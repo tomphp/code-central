@@ -9,7 +9,7 @@
 import { useRef } from "react";
 import { backLabel } from "../controls/backLabel";
 import { Empty, Loading } from "../controls/Empty";
-import { ErrorBanner } from "../controls/ErrorBanner";
+import { ErrorBanner, withCode } from "../controls/ErrorBanner";
 import { projectName } from "../controls/ProjectName";
 import { ProjectPicker } from "../controls/ProjectPicker";
 import { useProjectScope } from "../projectScope";
@@ -164,15 +164,15 @@ function WatcherStatus({ status: { project, tracking, provider, repository, proj
       return <p className="muted">{name}: Starting; the CI Watcher hasn&apos;t reported yet.</p>;
     case "error":
       return (
-        <p className="warning">
-          {name}: Error. {watcher.message}
+        <ErrorBanner>
+          {name}: {watcher.message}
           {watcher.fix && (
             <>
               <br />
-              {watcher.fix}
+              {withCode(watcher.fix)}
             </>
           )}
-        </p>
+        </ErrorBanner>
       );
   }
 }

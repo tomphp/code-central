@@ -158,7 +158,7 @@ describe("the CI Watchers' statuses", () => {
       within(ci()).getByText("Acme: Watching acme/web."),
     ).toBeInTheDocument();
     expect(watchers()).toHaveTextContent(
-      "Beta: Error. gh isn't logged in.Run gh auth login.",
+      "Beta: gh isn't logged in.Run gh auth login.",
     );
   });
 

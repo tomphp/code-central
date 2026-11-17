@@ -9,3 +9,9 @@ export function ErrorBanner({ children, id, className }: { children: ReactNode; 
     </p>
   );
 }
+
+// withCode sets each `backticked` span of a message as <code>, as a fix such as
+// "Run `gh auth login`." names its command.
+export function withCode(text: string): ReactNode[] {
+  return text.split(/`([^`]+)`/).map((part, i) => (i % 2 ? <code key={i}>{part}</code> : part));
+}
