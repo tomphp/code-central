@@ -381,6 +381,8 @@ export function projectSettingsContract(driver: () => Driver) {
   it("lists the Home Repository alone, then adds, edits, reorders and removes Repositories", async () => {
     await d.createProject("acme", "Acme");
     const names = (p: { repositories: { name: string }[] }) => p.repositories.map((r) => r.name);
+    // A local path is absolute where Core runs, as d.absolutePath is.
+    const local = (name: string) => d.absolutePath.replace(/[^\\/]+$/, name);
     expect((await d.api.listProjects())[0].repositories).toEqual([
       { name: "acme", home: true, clone_url: "", base: "main", local_path: "", code_host: "", changed_by: [] },
     ]);
@@ -389,11 +391,11 @@ export function projectSettingsContract(driver: () => Driver) {
     expect(added.repositories[1]).toEqual({
       name: "web", home: false, clone_url: "git@github.com:acme/web.git", base: "main", local_path: "", code_host: "github", changed_by: [],
     });
-    await d.api.addRepository("acme", { name: "api", clone_url: "https://github.com/acme/api", base: "develop", local_path: "/src/api" });
+    await d.api.addRepository("acme", { name: "api", clone_url: "https://github.com/acme/api", base: "develop", local_path: local("api") });
     expect(names((await d.api.listProjects())[0])).toEqual(["acme", "web", "api"]);
 
-    const edited = await d.api.editRepository("acme", "web", { base: "trunk", local_path: "/src/web" });
-    expect(edited.repositories[1]).toMatchObject({ name: "web", clone_url: "git@github.com:acme/web.git", base: "trunk", local_path: "/src/web" });
+    const edited = await d.api.editRepository("acme", "web", { base: "trunk", local_path: local("web") });
+    expect(edited.repositories[1]).toMatchObject({ name: "web", clone_url: "git@github.com:acme/web.git", base: "trunk", local_path: local("web") });
     expect(names(await d.api.setLandingOrder("acme", ["api", "acme", "web"]))).toEqual(["api", "acme", "web"]);
     expect(names(await d.api.removeRepository("acme", "web"))).toEqual(["api", "acme"]);
 
