@@ -51,8 +51,9 @@ describe("a Question Focus Item", () => {
     await renderApp(w);
     expect(question("Which colour?")).toBeInTheDocument();
     const it = item();
-    expect(within(it).getByText("Acme")).toBeInTheDocument();
-    expect(within(it).getByText("acme")).toBeInTheDocument();
+    // The one Project is named in the header, not again above the item.
+    expect(within(it).queryByText("Acme")).not.toBeInTheDocument();
+    expect(within(within(focus()).getByRole("banner")).getByText("Acme")).toBeInTheDocument();
     expect(within(it).getByText(shortOf(colour))).toBeInTheDocument();
     expect(within(it).getByText("Pick a colour")).toBeInTheDocument();
     expect(within(it).getByText("Focus: Questions")).toBeInTheDocument();
