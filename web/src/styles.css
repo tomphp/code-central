@@ -608,8 +608,9 @@ a.link-badge:hover { text-decoration: underline; }
 .pr-badge { white-space: nowrap; text-decoration: none; color: inherit; cursor: pointer; }
 a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
 .impl-list .pr-badge { margin-left: 6px; }
-.pr-conflicting, .pr-closed { color: var(--bad, inherit); }
-.pr-merged { opacity: 0.7; }
+/* Conflicting is the state that needs the human; merged is landed. Open and closed stay neutral. */
+.pr-conflicting { color: color-mix(in srgb, var(--r-failed) 55%, var(--text)); border-color: var(--r-failed); }
+.pr-merged { border-color: var(--r-landing); }
 .short-id { cursor: copy; }
 
 /* A full-width view's header is the rail laid across the top: the same
