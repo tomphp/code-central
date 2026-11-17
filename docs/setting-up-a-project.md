@@ -520,6 +520,27 @@ Its action panel, in the Inbox and as its Focus Item in Focus Mode, links to the
 
 Turning it on, or changing a setting while it is on, runs a check first; a refused Save shows what is wrong and how to fix it in the section, and Azure Boards stays as it was. While it is on, the section shows the **Work Item Watcher**'s status. **Won't fix** on an Azure Boards Incoming Issue leaves the work item's State for you to move.
 
+### Choosing a mode
+
+- **Saved query**: make a flat-list query in Azure DevOps (**Boards**, **Queries**) and paste the URL the browser shows. The query is the filter; edit it in Azure DevOps and the next check follows.
+- **WIQL filter**: give the project URL, such as `https://dev.azure.com/acme/web`, and a WHERE clause; Code Central supplies the SELECT and FROM. For example:
+
+  ```
+  [System.TeamProject] = @Project AND [System.State] <> 'Closed' AND [System.AssignedTo] = @Me AND [System.Tags] CONTAINS 'code-central'
+  ```
+
+  `@Me` is the PAT's owner, so it follows whoever made the token.
+
+A query matching more than 1,000 work items is an error that changes nothing until you narrow it.
+
+### The PAT
+
+Make a PAT in Azure DevOps (**User settings**, **Personal access tokens**) with the scope **Work Items: Read & write** (`vso.work_write`; read-only isn't enough, because of write-back). Put it in the variable in the *service's* environment, as for [Azure Pipelines](#azure-pipelines), then restart the service. The variable may be the CI settings' `ADO_PAT` if that token has the scope too. The check reads the PAT, the query and, without creating anything, write access (a `validateOnly` update), and refuses naming the missing scope.
+
+### What write-back does and doesn't do
+
+Code Central writes to a work item only in two ways: a **comment** in its Discussion for each milestone (posted once, however often the Work Item Watcher or the service restarts, found again by a hidden marker in the comment), and one **`code-central:` tag** for where its work stands, which replaces any other `code-central:` tag and leaves the work item's other tags alone. It never changes the work item's State, assignee or fields, and **Won't fix** only comments and tags. [The Work Item Watcher](running-as-a-service.md) in Running as a service describes the process.
+
 ## Choosing models for each kind of work
 
 The Factory runs every session with Claude Code's own default model and effort unless something says otherwise. To choose them per Project, open the **Models** section of the Project Options page, below GitHub Issues. It has a row for the **Project default**, then one for each kind of work, the Stage Guide a Ticket runs under:

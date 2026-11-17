@@ -100,3 +100,10 @@ Run this by hand once v1 is built (`make build`). These paths can't be automated
 - [ ] `CLAUDE_CODE_SESSION_ID` is set in the session's Bash tool and matches the hook's `session_id`.
 - [ ] The PostToolUse hook `code-central ping` keeps a Claim from turning Silent, and never slows or blocks a tool call, even with the service stopped.
 - [ ] `code-central service restart` while a session is mid-`wait`: `wait` resumes, and the MCP server reconnects without the session marking it failed.
+
+## Azure Boards
+
+- [ ] With a real Azure DevOps organisation and Azure Boards on, a comment the Work Item Watcher posts shows in the work item's Discussion as Markdown, and its hidden marker survives (it isn't visible, and a second check doesn't post the comment again, even after `code-central service restart`).
+- [ ] Turning Azure Boards on with a PAT that has only Work Items: Read is refused naming the write scope; with Read & write it saves, and no work item is changed by the check (`validateOnly` needs no write).
+- [ ] The `code-central:` tag shows on the work item and on the board's cards, changes (replacing the old one) as the work moves, and the work item's other tags and its State are untouched.
+- [ ] A WIQL filter with `[System.AssignedTo] = @Me` brings in only the work items assigned to the PAT's owner.
