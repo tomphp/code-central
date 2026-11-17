@@ -9,7 +9,7 @@ Working, tested code that meets the acceptance criteria, committed on a branch n
 - Work test-first at the seams the Spec's Testing Decisions name.
 <!-- subagent-exploration -->
 - Run the full suite and make it pass.
-- Then review the code against the Spec and the repository's standards, and fix what you find.
+- Then review the code against the Spec and the repository's standards, and fix what you find. Don't `finish` without it.
 - Commit only on the branch named after the Ticket's ID. Don't push it, and don't open a pull request: the branch lands in the base after the human accepts it.
 
 If the latest comment is a merge conflict, merge the base into the branch first and resolve it, then run the full suite again before anything else. The comment names the base commit and the conflicting files.
@@ -22,7 +22,7 @@ The In Review gate replaces any step that would stop to check with the user: the
 
 ## Finishing
 
-`finish` with `branch` (the Ticket's ID) and `commit` (the branch's head commit). The summary gives the branch and commit, the acceptance criteria met, the test result and what to check. The Ticket goes to In Review; stop working it.
+`finish` with `branch` (the Ticket's ID) and `commit` (the branch's head commit). The summary gives the branch and commit, the acceptance criteria met, the test result, the review's outcome (what Standards and Spec each found and what you fixed, or why you skipped it, as for a docs-only change) and what to check. The Ticket goes to In Review; stop working it.
 <!-- several-repositories -->
 
 ## A redo

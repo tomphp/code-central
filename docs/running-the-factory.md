@@ -202,7 +202,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    acme-shop-5 turn ended (implementation): "Price prints its Display price for zero and positive amounts": exit 0, success (completed); now In Review; ran 2m0s
    ```
 
-   Its summary names the branch and head commit, the acceptance criteria met, the test result and what to check:
+   Its summary names the branch and head commit, the acceptance criteria met, the test result, the code review's outcome (what the Standards and Spec axes found and what was fixed, or why it was skipped) and what to check:
 
    ```text
    Where
@@ -212,6 +212,10 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    Tests
 
    go test ./...: ok acme-shop/price (12 cases, all pass).
+
+   Review
+
+   Standards: no findings. Spec: one gap, a missing zero-amount case, fixed in 188e229.
    …
    ```
 
