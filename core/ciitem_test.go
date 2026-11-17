@@ -142,7 +142,7 @@ func TestSendBackIsRefusedWhileTheItemListsOtherTickets(t *testing.T) {
 func TestLandAnywayOnAnyListedTicketIsStoredOnceForTheCommitAndLandsEveryListedTicket(t *testing.T) {
 	f := itemWorld(t)
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
-	if _, err := f.core.LandAnyway(human, "acme", core.TicketInput{Ticket: "acme-8"}); err != nil {
+	if _, err := f.core.LandAnyway(human, "acme", core.CIResponseInput{Ticket: "acme-8"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"acme-5", "acme-8"} {
@@ -161,7 +161,7 @@ func TestLandAnywayOnAnyListedTicketIsStoredOnceForTheCommitAndLandsEveryListedT
 		return nil
 	})
 	// Choosing it again changes nothing.
-	if _, err := f.core.LandAnyway(human, "acme", core.TicketInput{Ticket: "acme-5"}); err != nil {
+	if _, err := f.core.LandAnyway(human, "acme", core.CIResponseInput{Ticket: "acme-5"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -169,7 +169,7 @@ func TestLandAnywayOnAnyListedTicketIsStoredOnceForTheCommitAndLandsEveryListedT
 func TestRerunOnAListedTicketReRunsTheCommitOnceForEveryListedTicket(t *testing.T) {
 	f := itemWorld(t)
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
-	if _, err := f.core.RerunCI(human, "acme", core.TicketInput{Ticket: "acme-5"}); err != nil {
+	if _, err := f.core.RerunCI(human, "acme", core.CIResponseInput{Ticket: "acme-5"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"acme-5", "acme-8"} {
@@ -312,7 +312,7 @@ func TestALaterCommitPassingClearsTheItemWithNoComment(t *testing.T) {
 func TestLandAnywayAppliesToThatCommitOnly(t *testing.T) {
 	f := itemWorld(t)
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
-	if _, err := f.core.LandAnyway(human, "acme", core.TicketInput{Ticket: "acme-5"}); err != nil {
+	if _, err := f.core.LandAnyway(human, "acme", core.CIResponseInput{Ticket: "acme-5"}); err != nil {
 		t.Fatal(err)
 	}
 	f.pushed(t, "acme-5", "def456")

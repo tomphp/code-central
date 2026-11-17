@@ -23,7 +23,9 @@ type storeFile struct {
 type optionsFile struct {
 	FocusClear string `yaml:"focus_clear,omitempty"`
 	FocusPopup string `yaml:"focus_popup,omitempty"`
-	GHPath     string `yaml:"gh_path,omitempty"`
+	// LimitsPopup is left out while it is the default.
+	LimitsPopup string `yaml:"limits_popup,omitempty"`
+	GHPath      string `yaml:"gh_path,omitempty"`
 }
 
 type projectFile struct {
@@ -80,6 +82,8 @@ type stageGuidesFile struct {
 // ciResponseFile is the human's response to one pushed commit's CI
 // result.
 type ciResponseFile struct {
+	// Repository is left out for the Home Repository.
+	Repository string           `yaml:"repository,omitempty"`
 	Commit     string           `yaml:"commit"`
 	LandAnyway string           `yaml:"land_anyway,omitempty"`
 	Rerun      string           `yaml:"rerun,omitempty"`
@@ -138,6 +142,19 @@ type ciFile struct {
 	// superseded by ADR 0032). It is read so a file that still holds it loads, and
 	// never kept or written.
 	UnblockOnPush bool `yaml:"unblock_on_push,omitempty"`
+	// Repositories is left out while no Repository but the Home has an
+	// entry.
+	Repositories []ciRepositoryFile `yaml:"repositories,omitempty"`
+}
+
+// ciRepositoryFile is the CI entry of one Repository other than the
+// Home.
+type ciRepositoryFile struct {
+	Name       string `yaml:"name"`
+	NotWatched bool   `yaml:"not_watched,omitempty"`
+	Provider   string `yaml:"provider,omitempty"`
+	Repository string `yaml:"repository,omitempty"`
+	ProjectURL string `yaml:"project_url,omitempty"`
 }
 
 type ciRuleFile struct {
@@ -248,6 +265,8 @@ type ciRunsFile struct {
 }
 
 type ciRunFile struct {
+	// Repository is left out for the Home Repository.
+	Repository string      `yaml:"repository,omitempty"`
 	ID         int64       `yaml:"id"`
 	Attempt    int         `yaml:"attempt"`
 	Workflow   string      `yaml:"workflow"`
@@ -526,7 +545,7 @@ func decodeCIRuns(data []byte) ([]CIRun, *LoadError) {
 	var out []CIRun
 	for i, rf := range f.Runs {
 		field := fmt.Sprintf("runs[%d]", i)
-		r := CIRun{ID: rf.ID, Attempt: rf.Attempt, Workflow: rf.Workflow, Name: rf.Name, Branch: rf.Branch, Commit: rf.Commit,
+		r := CIRun{Repository: rf.Repository, ID: rf.ID, Attempt: rf.Attempt, Workflow: rf.Workflow, Name: rf.Name, Branch: rf.Branch, Commit: rf.Commit,
 			Status: CIRunStatus(rf.Status), Conclusion: CIConclusion(rf.Conclusion), URL: rf.URL, Ticket: rf.Ticket, Rule: rf.Rule, Ignored: rf.Ignored}
 		if !r.Status.Valid() {
 			return nil, &LoadError{Field: field + ".status", Msg: fmt.Sprintf("unknown CI Run status %q", rf.Status)}
@@ -687,7 +706,11 @@ func encode(record any, project string) (string, []byte, error) {
 			Repositories: encodeRepositories(r.Repositories)})
 	case Options:
 		rel = "options.yaml"
-		data, err = encodeYAML(optionsFile{FocusClear: string(r.FocusClear), FocusPopup: string(r.FocusPopup), GHPath: r.GHPath})
+		f := optionsFile{FocusClear: string(r.FocusClear), FocusPopup: string(r.FocusPopup), GHPath: r.GHPath}
+		if r.LimitsPopup != DefaultOptions().LimitsPopup {
+			f.LimitsPopup = string(r.LimitsPopup)
+		}
+		data, err = encodeYAML(f)
 	case Spec:
 		rel = filepath.Join("projects", project, "specs", strconv.Itoa(r.Number)+".md")
 		var front []byte
@@ -760,7 +783,7 @@ func encode(record any, project string) (string, []byte, error) {
 		rel = filepath.Join("projects", project, ciRunsName)
 		f := ciRunsFile{Runs: []ciRunFile{}}
 		for _, run := range r.Runs {
-			rf := ciRunFile{ID: run.ID, Attempt: run.Attempt, Workflow: run.Workflow, Name: run.Name, Branch: run.Branch, Commit: run.Commit,
+			rf := ciRunFile{Repository: run.Repository, ID: run.ID, Attempt: run.Attempt, Workflow: run.Workflow, Name: run.Name, Branch: run.Branch, Commit: run.Commit,
 				Status: string(run.Status), Conclusion: string(run.Conclusion), Started: formatOptionalTime(run.Started), Finished: formatOptionalTime(run.Finished),
 				URL: run.URL, Ticket: run.Ticket, Rule: run.Rule, Ignored: run.Ignored}
 			for _, j := range run.Jobs {
@@ -816,7 +839,30 @@ func encodeCI(c CI) *ciFile {
 	for _, r := range c.Rules {
 		f.Rules = append(f.Rules, ciRuleFile{Spec: r.Spec, Workflow: r.Workflow, Branch: r.Branch, State: string(r.State), Created: formatTime(r.Created)})
 	}
+	for _, r := range c.Repositories {
+		f.Repositories = append(f.Repositories, ciRepositoryFile{Name: r.Name, NotWatched: r.NotWatched, Provider: string(r.Provider), Repository: r.Repository, ProjectURL: r.ProjectURL})
+	}
 	return f
+}
+
+// decodeCIRepositories checks a Project's CI entries as load does: each
+// names a Repository once, with a CI Provider unless it is Not watched.
+// It returns the field, relative to ci.repositories, with the error.
+func decodeCIRepositories(fs []ciRepositoryFile) ([]CIRepository, string, error) {
+	var out []CIRepository
+	for i, f := range fs {
+		r := CIRepository{Name: f.Name, NotWatched: f.NotWatched, Provider: CIProvider(f.Provider), Repository: f.Repository, ProjectURL: f.ProjectURL}
+		switch {
+		case !ValidRepositoryName(r.Name):
+			return nil, fmt.Sprintf("[%d].name", i), fmt.Errorf("%q isn't a Repository Name", r.Name)
+		case slices.ContainsFunc(out, func(o CIRepository) bool { return o.Name == r.Name }):
+			return nil, fmt.Sprintf("[%d].name", i), fmt.Errorf("%s has two CI entries", r.Name)
+		case r.Provider != "" && !r.Provider.Valid(), r.Provider == "" && !r.NotWatched:
+			return nil, fmt.Sprintf("[%d].provider", i), fmt.Errorf("unknown CI provider %q (%s)", f.Provider, strings.Join(ciProviderNames(), " or "))
+		}
+		out = append(out, r)
+	}
+	return out, "", nil
 }
 
 // encodeGitHubIssues leaves GitHub Issues out of project.yaml while it is
@@ -1001,7 +1047,7 @@ func decodeModels(f modelsFile) (Models, string, error) {
 func encodeCIResponses(rs []CIResponse) []ciResponseFile {
 	var out []ciResponseFile
 	for _, r := range rs {
-		f := ciResponseFile{Commit: r.Commit, LandAnyway: formatOptionalTime(r.LandAnyway), Rerun: formatOptionalTime(r.Rerun), FixTicket: r.FixTicket}
+		f := ciResponseFile{Repository: r.Repository, Commit: r.Commit, LandAnyway: formatOptionalTime(r.LandAnyway), Rerun: formatOptionalTime(r.Rerun), FixTicket: r.FixTicket}
 		for _, ra := range r.Reruns {
 			f.Reruns = append(f.Reruns, runAttemptFile{ID: ra.ID, Attempt: ra.Attempt})
 		}
@@ -1015,7 +1061,7 @@ func encodeCIResponses(rs []CIResponse) []ciResponseFile {
 func decodeCIResponses(fs []ciResponseFile) ([]CIResponse, string, error) {
 	var out []CIResponse
 	for i, f := range fs {
-		r := CIResponse{Commit: f.Commit, FixTicket: f.FixTicket}
+		r := CIResponse{Repository: f.Repository, Commit: f.Commit, FixTicket: f.FixTicket}
 		if r.Commit == "" {
 			return nil, fmt.Sprintf("[%d].commit", i), errors.New("required")
 		}

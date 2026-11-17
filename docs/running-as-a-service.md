@@ -147,7 +147,7 @@ Unknown keys or a bad value in `settings.yaml` stop the service and name the fil
 
 Preferences you change while Code Central runs are **Options**, not settings. Set them in the UI: click **Options** in the **Admin** section of the Inbox's left pane. Each choice saves the moment you make it, every open browser follows it at once, and **Back to the Inbox** returns you to where you were.
 
-There are three Options so far: *Focus Mode, when nothing needs you*, **Focus Pop-up** and **gh path**, which [Finding `gh`](#finding-gh) describes.
+There are four Options so far: *Focus Mode, when nothing needs you*, **Focus Pop-up**, **Show Limits popup** and **gh path**, which [Finding `gh`](#finding-gh) describes.
 
 *Focus Mode, when nothing needs you* is **Activity Dashboard** (the default) or **All clear**.
 
@@ -157,7 +157,9 @@ Focus Mode shows the dashboard whenever nothing needs you, unless you choose **A
 
 The dashboard is also in a view of its own, whatever you choose here and whatever needs you: click **Activity**, the first link in the **View** section of the Inbox's left pane, above **Board**. It opens on the Inbox's Project, or All Projects, with a **Projects** picker (with one active Project, the Sole Project, it opens on that Project and the picker doesn't offer All Projects) to change that and **Back to the Inbox** to return to where you were. It shows the same blocks and lists as above, and an entry still opens its Ticket in the Inbox.
 
-Scripts can read and set Options over the HTTP API, sending `X-Code-Central-Actor: human` to change them: `GET /api/options`, and `POST /api/set_options` with a body such as `{"focus_clear": "all_clear"}`, `{"focus_popup": "on"}` or `{"gh_path": "/opt/tools/gh"}`.
+**Show Limits popup** is **On** (the default) or **Off**. On, the **Limits popup** shows the selected Project's Plan Limits; Off hides it. It applies at once in every open tab.
+
+Scripts can read and set Options over the HTTP API, sending `X-Code-Central-Actor: human` to change them: `GET /api/options`, and `POST /api/set_options` with a body such as `{"focus_clear": "all_clear"}`, `{"focus_popup": "on"}`, `{"limits_popup": "off"}` or `{"gh_path": "/opt/tools/gh"}`.
 
 The service keeps Options in its store, in `options.yaml` beside `store.yaml`, so they survive a restart and a cleared browser. There is no file until you first change one, and no MCP tool or CLI command changes them. `settings.yaml` is still the place for what the service needs at startup, such as the port.
 

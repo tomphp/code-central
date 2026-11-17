@@ -300,6 +300,14 @@ export const FOCUS_POPUPS = [
 ] as const;
 export type FocusPopup = (typeof FOCUS_POPUPS)[number];
 
+// LimitsPopup is whether the Limits popup shows a Project's Plan Limits.
+// LimitsPopups has the default first.
+export const LIMITS_POPUPS = [
+  "on",
+  "off",
+] as const;
+export type LimitsPopup = (typeof LIMITS_POPUPS)[number];
+
 // ChatAvailability is whether the Project's current Conversation can take
 // a Chat Message now, worked out from the Heartbeats on every read.
 export const CHAT_AVAILABILITIES = [
@@ -353,6 +361,7 @@ export const TICKET_FIELDS = [
   "spec_merge",
   "spec_landed",
   "ci_item",
+  "ci_items",
   "waiting_for_spec",
   "ci_failure_options",
   "claims",
@@ -494,11 +503,15 @@ export interface TicketView {
   // Tickets); empty on any other Ticket.
   recommendation?: Recommendation;
   // PushedCommit is the latest commit the Factory pushed for the Ticket
-  // while CI Tracking was on, CIResult the Ticket's CI result and
-  // CICommit the pushed commit it comes from: under the CI gate one
-  // that passed, if any did, else the latest (code-central-430). All
-  // are left out while it has none. CIRuns are every CI Run tracked
-  // against it, the latest pushed commit's first. Computed on read.
+  // in the Home Repository while CI Tracking was on, and CICommit the
+  // pushed commit there the Home Repository's CI result comes from:
+  // under the CI gate one that passed, if any did, else the latest
+  // (code-central-430). CIResult is the Ticket's CI result, combined
+  // across its watched Repositories: running, else failed, else
+  // cancelled, else passed; each Repository's own is in Repositories.
+  // All are left out while it has none. CIRuns are every CI Run tracked
+  // against it, the Home Repository's first, each Repository's latest
+  // pushed commit's first. Computed on read.
   pushed_commit?: PushedCommitView;
   // PullRequest is the pull request the Pull Request Watcher reported
   // for the Ticket's pushed work; left out until it has one.
@@ -506,9 +519,10 @@ export interface TicketView {
   ci_result?: CIResult;
   ci_commit?: string;
   ci_runs?: CIRunView[];
-  // LandAnyway says the human accepted the latest pushed commit's
-  // failed CI result, so the Factory lands it (code-central-261), on
-  // this Ticket or on another sharing the commit (code-central-432).
+  // LandAnyway says the human accepted the failed CI result of the
+  // latest pushed commit in the Home Repository, so the Factory lands it
+  // there (code-central-261), on this Ticket or on another sharing the
+  // commit (code-central-432).
   land_anyway?: boolean;
   // SpecLanded says Land per Spec covers the Ticket, and WaitingForSpec
   // that it is Accepted and waits for its Spec to land (code-central-371).
@@ -517,8 +531,12 @@ export interface TicketView {
   spec_landed?: boolean;
   // CIItem is the CI failed, CI cancelled or CI unavailable item that
   // lists this Ticket, with every other Ticket waiting on its pushed
-  // commit (code-central-432); left out while none does.
+  // commit (code-central-432); left out while none does. A Ticket listed
+  // in several Repositories has the first in landing order whose reason
+  // is its own here, and CIItems lists each one, but only while the
+  // Project has more than one Repository.
   ci_item?: CIItemView;
+  ci_items?: CIItemView[];
   waiting_for_spec?: boolean;
   // CIFailureOptions are the failure options, each an operation's name,
   // the human may choose on the Ticket's CI item while it is CI failed
@@ -747,6 +765,8 @@ export interface OptionsView {
   focus_clear: FocusClear;
   // FocusPopup is the Focus Pop-up Option.
   focus_popup: FocusPopup;
+  // LimitsPopup is the Show Limits popup Option.
+  limits_popup: LimitsPopup;
   // GHPath is the gh path Option: where gh is, "" to find it on the
   // service's PATH, then in the usual install places.
   gh_path: string;
@@ -833,6 +853,12 @@ export interface CIView {
   rules: CIRuleView[];
   // Watcher is the CI Watcher's status, as it last reported it.
   watcher: WatcherView;
+  // Repositories are the CI entries of the Repositories other than the
+  // Home, in landing order; the fields above are the Home Repository's,
+  // and its PAT environment variable, Ignored workflows and CI Rules
+  // are every Repository's. Left out while the Project has the Home
+  // Repository alone.
+  repositories?: CIRepositoryView[];
 }
 
 // GitHubIssuesView is a Project's GitHub Issues settings as every Project
@@ -908,6 +934,10 @@ export interface FactoryStatusView {
   // Base is the base the Factory last reported under Pull Request
   // (code-central-394); left out while none is reporting.
   base?: BaseView;
+  // PlanLimits are the most recently observed Plan Limits among the
+  // Factories that aren't Offline (Spec code-central-861); left out
+  // while none has any.
+  plan_limits?: PlanLimits;
 }
 
 // RepositoryView is one of a Project's Repositories as every Project read
@@ -989,9 +1019,14 @@ export interface ChangedRepositoryView {
   // out until the Pull Request Watcher reports one.
   pull_request?: PullRequestView;
   // CIResult is the Repository's CI result, from the pushed commit
-  // CICommit; both are left out while it has none.
+  // CICommit; both are left out while it has none. CINotWatched says CI
+  // Tracking never watches the Repository: it has no CI result.
   ci_result?: CIResult;
   ci_commit?: string;
+  ci_not_watched?: boolean;
+  // LandAnyway says the human accepted the failed CI result of the
+  // latest pushed commit there, so the Factory lands it there.
+  land_anyway?: boolean;
 }
 
 // PushedCommitView is a commit the Factory pushed for a Ticket, and when
@@ -1018,8 +1053,10 @@ export interface PullRequestView {
 // takes it: the CI Watcher names what it is tracked against, a Ticket or
 // a CI Rule's Spec; Code Central marks it ignored.
 export interface CIRunView {
-  // ID and Attempt are the CI Provider's run ID and attempt, which key
-  // the run.
+  // Repository is the Repository Name of the Repository the run is for,
+  // empty for the Home Repository. With the CI Provider's run ID and
+  // attempt, it keys the run.
+  repository?: string;
   id: number;
   attempt: number;
   // Workflow is the workflow file's base name, such as ci.yml; Name is
@@ -1059,6 +1096,10 @@ export interface SpecMergeView {
 // none while CI unavailable.
 export interface CIItemView {
   reason: NeedsMeReason;
+  // Repository is the Repository Name the commit was pushed in, left
+  // out while the Project has the Home Repository alone. Each option
+  // acts on that Repository only.
+  repository?: string;
   commit: string;
   tickets: CIItemTicket[];
   options: CIFailureOption[];
@@ -1355,8 +1396,9 @@ export interface WatcherView {
   problem?: WatcherProblem;
   message?: string;
   fix?: string;
-  // Repositories are the Repositories it can't watch, each with its own
-  // problem, while in error because of them.
+  // Repositories are the Repositories it can't watch, each with its
+  // problem and fix, while in error about some of them only: it carries
+  // on watching the rest.
   repositories?: RepositoryProblem[];
   // RateLimitedUntil is when GitHub lets a rate-limited Watcher call it
   // again; until then it is still Watching, not in error.
@@ -1381,6 +1423,16 @@ export interface CIRuleView {
   branch: string;
   state: State;
   created: string;
+}
+
+// CIRepositoryView is the CI entry of one Repository other than the Home:
+// its CI Provider and what that watches, or Not watched.
+export interface CIRepositoryView {
+  name: string;
+  not_watched: boolean;
+  provider?: CIProvider;
+  repository?: string;
+  project_url?: string;
 }
 
 // ModelRowView is one Models row's model and effort, each empty when the
@@ -1420,6 +1472,18 @@ export interface BaseView {
   // Branch is the base branch's name, when the Factory reported it.
   branch?: string;
   at: string;
+}
+
+// PlanLimits are a Factory's Plan Limits, as it reports them and as the
+// Project's Factory Status shows them.
+export interface PlanLimits {
+  // ObservedAt is when the Factory read the figures; one later than
+  // Code Central's receipt is kept as the receipt time.
+  observed_at: string;
+  // FiveHour and Weekly are each left out when the Factory has no
+  // figures for that window.
+  five_hour?: PlanLimitWindow;
+  weekly?: PlanLimitWindow;
 }
 
 // CloneView is a Repository's clone as the Factory last reported it;
@@ -1598,6 +1662,13 @@ export interface RepositoryProblem {
   problem?: WatcherProblem;
   message: string;
   fix?: string;
+}
+
+// PlanLimitWindow is one window of the Plan Limits.
+export interface PlanLimitWindow {
+  // UsedPercent is the share of the window's limit used, 0 to 100.
+  used_percent: number;
+  resets_at: string;
 }
 
 // RoundSummary is a Round's number and how many of its Questions are open.

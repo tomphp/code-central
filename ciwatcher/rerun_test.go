@@ -50,7 +50,7 @@ func TestTheCIWatcherRerunsTheFailedJobsAndReportsTheNewAttempt(t *testing.T) {
 
 	human := core.WithActor(context.Background(), core.Human)
 	must(t, func() error {
-		_, err := w.srv.Core.RerunCI(human, "acme", core.TicketInput{Ticket: core.Ref(id)})
+		_, err := w.srv.Core.RerunCI(human, "acme", core.CIResponseInput{Ticket: core.Ref(id)})
 		return err
 	})
 	w.runsAnswer("abc123", listedRun{id: 11, attempt: 2, workflow: "ci.yml", status: "in_progress", updated: "2026-01-05T09:07:00Z"})
@@ -96,7 +96,7 @@ func TestTheCIWatcherAsksForAReRunOnce(t *testing.T) {
 
 	human := core.WithActor(context.Background(), core.Human)
 	must(t, func() error {
-		_, err := w.srv.Core.RerunCI(human, "acme", core.TicketInput{Ticket: core.Ref(id)})
+		_, err := w.srv.Core.RerunCI(human, "acme", core.CIResponseInput{Ticket: core.Ref(id)})
 		return err
 	})
 	w.waitingPoll()
@@ -121,7 +121,7 @@ func TestTheCIWatcherRerunsACancelledRun(t *testing.T) {
 
 	human := core.WithActor(context.Background(), core.Human)
 	must(t, func() error {
-		_, err := w.srv.Core.RerunCI(human, "acme", core.TicketInput{Ticket: core.Ref(id)})
+		_, err := w.srv.Core.RerunCI(human, "acme", core.CIResponseInput{Ticket: core.Ref(id)})
 		return err
 	})
 	w.runsAnswer("abc123", listedRun{id: 11, attempt: 2, workflow: "ci.yml", status: "completed", conclude: "success", updated: "2026-01-05T09:09:00Z"})

@@ -8,6 +8,7 @@
 import {
   FOCUS_CLEARS,
   FOCUS_POPUPS,
+  LIMITS_POPUPS,
   type Acknowledgement,
   type BaseDivergedView,
   type BaseMissingView,
@@ -26,6 +27,7 @@ import {
   type ModelRowView,
   type ModelsView,
   type OptionsView,
+  type PlanLimits,
   type ProjectView,
   type PullRequestState,
   type ReportedModelsView,
@@ -138,6 +140,19 @@ export interface RepositoryAdd {
   clone_url: string;
   base?: string;
   local_path?: string;
+  // ci is its CI entry; left out, it is filled in from the Clone URL.
+  ci?: RepositoryCIChange;
+}
+
+// A Repository's CI entry as the human sets it: Not watched, or a CI
+// Provider (GitHub Actions when left out) with what it watches.
+export interface RepositoryCIChange {
+  not_watched?: boolean;
+  provider?: CIProvider;
+  // repository is the GitHub repository as owner/name.
+  repository?: string;
+  // project_url is the Azure DevOps project as its URL.
+  project_url?: string;
 }
 
 // A change to a Repository: each field left out keeps its value, and an
@@ -201,6 +216,9 @@ export interface HeartbeatReport {
   interval_seconds: number;
   // chat defaults to false.
   chat?: boolean;
+  // plan_limits are the Plan Limits the Factory last read from its Turns;
+  // left out, they are none.
+  plan_limits?: PlanLimits;
 }
 
 // ---- Specs and Tickets ----
@@ -294,7 +312,7 @@ export type ChangeEvent =
 // ---- Options ----
 
 // DEFAULT_OPTIONS are the Options a fresh store reads.
-export const DEFAULT_OPTIONS: Options = { focus_clear: FOCUS_CLEARS[0], focus_popup: FOCUS_POPUPS[0], gh_path: "" };
+export const DEFAULT_OPTIONS: Options = { focus_clear: FOCUS_CLEARS[0], focus_popup: FOCUS_POPUPS[0], limits_popup: LIMITS_POPUPS[0], gh_path: "" };
 
 // ---- Usage (Spec code-central-201) ----
 

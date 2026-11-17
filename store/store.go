@@ -251,8 +251,11 @@ type StageGuides struct {
 // (code-central-432): Land anyway, and a Re-run request with the failed
 // run attempts it asked for. Before code-central-585 a response could be
 // stored on the pushed commit itself; format 37 moved each one here.
+// Repository is the Repository Name the commit was pushed in, empty for
+// the Home Repository: a response is keyed by both.
 type CIResponse struct {
-	Commit string
+	Repository string
+	Commit     string
 	// LandAnyway is when the human accepted the commit's failed CI
 	// result; zero until then.
 	LandAnyway time.Time
@@ -394,7 +397,10 @@ func ciProviderNames() []string {
 // Repository is the GitHub repository,
 // ProjectURL the Azure DevOps project and PATEnv the name of the
 // environment variable holding its PAT (never the PAT); each provider
-// keeps its own.
+// keeps its own. Those name the Home Repository's CI: Repositories hold
+// the other Repositories' entries (Spec code-central-848), while the PAT
+// environment variable, the Ignored workflows and the CI Rules are the
+// Project's, for every Repository.
 type CI struct {
 	Tracking         bool
 	Provider         CIProvider
@@ -408,6 +414,22 @@ type CI struct {
 	// as the fallback for a Landing with no Base.
 	PushRemoteBase string
 	Rules          []CIRule
+	// Repositories are the CI entries of the Repositories other than the
+	// Home, each named once; a Repository without one reads as filled in
+	// from its Clone URL.
+	Repositories []CIRepository
+}
+
+// CIRepository is the CI entry of one Repository other than the Home:
+// its CI Provider and what that watches (the GitHub repository as
+// owner/name, or the Azure DevOps project's URL), or Not watched, when
+// its CI is never tracked.
+type CIRepository struct {
+	Name       string
+	NotWatched bool
+	Provider   CIProvider
+	Repository string
+	ProjectURL string
 }
 
 // AnyWorkflow is the workflow of a CI Rule that matches every workflow
@@ -439,7 +461,7 @@ func DefaultCI() CI { return CI{Provider: CIGitHubActions} }
 func (c CI) Equal(d CI) bool {
 	return c.Tracking == d.Tracking && c.Provider == d.Provider && c.Repository == d.Repository && c.ProjectURL == d.ProjectURL && c.PATEnv == d.PATEnv &&
 		slices.Equal(c.IgnoredWorkflows, d.IgnoredWorkflows) && c.PushRemoteURL == d.PushRemoteURL && c.PushRemoteBase == d.PushRemoteBase &&
-		slices.EqualFunc(c.Rules, d.Rules, CIRule.Equal)
+		slices.EqualFunc(c.Rules, d.Rules, CIRule.Equal) && slices.Equal(c.Repositories, d.Repositories)
 }
 
 // orDefault fills in what c leaves empty from DefaultCI.
@@ -500,7 +522,9 @@ var NeedsMeReasons = []string{"needs_answer", "answered", "silent_claim", "long_
 	"accepted_not_landed", "blocked_by_cancelled", "new_issue", "closed_externally"}
 
 // IsZero reports whether m sets nothing.
-func (m Models) IsZero() bool { return m.Default == (ModelRow{}) && m.Chat == (ModelRow{}) && len(m.Kinds) == 0 }
+func (m Models) IsZero() bool {
+	return m.Default == (ModelRow{}) && m.Chat == (ModelRow{}) && len(m.Kinds) == 0
+}
 
 // Equal reports whether m and n set the same rows.
 func (m Models) Equal(n Models) bool {
@@ -859,12 +883,15 @@ func (c CIConclusion) Failed() bool { return c == CIFailure || c == CITimedOut }
 func (c CIConclusion) Cancelled() bool { return c == CICancelled }
 
 // CIRun is one attempt of one workflow run the CI Provider reported,
-// keyed by the provider's run ID and the attempt. It is tracked against
-// a Ticket or a CI Rule (the Spec number naming it). A run of an Ignored
-// workflow is kept, marked Ignored.
+// keyed by the Repository it ran for, the provider's run ID and the
+// attempt. It is tracked against a Ticket or a CI Rule (the Spec number
+// naming it). A run of an Ignored workflow is kept, marked Ignored.
 type CIRun struct {
-	ID      int64
-	Attempt int
+	// Repository is the Repository Name the run is for, empty for the
+	// Home Repository.
+	Repository string
+	ID         int64
+	Attempt    int
 	// Workflow is the workflow file's base name, such as ci.yml, and Name
 	// the name it shows.
 	Workflow   string
@@ -954,12 +981,40 @@ func FocusPopupNames() []string {
 	return out
 }
 
+// LimitsPopup is whether the Limits popup shows a Project's Plan Limits.
+// LimitsPopups has the default first.
+type LimitsPopup string
+
+// The two values of the Show Limits popup Option.
+const (
+	LimitsPopupOn  LimitsPopup = "on"
+	LimitsPopupOff LimitsPopup = "off"
+)
+
+// LimitsPopups lists every LimitsPopup, the default first.
+var LimitsPopups = []LimitsPopup{LimitsPopupOn, LimitsPopupOff}
+
+// Valid reports whether l is one of the LimitsPopups.
+func (l LimitsPopup) Valid() bool { return slices.Contains(LimitsPopups, l) }
+
+// LimitsPopupNames is the LimitsPopups as strings, for messages and the
+// schema.
+func LimitsPopupNames() []string {
+	var out []string
+	for _, l := range LimitsPopups {
+		out = append(out, string(l))
+	}
+	return out
+}
+
 // Options are the human's global preferences, set from the UI's Options
 // view. They are the store's one record that belongs to no Project.
 type Options struct {
 	FocusClear FocusClear
 	// FocusPopup is the Focus Pop-up Option.
 	FocusPopup FocusPopup
+	// LimitsPopup is the Show Limits popup Option.
+	LimitsPopup LimitsPopup
 	// GHPath is where gh, the GitHub CLI, is: the gh path Option. Empty
 	// finds it on the service's PATH, then in the usual install places.
 	GHPath string
@@ -967,7 +1022,9 @@ type Options struct {
 
 // DefaultOptions are the Options of a store that has never had any
 // written.
-func DefaultOptions() Options { return Options{FocusClear: FocusClears[0], FocusPopup: FocusPopups[0]} }
+func DefaultOptions() Options {
+	return Options{FocusClear: FocusClears[0], FocusPopup: FocusPopups[0], LimitsPopup: LimitsPopups[0]}
+}
 
 // FocusClearNames is the FocusClears as strings, for messages and the
 // schema.

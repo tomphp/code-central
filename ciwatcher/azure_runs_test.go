@@ -401,7 +401,7 @@ func TestAnAzureRerunActsOnABuildOnThePullRequestsMergeRef(t *testing.T) {
 	a.ciResult(id, core.CIFailed)
 	human := core.WithActor(context.Background(), core.Human)
 	must(t, func() error {
-		_, err := a.srv.Core.RerunCI(human, "acme", core.TicketInput{Ticket: core.Ref(id)})
+		_, err := a.srv.Core.RerunCI(human, "acme", core.CIResponseInput{Ticket: core.Ref(id)})
 		return err
 	})
 	a.poll()

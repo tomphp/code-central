@@ -22,8 +22,11 @@ const factoryName = "code-central-factory"
 type heartbeater struct {
 	post func(ctx context.Context, in core.ReportHeartbeatInput) error
 	base core.ReportHeartbeatInput // factory, host and interval
-	warn func(err error)
-	work work
+	// limits are the Factory's latest Plan Limits as a Heartbeat is
+	// queued, nil before its first Turn reads any.
+	limits func() *core.PlanLimits
+	warn   func(err error)
+	work   work
 
 	mu      sync.Mutex
 	waiting *core.ReportHeartbeatInput
@@ -35,8 +38,8 @@ type heartbeater struct {
 	done    chan struct{}
 }
 
-func newHeartbeater(post func(context.Context, core.ReportHeartbeatInput) error, base core.ReportHeartbeatInput, warn func(error), w work) *heartbeater {
-	return &heartbeater{post: post, base: base, warn: warn, work: w, wake: make(chan struct{}, 1), stop: make(chan struct{}), done: make(chan struct{})}
+func newHeartbeater(post func(context.Context, core.ReportHeartbeatInput) error, base core.ReportHeartbeatInput, limits func() *core.PlanLimits, warn func(error), w work) *heartbeater {
+	return &heartbeater{post: post, base: base, limits: limits, warn: warn, work: w, wake: make(chan struct{}, 1), stop: make(chan struct{}), done: make(chan struct{})}
 }
 
 var heartbeatRank = map[core.HeartbeatState]int{core.HeartbeatOnline: 0, core.HeartbeatDraining: 1, core.HeartbeatStopping: 2}
@@ -51,7 +54,7 @@ func (h *heartbeater) send(state core.HeartbeatState, note string) {
 	}
 	h.last = state
 	in := h.base
-	in.State, in.Note = state, note
+	in.State, in.Note, in.PlanLimits = state, note, h.limits()
 	h.waiting = &in
 	if h.posted == nil {
 		h.posted = h.work.busy("posting a Heartbeat")
@@ -176,7 +179,7 @@ func newFactoryHeartbeater(f *factory) *heartbeater {
 	return newHeartbeater(func(ctx context.Context, in core.ReportHeartbeatInput) error {
 		_, err := f.client.ReportHeartbeat(ctx, f.project, in)
 		return err
-	}, base, func(err error) {
+	}, base, f.planLimits.get, func(err error) {
 		f.printf("warning: can't send a Heartbeat to Code Central: %v", err)
 	}, f.work)
 }

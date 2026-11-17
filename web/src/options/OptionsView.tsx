@@ -51,8 +51,17 @@ const FOCUS_POPUP: OptionDefinition<"focus_popup"> = {
   ],
 };
 
+const LIMITS_POPUP: OptionDefinition<"limits_popup"> = {
+  name: "limits_popup",
+  label: "Show Limits popup",
+  choices: [
+    { value: "on", label: "On", hint: "A popup shows a Project's Plan Limits: the 5-hour and weekly windows." },
+    { value: "off", label: "Off", hint: "No Limits popup." },
+  ],
+};
+
 // OPTIONS is every Option chosen from a set, in the order shown.
-const OPTIONS = [FOCUS_CLEAR, FOCUS_POPUP];
+const OPTIONS = [FOCUS_CLEAR, FOCUS_POPUP, LIMITS_POPUP];
 
 export interface OptionsViewProps {
   api: Api;

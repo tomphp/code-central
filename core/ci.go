@@ -42,6 +42,12 @@ type CIView struct {
 	Rules []CIRuleView `json:"rules"`
 	// Watcher is the CI Watcher's status, as it last reported it.
 	Watcher WatcherView `json:"watcher"`
+	// Repositories are the CI entries of the Repositories other than the
+	// Home, in landing order; the fields above are the Home Repository's,
+	// and its PAT environment variable, Ignored workflows and CI Rules
+	// are every Repository's. Left out while the Project has the Home
+	// Repository alone.
+	Repositories []CIRepositoryView `json:"repositories,omitempty"`
 }
 
 // CIRuleView is one CI Rule: when Workflow fails on Branch, open a Ticket
@@ -55,12 +61,30 @@ type CIRuleView struct {
 	Created  time.Time   `json:"created"`
 }
 
-func ciView(key string, c store.CI, watcher WatcherView) CIView {
+// CIRepositoryView is the CI entry of one Repository other than the Home:
+// its CI Provider and what that watches, or Not watched.
+type CIRepositoryView struct {
+	Name       string           `json:"name"`
+	NotWatched bool             `json:"not_watched"`
+	Provider   store.CIProvider `json:"provider,omitempty"`
+	Repository string           `json:"repository,omitempty"`
+	ProjectURL string           `json:"project_url,omitempty"`
+}
+
+func ciView(p store.Project, watcher WatcherView) CIView {
+	key, c := p.Key, p.CI
 	v := CIView{Tracking: c.Tracking, Provider: c.Provider, Repository: c.Repository,
 		ProjectURL: c.ProjectURL, PATEnv: patEnvOf(c),
 		IgnoredWorkflows: orEmpty(c.IgnoredWorkflows), PushRemoteURL: c.PushRemoteURL, Rules: []CIRuleView{}, Watcher: watcher}
 	for _, r := range c.Rules {
 		v.Rules = append(v.Rules, CIRuleView{Spec: DisplayID(key, r.Spec), Workflow: r.Workflow, Branch: r.Branch, State: r.State, Created: r.Created})
+	}
+	for _, r := range p.RepositoryList() {
+		if r.Home {
+			continue
+		}
+		e, _ := ciEntryOf(p, r.Name)
+		v.Repositories = append(v.Repositories, CIRepositoryView{Name: e.Name, NotWatched: e.NotWatched, Provider: e.Provider, Repository: e.Repository, ProjectURL: e.ProjectURL})
 	}
 	return v
 }
@@ -145,7 +169,7 @@ func (c *Core) SetCITracking(ctx context.Context, key string, in SetCITrackingIn
 		return Written[ProjectView]{}, err
 	}
 	return c.updateCI(key, in.Full, func(p *store.CI) error {
-		ci.PushRemoteURL, ci.Rules = p.PushRemoteURL, p.Rules
+		ci.PushRemoteURL, ci.Rules, ci.Repositories = p.PushRemoteURL, p.Rules, p.Repositories
 		// What the CI Watcher said was about the old settings.
 		if !ci.Tracking || watchesAnother(*p, ci) {
 			c.watchers.reset(watcherKey{WatcherCI, key})
@@ -218,22 +242,25 @@ func (c *Core) SetCICheck(check CICheck) { c.ciCheck = check }
 // checkCI runs the CI check when ci turns CI Tracking on, or changes what
 // it watches while on, and refuses with the reason and fix when it fails:
 // on the repository when gh can't read it, on the project URL when the
-// Azure DevOps project can't be read, else on tracking.
+// Azure DevOps project can't be read, else on tracking. Turning CI
+// Tracking on also checks each other watched Repository's entry, and
+// refuses on repositories, naming the Repository.
 // It runs outside the store's lock, as the check calls GitHub.
 func (c *Core) checkCI(ctx context.Context, key string, ci store.CI) error {
 	if !ci.Tracking || c.ciCheck == nil {
 		return nil
 	}
-	var was store.CI
+	var p store.Project
 	var opts store.Options
 	err := c.store.View(func(r store.Reader) error {
 		if err := writable(r, key); err != nil {
 			return err
 		}
-		p, _ := r.Project(key)
-		was, opts = p.CI, r.Options()
+		p, _ = r.Project(key)
+		opts = r.Options()
 		return nil
 	})
+	was := p.CI
 	if err != nil || (was.Tracking && !watchesAnother(was, ci)) {
 		return err
 	}
@@ -241,18 +268,27 @@ func (c *Core) checkCI(ctx context.Context, key string, ci store.CI) error {
 	if ci.Provider == store.CIAzurePipelines {
 		in.ProjectURL, in.PATEnv = ci.ProjectURL, patEnvOf(ci)
 	}
-	res := c.ciCheck(ctx, in)
-	if res.Problem == "" {
+	if res := c.ciCheck(ctx, in); res.Problem != "" {
+		field := "tracking"
+		switch res.Problem {
+		case ProblemRepositoryUnreadable:
+			field = "repository"
+		case ProblemProjectUnreadable:
+			field = "project_url"
+		}
+		return &Error{Code: Invalid, Field: field, Message: res.Reason, Fix: res.Fix}
+	}
+	if was.Tracking {
 		return nil
 	}
-	field := "tracking"
-	switch res.Problem {
-	case ProblemRepositoryUnreadable:
-		field = "repository"
-	case ProblemProjectUnreadable:
-		field = "project_url"
+	p.CI.PATEnv = ci.PATEnv
+	for _, t := range ciTargets(p) {
+		e := store.CIRepository{Name: t.name, Provider: t.provider, Repository: t.repository, ProjectURL: t.projectURL}
+		if err := c.checkCIEntry(ctx, p, opts, e, "repositories."); err != nil {
+			return err
+		}
 	}
-	return &Error{Code: Invalid, Field: field, Message: res.Reason, Fix: res.Fix}
+	return nil
 }
 
 // ReportPushRemoteInput is the Factory's report_push_remote(url, full?).
@@ -293,6 +329,11 @@ func withoutLogin(url string) string {
 // updateCI changes a Project's CI settings with change, writing nothing
 // when they come out the same.
 func (c *Core) updateCI(key string, full bool, change func(*store.CI) error) (Written[ProjectView], error) {
+	return c.updateCIIn(key, full, func(_ store.Project, ci *store.CI) error { return change(ci) })
+}
+
+// updateCIIn is updateCI with the Project as the write reads it.
+func (c *Core) updateCIIn(key string, full bool, change func(store.Project, *store.CI) error) (Written[ProjectView], error) {
 	var before, after ProjectView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
@@ -303,7 +344,8 @@ func (c *Core) updateCI(key string, full bool, change func(*store.CI) error) (Wr
 		was, ci := p.CI, p.CI
 		ci.IgnoredWorkflows = slices.Clone(ci.IgnoredWorkflows)
 		ci.Rules = slices.Clone(ci.Rules)
-		if err := change(&ci); err != nil {
+		ci.Repositories = slices.Clone(ci.Repositories)
+		if err := change(p, &ci); err != nil {
 			return err
 		}
 		p.CI = ci

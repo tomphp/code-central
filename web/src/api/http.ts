@@ -86,6 +86,7 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     renameProject: (project, display_name) => call("POST", `${p(project)}/rename_project`, { display_name }),
     setLandingMethod: (project, landing) => call("POST", `${p(project)}/set_landing_method`, landing),
     setCITracking: (project, ci) => call("POST", `${p(project)}/set_ci_tracking`, { ...ci, full: true }),
+    setRepositoryCI: (project, name, ci) => call("POST", `${p(project)}/set_repository_ci`, { ...ci, name, full: true }),
     // Only the settings themselves: a Project's read adds spec and watcher.
     setGitHubIssues: (project, { on, repository, label, new_issues_need_me }) =>
       call("POST", `${p(project)}/set_github_issues`, { on, repository, label, new_issues_need_me, full: true }),

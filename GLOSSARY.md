@@ -284,6 +284,10 @@ _Avoid_: CI integration
 The pluggable part of CI Tracking that talks to one CI system, through that system's own command-line tool and login, or its API and a token from the environment. There are two: GitHub Actions, through `gh`, and Azure Pipelines. It is chosen per Repository, so one Project may use both.
 _Avoid_: Integration, connector
 
+**Not watched**:
+The CI choice of a Repository other than the Home whose CI CI Tracking never watches: it has no CI Provider, never gates landing, never raises a CI item and never counts towards a Ticket's CI result. A Repository whose Clone URL names no host a CI Provider is on is Not watched until the human chooses one.
+_Avoid_: CI off, untracked, ignored Repository
+
 **Azure Pipelines**:
 The CI Provider for Azure DevOps' CI. It reaches one Azure DevOps project, named by its URL, over Azure DevOps' API, using a PAT that the service's environment holds under a variable the Project names.
 _Avoid_: ADO provider, Azure DevOps CI
@@ -293,8 +297,16 @@ The Azure Pipelines setting that names the environment variable holding the Azur
 _Avoid_: PAT setting, token variable
 
 **Heartbeat**:
-The signal a running Factory sends Code Central on each poll, naming its Project, itself and its host, its state, its note and when the next is due. Code Central keeps only the latest of each Factory, in memory.
+The signal a running Factory sends Code Central on each poll, naming its Project, itself and its host, its state, its note and when the next is due. It also carries the Factory's Plan Limits, when it has any. Code Central keeps only the latest of each Factory, in memory.
 _Avoid_: ping, keepalive, check-in ("Ping" is already the session activity hook)
+
+**Plan Limits**:
+The Claude account's 5-hour limit and weekly limit, each as the percentage used and the time it resets, as a Factory last reported them from its Turns. They are account-wide, and go stale while the Factory is idle.
+_Avoid_: usage, session limit, quota
+
+**Limits popup**:
+The popup fixed at the bottom centre of the UI that shows the selected Project's Plan Limits as a meter for each window, when the Show Limits popup Option is on.
+_Avoid_: usage popup, meter popup, session popup
 
 **Chat**:
 Talking to Claude about a Project from the UI, outside any Ticket, through a floating icon and a pop-up.
@@ -410,11 +422,11 @@ The view of the CI Runs in a Project, or in all Projects with CI Tracking on: th
 _Avoid_: CI dashboard, build monitor
 
 **Usage**:
-The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used. It shows its parts in three tabs, Token usage, Context Size and Code Central calls, in that order, with the open tab in the URL; a session opens in its Session popup. Its token kinds include `chat`. Subagents nest under their parent session.
+The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used. It shows its parts in three tabs, Token usage, Context Size and Code Central calls, in that order, with the open tab in the URL; a session opens in its Session popup. Its token kinds include `chat`. Subagents nest under their parent session. It is not Plan Limits and not the Limits popup.
 _Avoid_: Analytics dashboard, stats, metrics
 
 **Session popup**:
-Usage's popup for one session (a Claim's main session or a Subagent): its Context Size response by response as a line chart, opened from Recent sessions. It is kept in the URL. A Subagent's popup links to its parent session's in place.
+Usage's popup for one session (a Claim's main session or a Subagent): its Context Size response by response as a line chart, opened from Recent sessions. It is kept in the URL. A Subagent's popup links to its parent session's in place. It is not the Limits popup.
 _Avoid_: session details, session modal, graph popup
 
 **Subagent**:
@@ -568,6 +580,10 @@ _Avoid_: Status board, overview, monitor
 **Option**:
 A global preference the human sets from the UI's Options view, kept by Code Central and applied at once.
 _Avoid_: Setting (that word stays for `settings.yaml`), preference, config
+
+**Show Limits popup**:
+The Option that shows or hides the Limits popup. It is on unless the human turns it off, and applies at once in every tab.
+_Avoid_: Show usage popup
 
 **gh path**:
 The Option naming where the `gh` command-line tool is, for when Code Central can't find it on its `PATH` or in the usual install places.

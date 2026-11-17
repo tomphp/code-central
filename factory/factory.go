@@ -313,6 +313,7 @@ type factory struct {
 	client                    *client.Client
 	events                    *sender[core.SessionEvent]  // posts Session Events
 	usage                     *sender[core.UsageResponse] // posts model responses' token usage
+	planLimits                latestPlanLimits            // the latest Plan Limits, sent on each Heartbeat
 	state                     *stateFile
 	lock                      *os.File // held for the Factory's whole life
 
