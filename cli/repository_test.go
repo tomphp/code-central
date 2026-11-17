@@ -102,6 +102,43 @@ func TestRepositoryAddEditMoveAndRemove(t *testing.T) {
 	}
 }
 
+// A Repository other than the Home needs a Clone URL, a local path or
+// both (Spec code-central-879): one with no Clone URL is local-only.
+func TestRepositoryAddsALocalOnlyRepositoryAndClearsACloneURL(t *testing.T) {
+	t.Parallel()
+	srv, env := repositoryEnv(t)
+
+	out := printed(t, run(t, env, "", "repository", "add", "notes", "--local-path", srcPath("notes")))
+	if !strings.Contains(out, "notes") || !strings.Contains(out, "(none: local only)") {
+		t.Fatalf("add printed:\n%s\nwant the list with notes shown local only", out)
+	}
+	printed(t, run(t, env, "", "repository", "add", "web", "--clone-url", "git@github.com:acme/web.git", "--local-path", srcPath("web")))
+
+	// An empty --clone-url, alone, clears it.
+	printed(t, run(t, env, "", "repository", "edit", "web", "--clone-url", ""))
+	p, _ := srv.Client.GetProject(context.Background(), "acme")
+	if web := p.Repositories[2]; web.Name != "web" || web.CloneURL != "" || web.LocalPath != srcPath("web") {
+		t.Fatalf("web = %+v, want no Clone URL and its local path kept", web)
+	}
+	// The service decides the rule: a local-only Repository keeps its
+	// local path.
+	if e := wantError(t, run(t, env, "", "repository", "edit", "web", "--local-path", ""), core.Invalid); e.Field != "clone_url" || e.Fix == "" {
+		t.Fatalf("clearing local-only web's local path: %+v, want clone_url refused with a fix", e)
+	}
+}
+
+func TestRepositoryAddNeedsACloneURLOrALocalPath(t *testing.T) {
+	t.Parallel()
+	srv, env := repositoryEnv(t)
+	r := run(t, env, "", "repository", "add", "web", "--base", "main")
+	if r.code != 1 || !strings.Contains(r.stderr, "needs --clone-url or --local-path") {
+		t.Fatalf("add with neither: exit %d, stderr %q, want 1 naming --clone-url and --local-path", r.code, r.stderr)
+	}
+	if got := landingOrder(t, srv); !slices.Equal(got, []string{"acme"}) {
+		t.Fatalf("order = %v, want the Home Repository alone", got)
+	}
+}
+
 func TestRepositoryRefusalsCarryTheirFix(t *testing.T) {
 	t.Parallel()
 	_, env := repositoryEnv(t)

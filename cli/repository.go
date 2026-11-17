@@ -18,7 +18,7 @@ import (
 // no command for them.
 func init() {
 	commands["repository"] = command{
-		usage: "repository list | add <name> --clone-url <url> [--base <branch>] [--local-path <path>] | edit <name> [--clone-url <url>] [--base <branch>] [--local-path <path>] | remove <name> | move <name> --before|--after <name>  [--project <key>]  manage the Project's Repositories, listed in landing order",
+		usage: "repository list | add <name> [--clone-url <url>] [--local-path <path>] [--base <branch>] | edit <name> [--clone-url <url>] [--base <branch>] [--local-path <path>] | remove <name> | move <name> --before|--after <name>  [--project <key>]  manage the Project's Repositories, listed in landing order; each needs a Clone URL, a local path or both, and one with no Clone URL is local-only, never cloned or pushed; an empty --clone-url or --local-path clears it",
 		run:   runRepository,
 	}
 }
@@ -80,8 +80,8 @@ func runRepository(ctx context.Context, e Env, args []string) error {
 		}
 		return printRepositories(e, p)
 	case "add":
-		if !set["clone-url"] {
-			return usagef("repository add needs --clone-url")
+		if !set["clone-url"] && !set["local-path"] {
+			return usagef("repository add needs --clone-url or --local-path")
 		}
 		w, err = sc.client.AddRepository(ctx, sc.project, core.AddRepositoryInput{Name: pos[0], CloneURL: *cloneURL, Base: *base, LocalPath: *localPath, Full: true})
 	case "edit":
@@ -155,8 +155,11 @@ func printRepositories(e Env, p core.ProjectView) error {
 		if r.Home {
 			name += " (home)"
 		}
-		if url == "" {
+		switch {
+		case url == "" && r.Home:
 			url = "(not reported yet)"
+		case url == "":
+			url = "(none: local only)"
 		}
 		if path == "" {
 			path = "-"

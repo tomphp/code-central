@@ -929,8 +929,8 @@ func decodeRepositories(key string, fs []repositoryFile) ([]Repository, string, 
 			out = append(out, Repository{Name: f.Name, Home: true})
 			continue
 		}
-		if f.CloneURL == "" {
-			return nil, field + ".clone_url", errors.New("missing")
+		if f.CloneURL == "" && f.LocalPath == "" {
+			return nil, field + ".clone_url", errors.New("missing, and so is local_path: a Repository needs one or both")
 		}
 		if f.Base == "" {
 			return nil, field + ".base", errors.New("missing")

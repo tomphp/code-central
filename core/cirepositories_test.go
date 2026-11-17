@@ -107,6 +107,23 @@ func TestAddingARepositoryFillsItsCIEntryInFromItsCloneURL(t *testing.T) {
 	}
 }
 
+func TestALocalOnlyRepositoryStartsNotWatchedAndCanBeGivenACIProviderByHand(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	p := f.addRepository(t, core.AddRepositoryInput{Name: "web", LocalPath: srcPath("web")})
+	if want := []core.CIRepositoryView{{Name: "web", NotWatched: true}}; !slices.Equal(p.CI.Repositories, want) {
+		t.Fatalf("CI entries %+v, want %+v", p.CI.Repositories, want)
+	}
+	w, err := f.core.SetRepositoryCI(human, "acme", core.SetRepositoryCIInput{Name: "web", Full: true,
+		RepositoryCI: core.RepositoryCI{Provider: store.CIGitHubActions, Repository: "acme/web"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []core.CIRepositoryView{{Name: "web", Provider: store.CIGitHubActions, Repository: "acme/web"}}; !slices.Equal(w.Record.CI.Repositories, want) {
+		t.Fatalf("CI entries %+v, want %+v", w.Record.CI.Repositories, want)
+	}
+}
+
 func TestAProjectWithTheHomeRepositoryAloneHasNoCIEntries(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")

@@ -84,6 +84,16 @@ acme-api (home)  git@github.com:acme/acme-api.git  main  -
 web              git@github.com:acme/web.git       main  -
 ```
 
+`--clone-url` is optional: a repository that is never pushed needs only the local path of its clone, and is local-only.
+
+```
+$ code-central repository add notes --local-path /home/you/src/notes
+NAME             CLONE URL                         BASE  LOCAL PATH
+acme-api (home)  git@github.com:acme/acme-api.git  main  -
+web              git@github.com:acme/web.git       main  -
+notes            (none: local only)                main  /home/you/src/notes
+```
+
 The list is the order accepted work lands in. The Factory clones each repository beside the Home Repository and gives every Ticket a worktree and a branch of the same name in each, named after the Ticket:
 
 ```
