@@ -1,0 +1,26 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "*",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/*.html"
+        ],
+        "createdAt": "2026-11-17T21:44:37.441Z",
+        "reason": "Claude: throwaway decision-round sketches, not shipped UI"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/*.html"
+        ],
+        "createdAt": "2026-11-17T21:56:18.344Z",
+        "reason": "Claude: throwaway decision-round sketches predating DESIGN.md, not shipped UI"
+      }
+    ]
+  }
+}

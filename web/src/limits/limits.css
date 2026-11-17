@@ -5,8 +5,8 @@
 .limits-window { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .limits-name { font-weight: 600; }
 .limits-bar { width: 96px; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
-.limits-fill { height: 100%; background: #2e9e5b; }
-.limits-bar.amber .limits-fill { background: #e0a020; }
+.limits-fill { height: 100%; background: var(--r-review); }
+.limits-bar.amber .limits-fill { background: var(--r-answer); }
 .limits-bar.red .limits-fill { background: var(--r-failed); }
 .limits-percent { font-variant-numeric: tabular-nums; min-width: 3ch; text-align: right; }
 .limits-reset, .limits-age { color: var(--muted); }

@@ -1,6 +1,7 @@
 // SessionsTable is Usage's Recent sessions table, with the Subagent
 // disclosures whose state it keeps.
 import { Fragment, useState } from "react";
+import { Caret } from "../controls/Icon";
 import { sessionKey, type SessionUsageFilter, type UsageSession } from "../api/types";
 import { count } from "../format";
 import { clickTo, hrefFor, type UiLocation } from "../url";
@@ -101,7 +102,7 @@ function SessionRow({ s, here, projectName, navigate, open, onToggle }: SessionR
         </a>
         {onToggle && n > 0 && (
           <button type="button" className="link usage-disclosure" aria-expanded={open} onClick={onToggle}>
-            <span aria-hidden="true">{open ? "▾" : "▸"}</span> {n} {n === 1 ? "subagent" : "subagents"}
+            <Caret open={open} /> {n} {n === 1 ? "subagent" : "subagents"}
           </button>
         )}
       </td>

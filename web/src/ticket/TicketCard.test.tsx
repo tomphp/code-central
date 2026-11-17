@@ -28,7 +28,7 @@ describe("TicketCard", () => {
     const card = screen.getByRole("link");
     expect(card.className).toBe("board-card needs reason-in_review");
     expect(screen.getByText("Prototype").className).toBe("stage-badge");
-    expect(screen.getByTitle("Has open Blockers").textContent).toBe("⛔ Blocked");
+    expect(screen.getByTitle("Has open Blockers")).toHaveTextContent(/^Blocked$/);
     expect(screen.getByRole("img", { name: "Needs you" }).className).toBe("dot reason-in_review");
     expect(card.querySelector(".board-card-spec")!.textContent).toBe("Map Sign-in");
   });

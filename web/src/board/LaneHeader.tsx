@@ -3,6 +3,7 @@
 // Requirement), the title, the needs-you dot and the headline, then how many
 // Tickets the lane shows. The line stays at the left while the columns
 // scroll sideways. The chevron folds the lane; the rest opens the Spec.
+import { Caret } from "../controls/Icon";
 import { KindBadge } from "../controls/KindBadge";
 import { countStates, describeSpec } from "../inbox/describeSpec";
 import { ShortId } from "../inbox/ShortId";
@@ -32,7 +33,7 @@ export function LaneHeader({ id, spec, all, shown, link, collapsed, onToggle }: 
     <section className={`lane-header${reasonOf(id) ? " needs" : ""}`} aria-label={title}>
       <div className="lane-header-line">
         <button className="chev" aria-expanded={!collapsed} aria-label={title} onClick={onToggle}>
-          {collapsed ? "▸" : "▾"}
+          <Caret open={!collapsed} />
         </button>
         <a className="lane-header-link" {...link}>
           <ShortId id={id} />

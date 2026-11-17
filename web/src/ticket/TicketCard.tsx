@@ -8,6 +8,7 @@
 // State chip and the Reason badge. It pulses when it joins its column, and when its
 // Ticket's last update changes.
 import type { MouseEvent } from "react";
+import { Blocked } from "../controls/Icon";
 import type { TicketRow } from "../api/types";
 import { KindBadge } from "../controls/KindBadge";
 import { NeedsYouDot, useNeedsMe } from "../needsme/context";
@@ -52,7 +53,7 @@ export function TicketCard({ t, link, badge, spec, joined, inNeedsMe }: TicketCa
         <PartlyLandedBadge partly={t.partly_landed} />
         {t.blocked && (
           <span className="board-blocked" title="Has open Blockers">
-            ⛔ Blocked
+            <Blocked /> Blocked
           </span>
         )}
         <NeedsYouDot id={t.id} />

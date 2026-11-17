@@ -4,6 +4,7 @@
 import type { MouseEvent } from "react";
 import type { ProjectRow } from "../api/types";
 import { clickTo, hrefFor, type UiLocation } from "../url";
+import { ViewHeader } from "../controls/ViewHeader";
 import { CISection } from "./CISection";
 import { FactoriesSection } from "./FactoriesSection";
 import { GitHubIssuesSection } from "./GitHubIssuesSection";
@@ -53,21 +54,22 @@ export function ProjectOptions({
   const back: UiLocation = { view: "inbox", project: project?.key };
 
   return (
-    <main aria-label="Project Options" className="project-options">
-      <a
-        className="project-options-back"
-        href={hrefFor(back)}
-        onClick={clickTo(navigate, back)}
-      >
-        Back to the inbox
-      </a>
+    <main aria-label="Project Options" className="view-shell">
+      <ViewHeader
+        title={project ? `${project.display_name}: Project Options` : "Project Options"}
+        right={
+          <a className="btn" href={hrefFor(back)} onClick={clickTo(navigate, back)}>
+            Back to the inbox
+          </a>
+        }
+      />
+      <div className="project-options">
       {!projects ? (
         <p className="empty">Loading…</p>
       ) : !project ? (
         <p className="empty">There is no Project {key}.</p>
       ) : (
         <>
-          <h1>{project.display_name}: Project Options</h1>
           <div className="project-options-layout">
             <nav aria-label="Sections" className="project-options-menu">
               <ul>
@@ -94,6 +96,7 @@ export function ProjectOptions({
           </div>
         </>
       )}
+      </div>
     </main>
   );
 }

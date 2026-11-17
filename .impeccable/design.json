@@ -1,0 +1,729 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-17T00:00:00Z",
+  "title": "Design System: Code Central",
+  "extensions": {
+    "colorMeta": {
+      "midnight-enamel": {
+        "role": "primary",
+        "displayName": "Midnight Enamel",
+        "canonical": "oklch(26.4% 0.077 265)",
+        "tonalRamp": [
+          "oklch(15% 0.032 265)",
+          "oklch(27% 0.046 265)",
+          "oklch(39% 0.059 265)",
+          "oklch(51% 0.073 265)",
+          "oklch(63% 0.068 265)",
+          "oklch(75% 0.055 265)",
+          "oklch(86% 0.043 265)",
+          "oklch(95% 0.032 265)"
+        ]
+      },
+      "rail-lit": {
+        "role": "primary",
+        "displayName": "Rail Lit",
+        "canonical": "oklch(36.4% 0.107 265)",
+        "tonalRamp": [
+          "oklch(15% 0.045 265)",
+          "oklch(27% 0.064 265)",
+          "oklch(39% 0.082 265)",
+          "oklch(51% 0.101 265)",
+          "oklch(63% 0.095 265)",
+          "oklch(75% 0.076 265)",
+          "oklch(86% 0.059 265)",
+          "oklch(95% 0.045 265)"
+        ]
+      },
+      "rail-text": {
+        "role": "neutral",
+        "displayName": "Rail Text",
+        "canonical": "oklch(94.0% 0.013 271)",
+        "tonalRamp": [
+          "oklch(15% 0.005 271)",
+          "oklch(27% 0.007 271)",
+          "oklch(39% 0.010 271)",
+          "oklch(51% 0.012 271)",
+          "oklch(63% 0.011 271)",
+          "oklch(75% 0.009 271)",
+          "oklch(86% 0.007 271)",
+          "oklch(95% 0.005 271)"
+        ]
+      },
+      "rail-muted": {
+        "role": "neutral",
+        "displayName": "Rail Muted",
+        "canonical": "oklch(78.4% 0.041 270)",
+        "tonalRamp": [
+          "oklch(15% 0.017 270)",
+          "oklch(27% 0.025 270)",
+          "oklch(39% 0.032 270)",
+          "oklch(51% 0.039 270)",
+          "oklch(63% 0.037 270)",
+          "oklch(75% 0.029 270)",
+          "oklch(86% 0.023 270)",
+          "oklch(95% 0.017 270)"
+        ]
+      },
+      "porcelain": {
+        "role": "primary",
+        "displayName": "Porcelain",
+        "canonical": "oklch(96.1% 0.008 91)",
+        "tonalRamp": [
+          "oklch(15% 0.003 91)",
+          "oklch(27% 0.005 91)",
+          "oklch(39% 0.006 91)",
+          "oklch(51% 0.008 91)",
+          "oklch(63% 0.007 91)",
+          "oklch(75% 0.006 91)",
+          "oklch(86% 0.005 91)",
+          "oklch(95% 0.003 91)"
+        ]
+      },
+      "panel-white": {
+        "role": "neutral",
+        "displayName": "Panel White",
+        "canonical": "oklch(100.0% 0.000 90)",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(27% 0.000 90)",
+          "oklch(39% 0.000 90)",
+          "oklch(51% 0.000 90)",
+          "oklch(63% 0.000 90)",
+          "oklch(75% 0.000 90)",
+          "oklch(86% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "linen": {
+        "role": "neutral",
+        "displayName": "Linen",
+        "canonical": "oklch(93.1% 0.012 92)",
+        "tonalRamp": [
+          "oklch(15% 0.005 92)",
+          "oklch(27% 0.007 92)",
+          "oklch(39% 0.010 92)",
+          "oklch(51% 0.012 92)",
+          "oklch(63% 0.011 92)",
+          "oklch(75% 0.009 92)",
+          "oklch(86% 0.007 92)",
+          "oklch(95% 0.005 92)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(21.5% 0.036 273)",
+        "tonalRamp": [
+          "oklch(15% 0.015 273)",
+          "oklch(27% 0.021 273)",
+          "oklch(39% 0.028 273)",
+          "oklch(51% 0.034 273)",
+          "oklch(63% 0.032 273)",
+          "oklch(75% 0.026 273)",
+          "oklch(86% 0.020 273)",
+          "oklch(95% 0.015 273)"
+        ]
+      },
+      "slate": {
+        "role": "neutral",
+        "displayName": "Slate",
+        "canonical": "oklch(46.9% 0.027 272)",
+        "tonalRamp": [
+          "oklch(15% 0.011 272)",
+          "oklch(27% 0.016 272)",
+          "oklch(39% 0.020 272)",
+          "oklch(51% 0.025 272)",
+          "oklch(63% 0.024 272)",
+          "oklch(75% 0.019 272)",
+          "oklch(86% 0.015 272)",
+          "oklch(95% 0.011 272)"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "oklch(88.2% 0.017 92)",
+        "tonalRamp": [
+          "oklch(15% 0.007 92)",
+          "oklch(27% 0.010 92)",
+          "oklch(39% 0.013 92)",
+          "oklch(51% 0.016 92)",
+          "oklch(63% 0.015 92)",
+          "oklch(75% 0.012 92)",
+          "oklch(86% 0.009 92)",
+          "oklch(95% 0.007 92)"
+        ]
+      },
+      "cobalt-signal": {
+        "role": "secondary",
+        "displayName": "Cobalt Signal",
+        "canonical": "oklch(51.6% 0.198 264)",
+        "tonalRamp": [
+          "oklch(15% 0.083 264)",
+          "oklch(27% 0.117 264)",
+          "oklch(39% 0.152 264)",
+          "oklch(51% 0.186 264)",
+          "oklch(63% 0.175 264)",
+          "oklch(75% 0.140 264)",
+          "oklch(86% 0.109 264)",
+          "oklch(95% 0.083 264)"
+        ]
+      },
+      "danger": {
+        "role": "neutral",
+        "displayName": "Danger",
+        "canonical": "oklch(53.4% 0.182 28)",
+        "tonalRamp": [
+          "oklch(15% 0.076 28)",
+          "oklch(27% 0.108 28)",
+          "oklch(39% 0.139 28)",
+          "oklch(51% 0.171 28)",
+          "oklch(63% 0.161 28)",
+          "oklch(75% 0.129 28)",
+          "oklch(86% 0.100 28)",
+          "oklch(95% 0.076 28)"
+        ]
+      },
+      "line-answer": {
+        "role": "tertiary",
+        "displayName": "Answer Amber",
+        "canonical": "oklch(74.2% 0.153 75)",
+        "tonalRamp": [
+          "oklch(15% 0.064 75)",
+          "oklch(27% 0.091 75)",
+          "oklch(39% 0.118 75)",
+          "oklch(51% 0.144 75)",
+          "oklch(63% 0.135 75)",
+          "oklch(75% 0.109 75)",
+          "oklch(86% 0.084 75)",
+          "oklch(95% 0.064 75)"
+        ]
+      },
+      "line-answered": {
+        "role": "tertiary",
+        "displayName": "Answered Violet",
+        "canonical": "oklch(53.1% 0.186 297)",
+        "tonalRamp": [
+          "oklch(15% 0.078 297)",
+          "oklch(27% 0.110 297)",
+          "oklch(39% 0.142 297)",
+          "oklch(51% 0.175 297)",
+          "oklch(63% 0.164 297)",
+          "oklch(75% 0.132 297)",
+          "oklch(86% 0.102 297)",
+          "oklch(95% 0.078 297)"
+        ]
+      },
+      "line-silent": {
+        "role": "tertiary",
+        "displayName": "Silent Grey",
+        "canonical": "oklch(55.5% 0.030 266)",
+        "tonalRamp": [
+          "oklch(15% 0.012 266)",
+          "oklch(27% 0.018 266)",
+          "oklch(39% 0.023 266)",
+          "oklch(51% 0.028 266)",
+          "oklch(63% 0.026 266)",
+          "oklch(75% 0.021 266)",
+          "oklch(86% 0.016 266)",
+          "oklch(95% 0.012 266)"
+        ]
+      },
+      "line-long": {
+        "role": "tertiary",
+        "displayName": "Long Slate",
+        "canonical": "oklch(45.2% 0.039 264)",
+        "tonalRamp": [
+          "oklch(15% 0.016 264)",
+          "oklch(27% 0.023 264)",
+          "oklch(39% 0.030 264)",
+          "oklch(51% 0.037 264)",
+          "oklch(63% 0.034 264)",
+          "oklch(75% 0.027 264)",
+          "oklch(86% 0.021 264)",
+          "oklch(95% 0.016 264)"
+        ]
+      },
+      "line-failed": {
+        "role": "tertiary",
+        "displayName": "Failed Scarlet",
+        "canonical": "oklch(57.7% 0.195 29)",
+        "tonalRamp": [
+          "oklch(15% 0.081 29)",
+          "oklch(27% 0.115 29)",
+          "oklch(39% 0.149 29)",
+          "oklch(51% 0.183 29)",
+          "oklch(63% 0.172 29)",
+          "oklch(75% 0.138 29)",
+          "oklch(86% 0.107 29)",
+          "oklch(95% 0.081 29)"
+        ]
+      },
+      "line-review": {
+        "role": "tertiary",
+        "displayName": "Review Green",
+        "canonical": "oklch(59.2% 0.133 154)",
+        "tonalRamp": [
+          "oklch(15% 0.056 154)",
+          "oklch(27% 0.079 154)",
+          "oklch(39% 0.102 154)",
+          "oklch(51% 0.125 154)",
+          "oklch(63% 0.118 154)",
+          "oklch(75% 0.094 154)",
+          "oklch(86% 0.073 154)",
+          "oklch(95% 0.056 154)"
+        ]
+      },
+      "line-landing": {
+        "role": "tertiary",
+        "displayName": "Landing Teal",
+        "canonical": "oklch(55.3% 0.094 185)",
+        "tonalRamp": [
+          "oklch(15% 0.039 185)",
+          "oklch(27% 0.056 185)",
+          "oklch(39% 0.072 185)",
+          "oklch(51% 0.089 185)",
+          "oklch(63% 0.083 185)",
+          "oklch(75% 0.067 185)",
+          "oklch(86% 0.052 185)",
+          "oklch(95% 0.039 185)"
+        ]
+      },
+      "line-blocked": {
+        "role": "tertiary",
+        "displayName": "Blocked Ochre",
+        "canonical": "oklch(59.8% 0.118 75)",
+        "tonalRamp": [
+          "oklch(15% 0.049 75)",
+          "oklch(27% 0.070 75)",
+          "oklch(39% 0.090 75)",
+          "oklch(51% 0.111 75)",
+          "oklch(63% 0.104 75)",
+          "oklch(75% 0.083 75)",
+          "oklch(86% 0.065 75)",
+          "oklch(95% 0.049 75)"
+        ]
+      },
+      "line-external": {
+        "role": "tertiary",
+        "displayName": "External Cyan",
+        "canonical": "oklch(57.2% 0.100 224)",
+        "tonalRamp": [
+          "oklch(15% 0.042 224)",
+          "oklch(27% 0.059 224)",
+          "oklch(39% 0.077 224)",
+          "oklch(51% 0.094 224)",
+          "oklch(63% 0.088 224)",
+          "oklch(75% 0.071 224)",
+          "oklch(86% 0.055 224)",
+          "oklch(95% 0.042 224)"
+        ]
+      },
+      "state-draft": {
+        "role": "tertiary",
+        "displayName": "Draft Grey",
+        "canonical": "oklch(65.0% 0.016 268)",
+        "tonalRamp": [
+          "oklch(15% 0.007 268)",
+          "oklch(27% 0.009 268)",
+          "oklch(39% 0.012 268)",
+          "oklch(51% 0.015 268)",
+          "oklch(63% 0.014 268)",
+          "oklch(75% 0.011 268)",
+          "oklch(86% 0.009 268)",
+          "oklch(95% 0.007 268)"
+        ]
+      },
+      "state-ready": {
+        "role": "tertiary",
+        "displayName": "Ready Slate-Blue",
+        "canonical": "oklch(52.9% 0.060 266)",
+        "tonalRamp": [
+          "oklch(15% 0.025 266)",
+          "oklch(27% 0.036 266)",
+          "oklch(39% 0.046 266)",
+          "oklch(51% 0.057 266)",
+          "oklch(63% 0.053 266)",
+          "oklch(75% 0.043 266)",
+          "oklch(86% 0.033 266)",
+          "oklch(95% 0.025 266)"
+        ]
+      },
+      "state-in-progress": {
+        "role": "tertiary",
+        "displayName": "In Progress Cobalt",
+        "canonical": "oklch(53.2% 0.190 264)",
+        "tonalRamp": [
+          "oklch(15% 0.079 264)",
+          "oklch(27% 0.112 264)",
+          "oklch(39% 0.146 264)",
+          "oklch(51% 0.179 264)",
+          "oklch(63% 0.168 264)",
+          "oklch(75% 0.135 264)",
+          "oklch(86% 0.104 264)",
+          "oklch(95% 0.079 264)"
+        ]
+      },
+      "state-done": {
+        "role": "tertiary",
+        "displayName": "Done Green",
+        "canonical": "oklch(51.4% 0.118 153)",
+        "tonalRamp": [
+          "oklch(15% 0.049 153)",
+          "oklch(27% 0.070 153)",
+          "oklch(39% 0.091 153)",
+          "oklch(51% 0.111 153)",
+          "oklch(63% 0.104 153)",
+          "oklch(75% 0.084 153)",
+          "oklch(86% 0.065 153)",
+          "oklch(95% 0.049 153)"
+        ]
+      },
+      "ribbon-1": {
+        "role": "tertiary",
+        "displayName": "Ribbon Coral",
+        "canonical": "oklch(73.7% 0.132 37)",
+        "tonalRamp": [
+          "oklch(15% 0.055 37)",
+          "oklch(27% 0.078 37)",
+          "oklch(39% 0.101 37)",
+          "oklch(51% 0.124 37)",
+          "oklch(63% 0.117 37)",
+          "oklch(75% 0.094 37)",
+          "oklch(86% 0.072 37)",
+          "oklch(95% 0.055 37)"
+        ]
+      },
+      "ribbon-2": {
+        "role": "tertiary",
+        "displayName": "Ribbon Sky",
+        "canonical": "oklch(71.5% 0.130 248)",
+        "tonalRamp": [
+          "oklch(15% 0.054 248)",
+          "oklch(27% 0.077 248)",
+          "oklch(39% 0.100 248)",
+          "oklch(51% 0.123 248)",
+          "oklch(63% 0.115 248)",
+          "oklch(75% 0.092 248)",
+          "oklch(86% 0.072 248)",
+          "oklch(95% 0.054 248)"
+        ]
+      },
+      "ribbon-3": {
+        "role": "tertiary",
+        "displayName": "Ribbon Mustard",
+        "canonical": "oklch(82.0% 0.140 89)",
+        "tonalRamp": [
+          "oklch(15% 0.058 89)",
+          "oklch(27% 0.083 89)",
+          "oklch(39% 0.107 89)",
+          "oklch(51% 0.132 89)",
+          "oklch(63% 0.124 89)",
+          "oklch(75% 0.099 89)",
+          "oklch(86% 0.077 89)",
+          "oklch(95% 0.058 89)"
+        ]
+      },
+      "ribbon-4": {
+        "role": "tertiary",
+        "displayName": "Ribbon Leaf",
+        "canonical": "oklch(75.5% 0.135 149)",
+        "tonalRamp": [
+          "oklch(15% 0.057 149)",
+          "oklch(27% 0.080 149)",
+          "oklch(39% 0.104 149)",
+          "oklch(51% 0.127 149)",
+          "oklch(63% 0.120 149)",
+          "oklch(75% 0.096 149)",
+          "oklch(86% 0.074 149)",
+          "oklch(95% 0.057 149)"
+        ]
+      },
+      "ribbon-5": {
+        "role": "tertiary",
+        "displayName": "Ribbon Lilac",
+        "canonical": "oklch(72.1% 0.141 311)",
+        "tonalRamp": [
+          "oklch(15% 0.059 311)",
+          "oklch(27% 0.084 311)",
+          "oklch(39% 0.108 311)",
+          "oklch(51% 0.133 311)",
+          "oklch(63% 0.125 311)",
+          "oklch(75% 0.100 311)",
+          "oklch(86% 0.078 311)",
+          "oklch(95% 0.059 311)"
+        ]
+      },
+      "ribbon-6": {
+        "role": "tertiary",
+        "displayName": "Ribbon Aqua",
+        "canonical": "oklch(79.1% 0.103 191)",
+        "tonalRamp": [
+          "oklch(15% 0.043 191)",
+          "oklch(27% 0.061 191)",
+          "oklch(39% 0.079 191)",
+          "oklch(51% 0.097 191)",
+          "oklch(63% 0.091 191)",
+          "oklch(75% 0.073 191)",
+          "oklch(86% 0.057 191)",
+          "oklch(95% 0.043 191)"
+        ]
+      },
+      "night-surface": {
+        "role": "neutral",
+        "displayName": "Night Surface",
+        "canonical": "oklch(21.7% 0.055 267)",
+        "tonalRamp": [
+          "oklch(15% 0.023 267)",
+          "oklch(27% 0.033 267)",
+          "oklch(39% 0.042 267)",
+          "oklch(51% 0.052 267)",
+          "oklch(63% 0.049 267)",
+          "oklch(75% 0.039 267)",
+          "oklch(86% 0.030 267)",
+          "oklch(95% 0.023 267)"
+        ]
+      },
+      "night-panel": {
+        "role": "neutral",
+        "displayName": "Night Panel",
+        "canonical": "oklch(26.2% 0.070 267)",
+        "tonalRamp": [
+          "oklch(15% 0.029 267)",
+          "oklch(27% 0.041 267)",
+          "oklch(39% 0.053 267)",
+          "oklch(51% 0.066 267)",
+          "oklch(63% 0.062 267)",
+          "oklch(75% 0.049 267)",
+          "oklch(86% 0.038 267)",
+          "oklch(95% 0.029 267)"
+        ]
+      },
+      "night-primary": {
+        "role": "primary",
+        "displayName": "Night Primary",
+        "canonical": "oklch(76.4% 0.120 266)",
+        "tonalRamp": [
+          "oklch(15% 0.050 266)",
+          "oklch(27% 0.071 266)",
+          "oklch(39% 0.092 266)",
+          "oklch(51% 0.113 266)",
+          "oklch(63% 0.106 266)",
+          "oklch(75% 0.085 266)",
+          "oklch(86% 0.066 266)",
+          "oklch(95% 0.050 266)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Focus Mode's item title and Question (32px); All clear at 40px."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "A Ticket's or Requirement's title in the detail pane."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "The view head's name and the rail brand, after the roundel."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "All running text, rows and controls."
+      },
+      "label": {
+        "displayName": "Signage Label",
+        "purpose": "Uppercase tracked names of a line (group heads, Board column heads); rail section headings at 10.5px/.14em."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Ids, counts and times, with tabular figures."
+      }
+    },
+    "shadows": [
+      {
+        "name": "float",
+        "value": "0 6px 20px rgb(18 34 74 / .14)",
+        "purpose": "--shadow: the Chat icon. Dark: 0 8px 28px rgb(0 0 0 / .45)."
+      },
+      {
+        "name": "menu",
+        "value": "0 8px 24px rgb(0 0 0 / .14)",
+        "purpose": "+ New menu and Columns menu; row menus and the Factory tooltip use 0 4px 16px rgb(0 0 0 / .12)."
+      },
+      {
+        "name": "modal",
+        "value": "0 12px 40px rgb(0 0 0 / .25)",
+        "purpose": "The modal card, over a rgb(0 0 0 / .35) scrim."
+      },
+      {
+        "name": "station-halo",
+        "value": "0 0 0 4px color-mix(in srgb, var(--rc) 25%, transparent)",
+        "purpose": "A station or Map node that waits on the human (Map nodes use 3px at 22%). A signal, not elevation."
+      },
+      {
+        "name": "focus",
+        "value": "outline: 2px solid var(--accent); outline-offset: 2px",
+        "purpose": "Every focus ring; Porcelain (#f4f2ec) on the rail and view head."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-change",
+        "value": "120ms ease-out",
+        "purpose": "Border and background colour on buttons, rows and cards."
+      },
+      {
+        "name": "pulse",
+        "value": "600ms ease-out, background to --surface-2 at 30%",
+        "purpose": "Flashes an element whose content changed; under reduced motion a brightness(1.4) flash instead."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "single-column",
+        "value": "900px",
+        "purpose": "Below: the Inbox becomes one column and the rail wraps into a top band. At and above: Project Options gains its sticky section menu."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one main action in a pane: Answer, Move, Save.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Answer</button>",
+      "css": ".ds-btn { font-family: var(--font, 'Hanken Grotesk Variable', system-ui, sans-serif); font-size: 14px; font-weight: 600; border-radius: 6px; padding: 5px 12px; border: 1px solid var(--border, #dcd8cc); cursor: pointer; transition: border-color 120ms ease-out, background-color 120ms ease-out; } .ds-btn-primary { background: var(--primary, #12224a); border-color: var(--primary, #12224a); color: var(--on-primary, #fff); } .ds-btn-primary:hover { background: color-mix(in srgb, var(--primary, #12224a) 86%, var(--accent, #2a5bd7)); } .ds-btn:focus-visible { outline: 2px solid var(--accent, #2a5bd7); outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Every other action: Dismiss, Prototype this, Edit.",
+      "html": "<button class=\"ds-btn2\">Dismiss</button>",
+      "css": ".ds-btn2 { font-family: var(--font, 'Hanken Grotesk Variable', system-ui, sans-serif); font-size: 14px; font-weight: 600; border-radius: 6px; padding: 5px 12px; background: var(--surface, #fff); color: var(--text, #14182a); border: 1px solid var(--border, #dcd8cc); cursor: pointer; transition: border-color 120ms ease-out; } .ds-btn2:hover { border-color: var(--muted, #555a6a); } .ds-btn2:focus-visible { outline: 2px solid var(--accent, #2a5bd7); outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Answer boxes, selects and option fields.",
+      "html": "<textarea class=\"ds-input\" rows=\"2\">Follow the system, with the switch as an override.</textarea>",
+      "css": ".ds-input { font-family: var(--font, 'Hanken Grotesk Variable', system-ui, sans-serif); font-size: 14px; width: 280px; color: var(--text, #14182a); background: var(--surface, #fff); border: 1px solid var(--border, #dcd8cc); border-radius: 6px; padding: 6px 8px; caret-color: var(--accent, #2a5bd7); resize: vertical; } .ds-input:focus-visible { outline: 2px solid var(--accent, #2a5bd7); outline-offset: 2px; }"
+    },
+    {
+      "name": "Rail",
+      "kind": "nav",
+      "refersTo": "rail-filter-on",
+      "description": "The midnight enamel shell: brand with roundel, rail-styled + New, State keys as stations, Project ribbons as bars.",
+      "html": "<nav class=\"ds-rail\"><div class=\"ds-brand\">Code Central</div><div class=\"ds-h\">Projects</div><a class=\"ds-f ds-on\"><span><i class=\"ds-ribbon\"></i>Demo</span><b class=\"ds-loud\">3</b></a><div class=\"ds-h\">View</div><a class=\"ds-f\"><span>Board</span><b>15</b></a><a class=\"ds-f\"><span><i class=\"ds-stn\" style=\"--st:#2f62d8\"></i>In Progress</span><b>1</b></a><a class=\"ds-f\"><span><i class=\"ds-stn\" style=\"--st:#e39b12\"></i>Needs Answer</span><b>1</b></a></nav>",
+      "css": ".ds-rail { font-family: var(--font, 'Hanken Grotesk Variable', system-ui, sans-serif); width: 224px; background: #12224a; color: #e8ebf4; padding: 18px 10px; display: flex; flex-direction: column; gap: 1px; font-size: 14px; } .ds-brand { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 800; padding: 0 8px 12px; } .ds-brand::before { content: ''; width: 14px; height: 14px; border-radius: 50%; border: 4px solid currentColor; box-sizing: border-box; } .ds-h { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; color: #aeb8d4; padding: 14px 8px 6px; } .ds-f { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; border-radius: 6px; cursor: pointer; } .ds-f:hover { background: color-mix(in srgb, #213a76 55%, transparent); } .ds-f span { display: inline-flex; align-items: center; gap: 9px; } .ds-f b { font: 500 12px 'Red Hat Mono Variable', ui-monospace, monospace; color: #aeb8d4; font-variant-numeric: tabular-nums; } .ds-f b.ds-loud { color: #f5b43c; font-weight: 700; } .ds-on { background: #213a76; color: #fff; font-weight: 700; } .ds-ribbon { width: 4px; height: 16px; border-radius: 2px; background: #5aa9f0; } .ds-stn { width: 11px; height: 11px; border-radius: 50%; box-sizing: border-box; border: 3px solid var(--st); background: #12224a; }"
+    },
+    {
+      "name": "State Chip",
+      "kind": "chip",
+      "refersTo": "state-chip",
+      "description": "A State's name with its station, on a wash of its line; the current State fills its station.",
+      "html": "<span class=\"ds-chip\" style=\"--st:#5b6b8f\">Ready</span> <span class=\"ds-chip ds-here\" style=\"--st:#e39b12\">Needs Answer</span>",
+      "css": ".ds-chip { font-family: var(--font, 'Hanken Grotesk Variable', system-ui, sans-serif); display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 1px 8px 1px 5px; border-radius: 999px; color: var(--text, #14182a); background: color-mix(in srgb, var(--st) 12%, transparent); border: 1px solid color-mix(in srgb, var(--st) 35%, transparent); } .ds-chip::before { content: ''; width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box; border: 2.5px solid var(--st); background: var(--surface, #fff); } .ds-here { background: color-mix(in srgb, var(--st) 24%, var(--surface, #fff)); border-color: var(--st); font-weight: 700; } .ds-here::before { background: var(--st); }"
+    },
+    {
+      "name": "Board Card",
+      "kind": "card",
+      "refersTo": "board-card",
+      "description": "A Ticket on the Board; one that needs the human is ringed all round in its reason's ink, never side-striped.",
+      "html": "<div style=\"display:flex;gap:8px\"><a class=\"ds-card\"><span class=\"ds-tid\">#22</span><span class=\"ds-ct\">Theme the charts</span></a><a class=\"ds-card ds-needs\" style=\"--rc:#e39b12\"><span class=\"ds-tid\">#19</span><span class=\"ds-ct\">Theme the Inbox</span></a></div>",
+      "css": ".ds-card { font-family: var(--font, 'Hanken Grotesk Variable', system-ui, sans-serif); display: flex; flex-direction: column; gap: 6px; width: 180px; padding: 10px 12px; background: var(--surface, #fff); border: 1px solid var(--border, #dcd8cc); border-radius: 6px; color: var(--text, #14182a); font-size: 14px; cursor: pointer; transition: border-color 120ms ease-out; } .ds-card:hover { border-color: var(--muted, #555a6a); } .ds-needs { border-color: var(--rc); box-shadow: 0 0 0 1px var(--rc); } .ds-tid { font: 600 12px 'Red Hat Mono Variable', ui-monospace, monospace; color: var(--muted, #555a6a); font-variant-numeric: tabular-nums; } .ds-ct { font-weight: 500; line-height: 1.35; }"
+    },
+    {
+      "name": "Needs Me Line",
+      "kind": "custom",
+      "description": "A reason group as one line: head over a 3px stroke, a 4px line dropping through a station on each row, ending at the last; the selected station grows and fills.",
+      "html": "<div class=\"ds-lg\" style=\"--rc:#d4382d\"><div class=\"ds-gh\"><span>Failed</span><span>2</span></div><a class=\"ds-row ds-cur\"><span class=\"ds-tid\">#22</span> Theme the charts</a><a class=\"ds-row\"><span class=\"ds-tid\">#24</span> Fix the Board scroll</a></div>",
+      "css": ".ds-lg { font-family: var(--font, 'Hanken Grotesk Variable', system-ui, sans-serif); width: 360px; background: var(--bg, #f4f2ec); font-size: 14px; } .ds-gh { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; margin: 0 14px; padding: 14px 0 6px; color: color-mix(in srgb, var(--rc) 55%, var(--text, #14182a)); border-bottom: 3px solid var(--rc); } .ds-gh span:last-child { font-family: 'Red Hat Mono Variable', ui-monospace, monospace; } .ds-row { position: relative; display: block; padding: 9px 14px 9px 40px; border-bottom: 1px solid var(--border, #dcd8cc); color: var(--text, #14182a); cursor: pointer; } .ds-row:hover { background: color-mix(in srgb, var(--surface, #fff) 70%, transparent); } .ds-row::before { content: ''; position: absolute; left: 19px; top: 0; bottom: 0; width: 4px; background: var(--rc); } .ds-row:last-child::before { bottom: auto; height: 22px; } .ds-row::after { content: ''; position: absolute; left: 14px; top: 13px; width: 14px; height: 14px; border-radius: 50%; box-sizing: border-box; background: var(--surface, #fff); border: 3.5px solid var(--rc); } .ds-cur { background: var(--surface, #fff); font-weight: 700; } .ds-cur::after { width: 18px; height: 18px; left: 12px; top: 11px; background: var(--rc); box-shadow: inset 0 0 0 3px var(--surface, #fff); } .ds-tid { font: 600 12px 'Red Hat Mono Variable', ui-monospace, monospace; color: var(--muted, #555a6a); }"
+    },
+    {
+      "name": "Stage Strip",
+      "kind": "custom",
+      "description": "A Requirement's route: a 5px line with a station per Stage; done in Review Green, running in Cobalt, queued dashed, the shown Stage an interchange ring.",
+      "html": "<ol class=\"ds-strip\"><li class=\"ds-seg ds-done\"><span>Grilling</span></li><li class=\"ds-seg ds-done\"><span>Spec</span></li><li class=\"ds-seg ds-queued ds-cur\"><span>Tickets</span></li><li class=\"ds-seg\"><span>Build</span></li></ol>",
+      "css": ".ds-strip { font-family: var(--font, 'Hanken Grotesk Variable', system-ui, sans-serif); list-style: none; display: flex; width: 420px; padding: 0 0 0 7px; margin: 14px 0 4px; } .ds-seg { flex: 1; min-width: 0; --line: var(--border, #dcd8cc); --stn: var(--border, #dcd8cc); } .ds-seg > span { position: relative; display: block; border-top: 5px solid var(--line); color: var(--muted, #555a6a); font-size: 11px; font-weight: 600; letter-spacing: .02em; padding: 12px 8px 2px 0; margin-left: -7px; } .ds-seg > span::before { content: ''; position: absolute; left: 0; top: -10px; width: 15px; height: 15px; border-radius: 50%; box-sizing: border-box; background: var(--surface, #fff); border: 4px solid var(--stn); } .ds-seg:last-child > span { border-top-color: transparent; } .ds-done { --line: var(--r-review, #2a9457); --stn: var(--r-review, #2a9457); } .ds-done > span { color: var(--text, #14182a); } .ds-queued { --stn: var(--accent, #2a5bd7); } .ds-queued > span { border-top-style: dashed; border-top-color: var(--accent, #2a5bd7); } .ds-cur > span { color: var(--text, #14182a); } .ds-cur > span::before { width: 19px; height: 19px; top: -12px; left: -2px; border-color: var(--text, #14182a); }"
+    },
+    {
+      "name": "View Head",
+      "kind": "nav",
+      "refersTo": "view-head",
+      "description": "The rail laid across the top of a full-width view: roundel and title, rail-styled controls, Porcelain primary.",
+      "html": "<header class=\"ds-vh\"><h1>Board</h1><span class=\"ds-sp\"></span><button class=\"ds-vb\">Columns</button><button class=\"ds-vb ds-vp\">+ New</button></header>",
+      "css": ".ds-vh { font-family: var(--font, 'Hanken Grotesk Variable', system-ui, sans-serif); display: flex; align-items: center; gap: 16px; min-height: 56px; padding: 10px 20px; background: #12224a; color: #e8ebf4; box-shadow: inset 0 -1px rgb(255 255 255 / .12); } .ds-vh h1 { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 800; margin: 0; } .ds-vh h1::before { content: ''; width: 14px; height: 14px; border-radius: 50%; border: 4px solid currentColor; box-sizing: border-box; } .ds-sp { margin-left: auto; } .ds-vb { font: 600 14px inherit; font-family: inherit; border-radius: 6px; padding: 5px 12px; background: transparent; color: #e8ebf4; border: 1px solid color-mix(in srgb, #e8ebf4 30%, transparent); cursor: pointer; } .ds-vb:hover { border-color: #e8ebf4; } .ds-vp { background: #f4f2ec; border-color: #f4f2ec; color: #12224a; } .ds-vp:hover { background: #fff; } .ds-vb:focus-visible { outline: 2px solid #f4f2ec; outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Midnight Transit Diagram",
+    "overview": "Work moves along fixed routes like a metro network. States are lines, Stages are stations, and Needs Me is the interchange where every line meets the human. The UI is a wayfinding diagram, not a tracker: a midnight-blue enamel rail holds the brand, the views and the State keys, beside a porcelain work surface where the lines are drawn in their own inks. Colour is never decoration here; every saturated stroke is a line a piece of work is travelling on.\n\nDensity is that of a signboard read at a glance: compact 14px text, hairline rules between rows, mono ids and counts with tabular figures, and the line inks carrying the meaning so the eye finds what waits without reading. The diagram's two marks do almost all of the work: a **line** (a thick coloured stroke, 3 to 5px) and a **station** (a surface-coloured disc inside a thick ring of the line's ink). Group heads, Board column heads, the Stage strip, Needs Me groups, State chips and the Map's nodes are all built from those two marks.\n\nThe system refuses the neutral grey tracker with a single blue accent. Dark mode is not an inversion: the rail goes deeper (night enamel), the surface becomes night blue, and the same lines are relit brighter so they keep their identity.",
+    "keyCharacteristics": [
+      "Midnight enamel rail (and the same enamel laid across the top of full-width views) beside a porcelain work surface.",
+      "Every State and every Needs Me reason has its own line ink; the ink is the meaning.",
+      "Stations: a ring of line ink around a surface-coloured disc; the selected or current one grows, and fills or turns to the text colour.",
+      "Lines as strokes: 3px under group heads, 4px down a Needs Me group, 5px under Board column heads and along the Stage strip.",
+      "Hanken Grotesk for text, Red Hat Mono with tabular figures for ids, counts and times.",
+      "Flat surfaces with hairline borders; shadows only on things that float."
+    ],
+    "rules": [
+      {
+        "name": "The One Line, One Ink Rule",
+        "body": "Every State and every reason owns one line ink, and that ink means only that line. Project ribbons have their own palette and never borrow a line ink.",
+        "section": "colors"
+      },
+      {
+        "name": "The Readable Ink Rule",
+        "body": "Line ink is never set as text at full strength. Text in a line's colour is `color-mix(in srgb, <line> 55%, var(--text))`, so it passes contrast in both themes; full-strength ink is for strokes, rings and fills only.",
+        "section": "colors"
+      },
+      {
+        "name": "The Filled Line Rule",
+        "body": "Text on a filled line colour (the Activity Dashboard's State blocks) uses `--on-line`: white in light, near-black navy in dark.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Figures Rule",
+        "body": "Any number a user compares (ids, counts, waited times, percentages) is set with tabular figures, in the mono where it is an id or a count.",
+        "section": "typography"
+      },
+      {
+        "name": "The Signage Label Rule",
+        "body": "Uppercase tracked labels name a line (a reason group, a State column) or a rail section, and nothing else. They are never decorative lead-ins above a heading.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Surface Rule",
+        "body": "Nothing resting on the page casts a shadow: rows, cards, panels and columns are separated by tone and hairlines. A shadow means the thing floats.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Ring Is a State Rule",
+        "body": "A ring means a station on a line. Project ribbons are bars (4 by 16px, 2px corners), never rings, so a Project never reads as a State.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "**Do** mark every State and reason with its station ring or line stroke in its own ink, and reuse the reason's ink for the matching workflow State.",
+      "**Do** set line-coloured text as `color-mix(in srgb, <line> 55%, var(--text))`; keep full-strength ink for strokes, rings and fills.",
+      "**Do** draw sequence as a line with stations: Stage routes, Needs Me groups, dashboard entries riding their block's line.",
+      "**Do** put full-width views under the 56px midnight view head with the roundel before the title.",
+      "**Do** use the mono with tabular figures for ids, counts and times.",
+      "**Do** keep both dark token copies (`prefers-color-scheme` and `data-theme=\"dark\"`) identical when adding a token.",
+      "**Do** draw new icons in the Icon.tsx stroke language (16-unit viewBox, 2px round strokes, currentColor)."
+    ],
+    "donts": [
+      "**Don't** mark a card or row with a thick coloured side border; a needing card is ringed all round in its reason's ink, and a row's line runs through its station.",
+      "**Don't** draw a Project as a ring or in a line ink; Projects are ribbon bars from their own palette.",
+      "**Don't** introduce a single-accent grey tracker look, or give one line's ink a second meaning.",
+      "**Don't** shadow anything that rests on the page; shadows are for menus, popovers, modals and the Chat pop-up.",
+      "**Don't** use glyph or emoji icons, or a system font for display text.",
+      "**Don't** add uppercase tracked lead-ins above headings; tracked uppercase is for line and rail section names."
+    ]
+  }
+}
