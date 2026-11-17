@@ -153,7 +153,10 @@ a { color: var(--accent); text-underline-offset: 2px; }
 /* Shared by panels (tickets 34-37). */
 .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 6px; padding: 5px 12px; font: inherit; font-weight: 600; cursor: pointer; transition: border-color 120ms ease-out, background-color 120ms ease-out; }
 .btn:hover { border-color: var(--muted); }
-.btn:disabled { opacity: .45; cursor: default; }
+/* One disabled look for every button: the hairline border stays, the text drops to about 55%, and a primary keeps its fill at reduced opacity. */
+.btn:disabled { color: color-mix(in srgb, var(--text) 55%, transparent); background: var(--surface); border-color: var(--border); cursor: default; }
+.btn.danger:disabled { color: color-mix(in srgb, var(--text) 55%, transparent); border-color: var(--border); }
+.btn.primary:disabled { background: color-mix(in srgb, var(--primary) 45%, transparent); border-color: color-mix(in srgb, var(--primary) 45%, transparent); color: var(--on-primary); }
 .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .btn.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--primary) 86%, var(--accent)); }
 .btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
@@ -660,3 +663,6 @@ a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
   @keyframes flash-0 { 30% { filter: brightness(1.4); } }
   @keyframes flash-1 { 30% { filter: brightness(1.4); } }
 }
+
+/* The rail and the view head restyle .btn, so their disabled buttons dim the way the rest do. */
+.inbox-nav .btn:disabled, .view-head .btn:disabled { opacity: .55; }
