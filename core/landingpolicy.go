@@ -35,6 +35,27 @@ func (p ProjectView) LandingPolicy() LandingPolicy {
 	return NewLandingPolicy(p.Landing.Method, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
 }
 
+// ForRepository is a Repository's Landing Policy: the Project's, with
+// Push off in a local-only Repository, which has no Clone URL to push to,
+// and unchanged in any other, the Home among them. So in a local-only
+// Repository Merge + Push reads as Merge and Branch + Push as Branch;
+// Pull Request never arises there, as EveryRepositoryNeedsCloneURL
+// refuses it. The Factory's landing steps in one Repository ask its
+// policy; Project-wide rules ask the Project's.
+func (lp LandingPolicy) ForRepository(r RepositoryView) LandingPolicy {
+	if r.LocalOnly() {
+		lp.push = false
+	}
+	return lp
+}
+
+// EveryRepositoryNeedsCloneURL answers Pull Request's "every Repository
+// needs a Clone URL on a supported Code Host", so no Repository may be
+// local-only: Pull Request.
+func (lp LandingPolicy) EveryRepositoryNeedsCloneURL() bool {
+	return lp.method == store.LandingPullRequest
+}
+
 // LandPerSpecInForce answers "Land per Spec applies under Merge and Pull
 // Request, and has no effect under Branch": Merge or Pull Request, with
 // Land per Spec on.

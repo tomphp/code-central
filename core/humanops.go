@@ -143,6 +143,11 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		if in.LandPerSpec != nil {
 			l.LandPerSpec = *in.LandPerSpec
 		}
+		if !landingPolicyOf(p).EveryRepositoryNeedsCloneURL() {
+			if err := refuseLocalOnly(NewLandingPolicy(l.Method, l.Push, l.LandPerSpec, p.CI.Tracking), repositoriesView(p)); err != nil {
+				return err
+			}
+		}
 		if p.Landing == l {
 			v = c.projectView(p)
 			return nil

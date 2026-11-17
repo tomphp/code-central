@@ -45,6 +45,11 @@ type RepositoryView struct {
 	Clone *CloneView `json:"clone,omitempty"`
 }
 
+// LocalOnly reports whether r is a Repository other than the Home with no
+// Clone URL. The Home's is empty only until the Factory reports it, so it
+// is never local-only.
+func (r RepositoryView) LocalOnly() bool { return !r.Home && r.CloneURL == "" }
+
 // repositoriesView is p's Repositories in landing order.
 func repositoriesView(p store.Project) []RepositoryView {
 	var out []RepositoryView
@@ -370,8 +375,8 @@ func repositoryNamed(key string, rs []store.Repository, name string) (int, error
 }
 
 // updateRepositories writes the Repositories change makes, once r's Clone
-// URL and local path are listed nowhere else and, when checkHost and
-// under Pull Request, its Clone URL passes the Pull Request Watcher's
+// URL and local path are listed nowhere else and, under Pull Request, r
+// has a Clone URL that, when checkHost, passes the Pull Request Watcher's
 // check. With ci, r's new CI entry, it is written with them, once, while
 // CI Tracking is on, it passes the CI Watcher's check. The checks call
 // the Code Host, so they run outside the store's lock, between a read
@@ -382,6 +387,11 @@ func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r 
 		rs, err := change(p.RepositoryList())
 		if err != nil {
 			return nil, err
+		}
+		// Before the Code Host check, so an empty Clone URL never reads
+		// as a host Pull Request doesn't support.
+		if landingPolicyOf(p).EveryRepositoryNeedsCloneURL() && r.LocalOnly() {
+			return nil, &Error{Code: Invalid, Field: "clone_url", Message: needsCloneURL, Fix: needsCloneURLFix}
 		}
 		return rs, refuseListed(p, r)
 	}
