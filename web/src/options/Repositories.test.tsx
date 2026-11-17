@@ -95,6 +95,77 @@ describe("the Repositories section", () => {
     expect((await w.api.listProjects())[0].repositories[1]).toMatchObject({ name: "web", base: "main", local_path: "/src/web" });
   });
 
+  it("adds a local-only Repository with a local path and no Clone URL", async () => {
+    const { w } = await fresh();
+    await renderApp(w);
+
+    const submit = () => within(addForm()).getByRole("button", { name: "Add Repository" });
+    const type = (label: string, value: string) => userEvent.type(within(addForm()).getByRole("textbox", { name: label }), value);
+    expect(submit()).toBeDisabled();
+    await type("Name", "docs");
+    expect(submit()).toBeDisabled();
+    await type("Local path", "/src/docs");
+    expect(submit()).toBeEnabled();
+    await userEvent.clear(within(addForm()).getByRole("textbox", { name: "Local path" }));
+    expect(submit()).toBeDisabled();
+    await type("Local path", "/src/docs");
+    await userEvent.click(submit());
+    await settle(w);
+
+    expect(order()).toEqual(["acme", "docs"]);
+    expect(row("docs")).toHaveTextContent("None: local only, never pushed");
+    expect(row("docs")).toHaveTextContent("/src/docs");
+    expect(within(row("docs")).getByText("Code Host").nextElementSibling).toBeEmptyDOMElement();
+    expect((await w.api.listProjects())[0].repositories[1]).toMatchObject({ name: "docs", clone_url: "", code_host: "", local_path: "/src/docs" });
+  });
+
+  it("hints how to leave the Clone URL empty for a local-only Repository", async () => {
+    const { w } = await fresh();
+    await renderApp(w);
+
+    expect(within(addForm()).getByRole("textbox", { name: "Clone URL" })).toHaveAccessibleDescription(
+      "Leave empty for a local-only repository: give its local path. It is never cloned or pushed.",
+    );
+  });
+
+  it("offers to watch a Repository's CI only while a Clone URL is entered", async () => {
+    const { w, s } = await fresh();
+    await s.trackCI("acme");
+    await renderApp(w);
+
+    const watch = () => within(addForm()).queryByRole("checkbox", { name: /Watch its CI/ });
+    expect(watch()).toBeNull();
+    await userEvent.type(within(addForm()).getByRole("textbox", { name: "Clone URL" }), "git@github.com:acme/web.git");
+    expect(watch()).not.toBeNull();
+    await userEvent.clear(within(addForm()).getByRole("textbox", { name: "Clone URL" }));
+    expect(watch()).toBeNull();
+  });
+
+  it("clears a Clone URL when the edit form's field is emptied", async () => {
+    const { w } = await fresh({ repositories: ["web"] });
+    await w.api.editRepository("acme", "web", { local_path: "/src/web" });
+    await renderApp(w);
+
+    await userEvent.click(within(row("web")).getByRole("button", { name: "Edit web" }));
+    const form = within(section()).getByRole("form", { name: "Edit web" });
+    await userEvent.clear(within(form).getByRole("textbox", { name: "Clone URL" }));
+    await userEvent.click(within(form).getByRole("button", { name: "Save" }));
+    await settle(w);
+
+    expect(row("web")).toHaveTextContent("None: local only, never pushed");
+    expect((await w.api.listProjects())[0].repositories[1]).toMatchObject({ name: "web", clone_url: "", local_path: "/src/web" });
+  });
+
+  it("keeps Save disabled once an edit leaves neither a Clone URL nor a local path", async () => {
+    const { w } = await fresh({ repositories: ["web"] });
+    await renderApp(w);
+
+    await userEvent.click(within(row("web")).getByRole("button", { name: "Edit web" }));
+    const form = within(section()).getByRole("form", { name: "Edit web" });
+    await userEvent.clear(within(form).getByRole("textbox", { name: "Clone URL" }));
+    expect(within(form).getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
   it("shows an add's refusal with its reason and fix, on the field it is about", async () => {
     const { w } = await fresh({ repositories: ["web"] });
     await renderApp(w);
