@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -59,8 +60,58 @@ func runSuite(budget time.Duration, jobs ...job) (bool, string) {
 
 func runSuiteVerbosely(budget time.Duration, verbose bool, jobs ...job) (bool, string) {
 	var out strings.Builder
-	ok := run(jobs, budget, verbose, &out)
+	ok := run(jobs, budget, verbose, "", &out)
 	return ok, out.String()
+}
+
+func TestAFailedRunKeepsTheWholeOutputInAFileAndPrintsItsPathLast(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "test.log")
+	var out strings.Builder
+	ok := run([]job{
+		fakeJob(t, "go test", "print", "ok  \tpkg/a\t0.1s", "print", "--- FAIL: TestC", "exit", "1"),
+		fakeJob(t, "vitest", "print", "42 passed"),
+	}, 10*time.Second, false, log, &out)
+	if ok {
+		t.Fatalf("the suite passed:\n%s", out.String())
+	}
+	lines := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
+	if last := lines[len(lines)-1]; !strings.HasSuffix(last, log) {
+		t.Errorf("the last line doesn't give the log's path %q:\n%s", log, out.String())
+	}
+	saved, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"== go test\nok  \tpkg/a\t0.1s\n--- FAIL: TestC\n", "== vitest\n42 passed\n"} {
+		if !strings.Contains(string(saved), want) {
+			t.Errorf("the log lacks %q:\n%s", want, saved)
+		}
+	}
+}
+
+func TestAPassingRunWritesNoLog(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "test.log")
+	var out strings.Builder
+	if !run([]job{fakeJob(t, "go test")}, 10*time.Second, false, log, &out) {
+		t.Fatalf("the suite failed:\n%s", out.String())
+	}
+	if _, err := os.Stat(log); err == nil || strings.Contains(out.String(), log) {
+		t.Errorf("a passing run left a log or named one:\n%s", out.String())
+	}
+}
+
+func TestEachWorktreeHasItsOwnLogFile(t *testing.T) {
+	a := logPath("/work/a/code-central")
+	b := logPath("/work/b/code-central")
+	if a == b {
+		t.Errorf("two worktrees share %s", a)
+	}
+	if logPath("/work/a/code-central") != a {
+		t.Error("a worktree's log path isn't stable")
+	}
+	if !strings.HasPrefix(filepath.Base(a), "code-central-test-code-central-") {
+		t.Errorf("the log's name doesn't say the worktree: %s", a)
+	}
 }
 
 func TestTheSuitePassesWhenEveryJobPassesInsideTheBudget(t *testing.T) {
