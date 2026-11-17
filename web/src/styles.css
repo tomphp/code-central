@@ -248,6 +248,11 @@ a.filter { text-decoration: none; }
 .project-options-choice { margin: 8px 0; }
 .project-options-hint { margin: 2px 0 0 1.6rem; font-size: 13px; color: var(--muted); }
 .project-options-remote { display: block; margin: 8px 0 0 1.6rem; }
+.project-options-focus { border-collapse: collapse; margin: 8px 0; }
+.project-options-focus th { text-align: left; font-weight: 500; }
+.project-options-focus thead th { font-size: 12.5px; color: var(--muted); }
+.project-options-focus th, .project-options-focus td { padding: 6px 16px 6px 0; border-bottom: 1px solid var(--border); }
+.project-options-focus tbody tr:last-child > * { border-bottom: 0; }
 .project-options-remote input, .project-options-field input, .project-options-field select { font: inherit; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
 .project-options-remote input[aria-invalid="true"], .project-options-field input[aria-invalid="true"] { border-color: var(--danger); }
 .project-options form + form, .project-options form + fieldset { margin-top: 16px; }
