@@ -76,18 +76,20 @@ func ciItemView(r store.Reader, p store.Project, it ciItem) *CIItemView {
 
 // ciItemOptions are the failure options the human may choose on it,
 // empty while CI unavailable: Re-run failed jobs under every Landing
-// Method; Land anyway under Merge + Push only, since under Branch and Pull
-// Request the human's merge decides; Send back to fix only when it lists
-// exactly one Ticket and that Ticket isn't Spec-landed, whose work is in
-// the base with its Spec's; and for a failure New fix Ticket, since a
-// cancelled run has nothing to fix forward.
+// Method; Land anyway under the Merge + Push of its Repository's Landing
+// Policy only, since under Branch and Pull Request the human's merge
+// decides, and a local-only Repository lands once merged; Send back to
+// fix only when it lists exactly one Ticket and that Ticket isn't
+// Spec-landed, whose work is in the base with its Spec's; and for a
+// failure New fix Ticket, since a cancelled run has nothing to fix
+// forward.
 func ciItemOptions(r store.Reader, p store.Project, it ciItem) []CIFailureOption {
 	options := []CIFailureOption{}
 	if it.reason == ReasonCIUnavailable {
 		return options
 	}
 	options = append(options, OptionRerunCI)
-	if landingPolicyOf(p).OffersLandAnyway() {
+	if landingPolicyIn(p, it.repository).OffersLandAnyway() {
 		options = append(options, OptionLandAnyway)
 	}
 	if len(it.tickets) == 1 && !specLanded(r, p, it.tickets[0]) {

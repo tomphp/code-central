@@ -47,6 +47,19 @@ func (lp LandingPolicy) ForRepository(r RepositoryView) LandingPolicy {
 	return lp
 }
 
+// landingPolicyIn is the Landing Policy of p's Repository name, which
+// every rule about one Repository's landing asks: p's, through
+// ForRepository. A name p doesn't list has p's.
+func landingPolicyIn(p store.Project, name string) LandingPolicy {
+	lp := landingPolicyOf(p)
+	for _, r := range p.RepositoryList() {
+		if r.Name == name {
+			return lp.ForRepository(repositoryView(p, r))
+		}
+	}
+	return lp
+}
+
 // EveryRepositoryNeedsCloneURL answers Pull Request's "every Repository
 // needs a Clone URL on a supported Code Host", so no Repository may be
 // local-only: Pull Request.
