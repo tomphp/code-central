@@ -393,6 +393,47 @@ func TestAddRepositoryUnderPullRequestRunsTheWatchersCheckForIt(t *testing.T) {
 	wantFix(t, err, core.Invalid, "clone_url")
 }
 
+func TestUnderPullRequestAddingOrEditingALocalOnlyRepositoryIsRefusedBeforeTheCodeHostCheck(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	if _, err := f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/acme.git"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest}); err != nil {
+		t.Fatal(err)
+	}
+	checked := 0
+	f.core.SetPullRequestCheck(func(context.Context, core.PullRequestCheckInput) core.WatcherCheckResult {
+		checked++
+		return core.WatcherCheckResult{}
+	})
+	wantNeedsCloneURL := func(t *testing.T, err error) {
+		t.Helper()
+		wantFix(t, err, core.Invalid, "clone_url")
+		if e := (*core.Error)(nil); errors.As(err, &e) && (e.Message != "Pull Request needs a Clone URL in every Repository" || e.Fix != "give its Clone URL, or land by Merge or Branch") {
+			t.Fatalf("refusal = %q, fix %q, want Pull Request's need for a Clone URL", e.Message, e.Fix)
+		}
+	}
+
+	_, err := f.core.AddRepository(human, "acme", core.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes")})
+	wantNeedsCloneURL(t, err)
+
+	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git", LocalPath: srcPath("web")})
+	empty := ""
+	_, err = f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "web", CloneURL: &empty})
+	wantNeedsCloneURL(t, err)
+	if checked != 1 {
+		t.Errorf("the Pull Request check ran %d times, want once, for web's add alone", checked)
+	}
+	v := f.projectView(t, "acme")
+	if got := repositoryNames(v); !slices.Equal(got, []string{"acme", "web"}) {
+		t.Fatalf("repositories = %v, want acme, web", got)
+	}
+	if got := repository(t, v, "web").CloneURL; got != "git@github.com:acme/web.git" {
+		t.Fatalf("web's Clone URL = %q after the refusal, want it kept", got)
+	}
+}
+
 func TestCloneURLsNormaliseAcrossSchemesAndSuffixes(t *testing.T) {
 	same := [][]string{
 		{"git@github.com:acme/web.git", "https://github.com/acme/web", "ssh://git@github.com/Acme/Web.git/", "https://user@GitHub.com/acme/web.git"},
