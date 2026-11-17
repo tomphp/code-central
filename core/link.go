@@ -60,13 +60,17 @@ func (in LinkInput) link() (store.Link, error) {
 	case !l.ExternalState.Valid():
 		return l, invalid("link.external_state", "unknown external state %q (open, closed, deleted or out_of_scope)", l.ExternalState)
 	}
-	if l.URL != "" {
-		u, err := url.Parse(l.URL)
-		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			return l, invalid("link.url", "a Link's URL is an absolute http or https URL, not %q", l.URL)
-		}
+	if l.URL != "" && !absoluteURL(l.URL) {
+		return l, invalid("link.url", "a Link's URL is an absolute http or https URL, not %q", l.URL)
 	}
 	return l, nil
+}
+
+// absoluteURL reports whether s is an absolute http or https URL, as a
+// Link's URL is.
+func absoluteURL(s string) bool {
+	u, err := url.Parse(s)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
 // requireActor refuses op unless the request is made as want.
@@ -265,12 +269,14 @@ func (c *Core) UpdateLinkedSpec(ctx context.Context, key string, in UpdateLinked
 
 // UpdateLinkedTicketInput is update_linked_ticket's input. A field left
 // out is unchanged; spec moves the Ticket under another Spec (its
-// external parent changed).
+// external parent changed), and url refreshes its Link's URL (the
+// external item moved), which isn't a definition edit.
 type UpdateLinkedTicketInput struct {
 	Ticket      Ref     `json:"ticket"`
 	Title       *string `json:"title,omitempty"`
 	Description *string `json:"description,omitempty"`
 	Spec        *Ref    `json:"spec,omitempty"`
+	URL         *string `json:"url,omitempty"`
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
@@ -285,9 +291,16 @@ func (c *Core) UpdateLinkedTicket(ctx context.Context, key string, in UpdateLink
 	if in.Title != nil && strings.TrimSpace(*in.Title) == "" {
 		return Written[TicketView]{}, invalid("title", "a Ticket needs a title")
 	}
+	if in.URL != nil && !absoluteURL(*in.URL) {
+		return Written[TicketView]{}, invalid("url", "a Link's URL is an absolute http or https URL, not %q", *in.URL)
+	}
 	return c.updateTicketIn(key, "update_linked_ticket", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
 		if err := ownedByLink(DisplayID(key, t.Number), t.Link); err != nil {
 			return false, err
+		}
+		moved := in.URL != nil && *in.URL != t.Link.URL
+		if moved {
+			t.Link.URL = *in.URL
 		}
 		prev := map[string]string{}
 		if in.Spec != nil {
@@ -303,7 +316,7 @@ func (c *Core) UpdateLinkedTicket(ctx context.Context, key string, in UpdateLink
 		}
 		change(prev, "title", &t.Title, in.Title)
 		change(prev, "description", &t.Description, in.Description)
-		return c.recordEdit(ctx, &t.Edits, prev), nil
+		return c.recordEdit(ctx, &t.Edits, prev) || moved, nil
 	})
 }
 

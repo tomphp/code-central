@@ -1,8 +1,9 @@
 // Package fakeazdo is a fake Azure DevOps API for tests, as fakegh is a
 // fake gh. It is an httptest server that follows a script of Answers and
-// records each request, so a test sees what the CI Watcher asked Azure
-// DevOps. The project URL it gives is over http://, which the project URL
-// parser accepts for it.
+// records each request, so a test sees what a Watcher asked Azure DevOps.
+// Work Item Tracking calls no Answer matches are answered from its board
+// (board.go). The project URL it gives is over http://, which the project
+// URL parser accepts for it.
 package fakeazdo
 
 import (
@@ -23,6 +24,9 @@ type Answer struct {
 	Status int // 200 when zero
 	Header http.Header
 	Body   string
+	// Times is how many requests it answers, after which it no longer
+	// matches; every one when zero.
+	Times int
 }
 
 // JSON is an Answer to method and path with status and v as its body.
@@ -63,16 +67,24 @@ type Server struct {
 	mu       sync.Mutex
 	answers  []Answer
 	requests []Request
+	board    board
 }
 
-// ProjectPath is the path of the fake's project below its URL.
-const ProjectPath = "/tfs/DefaultCollection/web"
+// ProjectPath is the path of the fake's project below its URL, and
+// CollectionPath the path of the collection it is in.
+const (
+	CollectionPath = "/tfs/DefaultCollection"
+	ProjectPath    = CollectionPath + "/" + Project
+)
+
+// Project is the name of the fake's project.
+const Project = "web"
 
 // New starts a fake with answers, stopped when the test ends.
 func New(t interface {
 	Cleanup(func())
 }, answers ...Answer) *Server {
-	s := &Server{answers: answers}
+	s := &Server{answers: answers, board: newBoard()}
 	s.Server = httptest.NewServer(http.HandlerFunc(s.serve))
 	t.Cleanup(s.Close)
 	return s
@@ -98,16 +110,26 @@ func (s *Server) Requests() []Request {
 func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
 	s.mu.Lock()
-	s.requests = append(s.requests, Request{
+	req := Request{
 		Method: r.Method, Path: r.URL.EscapedPath(), Query: r.URL.Query(),
 		Authorization: r.Header.Get("Authorization"), Body: string(body),
-	})
+	}
+	s.requests = append(s.requests, req)
 	var found *Answer
-	for _, a := range slices.Backward(s.answers) {
+	for i := len(s.answers) - 1; i >= 0; i-- {
+		a := s.answers[i]
 		if (a.Method == "" || a.Method == r.Method) && strings.HasPrefix(r.URL.EscapedPath(), a.Path) {
 			found = &a
+			// One answering every request counts down from zero, so
+			// never runs out.
+			if s.answers[i].Times--; s.answers[i].Times == 0 {
+				s.answers = slices.Delete(s.answers, i, i+1)
+			}
 			break
 		}
+	}
+	if found == nil {
+		found = s.board.answer(s.URL, req)
 	}
 	s.mu.Unlock()
 	if found == nil {
