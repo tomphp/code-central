@@ -35,7 +35,8 @@ export function LineChart({ label, values, pointLabel, tip, xLabel }: LineChartP
   const x = (i: number) => LEFT + (values.length > 1 ? (i / (values.length - 1)) * plotW : plotW / 2);
   const y = (v: number) => TOP + plotH - (v / top) * plotH;
   const ticks = Array.from({ length: TICKS + 1 }, (_, i) => (top / TICKS) * i);
-  const xTicks = [...new Set([0, Math.floor((values.length - 1) / 2), values.length - 1])];
+  const xTicks = xTickIndexes(values.length);
+  const peak = values.indexOf(Math.max(...values));
 
   return (
     <div className="line-chart">
@@ -73,6 +74,9 @@ export function LineChart({ label, values, pointLabel, tip, xLabel }: LineChartP
             onBlur={() => setActive(undefined)}
           />
         ))}
+        <text className="line-chart-peak" x={x(peak)} y={y(values[peak]) - 10} textAnchor={peakAnchor(x(peak))}>
+          {count(values[peak])}
+        </text>
       </svg>
       {active !== undefined && (
         <div
@@ -86,6 +90,23 @@ export function LineChart({ label, values, pointLabel, tip, xLabel }: LineChartP
       )}
     </div>
   );
+}
+
+// MAX_X_TICKS is how many x-axis ticks the chart labels at most.
+const MAX_X_TICKS = 8;
+
+// xTickIndexes are the points the x axis labels, by one rule: every point
+// up to MAX_X_TICKS, then MAX_X_TICKS evenly spaced, first and last among them.
+export function xTickIndexes(n: number): number[] {
+  if (n <= MAX_X_TICKS) return Array.from({ length: n }, (_, i) => i);
+  return [...new Set(Array.from({ length: MAX_X_TICKS }, (_, k) => Math.round((k * (n - 1)) / (MAX_X_TICKS - 1))))];
+}
+
+// peakAnchor keeps the peak's label inside the chart at either end.
+function peakAnchor(px: number): "start" | "middle" | "end" {
+  if (px < LEFT + 24) return "start";
+  if (px > WIDTH - RIGHT - 24) return "end";
+  return "middle";
 }
 
 // niceCeiling is the smallest of 1, 2, 2.5 or 5 times a power of ten, at
