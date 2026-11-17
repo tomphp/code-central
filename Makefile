@@ -104,7 +104,7 @@ e2e: build corewasm
 # Stays in the foreground, so start it with run_in_background.
 # docs/agents/running-the-ui.md says how to use it.
 demo-store demo: build
-	go run ./internal/demostore -bin bin/code-central$(EXE) -port $(or $(PORT),7801)
+	go run ./internal/demostore -bin bin/code-central$(EXE) -port $(or $(PORT),7801) $(ARGS)
 
 clean:
 	go run ./internal/clean bin web/dist web/src/api/core/core.wasm web/src/api/core/wasm_exec.js
