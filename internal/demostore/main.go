@@ -32,8 +32,11 @@ const projectKey = "demo"
 func main() {
 	bin := flag.String("bin", "bin/code-central", "the code-central binary")
 	port := flag.Int("port", 7801, "the loopback port to serve on (not 7733)")
-	store := flag.String("store", filepath.Join(os.TempDir(), "code-central-demo-store"), "the scratch store; reused when it holds the demo Project")
+	store := flag.String("store", "", "the scratch store; reused when it holds the demo Project (default: code-central-demo-store-<port> in the temp dir)")
 	flag.Parse()
+	if *store == "" {
+		*store = filepath.Join(os.TempDir(), "code-central-demo-store-"+strconv.Itoa(*port))
+	}
 	if err := run(*bin, *port, *store); err != nil {
 		fmt.Fprintln(os.Stderr, "demostore:", err)
 		os.Exit(1)

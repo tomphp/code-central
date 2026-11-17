@@ -86,6 +86,11 @@ func TestEachSystemPromptSaysTheTicketIsAlreadyClaimedAndNotToCallClaim(t *testi
 	if want := "as claim_id on every write that needs it. Commit on this branch only, with no push and no PR, and finish the Ticket when it is done."; !strings.Contains(impl.SystemPrompt, want) {
 		t.Errorf("implementation system prompt %q doesn't say %q", impl.SystemPrompt, want)
 	}
+	for stage, id := range ids {
+		if want := "Your first call is `get_ticket` with `ticket: " + id + "`."; !strings.Contains(calls[id].SystemPrompt, want) {
+			t.Errorf("%s: system prompt %q doesn't say %q", stage, calls[id].SystemPrompt, want)
+		}
+	}
 	spec := calls[ids["spec"]].SystemPrompt
 	if strings.Contains(spec, "Stage under Claim") {
 		t.Errorf("Stage prompt %q still says to work the Stage under Claim", spec)
