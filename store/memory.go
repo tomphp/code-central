@@ -239,6 +239,9 @@ func (w *writer) PutOptions(o Options) error {
 	if !o.FocusClear.Valid() {
 		return fmt.Errorf("%w: focus_clear %q", ErrInvalidOption, o.FocusClear)
 	}
+	if !o.LimitsPopup.Valid() {
+		return fmt.Errorf("%w: limits_popup %q", ErrInvalidOption, o.LimitsPopup)
+	}
 	if !o.FocusPopup.Valid() {
 		return fmt.Errorf("%w: focus_popup %q", ErrInvalidOption, o.FocusPopup)
 	}

@@ -23,7 +23,9 @@ type storeFile struct {
 type optionsFile struct {
 	FocusClear string `yaml:"focus_clear,omitempty"`
 	FocusPopup string `yaml:"focus_popup,omitempty"`
-	GHPath     string `yaml:"gh_path,omitempty"`
+	// LimitsPopup is left out while it is the default.
+	LimitsPopup string `yaml:"limits_popup,omitempty"`
+	GHPath      string `yaml:"gh_path,omitempty"`
 }
 
 type projectFile struct {
@@ -683,7 +685,11 @@ func encode(record any, project string) (string, []byte, error) {
 			Repositories: encodeRepositories(r.Repositories)})
 	case Options:
 		rel = "options.yaml"
-		data, err = encodeYAML(optionsFile{FocusClear: string(r.FocusClear), FocusPopup: string(r.FocusPopup), GHPath: r.GHPath})
+		f := optionsFile{FocusClear: string(r.FocusClear), FocusPopup: string(r.FocusPopup), GHPath: r.GHPath}
+		if r.LimitsPopup != DefaultOptions().LimitsPopup {
+			f.LimitsPopup = string(r.LimitsPopup)
+		}
+		data, err = encodeYAML(f)
 	case Spec:
 		rel = filepath.Join("projects", project, "specs", strconv.Itoa(r.Number)+".md")
 		var front []byte

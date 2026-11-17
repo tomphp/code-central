@@ -247,6 +247,27 @@ export function projectSettingsContract(driver: () => Driver) {
     expect(stopped.factories).toMatchObject([{ status: "offline", note: "stopped: drained" }]);
   });
 
+  it("serves the Plan Limits a Heartbeat carries, replaced whole by the next, and refuses bad figures", async () => {
+    await d.createProject("acme", "Acme");
+    const beat = { factory: "code-central-factory", host: "laptop", state: "online" as const, interval_seconds: 30 };
+    const plan_limits = {
+      observed_at: "2026-01-01T09:00:00Z",
+      five_hour: { used_percent: 42.5, resets_at: "2026-01-01T12:00:00Z" },
+      weekly: { used_percent: 7, resets_at: "2026-01-05T09:00:00Z" },
+    };
+    await d.reportHeartbeat("acme", beat);
+    expect((await d.api.listProjects())[0].factory_status.plan_limits).toBeUndefined();
+
+    await d.reportHeartbeat("acme", { ...beat, plan_limits });
+    expect((await d.api.listProjects())[0].factory_status.plan_limits).toEqual(plan_limits);
+
+    const over = await d.reportHeartbeat("acme", { ...beat, plan_limits: { ...plan_limits, weekly: { used_percent: 101, resets_at: "2026-01-05T09:00:00Z" } } }).catch((e) => e);
+    expect(over).toMatchObject({ status: 422, code: "invalid", field: "plan_limits.weekly.used_percent" });
+
+    await d.reportHeartbeat("acme", beat);
+    expect((await d.api.listProjects())[0].factory_status.plan_limits).toBeUndefined();
+  });
+
   it("keeps the Factory's report of what its claude accepts, and checks effort against its levels", async () => {
     await d.createProject("acme", "Acme");
     const none = { effort_levels: ["low", "medium", "high", "xhigh", "max"], aliases: [], model_ids: [], model_flag: "", effort_flag: "" };

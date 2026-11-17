@@ -187,6 +187,7 @@ func (f *factory) answerChat(ctx context.Context, t core.ChatTurn, session strin
 		UsageKind:    kindChat,
 		OnEvent:      p.add,
 		OnUsage:      p.addUsage,
+		OnPlanLimits: f.planLimits.set,
 		Linef:        func(format string, args ...any) { f.printf("chat: "+format, args...) },
 		Key:          chatTurnKey,
 		Work:         work,

@@ -9,6 +9,7 @@ Run this by hand once v1 is built (`make build`). These paths can't be automated
 ## Factory Status
 
 - [ ] With `code-central-factory` running, the Project's dot in the left pane is green and its tooltip (hover, and Tab to focus) lists `code-central-factory on <host>` with `N of M turns running`; Project Options lists the same under **Factories**. Ctrl-C once: the dot turns amber with `draining: …`; once it exits it is grey with `stopped: drained`. `kill -9` the Factory: the dot goes grey within about 100 seconds without a reload. Archived Projects show no dot. The dot reads clearly in light and dark themes.
+- [ ] With **Show Limits popup** on (the default) and `code-central-factory` running a Turn for a Project, the **Limits popup** appears at the bottom centre once that Turn ends, with a **5-hour** and a **Weekly** meter whose percentages and `resets in …` times match `/usage` in Claude Code. It sits clear of the Chat icon, under the Focus popup, a Board card's popup, the Chat pop-up and any dialog, has no close button, and Tab never reaches it. Leave the Factory idle for over 10 minutes: an `updated …m ago` note shows and the countdowns keep moving without a reload. Choose All Projects: it goes. Stop the Factory: it goes once the Factory is Offline. Turn **Show Limits popup** off in the Options view: it goes at once, in a second tab too. The bar reads clearly, amber and red included, in light and dark themes.
 
 ## `service install`
 

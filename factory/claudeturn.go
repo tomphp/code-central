@@ -71,10 +71,12 @@ type turnInput struct {
 	// UsageKind is the kind its model responses are posted under: a
 	// Claim's Stage Guide name, or kindChat.
 	UsageKind string
-	// OnEvent gets each Session Event, in order, and OnUsage each model
-	// response's usage.
-	OnEvent func(core.SessionEvent)
-	OnUsage func(core.UsageResponse)
+	// OnEvent gets each Session Event, in order, OnUsage each model
+	// response's usage, and OnPlanLimits the Plan Limits of each
+	// rate_limit_event.
+	OnEvent      func(core.SessionEvent)
+	OnUsage      func(core.UsageResponse)
+	OnPlanLimits func(core.PlanLimits)
 	// Linef prints a line about the Turn: a warning, or with verbose on
 	// a tool call unless Echo is set.
 	Linef func(format string, args ...any)
@@ -165,7 +167,7 @@ func (r *turnRunner) run(stop context.Context, in turnInput) turnOutcome {
 		if r.verbose && e.Kind == core.EventToolCall {
 			in.Echo(e.Text)
 		}
-	}, in.OnUsage)
+	}, in.OnUsage, in.OnPlanLimits)
 	in.Work.busy("handling the exit of turn ", in.Key)
 	close(streamRead)
 	<-stopperDone
@@ -180,6 +182,9 @@ func (in turnInput) withDefaults() turnInput {
 	}
 	if in.OnUsage == nil {
 		in.OnUsage = func(core.UsageResponse) {}
+	}
+	if in.OnPlanLimits == nil {
+		in.OnPlanLimits = func(core.PlanLimits) {}
 	}
 	if in.Linef == nil {
 		in.Linef = func(string, ...any) {}
@@ -419,7 +424,10 @@ type streamMessage struct {
 	// ParentToolUseID is the Agent call a subagent's message runs under;
 	// empty for the main session's.
 	ParentToolUseID string `json:"parent_tool_use_id"`
-	Message         struct {
+	// RateLimitInfo is a rate_limit_event's, as readPlanLimits reads
+	// it; kept raw so a shape it doesn't expect never loses the line.
+	RateLimitInfo json.RawMessage `json:"rate_limit_info"`
+	Message       struct {
 		// ID, Model and Usage are an assistant message's model
 		// response's.
 		ID      string       `json:"id"`
@@ -442,9 +450,10 @@ type streamMessage struct {
 // readTurn reads a started Turn's stream-json to its end and waits for
 // it, giving how it ended. onEvent is called with each Session Event the
 // stream maps to, in order, and onResponse with each model response's
-// usage, as usage reads them; dir is the Turn's worktree, and now times
-// each Session Event.
-func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, now func() time.Time, usage *usageReader, onEvent func(core.SessionEvent), onResponse func(core.UsageResponse)) turnEnd {
+// usage, as usage reads them, and onPlanLimits with the Plan Limits of
+// each rate_limit_event; dir is the Turn's worktree, and now times each
+// Session Event and dates each Plan Limits.
+func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, now func() time.Time, usage *usageReader, onEvent func(core.SessionEvent), onResponse func(core.UsageResponse), onPlanLimits func(core.PlanLimits)) turnEnd {
 	var end turnEnd
 	var retryErr string
 	tools := map[string]string{}
@@ -457,6 +466,9 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, now func() time.Time,
 		}
 		if r, ok := usage.read(msg); ok {
 			onResponse(r)
+		}
+		if pl, ok := readPlanLimits(msg, now()); ok {
+			onPlanLimits(pl)
 		}
 		for _, e := range streamEvents(msg, now(), tools, dir) {
 			if e.Kind == core.EventText {

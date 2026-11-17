@@ -4,6 +4,7 @@ store.yaml
 options.yaml (optional): the global Options; a key left out takes its default
   focus_clear: string (optional)
   focus_popup: string (optional)
+  limits_popup: string (optional)
   gh_path: string (optional)
 
 projects/<key>/project.yaml
@@ -35,12 +36,6 @@ projects/<key>/project.yaml
           state: string
           created: string
       unblock_on_push: bool (optional)
-      repositories: list of mappings (optional)
-          name: string
-          not_watched: bool (optional)
-          provider: string (optional)
-          repository: string (optional)
-          project_url: string (optional)
   github_issues: mapping (optional)
       on: bool
       repository: string (optional)
@@ -70,7 +65,6 @@ projects/<key>/project.yaml
       model_assignment_on: bool (optional)
   focus_kinds_off: []string (optional)
   ci_responses: list of mappings (optional)
-      repository: string (optional)
       commit: string
       land_anyway: string (optional)
       rerun: string (optional)
@@ -215,7 +209,6 @@ projects/<key>/tickets/<n>.yaml
 
 projects/<key>/ci-runs.yaml (optional): the Project's CI Runs
   runs: list of mappings
-      repository: string (optional)
       id: int64
       attempt: int
       workflow: string
@@ -238,6 +231,7 @@ projects/<key>/ci-runs.yaml (optional): the Project's CI Runs
 values
   options focus_clear (default activity_dashboard): activity_dashboard, all_clear
   options focus_popup (default off): off, on
+  options limits_popup (default on): on, off
   project landing.method (no landing: merge, push false, remote origin): merge, branch, pull_request
   project ci.provider (no ci: tracking off, github_actions): github_actions, azure_pipelines
   project models.kinds[].kind: grilling, spec, tickets, map-chart, map-grilling, map-research, map-task, prototype, retro, implementation

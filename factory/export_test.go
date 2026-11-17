@@ -47,5 +47,5 @@ var StartWaiting = startWaiting
 
 // ReadTurn reads a started Turn's stream to its end, as the runner does.
 func ReadTurn(cmd *exec.Cmd, stdout io.Reader, dir string) turnEnd {
-	return readTurn(cmd, stdout, dir, time.Now, newUsageReader("implementation", time.Now), func(core.SessionEvent) {}, func(core.UsageResponse) {})
+	return readTurn(cmd, stdout, dir, time.Now, newUsageReader("implementation", time.Now), func(core.SessionEvent) {}, func(core.UsageResponse) {}, func(core.PlanLimits) {})
 }
