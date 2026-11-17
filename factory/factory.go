@@ -451,7 +451,8 @@ func start(e Env, o options) (*factory, error) {
 	if err != nil {
 		return nil, fmt.Errorf("not in a git repository (%s)", e.Dir)
 	}
-	f.home = f.newRepository("", top)
+	// git writes C:/... on Windows; the Factory's paths are C:\...
+	f.home = f.newRepository("", filepath.FromSlash(top))
 	f.home.home = true
 	if err := f.checkGitVersion(); err != nil {
 		return nil, err
