@@ -308,6 +308,8 @@ If the Conversation's Factory is no longer Online, or no Factory has Chat suppor
 
 Each Conversation turn runs `claude -p` in the **Chat worktree**, `chat` in the Factory's worktrees folder beside the Tickets' (`~/src/acme-shop.worktrees/chat`); a Ticket ID is never `chat`, so the two can't clash. A Conversation's first turn moves the worktree to the base's tip, uses `--session-id` and prints `chat: starting a Conversation in <worktree>; resume: <command>`; later turns use `--resume`. The Factory keeps one `next_chat_work` call open and runs the turns it hands out one at a time.
 
+With several Repositories, each has its own Chat worktree beside its clone, `<clone parent>/<Repository Name>.worktrees/chat`, which a Conversation's first turn moves to that Repository's Base tip. The turn runs in the Home Repository's Chat worktree and reaches the others with `--add-dir`, and the Conversation's Resume Command carries them. The sweep leaves every Chat worktree alone.
+
 A Chat turn takes **no Claim slot**: it doesn't count against the Factory's concurrent turns, and a Conversation never waits for a Claim to end.
 
 - **Draining.** The first Ctrl-C closes the `next_chat_work` call, so no new Chat turn starts. A turn already running goes on, and the Factory exits once it has ended. While its Factory is Draining, the pop-up shows the Conversation as unavailable.
@@ -528,7 +530,7 @@ acme-shop-2: spec/acme-shop-2 conflicts with main again: commented on acme-shop-
 
 Turning Land per Spec off part-way makes the Factory's next poll merge every Spec Branch that holds merged-but-not-landed Tickets into the base, ready or not, and land them as a group; later Tickets land one by one. Adding the `long-lived` Label to a Spec while its Tickets wait does the same for that Spec alone. Turning Land per Spec on, or taking the Label off, affects only Tickets accepted afterwards. A Ticket added to a Spec after it has landed lands with a second batch: the Spec Branch is merged into the base again once the new Ticket is accepted.
 
-A Spec Branch is deleted once it is in the base and every Ticket on its Spec is Done or Cancelled. One that isn't in the base, as when the whole Spec is cancelled, is kept, and the Factory says so once. Ticket branches are never deleted.
+A Spec Branch is deleted once it is in the base and every Ticket on its Spec is Done or Cancelled. One that isn't in the base, as when the whole Spec is cancelled, is kept, and the Factory says so once. With several Repositories, each one's Spec Branch goes by the same rule against its own Base. Ticket branches are never deleted, but with several Repositories a branch the Ticket never used is (see **Worktrees in every Repository** below).
 
 ```text
 acme-shop-2: deleted spec/acme-shop-2, which is in main
@@ -573,7 +575,7 @@ warning: the base, main, has diverged from the remote's: it is at 9ad0fd655dd2 a
 main: no longer diverged from the remote's
 ```
 
-**Base missing.** Under every Landing Method, a base that exists neither locally nor on the Push remote is reported as missing through `report_base`. Code Central shows one **Base missing** item per Project in Needs Me and Focus Mode, naming the branch and the fix: create the branch, or change the Base branch in Project Options. The report clears when a later poll reports the base current.
+**Base missing.** Under every Landing Method, a base that exists neither locally nor on the Push remote is reported as missing through `report_base`. Code Central shows one **Base missing** item per Project in Needs Me and Focus Mode, naming the branch and the fix: create the branch, or change the Base branch in Project Options. The report clears when a later poll reports the base current. With [several Repositories](setting-up-a-project.md#several-repositories), each Repository's base is reported apart, and Base missing and Base diverged are one item per Repository, naming it (see **Landing across Repositories** below).
 
 On every poll, before it claims or lands, the Factory looks for the base. A local branch is used as it is. A base that exists only on the Push remote is created locally at the remote's commit, after a fetch. If it exists in neither place the Factory keeps running and heartbeating, but claims nothing and lands nothing until you create the branch or change the setting. It needs no restart:
 
@@ -581,6 +583,67 @@ On every poll, before it claims or lands, the Factory looks for the base. A loca
 base: created release at 9ad0fd655dd2 from origin/release
 warning: the base, release, exists neither here nor on origin: nothing lands and no branch is cut until you create it or change the Base branch in Project Options
 base: found release again
+```
+
+**Repository missing.** In a Project with [several Repositories](setting-up-a-project.md#several-repositories), the Factory also makes sure, on every poll, that each one has a clone: at its local path, else beside the Home Repository, at `<parent of the Home Repository>/<Repository Name>`. It clones a Repository with nothing at that path under the Push remote's name (`git clone --origin origin`), and adopts a clone already there when its Push remote's URL is the Clone URL (ssh or https, with or without `.git`). A Repository added while the Factory runs is cloned on its next poll. Anything else at the path, or a clone that fails, is **Repository missing**: the Factory touches nothing there, reports it through `report_repositories`, and starts no new Claim until every Repository has a clone. Code Central shows one **Repository missing** item per Repository in Needs Me and Focus Mode, naming the path, the Clone URL, the problem and the fix: clone it there by hand, set its local path in Project Options to a clone you have, or move what's there aside for the Factory to clone it. Project Options shows each Repository's clone and path. The next poll sees the fix by itself:
+
+```text
+repository web: cloned git@github.com:acme/web.git to /home/you/src/web
+repository api: adopted the clone at /home/you/src/api
+warning: Repository docs is missing: /home/you/src/docs isn't a git repository: no new Claim starts until it is cloned
+repository docs: cloned git@github.com:acme/docs.git to /home/you/src/docs
+```
+
+**Worktrees in every Repository.** With several Repositories, each Claim's start makes or reuses the Ticket's worktree in every one, beside its clone: the **Home worktree** at `<home>.worktrees/<ticket-id>` as ever, and each other at `<clone parent>/<Repository Name>.worktrees/<ticket-id>`. The branch has the same name in each (`<ticket-id>`, `prototype/<ticket-id>` or `research/<ticket-id>`), cut from that Repository's own Base, or under Land per Spec from its own Spec Branch, made from its Base on first use. A Stage gets a worktree detached at each Repository's Base tip, and a dirty one fails the Claim. A failure setting up a worktree names its Repository, and a Ticket whose branch conflicts with the Base in any Repository starts as a Conflict Claim listing the files under each Repository's name. The session starts in the Home worktree and reaches the others with `--add-dir`; its first prompt ends with a Repositories list giving each one's worktree, Base and branch, and its system prompt says to commit in each worktree and finish with `repositories`. The Ticket's Resume Command carries the same `--add-dir` flags. A Repository added while a Claim is held gets its worktree at the Ticket's next Claim; resuming the session doesn't add it:
+
+```text
+acme-shop-14 claimed (implementation): "Show prices from the API" in Spec acme-shop-13; worktree /home/you/src/acme-shop.worktrees/acme-shop-14; resume: claude --resume 2c9e4b1a-6f0d-4e8a-9b57-3d1f0a6c2e84 --add-dir /home/you/src/api.worktrees/acme-shop-14
+```
+
+Once the Ticket is done with its worktrees, the sweep removes them in every Repository, and a branch the Ticket never used (still on the line of the Base or Spec Branch it was cut from) goes with its worktree. A branch with work of its own is kept, merged or not. In the Home Repository, whose branch landing reads, an unused branch goes only once the Ticket is Done or Cancelled, or when it names no Home branch; with the Home Repository alone no branch is ever deleted. Here the Ticket changed the Home Repository alone:
+
+```text
+acme-shop-14: Done: removed its worktree /home/you/src/acme-shop.worktrees/acme-shop-14
+acme-shop-14: Done: removed its worktree /home/you/src/api.worktrees/acme-shop-14
+acme-shop-14: deleted its unused branch acme-shop-14 in Repository api
+```
+
+**Changed Repositories and the finish check.** With several Repositories, a Ticket's **Changed Repositories** are those whose branch holds commits in neither their Base nor, under Land per Spec, their Spec Branch; a Stage changes none. On every poll the Factory works them out from the branches of each Ticket it holds In Progress and reports them to Code Central (`report_changed_repositories`) whenever the set or a head moves, so the Ticket's card and page show them as the work goes. The finish settles them: `branch` and `commit` for the Home Repository and `repositories` for each other one, as the session is told (`code-central finish` takes them as `--repositories '[{"name":"api","branch":"acme-shop-14","commit":"4f1c2d9"}]'`). After the turn that finishes a Ticket, and again before landing it, the Factory checks the finish against every Repository's branch. A finish that leaves out a Repository with commits, or records a commit that isn't its branch's head, fails: the Ticket moves to Failed with a Failure Report on the finishing Claim (`fail_finish`), naming what is wrong and where each branch stands, and nothing of it lands. Send it back and its next Claim finishes again. An Accepted Ticket is failed this way only while it has landed nowhere, and a finish that drops a Repository its Ticket had recorded isn't auto-accepted, so the check comes first. With the Home Repository alone, nothing is reported or checked:
+
+```text
+acme-shop-14: the finish check failed: api is left out, but its branch acme-shop-14 holds commits beyond main, up to 4f1c2d9e8a7b
+acme-shop-14 turn ended (implementation): "Show prices from the API": exit 0, success (completed); now Failed; ran 6m12s
+```
+
+**Landing across Repositories.** Under Merge, an accepted Ticket lands in each of its Changed Repositories, and is Done once it has landed in all of them. The Factory first works out the merge in every one it hasn't landed in yet. If any conflicts, it lands none, and sends the Ticket back to Ready with one comment naming each conflicting Repository and its files. Otherwise it goes through them in the **landing order**, the order of Project Options' Repositories list (the Home Repository first by default): in each it makes the `Merge <ticket>: <title>` commit, advances that Repository's base, pushes it with Push on, and lands the Ticket there, recording that Repository's landed commit. A Ticket that has landed in some of its Repositories but not all is **Partly landed**, a badge on its card and page, and can't be cancelled. A failed push or base move stops there: the Factory comments once, naming the Repository, and tries again on every poll. It never force-pushes, resets or reverts what has landed. Under Merge + Push with CI Tracking on, the [CI gate](#with-ci-tracking) holds in each Repository whose CI is watched: once its merge is pushed there, the Ticket lands there when its CI result there passes, at a pushed commit holding the work, so a red build in one Repository holds back only that Repository's landing. The next Repository goes ahead once the push is made, and a **Not watched** Repository lands once pushed. A Ticket left Accepted a while is Accepted but not landed, naming the Repositories it has landed in and those it hasn't, each with why: its broken base, its CI there not passed yet, its pull request there still open, or what the Factory last commented, such as a refused push. Each Repository's base is located, kept level with its own remote and moved as the Project's is, and a missing or diverged one is a **Base missing** or **Base diverged** item naming it. It holds back only the Tickets landing in it, and no new Claim starts until it is fixed. The `land` operation names the Repository with `--repository` (`repository` over MCP); left out, it means the Home Repository. With the Home Repository alone, nothing of this shows and landing is as it always was:
+
+```text
+acme-shop-14: pushed main to origin
+acme-shop-14: landed on main at 7d1e0c9a2b3f
+acme-shop-14: can't land yet in api: couldn't push main to origin
+acme-shop-14: pushed main to origin in Repository api
+acme-shop-14: landed on main at 4b5c6d7e8f90 in Repository api
+acme-shop-15: waits to land: its base, release, is missing in Repository api
+acme-shop-16: pushed main to origin in Repository api
+acme-shop-16: CI tracks main at 0a1b2c3d4e5f in Repository api
+acme-shop-16: CI failed at 0a1b2c3d4e5f in Repository api, so it stays Accepted
+```
+
+Under **Branch**, an accepted Ticket lands in each of its Changed Repositories once you have merged its branch there into that Repository's base, and is Done once you have merged it in all of them; merged in some, it is Partly landed. With Push on, accepting pushes its branch in each. Under **Land per Spec**, each Repository has its own Spec Branch. An accepted Ticket is merged into its Spec Branch in each of its Changed Repositories, every one checked first: a conflict in any merges it into none, and sends it back with one comment naming each conflicting Repository and its files. Once the Spec is ready, the Factory checks the Spec Branch of every Repository the Spec's Tickets changed against that Repository's base before it lands any. A conflict in any lands nothing and opens, or comments on, the Spec's one Spec merge Ticket, which names each conflicting Repository with its files and both tips; its Claim merges each base into its branch there. Otherwise the Factory makes the same `Merge spec <spec id>: <title>` commit in each, in the landing order, pushes each base once with Push on, and lands there every Ticket that changed it. A failed push or base move in one Repository is tried again on every poll, as above, and the Spec's Tickets wait for it there. A broken base or a missing clone in any Repository the Spec's Tickets changed holds the whole Spec back, since its Spec Branch there can't be checked. Under Pull Request, the Spec Branch is pushed in each Repository, one pull request in each, and the Spec's Tickets land in each Repository as its pull request merges:
+
+```text
+acme-shop-14: Accepted under the Branch Landing Method: merge acme-shop-14 into main in Repository api and the Factory lands it
+acme-shop-14: merged into main by hand in Repository api
+acme-shop-14: landed on main at 4b5c6d7e8f90 in Repository api
+acme-shop-18: merged into spec/acme-shop-17 at 3b9e1f0c2d44
+acme-shop-18: merged into spec/acme-shop-17 at 5c0d1e2f3a4b in Repository api
+acme-shop-17: merged spec/acme-shop-17 into main at 9ad0fd655dd2
+acme-shop-17: landing its Tickets: acme-shop-18
+acme-shop-18: landed on main at 9ad0fd655dd2
+acme-shop-17: merged spec/acme-shop-17 into main at 6e7f8a9b0c1d in Repository api
+acme-shop-17: landing its Tickets in Repository api: acme-shop-18
+acme-shop-18: landed on main at 6e7f8a9b0c1d in Repository api
+acme-shop-19: spec/acme-shop-19 conflicts with the base in acme-shop, api: opened acme-shop-22 to merge the base into it
 ```
 
 When a base is found for the first time in a run, or changes, the Factory checks that `.mcp.json` is committed on it. At start it refuses to start without the file. Mid-run it cuts no new branches or worktrees, and prints the same message once, until the file is committed; landing carries on.

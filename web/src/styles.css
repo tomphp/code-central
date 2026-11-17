@@ -131,6 +131,15 @@ a.filter { text-decoration: none; }
 .project-options-rules > li { padding: 8px 0; border-bottom: 1px solid var(--border); }
 .project-options-rules .btn { margin-left: 4px; }
 .project-options-rules-section > .project-options-rule { margin-top: 12px; }
+.project-options-repositories { margin: 12px 0 0; padding: 0 0 0 20px; }
+.project-options-repositories > li { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.project-options-repository { display: flex; gap: 8px; align-items: center; }
+.project-options-home-badge { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; padding: 0 5px; border-radius: 4px; background: var(--surface-2); color: var(--muted); }
+.project-options-repository-details { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 6px 0; }
+.project-options-repository-details dt { color: var(--muted); }
+.project-options-repository-details dd { margin: 0; overflow-wrap: anywhere; }
+.project-options-clone-missing { color: var(--danger); }
+.project-options-repository-form { margin-top: 12px; }
 .project-options-field { display: block; margin: 12px 0 0; }
 .project-options-field input { min-width: 16rem; }
 .project-options-field + .project-options-hint { margin-left: 0; }
@@ -184,8 +193,16 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .ticket-body .claims > li { margin-bottom: 4px; }
 /* The latest Session Event, shown short and faintly. */
 .latest-event { color: var(--muted); }
+/* Changed Repositories (Spec code-central-848): name chips on a card and a
+   Spec, and a Ticket's Repositories section, one row per Repository. */
+.repo-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.repo-chip { font-size: 10.5px; padding: 0 5px; color: var(--muted); }
+.repos { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.repos li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.repo-name { font-weight: 500; }
+.accepted-repos { margin: 0 0 6px; padding-left: 18px; }
 /* A Ticket's CI section (code-central-256), and the CI Run status badges. */
-.ci-section h3 { font-size: 13px; margin: 14px 0 6px; }
+.ci-section h3, .repos-section h3 { font-size: 13px; margin: 14px 0 6px; }
 .ci-options { margin-top: 8px; }
 .ci-fix-note { display: grid; gap: 4px; margin-top: 8px; }
 .ci-fixes { display: flex; gap: 8px; flex-wrap: wrap; }

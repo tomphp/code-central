@@ -30,6 +30,74 @@ export function landingContract(driver: () => Driver) {
     expect(t.moves!.at(-1)).toMatchObject({ from: "Accepted", to: "Done", actor: "human", via: "merge", commit: "def456" });
   });
 
+  // ---- Changed Repositories (Spec code-central-848) ----
+
+  it("records the work in every Repository a finish names, and accepts work in another Repository into Accepted", async () => {
+    await d.createProject("acme", "Acme");
+    await d.api.addRepository("acme", { name: "api", clone_url: "git@github.com:acme/api.git" });
+    const id = await d.createTicket("acme", "Login page", "Ready");
+    await d.finish("acme", id, "Added the login page", {
+      branch: "impl-7",
+      commit: "abc123",
+      repositories: [{ name: "api", branch: "impl-7", commit: "def456" }],
+    });
+
+    const t = await d.api.getTicket("acme", id);
+    expect(t).toMatchObject({ branch: "impl-7", commit: "abc123" });
+    expect(t.repositories).toEqual([
+      { name: "acme", branch: "impl-7", commit: "abc123" },
+      { name: "api", branch: "impl-7", commit: "def456" },
+    ]);
+    const [row] = await d.api.findTickets("acme", { state: ["In Review"] });
+    expect(row.repositories).toEqual(["acme", "api"]);
+
+    const other = await d.createTicket("acme", "Login API", "Ready");
+    await d.finish("acme", other, "Added the API", { branch: "", commit: "", repositories: [{ name: "api", branch: "impl-8", commit: "fed789" }] });
+    wantAcknowledgement(await d.api.act("acme", other, "accept", {}), other, "Accepted", ["state", "moves"]);
+  });
+
+  it("lands in each Repository by name, Partly landed and not cancellable until it has landed in every one", async () => {
+    await d.createProject("acme", "Acme");
+    await d.api.addRepository("acme", { name: "api", clone_url: "git@github.com:acme/api.git" });
+    const id = await d.createTicket("acme", "Login page", "Ready");
+    await d.finish("acme", id, "Added the login page", {
+      branch: "impl-7",
+      commit: "abc123",
+      repositories: [{ name: "api", branch: "impl-7", commit: "def456" }],
+    });
+    await d.api.act("acme", id, "accept", {});
+
+    const unknown = await d.api.act("acme", id, "land", { commit: "fed789", repository: "web" }).catch((e) => e);
+    expect(unknown).toMatchObject({ status: 422, code: "invalid", field: "repository" });
+
+    wantAcknowledgement(await d.api.act("acme", id, "land", { commit: "fed789", repository: "api" }), id, "Accepted", ["repositories", "partly_landed"]);
+    const partly = await d.api.getTicket("acme", id);
+    expect(partly).toMatchObject({ state: "Accepted", partly_landed: true });
+    expect(partly.repositories!.map((r) => [r.name, r.landed?.commit])).toEqual([
+      ["acme", undefined],
+      ["api", "fed789"],
+    ]);
+    const [row] = await d.api.findTickets("acme", { state: ["Accepted"] });
+    expect(row.partly_landed).toBe(true);
+
+    const cancel = await d.api.act("acme", id, "cancel", {}).catch((e) => e);
+    expect(cancel).toBeInstanceOf(ApiError);
+    expect(cancel).toMatchObject({ status: 409, code: "action_not_allowed" });
+
+    wantAcknowledgement(await d.api.act("acme", id, "land", { commit: "aaa111" }), id, "Done", ["state", "moves", "repositories", "partly_landed"]);
+  });
+
+  it("refuses a finish naming a Repository the Project hasn't, keeping the Claim", async () => {
+    await d.createProject("acme", "Acme");
+    await d.api.addRepository("acme", { name: "api", clone_url: "git@github.com:acme/api.git" });
+    const id = await d.createTicket("acme", "Login page", "Ready");
+    const refused = await d
+      .finish("acme", id, "Done", { branch: "impl-7", commit: "abc123", repositories: [{ name: "web", branch: "impl-7", commit: "def456" }] })
+      .catch((e) => e);
+    expect(refused).toMatchObject({ status: 422, code: "invalid", field: "repositories[0].name" });
+    expect((await d.api.getTicket("acme", id)).state).toBe("In Progress");
+  });
+
   it("cancels an Accepted Ticket", async () => {
     await d.createProject("acme", "Acme");
     const id = await d.createTicket("acme", "Login page", "Ready");

@@ -14,8 +14,8 @@
 // IDs are what the writes returned (Specs and Tickets share one counter),
 // and Question numbers are Core's.
 import type { World } from "./core/core";
-import { HttpDriver, worldConnection } from "./driver";
-import type { CIRunView, CISettings, ExternalState, IssueWatcherReport, Landing, PullRequestState, PullRequestWatcherReport, SessionEvent, State, UsageResponse } from "./types";
+import { HttpDriver, worldConnection, type RepositoryWork } from "./driver";
+import type { CIRunView, CISettings, CloneState, ExternalState, IssueWatcherReport, Landing, PullRequestState, PullRequestWatcherReport, SessionEvent, State, UsageResponse } from "./types";
 
 export interface QuestionSeed {
   title: string;
@@ -42,10 +42,13 @@ export interface LinkSeed {
   external_state?: ExternalState;
 }
 
-// Work is the branch and head commit an agent finishes with.
+// Work is the branch and head commit an agent finishes with, in the Home
+// Repository, and with several Repositories, those in each other one it
+// changed.
 export interface Work {
   branch: string;
   commit: string;
+  repositories?: RepositoryWork[];
 }
 
 // CIOutcome is how a pushed commit's CI run stands.
@@ -237,19 +240,22 @@ export class Scenario extends HttpDriver {
   }
 
   // pushed has the Factory report it pushed an Accepted Ticket's commit,
-  // tracking CI first (trackCI) unless it is: the commit's CI is running
-  // until runs report.
-  async pushed(key: string, id: string, commit = WORK.commit) {
+  // in the Repository repository or the Home Repository, tracking CI
+  // first (trackCI) unless it is: the commit's CI is running until runs
+  // report.
+  async pushed(key: string, id: string, commit = WORK.commit, repository?: string) {
     const p = (await this.api.listProjects()).find((p) => p.key === key);
     if (!p?.ci.tracking || !p.landing.push) await this.trackCI(key);
-    await this.reportPushedCommit(key, id, commit);
+    await this.reportPushedCommit(key, id, commit, undefined, repository);
   }
 
   // ci has the CI Watcher report one run of the commit's workflow ci.yml
-  // (run number run) as outcome says.
-  async ci(key: string, id: string, outcome: CIOutcome, commit = WORK.commit, run = 1) {
+  // (run number run) as outcome says, in the Repository repository or
+  // the Home Repository.
+  async ci(key: string, id: string, outcome: CIOutcome, commit = WORK.commit, run = 1, repository?: string) {
     const conclusion = { passed: "success", failed: "failure", cancelled: "cancelled", running: undefined }[outcome] as CIRunView["conclusion"];
     const r: Omit<CIRunView, "ignored"> = {
+      ...(repository && { repository }),
       id: run,
       attempt: 1,
       workflow: "ci.yml",
@@ -294,13 +300,47 @@ export class Scenario extends HttpDriver {
   }
 
   // base has a Factory come online for the Project and report its base
-  // as state says. A diverged base shows only under Merge + Push or Pull
-  // Request, so landOn sets Merge + Push first unless the Project has one.
-  async base(key: string, state: "current" | "diverged" | "missing", commits: { local: string; remote: string } = { local: "aaa1111222", remote: "bbb2222333" }) {
+  // as state says: the Home Repository's, or the Repository named's. A
+  // diverged base shows only under Merge + Push or Pull Request, so landOn
+  // sets Merge + Push first unless the Project has one.
+  async base(
+    key: string,
+    state: "current" | "diverged" | "missing",
+    commits: { local: string; remote: string } = { local: "aaa1111222", remote: "bbb2222333" },
+    repository?: string,
+  ) {
     const p = (await this.api.listProjects()).find((p) => p.key === key);
     if (state === "diverged" && !p?.landing.push && p?.landing.method !== "pull_request") await this.landOn(key, "merge");
     await this.reportHeartbeat(key, { factory: "code-central-factory", host: "laptop", state: "online", interval_seconds: 30 });
-    await this.agent(`${this.projectPath(key)}/report_base`, { state, ...commits });
+    await this.agent(`${this.projectPath(key)}/report_base`, { state, ...commits, ...(repository && { repository }) });
+  }
+
+  // landedIn has the Factory land an Accepted Ticket's work in the
+  // Repository named at commit: Done once it has landed in each of its
+  // Changed Repositories, and Partly landed until then.
+  async landedIn(key: string, id: string, repository: string, commit = "def456") {
+    await this.agent(`${this.ticketPath(key, id)}/land`, { commit, repository });
+  }
+
+  // clones has a Factory come online for the Project and report its
+  // Repositories' clones, each ready or missing with its problem.
+  async clones(key: string, repositories: { name: string; path: string; state: CloneState; problem?: string }[]) {
+    await this.reportHeartbeat(key, { factory: "code-central-factory", host: "laptop", state: "online", interval_seconds: 30 });
+    await this.agent(`${this.projectPath(key)}/report_repositories`, { repositories });
+  }
+
+  // repository has the human add the Repository name to the Project, which
+  // then has several: reads name each Ticket's Changed Repositories.
+  async repository(key: string, name: string, cloneUrl = `git@github.com:acme/${name}.git`) {
+    await this.human(`${this.projectPath(key)}/add_repository`, { name, clone_url: cloneUrl });
+  }
+
+  // changed has the Factory report a Ticket's live Changed Repositories,
+  // each name on the Ticket's branch at its commit, claiming the Ticket
+  // first if it must.
+  async changed(key: string, id: string, commits: Record<string, string>) {
+    const repositories: RepositoryWork[] = Object.entries(commits).map(([name, commit]) => ({ name, branch: id, commit }));
+    await this.agent(`${this.ticketPath(key, id)}/report_changed_repositories`, { claim_id: await this.claimFor(key, id), repositories });
   }
 
   // pullRequest takes an Accepted Ticket to the Pull Request Landing
@@ -315,6 +355,21 @@ export class Scenario extends HttpDriver {
       link: `https://github.com/acme/web/pull/${number}`,
       state,
       ...(state === "merged" && { merge_commit: "def456" }),
+    });
+  }
+
+  // pullRequestIn has the Factory push an Accepted Ticket's branch in the
+  // Repository and the Pull Request Watcher report its pull request
+  // there in state, under Pull Request (pullRequest, or landOn, first).
+  async pullRequestIn(key: string, id: string, repository: string, state: PullRequestState = "open", number = 7) {
+    await this.reportPushedCommit(key, id, `${repository}-head`, id, repository);
+    await this.reportPullRequest(key, {
+      repository,
+      branch: id,
+      number,
+      link: `https://github.com/acme/${repository}/pull/${number}`,
+      state,
+      ...(state === "merged" && { merge_commit: `${repository}-merge` }),
     });
   }
 

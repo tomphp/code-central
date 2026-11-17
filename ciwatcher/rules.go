@@ -28,11 +28,15 @@ import (
 // second as the latest one tracked against its rule, but on a later
 // poll, is missed. A rate limit stops it calling the CI Provider: it
 // returns the *watchers.RateLimitError, and the runs it didn't get to fire on the
-// next poll.
-func (w *watcher) fireRules(ctx context.Context, p Provider, watch core.CIWatch) error {
+// next poll. The rules are the Project's, and fire on runs in every
+// watched Repository: p is the Repository repo's CI Provider, "" for the
+// Home Repository.
+func (w *watcher) fireRules(ctx context.Context, p Provider, watch core.CIWatch, repo string) error {
 	pushed := map[string]bool{}
 	for _, c := range watch.Pushed {
-		pushed[c.Commit] = true
+		if c.Repository == repo {
+			pushed[c.Commit] = true
+		}
 	}
 	var branches []string
 	onBranch := map[string][]core.CIWatchRule{}
@@ -66,6 +70,7 @@ func (w *watcher) fireRules(ctx context.Context, p Provider, watch core.CIWatch)
 			if !run.Conclusion.Failed() || pushed[run.Commit] {
 				continue
 			}
+			run.Repository = repo
 			rule, ok := matchRule(rules, run, watch.IgnoredWorkflows)
 			if !ok || !run.Finished.After(ruleSince(rule)) {
 				continue
@@ -108,7 +113,7 @@ func matchRule(rules []core.CIWatchRule, run Run, ignored []string) (core.CIWatc
 // Provider rate-limiting it is the only error it returns, a
 // *watchers.RateLimitError; it logs the others.
 func (w *watcher) fire(ctx context.Context, p Provider, watch core.CIWatch, rule core.CIWatchRule, run Run) error {
-	key := runKey{run.ID, run.Attempt}
+	key := runKey{run.Repository, run.ID, run.Attempt}
 	jobs, err := p.Jobs(ctx, run.ID, run.Attempt)
 	var limit *watchers.RateLimitError
 	if errors.As(err, &limit) {
@@ -150,16 +155,25 @@ func (w *watcher) openOrComment(ctx context.Context, watch core.CIWatch, rule co
 		}
 	}
 	_, err = w.Client.CreateTicket(ctx, w.Project, core.CreateTicketInput{Spec: core.Ref(rule.Spec), State: rule.State,
-		Title: fmt.Sprintf("Fix %s failing on %s", run.Workflow, run.Branch), Description: fixDescription(watch, rule, run)})
+		Title: fmt.Sprintf("Fix %s failing on %s%s", run.Workflow, run.Branch, where(run)), Description: fixDescription(watch, rule, run)})
 	return err
+}
+
+// where is " in <repository>" for a run in a Repository other than the
+// Home, "" for the Home's.
+func where(run Run) string {
+	if run.Repository == "" {
+		return ""
+	}
+	return " in " + run.Repository
 }
 
 // fixDescription is a fix Ticket's description: the failed run, its
 // failed jobs, the Ticket its commit landed, and what fixing it means.
 func fixDescription(watch core.CIWatch, rule core.CIWatchRule, run Run) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "**%s** (`%s`) failed on `%s` at commit `%s`, so the CI Rule on Spec %s opened this Ticket to fix it.\n\n",
-		run.Name, run.Workflow, run.Branch, run.Commit, rule.Spec)
+	fmt.Fprintf(&b, "**%s** (`%s`) failed on `%s`%s at commit `%s`, so the CI Rule on Spec %s opened this Ticket to fix it.\n\n",
+		run.Name, run.Workflow, run.Branch, where(run), run.Commit, rule.Spec)
 	b.WriteString(runDetails(watch, run))
 	fmt.Fprintf(&b, "\n## Acceptance criteria\n\n- [ ] `%s` passes on `%s` again.\n", run.Workflow, run.Branch)
 	return b.String()
@@ -168,7 +182,7 @@ func fixDescription(watch core.CIWatch, rule core.CIWatchRule, run Run) string {
 // fixComment is the comment on an unfinished fix Ticket for a further
 // failure.
 func fixComment(watch core.CIWatch, run Run) string {
-	return fmt.Sprintf("**%s** (`%s`) failed on `%s` again, at commit `%s`.\n\n%s", run.Name, run.Workflow, run.Branch, run.Commit, runDetails(watch, run))
+	return fmt.Sprintf("**%s** (`%s`) failed on `%s`%s again, at commit `%s`.\n\n%s", run.Name, run.Workflow, run.Branch, where(run), run.Commit, runDetails(watch, run))
 }
 
 // runDetails links run and names its failed jobs, and the Tickets its
@@ -186,7 +200,7 @@ func runDetails(watch core.CIWatch, run Run) string {
 	}
 	s := fmt.Sprintf("- Run: %s\n- Failed jobs: %s\n", run.URL, jobs)
 	for _, c := range watch.Landed {
-		if c.Commit == run.Commit {
+		if c.Repository == run.Repository && c.Commit == run.Commit {
 			s += fmt.Sprintf("- The commit landed %s, on Spec %s.\n", c.Ticket, c.Spec)
 		}
 	}

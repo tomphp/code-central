@@ -38,11 +38,17 @@ type FinishInput struct {
 	Ticket  Ref    `json:"ticket"`
 	ClaimID string `json:"claim_id"`
 	Summary string `json:"summary"`
-	// Branch and Commit name the work's branch and its head commit. Both
-	// are optional and free-form; one left out keeps the stored value. A
-	// Ticket with a branch is Accepted, not Done, when the human accepts it.
+	// Branch and Commit name the work's branch and its head commit in the
+	// Home Repository. Both are optional and free-form; one left out keeps
+	// the stored value. A Ticket with a branch is Accepted, not Done, when
+	// the human accepts it.
 	Branch string `json:"branch,omitempty"`
 	Commit string `json:"commit,omitempty"`
+	// Repositories are the branch and head commit in each other
+	// Repository the work changed (Spec code-central-848); the Home
+	// Repository may be given here instead of in Branch and Commit, not
+	// in both. The finish replaces the Ticket's Changed Repositories.
+	Repositories []RepositoryWork `json:"repositories,omitempty"`
 	// Recommendation is the Spec recommendation, implement or split:
 	// required on a spec Stage and refused on any other Ticket. It
 	// replaces the one an earlier finish gave.
@@ -183,7 +189,8 @@ func claimTarget(rule blockRule, in ClaimInput) (t store.Ticket, found bool, err
 // Progress to In Review, with the summary stored as a comment. A spec
 // Stage's finish also gives its Spec recommendation. Then, in the same
 // write, an auto-accept eligible Ticket is accepted on the human's
-// behalf (ADR 0037); the result is the same either way.
+// behalf (ADR 0037), unless the finish dropped one of its Changed
+// Repositories; the result is the same either way.
 func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishResult, error) {
 	if strings.TrimSpace(in.Summary) == "" {
 		return FinishResult{}, invalid("summary", "finish needs a summary: what was done, where (branch or commit) and what the reviewer should check")
@@ -218,17 +225,20 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 			return invalid("recommendation", "only a spec Stage takes a recommendation: finish again without it")
 		}
 		t.Recommendation = rec
-		if b := strings.TrimSpace(in.Branch); b != "" {
-			t.Branch = b
-		}
-		if cm := strings.TrimSpace(in.Commit); cm != "" {
-			t.Commit = cm
+		p, _ := w.Project(key)
+		was := changedRepositoryNames(key, t)
+		if err := settleFinish(p, &t, in); err != nil {
+			return err
 		}
 		t.Updated = now
 		// The result is read here, before any auto-accept, so the agent
 		// sees the same whether or not one follows.
 		if v, err = acknowledge(before, c.ticketView(w, key, t), in.Full); err != nil {
 			return err
+		}
+		if dropsRepositories(key, t, was) {
+			// The Factory's finish check comes first.
+			return w.PutTicket(key, t)
 		}
 		return c.autoAccept(ctx, w, key, t, now)
 	})
@@ -249,11 +259,11 @@ func (c *Core) Accept(ctx context.Context, key string, in TicketInput) (Written[
 
 // acceptStep is the accept transition on t, the step the human's accept
 // and an auto-accept share: In Review to Accepted when the work's finish
-// named a branch, and to Done otherwise. The Move records cause, empty
-// for the human's own accept.
+// named a branch in any of its Changed Repositories, and to Done
+// otherwise. The Move records cause, empty for the human's own accept.
 func acceptStep(ctx context.Context, t *store.Ticket, key string, cause store.AutoAcceptCause, now time.Time) error {
 	to := store.Done
-	if t.Branch != "" {
+	if hasBranchToLand(key, *t) {
 		to = store.Accepted
 	}
 	if err := transitionTo(ctx, t, key, "accept", "", to, now); err != nil {
@@ -263,26 +273,57 @@ func acceptStep(ctx context.Context, t *store.Ticket, key string, cause store.Au
 	return nil
 }
 
-// LandInput is land's input: the commit that put the work into the base.
+// LandInput is land's input: the commit that put the work into the base
+// of one of the Ticket's Changed Repositories.
 type LandInput struct {
 	Ticket Ref    `json:"ticket"`
 	Commit string `json:"commit"`
+	// Repository is the Repository Name of the base the work landed in;
+	// blank for the Home Repository.
+	Repository string `json:"repository,omitempty"`
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
 
-// Land is land(ticket, commit): human or agent, Accepted or In Review to
-// Done once the work is in the base. The commit is recorded on the Move,
-// with Via merge.
+// Land is land(ticket, commit, repository?): human or agent, once the
+// work is in the base of one of the Ticket's Changed Repositories, the
+// Home Repository's unless it names another (ADR 0049). It records that
+// Repository's landed commit. Once every Changed Repository has landed it
+// moves the Ticket from Accepted or In Review to Done, with the commit on
+// the Move, Via merge; until then the Ticket stays where it is, Partly
+// landed once Accepted.
 func (c *Core) Land(ctx context.Context, key string, in LandInput) (Written[TicketView], error) {
 	commit := strings.TrimSpace(in.Commit)
 	if commit == "" {
 		return Written[TicketView]{}, invalid("commit", "land needs the commit that put the work into the base")
 	}
-	return c.actThen(ctx, key, in.Ticket, in.Full, "land", "", "", func(t *store.Ticket) error {
+	return c.updateTicketIn(key, "land", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
+		p, _ := r.Project(key)
+		name, err := landingRepository(p, *t, in.Repository)
+		if err != nil {
+			return false, err
+		}
+		now := c.now()
+		i := slices.IndexFunc(t.Repositories, func(cr store.ChangedRepository) bool { return cr.Name == name })
+		if !landsLast(changedRepositories(key, *t), name) {
+			if _, err := check("land", t.State, "", ActorOf(ctx), DisplayID(key, t.Number)); err != nil {
+				return false, err
+			}
+			if l := t.Repositories[i].Landed; l != nil && l.Commit == commit {
+				return false, nil
+			}
+			t.Repositories[i].Landed = &store.Landed{Commit: commit, Time: now}
+			return true, nil
+		}
+		if err := c.actOn(ctx, t, key, "land", "", "", now); err != nil {
+			return false, err
+		}
 		m := &t.Moves[len(t.Moves)-1]
 		m.Via, m.Commit = "merge", commit
-		return nil
+		if i >= 0 {
+			t.Repositories[i].Landed = &store.Landed{Commit: commit, Time: now}
+		}
+		return true, nil
 	})
 }
 

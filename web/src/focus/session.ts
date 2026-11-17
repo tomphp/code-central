@@ -10,7 +10,7 @@ import { useEffect, useMemo, useReducer, useState } from "react";
 import type { Api } from "../api/api";
 import type { FocusPopup, NeedsMeRow, QuestionView, TicketView } from "../api/types";
 import { modalOpen, useModalOpen } from "../controls/Modal";
-import { ticketOf } from "../format";
+import { projectItemOf, ticketOf } from "../format";
 import { useTicket } from "../live";
 import { useNeedsMe } from "../needsme/context";
 import type { NeedsMe } from "../needsme/model";
@@ -284,8 +284,12 @@ const isUnreadRound = (item: FocusItem): boolean => item.roundKey !== undefined 
 // their Focus Items with it.
 export function itemsOf(row: NeedsMeRow, ticket?: TicketView): FocusItem[] {
   // A Base diverged item is a Project's, with no Ticket ID; a CI item is
-  // a Project's pushed commit's.
-  if (row.reason !== "needs_answer") return [{ key: keyOf(`${row.id || row.project} ${row.reason}${row.ci_item ? ` ${row.ci_item.commit}` : ""}`), row }];
+  // a Project's pushed commit's, and a Repository missing item its
+  // Repository's.
+  if (row.reason !== "needs_answer") {
+    const item = projectItemOf(row);
+    return [{ key: keyOf(`${row.id || row.project} ${row.reason}${item ? ` ${item}` : ""}`), row }];
+  }
   const roundKey = roundKeyOf(row);
   if (ticket?.id !== row.id) return [{ key: roundKey, row, roundKey }];
   const round = row.round ? ticket.rounds?.find((r) => r.number === row.round?.number) : ticket.rounds?.at(-1);

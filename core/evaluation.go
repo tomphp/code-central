@@ -46,9 +46,10 @@ type evaluation struct {
 	// number.
 	reasons map[int]ticketReason
 	ciItems []ciItem
-	// listedBy is the index in ciItems of the item listing each Ticket a
-	// CI item lists, by number.
-	listedBy map[int]int
+	// listedBy are the indexes in ciItems of the items listing each
+	// Ticket a CI item lists, one per Repository, in landing order, by
+	// number.
+	listedBy map[int][]int
 	// requirements are the Specs with a Stage Ticket, the Requirements,
 	// by number.
 	requirements map[int]bool
@@ -91,7 +92,7 @@ func (e *evaluation) evaluated() *evaluation {
 			e.list = slices.Insert(e.list, i, e.given)
 		}
 	}
-	e.reasons, e.listedBy, e.requirements, e.specWork = map[int]ticketReason{}, map[int]int{}, map[int]bool{}, map[int][]store.Ticket{}
+	e.reasons, e.listedBy, e.requirements, e.specWork = map[int]ticketReason{}, map[int][]int{}, map[int]bool{}, map[int][]store.Ticket{}
 	var listed []store.Ticket
 	for _, t := range e.list {
 		if StageOf(t.Labels) != "" {
@@ -130,7 +131,7 @@ func (e *evaluation) chain(t store.Ticket) (NeedsMeReason, time.Time) {
 		return ReasonAnswered, entered(t)
 	case store.InProgress, store.Accepted:
 		a := e.ci.ticket(t)
-		if a.failure != nil {
+		if a.failed {
 			return ReasonCIFailed, a.since
 		} else if a.cancelled {
 			return ReasonCICancelled, a.since
@@ -140,7 +141,7 @@ func (e *evaluation) chain(t store.Ticket) (NeedsMeReason, time.Time) {
 			return "", time.Time{}
 		}
 		lp := landingPolicyOf(p)
-		if t.State == store.Accepted && lp.LandsByPullRequest() && t.PullRequest != nil && t.PullRequest.State == store.PRClosed {
+		if t.State == store.Accepted && lp.LandsByPullRequest() && anyPullRequest(t, store.PRClosed) {
 			return ReasonPullRequestClosed, entered(t)
 		}
 		if t.State == store.Accepted && lp.LandsOnHumanMerge() {
@@ -155,10 +156,10 @@ func (e *evaluation) chain(t store.Ticket) (NeedsMeReason, time.Time) {
 		if a.unavailable != nil {
 			return ReasonCIUnavailable, a.unavailable.Pushed
 		}
-		// One the CI gate holds on a running CI result, or waiting for its
-		// Spec to land, is never Accepted but not landed: landing waits on
-		// them.
-		if s := c.notLandedSince(p, t); s != nil && !a.waiting && !waitingForSpec(e.r, p, t) {
+		// One the CI gate holds on a running CI result in every Repository
+		// it hasn't landed in, or waiting for its Spec to land, is never
+		// Accepted but not landed: landing waits on them.
+		if s := c.notLandedSince(p, t); s != nil && !waitsOnCIAlone(p, t, a) && !waitingForSpec(e.r, p, t) {
 			return ReasonAcceptedNotLanded, *s
 		}
 	case store.Failed:
@@ -179,29 +180,52 @@ func (e *evaluation) chain(t store.Ticket) (NeedsMeReason, time.Time) {
 }
 
 // group makes the CI items listing tickets, whose reasons are CI items',
-// in order of their first listed Ticket: one per pushed commit and
-// reason, listing its Tickets accepted earliest first, waiting since the
-// earliest of theirs.
+// in order of their first listed Ticket: one per Repository, pushed
+// commit and reason, listing its Tickets accepted earliest first, waiting
+// since the earliest of theirs. A Ticket is listed on an item for each
+// Repository where it is CI failed, CI cancelled or CI unavailable.
 func (e *evaluation) group(tickets []store.Ticket) {
 	slices.SortFunc(tickets, func(a, b store.Ticket) int {
 		return cmp.Or(entered(a).Compare(entered(b)), cmp.Compare(a.Number, b.Number))
 	})
 	for _, t := range tickets {
-		tr, a := e.reasons[t.Number], e.ci.ticket(t)
-		i := slices.IndexFunc(e.ciItems, func(it ciItem) bool { return it.commit == a.latest.Commit && it.reason == tr.reason })
-		if i < 0 {
-			// Only the detail of its reason is set: a running commit has
-			// no failure, and a failed or cancelled one isn't unavailable.
-			e.ciItems = append(e.ciItems, ciItem{reason: tr.reason, commit: a.latest.Commit, since: tr.since, failure: a.failure, unavailable: a.unavailable})
-			i = len(e.ciItems) - 1
+		for _, rc := range e.ci.ticket(t).repos {
+			reason, since := rc.itemReason()
+			if reason == "" {
+				continue
+			}
+			i := slices.IndexFunc(e.ciItems, func(it ciItem) bool {
+				return it.repository == rc.name && it.commit == rc.latest.Commit && it.reason == reason
+			})
+			if i < 0 {
+				// Only the detail of its reason is set: a running commit has
+				// no failure, and a failed or cancelled one isn't unavailable.
+				e.ciItems = append(e.ciItems, ciItem{reason: reason, repository: rc.name, commit: rc.latest.Commit, since: since,
+					failure: rc.failure, unavailable: rc.unavailable, result: rc.result})
+				i = len(e.ciItems) - 1
+			}
+			it := &e.ciItems[i]
+			it.tickets = append(it.tickets, t)
+			if since.Before(it.since) {
+				it.since = since
+			}
+			e.listedBy[t.Number] = append(e.listedBy[t.Number], i)
 		}
-		it := &e.ciItems[i]
-		it.tickets = append(it.tickets, t)
-		if tr.since.Before(it.since) {
-			it.since = tr.since
-		}
-		e.listedBy[t.Number] = i
 	}
+}
+
+// itemReason is the reason of the CI item listing a Ticket in rc's
+// Repository, and since when, or "" when none lists it there.
+func (rc *repoCI) itemReason() (NeedsMeReason, time.Time) {
+	switch {
+	case rc.failure != nil:
+		return ReasonCIFailed, rc.since
+	case rc.cancelled:
+		return ReasonCICancelled, rc.since
+	case rc.unavailable != nil:
+		return ReasonCIUnavailable, rc.unavailable.Pushed
+	}
+	return "", time.Time{}
 }
 
 // specPullRequestLead is specPullRequestLead(t) reading the work of t's
@@ -228,26 +252,45 @@ func (e *evaluation) reason(t store.Ticket) (NeedsMeReason, time.Time) {
 	return tr.reason, tr.since
 }
 
-// itemOf is the CI item listing t, if one does.
+// itemOf is t's first CI item, if one lists it: the first in landing
+// order whose reason is t's own.
 func (e *evaluation) itemOf(t store.Ticket) (ciItem, bool) {
-	i, ok := e.evaluated().listedBy[t.Number]
-	if !ok {
+	items := e.itemsOf(t)
+	if len(items) == 0 {
 		return ciItem{}, false
 	}
-	return e.ciItems[i], true
+	reason, _ := e.reason(t)
+	if i := slices.IndexFunc(items, func(it ciItem) bool { return it.reason == reason }); i >= 0 {
+		return items[i], true
+	}
+	return items[0], true
 }
 
-// baseRows are the Project's Base diverged and Base missing rows, each
-// while its Factory reports it.
-func (e *evaluation) baseRows() []NeedsMeRow {
-	var out []NeedsMeRow
-	if row, ok := e.c.baseDivergedRow(e.p); ok {
-		out = append(out, row)
-	}
-	if row, ok := e.c.baseMissingRow(e.p); ok {
-		out = append(out, row)
+// itemsOf are the CI items listing t, one per Repository, in landing
+// order.
+func (e *evaluation) itemsOf(t store.Ticket) []ciItem {
+	var out []ciItem
+	for _, i := range e.evaluated().listedBy[t.Number] {
+		out = append(out, e.ciItems[i])
 	}
 	return out
+}
+
+// itemIn is the CI item listing t in the Repository name, if one does.
+func (e *evaluation) itemIn(t store.Ticket, name string) (ciItem, bool) {
+	items := e.itemsOf(t)
+	if i := slices.IndexFunc(items, func(it ciItem) bool { return it.repository == name }); i >= 0 {
+		return items[i], true
+	}
+	return ciItem{}, false
+}
+
+// baseRows are the Project's Base diverged, Base missing and Repository
+// missing rows, one per Repository each, while its Factory reports it.
+func (e *evaluation) baseRows() []NeedsMeRow {
+	out := e.c.baseDivergedRows(e.p)
+	out = append(out, e.c.baseMissingRows(e.p)...)
+	return append(out, e.c.repositoryMissingRows(e.p)...)
 }
 
 // needsMeItem is one Needs Me item as the evaluation has it: its row,

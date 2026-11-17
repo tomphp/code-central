@@ -41,7 +41,10 @@ func specMergeCounts(t store.Ticket) bool {
 // waitingForSpec is whether t is Spec-landed and Accepted but not yet in
 // the base: it waits for its Spec to land, and the Factory has pushed
 // nothing for it. Once its Spec is merged into the base and pushed under
-// CI Tracking, it has a pushed commit and waits on CI instead.
+// CI Tracking, it has a pushed commit and waits on CI instead. With
+// several Changed Repositories it waits while one it hasn't landed in has
+// nothing pushed for it, as when the Spec's merge there is still to make
+// (Spec code-central-848).
 func waitingForSpec(r store.Reader, p store.Project, t store.Ticket) bool {
 	if t.State != store.Accepted || !specLanded(r, p, t) {
 		return false
@@ -50,16 +53,26 @@ func waitingForSpec(r store.Reader, p store.Project, t store.Ticket) bool {
 		// The Spec Branch is pushed and waits on its pull request.
 		return true
 	}
-	return len(t.PushedCommits) == 0 || !latestPushed(t).Pushed.After(backToReady(t))
+	rs := changedRepositories(p.Key, t)
+	if len(rs) < 2 {
+		return len(t.PushedCommits) == 0 || !latestPushed(t).Pushed.After(backToReady(t))
+	}
+	return slices.ContainsFunc(rs, func(cr store.ChangedRepository) bool {
+		pc, ok := latestPushedTo(p.Key, t, cr.Name)
+		return cr.Landed == nil && (!ok || !pc.Pushed.After(backToReady(t)))
+	})
 }
 
 // SpecMergeView is the Spec Branch commit a Ticket's work was merged
 // into and when Code Central heard of it; Counts is false for a merge no
 // later than the Ticket's last move back to Ready.
 type SpecMergeView struct {
-	Commit string    `json:"commit"`
-	Merged time.Time `json:"merged"`
-	Counts bool      `json:"counts"`
+	// Repository is the Repository Name of the Spec Branch, left out for
+	// the Home Repository.
+	Repository string    `json:"repository,omitempty"`
+	Commit     string    `json:"commit"`
+	Merged     time.Time `json:"merged"`
+	Counts     bool      `json:"counts"`
 }
 
 // LandPerSpecView is a Spec's Land per Spec status on a Spec read,
@@ -110,14 +123,19 @@ func landPerSpecView(r store.Reader, key string, s store.Spec, tickets []store.T
 type ReportSpecMergeInput struct {
 	Ticket Ref    `json:"ticket"`
 	Commit string `json:"commit"`
+	// Repository is the Repository Name of the Spec Branch the commit is
+	// on; left out, the Home Repository.
+	Repository string `json:"repository,omitempty"`
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
 
 // ReportSpecMerge is the Factory's report_spec_merge: the Spec Branch
 // commit it merged an Accepted Spec-landed Ticket's work into, recorded
-// with when. Reporting the same commit again changes nothing; a newer one
-// replaces it.
+// with when and the Repository it is in. With several Repositories the
+// Factory reports it once the work is in the Spec Branch of every one of
+// the Ticket's Changed Repositories, naming the first. Reporting the same
+// commit again changes nothing; a newer one replaces it.
 func (c *Core) ReportSpecMerge(_ context.Context, key string, in ReportSpecMergeInput) (Written[TicketView], error) {
 	commit := strings.TrimSpace(in.Commit)
 	if commit == "" {
@@ -128,10 +146,14 @@ func (c *Core) ReportSpecMerge(_ context.Context, key string, in ReportSpecMerge
 		if t.State != store.Accepted || !specLanded(r, p, *t) {
 			return false, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is %s: only an Accepted Spec-landed Ticket is merged into its Spec Branch", DisplayID(key, t.Number), t.State)}
 		}
-		if t.SpecMerge != nil && t.SpecMerge.Commit == commit && specMergeCounts(*t) {
+		name, err := repositoryOf(p, "repository", in.Repository)
+		if err != nil {
+			return false, err
+		}
+		if t.SpecMerge != nil && t.SpecMerge.Commit == commit && recordRepository(key, t.SpecMerge.Repository) == name && specMergeCounts(*t) {
 			return false, nil
 		}
-		t.SpecMerge = &store.SpecMerge{Commit: commit, Merged: c.now()}
+		t.SpecMerge = &store.SpecMerge{Repository: recordName(key, name), Commit: commit, Merged: c.now()}
 		return true, nil
 	})
 }
@@ -206,7 +228,7 @@ func (c *Core) newSpecFixTicket(ctx context.Context, key string, in NewFixTicket
 			return nil
 		}
 		lead, handled = t, true
-		closed = t.PullRequest != nil && t.PullRequest.State == store.PRClosed
+		closed = anyPullRequest(t, store.PRClosed)
 		return nil
 	})
 	if err != nil || !handled {

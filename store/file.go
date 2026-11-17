@@ -249,9 +249,13 @@ func (s *FileStore) loadProject(key string) error {
 			}
 			p.CI.Rules = append(p.CI.Rules, rule)
 		}
+		var at string
+		if p.CI.Repositories, at, err = decodeCIRepositories(c.Repositories); err != nil {
+			return &LoadError{File: rel, Field: "ci.repositories" + at, Msg: err.Error()}
+		}
 	}
 	if g := pf.GitHubIssues; g != nil {
-		p.GitHubIssues = GitHubIssues{On: g.On, Repository: g.Repository, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
+		p.GitHubIssues = GitHubIssues{On: g.On, Repositories: g.Repositories, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
 	}
 	if m := pf.Models; m != nil {
 		var field string
@@ -286,6 +290,9 @@ func (s *FileStore) loadProject(key string) error {
 			return &LoadError{File: rel, Field: fmt.Sprintf("auto_accept[%d]", i), Msg: fmt.Sprintf("unknown Auto-accept kind %q", k)}
 		}
 		p.SetAutoAccept(kind, true)
+	}
+	if p.Repositories, at, err = decodeRepositories(p.Key, pf.Repositories); err != nil {
+		return &LoadError{File: rel, Field: "repositories" + at, Msg: err.Error()}
 	}
 	s.setProject(p)
 	if err := s.loadCIRuns(key); err != nil {

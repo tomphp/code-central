@@ -21,3 +21,10 @@ export const AzurePipelines: Story = {
   }),
 };
 export const TrackingOff: Story = { ...optionsWorld() };
+export const SeveralRepositories: Story = {
+  ...optionsWorld(async (_s, w) => {
+    await w.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+    await w.api.addRepository("acme", { name: "api", clone_url: "git@github.com:acme/api.git" });
+    await w.api.addRepository("acme", { name: "docs", clone_url: "git@github.com:acme/docs.git", ci: { not_watched: true } });
+  }),
+};

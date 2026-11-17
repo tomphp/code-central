@@ -245,6 +245,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Repository: "acme/web"})
 		return err
 	},
+	"set_repository_ci": func(f fixture) error {
+		_, err := f.core.SetRepositoryCI(human, "acme", core.SetRepositoryCIInput{Name: "web", RepositoryCI: core.RepositoryCI{NotWatched: true}})
+		return err
+	},
 	"set_models": func(f fixture) error {
 		_, err := f.core.SetModels(human, "acme", core.SetModelsInput{Default: core.ModelRowView{Model: "opus"}})
 		return err
@@ -265,6 +269,23 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.SetFocusKinds(human, "acme", core.SetFocusKindsInput{Off: []core.NeedsMeReason{core.ReasonAnswered}})
 		return err
 	},
+	"add_repository": func(f fixture) error {
+		_, err := f.core.AddRepository(human, "acme", core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git"})
+		return err
+	},
+	"edit_repository": func(f fixture) error {
+		base := "develop"
+		_, err := f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "web", Base: &base})
+		return err
+	},
+	"remove_repository": func(f fixture) error {
+		_, err := f.core.RemoveRepository(human, "acme", core.RemoveRepositoryInput{Name: "web"})
+		return err
+	},
+	"set_landing_order": func(f fixture) error {
+		_, err := f.core.SetLandingOrder(human, "acme", core.SetLandingOrderInput{Names: []string{"acme"}})
+		return err
+	},
 	"report_models": func(f fixture) error {
 		_, err := f.core.ReportModels(ctx, "acme", core.ReportModelsInput{EffortLevels: []string{"low"}})
 		return err
@@ -275,6 +296,18 @@ var writesOnAcme = map[string]func(f fixture) error{
 	},
 	"report_base": func(f fixture) error {
 		_, err := f.core.ReportBase(ctx, "acme", core.ReportBaseInput{State: core.BaseCurrent, Local: "a", Remote: "a"})
+		return err
+	},
+	"report_repositories": func(f fixture) error {
+		_, err := f.core.ReportRepositories(ctx, "acme", core.ReportRepositoriesInput{Repositories: []core.RepositoryReport{{Name: "acme", Path: "/src/acme", State: core.CloneReady}}})
+		return err
+	},
+	"report_changed_repositories": func(f fixture) error {
+		_, err := f.core.ReportChangedRepositories(ctx, "acme", core.ReportChangedRepositoriesInput{Ticket: "acme-2", ClaimID: "claim-1", Repositories: []core.RepositoryWork{{Name: "acme", Branch: "acme-2", Commit: "abc"}}})
+		return err
+	},
+	"fail_finish": func(f fixture) error {
+		_, err := f.core.FailFinish(ctx, "acme", core.FailFinishInput{Ticket: "acme-2", WhatBroke: "a", Why: "b", WhatToFix: "c", WhereWorkStands: "d"})
 		return err
 	},
 	"start_conversation": func(f fixture) error {
@@ -290,7 +323,7 @@ var writesOnAcme = map[string]func(f fixture) error{
 		return err
 	},
 	"set_github_issues": func(f fixture) error {
-		_, err := f.core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repository: "acme/web"})
+		_, err := f.core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}})
 		return err
 	},
 	"report_issue_watcher_status": func(f fixture) error {
@@ -346,11 +379,11 @@ var writesOnAcme = map[string]func(f fixture) error{
 		return err
 	},
 	"land_anyway": func(f fixture) error {
-		_, err := f.core.LandAnyway(human, "acme", core.TicketInput{Ticket: "acme-2"})
+		_, err := f.core.LandAnyway(human, "acme", core.CIResponseInput{Ticket: "acme-2"})
 		return err
 	},
 	"rerun_ci": func(f fixture) error {
-		_, err := f.core.RerunCI(human, "acme", core.TicketInput{Ticket: "acme-2"})
+		_, err := f.core.RerunCI(human, "acme", core.CIResponseInput{Ticket: "acme-2"})
 		return err
 	},
 	"new_fix_ticket": func(f fixture) error {

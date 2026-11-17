@@ -59,10 +59,10 @@ func (f *factory) claimf(c claim, format string, args ...any) {
 	f.events.add(c.SessionID, core.SessionEvent{Time: f.e.Clock.Now(), Kind: core.EventFactory, Text: line})
 }
 
-// claimed prints the line for a new Claim on tk, once its worktree is
-// known and before its turn starts.
-func (f *factory) claimed(c claim, tk core.TicketView, wt string) {
-	f.claimf(c, "%s claimed %s in Spec %s; worktree %s; resume: claude --resume %s", c.Ticket, f.about(c), tk.Spec.ID, wt, c.SessionID)
+// claimed prints the line for a new Claim on tk, once its Home worktree
+// wt and its Resume Command are known and before its turn starts.
+func (f *factory) claimed(c claim, tk core.TicketView, wt, resume string) {
+	f.claimf(c, "%s claimed %s in Spec %s; worktree %s; resume: %s", c.Ticket, f.about(c), tk.Spec.ID, wt, resume)
 }
 
 // turnEnded prints the line for a turn that has ended and freed its

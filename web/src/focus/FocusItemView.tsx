@@ -148,6 +148,11 @@ export function FocusItemView({
           <BaseMissingFix row={row} navigate={navigate} />
           {skipButton && <p className="focus-skip">{skipButton}</p>}
         </>
+      ) : row.repository_missing ? (
+        <>
+          <RepositoryMissingFix row={row} navigate={navigate} />
+          {skipButton && <p className="focus-skip">{skipButton}</p>}
+        </>
       ) : (
         <>
           {ticket ? (
@@ -179,17 +184,25 @@ export function FocusItemView({
   );
 }
 
-// BaseDivergedFix is a Project's Base diverged item: both commits and the
-// fix, which is the human's by hand; the Factory carries on by itself.
+// BaseDivergedFix is a Base diverged item, a Project's or, with several
+// Repositories, one Repository's: both commits and the fix, which is the
+// human's by hand; the Factory carries on by itself.
 function BaseDivergedFix({ row }: { row: NeedsMeRow }) {
   const b = row.base_diverged!;
   const base = b.base ?? "the base";
   return (
     <section aria-label="Base diverged" className="panel">
-      <p>
-        The Factory can't fast-forward {base}: it holds commits the remote's
-        doesn't. Nothing lands and no new branch is cut until they agree.
-      </p>
+      {b.repository ? (
+        <p>
+          The Factory can't fast-forward {base} in Repository <code>{b.repository}</code>: it holds commits the remote's doesn't. Nothing touching{" "}
+          {b.repository} lands and no new branch is cut until they agree.
+        </p>
+      ) : (
+        <p>
+          The Factory can't fast-forward {base}: it holds commits the remote's
+          doesn't. Nothing lands and no new branch is cut until they agree.
+        </p>
+      )}
       <p>
         Local <code>{shortCommit(b.local)}</code> · remote{" "}
         <code>{shortCommit(b.remote)}</code>
@@ -202,8 +215,9 @@ function BaseDivergedFix({ row }: { row: NeedsMeRow }) {
   );
 }
 
-// BaseMissingFix is a Project's Base missing item: the branch and the fix,
-// with a link to where the base is changed.
+// BaseMissingFix is a Base missing item, a Project's or, with several
+// Repositories, one Repository's: the branch and the fix, with a link to
+// where the base is changed.
 function BaseMissingFix({
   row,
   navigate,
@@ -215,16 +229,64 @@ function BaseMissingFix({
   const options = { view: "project-options" as const, project: row.project };
   return (
     <section aria-label="Base missing" className="panel">
-      <p>
-        The base, <code>{b.base}</code>, exists neither locally nor on the
-        remote. Nothing lands and no new branch is cut until it does.
-      </p>
+      {b.repository ? (
+        <p>
+          The base of Repository <code>{b.repository}</code>, <code>{b.base}</code>, exists neither locally nor on the remote. Nothing touching{" "}
+          {b.repository} lands and no new branch is cut until it does.
+        </p>
+      ) : (
+        <p>
+          The base, <code>{b.base}</code>, exists neither locally nor on the
+          remote. Nothing lands and no new branch is cut until it does.
+        </p>
+      )}
       <p className="small">
         Create the branch, or change the base in{" "}
         <a href={hrefFor(options)} onClick={clickTo(navigate, options)}>
           Project Options
         </a>
         . The Factory carries on by itself on its next poll.
+      </p>
+    </section>
+  );
+}
+
+// RepositoryMissingFix is a Repository missing item: the path the Factory
+// left untouched, the Clone URL, what is wrong there and the fix, with a
+// link to where the local path is set.
+function RepositoryMissingFix({
+  row,
+  navigate,
+}: {
+  row: NeedsMeRow;
+  navigate: (patch: Partial<UiLocation>) => void;
+}) {
+  const m = row.repository_missing!;
+  const options = { view: "project-options" as const, project: row.project };
+  return (
+    <section aria-label="Repository missing" className="panel">
+      <p>
+        The Factory has no clone of Repository <strong>{m.repository}</strong>,
+        so no new Claim starts until it has. It leaves the path as it is.
+      </p>
+      <dl className="focus-repository-missing">
+        <dt>Path</dt>
+        <dd>
+          <code>{m.path}</code>
+        </dd>
+        <dt>Clone URL</dt>
+        <dd>
+          <code>{m.clone_url}</code>
+        </dd>
+        <dt>Problem</dt>
+        <dd>{m.problem}</dd>
+      </dl>
+      <p className="small">
+        {m.fix} (
+        <a href={hrefFor(options)} onClick={clickTo(navigate, options)}>
+          Project Options
+        </a>
+        ). The Factory carries on by itself on its next poll.
       </p>
     </section>
   );

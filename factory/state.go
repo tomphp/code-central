@@ -23,6 +23,11 @@ type claim struct {
 	// (systemPrompt); empty for a Claim started before the Factory added
 	// one, whose first prompt holds it instead.
 	SystemPrompt string `json:"system_prompt,omitempty"`
+	// AddDirs are the Ticket's worktrees in the Repositories other than
+	// the Home Repository, as the Claim's start made them, which every
+	// turn passes with --add-dir: a Repository added since waits for the
+	// next Claim.
+	AddDirs []string `json:"add_dirs,omitempty"`
 	// Denials is the Round the Factory posted for the calls its last turn
 	// had denied, while it waits for answers; nil otherwise.
 	Denials *denialRound `json:"denials,omitempty"`

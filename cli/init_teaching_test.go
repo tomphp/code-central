@@ -105,6 +105,10 @@ func TestInitWritesTheTeachingFilesAndAPointerToThem(t *testing.T) {
 	if !strings.Contains(lastLine(r.stdout), "code-central help sandboxes") {
 		t.Fatalf("last line %q", lastLine(r.stdout))
 	}
+	// init sets up the Home Repository; the others are added afterwards.
+	if !strings.Contains(r.stdout, "`code-central repository add`") {
+		t.Fatalf("init doesn't point at code-central repository add:\n%s", r.stdout)
+	}
 }
 
 func TestInitAddsNoSecondPointer(t *testing.T) {

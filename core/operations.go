@@ -97,6 +97,12 @@ var Operations = []Op{
 	{Name: "set_auto_accept", Audience: HumanOnly, Write: true},
 	// Focus Kinds (Spec code-central-550).
 	{Name: "set_focus_kinds", Audience: HumanOnly, Write: true},
+	// Repositories (Spec code-central-848): the human's alone, over HTTP
+	// and the CLI's repository command, never MCP.
+	{Name: "add_repository", Audience: HumanOnly, Write: true},
+	{Name: "edit_repository", Audience: HumanOnly, Write: true},
+	{Name: "remove_repository", Audience: HumanOnly, Write: true},
+	{Name: "set_landing_order", Audience: HumanOnly, Write: true},
 
 	// The Integration contract (ticket 42).
 	{Name: "create_linked_spec", Audience: IntegrationOnly, Write: true},
@@ -134,6 +140,8 @@ var Operations = []Op{
 
 	// CI Tracking (Spec code-central-247).
 	{Name: "set_ci_tracking", Audience: HumanOnly, Write: true},
+	// A Repository's CI entry (Spec code-central-848).
+	{Name: "set_repository_ci", Audience: HumanOnly, Write: true},
 	{Name: "report_push_remote", Audience: FactoryOnly, Write: true},
 	{Name: "add_ci_rule", Audience: HumanOnly, Write: true},
 	{Name: "edit_ci_rule", Audience: HumanOnly, Write: true},
@@ -181,6 +189,12 @@ var Operations = []Op{
 	{Name: "report_heartbeat", Audience: FactoryOnly, Write: true},
 	// The Factory's base under Pull Request (code-central-394).
 	{Name: "report_base", Audience: FactoryOnly, Write: true},
+	// The Factory's clones of the Repositories (Spec code-central-848).
+	{Name: "report_repositories", Audience: FactoryOnly, Write: true},
+	// A Ticket's Changed Repositories, live, and the Factory's finish
+	// check (Spec code-central-848).
+	{Name: "report_changed_repositories", Audience: FactoryOnly, Write: true},
+	{Name: "fail_finish", Audience: FactoryOnly, Write: true},
 
 	// Chat (Spec code-central-633): the human's Conversation and the
 	// Factory's long-poll for its turns. Chat writes change only memory.

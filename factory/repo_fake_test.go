@@ -189,6 +189,19 @@ func (r *fakeRepo) hasRemote(name string) bool {
 	return r.remotes[name] != nil
 }
 
+func (r *fakeRepo) remoteURL(name string) (string, error) {
+	if !r.hasRemote(name) {
+		return "", fmt.Errorf("no remote %s", name)
+	}
+	return "/remotes/" + name + ".git", nil
+}
+
+func (r *fakeRepo) topLevel() (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.list[0].path, nil
+}
+
 func (r *fakeRepo) mergeTree(base, head string) (string, []string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

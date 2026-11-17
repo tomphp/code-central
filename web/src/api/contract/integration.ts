@@ -141,7 +141,7 @@ export function integrationContract(driver: () => Driver) {
   async function incomingIssue(needMe: boolean, n: number, title: string) {
     await d.createProject("acme", "Acme");
     await d.letGHTriage("acme/web");
-    const on = await d.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: needMe });
+    const on = await d.api.setGitHubIssues("acme", { on: true, repositories: ["acme/web"], label: "", new_issues_need_me: needMe });
     const gh = { integration: "github", id: `acme/web#${n}`, url: `https://github.com/acme/web/issues/${n}` };
     return { id: await d.incomingIssue("acme", on.github_issues.spec!, title, gh), gh };
   }

@@ -23,6 +23,7 @@ The In Review gate replaces any step that would stop to check with the user: the
 ## Finishing
 
 `finish` with `branch` (the Ticket's ID) and `commit` (the branch's head commit). The summary gives the branch and commit, the acceptance criteria met, the test result and what to check. The Ticket goes to In Review; stop working it.
+<!-- several-repositories -->
 
 ## A redo
 

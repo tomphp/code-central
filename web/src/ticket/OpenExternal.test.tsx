@@ -116,7 +116,7 @@ describe("the Link badge on a Spec's pane", () => {
   it("marks the outbound Link of a Requirement made by To Requirement", async () => {
     const { w, s } = await world();
     await s.letGHTriage("acme/web");
-    const on = await w.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: false });
+    const on = await w.api.setGitHubIssues("acme", { on: true, repositories: ["acme/web"], label: "", new_issues_need_me: false });
     const issue = await s.incomingIssue("acme", on.github_issues.spec!, "Login is broken", { integration: "github", id: "acme/web#7", url: URL });
     const grilling = (await w.api.getTicket("acme", (await w.api.act("acme", issue, "to_requirement", {})).id)).replacements[0];
     const pane = await specPane(w, await w.api.getSpec("acme", (await w.api.getTicket("acme", grilling)).spec.id));

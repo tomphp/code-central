@@ -1,12 +1,15 @@
 package store
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Migrating the store (ADR 0003, design ticket 21). When store.yaml holds
@@ -82,6 +85,53 @@ var migrations = []MigrationStep{
 	{From: 38, Name: "add a Project's Retros Spec"},
 	{From: 39, Name: "add a Project's Chat row in its Models"},
 	{From: 40, Name: "add the Show Limits popup Option"},
+	{From: 41, Name: "add a Project's Repositories"},
+	{From: 42, Name: "add the repository_missing Focus Kind"},
+	{From: 43, Name: "add a Ticket's Changed Repositories and the Repository of its pushed commits, Spec merge and pull request"},
+	{From: 44, Name: "add a Ticket's pull requests in its other Repositories and the mark to close one"},
+	{From: 45, Name: "add each Repository's CI entry and the Repository of CI Runs and CI responses"},
+	{From: 46, Name: "replace the GitHub Issues repository with a list of repositories", File: githubIssuesRepositoryBecomesAList},
+}
+
+// githubIssuesRepositoryBecomesAList is format 46 to 47 (Spec
+// code-central-848): project.yaml's github_issues.repository moves into
+// the list github_issues.repositories. Every other file, and every
+// project.yaml without a repository there, stays byte for byte.
+func githubIssuesRepositoryBecomesAList(rel string, data []byte) ([]byte, error) {
+	if !strings.HasPrefix(rel, "projects/") || !strings.HasSuffix(rel, "/project.yaml") || strings.Count(rel, "/") != 2 {
+		return data, nil
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, err
+	}
+	if len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
+		return data, nil
+	}
+	moved := false
+	for i := 0; i+1 < len(doc.Content[0].Content); i += 2 {
+		key, val := doc.Content[0].Content[i], doc.Content[0].Content[i+1]
+		if key.Value != "github_issues" || val.Kind != yaml.MappingNode {
+			continue
+		}
+		for j := 0; j+1 < len(val.Content); j += 2 {
+			if val.Content[j].Value == "repository" && val.Content[j+1].Value != "" {
+				val.Content[j].Value = "repositories"
+				val.Content[j+1] = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq", Content: []*yaml.Node{val.Content[j+1]}}
+				moved = true
+			}
+		}
+	}
+	if !moved {
+		return data, nil
+	}
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(&doc); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), enc.Close()
 }
 
 // archivedBecomesATime is format 2 to 3 (ticket 39): project.yaml's

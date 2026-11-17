@@ -16,9 +16,10 @@ import (
 // each poll, so it keeps no state of its own. The gh path Option is read
 // on every poll, so changing it needs no restart.
 type IssueWatch struct {
-	Project    string `json:"project"`
-	On         bool   `json:"on"`
-	Repository string `json:"repository"`
+	Project string `json:"project"`
+	On      bool   `json:"on"`
+	// Repositories are the GitHub repositories to poll, each as owner/name.
+	Repositories []string `json:"repositories"`
 	// Label is the filter label; empty lets every issue in.
 	Label  string `json:"label"`
 	GHPath string `json:"gh_path"`
@@ -51,7 +52,7 @@ func (c *Core) GetIssueWatch(_ context.Context, key string) (IssueWatch, error) 
 			return unknownProject(key)
 		}
 		g := githubIssuesView(key, p.GitHubIssues, WatcherView{})
-		out = IssueWatch{Project: key, On: g.On, Repository: g.Repository, Label: g.Label, GHPath: r.Options().GHPath, Spec: g.Spec, Issues: []IncomingIssue{}, Writes: []IssueWrites{}}
+		out = IssueWatch{Project: key, On: g.On, Repositories: g.Repositories, Label: g.Label, GHPath: r.Options().GHPath, Spec: g.Spec, Issues: []IncomingIssue{}, Writes: []IssueWrites{}}
 		if p.GitHubIssues.Spec == 0 {
 			return nil
 		}

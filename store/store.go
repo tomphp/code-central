@@ -100,6 +100,71 @@ type Project struct {
 	// for, in AutoAcceptKinds order (ADR 0037). It is stored as on, so a
 	// Project stored without it reads every kind off (ADR 0034).
 	AutoAccept []AutoAcceptKind
+	// Repositories are the Project's Repositories in landing order (Spec
+	// code-central-848), the Home Repository among them. A Project stored
+	// without them has the Home Repository alone, as RepositoryList reads
+	// it, and a list holding only the Home Repository is stored as none.
+	Repositories []Repository
+}
+
+// Repository is one git repository a Project's work changes. The Home
+// Repository, where the Factory runs, keeps only its Name, the Project
+// Key, and its place in the landing order: its Base is the Project's
+// (Landing.Base) and its Clone URL the Push remote URL the Factory
+// reports.
+type Repository struct {
+	// Name is the Repository Name, fixed once added.
+	Name string
+	Home bool
+	// CloneURL is the remote the Repository is cloned from and pushed to.
+	CloneURL string
+	// Base is the branch the Repository's work is cut from and lands on.
+	Base string
+	// LocalPath is where the Factory finds the Repository's clone, when
+	// it isn't beside the Home Repository; empty for there.
+	LocalPath string
+}
+
+// DefaultRepositoryBase is a Repository's Base when the human names none.
+const DefaultRepositoryBase = "main"
+
+// MaxRepositoryName is the longest a Repository Name may be.
+const MaxRepositoryName = 64
+
+// ValidRepositoryName reports whether name keeps the Repository Name
+// rules: lowercase letters, digits, -, _ and ., starting with a letter or
+// digit, at most MaxRepositoryName long.
+func ValidRepositoryName(name string) bool {
+	if name == "" || len(name) > MaxRepositoryName {
+		return false
+	}
+	for i, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+		case i > 0 && (r == '-' || r == '_' || r == '.'):
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// RepositoryList is the Project's Repositories in landing order: the
+// Home Repository alone, named by the Project Key, while none is stored.
+func (p Project) RepositoryList() []Repository {
+	if len(p.Repositories) == 0 {
+		return []Repository{{Name: p.Key, Home: true}}
+	}
+	return slices.Clone(p.Repositories)
+}
+
+// SetRepositories stores rs as the Project's Repositories, none while
+// they are the Home Repository alone.
+func (p *Project) SetRepositories(rs []Repository) {
+	if len(rs) == 1 && rs[0].Home {
+		rs = nil
+	}
+	p.Repositories = rs
 }
 
 // AutoAcceptKind is an Auto-accept kind: the kind of Ticket a Project's
@@ -186,8 +251,11 @@ type StageGuides struct {
 // (code-central-432): Land anyway, and a Re-run request with the failed
 // run attempts it asked for. Before code-central-585 a response could be
 // stored on the pushed commit itself; format 37 moved each one here.
+// Repository is the Repository Name the commit was pushed in, empty for
+// the Home Repository: a response is keyed by both.
 type CIResponse struct {
-	Commit string
+	Repository string
+	Commit     string
 	// LandAnyway is when the human accepted the commit's failed CI
 	// result; zero until then.
 	LandAnyway time.Time
@@ -329,7 +397,10 @@ func ciProviderNames() []string {
 // Repository is the GitHub repository,
 // ProjectURL the Azure DevOps project and PATEnv the name of the
 // environment variable holding its PAT (never the PAT); each provider
-// keeps its own.
+// keeps its own. Those name the Home Repository's CI: Repositories hold
+// the other Repositories' entries (Spec code-central-848), while the PAT
+// environment variable, the Ignored workflows and the CI Rules are the
+// Project's, for every Repository.
 type CI struct {
 	Tracking         bool
 	Provider         CIProvider
@@ -343,6 +414,22 @@ type CI struct {
 	// as the fallback for a Landing with no Base.
 	PushRemoteBase string
 	Rules          []CIRule
+	// Repositories are the CI entries of the Repositories other than the
+	// Home, each named once; a Repository without one reads as filled in
+	// from its Clone URL.
+	Repositories []CIRepository
+}
+
+// CIRepository is the CI entry of one Repository other than the Home:
+// its CI Provider and what that watches (the GitHub repository as
+// owner/name, or the Azure DevOps project's URL), or Not watched, when
+// its CI is never tracked.
+type CIRepository struct {
+	Name       string
+	NotWatched bool
+	Provider   CIProvider
+	Repository string
+	ProjectURL string
 }
 
 // AnyWorkflow is the workflow of a CI Rule that matches every workflow
@@ -374,7 +461,7 @@ func DefaultCI() CI { return CI{Provider: CIGitHubActions} }
 func (c CI) Equal(d CI) bool {
 	return c.Tracking == d.Tracking && c.Provider == d.Provider && c.Repository == d.Repository && c.ProjectURL == d.ProjectURL && c.PATEnv == d.PATEnv &&
 		slices.Equal(c.IgnoredWorkflows, d.IgnoredWorkflows) && c.PushRemoteURL == d.PushRemoteURL && c.PushRemoteBase == d.PushRemoteBase &&
-		slices.EqualFunc(c.Rules, d.Rules, CIRule.Equal)
+		slices.EqualFunc(c.Rules, d.Rules, CIRule.Equal) && slices.Equal(c.Repositories, d.Repositories)
 }
 
 // orDefault fills in what c leaves empty from DefaultCI.
@@ -386,13 +473,14 @@ func (c CI) orDefault() CI {
 }
 
 // GitHubIssues is a Project's GitHub Issues settings (Spec
-// code-central-279): whether it is on, the repository (owner/name) its
-// issues come from, the filter label (empty for every issue), whether New
-// issues need me, and the number of its Issues Spec, 0 until GitHub
+// code-central-279): whether it is on, the repositories (owner/name) its
+// issues come from, the filter label (empty for every issue) and whether
+// New issues need me, both applying to every repository (Spec
+// code-central-848), and the number of its Issues Spec, 0 until GitHub
 // Issues is first turned on.
 type GitHubIssues struct {
 	On              bool
-	Repository      string
+	Repositories    []string
 	Label           string
 	NewIssuesNeedMe bool
 	Spec            int
@@ -431,7 +519,7 @@ var ModelKinds = []string{"grilling", "spec", "tickets", "map-chart", "map-grill
 // turn off, in group order: core's Needs Me reasons, which core's tests
 // keep in step.
 var NeedsMeReasons = []string{"needs_answer", "answered", "silent_claim", "long_claim", "failed", "in_review",
-	"ci_failed", "ci_cancelled", "base_diverged", "base_missing", "pull_request_closed", "to_merge", "ci_unavailable",
+	"ci_failed", "ci_cancelled", "base_diverged", "base_missing", "repository_missing", "pull_request_closed", "to_merge", "ci_unavailable",
 	"accepted_not_landed", "blocked_by_cancelled", "new_issue", "closed_externally"}
 
 // IsZero reports whether m sets nothing.
@@ -616,9 +704,16 @@ type Ticket struct {
 	Updated         time.Time
 	Description     string
 	// Branch and Commit are what the last finish naming them gave: the
-	// work's branch and its head commit. Free-form, never parsed.
+	// work's branch and its head commit in the Home Repository.
+	// Free-form, never parsed.
 	Branch string
 	Commit string
+	// Repositories are the Ticket's Changed Repositories (Spec
+	// code-central-848): reported live by the Factory while it is In
+	// Progress, and settled by each finish, the Home Repository's entry
+	// mirroring Branch and Commit. A Ticket stored without them, with a
+	// Branch or Commit, reads as the Home Repository's (ADR 0046).
+	Repositories []ChangedRepository
 	// Recommendation is the Spec recommendation the last finish of a spec
 	// Stage gave; empty on any other Ticket and on a spec Stage finished
 	// before there was one.
@@ -631,11 +726,12 @@ type Ticket struct {
 	// work into under Land per Spec, and when Code Central heard of it;
 	// nil until then.
 	SpecMerge *SpecMerge
-	// PullRequest is the pull request the Pull Request Watcher reported
-	// for the Ticket's pushed work (code-central-388); nil until then.
-	PullRequest *PullRequest
-	Claims      []Claim
-	Rounds      []Round
+	// PullRequests are the pull requests the Pull Request Watcher
+	// reported for the Ticket's pushed work (code-central-388), one per
+	// Repository at most (Spec code-central-848); none until then.
+	PullRequests []PullRequest
+	Claims       []Claim
+	Rounds       []Round
 	// FailureReports are numbered and never edited.
 	FailureReports []FailureReport
 	Comments       []Comment
@@ -662,11 +758,32 @@ var Recommendations = []Recommendation{RecommendImplement, RecommendSplit}
 // Valid reports whether r is one of the Spec recommendations.
 func (r Recommendation) Valid() bool { return slices.Contains(Recommendations, r) }
 
+// ChangedRepository is one of a Ticket's Changed Repositories: the
+// Repository Name, the Ticket's branch and its head commit there, and
+// once its work has landed there, the landed commit.
+type ChangedRepository struct {
+	Name   string
+	Branch string
+	Commit string
+	// Landed is nil until the Ticket's work lands in the Repository.
+	Landed *Landed
+}
+
+// Landed is the commit that put a Ticket's work into a Repository's
+// base, and when Code Central heard of it.
+type Landed struct {
+	Commit string
+	Time   time.Time
+}
+
 // SpecMerge is the Spec Branch commit a Ticket's work was merged into, and
 // when Code Central heard of it.
 type SpecMerge struct {
-	Commit string
-	Merged time.Time
+	// Repository is the Repository Name of the Spec Branch; empty for the
+	// Home Repository.
+	Repository string
+	Commit     string
+	Merged     time.Time
 }
 
 // PullRequestState is where a pull request stands on its Code Host.
@@ -686,16 +803,27 @@ var PullRequestStates = []PullRequestState{PROpen, PRConflicting, PRClosed, PRMe
 // PullRequest is a pull request on a Code Host: its number and link, its
 // state, and once merged the merge commit the host reports.
 type PullRequest struct {
+	// Repository is the Repository Name the pull request is in; empty
+	// for the Home Repository.
+	Repository  string
 	Number      int
 	Link        string
 	State       PullRequestState
 	MergeCommit string
+	// Close marks an open pull request for the Pull Request Watcher to
+	// close on the Code Host, as sending its Ticket back while none of
+	// its siblings has merged does; it holds until the watcher reports
+	// the pull request closed or merged.
+	Close bool
 }
 
 // PushedCommit is one commit the Factory pushed for a Ticket, and when
 // Code Central heard of it.
 type PushedCommit struct {
-	Commit string
+	// Repository is the Repository Name the commit was pushed in; empty
+	// for the Home Repository.
+	Repository string
+	Commit     string
 	// Branch is the branch the commit was pushed as; empty for a push
 	// reported without one.
 	Branch string
@@ -756,12 +884,15 @@ func (c CIConclusion) Failed() bool { return c == CIFailure || c == CITimedOut }
 func (c CIConclusion) Cancelled() bool { return c == CICancelled }
 
 // CIRun is one attempt of one workflow run the CI Provider reported,
-// keyed by the provider's run ID and the attempt. It is tracked against
-// a Ticket or a CI Rule (the Spec number naming it). A run of an Ignored
-// workflow is kept, marked Ignored.
+// keyed by the Repository it ran for, the provider's run ID and the
+// attempt. It is tracked against a Ticket or a CI Rule (the Spec number
+// naming it). A run of an Ignored workflow is kept, marked Ignored.
 type CIRun struct {
-	ID      int64
-	Attempt int
+	// Repository is the Repository Name the run is for, empty for the
+	// Home Repository.
+	Repository string
+	ID         int64
+	Attempt    int
 	// Workflow is the workflow file's base name, such as ci.yml, and Name
 	// the name it shows.
 	Workflow   string
@@ -1008,14 +1139,18 @@ func (t Ticket) clone() Ticket {
 	t.BlockedBy = slices.Clone(t.BlockedBy)
 	t.Replacements = slices.Clone(t.Replacements)
 	t.PushedCommits = slices.Clone(t.PushedCommits)
+	t.Repositories = slices.Clone(t.Repositories)
+	for i, r := range t.Repositories {
+		if r.Landed != nil {
+			l := *r.Landed
+			t.Repositories[i].Landed = &l
+		}
+	}
 	if t.SpecMerge != nil {
 		sm := *t.SpecMerge
 		t.SpecMerge = &sm
 	}
-	if t.PullRequest != nil {
-		pr := *t.PullRequest
-		t.PullRequest = &pr
-	}
+	t.PullRequests = slices.Clone(t.PullRequests)
 	t.Claims = slices.Clone(t.Claims)
 	t.Rounds = slices.Clone(t.Rounds)
 	for i := range t.Rounds {

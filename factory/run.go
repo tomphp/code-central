@@ -318,6 +318,7 @@ func (f *factory) reconcile(ctx context.Context) []claim {
 			continue
 		}
 		f.noteTicket(c, tk)
+		f.reportChanged(ctx, c, tk)
 		if tk.State == store.Answered && f.turnFor(c.ClaimID) == nil {
 			answered = append(answered, c)
 		}
@@ -347,6 +348,7 @@ func (f *factory) endClaim(c claim, by string) {
 	f.mu.Lock()
 	f.ended[c.ClaimID] = true
 	f.mu.Unlock()
+	delete(f.reportedChanged, c.ClaimID)
 	f.dropCutOff(c.ClaimID)
 	t := f.turnFor(c.ClaimID)
 	if t != nil && !endsItsOwnTurn[by] {
@@ -501,10 +503,12 @@ func (f *factory) claimNext(ctx context.Context) bool {
 }
 
 // claimingHeld reports whether nothing may be claimed, as every claim
-// cuts a branch or a worktree from the base: the base disagrees with the
-// host's, is missing, or lacks .mcp.json.
+// cuts a branch or a worktree from each Repository's base: a base
+// disagrees with the host's or is missing, the Home Repository's lacks
+// .mcp.json, or a Repository is missing, so a Ticket would start without
+// a checkout of every Repository.
 func (f *factory) claimingHeld() bool {
-	return f.baseDiverged || f.baseMissing || f.mcpHeld
+	return f.anyBaseHeld() || f.mcpHeld || f.repositoryMissing()
 }
 
 // claimLostAgain sends each claim whose answer was lost again, once, so
@@ -535,23 +539,36 @@ func (f *factory) claimLostAgain(ctx context.Context) {
 }
 
 // startClaimed carries on from res, the answer to claiming with in: it
-// records the Claim, names its worktree and starts its turn. It reports
+// records the Claim, names its worktrees, one in every Repository with
+// the Home worktree its session's, and starts its turn. It reports
 // whether there was a Claim.
 func (f *factory) startClaimed(ctx context.Context, in core.ClaimInput, res core.ClaimResult) bool {
-	session, resume := in.SessionID, *in.ResumeCommand
+	session := in.SessionID
 	if res.Ticket == nil {
 		return false
 	}
 	id := res.Ticket.ID
 	stage := core.GuideName(res.Ticket.Labels)
-	conflicts := f.conflictFiles(stage, *res.Ticket)
+	ws := f.worktreesNamed(id, workBranch(stage, id))
+	conflicts := f.conflictsIn(ws, stage, *res.Ticket)
 	var guide core.StageGuideView
 	if len(conflicts) == 0 {
 		guide = f.stageGuide(ctx, res.StageGuide, stage)
 	}
-	wt := f.worktree(id)
-	c := claim{Ticket: id, ClaimID: res.ClaimID, SessionID: session, AllowedTools: []string{}}
-	c.SystemPrompt = systemPrompt(c, stage, wt, guide, conflicts)
+	wt := ws.home().path
+	c := claim{Ticket: id, ClaimID: res.ClaimID, SessionID: session, AllowedTools: []string{}, AddDirs: ws.addDirs()}
+	var prompt string
+	if ws.several() {
+		c.SystemPrompt, prompt = severalSystemPrompt(c, stage, ws, guide, len(conflicts) > 0), severalFirstPrompt(c, stage, ws, conflicts)
+	} else {
+		var files []string
+		if len(conflicts) > 0 {
+			files = conflicts[0].files
+		}
+		c.SystemPrompt, prompt = systemPrompt(c, stage, wt, guide, files), firstPrompt(c, stage, f.baseBranch(), files)
+	}
+	// The Ticket's Resume Command adds the folders its turns do.
+	resume := *in.ResumeCommand + addDirFlags(c.AddDirs)
 	f.noteTicket(c, *res.Ticket)
 	if err := f.addClaim(c); err != nil {
 		f.claimf(c, "%s: can't write the state file: %v", id, err)
@@ -559,25 +576,16 @@ func (f *factory) startClaimed(ctx context.Context, in core.ClaimInput, res core
 	if _, err := f.client.SetSession(ctx, f.project, core.SetSessionInput{Ticket: core.Ref(id), ClaimID: res.ClaimID, SessionID: session, WorkingDir: &wt, ResumeCommand: &resume}); err != nil {
 		f.claimf(c, "%s: set_session: %v", id, err)
 	}
-	f.claimed(c, *res.Ticket, wt)
+	f.claimed(c, *res.Ticket, wt, resume)
 	settingUp := f.work.busy("setting up the worktree of ", id)
-	var err error
-	if branch := workBranch(stage, id); branch != "" {
-		err = f.cutBranchWorktree(*res.Ticket, branch, wt)
-	} else {
-		err = f.stageWorktree(wt)
-	}
+	fl := f.setUpWorktrees(*res.Ticket, ws)
 	settingUp()
-	if err != nil {
-		fl := (*failure)(nil)
-		if !errors.As(err, &fl) {
-			fl = f.setUpFailed(wt, err)
-		}
+	if fl != nil {
 		f.reportFailure(ctx, c, fl)
 		return true
 	}
 	mc := f.withFlags(stage, res.ModelChoice)
-	f.startTurn(ctx, c, turnInput{Dir: wt, Choice: mc, Prompt: firstPrompt(c, stage, f.baseBranch(), conflicts)})
+	f.startTurn(ctx, c, turnInput{Dir: wt, Choice: mc, Prompt: prompt})
 	return true
 }
 

@@ -59,6 +59,18 @@ type projectFile struct {
 	// AutoAccept is the Auto-accept kinds that are on, left out while
 	// every kind is off.
 	AutoAccept []string `yaml:"auto_accept,omitempty"`
+	// Repositories is left out while the Home Repository is the only one.
+	Repositories []repositoryFile `yaml:"repositories,omitempty"`
+}
+
+// repositoryFile is one of a Project's Repositories, in landing order.
+// The Home Repository's holds only its name.
+type repositoryFile struct {
+	Name      string `yaml:"name"`
+	Home      bool   `yaml:"home,omitempty"`
+	CloneURL  string `yaml:"clone_url,omitempty"`
+	Base      string `yaml:"base,omitempty"`
+	LocalPath string `yaml:"local_path,omitempty"`
 }
 
 // stageGuidesFile is a Project's Stage Guides settings.
@@ -70,6 +82,8 @@ type stageGuidesFile struct {
 // ciResponseFile is the human's response to one pushed commit's CI
 // result.
 type ciResponseFile struct {
+	// Repository is left out for the Home Repository.
+	Repository string           `yaml:"repository,omitempty"`
 	Commit     string           `yaml:"commit"`
 	LandAnyway string           `yaml:"land_anyway,omitempty"`
 	Rerun      string           `yaml:"rerun,omitempty"`
@@ -107,11 +121,11 @@ type kindModelFile struct {
 }
 
 type githubIssuesFile struct {
-	On              bool   `yaml:"on"`
-	Repository      string `yaml:"repository,omitempty"`
-	Label           string `yaml:"label,omitempty"`
-	NewIssuesNeedMe bool   `yaml:"new_issues_need_me,omitempty"`
-	Spec            int    `yaml:"spec,omitempty"`
+	On              bool     `yaml:"on"`
+	Repositories    []string `yaml:"repositories,omitempty"`
+	Label           string   `yaml:"label,omitempty"`
+	NewIssuesNeedMe bool     `yaml:"new_issues_need_me,omitempty"`
+	Spec            int      `yaml:"spec,omitempty"`
 }
 
 type ciFile struct {
@@ -128,6 +142,19 @@ type ciFile struct {
 	// superseded by ADR 0032). It is read so a file that still holds it loads, and
 	// never kept or written.
 	UnblockOnPush bool `yaml:"unblock_on_push,omitempty"`
+	// Repositories is left out while no Repository but the Home has an
+	// entry.
+	Repositories []ciRepositoryFile `yaml:"repositories,omitempty"`
+}
+
+// ciRepositoryFile is the CI entry of one Repository other than the
+// Home.
+type ciRepositoryFile struct {
+	Name       string `yaml:"name"`
+	NotWatched bool   `yaml:"not_watched,omitempty"`
+	Provider   string `yaml:"provider,omitempty"`
+	Repository string `yaml:"repository,omitempty"`
+	ProjectURL string `yaml:"project_url,omitempty"`
 }
 
 type ciRuleFile struct {
@@ -178,10 +205,12 @@ type ticketFile struct {
 	Description     string              `yaml:"description"`
 	Branch          string              `yaml:"branch,omitempty"`
 	Commit          string              `yaml:"commit,omitempty"`
+	Repositories    []changedRepoFile   `yaml:"repositories,omitempty"`
 	Recommendation  string              `yaml:"recommendation,omitempty"`
 	PushedCommits   []pushedCommitFile  `yaml:"pushed_commits,omitempty"`
 	SpecMerge       *specMergeFile      `yaml:"spec_merge,omitempty"`
 	PullRequest     *pullRequestFile    `yaml:"pull_request,omitempty"`
+	PullRequests    []pullRequestFile   `yaml:"pull_requests,omitempty"`
 	Claims          []claimFile         `yaml:"claims"`
 	Rounds          []roundFile         `yaml:"rounds"`
 	FailureReports  []failureReportFile `yaml:"failure_reports"`
@@ -190,22 +219,39 @@ type ticketFile struct {
 	Edits           []editFile          `yaml:"edits"`
 }
 
-type specMergeFile struct {
+// changedRepoFile is one of a Ticket's Changed Repositories.
+type changedRepoFile struct {
+	Name   string      `yaml:"name"`
+	Branch string      `yaml:"branch,omitempty"`
+	Commit string      `yaml:"commit,omitempty"`
+	Landed *landedFile `yaml:"landed,omitempty"`
+}
+
+type landedFile struct {
 	Commit string `yaml:"commit"`
-	Merged string `yaml:"merged"`
+	Time   string `yaml:"time"`
+}
+
+type specMergeFile struct {
+	Repository string `yaml:"repository,omitempty"`
+	Commit     string `yaml:"commit"`
+	Merged     string `yaml:"merged"`
 }
 
 type pullRequestFile struct {
+	Repository  string `yaml:"repository,omitempty"`
 	Number      int    `yaml:"number"`
 	Link        string `yaml:"link"`
 	State       string `yaml:"state"`
 	MergeCommit string `yaml:"merge_commit,omitempty"`
+	Close       bool   `yaml:"close,omitempty"`
 }
 
 type pushedCommitFile struct {
-	Commit string `yaml:"commit"`
-	Branch string `yaml:"branch,omitempty"`
-	Pushed string `yaml:"pushed"`
+	Repository string `yaml:"repository,omitempty"`
+	Commit     string `yaml:"commit"`
+	Branch     string `yaml:"branch,omitempty"`
+	Pushed     string `yaml:"pushed"`
 }
 
 type runAttemptFile struct {
@@ -219,6 +265,8 @@ type ciRunsFile struct {
 }
 
 type ciRunFile struct {
+	// Repository is left out for the Home Repository.
+	Repository string      `yaml:"repository,omitempty"`
 	ID         int64       `yaml:"id"`
 	Attempt    int         `yaml:"attempt"`
 	Workflow   string      `yaml:"workflow"`
@@ -387,8 +435,14 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 	if t.Updated, err = parseTime(f.Updated); err != nil {
 		return Ticket{}, &LoadError{Field: "updated", Msg: err.Error()}
 	}
+	if t.Repositories, lerr = decodeChangedRepositories(f.Repositories); lerr != nil {
+		return Ticket{}, lerr
+	}
 	for i, pc := range f.PushedCommits {
-		p := PushedCommit{Commit: pc.Commit, Branch: pc.Branch}
+		p := PushedCommit{Repository: pc.Repository, Commit: pc.Commit, Branch: pc.Branch}
+		if lerr := checkRepositoryName(fmt.Sprintf("pushed_commits[%d].repository", i), p.Repository); lerr != nil {
+			return Ticket{}, lerr
+		}
 		if p.Commit == "" {
 			return Ticket{}, &LoadError{Field: fmt.Sprintf("pushed_commits[%d].commit", i), Msg: "required"}
 		}
@@ -397,15 +451,23 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 		}
 		t.PushedCommits = append(t.PushedCommits, p)
 	}
+	// The Home Repository's pull request is pull_request, as it always
+	// was, and the other Repositories' are pull_requests.
 	if f.PullRequest != nil {
-		pr := &PullRequest{Number: f.PullRequest.Number, Link: f.PullRequest.Link, State: PullRequestState(f.PullRequest.State), MergeCommit: f.PullRequest.MergeCommit}
-		if !slices.Contains(PullRequestStates, pr.State) {
-			return Ticket{}, &LoadError{Field: "pull_request.state", Msg: fmt.Sprintf("%q is not one of %v", pr.State, PullRequestStates)}
+		if lerr := decodePullRequest(&t, "pull_request", *f.PullRequest); lerr != nil {
+			return Ticket{}, lerr
 		}
-		t.PullRequest = pr
+	}
+	for i, pf := range f.PullRequests {
+		if lerr := decodePullRequest(&t, fmt.Sprintf("pull_requests[%d]", i), pf); lerr != nil {
+			return Ticket{}, lerr
+		}
 	}
 	if f.SpecMerge != nil {
-		sm := &SpecMerge{Commit: f.SpecMerge.Commit}
+		sm := &SpecMerge{Repository: f.SpecMerge.Repository, Commit: f.SpecMerge.Commit}
+		if lerr := checkRepositoryName("spec_merge.repository", sm.Repository); lerr != nil {
+			return Ticket{}, lerr
+		}
 		if sm.Commit == "" {
 			return Ticket{}, &LoadError{Field: "spec_merge.commit", Msg: "required"}
 		}
@@ -483,7 +545,7 @@ func decodeCIRuns(data []byte) ([]CIRun, *LoadError) {
 	var out []CIRun
 	for i, rf := range f.Runs {
 		field := fmt.Sprintf("runs[%d]", i)
-		r := CIRun{ID: rf.ID, Attempt: rf.Attempt, Workflow: rf.Workflow, Name: rf.Name, Branch: rf.Branch, Commit: rf.Commit,
+		r := CIRun{Repository: rf.Repository, ID: rf.ID, Attempt: rf.Attempt, Workflow: rf.Workflow, Name: rf.Name, Branch: rf.Branch, Commit: rf.Commit,
 			Status: CIRunStatus(rf.Status), Conclusion: CIConclusion(rf.Conclusion), URL: rf.URL, Ticket: rf.Ticket, Rule: rf.Rule, Ignored: rf.Ignored}
 		if !r.Status.Valid() {
 			return nil, &LoadError{Field: field + ".status", Msg: fmt.Sprintf("unknown CI Run status %q", rf.Status)}
@@ -512,6 +574,64 @@ func decodeCIRuns(data []byte) ([]CIRun, *LoadError) {
 		out = append(out, r)
 	}
 	return out, nil
+}
+
+// decodeChangedRepositories is a Ticket's Changed Repositories, each
+// named by a valid Repository Name, once.
+func decodeChangedRepositories(fs []changedRepoFile) ([]ChangedRepository, *LoadError) {
+	var out []ChangedRepository
+	for i, f := range fs {
+		field := fmt.Sprintf("repositories[%d]", i)
+		if f.Name == "" {
+			return nil, &LoadError{Field: field + ".name", Msg: "required"}
+		}
+		if lerr := checkRepositoryName(field+".name", f.Name); lerr != nil {
+			return nil, lerr
+		}
+		if slices.ContainsFunc(out, func(r ChangedRepository) bool { return r.Name == f.Name }) {
+			return nil, &LoadError{Field: field + ".name", Msg: fmt.Sprintf("%q is listed twice", f.Name)}
+		}
+		r := ChangedRepository{Name: f.Name, Branch: f.Branch, Commit: f.Commit}
+		if f.Landed != nil {
+			l := &Landed{Commit: f.Landed.Commit}
+			if l.Commit == "" {
+				return nil, &LoadError{Field: field + ".landed.commit", Msg: "required"}
+			}
+			var err error
+			if l.Time, err = parseTime(f.Landed.Time); err != nil {
+				return nil, &LoadError{Field: field + ".landed.time", Msg: err.Error()}
+			}
+			r.Landed = l
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+// decodePullRequest adds f, a pull request stored at field, to t's,
+// refusing a bad state and a second pull request in one Repository.
+func decodePullRequest(t *Ticket, field string, f pullRequestFile) *LoadError {
+	pr := PullRequest{Repository: f.Repository, Number: f.Number, Link: f.Link, State: PullRequestState(f.State), MergeCommit: f.MergeCommit, Close: f.Close}
+	if lerr := checkRepositoryName(field+".repository", pr.Repository); lerr != nil {
+		return lerr
+	}
+	if !slices.Contains(PullRequestStates, pr.State) {
+		return &LoadError{Field: field + ".state", Msg: fmt.Sprintf("%q is not one of %v", pr.State, PullRequestStates)}
+	}
+	if slices.ContainsFunc(t.PullRequests, func(o PullRequest) bool { return o.Repository == pr.Repository }) {
+		return &LoadError{Field: field + ".repository", Msg: fmt.Sprintf("a second pull request in %q", pr.Repository)}
+	}
+	t.PullRequests = append(t.PullRequests, pr)
+	return nil
+}
+
+// checkRepositoryName refuses a Repository Name that breaks the rules;
+// an empty one, the Home Repository's, passes.
+func checkRepositoryName(field, name string) *LoadError {
+	if name != "" && !ValidRepositoryName(name) {
+		return &LoadError{Field: field, Msg: fmt.Sprintf("%q is not a Repository Name", name)}
+	}
+	return nil
 }
 
 func decodeRounds(rs []roundFile) ([]Round, error) {
@@ -582,7 +702,8 @@ func encode(record any, project string) (string, []byte, error) {
 		rel = filepath.Join("projects", r.Key, "project.yaml")
 		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI),
 			GitHubIssues: encodeGitHubIssues(r.GitHubIssues), Models: encodeModels(r.Models),
-			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), FocusKindsOff: r.FocusKindsOff, CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec, SmallChangesSpec: r.SmallChangesSpec, RetrosSpec: r.RetrosSpec, AutoAccept: encodeAutoAccept(r.AutoAccept)})
+			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), FocusKindsOff: r.FocusKindsOff, CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec, SmallChangesSpec: r.SmallChangesSpec, RetrosSpec: r.RetrosSpec, AutoAccept: encodeAutoAccept(r.AutoAccept),
+			Repositories: encodeRepositories(r.Repositories)})
 	case Options:
 		rel = "options.yaml"
 		f := optionsFile{FocusClear: string(r.FocusClear), FocusPopup: string(r.FocusPopup), GHPath: r.GHPath}
@@ -605,14 +726,26 @@ func encode(record any, project string) (string, []byte, error) {
 			Claims: []claimFile{}, Rounds: []roundFile{}, FailureReports: []failureReportFile{},
 			Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),
 		}
-		for _, pc := range r.PushedCommits {
-			f.PushedCommits = append(f.PushedCommits, pushedCommitFile{Commit: pc.Commit, Branch: pc.Branch, Pushed: formatTime(pc.Pushed)})
+		for _, cr := range r.Repositories {
+			cf := changedRepoFile{Name: cr.Name, Branch: cr.Branch, Commit: cr.Commit}
+			if cr.Landed != nil {
+				cf.Landed = &landedFile{Commit: cr.Landed.Commit, Time: formatTime(cr.Landed.Time)}
+			}
+			f.Repositories = append(f.Repositories, cf)
 		}
-		if r.PullRequest != nil {
-			f.PullRequest = &pullRequestFile{Number: r.PullRequest.Number, Link: r.PullRequest.Link, State: string(r.PullRequest.State), MergeCommit: r.PullRequest.MergeCommit}
+		for _, pc := range r.PushedCommits {
+			f.PushedCommits = append(f.PushedCommits, pushedCommitFile{Repository: pc.Repository, Commit: pc.Commit, Branch: pc.Branch, Pushed: formatTime(pc.Pushed)})
+		}
+		for _, pr := range r.PullRequests {
+			pf := pullRequestFile{Repository: pr.Repository, Number: pr.Number, Link: pr.Link, State: string(pr.State), MergeCommit: pr.MergeCommit, Close: pr.Close}
+			if pr.Repository == "" && f.PullRequest == nil {
+				f.PullRequest = &pf
+			} else {
+				f.PullRequests = append(f.PullRequests, pf)
+			}
 		}
 		if r.SpecMerge != nil {
-			f.SpecMerge = &specMergeFile{Commit: r.SpecMerge.Commit, Merged: formatTime(r.SpecMerge.Merged)}
+			f.SpecMerge = &specMergeFile{Repository: r.SpecMerge.Repository, Commit: r.SpecMerge.Commit, Merged: formatTime(r.SpecMerge.Merged)}
 		}
 		for _, c := range r.Claims {
 			cf := claimFile{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, Model: c.Model, Effort: c.Effort, Started: formatTime(c.Started), EndedBy: c.EndedBy}
@@ -650,7 +783,7 @@ func encode(record any, project string) (string, []byte, error) {
 		rel = filepath.Join("projects", project, ciRunsName)
 		f := ciRunsFile{Runs: []ciRunFile{}}
 		for _, run := range r.Runs {
-			rf := ciRunFile{ID: run.ID, Attempt: run.Attempt, Workflow: run.Workflow, Name: run.Name, Branch: run.Branch, Commit: run.Commit,
+			rf := ciRunFile{Repository: run.Repository, ID: run.ID, Attempt: run.Attempt, Workflow: run.Workflow, Name: run.Name, Branch: run.Branch, Commit: run.Commit,
 				Status: string(run.Status), Conclusion: string(run.Conclusion), Started: formatOptionalTime(run.Started), Finished: formatOptionalTime(run.Finished),
 				URL: run.URL, Ticket: run.Ticket, Rule: run.Rule, Ignored: run.Ignored}
 			for _, j := range run.Jobs {
@@ -706,17 +839,40 @@ func encodeCI(c CI) *ciFile {
 	for _, r := range c.Rules {
 		f.Rules = append(f.Rules, ciRuleFile{Spec: r.Spec, Workflow: r.Workflow, Branch: r.Branch, State: string(r.State), Created: formatTime(r.Created)})
 	}
+	for _, r := range c.Repositories {
+		f.Repositories = append(f.Repositories, ciRepositoryFile{Name: r.Name, NotWatched: r.NotWatched, Provider: string(r.Provider), Repository: r.Repository, ProjectURL: r.ProjectURL})
+	}
 	return f
+}
+
+// decodeCIRepositories checks a Project's CI entries as load does: each
+// names a Repository once, with a CI Provider unless it is Not watched.
+// It returns the field, relative to ci.repositories, with the error.
+func decodeCIRepositories(fs []ciRepositoryFile) ([]CIRepository, string, error) {
+	var out []CIRepository
+	for i, f := range fs {
+		r := CIRepository{Name: f.Name, NotWatched: f.NotWatched, Provider: CIProvider(f.Provider), Repository: f.Repository, ProjectURL: f.ProjectURL}
+		switch {
+		case !ValidRepositoryName(r.Name):
+			return nil, fmt.Sprintf("[%d].name", i), fmt.Errorf("%q isn't a Repository Name", r.Name)
+		case slices.ContainsFunc(out, func(o CIRepository) bool { return o.Name == r.Name }):
+			return nil, fmt.Sprintf("[%d].name", i), fmt.Errorf("%s has two CI entries", r.Name)
+		case r.Provider != "" && !r.Provider.Valid(), r.Provider == "" && !r.NotWatched:
+			return nil, fmt.Sprintf("[%d].provider", i), fmt.Errorf("unknown CI provider %q (%s)", f.Provider, strings.Join(ciProviderNames(), " or "))
+		}
+		out = append(out, r)
+	}
+	return out, "", nil
 }
 
 // encodeGitHubIssues leaves GitHub Issues out of project.yaml while it is
 // off with nothing set, so a Project that never had it keeps the file it
 // always had.
 func encodeGitHubIssues(g GitHubIssues) *githubIssuesFile {
-	if g == (GitHubIssues{}) {
+	if !g.On && len(g.Repositories) == 0 && g.Label == "" && !g.NewIssuesNeedMe && g.Spec == 0 {
 		return nil
 	}
-	return &githubIssuesFile{On: g.On, Repository: g.Repository, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
+	return &githubIssuesFile{On: g.On, Repositories: g.Repositories, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
 }
 
 // encodeAutoAccept is the on kinds as project.yaml holds them.
@@ -726,6 +882,65 @@ func encodeAutoAccept(kinds []AutoAcceptKind) []string {
 		out = append(out, string(k))
 	}
 	return out
+}
+
+// encodeRepositories is the Repositories as project.yaml holds them, the
+// Home Repository's with its name alone.
+func encodeRepositories(rs []Repository) []repositoryFile {
+	var out []repositoryFile
+	for _, r := range rs {
+		if r.Home {
+			out = append(out, repositoryFile{Name: r.Name, Home: true})
+			continue
+		}
+		out = append(out, repositoryFile{Name: r.Name, CloneURL: r.CloneURL, Base: r.Base, LocalPath: r.LocalPath})
+	}
+	return out
+}
+
+// decodeRepositories checks a Project's Repositories as load does: each
+// Name is unique, the Home Repository, named key, is listed once with
+// nothing more, and every other keeps the Repository Name rules and has a
+// Clone URL and a Base. The Home Repository's name is the Project Key,
+// which keeps the key's own rules. It returns the offending field,
+// relative to repositories, with the error.
+func decodeRepositories(key string, fs []repositoryFile) ([]Repository, string, error) {
+	if len(fs) == 0 {
+		return nil, "", nil
+	}
+	var out []Repository
+	homes := 0
+	for i, f := range fs {
+		field := fmt.Sprintf("[%d]", i)
+		if !f.Home && !ValidRepositoryName(f.Name) {
+			return nil, field + ".name", fmt.Errorf("%q isn't a Repository Name: lowercase letters, digits, -, _ and ., starting with a letter or digit, at most %d characters", f.Name, MaxRepositoryName)
+		}
+		if slices.ContainsFunc(out, func(r Repository) bool { return r.Name == f.Name }) {
+			return nil, field + ".name", fmt.Errorf("%q a second time", f.Name)
+		}
+		if f.Home {
+			homes++
+			if f.Name != key {
+				return nil, field + ".name", fmt.Errorf("the Home Repository is named by the Project Key %q, not %q", key, f.Name)
+			}
+			if f.CloneURL != "" || f.Base != "" || f.LocalPath != "" {
+				return nil, field, errors.New("the Home Repository holds only its name: its Clone URL is reported and its Base is the Project's")
+			}
+			out = append(out, Repository{Name: f.Name, Home: true})
+			continue
+		}
+		if f.CloneURL == "" {
+			return nil, field + ".clone_url", errors.New("missing")
+		}
+		if f.Base == "" {
+			return nil, field + ".base", errors.New("missing")
+		}
+		out = append(out, Repository{Name: f.Name, CloneURL: f.CloneURL, Base: f.Base, LocalPath: f.LocalPath})
+	}
+	if homes != 1 {
+		return nil, "", fmt.Errorf("lists the Home Repository %d times, want once", homes)
+	}
+	return out, "", nil
 }
 
 // encodeStageGuides leaves the Stage Guides settings out of project.yaml
@@ -832,7 +1047,7 @@ func decodeModels(f modelsFile) (Models, string, error) {
 func encodeCIResponses(rs []CIResponse) []ciResponseFile {
 	var out []ciResponseFile
 	for _, r := range rs {
-		f := ciResponseFile{Commit: r.Commit, LandAnyway: formatOptionalTime(r.LandAnyway), Rerun: formatOptionalTime(r.Rerun), FixTicket: r.FixTicket}
+		f := ciResponseFile{Repository: r.Repository, Commit: r.Commit, LandAnyway: formatOptionalTime(r.LandAnyway), Rerun: formatOptionalTime(r.Rerun), FixTicket: r.FixTicket}
 		for _, ra := range r.Reruns {
 			f.Reruns = append(f.Reruns, runAttemptFile{ID: ra.ID, Attempt: ra.Attempt})
 		}
@@ -846,7 +1061,7 @@ func encodeCIResponses(rs []CIResponse) []ciResponseFile {
 func decodeCIResponses(fs []ciResponseFile) ([]CIResponse, string, error) {
 	var out []CIResponse
 	for i, f := range fs {
-		r := CIResponse{Commit: f.Commit, FixTicket: f.FixTicket}
+		r := CIResponse{Repository: f.Repository, Commit: f.Commit, FixTicket: f.FixTicket}
 		if r.Commit == "" {
 			return nil, fmt.Sprintf("[%d].commit", i), errors.New("required")
 		}

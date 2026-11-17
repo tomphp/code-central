@@ -43,6 +43,11 @@ const (
 	// missing, under any Landing Method. It is one item per Project, with
 	// no Ticket.
 	ReasonBaseMissing NeedsMeReason = "base_missing"
+	// ReasonRepositoryMissing is a Repository whose Factory reports its
+	// clone missing (Spec code-central-848): its path holds something
+	// other than a clone of its Clone URL, or cloning it failed. It is one
+	// item per Repository, with no Ticket.
+	ReasonRepositoryMissing NeedsMeReason = "repository_missing"
 	// ReasonPullRequestClosed is an Accepted Ticket under Pull Request
 	// whose pull request is closed or abandoned without merging
 	// (code-central-391); it clears if the pull request is reopened.
@@ -92,6 +97,7 @@ var needsMeReasons = []NeedsMeReasonView{
 	{ReasonCICancelled, "CI cancelled: one item per pushed commit whose CI was cancelled"},
 	{ReasonBaseDiverged, "Base diverged: a Project's local base has diverged from the remote's; reconcile it by hand"},
 	{ReasonBaseMissing, "Base missing: a Project's base branch exists nowhere; create it or change it in Options"},
+	{ReasonRepositoryMissing, "Repository missing: the Factory has no clone of a Repository; clone it or set its local path"},
 	{ReasonPullRequestClosed, "Pull request closed: Accepted with its pull request closed without merging"},
 	{ReasonToMerge, "To merge: Accepted under Branch or Pull Request; merge it to the base"},
 	{ReasonCIUnavailable, "CI unavailable: one item per pushed commit with no word of its CI 10 minutes after its push"},
@@ -193,12 +199,23 @@ type NeedsMeRow struct {
 	// PullRequest is the Ticket's pull request, for its item's link; left
 	// out until the Pull Request Watcher reports one.
 	PullRequest *PullRequestView `json:"pull_request,omitempty"`
+	// ClosedPullRequests are the Ticket's pull requests closed without
+	// merging, each naming its Repository while the Project has several,
+	// in landing order (Pull request closed).
+	ClosedPullRequests []PullRequestView `json:"closed_pull_requests,omitempty"`
 	// BaseDiverged is the local and remote base commits (Base diverged,
 	// whose row has no Ticket: its ID is empty).
 	BaseDiverged *BaseDivergedView `json:"base_diverged,omitempty"`
 	// BaseMissing is the missing base's branch and the fix (Base missing,
 	// whose row has no Ticket either).
 	BaseMissing *BaseMissingView `json:"base_missing,omitempty"`
+	// RepositoryMissing is the missing Repository's path, Clone URL,
+	// problem and fix (Repository missing, whose row has no Ticket).
+	RepositoryMissing *RepositoryMissingView `json:"repository_missing,omitempty"`
+	// NotLanded is the Repositories the Ticket has landed in and those it
+	// hasn't, with why (Accepted but not landed, while the Project has
+	// several Repositories).
+	NotLanded *NotLandedView `json:"not_landed,omitempty"`
 }
 
 // NeedsMeRequirement is the Requirement a Needs Me row's Ticket is on:
@@ -319,7 +336,7 @@ func (e *evaluation) row(t store.Ticket, tr ticketReason) NeedsMeRow {
 		Project: key, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: tr.reason, Since: tr.since, Link: linkView(t.Link),
 		Requirement: req, Spec: needsMeSpec(e.r, key, t, req), Prototype: slices.Contains(t.Labels, PrototypeLabel),
 		Retro:    slices.Contains(t.Labels, RetroLabel),
-		CIResult: e.ci.ticket(t).result, PullRequest: pullRequestView(t.PullRequest),
+		CIResult: e.ci.ticket(t).result, PullRequest: pullRequestView(homePullRequest(key, t)),
 	}
 	switch tr.reason {
 	case ReasonNeedsAnswer:
@@ -341,6 +358,15 @@ func (e *evaluation) row(t store.Ticket, tr ticketReason) NeedsMeRow {
 		row.Summary = firstLine(finishSummary(t))
 	case ReasonToMerge:
 		row.Branch = branchOf(t)
+	case ReasonAcceptedNotLanded:
+		row.NotLanded = e.c.notLandedView(e.p, t, e.ci)
+	case ReasonPullRequestClosed:
+		row.ClosedPullRequests = closedPullRequests(e.p, t)
+		if row.PullRequest == nil && len(row.ClosedPullRequests) > 0 {
+			// The row's link is a closed pull request when the Home
+			// Repository has none.
+			row.PullRequest = &row.ClosedPullRequests[0]
+		}
 	case ReasonBlockedByCancelled:
 		b, _ := cancelledBlocker(e.rule, t)
 		row.Blocker = &b

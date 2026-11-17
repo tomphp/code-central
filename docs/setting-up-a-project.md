@@ -64,6 +64,7 @@ You're starting `acme-shop` from nothing, in `~/src`.
    Created Project acme-shop.
    Project acme-shop is committed. Wrote .mcp.json, .claude/settings.json, docs/agents/issue-tracker.md, docs/agents/triage-labels.md, CLAUDE.md.
    Nothing was committed.
+   This is the Project's Home Repository. Work spanning other repositories? Add them with `code-central repository add`.
    Agents in a sandbox or container: see `code-central help sandboxes`.
    ```
 
@@ -156,6 +157,7 @@ You're starting `acme-shop` from nothing, in `~/src`.
    Created Project acme-api.
    Project acme-api is committed. Wrote .mcp.json, .claude/settings.json, docs/agents/issue-tracker.md, docs/agents/triage-labels.md, CLAUDE.md.
    Nothing was committed.
+   This is the Project's Home Repository. Work spanning other repositories? Add them with `code-central repository add`.
    Agents in a sandbox or container: see `code-central help sandboxes`.
    ```
 
@@ -204,11 +206,45 @@ You're starting `acme-shop` from nothing, in `~/src`.
 
 `acme-api` is now a working Project.
 
+## Several Repositories
+
+A Project's work can span more than one repository. The one you ran `init` in is its **Home Repository**: the Factory runs there and the Project's files live there. Every other repository is added to the Project, never set up with `init`. A Project with only its Home Repository needs nothing here.
+
+Add, edit, reorder and remove them in the **Repositories** section at the top of Project Options, or with `code-central repository`. Each has a **Repository Name**, fixed once added (lowercase letters, digits, `-`, `_` and `.`), a **Clone URL**, a **Base** (`main` unless you name another) and an optional local path, the full path of a clone you already have:
+
+```console
+$ code-central repository add web --clone-url git@github.com:acme/web.git
+NAME             CLONE URL                         BASE  LOCAL PATH
+acme-api (home)  git@github.com:acme/acme-api.git  main  -
+web              git@github.com:acme/web.git       main  -
+$ code-central repository move web --before acme-api
+NAME             CLONE URL                         BASE  LOCAL PATH
+web              git@github.com:acme/web.git       main  -
+acme-api (home)  git@github.com:acme/acme-api.git  main  -
+```
+
+The list is the **landing order**: accepted work lands in each Repository in that order. `code-central repository list` shows it; `edit <name>` takes `--clone-url`, `--base` and `--local-path` (an empty `--local-path ""` clears it); `remove <name>` takes one off the list and leaves its clone on disk. The Home Repository is listed under the Project Key: its Clone URL is the Push remote URL the Factory reports, and its Base is set in the Landing Method section. Each refusal says how to put it right: a Repository Name or a Clone URL already listed (`git@github.com:acme/web.git` and `https://github.com/acme/web` are the same one), removing the Home Repository, or removing one an unfinished Ticket has changed. While the Landing Method is Pull Request, a Repository is added only on a Code Host Pull Request supports, and only once the Pull Request Watcher's check passes for it.
+
+The Factory clones each Repository on its next poll, beside the Home Repository (`/home/you/src/web` for `web` when the Home Repository is `/home/you/src/acme-api`) unless you gave a local path, and adopts a clone of the Clone URL it finds there as it is. Each Ticket then gets a worktree in every Repository, named after it, and a session that starts in the Home worktree and reaches the others with `--add-dir`:
+
+```text
+/home/you/src/acme-api                   the Home Repository
+/home/you/src/acme-api.worktrees/acme-4  the Ticket's Home worktree
+/home/you/src/web                        cloned by the Factory
+/home/you/src/web.worktrees/acme-4       the Ticket's worktree in web, on the same branch, acme-4
+```
+
+Each Repository's row shows its clone, **Cloned at** its path or **Missing at** its path with the problem. Anything other than a clone of the Clone URL at that path is left untouched and shows as **Repository missing** in Needs Me, and no new work starts until it is fixed: [Repository missing](running-the-factory.md#how-accepted-work-lands) in Running the Factory has the Factory's output.
+
+Each Ticket's **Changed Repositories** are the ones its branch holds work in. With several Repositories, a Ticket's card on the Board names them in small chips, live while it is In Progress and settled by its finish; its page and popup have a **Repositories** section with each one's `branch@commit`, landed commit, pull request and CI result; the Accepted panel lists `branch@commit` in each; and a Spec's page and popup name every Repository its Tickets changed. The Factory checks every finish against the branches and fails one that leaves a Repository out ([the finish check](running-the-factory.md#how-accepted-work-lands) in Running the Factory). An accepted Ticket lands in each of its Changed Repositories in the landing order, and is Done once it has landed in all of them; until then a Ticket that has landed in some shows **Partly landed**, its page says why each other one hasn't landed yet, and it can't be cancelled. The Accepted panel's **Land** asks which Repository's base the work is in. With the Home Repository alone none of this shows.
+
+With CI Tracking on, each Repository has its own CI: adding one fills in its CI Provider and what to watch from its Clone URL (GitHub Actions on `owner/name` for a GitHub one, Azure Pipelines on the project of an Azure Repos one), or, when you untick **Watch its CI** in the add form or its Clone URL is on another host, leaves it **Not watched**. The CI section lists each Repository's CI under **Each Repository's CI**, where **Edit** changes it; a watched one must pass the CI Watcher's check first, as turning CI Tracking on checks every watched Repository. The PAT variable, Ignored workflows and CI Rules are the Project's, for every Repository. A Ticket has a CI result in each watched Repository it pushed in, shown in its **Repositories** section and its **CI** section, and one combined result (running, else failed, else cancelled, else passed) on its card. A red build is one CI item per pushed commit named `Name@sha`, such as **CI failed at web@4f1c2ab**, and its options act on that Repository only. Under Merge + Push, the CI gate holds in each watched Repository on its own CI result, so a red build there holds back only the Ticket's landing there. A Not watched Repository never holds anything back. When the CI Watcher can't read a Repository, its status names the Repository with its fix, and it carries on watching the others.
+
 ## Choosing how accepted work lands
 
 Each Project has a **Landing Method**: what the Factory does with an implementation Ticket's branch once you accept it. A new Project starts on **Merge** with **Push** off: the Factory merges the branch into the base locally and lands the Ticket, and nothing leaves the machine. Leave it there unless you want something else.
 
-To change it, open the UI, click **⋯** beside the Project in the left pane, and choose **Options**. The Project Options page has its own address, `/?view=project-options&project=acme-api`, so you can bookmark it. On a wide screen a menu on the left lists the page's sections (Landing Method, CI, GitHub Issues, Models, Stage Guides, Auto-accept and Focus) and stays in view as you scroll; choosing an entry jumps to that section. On a narrow screen the menu is hidden. Its **Landing Method** section starts with the **Base branch**, a text field showing the branch the Project's work is cut from and lands on (`main` until you change it; it is saved with the rest of the section, and Save refuses a name git would not accept). Below it are the three methods:
+To change it, open the UI, click **⋯** beside the Project in the left pane, and choose **Options**. The Project Options page has its own address, `/?view=project-options&project=acme-api`, so you can bookmark it. On a wide screen a menu on the left lists the page's sections (Repositories, Landing Method, CI, GitHub Issues, Models, Stage Guides, Auto-accept and Focus) and stays in view as you scroll; choosing an entry jumps to that section. On a narrow screen the menu is hidden. Its **Landing Method** section starts with the **Base branch**, a text field showing the branch the Project's work is cut from and lands on (`main` until you change it; it is saved with the rest of the section, and Save refuses a name git would not accept). Below it are the three methods:
 
 - **Merge**: the Factory merges the accepted branch into the base and lands the Ticket. The default.
 - **Leave as a branch**: the Factory leaves the branch for you to merge, and lands the Ticket when it sees the merge in the base.
@@ -234,9 +270,9 @@ Make an Azure DevOps PAT with Code: Read & write, run `launchctl setenv ADO_PAT 
 
 Under Pull Request there is no CI gate and **Land anyway** isn't offered.
 
-**Base diverged.** Under Pull Request, and under Merge with Push on, the Factory keeps your local base level with the remote's by fetching and fast-forwarding it. Under Pull Request, if the local base holds commits the remote's doesn't, it can't. Under Merge + Push, a local base that is only ahead of the remote's is current, since the Factory merges locally and then pushes; when the remote holds commits the local base lacks as well, the Factory moves the local base onto the remote's, rebuilding its own unpushed merges and replaying your unpushed commits, and it can't only when one of those conflicts or an unpushed merge isn't its own. Either way Code Central shows a **Base diverged** item in Needs Me and Focus Mode, one per Project, with the two commits. Until you reconcile them by hand, for example by resetting or rebasing your local base onto the remote's, the Factory lands nothing and claims no work that would cut a branch. You do nothing in Code Central: on its next poll the Factory sees the fix and carries on. [Pull Request](running-the-factory.md#pull-request) in Running the Factory shows its lines.
+**Base diverged.** Under Pull Request, and under Merge with Push on, the Factory keeps your local base level with the remote's by fetching and fast-forwarding it. Under Pull Request, if the local base holds commits the remote's doesn't, it can't. Under Merge + Push, a local base that is only ahead of the remote's is current, since the Factory merges locally and then pushes; when the remote holds commits the local base lacks as well, the Factory moves the local base onto the remote's, rebuilding its own unpushed merges and replaying your unpushed commits, and it can't only when one of those conflicts or an unpushed merge isn't its own. Either way Code Central shows a **Base diverged** item in Needs Me and Focus Mode, one per Project, with the two commits. Until you reconcile them by hand, for example by resetting or rebasing your local base onto the remote's, the Factory lands nothing and claims no work that would cut a branch. You do nothing in Code Central: on its next poll the Factory sees the fix and carries on. With several Repositories each one's base is kept level with its own remote, and Base diverged is one item per Repository, naming it, which holds back only the Tickets landing in that Repository; no new work starts until it is fixed. [Pull Request](running-the-factory.md#pull-request) in Running the Factory shows its lines.
 
-**Base missing.** Under every Landing Method, if the Project's base branch exists neither locally nor on the Push remote, the Factory reports it and Code Central shows a **Base missing** item in Needs Me and Focus Mode, one per Project, naming the branch and linking to Project Options. Create the branch, or change the Base branch in Project Options. The item clears on the Factory's next poll that finds the branch. It never shows beside Base diverged, which is a Pull Request and Merge + Push item.
+**Base missing.** Under every Landing Method, if the Project's base branch exists neither locally nor on the Push remote, the Factory reports it and Code Central shows a **Base missing** item in Needs Me and Focus Mode, one per Project, naming the branch and linking to Project Options. Create the branch, or change the Base branch in Project Options. The item clears on the Factory's next poll that finds the branch. It never shows beside Base diverged, which is a Pull Request and Merge + Push item. With several Repositories it is one item per Repository whose base is missing, naming it, and the fix for a Repository other than the Home one is to create the branch there or change its Base in the Repositories section.
 
 ## Watching CI
 
@@ -364,7 +400,7 @@ The last line is there when the failing commit is where a Ticket landed, such as
 **GitHub Issues** brings a GitHub repository's issues into Code Central, and writes the work's progress back to them. It is off on every Project until you turn it on, and Agents have no tool or command to change it. Turn it on in the **GitHub Issues** section of the same Project Options page, below CI:
 
 - **GitHub Issues**: on or off. Code Central uses your existing `gh` login and stores no GitHub token.
-- **GitHub repository**: the repository whose issues come in, as `owner/name`, such as `acme/acme-api`. GitHub Issues can't be on without one. Like CI's, it is filled in from a GitHub Push remote the Factory reported, with a note naming the URL; change it if your issues live in another repository.
+- **GitHub repository**: the repository whose issues come in, as `owner/name`, such as `acme/acme-api`; [list as many as you like](#listing-several-github-repositories). GitHub Issues can't be on without one. Like CI's, it is filled in from a GitHub Push remote the Factory reported, with a note naming the URL; change it if your issues live in another repository.
 - **Filter label**: one GitHub label, such as `code-central`. Only issues carrying it come in. Leave it empty to bring in every open issue.
 - **New issues need me**: off by default. When on, each new issue also shows in Needs Me and Focus Mode until you triage it.
 
@@ -408,6 +444,22 @@ On each check, the Issue Watcher also brings in the repository's open issues, th
 
 While an Incoming Issue waits for triage, it follows its issue on GitHub on each check. An edit to the issue's title or description changes the Incoming Issue's, recorded in its history as the integration's edit. An issue closed on GitHub shows in Needs Me as **Closed externally**, and reopening it takes it out again. An issue that is deleted shows there too, its panel saying it **was deleted**, and one transferred to another repository or that loses the filter label says it **left the Integration's query**. Its Ticket is never deleted: cancel it, mark it Done or unlink it. Once you change the repository, the Incoming Issues from the old one stay as they are.
 
+### Listing several GitHub repositories
+
+The **GitHub repository** setting is a list. Type an `owner/name` and choose **Add repository**, or choose one of the suggestions under the field: each of the Project's [Repositories](#several-repositories) whose Clone URL is on GitHub is offered as a one-click `Add acme/acme-web`, naming its Repository. Any `owner/name` may be listed, not only a Project's own repositories. Each repository you add passes the check above before Save accepts it, and a refusal names the repository and its fix. **Remove** takes a repository off the list; the Incoming Issues it brought in stay as they are.
+
+The filter label and **New issues need me** are one setting for every listed repository. Issues from every repository arrive on the one Issues Spec, which is titled `GitHub Issues` once more than one repository is listed (and `GitHub Issues: acme/acme-api` again with one), unless you renamed it. Each Incoming Issue's badge names its own repository.
+
+With several repositories, the section lists each with its own status, and the Issue Watcher checks and polls each on its own:
+
+```text
+acme/acme-api: Watching
+acme/acme-web: Error. gh can't read the repository acme/acme-web: gh: Not Found (HTTP 404)
+Check the repository is the owner/name GitHub shows, and that the account gh is logged in as can see it.
+```
+
+One failing repository doesn't stop the others: they keep arriving and being written to while it shows its own fix. You get one Notification when the Issue Watcher goes into an error, not another when a second repository fails while it is already in one. `gh` being missing or logged out is every repository's error.
+
 ### What Code Central writes to an issue
 
 Code Central works out from each Ticket's and Spec's state what its issue should show, and the Issue Watcher makes it so on its next check. Each linked issue carries one **status label**, which the Issue Watcher creates in the repository if it is missing, taking any other `code-central:` label off the issue:
@@ -425,6 +477,8 @@ As a Requirement from an issue goes on, the Issue Watcher posts each step on the
 - the Requirement's text as the spec Stage left it, once that Stage is Done;
 - each implementation Ticket as it lands, with its title and the commit that put it into the base, such as `Landed **Fix the login** (acme-api-21) in 4f1c2ab.`. A Ticket Accepted but not yet landed isn't posted, and under Merge + Push with CI Tracking a Ticket is Done only once it is on the remote and green;
 - once the Requirement is Finished, what landed, each Ticket with its commit, and the issue is closed as completed. If nothing landed, the issue is closed as not planned with no comment.
+
+When the Project has [several Repositories](#several-repositories), a Ticket's line gives one commit for each Repository it changed, in landing order: `owner/repo@sha` when the Repository's Clone URL is on GitHub and `Name@sha` otherwise, such as `Landed **Fix the login** (acme-api-21) in acme/acme-api@4f1c2ab, docs@9c0de31.`. The Finished comment then ends with the Requirement's Changed Repositories, such as `Changed Repositories: acme/acme-api, docs`. A Project with one Repository gets the comments above, unchanged.
 
 Each comment it posts ends with a link back to the Ticket or Requirement in Code Central, and is posted exactly once: not again after the Issue Watcher or the service restarts, even if it stopped between posting it and recording it, and not again after you turn GitHub Issues off and on. Anything that comes due while GitHub Issues is off is written once you turn it back on. Your Rounds and their answers, Failure Reports, Transcripts, Claims and comments on a Ticket are never written to GitHub. Unlinking a Ticket or a Requirement stops every write to its issue.
 
@@ -535,6 +589,7 @@ curl -X POST localhost:7733/api/p/acme-api/add_labels -H 'X-Code-Central-Actor: 
    Created Project widgets.
    Project widgets is local. Wrote .mcp.json, .claude/settings.local.json, docs/agents/issue-tracker.md, docs/agents/triage-labels.md, CLAUDE.local.md.
    They are listed in .git/info/exclude; nothing was committed.
+   This is the Project's Home Repository. Work spanning other repositories? Add them with `code-central repository add`.
    Agents in a sandbox or container: see `code-central help sandboxes`.
    ```
 
@@ -572,6 +627,7 @@ $ code-central init
 /Users/you/src/acme-api-rate-limits/.mcp.json already points at Project acme-api; refreshing the files init writes.
 Project acme-api is committed. Wrote .claude/settings.json, docs/agents/issue-tracker.md, docs/agents/triage-labels.md.
 Nothing was committed.
+This is the Project's Home Repository. Work spanning other repositories? Add them with `code-central repository add`.
 Agents in a sandbox or container: see `code-central help sandboxes`.
 $ git status --short
 ```
@@ -589,6 +645,7 @@ Project Key [widgets]:
 Project widgets already exists. Join it? Only if this repository is that Project. [y/N]: y
 Project widgets is local. Wrote .mcp.json, .claude/settings.local.json, docs/agents/issue-tracker.md, docs/agents/triage-labels.md, CLAUDE.local.md.
 They are listed in .git/info/exclude; nothing was committed.
+This is the Project's Home Repository. Work spanning other repositories? Add them with `code-central repository add`.
 Agents in a sandbox or container: see `code-central help sandboxes`.
 ```
 
@@ -626,6 +683,7 @@ In `acme-api`, someone has replaced `docs/agents/triage-labels.md` with their ow
    Project acme-api is committed. Wrote .claude/settings.json, docs/agents/issue-tracker.md.
    Kept your docs/agents/triage-labels.md.
    Nothing was committed.
+   This is the Project's Home Repository. Work spanning other repositories? Add them with `code-central repository add`.
    Agents in a sandbox or container: see `code-central help sandboxes`.
    ```
 

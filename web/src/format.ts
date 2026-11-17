@@ -11,6 +11,7 @@ export const REASON_LABEL: Record<NeedsMeReason, string> = {
   ci_cancelled: "CI cancelled",
   base_diverged: "Base diverged",
   base_missing: "Base missing",
+  repository_missing: "Repository missing",
   pull_request_closed: "Pull request closed",
   to_merge: "To merge",
   ci_unavailable: "CI unavailable",
@@ -39,6 +40,13 @@ export function runDuration(run: Pick<CIRunView, "status" | "started" | "finishe
 // a CI item lists (code-central-432); "" for a Project's item.
 export function ticketOf(r: NeedsMeRow): string {
   return r.id || r.ci_item?.tickets[0]?.id || "";
+}
+
+// projectItemOf tells a Project's items of one reason apart: a CI item by
+// its pushed commit, a Repository missing, Base diverged or Base missing
+// item by its Repository; "" for any other row.
+export function projectItemOf(r: NeedsMeRow): string {
+  return r.ci_item?.commit ?? r.repository_missing?.repository ?? r.base_diverged?.repository ?? r.base_missing?.repository ?? "";
 }
 
 // listedTickets names the Tickets a CI item lists.
@@ -85,13 +93,25 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
       const cancelled = `CI cancelled ${ago(now, r.since)}`;
       return r.ci_item ? `${listedTickets(r)} · ${cancelled}` : cancelled;
     }
-    case "base_diverged":
-      return r.base_diverged
-        ? `${r.base_diverged.base ?? "The base"} is at ${shortCommit(r.base_diverged.local)} and the remote's at ${shortCommit(r.base_diverged.remote)}: reconcile them by hand`
-        : "The local base has diverged from the remote's";
+    case "base_diverged": {
+      const b = r.base_diverged;
+      if (!b) return "The local base has diverged from the remote's";
+      const base = b.repository ? `${b.base ?? "The base"} in ${b.repository}` : (b.base ?? "The base");
+      return `${base} is at ${shortCommit(b.local)} and the remote's at ${shortCommit(b.remote)}: reconcile them by hand`;
+    }
     case "base_missing":
       return r.base_missing?.fix ?? "The base branch doesn't exist";
+    case "repository_missing":
+      return r.repository_missing
+        ? `${r.repository_missing.repository}: ${r.repository_missing.problem}`
+        : "A Repository has no clone";
     case "pull_request_closed":
+      // With several Repositories each closed one is named by its
+      // Repository (Spec code-central-848).
+      if (r.closed_pull_requests?.some((p) => p.repository)) {
+        const named = r.closed_pull_requests.map((p) => `#${p.number} in ${p.repository}`).join(", ");
+        return `Pull request ${named} ${r.closed_pull_requests.length === 1 ? "was" : "were"} closed without merging: send the work back or reopen it`;
+      }
       return r.pull_request
         ? `Pull request #${r.pull_request.number} was closed without merging: send the work back or cancel it`
         : "Its pull request was closed without merging";
@@ -105,7 +125,7 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
     case "ci_unavailable":
       return ciUnavailableDetail(now, r);
     case "accepted_not_landed":
-      return `Accepted ${ago(now, r.since)}, not landed`;
+      return `Accepted ${ago(now, r.since)}, not landed${notLandedIn(r)}`;
     case "blocked_by_cancelled":
       return r.blocker
         ? `Blocked by ${r.blocker.id} ${r.blocker.title}, Cancelled with no Replacement`
@@ -117,6 +137,16 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
     case "closed_externally":
       return `${externalDetail(r)} · still ${r.state}`;
   }
+}
+
+// notLandedIn names, for an Accepted but not landed row while the
+// Project has several Repositories, the Repositories its Ticket hasn't
+// landed in, each with why, then those it has; "" otherwise.
+function notLandedIn(r: NeedsMeRow): string {
+  const n = r.not_landed;
+  if (!n) return "";
+  const notLanded = n.not_landed.map((u) => (u.reason ? `${u.name} (${u.reason})` : u.name)).join(", ");
+  return ` in ${notLanded}${n.landed.length ? `; landed in ${n.landed.join(", ")}` : ""}`;
 }
 
 // ciUnavailableDetail says why a CI unavailable row has had no word of

@@ -247,7 +247,7 @@ func (f fixture) incomingIssue(t *testing.T, spec, n int) {
 	t.Helper()
 	err := f.store.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
-		p.GitHubIssues = store.GitHubIssues{On: true, Repository: "acme/web", NewIssuesNeedMe: true, Spec: spec}
+		p.GitHubIssues = store.GitHubIssues{On: true, Repositories: []string{"acme/web"}, NewIssuesNeedMe: true, Spec: spec}
 		return w.PutProject(p)
 	})
 	if err == nil {
@@ -270,7 +270,8 @@ func (f fixture) incomingIssue(t *testing.T, spec, n int) {
 // acme-14 Failed, acme-15 In Review, acme-16 blocked by Cancelled acme-17,
 // acme-18 a Silent Claim, acme-19 a Long Claim, and on linked Spec
 // acme-20 acme-21 Closed externally and acme-22 a New issue; its base has
-// diverged. web, under Pull Request, has web-2 To merge and web-3 Pull
+// diverged and its Repository api is missing. web, under Pull Request,
+// has web-2 To merge and web-3 Pull
 // request closed; its base is missing.
 func agreementWorld(t *testing.T) fixture {
 	t.Helper()
@@ -346,12 +347,17 @@ func agreementWorld(t *testing.T) fixture {
 	}
 	must(f.core.ReportBase(ctx, "acme", core.ReportBaseInput{State: core.BaseDiverged, Local: "a", Remote: "b"}))
 	must(f.core.ReportBase(ctx, "web", core.ReportBaseInput{State: core.BaseMissing}))
+	must(f.core.AddRepository(human, "acme", core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"}))
+	must(f.core.ReportRepositories(ctx, "acme", core.ReportRepositoriesInput{Repositories: []core.RepositoryReport{
+		{Name: "acme", Path: "/src/acme", State: core.CloneReady},
+		{Name: "api", Path: "/src/api", State: core.CloneMissing, Problem: "/src/api isn't a git repository"},
+	}}))
 	return f
 }
 
 // allReasons are the Needs Me reasons in group order.
 var allReasons = []core.NeedsMeReason{core.ReasonNeedsAnswer, core.ReasonAnswered, core.ReasonSilentClaim, core.ReasonLongClaim, core.ReasonFailed,
-	core.ReasonInReview, core.ReasonCIFailed, core.ReasonCICancelled, core.ReasonBaseDiverged, core.ReasonBaseMissing, core.ReasonPullRequestClosed,
+	core.ReasonInReview, core.ReasonCIFailed, core.ReasonCICancelled, core.ReasonBaseDiverged, core.ReasonBaseMissing, core.ReasonRepositoryMissing, core.ReasonPullRequestClosed,
 	core.ReasonToMerge, core.ReasonCIUnavailable, core.ReasonAcceptedNotLanded, core.ReasonBlockedByCancelled, core.ReasonNewIssue, core.ReasonClosedExternally}
 
 // Over a world with a Ticket waiting for each reason, a CI item listing
@@ -492,7 +498,7 @@ func TestTicketsSharingAPushedCommitShareItsCIItemForEveryReader(t *testing.T) {
 		}
 	}
 
-	if _, err := f.core.LandAnyway(human, "acme", core.TicketInput{Ticket: "acme-8"}); err != nil {
+	if _, err := f.core.LandAnyway(human, "acme", core.CIResponseInput{Ticket: "acme-8"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"acme-5", "acme-8"} {

@@ -35,6 +35,7 @@ type PullRequest struct {
 	MergeStatus     string    `json:"mergeStatus"`
 	Created         time.Time `json:"creationDate"`
 	Closed          time.Time `json:"closedDate"`
+	Description     string    `json:"description"`
 	LastMergeCommit struct {
 		CommitID string `json:"commitId"`
 	} `json:"lastMergeCommit"`
@@ -86,13 +87,33 @@ func (c *Client) PullRequest(ctx context.Context, repository string, id int) (Pu
 // target, both full ref names. The description is cut to what Azure Repos
 // accepts.
 func (c *Client) OpenPullRequest(ctx context.Context, repository, source, target, title, description string) (PullRequest, error) {
-	if r := []rune(description); len(r) > MaxPullRequestDescription {
-		description = string(r[:MaxPullRequestDescription-1]) + "…"
-	}
 	var p PullRequest
 	err := c.do(ctx, http.MethodPost, c.repoURL(repository)+"/pullrequests", nil, map[string]any{
-		"sourceRefName": source, "targetRefName": target, "title": title, "description": description, "isDraft": false,
+		"sourceRefName": source, "targetRefName": target, "title": title, "description": CutDescription(description), "isDraft": false,
 	}, &p)
+	return p, err
+}
+
+// CutDescription is description cut to what Azure Repos accepts.
+func CutDescription(description string) string {
+	if r := []rune(description); len(r) > MaxPullRequestDescription {
+		return string(r[:MaxPullRequestDescription-1]) + "…"
+	}
+	return description
+}
+
+// EditPullRequestDescription sets a pull request's description, cut to
+// what Azure Repos accepts.
+func (c *Client) EditPullRequestDescription(ctx context.Context, repository string, id int, description string) (PullRequest, error) {
+	var p PullRequest
+	err := c.do(ctx, http.MethodPatch, fmt.Sprintf("%s/pullrequests/%d", c.repoURL(repository), id), nil, map[string]any{"description": CutDescription(description)}, &p)
+	return p, err
+}
+
+// AbandonPullRequest closes a pull request without merging it.
+func (c *Client) AbandonPullRequest(ctx context.Context, repository string, id int) (PullRequest, error) {
+	var p PullRequest
+	err := c.do(ctx, http.MethodPatch, fmt.Sprintf("%s/pullrequests/%d", c.repoURL(repository), id), nil, map[string]any{"status": "abandoned"}, &p)
 	return p, err
 }
 

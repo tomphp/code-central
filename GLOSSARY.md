@@ -28,6 +28,10 @@ _Avoid_: remote, origin, repository URL
 The Repositories in which a Ticket's branch holds commits beyond the Base. The Factory reports them live while the Ticket is In Progress, and each finish settles them, replacing the earlier list. Nobody sets them by hand. Every Ticket records them, including those whose work never lands. A finish recorded before Repositories existed reads as the Home Repository's. A Spec's Changed Repositories are the union of its Tickets'.
 _Avoid_: affected repos, target repos, scope
 
+**Finish check**:
+The Factory's comparison of a finish's record of the Changed Repositories with every Repository's branch, made after the turn that finished the Ticket and again before landing it, only while the Project has more than one Repository. A finish that leaves out a Repository whose branch holds work, or records a commit that isn't its branch's head, fails: the Ticket goes to Failed with a Failure Report on the finishing Claim. An Accepted Ticket that has landed somewhere can't fail it.
+_Avoid_: finish validation, finish guard
+
 **Home worktree**:
 A Ticket's worktree in the Home Repository, `<home>.worktrees/<ticket-id>`. It is where the Ticket's session starts, its working directory. A Ticket has one worktree per Repository: at each Claim's start the Factory makes or reuses one in every Repository, whichever of them the Ticket goes on to change, and each other Repository's is beside its clone, at `<clone parent>/<Repository Name>.worktrees/<ticket-id>`. A Repository added mid-session gets its worktree at the next Claim.
 _Avoid_: workspace, main worktree
@@ -261,7 +265,7 @@ The status shown on an Accepted Ticket under Land per Spec whose work isn't yet 
 _Avoid_: Held, queued, staged
 
 **Partly landed**:
-The status shown on an Accepted Ticket that has landed in some of its Changed Repositories but not all. Under Land per Spec it is shown on a Spec's Tickets the same way. It is a status, not a State, like Waiting for the Spec.
+The status shown on an Accepted Ticket that has landed in some of its Changed Repositories but not all. Under Land per Spec it is shown on a Spec's Tickets the same way. It is a status, not a State, like Waiting for the Spec. A Partly landed Ticket can't be cancelled, since what has landed stays landed: it is landed in the rest, or sent back.
 _Avoid_: Half landed, partially merged, split
 
 **Accepted but not landed**:
@@ -279,6 +283,10 @@ _Avoid_: CI integration
 **CI Provider**:
 The pluggable part of CI Tracking that talks to one CI system, through that system's own command-line tool and login, or its API and a token from the environment. There are two: GitHub Actions, through `gh`, and Azure Pipelines. It is chosen per Repository, so one Project may use both.
 _Avoid_: Integration, connector
+
+**Not watched**:
+The CI choice of a Repository other than the Home whose CI CI Tracking never watches: it has no CI Provider, never gates landing, never raises a CI item and never counts towards a Ticket's CI result. A Repository whose Clone URL names no host a CI Provider is on is Not watched until the human chooses one.
+_Avoid_: CI off, untracked, ignored Repository
 
 **Azure Pipelines**:
 The CI Provider for Azure DevOps' CI. It reaches one Azure DevOps project, named by its URL, over Azure DevOps' API, using a PAT that the service's environment holds under a variable the Project names.
@@ -317,7 +325,7 @@ A Factory saying in its Heartbeat that it can run Conversations.
 _Avoid_: chat capability, chat mode
 
 **Chat worktree**:
-The one worktree a Factory runs every Conversation in, `<home>.worktrees/chat` in the Home Repository, beside the Home worktrees. A Conversation's first turn moves it to the Base's tip when it is clean; the Factory never removes it, so a Conversation's Resume Command keeps working.
+A Repository's worktree for the Factory's Conversations: `<home>.worktrees/chat` in the Home Repository, beside the Home worktrees, where every Conversation runs, and `<clone parent>/<Repository Name>.worktrees/chat` beside each other Repository's clone, which a Conversation reaches as an added directory. A Conversation's first turn moves each one to its Repository's Base tip when it is clean; the Factory never removes them, so a Conversation's Resume Command keeps working.
 _Avoid_: chat checkout, chat directory
 
 **Factory Status**:
@@ -385,7 +393,7 @@ The identifier Code Central issues with a Claim, which proves the holder on ever
 _Avoid_: Token, holder ID
 
 **Resume Command**:
-The command that brings a session back: a Claim's, given by whoever claims, from its working directory; or a Conversation's. A Conversation's Resume Command changes into the worktree itself, because the human runs it from anywhere.
+The command that brings a session back: a Claim's, given by whoever claims, from its working directory; or a Conversation's. A Conversation's Resume Command changes into the worktree itself, because the human runs it from anywhere. With several Repositories, the Factory's Resume Commands add the other Repositories' worktrees as directories, as its sessions do.
 _Avoid_: Resume string, attach command
 
 **Silent Claim**:
@@ -594,7 +602,7 @@ The Questions an agent posts together on a Ticket, all of which must be answered
 _Avoid_: Batch
 
 **Failure Report**:
-An agent's permanent record of what broke on a Ticket, why, and what to fix, posted when it has no way forward.
+An agent's permanent record of what broke on a Ticket, why, and what to fix, posted when it has no way forward. The Factory posts one too, on the finishing Claim, when a finish leaves out a Changed Repository or records a commit that isn't its branch's head.
 _Avoid_: Error, incident
 
 **Label**:

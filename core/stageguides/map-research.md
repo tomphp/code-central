@@ -20,6 +20,7 @@ The In Review gate replaces any step that would stop to check with the user: the
 ## Finishing
 
 `finish` with a summary of the findings that points at the resolution comment. Give no `branch`: the research never lands, so accepting it makes the Ticket Done. The Ticket goes to In Review; stop working it.
+<!-- several-repositories -->
 
 ## A redo
 

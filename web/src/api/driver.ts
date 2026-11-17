@@ -19,6 +19,14 @@ import type { CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, Models
 import type { World } from "./core/core";
 import { toError } from "./http";
 
+// RepositoryWork is a Ticket's branch and head commit in one Repository,
+// as finish and the Factory's live report give them (Spec code-central-848).
+export interface RepositoryWork {
+  name: string;
+  branch: string;
+  commit: string;
+}
+
 // The Driver sets up the world the way agents, integrations and the Factory
 // would, with their operations over HTTP. Tests use the IDs it returns,
 // never literal IDs (Specs and Tickets share one counter).
@@ -34,12 +42,13 @@ export interface Driver {
   reportFailure(key: string, id: string, report: FailureReportBody): Promise<void>;
   // finish claims a Ready Ticket as an agent and finishes it with the
   // summary, moving it to In Review. on names the work's branch and head
-  // commit (ticket 71), or a spec Stage's Spec recommendation.
+  // commit (ticket 71), with several Repositories also each other one's
+  // (Spec code-central-848), or a spec Stage's Spec recommendation.
   finish(
     key: string,
     id: string,
     summary: string,
-    on?: { branch: string; commit: string } | { recommendation: NonNullable<TicketView["recommendation"]> },
+    on?: { branch: string; commit: string; repositories?: RepositoryWork[] } | { recommendation: NonNullable<TicketView["recommendation"]> },
   ): Promise<void>;
   // addBlocker makes id wait on blocker, as an agent's add_blocker.
   addBlocker(key: string, id: string, blocker: string): Promise<void>;
@@ -104,8 +113,9 @@ export interface Driver {
   // (code-central-256).
   // The branch it was pushed as is what the Pull Request Watcher opens a
   // pull request from; under Pull Request a push is recorded with CI
-  // Tracking off too (code-central-388).
-  reportPushedCommit(key: string, id: string, commit: string, branch?: string): Promise<void>;
+  // Tracking off too (code-central-388). repository names the Repository
+  // it was pushed in, the Home Repository when left out.
+  reportPushedCommit(key: string, id: string, commit: string, branch?: string, repository?: string): Promise<void>;
   // reportPullRequest reports the pull request of the work pushed as
   // branch, as the Pull Request Watcher does; it is recorded on every
   // Ticket the work covers (code-central-388).
@@ -334,8 +344,8 @@ export class HttpDriver implements Driver {
   };
 
   // code-central-256: as the Factory and the CI Watcher
-  reportPushedCommit: Driver["reportPushedCommit"] = async (key, id, commit, branch) => {
-    await this.agent(`${this.ticketPath(key, id)}/report_pushed_commit`, { commit, branch });
+  reportPushedCommit: Driver["reportPushedCommit"] = async (key, id, commit, branch, repository) => {
+    await this.agent(`${this.ticketPath(key, id)}/report_pushed_commit`, { commit, branch, ...(repository && { repository }) });
   };
 
   // code-central-388: as the Pull Request Watcher

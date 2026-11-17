@@ -1,6 +1,6 @@
 // The Project Options page: one Project's settings, reached from its menu
-// in the left pane, a section each: the Landing Method, CI with its CI
-// Rules, GitHub Issues, Models, Stage Guides, and Focus.
+// in the left pane, a section each: the Repositories, the Landing Method,
+// CI with its CI Rules, GitHub Issues, Models, Stage Guides, and Focus.
 import type { MouseEvent } from "react";
 import type { ProjectRow } from "../api/types";
 import { clickTo, hrefFor, type UiLocation } from "../url";
@@ -9,6 +9,7 @@ import { FactoriesSection } from "./FactoriesSection";
 import { GitHubIssuesSection } from "./GitHubIssuesSection";
 import { LandingMethodSection } from "./LandingMethodSection";
 import { ModelsSection } from "./ModelsSection";
+import { RepositoriesSection } from "./RepositoriesSection";
 import { StageGuidesSection } from "./StageGuidesSection";
 import { AutoAcceptSection } from "./AutoAcceptSection";
 import { FocusSection } from "./FocusSection";
@@ -24,6 +25,7 @@ export interface ProjectOptionsProps {
 // SECTIONS is the one list the section menu is built from; each id is the id
 // of that section's fieldset.
 export const SECTIONS = [
+  { id: "project-options-repositories", label: "Repositories" },
   { id: "project-options-landing-method", label: "Landing Method" },
   { id: "project-options-ci", label: "CI" },
   { id: "project-options-github-issues", label: "GitHub Issues" },
@@ -79,6 +81,7 @@ export function ProjectOptions({
               </ul>
             </nav>
             <div className="project-options-sections">
+              <RepositoriesSection project={project} />
               <LandingMethodSection project={project} />
               <CISection project={project} />
               <GitHubIssuesSection project={project} />

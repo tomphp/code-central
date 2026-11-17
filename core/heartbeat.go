@@ -97,8 +97,12 @@ type heartbeats struct {
 	all map[heartbeatKey]heartbeat
 	// seen is each Project's Factory Status as the watch last saw it.
 	seen map[string]string
-	// base is each Project's reported base (code-central-394).
-	base map[string]BaseView
+	// base is each Project's reported bases (code-central-394), by
+	// Repository Name (Spec code-central-848).
+	base map[string]map[string]BaseView
+	// clones is each Project's reported clones, by Repository Name
+	// (Spec code-central-848).
+	clones map[string]map[string]CloneView
 }
 
 // status is h's status at now.
@@ -133,7 +137,8 @@ func (hs *heartbeats) view(project string, now time.Time) FactoryStatusView {
 			v.PlanLimits, latest = h.limits, k
 		}
 	}
-	v.Base = hs.baseView(project, now)
+	// The Home Repository's, named by the Project Key.
+	v.Base = hs.baseView(project, project, now)
 	slices.SortFunc(v.Factories, func(a, b FactoryView) int {
 		if c := strings.Compare(a.Name, b.Name); c != 0 {
 			return c
@@ -211,8 +216,9 @@ func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeat
 	hs.all[k] = h
 	if !seen || prev.status(now) == FactoryOffline || in.State == HeartbeatStopping {
 		// A Factory that is new, back from a lapse or stopping holds
-		// no base report of its own to trust.
+		// no base or clone report of its own to trust.
 		delete(hs.base, key)
+		delete(hs.clones, key)
 	}
 	hs.mu.Unlock()
 	if !seen || prev.status(now) != h.status(now) || prev.note != note || prev.chat != in.Chat || !sameLimits(prev.limits, h.limits) {

@@ -158,7 +158,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 			// What the Pull Request Watcher said was about the old method.
 			c.watchers.reset(watcherKey{WatcherPullRequests, key})
 			for _, t := range w.Tickets(key) {
-				if t.State == store.Accepted && pullRequestOpen(t) {
+				if t.State == store.Accepted && slices.ContainsFunc(t.PullRequests, pullRequestOpen) {
 					left = append(left, t.Number)
 				}
 			}
@@ -174,10 +174,20 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 	for _, n := range left {
 		if err := c.store.Update(func(w store.Writer) error {
 			t, ok := w.Ticket(key, n)
-			if !ok || t.PullRequest == nil {
+			var links []string
+			for _, pr := range t.PullRequests {
+				if pullRequestOpen(pr) {
+					links = append(links, pr.Link)
+				}
+			}
+			if !ok || len(links) == 0 {
 				return nil
 			}
-			addComment(&t, Human, c.now(), 0, fmt.Sprintf("The Landing Method is no longer Pull Request, so its pull request %s is left open on the host. Close it there when you no longer want it.", t.PullRequest.Link))
+			body := fmt.Sprintf("The Landing Method is no longer Pull Request, so its pull request %s is left open on the host. Close it there when you no longer want it.", links[0])
+			if len(links) > 1 {
+				body = fmt.Sprintf("The Landing Method is no longer Pull Request, so its pull requests %s are left open on their hosts. Close them there when you no longer want them.", strings.Join(links, ", "))
+			}
+			addComment(&t, Human, c.now(), 0, body)
 			t.Updated = c.now()
 			return w.PutTicket(key, t)
 		}); err != nil {
@@ -215,6 +225,7 @@ func (c *Core) ListProjects(context.Context) ([]ProjectRow, error) {
 		for _, p := range r.Projects() {
 			row := ProjectRow{ProjectView: c.projectView(p)}
 			row.Landing.OpenPullRequests = openPullRequests(r, p.Key, landingPolicyOf(p))
+			fillChangedBy(r, &row.ProjectView)
 			e := c.evaluate(r, p)
 			row.NeedsMe = len(e.baseRows())
 			for _, t := range e.tickets() {

@@ -10,6 +10,7 @@ import (
 // Rules, and the Factory's report of its Push remote.
 func init() {
 	Routes["set_ci_tracking"] = "POST /api/p/{key}/set_ci_tracking"
+	Routes["set_repository_ci"] = "POST /api/p/{key}/set_repository_ci"
 	Routes["report_push_remote"] = "POST /api/p/{key}/report_push_remote"
 	Routes["add_ci_rule"] = "POST /api/p/{key}/add_ci_rule"
 	Routes["edit_ci_rule"] = "POST /api/p/{key}/edit_ci_rule"
@@ -21,6 +22,13 @@ func init() {
 			return nil, err
 		}
 		return c.SetCITracking(r.Context(), r.PathValue("key"), in)
+	}
+	handlers["set_repository_ci"] = func(c *core.Core, r *http.Request) (any, error) {
+		var in core.SetRepositoryCIInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		return c.SetRepositoryCI(r.Context(), r.PathValue("key"), in)
 	}
 	handlers["report_push_remote"] = func(c *core.Core, r *http.Request) (any, error) {
 		var in core.ReportPushRemoteInput
@@ -109,7 +117,7 @@ func init() {
 	Routes["rerun_ci"] = "POST /api/p/{key}/tickets/{n}/rerun_ci"
 
 	handlers["land_anyway"] = func(c *core.Core, r *http.Request) (any, error) {
-		var in core.TicketInput
+		var in core.CIResponseInput
 		if err := decodeBody(r, &in); err != nil {
 			return nil, err
 		}
@@ -117,7 +125,7 @@ func init() {
 		return c.LandAnyway(r.Context(), r.PathValue("key"), in)
 	}
 	handlers["rerun_ci"] = func(c *core.Core, r *http.Request) (any, error) {
-		var in core.TicketInput
+		var in core.CIResponseInput
 		if err := decodeBody(r, &in); err != nil {
 			return nil, err
 		}

@@ -130,8 +130,9 @@ type Harness struct {
 	Server *codecentraltest.Server
 	// Project is the Project Key the repo's committed .mcp.json names.
 	Project string
-	// Repo is the git repo's top level. Its parent holds only it and the
-	// Factory's worktree folder, Repo + ".worktrees".
+	// Repo is the git repo's top level, the Home Repository's. Its parent
+	// holds only it, the Factory's worktree folder, Repo + ".worktrees",
+	// and the clones of the Repositories AddRepository adds.
 	Repo string
 	// Home is the Factory's HOME and its profile folder, so its state file
 	// is under it even with HOME unset.
@@ -966,15 +967,33 @@ func lastFailure(tk core.TicketView) string {
 }
 
 // Finished claims ticket outside the Factory and finishes it with this
-// branch and commit, so it is In Review with work to land.
-func (h *Harness) Finished(ticket, branch, commit string) {
+// branch and commit, and the work in any other repositories, so it is In
+// Review with work to land.
+func (h *Harness) Finished(ticket, branch, commit string, repositories ...core.RepositoryWork) {
 	h.t.Helper()
 	ctx := context.Background()
 	c := h.Server.Client
 	res, err := c.Claim(ctx, h.Project, core.ClaimInput{Ticket: core.Ref(ticket)})
 	must(h.t, err)
-	_, err = c.Finish(ctx, h.Project, core.FinishInput{Ticket: core.Ref(ticket), ClaimID: res.ClaimID, Summary: "Done.", Branch: branch, Commit: commit})
+	_, err = c.Finish(ctx, h.Project, core.FinishInput{Ticket: core.Ref(ticket), ClaimID: res.ClaimID, Summary: "Done.", Branch: branch, Commit: commit, Repositories: repositories})
 	must(h.t, err)
+}
+
+// NeedsMeItems is the Project's Needs Me items of reason, in Needs Me's
+// order.
+func (h *Harness) NeedsMeItems(reason core.NeedsMeReason) []core.NeedsMeRow {
+	h.t.Helper()
+	v, err := h.Human().NeedsMe(context.Background())
+	must(h.t, err)
+	var out []core.NeedsMeRow
+	for _, g := range v.Groups {
+		for _, row := range g.Tickets {
+			if g.Reason == reason && row.Project == h.Project {
+				out = append(out, row)
+			}
+		}
+	}
+	return out
 }
 
 // Accept accepts ticket as the human.
@@ -1046,21 +1065,88 @@ func (r *Remote) AcceptPushes() {
 	must(r.h.t, os.Remove(filepath.Join(r.Path, "hooks", "pre-receive")))
 }
 
+// Repository is a second real repository of the Project's (Spec
+// code-central-848), beside the Home Repository.
+type Repository struct {
+	// Name is its Repository Name.
+	Name string
+	// CloneURL is its own bare remote, holding one commit on main.
+	CloneURL string
+	// Path is where the Factory clones it: beside the Home Repository,
+	// at <Repo's parent>/<Name>.
+	Path string
+	h    *Harness
+}
+
+// CommitOn commits file with content on branch in r's clone at Path, as
+// Harness.CommitOn does in the Home Repository, and returns the commit.
+func (r *Repository) CommitOn(branch, file, content string) string {
+	r.h.t.Helper()
+	return r.h.commitOn(r.Path, branch, file, content)
+}
+
+// Remote is r's bare remote, its Clone URL, as the remote name of the
+// Factory's clone: the Push remote's name, which it clones under.
+func (r *Repository) Remote(name string) *Remote {
+	return &Remote{h: r.h, Name: name, Path: r.CloneURL}
+}
+
+// Worktree is where the Factory keeps ticket's worktree in r, beside its
+// clone, at <Path's parent>/<Name>.worktrees/<ticket>; Worktree("chat")
+// is r's Chat worktree.
+func (r *Repository) Worktree(ticket string) string {
+	return filepath.Join(filepath.Dir(r.Path), r.Name+".worktrees", ticket)
+}
+
+// AddRepository makes a bare repository named name, holding one commit
+// on main, and adds it to the Project through add_repository, with no
+// local path, so the Factory clones it beside the Home Repository.
+func (h *Harness) AddRepository(name string) *Repository {
+	h.t.Helper()
+	r := h.MakeRepository(name)
+	if _, err := h.Human().AddRepository(context.Background(), h.Project, core.AddRepositoryInput{Name: name, CloneURL: r.CloneURL}); err != nil {
+		h.t.Fatalf("add_repository %s: %v", name, err)
+	}
+	return r
+}
+
+// MakeRepository makes AddRepository's bare repository without adding it
+// to the Project.
+func (h *Harness) MakeRepository(name string) *Repository {
+	h.t.Helper()
+	root := filepath.Dir(filepath.Dir(h.Repo))
+	seed := filepath.Join(root, "seeds", name)
+	must(h.t, os.MkdirAll(seed, 0o755))
+	h.GitIn(seed, "init", "-q", "-b", "main")
+	must(h.t, os.WriteFile(filepath.Join(seed, "README.md"), []byte(name+"\n"), 0o644))
+	h.GitIn(seed, "add", "README.md")
+	h.GitIn(seed, "commit", "-q", "-m", "Start "+name)
+	r := &Repository{Name: name, CloneURL: filepath.Join(root, "repositories", name+".git"), Path: filepath.Join(filepath.Dir(h.Repo), name), h: h}
+	h.GitIn(root, "clone", "-q", "--bare", seed, r.CloneURL)
+	return r
+}
+
 // CommitOn commits file with content on branch, made from main when it
 // doesn't exist, and returns the commit. The repo is left on main.
 func (h *Harness) CommitOn(branch, file, content string) string {
 	h.t.Helper()
+	return h.commitOn(h.Repo, branch, file, content)
+}
+
+// commitOn is CommitOn in the clone at dir.
+func (h *Harness) commitOn(dir, branch, file, content string) string {
+	h.t.Helper()
 	if branch != "main" {
-		if !strings.Contains(h.Git("branch", "--list", branch), branch) {
-			h.Git("branch", branch, "main")
+		if !strings.Contains(h.GitIn(dir, "branch", "--list", branch), branch) {
+			h.GitIn(dir, "branch", branch, "main")
 		}
-		h.Git("checkout", "-q", branch)
-		defer h.Git("checkout", "-q", "main")
+		h.GitIn(dir, "checkout", "-q", branch)
+		defer h.GitIn(dir, "checkout", "-q", "main")
 	}
-	must(h.t, os.WriteFile(filepath.Join(h.Repo, file), []byte(content), 0o644))
-	h.Git("add", file)
-	h.Git("commit", "-q", "-m", "Change "+file)
-	return h.Git("rev-parse", "HEAD")
+	must(h.t, os.WriteFile(filepath.Join(dir, file), []byte(content), 0o644))
+	h.GitIn(dir, "add", file)
+	h.GitIn(dir, "commit", "-q", "-m", "Change "+file)
+	return h.GitIn(dir, "rev-parse", "HEAD")
 }
 
 // Running is a Factory running in-process.

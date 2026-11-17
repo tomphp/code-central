@@ -16,7 +16,9 @@ import (
 
 // Step is one thing the fake claude does. In CLI and Git args, Write's
 // content and Stdout, {{ticket}}, {{claim}} and {{session}} stand for the
-// run's Ticket, Claim and session ID.
+// run's Ticket, Claim and session ID, {{head}} for the head commit of the
+// worktree the run started in, and {{head:<Repository Name>}} for that of
+// the Repository's worktree, as it is when the step runs.
 type Step struct {
 	// CLI runs the code-central CLI with these args in the worktree.
 	CLI []string `json:"cli,omitempty"`
@@ -34,6 +36,10 @@ type Step struct {
 	// notes each stop signal it gets (see Signals): on Unix it ignores
 	// SIGINT and exits 143 on SIGTERM; on Windows it ignores Ctrl-Break.
 	Wait bool `json:"wait,omitempty"`
+	// In runs a Write, Git or Need step in the worktree of the Repository
+	// it names, one of the run's --add-dir folders, in place of the
+	// worktree the run started in (InRepository).
+	In string `json:"in,omitempty"`
 }
 
 // File is a file a Write step writes, Name relative to the worktree.
@@ -130,9 +136,44 @@ func Git(args ...string) Step { return Step{Git: args} }
 // NeedFile fails the run unless name is in the worktree.
 func NeedFile(name string) Step { return Step{Need: name} }
 
+// InRepository is s run in the worktree of the Repository named
+// repository, which the Factory passed with --add-dir, rather than in
+// the worktree the run started in.
+func InRepository(repository string, s Step) Step {
+	s.In = repository
+	return s
+}
+
+// CommitIn writes file with content in the worktree of the Repository
+// named repository and commits it there.
+func CommitIn(repository, file, content string) []Step {
+	return []Step{
+		InRepository(repository, WriteFile(file, content)),
+		InRepository(repository, Git("add", file)),
+		InRepository(repository, Git("commit", "-q", "-m", "Change "+file)),
+	}
+}
+
 // Finish finishes the run's Ticket under its Claim.
 func Finish(summary string) Step {
 	return CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", summary)
+}
+
+// FinishIn finishes the run's Ticket under its Claim with repositories:
+// each Repository named, one of the run's --add-dir worktrees, on the
+// Ticket's branch at its worktree's head. home also records the Home
+// Repository's branch and head, as branch and commit.
+func FinishIn(summary string, home bool, repositories ...string) Step {
+	var list []core.RepositoryWork
+	for _, r := range repositories {
+		list = append(list, core.RepositoryWork{Name: r, Branch: "{{ticket}}", Commit: "{{head:" + r + "}}"})
+	}
+	b, _ := json.Marshal(list)
+	args := []string{"finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", summary, "--repositories", string(b)}
+	if home {
+		args = append(args, "--branch", "{{ticket}}", "--commit", "{{head}}")
+	}
+	return CLI(args...)
 }
 
 // FinishSpec finishes the run's spec Stage under its Claim with its Spec
@@ -358,6 +399,17 @@ func (c Call) Flag(flag string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// Values is the value after each flag in the call's args, in order.
+func (c Call) Values(flag string) []string {
+	var out []string
+	for i, a := range c.Args {
+		if a == flag && i+1 < len(c.Args) {
+			out = append(out, c.Args[i+1])
+		}
+	}
+	return out
 }
 
 // Has reports whether arg is one of the call's args.

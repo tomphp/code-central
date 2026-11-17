@@ -20,7 +20,7 @@ import (
 // The ceilings in bytes, which the Context Report measures in.
 const (
 	// workflowBudget is the whole get_workflow response.
-	workflowBudget = 12550
+	workflowBudget = 12900
 	// ticketBudget is the default get_ticket of redone's acme-2.
 	ticketBudget = 1100
 	// acknowledgementBudget is each write's default result.
@@ -109,6 +109,11 @@ func TestTheStageGuidesTroubleRulesStayWithin800Bytes(t *testing.T) {
 	}
 }
 
+// severalRepositoriesAllowance is what the paragraph for several
+// Repositories may add to the budget of each guide that has it, so a
+// Project with the Home Repository alone keeps the tighter ceiling.
+const severalRepositoriesAllowance = 450
+
 func TestEachStageGuideStaysWithinItsBudget(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
@@ -122,6 +127,12 @@ func TestEachStageGuideStaysWithinItsBudget(t *testing.T) {
 		}
 		if n := len(guide(t, f, stage)); n > limit {
 			t.Errorf("the %s guide is %d bytes, over the %d budget", stage, n, limit)
+		}
+	}
+	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
+	for _, stage := range severalRepositoriesGuides {
+		if n, limit := len(guide(t, f, stage)), guideBudgets[stage]+severalRepositoriesAllowance; n > limit {
+			t.Errorf("with several Repositories the %s guide is %d bytes, over the %d budget", stage, n, limit)
 		}
 	}
 }

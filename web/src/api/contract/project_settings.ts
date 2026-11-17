@@ -113,20 +113,22 @@ export function projectSettingsContract(driver: () => Driver) {
 
   it("sets a Project's GitHub Issues settings, off by default and checked when turned on", async () => {
     await d.createProject("acme", "Acme");
-    const off = { on: false, repository: "", label: "", new_issues_need_me: false };
+    const off = { on: false, repositories: [], label: "", new_issues_need_me: false };
     const notReported = { state: "not_reported" };
     expect((await d.api.listProjects())[0].github_issues).toEqual({ ...off, watcher: notReported });
 
-    const none = await d.api.setGitHubIssues("acme", { ...off, on: true, repository: " " }).catch((e) => e);
-    expect(none).toMatchObject({ status: 422, code: "invalid", field: "repository" });
+    const none = await d.api.setGitHubIssues("acme", { ...off, on: true, repositories: [" "] }).catch((e) => e);
+    expect(none).toMatchObject({ status: 422, code: "invalid", field: "repositories" });
     expect(none.message).toContain("owner/name");
-    const url = await d.api.setGitHubIssues("acme", { ...off, repository: "https://github.com/acme/web" }).catch((e) => e);
-    expect(url).toMatchObject({ status: 422, code: "invalid", field: "repository" });
+    const url = await d.api.setGitHubIssues("acme", { ...off, repositories: ["https://github.com/acme/web"] }).catch((e) => e);
+    expect(url).toMatchObject({ status: 422, code: "invalid", field: "repositories" });
+    const twice = await d.api.setGitHubIssues("acme", { ...off, repositories: ["acme/web", "Acme/Web"] }).catch((e) => e);
+    expect(twice).toMatchObject({ status: 422, code: "invalid", field: "repositories" });
 
     // Off, nothing is checked and no Issues Spec is made.
     await d.logOutOfGH();
-    const kept = await d.api.setGitHubIssues("acme", { on: false, repository: " acme/web ", label: " bug ", new_issues_need_me: true });
-    expect(kept.github_issues).toEqual({ on: false, repository: "acme/web", label: "bug", new_issues_need_me: true, watcher: notReported });
+    const kept = await d.api.setGitHubIssues("acme", { on: false, repositories: [" acme/web "], label: " bug ", new_issues_need_me: true });
+    expect(kept.github_issues).toEqual({ on: false, repositories: ["acme/web"], label: "bug", new_issues_need_me: true, watcher: notReported });
 
     const refused = await d.api.setGitHubIssues("acme", { ...kept.github_issues, on: true }).catch((e) => e);
     expect(refused).toBeInstanceOf(ApiError);
@@ -316,14 +318,14 @@ export function projectSettingsContract(driver: () => Driver) {
     expect((await d.mcpCall("acme", "get_ticket", { ticket: id })).text).not.toContain("model_choice");
   });
 
-  it("creates the Issues Spec the first time GitHub Issues is turned on, retitled with the repository", async () => {
+  it("creates the Issues Spec the first time GitHub Issues is turned on, retitled with the repositories", async () => {
     await d.createProject("acme", "Acme");
     await d.letGHTriage("acme/web");
-    const on = await d.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: false });
+    const on = await d.api.setGitHubIssues("acme", { on: true, repositories: ["acme/web"], label: "", new_issues_need_me: false });
     // The service's own Issue Watcher may report by the time it reads.
     expect(on.github_issues).toEqual({
       on: true,
-      repository: "acme/web",
+      repositories: ["acme/web"],
       label: "",
       new_issues_need_me: false,
       spec: expect.stringMatching(/^acme-\d+$/),
@@ -334,12 +336,18 @@ export function projectSettingsContract(driver: () => Driver) {
     expect(s.title).toBe("GitHub Issues: acme/web");
     expect(s.link).toBeUndefined();
 
-    await d.api.setGitHubIssues("acme", { on: false, repository: "acme/web", label: "", new_issues_need_me: false });
-    expect((await d.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: false })).github_issues.spec).toBe(spec);
+    await d.api.setGitHubIssues("acme", { on: false, repositories: ["acme/web"], label: "", new_issues_need_me: false });
+    expect((await d.api.setGitHubIssues("acme", { on: true, repositories: ["acme/web"], label: "", new_issues_need_me: false })).github_issues.spec).toBe(spec);
 
     await d.letGHTriage("acme/site");
-    await d.api.setGitHubIssues("acme", { on: true, repository: "acme/site", label: "", new_issues_need_me: false });
+    await d.api.setGitHubIssues("acme", { on: true, repositories: ["acme/site"], label: "", new_issues_need_me: false });
     expect((await d.api.getSpec("acme", spec)).title).toBe("GitHub Issues: acme/site");
+
+    // Listing more than one repository titles it "GitHub Issues", and each
+    // one added passes the check.
+    await d.letGHTriage("acme/api");
+    await d.api.setGitHubIssues("acme", { on: true, repositories: ["acme/site", "acme/api"], label: "", new_issues_need_me: false });
+    expect((await d.api.getSpec("acme", spec)).title).toBe("GitHub Issues");
   });
 
   it("adds, edits and removes CI Rules, each with its own Spec", async () => {
@@ -368,6 +376,40 @@ export function projectSettingsContract(driver: () => Driver) {
     expect(glob).toMatchObject({ status: 422, code: "invalid", field: "branch" });
     const path = await d.api.addCIRule("acme", { workflow: ".github/workflows/ci.yml", branch: "main", state: "Draft" }).catch((e) => e);
     expect(path).toMatchObject({ status: 422, code: "invalid", field: "workflow" });
+  });
+
+  it("lists the Home Repository alone, then adds, edits, reorders and removes Repositories", async () => {
+    await d.createProject("acme", "Acme");
+    const names = (p: { repositories: { name: string }[] }) => p.repositories.map((r) => r.name);
+    expect((await d.api.listProjects())[0].repositories).toEqual([
+      { name: "acme", home: true, clone_url: "", base: "main", local_path: "", code_host: "", changed_by: [] },
+    ]);
+
+    const added = await d.api.addRepository("acme", { name: "web", clone_url: " git@github.com:acme/web.git " });
+    expect(added.repositories[1]).toEqual({
+      name: "web", home: false, clone_url: "git@github.com:acme/web.git", base: "main", local_path: "", code_host: "github", changed_by: [],
+    });
+    await d.api.addRepository("acme", { name: "api", clone_url: "https://github.com/acme/api", base: "develop", local_path: "/src/api" });
+    expect(names((await d.api.listProjects())[0])).toEqual(["acme", "web", "api"]);
+
+    const edited = await d.api.editRepository("acme", "web", { base: "trunk", local_path: "/src/web" });
+    expect(edited.repositories[1]).toMatchObject({ name: "web", clone_url: "git@github.com:acme/web.git", base: "trunk", local_path: "/src/web" });
+    expect(names(await d.api.setLandingOrder("acme", ["api", "acme", "web"]))).toEqual(["api", "acme", "web"]);
+    expect(names(await d.api.removeRepository("acme", "web"))).toEqual(["api", "acme"]);
+
+    // Each refusal names its field and says how to put it right.
+    const twice = await d.api.addRepository("acme", { name: "shop", clone_url: "git@github.com:Acme/API.git" }).catch((e) => e);
+    expect(twice).toMatchObject({ status: 422, code: "invalid", field: "clone_url" });
+    expect(twice.fix).toContain("edit api");
+    const home = await d.api.removeRepository("acme", "acme").catch((e) => e);
+    expect(home).toMatchObject({ status: 422, code: "invalid", field: "name" });
+    expect(home.fix).toBeTruthy();
+    const homeBase = await d.api.editRepository("acme", "acme", { base: "trunk" }).catch((e) => e);
+    expect(homeBase).toMatchObject({ status: 422, code: "invalid", field: "base" });
+    expect(homeBase.fix).toContain("Landing");
+    const order = await d.api.setLandingOrder("acme", ["api"]).catch((e) => e);
+    expect(order).toMatchObject({ status: 422, code: "invalid", field: "names" });
+    expect(await d.api.editRepository("acme", "web", { base: "main" }).catch((e) => e)).toMatchObject({ status: 404, code: "not_found" });
   });
 
   it("sets a Project's Azure Pipelines settings, validating them by provider", async () => {

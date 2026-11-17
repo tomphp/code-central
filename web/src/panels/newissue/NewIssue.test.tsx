@@ -22,7 +22,7 @@ async function world(needMe = true) {
   const s = scenario(w);
   await s.createProject("acme", "Acme");
   await s.createProject("spare", "Spare"); // a second active Project, so All Projects stays offered
-  const on = await w.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: needMe });
+  const on = await w.api.setGitHubIssues("acme", { on: true, repositories: ["acme/web"], label: "", new_issues_need_me: needMe });
   const issue = await s.incomingIssue("acme", on.github_issues.spec!, "Login is broken", ISSUE);
   return { w, s, issue };
 }

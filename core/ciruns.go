@@ -96,10 +96,12 @@ type CIJobView struct {
 // takes it: the CI Watcher names what it is tracked against, a Ticket or
 // a CI Rule's Spec; Code Central marks it ignored.
 type CIRunView struct {
-	// ID and Attempt are the CI Provider's run ID and attempt, which key
-	// the run.
-	ID      int64 `json:"id"`
-	Attempt int   `json:"attempt"`
+	// Repository is the Repository Name of the Repository the run is for,
+	// empty for the Home Repository. With the CI Provider's run ID and
+	// attempt, it keys the run.
+	Repository string `json:"repository,omitempty"`
+	ID         int64  `json:"id"`
+	Attempt    int    `json:"attempt"`
 	// Workflow is the workflow file's base name, such as ci.yml; Name is
 	// the name it shows.
 	Workflow   string             `json:"workflow"`
@@ -123,7 +125,7 @@ type CIRunView struct {
 
 // ciRunView is r as reads return it.
 func ciRunView(key string, r store.CIRun) CIRunView {
-	v := CIRunView{ID: r.ID, Attempt: r.Attempt, Workflow: r.Workflow, Name: r.Name, Branch: r.Branch, Commit: r.Commit,
+	v := CIRunView{Repository: r.Repository, ID: r.ID, Attempt: r.Attempt, Workflow: r.Workflow, Name: r.Name, Branch: r.Branch, Commit: r.Commit,
 		Status: r.Status, Conclusion: r.Conclusion, URL: r.URL, Jobs: []CIJobView{}, Ignored: r.Ignored}
 	if !r.Started.IsZero() {
 		at := r.Started
@@ -149,19 +151,6 @@ func ciRunView(key string, r store.CIRun) CIRunView {
 // attempt: one GitHub refuses, say for a run too old to re-run, lapses,
 // and the Ticket is CI failed again, with its failure options.
 const ciRerunLapse = 10 * time.Minute
-
-// runsOf are the Ticket-tracked runs of the commits t pushed, whichever
-// Ticket they were tracked against: Tickets sharing a pushed commit share
-// its runs. Runs tracked against a CI Rule are left out.
-func runsOf(runs []store.CIRun, t store.Ticket) []store.CIRun {
-	var mine []store.CIRun
-	for _, run := range runs {
-		if run.Ticket != 0 && slices.ContainsFunc(t.PushedCommits, func(p store.PushedCommit) bool { return p.Commit == run.Commit }) {
-			mine = append(mine, run)
-		}
-	}
-	return mine
-}
 
 // countsFor reports whether run counts towards commit's CI result: one
 // of commit's runs that isn't ignored.
@@ -238,24 +227,28 @@ func countedRuns(commit string, runs []store.CIRun) map[int64]store.CIRun {
 }
 
 // ReportPushedCommitInput is the Factory's report_pushed_commit(ticket,
-// commit, full?).
+// commit, repository?, full?).
 type ReportPushedCommitInput struct {
 	Ticket Ref    `json:"ticket"`
 	Commit string `json:"commit"`
 	// Branch is the branch the Factory pushed the commit as, so that the
 	// Pull Request Watcher knows the pull request's head branch.
 	Branch string `json:"branch,omitempty"`
+	// Repository is the Repository Name the Factory pushed the commit in;
+	// left out, the Home Repository.
+	Repository string `json:"repository,omitempty"`
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
 
 // ReportPushedCommit is the Factory's report_pushed_commit: the commit it
-// pushed for an Accepted Ticket (or an In Review one, merged by hand),
-// recorded with when. It is recorded only while CI Tracking and Push are
-// on, so turning CI Tracking on tracks only pushes from then on; with
-// either off, nothing changes; under Pull Request, which implies Push, it
-// is recorded whether or not CI Tracking is on. A newer pushed commit replaces the old one
-// as the one the CI result comes from.
+// pushed in a Repository for an Accepted Ticket (or an In Review one,
+// merged by hand), recorded with when. It is recorded only while CI
+// Tracking and Push are on, so turning CI Tracking on tracks only pushes
+// from then on; with either off, nothing changes; under Pull Request,
+// which implies Push, it is recorded whether or not CI Tracking is on. A
+// newer pushed commit in the Repository replaces the old one as the one
+// the Repository's CI result comes from.
 func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushedCommitInput) (Written[TicketView], error) {
 	commit := strings.TrimSpace(in.Commit)
 	if commit == "" {
@@ -269,15 +262,19 @@ func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushed
 			return false, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is %s: only an Accepted or In Review Ticket is pushed", DisplayID(key, t.Number), t.State)}
 		}
 		p, _ := r.Project(key)
+		name, err := repositoryOf(p, "repository", in.Repository)
+		if err != nil {
+			return false, err
+		}
 		if !landingPolicyOf(p).RecordsPushedCommit() {
 			return false, nil
 		}
-		if n := len(t.PushedCommits); n > 0 && t.PushedCommits[n-1].Commit == commit {
+		if pc, ok := latestPushedTo(key, *t, name); ok && pc.Commit == commit {
 			return false, nil
 		}
-		t.PushedCommits = append(t.PushedCommits, store.PushedCommit{Commit: commit, Branch: strings.TrimSpace(in.Branch), Pushed: c.now()})
+		t.PushedCommits = append(t.PushedCommits, store.PushedCommit{Repository: recordName(key, name), Commit: commit, Branch: strings.TrimSpace(in.Branch), Pushed: c.now()})
 		for _, o := range r.Tickets(key) {
-			if o.Number != t.Number && len(o.PushedCommits) > 0 && latestPushed(o).Commit == commit {
+			if pushed := pushedIn(key, o, name); o.Number != t.Number && len(pushed) > 0 && pushed[len(pushed)-1].Commit == commit {
 				sharing = append(sharing, o.Number)
 			}
 		}
@@ -290,6 +287,26 @@ func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushed
 		c.publishTicketChanged(key, n)
 	}
 	return v, nil
+}
+
+// repositoryOf is the Repository Name given names in p, field: the Home
+// Repository's when given is empty; refused when it names none of p's
+// Repositories.
+func repositoryOf(p store.Project, field, given string) (string, error) {
+	given = strings.TrimSpace(given)
+	if given == "" {
+		return p.Key, nil
+	}
+	if !slices.Contains(repositoryNames(p.RepositoryList()), given) {
+		return "", notARepository(p, field, given)
+	}
+	return given, nil
+}
+
+// notARepository refuses name, on field, as naming none of p's
+// Repositories, which it lists.
+func notARepository(p store.Project, field, name string) error {
+	return invalid(field, "%q is not one of this Project's Repositories, which are %s", name, strings.Join(repositoryNames(p.RepositoryList()), ", "))
 }
 
 // ReportCIRunsInput is the CI Watcher's report_ci_runs(runs, full?).
@@ -305,7 +322,7 @@ type CIRunsView struct {
 }
 
 // ReportCIRuns is the CI Watcher's report_ci_runs: it upserts each run,
-// keyed by its run ID and attempt, marking runs of Ignored workflows
+// keyed by its Repository, run ID and attempt, marking runs of Ignored workflows
 // ignored, and prunes the runs finished more than ciKeep ago. It needs
 // CI Tracking on. Every Ticket whose runs changed gets a change notice,
 // as the Project gets ci.changed, so the UI updates live.
@@ -327,11 +344,13 @@ func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput)
 		pruned := len(kept) < len(stored)
 		ci := c.ciStateOf(w, p)
 		for i, v := range in.Runs {
-			run, err := c.ciRunOf(w, key, p.CI, v, fmt.Sprintf("runs[%d]", i))
+			run, err := c.ciRunOf(w, p, v, fmt.Sprintf("runs[%d]", i))
 			if err != nil {
 				return err
 			}
-			at := slices.IndexFunc(runs, func(r store.CIRun) bool { return r.ID == run.ID && r.Attempt == run.Attempt })
+			at := slices.IndexFunc(runs, func(r store.CIRun) bool {
+				return r.Repository == run.Repository && r.ID == run.ID && r.Attempt == run.Attempt
+			})
 			switch {
 			case at < 0:
 				runs = append(runs, run)
@@ -381,16 +400,23 @@ func markCIRunChanged(ci *ciState, changed map[int]bool, run store.CIRun) {
 		return
 	}
 	changed[run.Ticket] = true
-	for _, t := range ci.ticketsReading(run.Commit) {
+	for _, t := range ci.ticketsReading(run.Repository, run.Commit) {
 		changed[t.Number] = true
 	}
 }
 
-// ciRunOf is the run v reports, checked, as stored: tracked against an
-// existing Ticket or Spec, and ignored when its workflow is.
-func (c *Core) ciRunOf(r store.Reader, key string, ci store.CI, v CIRunView, field string) (store.CIRun, error) {
+// ciRunOf is the run v reports in p, checked, as stored: for one of p's
+// Repositories, tracked against an existing Ticket or Spec, and ignored
+// when its workflow is.
+func (c *Core) ciRunOf(r store.Reader, p store.Project, v CIRunView, field string) (store.CIRun, error) {
+	key, ci := p.Key, p.CI
 	run := store.CIRun{ID: v.ID, Attempt: v.Attempt, Workflow: strings.TrimSpace(v.Workflow), Name: v.Name, Branch: v.Branch,
 		Commit: strings.TrimSpace(v.Commit), Status: v.Status, Conclusion: v.Conclusion, URL: v.URL}
+	name, err := repositoryOf(p, field+".repository", v.Repository)
+	if err != nil {
+		return run, err
+	}
+	run.Repository = recordName(key, name)
 	switch {
 	case run.ID <= 0:
 		return run, invalid(field+".id", "a CI Run needs its CI Provider's run ID")
@@ -463,28 +489,31 @@ type CIWaitingCommit struct {
 	PullRequest int `json:"pull_request,omitempty"`
 }
 
-// ciWaiting is the pushed commits the CI Watcher watches, once per
-// commit, oldest push first: each Ticket's latest pushed commit and,
-// under the CI gate, every other it pushed since it last moved back to
-// Ready, whose CI result is still running, or that was pushed, or asked
-// to be re-run, in the last ciNewlyPushed. A Cancelled Ticket's are left
-// out, as is one pushed, or last asked to be re-run, more than
-// ciWaitLimit ago.
-func ciWaiting(ci *ciState) []CIWaitingCommit {
+// ciWaiting is the pushed commits in the Repository name the CI Watcher
+// watches, once per commit, oldest push first: each Ticket's latest
+// pushed commit there and, under the CI gate, every other it pushed there
+// since it last moved back to Ready, whose CI result is still running, or
+// that was pushed, or asked to be re-run, in the last ciNewlyPushed. A
+// Cancelled Ticket's are left out, as is one pushed, or last asked to be
+// re-run, more than ciWaitLimit ago.
+func ciWaiting(ci *ciState, name string) []CIWaitingCommit {
 	out := []CIWaitingCommit{}
 	key := ci.p.Key
 	for _, t := range ci.r.Tickets(key) {
 		if len(t.PushedCommits) == 0 || t.State == store.Cancelled {
 			continue
 		}
-		mine := ci.ticket(t).runs
-		for _, pc := range ci.resultCommits(t) {
-			if !ci.watched(pc, mine) {
+		rc := ci.ticket(t).in(name)
+		if rc == nil {
+			continue
+		}
+		for _, pc := range ci.resultCommits(t, rc.pushed) {
+			if !ci.watched(rc, pc) {
 				continue
 			}
 			w := CIWaitingCommit{Ticket: DisplayID(key, t.Number), Commit: pc.Commit, Pushed: pc.Pushed}
-			if t.PullRequest != nil {
-				w.PullRequest = t.PullRequest.Number
+			if pr := pullRequestIn(key, t, name); pr != nil {
+				w.PullRequest = pr.Number
 			}
 			out = append(out, w)
 		}

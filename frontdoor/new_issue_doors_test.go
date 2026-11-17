@@ -39,7 +39,7 @@ func keepAsDraft(n string) httpCall {
 func issuesOn(needMe bool) func(*testing.T, *codecentraltest.Server) {
 	return func(t *testing.T, srv *codecentraltest.Server) {
 		t.Helper()
-		body := `{"on":true,"repository":"acme/web","new_issues_need_me":` + strconv.FormatBool(needMe) + `}`
+		body := `{"on":true,"repositories":["acme/web"],"new_issues_need_me":` + strconv.FormatBool(needMe) + `}`
 		httpOK(t, srv, setGitHubIssues(body))
 	}
 }

@@ -12,6 +12,7 @@ import type {
   HeldSessionEvent,
   CIRuleChange,
   CITrackingChange,
+  RepositoryCIChange,
   LandingInput,
   LinkedRow,
   NeedsMeView,
@@ -36,7 +37,9 @@ import type {
   ChatMessage,
   ChatOutcome,
   Conversation,
-  UsageView, GitHubIssuesChange, ModelsChange, NeedsMeReason
+  UsageView, GitHubIssuesChange, ModelsChange, NeedsMeReason,
+  RepositoryAdd,
+  RepositoryChange,
 } from "./types";
 
 // TicketActions maps each human action on one Ticket to its request body
@@ -155,6 +158,10 @@ export interface Api {
   // trimmed, and needed as owner/name to turn CI Tracking on; Ignored
   // workflows are trimmed, with blanks and repeats dropped.
   setCITracking(project: string, ci: CITrackingChange): Promise<ProjectView>;
+  // setRepositoryCI sets the CI entry of a Repository other than the
+  // Home: Not watched, or its CI Provider and what it watches, which,
+  // while CI Tracking is on, must pass the CI Watcher's check.
+  setRepositoryCI(project: string, name: string, ci: RepositoryCIChange): Promise<ProjectView>;
   // setGitHubIssues sets the Project's GitHub Issues settings. The
   // repository and label are trimmed; turning it on needs a repository as
   // owner/name and a passing Issues check, and the first time creates the
@@ -187,6 +194,16 @@ export interface Api {
   addCIRule(project: string, rule: CIRuleChange): Promise<ProjectView>;
   editCIRule(project: string, spec: string, rule: CIRuleChange): Promise<ProjectView>;
   removeCIRule(project: string, spec: string): Promise<ProjectView>;
+  // addRepository adds a Repository at the end of the landing order, its
+  // Base main unless named; editRepository changes the named one's Clone
+  // URL, Base or local path, never its name, and never the Home
+  // Repository's; removeRepository removes one no unfinished Ticket has
+  // changed, never the Home Repository; setLandingOrder takes every
+  // Repository Name once, in the new order. Each refusal gives a fix.
+  addRepository(project: string, repository: RepositoryAdd): Promise<ProjectView>;
+  editRepository(project: string, name: string, change: RepositoryChange): Promise<ProjectView>;
+  removeRepository(project: string, name: string): Promise<ProjectView>;
+  setLandingOrder(project: string, names: string[]): Promise<ProjectView>;
   // unlink detaches a Spec's or Ticket's Link (ticket 42). It isn't a
   // TicketAction: its target, a Spec or a Ticket, goes in the body.
   unlink(project: string, target: string): Promise<LinkedRow>;

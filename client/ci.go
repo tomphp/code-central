@@ -14,6 +14,12 @@ func (c *Client) SetCITracking(ctx context.Context, key string, in core.SetCITra
 	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/set_ci_tracking", in, in.Full)
 }
 
+// SetRepositoryCI is the human's set_repository_ci: one Repository's CI
+// entry.
+func (c *Client) SetRepositoryCI(ctx context.Context, key string, in core.SetRepositoryCIInput) (core.Written[core.ProjectView], error) {
+	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/set_repository_ci", in, in.Full)
+}
+
 // ReportPushRemote is the Factory's report_push_remote.
 func (c *Client) ReportPushRemote(ctx context.Context, key string, in core.ReportPushRemoteInput) (core.Written[core.ProjectView], error) {
 	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/report_push_remote", in, in.Full)
