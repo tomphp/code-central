@@ -338,6 +338,8 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .ticket-body .claims > li { margin-bottom: 4px; }
 /* The latest Session Event, shown short and faintly. */
 .latest-event { color: var(--muted); }
+/* A Claim line's fields: it breaks between them, never inside one. */
+.claim-line .field { white-space: nowrap; }
 /* Changed Repositories (Spec code-central-848): name chips on a card and a
    Spec, and a Ticket's Repositories section, one row per Repository. */
 .repo-chips { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -447,7 +449,7 @@ a.link-badge:hover { text-decoration: underline; }
 .modal-card { background: var(--surface); width: min(40rem, 92vw); border-radius: 12px; padding: 18px 20px; box-shadow: 0 12px 40px rgb(0 0 0 / .25); }
 .modal-card:focus:not(:focus-visible) { outline: none; }
 .modal-card h2 { font-size: 16px; margin-bottom: 10px; }
-.modal-card textarea { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); resize: vertical; }
+.modal-card textarea { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); resize: vertical; }
 .modal-project { display: block; margin-bottom: 8px; }
 .modal-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
 .modal-actions .muted { flex: 1; }
