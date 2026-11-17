@@ -319,7 +319,7 @@ var writesOnAcme = map[string]func(f fixture) error{
 		return err
 	},
 	"set_github_issues": func(f fixture) error {
-		_, err := f.core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repository: "acme/web"})
+		_, err := f.core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}})
 		return err
 	},
 	"report_issue_watcher_status": func(f fixture) error {

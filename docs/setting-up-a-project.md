@@ -389,7 +389,7 @@ The last line is there when the failing commit is where a Ticket landed, such as
 **GitHub Issues** brings a GitHub repository's issues into Code Central, and writes the work's progress back to them. It is off on every Project until you turn it on, and Agents have no tool or command to change it. Turn it on in the **GitHub Issues** section of the same Project Options page, below CI:
 
 - **GitHub Issues**: on or off. Code Central uses your existing `gh` login and stores no GitHub token.
-- **GitHub repository**: the repository whose issues come in, as `owner/name`, such as `acme/acme-api`. GitHub Issues can't be on without one. Like CI's, it is filled in from a GitHub Push remote the Factory reported, with a note naming the URL; change it if your issues live in another repository.
+- **GitHub repository**: the repository whose issues come in, as `owner/name`, such as `acme/acme-api`; [list as many as you like](#listing-several-github-repositories). GitHub Issues can't be on without one. Like CI's, it is filled in from a GitHub Push remote the Factory reported, with a note naming the URL; change it if your issues live in another repository.
 - **Filter label**: one GitHub label, such as `code-central`. Only issues carrying it come in. Leave it empty to bring in every open issue.
 - **New issues need me**: off by default. When on, each new issue also shows in Needs Me and Focus Mode until you triage it.
 
@@ -433,6 +433,22 @@ On each check, the Issue Watcher also brings in the repository's open issues, th
 
 While an Incoming Issue waits for triage, it follows its issue on GitHub on each check. An edit to the issue's title or description changes the Incoming Issue's, recorded in its history as the integration's edit. An issue closed on GitHub shows in Needs Me as **Closed externally**, and reopening it takes it out again. An issue that is deleted shows there too, its panel saying it **was deleted**, and one transferred to another repository or that loses the filter label says it **left the Integration's query**. Its Ticket is never deleted: cancel it, mark it Done or unlink it. Once you change the repository, the Incoming Issues from the old one stay as they are.
 
+### Listing several GitHub repositories
+
+The **GitHub repository** setting is a list. Type an `owner/name` and choose **Add repository**, or choose one of the suggestions under the field: each of the Project's [Repositories](#several-repositories) whose Clone URL is on GitHub is offered as a one-click `Add acme/acme-web`, naming its Repository. Any `owner/name` may be listed, not only a Project's own repositories. Each repository you add passes the check above before Save accepts it, and a refusal names the repository and its fix. **Remove** takes a repository off the list; the Incoming Issues it brought in stay as they are.
+
+The filter label and **New issues need me** are one setting for every listed repository. Issues from every repository arrive on the one Issues Spec, which is titled `GitHub Issues` once more than one repository is listed (and `GitHub Issues: acme/acme-api` again with one), unless you renamed it. Each Incoming Issue's badge names its own repository.
+
+With several repositories, the section lists each with its own status, and the Issue Watcher checks and polls each on its own:
+
+```text
+acme/acme-api: Watching
+acme/acme-web: Error. gh can't read the repository acme/acme-web: gh: Not Found (HTTP 404)
+Check the repository is the owner/name GitHub shows, and that the account gh is logged in as can see it.
+```
+
+One failing repository doesn't stop the others: they keep arriving and being written to while it shows its own fix. You get one Notification when the Issue Watcher goes into an error, not another when a second repository fails while it is already in one. `gh` being missing or logged out is every repository's error.
+
 ### What Code Central writes to an issue
 
 Code Central works out from each Ticket's and Spec's state what its issue should show, and the Issue Watcher makes it so on its next check. Each linked issue carries one **status label**, which the Issue Watcher creates in the repository if it is missing, taking any other `code-central:` label off the issue:
@@ -450,6 +466,8 @@ As a Requirement from an issue goes on, the Issue Watcher posts each step on the
 - the Requirement's text as the spec Stage left it, once that Stage is Done;
 - each implementation Ticket as it lands, with its title and the commit that put it into the base, such as `Landed **Fix the login** (acme-api-21) in 4f1c2ab.`. A Ticket Accepted but not yet landed isn't posted, and under Merge + Push with CI Tracking a Ticket is Done only once it is on the remote and green;
 - once the Requirement is Finished, what landed, each Ticket with its commit, and the issue is closed as completed. If nothing landed, the issue is closed as not planned with no comment.
+
+When the Project has [several Repositories](#several-repositories), a Ticket's line gives one commit for each Repository it changed, in landing order: `owner/repo@sha` when the Repository's Clone URL is on GitHub and `Name@sha` otherwise, such as `Landed **Fix the login** (acme-api-21) in acme/acme-api@4f1c2ab, docs@9c0de31.`. The Finished comment then ends with the Requirement's Changed Repositories, such as `Changed Repositories: acme/acme-api, docs`. A Project with one Repository gets the comments above, unchanged.
 
 Each comment it posts ends with a link back to the Ticket or Requirement in Code Central, and is posted exactly once: not again after the Issue Watcher or the service restarts, even if it stopped between posting it and recording it, and not again after you turn GitHub Issues off and on. Anything that comes due while GitHub Issues is off is written once you turn it back on. Your Rounds and their answers, Failure Reports, Transcripts, Claims and comments on a Ticket are never written to GitHub. Unlinking a Ticket or a Requirement stops every write to its issue.
 

@@ -192,7 +192,7 @@ func TestATransferredIssueIsOutOfScope(t *testing.T) {
 // it is open again.
 func TestAnIssueThatLosesTheFilterLabelIsOutOfScopeUntilItHasItAgain(t *testing.T) {
 	w := newWatching(t)
-	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repository: "acme/web", Label: "Bug"}); err != nil {
+	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}, Label: "Bug"}); err != nil {
 		t.Fatal(err)
 	}
 	w.arrived("Bug", 1, 2)

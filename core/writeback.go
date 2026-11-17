@@ -199,15 +199,26 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s store.Spec) (w Issu
 		due(CommentSpec, bodyAt(s, doneMove(sp).Time))
 	}
 	slices.SortStableFunc(landed, func(a, b store.Ticket) int { return doneMove(a).Time.Compare(doneMove(b).Time) })
+	p, _ := r.Project(key)
 	var list []string
 	for _, t := range landed {
-		line := landedLine(key, t)
+		line := landedLine(p, t)
 		due(CommentLanded+DisplayID(key, t.Number), "Landed "+line+".")
 		list = append(list, "- "+line)
 	}
 	_, finishedSpec := summarise(tickets)
 	if finishedSpec && len(landed) > 0 {
-		due(CommentClosed, "Finished. What landed:\n\n"+strings.Join(list, "\n"))
+		text := "Finished. What landed:\n\n" + strings.Join(list, "\n")
+		if severalRepositories(p) {
+			var names []string
+			for _, name := range specRepositories(p, tickets) {
+				names = append(names, repositoryLabel(p, name))
+			}
+			if len(names) > 0 {
+				text += "\n\nChanged Repositories: " + strings.Join(names, ", ")
+			}
+		}
+		due(CommentClosed, text)
 	}
 	w.Label, w.Close = requirementStatus(finishedSpec, len(landed) > 0, stagesDone)
 	return dueWhile(s.Link.ExternalState, w)
@@ -269,13 +280,51 @@ func bodyAt(s store.Spec, at time.Time) string {
 }
 
 // landedLine is t, a Done implementation Ticket, as a write-back names
-// it: its title and ID, and its land commit if it has one.
-func landedLine(key string, t store.Ticket) string {
-	line := fmt.Sprintf("**%s** (%s)", t.Title, DisplayID(key, t.Number))
-	if commit := doneMove(t).Commit; commit != "" {
-		line += " in " + commit
+// it: its title and ID, and its land commit if it has one. With several
+// Repositories it gives one commit per Changed Repository that landed,
+// in landing order, each as repositoryLabel@commit.
+func landedLine(p store.Project, t store.Ticket) string {
+	line := fmt.Sprintf("**%s** (%s)", t.Title, DisplayID(p.Key, t.Number))
+	if !severalRepositories(p) {
+		if commit := doneMove(t).Commit; commit != "" {
+			line += " in " + commit
+		}
+		return line
+	}
+	changed := slices.Clone(changedRepositories(p.Key, t))
+	inLandingOrder(p, changed, repositoryName)
+	var commits []string
+	for _, r := range changed {
+		commit := ""
+		switch {
+		case r.Landed != nil:
+			commit = r.Landed.Commit
+		case r.Name == p.Key:
+			commit = doneMove(t).Commit
+		}
+		if commit != "" {
+			commits = append(commits, repositoryLabel(p, r.Name)+"@"+commit)
+		}
+	}
+	if len(commits) > 0 {
+		line += " in " + strings.Join(commits, ", ")
 	}
 	return line
+}
+
+// repositoryLabel names the Repository called name for an issue's
+// reader: owner/repo when its Clone URL is on GitHub, else its Repository
+// Name.
+func repositoryLabel(p store.Project, name string) string {
+	for _, rv := range repositoriesView(p) {
+		if rv.Name != name {
+			continue
+		}
+		if host, repository := codeHostOf(rv.CloneURL); host == CodeHostGitHub {
+			return repository
+		}
+	}
+	return name
 }
 
 // requirementContext is the context the human gave To Requirement for

@@ -22,7 +22,9 @@ func init() {
 		ok:    call{http: getIssueWatch("acme")},
 		check: func(t *testing.T, out map[string]any) {
 			field("project", "acme")(t, out)
-			field("repository", "acme/web")(t, out)
+			if got := toStrings(out["repositories"]); !slices.Equal(got, []string{"acme/web"}) {
+				t.Fatalf("repositories = %v, want acme/web", got)
+			}
 		},
 		bad:  call{http: getIssueWatch("nope")},
 		code: core.UnknownProject,
@@ -53,7 +55,7 @@ func reportIssueWatcherStatus(body string) httpCall {
 // filter label triage.
 func githubIssuesOn(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
-	httpOK(t, srv, setGitHubIssues(`{"on":true,"repository":"acme/web","label":"triage"}`))
+	httpOK(t, srv, setGitHubIssues(`{"on":true,"repositories":["acme/web"],"label":"triage"}`))
 }
 
 // issueWatcher checks the Issue Watcher's status in a Project's
@@ -73,7 +75,11 @@ func TestGetIssueWatchHasTheGitHubIssuesSettingsAndGHPath(t *testing.T) {
 	httpOK(t, srv, httpCall{"POST", "/api/set_options", `{"gh_path":` + strconv.Quote(gh) + `}`})
 
 	got := httpOK(t, srv, getIssueWatch("acme"))
-	want := map[string]any{"project": "acme", "on": true, "repository": "acme/web", "label": "triage", "gh_path": gh, "spec": "acme-4"}
+	want := map[string]any{"project": "acme", "on": true, "label": "triage", "gh_path": gh, "spec": "acme-4"}
+	if repos := toStrings(got["repositories"]); !slices.Equal(repos, []string{"acme/web"}) {
+		t.Fatalf("get_issue_watch repositories = %v, want acme/web", repos)
+	}
+	delete(got, "repositories")
 	noIncomingIssues(t, got)
 	if !mapsEqual(got, want) {
 		t.Fatalf("get_issue_watch = %v, want %v", got, want)
@@ -83,7 +89,11 @@ func TestGetIssueWatchHasTheGitHubIssuesSettingsAndGHPath(t *testing.T) {
 func TestGetIssueWatchSaysWhenGitHubIssuesIsOff(t *testing.T) {
 	srv := newServer(t)
 	got := httpOK(t, srv, getIssueWatch("acme"))
-	want := map[string]any{"project": "acme", "on": false, "repository": "", "label": "", "gh_path": ""}
+	want := map[string]any{"project": "acme", "on": false, "label": "", "gh_path": ""}
+	if repos := toStrings(got["repositories"]); len(repos) != 0 {
+		t.Fatalf("get_issue_watch repositories = %v, want none", repos)
+	}
+	delete(got, "repositories")
 	noIncomingIssues(t, got)
 	if !mapsEqual(got, want) {
 		t.Fatalf("get_issue_watch = %v, want %v", got, want)
@@ -171,7 +181,7 @@ func TestTheIssueWatchersStatusShowsInGitHubIssues(t *testing.T) {
 	}
 
 	// Turning GitHub Issues off forgets it.
-	httpOK(t, srv, setGitHubIssues(`{"on":false,"repository":"acme/web"}`))
+	httpOK(t, srv, setGitHubIssues(`{"on":false,"repositories":["acme/web"]}`))
 	issueWatcher(t, project(), "not_reported", "", "")
 }
 
@@ -188,6 +198,33 @@ func TestReportIssueWatcherStatusRefusesWhatIsntTheIssueWatchers(t *testing.T) {
 		`{"state":"error","problem":"crashed","message":"crashed"}`,
 		`{"state":"error","problem":"logged_out"}`,
 		`{"state":"error","message":"no","rate_limited_until":"2026-01-05T10:15:00Z"}`,
+	} {
+		status, b := httpDo(t, srv, reportIssueWatcherStatus(body))
+		if errorJSON(t, b, core.Invalid); status != httpapi.Status(core.Invalid) {
+			t.Fatalf("%s: status %d, want invalid", body, status)
+		}
+	}
+}
+
+// With several repositories listed, an error may name the listed
+// repositories it can't watch, each with its own fix; one that isn't
+// listed is refused, and the Watching report names none.
+func TestTheIssueWatchersErrorNamesTheListedRepositoriesItCantWatch(t *testing.T) {
+	srv := newServer(t)
+	httpOK(t, srv, setGitHubIssues(`{"on":true,"repositories":["acme/web","acme/api"]}`))
+	project := func() map[string]any { return httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}) }
+
+	httpOK(t, srv, reportIssueWatcherStatus(`{"state":"error","problem":"no_triage","message":"acme/api: no triage","fix":"acme/api: grant it","repositories":[`+
+		`{"repository":"acme/api","problem":"no_triage","message":"no triage","fix":"grant it"}]}`))
+	w := project()["github_issues"].(map[string]any)["watcher"].(map[string]any)
+	repos, _ := w["repositories"].([]any)
+	if len(repos) != 1 || repos[0].(map[string]any)["repository"] != "acme/api" || repos[0].(map[string]any)["fix"] != "grant it" {
+		t.Fatalf("github_issues.watcher = %v, want acme/api's problem and fix", w)
+	}
+
+	for _, body := range []string{
+		`{"state":"error","message":"no","repositories":[{"repository":"acme/other","message":"no"}]}`,
+		`{"state":"watching","repositories":[{"repository":"acme/api","message":"no"}]}`,
 	} {
 		status, b := httpDo(t, srv, reportIssueWatcherStatus(body))
 		if errorJSON(t, b, core.Invalid); status != httpapi.Status(core.Invalid) {

@@ -50,6 +50,11 @@ type watcherKind struct {
 	// refused as not a problem of watches, such as CI.
 	problems []WatcherProblem
 	watches  string
+	// watched are the names of what it watches, one by one, that a
+	// per-Repository problem may name: the Project's Repository Names
+	// unless set, as the Issue Watcher's repositories are GitHub's
+	// owner/name.
+	watched func(store.Project) []string
 }
 
 // watcherKinds is every kind of Watcher.
@@ -59,7 +64,7 @@ var watcherKinds = map[WatcherKind]watcherKind{
 			ProblemProjectUnreadable, ProblemPATScope, ProblemCheckFailed}, watches: "CI"},
 	WatcherIssues: {name: "Issue Watcher", setting: "GitHub Issues", on: func(p store.Project) bool { return p.GitHubIssues.On },
 		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemIssuesDisabled, ProblemNoTriage, ProblemCheckFailed},
-		watches:  "GitHub Issues"},
+		watches:  "GitHub Issues", watched: func(p store.Project) []string { return p.GitHubIssues.Repositories }},
 	WatcherPullRequests: {name: "Pull Request Watcher", setting: "Pull Request", on: func(p store.Project) bool { return landingPolicyOf(p).RunsPullRequestWatcher() },
 		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemNoWrite, ProblemPATMissing, ProblemPATRejected,
 			ProblemPATScope, ProblemCheckFailed}, watches: "pull requests"},
@@ -342,10 +347,13 @@ func (c *Core) reportWatcherStatus(kind WatcherKind, key string, in ReportWatche
 		if !k.on(p) {
 			return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is off on %s, so it has no %s", k.setting, key, k.name)}
 		}
-		names := repositoryNames(p.RepositoryList())
+		names, what := repositoryNames(p.RepositoryList()), "Repositories"
+		if k.watched != nil {
+			names, what = k.watched(p), k.setting+" repositories"
+		}
 		for i, rp := range next.Repositories {
 			if !slices.Contains(names, rp.Repository) {
-				return invalid(fmt.Sprintf("repositories[%d].repository", i), "%q is not one of %s's Repositories, which are %s", rp.Repository, key, strings.Join(names, ", "))
+				return invalid(fmt.Sprintf("repositories[%d].repository", i), "%q is not one of %s's %s, which are %s", rp.Repository, key, what, strings.Join(names, ", "))
 			}
 		}
 		// The store's read lock keeps the setting from being turned off

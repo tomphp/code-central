@@ -16,10 +16,14 @@ export function WatcherStatus({
   name,
   repository,
   watcher,
+  inRows = false,
 }: {
   name: string;
   repository: string;
   watcher: CIWatcherStatus | IssueWatcherStatus | PullRequestWatcherStatus;
+  // inRows is set where the section shows each failing repository in its
+  // own row, so the status doesn't list them again.
+  inRows?: boolean;
 }) {
   // A Watcher of several Repositories names each one it can't watch
   // (Spec code-central-848).
@@ -71,19 +75,21 @@ export function WatcherStatus({
             carries on watching the others, tries again every 2 minutes, and goes back to Watching once each cause is
             fixed.
           </p>
-          <ul aria-label="Failing Repositories">
-            {repositories.map((r) => (
-              <li key={r.repository} aria-label={r.repository}>
-                <span className="repo-name">{r.repository}</span>: {r.message}
-                {r.fix && (
-                  <>
-                    <br />
-                    {r.fix}
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
+          {!inRows && (
+            <ul aria-label="Failing Repositories">
+              {repositories.map((r) => (
+                <li key={r.repository} aria-label={r.repository}>
+                  <span className="repo-name">{r.repository}</span>: {r.message}
+                  {r.fix && (
+                    <>
+                      <br />
+                      {r.fix}
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </section>

@@ -205,7 +205,7 @@ func TestEveryPageOfOpenIssuesArrives(t *testing.T) {
 // With a filter label, only the issues GitHub lists with it arrive.
 func TestWithAFilterLabelOnlyLabelledIssuesArrive(t *testing.T) {
 	w := newWatching(t)
-	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repository: "acme/web", Label: "good first issue"}); err != nil {
+	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}, Label: "good first issue"}); err != nil {
 		t.Fatal(err)
 	}
 	w.openIssues("", 1, openIssue(1), openIssue(2))
@@ -240,7 +240,7 @@ func TestTurningGitHubIssuesOffAndOnCreatesNoDuplicates(t *testing.T) {
 	w.start(w.h.Bin)
 	w.status(core.WatcherWatching)
 	for _, on := range []bool{false, true} {
-		if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: on, Repository: "acme/web"}); err != nil {
+		if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: on, Repositories: []string{"acme/web"}}); err != nil {
 			t.Fatal(err)
 		}
 		w.polled()

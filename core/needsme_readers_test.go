@@ -247,7 +247,7 @@ func (f fixture) incomingIssue(t *testing.T, spec, n int) {
 	t.Helper()
 	err := f.store.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
-		p.GitHubIssues = store.GitHubIssues{On: true, Repository: "acme/web", NewIssuesNeedMe: true, Spec: spec}
+		p.GitHubIssues = store.GitHubIssues{On: true, Repositories: []string{"acme/web"}, NewIssuesNeedMe: true, Spec: spec}
 		return w.PutProject(p)
 	})
 	if err == nil {

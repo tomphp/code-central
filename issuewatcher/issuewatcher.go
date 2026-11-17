@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/tomoram/code-central/core"
@@ -26,7 +27,7 @@ const Command = "issue-watcher"
 // CheckArgs are the arguments that run program's Issue Watcher in its
 // check mode for in, after the program itself.
 func CheckArgs(in core.IssuesCheckInput) []string {
-	args := []string{Command, "--check", "--repository", in.Repository}
+	args := []string{Command, "--check", "--repositories", strings.Join(in.Repositories, ",")}
 	if in.GHPath != "" {
 		args = append(args, "--gh-path", in.GHPath)
 	}
@@ -42,13 +43,34 @@ func Checker(program string, environ []string) core.IssuesCheck {
 	}
 }
 
-// Check is the check mode: whether the Issue Watcher can work in's
-// repository's issues. It passes when gh is found, is logged in, can read
-// the repository, the repository has issues on, and gh's login has at
-// least triage permission there, which labelling and closing issues need.
-// Being rate-limited fails the check, as there is no knowing yet.
+// Check is the check mode: whether the Issue Watcher can work each of
+// in's repositories' issues. A repository passes when gh is found, is
+// logged in, can read it, it has issues on, and gh's login has at least
+// triage permission there, which labelling and closing issues need. Being
+// rate-limited fails the check, as there is no knowing yet. With several
+// repositories, each failing one is answered with its own problem, and
+// gh being missing or logged out answers for them all.
 func Check(ctx context.Context, in core.IssuesCheckInput, env gh.Env) core.WatcherCheckResult {
-	_, r, err := checkAccess(ctx, in, env)
+	var ps []core.RepositoryProblem
+	for _, repository := range in.Repositories {
+		r := checkOne(ctx, repository, in.GHPath, env)
+		if r.Problem == "" {
+			continue
+		}
+		if len(in.Repositories) == 1 || r.Problem == core.ProblemGHMissing || r.Problem == core.ProblemLoggedOut {
+			return r
+		}
+		ps = append(ps, core.RepositoryProblem{Repository: repository, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
+	}
+	if len(ps) == 0 {
+		return core.WatcherCheckResult{}
+	}
+	return core.SumRepositoryProblems(ps)
+}
+
+// checkOne is Check for one repository.
+func checkOne(ctx context.Context, repository, ghPath string, env gh.Env) core.WatcherCheckResult {
+	_, r, err := checkAccess(ctx, repository, ghPath, env)
 	var limit *watchers.RateLimitError
 	if errors.As(err, &limit) {
 		r = limit.CheckResult(time.Now())
@@ -65,16 +87,16 @@ type access struct {
 
 // checkAccess is Check, as each poll runs it too, with what it found:
 // GitHub rate-limiting a call is a *watchers.RateLimitError, not a problem.
-func checkAccess(ctx context.Context, in core.IssuesCheckInput, env gh.Env) (a access, r core.WatcherCheckResult, err error) {
-	prog, missing := gh.Find(in.GHPath, env)
+func checkAccess(ctx context.Context, repository, ghPath string, env gh.Env) (a access, r core.WatcherCheckResult, err error) {
+	prog, missing := gh.Find(ghPath, env)
 	if missing != nil {
 		return access{}, *missing, nil
 	}
-	a = access{prog: prog, repository: in.Repository}
+	a = access{prog: prog, repository: repository}
 	r, err = gh.CheckLogin(ctx, env, prog)
 	if r.Problem == "" && err == nil {
 		var name string
-		name, r, err = checkRepository(ctx, env, prog, in.Repository)
+		name, r, err = checkRepository(ctx, env, prog, repository)
 		if name != "" {
 			a.repository = name
 		}

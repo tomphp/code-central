@@ -410,7 +410,7 @@ func (f *fixture) issueWatcher(key string, in core.ReportWatcherStatusInput) {
 	f.t.Helper()
 	p := must(f.t)(f.core.GetProject(ctx, key)).(core.ProjectView)
 	if !p.GitHubIssues.On {
-		must(f.t)(f.core.SetGitHubIssues(core.WithActor(ctx, core.Human), key, core.SetGitHubIssuesInput{On: true, Repository: "acme/web"}))
+		must(f.t)(f.core.SetGitHubIssues(core.WithActor(ctx, core.Human), key, core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}}))
 	}
 	must(f.t)(f.core.ReportIssueWatcherStatus(core.WithActor(ctx, core.Integration), key, in))
 }
