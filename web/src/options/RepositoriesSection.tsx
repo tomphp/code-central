@@ -128,6 +128,9 @@ function RepositoryRow({
 }) {
   const [error, setError] = useState<ApiError>();
   const id = useId();
+  // localOnly is a Repository with no Clone URL: never cloned or pushed. The
+  // Home Repository's is only not reported yet.
+  const localOnly = !r.home && r.clone_url === "";
   const act = (action: () => Promise<unknown>) => () => {
     setError(undefined);
     action().catch(setError);
@@ -149,10 +152,12 @@ function RepositoryRow({
         <dt>Clone URL</dt>
         <dd>
           {r.clone_url ||
-            (r.home ? "Not reported yet: start the Factory once and it reports its Push remote." : "")}
+            (r.home
+              ? "Not reported yet: start the Factory once and it reports its Push remote."
+              : "None: local only, never pushed")}
         </dd>
         <dt>Code Host</dt>
-        <dd>{CODE_HOST_LABEL[r.code_host]}</dd>
+        <dd>{localOnly ? "" : CODE_HOST_LABEL[r.code_host]}</dd>
         <dt>Base</dt>
         <dd>
           {r.base}
@@ -266,7 +271,7 @@ function RepositoryForm(props: {
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     setError(undefined);
-    save(ciChoice && !watchCI ? { ...draft, ci: { not_watched: true } } : draft).then(
+    save(showCIChoice && !watchCI ? { ...draft, ci: { not_watched: true } } : draft).then(
       () => {
         if (clearOnSave) {
           setDraft(initial);
@@ -280,7 +285,10 @@ function RepositoryForm(props: {
     error?.field === field
       ? { "aria-invalid": true, "aria-describedby": `${id}-error` }
       : undefined;
-  const filled = draft.name.trim() !== "" && draft.clone_url.trim() !== "";
+  const hasCloneURL = draft.clone_url.trim() !== "";
+  const filled = draft.name.trim() !== "" && (hasCloneURL || draft.local_path.trim() !== "");
+  // A Repository with no Clone URL is never watched, so there is nothing to choose.
+  const showCIChoice = ciChoice && hasCloneURL;
 
   return (
     <form aria-label={label} className="project-options-repository-form" onSubmit={onSubmit}>
@@ -299,11 +307,16 @@ function RepositoryForm(props: {
           />
         </Field>
       )}
-      <Field label="Clone URL">
+      <Field
+        label="Clone URL"
+        hintId={`${id}-clone-url`}
+        hint="Leave empty for a local-only repository: give its local path. It is never cloned or pushed."
+      >
         <input
           value={draft.clone_url}
           placeholder="git@github.com:acme/web.git"
           onChange={(e) => edit({ clone_url: e.target.value })}
+          aria-describedby={`${id}-clone-url`}
           {...invalid("clone_url")}
         />
       </Field>
@@ -326,7 +339,7 @@ function RepositoryForm(props: {
           {...invalid("local_path")}
         />
       </Field>
-      {ciChoice && (
+      {showCIChoice && (
         <label className="project-options-check">
           <input
             type="checkbox"

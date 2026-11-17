@@ -134,10 +134,11 @@ export interface CIRuleChange {
 }
 
 // A Repository as the human adds it: base is main and local_path beside
-// the Home Repository when left empty.
+// the Home Repository when left empty. It needs a clone_url or a local_path;
+// with no clone_url it is local-only, never cloned or pushed.
 export interface RepositoryAdd {
   name: string;
-  clone_url: string;
+  clone_url?: string;
   base?: string;
   local_path?: string;
   // ci is its CI entry; left out, it is filled in from the Clone URL.
@@ -155,8 +156,9 @@ export interface RepositoryCIChange {
   project_url?: string;
 }
 
-// A change to a Repository: each field left out keeps its value, and an
-// empty local_path puts the clone back beside the Home Repository.
+// A change to a Repository: each field left out keeps its value, an empty
+// local_path puts the clone back beside the Home Repository and an empty
+// clone_url clears it, making the Repository local-only.
 export interface RepositoryChange {
   clone_url?: string;
   base?: string;
