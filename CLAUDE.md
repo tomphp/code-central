@@ -24,6 +24,10 @@ To run the UI and look at a change: see `docs/agents/running-the-ui.md`.
 
 To learn a Go API, read `go doc ./<pkg> <Name>` before the source.
 
+## Editing
+
+Change a file with Read (`offset` and `limit`) then Edit; a hook refuses `sed -i` and a python or perl replace on one file.
+
 ## Checks
 
 While working, run `make typecheck` (after changing a Go wire type, `make wiretypes` regenerates the UI's types) `make lint F=<file>` (ESLint on one file, or all of `web/`) and `make vitest F=<file>` (they install web dependencies first in a fresh worktree); `make vitest-stress F=<file>` repeats one file under load to show a flake (`N=`, `LOAD=`); run `make test` once at the end (it prints only what failed, and on a failure keeps the whole output in `$TMPDIR/code-central-test-<worktree>-<hash>.log` and prints its path last, so read that file rather than rerunning; `make test-verbose` prints everything). `make ci-failures RUN=<id>` shows what failed in a CI run.
