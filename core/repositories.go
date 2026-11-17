@@ -88,19 +88,21 @@ func repositoryNames(rs []store.Repository) []string {
 	return names
 }
 
-// AddRepositoryInput is the human's add_repository(name, clone_url,
-// base?, local_path?, full?).
+// AddRepositoryInput is the human's add_repository(name, clone_url?,
+// base?, local_path?, full?): it needs clone_url, local_path or both.
 type AddRepositoryInput struct {
 	// Name is the Repository Name, fixed once added.
-	Name     string `json:"name"`
-	CloneURL string `json:"clone_url"`
+	Name string `json:"name"`
+	// CloneURL left out makes the Repository local-only: the Factory
+	// never clones or pushes it, and adopts the clone at LocalPath.
+	CloneURL string `json:"clone_url,omitempty"`
 	// Base is main when left out.
 	Base string `json:"base,omitempty"`
 	// LocalPath is an absolute path to an existing clone; left out, the
 	// Factory clones it beside the Home Repository.
 	LocalPath string `json:"local_path,omitempty"`
 	// CI is the Repository's CI entry; left out, it is filled in from the
-	// Clone URL, Not watched for a host no CI Provider is on.
+	// Clone URL, Not watched for none or a host no CI Provider is on.
 	CI *RepositoryCI `json:"ci,omitempty"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
@@ -110,11 +112,12 @@ type AddRepositoryInput struct {
 // base?, local_path?, full?): each field left out keeps its value. The
 // name only finds the Repository: a Repository Name never changes.
 type EditRepositoryInput struct {
-	Name     string  `json:"name"`
+	Name string `json:"name"`
+	// CloneURL, set empty, clears it, making the Repository local-only.
 	CloneURL *string `json:"clone_url,omitempty"`
 	Base     *string `json:"base,omitempty"`
 	// LocalPath, set empty, puts the clone back beside the Home
-	// Repository.
+	// Repository. A Repository keeps a Clone URL or a local path.
 	LocalPath *string `json:"local_path,omitempty"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
@@ -306,12 +309,13 @@ func (c *Core) SetLandingOrder(ctx context.Context, key string, in SetLandingOrd
 }
 
 // checkRepositoryFields refuses a Repository whose Clone URL, Base or
-// local path can't be one, with how to put it right.
+// local path can't be one, with how to put it right. It needs a Clone
+// URL, a local path or both: with no Clone URL it is local-only.
 func checkRepositoryFields(r store.Repository) error {
 	switch {
-	case r.CloneURL == "":
-		return &Error{Code: Invalid, Field: "clone_url", Message: "a Repository needs the Clone URL it's cloned from and pushed to",
-			Fix: "give the URL you'd pass to git clone, such as git@github.com:acme/web.git"}
+	case r.CloneURL == "" && r.LocalPath == "":
+		return &Error{Code: Invalid, Field: "clone_url", Message: "a Repository needs a Clone URL to clone from, or the local path of a clone it already has",
+			Fix: "give its Clone URL, such as git@github.com:acme/web.git, or the local path of its clone, such as /home/you/src/web"}
 	case strings.ContainsFunc(r.CloneURL, unicode.IsSpace):
 		return &Error{Code: Invalid, Field: "clone_url", Message: fmt.Sprintf("%s isn't a Clone URL: it holds a space", quote(r.CloneURL)),
 			Fix: "give the URL you'd pass to git clone, such as git@github.com:acme/web.git"}
@@ -332,6 +336,8 @@ func checkRepositoryFields(r store.Repository) error {
 // refuseListed refuses r when another Repository has its Clone URL, as
 // normalised, or its local path. The Home Repository's Clone URL is the
 // reported Push remote URL, so it can clash only once that is reported.
+// An empty Clone URL clashes with none, so local-only Repositories sit
+// side by side.
 func refuseListed(p store.Project, r store.Repository) error {
 	for _, o := range p.RepositoryList() {
 		if o.Name == r.Name {
@@ -341,7 +347,7 @@ func refuseListed(p store.Project, r store.Repository) error {
 		if o.Home {
 			url = p.CI.PushRemoteURL
 		}
-		if url != "" && NormalCloneURL(url) == NormalCloneURL(r.CloneURL) {
+		if url != "" && r.CloneURL != "" && NormalCloneURL(url) == NormalCloneURL(r.CloneURL) {
 			return &Error{Code: Invalid, Field: "clone_url", Message: fmt.Sprintf("%s is already listed as Repository %s, at %s", r.CloneURL, o.Name, url),
 				Fix: "a repository is listed once: edit " + o.Name + " instead, or give this one's own Clone URL"}
 		}

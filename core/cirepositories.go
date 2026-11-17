@@ -33,7 +33,8 @@ func ciEntryOf(p store.Project, name string) (entry store.CIRepository, ok bool)
 
 // ciEntryFromCloneURL is the CI entry a Repository's Clone URL fills in:
 // GitHub Actions on a GitHub repository, Azure Pipelines on the Azure
-// DevOps project of an Azure Repos one, or Not watched for any other.
+// DevOps project of an Azure Repos one, or Not watched for any other,
+// and for none, a local-only Repository's.
 func ciEntryFromCloneURL(name, url string) store.CIRepository {
 	switch host, repo := codeHostOf(url); host {
 	case CodeHostGitHub:
