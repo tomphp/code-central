@@ -87,6 +87,9 @@ export interface Driver {
   postChatEvents(key: string, factory: string, conversation: string, texts: string[], outcome?: "done" | "stopped" | "failed"): Promise<void>; // no outcome leaves the reply running
   // absolutePath is a path absolute where Core runs.
   readonly absolutePath: string;
+  // canReachAzureDevOps is whether the Azure Boards check can pass where
+  // Core runs: the real service has no PAT and no Azure DevOps to ask.
+  readonly canReachAzureDevOps: boolean;
   // reportPushRemote reports the Push remote's URL as a Factory does when
   // it starts (code-central-251).
   reportPushRemote(key: string, url: string): Promise<void>;
@@ -156,6 +159,7 @@ export interface Connection {
   // absolutePath is a path absolute where Core runs: a WASM Core judges
   // paths as Unix does, whatever the host.
   absolutePath: string;
+  canReachAzureDevOps: boolean;
   // settle resolves once what an operation set off is done: the Driver
   // awaits it after each write it makes and each control it calls.
   settle(): Promise<void>;
@@ -195,6 +199,7 @@ export function worldConnection(w: World, settle = () => w.settled()): Connectio
     letGHWrite: async () => w.setPullRequestCheck(),
     dropTranscriptStreams: () => w.dropStreams(),
     absolutePath: "/opt/tools/gh",
+    canReachAzureDevOps: true,
     settle,
     close: async () => w.drop(),
   };
@@ -398,6 +403,9 @@ export class HttpDriver implements Driver {
   };
   get absolutePath(): string {
     return this.c.absolutePath;
+  }
+  get canReachAzureDevOps(): boolean {
+    return this.c.canReachAzureDevOps;
   }
   close: Driver["close"] = () => this.c.close();
 }

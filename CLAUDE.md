@@ -43,3 +43,7 @@ The guides in `docs/` and the README show real commands and output. When a chang
 ## Commits
 
 Commit messages are [Conventional Commits](https://www.conventionalcommits.org/), as `cog.toml` defines them, and the type sets the next release (ADR 0014): `feat` bumps the minor version, `fix` and `perf` the patch, and `!` or a `BREAKING CHANGE:` footer the major; `docs`, `test`, `refactor`, `build`, `ci`, `chore`, `style` and `revert` release nothing. For example, `feat(factory): push the base after merging (code-central-177)`.
+
+## When Making UI Changes
+
+Make sure e2e tests still pass.

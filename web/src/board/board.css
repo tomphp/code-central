@@ -14,7 +14,7 @@
 .board-columns-menu[hidden] { display: none; }
 .view-head .board-columns-menu label { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 5px; cursor: pointer; font-size: 13px; }
 .board-columns-menu label:hover { background: var(--surface-2); }
-.board-swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--st); flex: none; }
+.board-swatch { width: 11px; height: 11px; border-radius: 50%; box-sizing: border-box; border: 3px solid var(--st); background: var(--surface); flex: none; }
 
 /* A brief note under the header, as Focus Mode's. */
 .board-note { margin: 8px auto 0; padding: 6px 14px; border-radius: 6px; background: var(--border); color: var(--muted); font-size: 16px; }
@@ -22,19 +22,21 @@
 .board-grid { padding: 0 16px 24px; min-width: min-content; }
 .board-heads, .board-cells { display: grid; grid-template-columns: repeat(var(--cols), minmax(165px, 1fr)); column-gap: 8px; }
 .board-heads { position: sticky; top: 0; z-index: 2; background: var(--bg); }
-.board-col-head { margin: 0; background: var(--bg); display: flex; align-items: center; gap: 8px; padding: 12px 8px 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; border-bottom: 3px solid var(--st); }
+.board-col-head { margin: 0; background: var(--bg); display: flex; align-items: center; gap: 8px; padding: 14px 8px 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; border-bottom: 5px solid var(--st); }
+.board-col-head .count { font-family: var(--mono); }
 .board-col-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .board-cell { display: flex; flex-direction: column; gap: 6px; padding: 8px 4px; min-width: 0; min-height: 60vh; border-radius: 0 0 8px 8px; background: color-mix(in srgb, var(--surface-2) 55%, transparent); }
 .board-empty { color: var(--muted); font-size: 12px; text-align: center; margin: 16px 0; }
 
 /* Cards: a needs-you card has a left border in its reason's colour. */
-.board-card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--border); border-radius: 6px; color: var(--text); text-decoration: none; min-width: 0; }
+/* Cards: a needs-you card is ringed in its reason's colour. */
+.board-card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); text-decoration: none; min-width: 0; transition: border-color 120ms ease-out; }
 .board-card:hover { border-color: var(--muted); }
-.board-card.needs { border-left-color: var(--rc); }
+.board-card.needs { border-color: var(--rc); box-shadow: 0 0 0 1px var(--rc); }
 .board-card-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; row-gap: 3px; min-width: 0; }
 .board-card .tid { flex: none; }
 .board-spacer { flex: 1; }
-.board-blocked { font-size: 11px; color: var(--r-blocked); white-space: nowrap; flex: none; }
+.board-blocked { font-size: 11px; color: color-mix(in srgb, var(--r-blocked) 55%, var(--text)); white-space: nowrap; flex: none; }
 .board-card-title { font-weight: 500; min-width: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.35; }
 .board-card-spec { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .board-card-spec .kind-badge { font-size: 9.5px; padding: 0 4px; }
@@ -46,7 +48,7 @@
 .board-lane { margin-top: 10px; }
 .board-lane.collapsed { margin-top: 0; }
 .lane-header { background: var(--surface); border-top: 1px solid var(--border); }
-.lane-header.needs { border-left: 3px solid color-mix(in srgb, var(--r-answer) 55%, transparent); }
+.lane-header.needs { background: color-mix(in srgb, var(--r-answer) 9%, var(--surface)); }
 .lane-header-line { position: sticky; left: 0; max-width: calc(100vw - 48px); display: flex; align-items: center; }
 .lane-header .chev { margin: 0 0 0 6px; }
 .lane-header-link { flex: 1; min-width: 0; display: flex; gap: 8px; align-items: center; padding: 8px 10px 8px 6px; border-left: 3px solid transparent; color: var(--text); text-decoration: none; }

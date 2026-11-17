@@ -9,12 +9,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/ciwatcher/ciwatchertest"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/issuewatcher"
+	"github.com/tomoram/code-central/watchers/watchertest"
 )
 
 // GitHub Issues from several repositories (code-central-858): the one
@@ -24,7 +24,7 @@ import (
 
 // repositoryOf scripts GitHub's answer to reading name, a repository gh
 // can triage.
-func repositoryOf(h *ciwatchertest.Harness, name string) {
+func repositoryOf(h *watchertest.Harness, name string) {
 	h.Answer(fakegh.Answer{Args: []string{"api", "repos/" + name},
 		Stdout: `{"full_name":"` + name + `","has_issues":true,"permissions":` + triage + `}`})
 }
@@ -142,7 +142,7 @@ func TestOneFailingRepositoryShowsItsOwnErrorWhileTheOthersKeepWatching(t *testi
 // Each repository is checked on its own by check mode, and each failing
 // one is answered with its own problem.
 func TestCheckModeAnswersPerRepository(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	repository(h, true, triage)
 	h.Unreadable("acme/api")
 	repositoryOf(h, "acme/site")

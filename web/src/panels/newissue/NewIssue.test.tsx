@@ -128,6 +128,53 @@ describe("Won't fix on a New issue", () => {
     expect(within(p).queryByRole("form", { name: "Won't fix" })).toBeNull();
     expect(x.w.calls).not.toContain("wont_fix");
   });
+
+  it("says it closes the GitHub issue as not planned", async () => {
+    const p = await renderPanel(await world());
+    await userEvent.click(within(p).getByRole("button", { name: "Won't fix…" }));
+    expect(within(p).getByRole("form", { name: "Won't fix" })).toHaveTextContent("closes the issue on GitHub as not planned");
+  });
+});
+
+// boardsWorld has Azure Boards on for acme, its Azure Boards Spec, with
+// New issues need me on, and work item 4512 come in.
+async function boardsWorld() {
+  const w = await newWorld();
+  const s = scenario(w);
+  await s.createProject("acme", "Acme");
+  const on = await w.api.setAzureBoards("acme", {
+    on: true,
+    mode: "saved_query",
+    query_url: "https://dev.azure.com/contoso/web/_queries/query/6b4a0c1e-9f1d-4a51-8f43-2a7d3c1b9e10",
+    project_url: "",
+    where: "",
+    pat_env: "",
+    new_issues_need_me: true,
+  });
+  const issue = await s.incomingIssue("acme", on.azure_boards.spec!, "Login is broken", {
+    integration: "azure-boards",
+    id: "contoso#4512",
+    url: "https://dev.azure.com/contoso/web/_workitems/edit/4512",
+  });
+  return { w, s, issue };
+}
+
+describe("a New issue from Azure Boards", () => {
+  it("names Azure Boards and adds nothing to the work item on Keep as Draft", async () => {
+    const p = await renderPanel(await boardsWorld());
+    expect(p).toHaveTextContent("came in from Azure Boards");
+    expect(p).toHaveTextContent("adds nothing to the work item in Azure Boards");
+    expect(p).not.toHaveTextContent("GitHub");
+  });
+
+  it("says Won't fix leaves the work item's State for the human", async () => {
+    const p = await renderPanel(await boardsWorld());
+    await userEvent.click(within(p).getByRole("button", { name: "Won't fix…" }));
+    const form = within(p).getByRole("form", { name: "Won't fix" });
+    expect(form).toHaveTextContent("code-central:wont-fix");
+    expect(form).toHaveTextContent("leaves the work item's State as it is");
+    expect(form).not.toHaveTextContent("closes");
+  });
 });
 
 // toRequirement opens To Requirement's context box in within, types

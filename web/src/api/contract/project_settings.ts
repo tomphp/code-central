@@ -138,6 +138,51 @@ export function projectSettingsContract(driver: () => Driver) {
     expect((await d.api.listProjects())[0].github_issues).toEqual(kept.github_issues);
   });
 
+  it("sets a Project's Azure Boards settings, off by default, keeping each mode's, with the Azure Boards Spec made once", async () => {
+    await d.createProject("acme", "Acme");
+    const off = {
+      on: false, mode: "saved_query" as const, query_url: "", project_url: "", where: "", pat_env: "ADO_PAT", new_issues_need_me: false,
+      watcher: { state: "not_reported" as const },
+    };
+    expect((await d.api.listProjects())[0].azure_boards).toEqual(off);
+
+    const none = await d.api.setAzureBoards("acme", { ...off, on: true }).catch((e) => e);
+    expect(none).toMatchObject({ status: 422, code: "invalid", field: "query_url" });
+    const select = await d.api
+      .setAzureBoards("acme", { ...off, mode: "wiql", project_url: "https://dev.azure.com/contoso/web", where: "SELECT [System.Id] FROM workitems" })
+      .catch((e) => e);
+    expect(select).toMatchObject({ status: 422, code: "invalid", field: "where" });
+
+    const query = "https://dev.azure.com/contoso/web/_queries/query/6b4a0c1e-9f1d-4a51-8f43-2a7d3c1b9e10";
+    if (!d.canReachAzureDevOps) {
+      // The check refuses turning it on without a PAT, and the Project is left as it was.
+      const refused = await d.api.setAzureBoards("acme", { ...off, on: true, query_url: query }).catch((e) => e);
+      expect(refused).toMatchObject({ status: 422, code: "invalid", field: "on" });
+      expect(refused.message).toContain("ADO_PAT");
+      expect((await d.api.listProjects())[0].azure_boards).toEqual(off);
+      return;
+    }
+    const on =await d.api.setAzureBoards("acme", {
+      ...off, on: true, query_url: ` ${query}/ `, project_url: "https://dev.azure.com/contoso/api/_boards", where: " [System.State] = 'Approved' ",
+    });
+    expect(on.azure_boards).toEqual({
+      ...off, on: true, query_url: query, project_url: "https://dev.azure.com/contoso/api", where: "[System.State] = 'Approved'", spec: expect.stringMatching(/^acme-\d+$/),
+    });
+    const spec = on.azure_boards.spec!;
+    const s = await d.api.getSpec("acme", spec);
+    expect(s.title).toBe("Azure Boards: contoso/web");
+    expect(s.labels).toEqual(["long-lived"]);
+    expect(s.link).toBeUndefined();
+
+    // Switching mode keeps the Saved query's URL, and the title follows
+    // the WIQL filter's project; off and on again reuses the Spec.
+    const wiql = await d.api.setAzureBoards("acme", { ...on.azure_boards, mode: "wiql" });
+    expect(wiql.azure_boards).toEqual({ ...on.azure_boards, mode: "wiql" });
+    expect((await d.api.getSpec("acme", spec)).title).toBe("Azure Boards: contoso/api");
+    await d.api.setAzureBoards("acme", { ...wiql.azure_boards, on: false });
+    expect((await d.api.setAzureBoards("acme", wiql.azure_boards)).azure_boards.spec).toBe(spec);
+  });
+
   it("sets a Project's Subagent Exploration, on to begin with", async () => {
     await d.createProject("acme", "Acme");
     expect((await d.api.listProjects())[0].stage_guides).toEqual({ subagent_exploration: true, model_assignment: false });

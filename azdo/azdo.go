@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tomoram/code-central/watchers"
+	"github.com/tomoram/code-central/ratelimit"
 )
 
 // APIVersion is the REST API version every call pins.
@@ -65,6 +65,21 @@ func New(environ []string, patEnv, projectURL string, httpClient *http.Client) (
 	hc := *httpClient
 	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	return &Client{projectURL: u, pat: pat, http: &hc, baseURL: u}, nil
+}
+
+// PATMissingFix is how to give the service the PAT variable name on goos,
+// a PAT with scope, such as Build: Read & execute, then restart it.
+func PATMissingFix(goos, name, scope string) string {
+	var how string
+	switch goos {
+	case "darwin":
+		how = fmt.Sprintf("run `launchctl setenv %s <PAT>`", name)
+	case "windows":
+		how = fmt.Sprintf("set %s as a user environment variable", name)
+	default:
+		how = fmt.Sprintf("run `systemctl --user set-environment %s=<PAT>`, or put %s=<PAT> in a file under ~/.config/environment.d/", name, name)
+	}
+	return fmt.Sprintf("Make an Azure DevOps PAT with %s, %s, then restart the Code Central service.", scope, how)
 }
 
 func getenv(environ []string, key string) string {
@@ -193,10 +208,18 @@ func (c *Client) Retry(ctx context.Context, buildID int) error {
 // do calls method on rawURL with query, sending body as JSON when it isn't
 // nil, and decodes the JSON answer into out when it isn't nil.
 func (c *Client) do(ctx context.Context, method, rawURL string, query url.Values, body, out any) error {
+	return c.doAs(ctx, method, rawURL, query, "application/json", body, out)
+}
+
+// doAs is do, sending its body as contentType. A call whose query gives no
+// api-version is pinned to APIVersion.
+func (c *Client) doAs(ctx context.Context, method, rawURL string, query url.Values, contentType string, body, out any) error {
 	if query == nil {
 		query = url.Values{}
 	}
-	query.Set("api-version", APIVersion)
+	if query.Get("api-version") == "" {
+		query.Set("api-version", APIVersion)
+	}
 	var rd io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -212,7 +235,7 @@ func (c *Client) do(ctx context.Context, method, rawURL string, query url.Values
 	req.SetBasicAuth("", c.pat)
 	req.Header.Set("Accept", "application/json")
 	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", contentType)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -240,7 +263,7 @@ func (c *Client) refusal(resp *http.Response, data []byte, method, rawURL string
 	switch {
 	case status == http.StatusTooManyRequests,
 		status == http.StatusServiceUnavailable && resp.Header.Get("Retry-After") != "":
-		limit := &watchers.RateLimitError{System: "Azure DevOps", Message: fmt.Sprintf("%s answered %d", what, status)}
+		limit := &ratelimit.Error{System: "Azure DevOps", Message: fmt.Sprintf("%s answered %d", what, status)}
 		if secs, err := strconv.Atoi(strings.TrimSpace(resp.Header.Get("Retry-After"))); err == nil && secs > 0 {
 			limit.RetryAfter = time.Duration(secs) * time.Second
 		}
@@ -254,10 +277,10 @@ func (c *Client) refusal(resp *http.Response, data []byte, method, rawURL string
 		return fmt.Errorf("%w: %s answered 403", ErrMissingScope, what)
 	case status == http.StatusNotFound:
 		return fmt.Errorf("%w: %s answered 404", ErrNotFound, what)
-	case status == http.StatusBadRequest, status == http.StatusConflict:
-		return fmt.Errorf("%w: %s answered %d: %s", ErrRefused, what, status, watchers.FirstLine(string(data)))
+	case status == http.StatusBadRequest, status == http.StatusConflict, status == http.StatusPreconditionFailed:
+		return &RefusedError{What: what, Status: status, Message: messageOf(data)}
 	case status >= 200 && status < 300:
 		return nil
 	}
-	return fmt.Errorf("Azure DevOps answered %s with %d: %s", what, status, watchers.FirstLine(string(data)))
+	return fmt.Errorf("Azure DevOps answered %s with %d: %s", what, status, ratelimit.FirstLine(string(data)))
 }

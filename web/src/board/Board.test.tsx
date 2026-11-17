@@ -194,7 +194,7 @@ describe("the Board's columns", () => {
     await click(within(board()).getByRole("checkbox", { name: "Cancelled" }));
     expect(heads()).toHaveLength(10);
     expect(new URLSearchParams(window.location.search).get("hide")).toBe("");
-    expect(columnsButton()).toHaveTextContent(/^Columns ▾$/);
+    expect(columnsButton()).toHaveTextContent(/^Columns$/);
 
     await click(within(board()).getByRole("checkbox", { name: "In Progress" }));
     expect(heads()).not.toContain("In Progress 1");
@@ -257,7 +257,7 @@ describe("the Board's cards", () => {
     const reset = card("Password reset");
     expect(within(reset).getByRole("button", { name: fake.ids.reset })).toHaveTextContent("#6");
     expect(reset).toHaveTextContent("Prototype");
-    expect(reset).toHaveTextContent("⛔ Blocked");
+    expect(within(reset).getByTitle("Has open Blockers")).toHaveTextContent(/^Blocked$/);
     expect(within(reset).queryByRole("img", { name: "Needs you" })).toBeNull();
     expect(reset).toHaveTextContent(/Spec\s*Login$/);
     expect(within(card("Sign-up page")).getByRole("img", { name: "Needs you" })).toBeInTheDocument();

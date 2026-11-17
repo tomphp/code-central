@@ -56,3 +56,54 @@ func TestParseProjectURLErrorsDoNotRepeatALogin(t *testing.T) {
 		t.Fatalf("error repeats the login: %v", err)
 	}
 }
+
+func TestParseQueryURL(t *testing.T) {
+	const id = "6b4a0c1e-9f1d-4a51-8f43-2a7d3c1b9e10"
+	ok := []struct{ in, want string }{
+		{"https://dev.azure.com/contoso/web/_queries/query/" + id, "https://dev.azure.com/contoso/web/_queries/query/" + id},
+		{"  https://dev.azure.com/contoso/web/_queries/query/" + id + "/  ", "https://dev.azure.com/contoso/web/_queries/query/" + id},
+		{"https://dev.azure.com/contoso/web/_queries/query-edit/" + id + "/?a=1#frag", "https://dev.azure.com/contoso/web/_queries/query/" + id},
+		{"https://me:secret@Dev.Azure.com/contoso/My Web/_queries/query/" + strings.ToUpper(id), "https://dev.azure.com/contoso/My%20Web/_queries/query/" + strings.ToUpper(id)},
+		{"https://contoso.visualstudio.com/web/_queries/query/" + id, "https://contoso.visualstudio.com/web/_queries/query/" + id},
+		{"https://ado.example.com/tfs/DefaultCollection/web/_queries/query/" + id, "https://ado.example.com/tfs/DefaultCollection/web/_queries/query/" + id},
+	}
+	for _, c := range ok {
+		got, err := ParseQueryURL(c.in)
+		if err != nil || got != c.want {
+			t.Errorf("ParseQueryURL(%q) = %q, %v; want %q", c.in, got, err, c.want)
+		}
+	}
+	bad := []string{
+		"", "https://dev.azure.com/contoso/web", "https://dev.azure.com/contoso/web/_queries",
+		"https://dev.azure.com/contoso/web/_queries/query", "https://dev.azure.com/contoso/web/_queries/query/not-a-guid",
+		"https://dev.azure.com/contoso/web/_queries/query/" + id + "/extra", "https://dev.azure.com/contoso/web/_build/query/" + id,
+		"https://dev.azure.com/contoso/_queries/query/" + id, "dev.azure.com/contoso/web/_queries/query/" + id,
+	}
+	for _, in := range bad {
+		if got, err := ParseQueryURL(in); err == nil {
+			t.Errorf("ParseQueryURL(%q) = %q, want an error", in, got)
+		}
+	}
+	if _, err := ParseQueryURL("https://me:hunter2@dev.azure.com/contoso/web"); err == nil || strings.Contains(err.Error(), "hunter2") {
+		t.Errorf("error = %v, want one that doesn't repeat the login", err)
+	}
+}
+
+func TestNames(t *testing.T) {
+	cases := []struct{ in, org, project string }{
+		{"https://dev.azure.com/contoso/web", "contoso", "web"},
+		{"https://dev.azure.com/Contoso/My%20Web", "Contoso", "My Web"},
+		{"https://contoso.visualstudio.com/web", "contoso", "web"},
+		{"https://contoso.visualstudio.com/DefaultCollection/web", "contoso", "web"},
+		{"https://ado.example.com/tfs/DefaultCollection/web", "DefaultCollection", "web"},
+		{"https://dev.azure.com/contoso/web/_queries/query/6b4a0c1e-9f1d-4a51-8f43-2a7d3c1b9e10", "contoso", "web"},
+	}
+	for _, c := range cases {
+		if org, project := Names(c.in); org != c.org || project != c.project {
+			t.Errorf("Names(%q) = %q, %q; want %q, %q", c.in, org, project, c.org, c.project)
+		}
+	}
+	if org, project := Names("not a url"); org != "" || project != "" {
+		t.Errorf("Names of no URL = %q, %q; want none", org, project)
+	}
+}

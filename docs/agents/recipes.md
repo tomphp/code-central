@@ -5,10 +5,10 @@ Recipes for changes that touch many packages. Each one starts with a single edit
 ## Add or change an operation
 
 1. Add it to `core.Operations` in `core/operations.go` with its `Audience` and `Write`, then write the Core method.
-2. Run `go test ./core ./frontdoor`. The guard tests name each missing piece:
+2. Run `go test ./core ./server`. The guard tests name each missing piece:
    - `TestHTTPExposesEveryOperation`: a route in `httpapi.Routes` (`httpapi/httpapi.go`), served through the shared handlers.
    - `TestMCPExposesExactlyTheAgentOperations` and `TestCLIExposesExactlyTheAgentOperations`, for `AgentAndHuman` only: a tool in `tools` (`mcp/mcp.go`, with a one-line description) and a kebab-case command in `cli/cli.go`, which calls the service through a `client/` method.
-   - `TestEveryOperationHasACase`: a cross-door case. Put a feature's cases in their own `frontdoor/<feature>_doors_test.go`, registered from `init()` (see `frontdoor/modelchoice_doors_test.go`).
+   - `TestEveryOperationHasACase`: a cross-door case. Put a feature's cases in their own `server/<feature>_doors_test.go`, registered from `init()` (see `server/modelchoice_doors_test.go`).
    - `TestAnArchivedProjectRefusesEveryWrite`, for a write: an entry in `writesOnAcme` in `core/archive_test.go`.
 3. When the UI uses it: types, action, contract case. Response types come from `make wiretypes` (add a root to the generator's list in `internal/wiretypes` for a new top-level view); the staleness test fails if you forget to regenerate, and a typed string the UI reaches needs a value list registered in the generator. Hand-write only the request body in `web/src/api/types.ts`, the action in `web/src/api/actions/` (its body and result, merged into `TicketActions`), and a case for its behaviour in the feature's file under `web/src/api/contract/` (`contract/index.ts` registers them all; the `Driver` they use is in `web/src/api/driver.ts`, and `defaultLanding` and `defaultCI` in `scenario.ts` build a new Project's rows). `make vitest F=src/api/fake.test.ts` runs the contract's WASM half: `createHttpApi` on the WASM Core, the real Core built to WebAssembly (`make corewasm` builds it first).
 

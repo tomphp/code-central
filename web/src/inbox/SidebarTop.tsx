@@ -1,7 +1,8 @@
 // The top row of the inbox sidebar: the split "+ New ▾", primary and full
-// width, and "◎ Focus". The row places the ▾'s menu across its width.
+// width, and Focus with its station. The row places the ▾'s menu across its width.
 import { NewSplit, type NewSplitProps } from "../requirement/NewSplit";
 import { Button } from "../controls/Button";
+import { Station } from "../controls/Icon";
 
 export interface SidebarTopProps {
   // newProps are what + New ▾ needs, all but its variant, which is primary.
@@ -9,13 +10,13 @@ export interface SidebarTopProps {
   onFocusMode(): void;
 }
 
-// SidebarTop is the sidebar's top row: + New ▾ and ◎ Focus.
+// SidebarTop is the sidebar's top row: + New ▾ and Focus.
 export function SidebarTop({ newProps, onFocusMode }: SidebarTopProps) {
   return (
     <div className="new-row">
       <NewSplit variant="primary" {...newProps} />
       <Button  onClick={onFocusMode}>
-        <span aria-hidden="true">◎</span> Focus
+        <Station /> Focus
       </Button>
     </div>
   );

@@ -61,7 +61,8 @@ describe("end-to-end: the human answers a live Round in Focus Mode", () => {
     const item = focus.getByRole("article", { name: "Focus Item" });
     const question = item.getByRole("region", { name: "Question" });
     await question.getByRole("heading", { name: "Which database?" }).waitFor();
-    expect(await item.getByText(id, { exact: true }).count()).toBe(1);
+    // The Short ID shows while one Project is selected; its title is the full ID.
+    expect(await item.getByTitle(id, { exact: true }).count()).toBe(1);
     expect(await item.getByText("Login form").count()).toBe(1);
     await question.getByText("Question 1 of 3 · Round 1").waitFor();
     await focus.getByText("3 left").waitFor();
@@ -115,7 +116,7 @@ describe("end-to-end: the human answers a live Round in Focus Mode", () => {
     await dashboard.getByRole("group", { name: "In Progress" }).getByText("1", { exact: true }).waitFor();
     const entry = dashboard.getByRole("list", { name: "In Progress" }).getByRole("listitem");
     expect(await entry.count()).toBe(1);
-    await entry.getByText(id, { exact: true }).waitFor();
+    await entry.getByTitle(id, { exact: true }).waitFor();
     await entry.getByText("Login form").waitFor();
 
     // The human chooses All clear over the API: the open Focus Mode

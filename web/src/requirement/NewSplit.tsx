@@ -6,6 +6,7 @@
 // ancestor, which the caller provides.
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import { Button } from "../controls/Button";
+import { Caret } from "../controls/Icon";
 import type { SpecAcknowledgement, TicketAcknowledgement } from "../api/types";
 import { NewMap, NewRequirement, NewSmallChange, type NewRequirementProps } from "./NewRequirement";
 
@@ -114,7 +115,7 @@ export function NewSplit({ variant, onSubmitted, ...newProps }: NewSplitProps) {
           onClick={() => setOpen(!open)}
           onKeyDown={onMoreKey}
         >
-          ▾
+          <Caret />
         </Button>
       </div>
       <div role="menu" aria-labelledby={moreId} className="new-menu" ref={menu} hidden={!open} onKeyDown={onMenuKey}>

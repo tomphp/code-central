@@ -418,6 +418,11 @@ export class Scenario extends HttpDriver {
     await this.integration(`${this.projectPath(key)}/integration/report_issue_watcher_status`, status);
   }
 
+  // reportWorkItemWatcher has the Work Item Watcher report its status.
+  async reportWorkItemWatcher(key: string, status: IssueWatcherReport) {
+    await this.integration(`${this.projectPath(key)}/integration/report_work_item_watcher_status`, status);
+  }
+
   async reportPullRequestWatcher(key: string, status: PullRequestWatcherReport) {
     await this.agent(`${this.projectPath(key)}/report_pull_request_watcher_status`, status);
   }

@@ -4,7 +4,8 @@
 // crashes, and stops them all when it stops (ADR 0018); on the Watcher's
 // side, a Watcher runs until its stdin closes. It also runs any kind's
 // check mode for the service (Check). The service supervises the CI
-// Watcher and the Issue Watcher; a new kind is one more Kind.
+// Watcher, the Issue Watcher, the Pull Request Watcher and the Work Item
+// Watcher; a new kind is one more Kind.
 package watchers
 
 import (

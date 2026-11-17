@@ -16,8 +16,8 @@ import (
 	"github.com/tomoram/code-central/azdo"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
+	"github.com/tomoram/code-central/ratelimit"
 	"github.com/tomoram/code-central/store"
-	"github.com/tomoram/code-central/watchers"
 )
 
 // AzurePipelines is the Azure Pipelines CI Provider for one Azure DevOps
@@ -36,7 +36,7 @@ type AzurePipelines struct {
 }
 
 // CheckAccess checks the PAT variable is set, reads the project, and
-// lists one build. Azure DevOps throttling it is a *watchers.RateLimitError,
+// lists one build. Azure DevOps throttling it is a *ratelimit.Error,
 // not a problem. The execute scope can't be confirmed without retrying a
 // run, so it isn't checked.
 func (a *AzurePipelines) CheckAccess(ctx context.Context) (core.WatcherCheckResult, error) {
@@ -45,7 +45,7 @@ func (a *AzurePipelines) CheckAccess(ctx context.Context) (core.WatcherCheckResu
 	case errors.Is(err, azdo.ErrNoPAT):
 		return core.WatcherCheckResult{Problem: core.ProblemPATMissing,
 			Reason: fmt.Sprintf("The environment variable %s is not set, or is empty, in the CI Watcher's environment.", a.PATEnv),
-			Fix:    patMissingFix(runtime.GOOS, a.PATEnv)}, nil
+			Fix:    azdo.PATMissingFix(runtime.GOOS, a.PATEnv, "Build: Read & execute")}, nil
 	case err != nil:
 		return unreadable(a.ProjectURL, err), nil
 	}
@@ -60,7 +60,7 @@ func (a *AzurePipelines) CheckAccess(ctx context.Context) (core.WatcherCheckResu
 
 // refused is the check's answer to err from a call.
 func (a *AzurePipelines) refused(err error) (core.WatcherCheckResult, error) {
-	var limit *watchers.RateLimitError
+	var limit *ratelimit.Error
 	switch {
 	case errors.As(err, &limit):
 		return core.WatcherCheckResult{}, limit
@@ -81,21 +81,6 @@ func unreadable(projectURL string, err error) core.WatcherCheckResult {
 	return core.WatcherCheckResult{Problem: core.ProblemProjectUnreadable,
 		Reason: fmt.Sprintf("Code Central can't read the Azure DevOps project %s: %v", projectURL, err),
 		Fix:    "Check the project URL is the one the browser shows, such as https://dev.azure.com/acme/web, and that the PAT's organization can see it."}
-}
-
-// patMissingFix is how to give the service the variable on goos, then
-// restart it.
-func patMissingFix(goos, name string) string {
-	var how string
-	switch goos {
-	case "darwin":
-		how = fmt.Sprintf("run `launchctl setenv %s <PAT>`", name)
-	case "windows":
-		how = fmt.Sprintf("set %s as a user environment variable", name)
-	default:
-		how = fmt.Sprintf("run `systemctl --user set-environment %s=<PAT>`, or put %s=<PAT> in a file under ~/.config/environment.d/", name, name)
-	}
-	return fmt.Sprintf("Make an Azure DevOps PAT with Build: Read & execute, %s, then restart the Code Central service.", how)
 }
 
 // azureRunLimit is how many of the project's latest builds RunsForCommit

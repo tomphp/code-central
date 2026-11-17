@@ -1,63 +1,169 @@
+@import "@fontsource-variable/hanken-grotesk/wght.css";
+@import "@fontsource-variable/red-hat-mono/wght.css";
+
+/* The transit diagram: a midnight-blue enamel shell (--rail) around a
+   porcelain work surface, with the States and reasons drawn in line inks.
+   Dark mode keeps the same lines on a night-blue surface; its tokens are
+   repeated for the system setting and for data-theme="dark". */
 :root {
-  --bg: #f7f7f5;
+  --font: "Hanken Grotesk Variable", system-ui, -apple-system, sans-serif;
+  --mono: "Red Hat Mono Variable", ui-monospace, Menlo, monospace;
+  --rail: #12224a;
+  --rail-2: #213a76;
+  --rail-text: #e8ebf4;
+  --rail-muted: #aeb8d4;
+  --rail-rule: rgb(255 255 255 / .12);
+  --bg: #f4f2ec;
   --surface: #ffffff;
-  --surface-2: #f0efec;
-  --text: #1d1d1b;
-  --muted: #6b6a66;
-  --border: #e2e0db;
-  --accent: #2f5bd3;
-  --danger: #b4321f;
-  --r-answer: #d97706;
-  --r-answered: #7c3aed;
-  --r-silent: #64748b;
-  --r-long: #475569;
-  --r-failed: #dc2626;
-  --r-review: #059669;
-  --r-landing: #0f766e;
-  --r-blocked: #a16207;
-  --r-external: #0e7490;
-  /* State colours, so far only on the Activity Dashboard. */
-  --s-ready: #2563eb;
-  --s-in-progress: #d97706;
+  --surface-2: #ebe8df;
+  --text: #14182a;
+  --muted: #555a6a;
+  --border: #dcd8cc;
+  --accent: #2a5bd7;
+  --danger: #c0302a;
+  --primary: #12224a;
+  --on-primary: #ffffff;
+  /* Text on a filled line colour. */
+  --on-line: #ffffff;
+  /* Chart ramp: ink to neutral, never a line ink. */
+  --chart-1: #12224a;
+  --chart-2: #5b6b8f;
+  --chart-3: #9aa5bf;
+  --chart-4: #cdd2de;
+  /* Reason lines. */
+  --r-answer: #e39b12;
+  --r-answered: #7a4bc8;
+  --r-silent: #6b7385;
+  --r-long: #4b566c;
+  --r-failed: #d4382d;
+  --r-review: #2a9457;
+  --r-landing: #10847a;
+  --r-blocked: #a8741a;
+  --r-external: #1b84a3;
+  /* State lines. */
+  --st-draft: #8b8f99;
+  --st-ready: #5b6b8f;
+  --st-in-progress: #2f62d8;
+  --st-done: #1f7a45;
+  --st-cancelled: #8b8f99;
+  /* The Activity Dashboard's State blocks follow the State lines. */
+  --s-ready: var(--st-ready);
+  --s-in-progress: var(--st-in-progress);
   /* The Activity Dashboard's CI Running block. */
-  --ci-running: #0d9488;
+  --ci-running: #10847a;
+  --shadow: 0 6px 20px rgb(18 34 74 / .14);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #161615;
-    --surface: #1f1f1d;
-    --surface-2: #2a2a27;
-    --text: #ecebe7;
-    --muted: #9b9a94;
-    --border: #34332f;
-    --accent: #7b9cf5;
-    --danger: #f2735f;
+    --rail: #060c20;
+    --rail-2: #1d3060;
+    --rail-text: #e8ebf4;
+    --rail-muted: #9eaacb;
+    --rail-rule: rgb(255 255 255 / .14);
+    --bg: #0e1833;
+    --surface: #152246;
+    --surface-2: #1d2d57;
+    --text: #eef0f6;
+    --muted: #a5adc4;
+    --border: #2a3c6b;
+    --accent: #86a6ff;
+    --danger: #ff7b6e;
+    --primary: #8fb0ff;
+    --on-primary: #0a1430;
+    --on-line: #0a1430;
+    --chart-1: #e3e8f5;
+    --chart-2: #a3b0cf;
+    --chart-3: #6b7ba0;
+    --chart-4: #3f4f7a;
+    --r-answer: #f5b43c;
+    --r-answered: #a68cf2;
+    --r-silent: #9aa3b8;
+    --r-long: #8793ad;
+    --r-failed: #ff6f62;
+    --r-review: #4fc887;
+    --r-landing: #3cc4b5;
+    --r-blocked: #e0b04a;
+    --r-external: #4fc0e0;
+    --st-draft: #8f96a8;
+    --st-ready: #8a9bc4;
+    --st-in-progress: #7ea0ff;
+    --st-done: #4fb878;
+    --st-cancelled: #8f96a8;
+    --ci-running: #3cc4b5;
+    --shadow: 0 8px 28px rgb(0 0 0 / .45);
     color-scheme: dark;
   }
 }
+:root[data-theme="dark"] {
+  --rail: #060c20;
+  --rail-2: #1d3060;
+  --rail-text: #e8ebf4;
+  --rail-muted: #9eaacb;
+  --rail-rule: rgb(255 255 255 / .14);
+  --bg: #0e1833;
+  --surface: #152246;
+  --surface-2: #1d2d57;
+  --text: #eef0f6;
+  --muted: #a5adc4;
+  --border: #2a3c6b;
+  --accent: #86a6ff;
+  --danger: #ff7b6e;
+  --primary: #8fb0ff;
+  --on-primary: #0a1430;
+  --on-line: #0a1430;
+  --chart-1: #e3e8f5;
+  --chart-2: #a3b0cf;
+  --chart-3: #6b7ba0;
+  --chart-4: #3f4f7a;
+  --r-answer: #f5b43c;
+  --r-answered: #a68cf2;
+  --r-silent: #9aa3b8;
+  --r-long: #8793ad;
+  --r-failed: #ff6f62;
+  --r-review: #4fc887;
+  --r-landing: #3cc4b5;
+  --r-blocked: #e0b04a;
+  --r-external: #4fc0e0;
+  --st-draft: #8f96a8;
+  --st-ready: #8a9bc4;
+  --st-in-progress: #7ea0ff;
+  --st-done: #4fb878;
+  --st-cancelled: #8f96a8;
+  --ci-running: #3cc4b5;
+  --shadow: 0 8px 28px rgb(0 0 0 / .45);
+  color-scheme: dark;
+}
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, sans-serif; }
-h1, h2, h3 { margin: 0; }
-code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--surface-2); padding: 1px 4px; border-radius: 4px; }
-a { color: var(--accent); }
+html { scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent; accent-color: var(--accent); }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--font); font-optical-sizing: auto; -webkit-font-smoothing: antialiased; }
+::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input, textarea { caret-color: var(--accent); }
+h1, h2, h3 { margin: 0; letter-spacing: -.01em; }
+code { font: 12.5px var(--mono); background: var(--surface-2); padding: 1px 4px; border-radius: 4px; }
+a { color: var(--accent); text-underline-offset: 2px; }
 .muted { color: var(--muted); }
 .small { font-size: 12px; }
 .empty { color: var(--muted); padding: 2rem; text-align: center; }
-.banner { margin: 0; padding: 6px 14px; background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
-.tid { font: 600 12px ui-monospace, Menlo, monospace; color: var(--muted); }
+.banner { margin: 0; padding: 6px 14px; background: color-mix(in srgb, var(--danger) 12%, transparent); color: color-mix(in srgb, var(--danger) 55%, var(--text)); }
+.tid { font: 600 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 .label { font-size: 11px; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--border); }
 
 /* Shared by panels (tickets 34-37). */
-.btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 6px; padding: 5px 12px; font: inherit; cursor: pointer; }
+.btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 6px; padding: 5px 12px; font: inherit; font-weight: 600; cursor: pointer; transition: border-color 120ms ease-out, background-color 120ms ease-out; }
 .btn:hover { border-color: var(--muted); }
-.btn:disabled { opacity: .45; cursor: default; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* One disabled look for every button: the hairline border stays, the text drops to about 55%, and a primary keeps its fill at reduced opacity. */
+.btn:disabled { color: color-mix(in srgb, var(--text) 55%, transparent); background: var(--surface); border-color: var(--border); cursor: default; }
+.btn.danger:disabled { color: color-mix(in srgb, var(--text) 55%, transparent); border-color: var(--border); }
+.btn.primary:disabled { background: color-mix(in srgb, var(--primary) 45%, transparent); border-color: color-mix(in srgb, var(--primary) 45%, transparent); color: var(--on-primary); }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.btn.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--primary) 86%, var(--accent)); }
 .btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
-textarea, select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
+textarea, select, input:not([type=checkbox], [type=radio], [type=range], [type=file], [type=color]) { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
 textarea { width: 100%; resize: vertical; }
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin: 12px 0; }
-.warning { font-size: 12.5px; padding: 6px 10px; border-radius: 6px; background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+.warning { font-size: 12.5px; padding: 6px 10px; border-radius: 6px; background: color-mix(in srgb, var(--danger) 12%, transparent); color: color-mix(in srgb, var(--danger) 55%, var(--text)); }
 
 /* Reason colours. */
 .reason-needs_answer { --rc: var(--r-answer); }
@@ -76,19 +182,41 @@ textarea { width: 100%; resize: vertical; }
 .reason-blocked_by_cancelled { --rc: var(--r-blocked); }
 .reason-new_issue { --rc: var(--r-external); }
 .reason-closed_externally { --rc: var(--r-external); }
-.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--rc, var(--r-answer)); flex: none; }
-.reason { font-size: 11px; color: var(--rc); display: inline-flex; gap: 4px; align-items: center; white-space: nowrap; flex: none; }
+/* A station: a ring in its line's ink around the surface colour. */
+.dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: var(--surface); border: 3px solid var(--rc, var(--r-answer)); flex: none; }
+/* Line ink as text: the line colour pulled toward the text colour, so it
+   reads in both themes. */
+.reason { font-size: 11px; font-weight: 600; color: color-mix(in srgb, var(--rc) 55%, var(--text)); display: inline-flex; gap: 5px; align-items: center; white-space: nowrap; flex: none; }
 .impl-list .reason { margin-left: 6px; }
 
 /* The triage inbox. */
 .inbox { display: grid; grid-template-columns: 14rem 24rem 1fr; height: 100vh; }
-.inbox-nav { border-right: 1px solid var(--border); padding: 16px 10px; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
-.inbox-nav h1 { font-size: 15px; padding: 0 8px 12px; }
-.inbox-nav h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 16px 8px 4px; }
-.filter { display: flex; justify-content: space-between; text-align: left; border: 0; background: transparent; color: var(--text); font: inherit; padding: 5px 8px; border-radius: 6px; cursor: pointer; }
-.filter.sub { font-size: 12.5px; padding: 3px 8px 3px 16px; }
-.filter.on { background: var(--surface-2); font-weight: 600; }
+/* The rail: the midnight enamel shell. It redefines the surface tokens
+   for what sits on it, so menus and buttons inside it follow the rail. */
+.inbox-nav { background: var(--rail); color: var(--rail-text); box-shadow: inset -1px 0 var(--rail-rule); padding: 18px 10px; overflow: auto; display: flex; flex-direction: column; gap: 1px; scrollbar-color: var(--rail-rule) transparent; }
+.inbox-nav h1 { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 800; letter-spacing: -.01em; padding: 0 8px 16px; }
+/* The roundel: Code Central's mark, an interchange ring. */
+.inbox-nav h1::before, .view-head h1::before { content: ""; width: 14px; height: 14px; border-radius: 50%; border: 4px solid currentColor; flex: none; }
+.inbox-nav h2 { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; color: var(--rail-muted); padding: 18px 8px 6px; }
+.filter { display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; border: 0; background: transparent; color: inherit; font: inherit; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+.inbox-nav .filter:hover { background: color-mix(in srgb, var(--rail-2) 55%, transparent); }
+.filter.sub { font-size: 13px; padding: 4px 8px 4px 10px; }
+.filter-label { display: inline-flex; align-items: center; gap: 9px; min-width: 0; }
+.filter.on { background: var(--rail-2); font-weight: 700; color: #fff; }
 a.filter { text-decoration: none; }
+.inbox-nav .count { color: var(--rail-muted); font-family: var(--mono); font-size: 12px; }
+.inbox-nav .count.loud { color: #f5b43c; }
+.inbox-nav .menu-toggle { color: var(--rail-muted); }
+.inbox-nav .menu-toggle:hover { background: var(--rail-2); }
+/* On the rail + New is porcelain, Focus an outline in the rail's ink. */
+.inbox-nav .btn { background: transparent; color: var(--rail-text); border-color: color-mix(in srgb, var(--rail-text) 30%, transparent); }
+.inbox-nav .btn:hover { border-color: var(--rail-text); }
+.inbox-nav .btn.primary { background: #f4f2ec; border-color: #f4f2ec; color: #12224a; }
+.inbox-nav .btn.primary:hover:not(:disabled) { background: #ffffff; }
+.inbox-nav .new-split .new-more { border-left-color: color-mix(in srgb, #12224a 25%, transparent); }
+/* Menus opened from the rail drop back onto the work surface. */
+.inbox-nav .menu, .inbox-nav .new-menu, .inbox-nav .factory-tooltip { color: var(--text); }
+.inbox-nav .archived-group > summary, .inbox-nav > .project-row .muted { color: var(--rail-muted); }
 /* Project rows and their menus; the Archived group (ticket 39). */
 .project-row { position: relative; display: flex; align-items: center; flex-wrap: wrap; }
 .project-row > .filter { flex: 1; }
@@ -104,7 +232,7 @@ a.filter { text-decoration: none; }
 .menu a[role="menuitem"] { text-decoration: none; box-sizing: border-box; }
 
 /* The Project Options page: sections in one column, with a section menu on the left on wide screens. */
-.project-options { max-width: 52rem; margin: 0 auto; padding: 24px; }
+.project-options { width: 100%; max-width: 60rem; margin: 0 auto; padding: 28px 24px; }
 .project-options-layout { display: block; }
 .project-options-menu { display: none; }
 .project-options-menu ul { list-style: none; margin: 0; padding: 0; }
@@ -115,7 +243,6 @@ a.filter { text-decoration: none; }
   .project-options-layout { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: 24px; align-items: start; }
   .project-options-menu { display: block; position: sticky; top: 16px; }
 }
-.project-options h1 { font-size: 20px; margin: 12px 0 20px; }
 .project-options-section { border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px 16px; margin: 0; }
 .project-options-section legend { font-weight: 600; padding: 0 4px; }
 .project-options-choice { margin: 8px 0; }
@@ -156,16 +283,34 @@ a.filter { text-decoration: none; }
 .archived-group { margin-top: auto; padding-top: 16px; }
 .archived-group > summary { cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 4px 8px; }
 .archived-group .filter { opacity: .7; }
-.count { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 500; }
-.count.loud { color: var(--r-answer); font-weight: 700; }
+.count { color: var(--muted); font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 500; }
+.count.loud { color: color-mix(in srgb, var(--r-answer) 55%, var(--text)); font-weight: 700; }
+/* A Project's ribbon: a short bar in its own colour (a bar, never a ring,
+   so it never reads as a State). The palette is the rail's, in both themes. */
+:root { --ribbon-1: #f08a6c; --ribbon-2: #5aa9f0; --ribbon-3: #e8bf4a; --ribbon-4: #6cc77f; --ribbon-5: #c18ae6; --ribbon-6: #5fd0cb; }
+.ribbon { width: 4px; height: 16px; border-radius: 2px; background: var(--ribbon); flex: none; }
+/* A State's station on the rail's filters. */
+.station { width: 11px; height: 11px; border-radius: 50%; border: 3px solid var(--st); background: var(--rail); flex: none; }
 /* A count block's number: big, in the block's own colour. */
 .count.big { color: inherit; font-size: clamp(72px, 14vw, 160px); font-weight: 700; line-height: 1; }
 .inbox-list { border-right: 1px solid var(--border); overflow: auto; padding-bottom: 80px; }
-.group-head { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; padding: 14px 14px 6px; color: var(--rc); display: flex; justify-content: space-between; }
-.row { display: block; text-decoration: none; color: var(--text); border-left: 3px solid transparent; padding: 8px 14px; border-bottom: 1px solid var(--border); }
-.row:hover { background: var(--surface); }
-.row[aria-current="true"] { background: var(--surface); border-left-color: var(--accent); }
+/* A group's head is its line: the name in the line's ink over a stroke of it. */
+.group-head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; margin: 18px 14px 4px; padding-bottom: 6px; color: color-mix(in srgb, var(--rc) 55%, var(--text)); display: flex; justify-content: space-between; border-bottom: 3px solid var(--rc); }
+.group-head .count { color: inherit; font-family: var(--mono); }
+.row { display: block; text-decoration: none; color: var(--text); padding: 9px 14px; border-bottom: 1px solid var(--border); transition: background-color 120ms ease-out; }
+.row:hover { background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.row[aria-current="true"] { background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); }
+.row[aria-current="true"] .row-title { font-weight: 700; }
 .row.quiet { opacity: .7; }
+/* A Needs Me group is one line in its reason's ink, dropping from the
+   group head, with a station on every row; it ends at the last. */
+.line-group > .row { position: relative; padding-left: 40px; }
+.line-group > .row::before { content: ""; position: absolute; left: 19px; top: 0; bottom: 0; width: 4px; background: var(--rc); }
+.line-group > .row:last-child::before { bottom: auto; height: 22px; }
+.line-group > .row::after { content: ""; position: absolute; left: 14px; top: 13px; width: 14px; height: 14px; border-radius: 50%; box-sizing: border-box; background: var(--surface); border: 3.5px solid var(--rc); }
+/* The selected row's station is larger and filled, still in its line's ink. */
+.line-group > .row[aria-current="true"]::after { width: 18px; height: 18px; left: 12px; top: 11px; background: var(--rc); box-shadow: inset 0 0 0 3px var(--surface); }
+.line-group > .group-head { margin-bottom: 0; }
 .row-top { display: flex; gap: 8px; align-items: center; }
 .row-title { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-detail { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -207,16 +352,16 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .ci-fix-note { display: grid; gap: 4px; margin-top: 8px; }
 .ci-fixes { display: flex; gap: 8px; flex-wrap: wrap; }
 .ci-result, .ci-status { font-size: 11px; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--border); }
-.ci-passed, .ci-partially-succeeded { color: var(--r-review); border-color: var(--r-review); }
-.ci-failed, .ci-timed-out { color: var(--r-failed); border-color: var(--r-failed); }
+.ci-passed, .ci-partially-succeeded { color: color-mix(in srgb, var(--r-review) 55%, var(--text)); border-color: var(--r-review); }
+.ci-failed, .ci-timed-out { color: color-mix(in srgb, var(--r-failed) 55%, var(--text)); border-color: var(--r-failed); }
 /* Cancelled is neutral grey, not red: a cancelled run is no failure. */
 .ci-cancelled { color: var(--muted); border-color: var(--muted); }
-.ci-running, .ci-queued { color: var(--s-in-progress); border-color: var(--s-in-progress); }
+.ci-running, .ci-queued { color: color-mix(in srgb, var(--s-in-progress) 55%, var(--text)); border-color: var(--s-in-progress); }
 /* CI badges on rows, and the Spec view's sums of them (code-central-259). */
 .ci-badge { white-space: nowrap; }
 .impl-list .ci-badge { margin-left: 6px; }
 .ci-sums { display: flex; gap: 6px; align-items: center; margin: 8px 0; }
-.ci-runs { list-style: none; padding: 0; margin: 4px 0; font-size: 13px; }
+.ci-runs { font-variant-numeric: tabular-nums; list-style: none; padding: 0; margin: 4px 0; font-size: 13px; }
 .ci-run { margin-bottom: 6px; }
 .ci-run .label { margin-left: 6px; }
 /* Any CIRunEntry of an ignored workflow is greyed, in every layout. */
@@ -234,7 +379,7 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .transcript-call { display: block; background: none; padding: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ticket-body .transcript-result > summary { margin: 2px 0 0 12px; }
 .transcript-result > summary time { margin-right: 4px; }
-.transcript-result pre { margin: 4px 0 2px 12px; padding: 6px 8px; max-height: 240px; overflow: auto; background: var(--surface-2); border-radius: 4px; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+.transcript-result pre { margin: 4px 0 2px 12px; padding: 6px 8px; max-height: 240px; overflow: auto; background: var(--surface-2); border-radius: 4px; font: 12px var(--mono); white-space: pre-wrap; }
 .transcript-mark { margin-left: 6px; padding: 0 5px; border-radius: 3px; border: 1px solid var(--border); font-size: 11px; }
 .transcript-error { color: var(--danger); border-color: var(--danger); }
 .transcript-factory { background: var(--surface-2); color: var(--muted); font-size: 12.5px; }
@@ -245,8 +390,11 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 
 @media (max-width: 900px) {
   .inbox { grid-template-columns: 1fr; height: auto; }
-  .inbox-nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--border); }
-  .inbox-nav h2 { display: none; }
+  .inbox-nav { flex-direction: row; flex-wrap: wrap; align-items: center; border-right: 0; border-bottom: 1px solid var(--border); padding: 14px 10px 10px; }
+  /* Each group starts its own line under its heading. */
+  .inbox-nav h2 { flex-basis: 100%; padding: 10px 8px 2px; }
+  .inbox-nav .inbox-title, .inbox-nav .new-row { flex-basis: 100%; }
+  .inbox-nav .new-row { margin-bottom: 0; }
 }
 
 /* The Link badge and the linked note (ticket 42). */
@@ -297,6 +445,7 @@ a.link-badge:hover { text-decoration: underline; }
 .map-count { display: block; font-size: 12.5px; margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
 .modal { position: fixed; inset: 0; background: rgb(0 0 0 / .35); display: grid; place-items: start center; padding-top: 12vh; z-index: 40; }
 .modal-card { background: var(--surface); width: min(40rem, 92vw); border-radius: 12px; padding: 18px 20px; box-shadow: 0 12px 40px rgb(0 0 0 / .25); }
+.modal-card:focus:not(:focus-visible) { outline: none; }
 .modal-card h2 { font-size: 16px; margin-bottom: 10px; }
 .modal-card textarea { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); resize: vertical; }
 .modal-project { display: block; margin-bottom: 8px; }
@@ -307,22 +456,37 @@ a.link-badge:hover { text-decoration: underline; }
 /* PopupShell's header row: its title, anything else it holds such as the
    Focus popup's N left, then × at the right. It stays in view while a wide
    card's content scrolls. */
-.popup-head { position: sticky; top: -18px; z-index: 1; display: flex; align-items: center; margin: -18px -20px 0; padding: 8px 10px 0; background: var(--surface); }
+.popup-head { position: sticky; top: -18px; z-index: 1; display: flex; align-items: center; margin: -18px -20px 0; padding: 8px 10px 0; background: var(--surface); border-radius: 12px 12px 0 0; }
 .popup-head > :not(.popup-close) { padding-left: 10px; }
 .popup-head h2 { margin: 10px 0; }
 .popup-close { margin-left: auto; border: 0; background: none; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 8px; border-radius: 6px; cursor: pointer; }
 .popup-close:hover { color: var(--text); background: var(--surface-2); }
-.strip { list-style: none; display: flex; gap: 3px; padding: 0; margin: 6px 0 2px; }
-.seg { flex: 1; min-width: 0; }
-.seg > button, .seg > span { width: 100%; border: 0; border-top: 4px solid var(--border); background: transparent; color: var(--muted); font: 11px system-ui; padding: 3px 2px 0; text-align: left; display: flex; justify-content: space-between; white-space: nowrap; }
+/* The Stage strip is the Requirement's route: one line, a station per
+   Stage. Each segment's top border is its stretch of line, coloured by its
+   progress, and its ::before is the station at the stretch's start. */
+.strip { list-style: none; display: flex; gap: 0; padding: 0 0 0 7px; margin: 10px 0 4px; }
+.seg { flex: 1; min-width: 0; --line: var(--border); --stn: var(--border); }
+.seg > button, .seg > span { position: relative; width: 100%; border: 0; border-top: 5px solid var(--line); background: transparent; color: var(--muted); font: 600 11px var(--font); letter-spacing: .02em; padding: 12px 8px 2px 0; margin-left: -7px; text-align: left; display: flex; gap: 4px; justify-content: space-between; white-space: nowrap; border-radius: 0; }
+.seg > button::before, .seg > span::before { content: ""; position: absolute; left: 0; top: -10px; width: 15px; height: 15px; border-radius: 50%; box-sizing: border-box; background: var(--surface); border: 4px solid var(--stn); }
+/* The route ends at its last station. */
+.seg:last-child > * { border-top-color: transparent; }
 .seg > button { cursor: pointer; }
+.seg > button:hover { color: var(--text); }
 .seg > button:disabled { cursor: default; }
-.seg.progress-done > * { border-top-color: var(--r-review); color: var(--text); }
+.seg.progress-done { --line: var(--r-review); --stn: var(--r-review); }
+.seg.progress-done > * { color: var(--text); }
 .seg.progress-skipped > * { text-decoration: line-through; }
-.seg.progress-running > * { border-top-color: var(--accent); color: var(--text); }
+.seg.progress-running { --line: var(--accent); --stn: var(--accent); }
+.seg.progress-running > * { color: var(--text); }
+.seg.progress-queued { --stn: var(--accent); }
 .seg.progress-queued > * { border-top-style: dashed; border-top-color: var(--accent); }
-.seg.progress-needs > * { border-top-color: var(--rc); color: var(--rc); font-weight: 700; }
-.seg[aria-current="step"] > * { background: var(--surface-2); }
+.seg.progress-needs { --line: var(--rc); --stn: var(--rc); }
+.seg.progress-needs > * { color: color-mix(in srgb, var(--rc) 55%, var(--text)); font-weight: 700; }
+/* The Stage being shown is an interchange: a larger ring in the text colour. */
+.seg[aria-current="step"] > *::before { width: 19px; height: 19px; top: -12px; left: -2px; border-color: var(--text); border-width: 4px; }
+.seg[aria-current="step"] > * { color: var(--text); }
+/* A Stage that waits on you rings out from its station. */
+.seg.progress-needs > *::before { box-shadow: 0 0 0 4px color-mix(in srgb, var(--rc) 25%, transparent); }
 .seg-n { font-variant-numeric: tabular-nums; }
 .req-head { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
 .req-head h2 { font-size: 19px; margin: 6px 0 4px; }
@@ -345,15 +509,19 @@ a.link-badge:hover { text-decoration: underline; }
 .map-graph svg { display: block; }
 .map-edge { fill: none; stroke: var(--muted); stroke-width: 1.2; }
 .map-arrow { fill: var(--muted); }
-.map-node { box-sizing: border-box; height: 100%; display: flex; flex-direction: column; gap: 3px; padding: 5px 8px; background: var(--surface); border: 1px solid var(--border); border-top: 4px solid var(--border); border-radius: 6px; font-size: 12px; overflow: hidden; }
+.map-node { box-sizing: border-box; height: 100%; display: flex; flex-direction: column; gap: 3px; padding: 5px 8px; background: var(--surface); border: 1.5px solid var(--mn); border-radius: 6px; font-size: 12px; overflow: hidden; }
+/* A Map's Tickets are stations on its network: each node is ringed, and
+   its type carries a station, in its progress colour. */
+.map-node { --mn: var(--border); }
 .map-node-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
-.map-node-type { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.map-node-type { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.map-node-type::before { content: ""; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; border: 3px solid var(--mn); background: var(--surface); flex: none; }
 .map-node .map-node-title { color: var(--text); text-align: left; font-size: 12px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .map-node .map-node-title[aria-current="true"] { font-weight: 600; }
-.map-node.progress-done { border-top-color: var(--r-review); }
-.map-node.progress-running { border-top-color: var(--accent); }
-.map-node.progress-queued { border-top-style: dashed; border-top-color: var(--accent); }
-.map-node.progress-needs { border-top-color: var(--rc); }
+.map-node.progress-done { --mn: var(--r-review); }
+.map-node.progress-running { --mn: var(--accent); }
+.map-node.progress-queued { --mn: var(--accent); border-style: dashed; }
+.map-node.progress-needs { --mn: var(--rc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--rc) 22%, transparent); }
 .map-node.progress-waiting { color: var(--muted); }
 .map-node.cancelled { opacity: .55; }
 .map-node.cancelled .map-node-title { text-decoration: line-through; }
@@ -367,10 +535,10 @@ a.link-badge:hover { text-decoration: underline; }
 .req-chip { color: var(--accent); }
 /* Factory Status dot, tooltip and list (code-central-324). */
 .factory-status { position: relative; display: inline-flex; align-items: center; padding: 0 2px 0 6px; }
-.factory-dot { width: 9px; height: 9px; border-radius: 50%; background: #8a8984; }
-.factory-dot.online { background: #2e9e5b; }
-.factory-dot.draining { background: #e0a020; }
-.factory-dot.offline { background: #8a8984; }
+.factory-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--st-draft); }
+.factory-dot.online { background: #4fc887; }
+.factory-dot.draining { background: #f5b43c; }
+.factory-dot.offline { background: var(--st-draft); }
 .factory-dot:focus-visible { outline: 2px solid var(--muted); outline-offset: 2px; }
 .factory-tooltip { position: absolute; left: 0; top: 100%; z-index: 10; min-width: 16rem; max-width: 22rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 12.5px; box-shadow: 0 4px 16px rgb(0 0 0 / .12); }
 .factory-list { margin: 0; padding-left: 1.1rem; }
@@ -389,29 +557,29 @@ a.link-badge:hover { text-decoration: underline; }
 .spec-body-head .link { font-weight: 600; }
 
 /* The State chips' colours, and the State lists' By Ticket | By Spec toggle. */
-.st-draft { --st: #a8a29e; }
-.st-ready { --st: #94a3b8; }
-.st-in-progress { --st: var(--accent); }
+.st-draft { --st: var(--st-draft); }
+.st-ready { --st: var(--st-ready); }
+.st-in-progress { --st: var(--st-in-progress); }
 .st-needs-answer { --st: var(--r-answer); }
 .st-answered { --st: var(--r-answered); }
 .st-failed { --st: var(--r-failed); }
 .st-in-review { --st: var(--r-review); }
 .st-accepted { --st: var(--r-landing); }
-.st-done { --st: #16a34a; }
-.st-cancelled { --st: #a8a29e; }
+.st-done { --st: var(--st-done); }
+.st-cancelled { --st: var(--st-cancelled); }
 .bs-toggle-bar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; background: var(--bg, var(--surface-2)); border-bottom: 1px solid var(--border); }
 .bs-search { flex: 1 1 100%; font-size: 13px; }
 .bs-toggle { flex: none; display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; background: var(--surface); }
 .bs-toggle button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; padding: 4px 12px; cursor: pointer; white-space: nowrap; }
 .bs-toggle button + button { border-left: 1px solid var(--border); }
-.bs-toggle button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.bs-toggle button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); font-weight: 600; }
 .bs-toggle button:disabled { cursor: default; opacity: .6; }
 .bs-tabs [role="tablist"] { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
 .bs-tabs [role="tab"] { border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font: inherit; font-size: 13px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
 .bs-tabs [role="tab"][aria-selected="true"] { color: inherit; border-bottom-color: var(--accent); }
 /* The Spec row (code-central-458): a chevron, then a row link to the Spec. */
 .spec-row { border-bottom: 1px solid var(--border); }
-.spec-row.needs { border-left: 3px solid color-mix(in srgb, var(--r-answer) 55%, transparent); }
+.spec-row.needs { background: color-mix(in srgb, var(--r-answer) 8%, transparent); }
 .spec-row.quiet > .spec-row-head { opacity: .7; }
 .spec-row-head { display: flex; align-items: flex-start; }
 .spec-row-head .row { flex: 1; min-width: 0; border-bottom: 0; padding-left: 6px; }
@@ -423,15 +591,18 @@ a.link-badge:hover { text-decoration: underline; }
 .spec-row-tickets .row:last-child { border-bottom: 0; }
 .chev { border: 0; background: none; color: var(--muted); width: 20px; height: 20px; padding: 0; margin: 9px 0 0 6px; cursor: pointer; font-size: 12px; flex: none; border-radius: 4px; }
 .chev:hover { background: var(--surface-2); color: var(--text); }
-.kind-badge { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 4px; flex: none; border: 1px solid currentColor; }
-.kind-requirement { color: var(--accent); }
-.kind-map { color: var(--r-answered); }
+.kind-badge { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 4px; flex: none; font-weight: 600; border: 1px solid var(--kc, currentColor); }
+.kind-requirement { --kc: var(--accent); color: color-mix(in srgb, var(--accent) 55%, var(--text)); }
+.kind-map { --kc: var(--r-answered); color: color-mix(in srgb, var(--r-answered) 55%, var(--text)); }
 .kind-spec { color: var(--muted); }
-.kind-long-lived { color: var(--r-landing); }
+.kind-long-lived { --kc: var(--r-landing); color: color-mix(in srgb, var(--r-landing) 55%, var(--text)); }
 .stage-badge { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; padding: 0 5px; border-radius: 4px; background: var(--surface-2); color: var(--muted); flex: none; }
 .state-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; }
-.state-chip { font-size: 11px; padding: 1px 7px; border-radius: 999px; color: var(--text); background: color-mix(in srgb, var(--st) 14%, transparent); border: 1px solid color-mix(in srgb, var(--st) 40%, transparent); white-space: nowrap; flex: none; }
-.state-chip.here { background: var(--st); color: #fff; border-color: var(--st); font-weight: 600; }
+/* A State chip: a station ring and the State's name, on a wash of its line. */
+.state-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 1px 8px 1px 5px; border-radius: 999px; color: var(--text); background: color-mix(in srgb, var(--st) 12%, transparent); border: 1px solid color-mix(in srgb, var(--st) 35%, transparent); white-space: nowrap; flex: none; }
+.state-chip::before { content: ""; width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box; border: 2.5px solid var(--st); background: var(--surface); flex: none; }
+.state-chip.here { background: color-mix(in srgb, var(--st) 24%, var(--surface)); border-color: var(--st); font-weight: 700; }
+.state-chip.here::before { background: var(--st); }
 
 /* The pull request badge (code-central-388). */
 .pr-badge { white-space: nowrap; text-decoration: none; color: inherit; cursor: pointer; }
@@ -441,10 +612,27 @@ a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
 .pr-merged { opacity: 0.7; }
 .short-id { cursor: copy; }
 
-.view-head { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--border); }
-.view-head h1 { font-size: 18px; margin: 0; }
+/* A full-width view's header is the rail laid across the top: the same
+   midnight enamel, with the roundel before the view's name. */
+.view-head { display: flex; align-items: center; gap: 16px; min-height: 56px; padding: 10px 20px; background: var(--rail); color: var(--rail-text); box-shadow: inset 0 -1px var(--rail-rule); }
+.view-head h1 { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 800; margin: 0; }
 .view-head label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
-.view-picker-label { color: var(--muted); }
+.view-picker-label, .view-head > .muted, .view-head .focus-left, .view-head .btn .muted, .view-head .focus-project .muted, .view-head > .count { color: var(--rail-muted); }
+.view-head a.btn { text-decoration: none; }
+.view-head .btn, .view-head select { background: transparent; color: var(--rail-text); border: 1px solid color-mix(in srgb, var(--rail-text) 30%, transparent); }
+.view-head select { border-radius: 6px; padding: 5px 8px; }
+.view-head select option { color: var(--text); background: var(--surface); }
+.view-head .btn:hover, .view-head select:hover { border-color: var(--rail-text); }
+.view-head .btn.primary { background: #f4f2ec; border-color: #f4f2ec; color: #12224a; }
+.view-head .btn.primary:hover:not(:disabled) { background: #ffffff; }
+.view-head .new-split .new-more { border-left-color: color-mix(in srgb, #12224a 25%, transparent); }
+.view-head .bs-toggle { background: transparent; border-color: color-mix(in srgb, var(--rail-text) 30%, transparent); }
+.view-head .bs-toggle button { color: var(--rail-muted); }
+.view-head .bs-toggle button + button { border-left-color: color-mix(in srgb, var(--rail-text) 30%, transparent); }
+.view-head .bs-toggle button[aria-pressed="true"] { background: #f4f2ec; color: #12224a; }
+.view-head .new-menu, .view-head .board-columns-menu, .view-head .menu { color: var(--text); }
+.view-head :focus-visible { outline-color: #f4f2ec; }
+.inbox-nav :focus-visible { outline-color: #f4f2ec; }
 .view-head-spacer { margin-left: auto; }
 
 /* A view's shell: the full-height column its header and body stack in. */
@@ -459,7 +647,7 @@ a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
 .data-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .data-table th, .data-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; }
 .data-table tbody th { font-weight: 500; }
-.data-table-mono tbody th { font-family: ui-monospace, monospace; }
+.data-table-mono tbody th { font-family: var(--mono); }
 .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .data-table .label { margin-left: 6px; }
 /* A pulse: a brief background flash when what an element shows changes.
@@ -476,3 +664,6 @@ a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
   @keyframes flash-0 { 30% { filter: brightness(1.4); } }
   @keyframes flash-1 { 30% { filter: brightness(1.4); } }
 }
+
+/* The rail and the view head restyle .btn, so their disabled buttons dim the way the rest do. */
+.inbox-nav .btn:disabled, .view-head .btn:disabled { opacity: .55; }

@@ -6,6 +6,7 @@
 // the rest of the row opens the Spec. Whether it is open lives on the page
 // only. A Board lane is headed by a Lane header instead.
 import { useEffect, useState } from "react";
+import { Caret } from "../controls/Icon";
 import { STATES, type State } from "../api/types";
 import type { ProjectSpec, ProjectTicket } from "../live";
 import { NeedsYouDot, useNeedsMe } from "../needsme/context";
@@ -64,7 +65,7 @@ export function SpecRow({ id, spec, all, shown, here, now, link, ticketLink, sel
     <section className={`spec-row${needsYou ? " needs" : ""}${quiet ? " quiet" : ""}`} aria-label={title}>
       <div className="spec-row-head">
         <button className="chev" aria-expanded={open} aria-label={title} onClick={() => setOpen((o) => !o)}>
-          {open ? "▾" : "▸"}
+          <Caret open={open} />
         </button>
         <a className="row" {...link}>
           <span className="row-top">

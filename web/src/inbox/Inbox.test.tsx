@@ -435,7 +435,7 @@ describe("the sidebar's top row: + New and Focus", () => {
     expect(newButton).toHaveTextContent("+ New");
     expect(menuButton()).toHaveAttribute("aria-haspopup", "menu");
     expect(menuButton()).toHaveAttribute("aria-expanded", "false");
-    expect(within(nav()).getByRole("button", { name: "Focus" })).toHaveTextContent("◎ Focus");
+    expect(within(nav()).getByRole("button", { name: "Focus" })).toHaveTextContent(/^Focus$/);
     expect(within(nav()).queryByRole("button", { name: "New Map" })).toBeNull();
     expect(screen.queryByRole("menu")).toBeNull();
   });

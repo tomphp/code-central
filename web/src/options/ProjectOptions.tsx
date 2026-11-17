@@ -1,11 +1,13 @@
 // The Project Options page: one Project's settings, reached from its menu
 // in the left pane, a section each: the Repositories, the Default Landing,
-// CI with its CI Rules, GitHub Issues, Models, Stage Guides, and Focus.
+// CI with its CI Rules, GitHub Issues, Azure Boards, Models, Stage Guides, and Focus.
 import type { MouseEvent } from "react";
 import type { ProjectRow } from "../api/types";
 import { clickTo, hrefFor, type UiLocation } from "../url";
+import { ViewHeader } from "../controls/ViewHeader";
 import { CISection } from "./CISection";
 import { FactoriesSection } from "./FactoriesSection";
+import { AzureBoardsSection } from "./AzureBoardsSection";
 import { GitHubIssuesSection } from "./GitHubIssuesSection";
 import { DefaultLandingSection } from "./DefaultLandingSection";
 import { ModelsSection } from "./ModelsSection";
@@ -29,6 +31,7 @@ export const SECTIONS = [
   { id: "project-options-default-landing", label: "Default Landing" },
   { id: "project-options-ci", label: "CI" },
   { id: "project-options-github-issues", label: "GitHub Issues" },
+  { id: "project-options-azure-boards", label: "Azure Boards" },
   { id: "project-options-models", label: "Models" },
   { id: "project-options-stage-guides", label: "Stage Guides" },
   { id: "project-options-auto-accept", label: "Auto-accept" },
@@ -53,21 +56,22 @@ export function ProjectOptions({
   const back: UiLocation = { view: "inbox", project: project?.key };
 
   return (
-    <main aria-label="Project Options" className="project-options">
-      <a
-        className="project-options-back"
-        href={hrefFor(back)}
-        onClick={clickTo(navigate, back)}
-      >
-        Back to the inbox
-      </a>
+    <main aria-label="Project Options" className="view-shell">
+      <ViewHeader
+        title={project ? `${project.display_name}: Project Options` : "Project Options"}
+        right={
+          <a className="btn" href={hrefFor(back)} onClick={clickTo(navigate, back)}>
+            Back to the inbox
+          </a>
+        }
+      />
+      <div className="project-options">
       {!projects ? (
         <p className="empty">Loading…</p>
       ) : !project ? (
         <p className="empty">There is no Project {key}.</p>
       ) : (
         <>
-          <h1>{project.display_name}: Project Options</h1>
           <div className="project-options-layout">
             <nav aria-label="Sections" className="project-options-menu">
               <ul>
@@ -85,6 +89,7 @@ export function ProjectOptions({
               <DefaultLandingSection project={project} />
               <CISection project={project} />
               <GitHubIssuesSection project={project} />
+              <AzureBoardsSection project={project} />
               <ModelsSection project={project} />
               <StageGuidesSection project={project} />
               <AutoAcceptSection project={project} />
@@ -94,6 +99,7 @@ export function ProjectOptions({
           </div>
         </>
       )}
+      </div>
     </main>
   );
 }

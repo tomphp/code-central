@@ -13,20 +13,24 @@ import (
 
 // Write-backs (Spec code-central-279): Code Central works out from the
 // work's state, never from events, what each linked issue should have,
-// and get_issue_watch lists it; the Issue Watcher makes it so. A comment
-// is written once: report_issue_written records its key on the item's
-// Link. Labels and closing need no record, as the Issue Watcher changes
+// and get_issue_watch lists it; the Issue Watcher makes it so. It is
+// worked out per Integration (Spec code-central-894): each Watcher's
+// watch lists only its own Integration's Links, and get_work_item_watch
+// lists a work item's with its status label as a tag and never a close.
+// A comment is written once: report_issue_written records its key on the
+// item's Link. Labels and closing need no record, as the Watcher changes
 // only what differs. Nothing is ever due from Rounds, answers, Failure
 // Reports, Transcripts or Claims.
 
-// StatusLabelPrefix starts every status label, so the Issue Watcher
-// knows which of an issue's labels are Code Central's.
+// StatusLabelPrefix starts every status label, so a Watcher knows which
+// of an issue's labels, or a work item's tags, are Code Central's.
 const StatusLabelPrefix = "code-central:"
 
-// The status labels an issue carries, one at a time.
+// The status labels an issue carries, one at a time, and the tags of the
+// same names a work item carries.
 const (
-	// LabelDraft is on an Incoming Issue, a Draft or Ready Ticket on the
-	// Issues Spec that no triage action has taken off it.
+	// LabelDraft is on an Incoming Issue, a Draft or Ready Ticket on an
+	// inbox Spec that no triage action has taken off it.
 	LabelDraft = StatusLabelPrefix + "draft"
 	// LabelRequirement is on an issue To Requirement made a Requirement
 	// of, while the Requirement's Stages aren't all Done or Cancelled.
@@ -142,8 +146,43 @@ func triageComment(t store.Ticket, via TriageAction) (comment string, latest, ok
 	return "", false, false
 }
 
+// integrationWrites is what is due on each of integration's Links in key,
+// in number order: on the Tickets on its inbox Spec, and on the Specs
+// with an outbound Link through it. There is none before the Integration
+// is first turned on.
+func (c *Core) integrationWrites(r store.Reader, key, integration string) []IssueWrites {
+	out := []IssueWrites{}
+	in := inboxOf(r, key, integration)
+	if in.spec == 0 {
+		return out
+	}
+	byNumber := map[int]IssueWrites{}
+	for _, s := range r.Specs(key) {
+		if s.Link.Integration != integration {
+			continue
+		}
+		if w, ok := c.specIssueWrites(r, key, s); ok {
+			byNumber[s.Number] = w
+		}
+	}
+	for _, t := range r.Tickets(key) {
+		if t.Spec != in.spec || t.Link.Integration != integration {
+			continue
+		}
+		if w, ok := c.ticketIssueWrites(key, t); ok {
+			byNumber[t.Number] = w
+		}
+	}
+	for n := 1; n < r.NextNumber(key); n++ {
+		if w, ok := byNumber[n]; ok {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
 // ticketIssueWrites is what is due on the issue t, a Ticket on key's
-// Issues Spec, is linked to; ok is false when nothing is.
+// inbox Spec, is linked to; ok is false when nothing is.
 func (c *Core) ticketIssueWrites(key string, t store.Ticket) (w IssueWrites, ok bool) {
 	if !t.Link.Attached() {
 		return IssueWrites{}, false

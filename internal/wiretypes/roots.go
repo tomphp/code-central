@@ -51,6 +51,7 @@ var enums = []Enum{
 	enumOf("CodeHosts", core.CodeHosts),
 	enumOf("CloneStates", core.CloneStates),
 	enumOf("CIProviders", store.CIProviders),
+	enumOf("AzureBoardsModes", store.AzureBoardsModes),
 	enumOf("WatcherStates", core.WatcherStates),
 	enumOf("WatcherProblems", core.WatcherProblems),
 	enumOf("AutoAcceptKinds", store.AutoAcceptKinds),

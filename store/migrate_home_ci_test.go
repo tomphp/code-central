@@ -18,15 +18,15 @@ func homeCI(p store.Project) store.CIRepository {
 	return store.CIRepository{}
 }
 
-// Format 50 (code-central-900) moved the Home Repository's CI choice
+// Format 51 (code-central-900) moved the Home Repository's CI choice
 // from the CI settings' own provider and target into a per-Repository CI
 // entry like the others', and added the Factory's report that the Home's
-// clone has no Push remote. The real chain migrates a format-49 store
+// clone has no Push remote. The real chain migrates a format-50 store
 // copying every file unchanged: the old fields load as the Home's entry,
 // and the next write puts it in the new place.
-func TestTheRealChainMigratesAFormat49StoreToTheHomeCIEntryFormat(t *testing.T) {
+func TestTheRealChainMigratesAFormat50StoreToTheHomeCIEntryFormat(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
-	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 49\n")
+	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 50\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),
 		"key: acme\ndisplay_name: Acme\ncreated: 2026-01-02T03:04:05Z\nmode: committed\n"+
 			"ci:\n  tracking: true\n  provider: github_actions\n  repository: acme/web\n  push_remote_url: git@github.com:acme/web.git\n"+
@@ -41,8 +41,8 @@ func TestTheRealChainMigratesAFormat49StoreToTheHomeCIEntryFormat(t *testing.T) 
 	before := snapshot(t, dir)
 
 	s := openFile(t, dir)
-	if m := s.Migrated(); m == nil || m.From != 49 || m.To != store.Format {
-		t.Fatalf("migrated = %+v, want a migration from format 49", m)
+	if m := s.Migrated(); m == nil || m.From != 50 || m.To != store.Format {
+		t.Fatalf("migrated = %+v, want a migration from format 50", m)
 	}
 	after := snapshot(t, dir)
 	for rel, content := range before {
@@ -95,7 +95,7 @@ func TestTheRealChainMigratesAFormat49StoreToTheHomeCIEntryFormat(t *testing.T) 
 // An unknown CI Provider in the older Home fields still fails to load.
 func TestAnUnknownOlderHomeCIProviderFailsToLoad(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
-	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 49\n")
+	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 50\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),
 		"key: acme\ndisplay_name: Acme\ncreated: 2026-01-02T03:04:05Z\nmode: committed\nci:\n  tracking: false\n  provider: jenkins\n")
 	if _, err := store.Open(dir); err == nil || !strings.Contains(err.Error(), "ci.provider") {

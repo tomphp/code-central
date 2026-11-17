@@ -70,6 +70,9 @@ type Project struct {
 	// GitHubIssues is the Project's GitHub Issues settings. A Project
 	// stored without them reads as the zero GitHubIssues: off.
 	GitHubIssues GitHubIssues
+	// AzureBoards is the Project's Azure Boards settings. A Project stored
+	// without them reads as the zero AzureBoards: off.
+	AzureBoards AzureBoards
 	// Models is the Project's Models rows. A Project stored without them
 	// sets no model or effort.
 	Models Models
@@ -501,6 +504,54 @@ type GitHubIssues struct {
 	Label           string
 	NewIssuesNeedMe bool
 	Spec            int
+}
+
+// AzureBoards is a Project's Azure Boards settings (Spec
+// code-central-894): whether it is on, the Mode that picks its work items
+// with the settings of each Mode (a Saved query's URL, or a WIQL filter's
+// project URL and WHERE clause), the environment variable holding the PAT
+// (empty reads as the Project's CI PAT variable, else DefaultPATEnv),
+// whether New issues need me, and the number of its Azure Boards Spec, 0
+// until Azure Boards is first turned on. The settings of the Mode not
+// chosen are kept, so switching back restores them.
+type AzureBoards struct {
+	On              bool
+	Mode            AzureBoardsMode
+	QueryURL        string
+	ProjectURL      string
+	Where           string
+	PATEnv          string
+	NewIssuesNeedMe bool
+	Spec            int
+}
+
+// AzureBoardsMode is how Azure Boards picks its work items.
+type AzureBoardsMode string
+
+// The Azure Boards Modes.
+const (
+	// AzureBoardsSavedQuery runs a saved Azure DevOps query, named by its
+	// URL.
+	AzureBoardsSavedQuery AzureBoardsMode = "saved_query"
+	// AzureBoardsWIQL runs a WIQL WHERE clause in the Azure DevOps project
+	// its URL names.
+	AzureBoardsWIQL AzureBoardsMode = "wiql"
+)
+
+// AzureBoardsModes lists every AzureBoardsMode, the default first.
+var AzureBoardsModes = []AzureBoardsMode{AzureBoardsSavedQuery, AzureBoardsWIQL}
+
+// Valid reports whether m is one of the AzureBoardsModes.
+func (m AzureBoardsMode) Valid() bool { return slices.Contains(AzureBoardsModes, m) }
+
+// azureBoardsModeNames is the AzureBoardsModes as strings, for messages
+// and the schema.
+func azureBoardsModeNames() []string {
+	var out []string
+	for _, m := range AzureBoardsModes {
+		out = append(out, string(m))
+	}
+	return out
 }
 
 // Models is a Project's Models rows (Spec code-central-301): the model
