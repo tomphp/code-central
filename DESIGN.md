@@ -173,7 +173,7 @@ A midnight-and-porcelain base with a full set of transit line inks, each owned b
 ### Tertiary: line inks
 The reason lines (`line-*`) colour Needs Me groups and their stations, a needing Stage, a needing Map node and a needing Board card:
 - **Answer Amber** (`line-answer`): Needs Answer; the loudest line, also the Round panel's outline and the Needs Me count.
-- **Answered Violet** (`line-answered`), **Failed Scarlet** (`line-failed`, also CI failed, base diverged/missing), **Review Green** (`line-review`, also done Stages and passed CI), **Landing Teal** (`line-landing`, to merge / accepted not landed), **Blocked Ochre** (`line-blocked`), **External Cyan** (`line-external`, Incoming Issues), **Silent Grey** (`line-silent`) and **Long Slate** (`line-long`).
+- **Answered Violet** (`line-answered`), **Failed Scarlet** (`line-failed`, also CI failed, base diverged/missing, repository missing, pull request closed), **Review Green** (`line-review`, also done Stages and passed CI), **Landing Teal** (`line-landing`, to merge / accepted not landed), **Blocked Ochre** (`line-blocked`), **External Cyan** (`line-external`, Incoming Issues), **Silent Grey** (`line-silent`) and **Long Slate** (`line-long`).
 
 The State lines (`state-*`) colour the rail's State keys, State chips and Board column heads: **Draft Grey**, **Ready Slate-Blue**, **In Progress Cobalt**, **Done Green**, **Cancelled Grey**. The workflow States Needs Answer, Answered, Failed, In Review and Accepted reuse their reason's line, so one State keeps one ink everywhere.
 
