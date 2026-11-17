@@ -229,7 +229,7 @@ func projectWakesTheFactory(r store.Reader, p store.Project) bool {
 		return false
 	}
 	ci := func(c store.CI) store.CI {
-		c.PushRemoteURL = ""
+		c.PushRemoteURL, c.NoPushRemote = "", false
 		return c
 	}
 	return was.Base() != p.Base() || was.Landing != p.Landing || !ci(was.CI).Equal(ci(p.CI)) ||

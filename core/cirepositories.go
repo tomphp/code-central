@@ -9,26 +9,49 @@ import (
 )
 
 // CI Tracking across Repositories (Spec code-central-848): CI Tracking
-// stays one switch, and each Repository other than the Home has a CI
-// entry, its CI Provider and what that watches, or Not watched. The Home
-// Repository's entry is the CI settings' own Provider and target. A
-// Ticket has a CI result per watched Repository it pushed in, combined
-// into one; a Not watched Repository never gates, raises a CI item or
-// counts towards that result.
+// stays one switch, and each Repository, the Home included (Spec
+// code-central-890), has a CI entry, its CI Provider and what that
+// watches, or Not watched. A Ticket has a CI result per watched
+// Repository it pushed in, combined into one; a Not watched Repository
+// never gates, raises a CI item or counts towards that result.
 
-// ciEntryOf is the CI entry of p's Repository named name, which isn't the
-// Home: the one stored, or with none stored, one filled in from its
-// Clone URL. ok is false when p has no such Repository.
+// ciEntryOf is the CI entry of p's Repository named name: the one
+// stored, or with none stored, one filled in from its Clone URL. ok is
+// false when p has no such Repository.
 func ciEntryOf(p store.Project, name string) (entry store.CIRepository, ok bool) {
-	if i := slices.IndexFunc(p.CI.Repositories, func(e store.CIRepository) bool { return e.Name == name }); i >= 0 {
-		return p.CI.Repositories[i], true
-	}
 	for _, r := range p.RepositoryList() {
-		if r.Name == name && !r.Home {
-			return ciEntryFromCloneURL(name, r.CloneURL), true
+		if r.Name == name {
+			return ciEntryOfRepository(p, r), true
 		}
 	}
 	return store.CIRepository{}, false
+}
+
+// ciEntryOfRepository is the CI entry of p's Repository r: the one
+// stored, or with none stored, one filled in from its Clone URL, the
+// reported Push remote's for the Home Repository.
+func ciEntryOfRepository(p store.Project, r store.Repository) store.CIRepository {
+	if e, ok := storedCIEntry(p, r.Name); ok {
+		return e
+	}
+	url := r.CloneURL
+	if r.Home {
+		url = p.CI.PushRemoteURL
+	}
+	return ciEntryFromCloneURL(r.Name, url)
+}
+
+// storedCIEntry is the CI entry p stores for its Repository name, if any.
+func storedCIEntry(p store.Project, name string) (store.CIRepository, bool) {
+	if i := slices.IndexFunc(p.CI.Repositories, func(e store.CIRepository) bool { return e.Name == name }); i >= 0 {
+		return p.CI.Repositories[i], true
+	}
+	return store.CIRepository{}, false
+}
+
+// ciEntryView is e as a Project read shows it.
+func ciEntryView(e store.CIRepository) CIRepositoryView {
+	return CIRepositoryView{Name: e.Name, NotWatched: e.NotWatched, Provider: e.Provider, Repository: e.Repository, ProjectURL: e.ProjectURL}
 }
 
 // ciEntryFromCloneURL is the CI entry a Repository's Clone URL fills in:
@@ -46,13 +69,9 @@ func ciEntryFromCloneURL(name, url string) store.CIRepository {
 	return store.CIRepository{Name: name, NotWatched: true}
 }
 
-// watchesCI reports whether CI Tracking watches p's Repository name: the
-// Home Repository always, another while it is listed and its CI entry
-// isn't Not watched.
+// watchesCI reports whether CI Tracking watches p's Repository name:
+// while it is listed and its CI entry isn't Not watched.
 func watchesCI(p store.Project, name string) bool {
-	if name == p.Key {
-		return true
-	}
 	entry, ok := ciEntryOf(p, name)
 	return ok && !entry.NotWatched
 }
@@ -67,17 +86,30 @@ type ciTarget struct {
 	repository, projectURL string
 }
 
-// ciTargets are the CI targets of p's watched Repositories other than
-// the Home, in landing order.
+// ciTargets are the CI targets of p's watched Repositories, the Home's
+// included, in landing order.
 func ciTargets(p store.Project) []ciTarget {
 	var out []ciTarget
 	for _, r := range p.RepositoryList() {
-		if r.Home {
-			continue
-		}
-		if e, _ := ciEntryOf(p, r.Name); !e.NotWatched {
+		if e := ciEntryOfRepository(p, r); !e.NotWatched {
 			out = append(out, ciTarget{name: r.Name, provider: e.Provider, repository: e.Repository, projectURL: e.ProjectURL})
 		}
+	}
+	return out
+}
+
+// ciProviders are the CI Providers p's watched Repositories use, each
+// once, or GitHub Actions while none is watched, as before any
+// Repository had a CI entry: a workflow name is checked against them.
+func ciProviders(p store.Project) []store.CIProvider {
+	var out []store.CIProvider
+	for _, t := range ciTargets(p) {
+		if !slices.Contains(out, t.provider) {
+			out = append(out, t.provider)
+		}
+	}
+	if len(out) == 0 {
+		return []store.CIProvider{store.CIGitHubActions}
 	}
 	return out
 }
@@ -140,8 +172,7 @@ type RepositoryCI struct {
 // SetRepositoryCIInput is the human's set_repository_ci(name,
 // not_watched?, provider?, repository?, project_url?, full?).
 type SetRepositoryCIInput struct {
-	// Name is the Repository's, which can't be the Home Repository's: its
-	// CI is the CI settings' own.
+	// Name is the Repository's, the Home Repository's included.
 	Name string `json:"name"`
 	RepositoryCI
 	// Full asks for the Project in place of the Acknowledgement.
@@ -163,14 +194,12 @@ func ciEntry(name string, in RepositoryCI, field string) (store.CIRepository, er
 	if !e.Provider.Valid() {
 		return e, invalid(field+"provider", "CI Provider %q isn't %q or %q", e.Provider, store.CIGitHubActions, store.CIAzurePipelines)
 	}
-	ci := store.CI{Tracking: !e.NotWatched, Provider: e.Provider, Repository: e.Repository, ProjectURL: e.ProjectURL}
-	if err := checkCITarget(&ci); err != nil {
+	if err := checkCITarget(&e); err != nil {
 		if ce, ok := err.(*Error); ok {
 			ce.Field = field + ce.Field
 		}
 		return e, err
 	}
-	e.Repository, e.ProjectURL = ci.Repository, ci.ProjectURL
 	return e, nil
 }
 
@@ -181,7 +210,25 @@ func ciEntry(name string, in RepositoryCI, field string) (store.CIRepository, er
 // field+provider. It runs outside the store's lock, as the check calls
 // GitHub.
 func (c *Core) checkCIEntry(ctx context.Context, p store.Project, opts store.Options, e store.CIRepository, field string) error {
-	if e.NotWatched || c.ciCheck == nil {
+	return c.checkCIEntryOn(ctx, p, opts, e, field, "provider", e.Name+": ")
+}
+
+// checkCIEntryOn is checkCIEntry refusing on field+other, not provider,
+// for a problem with neither the repository nor the project, with lead
+// before the reason. A watched entry naming nothing to watch, as an older
+// client's set_ci_tracking may leave the Home's while CI Tracking is
+// off, is refused as needing it, without the check.
+func (c *Core) checkCIEntryOn(ctx context.Context, p store.Project, opts store.Options, e store.CIRepository, field, other, lead string) error {
+	if e.NotWatched {
+		return nil
+	}
+	if err := checkCITarget(&e); err != nil {
+		if ce, ok := err.(*Error); ok {
+			ce.Field, ce.Message = field+ce.Field, lead+ce.Message
+		}
+		return err
+	}
+	if c.ciCheck == nil {
 		return nil
 	}
 	in := CICheckInput{Provider: e.Provider, Repository: e.Repository, GHPath: opts.GHPath}
@@ -192,19 +239,19 @@ func (c *Core) checkCIEntry(ctx context.Context, p store.Project, opts store.Opt
 	if res.Problem == "" {
 		return nil
 	}
-	f := "provider"
+	f := other
 	switch res.Problem {
 	case ProblemRepositoryUnreadable:
 		f = "repository"
 	case ProblemProjectUnreadable:
 		f = "project_url"
 	}
-	return &Error{Code: Invalid, Field: field + f, Message: e.Name + ": " + res.Reason, Fix: res.Fix}
+	return &Error{Code: Invalid, Field: field + f, Message: lead + res.Reason, Fix: res.Fix}
 }
 
 // SetRepositoryCI is the human's set_repository_ci: the CI entry of a
-// Repository other than the Home, its CI Provider and what it watches,
-// or Not watched. While CI Tracking is on, a watched entry that watches
+// Repository, the Home included, its CI Provider and what it watches, or
+// Not watched. While CI Tracking is on, a watched entry that watches
 // something new must pass the CI Watcher's check first.
 func (c *Core) SetRepositoryCI(ctx context.Context, key string, in SetRepositoryCIInput) (Written[ProjectView], error) {
 	if err := humanOnly(ctx, "set_repository_ci"); err != nil {
@@ -229,10 +276,8 @@ func (c *Core) SetRepositoryCI(ctx context.Context, key string, in SetRepository
 	if err != nil {
 		return Written[ProjectView]{}, err
 	}
-	if was, _ := ciEntryOf(p, name); landingPolicies(p).RunsCIWatcher() && (was.NotWatched || !sameCITarget(was, e)) {
-		if err := c.checkCIEntry(ctx, p, opts, e, ""); err != nil {
-			return Written[ProjectView]{}, err
-		}
+	if err := c.checkNewCIEntry(ctx, p, opts, e, ""); err != nil {
+		return Written[ProjectView]{}, err
 	}
 	return c.updateCIIn(key, in.Full, func(p store.Project, ci *store.CI) error {
 		if _, err := ciEntryNamed(p, name); err != nil {
@@ -243,13 +288,19 @@ func (c *Core) SetRepositoryCI(ctx context.Context, key string, in SetRepository
 	})
 }
 
-// ciEntryNamed is the CI entry of p's Repository name, refusing the Home
-// Repository and a name p has no Repository by.
-func ciEntryNamed(p store.Project, name string) (store.CIRepository, error) {
-	if name == p.Key {
-		return store.CIRepository{}, &Error{Code: Invalid, Field: "name", Message: name + " is the Home Repository, whose CI is the CI settings' own CI Provider and target",
-			Fix: "change the Home Repository's CI with set_ci_tracking"}
+// checkNewCIEntry runs checkCIEntry for e, the CI entry about to replace
+// its Repository's in p, while the CI Watcher runs and e watches
+// something new.
+func (c *Core) checkNewCIEntry(ctx context.Context, p store.Project, opts store.Options, e store.CIRepository, field string) error {
+	if was, _ := ciEntryOf(p, e.Name); landingPolicies(p).RunsCIWatcher() && (was.NotWatched || !sameCITarget(was, e)) {
+		return c.checkCIEntry(ctx, p, opts, e, field)
 	}
+	return nil
+}
+
+// ciEntryNamed is the CI entry of p's Repository name, refusing a name p
+// has no Repository by.
+func ciEntryNamed(p store.Project, name string) (store.CIRepository, error) {
 	e, ok := ciEntryOf(p, name)
 	if !ok {
 		return e, notARepository(p, "name", name)

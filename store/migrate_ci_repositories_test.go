@@ -38,8 +38,9 @@ func TestTheRealChainMigratesAFormat45StoreToTheCIRepositoriesFormat(t *testing.
 	}
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
-		if p.CI.Repositories != nil || p.CIResponses[0].Repository != "" {
-			t.Errorf("CI entries %+v and response %+v, want no entries and no Repository Name", p.CI.Repositories, p.CIResponses[0])
+		// The Home's CI loads as its own entry since format 50.
+		if len(p.CI.Repositories) != 1 || homeCI(p).Repository != "acme/web" || p.CIResponses[0].Repository != "" {
+			t.Errorf("CI entries %+v and response %+v, want the Home's entry alone and no Repository Name", p.CI.Repositories, p.CIResponses[0])
 		}
 		if runs := r.CIRuns("acme"); runs[0].Repository != "" {
 			t.Errorf("run %+v, want no Repository Name", runs[0])

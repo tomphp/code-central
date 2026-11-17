@@ -28,7 +28,7 @@ func init() {
 			field("key", "acme")(t, out)
 			ciSettings(t, out, true, "acme/web", []string{"nightly.yml"}, "")
 		},
-		bad:  call{http: setCITracking(`{"tracking":true}`)},
+		bad:  call{http: setCITracking(`{"tracking":true,"provider":"github_actions"}`)},
 		code: core.Invalid,
 	}
 	cases["report_push_remote"] = opCase{
@@ -39,8 +39,8 @@ func init() {
 		full: func(t *testing.T, out map[string]any) {
 			ciSettings(t, out, false, "", nil, "git@github.com:acme/web.git")
 		},
-		bad:  call{http: reportPushRemote(`{"url":" "}`)},
-		code: core.Invalid,
+		bad:  call{http: httpCall{"POST", "/api/p/nope/report_push_remote", `{"url":"git@github.com:acme/web.git"}`}},
+		code: core.UnknownProject,
 	}
 }
 
@@ -94,14 +94,19 @@ func TestSetCITrackingIsRejectedForAnAgent(t *testing.T) {
 	ciSettings(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), false, "", nil, "")
 }
 
+// An older client names the Home Repository's CI in set_ci_tracking, and
+// needs what it watches to turn CI Tracking on; a newer one names only
+// the Project-wide fields, so CI Tracking may be on with the Home Not
+// watched (Spec code-central-890).
 func TestTurningCITrackingOnNeedsARepository(t *testing.T) {
 	srv := newServer(t)
-	for _, body := range []string{`{"tracking":true}`, `{"tracking":true,"repository":"  "}`} {
+	for _, body := range []string{`{"tracking":true,"provider":"github_actions"}`, `{"tracking":true,"provider":"github_actions","repository":"  "}`} {
 		e := httpRejected(t, srv, setCITracking(body), core.Invalid)
 		if e.Field != "repository" || !strings.Contains(e.Message, "owner/name") {
 			t.Fatalf("%s: field %q message %q, want repository asking for owner/name", body, e.Field, e.Message)
 		}
 	}
+	ciSettings(t, httpOK(t, srv, setCITracking(`{"tracking":true,"full":true}`)), true, "", nil, "")
 	// Off, the repository may stay empty, or be kept for later.
 	ciSettings(t, httpOK(t, srv, setCITracking(`{"tracking":false,"full":true}`)), false, "", nil, "")
 	ciSettings(t, httpOK(t, srv, setCITracking(`{"tracking":false,"repository":"acme/web","full":true}`)), false, "acme/web", nil, "")
@@ -185,9 +190,13 @@ func TestTheFactoryReportsThePushRemoteURL(t *testing.T) {
 	httpDoAs(t, srv, core.Agent, reportPushRemote(`{"url":"git@github.com:acme/web.git"}`))
 	ciSettings(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), true, "acme/web", nil, "git@github.com:acme/web.git")
 
-	e := httpRejected(t, srv, reportPushRemote(`{"url":""}`), core.Invalid)
-	if e.Field != "url" {
-		t.Fatalf("field %q, want url", e.Field)
+	// No Push remote, reported as an empty URL, makes the Home local-only
+	// (Spec code-central-890).
+	httpDoAs(t, srv, core.Agent, reportPushRemote(`{"url":""}`))
+	p := httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""})
+	home, _ := p["repositories"].([]any)[0].(map[string]any)
+	if home["clone_url"] != "" || home["local_only"] != true {
+		t.Fatalf("Home %v, want it local-only with no Clone URL", home)
 	}
 }
 

@@ -26,8 +26,12 @@ type RepositoryView struct {
 	Home bool `json:"home"`
 	// CloneURL is the remote the Repository is cloned from and pushed to:
 	// the Push remote URL the Factory reported for the Home Repository,
-	// empty until it has.
+	// empty until it has, or when it reported none.
 	CloneURL string `json:"clone_url"`
+	// LocalOnly marks a Repository with no Clone URL, never cloned or
+	// pushed: the Home Repository once the Factory reports its clone has
+	// no Push remote, and not before.
+	LocalOnly bool `json:"local_only"`
 	// Base is the branch its work is cut from and lands on: the Project's
 	// Base for the Home Repository.
 	Base string `json:"base"`
@@ -58,16 +62,14 @@ type RepositoryView struct {
 	// Landing is Pull Request, as only a Home that lost its remote can
 	// be: nothing lands there until it has another Landing or a remote.
 	LocalOnlyUnderPullRequest bool `json:"local_only_under_pull_request"`
+	// CI is its CI choice, the Home's included: its CI entry, stored or
+	// filled in from its Clone URL.
+	CI CIRepositoryView `json:"ci"`
 }
-
-// LocalOnly reports whether r is a Repository other than the Home with no
-// Clone URL. The Home's is empty only until the Factory reports it, so it
-// is never local-only.
-func (r RepositoryView) LocalOnly() bool { return !r.Home && r.CloneURL == "" }
 
 // localOnlyIn reports whether p's Repository name is local-only.
 func localOnlyIn(p store.Project, name string) bool {
-	return slices.ContainsFunc(repositoriesView(p), func(r RepositoryView) bool { return r.Name == name && r.LocalOnly() })
+	return slices.ContainsFunc(repositoriesView(p), func(r RepositoryView) bool { return r.Name == name && r.LocalOnly })
 }
 
 // repositoriesView is p's Repositories in landing order.
@@ -83,15 +85,16 @@ func repositoriesView(p store.Project) []RepositoryView {
 // repositoryView is p's Repository r as every Project read returns it.
 func repositoryView(p store.Project, r store.Repository) RepositoryView {
 	v := RepositoryView{Name: r.Name, Home: r.Home, CloneURL: r.CloneURL, Base: r.Base, LocalPath: r.LocalPath, ChangedBy: []string{},
-		PushRemote: r.PushRemote, OwnPushRemote: r.PushRemote != ""}
+		PushRemote: r.PushRemote, OwnPushRemote: r.PushRemote != "", LocalOnly: r.CloneURL == ""}
 	if r.Home {
-		v.CloneURL, v.Base = p.CI.PushRemoteURL, p.Base()
+		v.CloneURL, v.Base, v.LocalOnly = p.CI.PushRemoteURL, p.Base(), p.CI.NoPushRemote
 	}
 	if !v.OwnPushRemote {
 		v.PushRemote = p.Landing.Remote
 	}
 	v.CodeHost, _ = codeHostOf(v.CloneURL)
 	v.Landing, v.OwnLanding = effectiveLanding(p, r)
+	v.CI = ciEntryView(ciEntryOfRepository(p, r))
 	return v
 }
 

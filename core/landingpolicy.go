@@ -118,7 +118,7 @@ func repositoryLandingPolicies(repositories []RepositoryView, method store.Landi
 	ps := LandingPolicies{byName: map[string]LandingPolicy{}, fallback: NewLandingPolicy(method, push, landPerSpec, ciTracking)}
 	for _, r := range repositories {
 		m, p := r.Landing.methodAndPush()
-		ps.byName[r.Name] = NewLandingPolicy(m, p && !r.LocalOnly(), landPerSpec, ciTracking)
+		ps.byName[r.Name] = NewLandingPolicy(m, p && !r.LocalOnly, landPerSpec, ciTracking)
 		ps.names = append(ps.names, r.Name)
 	}
 	return ps
@@ -130,7 +130,7 @@ func repositoryLandingPolicies(repositories []RepositoryView, method store.Landi
 func markLocalOnlyUnderPullRequest(p store.Project, vs []RepositoryView) {
 	ps := repositoryLandingPolicies(vs, p.Landing.Method, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
 	for i, v := range vs {
-		vs[i].LocalOnlyUnderPullRequest = v.LocalOnly() && ps.In(v.Name).NeedsCloneURL()
+		vs[i].LocalOnlyUnderPullRequest = v.LocalOnly && ps.In(v.Name).NeedsCloneURL()
 	}
 }
 

@@ -60,6 +60,23 @@ func TestRepositoryListShowsTheHomeRepositoryAlone(t *testing.T) {
 	if len(lines) != 2 || !strings.Contains(lines[1], "acme (home)") || !strings.Contains(lines[1], "main") {
 		t.Fatalf("list:\n%s\nwant a header and the Home Repository acme on main", out)
 	}
+	if !strings.Contains(lines[1], "(not reported yet)") {
+		t.Fatalf("list:\n%s\nwant the Home's Clone URL not reported yet", out)
+	}
+}
+
+// The Factory reports the Home's clone has no Push remote: it is
+// local-only (Spec code-central-890).
+func TestRepositoryListShowsALocalOnlyHome(t *testing.T) {
+	t.Parallel()
+	srv, env := repositoryEnv(t)
+	if _, err := srv.Client.ReportPushRemote(context.Background(), "acme", core.ReportPushRemoteInput{URL: ""}); err != nil {
+		t.Fatal(err)
+	}
+	out := printed(t, run(t, env, "", "repository", "list"))
+	if lines := strings.Split(strings.TrimSpace(out), "\n"); len(lines) != 2 || !strings.Contains(lines[1], "acme (home)") || !strings.Contains(lines[1], "(none: local only)") {
+		t.Fatalf("list:\n%s\nwant the Home shown local only", out)
+	}
 }
 
 func TestRepositoryAddEditMoveAndRemove(t *testing.T) {

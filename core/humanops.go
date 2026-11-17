@@ -148,7 +148,9 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		nextP := p
 		nextP.Landing = l
 		was, next := landingPolicies(p), landingPolicies(nextP)
-		if next.In(key).LandsByPullRequest() {
+		// A local-only Home has no Push remote to check: refused below
+		// when it comes under Pull Request, and flagged when already there.
+		if next.In(key).LandsByPullRequest() && !p.CI.NoPushRemote {
 			if err := checkPullRequestHost(p.CI.PushRemoteURL); err != nil {
 				return err
 			}

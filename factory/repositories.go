@@ -49,10 +49,11 @@ type repository struct {
 }
 
 // view is r as the Project lists it, as far as the Factory keeps it: its
-// Name, whether it is the Home, its Clone URL and its Base, which say
-// whether it is local-only. Its local path and Code Host are left out.
+// Name, whether it is the Home, its Clone URL and its Base, and whether
+// it is local-only: one other than the Home with no Clone URL. Its local
+// path and Code Host are left out.
 func (r *repository) view() core.RepositoryView {
-	return core.RepositoryView{Name: r.name, Home: r.home, CloneURL: r.cloneURL, Base: r.base}
+	return core.RepositoryView{Name: r.name, Home: r.home, CloneURL: r.cloneURL, Base: r.base, LocalOnly: !r.home && r.cloneURL == ""}
 }
 
 // policy is r's Landing Policy among the Project's, policies, which every

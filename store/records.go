@@ -140,26 +140,30 @@ type githubIssuesFile struct {
 }
 
 type ciFile struct {
-	Tracking         bool         `yaml:"tracking"`
-	Provider         string       `yaml:"provider"`
+	Tracking bool `yaml:"tracking"`
+	// Provider, Repository and ProjectURL are the Home Repository's CI
+	// before it became a CI entry like the others' (Spec
+	// code-central-890). They are read as the Home's entry, so a file
+	// that still holds them loads, and never written.
+	Provider         string       `yaml:"provider,omitempty"`
 	Repository       string       `yaml:"repository,omitempty"`
 	ProjectURL       string       `yaml:"project_url,omitempty"`
 	PATEnv           string       `yaml:"pat_env,omitempty"`
 	IgnoredWorkflows []string     `yaml:"ignored_workflows,omitempty"`
 	PushRemoteURL    string       `yaml:"push_remote_url,omitempty"`
+	NoPushRemote     bool         `yaml:"no_push_remote,omitempty"`
 	PushRemoteBase   string       `yaml:"push_remote_base,omitempty"`
 	Rules            []ciRuleFile `yaml:"rules,omitempty"`
 	// UnblockOnPush is the removed Unblock on push option (ADR 0023,
 	// superseded by ADR 0032). It is read so a file that still holds it loads, and
 	// never kept or written.
 	UnblockOnPush bool `yaml:"unblock_on_push,omitempty"`
-	// Repositories is left out while no Repository but the Home has an
-	// entry.
+	// Repositories is left out while no Repository has an entry.
 	Repositories []ciRepositoryFile `yaml:"repositories,omitempty"`
 }
 
-// ciRepositoryFile is the CI entry of one Repository other than the
-// Home.
+// ciRepositoryFile is the CI entry of one Repository, the Home's
+// included.
 type ciRepositoryFile struct {
 	Name       string `yaml:"name"`
 	NotWatched bool   `yaml:"not_watched,omitempty"`
@@ -842,11 +846,11 @@ func encodeLanding(l Landing) *landingFile {
 // encodeCI leaves the default CI out of project.yaml, so a Project that
 // never had CI settings keeps the file it always had.
 func encodeCI(c CI) *ciFile {
-	if c = c.orDefault(); c.Equal(DefaultCI()) {
+	if c.Equal(DefaultCI()) {
 		return nil
 	}
-	f := &ciFile{Tracking: c.Tracking, Provider: string(c.Provider), Repository: c.Repository, ProjectURL: c.ProjectURL, PATEnv: c.PATEnv,
-		IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, PushRemoteBase: c.PushRemoteBase}
+	f := &ciFile{Tracking: c.Tracking, PATEnv: c.PATEnv,
+		IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, NoPushRemote: c.NoPushRemote, PushRemoteBase: c.PushRemoteBase}
 	for _, r := range c.Rules {
 		f.Rules = append(f.Rules, ciRuleFile{Spec: r.Spec, Workflow: r.Workflow, Branch: r.Branch, State: string(r.State), Created: formatTime(r.Created)})
 	}
@@ -874,6 +878,26 @@ func decodeCIRepositories(fs []ciRepositoryFile) ([]CIRepository, string, error)
 		out = append(out, r)
 	}
 	return out, "", nil
+}
+
+// withLegacyHomeCI is es with the Home Repository's CI entry, named key,
+// read from f's older provider, repository and project URL (Spec
+// code-central-890) when they name what to watch and es has no entry for
+// the Home. Without them the Home's entry is filled in from its Clone
+// URL, as any Repository's is.
+func withLegacyHomeCI(key string, es []CIRepository, f ciFile) []CIRepository {
+	e := CIRepository{Name: key, Provider: CIProvider(f.Provider), Repository: f.Repository, ProjectURL: f.ProjectURL}
+	if e.Provider == "" {
+		e.Provider = CIGitHubActions
+	}
+	named := e.Repository != ""
+	if e.Provider == CIAzurePipelines {
+		named = e.ProjectURL != ""
+	}
+	if !named || slices.ContainsFunc(es, func(o CIRepository) bool { return o.Name == key }) {
+		return es
+	}
+	return append([]CIRepository{e}, es...)
 }
 
 // encodeGitHubIssues leaves GitHub Issues out of project.yaml while it is

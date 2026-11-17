@@ -35,7 +35,7 @@ func TestTheRealChainMigratesAFormat19StoreToTheAzurePipelinesFormat(t *testing.
 	}
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
-		if !p.CI.Tracking || p.CI.Repository != "acme/web" || p.CI.ProjectURL != "" || p.CI.PATEnv != "" {
+		if h := homeCI(p); !p.CI.Tracking || h.Repository != "acme/web" || h.ProjectURL != "" || p.CI.PATEnv != "" {
 			t.Errorf("ci after migrating = %+v, want acme/web with no project URL or PAT environment variable", p.CI)
 		}
 		return nil
@@ -44,7 +44,7 @@ func TestTheRealChainMigratesAFormat19StoreToTheAzurePipelinesFormat(t *testing.
 	// The new settings and conclusion read back, each provider's own kept.
 	if err := s.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
-		p.CI.Provider, p.CI.ProjectURL, p.CI.PATEnv = store.CIAzurePipelines, "https://dev.azure.com/acme/web", "ACME_PAT"
+		p.CI.Repositories[0].Provider, p.CI.Repositories[0].ProjectURL, p.CI.PATEnv = store.CIAzurePipelines, "https://dev.azure.com/acme/web", "ACME_PAT"
 		return w.PutProject(p)
 	}); err != nil {
 		t.Fatal(err)
@@ -52,7 +52,7 @@ func TestTheRealChainMigratesAFormat19StoreToTheAzurePipelinesFormat(t *testing.
 	s = reopen(t, s)
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
-		if p.CI.Provider != store.CIAzurePipelines || p.CI.ProjectURL != "https://dev.azure.com/acme/web" || p.CI.PATEnv != "ACME_PAT" || p.CI.Repository != "acme/web" {
+		if h := homeCI(p); h.Provider != store.CIAzurePipelines || h.ProjectURL != "https://dev.azure.com/acme/web" || p.CI.PATEnv != "ACME_PAT" || h.Repository != "acme/web" {
 			t.Errorf("ci = %+v, want Azure Pipelines settings with the repository kept", p.CI)
 		}
 		return nil

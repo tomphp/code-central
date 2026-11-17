@@ -40,7 +40,7 @@ func TestTheRealChainMigratesAFormat13StoreToTheGitHubIssuesFormat(t *testing.T)
 		if !reflect.DeepEqual(p.GitHubIssues, store.GitHubIssues{}) {
 			t.Errorf("github issues after migrating = %+v, want off with nothing set", p.GitHubIssues)
 		}
-		if !p.CI.Tracking || p.CI.Repository != "acme/web" {
+		if !p.CI.Tracking || homeCI(p).Repository != "acme/web" {
 			t.Errorf("ci after migrating = %+v, want it kept", p.CI)
 		}
 		return nil
