@@ -208,12 +208,12 @@ func (c *Client) Retry(ctx context.Context, buildID int) error {
 // do calls method on rawURL with query, sending body as JSON when it isn't
 // nil, and decodes the JSON answer into out when it isn't nil.
 func (c *Client) do(ctx context.Context, method, rawURL string, query url.Values, body, out any) error {
-	return c.doAs(ctx, "application/json", method, rawURL, query, body, out)
+	return c.doAs(ctx, method, rawURL, query, "application/json", body, out)
 }
 
-// doAs is do, sending body with contentType. A call whose query gives no
+// doAs is do, sending its body as contentType. A call whose query gives no
 // api-version is pinned to APIVersion.
-func (c *Client) doAs(ctx context.Context, contentType, method, rawURL string, query url.Values, body, out any) error {
+func (c *Client) doAs(ctx context.Context, method, rawURL string, query url.Values, contentType string, body, out any) error {
 	if query == nil {
 		query = url.Values{}
 	}

@@ -167,6 +167,7 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 	c.SetUsage(usage.New(dir, clk, time.Local, e.Stderr))
 	c.SetCICheck(ciwatcher.Checker(self, os.Environ()))
 	c.SetIssuesCheck(issuewatcher.Checker(self, os.Environ()))
+	c.SetAzureBoardsCheck(workitemwatcher.Checker(self, os.Environ()))
 	c.SetPullRequestCheck(pullrequestwatcher.Checker(self, os.Environ()))
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()

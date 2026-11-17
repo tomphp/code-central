@@ -114,6 +114,13 @@ func (s *Server) SavedQuery(id string, ids ...int) {
 	s.board.saved[id] = ids
 }
 
+// DeleteSavedQuery takes the project's saved query id away.
+func (s *Server) DeleteSavedQuery(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.board.saved, id)
+}
+
 // Filter makes a WIQL query of the project whose WHERE clause is where
 // match ids, in that order. A WHERE clause the board has no filter for is
 // a WIQL error.
@@ -176,6 +183,15 @@ func (b board) answer(serverURL string, req Request) *Answer {
 			}
 		}
 		a := JSON("", "", 0, map[string]any{"count": len(value), "value": value})
+		return &a
+	case req.Method == http.MethodPatch && strings.HasPrefix(req.Path, workItemsPath) && slices.Contains(req.Query["validateOnly"], "true"):
+		// A validated write is checked and answered, never saved.
+		id, err := strconv.Atoi(strings.TrimPrefix(req.Path, workItemsPath))
+		w, ok := b.items[id]
+		if err != nil || !ok {
+			return refusal(http.StatusNotFound, fmt.Sprintf("TF401232: Work item %d does not exist, or you do not have permissions to read it.", id))
+		}
+		a := JSON("", "", 0, w.json(serverURL))
 		return &a
 	case req.Method == http.MethodGet && strings.HasPrefix(req.Path, workItemsPath):
 		id, err := strconv.Atoi(strings.TrimPrefix(req.Path, workItemsPath))
