@@ -154,13 +154,14 @@ export interface Api {
   // remote is trimmed; under Push it can't be empty, and without Push an
   // empty one is stored as origin.
   setLandingMethod(project: string, landing: LandingInput): Promise<ProjectView>;
-  // setCITracking sets the Project's CI settings. The repository is
-  // trimmed, and needed as owner/name to turn CI Tracking on; Ignored
-  // workflows are trimmed, with blanks and repeats dropped.
+  // setCITracking sets the Project's CI settings: CI Tracking, the PAT
+  // environment variable and the Ignored workflows, trimmed, with blanks
+  // and repeats dropped. Turning CI Tracking on checks each watched
+  // Repository's CI entry.
   setCITracking(project: string, ci: CITrackingChange): Promise<ProjectView>;
-  // setRepositoryCI sets the CI entry of a Repository other than the
-  // Home: Not watched, or its CI Provider and what it watches, which,
-  // while CI Tracking is on, must pass the CI Watcher's check.
+  // setRepositoryCI sets a Repository's CI entry, the Home's included:
+  // Not watched, or its CI Provider and what it watches, which, while CI
+  // Tracking is on, must pass the CI Watcher's check.
   setRepositoryCI(project: string, name: string, ci: RepositoryCIChange): Promise<ProjectView>;
   // setGitHubIssues sets the Project's GitHub Issues settings. The
   // repository and label are trimmed; turning it on needs a repository as

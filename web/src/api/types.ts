@@ -106,12 +106,14 @@ export interface PullRequestReport {
 // The CI settings the human sets with setCITracking.
 export interface CITrackingChange {
   tracking: boolean;
-  provider: CIProvider;
-  // repository is the GitHub repository as owner/name; CI Tracking on needs one.
-  repository: string;
+  // provider, repository and project_url are the Home Repository's CI
+  // entry as an older client set it here; this one sets it with
+  // setRepositoryCI, like any other Repository's (Spec code-central-890).
+  provider?: CIProvider;
+  // repository is the GitHub repository as owner/name.
+  repository?: string;
   // project_url is the Azure DevOps project as its URL, such as
-  // https://dev.azure.com/acme/web; Azure Pipelines on needs one. Each
-  // CI Provider keeps its own fields, so switching loses nothing.
+  // https://dev.azure.com/acme/web.
   project_url?: string;
   // pat_env names the environment variable holding the Azure DevOps PAT in
   // the service's environment, ADO_PAT when left empty. The PAT itself is
