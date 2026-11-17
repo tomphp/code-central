@@ -1,6 +1,8 @@
 package frontdoor_test
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -9,6 +11,10 @@ import (
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 )
+
+// srcPath is a clone's absolute path on this OS: "/src/<name>" isn't
+// absolute on Windows.
+func srcPath(name string) string { return filepath.ToSlash(filepath.Join(os.TempDir(), "src", name)) }
 
 // Repositories (Spec code-central-848): add_repository, edit_repository,
 // remove_repository and set_landing_order are the human's, so HTTP only;
@@ -32,13 +38,13 @@ func init() {
 	}
 	cases["edit_repository"] = opCase{
 		setup: withRepository(`{"name":"web","clone_url":"git@github.com:acme/web.git"}`),
-		ok:    call{http: editRepository(`{"name":"web","base":"develop","local_path":"/src/web"}`)},
+		ok:    call{http: editRepository(`{"name":"web","base":"develop","local_path":"` + srcPath("web") + `"}`)},
 		check: func(t *testing.T, out map[string]any) {
 			acknowledgement("acme", "repositories")(t, out)
 		},
 		full: func(t *testing.T, out map[string]any) {
-			if web := repositoryIn(out, "web"); web["base"] != "develop" || web["local_path"] != "/src/web" {
-				t.Fatalf("web = %v, want Base develop at /src/web", web)
+			if web := repositoryIn(out, "web"); web["base"] != "develop" || web["local_path"] != srcPath("web") {
+				t.Fatalf("web = %v, want Base develop at %s", web, srcPath("web"))
 			}
 		},
 		bad:  call{http: editRepository(`{"name":"acme","base":"trunk"}`)},

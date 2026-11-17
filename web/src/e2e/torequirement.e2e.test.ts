@@ -56,7 +56,7 @@ describe("end-to-end: an issue arrives and the human turns it To Requirement", (
     await svc.agent("/api/projects/create_project", { key: "acme", display_name: "Acme" });
     const issue = { number: 7, title: "Login is broken", body: "It fails with a 500.", html_url: "https://github.com/acme/web/issues/7", state: "open", labels: [] };
     await svc.scriptGH([triageRepository("acme/web"), { args: ["api", OPEN_ISSUES], stdout: JSON.stringify([issue]) }]);
-    const on = { on: true, repository: "acme/web", label: "", new_issues_need_me: true };
+    const on = { on: true, repositories: ["acme/web"], label: "", new_issues_need_me: true };
     await svc.human("/api/p/acme/set_github_issues", on);
 
     // The Issue Watcher's first poll brings the issue in, as a New issue.
