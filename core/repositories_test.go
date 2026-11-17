@@ -3,6 +3,8 @@ package core_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -10,6 +12,10 @@ import (
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/store"
 )
+
+// srcPath is a clone's absolute path on this OS: "/src/<name>" isn't
+// absolute on Windows.
+func srcPath(name string) string { return filepath.ToSlash(filepath.Join(os.TempDir(), "src", name)) }
 
 // A Project's Repositories (Spec code-central-848): the Home Repository
 // is implicit, and the human adds, edits, removes and reorders the
@@ -88,13 +94,13 @@ func TestAddRepositoryListsItAfterTheOthersAndItReadsBack(t *testing.T) {
 		if web := repository(t, p, "web"); web.Home || web.CloneURL != "git@github.com:acme/web.git" || web.Base != "main" || web.LocalPath != "" || web.CodeHost != core.CodeHostGitHub {
 			t.Fatalf("web = %+v, want its trimmed Clone URL on GitHub, with Base main", web)
 		}
-		f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "https://dev.azure.com/acme/shop/_git/api", Base: "develop", LocalPath: "/src/api"})
+		f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "https://dev.azure.com/acme/shop/_git/api", Base: "develop", LocalPath: srcPath("api")})
 	})
 	p := f.projectView(t, "acme")
 	if got := repositoryNames(p); !slices.Equal(got, []string{"acme", "web", "api"}) {
 		t.Fatalf("repositories = %v, want acme, web, api in the order they were added", got)
 	}
-	if api := repository(t, p, "api"); api.Base != "develop" || api.LocalPath != "/src/api" || api.CodeHost != core.CodeHostAzureRepos {
+	if api := repository(t, p, "api"); api.Base != "develop" || api.LocalPath != srcPath("api") || api.CodeHost != core.CodeHostAzureRepos {
 		t.Fatalf("api = %+v, want Base develop at /src/api on Azure Repos", api)
 	}
 }
@@ -118,7 +124,7 @@ func TestAddRepositoryRefusesWhatBreaksItsRules(t *testing.T) {
 	if _, err := f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/acme.git"}); err != nil {
 		t.Fatal(err)
 	}
-	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git", LocalPath: "/src/web"})
+	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git", LocalPath: srcPath("web")})
 	for name, tc := range map[string]struct {
 		in    core.AddRepositoryInput
 		field string
@@ -132,7 +138,7 @@ func TestAddRepositoryRefusesWhatBreaksItsRules(t *testing.T) {
 		"the Home Repository's Clone URL": {core.AddRepositoryInput{Name: "api", CloneURL: "https://github.com/acme/acme.git/"}, "clone_url"},
 		"a bad Base":                      {core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git", Base: "a..b"}, "base"},
 		"a relative local path":           {core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git", LocalPath: "src/api"}, "local_path"},
-		"a local path another one is at":  {core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git", LocalPath: "/src/web/"}, "local_path"},
+		"a local path another one is at":  {core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git", LocalPath: srcPath("web") + "/"}, "local_path"},
 		"a Clone URL with a space in it":  {core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/my api.git"}, "clone_url"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -160,7 +166,7 @@ func TestTheRepositoryOperationsAreTheHumansAndRefuseAnArchivedProject(t *testin
 func TestEditRepositoryChangesItsCloneURLBaseAndLocalPath(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git", LocalPath: "/src/web"})
+	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git", LocalPath: srcPath("web")})
 	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
 	url, base := "https://dev.azure.com/acme/shop/_git/web", "develop"
 	v, err := f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "web", CloneURL: &url, Base: &base, Full: true})
@@ -168,7 +174,7 @@ func TestEditRepositoryChangesItsCloneURLBaseAndLocalPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	web := repository(t, *v.Record, "web")
-	if web.CloneURL != url || web.Base != "develop" || web.LocalPath != "/src/web" || web.CodeHost != core.CodeHostAzureRepos {
+	if web.CloneURL != url || web.Base != "develop" || web.LocalPath != srcPath("web") || web.CodeHost != core.CodeHostAzureRepos {
 		t.Fatalf("web = %+v, want the new Clone URL and Base, and its local path kept", web)
 	}
 	// An empty local path puts it back beside the Home Repository.
@@ -197,7 +203,7 @@ func TestEditRepositoryRefusesTheHomeRepositoryAndWhatBreaksTheRules(t *testing.
 	}{
 		"the Home Repository's Base":       {core.EditRepositoryInput{Name: "acme", Base: s("trunk")}, "base"},
 		"the Home Repository's Clone URL":  {core.EditRepositoryInput{Name: "acme", CloneURL: s("git@github.com:acme/x.git")}, "clone_url"},
-		"the Home Repository's local path": {core.EditRepositoryInput{Name: "acme", LocalPath: s("/src/acme")}, "local_path"},
+		"the Home Repository's local path": {core.EditRepositoryInput{Name: "acme", LocalPath: s(srcPath("acme"))}, "local_path"},
 		"another's Clone URL":              {core.EditRepositoryInput{Name: "web", CloneURL: s("ssh://git@github.com/acme/api")}, "clone_url"},
 		"no Clone URL":                     {core.EditRepositoryInput{Name: "web", CloneURL: s(" ")}, "clone_url"},
 		"a bad Base":                       {core.EditRepositoryInput{Name: "web", Base: s("-x")}, "base"},

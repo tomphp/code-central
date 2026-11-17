@@ -2,6 +2,8 @@ package cli_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -9,6 +11,10 @@ import (
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 )
+
+// srcPath is a clone's absolute path on this OS: "/src/<name>" isn't
+// absolute on Windows.
+func srcPath(name string) string { return filepath.ToSlash(filepath.Join(os.TempDir(), "src", name)) }
 
 // The repository command (Spec code-central-848) manages a Project's
 // Repositories through the client, as the human, outside the operation
@@ -64,14 +70,14 @@ func TestRepositoryAddEditMoveAndRemove(t *testing.T) {
 	if !strings.Contains(out, "git@github.com:acme/web.git") {
 		t.Fatalf("add printed:\n%s\nwant the list with web", out)
 	}
-	printed(t, run(t, env, "", "repository", "add", "api", "--clone-url", "https://github.com/acme/api", "--base", "develop", "--local-path", "/src/api"))
+	printed(t, run(t, env, "", "repository", "add", "api", "--clone-url", "https://github.com/acme/api", "--base", "develop", "--local-path", srcPath("api")))
 	if got := landingOrder(t, srv); !slices.Equal(got, []string{"acme", "web", "api"}) {
 		t.Fatalf("order = %v", got)
 	}
 
-	printed(t, run(t, env, "", "repository", "edit", "web", "--base", "trunk", "--local-path", "/src/web"))
+	printed(t, run(t, env, "", "repository", "edit", "web", "--base", "trunk", "--local-path", srcPath("web")))
 	p, _ := srv.Client.GetProject(context.Background(), "acme")
-	if web := p.Repositories[1]; web.Base != "trunk" || web.LocalPath != "/src/web" || web.CloneURL != "git@github.com:acme/web.git" {
+	if web := p.Repositories[1]; web.Base != "trunk" || web.LocalPath != srcPath("web") || web.CloneURL != "git@github.com:acme/web.git" {
 		t.Fatalf("web = %+v, want Base trunk at /src/web with its Clone URL kept", web)
 	}
 	// An empty --local-path clears it; a flag left out keeps its value.
