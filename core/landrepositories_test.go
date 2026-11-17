@@ -298,3 +298,31 @@ func TestAHomeRepositoryAloneLandsAsItAlwaysHas(t *testing.T) {
 		t.Fatalf("acme-2 %s %+v, want it Done with no Repositories shown", tk.State, tk.Repositories)
 	}
 }
+
+func TestUnderTheCIGateARepositoryWaitingOnItsCISaysSoAsWhyItHasntLanded(t *testing.T) {
+	f := twoRepoWorld(t)
+	f.changes(t, 5, "acme", "api")
+	f.pushedFor(t, "api", "acme-5", "def456")
+	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CIInProgress, "")
+
+	v := f.getTicket(t, "acme-5")
+	if home, api := changedIn(t, v, "acme"), changedIn(t, v, "api"); home.NotLanded != "waiting on CI at abc123" || api.NotLanded != "waiting on CI at def456" {
+		t.Fatalf("Home %+v, api %+v: want each waiting on its own CI", home, api)
+	}
+
+	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CICompleted, store.CIFailure)
+	if api := changedIn(t, f.getTicket(t, "acme-5"), "api"); api.NotLanded != "CI failed at def456" {
+		t.Fatalf("api %+v, want its red build as why it hasn't landed", api)
+	}
+}
+
+func TestAnOpenPullRequestIsWhyARepositoryHasntLanded(t *testing.T) {
+	f := newFixture(t)
+	f.pullRequestsAcross(t)
+	f.reportIn(t, "api", 4, store.PROpen, "")
+
+	tk := f.get(t, "2")
+	if home, api := changedIn(t, tk, "acme"), changedIn(t, tk, "api"); api.NotLanded != "its pull request 4 is open" || home.NotLanded != "" {
+		t.Fatalf("Home %+v, api %+v: want api's open pull request as why it hasn't landed, and no reason for the Home Repository, which has no pull request yet", home, api)
+	}
+}

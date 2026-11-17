@@ -241,7 +241,7 @@ func (f *factory) pushSpec(ctx context.Context, id string, p core.ProjectView) {
 		f.printf("%s: pushed %s to %s", id, branch, p.Landing.Remote)
 	}
 	for _, tk := range tickets {
-		f.reportPushed(ctx, tk, p.LandingPolicy(), branch, f.remoteTip(p.Landing.Remote, branch, tip))
+		f.reportPushed(ctx, tk, p.LandingPolicy(), f.home, branch, f.remoteTip(p.Landing.Remote, branch, tip))
 	}
 }
 

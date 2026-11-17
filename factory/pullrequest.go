@@ -146,7 +146,7 @@ func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, p cor
 	if pushed {
 		f.printf("%s: pushed %s to %s", tk.ID, tk.Branch, p.Landing.Remote)
 	}
-	f.reportPushed(ctx, tk, p.LandingPolicy(), tk.Branch, f.remoteTip(p.Landing.Remote, tk.Branch, head))
+	f.reportPushed(ctx, tk, p.LandingPolicy(), f.home, tk.Branch, f.remoteTip(p.Landing.Remote, tk.Branch, head))
 }
 
 // inOldBase reports whether the fetched remote holds commit on a base the

@@ -136,3 +136,32 @@ func TestSentBackAfterASiblingMergedTheNextClaimStartsThatRepositorysBranchAtIts
 		t.Errorf("failure reports %+v, want the finish check passed", tk.FailureReports)
 	}
 }
+
+// A broken base in one Repository holds back only the work touching it,
+// under Pull Request as under Merge.
+func TestUnderPullRequestATicketInAnotherRepositoryLandsWhileTheHomeRepositorysBaseIsMissing(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	h.AddRemote("origin")
+	api := h.AddRepository("api")
+	pullRequestOn(h, "origin")
+	id := h.ReadyTicket("Add an endpoint")
+	h.Script(id, append(factorytest.CommitIn("api", "endpoint.go", "package api\n"), factorytest.FinishIn("Done.", false, "api"), factorytest.Result("success"))...)
+	r := h.Start()
+	h.WantState(id, store.InReview)
+	h.Accept(id)
+	r.Poll()
+	apiHead := wantPushedIn(t, h, "api", id)
+	// The Home Repository's Base becomes a branch that exists nowhere.
+	pullRequestOn(h, "origin")
+	release := "release"
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingPullRequest, Remote: "origin", Base: &release})
+	h.GitIn(api.Path, "push", "-q", "origin", id+":refs/heads/main")
+	reportPullRequestIn(t, h, "api", id, 4, apiHead)
+
+	r.Poll()
+
+	if tk := h.WantState(id, store.Done); landedIn(tk, "api") != apiHead {
+		t.Errorf("api landed at %q, want its merge commit %s", landedIn(tk, "api"), apiHead)
+	}
+}

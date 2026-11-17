@@ -359,7 +359,7 @@ func (e *evaluation) row(t store.Ticket, tr ticketReason) NeedsMeRow {
 	case ReasonToMerge:
 		row.Branch = branchOf(t)
 	case ReasonAcceptedNotLanded:
-		row.NotLanded = e.c.notLandedView(e.p, t)
+		row.NotLanded = e.c.notLandedView(e.p, t, e.ci)
 	case ReasonPullRequestClosed:
 		row.ClosedPullRequests = closedPullRequests(e.p, t)
 		if row.PullRequest == nil && len(row.ClosedPullRequests) > 0 {

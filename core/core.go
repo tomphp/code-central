@@ -824,7 +824,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t store.Ticket) Ticke
 		v.Repositories = changedRepositoryViews(pr, t, e.ci)
 		for i, rv := range v.Repositories {
 			if t.State == store.Accepted && rv.Landed == nil {
-				v.Repositories[i].NotLanded = c.notLandedReason(pr, t, rv.Name)
+				v.Repositories[i].NotLanded = c.notLandedReason(pr, t, rv.Name, e.ci)
 			}
 		}
 		for _, it := range e.itemsOf(t) {

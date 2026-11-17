@@ -246,3 +246,133 @@ func pushElsewhere(t *testing.T, h *factorytest.Harness, api *factorytest.Reposi
 	h.GitIn(other, "push", "-q", "origin", "main")
 	return h.GitIn(other, "rev-parse", "HEAD")
 }
+
+// The CI gate per Repository (Spec code-central-848, ADR 0034): under
+// Merge + Push with CI Tracking on, each Repository lands once its own
+// CI result is passed, at a pushed commit there holding the work; one
+// Not watched lands once pushed.
+
+// watchCIIn has the human set the Repository name's CI to GitHub Actions
+// on repository, or with repository "", to Not watched.
+func watchCIIn(t *testing.T, h *factorytest.Harness, name, repository string) {
+	t.Helper()
+	ci := core.RepositoryCI{Repository: repository, NotWatched: repository == ""}
+	if _, err := h.Human().SetRepositoryCI(context.Background(), h.Project, core.SetRepositoryCIInput{Name: name, RepositoryCI: ci}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// pushedIn is tk's latest pushed commit in the Repository name, or "".
+func pushedIn(tk core.TicketView, name string) string {
+	for _, r := range tk.Repositories {
+		if r.Name == name && r.PushedCommit != nil {
+			return r.PushedCommit.Commit
+		}
+	}
+	return ""
+}
+
+// gatedInTwo is a harness under Merge + Push to origin with CI Tracking
+// on and the Repository api, its CI watched on acme/api unless notWatched,
+// with a Ticket in both Accepted and polled once, so its merge is pushed
+// in each. It returns the Ticket.
+func gatedInTwo(t *testing.T, notWatched bool) (h *factorytest.Harness, api *factorytest.Repository, r *factorytest.Running, id string) {
+	t.Helper()
+	h = factorytest.New(t)
+	h.AddRemote("origin")
+	api = h.AddRepository("api")
+	mergeAndPush(h, "origin")
+	trackCI(t, h)
+	if notWatched {
+		watchCIIn(t, h, "api", "")
+	} else {
+		watchCIIn(t, h, "api", "acme/api")
+	}
+	id = inTwo(h, "Add an endpoint")
+	r = h.Start()
+	h.WantState(id, store.InReview)
+	h.Accept(id)
+	r.Poll()
+	return h, api, r, id
+}
+
+func TestUnderTheCIGateEachRepositoryLandsOnceItsOwnCIResultPasses(t *testing.T) {
+	t.Parallel()
+	h, api, r, id := gatedInTwo(t, false)
+
+	tk := h.WantState(id, store.Accepted)
+	homePushed, apiPushed := pushedIn(tk, h.Project), pushedIn(tk, "api")
+	if homePushed == "" || apiPushed == "" || apiPushed != api.Remote("origin").Git("rev-parse", "main") {
+		t.Fatalf("Changed Repositories %+v, want each merge pushed and reported, api's at its remote's main", tk.Repositories)
+	}
+	if tk.PartlyLanded {
+		t.Fatalf("Changed Repositories %+v, want it landed nowhere before any CI passes", tk.Repositories)
+	}
+	r.WantOutput(id + ": CI tracks main at " + apiPushed[:12] + " in Repository api")
+
+	reportRunIn(t, h, "api", 7, id, apiPushed, store.CICompleted, store.CISuccess)
+	r.Poll()
+
+	tk = h.WantState(id, store.Accepted)
+	if landedIn(tk, "api") != apiPushed || !tk.PartlyLanded || tk.Repositories[0].Landed != nil {
+		t.Fatalf("Changed Repositories %+v, want api landed at its pushed commit that passed, %s, while the Home Repository waits on its CI", tk.Repositories, apiPushed)
+	}
+
+	reportRun(t, h, 1, id, homePushed, store.CICompleted, store.CISuccess)
+	r.Poll()
+
+	tk = h.WantState(id, store.Done)
+	if landedIn(tk, h.Project) != homePushed || landedIn(tk, "api") != apiPushed {
+		t.Fatalf("Changed Repositories %+v, want each landed at its pushed commit that passed", tk.Repositories)
+	}
+}
+
+func TestUnderTheCIGateARedBuildInARepositoryHoldsBackOnlyItsLanding(t *testing.T) {
+	t.Parallel()
+	h, _, r, id := gatedInTwo(t, false)
+	tk := h.Ticket(id)
+	homePushed, apiPushed := pushedIn(tk, h.Project), pushedIn(tk, "api")
+
+	reportRunIn(t, h, "api", 7, id, apiPushed, store.CICompleted, store.CIFailure)
+	reportRun(t, h, 1, id, homePushed, store.CICompleted, store.CISuccess)
+	r.Poll()
+
+	tk = h.WantState(id, store.Accepted)
+	if landedIn(tk, h.Project) != homePushed || landedIn(tk, "api") != "" {
+		t.Fatalf("Changed Repositories %+v, want the Home Repository landed and api held back by its red build", tk.Repositories)
+	}
+	r.WantOutput(id + ": CI failed at " + apiPushed[:12] + " in Repository api, so it stays Accepted")
+}
+
+func TestUnderTheCIGateANotWatchedRepositoryLandsOncePushed(t *testing.T) {
+	t.Parallel()
+	h, api, r, id := gatedInTwo(t, true)
+
+	tk := h.WantState(id, store.Accepted)
+	apiMerge := api.Remote("origin").Git("rev-parse", "main")
+	if landedIn(tk, "api") != apiMerge || tk.Repositories[0].Landed != nil || pushedIn(tk, "api") != "" {
+		t.Fatalf("Changed Repositories %+v, want api landed at its pushed merge %s, with no pushed commit for CI, and the Home Repository waiting on its CI", tk.Repositories, apiMerge)
+	}
+
+	reportRun(t, h, 1, id, pushedIn(tk, h.Project), store.CICompleted, store.CISuccess)
+	r.Poll()
+	h.WantState(id, store.Done)
+}
+
+func TestUnderTheCIGateALaterTipOfARepositorysBaseIsReportedToTheTicketsWaitingThere(t *testing.T) {
+	t.Parallel()
+	h, api, r, id := gatedInTwo(t, false)
+	tip := pushElsewhere(t, h, api, "other.go", "package api\n")
+
+	r.Poll()
+
+	tk := h.WantState(id, store.Accepted)
+	if pushedIn(tk, "api") != tip {
+		t.Fatalf("api's pushed commit is %q, want its remote's later tip %s, which holds the work", pushedIn(tk, "api"), tip)
+	}
+	reportRunIn(t, h, "api", 8, id, tip, store.CICompleted, store.CISuccess)
+	r.Poll()
+	if tk := h.Ticket(id); landedIn(tk, "api") != tip {
+		t.Fatalf("Changed Repositories %+v, want api landed at the tip that passed, %s", tk.Repositories, tip)
+	}
+}

@@ -374,9 +374,10 @@ type factory struct {
 	// saidOnCI is "<ticket>@<pushed commit>@<CI result>" of Tickets the
 	// CI gate holds, already said; the poll's own.
 	saidOnCI map[string]bool
-	// unreported is, by Ticket ID, the commit a push under Merge + Push
-	// left the remote's base holding, whose report as the Ticket's pushed
-	// commit failed, to report next poll; the poll's own.
+	// unreported is, by Ticket ID and, for a Repository other than the
+	// Home Repository, its where(), the commit a push under Merge + Push
+	// left the remote's base holding there, whose report as the Ticket's
+	// pushed commit failed, to report next poll; the poll's own.
 	unreported map[string]string
 	// accepts is what claude --help said claude accepts, read at startup.
 	accepts claudeAccepts

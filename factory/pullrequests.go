@@ -83,7 +83,7 @@ func (f *factory) landPullRequests(ctx context.Context, tk core.TicketView, p co
 		if pushed {
 			f.printf("%s: pushed %s to %s%s", tk.ID, branch, remote, r.where())
 		}
-		f.reportPushedIn(ctx, tk, p.LandingPolicy(), r, rec, branch, f.remoteTipIn(r, remote, branch, head))
+		f.reportPushed(ctx, tk, p.LandingPolicy(), r, branch, f.remoteTipIn(r, remote, branch, head))
 	}
 }
 
@@ -122,21 +122,6 @@ func (f *factory) landIn(ctx context.Context, tk core.TicketView, r *repository,
 func (f *factory) pushedAlreadyIn(r *repository, remote, branch string) bool {
 	_, err := r.git.commit("refs/remotes/" + remote + "/" + branch)
 	return err == nil
-}
-
-// reportPushedIn is reportPushed for tk's work in r, rec: reported once,
-// when it isn't the commit last reported pushed there.
-func (f *factory) reportPushedIn(ctx context.Context, tk core.TicketView, policy core.LandingPolicy, r *repository, rec core.ChangedRepositoryView, branch, commit string) {
-	if !policy.RecordsPushedCommit() || rec.PushedCommit != nil && rec.PushedCommit.Commit == commit {
-		return
-	}
-	in := core.ReportPushedCommitInput{Ticket: core.Ref(tk.ID), Commit: commit, Branch: branch}
-	if !r.home {
-		in.Repository = r.name
-	}
-	if _, err := f.client.ReportPushedCommit(ctx, f.project, in); err != nil && ctx.Err() == nil {
-		f.printf("%s: report_pushed_commit%s: %v", tk.ID, r.where(), err)
-	}
 }
 
 // detectMergedPullRequestsIn lands an In Review Ticket whose work spans
