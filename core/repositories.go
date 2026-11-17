@@ -338,7 +338,14 @@ func checkRepositoryFields(r store.Repository) error {
 // reported Push remote URL, so it can clash only once that is reported.
 // An empty Clone URL clashes with none, so local-only Repositories sit
 // side by side.
-func refuseListed(p store.Project, r store.Repository) error {
+//
+// The path check compares resolved clone paths: a Repository's local
+// path, else beside the Home Repository's clone, at home, the clone path
+// the Factory last reported, empty without one. Without it, only
+// explicit local paths are compared, and the Home Repository's clone
+// holds none.
+func refuseListed(p store.Project, r store.Repository, home string) error {
+	mine := resolvedClonePath(r, home)
 	for _, o := range p.RepositoryList() {
 		if o.Name == r.Name {
 			continue
@@ -351,12 +358,54 @@ func refuseListed(p store.Project, r store.Repository) error {
 			return &Error{Code: Invalid, Field: "clone_url", Message: fmt.Sprintf("%s is already listed as Repository %s, at %s", r.CloneURL, o.Name, url),
 				Fix: "a repository is listed once: edit " + o.Name + " instead, or give this one's own Clone URL"}
 		}
-		if o.LocalPath != "" && r.LocalPath != "" && filepath.Clean(o.LocalPath) == filepath.Clean(r.LocalPath) {
-			return &Error{Code: Invalid, Field: "local_path", Message: fmt.Sprintf("Repository %s's clone is already at %s", o.Name, o.LocalPath),
-				Fix: "give this Repository's own clone, or leave the local path out to clone it beside the Home Repository"}
+		theirs := resolvedClonePath(o, home)
+		if o.Home {
+			theirs = home
 		}
+		if mine == "" || theirs != mine {
+			continue
+		}
+		who := "Repository " + o.Name
+		if o.Home {
+			who = "the Home Repository"
+		}
+		if r.LocalPath == "" {
+			return &Error{Code: Invalid, Field: "local_path", Message: fmt.Sprintf("Repository %s's clone would be at %s, beside the Home Repository, where %s's clone already is", r.Name, mine, who),
+				Fix: "give this Repository the local path of its own clone"}
+		}
+		return &Error{Code: Invalid, Field: "local_path", Message: fmt.Sprintf("%s's clone is already at %s", who, mine),
+			Fix: "give this Repository's own clone, or leave the local path out to clone it beside the Home Repository"}
 	}
 	return nil
+}
+
+// resolvedClonePath is where r's clone is: its local path, else beside
+// the Home Repository's clone at home, or empty when home is unknown.
+func resolvedClonePath(r store.Repository, home string) string {
+	switch {
+	case r.LocalPath != "":
+		return filepath.Clean(r.LocalPath)
+	case home != "":
+		return filepath.Join(filepath.Dir(home), r.Name)
+	}
+	return ""
+}
+
+// reportedHomeClone is the path of p's Home Repository's clone as the
+// Factory's latest Repositories report says, empty while no Factory is
+// reporting or none has.
+func (c *Core) reportedHomeClone(p store.Project) string {
+	hs := c.heartbeats
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	for _, r := range p.RepositoryList() {
+		if r.Home {
+			if v := hs.cloneView(p.Key, r.Name, c.clock.Now()); v != nil {
+				return filepath.Clean(v.Path)
+			}
+		}
+	}
+	return ""
 }
 
 // repositoryNamed is the index of the Repository named name in rs.
@@ -370,7 +419,7 @@ func repositoryNamed(key string, rs []store.Repository, name string) (int, error
 }
 
 // updateRepositories writes the Repositories change makes, once r's Clone
-// URL and local path are listed nowhere else and, when checkHost and
+// URL and resolved clone path are listed nowhere else and, when checkHost and
 // under Pull Request, its Clone URL passes the Pull Request Watcher's
 // check. With ci, r's new CI entry, it is written with them, once, while
 // CI Tracking is on, it passes the CI Watcher's check. The checks call
@@ -383,7 +432,7 @@ func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r 
 		if err != nil {
 			return nil, err
 		}
-		return rs, refuseListed(p, r)
+		return rs, refuseListed(p, r, c.reportedHomeClone(p))
 	}
 	var check *PullRequestCheckInput
 	var checkCI func() error
