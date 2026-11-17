@@ -326,6 +326,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}})
 		return err
 	},
+	"set_azure_boards": func(f fixture) error {
+		_, err := f.core.SetAzureBoards(human, "acme", core.SetAzureBoardsInput{On: true, QueryURL: "https://dev.azure.com/contoso/web/_queries/query/6b4a0c1e-9f1d-4a51-8f43-2a7d3c1b9e10"})
+		return err
+	},
 	"report_issue_watcher_status": func(f fixture) error {
 		_, err := f.core.ReportIssueWatcherStatus(integration, "acme", core.ReportWatcherStatusInput{State: core.WatcherWatching})
 		return err

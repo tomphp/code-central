@@ -11,3 +11,5 @@ GitHub Actions goes through `gh` and its own login (ADR 0018). Azure DevOps has 
 ## Consequences
 
 The human sets the variable for the service, on each OS, and restarts it; the check mode reports when it is missing. Several Projects in different Azure DevOps organizations each name their own variable.
+
+Extended by [ADR 0053](0053-azure-boards-is-a-second-integration-with-its-own-watcher-and-inbox-spec.md): the Work Item Watcher reads its PAT the same way, from the Project's CI PAT variable unless Azure Boards names its own.

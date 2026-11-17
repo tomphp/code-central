@@ -90,7 +90,9 @@ func (c *Core) SetGitHubIssues(ctx context.Context, key string, in SetGitHubIssu
 	created := 0
 	if g.On {
 		var err error
-		if created, err = c.createIssuesSpec(key, g.Repositories); err != nil {
+		created, err = c.createInboxSpec(key, func(p store.Project) int { return p.GitHubIssues.Spec },
+			store.Spec{Title: issuesSpecTitle(g.Repositories), Body: issuesSpecBody})
+		if err != nil {
 			return Written[ProjectView]{}, err
 		}
 	}
@@ -118,7 +120,7 @@ func (c *Core) SetGitHubIssues(ctx context.Context, key string, in SetGitHubIssu
 		return Written[ProjectView]{}, err
 	}
 	if was.Spec != 0 && len(g.Repositories) > 0 && !slices.Equal(was.Repositories, g.Repositories) {
-		if err := c.retitleIssuesSpec(ctx, key, was.Spec, g.Repositories); err != nil {
+		if err := c.retitleInboxSpec(ctx, key, was.Spec, givenIssuesSpecTitle, issuesSpecTitle(g.Repositories)); err != nil {
 			return Written[ProjectView]{}, err
 		}
 	}
@@ -131,36 +133,39 @@ func sameGitHubIssues(a, b store.GitHubIssues) bool {
 		a.NewIssuesNeedMe == b.NewIssuesNeedMe && a.Spec == b.Spec
 }
 
-// createIssuesSpec creates key's Issues Spec for repositories unless it
-// has one, and returns its number; 0 when it already had one.
-func (c *Core) createIssuesSpec(key string, repositories []string) (int, error) {
+// createInboxSpec creates key's inbox Spec for an Integration, a
+// Long-lived Spec with spec's title and body, unless the Project already
+// has one, whose number has reads; it returns the new Spec's number, 0
+// when it already had one.
+func (c *Core) createInboxSpec(key string, has func(store.Project) int, spec store.Spec) (int, error) {
 	n := 0
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		if p, _ := w.Project(key); p.GitHubIssues.Spec != 0 {
+		if p, _ := w.Project(key); has(p) != 0 {
 			return nil
 		}
 		now := c.now()
 		n = w.NextNumber(key)
-		return w.PutSpec(key, store.Spec{Number: n, Title: issuesSpecTitle(repositories), Body: issuesSpecBody, Labels: []string{LongLivedLabel}, Created: now, Updated: now})
+		spec.Number, spec.Labels, spec.Created, spec.Updated = n, []string{LongLivedLabel}, now, now
+		return w.PutSpec(key, spec)
 	})
 	return n, err
 }
 
-// retitleIssuesSpec retitles Issues Spec n after repositories, unless the
-// human has changed its title: it still has the title Code Central gave
-// it for some repositories, which may since have been cleared.
-func (c *Core) retitleIssuesSpec(ctx context.Context, key string, n int, repositories []string) error {
+// retitleInboxSpec retitles inbox Spec n to title, unless the human has
+// changed its title: it still has a title Code Central gave it, as given
+// reports, for settings which may since have been cleared.
+func (c *Core) retitleInboxSpec(ctx context.Context, key string, n int, given func(string) bool, title string) error {
 	return c.store.Update(func(w store.Writer) error {
 		s, ok := w.Spec(key, n)
-		if !ok || !givenIssuesSpecTitle(s.Title) || s.Title == issuesSpecTitle(repositories) {
+		if !ok || !given(s.Title) || s.Title == title {
 			return nil
 		}
 		s.Updated = c.now()
 		s.Edits = append(s.Edits, store.Edit{Number: len(s.Edits) + 1, Actor: string(ActorOf(ctx)), Time: s.Updated, Previous: map[string]string{"title": s.Title}})
-		s.Title = issuesSpecTitle(repositories)
+		s.Title = title
 		return w.PutSpec(key, s)
 	})
 }

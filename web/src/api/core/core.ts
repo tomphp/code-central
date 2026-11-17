@@ -23,6 +23,7 @@ interface CoreModule {
   advance(id: number, ms: number): void;
   setCICheck(id: number, resultJSON: string): void;
   setIssuesCheck(id: number, resultJSON: string): void;
+  setAzureBoardsCheck(id: number, resultJSON: string): void;
   setPullRequestCheck(id: number, resultJSON: string): void;
   reportWatcherCrash(id: number, kind: string, key: string, restarts: number, lastLine: string, restartAtISO: string): void;
   dropStreams(id: number): void;
@@ -264,14 +265,18 @@ export class World {
 
   // setCICheck makes the gh check CI Tracking runs answer res, as a gh
   // that can or can't watch would; with none set, it passes. So do
-  // setIssuesCheck for GitHub Issues and setPullRequestCheck for the Pull
-  // Request Landing Method.
+  // setIssuesCheck for GitHub Issues, setAzureBoardsCheck for Azure
+  // Boards and setPullRequestCheck for the Pull Request Landing Method.
   setCICheck(res: CheckResult = {}) {
     this.live().setCICheck(this.id, JSON.stringify(res));
   }
 
   setIssuesCheck(res: CheckResult = {}) {
     this.live().setIssuesCheck(this.id, JSON.stringify(res));
+  }
+
+  setAzureBoardsCheck(res: CheckResult = {}) {
+    this.live().setAzureBoardsCheck(this.id, JSON.stringify(res));
   }
 
   setPullRequestCheck(res: CheckResult = {}) {

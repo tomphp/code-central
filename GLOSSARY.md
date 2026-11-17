@@ -333,7 +333,7 @@ Whether a Project's Factories are **Online**, **Draining** (claiming nothing new
 _Avoid_: health, presence, liveness
 
 **Watcher**:
-A separate process, started and supervised by Code Central, that watches one external system for one Project, reaching it through its CI Provider or `gh` and reporting over the HTTP API. Each kind is run while its Project setting is on, restarted with backoff when it crashes, and has its own status, Watching or an error with its fix, of which going into an error sends one Notification. The kinds are the CI Watcher, the Issue Watcher and the Pull Request Watcher.
+A separate process, started and supervised by Code Central, that watches one external system for one Project, reaching it through its CI Provider, `gh`, or Azure DevOps' API with a PAT, and reporting over the HTTP API. Each kind is run while its Project setting is on, restarted with backoff when it crashes, and has its own status, Watching or an error with its fix, of which going into an error sends one Notification. The kinds are the CI Watcher, the Issue Watcher, the Work Item Watcher and the Pull Request Watcher.
 _Avoid_: Daemon, poller
 
 **CI Watcher**:
@@ -646,7 +646,7 @@ A one-way, one-off migration of work into Code Central, after which Code Central
 _Avoid_: Sync, Integration
 
 **Integration**:
-A plugin with an ongoing link to an external ticketing system, which owns the definition of the work it links while Code Central owns its delivery. GitHub Issues is the first, run by the Issue Watcher. CI Tracking is not an Integration: it owns no work, and only reports on CI.
+A plugin with an ongoing link to an external ticketing system, which owns the definition of the work it links while Code Central owns its delivery. GitHub Issues is the first, run by the Issue Watcher, and Azure Boards the second, run by the Work Item Watcher. Each has its own inbox Spec, the Issues Spec or the Azure Boards Spec, and both may be on at once. CI Tracking is not an Integration: it owns no work, and only reports on CI.
 _Avoid_: Import, connector, sync
 
 **Link**:
@@ -669,8 +669,32 @@ _Avoid_: Issue daemon, syncer
 A Project's Long-lived Spec that the Incoming Issues from every listed repository arrive on, with no Link and no Stages. It is titled like "GitHub Issues: owner/repo" while one repository is listed, and "GitHub Issues" once more than one is. It is created the first time GitHub Issues is turned on, and its title follows the list unless the human retitles it.
 _Avoid_: Inbox Spec, triage Spec
 
+**Azure Boards**:
+A Project's opt-in, off by default, to link the work items an Azure DevOps query returns through an Integration. The human turns it on in the Azure Boards section of Project Options, choosing a Saved query or a WIQL filter, the environment variable holding the PAT (the Project's CI PAT variable unless it names its own), and whether New issues need me; the settings of the mode not chosen are kept. Turning it on, or changing what it runs while on, first runs the Work Item Watcher's check mode, and the first time it creates the Azure Boards Spec. Turning it off leaves every Link as it is. It is inbound only, and never changes a work item's State. It is the second Integration.
+_Avoid_: ADO integration, Azure DevOps Boards sync
+
+**Work item**:
+Azure DevOps' own tracked item, such as a Product Backlog Item, Bug or User Story, which is what Azure Boards links. Like issue for GitHub, it is reserved for the external item, never a Ticket.
+_Avoid_: ADO ticket, Boards item
+
+**Saved query**:
+One of the two ways Azure Boards chooses its work items: an Azure DevOps saved query, named by its URL and built in Azure DevOps' own query editor. It must be a flat list; a tree or links query is refused.
+_Avoid_: Stored query, query ID
+
+**WIQL filter**:
+The other way Azure Boards chooses its work items: a WIQL WHERE clause, without the keyword, run in the Azure DevOps project its URL names. Code Central wraps it as `SELECT [System.Id] FROM workitems WHERE …`, so `@Me` and `@project` work and the result is always a flat list.
+_Avoid_: WIQL query, custom query
+
+**Work Item Watcher**:
+The kind of Watcher that polls one Project's Azure Boards query over the Azure DevOps REST API with the PAT, writing as the `integration` Actor, and that posts Code Central's progress back to the work items. It has a check mode as the Issue Watcher does.
+_Avoid_: Boards poller, ADO watcher
+
+**Azure Boards Spec**:
+A Project's Long-lived Spec that Azure Boards' Incoming Issues arrive on, with no Link and no Stages, titled like "Azure Boards: org/project" after the organization and project the chosen mode runs in. It is created the first time Azure Boards is turned on, reused if it is turned off and on again, and its title follows the settings unless the human retitles it. It is the counterpart of the Issues Spec.
+_Avoid_: Inbox Spec
+
 **Incoming Issue**:
-A linked Draft or Ready Ticket on the Issues Spec whose Link isn't detached, mirroring one GitHub issue. GitHub owns its definition, and the triage actions are offered on it.
+A linked Draft or Ready Ticket on an Integration's inbox Spec, the Issues Spec or the Azure Boards Spec, whose Link isn't detached, mirroring one GitHub issue or one Azure Boards work item. The external system owns its definition, and the triage actions are offered on it.
 _Avoid_: Issue Ticket, imported issue
 
 **New issue**:
@@ -682,31 +706,31 @@ Whether an Incoming Issue still waits for the human's first triage action. Code 
 _Avoid_: Unread, pending
 
 **Triage action**:
-What the human may do with an Incoming Issue: Keep as Draft, To Requirement or Won't fix. Each is offered on every Incoming Issue, awaiting triage or not, in its Ticket panel, and on a New issue's row and Focus Item.
+What the human may do with an Incoming Issue, from either Integration: Keep as Draft, To Requirement or Won't fix. Each is offered on every Incoming Issue, awaiting triage or not, in its Ticket panel, and on a New issue's row and Focus Item.
 _Avoid_: Triage option, disposition
 
 **New issues need me**:
-A GitHub Issues setting, off by default: when on, each new Incoming Issue also shows in Needs Me and Focus Mode under New issue until the human triages it.
+A setting of GitHub Issues and, its own, of Azure Boards, off by default: when on, each new Incoming Issue on that Integration's inbox Spec also shows in Needs Me and Focus Mode under New issue until the human triages it.
 _Avoid_: Notify on new issues
 
 **Keep as Draft**:
-The human's triage action that leaves an Incoming Issue as it is, a Draft as it arrived, and clears its awaiting triage, taking it out of Needs Me for good, writing nothing to GitHub.
+The human's triage action that leaves an Incoming Issue as it is, a Draft as it arrived, and clears its awaiting triage, taking it out of Needs Me for good, writing nothing to its issue or work item.
 _Avoid_: Park, snooze
 
 **To Requirement**:
-The human's triage action that makes a Requirement from an Incoming Issue, its title, then its body, then the human's optional extra context, moves the issue's Link to the Requirement's Spec as an Outbound Link, and Cancels the Incoming Issue with the grilling Stage Ticket as its Replacement.
+The human's triage action that makes a Requirement from an Incoming Issue, its title, then its body, then the human's optional extra context, moves the issue's or work item's Link to the Requirement's Spec as an Outbound Link, and Cancels the Incoming Issue with the grilling Stage Ticket as its Replacement.
 _Avoid_: Promote, accept
 
 **Won't fix**:
-The human's triage action that Cancels an Incoming Issue, with an optional reason, and closes its GitHub issue as not planned, posting the reason as a comment.
+The human's triage action that Cancels an Incoming Issue, with an optional reason, and closes its GitHub issue as not planned, posting the reason as a comment. On a work item it only posts the reason and sets the `code-central:wont-fix` tag: the work item's State is left for the human to move in Azure DevOps.
 _Avoid_: Reject, decline
 
 **Status label**:
-The one `code-central:` label Code Central keeps on a linked GitHub issue to show where its work stands, such as `code-central:draft` on an Incoming Issue not yet triaged off the Issues Spec, `code-central:requirement` after To Requirement, `code-central:building` once the Requirement's Stages are all Done or Cancelled, `code-central:done` once its Spec is Finished with something landed, or `code-central:wont-fix` after Won't fix or once its Spec is Finished with nothing landed. The Issue Watcher creates it in the repository if it is missing.
+The one `code-central:` label Code Central keeps on a linked GitHub issue to show where its work stands, such as `code-central:draft` on an Incoming Issue not yet triaged off the Issues Spec, `code-central:requirement` after To Requirement, `code-central:building` once the Requirement's Stages are all Done or Cancelled, `code-central:done` once its Spec is Finished with something landed, or `code-central:wont-fix` after Won't fix or once its Spec is Finished with nothing landed. The Issue Watcher creates it in the repository if it is missing. On a work item it is an Azure DevOps tag of the same name, and the Work Item Watcher replaces only `code-central:` tags, leaving the others. Azure DevOps' "tag" stays lowercase and external, never Code Central's Tag.
 _Avoid_: Tag, state label
 
 **Write-back**:
-What Code Central writes to a linked GitHub issue: its comments, such as a Requirement's grilling resolution, its Spec's body and each Ticket as it lands, its Status label and closing it. Each Ticket's landed comment names its commit in every Changed Repository, as `owner/repo@sha` for a GitHub-hosted Repository and as `Name@sha`, by Repository Name, otherwise; the comment listing what landed once the Spec is Finished also lists the Spec's Changed Repositories. In a single-repository Project they read as before. Code Central works out from the work's state what is due on each issue, never from events, and the Issue Watcher makes it so, posting each comment exactly once. Only the linked issue is written to, never another repository's issues. Nothing is ever written from Rounds, answers, Failure Reports, Transcripts or Claims.
+What Code Central writes to a linked GitHub issue or work item, worked out per Integration: its comments, such as a Requirement's grilling resolution, its Spec's body and each Ticket as it lands, its Status label, and, for a GitHub issue only, closing it; a work item's State is never changed. Each Ticket's landed comment names its commit in every Changed Repository, as `owner/repo@sha` for a GitHub-hosted Repository and as `Name@sha`, by Repository Name, otherwise; the comment listing what landed once the Spec is Finished also lists the Spec's Changed Repositories. In a single-repository Project they read as before. Code Central works out from the work's state what is due on each issue, never from events, and the Integration's Watcher makes it so, posting each comment exactly once. Only the linked issue or work item is written to, never another. Nothing is ever written from Rounds, answers, Failure Reports, Transcripts or Claims.
 _Avoid_: Sync, mirroring
 
 **Outbound Link**:

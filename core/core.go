@@ -42,6 +42,9 @@ type Core struct {
 	// issuesCheck is the Issue Watcher's check mode, run when GitHub
 	// Issues is turned on; nil checks nothing.
 	issuesCheck IssuesCheck
+	// azureBoardsCheck is the Azure Boards check, run when Azure Boards is
+	// turned on or what it runs changes while on; nil checks nothing.
+	azureBoardsCheck AzureBoardsCheck
 	// pullRequestCheck is the Pull Request Watcher's check mode, run when
 	// Pull Request is turned on; nil checks nothing.
 	pullRequestCheck PullRequestCheck
@@ -95,6 +98,9 @@ type ProjectView struct {
 	// GitHubIssues is the Project's GitHub Issues settings, always filled
 	// in: GitHub Issues off by default.
 	GitHubIssues GitHubIssuesView `json:"github_issues"`
+	// AzureBoards is the Project's Azure Boards settings, always filled
+	// in: Azure Boards off by default.
+	AzureBoards AzureBoardsView `json:"azure_boards"`
 	// Models is the Project's Models rows, always filled in: every row at
 	// Default to begin with.
 	Models ModelsView `json:"models"`
@@ -760,7 +766,7 @@ func finished(s store.State) bool { return s == store.Done || s == store.Cancell
 func (c *Core) projectView(p store.Project) ProjectView {
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
 		Landing: landingViewWith(p, c.watchers.view(watcherKey{WatcherPullRequests, p.Key})), CI: ciView(p, c.watchers.view(watcherKey{WatcherCI, p.Key})),
-		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), Models: modelsView(p.Models),
+		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), AzureBoards: azureBoardsView(p), Models: modelsView(p.Models),
 		ReportedModels: reportedModelsView(p.ReportedModels), StageGuides: stageGuidesView(p.StageGuides), AutoAccept: autoAcceptView(p),
 		FocusKinds: focusKindsView(p.FocusKindsOff), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now()), Repositories: repositoriesView(p)}
 	c.fillClones(p.Key, v.Repositories)

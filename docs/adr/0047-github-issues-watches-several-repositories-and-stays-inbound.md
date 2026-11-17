@@ -19,3 +19,5 @@ This amends ADR 0022's one repository per Issues Spec and its "titled after the 
 - One inbox per Project across every repository.
 - A single-repository Project is unchanged.
 - Issues opened in a Changed Repository's own tracker stay outside Code Central unless that repository is listed.
+
+Amended by [ADR 0053](0053-azure-boards-is-a-second-integration-with-its-own-watcher-and-inbox-spec.md): one inbox per Integration, not per Project; GitHub Issues keeps its one Issues Spec across every listed repository.
