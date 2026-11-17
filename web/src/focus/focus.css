@@ -22,6 +22,10 @@
 .focus-requirement { margin: 0 0 8px; font-size: 20px; color: var(--muted); }
 .focus-badges { margin: 0 0 8px; display: flex; gap: 6px; flex-wrap: wrap; }
 .focus-why { margin: 0 0 24px; font-size: 20px; }
+/* In the Focus popup the title is the one large line: the ID and the wait
+   step down to small slate type. */
+.modal-card .focus-ticket .tid { font-size: 12.5px; }
+.modal-card .focus-why { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .focus-repository-missing { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; }
 .focus-repository-missing dt { color: var(--muted); }
 .focus-repository-missing dd { margin: 0; overflow-wrap: anywhere; }
