@@ -54,6 +54,10 @@ type FactoryStatusView struct {
 	// Base is the base the Factory last reported under Pull Request
 	// (code-central-394); left out while none is reporting.
 	Base *BaseView `json:"base,omitempty"`
+	// PlanLimits are the most recently observed Plan Limits among the
+	// Factories that aren't Offline (Spec code-central-861); left out
+	// while none has any.
+	PlanLimits *PlanLimits `json:"plan_limits,omitempty"`
 }
 
 // FactoryView is one Factory as the Project view lists it, from its last
@@ -79,6 +83,10 @@ type heartbeat struct {
 	interval   int
 	chat       bool
 	at         time.Time
+	// limits are the Factory's Plan Limits as kept, observed_at capped
+	// at receipt, and reported are them as the Factory sent them; both
+	// nil when it reports none.
+	limits, reported *PlanLimits
 }
 
 type heartbeatKey struct{ project, name, host string }
@@ -113,6 +121,7 @@ func (h heartbeat) status(now time.Time) FactoryStatusName {
 func (hs *heartbeats) view(project string, now time.Time) FactoryStatusView {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
+	var latest heartbeatKey // the Factory whose Plan Limits v holds
 	v := FactoryStatusView{Status: FactoryOffline, Factories: []FactoryView{}}
 	for k, h := range hs.all {
 		if k.project != project {
@@ -123,6 +132,9 @@ func (hs *heartbeats) view(project string, now time.Time) FactoryStatusView {
 		switch {
 		case s == FactoryOnline, s == FactoryDraining && v.Status == FactoryOffline:
 			v.Status = s
+		}
+		if s != FactoryOffline && h.limits != nil && (v.PlanLimits == nil || newerLimits(*h.limits, k, *v.PlanLimits, latest)) {
+			v.PlanLimits, latest = h.limits, k
 		}
 	}
 	// The Home Repository's, named by the Project Key.
@@ -150,6 +162,10 @@ type ReportHeartbeatInput struct {
 	// Chat is Chat support: the Factory can run Conversations. It
 	// defaults to false, so a Factory that doesn't know Chat has none.
 	Chat bool `json:"chat"`
+	// PlanLimits are the Plan Limits the Factory last read from its
+	// Turns; left out when it has none. Plan Limits with neither window
+	// are none.
+	PlanLimits *PlanLimits `json:"plan_limits,omitempty"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
@@ -170,6 +186,10 @@ func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeat
 	case in.IntervalSeconds < 1 || in.IntervalSeconds > maxHeartbeatInterval:
 		return Written[ProjectView]{}, invalid("interval_seconds", "interval_seconds is from 1 to %d, not %d", maxHeartbeatInterval, in.IntervalSeconds)
 	}
+	reported, err := checkPlanLimits(in.PlanLimits)
+	if err != nil {
+		return Written[ProjectView]{}, err
+	}
 	note := strings.TrimSpace(in.Note)
 	if r := []rune(note); len(r) > maxHeartbeatNote {
 		note = strings.TrimSpace(string(r[:maxHeartbeatNote]))
@@ -188,10 +208,11 @@ func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeat
 	}
 	now := c.now()
 	k := heartbeatKey{key, name, host}
-	h := heartbeat{name: name, host: host, state: in.State, note: note, interval: in.IntervalSeconds, chat: in.Chat, at: now}
+	h := heartbeat{name: name, host: host, state: in.State, note: note, interval: in.IntervalSeconds, chat: in.Chat, at: now, reported: reported}
 	hs := c.heartbeats
 	hs.mu.Lock()
 	prev, seen := hs.all[k]
+	h.limits = keptLimits(prev, reported, now)
 	hs.all[k] = h
 	if !seen || prev.status(now) == FactoryOffline || in.State == HeartbeatStopping {
 		// A Factory that is new, back from a lapse or stopping holds
@@ -200,7 +221,7 @@ func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeat
 		delete(hs.clones, key)
 	}
 	hs.mu.Unlock()
-	if !seen || prev.status(now) != h.status(now) || prev.note != note || prev.chat != in.Chat {
+	if !seen || prev.status(now) != h.status(now) || prev.note != note || prev.chat != in.Chat || !sameLimits(prev.limits, h.limits) {
 		c.events.Publish(events.Event{Type: events.ProjectChanged, Project: key})
 	}
 	c.chatAfterHeartbeat(key)
@@ -247,6 +268,9 @@ func (c *Core) factoryStatusChanges() []string {
 		sig := string(v.Status)
 		if v.Base != nil {
 			sig += "\x00base\x00" + string(v.Base.State)
+		}
+		if v.PlanLimits != nil {
+			sig += "\x00plan_limits"
 		}
 		for _, f := range v.Factories {
 			sig += "\x00" + f.Name + "\x00" + f.Host + "\x00" + string(f.Status)

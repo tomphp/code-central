@@ -4,6 +4,7 @@ store.yaml
 options.yaml (optional): the global Options; a key left out takes its default
   focus_clear: string (optional)
   focus_popup: string (optional)
+  limits_popup: string (optional)
   gh_path: string (optional)
 
 projects/<key>/project.yaml
@@ -126,25 +127,15 @@ projects/<key>/tickets/<n>.yaml
   description: string
   branch: string (optional)
   commit: string (optional)
-  repositories: list of mappings (optional)
-      name: string
-      branch: string (optional)
-      commit: string (optional)
-      landed: mapping (optional)
-          commit: string
-          time: string
   recommendation: string (optional)
   pushed_commits: list of mappings (optional)
-      repository: string (optional)
       commit: string
       branch: string (optional)
       pushed: string
   spec_merge: mapping (optional)
-      repository: string (optional)
       commit: string
       merged: string
   pull_request: mapping (optional)
-      repository: string (optional)
       number: int
       link: string
       state: string
@@ -230,6 +221,7 @@ projects/<key>/ci-runs.yaml (optional): the Project's CI Runs
 values
   options focus_clear (default activity_dashboard): activity_dashboard, all_clear
   options focus_popup (default off): off, on
+  options limits_popup (default on): on, off
   project landing.method (no landing: merge, push false, remote origin): merge, branch, pull_request
   project ci.provider (no ci: tracking off, github_actions): github_actions, azure_pipelines
   project models.kinds[].kind: grilling, spec, tickets, map-chart, map-grilling, map-research, map-task, prototype, retro, implementation

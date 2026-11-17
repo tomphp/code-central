@@ -10,15 +10,15 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// Format 43 (code-central-854) added a Ticket's Changed Repositories and
+// Format 44 (code-central-854) added a Ticket's Changed Repositories and
 // the Repository Name of its pushed commits, Spec merge and pull request.
-// The real chain migrates a format-42 store copying every file unchanged:
+// The real chain migrates a format-43 store copying every file unchanged:
 // a Ticket from before keeps its branch and commit and has no list, and
 // its records have no Repository Name, so all read as the Home
 // Repository's.
-func TestTheRealChainMigratesAFormat42StoreToTheChangedRepositoriesFormat(t *testing.T) {
+func TestTheRealChainMigratesAFormat43StoreToTheChangedRepositoriesFormat(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
-	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 42\n")
+	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 43\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),
 		"key: acme\ndisplay_name: Acme\ncreated: 2026-01-02T03:04:05Z\nmode: committed\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/specs/1.md"),
@@ -32,8 +32,8 @@ func TestTheRealChainMigratesAFormat42StoreToTheChangedRepositoriesFormat(t *tes
 	before := snapshot(t, dir)
 
 	s := openFile(t, dir)
-	if m := s.Migrated(); m == nil || m.From != 42 || m.To != store.Format {
-		t.Fatalf("migrated = %+v, want a migration from format 42", m)
+	if m := s.Migrated(); m == nil || m.From != 43 || m.To != store.Format {
+		t.Fatalf("migrated = %+v, want a migration from format 43", m)
 	}
 	after := snapshot(t, dir)
 	for rel, content := range before {
@@ -95,7 +95,7 @@ func TestATicketsChangedRepositoriesAreCheckedOnLoad(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := filepath.Join(t.TempDir(), "code-central")
-			writeFile(t, filepath.Join(dir, "store.yaml"), "format: 43\n")
+			writeFile(t, filepath.Join(dir, "store.yaml"), "format: 44\n")
 			writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),
 				"key: acme\ndisplay_name: Acme\ncreated: 2026-01-02T03:04:05Z\nmode: committed\n")
 			writeFile(t, filepath.Join(dir, "projects/acme/specs/1.md"),

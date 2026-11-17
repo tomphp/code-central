@@ -300,6 +300,14 @@ export const FOCUS_POPUPS = [
 ] as const;
 export type FocusPopup = (typeof FOCUS_POPUPS)[number];
 
+// LimitsPopup is whether the Limits popup shows a Project's Plan Limits.
+// LimitsPopups has the default first.
+export const LIMITS_POPUPS = [
+  "on",
+  "off",
+] as const;
+export type LimitsPopup = (typeof LIMITS_POPUPS)[number];
+
 // ChatAvailability is whether the Project's current Conversation can take
 // a Chat Message now, worked out from the Heartbeats on every read.
 export const CHAT_AVAILABILITIES = [
@@ -750,6 +758,8 @@ export interface OptionsView {
   focus_clear: FocusClear;
   // FocusPopup is the Focus Pop-up Option.
   focus_popup: FocusPopup;
+  // LimitsPopup is the Show Limits popup Option.
+  limits_popup: LimitsPopup;
   // GHPath is the gh path Option: where gh is, "" to find it on the
   // service's PATH, then in the usual install places.
   gh_path: string;
@@ -911,6 +921,10 @@ export interface FactoryStatusView {
   // Base is the base the Factory last reported under Pull Request
   // (code-central-394); left out while none is reporting.
   base?: BaseView;
+  // PlanLimits are the most recently observed Plan Limits among the
+  // Factories that aren't Offline (Spec code-central-861); left out
+  // while none has any.
+  plan_limits?: PlanLimits;
 }
 
 // RepositoryView is one of a Project's Repositories as every Project read
@@ -1423,6 +1437,18 @@ export interface BaseView {
   at: string;
 }
 
+// PlanLimits are a Factory's Plan Limits, as it reports them and as the
+// Project's Factory Status shows them.
+export interface PlanLimits {
+  // ObservedAt is when the Factory read the figures; one later than
+  // Code Central's receipt is kept as the receipt time.
+  observed_at: string;
+  // FiveHour and Weekly are each left out when the Factory has no
+  // figures for that window.
+  five_hour?: PlanLimitWindow;
+  weekly?: PlanLimitWindow;
+}
+
 // CloneView is a Repository's clone as the Factory last reported it;
 // absent while no Factory is reporting.
 export interface CloneView {
@@ -1589,6 +1615,13 @@ export interface Tokens {
   cache_write_tokens: number;
   cache_read_tokens: number;
   output_tokens: number;
+}
+
+// PlanLimitWindow is one window of the Plan Limits.
+export interface PlanLimitWindow {
+  // UsedPercent is the share of the window's limit used, 0 to 100.
+  used_percent: number;
+  resets_at: string;
 }
 
 // RoundSummary is a Round's number and how many of its Questions are open.

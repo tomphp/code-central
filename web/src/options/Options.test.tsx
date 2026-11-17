@@ -103,6 +103,30 @@ describe("the Focus Pop-up Option", () => {
   });
 });
 
+describe("the Show Limits popup Option", () => {
+  it("offers On then Off with hints, on by default, and saves a choice at once", async () => {
+    const { w } = await world();
+    await renderApp(w, "/?view=options");
+    const group = within(options()).getByRole("radiogroup", { name: "Show Limits popup" });
+    expect(within(group).getAllByRole("radio").map((r) => r.getAttribute("value"))).toEqual(["on", "off"]);
+    expect(within(group).getByRole("radio", { name: "On" })).toBeChecked();
+    expect(within(group).getByRole("radio", { name: "On" })).toHaveAccessibleDescription(
+      "A popup shows a Project's Plan Limits: the 5-hour and weekly windows.",
+    );
+    expect(within(group).getByRole("radio", { name: "Off" })).toHaveAccessibleDescription("No Limits popup.");
+
+    await userEvent.click(within(group).getByRole("radio", { name: "Off" }));
+    await settle(w);
+    expect(within(group).getByRole("radio", { name: "Off" })).toBeChecked();
+    expect(await w.api.options()).toMatchObject({ limits_popup: "off" });
+
+    // A change made elsewhere is followed live.
+    await w.api.setOptions({ limits_popup: "on" });
+    await settle(w);
+    expect(within(group).getByRole("radio", { name: "On" })).toBeChecked();
+  });
+});
+
 describe("the Focus Mode Option", () => {
   it("offers Activity Dashboard first, then All clear, and saves a choice at once", async () => {
     const { w } = await world();

@@ -294,6 +294,10 @@ The notes code-central-factory sends:
 
 A stopping Heartbeat shows Offline at once. A crash sends nothing, so the dot goes grey at the Factory's deadline: three polls, and at least 90 seconds. After Code Central restarts every dot is grey until the Factory's next poll. See [Writing a Factory](writing-a-factory.md) for sending Heartbeats from your own.
 
+### Plan Limits
+
+The Factory also reports the Claude account's Plan Limits, the 5-hour and weekly limits, each as the percentage used and when it resets. It reads them from the `rate_limit_event` claude prints during its Turns, Claim and Chat Turns alike, and every Heartbeat it sends (online, draining and stopping) carries the latest as `plan_limits`. It has none until its first Turn after starting, and it sends no Heartbeat early for new figures: they go with the next poll's. Only a Turn brings new figures, so they grow stale while the Factory is idle; it keeps the last ones until it exits. The limits are account-wide, so with several Factories the Project shows the most recently read.
+
 ### Chat in the UI
 
 While a Project is open (not in the all-Projects scope) and one of its Factories is Online with Chat support, a round Chat icon floats in the lower right corner. It opens a pop-up holding the Project's current Conversation, the same in every tab. Your messages show as plain text and Claude's as Markdown, streaming in as it writes. Each tool call is one collapsed line that opens to its result, a denied permission shows as a warning, and a stopped or failed reply ends with `Stopped` or its error. **Send** is off while a reply runs, and **Stop** shows then. Sending with no Conversation starts one with the Chat row's model and effort. **New conversation** asks for a model and effort first, filled from that row (haiku when it sets none), and drops the old Conversation. **Copy resume command** copies `cd <worktree> && claude --resume <session-id>` once the session is known.

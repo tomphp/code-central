@@ -20,7 +20,7 @@ func TestTheRealChainMigratesAFormat31StoreToTheFocusPopupFormat(t *testing.T) {
 		t.Fatalf("migrated = %+v, want a migration from format 31", m)
 	}
 	s.View(func(r store.Reader) error {
-		want := store.Options{FocusClear: store.FocusAllClear, FocusPopup: store.FocusPopupOff}
+		want := store.Options{FocusClear: store.FocusAllClear, FocusPopup: store.FocusPopupOff, LimitsPopup: store.LimitsPopupOn}
 		if got := r.Options(); got != want {
 			t.Errorf("options after migrating = %+v, want %+v", got, want)
 		}

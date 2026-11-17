@@ -182,12 +182,18 @@ func (s *FileStore) loadOptions() error {
 	if f.FocusPopup != "" {
 		o.FocusPopup = FocusPopup(f.FocusPopup)
 	}
+	if f.LimitsPopup != "" {
+		o.LimitsPopup = LimitsPopup(f.LimitsPopup)
+	}
 	o.GHPath = f.GHPath
 	if !o.FocusClear.Valid() {
 		return &LoadError{File: rel, Field: "focus_clear", Msg: fmt.Sprintf("unknown value %q (%s)", f.FocusClear, strings.Join(FocusClearNames(), " or "))}
 	}
 	if !o.FocusPopup.Valid() {
 		return &LoadError{File: rel, Field: "focus_popup", Msg: fmt.Sprintf("unknown value %q (%s)", f.FocusPopup, strings.Join(FocusPopupNames(), " or "))}
+	}
+	if !o.LimitsPopup.Valid() {
+		return &LoadError{File: rel, Field: "limits_popup", Msg: fmt.Sprintf("unknown value %q (%s)", f.LimitsPopup, strings.Join(LimitsPopupNames(), " or "))}
 	}
 	s.options = o
 	return nil
