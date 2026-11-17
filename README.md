@@ -73,6 +73,28 @@ Press the **Focus** button, and repond whenever you are prompted.
 - Don't be afraid to bootstrap multiple projects and work on them concurrently (you will need a factory running per project).
 - Try tell a requirement to create a prototype.
 
+### Several repositories
+
+A Project's work can span more than one repository. The one you ran `code-central init` in is its Home Repository, where the Factory runs. Add the others in the **Repositories** section of Project Options, or from the Home Repository:
+
+```
+$ code-central repository add web --clone-url git@github.com:acme/web.git
+NAME             CLONE URL                         BASE  LOCAL PATH
+acme-api (home)  git@github.com:acme/acme-api.git  main  -
+web              git@github.com:acme/web.git       main  -
+```
+
+The list is the order accepted work lands in. The Factory clones each repository beside the Home Repository and gives every Ticket a worktree and a branch of the same name in each, named after the Ticket:
+
+```
+~/src/acme-api                     the Home Repository
+~/src/acme-api.worktrees/acme-4    the Ticket's Home worktree, where its session starts
+~/src/web                          cloned by the Factory
+~/src/web.worktrees/acme-4         reached with --add-dir
+```
+
+[Setting up a Project](docs/setting-up-a-project.md#several-repositories) and [Running the Factory](docs/running-the-factory.md#how-accepted-work-lands) have the rest.
+
 
 ## The guides
 

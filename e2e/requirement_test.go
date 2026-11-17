@@ -56,6 +56,15 @@ func startWorld(t *testing.T, requirement string, factoryArgs ...string) *world 
 // when withRemote, holding main as committed at the start.
 func startWorldWith(t *testing.T, requirement string, withRemote bool, factoryArgs ...string) *world {
 	t.Helper()
+	return startWorldSetUp(t, requirement, withRemote, nil, factoryArgs...)
+}
+
+// startWorldSetUp is startWorldWith, running setUp (when set) once the
+// repository is Project acme and committed, before the requirement (when
+// not blank) is submitted and the Factory starts. root holds the work
+// folder, where the Home Repository's clone parent is, and remote.git.
+func startWorldSetUp(t *testing.T, requirement string, withRemote bool, setUp func(root string, svc *service, inRepo func(args ...string) string, env []string), factoryArgs ...string) *world {
+	t.Helper()
 	svc := serve(t)
 	// git reports real paths, so resolve macOS's /var -> /private/var.
 	root, err := filepath.EvalSymlinks(t.TempDir())
@@ -105,20 +114,25 @@ func startWorldWith(t *testing.T, requirement string, withRemote bool, factoryAr
 		inRepo("remote", "add", "origin", remote)
 		inRepo("push", "-q", "origin", "main")
 	}
+	if setUp != nil {
+		setUp(root, svc, inRepo, env)
+	}
 
 	// The human submits a Requirement: its Spec and three Stage Tickets.
-	code, out := svc.cli(t, repo, "", "submit-requirement", "--text", requirement)
-	if code != 0 {
-		t.Fatalf("submit-requirement: exit %d: %s", code, out)
-	}
-	var submitted struct {
-		Spec struct {
-			ID string `json:"id"`
-		} `json:"spec"`
-	}
-	json.Unmarshal([]byte(out), &submitted)
-	if submitted.Spec.ID != "acme-1" {
-		t.Fatalf("submit-requirement: %s", out)
+	if requirement != "" {
+		code, out := svc.cli(t, repo, "", "submit-requirement", "--text", requirement)
+		if code != 0 {
+			t.Fatalf("submit-requirement: exit %d: %s", code, out)
+		}
+		var submitted struct {
+			Spec struct {
+				ID string `json:"id"`
+			} `json:"spec"`
+		}
+		json.Unmarshal([]byte(out), &submitted)
+		if submitted.Spec.ID != "acme-1" {
+			t.Fatalf("submit-requirement: %s", out)
+		}
 	}
 
 	// The Factory runs as its own process in the repository.
@@ -301,9 +315,17 @@ type ticketView struct {
 		ID    string `json:"id"`
 		Title string `json:"title"`
 	} `json:"spec"`
-	Branch string `json:"branch"`
-	Commit string `json:"commit"`
-	Moves  []struct {
+	Branch       string `json:"branch"`
+	Commit       string `json:"commit"`
+	Repositories []struct {
+		Name   string `json:"name"`
+		Branch string `json:"branch"`
+		Commit string `json:"commit"`
+		Landed *struct {
+			Commit string `json:"commit"`
+		} `json:"landed"`
+	} `json:"repositories"`
+	Moves []struct {
 		Commit string `json:"commit"`
 	} `json:"moves"`
 }
@@ -410,6 +432,25 @@ func fakeClaude(codeCentral string, args []string) int {
 			}
 			finish = append(finish, "--summary", summary)
 		default:
+			// A Repository beyond the Home's has its worktree in an
+			// --add-dir, <clone parent>/<name>.worktrees/<ticket>.
+			var others []map[string]string
+			for i, a := range args {
+				if a != "--add-dir" || i+1 >= len(args) {
+					continue
+				}
+				dir := args[i+1]
+				commit, err := commitHello(run, dir, tk.Title)
+				if err != nil {
+					return err
+				}
+				others = append(others, map[string]string{
+					"name": strings.TrimSuffix(filepath.Base(filepath.Dir(dir)), ".worktrees"), "branch": id, "commit": commit})
+			}
+			if len(others) > 0 {
+				j, _ := json.Marshal(others)
+				finish = append(finish, "--repositories", string(j))
+			}
 			file, word := "hello.txt", "hello"
 			if tk.Title == "Say goodbye" {
 				file, word = "goodbye.txt", "goodbye"
@@ -438,4 +479,19 @@ func fakeClaude(codeCentral string, args []string) int {
 	}
 	fmt.Println(`{"type":"result","subtype":"success","is_error":false,"result":"Finished ` + id + `."}`)
 	return 0
+}
+
+// commitHello writes hello.txt in the worktree dir and commits it, as the
+// Ticket titled title, returning the commit.
+func commitHello(run func(name string, args ...string) (string, error), dir, title string) (string, error) {
+	if err := os.WriteFile(filepath.Join(dir, "hello.txt"), []byte("hello\n"), 0o644); err != nil {
+		return "", err
+	}
+	if _, err := run("git", "-C", dir, "add", "hello.txt"); err != nil {
+		return "", err
+	}
+	if _, err := run("git", "-C", dir, "commit", "-q", "-m", title); err != nil {
+		return "", err
+	}
+	return run("git", "-C", dir, "rev-parse", "HEAD")
 }
