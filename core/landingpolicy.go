@@ -124,6 +124,16 @@ func repositoryLandingPolicies(repositories []RepositoryView, method store.Landi
 	return ps
 }
 
+// markLocalOnlyUnderPullRequest flags each of vs, p's Repositories'
+// views, that is local-only with a policy that needs a Clone URL: only a
+// Home that lost its remote can be, and it keeps its Landing.
+func markLocalOnlyUnderPullRequest(p store.Project, vs []RepositoryView) {
+	ps := repositoryLandingPolicies(vs, p.Landing.Method, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
+	for i, v := range vs {
+		vs[i].LocalOnlyUnderPullRequest = v.LocalOnly() && ps.In(v.Name).NeedsCloneURL()
+	}
+}
+
 // landingPolicies is the policies of p's Repositories.
 func landingPolicies(p store.Project) LandingPolicies {
 	return repositoryLandingPolicies(repositoriesView(p), p.Landing.Method, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
@@ -193,6 +203,13 @@ func (ps LandingPolicies) RunsPullRequestWatcher() bool {
 // Project with CI Tracking on", which every Repository's policy shares.
 func (ps LandingPolicies) RunsCIWatcher() bool {
 	return ps.Any(LandingPolicy.RunsCIWatcher)
+}
+
+// UsesAzureReposPAT answers the PAT variable's "shown while any Azure
+// Repos Repository is under Pull Request", given the Azure Repos
+// Repositories' names.
+func (ps LandingPolicies) UsesAzureReposPAT(azureRepos []string) bool {
+	return ps.Only(azureRepos).Any(LandingPolicy.LandsByPullRequest)
 }
 
 // LandPerSpecInForce answers whether Land per Spec covers the Project's

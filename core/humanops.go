@@ -155,7 +155,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		}
 		// Only bringing a local-only Repository under Pull Request is
 		// refused.
-		if err := refuseClonelessFollowers(p, nextP); err != nil {
+		if err := refuseLocalOnlyFollowers(p, nextP); err != nil {
 			return err
 		}
 		if p.Landing == l {

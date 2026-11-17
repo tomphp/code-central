@@ -182,7 +182,9 @@ func TestThePullRequestWatcherRunsWhileAnyRepositoryIsUnderPullRequest(t *testin
 	if !f.landingOf(t).UsesAzureReposPAT {
 		t.Fatalf("the PAT variable is unused with web, on Azure Repos, under Pull Request")
 	}
-	if v := f.projectView(t, "acme"); !slices.ContainsFunc(v.Repositories, func(r core.RepositoryView) bool { return r.Name == "web" && r.Landing == core.RepositoryLandingPullRequest }) {
+	if v := f.projectView(t, "acme"); !slices.ContainsFunc(v.Repositories, func(r core.RepositoryView) bool {
+		return r.Name == "web" && r.Landing == core.RepositoryLandingPullRequest
+	}) {
 		t.Fatalf("repositories %+v, want web under Pull Request", v.Repositories)
 	}
 }

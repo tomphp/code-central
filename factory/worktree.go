@@ -243,13 +243,13 @@ func (f *factory) prune(r *repository) {
 // when the Ticket never used it (sweepsBranch, sweepUnusedBranch); with
 // the Home Repository alone, branches are never deleted. Anything else is
 // kept, the Chat worktrees among it.
-func (f *factory) sweep(ctx context.Context, policy core.LandingPolicies) {
+func (f *factory) sweep(ctx context.Context, policies core.LandingPolicies) {
 	tickets := map[string]*core.TicketView{}
 	for _, r := range f.readyRepositories() {
 		if ctx.Err() != nil {
 			return
 		}
-		f.sweepIn(ctx, r, policy, tickets)
+		f.sweepIn(ctx, r, policies, tickets)
 	}
 }
 

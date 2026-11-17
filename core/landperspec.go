@@ -18,10 +18,10 @@ import (
 
 // specLanded is whether t is a Spec-landed Ticket in Project p: any of
 // p's Repositories is under Merge or Pull Request with Land per Spec on,
-// t is an
-// implementation Ticket (not a Stage, Map, Prototype or Retro Ticket), and its
-// Spec is neither a Map nor Long-lived (it doesn't carry the long-lived
-// Label). A Long-lived Spec's Tickets land Ticket by Ticket.
+// t is an implementation Ticket (not a Stage, Map, Prototype or Retro
+// Ticket), and its Spec is neither a Map nor Long-lived (it doesn't carry
+// the long-lived Label). A Long-lived Spec's Tickets land Ticket by
+// Ticket.
 func specLanded(r store.Reader, p store.Project, t store.Ticket) bool {
 	if !landingPolicies(p).LandPerSpecInForce() {
 		return false

@@ -882,11 +882,13 @@ func landingView(p store.Project) LandingView {
 func landingViewWith(p store.Project, watcher WatcherView) LandingView {
 	host, repo := codeHostOf(p.CI.PushRemoteURL)
 	push := p.Landing.Normalized().Push
-	ps := landingPolicies(p)
-	azure := false
+	var azure []string
 	for _, rv := range repositoriesView(p) {
-		azure = azure || rv.CodeHost == CodeHostAzureRepos && ps.In(rv.Name).LandsByPullRequest()
+		if rv.CodeHost == CodeHostAzureRepos {
+			azure = append(azure, rv.Name)
+		}
 	}
 	return LandingView{Method: p.Landing.Method, Push: push, Remote: p.Landing.Remote, LandPerSpec: p.Landing.LandPerSpec,
-		CodeHost: host, Repository: repo, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv}), UsesAzureReposPAT: azure, Base: p.Base(), Watcher: watcher, OpenPullRequests: []OpenPullRequest{}}
+		CodeHost: host, Repository: repo, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv}), UsesAzureReposPAT: landingPolicies(p).UsesAzureReposPAT(azure),
+		Base: p.Base(), Watcher: watcher, OpenPullRequests: []OpenPullRequest{}}
 }

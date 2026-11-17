@@ -58,14 +58,14 @@ func (c *Core) checkPullRequest(ctx context.Context, key string, change func(sto
 	var url, ghPath, patEnv string
 	var repositories []RepositoryView
 	var homeUnder, single bool
-	var cloneless error
+	var localOnly error
 	err := c.store.View(func(r store.Reader) error {
 		if err := writable(r, key); err != nil {
 			return err
 		}
 		p, _ := r.Project(key)
 		next := change(p)
-		cloneless = refuseClonelessFollowers(p, next)
+		localOnly = refuseLocalOnlyFollowers(p, next)
 		was, now := landingPolicies(p), landingPolicies(next)
 		all := repositoriesView(next)
 		for _, rv := range all {
@@ -86,8 +86,8 @@ func (c *Core) checkPullRequest(ctx context.Context, key string, change func(sto
 			return err
 		}
 	}
-	if cloneless != nil {
-		return cloneless
+	if localOnly != nil {
+		return localOnly
 	}
 	if c.pullRequestCheck == nil {
 		return nil
@@ -120,45 +120,45 @@ func (c *Core) checkPullRequest(ctx context.Context, key string, change func(sto
 	return checkRefusal(SumRepositoryProblems(ps), "method")
 }
 
-// clonelessFix is how to put right the local-only Repository rv under
-// Pull Request, called who: another Landing, or a Clone URL.
-func clonelessFix(rv RepositoryView, who string) string {
+// localOnlyUnderPullRequestFix is how to put right the local-only
+// Repository rv under Pull Request: another Landing, or a Clone URL.
+func localOnlyUnderPullRequestFix(rv RepositoryView) string {
 	if rv.OwnLanding {
-		return "give " + who + " a Clone URL, or another Landing such as Merge"
+		return "give " + rv.Name + " a Clone URL, or another Landing such as Merge"
 	}
-	return "give " + who + " an Own Landing such as Merge, or a Clone URL"
+	return "give " + rv.Name + " an Own Landing such as Merge, or a Clone URL"
 }
 
-// refuseCloneless refuses p, as an add or edit of its Repository name
-// would leave it, while name is local-only under Pull Request: Pull
-// Request is refused as a local-only Repository's Own Landing, and a
-// Clone URL can't be cleared or left out while the Repository would be
-// under Pull Request. It is refused on landing when the human chose the
-// Landing, else on clone_url.
-func refuseCloneless(p store.Project, name string, landing bool) error {
-	for _, r := range p.RepositoryList() {
-		if rv := repositoryView(p, r); rv.Name == name && rv.LocalOnly() && landingPolicyIn(p, name).NeedsCloneURL() {
+// refuseLocalOnlyUnderPullRequest refuses p, as an add or edit of its
+// Repository name would leave it, while name is local-only under Pull
+// Request: Pull Request is refused as a local-only Repository's Own
+// Landing, and a Clone URL can't be cleared or left out while the
+// Repository would be under Pull Request. It is refused on landing when
+// the human chose the Landing, else on clone_url.
+func refuseLocalOnlyUnderPullRequest(p store.Project, name string, landing bool) error {
+	for _, rv := range repositoriesView(p) {
+		if rv.Name == name && rv.LocalOnlyUnderPullRequest {
 			field := "clone_url"
 			if landing {
 				field = "landing"
 			}
-			return &Error{Code: Invalid, Field: field, Message: name + " is local-only, with no Clone URL, so it can't land by Pull Request", Fix: clonelessFix(rv, name)}
+			return &Error{Code: Invalid, Field: field, Message: name + " is local-only, with no Clone URL, so it can't land by Pull Request", Fix: localOnlyUnderPullRequestFix(rv)}
 		}
 	}
 	return nil
 }
 
-// refuseClonelessFollowers refuses next, a change of p's Default Landing,
+// refuseLocalOnlyFollowers refuses next, a change of p's Default Landing,
 // on method while it brings a local-only Repository following it under
 // Pull Request, naming each one with its fix. One already there, as only
 // a Home that lost its remote can be, isn't refused again.
-func refuseClonelessFollowers(p, next store.Project) error {
-	was, now := landingPolicies(p), landingPolicies(next)
+func refuseLocalOnlyFollowers(p, next store.Project) error {
+	was := landingPolicies(p)
 	var ps []RepositoryProblem
 	for _, rv := range repositoriesView(next) {
-		if rv.LocalOnly() && now.In(rv.Name).NeedsCloneURL() && !was.In(rv.Name).NeedsCloneURL() {
+		if rv.LocalOnlyUnderPullRequest && !was.In(rv.Name).NeedsCloneURL() {
 			ps = append(ps, RepositoryProblem{Repository: rv.Name, Problem: ProblemCheckFailed,
-				Message: "local-only, with no Clone URL, and following the Default Landing, so it can't land by Pull Request", Fix: clonelessFix(rv, "it")})
+				Message: "local-only, with no Clone URL, and following the Default Landing, so it can't land by Pull Request", Fix: localOnlyUnderPullRequestFix(rv)})
 		}
 	}
 	return checkRefusal(SumRepositoryProblems(ps), "method")

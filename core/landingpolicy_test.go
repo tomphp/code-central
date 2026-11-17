@@ -25,8 +25,8 @@ func TestLandingPolicyMatrix(t *testing.T) {
 						"LandsOnHumanMerge":   {NewLandingPolicy(m, push, lps, ci).LandsOnHumanMerge(), branch || pr},
 						// Today's code offers it under Merge without Push too;
 						// the glossary's false holds there.
-						"OffersLandAnyway":             {NewLandingPolicy(m, push, lps, ci).OffersLandAnyway(), merge && effPush},
-						"FlagsNotLanded":               {NewLandingPolicy(m, push, lps, ci).FlagsNotLanded(), merge},
+						"OffersLandAnyway":           {NewLandingPolicy(m, push, lps, ci).OffersLandAnyway(), merge && effPush},
+						"FlagsNotLanded":             {NewLandingPolicy(m, push, lps, ci).FlagsNotLanded(), merge},
 						"LandsByPullRequest":         {NewLandingPolicy(m, push, lps, ci).LandsByPullRequest(), pr},
 						"RunsCIWatcher":              {NewLandingPolicy(m, push, lps, ci).RunsCIWatcher(), ci},
 						"MergesSpecBranches":         {NewLandingPolicy(m, push, lps, ci).MergesSpecBranches(), merge && lps},

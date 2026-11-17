@@ -76,6 +76,7 @@ func repositoriesView(p store.Project) []RepositoryView {
 	for _, r := range p.RepositoryList() {
 		out = append(out, repositoryView(p, r))
 	}
+	markLocalOnlyUnderPullRequest(p, out)
 	return out
 }
 
@@ -91,7 +92,6 @@ func repositoryView(p store.Project, r store.Repository) RepositoryView {
 	}
 	v.CodeHost, _ = codeHostOf(v.CloneURL)
 	v.Landing, v.OwnLanding = effectiveLanding(p, r)
-	v.LocalOnlyUnderPullRequest = v.LocalOnly() && v.Landing == RepositoryLandingPullRequest
 	return v
 }
 
@@ -548,7 +548,7 @@ type repositoryChange struct {
 // is on, it passes the CI Watcher's check. The checks call the Code Host,
 // so they run outside the store's lock, between a read that refuses what
 // the store alone can and the write, which checks again.
-func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r store.Repository, what repositoryChange, ci *store.CIRepository, change func([]store.Repository) ([]store.Repository, error)) (Written[ProjectView], error) {
+func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r store.Repository, changed repositoryChange, ci *store.CIRepository, change func([]store.Repository) ([]store.Repository, error)) (Written[ProjectView], error) {
 	apply := func(p store.Project) ([]store.Repository, error) {
 		rs, err := change(p.RepositoryList())
 		if err != nil {
@@ -558,7 +558,7 @@ func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r 
 		// as a host Pull Request doesn't support.
 		next := p
 		next.SetRepositories(rs)
-		if err := refuseCloneless(next, r.Name, what.landing); err != nil {
+		if err := refuseLocalOnlyUnderPullRequest(next, r.Name, changed.landing); err != nil {
 			return nil, err
 		}
 		if r.Home {
@@ -580,8 +580,8 @@ func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r 
 		}
 		next := p
 		next.SetRepositories(rs)
-		under, was := landingPolicyIn(next, r.Name).LandsByPullRequest(), landingPolicyIn(p, r.Name).LandsByPullRequest()
-		if under && (what.newCloneURL || !was) {
+		underPR, wasUnderPR := landingPolicyIn(next, r.Name).LandsByPullRequest(), landingPolicyIn(p, r.Name).LandsByPullRequest()
+		if underPR && (changed.newCloneURL || !wasUnderPR) {
 			check = &PullRequestCheckInput{GHPath: rd.Options().GHPath, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv})}
 			url = repositoryView(next, r).CloneURL
 		}

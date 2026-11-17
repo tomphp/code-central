@@ -578,11 +578,7 @@ func openPullRequests(r store.Reader, p store.Project) []OpenPullRequest {
 			continue
 		}
 		for _, pr := range t.PullRequests {
-			in := pr.Repository
-			if in == "" {
-				in = p.Key
-			}
-			if pullRequestOpen(pr) && !ps.In(in).LandsByPullRequest() {
+			if pullRequestOpen(pr) && !ps.In(recordRepository(p.Key, pr.Repository)).LandsByPullRequest() {
 				out = append(out, OpenPullRequest{Ticket: DisplayID(p.Key, t.Number), Link: pr.Link})
 			}
 		}

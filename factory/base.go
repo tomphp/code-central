@@ -49,16 +49,15 @@ func (f *factory) stateOf(r *repository) *baseState {
 	return s
 }
 
-// held says why nothing touching r lands this poll under policy, the
-// Project's Repositories' policies: its base is missing, or under r's
-// Merge + Push isn't level with the remote's. It is "" when r's base is
-// ready.
-func (f *factory) held(r *repository, policy core.LandingPolicies) string {
+// held says why nothing touching r lands this poll under policies, the
+// Project's Repositories': its base is missing, or under r's Merge + Push
+// isn't level with the remote's. It is "" when r's base is ready.
+func (f *factory) held(r *repository, policies core.LandingPolicies) string {
 	s := f.stateOf(r)
 	switch {
 	case s.missing:
 		return "its base, " + f.baseOf(r) + ", is missing"
-	case r.policy(policy).PushesBase() && !s.current:
+	case r.policy(policies).PushesBase() && !s.current:
 		return "its base, " + f.baseOf(r) + ", isn't level with the remote's"
 	}
 	return ""
