@@ -188,6 +188,28 @@ func TestARepositoryAtAnEarlierRepositorysPathIsRepositoryMissing(t *testing.T) 
 	}
 }
 
+func TestARepositoryWithACloneURLAtAnEarlierRepositorysPathIsNeitherClonedNorAdopted(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	site := h.MakeRepository("site")
+	// web, local-only, is at site's default path, which Code Central
+	// can't see before the Factory's first report.
+	h.GitIn(filepath.Dir(h.Repo), "init", "-q", "-b", "main", site.Path)
+	web := addLocalOnly(t, h, "web", site.Path)
+	if _, err := h.Human().AddRepository(context.Background(), h.Project, core.AddRepositoryInput{Name: "site", CloneURL: site.CloneURL}); err != nil {
+		t.Fatal(err)
+	}
+
+	h.Start().Poll()
+	wantMissing(t, h, site, site.Path+" is Repository web's clone")
+	if got := h.GitIn(web.Path, "remote"); got != "" {
+		t.Errorf("web's remotes are %q, want none added", got)
+	}
+	if got := files(t, web.Path); !slices.Equal(got, []string{".git"}) {
+		t.Errorf("%s holds %v, want nothing cloned into it", web.Path, got)
+	}
+}
+
 func TestARepositoryAtTheHomeRepositorysPathIsRepositoryMissing(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)

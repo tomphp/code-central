@@ -169,10 +169,12 @@ func (c *Core) repositoryMissingRows(p store.Project) []NeedsMeRow {
 		if r.Clone == nil || r.Clone.State != CloneMissing {
 			continue
 		}
-		fix := fmt.Sprintf("Clone %s to %s by hand, set Repository %s's local path to a clone of it in Project Options, or move what's at %s aside for the Factory to clone it there", r.CloneURL, r.Clone.Path, r.Name, r.Clone.Path)
+		var fix string
 		if r.CloneURL == "" {
 			// Local-only: the Factory never clones it.
 			fix = fmt.Sprintf("Put Repository %s's git repository at %s, or set its local path to where it is in Project Options", r.Name, r.Clone.Path)
+		} else {
+			fix = fmt.Sprintf("Clone %s to %s by hand, set Repository %s's local path to a clone of it in Project Options, or move what's at %s aside for the Factory to clone it there", r.CloneURL, r.Clone.Path, r.Name, r.Clone.Path)
 		}
 		out = append(out, NeedsMeRow{
 			Project: p.Key, Title: "Repository missing: " + r.Name, Reason: ReasonRepositoryMissing, Since: r.Clone.Since,
