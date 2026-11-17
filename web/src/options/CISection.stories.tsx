@@ -21,6 +21,15 @@ export const AzurePipelines: Story = {
   }),
 };
 export const TrackingOff: Story = { ...optionsWorld() };
+// A Repository on Azure Pipelines, set in its row, brings in the PAT
+// environment variable and both kinds of Ignored workflow name.
+export const AzurePipelinesInOneRepository: Story = {
+  ...optionsWorld(async (s, w) => {
+    await s.reportPushRemote("acme", "git@github.com:acme/web.git");
+    await w.api.addRepository("acme", { name: "infra", clone_url: "https://dev.azure.com/acme/ops/_git/infra" });
+    await w.api.setCITracking("acme", { tracking: true, ignored_workflows: ["nightly.yml"] });
+  }),
+};
 export const SeveralRepositories: Story = {
   ...optionsWorld(async (_s, w) => {
     await w.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });

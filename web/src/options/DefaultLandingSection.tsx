@@ -5,6 +5,7 @@ import type {
   Landing,
   LandingMethod,
   ProjectRow,
+  RepositoryView,
 } from "../api/types";
 import { Button } from "../controls/Button";
 import { Refusal } from "./Refusal";
@@ -30,9 +31,21 @@ const METHODS: { method: LandingMethod; label: string; hint: string }[] = [
 
 const CODE_HOST_NAMES = { github: "GitHub", azure_repos: "Azure Repos" };
 
-// LandingMethodSection is how the Project's accepted work lands. It follows
-// the Project as read, so a change from another tab shows here too.
-export function LandingMethodSection({ project }: { project: ProjectRow }) {
+// usesAzureReposPAT reports whether the PAT variable is used with the
+// Default Landing's method as drafted: while any Azure Repos Repository
+// is under Pull Request, by its Own Landing or by following the default.
+function usesAzureReposPAT(repositories: RepositoryView[], method: LandingMethod) {
+  return repositories.some(
+    (r) => r.code_host === "azure_repos" && (r.own_landing ? r.landing : method) === "pull_request",
+  );
+}
+
+// DefaultLandingSection is the Project's Default Landing (Spec
+// code-central-890): how accepted work lands in every Repository with no
+// Own Landing, and the Project-wide Land per Spec, PAT variable and
+// Base. It follows the Project as read, so a change from another tab
+// shows here too.
+export function DefaultLandingSection({ project }: { project: ProjectRow }) {
   const api = useApi();
   const { method, push, remote, land_per_spec, pat_env, base, code_host, repository } = project.landing;
   const [draft, setDraft] = useState<Landing>(project.landing);
@@ -76,8 +89,8 @@ export function LandingMethodSection({ project }: { project: ProjectRow }) {
 
   return (
     <form onSubmit={save}>
-      <fieldset id="project-options-landing-method" className="project-options-section" disabled={project.archived}>
-        <legend>Landing Method</legend>
+      <fieldset id="project-options-default-landing" className="project-options-section" disabled={project.archived}>
+        <legend>Default Landing</legend>
         {project.archived && (
           <p className="muted">
             The Project is archived: unarchive it to change its options.
@@ -148,35 +161,36 @@ export function LandingMethodSection({ project }: { project: ProjectRow }) {
           </p>
         </div>
         <label className="project-options-remote">
-          Remote{" "}
+          Push remote{" "}
           <input
             value={draft.remote}
-            disabled={!draft.push && !pullRequest}
             onChange={(e) => edit({ remote: e.target.value })}
             aria-invalid={remoteError || undefined}
-            aria-describedby={remoteError ? `${id}-error` : undefined}
+            aria-describedby={remoteError ? `${id}-error ${id}-remote` : `${id}-remote`}
           />
         </label>
+        <p className="project-options-hint" id={`${id}-remote`}>
+          The git remote each Repository with no Push remote of its own is
+          pushed to and fetched from.
+        </p>
         {pullRequest && (
-          <>
-            <p className="project-options-hint" role="status" aria-label="Code Host">
-              {code_host
-                ? `Code Host: ${CODE_HOST_NAMES[code_host]}, repository ${repository}.`
-                : pushRemoteURL
-                  ? `The Push remote ${pushRemoteURL} is on a host Pull Request doesn't support: it supports GitHub and Azure Repos.`
-                  : "No Push remote URL is reported yet: start the Factory once so it reports it, and the Code Host is worked out from it."}
-            </p>
-            {code_host === "azure_repos" && (
-              <label className="project-options-remote">
-                PAT variable{" "}
-                <input
-                  value={draft.pat_env}
-                  onChange={(e) => edit({ pat_env: e.target.value })}
-                  aria-invalid={error?.field === "pat_env" || undefined}
-                />
-              </label>
-            )}
-          </>
+          <p className="project-options-hint" role="status" aria-label="Code Host">
+            {code_host
+              ? `Code Host: ${CODE_HOST_NAMES[code_host]}, repository ${repository}.`
+              : pushRemoteURL
+                ? `The Push remote ${pushRemoteURL} is on a host Pull Request doesn't support: it supports GitHub and Azure Repos.`
+                : "No Push remote URL is reported yet: start the Factory once so it reports it, and the Code Host is worked out from it."}
+          </p>
+        )}
+        {usesAzureReposPAT(project.repositories, draft.method) && (
+          <label className="project-options-remote">
+            PAT variable{" "}
+            <input
+              value={draft.pat_env}
+              onChange={(e) => edit({ pat_env: e.target.value })}
+              aria-invalid={error?.field === "pat_env" || undefined}
+            />
+          </label>
         )}
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
@@ -207,7 +221,7 @@ export function LandingMethodSection({ project }: { project: ProjectRow }) {
             </ul>
           </div>
         )}
-        {project.landing.method === "pull_request" && (
+        {project.repositories.some((r) => r.landing === "pull_request") && (
           <WatcherStatus
             name="Pull Request Watcher"
             repository={

@@ -1,8 +1,9 @@
 // CI Tracking per Repository in the UI (Spec code-central-848), on the
 // WASM Core: CI items labelled Name@sha, the Ticket page's CI per
-// Repository with failure options acting on that Repository only, and
-// the CI section's row per Repository with its CI Provider and target, or
-// Not watched, and the CI Watcher's per-Repository errors. A
+// Repository with failure options acting on that Repository only, each
+// Repository's row in Project Options with its CI Provider and target, or
+// Not watched (Spec code-central-890), and the CI Watcher's
+// per-Repository errors. A
 // single-repository Project shows none of it.
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -85,22 +86,24 @@ describe("a red build in one of several Repositories", () => {
   });
 });
 
-describe("the CI section with several Repositories", () => {
-  it("lists each Repository's CI, editable, with Not watched", async () => {
+describe("Project Options with several Repositories", () => {
+  it("shows each Repository's CI in its row, editable, with Not watched", async () => {
     const { w } = await world();
     await renderApp(w, OPTIONS);
-    const each = screen.getByRole("region", { name: "CI per Repository" });
-    expect(within(each).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
-      "acme: GitHub Actions on acme/web, the Home Repository's, set above",
-      "api: GitHub Actions on acme/api Edit",
-    ]);
-    await userEvent.click(within(each).getByRole("button", { name: "Edit api's CI" }));
-    const form = within(each).getByRole("form", { name: "api's CI" });
+    const rows = within(screen.getByRole("group", { name: "Repositories" })).getByRole("list", { name: "Repositories" });
+    const ciOf = (name: string) =>
+      within(within(rows).getByRole("listitem", { name })).getByText("CI", { selector: "dt" }).nextElementSibling as HTMLElement;
+    expect(ciOf("acme")).toHaveTextContent("GitHub Actions on acme/web");
+    expect(ciOf("api")).toHaveTextContent("GitHub Actions on acme/api");
+    expect(screen.queryByRole("region", { name: "CI per Repository" })).toBeNull();
+
+    await userEvent.click(within(ciOf("api")).getByRole("button", { name: "Edit api's CI" }));
+    const form = within(ciOf("api")).getByRole("form", { name: "api's CI" });
     await userEvent.selectOptions(within(form).getByRole("combobox", { name: "CI" }), "Not watched");
     await userEvent.click(within(form).getByRole("button", { name: "Save" }));
     await settle(w);
     expect((await acme(w)).ci.repositories).toEqual([{ name: "api", not_watched: true }]);
-    expect(within(screen.getByRole("region", { name: "CI per Repository" })).getAllByRole("listitem")[1]).toHaveTextContent("api: Not watched");
+    expect(ciOf("api")).toHaveTextContent("Not watched");
   });
 
   it("shows the CI Watcher's error per Repository with each fix", async () => {
