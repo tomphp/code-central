@@ -48,6 +48,21 @@ type repository struct {
 	cloned bool
 }
 
+// view is r as the Project lists it, as far as the Factory keeps it: its
+// Name, whether it is the Home, its Clone URL and its Base, which say
+// whether it is local-only. Its local path and Code Host are left out.
+func (r *repository) view() core.RepositoryView {
+	return core.RepositoryView{Name: r.name, Home: r.home, CloneURL: r.cloneURL, Base: r.base}
+}
+
+// policy is r's Landing Policy, which every landing step in r asks: the
+// Project's, projectPolicy, with Push off in a local-only Repository (ADR
+// 0039, Spec code-central-879). Project-wide rules ask the Project's, so
+// a function given a policy with r is given the Project's and asks this.
+func (r *repository) policy(projectPolicy core.LandingPolicy) core.LandingPolicy {
+	return projectPolicy.ForRepository(r.view())
+}
+
 // baseOf is r's Base: the Project's for the Home Repository.
 func (f *factory) baseOf(r *repository) string {
 	if r.home {

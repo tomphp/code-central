@@ -27,7 +27,8 @@ const (
 	BaseCurrent  BaseState = "current"
 	BaseDiverged BaseState = "diverged"
 	// BaseMissing is a base that exists neither locally nor on the Push
-	// remote; it carries no commits.
+	// remote, or in a local-only Repository, never looked for on a
+	// remote, doesn't exist locally; it carries no commits.
 	BaseMissing BaseState = "missing"
 )
 
@@ -192,9 +193,10 @@ func (c *Core) reportedBase(p store.Project, r store.Repository, state BaseState
 }
 
 // divergedBase is the reported base of p's Repository r while it is
-// diverged and p is under Pull Request or Merge + Push.
+// diverged and r's Landing Policy is Pull Request or Merge + Push: never
+// in a local-only Repository.
 func (c *Core) divergedBase(p store.Project, r store.Repository) (BaseView, bool) {
-	if !landingPolicyOf(p).KeepsBaseLevel() {
+	if !landingPolicyIn(p, r.Name).KeepsBaseLevel() {
 		return BaseView{}, false
 	}
 	return c.reportedBase(p, r, BaseDiverged)

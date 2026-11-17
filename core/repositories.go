@@ -54,14 +54,19 @@ func (r RepositoryView) LocalOnly() bool { return !r.Home && r.CloneURL == "" }
 func repositoriesView(p store.Project) []RepositoryView {
 	var out []RepositoryView
 	for _, r := range p.RepositoryList() {
-		v := RepositoryView{Name: r.Name, Home: r.Home, CloneURL: r.CloneURL, Base: r.Base, LocalPath: r.LocalPath, ChangedBy: []string{}}
-		if r.Home {
-			v.CloneURL, v.Base = p.CI.PushRemoteURL, p.Base()
-		}
-		v.CodeHost, _ = codeHostOf(v.CloneURL)
-		out = append(out, v)
+		out = append(out, repositoryView(p, r))
 	}
 	return out
+}
+
+// repositoryView is p's Repository r as every Project read returns it.
+func repositoryView(p store.Project, r store.Repository) RepositoryView {
+	v := RepositoryView{Name: r.Name, Home: r.Home, CloneURL: r.CloneURL, Base: r.Base, LocalPath: r.LocalPath, ChangedBy: []string{}}
+	if r.Home {
+		v.CloneURL, v.Base = p.CI.PushRemoteURL, p.Base()
+	}
+	v.CodeHost, _ = codeHostOf(v.CloneURL)
+	return v
 }
 
 // fillChangedBy fills in each of v's Repositories' ChangedBy from the

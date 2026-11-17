@@ -68,11 +68,11 @@ func (c *Core) notLandedReason(p store.Project, t store.Ticket, name string, ci 
 
 // waitingIn is what t's work in the Repository name, p's, waits on to
 // land there: under Pull Request, its open pull request there to merge;
-// under the CI gate, once pushed there since t moved to its State, its CI
-// result there, from ci, to pass. It is "" when it waits on neither, as
-// in a Repository Not watched.
+// under the CI gate there, once pushed there since t moved to its State,
+// its CI result there, from ci, to pass. It is "" when it waits on
+// neither, as in a Repository Not watched or a local-only one.
 func waitingIn(p store.Project, t store.Ticket, name string, ci *ciState) string {
-	policy := landingPolicyOf(p)
+	policy := landingPolicyIn(p, name)
 	if pr := pullRequestIn(p.Key, t, name); policy.LandsByPullRequest() && pr != nil && pr.State == store.PROpen {
 		return fmt.Sprintf("its pull request %d is open", pr.Number)
 	}

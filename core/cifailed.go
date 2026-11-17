@@ -232,8 +232,12 @@ func whyNotLandAnyway(ci *ciState, t store.Ticket, rc *repoCI) string {
 		}
 		return fmt.Sprintf("%s's Project lands by Branch, so your merge decides whether it lands, whatever its CI result", id)
 	}
-	// Unreached: under Merge + Push an Accepted Ticket whose CI failed or
-	// was cancelled is on a CI item, which offers Land anyway.
+	if !landingPolicyIn(ci.p, rc.name).OffersLandAnyway() {
+		return fmt.Sprintf("%s lands in %s once merged, whatever its CI result: %s is local-only, with no Clone URL, so nothing is pushed there", id, rc.name, rc.name)
+	}
+	// Unreached: under a Repository's Merge + Push an Accepted Ticket
+	// whose CI failed or was cancelled there is on a CI item, which offers
+	// Land anyway.
 	return fmt.Sprintf("%s's CI item doesn't offer Land anyway", id)
 }
 

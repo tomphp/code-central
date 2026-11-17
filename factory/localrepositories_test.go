@@ -36,6 +36,16 @@ func editCloneURL(t *testing.T, h *factorytest.Harness, name, url string) {
 	}
 }
 
+// addUnrelatedOrigin gives the clone of r, a local-only Repository, a
+// remote named origin, the Push remote's name, that isn't the
+// Repository's: a repository of its own, other, whose main shares no
+// history with r's. It returns other.
+func addUnrelatedOrigin(h *factorytest.Harness, r *factorytest.Repository) *factorytest.Repository {
+	other := h.MakeRepository("other")
+	h.GitIn(r.Path, "remote", "add", "origin", other.CloneURL)
+	return other
+}
+
 func TestALocalOnlyRepositoryIsAdoptedWithNoRemoteCheck(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
@@ -59,9 +69,8 @@ func TestALocalOnlyRepositoryIsAdoptedWithNoRemoteCheck(t *testing.T) {
 func TestALocalOnlyRepositoryWithAnUnrelatedRemoteIsAdoptedAsItIs(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	other := h.MakeRepository("other")
 	web := h.AddLocalRepository("web")
-	h.GitIn(web.Path, "remote", "add", "origin", other.CloneURL)
+	other := addUnrelatedOrigin(h, web)
 
 	h.Start().Poll()
 	if c := clone(t, h, "web"); c == nil || c.State != core.CloneReady {
