@@ -252,8 +252,8 @@ function BaseMissingFix({
 }
 
 // RepositoryMissingFix is a Repository missing item: the path the Factory
-// left untouched, the Clone URL, what is wrong there and the fix, with a
-// link to where the local path is set.
+// left untouched, the Clone URL (none for a local-only Repository), what
+// is wrong there and the fix, with a link to where the local path is set.
 function RepositoryMissingFix({
   row,
   navigate,
@@ -274,10 +274,14 @@ function RepositoryMissingFix({
         <dd>
           <code>{m.path}</code>
         </dd>
-        <dt>Clone URL</dt>
-        <dd>
-          <code>{m.clone_url}</code>
-        </dd>
+        {m.clone_url && (
+          <>
+            <dt>Clone URL</dt>
+            <dd>
+              <code>{m.clone_url}</code>
+            </dd>
+          </>
+        )}
         <dt>Problem</dt>
         <dd>{m.problem}</dd>
       </dl>

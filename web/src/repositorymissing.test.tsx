@@ -60,6 +60,21 @@ describe("Repository missing", () => {
     expect(within(it).queryByRole("link", { name: /Open in Inbox/ })).toBeNull();
   });
 
+  it("leaves out the Clone URL row for a local-only Repository", async () => {
+    const w = await world({ repositories: [] });
+    await w.api.addRepository("acme", { name: "web", local_path: "/src/web" });
+    await scenario(w).clones("acme", [
+      { name: "acme", path: "/src/acme", state: "ready" },
+      { name: "web", path: "/src/web", state: "missing", problem: "nothing at /src/web" },
+    ]);
+    await renderApp(w);
+    const panel = within(focus()).getByRole("region", { name: "Repository missing" });
+    expect(panel).toHaveTextContent("/src/web");
+    expect(panel).toHaveTextContent("nothing at /src/web");
+    expect(within(panel).queryByText("Clone URL")).toBeNull();
+    expect(panel).toHaveTextContent(/git repository at \/src\/web, or set its local path/);
+  });
+
   it("is one Focus Item per missing Repository", async () => {
     const w = await world({ repositories: ["web", "api"] });
     await scenario(w).clones("acme", [

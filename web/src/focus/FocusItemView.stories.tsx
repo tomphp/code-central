@@ -196,6 +196,15 @@ export const RepositoryMissing = focusItem(async (s) => {
   return undefined;
 });
 
+export const RepositoryMissingLocalOnly = focusItem(async (s) => {
+  await s.human(`${s.projectPath("acme")}/add_repository`, { name: "web", local_path: "/src/web" });
+  await s.clones("acme", [
+    { name: "acme", path: "/src/acme", state: "ready" },
+    { name: "web", path: "/src/web", state: "missing", problem: "nothing at /src/web" },
+  ]);
+  return undefined;
+});
+
 export const PullRequestClosed = focusItem(async (s) => {
   const id = await accepted(s);
   await s.pullRequest("acme", id, "closed");
