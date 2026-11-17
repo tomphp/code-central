@@ -498,7 +498,7 @@ func TestTicketsSharingAPushedCommitShareItsCIItemForEveryReader(t *testing.T) {
 		}
 	}
 
-	if _, err := f.core.LandAnyway(human, "acme", core.TicketInput{Ticket: "acme-8"}); err != nil {
+	if _, err := f.core.LandAnyway(human, "acme", core.CIResponseInput{Ticket: "acme-8"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"acme-5", "acme-8"} {

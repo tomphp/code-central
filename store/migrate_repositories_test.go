@@ -12,7 +12,7 @@ import (
 // Format 42 (code-central-851) added a Project's Repositories. The real
 // chain migrates a format-41 store copying every file unchanged, and a
 // Project from before has the Home Repository alone, named by its key.
-func TestTheRealChainMigratesAFormat40StoreToTheRepositoriesFormat(t *testing.T) {
+func TestTheRealChainMigratesAFormat41StoreToTheRepositoriesFormat(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
 	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 41\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),

@@ -556,20 +556,6 @@ func pushedAs(pc store.PushedCommit, t store.Ticket, branch string) bool {
 	return t.Branch == branch
 }
 
-// repositoryOf is the Repository a write names in field: p's Home
-// Repository for none, else one of p's Repositories by Name.
-func repositoryOf(p store.Project, field, name string) (string, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return p.Key, nil
-	}
-	names := repositoryNames(p.RepositoryList())
-	if !slices.Contains(names, name) {
-		return "", invalid(field, "%q is not one of this Project's Repositories, which are %s", name, strings.Join(names, ", "))
-	}
-	return name, nil
-}
-
 // pullRequestOpen says t waits on a pull request that is still open on the
 // Code Host, conflicting or not.
 func pullRequestOpen(p store.PullRequest) bool {

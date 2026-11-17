@@ -5,18 +5,25 @@
 // workflow's status, jobs and link, then the failure options, which act
 // on every listed Ticket, so the Ticket pane and the Focus Item both
 // offer them; then the Accepted panel, so Land with a commit and Cancel
-// stay at hand while it waits.
+// stay at hand while it waits. With several Repositories a Ticket may be
+// on one item per Repository, each named Name@sha, whose options act on
+// its Repository only (Spec code-central-848).
 import type { PanelDef, PanelProps } from "../ActionPanel";
 import { AcceptedPanel } from "../accepted/panel";
-import type { CIItem } from "../../api/types";
+import type { CIItem, NeedsMeReason } from "../../api/types";
 import { shortCommit } from "../../format";
 import { CISection } from "../../ticket/CISection";
 import { hrefFor } from "../../url";
 
+// itemTitle is a CI item's reason as its title starts.
+const itemTitle = (reason?: NeedsMeReason) =>
+  reason === "ci_cancelled" ? "CI cancelled" : reason === "ci_unavailable" ? "CI unavailable" : "CI failed";
+
 export function CIFailedPanel(props: PanelProps) {
   const { project, ticket } = props;
   const reason = ticket.needs_me_reason;
-  const title = reason === "ci_cancelled" ? "CI cancelled" : reason === "ci_unavailable" ? "CI unavailable" : "CI failed";
+  const title = itemTitle(reason);
+  const items = ticket.ci_items ?? (ticket.ci_item ? [ticket.ci_item] : []);
   return (
     <>
       <section aria-label={title} className="panel">
@@ -26,7 +33,9 @@ export function CIFailedPanel(props: PanelProps) {
             ? "No word of its pushed commit's CI has come for 10 minutes, so it waits Accepted until CI reports, or the CI Watcher is Watching again."
             : `Its pushed commit's CI ${reason === "ci_cancelled" ? "was cancelled" : "failed"}, so it waits Accepted until you choose what to do.`}
         </p>
-        {ticket.ci_item && <CIItemTickets item={ticket.ci_item} self={ticket.id} title={title} />}
+        {items.map((item) => (
+          <CIItemTickets key={`${item.repository ?? ""}@${item.commit}`} item={item} self={ticket.id} title={itemTitle(item.reason)} />
+        ))}
         <CISection project={project} ticket={ticket} />
       </section>
       <AcceptedPanel {...props} />
@@ -38,9 +47,10 @@ export function CIFailedPanel(props: PanelProps) {
 // Tickets it lists: one item per commit, whose options act on all of them.
 function CIItemTickets({ item, self, title }: { item: CIItem; self: string; title: string }) {
   const others = item.tickets.filter((t) => t.id !== self);
+  const at = item.repository ? `${item.repository}@${shortCommit(item.commit)}` : shortCommit(item.commit);
   return (
     <p className="small ci-item">
-      {title} at <code>{shortCommit(item.commit)}</code> is one Needs Me item
+      {title} at <code>{at}</code> is one Needs Me item
       {others.length === 0 ? (
         <>, listing this Ticket alone.</>
       ) : (

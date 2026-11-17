@@ -10,6 +10,7 @@ import { Button } from "../controls/Button";
 import { Field } from "../controls/Field";
 import { Select } from "../controls/Select";
 import { azureProjectURL } from "./azureProjectURL";
+import { CIRepositories } from "./CIRepositories";
 import { CIRules } from "./CIRules";
 import { githubRepository } from "./githubRepository";
 import { Refusal } from "./Refusal";
@@ -287,6 +288,7 @@ export function CISection({ project }: { project: ProjectRow }) {
           watcher={project.ci.watcher}
         />
       )}
+      <CIRepositories project={project} />
       <CIRules project={project} />
     </fieldset>
   );

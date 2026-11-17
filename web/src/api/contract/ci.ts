@@ -417,4 +417,56 @@ export function ciContract(driver: () => Driver) {
     expect((await d.api.ciOverview({ project: "acme" })).runs).toHaveLength(7);
     expect(await d.api.ciOverview({ project: "quiet", running: true })).toMatchObject({ runs: [] });
   });
+
+  it("tracks CI per Repository: each one's entry, result and Name@sha item, whose options act on it alone (Spec code-central-848)", async () => {
+    await d.createProject("acme", "Acme");
+    await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin", land_per_spec: false });
+    await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+    const added = await d.api.addRepository("acme", { name: "api", clone_url: "git@github.com:acme/api.git" });
+    expect(added.ci.repositories).toEqual([{ name: "api", not_watched: false, provider: "github_actions", repository: "acme/api" }]);
+    const refused = await d.api.setRepositoryCI("acme", "acme", { not_watched: true }).catch((e) => e);
+    expect(refused).toMatchObject({ code: "invalid", field: "name" });
+
+    const id = await d.createTicket("acme", "Login page", "Ready");
+    await d.finish("acme", id, "Added the login page", { branch: "impl-7", commit: "abc123", repositories: [{ name: "api", branch: "impl-7", commit: "def456" }] });
+    await d.api.act("acme", id, "accept", {});
+    await d.reportPushedCommit("acme", id, "abc123");
+    await d.reportPushedCommit("acme", id, "def456", undefined, "api");
+    const run = (repository: string, commit: string, conclusion: "success" | "failure") => ({
+      ...(repository && { repository }),
+      id: 1,
+      attempt: 1,
+      workflow: "ci.yml",
+      name: "CI",
+      branch: "main",
+      commit,
+      status: "completed" as const,
+      conclusion,
+      url: "https://github.com/acme/web/actions/runs/1",
+      jobs: [],
+      ticket: id,
+    });
+    await d.reportCIRuns("acme", [run("", "abc123", "success"), run("api", "def456", "failure")]);
+
+    const t = await d.api.getTicket("acme", id);
+    expect(t.ci_result).toBe("failed");
+    expect(t.repositories?.map((r) => [r.name, r.ci_result])).toEqual([
+      ["acme", "passed"],
+      ["api", "failed"],
+    ]);
+    expect(t.ci_item).toMatchObject({ reason: "ci_failed", repository: "api", commit: "def456" });
+    expect((await d.api.needsMe()).groups.flatMap((g) => g.tickets).map((r) => r.title)).toEqual(["CI failed at api@def456"]);
+
+    await d.api.act("acme", id, "land_anyway", { repository: "api" });
+    const chosen = await d.api.getTicket("acme", id);
+    expect(chosen.repositories?.map((r) => [r.name, !!r.land_anyway])).toEqual([
+      ["acme", false],
+      ["api", true],
+    ]);
+
+    // Not watched, api never counts.
+    const off = await d.api.setRepositoryCI("acme", "api", { not_watched: true });
+    expect(off.ci.repositories).toEqual([{ name: "api", not_watched: true }]);
+    expect((await d.api.getTicket("acme", id)).ci_result).toBe("passed");
+  });
 }

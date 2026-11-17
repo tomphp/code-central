@@ -16,7 +16,7 @@ import (
 // a Ticket from before keeps its branch and commit and has no list, and
 // its records have no Repository Name, so all read as the Home
 // Repository's.
-func TestTheRealChainMigratesAFormat42StoreToTheChangedRepositoriesFormat(t *testing.T) {
+func TestTheRealChainMigratesAFormat43StoreToTheChangedRepositoriesFormat(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
 	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 43\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),

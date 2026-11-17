@@ -13,7 +13,7 @@ import (
 // other Repositories and the mark to close one. The real chain migrates a
 // format-44 store copying every file unchanged: a Ticket's one pull
 // request stays the Home Repository's.
-func TestTheRealChainMigratesAFormat43StoreToThePullRequestsFormat(t *testing.T) {
+func TestTheRealChainMigratesAFormat44StoreToThePullRequestsFormat(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
 	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 44\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),

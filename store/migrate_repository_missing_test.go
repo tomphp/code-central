@@ -11,7 +11,7 @@ import (
 // Format 43 (code-central-852) added the repository_missing Focus Kind.
 // The real chain migrates a format-42 store copying every file unchanged,
 // and a Project can then turn the new kind off.
-func TestTheRealChainMigratesAFormat41StoreToTheRepositoryMissingFormat(t *testing.T) {
+func TestTheRealChainMigratesAFormat42StoreToTheRepositoryMissingFormat(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
 	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 42\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),

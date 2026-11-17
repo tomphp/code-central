@@ -28,7 +28,7 @@ func TestTheRealChainMigratesAFormat17StoreToTheLinkOutboundFormat(t *testing.T)
 	}
 	after := snapshot(t, dir)
 	for rel, content := range before {
-		// project.yaml's github_issues.repository became a list at format 46.
+		// project.yaml's github_issues.repository became a list at format 47.
 		if rel != "store.yaml" && rel != "projects/acme/project.yaml" && after[rel] != content {
 			t.Errorf("%s changed:\n%s", rel, after[rel])
 		}

@@ -89,10 +89,11 @@ var migrations = []MigrationStep{
 	{From: 42, Name: "add the repository_missing Focus Kind"},
 	{From: 43, Name: "add a Ticket's Changed Repositories and the Repository of its pushed commits, Spec merge and pull request"},
 	{From: 44, Name: "add a Ticket's pull requests in its other Repositories and the mark to close one"},
-	{From: 45, Name: "replace the GitHub Issues repository with a list of repositories", File: githubIssuesRepositoryBecomesAList},
+	{From: 45, Name: "add each Repository's CI entry and the Repository of CI Runs and CI responses"},
+	{From: 46, Name: "replace the GitHub Issues repository with a list of repositories", File: githubIssuesRepositoryBecomesAList},
 }
 
-// githubIssuesRepositoryBecomesAList is format 44 to 45 (Spec
+// githubIssuesRepositoryBecomesAList is format 46 to 47 (Spec
 // code-central-848): project.yaml's github_issues.repository moves into
 // the list github_issues.repositories. Every other file, and every
 // project.yaml without a repository there, stays byte for byte.

@@ -240,19 +240,22 @@ export class Scenario extends HttpDriver {
   }
 
   // pushed has the Factory report it pushed an Accepted Ticket's commit,
-  // tracking CI first (trackCI) unless it is: the commit's CI is running
-  // until runs report.
-  async pushed(key: string, id: string, commit = WORK.commit) {
+  // in the Repository repository or the Home Repository, tracking CI
+  // first (trackCI) unless it is: the commit's CI is running until runs
+  // report.
+  async pushed(key: string, id: string, commit = WORK.commit, repository?: string) {
     const p = (await this.api.listProjects()).find((p) => p.key === key);
     if (!p?.ci.tracking || !p.landing.push) await this.trackCI(key);
-    await this.reportPushedCommit(key, id, commit);
+    await this.reportPushedCommit(key, id, commit, undefined, repository);
   }
 
   // ci has the CI Watcher report one run of the commit's workflow ci.yml
-  // (run number run) as outcome says.
-  async ci(key: string, id: string, outcome: CIOutcome, commit = WORK.commit, run = 1) {
+  // (run number run) as outcome says, in the Repository repository or
+  // the Home Repository.
+  async ci(key: string, id: string, outcome: CIOutcome, commit = WORK.commit, run = 1, repository?: string) {
     const conclusion = { passed: "success", failed: "failure", cancelled: "cancelled", running: undefined }[outcome] as CIRunView["conclusion"];
     const r: Omit<CIRunView, "ignored"> = {
+      ...(repository && { repository }),
       id: run,
       attempt: 1,
       workflow: "ci.yml",

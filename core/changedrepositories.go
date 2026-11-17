@@ -45,9 +45,14 @@ type ChangedRepositoryView struct {
 	// out until the Pull Request Watcher reports one.
 	PullRequest *PullRequestView `json:"pull_request,omitempty"`
 	// CIResult is the Repository's CI result, from the pushed commit
-	// CICommit; both are left out while it has none.
-	CIResult CIResult `json:"ci_result,omitempty"`
-	CICommit string   `json:"ci_commit,omitempty"`
+	// CICommit; both are left out while it has none. CINotWatched says CI
+	// Tracking never watches the Repository: it has no CI result.
+	CIResult     CIResult `json:"ci_result,omitempty"`
+	CICommit     string   `json:"ci_commit,omitempty"`
+	CINotWatched bool     `json:"ci_not_watched,omitempty"`
+	// LandAnyway says the human accepted the failed CI result of the
+	// latest pushed commit there, so the Factory lands it there.
+	LandAnyway bool `json:"land_anyway,omitempty"`
 }
 
 // LandedView is the commit that put a Ticket's work into a Repository's
@@ -222,10 +227,11 @@ func dropsRepositories(home string, t store.Ticket, was []string) bool {
 	return slices.ContainsFunc(was, func(name string) bool { return !slices.Contains(now, name) })
 }
 
-// changedRepositoryViews is t's Changed Repositories as v, t's view in
-// p, shows them: the Home Repository's with the CI result v gives, and
-// any Repository's landed commit, latest pushed commit and pull request.
-func changedRepositoryViews(p store.Project, t store.Ticket, v TicketView) []ChangedRepositoryView {
+// changedRepositoryViews is t's Changed Repositories as t's view in p
+// shows them: each with its landed commit, latest pushed commit, pull
+// request, and from ci, p's CI state, its CI result there.
+func changedRepositoryViews(p store.Project, t store.Ticket, s *ciState) []ChangedRepositoryView {
+	ci := s.ticket(t)
 	rs := slices.Clone(changedRepositories(p.Key, t))
 	inLandingOrder(p, rs, repositoryName)
 	out := []ChangedRepositoryView{}
@@ -234,8 +240,12 @@ func changedRepositoryViews(p store.Project, t store.Ticket, v TicketView) []Cha
 		if r.Landed != nil {
 			rv.Landed = &LandedView{Commit: r.Landed.Commit, Time: r.Landed.Time}
 		}
+		if rc := ci.in(r.Name); rc != nil {
+			rv.CIResult, rv.CICommit, rv.LandAnyway = rc.result, rc.commit, s.landAnyway(rc)
+		} else if landingPolicyOf(p).RunsCIWatcher() && !watchesCI(p, r.Name) {
+			rv.CINotWatched = true
+		}
 		if r.Name == p.Key {
-			rv.CIResult, rv.CICommit = v.CIResult, v.CICommit
 			if rv.Landed == nil {
 				rv.Landed = landedByMove(t)
 			}
