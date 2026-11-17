@@ -1,9 +1,10 @@
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useApi } from "../live";
 import type {
   ApiError,
   GitHubIssuesChange,
   GitHubIssuesSettings,
+  IssueWatcherStatus,
   ProjectRow,
 } from "../api/types";
 import { Button } from "../controls/Button";
@@ -12,52 +13,109 @@ import { githubRepository } from "./githubRepository";
 import { Refusal } from "./Refusal";
 import { WatcherStatus } from "./WatcherStatus";
 
-// issuesDraft is the form for GitHub Issues as stored, its repository
+// issuesDraft is the form for GitHub Issues as stored, its repositories
 // prefilled from a GitHub Push remote while none is set, as CI's is.
 function issuesDraft(
   g: GitHubIssuesSettings,
   pushRemoteURL: string,
 ): GitHubIssuesChange {
+  const prefill = githubRepository(pushRemoteURL);
   return {
     on: g.on,
-    repository: g.repository || githubRepository(pushRemoteURL) || "",
+    repositories: g.repositories.length > 0 ? g.repositories : prefill ? [prefill] : [],
     label: g.label,
     new_issues_need_me: g.new_issues_need_me,
   };
 }
 
+const sameList = (a: string[], b: string[]) =>
+  a.length === b.length && a.every((r, i) => r === b[i]);
+
+// listed reports whether repository is among repositories, as GitHub
+// compares names: whatever their case.
+const listed = (repositories: string[], repository: string) =>
+  repositories.some((r) => r.toLowerCase() === repository.toLowerCase());
+
+// repositoryStatus is what the Issue Watcher last said of repository: its
+// own problem and fix while it is among those it can't watch, or Watching
+// while the others are the ones in error.
+function repositoryStatus(
+  watcher: IssueWatcherStatus,
+  repository: string,
+): { text: string; fix?: string; error: boolean } {
+  if (watcher.state === "not_reported") {
+    return { text: "Starting; it hasn't reported yet.", error: false };
+  }
+  if (watcher.state === "watching") return { text: "Watching", error: false };
+  const failing = watcher.repositories ?? [];
+  if (failing.length === 0) {
+    return { text: `Error. ${watcher.message ?? ""}`, fix: watcher.fix, error: true };
+  }
+  const own = failing.find((r) => r.repository === repository);
+  return own
+    ? { text: `Error. ${own.message}`, fix: own.fix, error: true }
+    : { text: "Watching", error: false };
+}
+
 // GitHubIssuesSection is the Project's GitHub Issues settings (Spec
-// code-central-279): the switch, the GitHub repository its issues come
-// from, the filter label and New issues need me. Turning it on runs the
-// Issue Watcher's check, whose refusal shows in place with its fix; while
-// it is on, the Issue Watcher's status shows below. Like the other
-// sections it follows the Project as read.
+// code-central-279, code-central-848): the switch, the list of GitHub
+// repositories its issues come from, the filter label and New issues need
+// me, the last two for every repository. Each Repository's GitHub remote
+// is offered as a suggestion. Turning it on, or adding a repository, runs
+// the Issue Watcher's check, whose refusal shows in place with its fix;
+// while it is on, the Issue Watcher's status shows below, with one row
+// for each of several repositories. Like the other sections it follows the
+// Project as read.
 export function GitHubIssuesSection({ project }: { project: ProjectRow }) {
   const api = useApi();
   const stored = issuesDraft(project.github_issues, project.ci.push_remote_url);
   const prefilled =
-    !project.github_issues.repository && stored.repository !== "";
+    project.github_issues.repositories.length === 0 &&
+    stored.repositories.length > 0;
   const [draft, setDraft] = useState<GitHubIssuesChange>(stored);
+  const [adding, setAdding] = useState("");
   const [error, setError] = useState<ApiError>();
   const [saved, setSaved] = useState(false);
   const id = useId();
-  const { on, repository, label, new_issues_need_me } = stored;
+  const { on, repositories, label, new_issues_need_me } = stored;
+  // The list as one string, so the effect below re-runs only when the
+  // stored list changes, not on every read's new array.
+  const storedRepositories = repositories.join("\n");
   useEffect(
-    () => setDraft({ on, repository, label, new_issues_need_me }),
-    [on, repository, label, new_issues_need_me],
+    () => setDraft({ on, repositories: storedRepositories ? storedRepositories.split("\n") : [], label, new_issues_need_me }),
+    [on, storedRepositories, label, new_issues_need_me],
   );
 
+  // pending is the repository typed but not yet added: saving adds it too.
+  const pending = adding.trim();
+  const wanted =
+    pending && !listed(draft.repositories, pending)
+      ? [...draft.repositories, pending]
+      : draft.repositories;
   const edit = (patch: Partial<GitHubIssuesChange>) => {
     setDraft((d) => ({ ...d, ...patch }));
     setError(undefined);
     setSaved(false);
   };
+  const add = (repository: string) => {
+    if (repository && !listed(draft.repositories, repository)) {
+      edit({ repositories: [...draft.repositories, repository] });
+    }
+    setAdding("");
+  };
+  const onAddKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      add(pending);
+    }
+  };
   const save = (e: FormEvent) => {
     e.preventDefault();
     setError(undefined);
-    api.setGitHubIssues(project.key, draft).then(
+    api.setGitHubIssues(project.key, { ...draft, repositories: wanted }).then(
       (v) => {
         setDraft(issuesDraft(v.github_issues, v.ci.push_remote_url));
+        setAdding("");
         setSaved(true);
       },
       (e: ApiError) => setError(e),
@@ -65,13 +123,22 @@ export function GitHubIssuesSection({ project }: { project: ProjectRow }) {
   };
   const changed =
     draft.on !== on ||
-    draft.repository !== repository ||
+    !sameList(wanted, repositories) ||
     draft.label.trim() !== label ||
     draft.new_issues_need_me !== new_issues_need_me;
   const describedBy = (field: string, hint: string) =>
     error?.field === field ? `${hint} ${id}-error` : hint;
   const invalid = (field: string) => error?.field === field || undefined;
   const spec = project.github_issues.spec;
+  const several = repositories.length > 1;
+  // suggestions are each Repository's GitHub remote that isn't listed yet.
+  const suggestions = project.repositories.flatMap((r) => {
+    const repository = githubRepository(r.clone_url);
+    return repository && !listed(wanted, repository) ? [{ repository, name: r.name }] : [];
+  });
+  const suggested = suggestions.filter(
+    (s, i) => suggestions.findIndex((o) => o.repository === s.repository) === i,
+  );
 
   return (
     <fieldset id="project-options-github-issues" className="project-options-section" disabled={project.archived}>
@@ -89,33 +156,90 @@ export function GitHubIssuesSection({ project }: { project: ProjectRow }) {
             GitHub Issues
           </label>
           <p className="project-options-hint" id={`${id}-on`}>
-            Each open issue in the repository arrives as an Incoming Issue, a
+            Each open issue in the repositories arrives as an Incoming Issue, a
             Draft Ticket to triage, and Code Central writes the work&apos;s
             progress back to it, through your existing <code>gh</code> login.
             Code Central stores no GitHub token.
           </p>
         </div>
+        <ul className="project-options-repositories" aria-label="GitHub repositories">
+          {draft.repositories.map((repository) => {
+            const status =
+              several && on && listed(repositories, repository)
+                ? repositoryStatus(project.github_issues.watcher, repository)
+                : undefined;
+            return (
+              <li key={repository} aria-label={repository}>
+                <span className="repo-name">{repository}</span>
+                {status && (
+                  <span className={status.error ? "warning" : "muted"}>
+                    {": "}
+                    {status.text}
+                    {status.fix && (
+                      <>
+                        <br />
+                        {status.fix}
+                      </>
+                    )}
+                  </span>
+                )}{" "}
+                <Button
+                  type="button"
+                  aria-label={`Remove ${repository}`}
+                  onClick={() =>
+                    edit({ repositories: draft.repositories.filter((r) => r !== repository) })
+                  }
+                >
+                  Remove
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
         <Field
           label="GitHub repository"
           hintId={`${id}-repository`}
           hint={
             <>
-          {prefilled
-            ? `From the Push remote ${project.ci.push_remote_url}. `
-            : ""}
-          The repository whose issues come in, as owner/name; GitHub Issues
-          needs one.
+              {prefilled
+                ? `From the Push remote ${project.ci.push_remote_url}. `
+                : ""}
+              A repository whose issues come in, as owner/name; GitHub Issues
+              needs one. Add as many as you like: the filter label and New
+              issues need me apply to every one.
             </>
           }
         >
           <input
-            value={draft.repository}
+            value={adding}
             placeholder="owner/name"
-            onChange={(e) => edit({ repository: e.target.value })}
-            aria-describedby={describedBy("repository", `${id}-repository`)}
-            aria-invalid={invalid("repository")}
+            onChange={(e) => {
+              setAdding(e.target.value);
+              setError(undefined);
+              setSaved(false);
+            }}
+            onKeyDown={onAddKey}
+            aria-describedby={describedBy("repositories", `${id}-repository`)}
+            aria-invalid={invalid("repositories")}
           />
         </Field>
+        <Button type="button" disabled={pending === ""} onClick={() => add(pending)}>
+          Add repository
+        </Button>
+        {suggested.length > 0 && (
+          <ul className="project-options-repositories" aria-label="Suggested repositories">
+            {suggested.map(({ repository, name }) => (
+              <li key={repository}>
+                <Button type="button" onClick={() => add(repository)}>
+                  {`Add ${repository}`}
+                </Button>
+                {project.repositories.length > 1 && (
+                  <span className="muted"> The remote of {name}.</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
         <Field
           label="Filter label"
           hintId={`${id}-label`}
@@ -168,8 +292,9 @@ export function GitHubIssuesSection({ project }: { project: ProjectRow }) {
       {project.github_issues.on && (
         <WatcherStatus
           name="Issue Watcher"
-          repository={project.github_issues.repository}
+          repository={project.github_issues.repositories.join(", ")}
           watcher={project.github_issues.watcher}
+          inRows={several}
         />
       )}
     </fieldset>

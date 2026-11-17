@@ -77,12 +77,11 @@ func openIssues(ctx context.Context, env gh.Env, prog, repository, label string)
 	}
 }
 
-// arrive brings in each of issues, watch's repository's open issues,
-// that has no Link in the Project, detached ones included, so an
-// unlinked or triaged issue never comes in again, as a Draft Ticket on
-// the Issues Spec. What goes wrong is logged and tried again on the next
-// poll.
-func (cfg Config) arrive(ctx context.Context, watch core.IssueWatch, issues []ghIssue) {
+// arrive brings in each of issues, repository's open issues, that has no
+// Link in the Project, detached ones included, so an unlinked or triaged
+// issue never comes in again, as a Draft Ticket on the Issues Spec. What
+// goes wrong is logged and tried again on the next poll.
+func (cfg Config) arrive(ctx context.Context, watch core.IssueWatch, repository string, issues []ghIssue) {
 	linked, err := cfg.Client.FindLinked(ctx, cfg.Project, core.FindLinkedInput{Integration: Integration})
 	if err != nil {
 		if ctx.Err() == nil {
@@ -95,7 +94,7 @@ func (cfg Config) arrive(ctx context.Context, watch core.IssueWatch, issues []gh
 		have[row.Link.ID] = true
 	}
 	for _, i := range issues {
-		id := LinkID(watch.Repository, i.Number)
+		id := LinkID(repository, i.Number)
 		if have[id] {
 			continue
 		}

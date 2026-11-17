@@ -42,6 +42,9 @@ export interface CheckResult {
   problem?: string;
   reason?: string;
   fix?: string;
+  // repositories are the failing repositories of a check made of several,
+  // each with its own problem.
+  repositories?: { repository: string; problem?: string; message: string; fix?: string }[];
 }
 
 // WatcherCrash is the Watcher supervisor's report of a crashed Watcher.

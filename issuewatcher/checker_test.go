@@ -54,7 +54,7 @@ const (
 )
 
 func turnOn(srv *codecentraltest.Server) error {
-	_, err := srv.Client.SetGitHubIssues(ctx, "acme", core.SetGitHubIssuesInput{On: true, Repository: "acme/web"})
+	_, err := srv.Client.SetGitHubIssues(ctx, "acme", core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}})
 	return err
 }
 
@@ -62,7 +62,7 @@ func turnOn(srv *codecentraltest.Server) error {
 func refusal(t *testing.T, err error) *core.Error {
 	t.Helper()
 	var e *core.Error
-	if !errors.As(err, &e) || e.Code != core.Invalid || (e.Field != "on" && e.Field != "repository") {
+	if !errors.As(err, &e) || e.Code != core.Invalid || (e.Field != "on" && e.Field != "repositories") {
 		t.Fatalf("err = %v, want GitHub Issues refused", err)
 	}
 	return e

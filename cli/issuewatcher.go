@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
@@ -17,7 +18,7 @@ func init() {
 	commands[issuewatcher.Command] = command{
 		hidden: true,
 		usage: issuewatcher.Command + " --project <key>  watch the Project's GitHub issues until stdin closes; " +
-			issuewatcher.Command + " --check --repository <owner/name> [--gh-path <path>]  check the Issue Watcher can work the repository's issues, answering JSON",
+			issuewatcher.Command + " --check --repositories <owner/name,...> [--gh-path <path>]  check the Issue Watcher can work the repositories' issues, answering JSON",
 		run: runIssueWatcher,
 	}
 }
@@ -32,7 +33,7 @@ func runIssueWatcher(ctx context.Context, e Env, args []string) error {
 	check := fs.Bool("check", false, "check access once and exit")
 	project := fs.String("project", "", "the Project to watch")
 	var in core.IssuesCheckInput
-	fs.StringVar(&in.Repository, "repository", "", "GitHub repository, owner/name")
+	repositories := fs.String("repositories", "", "GitHub repositories, owner/name, comma-separated")
 	fs.StringVar(&in.GHPath, "gh-path", "", "the gh path Option")
 	pos, err := parse(fs, args)
 	if err != nil {
@@ -48,9 +49,10 @@ func runIssueWatcher(ctx context.Context, e Env, args []string) error {
 		c.Actor = core.Integration
 		return issuewatcher.Watch(ctx, issuewatcher.Config{Client: c, Project: *project, Env: gh.Env{Environ: os.Environ()},
 			Clock: clock.System{}, Stdin: e.Stdin, Log: e.Stderr})
-	case in.Repository == "":
-		return usagef("--check needs --repository")
+	case *repositories == "":
+		return usagef("--check needs --repositories")
 	}
+	in.Repositories = strings.Split(*repositories, ",")
 	r := issuewatcher.Check(ctx, in, gh.Env{Environ: os.Environ()})
 	return json.NewEncoder(e.Stdout).Encode(r)
 }

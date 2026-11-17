@@ -233,7 +233,7 @@ export const BlockedByCancelled = focusItem(async (s) => {
 
 // An Incoming Issue awaiting triage.
 export const NewIssue = focusItem(async (s, w) => {
-  const on = await w.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: true });
+  const on = await w.api.setGitHubIssues("acme", { on: true, repositories: ["acme/web"], label: "", new_issues_need_me: true });
   return s.incomingIssue("acme", on.github_issues.spec!, "Login is broken", ISSUE);
 });
 

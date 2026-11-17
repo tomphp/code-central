@@ -19,8 +19,8 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// follow has each of watch's Incoming Issues from its repository follow
-// its issue. One among listed, the repository's open issues, takes the
+// follow has each of watch's Incoming Issues from repository follow its
+// issue. One among listed, the repository's open issues, takes the
 // issue's title and body when they differ, and is open. One that wasn't
 // listed has its issue read: closed is closed, deleted is deleted, and
 // transferred away or without the filter label is out of scope, with the
@@ -29,13 +29,13 @@ import (
 // configured are left as they are. It returns GitHub's rate limit, if it
 // refused a call for it; anything else that goes wrong is logged and
 // tried again on the next poll.
-func (cfg Config) follow(ctx context.Context, watch core.IssueWatch, a access, listed []ghIssue) *watchers.RateLimitError {
+func (cfg Config) follow(ctx context.Context, watch core.IssueWatch, repository string, a access, listed []ghIssue) *watchers.RateLimitError {
 	open := map[int]ghIssue{}
 	for _, i := range listed {
 		open[i.Number] = i
 	}
 	for _, incoming := range watch.Issues {
-		n, ok := issueNumber(watch.Repository, incoming.Link.ID)
+		n, ok := issueNumber(repository, incoming.Link.ID)
 		if !ok {
 			continue
 		}

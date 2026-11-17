@@ -160,7 +160,7 @@ func TestGetIssueWatchListsTheWritesDueForEachState(t *testing.T) {
 func TestWritesComeDueWhileGitHubIssuesIsOff(t *testing.T) {
 	srv := newServer(t, newIssue)
 	issuesOn(true)(t, srv)
-	httpOK(t, srv, setGitHubIssues(`{"on":false,"repository":"acme/web"}`))
+	httpOK(t, srv, setGitHubIssues(`{"on":false,"repositories":["acme/web"]}`))
 	httpOK(t, srv, wontFix("5", `{"reason":"No."}`))
 	issuesOn(true)(t, srv)
 	wantDue(t, writesDue(t, srv), "acme-5", "code-central:wont-fix", "not_planned", "wont-fix")
