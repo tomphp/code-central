@@ -21,14 +21,17 @@ import (
 // and shows the settings. It type-checks the packages' non-test files and
 // flags every read of a guarded field on a guarded type.
 
-// guardedFields are the four landing inputs.
-var guardedFields = []string{"Method", "Push", "LandPerSpec", "Tracking"}
+// guardedFields are the four landing inputs, and a Repository's
+// effective Landing on its view.
+var guardedFields = []string{"Method", "Push", "LandPerSpec", "Tracking", "Landing"}
 
 // guardedTypes hold the landing inputs, as package path and type name.
 var guardedTypes = []string{
 	"github.com/tomoram/code-central/store.Landing",
+	"github.com/tomoram/code-central/store.OwnLanding",
 	"github.com/tomoram/code-central/store.CI",
 	"github.com/tomoram/code-central/core.LandingView",
+	"github.com/tomoram/code-central/core.RepositoryView",
 }
 
 // guardAllow is a whole file, or one top-level function in it, that may
@@ -39,7 +42,8 @@ type guardAllow struct {
 }
 
 var landingGuardAllowlist = []guardAllow{
-	{file: "core/landingpolicy.go", why: "the policy and its builders, including ProjectView.LandingPolicy()"},
+	{file: "core/landingpolicy.go", why: "the policy and its builders, including ProjectView.LandingPolicies(), and a Repository's Landing"},
+	{file: "core/repositories.go", fn: "repositoryView", why: "builds the RepositoryView"},
 	{file: "core/humanops.go", fn: "SetLandingMethod", why: "saves the Landing settings"},
 	{file: "core/core.go", fn: "landingViewWith", why: "builds the LandingView"},
 	{file: "core/ci.go", why: "builds, checks and saves the CI settings, and builds CIView"},

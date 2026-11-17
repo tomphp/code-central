@@ -108,10 +108,10 @@ type Project struct {
 }
 
 // Repository is one git repository a Project's work changes. The Home
-// Repository, where the Factory runs, keeps only its Name, the Project
-// Key, and its place in the landing order: its Base is the Project's
-// (Landing.Base) and its Clone URL the Push remote URL the Factory
-// reports.
+// Repository, where the Factory runs, keeps its Name, the Project Key,
+// its place in the landing order, and any Own Landing and Push remote:
+// its Base is the Project's (Landing.Base) and its Clone URL the Push
+// remote URL the Factory reports.
 type Repository struct {
 	// Name is the Repository Name, fixed once added.
 	Name string
@@ -123,6 +123,33 @@ type Repository struct {
 	// LocalPath is where the Factory finds the Repository's clone, when
 	// it isn't beside the Home Repository; empty for there.
 	LocalPath string
+	// OwnLanding is the Repository's Own Landing, the zero OwnLanding
+	// while it follows the Project's Default Landing (Spec
+	// code-central-890).
+	OwnLanding OwnLanding
+	// PushRemote names the git remote the Factory pushes the Repository
+	// to and fetches it from; empty for the Project's (Landing.Remote).
+	PushRemote string
+}
+
+// OwnLanding is a Repository's own Landing Method and Push option, set
+// in place of the Project's Default Landing. Its zero value, with no
+// Method, is none: the Repository follows the Default Landing.
+type OwnLanding struct {
+	Method LandingMethod
+	Push   bool
+}
+
+// Set reports whether o is an Own Landing, not the zero one.
+func (o OwnLanding) Set() bool { return o.Method != "" }
+
+// Normalized is o as it is stored: Push is implied under Pull Request,
+// so it is cleared there, as for the Default Landing.
+func (o OwnLanding) Normalized() OwnLanding {
+	if o.Method == LandingPullRequest {
+		o.Push = false
+	}
+	return o
 }
 
 // LocalOnly reports whether r is a Repository other than the Home with
@@ -165,9 +192,9 @@ func (p Project) RepositoryList() []Repository {
 }
 
 // SetRepositories stores rs as the Project's Repositories, none while
-// they are the Home Repository alone.
+// they are the Home Repository alone with nothing more than its name.
 func (p *Project) SetRepositories(rs []Repository) {
-	if len(rs) == 1 && rs[0].Home {
+	if len(rs) == 1 && rs[0] == (Repository{Name: rs[0].Name, Home: true}) {
 		rs = nil
 	}
 	p.Repositories = rs

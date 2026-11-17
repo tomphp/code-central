@@ -137,6 +137,9 @@ type LandingView struct {
 	// PATEnv is the environment variable holding the Azure Repos PAT,
 	// ADO_PAT unless the Project names another.
 	PATEnv string `json:"pat_env"`
+	// UsesAzureReposPAT is whether the PAT variable is used: any Azure
+	// Repos Repository is under Pull Request.
+	UsesAzureReposPAT bool `json:"uses_azure_repos_pat"`
 	// Base is the branch the Project's work is cut from and lands on: the
 	// stored one, else the reported fallback, else main.
 	Base string `json:"base"`
@@ -468,7 +471,7 @@ func (c *Core) GetProject(_ context.Context, key string) (ProjectView, error) {
 			return unknownProject(key)
 		}
 		v = c.projectView(p)
-		v.Landing.OpenPullRequests = openPullRequests(r, key, landingPolicyOf(p))
+		v.Landing.OpenPullRequests = openPullRequests(r, p)
 		fillChangedBy(r, &v)
 		return nil
 	})
@@ -879,6 +882,13 @@ func landingView(p store.Project) LandingView {
 func landingViewWith(p store.Project, watcher WatcherView) LandingView {
 	host, repo := codeHostOf(p.CI.PushRemoteURL)
 	push := p.Landing.Normalized().Push
+	var azure []string
+	for _, rv := range repositoriesView(p) {
+		if rv.CodeHost == CodeHostAzureRepos {
+			azure = append(azure, rv.Name)
+		}
+	}
 	return LandingView{Method: p.Landing.Method, Push: push, Remote: p.Landing.Remote, LandPerSpec: p.Landing.LandPerSpec,
-		CodeHost: host, Repository: repo, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv}), Base: p.Base(), Watcher: watcher, OpenPullRequests: []OpenPullRequest{}}
+		CodeHost: host, Repository: repo, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv}), UsesAzureReposPAT: landingPolicies(p).UsesAzureReposPAT(azure),
+		Base: p.Base(), Watcher: watcher, OpenPullRequests: []OpenPullRequest{}}
 }

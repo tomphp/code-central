@@ -7,6 +7,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { newWorld } from "../api/core/core";
+import { defaultLanding } from "../api/scenario";
 import { renderApp, scenario, settle } from "../worldTesting";
 
 // acme is a WASM Core world with the Project acme, which has no Spec.
@@ -270,36 +271,14 @@ describe("Project Options", () => {
     );
     expect(remote).toHaveAccessibleDescription(/Push needs a git remote/);
     expect(remote).toHaveAttribute("aria-invalid", "true");
-    expect((await w.api.listProjects())[0].landing).toEqual({
-      method: "merge",
-      push: false,
-      remote: "origin",
-      land_per_spec: true,
-      code_host: "",
-      repository: "",
-      pat_env: "ADO_PAT",
-      base: "main",
-      watcher: { state: "not_reported" },
-      open_pull_requests: [],
-    });
+    expect((await w.api.listProjects())[0].landing).toEqual(defaultLanding());
 
     await userEvent.type(remote, "upstream");
     expect(within(landing()).queryByRole("alert")).toBeNull();
     await userEvent.click(save);
     await settle(w);
     expect(within(landing()).getByRole("status")).toHaveTextContent("Saved");
-    expect((await w.api.listProjects())[0].landing).toEqual({
-      method: "branch",
-      push: true,
-      remote: "upstream",
-      land_per_spec: true,
-      code_host: "",
-      repository: "",
-      pat_env: "ADO_PAT",
-      base: "main",
-      watcher: { state: "not_reported" },
-      open_pull_requests: [],
-    });
+    expect((await w.api.listProjects())[0].landing).toEqual(defaultLanding({ method: "branch", push: true, remote: "upstream" }));
     expect(save).toBeDisabled();
   });
 

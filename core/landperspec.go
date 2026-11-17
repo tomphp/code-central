@@ -16,13 +16,14 @@ import (
 // Tickets are accepted. Core works out which Tickets this covers, in one
 // place, and when a Spec is ready; the Factory does the git.
 
-// specLanded is whether t is a Spec-landed Ticket in Project p: p is under
-// Merge or Pull Request with Land per Spec on, t is an
-// implementation Ticket (not a Stage, Map, Prototype or Retro Ticket), and its
-// Spec is neither a Map nor Long-lived (it doesn't carry the long-lived
-// Label). A Long-lived Spec's Tickets land Ticket by Ticket.
+// specLanded is whether t is a Spec-landed Ticket in Project p: any of
+// p's Repositories is under Merge or Pull Request with Land per Spec on,
+// t is an implementation Ticket (not a Stage, Map, Prototype or Retro
+// Ticket), and its Spec is neither a Map nor Long-lived (it doesn't carry
+// the long-lived Label). A Long-lived Spec's Tickets land Ticket by
+// Ticket.
 func specLanded(r store.Reader, p store.Project, t store.Ticket) bool {
-	if !landingPolicyOf(p).LandPerSpecInForce() {
+	if !landingPolicies(p).LandPerSpecInForce() {
 		return false
 	}
 	if StageOf(t.Labels) != "" || isMap(t.Labels) || slices.Contains(t.Labels, PrototypeLabel) || slices.Contains(t.Labels, RetroLabel) {
@@ -49,7 +50,7 @@ func waitingForSpec(r store.Reader, p store.Project, t store.Ticket) bool {
 	if t.State != store.Accepted || !specLanded(r, p, t) {
 		return false
 	}
-	if landingPolicyOf(p).LandsByPullRequest() {
+	if ticketLandingPolicies(p, t).Any(LandingPolicy.LandsByPullRequest) {
 		// The Spec Branch is pushed and waits on its pull request.
 		return true
 	}
@@ -90,7 +91,7 @@ type LandPerSpecView struct {
 // a Long-lived Spec.
 func landPerSpecView(r store.Reader, key string, s store.Spec, tickets []store.Ticket) *LandPerSpecView {
 	p, _ := r.Project(key)
-	if !landingPolicyOf(p).LandPerSpecInForce() || slices.Contains(s.Labels, LongLivedLabel) {
+	if !landingPolicies(p).LandPerSpecInForce() || slices.Contains(s.Labels, LongLivedLabel) {
 		return nil
 	}
 	v := &LandPerSpecView{Waiting: []string{}}
@@ -170,9 +171,10 @@ func specWork(r store.Reader, key string, t store.Ticket) []store.Ticket {
 }
 
 // inSpecWork reports whether t waits on its Spec's one pull request in
-// Project p: p is under Pull Request, and t is Accepted and Spec-landed.
+// Project p: one of its Changed Repositories is under Pull Request, and t
+// is Accepted and Spec-landed.
 func inSpecWork(r store.Reader, p store.Project, t store.Ticket) bool {
-	return landingPolicyOf(p).LandsByPullRequest() && t.State == store.Accepted && specLanded(r, p, t)
+	return t.State == store.Accepted && ticketLandingPolicies(p, t).Any(LandingPolicy.LandsByPullRequest) && specLanded(r, p, t)
 }
 
 // specWorkOf is the work of Spec spec among tickets, Project p's: the

@@ -79,22 +79,24 @@ A Project's work can span more than one repository. The one you ran `code-centra
 
 ```
 $ code-central repository add web --clone-url git@github.com:acme/web.git
-NAME             CLONE URL                         BASE  LOCAL PATH
-acme-api (home)  git@github.com:acme/acme-api.git  main  -
-web              git@github.com:acme/web.git       main  -
+NAME             CLONE URL                         BASE  LOCAL PATH  LANDING          PUSH REMOTE
+acme-api (home)  git@github.com:acme/acme-api.git  main  -           Merge (default)  origin
+web              git@github.com:acme/web.git       main  -           Merge (default)  origin
 ```
 
 `--clone-url` is optional: a repository that is never pushed needs only the local path of its clone, and is local-only.
 
 ```
 $ code-central repository add notes --local-path /home/you/src/notes
-NAME             CLONE URL                         BASE  LOCAL PATH
-acme-api (home)  git@github.com:acme/acme-api.git  main  -
-web              git@github.com:acme/web.git       main  -
-notes            (none: local only)                main  /home/you/src/notes
+NAME             CLONE URL                         BASE  LOCAL PATH           LANDING          PUSH REMOTE
+acme-api (home)  git@github.com:acme/acme-api.git  main  -                    Merge (default)  origin
+web              git@github.com:acme/web.git       main  -                    Merge (default)  origin
+notes            (none: local only)                main  /home/you/src/notes  Merge (default)  origin
 ```
 
 `code-central repository edit web --clone-url ""` clears a Clone URL, as long as the repository has a local path.
+
+Each repository, the Home included, follows the Project's Default Landing, or has its Own Landing set with `--landing` (`default`, `merge`, `merge+push`, `branch`, `branch+push` or `pull-request`) and its own Push remote with `--push-remote` (empty for the Project's).
 
 The list is the order accepted work lands in. The Factory clones each repository beside the Home Repository and gives every Ticket a worktree and a branch of the same name in each, named after the Ticket:
 

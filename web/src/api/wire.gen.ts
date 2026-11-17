@@ -66,6 +66,20 @@ export const LANDING_METHODS = [
 ] as const;
 export type LandingMethod = (typeof LANDING_METHODS)[number];
 
+// RepositoryLanding is a Repository's Landing as the human chooses it:
+// the Project's Default Landing, or an Own Landing of a Landing Method
+// with its Push option. A Repository's view shows its effective one,
+// never RepositoryLandingDefault.
+export const REPOSITORY_LANDINGS = [
+  "default",
+  "merge",
+  "merge_push",
+  "branch",
+  "branch_push",
+  "pull_request",
+] as const;
+export type RepositoryLanding = (typeof REPOSITORY_LANDINGS)[number];
+
 // CodeHost is the Code Host a Pull Request is opened on, worked out from
 // the Push remote URL, or none.
 export const CODE_HOSTS = [
@@ -821,6 +835,9 @@ export interface LandingView {
   // PATEnv is the environment variable holding the Azure Repos PAT,
   // ADO_PAT unless the Project names another.
   pat_env: string;
+  // UsesAzureReposPAT is whether the PAT variable is used: any Azure
+  // Repos Repository is under Pull Request.
+  uses_azure_repos_pat: boolean;
   // Base is the branch the Project's work is cut from and lands on: the
   // stored one, else the reported fallback, else main.
   base: string;
@@ -971,6 +988,20 @@ export interface RepositoryView {
   // Clone is its clone as the Factory last reported it, absent while no
   // Factory is reporting.
   clone?: CloneView;
+  // Landing is its effective Landing: its Own Landing, else the
+  // Project's Default Landing; never default.
+  landing: RepositoryLanding;
+  // OwnLanding is whether Landing is its Own Landing.
+  own_landing: boolean;
+  // PushRemote is the git remote it is pushed to and fetched from: its
+  // own, else the Project's.
+  push_remote: string;
+  // OwnPushRemote is whether PushRemote is its own.
+  own_push_remote: boolean;
+  // LocalOnlyUnderPullRequest marks a local-only Repository whose
+  // Landing is Pull Request, as only a Home that lost its remote can
+  // be: nothing lands there until it has another Landing or a remote.
+  local_only_under_pull_request: boolean;
 }
 
 // LinkView is a Spec's or Ticket's Link as reads show it: the external

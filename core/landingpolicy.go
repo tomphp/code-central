@@ -2,14 +2,15 @@ package core
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/tomoram/code-central/store"
 )
 
-// LandingPolicy is how a Project's Landing Method, Push, Land per Spec and
-// CI Tracking combine into the landing rules. It is a pure value: it is
-// built from the normalised Landing, so Pull Request with Push on reads as
-// Push off and can't reach any rule.
+// LandingPolicy is how one Repository's Landing Method and Push, and the
+// Project's Land per Spec and CI Tracking, combine into the landing rules
+// there. It is a pure value: it is built from the normalised Landing, so
+// Pull Request with Push on reads as Push off and can't reach any rule.
 type LandingPolicy struct {
 	method      store.LandingMethod
 	push        bool
@@ -17,53 +18,211 @@ type LandingPolicy struct {
 	tracking    bool
 }
 
-// NewLandingPolicy is the policy of a Project with these four inputs.
+// NewLandingPolicy is the policy of a Repository with these four inputs.
 func NewLandingPolicy(method store.LandingMethod, push, landPerSpec, ciTracking bool) LandingPolicy {
 	l := store.Landing{Method: method, Push: push}.Normalized()
 	return LandingPolicy{method: l.Method, push: l.Push, landPerSpec: landPerSpec, tracking: ciTracking}
 }
 
-// landingPolicyOf is the policy of p's Landing and CI Tracking. It and
-// NewLandingPolicy are the only places that turn settings fields into a
-// policy.
-func landingPolicyOf(p store.Project) LandingPolicy {
-	return NewLandingPolicy(p.Landing.Method, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
+// LandingPolicies are the Landing Policies of a Project's Repositories, by
+// Repository Name (Spec code-central-890). Per-Repository rules ask In,
+// for the Repository in question; Project-wide rules ask across them.
+type LandingPolicies struct {
+	byName map[string]LandingPolicy
+	// names are the Repository Names in landing order.
+	names []string
+	// fallback is the Default Landing's policy, for a name not listed.
+	fallback LandingPolicy
 }
 
-// LandingPolicy is the policy of the view's Landing and CI Tracking.
-func (p ProjectView) LandingPolicy() LandingPolicy {
-	return NewLandingPolicy(p.Landing.Method, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
-}
+// RepositoryLanding is a Repository's Landing as the human chooses it:
+// the Project's Default Landing, or an Own Landing of a Landing Method
+// with its Push option. A Repository's view shows its effective one,
+// never RepositoryLandingDefault.
+type RepositoryLanding string
 
-// ForRepository answers the Landing Policy's "A Repository's Landing
-// Policy is the Project's with Push off in a Repository with no Clone
-// URL, and unchanged in any other": Push off when r is local-only. The
-// Home is never local-only. Pull Request never arises in a local-only
-// Repository, as EveryRepositoryNeedsCloneURL refuses it.
-func (lp LandingPolicy) ForRepository(r RepositoryView) LandingPolicy {
-	if r.LocalOnly() {
-		lp.push = false
+// The Repository Landings.
+const (
+	RepositoryLandingDefault     RepositoryLanding = "default"
+	RepositoryLandingMerge       RepositoryLanding = "merge"
+	RepositoryLandingMergePush   RepositoryLanding = "merge_push"
+	RepositoryLandingBranch      RepositoryLanding = "branch"
+	RepositoryLandingBranchPush  RepositoryLanding = "branch_push"
+	RepositoryLandingPullRequest RepositoryLanding = "pull_request"
+)
+
+// RepositoryLandings lists every RepositoryLanding, the default first.
+var RepositoryLandings = []RepositoryLanding{RepositoryLandingDefault, RepositoryLandingMerge, RepositoryLandingMergePush,
+	RepositoryLandingBranch, RepositoryLandingBranchPush, RepositoryLandingPullRequest}
+
+// Valid reports whether l is one of the RepositoryLandings.
+func (l RepositoryLanding) Valid() bool { return slices.Contains(RepositoryLandings, l) }
+
+// repositoryLandingOf is the RepositoryLanding of a Landing Method with
+// its Push option, normalised: Pull Request implies Push.
+func repositoryLandingOf(method store.LandingMethod, push bool) RepositoryLanding {
+	switch {
+	case method == store.LandingPullRequest:
+		return RepositoryLandingPullRequest
+	case method == store.LandingBranch && push:
+		return RepositoryLandingBranchPush
+	case method == store.LandingBranch:
+		return RepositoryLandingBranch
+	case push:
+		return RepositoryLandingMergePush
 	}
-	return lp
+	return RepositoryLandingMerge
+}
+
+// methodAndPush is l's Landing Method and Push option; Merge for the
+// default, which a view never holds.
+func (l RepositoryLanding) methodAndPush() (store.LandingMethod, bool) {
+	switch l {
+	case RepositoryLandingMergePush:
+		return store.LandingMerge, true
+	case RepositoryLandingBranch:
+		return store.LandingBranch, false
+	case RepositoryLandingBranchPush:
+		return store.LandingBranch, true
+	case RepositoryLandingPullRequest:
+		return store.LandingPullRequest, false
+	}
+	return store.LandingMerge, false
+}
+
+// ownLanding is l as a stored Own Landing: none for the default.
+func (l RepositoryLanding) ownLanding() store.OwnLanding {
+	if l == RepositoryLandingDefault {
+		return store.OwnLanding{}
+	}
+	m, push := l.methodAndPush()
+	return store.OwnLanding{Method: m, Push: push}
+}
+
+// effectiveLanding is r's Landing in p, its Own Landing or else p's
+// Default Landing, and whether it is its own.
+func effectiveLanding(p store.Project, r store.Repository) (RepositoryLanding, bool) {
+	if o := r.OwnLanding; o.Set() {
+		return repositoryLandingOf(o.Method, o.Push), true
+	}
+	return repositoryLandingOf(p.Landing.Method, p.Landing.Push), false
+}
+
+// repositoryLandingPolicies is the policies of repositories, given the
+// Default Landing's method and Push and the Project's Land per Spec and CI
+// Tracking. It and NewLandingPolicy are the only places that turn
+// settings fields into a policy: a Repository's policy is the Landing
+// Policy's "its Own Landing, or else the Default Landing, with Push off
+// when the Repository is local-only".
+func repositoryLandingPolicies(repositories []RepositoryView, method store.LandingMethod, push, landPerSpec, ciTracking bool) LandingPolicies {
+	ps := LandingPolicies{byName: map[string]LandingPolicy{}, fallback: NewLandingPolicy(method, push, landPerSpec, ciTracking)}
+	for _, r := range repositories {
+		m, p := r.Landing.methodAndPush()
+		ps.byName[r.Name] = NewLandingPolicy(m, p && !r.LocalOnly(), landPerSpec, ciTracking)
+		ps.names = append(ps.names, r.Name)
+	}
+	return ps
+}
+
+// markLocalOnlyUnderPullRequest flags each of vs, p's Repositories'
+// views, that is local-only with a policy that needs a Clone URL: only a
+// Home that lost its remote can be, and it keeps its Landing.
+func markLocalOnlyUnderPullRequest(p store.Project, vs []RepositoryView) {
+	ps := repositoryLandingPolicies(vs, p.Landing.Method, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
+	for i, v := range vs {
+		vs[i].LocalOnlyUnderPullRequest = v.LocalOnly() && ps.In(v.Name).NeedsCloneURL()
+	}
+}
+
+// landingPolicies is the policies of p's Repositories.
+func landingPolicies(p store.Project) LandingPolicies {
+	return repositoryLandingPolicies(repositoriesView(p), p.Landing.Method, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
+}
+
+// LandingPolicies is the policies of the view's Repositories.
+func (p ProjectView) LandingPolicies() LandingPolicies {
+	return repositoryLandingPolicies(p.Repositories, p.Landing.Method, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
 }
 
 // landingPolicyIn is the Landing Policy of p's Repository name, which
-// every rule about one Repository's landing asks: p's, through
-// ForRepository. A name p doesn't list has p's.
+// every rule about one Repository's landing asks.
 func landingPolicyIn(p store.Project, name string) LandingPolicy {
-	lp := landingPolicyOf(p)
-	for _, r := range p.RepositoryList() {
-		if r.Name == name {
-			return lp.ForRepository(repositoryView(p, r))
-		}
-	}
-	return lp
+	return landingPolicies(p).In(name)
 }
 
-// EveryRepositoryNeedsCloneURL answers Pull Request's "every Repository
-// needs a Clone URL on a supported Code Host", so no Repository may be
-// local-only: Pull Request.
-func (lp LandingPolicy) EveryRepositoryNeedsCloneURL() bool {
+// In is the Landing Policy of the Repository name. A name not listed has
+// the Default Landing's.
+func (ps LandingPolicies) In(name string) LandingPolicy {
+	if lp, ok := ps.byName[name]; ok {
+		return lp
+	}
+	return ps.fallback
+}
+
+// ticketLandingPolicies is the policies of t's Changed Repositories in p,
+// which a rule about t's landing asks across: the Home's while it has
+// none.
+func ticketLandingPolicies(p store.Project, t store.Ticket) LandingPolicies {
+	names := changedRepositoryNames(p.Key, t)
+	if len(names) == 0 {
+		names = []string{p.Key}
+	}
+	return landingPolicies(p).Only(names)
+}
+
+// Only is ps narrowed to the Repositories names, such as a Ticket's
+// Changed Repositories.
+func (ps LandingPolicies) Only(names []string) LandingPolicies {
+	out := LandingPolicies{byName: map[string]LandingPolicy{}, fallback: ps.fallback}
+	for _, n := range names {
+		out.byName[n] = ps.In(n)
+		out.names = append(out.names, n)
+	}
+	return out
+}
+
+// Any reports whether rule holds in any Repository's policy, as a
+// Project-wide rule asks: "Project-wide rules hold when any Repository's
+// policy calls for them".
+func (ps LandingPolicies) Any(rule func(LandingPolicy) bool) bool {
+	for _, n := range ps.names {
+		if rule(ps.byName[n]) {
+			return true
+		}
+	}
+	return false
+}
+
+// RunsPullRequestWatcher answers the Pull Request Watcher's "The service
+// runs one per Project while any Repository is under Pull Request".
+func (ps LandingPolicies) RunsPullRequestWatcher() bool {
+	return ps.Any(LandingPolicy.LandsByPullRequest)
+}
+
+// RunsCIWatcher answers the CI Watcher's "The service starts one per
+// Project with CI Tracking on", which every Repository's policy shares.
+func (ps LandingPolicies) RunsCIWatcher() bool {
+	return ps.Any(LandingPolicy.RunsCIWatcher)
+}
+
+// UsesAzureReposPAT answers the PAT variable's "shown while any Azure
+// Repos Repository is under Pull Request", given the Azure Repos
+// Repositories' names.
+func (ps LandingPolicies) UsesAzureReposPAT(azureRepos []string) bool {
+	return ps.Only(azureRepos).Any(LandingPolicy.LandsByPullRequest)
+}
+
+// LandPerSpecInForce answers whether Land per Spec covers the Project's
+// Specs: in force in any Repository's policy.
+func (ps LandingPolicies) LandPerSpecInForce() bool {
+	return ps.Any(LandingPolicy.LandPerSpecInForce)
+}
+
+// NeedsCloneURL answers Pull Request's "it is refused as a local-only
+// Repository's Own Landing, and as the Default Landing while a local-only
+// Repository follows it": Pull Request, which can't land where there is
+// no Clone URL.
+func (lp LandingPolicy) NeedsCloneURL() bool {
 	return lp.method == store.LandingPullRequest
 }
 
@@ -144,17 +303,11 @@ func (lp LandingPolicy) LandsByPullRequest() bool {
 	return lp.method == store.LandingPullRequest
 }
 
-// RunsPullRequestWatcher answers the Pull Request Watcher's "The service
-// runs one per Project under Pull Request": Pull Request. It holds the
-// same value as LandsByPullRequest but answers a different rule.
-func (lp LandingPolicy) RunsPullRequestWatcher() bool {
-	return lp.method == store.LandingPullRequest
-}
-
 // RunsCIWatcher answers the CI Watcher's "The service starts one per
 // Project with CI Tracking on": CI Tracking, whatever the method. It is
 // not TracksCIResults, which says whether a pushed commit has CI results
-// and is true without CI Tracking too, except under Pull Request.
+// and is true without CI Tracking too, except under Pull Request. The
+// Project asks it across its Repositories, as LandingPolicies does.
 func (lp LandingPolicy) RunsCIWatcher() bool {
 	return lp.tracking
 }

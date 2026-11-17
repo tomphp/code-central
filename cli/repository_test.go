@@ -127,6 +127,55 @@ func TestRepositoryAddsALocalOnlyRepositoryAndClearsACloneURL(t *testing.T) {
 	}
 }
 
+// A Repository, the Home included, follows the Default Landing or has its
+// Own Landing, and may name its own Push remote (Spec code-central-890).
+func TestRepositoryTakesALandingAndPushRemoteAndListsThem(t *testing.T) {
+	t.Parallel()
+	srv, env := repositoryEnv(t)
+
+	out := printed(t, run(t, env, "", "repository", "add", "web", "--clone-url", "git@github.com:acme/web.git", "--landing", "branch+push", "--push-remote", "upstream"))
+	web := lineOf(t, out, "web")
+	if !strings.Contains(web, "Branch + Push (own)") || !strings.Contains(web, "upstream") {
+		t.Fatalf("add printed:\n%s\nwant web on its Own Landing, Branch + Push, to upstream", out)
+	}
+	if home := lineOf(t, out, "acme (home)"); !strings.Contains(home, "Merge (default)") || !strings.Contains(home, "origin") {
+		t.Fatalf("add printed:\n%s\nwant the Home on the Default Landing, Merge, to origin", out)
+	}
+	if !strings.Contains(out, "LANDING") || !strings.Contains(out, "PUSH REMOTE") {
+		t.Fatalf("list:\n%s\nwant LANDING and PUSH REMOTE columns", out)
+	}
+
+	printed(t, run(t, env, "", "repository", "edit", "acme", "--landing", "merge+push"))
+	printed(t, run(t, env, "", "repository", "edit", "web", "--landing", "default", "--push-remote", ""))
+	p, _ := srv.Client.GetProject(context.Background(), "acme")
+	if home := p.Repositories[0]; home.Landing != core.RepositoryLandingMergePush || !home.OwnLanding {
+		t.Fatalf("the Home = %+v, want its Own Landing, Merge + Push", home)
+	}
+	if web := p.Repositories[1]; web.Landing != core.RepositoryLandingMerge || web.OwnLanding || web.OwnPushRemote {
+		t.Fatalf("web = %+v, want it back on the Default Landing and the Project's remote", web)
+	}
+
+	printed(t, run(t, env, "", "repository", "add", "notes", "--local-path", srcPath("notes"), "--landing", "branch"))
+	if e := wantError(t, run(t, env, "", "repository", "edit", "notes", "--landing", "pull-request"), core.Invalid); e.Field != "landing" || !strings.Contains(e.Fix, "notes") {
+		t.Fatalf("Pull Request on local-only notes: %+v, want landing refused with a fix naming notes", e)
+	}
+	if r := run(t, env, "", "repository", "edit", "web", "--landing", "rebase"); r.code != 1 || !strings.Contains(r.stderr, "merge+push") {
+		t.Fatalf("an unknown --landing: exit %d, stderr %q; want a usage error listing the Landings", r.code, r.stderr)
+	}
+}
+
+// lineOf is the line of out that starts with name.
+func lineOf(t *testing.T, out, name string) string {
+	t.Helper()
+	for _, l := range strings.Split(out, "\n") {
+		if strings.HasPrefix(l, name+" ") {
+			return l
+		}
+	}
+	t.Fatalf("no line for %s in:\n%s", name, out)
+	return ""
+}
+
 func TestRepositoryAddNeedsACloneURLOrALocalPath(t *testing.T) {
 	t.Parallel()
 	srv, env := repositoryEnv(t)

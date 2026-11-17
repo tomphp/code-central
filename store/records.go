@@ -64,13 +64,24 @@ type projectFile struct {
 }
 
 // repositoryFile is one of a Project's Repositories, in landing order.
-// The Home Repository's holds only its name.
+// The Home Repository's holds only its name, Own Landing and Push remote.
 type repositoryFile struct {
 	Name      string `yaml:"name"`
 	Home      bool   `yaml:"home,omitempty"`
 	CloneURL  string `yaml:"clone_url,omitempty"`
 	Base      string `yaml:"base,omitempty"`
 	LocalPath string `yaml:"local_path,omitempty"`
+	// Landing is the Own Landing, left out while it follows the Default
+	// Landing.
+	Landing *ownLandingFile `yaml:"landing,omitempty"`
+	// PushRemote is left out while it uses the Project's.
+	PushRemote string `yaml:"push_remote,omitempty"`
+}
+
+// ownLandingFile is a Repository's Own Landing.
+type ownLandingFile struct {
+	Method string `yaml:"method"`
+	Push   bool   `yaml:"push,omitempty"`
 }
 
 // stageGuidesFile is a Project's Stage Guides settings.
@@ -885,23 +896,28 @@ func encodeAutoAccept(kinds []AutoAcceptKind) []string {
 }
 
 // encodeRepositories is the Repositories as project.yaml holds them, the
-// Home Repository's with its name alone.
+// Home Repository's with its name, Own Landing and Push remote alone.
 func encodeRepositories(rs []Repository) []repositoryFile {
 	var out []repositoryFile
 	for _, r := range rs {
-		if r.Home {
-			out = append(out, repositoryFile{Name: r.Name, Home: true})
-			continue
+		f := repositoryFile{Name: r.Name, Home: r.Home, PushRemote: r.PushRemote}
+		if !r.Home {
+			f.CloneURL, f.Base, f.LocalPath = r.CloneURL, r.Base, r.LocalPath
 		}
-		out = append(out, repositoryFile{Name: r.Name, CloneURL: r.CloneURL, Base: r.Base, LocalPath: r.LocalPath})
+		if o := r.OwnLanding.Normalized(); o.Set() {
+			f.Landing = &ownLandingFile{Method: string(o.Method), Push: o.Push}
+		}
+		out = append(out, f)
 	}
 	return out
 }
 
 // decodeRepositories checks a Project's Repositories as load does: each
 // Name is unique, the Home Repository, named key, is listed once with
-// nothing more, and every other keeps the Repository Name rules and has a
-// Clone URL and a Base. The Home Repository's name is the Project Key,
+// nothing more than an Own Landing and a Push remote, every other keeps
+// the Repository Name rules and has a Clone URL or a local path and a
+// Base, and each Own Landing names a Landing Method, with Pull Request's
+// Push normalised away. The Home Repository's name is the Project Key,
 // which keeps the key's own rules. It returns the offending field,
 // relative to repositories, with the error.
 func decodeRepositories(key string, fs []repositoryFile) ([]Repository, string, error) {
@@ -918,15 +934,21 @@ func decodeRepositories(key string, fs []repositoryFile) ([]Repository, string, 
 		if slices.ContainsFunc(out, func(r Repository) bool { return r.Name == f.Name }) {
 			return nil, field + ".name", fmt.Errorf("%q a second time", f.Name)
 		}
+		var own OwnLanding
+		if l := f.Landing; l != nil {
+			if own = (OwnLanding{Method: LandingMethod(l.Method), Push: l.Push}).Normalized(); !own.Method.Valid() {
+				return nil, field + ".landing.method", fmt.Errorf("unknown landing method %q (%s)", l.Method, strings.Join(landingMethodNames(), " or "))
+			}
+		}
 		if f.Home {
 			homes++
 			if f.Name != key {
 				return nil, field + ".name", fmt.Errorf("the Home Repository is named by the Project Key %q, not %q", key, f.Name)
 			}
 			if f.CloneURL != "" || f.Base != "" || f.LocalPath != "" {
-				return nil, field, errors.New("the Home Repository holds only its name: its Clone URL is reported and its Base is the Project's")
+				return nil, field, errors.New("the Home Repository holds only its name, Own Landing and Push remote: its Clone URL is reported and its Base is the Project's")
 			}
-			out = append(out, Repository{Name: f.Name, Home: true})
+			out = append(out, Repository{Name: f.Name, Home: true, OwnLanding: own, PushRemote: f.PushRemote})
 			continue
 		}
 		if f.CloneURL == "" && f.LocalPath == "" {
@@ -935,7 +957,7 @@ func decodeRepositories(key string, fs []repositoryFile) ([]Repository, string, 
 		if f.Base == "" {
 			return nil, field + ".base", errors.New("missing")
 		}
-		out = append(out, Repository{Name: f.Name, CloneURL: f.CloneURL, Base: f.Base, LocalPath: f.LocalPath})
+		out = append(out, Repository{Name: f.Name, CloneURL: f.CloneURL, Base: f.Base, LocalPath: f.LocalPath, OwnLanding: own, PushRemote: f.PushRemote})
 	}
 	if homes != 1 {
 		return nil, "", fmt.Errorf("lists the Home Repository %d times, want once", homes)

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -43,6 +44,20 @@ type RepositoryView struct {
 	// Clone is its clone as the Factory last reported it, absent while no
 	// Factory is reporting.
 	Clone *CloneView `json:"clone,omitempty"`
+	// Landing is its effective Landing: its Own Landing, else the
+	// Project's Default Landing; never default.
+	Landing RepositoryLanding `json:"landing"`
+	// OwnLanding is whether Landing is its Own Landing.
+	OwnLanding bool `json:"own_landing"`
+	// PushRemote is the git remote it is pushed to and fetched from: its
+	// own, else the Project's.
+	PushRemote string `json:"push_remote"`
+	// OwnPushRemote is whether PushRemote is its own.
+	OwnPushRemote bool `json:"own_push_remote"`
+	// LocalOnlyUnderPullRequest marks a local-only Repository whose
+	// Landing is Pull Request, as only a Home that lost its remote can
+	// be: nothing lands there until it has another Landing or a remote.
+	LocalOnlyUnderPullRequest bool `json:"local_only_under_pull_request"`
 }
 
 // LocalOnly reports whether r is a Repository other than the Home with no
@@ -50,22 +65,33 @@ type RepositoryView struct {
 // is never local-only.
 func (r RepositoryView) LocalOnly() bool { return !r.Home && r.CloneURL == "" }
 
+// localOnlyIn reports whether p's Repository name is local-only.
+func localOnlyIn(p store.Project, name string) bool {
+	return slices.ContainsFunc(repositoriesView(p), func(r RepositoryView) bool { return r.Name == name && r.LocalOnly() })
+}
+
 // repositoriesView is p's Repositories in landing order.
 func repositoriesView(p store.Project) []RepositoryView {
 	var out []RepositoryView
 	for _, r := range p.RepositoryList() {
 		out = append(out, repositoryView(p, r))
 	}
+	markLocalOnlyUnderPullRequest(p, out)
 	return out
 }
 
 // repositoryView is p's Repository r as every Project read returns it.
 func repositoryView(p store.Project, r store.Repository) RepositoryView {
-	v := RepositoryView{Name: r.Name, Home: r.Home, CloneURL: r.CloneURL, Base: r.Base, LocalPath: r.LocalPath, ChangedBy: []string{}}
+	v := RepositoryView{Name: r.Name, Home: r.Home, CloneURL: r.CloneURL, Base: r.Base, LocalPath: r.LocalPath, ChangedBy: []string{},
+		PushRemote: r.PushRemote, OwnPushRemote: r.PushRemote != ""}
 	if r.Home {
 		v.CloneURL, v.Base = p.CI.PushRemoteURL, p.Base()
 	}
+	if !v.OwnPushRemote {
+		v.PushRemote = p.Landing.Remote
+	}
 	v.CodeHost, _ = codeHostOf(v.CloneURL)
+	v.Landing, v.OwnLanding = effectiveLanding(p, r)
 	return v
 }
 
@@ -99,7 +125,8 @@ func repositoryNames(rs []store.Repository) []string {
 }
 
 // AddRepositoryInput is the human's add_repository(name, clone_url?,
-// base?, local_path?, full?): it needs clone_url, local_path or both.
+// base?, local_path?, ci?, landing?, push_remote?, full?): it needs
+// clone_url, local_path or both.
 type AddRepositoryInput struct {
 	// Name is the Repository Name, fixed once added.
 	Name string `json:"name"`
@@ -114,13 +141,21 @@ type AddRepositoryInput struct {
 	// CI is the Repository's CI entry; left out, it is filled in from the
 	// Clone URL, Not watched for none or a host no CI Provider is on.
 	CI *RepositoryCI `json:"ci,omitempty"`
+	// Landing is its Own Landing; left out or default, it follows the
+	// Project's Default Landing.
+	Landing RepositoryLanding `json:"landing,omitempty"`
+	// PushRemote names the git remote it is pushed to; left out, the
+	// Project's.
+	PushRemote string `json:"push_remote,omitempty"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
 
 // EditRepositoryInput is the human's edit_repository(name, clone_url?,
-// base?, local_path?, full?): each field left out keeps its value. The
-// name only finds the Repository: a Repository Name never changes.
+// base?, local_path?, landing?, push_remote?, full?): each field left out
+// keeps its value. The name only finds the Repository: a Repository Name
+// never changes. The Home Repository takes the landing and push_remote
+// alone.
 type EditRepositoryInput struct {
 	Name string `json:"name"`
 	// CloneURL, set empty, clears it, making the Repository local-only.
@@ -129,6 +164,11 @@ type EditRepositoryInput struct {
 	// LocalPath, set empty, puts the clone back beside the Home
 	// Repository. A Repository keeps a Clone URL or a local path.
 	LocalPath *string `json:"local_path,omitempty"`
+	// Landing, set default, has it follow the Project's Default Landing;
+	// any other value is its Own Landing.
+	Landing *RepositoryLanding `json:"landing,omitempty"`
+	// PushRemote, set empty, has it use the Project's.
+	PushRemote *string `json:"push_remote,omitempty"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
@@ -166,6 +206,13 @@ func (c *Core) AddRepository(ctx context.Context, key string, in AddRepositoryIn
 	if err := checkRepositoryFields(r); err != nil {
 		return Written[ProjectView]{}, err
 	}
+	landing := in.Landing
+	if landing == "" {
+		landing = RepositoryLandingDefault
+	}
+	if err := setRepositoryLanding(&r, &landing, &in.PushRemote); err != nil {
+		return Written[ProjectView]{}, err
+	}
 	entry := ciEntryFromCloneURL(r.Name, r.CloneURL)
 	if in.CI != nil {
 		var err error
@@ -184,7 +231,7 @@ func (c *Core) AddRepository(ctx context.Context, key string, in AddRepositoryIn
 		}
 		return append(rs, r), nil
 	}
-	return c.updateRepositories(ctx, key, in.Full, r, true, &entry, add)
+	return c.updateRepositories(ctx, key, in.Full, r, repositoryChange{newCloneURL: true, landing: in.Landing != ""}, &entry, add)
 }
 
 // EditRepository is the human's edit_repository: a Repository's Clone
@@ -225,7 +272,12 @@ func (c *Core) EditRepository(ctx context.Context, key string, in EditRepository
 	if in.LocalPath != nil {
 		r.LocalPath = strings.TrimSpace(*in.LocalPath)
 	}
-	if err := checkRepositoryFields(r); err != nil {
+	if !r.Home {
+		if err := checkRepositoryFields(r); err != nil {
+			return Written[ProjectView]{}, err
+		}
+	}
+	if err := setRepositoryLanding(&r, in.Landing, in.PushRemote); err != nil {
 		return Written[ProjectView]{}, err
 	}
 	edit := func(rs []store.Repository) ([]store.Repository, error) {
@@ -237,8 +289,32 @@ func (c *Core) EditRepository(ctx context.Context, key string, in EditRepository
 		return rs, nil
 	}
 	// Only a Clone URL naming another repository needs the Pull Request
-	// check again.
-	return c.updateRepositories(ctx, key, in.Full, r, NormalCloneURL(was) != NormalCloneURL(r.CloneURL), nil, edit)
+	// check again, or a Landing bringing it under Pull Request.
+	w, err := c.updateRepositories(ctx, key, in.Full, r, repositoryChange{newCloneURL: NormalCloneURL(was) != NormalCloneURL(r.CloneURL), landing: in.Landing != nil}, nil, edit)
+	if err == nil && in.Landing != nil {
+		// The Landing decides an Accepted Ticket's Needs Me reason (To
+		// merge, or Accepted but not landed), so each one changed
+		// without a write.
+		c.publishAccepted(key)
+	}
+	return w, err
+}
+
+// publishAccepted publishes a change of each of the Project key's
+// Accepted Tickets.
+func (c *Core) publishAccepted(key string) {
+	var accepted []int
+	c.store.View(func(r store.Reader) error {
+		for _, t := range r.Tickets(key) {
+			if t.State == store.Accepted {
+				accepted = append(accepted, t.Number)
+			}
+		}
+		return nil
+	})
+	for _, n := range accepted {
+		c.events.Publish(events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, n)})
+	}
 }
 
 // editHomeRefusal is why in can't edit the Home Repository.
@@ -316,6 +392,34 @@ func (c *Core) SetLandingOrder(ctx context.Context, key string, in SetLandingOrd
 		}
 		return out, nil
 	})
+}
+
+// setRepositoryLanding sets r's Own Landing from landing, when given, and
+// its Push remote from pushRemote, when given, refusing a Landing that
+// isn't one or a remote name git wouldn't take, with how to put it right.
+// Empty leaves the Push remote to the Project's.
+func setRepositoryLanding(r *store.Repository, landing *RepositoryLanding, pushRemote *string) error {
+	if landing != nil {
+		l := RepositoryLanding(strings.TrimSpace(string(*landing)))
+		if !l.Valid() {
+			var names []string
+			for _, v := range RepositoryLandings {
+				names = append(names, string(v))
+			}
+			return &Error{Code: Invalid, Field: "landing", Message: fmt.Sprintf("%s isn't a Landing", quote(string(l))),
+				Fix: "choose one of " + strings.Join(names, ", ") + ", where default follows the Project's Default Landing"}
+		}
+		r.OwnLanding = l.ownLanding()
+	}
+	if pushRemote != nil {
+		name := strings.TrimSpace(*pushRemote)
+		if err := checkBranchName(name); err != nil {
+			return &Error{Code: Invalid, Field: "push_remote", Message: fmt.Sprintf("%s isn't a git remote's name", quote(name)),
+				Fix: "name a remote of its clone, such as " + store.DefaultLandingRemote + ", or leave it empty for the Project's"}
+		}
+		r.PushRemote = name
+	}
+	return nil
 }
 
 // checkRepositoryFields refuses a Repository whose Clone URL, Base or
@@ -428,15 +532,23 @@ func repositoryNamed(key string, rs []store.Repository, name string) (int, error
 	return i, nil
 }
 
+// repositoryChange is what an add or edit of a Repository changes that
+// its checks ask about: whether its Clone URL names another repository,
+// and whether the human chose its Landing.
+type repositoryChange struct {
+	newCloneURL bool
+	landing     bool
+}
+
 // updateRepositories writes the Repositories change makes, once r's Clone
-// URL and resolved clone path are listed nowhere else and, under Pull
-// Request, r has a Clone URL that, when checkHost, passes the Pull Request
-// Watcher's check. With ci, r's new CI entry, it is written with them, once, while
-// CI Tracking is on, it passes the CI Watcher's check. The checks call
-// the Code Host, so they run outside the store's lock, between a read
-// that refuses what the store alone can and the write, which checks
-// again.
-func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r store.Repository, checkHost bool, ci *store.CIRepository, change func([]store.Repository) ([]store.Repository, error)) (Written[ProjectView], error) {
+// URL and resolved clone path are listed nowhere else and, when r would
+// be under Pull Request, it has a Clone URL that, when it is new or r
+// comes under Pull Request, passes the Pull Request Watcher's check. With
+// ci, r's new CI entry, it is written with them, once, while CI Tracking
+// is on, it passes the CI Watcher's check. The checks call the Code Host,
+// so they run outside the store's lock, between a read that refuses what
+// the store alone can and the write, which checks again.
+func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r store.Repository, changed repositoryChange, ci *store.CIRepository, change func([]store.Repository) ([]store.Repository, error)) (Written[ProjectView], error) {
 	apply := func(p store.Project) ([]store.Repository, error) {
 		rs, err := change(p.RepositoryList())
 		if err != nil {
@@ -444,25 +556,36 @@ func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r 
 		}
 		// Before the Code Host check, so an empty Clone URL never reads
 		// as a host Pull Request doesn't support.
-		if landingPolicyOf(p).EveryRepositoryNeedsCloneURL() && r.LocalOnly() {
-			return nil, &Error{Code: Invalid, Field: "clone_url", Message: needsCloneURL, Fix: needsCloneURLFix}
+		next := p
+		next.SetRepositories(rs)
+		if err := refuseLocalOnlyUnderPullRequest(next, r.Name, changed.landing); err != nil {
+			return nil, err
+		}
+		if r.Home {
+			return rs, nil
 		}
 		return rs, refuseListed(p, r, c.reportedHomeClone(p))
 	}
 	var check *PullRequestCheckInput
+	var url string
 	var checkCI func() error
 	err := c.store.View(func(rd store.Reader) error {
 		if err := writable(rd, key); err != nil {
 			return err
 		}
 		p, _ := rd.Project(key)
-		if _, err := apply(p); err != nil {
+		rs, err := apply(p)
+		if err != nil {
 			return err
 		}
-		if checkHost && landingPolicyOf(p).RunsPullRequestWatcher() {
+		next := p
+		next.SetRepositories(rs)
+		underPR, wasUnderPR := landingPolicyIn(next, r.Name).LandsByPullRequest(), landingPolicyIn(p, r.Name).LandsByPullRequest()
+		if underPR && (changed.newCloneURL || !wasUnderPR) {
 			check = &PullRequestCheckInput{GHPath: rd.Options().GHPath, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv})}
+			url = repositoryView(next, r).CloneURL
 		}
-		if opts := rd.Options(); ci != nil && landingPolicyOf(p).RunsCIWatcher() {
+		if opts := rd.Options(); ci != nil && landingPolicies(p).RunsCIWatcher() {
 			checkCI = func() error { return c.checkCIEntry(ctx, p, opts, *ci, "ci.") }
 		}
 		return nil
@@ -471,7 +594,13 @@ func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r 
 		return Written[ProjectView]{}, err
 	}
 	if check != nil {
-		if err := c.checkRepositoryPullRequests(ctx, r.Name, r.CloneURL, *check); err != nil {
+		if r.Home {
+			// The Push remote's own refusals, with their own fixes.
+			if err := checkPullRequestHost(url); err != nil {
+				return Written[ProjectView]{}, err
+			}
+		}
+		if err := c.checkRepositoryPullRequests(ctx, r.Name, url, *check); err != nil {
 			return Written[ProjectView]{}, err
 		}
 	}
