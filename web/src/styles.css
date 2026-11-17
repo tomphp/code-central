@@ -429,6 +429,7 @@ a.link-badge:hover { text-decoration: underline; }
 .map-count { display: block; font-size: 12.5px; margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
 .modal { position: fixed; inset: 0; background: rgb(0 0 0 / .35); display: grid; place-items: start center; padding-top: 12vh; z-index: 40; }
 .modal-card { background: var(--surface); width: min(40rem, 92vw); border-radius: 12px; padding: 18px 20px; box-shadow: 0 12px 40px rgb(0 0 0 / .25); }
+.modal-card:focus:not(:focus-visible) { outline: none; }
 .modal-card h2 { font-size: 16px; margin-bottom: 10px; }
 .modal-card textarea { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); resize: vertical; }
 .modal-project { display: block; margin-bottom: 8px; }
@@ -439,7 +440,7 @@ a.link-badge:hover { text-decoration: underline; }
 /* PopupShell's header row: its title, anything else it holds such as the
    Focus popup's N left, then × at the right. It stays in view while a wide
    card's content scrolls. */
-.popup-head { position: sticky; top: -18px; z-index: 1; display: flex; align-items: center; margin: -18px -20px 0; padding: 8px 10px 0; background: var(--surface); }
+.popup-head { position: sticky; top: -18px; z-index: 1; display: flex; align-items: center; margin: -18px -20px 0; padding: 8px 10px 0; background: var(--surface); border-radius: 12px 12px 0 0; }
 .popup-head > :not(.popup-close) { padding-left: 10px; }
 .popup-head h2 { margin: 10px 0; }
 .popup-close { margin-left: auto; border: 0; background: none; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 8px; border-radius: 6px; cursor: pointer; }
