@@ -18,7 +18,7 @@ import (
 // no command for them.
 func init() {
 	commands["repository"] = command{
-		usage: "repository list | add <name> [--clone-url <url>] [--local-path <path>] [--base <branch>] | edit <name> [--clone-url <url>] [--base <branch>] [--local-path <path>] | remove <name> | move <name> --before|--after <name>  [--project <key>]  manage the Project's Repositories, listed in landing order; each needs a Clone URL, a local path or both, and one with no Clone URL is local-only, never cloned or pushed; an empty --clone-url or --local-path clears it",
+		usage: "repository list | add <name> [--clone-url <url>] [--base <branch>] [--local-path <path>] | edit <name> [--clone-url <url>] [--base <branch>] [--local-path <path>] | remove <name> | move <name> --before|--after <name>  [--project <key>]  manage the Project's Repositories, listed in landing order; each needs a Clone URL, a local path or both, and one with no Clone URL is local-only, never cloned or pushed; an empty --clone-url or --local-path clears it",
 		run:   runRepository,
 	}
 }

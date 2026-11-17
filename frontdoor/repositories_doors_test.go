@@ -38,13 +38,15 @@ func init() {
 	}
 	cases["edit_repository"] = opCase{
 		setup: withRepository(`{"name":"web","clone_url":"git@github.com:acme/web.git"}`),
-		ok:    call{http: editRepository(`{"name":"web","base":"develop","local_path":"` + srcPath("web") + `"}`)},
+		// An empty Clone URL clears it, leaving web local-only at its
+		// local path.
+		ok: call{http: editRepository(`{"name":"web","clone_url":"","base":"develop","local_path":"` + srcPath("web") + `"}`)},
 		check: func(t *testing.T, out map[string]any) {
 			acknowledgement("acme", "repositories")(t, out)
 		},
 		full: func(t *testing.T, out map[string]any) {
-			if web := repositoryIn(out, "web"); web["base"] != "develop" || web["local_path"] != srcPath("web") {
-				t.Fatalf("web = %v, want Base develop at %s", web, srcPath("web"))
+			if web := repositoryIn(out, "web"); web["base"] != "develop" || web["local_path"] != srcPath("web") || web["clone_url"] != "" || web["code_host"] != "" {
+				t.Fatalf("web = %v, want Base develop at %s with no Clone URL", web, srcPath("web"))
 			}
 		},
 		bad:  call{http: editRepository(`{"name":"acme","base":"trunk"}`)},

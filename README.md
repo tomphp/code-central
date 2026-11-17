@@ -94,6 +94,8 @@ web              git@github.com:acme/web.git       main  -
 notes            (none: local only)                main  /home/you/src/notes
 ```
 
+`code-central repository edit web --clone-url ""` clears a Clone URL, as long as the repository has a local path.
+
 The list is the order accepted work lands in. The Factory clones each repository beside the Home Repository and gives every Ticket a worktree and a branch of the same name in each, named after the Ticket:
 
 ```
