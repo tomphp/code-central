@@ -58,8 +58,10 @@ type Request struct {
 	// Authorization is the Authorization header, so a test sees the PAT
 	// went as Basic auth.
 	Authorization string
-	ContentType   string
-	Body          string
+	// ContentType is the Content-Type header, so a test sees a JSON Patch
+	// went as one.
+	ContentType string
+	Body        string
 }
 
 // Server is a running fake.

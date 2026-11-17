@@ -26,7 +26,19 @@ type WorkItem struct {
 	Description        string
 	ReproSteps         string
 	AcceptanceCriteria string
+	// Tags is System.Tags: the tags joined by "; ".
+	Tags string
 }
+
+// Comment is a comment in a work item's Discussion, as the fake stores it:
+// its text, and the format it was posted in.
+type Comment struct {
+	Text   string
+	Format string
+}
+
+// CommentsAPIVersion is the only API version that has work item comments.
+const CommentsAPIVersion = "7.1-preview.4"
 
 // WebURL is w's link in a browser, on the fake at serverURL.
 func (w WorkItem) WebURL(serverURL string) string {
@@ -47,10 +59,27 @@ type board struct {
 	// WHERE clause, each with the IDs it matches.
 	saved   map[string][]int
 	filters map[string][]int
+	// comments are each work item's Discussion, oldest first.
+	comments map[int][]Comment
 }
 
 func newBoard() board {
-	return board{items: map[int]WorkItem{}, saved: map[string][]int{}, filters: map[string][]int{}}
+	return board{items: map[int]WorkItem{}, saved: map[string][]int{}, filters: map[string][]int{}, comments: map[int][]Comment{}}
+}
+
+// PutComment adds a comment, as a human or an earlier run would have,
+// to work item id's Discussion.
+func (s *Server) PutComment(id int, text string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.board.comments[id] = append(s.board.comments[id], Comment{Text: text, Format: "markdown"})
+}
+
+// Comments is work item id's Discussion, oldest first.
+func (s *Server) Comments(id int) []Comment {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.board.comments[id])
 }
 
 // PutWorkItems adds work items to the board, or replaces those with the
@@ -172,8 +201,102 @@ func (b board) answer(serverURL string, req Request) *Answer {
 		}
 		a := JSON("", "", 0, w.json(serverURL))
 		return &a
+	case req.Method == http.MethodPatch && strings.HasPrefix(req.Path, workItemsPath):
+		return b.patch(serverURL, req)
+	}
+	if id, ok := commentsOf(req.Path); ok {
+		return b.discuss(id, req)
 	}
 	return nil
+}
+
+// patch is the board's answer to a JSON Patch of a work item: a test on
+// /rev that holds, and an add of its tags, which it makes unless the
+// request only validates. Anything else is refused, as are a stale /rev
+// and a patch that isn't sent as a JSON Patch.
+func (b board) patch(serverURL string, req Request) *Answer {
+	id, err := strconv.Atoi(strings.TrimPrefix(req.Path, workItemsPath))
+	w, ok := b.items[id]
+	if err != nil || !ok {
+		return refusal(http.StatusNotFound, fmt.Sprintf("TF401232: Work item %d does not exist, or you do not have permissions to update it.", id))
+	}
+	if req.ContentType != "application/json-patch+json" {
+		return refusal(http.StatusUnsupportedMediaType, "The content type of a work item update must be application/json-patch+json.")
+	}
+	var ops []struct {
+		Op    string          `json:"op"`
+		Path  string          `json:"path"`
+		Value json.RawMessage `json:"value"`
+	}
+	if json.Unmarshal([]byte(req.Body), &ops) != nil {
+		return refusal(http.StatusBadRequest, "The JSON Patch can't be read.")
+	}
+	for _, op := range ops {
+		switch {
+		case op.Op == "test" && op.Path == "/rev":
+			var rev int
+			if json.Unmarshal(op.Value, &rev) != nil || rev != w.Rev {
+				return refusal(http.StatusPreconditionFailed, fmt.Sprintf("The work item %d has been updated: its revision is %d.", id, w.Rev))
+			}
+		case op.Op == "add" && op.Path == "/fields/System.Tags":
+			if json.Unmarshal(op.Value, &w.Tags) != nil {
+				return refusal(http.StatusBadRequest, "System.Tags must be a string.")
+			}
+		default:
+			return refusal(http.StatusBadRequest, fmt.Sprintf("The fake doesn't take the operation %s %s.", op.Op, op.Path))
+		}
+	}
+	if !slices.Contains(req.Query["validateOnly"], "true") {
+		w.Rev++
+		b.items[id] = w
+	}
+	a := JSON("", "", 0, w.json(serverURL))
+	return &a
+}
+
+// commentsOf is the ID of the work item whose Discussion path is, as
+// {project}/_apis/wit/workItems/{id}/comments in the collection.
+func commentsOf(path string) (id int, ok bool) {
+	rest, ok := strings.CutPrefix(path, CollectionPath+"/")
+	if !ok {
+		return 0, false
+	}
+	parts := strings.Split(rest, "/")
+	if len(parts) != 6 || parts[1] != "_apis" || parts[2] != "wit" || parts[3] != "workItems" || parts[5] != "comments" {
+		return 0, false
+	}
+	id, err := strconv.Atoi(parts[4])
+	return id, err == nil
+}
+
+// discuss is the board's answer to listing or adding to work item id's
+// Discussion, which only API 7.1-preview.4 has, and adding takes only
+// Markdown or HTML.
+func (b board) discuss(id int, req Request) *Answer {
+	if !slices.Contains(req.Query["api-version"], CommentsAPIVersion) {
+		return refusal(http.StatusBadRequest, "The comments API is only in version "+CommentsAPIVersion+".")
+	}
+	if _, ok := b.items[id]; !ok {
+		return refusal(http.StatusNotFound, fmt.Sprintf("TF401232: Work item %d does not exist, or you do not have permissions to read it.", id))
+	}
+	if req.Method == http.MethodPost {
+		var in struct {
+			Text string `json:"text"`
+		}
+		format := strings.Join(req.Query["format"], "")
+		if json.Unmarshal([]byte(req.Body), &in) != nil || (format != "markdown" && format != "html") {
+			return refusal(http.StatusBadRequest, "A comment needs its text and a format, markdown or html.")
+		}
+		b.comments[id] = append(b.comments[id], Comment{Text: in.Text, Format: format})
+		a := JSON("", "", 0, map[string]any{"id": len(b.comments[id]), "workItemId": id, "text": in.Text})
+		return &a
+	}
+	list := make([]map[string]any, len(b.comments[id]))
+	for i, c := range b.comments[id] {
+		list[i] = map[string]any{"id": i + 1, "workItemId": id, "text": c.Text}
+	}
+	a := JSON("", "", 0, map[string]any{"totalCount": len(list), "count": len(list), "comments": list})
+	return &a
 }
 
 // json is w as Azure DevOps gives it, leaving out the fields it has no
@@ -181,6 +304,7 @@ func (b board) answer(serverURL string, req Request) *Answer {
 func (w WorkItem) json(serverURL string) map[string]any {
 	fields := map[string]any{"System.TeamProject": w.project(), "System.Rev": w.Rev}
 	for name, v := range map[string]string{
+		"System.Tags":         w.Tags,
 		"System.WorkItemType": w.Type, "System.State": w.State, "System.Title": w.Title, "System.Description": w.Description,
 		"Microsoft.VSTS.TCM.ReproSteps": w.ReproSteps, "Microsoft.VSTS.Common.AcceptanceCriteria": w.AcceptanceCriteria,
 	} {

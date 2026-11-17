@@ -211,12 +211,15 @@ func (c *Client) do(ctx context.Context, method, rawURL string, query url.Values
 	return c.doAs(ctx, method, rawURL, query, "application/json", body, out)
 }
 
-// doAs is do, sending its body as contentType.
+// doAs is do, sending its body as contentType. A call whose query gives no
+// api-version is pinned to APIVersion.
 func (c *Client) doAs(ctx context.Context, method, rawURL string, query url.Values, contentType string, body, out any) error {
 	if query == nil {
 		query = url.Values{}
 	}
-	query.Set("api-version", APIVersion)
+	if query.Get("api-version") == "" {
+		query.Set("api-version", APIVersion)
+	}
 	var rd io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -274,7 +277,7 @@ func (c *Client) refusal(resp *http.Response, data []byte, method, rawURL string
 		return fmt.Errorf("%w: %s answered 403", ErrMissingScope, what)
 	case status == http.StatusNotFound:
 		return fmt.Errorf("%w: %s answered 404", ErrNotFound, what)
-	case status == http.StatusBadRequest, status == http.StatusConflict:
+	case status == http.StatusBadRequest, status == http.StatusConflict, status == http.StatusPreconditionFailed:
 		return &RefusedError{What: what, Status: status, Message: messageOf(data)}
 	case status >= 200 && status < 300:
 		return nil
