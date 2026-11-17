@@ -24,6 +24,7 @@ func (f *factory) startTurn(ctx context.Context, c claim, in turnInput) {
 	in.UsageKind = f.claimInfo(c).stage
 	in.OnEvent = func(e core.SessionEvent) { f.events.add(c.SessionID, e) }
 	in.OnUsage = func(r core.UsageResponse) { f.usage.add(c.SessionID, r) }
+	in.OnPlanLimits = f.planLimits.set
 	in.Linef = func(format string, args ...any) {
 		f.claimf(c, "%s: %s", c.Ticket, fmt.Sprintf(format, args...))
 	}

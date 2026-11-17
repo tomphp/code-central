@@ -9,13 +9,13 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// Format 45 (code-central-858) replaced the GitHub Issues setting
+// Format 46 (code-central-858) replaced the GitHub Issues setting
 // `repository` with a list, `repositories`. The real chain migrates a
-// format-44 store moving each Project's repository into the list, and
+// format-45 store moving each Project's repository into the list, and
 // leaves a Project with none, or without GitHub Issues, as it was.
 func TestTheRealChainMigratesAFormat44StoreToTheGitHubIssuesRepositoriesFormat(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
-	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 44\n")
+	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 45\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),
 		"key: acme\ndisplay_name: Acme\ncreated: 2026-01-02T03:04:05Z\nmode: committed\n"+
 			"github_issues:\n  on: true\n  repository: acme/web\n  label: good first issue\n  new_issues_need_me: true\n  spec: 4\n")
@@ -27,8 +27,8 @@ func TestTheRealChainMigratesAFormat44StoreToTheGitHubIssuesRepositoriesFormat(t
 	before := snapshot(t, dir)
 
 	s := openFile(t, dir)
-	if m := s.Migrated(); m == nil || m.From != 44 || m.To != store.Format {
-		t.Fatalf("migrated = %+v, want a migration from format 44", m)
+	if m := s.Migrated(); m == nil || m.From != 45 || m.To != store.Format {
+		t.Fatalf("migrated = %+v, want a migration from format 45", m)
 	}
 	after := snapshot(t, dir)
 	if after["projects/plain/project.yaml"] != before["projects/plain/project.yaml"] {

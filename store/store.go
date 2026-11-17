@@ -501,7 +501,9 @@ var NeedsMeReasons = []string{"needs_answer", "answered", "silent_claim", "long_
 	"accepted_not_landed", "blocked_by_cancelled", "new_issue", "closed_externally"}
 
 // IsZero reports whether m sets nothing.
-func (m Models) IsZero() bool { return m.Default == (ModelRow{}) && m.Chat == (ModelRow{}) && len(m.Kinds) == 0 }
+func (m Models) IsZero() bool {
+	return m.Default == (ModelRow{}) && m.Chat == (ModelRow{}) && len(m.Kinds) == 0
+}
 
 // Equal reports whether m and n set the same rows.
 func (m Models) Equal(n Models) bool {
@@ -955,12 +957,40 @@ func FocusPopupNames() []string {
 	return out
 }
 
+// LimitsPopup is whether the Limits popup shows a Project's Plan Limits.
+// LimitsPopups has the default first.
+type LimitsPopup string
+
+// The two values of the Show Limits popup Option.
+const (
+	LimitsPopupOn  LimitsPopup = "on"
+	LimitsPopupOff LimitsPopup = "off"
+)
+
+// LimitsPopups lists every LimitsPopup, the default first.
+var LimitsPopups = []LimitsPopup{LimitsPopupOn, LimitsPopupOff}
+
+// Valid reports whether l is one of the LimitsPopups.
+func (l LimitsPopup) Valid() bool { return slices.Contains(LimitsPopups, l) }
+
+// LimitsPopupNames is the LimitsPopups as strings, for messages and the
+// schema.
+func LimitsPopupNames() []string {
+	var out []string
+	for _, l := range LimitsPopups {
+		out = append(out, string(l))
+	}
+	return out
+}
+
 // Options are the human's global preferences, set from the UI's Options
 // view. They are the store's one record that belongs to no Project.
 type Options struct {
 	FocusClear FocusClear
 	// FocusPopup is the Focus Pop-up Option.
 	FocusPopup FocusPopup
+	// LimitsPopup is the Show Limits popup Option.
+	LimitsPopup LimitsPopup
 	// GHPath is where gh, the GitHub CLI, is: the gh path Option. Empty
 	// finds it on the service's PATH, then in the usual install places.
 	GHPath string
@@ -968,7 +998,9 @@ type Options struct {
 
 // DefaultOptions are the Options of a store that has never had any
 // written.
-func DefaultOptions() Options { return Options{FocusClear: FocusClears[0], FocusPopup: FocusPopups[0]} }
+func DefaultOptions() Options {
+	return Options{FocusClear: FocusClears[0], FocusPopup: FocusPopups[0], LimitsPopup: LimitsPopups[0]}
+}
 
 // FocusClearNames is the FocusClears as strings, for messages and the
 // schema.

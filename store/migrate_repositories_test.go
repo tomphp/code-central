@@ -9,19 +9,19 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// Format 41 (code-central-851) added a Project's Repositories. The real
-// chain migrates a format-40 store copying every file unchanged, and a
+// Format 42 (code-central-851) added a Project's Repositories. The real
+// chain migrates a format-41 store copying every file unchanged, and a
 // Project from before has the Home Repository alone, named by its key.
 func TestTheRealChainMigratesAFormat40StoreToTheRepositoriesFormat(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
-	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 40\n")
+	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 41\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),
 		"key: acme\ndisplay_name: Acme\ncreated: 2026-01-02T03:04:05Z\nmode: committed\n")
 	before := snapshot(t, dir)
 
 	s := openFile(t, dir)
-	if m := s.Migrated(); m == nil || m.From != 40 || m.To != store.Format {
-		t.Fatalf("migrated = %+v, want a migration from format 40", m)
+	if m := s.Migrated(); m == nil || m.From != 41 || m.To != store.Format {
+		t.Fatalf("migrated = %+v, want a migration from format 41", m)
 	}
 	after := snapshot(t, dir)
 	for rel, content := range before {
@@ -75,7 +75,7 @@ func TestLoadRefusesAProjectsRepositoriesThatBreakTheirRules(t *testing.T) {
 	// its Home Repository.
 	long := strings.Repeat("a", store.MaxRepositoryName+1)
 	dir := filepath.Join(t.TempDir(), "code-central")
-	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 41\n")
+	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 42\n")
 	writeFile(t, filepath.Join(dir, "projects/"+long+"/project.yaml"),
 		"key: "+long+"\ndisplay_name: Long\ncreated: 2026-01-02T03:04:05Z\nmode: committed\nrepositories:\n"+
 			"  - name: "+long+"\n    home: true\n  - name: web\n    clone_url: u\n    base: main\n")
@@ -97,7 +97,7 @@ func TestLoadRefusesAProjectsRepositoriesThatBreakTheirRules(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := filepath.Join(t.TempDir(), "code-central")
-			writeFile(t, filepath.Join(dir, "store.yaml"), "format: 41\n")
+			writeFile(t, filepath.Join(dir, "store.yaml"), "format: 42\n")
 			writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),
 				"key: acme\ndisplay_name: Acme\ncreated: 2026-01-02T03:04:05Z\nmode: committed\nrepositories:\n"+tc.repos)
 			_, err := store.Open(dir)

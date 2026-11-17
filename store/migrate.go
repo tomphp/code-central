@@ -84,11 +84,12 @@ var migrations = []MigrationStep{
 	{From: 37, Name: "add retro to the kinds of work a Models row may name"},
 	{From: 38, Name: "add a Project's Retros Spec"},
 	{From: 39, Name: "add a Project's Chat row in its Models"},
-	{From: 40, Name: "add a Project's Repositories"},
-	{From: 41, Name: "add the repository_missing Focus Kind"},
-	{From: 42, Name: "add a Ticket's Changed Repositories and the Repository of its pushed commits, Spec merge and pull request"},
-	{From: 43, Name: "add a Ticket's pull requests in its other Repositories and the mark to close one"},
-	{From: 44, Name: "replace the GitHub Issues repository with a list of repositories", File: githubIssuesRepositoryBecomesAList},
+	{From: 40, Name: "add the Show Limits popup Option"},
+	{From: 41, Name: "add a Project's Repositories"},
+	{From: 42, Name: "add the repository_missing Focus Kind"},
+	{From: 43, Name: "add a Ticket's Changed Repositories and the Repository of its pushed commits, Spec merge and pull request"},
+	{From: 44, Name: "add a Ticket's pull requests in its other Repositories and the mark to close one"},
+	{From: 45, Name: "replace the GitHub Issues repository with a list of repositories", File: githubIssuesRepositoryBecomesAList},
 }
 
 // githubIssuesRepositoryBecomesAList is format 44 to 45 (Spec

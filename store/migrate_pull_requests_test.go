@@ -9,13 +9,13 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// Format 44 (code-central-856) added a Ticket's pull requests in its
+// Format 45 (code-central-856) added a Ticket's pull requests in its
 // other Repositories and the mark to close one. The real chain migrates a
-// format-43 store copying every file unchanged: a Ticket's one pull
+// format-44 store copying every file unchanged: a Ticket's one pull
 // request stays the Home Repository's.
 func TestTheRealChainMigratesAFormat43StoreToThePullRequestsFormat(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
-	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 43\n")
+	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 44\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),
 		"key: acme\ndisplay_name: Acme\ncreated: 2026-01-02T03:04:05Z\nmode: committed\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/specs/1.md"),
@@ -28,8 +28,8 @@ func TestTheRealChainMigratesAFormat43StoreToThePullRequestsFormat(t *testing.T)
 	before := snapshot(t, dir)
 
 	s := openFile(t, dir)
-	if m := s.Migrated(); m == nil || m.From != 43 || m.To != store.Format {
-		t.Fatalf("migrated = %+v, want a migration from format 43", m)
+	if m := s.Migrated(); m == nil || m.From != 44 || m.To != store.Format {
+		t.Fatalf("migrated = %+v, want a migration from format 44", m)
 	}
 	after := snapshot(t, dir)
 	for rel, content := range before {
@@ -72,7 +72,7 @@ func TestTheRealChainMigratesAFormat43StoreToThePullRequestsFormat(t *testing.T)
 // A Ticket file with two pull requests in one Repository doesn't load.
 func TestATicketsPullRequestsAreOnePerRepository(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
-	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 44\n")
+	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 45\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),
 		"key: acme\ndisplay_name: Acme\ncreated: 2026-01-02T03:04:05Z\nmode: committed\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/specs/1.md"),
