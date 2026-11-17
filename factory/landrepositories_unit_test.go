@@ -117,3 +117,177 @@ func TestARepositoryTheTicketHasLandedInHoldsNothingBackWithoutItsClone(t *testi
 		t.Fatalf("%s %s, want Done once it lands in the Home Repository", id, tk.State)
 	}
 }
+
+// Land per Spec and Branch with a second Repository (ADR 0049).
+
+// holdSpec makes the world's Tickets from here on Spec-landed: on a
+// plain Spec, held back from landing by a Draft tickets Stage until
+// release cancels it.
+func (w *landWorld) holdSpec() (release func()) {
+	w.t.Helper()
+	ctx := context.Background()
+	s, err := w.srv.Client.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Work"})
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	w.spec = s.ID
+	stage, err := w.srv.Client.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: core.Ref(s.ID), Title: "Tickets", State: store.Draft, Labels: []string{core.StageLabel("tickets")}})
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	return func() {
+		w.t.Helper()
+		if _, err := w.human.Cancel(ctx, "acme", core.CancelInput{Ticket: core.Ref(stage.ID)}); err != nil {
+			w.t.Fatal(err)
+		}
+	}
+}
+
+func TestEveryRepositorysSpecBranchIsCheckedBeforeAnyBaseMoves(t *testing.T) {
+	w := newLandWorld(t)
+	api := w.withAPI()
+	release := w.holdSpec()
+	id, _ := w.acceptedInTwo(api, "Add an endpoint")
+	w.pollRepositories()
+	branch := "refs/heads/" + specBranch(w.spec)
+	if w.repo.tip(branch) == "" || api.tip(branch) == "" {
+		t.Fatalf("%s wasn't merged into its Spec Branch in both:\n%s", id, w.out)
+	}
+	// api's Spec Branch conflicts with its base.
+	api.conflicts[api.tip(branch)] = []string{"endpoint.go"}
+	homeMain, apiMain := w.repo.tip("refs/heads/main"), api.tip("refs/heads/main")
+	release()
+
+	w.pollRepositories()
+
+	if w.repo.tip("refs/heads/main") != homeMain || api.tip("refs/heads/main") != apiMain {
+		t.Fatal("a base moved: nothing lands while any Repository's Spec Branch conflicts")
+	}
+	if tk := w.ticket(id); tk.State != store.Accepted {
+		t.Fatalf("%s is %s, want it still Accepted", id, tk.State)
+	}
+	rows, err := w.srv.Client.FindTickets(context.Background(), "acme", core.FindTicketsInput{Title: core.SpecMergeTitle(w.spec)})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("Spec merge Tickets %+v (%v), want one", rows, err)
+	}
+	if fix := w.ticket(rows[0].ID); !strings.Contains(fix.Description, "- api: merging spec/"+w.spec+" at "+api.tip(branch)+" into main at "+apiMain+" conflicts in these files:\n  - endpoint.go\n") {
+		t.Fatalf("Spec merge Ticket %q, want it to name api's conflict", fix.Description)
+	}
+}
+
+func TestASpecLandsWithTheSameMergeSpecCommitInEachRepository(t *testing.T) {
+	w := newLandWorld(t)
+	api := w.withAPI()
+	release := w.holdSpec()
+	release()
+	id, apiWork := w.acceptedInTwo(api, "Add an endpoint")
+
+	w.pollRepositories()
+
+	tk := w.ticket(id)
+	homeMerge, apiMerge := w.repo.tip("refs/heads/main"), api.tip("refs/heads/main")
+	want := "Merge spec " + w.spec + ": Work"
+	if tk.State != store.Done || w.repo.messageOf(homeMerge) != want || api.messageOf(apiMerge) != want || !api.isAncestor(apiWork, apiMerge) {
+		t.Fatalf("%s is %s; main is at %q and %q, want it Done, landed by the Spec's merge in each", id, tk.State, w.repo.messageOf(homeMerge), api.messageOf(apiMerge))
+	}
+}
+
+func TestATicketIsMergedIntoItsSpecBranchInEveryRepositoryOrNone(t *testing.T) {
+	w := newLandWorld(t)
+	api := w.withAPI()
+	w.holdSpec()
+	id, apiWork := w.acceptedInTwo(api, "Add an endpoint")
+	home := w.repo.tip("refs/heads/" + id)
+	api.conflicts[apiWork] = []string{"endpoint.go"}
+
+	w.pollRepositories()
+
+	tk := w.ticket(id)
+	if tk.State != store.Ready || commentsSaying(tk, "merging it into the Spec Branch conflicts", "- api: merging", "  - endpoint.go") != 1 {
+		t.Fatalf("%s %s %+v, want it sent back naming api's conflict with its Spec Branch", id, tk.State, tk.Comments)
+	}
+	if spec := w.repo.tip("refs/heads/" + specBranch(w.spec)); w.repo.isAncestor(home, spec) {
+		t.Fatal("the Home Repository's Spec Branch holds the Ticket's work: a Ticket conflicting in any Repository is merged into none")
+	}
+}
+
+func TestUnderBranchATicketLandsInEachRepositoryOnceMergedThereByHand(t *testing.T) {
+	w := newLandWorld(t)
+	w.setLanding(store.LandingBranch, false, "")
+	api := w.withAPI()
+	id, _ := w.acceptedInTwo(api, "Add an endpoint")
+
+	api.mergeByHand(id)
+	w.pollRepositories()
+
+	tk := w.ticket(id)
+	if tk.State != store.Accepted || !tk.PartlyLanded {
+		t.Fatalf("%s is %s, partly landed %v, want it Partly landed once merged in api alone", id, tk.State, tk.PartlyLanded)
+	}
+
+	w.repo.mergeByHand(id)
+	w.pollRepositories()
+
+	if tk := w.ticket(id); tk.State != store.Done {
+		t.Fatalf("%s is %s, want Done once merged in both", id, tk.State)
+	}
+}
+
+func TestARefusedPushIsTriedAgainThoughAnotherRepositorysSpecBranchNowConflicts(t *testing.T) {
+	w := newLandWorld(t)
+	api := w.withAPI()
+	w.repo.addRemote("origin")
+	api.addRemote("origin")
+	w.setLanding(store.LandingMerge, true, "origin")
+	release := w.holdSpec()
+	id, _ := w.acceptedInTwo(api, "Add an endpoint")
+	w.pollRepositories()
+	w.repo.setBroken("origin", true)
+	release()
+	w.pollRepositories()
+	homeMerge, branch := w.repo.tip("refs/heads/main"), "refs/heads/"+specBranch(w.spec)
+	if w.repo.messageOf(homeMerge) != "Merge spec "+w.spec+": Work" || api.messageOf(api.tip("refs/heads/main")) == "Merge spec "+w.spec+": Work" {
+		t.Fatalf("want the Spec merged in the Home Repository, its push refused, and api not merged yet:\n%s", w.out)
+	}
+	// Meanwhile api's Spec Branch comes to conflict with its base.
+	api.conflicts[api.tip(branch)] = []string{"endpoint.go"}
+	w.repo.setBroken("origin", false)
+
+	w.pollRepositories()
+
+	if got := w.repo.remoteTip("origin", "main"); got != homeMerge {
+		t.Fatalf("the Home Repository's remote main is at %q, want its merge %s pushed: a merge made already is still pushed", got, homeMerge)
+	}
+	if tk := w.ticket(id); !tk.PartlyLanded {
+		t.Fatalf("%s %+v, want it landed in the Home Repository alone", id, tk.Repositories)
+	}
+	if rows, _ := w.srv.Client.FindTickets(context.Background(), "acme", core.FindTicketsInput{Title: core.SpecMergeTitle(w.spec)}); len(rows) != 1 {
+		t.Fatalf("Spec merge Tickets %+v, want one for api's conflict", rows)
+	}
+}
+
+func TestUnderPullRequestASpecTouchingARepositoryWithNoCloneIsPushedNowhere(t *testing.T) {
+	w := newLandWorld(t)
+	api := w.withAPI()
+	w.repo.addRemote("origin")
+	api.addRemote("origin")
+	if _, err := w.srv.Client.ReportPushRemote(context.Background(), "acme", core.ReportPushRemoteInput{URL: "https://github.com/acme/app.git", Base: "main"}); err != nil {
+		t.Fatal(err)
+	}
+	w.setLanding(store.LandingPullRequest, false, "origin")
+	release := w.holdSpec()
+	w.acceptedInTwo(api, "Add an endpoint")
+	w.pollRepositories()
+	if w.repo.tip("refs/heads/"+specBranch(w.spec)) == "" {
+		t.Fatalf("not merged into the Spec Branch:\n%s", w.out)
+	}
+	// api's clone has gone since.
+	w.f.repositories["api"].problem, w.f.repositories["api"].git = "it isn't a git repository", nil
+	release()
+
+	w.pollRepositories()
+
+	if got := w.repo.remoteTip("origin", specBranch(w.spec)); got != "" {
+		t.Fatalf("the Home Repository's Spec Branch was pushed at %s, though api's can't be checked", got)
+	}
+}

@@ -816,7 +816,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t store.Ticket) Ticke
 	v.PushedCommit, v.CIResult, v.CICommit, v.CIRuns = e.ci.view(t)
 	v.PullRequest = pullRequestView(homePullRequest(key, t))
 	if t.SpecMerge != nil {
-		v.SpecMerge = &SpecMergeView{Commit: t.SpecMerge.Commit, Merged: t.SpecMerge.Merged, Counts: specMergeCounts(t)}
+		v.SpecMerge = &SpecMergeView{Repository: t.SpecMerge.Repository, Commit: t.SpecMerge.Commit, Merged: t.SpecMerge.Merged, Counts: specMergeCounts(t)}
 	}
 	v.SpecLanded = specLanded(r, pr, t)
 	v.WaitingForSpec = waitingForSpec(r, pr, t)

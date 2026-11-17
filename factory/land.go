@@ -154,8 +154,7 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 				continue
 			}
 		}
-		prMerged := tk.PullRequest != nil && tk.PullRequest.State == store.PRMerged
-		route := policy.Route(f.waitsOnSpecBranch(tk), prMerged)
+		route := policy.Route(f.waitsOnSpecBranch(tk), pullRequestMerged(tk))
 		ws, why := f.workToLand(tk, route, policy)
 		if why != "" {
 			if key := tk.ID + "@" + why; !f.saidHeld[key] {
@@ -166,7 +165,7 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 		}
 		switch route {
 		case core.RouteBranch:
-			f.landMergedBranch(ctx, tk, p)
+			f.landMergedBranch(ctx, tk, p, ws)
 		case core.RoutePullRequest:
 			if f.landsInEach(tk, route) {
 				f.landPullRequests(ctx, tk, p)
@@ -175,16 +174,15 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 			}
 		case core.RouteSpecBranch:
 			if tk.SpecMerge == nil || !tk.SpecMerge.Counts {
-				f.mergeIntoSpecBranch(ctx, tk)
+				f.mergeIntoSpecBranch(ctx, tk, ws)
 			}
 		case core.RouteMerge:
 			f.landAccepted(ctx, tk, p, ws)
 		}
 	}
-	// Spec Branches are the Home Repository's; a hand merge is held per
-	// Repository.
+	// Ready Specs land, and hand merges are detected, each held back only
+	// by the broken bases of the Repositories it touches.
 	switch {
-	case !homeReady:
 	case policy.LandsByPullRequest():
 		// A Spec Branch goes to the base through its own pull request,
 		// not by a merge here: it is pushed instead.
@@ -196,52 +194,68 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 }
 
 // landMergedBranch lands an Accepted Ticket under the Branch Landing
-// Method once its work is in the base: the human merged it. Until then it
-// is left as it is, with a line saying so once: never merged, never sent
-// back. With Push on, its branch is pushed to the remote meanwhile.
-func (f *factory) landMergedBranch(ctx context.Context, tk core.TicketView, p core.ProjectView) {
-	head, what, err := f.workOf(tk)
-	if err == nil && f.inBase(head) {
-		f.printf("%s: merged into %s by hand", tk.ID, f.baseBranch())
-		f.landAt(ctx, tk, f.home, head)
-		return
+// Method in each of ws, its Changed Repositories, once its work is in
+// that Repository's base: the human merged it there. It is Done once
+// merged in every one (ADR 0049). Until then each Repository it isn't
+// merged in is left as it is, with a line saying so once: never merged,
+// never sent back. With Push on, its branch there is pushed to the
+// remote meanwhile.
+func (f *factory) landMergedBranch(ctx context.Context, tk core.TicketView, p core.ProjectView, ws []changedWork) {
+	policy := p.LandingPolicy()
+	for _, w := range ws {
+		r := w.r
+		head, what, err := f.workIn(r, tk)
+		switch {
+		case err == nil && w.landed != "" && r.git.isAncestor(head, w.landed):
+			continue
+		case err == nil && f.inBaseOf(r, head):
+			f.printf("%s: merged into %s by hand%s", tk.ID, f.baseOf(r), r.where())
+			f.landAt(ctx, tk, r, head)
+			continue
+		case err == nil && policy.PushesAcceptedBranch():
+			f.pushBranch(ctx, tk, policy, p.Landing.Remote, r, head)
+		}
+		key := tk.ID + "@" + head + r.where()
+		if f.leftOnBranch[key] {
+			continue
+		}
+		f.leftOnBranch[key] = true
+		if err != nil {
+			f.printf("warning: %s is Accepted under the Branch Landing Method, but %s isn't in this repository", tk.ID, what)
+			continue
+		}
+		merge := branchIn(tk, r)
+		if merge == "" {
+			merge = short(head)
+		}
+		f.printf("%s: Accepted under the Branch Landing Method: merge %s into %s%s and the Factory lands it", tk.ID, merge, f.baseOf(r), r.where())
 	}
-	if policy := p.LandingPolicy(); err == nil && policy.PushesAcceptedBranch() {
-		f.pushBranch(ctx, tk, policy, p.Landing.Remote, head)
-	}
-	key := tk.ID + "@" + head
-	if f.leftOnBranch[key] {
-		return
-	}
-	f.leftOnBranch[key] = true
-	if err != nil {
-		f.printf("warning: %s is Accepted under the Branch Landing Method, but %s isn't in this repository", tk.ID, what)
-		return
-	}
-	merge := tk.Branch
-	if merge == "" {
-		merge = short(head)
-	}
-	f.printf("%s: Accepted under the Branch Landing Method: merge %s into %s and the Factory lands it", tk.ID, merge, f.baseBranch())
 }
 
-// pushBranch makes sure tk's branch, holding commit, is on remote, and
-// comments when it can't be pushed yet, to be retried next poll.
-func (f *factory) pushBranch(ctx context.Context, tk core.TicketView, policy core.LandingPolicy, remote, commit string) {
-	if tk.Branch == "" {
+// branchIn is tk's branch in r: the one its finish named there.
+func branchIn(tk core.TicketView, r *repository) string {
+	v, _ := viewIn(tk, r)
+	return v.Branch
+}
+
+// pushBranch makes sure tk's branch in r, holding commit, is on remote,
+// and comments when it can't be pushed yet, to be retried next poll.
+func (f *factory) pushBranch(ctx context.Context, tk core.TicketView, policy core.LandingPolicy, remote string, r *repository, commit string) {
+	branch := branchIn(tk, r)
+	if branch == "" {
 		f.cantPushYet(ctx, tk, "it was finished without a branch, so there is no branch to push.")
 		return
 	}
-	pushed, why := f.push(ctx, f.home, remote, tk.Branch, commit)
+	pushed, why := f.push(ctx, r, remote, branch, commit)
 	if why != "" {
-		f.cantPushYet(ctx, tk, why)
+		f.cantPushIn(ctx, tk, r, why)
 		return
 	}
 	if pushed {
-		f.printf("%s: pushed %s to %s", tk.ID, tk.Branch, remote)
+		f.printf("%s: pushed %s to %s%s", tk.ID, branch, remote, r.where())
 		// Only a push made now: one made before CI Tracking was turned on
 		// isn't tracked.
-		f.reportPushed(ctx, tk, policy, f.home, tk.Branch, f.remoteTip(f.home, remote, tk.Branch, commit))
+		f.reportPushed(ctx, tk, policy, r, branch, f.remoteTip(r, remote, branch, commit))
 	}
 }
 
@@ -405,10 +419,10 @@ func (f *factory) changedWorkOf(tk core.TicketView) ([]changedWork, string) {
 }
 
 // landsInEach reports whether tk lands by route in each of its Changed
-// Repositories, not in the Home Repository alone: by Merge, or by Pull
-// Request with work beside the Home Repository (ADR 0049, ADR 0050).
+// Repositories, not in the Home Repository alone: by every route but Pull
+// Request without work beside the Home Repository (ADR 0049, ADR 0050).
 func (f *factory) landsInEach(tk core.TicketView, route core.LandingRoute) bool {
-	return route == core.RouteMerge || route == core.RoutePullRequest && changedElsewhere(f.home.name, tk)
+	return route != core.RoutePullRequest || changedElsewhere(f.home.name, tk)
 }
 
 // workToLand is tk's Changed Repositories to land by route, or says why
@@ -452,7 +466,8 @@ type mergePlan struct {
 // advances the base, pushes and lands in each Repository in turn, and
 // stops at one it can't land in yet, to go on from there next poll.
 func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, p core.ProjectView, ws []changedWork) {
-	var plans, conflicts []mergePlan
+	var plans []mergePlan
+	var conflicts []landConflict
 	for _, w := range ws {
 		pl, landed, ok := f.planMerge(ctx, tk, w)
 		switch {
@@ -460,13 +475,13 @@ func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, p core.P
 			return
 		case landed:
 		case len(pl.conflicts) > 0:
-			conflicts = append(conflicts, pl)
+			conflicts = append(conflicts, landConflict{r: pl.r, head: pl.head, into: f.baseOf(pl.r), tip: pl.baseTip, files: pl.conflicts})
 		default:
 			plans = append(plans, pl)
 		}
 	}
 	if len(conflicts) > 0 {
-		f.sendBackConflicts(ctx, tk, conflicts)
+		f.sendBackConflicts(ctx, tk, "base", conflicts)
 		return
 	}
 	for _, pl := range plans {
@@ -644,7 +659,7 @@ func (f *factory) landOnCI(ctx context.Context, tk core.TicketView, r *repositor
 func viewIn(tk core.TicketView, r *repository) (v core.ChangedRepositoryView, ok bool) {
 	if len(tk.Repositories) == 0 && r.home {
 		return core.ChangedRepositoryView{Name: r.name, Branch: tk.Branch, Commit: tk.Commit, PushedCommit: tk.PushedCommit,
-			CIResult: tk.CIResult, CICommit: tk.CICommit, LandAnyway: tk.LandAnyway}, true
+			CIResult: tk.CIResult, CICommit: tk.CICommit, LandAnyway: tk.LandAnyway, PullRequest: tk.PullRequest}, true
 	}
 	i := slices.IndexFunc(tk.Repositories, func(v core.ChangedRepositoryView) bool { return v.Name == r.name })
 	if i < 0 {
@@ -779,6 +794,15 @@ func (f *factory) cantPushYet(ctx context.Context, tk core.TicketView, why strin
 	f.commentOnce(ctx, tk, "can't push yet", "The Factory can't push this Ticket's branch yet", why)
 }
 
+// cantPushIn is cantPushYet for a push in r, which the comment names
+// unless it is the Home Repository.
+func (f *factory) cantPushIn(ctx context.Context, tk core.TicketView, r *repository, why string) {
+	if !r.home {
+		why = fmt.Sprintf("in %s, %s", r.name, why)
+	}
+	f.cantPushYet(ctx, tk, why)
+}
+
 // commentOnce comments on tk that the Factory can't do something yet,
 // and why, unless that comment is already there, and prints a line.
 func (f *factory) commentOnce(ctx context.Context, tk core.TicketView, line, lead, why string) {
@@ -824,34 +848,43 @@ func (f *factory) sendBack(ctx context.Context, tk core.TicketView, head, into, 
 	f.printf("%s: conflicts with %s at %s in %s: sent back to Ready", tk.ID, into, short(tip), strings.Join(conflicts, ", "))
 }
 
+// landConflict is how merging a Ticket's work in r, head, into the
+// branch into at tip conflicts: in files.
+type landConflict struct {
+	r               *repository
+	head, into, tip string
+	files           []string
+}
+
 // sendBackConflicts is sendBack for a Ticket whose work conflicts with
-// the base in each of conflicts' Repositories: one note names each, with
-// its files (ADR 0049). The Factory has merged it into none of them this
-// time. With the Home Repository alone it is sendBack.
-func (f *factory) sendBackConflicts(ctx context.Context, tk core.TicketView, conflicts []mergePlan) {
+// its onto, its "base" or its "Spec Branch", in each of conflicts'
+// Repositories: one note names each, with its files (ADR 0049). The
+// Factory has merged it into none of them this time. With the Home
+// Repository alone it is sendBack.
+func (f *factory) sendBackConflicts(ctx context.Context, tk core.TicketView, onto string, conflicts []landConflict) {
 	if !f.several() {
-		pl := conflicts[0]
-		f.sendBack(ctx, tk, pl.head, f.baseOf(pl.r), pl.baseTip, pl.conflicts)
+		c := conflicts[0]
+		f.sendBack(ctx, tk, c.head, c.into, c.tip, c.files)
 		return
 	}
 	var b strings.Builder
 	var names []string
-	b.WriteString("The Factory couldn't land this: merging it into the base conflicts in these Repositories, so it merged it into none of them:\n\n")
-	for _, pl := range conflicts {
-		names = append(names, pl.r.name)
-		fmt.Fprintf(&b, "- %s: merging %s into %s at %s conflicts in these files:\n", pl.r.name, short(pl.head), f.baseOf(pl.r), short(pl.baseTip))
-		for _, c := range pl.conflicts {
-			fmt.Fprintf(&b, "  - %s\n", c)
+	fmt.Fprintf(&b, "The Factory couldn't land this: merging it into the %s conflicts in these Repositories, so it merged it into none of them:\n\n", onto)
+	for _, c := range conflicts {
+		names = append(names, c.r.name)
+		fmt.Fprintf(&b, "- %s: merging %s into %s at %s conflicts in these files:\n", c.r.name, short(c.head), c.into, short(c.tip))
+		for _, file := range c.files {
+			fmt.Fprintf(&b, "  - %s\n", file)
 		}
 	}
-	b.WriteString("\nIn each, merge its base into the branch, resolve the conflicts, and finish again.")
+	fmt.Fprintf(&b, "\nIn each, merge its %s into the branch, resolve the conflicts, and finish again.", onto)
 	if _, err := f.client.SendBack(ctx, f.project, core.SendBackInput{Ticket: core.Ref(tk.ID), Note: b.String()}); err != nil {
 		if ctx.Err() == nil {
 			f.printf("%s: send_back: %v", tk.ID, err)
 		}
 		return
 	}
-	f.printf("%s: conflicts with the base in %s: sent back to Ready", tk.ID, strings.Join(names, ", "))
+	f.printf("%s: conflicts with the %s in %s: sent back to Ready", tk.ID, onto, strings.Join(names, ", "))
 }
 
 // advanceBase fast-forwards r's base from old to merge. It returns why it

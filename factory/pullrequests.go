@@ -24,6 +24,15 @@ func changedElsewhere(home string, tk core.TicketView) bool {
 	return slices.ContainsFunc(tk.Repositories, func(r core.ChangedRepositoryView) bool { return r.Name != home })
 }
 
+// pullRequestMerged reports whether a pull request of tk's has merged, in
+// any of its Changed Repositories.
+func pullRequestMerged(tk core.TicketView) bool {
+	return hasMerged(tk.PullRequest) || slices.ContainsFunc(tk.Repositories, func(v core.ChangedRepositoryView) bool { return hasMerged(v.PullRequest) })
+}
+
+// hasMerged reports whether pr is a pull request that has merged.
+func hasMerged(pr *core.PullRequestView) bool { return pr != nil && pr.State == store.PRMerged }
+
 // repositoryNamed is the Repository name with a clone, or nil.
 func (f *factory) repositoryNamed(name string) *repository {
 	for _, r := range f.readyRepositories() {
@@ -45,9 +54,12 @@ func (f *factory) baseHolds(r *repository, remote, commit string) bool {
 // work spans Repositories, in landing order: each Changed Repository not
 // yet landed lands at its pull request's merge commit once its base
 // holds it, or at once with nothing to merge; the rest have their branch
-// pushed there for the Watcher to open a pull request on.
+// pushed there for the Watcher to open a pull request on. A Ticket still
+// waiting on its Spec Branch has that pushed instead, by pushSpecs, so
+// only its merged pull requests are seen to here.
 func (f *factory) landPullRequests(ctx context.Context, tk core.TicketView, p core.ProjectView) {
 	remote := p.Landing.Remote
+	onSpec := f.waitsOnSpecBranch(tk)
 	for _, rec := range tk.Repositories {
 		if rec.Landed != nil {
 			continue
@@ -62,7 +74,7 @@ func (f *factory) landPullRequests(ctx context.Context, tk core.TicketView, p co
 			continue
 		}
 		branch := rec.Branch
-		if branch == "" {
+		if branch == "" || onSpec {
 			continue
 		}
 		head, err := r.git.commit(rec.Commit)

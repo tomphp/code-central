@@ -1093,6 +1093,9 @@ export interface CIRunView {
 // into and when Code Central heard of it; Counts is false for a merge no
 // later than the Ticket's last move back to Ready.
 export interface SpecMergeView {
+  // Repository is the Repository Name of the Spec Branch, left out for
+  // the Home Repository.
+  repository?: string;
   commit: string;
   merged: string;
   counts: boolean;
