@@ -119,6 +119,36 @@ func TestASpecLandedTicketPushedInSomeOfItsRepositoriesStillWaitsForItsSpec(t *t
 	}
 }
 
+func TestASpecLandedTicketWaitsForItsSpecOnlyInRepositoriesWhereLandPerSpecIsInForce(t *testing.T) {
+	f := landWorld(t, true)
+	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
+	// Under Branch in api Land per Spec has no effect: a Ticket lands
+	// there once the human merges it (Spec code-central-890).
+	f.editLanding(t, "api", core.RepositoryLandingBranch)
+	f.changes(t, 5, "api")
+	f.moveTo(t, 5, store.Accepted)
+	f.changes(t, 6, "acme", "api")
+	f.moveTo(t, 6, store.Accepted)
+
+	if tk := f.getTicket(t, "acme-5"); !tk.SpecLanded || tk.WaitingForSpec {
+		t.Fatalf("acme-5 Spec-landed %v, waiting for its Spec %v; want it Spec-landed, as Land per Spec is in force in the Home, but not waiting: it changed api alone", tk.SpecLanded, tk.WaitingForSpec)
+	}
+	if !f.getTicket(t, "acme-6").WaitingForSpec {
+		t.Fatal("acme-6 isn't waiting for its Spec, though it is to land with it in the Home")
+	}
+	f.specMerge(t, "acme-6", "abc123")
+	if s := f.landStatus(t); !s.Ready || len(s.Waiting) != 1 || s.Waiting[0] != "acme-6" {
+		t.Fatalf("Land per Spec %+v, want the Spec ready with acme-6 alone waiting", s)
+	}
+
+	if _, err := f.core.Land(ctx, "acme", core.LandInput{Ticket: "acme-6", Commit: "abc123", Repository: "acme"}); err != nil {
+		t.Fatal(err)
+	}
+	if tk := f.getTicket(t, "acme-6"); !tk.PartlyLanded || tk.WaitingForSpec {
+		t.Fatalf("acme-6 partly landed %v, waiting for its Spec %v; want it landed in the Home, waiting for the human's merge in api alone", tk.PartlyLanded, tk.WaitingForSpec)
+	}
+}
+
 func TestReportSpecMergeRecordsTheRepositoryItNames(t *testing.T) {
 	f := landWorld(t, true)
 	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})

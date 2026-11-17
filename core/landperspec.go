@@ -45,22 +45,25 @@ func specMergeCounts(t store.Ticket) bool {
 // CI Tracking, it has a pushed commit and waits on CI instead. With
 // several Changed Repositories it waits while one it hasn't landed in has
 // nothing pushed for it, as when the Spec's merge there is still to make
-// (Spec code-central-848).
+// (Spec code-central-848). It waits only on its Changed Repositories
+// where Land per Spec is in force: under Branch it lands once the human
+// merges it (Spec code-central-890).
 func waitingForSpec(r store.Reader, p store.Project, t store.Ticket) bool {
 	if t.State != store.Accepted || !specLanded(r, p, t) {
 		return false
 	}
-	if ticketLandingPolicies(p, t).Any(LandingPolicy.LandsByPullRequest) {
+	ps := ticketLandingPolicies(p, t)
+	if ps.Any(LandingPolicy.LandsByPullRequest) {
 		// The Spec Branch is pushed and waits on its pull request.
 		return true
 	}
 	rs := changedRepositories(p.Key, t)
 	if len(rs) < 2 {
-		return len(t.PushedCommits) == 0 || !latestPushed(t).Pushed.After(backToReady(t))
+		return ps.LandPerSpecInForce() && (len(t.PushedCommits) == 0 || !latestPushed(t).Pushed.After(backToReady(t)))
 	}
 	return slices.ContainsFunc(rs, func(cr store.ChangedRepository) bool {
 		pc, ok := latestPushedTo(p.Key, t, cr.Name)
-		return cr.Landed == nil && (!ok || !pc.Pushed.After(backToReady(t)))
+		return cr.Landed == nil && ps.In(cr.Name).LandPerSpecInForce() && (!ok || !pc.Pushed.After(backToReady(t)))
 	})
 }
 

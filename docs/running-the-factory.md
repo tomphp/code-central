@@ -654,6 +654,15 @@ acme-shop-18: landed on main at 6e7f8a9b0c1d in Repository api
 acme-shop-19: spec/acme-shop-19 conflicts with the base in acme-shop, api: opened acme-shop-22 to merge the base into it
 ```
 
+**Mixed Landings.** Each Repository lands by its own Landing, its Own Landing or else the Default Landing, so one Ticket's Changed Repositories can land by different routes. Under Merge the Factory merges the Ticket there, and pushes the base with Push on. Under Branch it waits for you to merge it there. Under Pull Request it pushes the Ticket's branch there for its pull request, and lands it there once that is merged; a Repository under Merge or Branch never gets a pull request. Every Repository is checked before the Ticket lands in any, so a conflict where the Factory merges sends the Ticket back before anything is pushed for a pull request elsewhere, and the Ticket is Partly landed until it has landed in each. With Land per Spec on, a Spec lands in each Repository by that Repository's Landing: its Spec Branch is merged where it is Merge, and pushed for the Spec's pull request where it is Pull Request. Under Branch, Land per Spec has no effect there: a Ticket lands there once you merge it, and one that changed only Repositories under Branch doesn't hold its Spec back. Changing a Repository's Own Landing while work is in flight applies from the next landing step in that Repository alone, and what has landed stays. Here the Home lands by Merge and api by Pull Request:
+
+```text
+acme-shop-20: landed on main at 1f2e3d4c5b6a
+acme-shop-20: pushed acme-shop-20 to origin in Repository api
+acme-shop-20: pull request 12 merged in Repository api
+acme-shop-20: landed on main in Repository api at 7a8b9c0d1e2f
+```
+
 When a base is found for the first time in a run, or changes, the Factory checks that `.mcp.json` is committed on it. At start it refuses to start without the file. Mid-run it cuts no new branches or worktrees, and prints the same message once, until the file is committed; landing carries on.
 
 With **Land per Spec** on, the Spec's accepted Tickets gather on the Spec Branch as under Merge. Once the Spec is ready, the Factory checks the Spec Branch against the fast-forwarded base (a conflict opens the usual Ticket on the Spec), pushes `spec/<spec id>`, and reports that commit for every waiting Ticket: one pull request opens for the Spec, with a section for each Ticket, and each later merge into the Spec Branch is pushed to update it. When it is merged, every waiting Ticket lands at its merge commit and the Spec Branch is deleted:
