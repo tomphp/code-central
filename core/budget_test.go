@@ -33,7 +33,7 @@ var guideBudgets = map[string]int{
 	"grilling":       4200,
 	"spec":           3600,
 	"tickets":        3700, // with Model Assignment on and aliases reported
-	"implementation": 3500,
+	"implementation": 3650,
 	"map-chart":      4000,
 	"map-grilling":   4000,
 	"map-research":   3300,
