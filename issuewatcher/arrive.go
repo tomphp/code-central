@@ -16,7 +16,7 @@ import (
 )
 
 // Integration is the name every Link the Issue Watcher makes carries.
-const Integration = "github"
+const Integration = core.IntegrationGitHub
 
 // LinkID is the Link ID of repository's issue n: owner/repo#n, so it
 // stays unique if the configured repository changes.
@@ -47,7 +47,7 @@ type ghLabel struct {
 
 // openIssues lists repository's open issues through prog, gh, oldest
 // first, leaving out pull requests and, if label isn't empty, issues
-// without it. GitHub rate-limiting a call is a *watchers.RateLimitError.
+// without it. GitHub rate-limiting a call is a *ratelimit.Error.
 func openIssues(ctx context.Context, env gh.Env, prog, repository, label string) ([]ghIssue, error) {
 	var out []ghIssue
 	for page := 1; ; page++ {

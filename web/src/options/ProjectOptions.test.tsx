@@ -1018,6 +1018,7 @@ describe("Project Options", () => {
       "Default Landing",
       "CI",
       "GitHub Issues",
+      "Azure Boards",
       "Models",
       "Stage Guides",
       "Auto-accept",

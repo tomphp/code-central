@@ -10,12 +10,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/tomoram/code-central/watchers"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ratelimit"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -27,7 +27,7 @@ import (
 // remembered, and only reported again. A run finishing in the same
 // second as the latest one tracked against its rule, but on a later
 // poll, is missed. A rate limit stops it calling the CI Provider: it
-// returns the *watchers.RateLimitError, and the runs it didn't get to fire on the
+// returns the *ratelimit.Error, and the runs it didn't get to fire on the
 // next poll. The rules are the Project's, and fire on runs in every
 // watched Repository: p is the Repository repo's CI Provider, "" for the
 // Home Repository.
@@ -55,7 +55,7 @@ func (w *watcher) fireRules(ctx context.Context, p Provider, watch core.CIWatch,
 			}
 		}
 		runs, err := p.CompletedRunsOnBranch(ctx, branch, since)
-		var limit *watchers.RateLimitError
+		var limit *ratelimit.Error
 		if errors.As(err, &limit) {
 			return limit
 		}
@@ -111,11 +111,11 @@ func matchRule(rules []core.CIWatchRule, run Run, ignored []string) (core.CIWatc
 // fire opens a fix Ticket for run on rule's Spec, or comments on the
 // rule's unfinished one, then reports run tracked against rule. The CI
 // Provider rate-limiting it is the only error it returns, a
-// *watchers.RateLimitError; it logs the others.
+// *ratelimit.Error; it logs the others.
 func (w *watcher) fire(ctx context.Context, p Provider, watch core.CIWatch, rule core.CIWatchRule, run Run) error {
 	key := runKey{run.Repository, run.ID, run.Attempt}
 	jobs, err := p.Jobs(ctx, run.ID, run.Attempt)
-	var limit *watchers.RateLimitError
+	var limit *ratelimit.Error
 	if errors.As(err, &limit) {
 		return limit
 	}

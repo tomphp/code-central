@@ -7,6 +7,7 @@ import type { Api } from "../api/api";
 import type { NeedsMeRow, TicketView } from "../api/types";
 import { duration, shortCommit, ticketOf } from "../format";
 import { FocusBadge } from "./FocusBadge";
+import { ShortId } from "../inbox/ShortId";
 import { WithApi, type InboxData } from "../live";
 import { Markdown } from "../Markdown";
 import { panelFor } from "../panels/ActionPanel";
@@ -90,7 +91,7 @@ export function FocusItemView({
       </p>
       {row.id ? (
         <p className="focus-ticket">
-          <span className="tid">{row.id}</span>
+          <ShortId id={row.id} />
         </p>
       ) : (
         row.ci_item && (
@@ -99,7 +100,7 @@ export function FocusItemView({
             {row.ci_item.tickets.map((t, i) => (
               <span key={t.id}>
                 {i > 0 && " "}
-                <span className="tid">{t.id}</span>
+                <ShortId id={t.id} />
               </span>
             ))}
           </p>

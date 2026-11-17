@@ -5,6 +5,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { OneProject } from "../inbox/ShortId";
 import { CIRunEntry, runKey, type CIRunCardProps } from "./CIRunEntry";
 import { NOW, finished, running } from "./ciFixtures";
 
@@ -113,6 +114,37 @@ describe("CIRunEntry's card", () => {
     await userEvent.click(within(entry).getAllByRole("link")[0]);
     expect(navigate).toHaveBeenCalledWith({ view: "inbox", ticket: "acme-1" });
     expect(within(entry).getByRole("link", { name: "View on Azure DevOps" })).toHaveAttribute("href", "https://example.com/run");
+  });
+});
+
+describe("CIRunEntry's Short IDs", () => {
+  it("shows the card's Ticket as a Short ID under OneProject, and a click copies without following the link", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const navigate = vi.fn();
+    render(
+      <OneProject.Provider value>
+        <ul>
+          <CIRunEntry layout="card" run={{ ...running("acme", 1), ticket: "acme-1" }} now={NOW} to={{ view: "inbox", ticket: "acme-1" }} navigate={navigate} />
+        </ul>
+      </OneProject.Provider>,
+    );
+    await userEvent.click(screen.getByText("#1"));
+    expect(writeText).toHaveBeenCalledWith("acme-1");
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("keeps the row's Ticket in full even under OneProject", () => {
+    render(
+      <OneProject.Provider value>
+        <table>
+          <tbody>
+            <CIRunEntry layout="row" run={finished("acme", 1, { ticket: "acme-1" })} now={NOW} navigate={() => {}} />
+          </tbody>
+        </table>
+      </OneProject.Provider>,
+    );
+    expect(screen.getByText("acme-1")).toBeInTheDocument();
   });
 });
 

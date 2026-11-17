@@ -1,6 +1,6 @@
 /* The In Review panel (ticket 36). */
 .review-heading { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
-.review-panel h3 { font-size: 14px; color: var(--r-review); margin: 0; }
+.review-panel h3 { font-size: 14px; color: color-mix(in srgb, var(--r-review) 55%, var(--text)); margin: 0; }
 .review-panel .summary { background: var(--surface-2); border-radius: 6px; padding: 8px 10px; }
 .review-panel .reject-comment { display: grid; gap: 4px; margin-top: 12px; }
 .review-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }

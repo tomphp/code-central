@@ -111,7 +111,7 @@ describe("All clear", () => {
     await renderApp(w, "/?view=focus");
     const clear = within(focus()).getByRole("region", { name: "All clear" });
     expect(clear).toHaveTextContent(/^All clearNothing needs you\.$/);
-    expect(within(focus()).getAllByRole("button").map((b) => b.textContent)).toEqual(["+ New", "▾", "Exit"]);
+    expect(within(focus()).getAllByRole("button").map((b) => b.textContent || b.getAttribute("aria-label"))).toEqual(["+ New", "More to create", "Exit"]);
     expect(within(focus()).queryAllByRole("link")).toEqual([]);
   });
 

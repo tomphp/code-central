@@ -9,18 +9,18 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/ciwatcher"
-	"github.com/tomoram/code-central/ciwatcher/ciwatchertest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/watchers/watchertest"
 )
 
-func TestMain(m *testing.M) { ciwatchertest.Main(m) }
+func TestMain(m *testing.M) { watchertest.Main(m) }
 
 // check runs the check mode for acme/web with the gh path Option ghPath,
 // gh on path, and install places, the folders gh is otherwise looked for in.
-func check(h *ciwatchertest.Harness, ghPath string, path []string, places ...string) core.WatcherCheckResult {
+func check(h *watchertest.Harness, ghPath string, path []string, places ...string) core.WatcherCheckResult {
 	if places == nil {
 		places = []string{}
 	}
@@ -29,7 +29,7 @@ func check(h *ciwatchertest.Harness, ghPath string, path []string, places ...str
 }
 
 // ran is the programs the fake gh ran as, one per call.
-func ran(h *ciwatchertest.Harness) []string {
+func ran(h *watchertest.Harness) []string {
 	var out []string
 	for _, c := range h.Calls() {
 		out = append(out, c.Program)
@@ -38,7 +38,7 @@ func ran(h *ciwatchertest.Harness) []string {
 }
 
 func TestTheCheckAsksGHForItsLoginThenTheRepository(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	if r := check(h, "", []string{h.Bin}); !reflect.DeepEqual(r, core.WatcherCheckResult{}) {
 		t.Fatalf("check = %+v, want no problem", r)
 	}
@@ -53,7 +53,7 @@ func TestTheCheckAsksGHForItsLoginThenTheRepository(t *testing.T) {
 }
 
 func TestALoggedOutGHFailsTheCheckWithGHAuthLogin(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	h.LoggedOut()
 	r := check(h, "", []string{h.Bin})
 	if r.Problem != core.ProblemLoggedOut || !strings.Contains(r.Reason, "You are not logged into any GitHub hosts") || !strings.Contains(r.Fix, "gh auth login") {
@@ -65,7 +65,7 @@ func TestALoggedOutGHFailsTheCheckWithGHAuthLogin(t *testing.T) {
 }
 
 func TestAnUnreadableRepositoryFailsTheCheckNamingIt(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	h.Unreadable("acme/web")
 	r := check(h, "", []string{h.Bin})
 	if r.Problem != core.ProblemRepositoryUnreadable || !strings.Contains(r.Reason, "acme/web") || !strings.Contains(r.Reason, "Not Found (HTTP 404)") ||
@@ -75,7 +75,7 @@ func TestAnUnreadableRepositoryFailsTheCheckNamingIt(t *testing.T) {
 }
 
 func TestGHMissingEverywhereFailsTheCheckWithItsInstall(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	place := t.TempDir()
 	r := check(h, "", []string{t.TempDir()}, place)
 	if r.Problem != core.ProblemGHMissing || !strings.Contains(r.Reason, "PATH") || !strings.Contains(r.Reason, place) || !strings.Contains(r.Fix, "https://cli.github.com") ||
@@ -88,7 +88,7 @@ func TestGHMissingEverywhereFailsTheCheckWithItsInstall(t *testing.T) {
 }
 
 func TestGHIsFoundOnPATHBeforeTheInstallPlaces(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	place := h.GH(filepath.Join(t.TempDir(), "homebrew"))
 	empty := t.TempDir()
 	check(h, "", []string{empty, h.Bin}, filepath.Dir(place))
@@ -98,7 +98,7 @@ func TestGHIsFoundOnPATHBeforeTheInstallPlaces(t *testing.T) {
 }
 
 func TestGHIsFoundInTheInstallPlacesWhenNotOnPATH(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	second := h.GH(filepath.Join(t.TempDir(), "linuxbrew"))
 	if r := check(h, "", []string{t.TempDir()}, t.TempDir(), filepath.Dir(second)); r.Problem != "" {
 		t.Fatalf("check = %+v, want gh found in an install place", r)
@@ -109,7 +109,7 @@ func TestGHIsFoundInTheInstallPlacesWhenNotOnPATH(t *testing.T) {
 }
 
 func TestTheGHPathOptionComesFirst(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	chosen := h.GH(filepath.Join(t.TempDir(), "tools"))
 	for _, option := range []string{chosen, filepath.Dir(chosen)} {
 		t.Run(option, func(t *testing.T) {
@@ -125,7 +125,7 @@ func TestTheGHPathOptionComesFirst(t *testing.T) {
 }
 
 func TestAGHPathOptionWithNoGHFailsTheCheckWithoutLookingElsewhere(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	option := filepath.Join(t.TempDir(), "gh")
 	r := check(h, option, []string{h.Bin})
 	if r.Problem != core.ProblemGHMissing || !strings.Contains(r.Reason, option) || !strings.Contains(r.Fix, "gh path Option") {
@@ -154,7 +154,7 @@ func TestTheDefaultInstallPlaces(t *testing.T) {
 }
 
 func TestGHThatDoesntRunFailsTheCheck(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	h.Answer(fakegh.Answer{Args: []string{"auth"}, Exit: 0})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -168,7 +168,7 @@ func TestGHThatDoesntRunFailsTheCheck(t *testing.T) {
 // A rate-limited check can't tell whether the repository can be read, so
 // it fails, saying to try again.
 func TestARateLimitedCheckFailsSayingToTryAgain(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	h.Answer(fakegh.Answer{Args: []string{"api", "repos/acme/web"}, Exit: 1,
 		Stdout: "HTTP/2.0 429 Too Many Requests\r\nRetry-After: 60\r\n\r\n{\"message\":\"You have exceeded a secondary rate limit.\"}",
 		Stderr: "gh: You have exceeded a secondary rate limit. (HTTP 429)\n"})

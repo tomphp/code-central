@@ -9,14 +9,14 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// Format 49 (code-central-899) let a Repository, the Home included, hold
-// an Own Landing and a Push remote. The real chain migrates a format-48
+// Format 50 (code-central-899) let a Repository, the Home included, hold
+// an Own Landing and a Push remote. The real chain migrates a format-49
 // store copying every file unchanged: each Repository then follows the
 // Default Landing with the Project's Push remote, and an Own Landing and
 // a Push remote read back as written.
-func TestTheRealChainMigratesAFormat48StoreToTheOwnLandingFormat(t *testing.T) {
+func TestTheRealChainMigratesAFormat49StoreToTheOwnLandingFormat(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
-	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 48\n")
+	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 49\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),
 		"key: acme\ndisplay_name: Acme\ncreated: 2026-01-02T03:04:05Z\nmode: committed\n"+
 			"landing:\n  method: merge\n  push: true\n  remote: origin\nrepositories:\n"+
@@ -24,8 +24,8 @@ func TestTheRealChainMigratesAFormat48StoreToTheOwnLandingFormat(t *testing.T) {
 	before := snapshot(t, dir)
 
 	s := openFile(t, dir)
-	if m := s.Migrated(); m == nil || m.From != 48 || m.To != store.Format {
-		t.Fatalf("migrated = %+v, want a migration from format 48", m)
+	if m := s.Migrated(); m == nil || m.From != 49 || m.To != store.Format {
+		t.Fatalf("migrated = %+v, want a migration from format 49", m)
 	}
 	after := snapshot(t, dir)
 	for rel, content := range before {

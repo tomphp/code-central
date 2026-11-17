@@ -14,8 +14,8 @@ import (
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/frontdoor"
 	"github.com/tomoram/code-central/ids"
+	"github.com/tomoram/code-central/server"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/usage"
 	"github.com/tomoram/code-central/web"
@@ -51,6 +51,7 @@ type options struct {
 	start            time.Time
 	ciCheck          core.CICheck
 	issuesCheck      core.IssuesCheck
+	azureBoardsCheck core.AzureBoardsCheck
 	pullRequestCheck core.PullRequestCheck
 }
 
@@ -90,6 +91,13 @@ func WithIssuesCheck(check core.IssuesCheck) Option {
 	return func(o *options) { o.issuesCheck = check }
 }
 
+// WithAzureBoardsCheck makes check the server's Azure Boards check, run
+// when Azure Boards is turned on or what it runs changes while on;
+// without it, nothing is checked.
+func WithAzureBoardsCheck(check core.AzureBoardsCheck) Option {
+	return func(o *options) { o.azureBoardsCheck = check }
+}
+
 // NewServer starts a test service, stopped when t ends.
 func NewServer(t testing.TB, opts ...Option) *Server {
 	t.Helper()
@@ -106,8 +114,9 @@ func NewServer(t testing.TB, opts ...Option) *Server {
 	c.SetUsage(usage.New(o.usageDir, clk, o.location, o.log))
 	c.SetCICheck(o.ciCheck)
 	c.SetIssuesCheck(o.issuesCheck)
+	c.SetAzureBoardsCheck(o.azureBoardsCheck)
 	c.SetPullRequestCheck(o.pullRequestCheck)
-	hs := httptest.NewUnstartedServer(frontdoor.Versioned(frontdoor.Handler(c, web.Handler(), o.log), o.version))
+	hs := httptest.NewUnstartedServer(server.Versioned(server.Handler(c, web.Handler(), o.log), o.version))
 	// Before serving, so a comment written to an issue links back here.
 	c.SetUIURL("http://" + hs.Listener.Addr().String())
 	hs.Start()

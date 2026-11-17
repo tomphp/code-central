@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/ciwatcher/ciwatchertest"
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
@@ -18,6 +17,7 @@ import (
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/issuewatcher"
 	"github.com/tomoram/code-central/watchers"
+	"github.com/tomoram/code-central/watchers/watchertest"
 )
 
 var human = core.WithActor(context.Background(), core.Human)
@@ -28,7 +28,7 @@ var human = core.WithActor(context.Background(), core.Human)
 // ends or its stdin closes.
 type watching struct {
 	t   *testing.T
-	h   *ciwatchertest.Harness
+	h   *watchertest.Harness
 	srv *codecentraltest.Server
 	// stdin is the Issue Watcher's stdin; closing it stops the loop.
 	stdin *io.PipeWriter
@@ -44,7 +44,7 @@ func newWatching(t *testing.T) *watching {
 	if _, err := srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}}); err != nil {
 		t.Fatal(err)
 	}
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	repository(h, true, triage)
 	return &watching{t: t, h: h, srv: srv}
 }
@@ -130,21 +130,21 @@ func TestTheIssueWatcherReportsWatchingWhenItCanTriageTheRepositorysIssues(t *te
 func TestEachErrorIsReportedWithItsFixUntilItIsFixed(t *testing.T) {
 	for _, c := range []struct {
 		name        string
-		cause, fix  func(h *ciwatchertest.Harness)
+		cause, fix  func(h *watchertest.Harness)
 		problem     core.WatcherProblem
 		message, to string
 	}{
-		{"logged out", func(h *ciwatchertest.Harness) { h.LoggedOut() }, func(h *ciwatchertest.Harness) { h.Answer(fakegh.Answer{Args: []string{"auth", "status"}}) },
+		{"logged out", func(h *watchertest.Harness) { h.LoggedOut() }, func(h *watchertest.Harness) { h.Answer(fakegh.Answer{Args: []string{"auth", "status"}}) },
 			core.ProblemLoggedOut, "not logged into", "gh auth login"},
-		{"unreadable", func(h *ciwatchertest.Harness) { h.Unreadable("acme/web") }, func(h *ciwatchertest.Harness) { repository(h, true, triage) },
+		{"unreadable", func(h *watchertest.Harness) { h.Unreadable("acme/web") }, func(h *watchertest.Harness) { repository(h, true, triage) },
 			core.ProblemRepositoryUnreadable, "can't read the repository acme/web", "owner/name"},
-		{"issues disabled", func(h *ciwatchertest.Harness) { repository(h, false, write) }, func(h *ciwatchertest.Harness) { repository(h, true, write) },
+		{"issues disabled", func(h *watchertest.Harness) { repository(h, false, write) }, func(h *watchertest.Harness) { repository(h, true, write) },
 			core.ProblemIssuesDisabled, "acme/web has its issues turned off", "Features"},
-		{"below triage", func(h *ciwatchertest.Harness) { repository(h, true, read) }, func(h *ciwatchertest.Harness) { repository(h, true, triage) },
+		{"below triage", func(h *watchertest.Harness) { repository(h, true, read) }, func(h *watchertest.Harness) { repository(h, true, triage) },
 			core.ProblemNoTriage, "can't triage the issues of acme/web", "triage permission"},
-		{"unreadable answer", func(h *ciwatchertest.Harness) {
+		{"unreadable answer", func(h *watchertest.Harness) {
 			h.Answer(fakegh.Answer{Args: []string{"api", "repos/acme/web"}, Stdout: "not json"})
-		}, func(h *ciwatchertest.Harness) { repository(h, true, triage) }, core.ProblemCheckFailed, "acme/web", "gh works"},
+		}, func(h *watchertest.Harness) { repository(h, true, triage) }, core.ProblemCheckFailed, "acme/web", "gh works"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWatching(t)

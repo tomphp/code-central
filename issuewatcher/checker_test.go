@@ -9,21 +9,21 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/ciwatcher/ciwatchertest"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/issuewatcher"
+	"github.com/tomoram/code-central/watchers/watchertest"
 )
 
-func TestMain(m *testing.M) { ciwatchertest.Main(m) }
+func TestMain(m *testing.M) { watchertest.Main(m) }
 
 var ctx = context.Background()
 
 // serviceWith is a real Code Central with a Project acme whose Issues
 // check runs the test binary as code-central, as the service runs its
 // own executable, with gh found on path. Its client is the human's.
-func serviceWith(t *testing.T, h *ciwatchertest.Harness, path ...string) *codecentraltest.Server {
+func serviceWith(t *testing.T, h *watchertest.Harness, path ...string) *codecentraltest.Server {
 	t.Helper()
 	return serviceRunning(t, h.CodeCentral, h.Environ(path...))
 }
@@ -42,7 +42,7 @@ func serviceRunning(t *testing.T, program string, environ []string) *codecentral
 
 // repository makes gh read acme/web as GitHub answers for a repository
 // with issues on or off, on which gh's login has permissions.
-func repository(h *ciwatchertest.Harness, issues bool, permissions string) {
+func repository(h *watchertest.Harness, issues bool, permissions string) {
 	h.Answer(fakegh.Answer{Args: []string{"api", "repos/acme/web"},
 		Stdout: `{"full_name":"acme/web","has_issues":` + strconv.FormatBool(issues) + `,"permissions":` + permissions + `}`})
 }
@@ -81,7 +81,7 @@ func settings(t *testing.T, srv *codecentraltest.Server) core.GitHubIssuesView {
 func TestGitHubIssuesTurnsOnWhenTheCheckPasses(t *testing.T) {
 	for name, permissions := range map[string]string{"triage": triage, "write": write} {
 		t.Run(name, func(t *testing.T) {
-			h := ciwatchertest.New(t)
+			h := watchertest.New(t)
 			repository(h, true, permissions)
 			srv := serviceWith(t, h, h.Bin)
 			if err := turnOn(srv); err != nil {
@@ -113,27 +113,27 @@ func TestEachFailedCheckRefusesGitHubIssuesWithItsFix(t *testing.T) {
 	noGH := filepath.Join(t.TempDir(), "gh")
 	for _, c := range []struct {
 		name        string
-		setup       func(h *ciwatchertest.Harness, srv *codecentraltest.Server)
+		setup       func(h *watchertest.Harness, srv *codecentraltest.Server)
 		problem     core.WatcherProblem
 		reason, fix string
 	}{
-		{"gh missing", func(_ *ciwatchertest.Harness, srv *codecentraltest.Server) {
+		{"gh missing", func(_ *watchertest.Harness, srv *codecentraltest.Server) {
 			if _, err := srv.Client.SetOptions(ctx, core.SetOptionsInput{GHPath: &noGH}); err != nil {
 				t.Fatal(err)
 			}
 		}, core.ProblemGHMissing, "gh isn't there", "gh path Option"},
-		{"logged out", func(h *ciwatchertest.Harness, _ *codecentraltest.Server) { h.LoggedOut() }, core.ProblemLoggedOut, "isn't logged in", "gh auth login"},
-		{"no read access", func(h *ciwatchertest.Harness, _ *codecentraltest.Server) { h.Unreadable("acme/web") }, core.ProblemRepositoryUnreadable,
+		{"logged out", func(h *watchertest.Harness, _ *codecentraltest.Server) { h.LoggedOut() }, core.ProblemLoggedOut, "isn't logged in", "gh auth login"},
+		{"no read access", func(h *watchertest.Harness, _ *codecentraltest.Server) { h.Unreadable("acme/web") }, core.ProblemRepositoryUnreadable,
 			"can't read the repository acme/web", "owner/name"},
-		{"issues disabled", func(h *ciwatchertest.Harness, _ *codecentraltest.Server) { repository(h, false, write) }, core.ProblemIssuesDisabled,
+		{"issues disabled", func(h *watchertest.Harness, _ *codecentraltest.Server) { repository(h, false, write) }, core.ProblemIssuesDisabled,
 			"acme/web has its issues turned off", "Features"},
-		{"below triage", func(h *ciwatchertest.Harness, _ *codecentraltest.Server) { repository(h, true, read) }, core.ProblemNoTriage,
+		{"below triage", func(h *watchertest.Harness, _ *codecentraltest.Server) { repository(h, true, read) }, core.ProblemNoTriage,
 			"can't triage the issues of acme/web", "triage permission"},
-		{"no permissions", func(h *ciwatchertest.Harness, _ *codecentraltest.Server) { repository(h, true, "null") }, core.ProblemNoTriage,
+		{"no permissions", func(h *watchertest.Harness, _ *codecentraltest.Server) { repository(h, true, "null") }, core.ProblemNoTriage,
 			"can't triage the issues of acme/web", "triage permission"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			h := ciwatchertest.New(t)
+			h := watchertest.New(t)
 			repository(h, true, triage)
 			srv := serviceWith(t, h, h.Bin)
 			c.setup(h, srv)
@@ -149,7 +149,7 @@ func TestEachFailedCheckRefusesGitHubIssuesWithItsFix(t *testing.T) {
 }
 
 func TestAnAnswerTheCheckCantReadRefusesGitHubIssues(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	h.Answer(fakegh.Answer{Args: []string{"api", "repos/acme/web"}, Stdout: "not json"})
 	srv := serviceWith(t, h, h.Bin)
 	if e := refusal(t, turnOn(srv)); e.Field != "on" || !strings.Contains(e.Message, "acme/web") || e.Fix == "" {
@@ -158,7 +158,7 @@ func TestAnAnswerTheCheckCantReadRefusesGitHubIssues(t *testing.T) {
 }
 
 func TestACheckThatDoesntFinishRefusesGitHubIssues(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	srv := serviceRunning(t, filepath.Join(t.TempDir(), "missing"), h.Environ(h.Bin))
 	if e := refusal(t, turnOn(srv)); !strings.Contains(e.Message, "Issue Watcher's check didn't finish") || !strings.Contains(e.Fix, "GitHub Issues") {
 		t.Fatalf("refusal %+v, want the check that didn't finish, with a fix", e)
@@ -166,7 +166,7 @@ func TestACheckThatDoesntFinishRefusesGitHubIssues(t *testing.T) {
 }
 
 func TestARateLimitedCheckRefusesGitHubIssuesUntilItEnds(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	h.Answer(fakegh.Answer{Args: []string{"api", "repos/acme/web"}, Exit: 1,
 		Stdout: "HTTP/2.0 403 Forbidden\r\nX-Ratelimit-Remaining: 0\r\nX-Ratelimit-Reset: 4102444800\r\n\r\n{}", Stderr: "gh: API rate limit exceeded (HTTP 403)\n"})
 	srv := serviceWith(t, h, h.Bin)

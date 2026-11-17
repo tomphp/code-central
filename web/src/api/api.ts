@@ -37,7 +37,7 @@ import type {
   ChatMessage,
   ChatOutcome,
   Conversation,
-  UsageView, GitHubIssuesChange, ModelsChange, NeedsMeReason,
+  UsageView, GitHubIssuesChange, AzureBoardsChange, ModelsChange, NeedsMeReason,
   RepositoryAdd,
   RepositoryChange,
 } from "./types";
@@ -169,6 +169,13 @@ export interface Api {
   // Issues Spec, titled like "GitHub Issues: acme/web", which follows a
   // changed repository unless the human retitled it.
   setGitHubIssues(project: string, settings: GitHubIssuesChange): Promise<ProjectView>;
+  // setAzureBoards sets the Project's Azure Boards settings. Each mode's
+  // settings are trimmed, URLs tidied, and kept; turning it on needs the
+  // chosen mode's and a passing Azure Boards check, as does changing
+  // what it runs while on. The first turn-on creates the Azure Boards
+  // Spec, titled like "Azure Boards: contoso/web", which follows the
+  // chosen mode's project unless the human retitled it.
+  setAzureBoards(project: string, settings: AzureBoardsChange): Promise<ProjectView>;
   // setModels replaces the Project's Models rows whole: a kind left out
   // is set to Default, and so is the Chat row. A model is trimmed and
   // can't be blank or span lines; an effort must be one of the valid

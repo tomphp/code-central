@@ -92,8 +92,9 @@ var migrations = []MigrationStep{
 	{From: 45, Name: "add each Repository's CI entry and the Repository of CI Runs and CI responses"},
 	{From: 46, Name: "replace the GitHub Issues repository with a list of repositories", File: githubIssuesRepositoryBecomesAList},
 	{From: 47, Name: "let a Repository other than the Home leave out its Clone URL when it has a local path"},
-	{From: 48, Name: "add a Repository's Own Landing and Push remote"},
-	{From: 49, Name: "move the Home Repository's CI into its own CI entry, and add the report that its clone has no Push remote"},
+	{From: 48, Name: "add a Project's Azure Boards settings"},
+	{From: 49, Name: "add a Repository's Own Landing and Push remote"},
+	{From: 50, Name: "move the Home Repository's CI into its own CI entry, and add the report that its clone has no Push remote"},
 }
 
 // githubIssuesRepositoryBecomesAList is format 46 to 47 (Spec

@@ -66,7 +66,7 @@ const item = (name: string) => within(screen.getByRole("menu")).getByRole("menui
 const headerButtons = () =>
   within(newButton().closest("header")!)
     .getAllByRole("button")
-    .map((b) => b.textContent);
+    .map((b) => b.textContent || b.getAttribute("aria-label"));
 const skip = async (w: World) => {
   await userEvent.click(within(focus()).getByRole("button", { name: "Skip" }));
   await settle(w);
@@ -112,7 +112,7 @@ describe("+ New ▾ in Focus Mode's header", () => {
   it("sits after the Project and N left, just before Exit, which stays at the far end", async () => {
     await renderApp(await world(), "/?view=focus&project=acme");
     heading("Flaky build");
-    expect(headerButtons()).toEqual(["+ New", "▾", "Exit"]);
+    expect(headerButtons()).toEqual(["+ New", "More to create", "Exit"]);
     const plus = newButton();
     const before = (text: string) => (within(plus.closest("header")!).getByText(text).compareDocumentPosition(plus) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
     expect(before("acme")).toBe(true);
@@ -130,24 +130,24 @@ describe("+ New ▾ in Focus Mode's header", () => {
     const release = gateNeedsMe(w);
     await renderApp(w);
     expect(within(focus()).getByText("Loading…")).toBeInTheDocument();
-    expect(headerButtons()).toEqual(["+ New", "▾", "Exit"]);
+    expect(headerButtons()).toEqual(["+ New", "More to create", "Exit"]);
 
     release();
     await settle(w);
     heading("Flaky build");
-    expect(headerButtons()).toEqual(["+ New", "▾", "Exit"]);
+    expect(headerButtons()).toEqual(["+ New", "More to create", "Exit"]);
 
     await skip(w);
     heading("Login page");
     await skip(w);
     expect(within(focus()).getByText("You skipped 2, go through them again?")).toBeInTheDocument();
-    expect(headerButtons()).toEqual(["+ New", "▾", "Exit"]);
+    expect(headerButtons()).toEqual(["+ New", "More to create", "Exit"]);
   });
 
   it("shows on All clear", async () => {
     await renderApp(await world(false));
     within(focus()).getByRole("region", { name: "All clear" });
-    expect(headerButtons()).toEqual(["+ New", "▾", "Exit"]);
+    expect(headerButtons()).toEqual(["+ New", "More to create", "Exit"]);
   });
 
   it("shows on the Activity Dashboard", async () => {
@@ -155,7 +155,7 @@ describe("+ New ▾ in Focus Mode's header", () => {
     await w.api.setOptions({ focus_clear: "activity_dashboard" });
     await renderApp(w);
     expect(within(focus()).getByRole("region", { name: "Activity Dashboard" })).toBeInTheDocument();
-    expect(headerButtons()).toEqual(["+ New", "▾", "Exit"]);
+    expect(headerButtons()).toEqual(["+ New", "More to create", "Exit"]);
   });
 
   it("opens New requirement from + New, and New Map from the ▾ menu", async () => {

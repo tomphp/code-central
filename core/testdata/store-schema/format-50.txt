@@ -22,13 +22,12 @@ projects/<key>/project.yaml
       base: string (optional)
   ci: mapping (optional)
       tracking: bool
-      provider: string (optional)
+      provider: string
       repository: string (optional)
       project_url: string (optional)
       pat_env: string (optional)
       ignored_workflows: []string (optional)
       push_remote_url: string (optional)
-      no_push_remote: bool (optional)
       push_remote_base: string (optional)
       rules: list of mappings (optional)
           spec: int
@@ -47,6 +46,15 @@ projects/<key>/project.yaml
       on: bool
       repositories: []string (optional)
       label: string (optional)
+      new_issues_need_me: bool (optional)
+      spec: int (optional)
+  azure_boards: mapping (optional)
+      on: bool
+      mode: string (optional)
+      query_url: string (optional)
+      project_url: string (optional)
+      where: string (optional)
+      pat_env: string (optional)
       new_issues_need_me: bool (optional)
       spec: int (optional)
   models: mapping (optional)
@@ -255,6 +263,7 @@ values
   options limits_popup (default on): on, off
   project landing.method (no landing: merge, push false, remote origin): merge, branch, pull_request
   project ci.provider (no ci: tracking off, github_actions): github_actions, azure_pipelines
+  project azure_boards.mode (optional): saved_query, wiql
   project models.kinds[].kind: grilling, spec, tickets, map-chart, map-grilling, map-research, map-task, prototype, retro, implementation
   project focus_kinds_off[]: needs_answer, answered, silent_claim, long_claim, failed, in_review, ci_failed, ci_cancelled, base_diverged, base_missing, repository_missing, pull_request_closed, to_merge, ci_unavailable, accepted_not_landed, blocked_by_cancelled, new_issue, closed_externally
   ticket state, moves[].from, moves[].to: Draft, Ready, In Progress, Needs Answer, Answered, Failed, In Review, Accepted, Done, Cancelled

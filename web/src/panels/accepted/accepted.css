@@ -1,3 +1,4 @@
 /* The Accepted panel (ticket 71). */
-.accepted-panel h3 { font-size: 14px; color: var(--r-review); margin-bottom: 8px; }
+.accepted-panel h3 { font-size: 14px; color: color-mix(in srgb, var(--r-review) 55%, var(--text)); margin-bottom: 8px; }
 .accepted-panel .land-commit { display: grid; gap: 4px; }
+.accepted-panel .land-commit input { box-sizing: border-box; width: 100%; }

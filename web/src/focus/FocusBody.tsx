@@ -15,6 +15,7 @@ import { Count } from "../controls/Count";
 import { Empty, Loading } from "../controls/Empty";
 import { ProjectName } from "../controls/ProjectName";
 import { ViewHeader } from "../controls/ViewHeader";
+import { OneProject } from "../inbox/ShortId";
 import type { InboxData } from "../live";
 import { NewSplit } from "../requirement/NewSplit";
 import type { UiLocation } from "../url";
@@ -52,6 +53,7 @@ export function FocusBody({ now, data, session, dashboard, loc, project: scoped,
   const { item } = session;
 
   return (
+    <OneProject.Provider value={!!scope}>
     <main aria-label="Focus Mode" className="focus">
       <ViewHeader
         left={
@@ -117,5 +119,6 @@ export function FocusBody({ now, data, session, dashboard, loc, project: scoped,
         <Loading />
       )}
     </main>
+    </OneProject.Provider>
   );
 }

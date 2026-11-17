@@ -5,6 +5,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { STATES, type State } from "../api/types";
 import { Button } from "../controls/Button";
+import { Caret } from "../controls/Icon";
 import { stateSlug } from "../controls/StateChip";
 
 export interface ColumnsMenuProps {
@@ -46,7 +47,7 @@ export function ColumnsMenu({ hidden, onChange, needsMe, onNeedsMe }: ColumnsMen
     >
       <Button ref={button}  aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
         Columns
-        {hidden.length > 0 && <span className="muted"> · {STATES.length - hidden.length}/{STATES.length}</span>} ▾
+        {hidden.length > 0 && <span className="muted"> · {STATES.length - hidden.length}/{STATES.length}</span>} <Caret />
       </Button>
       <div id={id} role="group" aria-label="Columns" className="board-columns-menu" hidden={!open}>
         {STATES.flatMap((s) => [

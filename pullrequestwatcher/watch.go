@@ -17,6 +17,7 @@ import (
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
+	"github.com/tomoram/code-central/ratelimit"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/watchers"
 )
@@ -100,7 +101,7 @@ func Watch(ctx context.Context, cfg Config) error {
 // reports Watching; whether pushed work is still without a pull request, so
 // the loop polls sooner; and the rate limit, if it refused a call for it. A
 // poll that finds an error reports it itself.
-func (cfg Config) poll(ctx context.Context) (reachable, waiting bool, limit *watchers.RateLimitError) {
+func (cfg Config) poll(ctx context.Context) (reachable, waiting bool, limit *ratelimit.Error) {
 	watch, err := cfg.Client.GetPullRequestWatch(ctx, cfg.Project)
 	if err != nil {
 		if ctx.Err() == nil {
@@ -386,7 +387,7 @@ func (g github) open(ctx context.Context, branch, title, body string) (*pullRequ
 	out, msg, err := gh.API(ctx, g.env, g.prog, "repos/"+g.repository+"/pulls", "--method", "POST",
 		"-f", "title="+title, "-f", "body="+body, "-f", "head="+branch, "-f", "base="+g.base)
 	if err != nil {
-		var limit *watchers.RateLimitError
+		var limit *ratelimit.Error
 		if errors.As(err, &limit) {
 			return nil, err
 		}
@@ -409,7 +410,7 @@ func (g github) sameBody(listed, body string) bool { return listed == body }
 func (g github) patch(ctx context.Context, number int, what, field string) ([]byte, error) {
 	out, msg, err := gh.API(ctx, g.env, g.prog, fmt.Sprintf("repos/%s/pulls/%d", g.repository, number), "--method", "PATCH", "-f", field)
 	if err != nil {
-		var limit *watchers.RateLimitError
+		var limit *ratelimit.Error
 		if errors.As(err, &limit) {
 			return nil, err
 		}

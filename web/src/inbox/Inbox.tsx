@@ -202,6 +202,7 @@ export function Inbox({
           }}
           onFocusMode={() => navigate({ view: "focus" })}
         />
+        <h2>Projects</h2>
         {!sole && (
           <FilterButton
             on={!scope}
@@ -232,6 +233,7 @@ export function Inbox({
           <FilterButton
             key={s}
             sub
+            station={s}
             on={loc.state === s}
             label={s}
             count={tickets.filter((t) => t.state === s && !isStage(t)).length}
@@ -325,7 +327,7 @@ export function Inbox({
               <section
                 key={g.reason}
                 aria-label={REASON_LABEL[g.reason]}
-                className={`reason-${g.reason}`}
+                className={`line-group reason-${g.reason}`}
               >
                 <h3 className="group-head" data-reason={g.reason}>
                   {REASON_LABEL[g.reason]} <span>{g.tickets.length}</span>

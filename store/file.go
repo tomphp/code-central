@@ -258,6 +258,13 @@ func (s *FileStore) loadProject(key string) error {
 	if g := pf.GitHubIssues; g != nil {
 		p.GitHubIssues = GitHubIssues{On: g.On, Repositories: g.Repositories, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
 	}
+	if a := pf.AzureBoards; a != nil {
+		p.AzureBoards = AzureBoards{On: a.On, Mode: AzureBoardsMode(a.Mode), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
+			PATEnv: a.PATEnv, NewIssuesNeedMe: a.NewIssuesNeedMe, Spec: a.Spec}
+		if a.Mode != "" && !p.AzureBoards.Mode.Valid() {
+			return &LoadError{File: rel, Field: "azure_boards.mode", Msg: fmt.Sprintf("unknown Azure Boards mode %q (%s)", a.Mode, strings.Join(azureBoardsModeNames(), " or "))}
+		}
+	}
 	if m := pf.Models; m != nil {
 		var field string
 		if p.Models, field, err = decodeModels(*m); err != nil {
