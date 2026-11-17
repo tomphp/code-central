@@ -31,9 +31,9 @@ const scope = "Work Items: Read & write"
 // wiqlQuery is the whole WIQL query a WIQL filter's WHERE clause runs as.
 func wiqlQuery(where string) string { return "SELECT [System.Id] FROM workitems WHERE " + where }
 
-// queried is a query that ran: the client that ran it, the organization
+// queryRun is a query that ran: the client that ran it, the organization
 // its work items are in, as Link IDs carry it, and the IDs it matched.
-type queried struct {
+type queryRun struct {
 	c   *azdo.Client
 	org string
 	ids []int
@@ -41,25 +41,25 @@ type queried struct {
 
 // runQuery runs in's query with the PAT in its variable. A query that
 // can't run, or matches more than MaxWorkItems work items, is a problem
-// with its fix; Azure DevOps rate-limiting it is a
-// *watchers.RateLimitError, not a problem.
-func runQuery(ctx context.Context, env gh.Env, in core.AzureBoardsCheckInput) (queried, core.WatcherCheckResult, error) {
+// with its fix; Azure DevOps rate-limiting it is the error, a
+// *watchers.RateLimitError, and not a problem.
+func runQuery(ctx context.Context, env gh.Env, in core.AzureBoardsCheckInput) (queryRun, core.WatcherCheckResult, error) {
 	projectURL, id := in.ProjectURL, ""
 	if in.Mode != store.AzureBoardsWIQL {
 		var err error
 		if projectURL, id, err = azdo.SplitQueryURL(in.QueryURL); err != nil {
-			return queried{}, core.WatcherCheckResult{Problem: core.ProblemQueryUnusable, Reason: err.Error(),
+			return queryRun{}, core.WatcherCheckResult{Problem: core.ProblemQueryUnusable, Reason: err.Error(),
 				Fix: "Paste the saved query's URL from the browser, with the query open, in the Azure Boards settings."}, nil
 		}
 	}
 	c, err := azdo.New(env.Environ, in.PATEnv, projectURL, nil)
 	switch {
 	case errors.Is(err, azdo.ErrNoPAT):
-		return queried{}, core.WatcherCheckResult{Problem: core.ProblemPATMissing,
+		return queryRun{}, core.WatcherCheckResult{Problem: core.ProblemPATMissing,
 			Reason: fmt.Sprintf("The environment variable %s is not set, or is empty, in the Work Item Watcher's environment.", in.PATEnv),
 			Fix:    azdo.PATMissingFix(runtime.GOOS, in.PATEnv, scope)}, nil
 	case err != nil:
-		return queried{}, projectUnreadable(projectURL, err), nil
+		return queryRun{}, projectUnreadable(projectURL, err), nil
 	}
 	var res azdo.QueryResult
 	if id != "" {
@@ -67,22 +67,26 @@ func runQuery(ctx context.Context, env gh.Env, in core.AzureBoardsCheckInput) (q
 	} else {
 		res, err = c.WIQL(ctx, wiqlQuery(in.Where))
 	}
-	if err != nil {
-		return queried{}, refused(in, projectURL, err), err
+	var limit *watchers.RateLimitError
+	switch {
+	case errors.As(err, &limit):
+		return queryRun{}, core.WatcherCheckResult{}, limit
+	case err != nil:
+		return queryRun{}, problemOf(in, projectURL, err), nil
 	}
 	if id != "" && res.QueryType != "flat" {
-		return queried{}, core.WatcherCheckResult{Problem: core.ProblemQueryUnusable,
+		return queryRun{}, core.WatcherCheckResult{Problem: core.ProblemQueryUnusable,
 			Reason: fmt.Sprintf("The saved query %s is a %s query, which Code Central can't take work items from.", in.QueryURL, queryTypeName(res.QueryType)),
 			Fix:    "Make it a flat list of work items in Azure DevOps' query editor, or save a flat copy and paste its URL."}, nil
 	}
 	ids := res.IDs()
 	if len(ids) > MaxWorkItems {
-		return queried{}, core.WatcherCheckResult{Problem: core.ProblemTooManyWorkItems,
+		return queryRun{}, core.WatcherCheckResult{Problem: core.ProblemTooManyWorkItems,
 			Reason: fmt.Sprintf("The Azure Boards query matches %d work items, more than the %d Code Central takes in, so none were brought in or closed.", len(ids), MaxWorkItems),
 			Fix:    "Narrow the query, such as by State, assignee or area path, so it matches the work items to bring in."}, nil
 	}
 	org, _ := azdourl.Names(projectURL)
-	return queried{c: c, org: strings.ToLower(org), ids: ids}, core.WatcherCheckResult{}, nil
+	return queryRun{c: c, org: strings.ToLower(org), ids: ids}, core.WatcherCheckResult{}, nil
 }
 
 // queryTypeName is a query type as the human knows it.
@@ -93,15 +97,11 @@ func queryTypeName(queryType string) string {
 	return queryType
 }
 
-// refused is the problem err, from running in's query in projectURL, is;
-// none for a rate limit, which isn't one.
-func refused(in core.AzureBoardsCheckInput, projectURL string, err error) core.WatcherCheckResult {
-	var limit *watchers.RateLimitError
+// problemOf is the problem err, from running in's query in projectURL, is.
+func problemOf(in core.AzureBoardsCheckInput, projectURL string, err error) core.WatcherCheckResult {
 	var refusal *azdo.RefusedError
 	saved := in.Mode != store.AzureBoardsWIQL
 	switch {
-	case errors.As(err, &limit):
-		return core.WatcherCheckResult{}
 	case errors.Is(err, azdo.ErrPATRejected):
 		return core.WatcherCheckResult{Problem: core.ProblemPATRejected,
 			Reason: fmt.Sprintf("Azure DevOps rejected the PAT in %s: it may have expired or been revoked.", in.PATEnv),

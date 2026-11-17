@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -42,12 +43,11 @@ func workItemID(org, linkID string) (int, bool) {
 // triaged ones included, so a work item taken off the inbox never comes
 // in again, or are Incoming Issues. A new one arrives as a Draft Ticket;
 // an Incoming Issue takes its work item's title, body and web link when
-// they differ, and is open. An Incoming Issue no longer matched is read
-// alone: deleted if Azure DevOps can't find it, out of scope otherwise,
-// and out of scope without reading if it is another organization's. It
-// returns Azure DevOps' rate limit, if it refused a call for it; anything
-// else that goes wrong is logged and tried again on the next poll.
-func (cfg Config) mirror(ctx context.Context, watch core.WorkItemWatch, q queried) *watchers.RateLimitError {
+// they differ, and is open. Then each Incoming Issue no longer matched
+// leaves (leave). It returns Azure DevOps' rate limit, if it refused a
+// call for it; anything else that goes wrong is logged and tried again on
+// the next poll.
+func (cfg Config) mirror(ctx context.Context, watch core.WorkItemWatch, q queryRun) *watchers.RateLimitError {
 	linked := map[string]bool{}
 	for _, id := range watch.Linked {
 		linked[id] = true
@@ -56,41 +56,47 @@ func (cfg Config) mirror(ctx context.Context, watch core.WorkItemWatch, q querie
 	for _, i := range watch.Issues {
 		incoming[i.Link.ID] = i
 	}
-	matched := map[int]bool{}
 	var read []int
 	for _, id := range q.ids {
-		matched[id] = true
 		if _, ok := incoming[LinkID(q.org, id)]; ok || !linked[LinkID(q.org, id)] {
 			read = append(read, id)
 		}
 	}
 	items, err := q.c.WorkItems(ctx, read)
 	if err != nil {
-		return cfg.failed(ctx, "reading the matching work items", err)
+		return cfg.limitOrLog(ctx, "reading the matching work items", err)
 	}
 	for _, w := range items {
 		if i, ok := incoming[LinkID(q.org, w.ID)]; ok {
-			cfg.follow(ctx, i, q.c, w)
+			cfg.follow(ctx, q, i, w)
 		} else {
-			cfg.arrive(ctx, watch.Spec, q, w)
+			cfg.arrive(ctx, q, watch.Spec, w)
 		}
 		if ctx.Err() != nil {
 			return nil
 		}
 	}
-	for _, i := range watch.Issues {
+	return cfg.leave(ctx, q, watch.Issues)
+}
+
+// leave sets each of issues that q didn't match out of scope, or deleted
+// when its work item, read alone, can't be: Azure DevOps answers one that
+// was deleted, or that the PAT may not read, as not found, or refuses it.
+// One of another organization than q's is out of scope without reading.
+func (cfg Config) leave(ctx context.Context, q queryRun, issues []core.IncomingIssue) *watchers.RateLimitError {
+	for _, i := range issues {
 		id, ours := workItemID(q.org, i.Link.ID)
-		if ours && matched[id] {
+		if ours && slices.Contains(q.ids, id) {
 			continue
 		}
 		state := store.ExternalOutOfScope
 		if ours {
 			_, err := q.c.WorkItem(ctx, id)
 			switch {
-			case errors.Is(err, azdo.ErrNotFound):
+			case errors.Is(err, azdo.ErrNotFound), errors.Is(err, azdo.ErrMissingScope):
 				state = store.ExternalDeleted
 			case err != nil:
-				if limit := cfg.failed(ctx, "reading work item "+i.Link.ID, err); limit != nil {
+				if limit := cfg.limitOrLog(ctx, "reading work item "+i.Link.ID, err); limit != nil {
 					return limit
 				}
 				continue
@@ -101,9 +107,9 @@ func (cfg Config) mirror(ctx context.Context, watch core.WorkItemWatch, q querie
 	return nil
 }
 
-// arrive brings in work item w as a Draft Ticket on spec, the Azure
-// Boards Spec.
-func (cfg Config) arrive(ctx context.Context, spec string, q queried, w azdo.WorkItem) {
+// arrive brings in work item w, one of q's matches, as a Draft Ticket on
+// spec, the Azure Boards Spec.
+func (cfg Config) arrive(ctx context.Context, q queryRun, spec string, w azdo.WorkItem) {
 	link := q.c.WorkItemURL(w.Fields.TeamProject, w.ID)
 	_, err := cfg.Client.CreateLinkedTicket(ctx, cfg.Project, core.CreateLinkedTicketInput{
 		Spec: core.Ref(spec), Title: w.Fields.Title, Description: body(w, link), State: store.Draft,
@@ -114,10 +120,11 @@ func (cfg Config) arrive(ctx context.Context, spec string, q queried, w azdo.Wor
 	}
 }
 
-// follow updates i to its work item w's title, body and web link where
-// they differ, and opens it if it was out of scope or deleted.
-func (cfg Config) follow(ctx context.Context, i core.IncomingIssue, c *azdo.Client, w azdo.WorkItem) {
-	link := c.WorkItemURL(w.Fields.TeamProject, w.ID)
+// follow updates i to its work item w, one of q's matches: its title,
+// body and web link where they differ, and opens it if it was out of
+// scope or deleted.
+func (cfg Config) follow(ctx context.Context, q queryRun, i core.IncomingIssue, w azdo.WorkItem) {
+	link := q.c.WorkItemURL(w.Fields.TeamProject, w.ID)
 	up := core.UpdateLinkedTicketInput{Ticket: core.Ref(i.Ticket)}
 	if w.Fields.Title != i.Title {
 		up.Title = &w.Fields.Title
@@ -147,9 +154,10 @@ func (cfg Config) setExternalState(ctx context.Context, i core.IncomingIssue, st
 	}
 }
 
-// failed logs err from doing what, unless it is Azure DevOps'
-// rate limit, which it returns, or the poll stopping.
-func (cfg Config) failed(ctx context.Context, what string, err error) *watchers.RateLimitError {
+// limitOrLog is err, from doing what, as Azure DevOps' rate limit, when
+// it is one; any other error is logged, unless the poll is stopping, and
+// is nil.
+func (cfg Config) limitOrLog(ctx context.Context, what string, err error) *watchers.RateLimitError {
 	var limit *watchers.RateLimitError
 	if errors.As(err, &limit) {
 		return limit

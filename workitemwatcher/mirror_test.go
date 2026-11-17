@@ -128,7 +128,7 @@ func wantExternal(t *testing.T, w *watching, id int, want store.ExternalState) {
 }
 
 // read is the IDs of the work items the fake was asked for since
-// request from, together or alone, in order.
+// request from, together or alone, in ID order.
 func (w *watching) read(from int) []int {
 	w.t.Helper()
 	var ids []int
@@ -148,6 +148,7 @@ func (w *watching) read(from int) []int {
 			ids = append(ids, id)
 		}
 	}
+	slices.Sort(ids)
 	return ids
 }
 
@@ -249,7 +250,7 @@ func TestAWorkItemLeavingTheResultsIsOutOfScopeAndRestoredWhenItReturns(t *testi
 	wantExternal(t, w, 2, store.ExternalOutOfScope)
 	wantExternal(t, w, 3, store.ExternalDeleted)
 	if got := w.read(from); !slices.Equal(got, []int{1, 2, 3}) {
-		t.Fatalf("read %v, want 1 with the matches, then 2 and 3 alone", got)
+		t.Fatalf("read %v, want 1, the match, and 2 and 3, which left", got)
 	}
 
 	w.fake.SavedQuery(queryID, 1, 2)
@@ -259,6 +260,18 @@ func TestAWorkItemLeavingTheResultsIsOutOfScopeAndRestoredWhenItReturns(t *testi
 	if got := len(w.linked()); got != 3 {
 		t.Fatalf("%d linked items, want 3: nothing arrives twice", got)
 	}
+}
+
+// A work item the PAT may no longer read, once it left the results, is
+// marked deleted, as Azure DevOps can't tell it apart from one deleted.
+func TestAnUnreadableWorkItemThatLeftTheResultsIsDeleted(t *testing.T) {
+	w := newWatching(t)
+	w.arrived(1, 2)
+	w.fake.Script(fakeazdo.JSON("GET", fakeazdo.CollectionPath+"/_apis/wit/workitems/2", 403, map[string]string{"message": "TF401019: no permission"}))
+	w.fake.SavedQuery(queryID, 1)
+	w.polled()
+	wantExternal(t, w, 1, store.ExternalOpen)
+	wantExternal(t, w, 2, store.ExternalDeleted)
 }
 
 // Changing the query, or the mode, behaves as the work items changing:

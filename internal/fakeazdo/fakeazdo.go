@@ -120,10 +120,11 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		a := s.answers[i]
 		if (a.Method == "" || a.Method == r.Method) && strings.HasPrefix(r.URL.EscapedPath(), a.Path) {
 			found = &a
-			// One answering every request counts down from zero, so
-			// never runs out.
-			if s.answers[i].Times--; s.answers[i].Times == 0 {
+			switch {
+			case a.Times == 1:
 				s.answers = slices.Delete(s.answers, i, i+1)
+			case a.Times > 1:
+				s.answers[i].Times--
 			}
 			break
 		}

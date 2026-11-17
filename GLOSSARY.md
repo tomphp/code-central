@@ -686,7 +686,7 @@ The other way Azure Boards chooses its work items: a WIQL WHERE clause, without 
 _Avoid_: WIQL query, custom query
 
 **Work Item Watcher**:
-The kind of Watcher that polls one Project's Azure Boards query over the Azure DevOps REST API with the PAT, writing as the `integration` Actor, and that posts Code Central's progress back to the work items. It has a check mode as the Issue Watcher does.
+The kind of Watcher that polls one Project's Azure Boards query over the Azure DevOps REST API with the PAT, writing as the `integration` Actor: each work item it matches arrives as an Incoming Issue and follows the work item's edits, and one that leaves the results is out of scope, or deleted when Azure DevOps can't read it. It posts Code Central's progress back to the work items, and has a check mode as the Issue Watcher does.
 _Avoid_: Boards poller, ADO watcher
 
 **Azure Boards Spec**:

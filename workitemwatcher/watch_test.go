@@ -17,6 +17,7 @@ import (
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakeazdo"
+	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/watchers"
 	"github.com/tomoram/code-central/workitemwatcher"
 )
@@ -276,20 +277,19 @@ func TestAQueryMatchingMoreThan1000WorkItemsIsAnErrorThatChangesNothing(t *testi
 	}
 	w.fake.PutWorkItems(item(2))
 	w.fake.SavedQuery(queryID, many...)
+	from := len(w.fake.Requests())
 	w.nextPoll()
 	got := w.status(core.WatcherError)
 	if got.Problem != core.ProblemTooManyWorkItems || !strings.Contains(got.Message, "1001") || !strings.Contains(got.Fix, "Narrow the query") {
 		t.Fatalf("status %+v, want too_many_work_items naming 1001 and to narrow the query", got)
 	}
 	w.srv.Clock.BlockUntil(1)
+	// Work item 1, which no longer matches, isn't out of scope, and
+	// work item 2, which does, hasn't arrived.
 	wantIncoming(t, w, 1)
-	wantExternal(t, w, 1, "open")
-	for _, r := range w.fake.Requests() {
-		if strings.Contains(r.Path, "/workitems") {
-			if r.Method == "POST" && strings.Contains(r.Body, "1002") {
-				t.Fatalf("request %+v, want no work item read on a poll matching too many", r)
-			}
-		}
+	wantExternal(t, w, 1, store.ExternalOpen)
+	if got := w.read(from); len(got) != 0 {
+		t.Fatalf("read work items %v on a poll matching too many, want none", got)
 	}
 
 	w.fake.SavedQuery(queryID, 1, 2)
