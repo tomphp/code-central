@@ -281,7 +281,7 @@ func (f *factory) pushSpec(ctx context.Context, id string, p core.ProjectView) {
 		return
 	}
 	for _, pl := range plans {
-		pushed, why := f.push(ctx, pl.r, p.Landing.Remote, branch, pl.tip)
+		pushed, why := f.push(ctx, pl.r, pl.r.remote, branch, pl.tip)
 		if why != "" {
 			for _, tk := range pl.tickets {
 				f.cantPushIn(ctx, tk, pl.r, why)
@@ -289,10 +289,10 @@ func (f *factory) pushSpec(ctx context.Context, id string, p core.ProjectView) {
 			continue
 		}
 		if pushed {
-			f.printf("%s: pushed %s to %s%s", id, branch, p.Landing.Remote, pl.r.where())
+			f.printf("%s: pushed %s to %s%s", id, branch, pl.r.remote, pl.r.where())
 		}
 		for _, tk := range pl.tickets {
-			f.reportPushed(ctx, tk, policies, pl.r, branch, f.remoteTip(pl.r, p.Landing.Remote, branch, pl.tip))
+			f.reportPushed(ctx, tk, policies, pl.r, branch, f.remoteTip(pl.r, pl.r.remote, branch, pl.tip))
 		}
 	}
 }

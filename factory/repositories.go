@@ -41,6 +41,19 @@ type repository struct {
 	// base is the Base the Project lists; empty for the Home Repository,
 	// whose Base is the Project's (baseOf).
 	base string
+	// remote is its Push remote's name, as the Project lists it: its
+	// own, else the Project's. Every push, fetch and remote-tracking ref
+	// in its clone is of this remote. Only the poll reads it.
+	remote string
+	// localOnly is whether the Project lists it as local-only, with no
+	// Clone URL: the Home Repository once the Factory reported its clone
+	// has no Push remote (Spec code-central-890). It is never pushed or
+	// fetched.
+	localOnly bool
+	// localOnlyUnderPullRequest is whether it is local-only under Pull
+	// Request, as only a Home that lost its remote can be: nothing lands
+	// in it.
+	localOnlyUnderPullRequest bool
 	// problem says why it is Repository missing; empty while its clone is
 	// ready.
 	problem string
@@ -48,12 +61,11 @@ type repository struct {
 	cloned bool
 }
 
-// view is r as the Project lists it, as far as the Factory keeps it: its
-// Name, whether it is the Home, its Clone URL and its Base, and whether
-// it is local-only: one other than the Home with no Clone URL. Its local
-// path and Code Host are left out.
-func (r *repository) view() core.RepositoryView {
-	return core.RepositoryView{Name: r.name, Home: r.home, CloneURL: r.cloneURL, Base: r.base, LocalOnly: !r.home && r.cloneURL == ""}
+// listedAs takes from v, r as the Project lists it, what every poll
+// reads again: its Push remote, and whether it is local-only, and so
+// under Pull Request.
+func (r *repository) listedAs(v core.RepositoryView) {
+	r.remote, r.localOnly, r.localOnlyUnderPullRequest = v.PushRemote, v.LocalOnly, v.LocalOnlyUnderPullRequest
 }
 
 // policy is r's Landing Policy among the Project's, policies, which every
@@ -136,8 +148,10 @@ func (f *factory) syncRepositories(ctx context.Context, p core.ProjectView) {
 	}
 	for _, v := range p.Repositories {
 		r := f.home
-		if !v.Home {
-			r = f.cloneOf(ctx, v, p.Landing.Remote, taken)
+		if v.Home {
+			r.listedAs(v)
+		} else {
+			r = f.cloneOf(ctx, v, taken)
 			if ctx.Err() != nil {
 				// A stop cut the clone off: it isn't missing.
 				return
@@ -149,6 +163,7 @@ func (f *factory) syncRepositories(ctx context.Context, p core.ProjectView) {
 				f.prune(r)
 			}
 		}
+		f.sayLocalOnlyUnderPullRequest(r)
 		next[v.Name] = r
 		inOrder = append(inOrder, r)
 		state := core.CloneReady
@@ -176,20 +191,22 @@ func (f *factory) syncRepositories(ctx context.Context, p core.ProjectView) {
 	f.reportRepositoriesFailing = false
 }
 
-// cloneOf is the Repository v with its clone: cloned under the Push
+// cloneOf is the Repository v with its clone: cloned under its Push
 // remote's name when its path holds nothing, adopted when the path holds
 // a clone whose Push remote is v's Clone URL, and otherwise missing,
 // with the path untouched. A local-only Repository, with no Clone URL, is
 // never cloned: whatever git repository of its own is at its path is
 // adopted with no remote check (Spec code-central-879). A path in taken
 // is another Repository's, so missing too; v's path is added to it.
-func (f *factory) cloneOf(ctx context.Context, v core.RepositoryView, remote string, taken map[string]string) *repository {
+func (f *factory) cloneOf(ctx context.Context, v core.RepositoryView, taken map[string]string) *repository {
 	dir := v.LocalPath
 	if dir == "" {
 		dir = filepath.Join(filepath.Dir(f.home.dir), v.Name)
 	}
 	r := f.newRepository(v.Name, dir)
 	r.cloneURL, r.base = v.CloneURL, v.Base
+	r.listedAs(v)
+	remote := r.remote
 	// Named after the Repository, whatever its local path's folder is
 	// called (ADR 0048).
 	r.worktrees = filepath.Join(filepath.Dir(dir), v.Name+".worktrees")
@@ -251,6 +268,22 @@ func (f *factory) sayClone(r, was *repository) {
 	case was == nil || was.problem != "" || was.dir != r.dir:
 		f.printf("repository %s: adopted the clone at %s", r.name, r.dir)
 	}
+}
+
+// sayLocalOnlyUnderPullRequest says once that r, a Home that lost its
+// remote, as only it can be, is local-only under Pull Request, which
+// holds back the Tickets landing in it (held), and says so again should
+// it be once more after it was put right.
+func (f *factory) sayLocalOnlyUnderPullRequest(r *repository) {
+	if !r.localOnlyUnderPullRequest {
+		delete(f.saidLocalOnly, r.name)
+		return
+	}
+	if f.saidLocalOnly[r.name] {
+		return
+	}
+	f.saidLocalOnly[r.name] = true
+	f.printf("warning: Repository %s is local-only under Pull Request: nothing lands in it until you give it another Landing in Project Options, or add its Push remote, %s, to its clone and restart the Factory", r.name, r.remote)
 }
 
 // repositoryMissing reports whether any Repository is missing, as the

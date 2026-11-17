@@ -122,11 +122,12 @@ func (f *factory) reportBaseState(ctx context.Context, r *repository, in core.Re
 // Watcher to open a pull request on.
 func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, p core.ProjectView) {
 	if tk.PullRequest != nil && tk.PullRequest.State == store.PRMerged {
-		f.landMerged(ctx, tk, p.Landing.Remote)
+		f.landMerged(ctx, tk)
 		return
 	}
+	remote := f.home.remote
 	head, _, err := f.workOf(tk)
-	if err == nil && tk.PullRequest == nil && !f.pushedAlready(p.Landing.Remote, tk.Branch) && f.stateOf(f.home).current && f.inBase(head) {
+	if err == nil && tk.PullRequest == nil && !f.pushedAlreadyIn(f.home, tk.Branch) && f.stateOf(f.home).current && f.inBase(head) {
 		f.printf("%s: nothing to merge into %s", tk.ID, f.baseBranch())
 		f.landAt(ctx, tk, f.home, head)
 		return
@@ -138,23 +139,23 @@ func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, p cor
 	if tk.Branch == "" {
 		return
 	}
-	pushed, why := f.push(ctx, f.home, p.Landing.Remote, tk.Branch, head)
+	pushed, why := f.push(ctx, f.home, remote, tk.Branch, head)
 	if why != "" {
 		f.cantPushYet(ctx, tk, why)
 		return
 	}
 	if pushed {
-		f.printf("%s: pushed %s to %s", tk.ID, tk.Branch, p.Landing.Remote)
+		f.printf("%s: pushed %s to %s", tk.ID, tk.Branch, remote)
 	}
-	f.reportPushed(ctx, tk, p.LandingPolicies(), f.home, tk.Branch, f.remoteTip(f.home, p.Landing.Remote, tk.Branch, head))
+	f.reportPushed(ctx, tk, p.LandingPolicies(), f.home, tk.Branch, f.remoteTip(f.home, remote, tk.Branch, head))
 }
 
-// inOldBase reports whether the fetched remote holds commit on a base the
-// Project named earlier in this run: an open pull request keeps its target
-// when the base changes, so it merges there.
-func (f *factory) inOldBase(commit, remote string) bool {
+// inOldBase reports whether the Home's fetched Push remote holds commit
+// on a base the Project named earlier in this run: an open pull request
+// keeps its target when the base changes, so it merges there.
+func (f *factory) inOldBase(commit string) bool {
 	for _, b := range f.oldBases {
-		if f.home.git.isAncestor(commit, "refs/remotes/"+remote+"/"+b) {
+		if f.home.git.isAncestor(commit, "refs/remotes/"+f.home.remote+"/"+b) {
 			return true
 		}
 	}
@@ -164,9 +165,9 @@ func (f *factory) inOldBase(commit, remote string) bool {
 // landMerged lands tk, whose pull request is reported merged, at the merge
 // commit, once the fetched base holds it. Until then it waits for a later
 // poll.
-func (f *factory) landMerged(ctx context.Context, tk core.TicketView, remote string) {
+func (f *factory) landMerged(ctx context.Context, tk core.TicketView) {
 	merge := tk.PullRequest.MergeCommit
-	if !f.stateOf(f.home).current || !f.inBase(merge) && !f.inOldBase(merge, remote) {
+	if !f.stateOf(f.home).current || !f.inBase(merge) && !f.inOldBase(merge) {
 		key := tk.ID + "@" + merge
 		if !f.leftOnBranch[key] {
 			f.leftOnBranch[key] = true
@@ -182,20 +183,20 @@ func (f *factory) landMerged(ctx context.Context, tk core.TicketView, remote str
 // merged, as a branch merged by hand does under Branch. A Ticket in any
 // other State whose pull request is merged gets a warning line and a
 // comment, once.
-func (f *factory) detectMergedPullRequests(ctx context.Context, remote string) {
+func (f *factory) detectMergedPullRequests(ctx context.Context) {
 	for _, tk := range f.landable(ctx, mergeableStates...) {
 		if f.halted(ctx) || f.paused() {
 			return
 		}
 		if tk.State == store.InReview && changedElsewhere(f.home.name, tk) {
-			f.detectMergedPullRequestsIn(ctx, tk, remote)
+			f.detectMergedPullRequestsIn(ctx, tk)
 			continue
 		}
 		if tk.PullRequest == nil || tk.PullRequest.State != store.PRMerged {
 			continue
 		}
 		if tk.State == store.InReview {
-			f.landMerged(ctx, tk, remote)
+			f.landMerged(ctx, tk)
 			continue
 		}
 		key := tk.ID + "@" + tk.PullRequest.MergeCommit
@@ -209,11 +210,4 @@ func (f *factory) detectMergedPullRequests(ctx context.Context, remote string) {
 			f.printf("%s: comment: %v", tk.ID, err)
 		}
 	}
-}
-
-// pushedAlready reports whether branch is on remote, as far as the last
-// fetch or push knows.
-func (f *factory) pushedAlready(remote, branch string) bool {
-	_, err := f.home.git.commit("refs/remotes/" + remote + "/" + branch)
-	return err == nil
 }
