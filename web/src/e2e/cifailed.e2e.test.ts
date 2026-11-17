@@ -69,7 +69,8 @@ describe("end-to-end: the human lands a CI failed Ticket anyway from Focus Mode"
     const panel = item.getByRole("region", { name: "CI failed" });
     await panel.waitFor();
     await item.getByText("CI failed", { exact: true }).first().waitFor();
-    expect(await item.locator(".focus-ticket").textContent()).toBe(id);
+    // The Short ID shows while one Project is selected; its title is the full ID.
+    expect(await item.locator(".focus-ticket .tid").getAttribute("title")).toBe(id);
     // The Accepted panel's Land and Cancel stay below the failure options.
     await item.getByRole("region", { name: "Accepted" }).getByRole("button", { name: "Cancel" }).waitFor();
     const ci = panel.getByRole("region", { name: "CI" });
