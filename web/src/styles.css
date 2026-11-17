@@ -267,7 +267,7 @@ a.filter { text-decoration: none; }
 .archived-group { margin-top: auto; padding-top: 16px; }
 .archived-group > summary { cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 4px 8px; }
 .archived-group .filter { opacity: .7; }
-.count { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 500; }
+.count { color: var(--muted); font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 500; }
 .count.loud { color: color-mix(in srgb, var(--r-answer) 55%, var(--text)); font-weight: 700; }
 /* A Project's ribbon: a short bar in its own colour (a bar, never a ring,
    so it never reads as a State). The palette is the rail's, in both themes. */
@@ -345,7 +345,7 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .ci-badge { white-space: nowrap; }
 .impl-list .ci-badge { margin-left: 6px; }
 .ci-sums { display: flex; gap: 6px; align-items: center; margin: 8px 0; }
-.ci-runs { list-style: none; padding: 0; margin: 4px 0; font-size: 13px; }
+.ci-runs { font-variant-numeric: tabular-nums; list-style: none; padding: 0; margin: 4px 0; font-size: 13px; }
 .ci-run { margin-bottom: 6px; }
 .ci-run .label { margin-left: 6px; }
 /* Any CIRunEntry of an ignored workflow is greyed, in every layout. */
@@ -363,7 +363,7 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .transcript-call { display: block; background: none; padding: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ticket-body .transcript-result > summary { margin: 2px 0 0 12px; }
 .transcript-result > summary time { margin-right: 4px; }
-.transcript-result pre { margin: 4px 0 2px 12px; padding: 6px 8px; max-height: 240px; overflow: auto; background: var(--surface-2); border-radius: 4px; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+.transcript-result pre { margin: 4px 0 2px 12px; padding: 6px 8px; max-height: 240px; overflow: auto; background: var(--surface-2); border-radius: 4px; font: 12px var(--mono); white-space: pre-wrap; }
 .transcript-mark { margin-left: 6px; padding: 0 5px; border-radius: 3px; border: 1px solid var(--border); font-size: 11px; }
 .transcript-error { color: var(--danger); border-color: var(--danger); }
 .transcript-factory { background: var(--surface-2); color: var(--muted); font-size: 12.5px; }
@@ -630,7 +630,7 @@ a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
 .data-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .data-table th, .data-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; }
 .data-table tbody th { font-weight: 500; }
-.data-table-mono tbody th { font-family: ui-monospace, monospace; }
+.data-table-mono tbody th { font-family: var(--mono); }
 .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .data-table .label { margin-left: 6px; }
 /* A pulse: a brief background flash when what an element shows changes.
