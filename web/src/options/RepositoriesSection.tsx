@@ -36,13 +36,13 @@ const CODE_HOST_LABEL: Record<CodeHost, string> = {
   "": "no supported Code Host",
 };
 
-// LANDING is the Default Landing section's id, where the Home Repository's
-// Base is set. Like the section menu, jumping there leaves the URL, which
-// holds the view, alone.
-const LANDING = "project-options-default-landing";
+// DEFAULT_LANDING_ID is the Default Landing section's id, where the Home
+// Repository's Base is set. Like the section menu, jumping there leaves
+// the URL, which holds the view, alone.
+const DEFAULT_LANDING_ID = "project-options-default-landing";
 const jumpToLanding = (e: MouseEvent<HTMLAnchorElement>) => {
   e.preventDefault();
-  document.getElementById(LANDING)?.scrollIntoView?.();
+  document.getElementById(DEFAULT_LANDING_ID)?.scrollIntoView?.();
 };
 
 // defaultLandingOf is the Project's Default Landing as a Repository's
@@ -222,7 +222,7 @@ function RepositoryRow({
             <>
               {" "}
               (the Project&apos;s Base, set in{" "}
-              <a href={`#${LANDING}`} onClick={jumpToLanding}>
+              <a href={`#${DEFAULT_LANDING_ID}`} onClick={jumpToLanding}>
                 Default Landing
               </a>
               )
