@@ -419,7 +419,7 @@ func repositoryNamed(key string, rs []store.Repository, name string) (int, error
 }
 
 // updateRepositories writes the Repositories change makes, once r's Clone
-// URL and local path are listed nowhere else and, when checkHost and
+// URL and resolved clone path are listed nowhere else and, when checkHost and
 // under Pull Request, its Clone URL passes the Pull Request Watcher's
 // check. With ci, r's new CI entry, it is written with them, once, while
 // CI Tracking is on, it passes the CI Watcher's check. The checks call
