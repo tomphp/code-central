@@ -51,7 +51,7 @@ func (c *Core) closedSpecOthers(ctx context.Context, key string, ref Ref) []int 
 		if err != nil {
 			return nil
 		}
-		if lead, _ := specPullRequestLead(r, key, t); !lead || t.PullRequest == nil || t.PullRequest.State != store.PRClosed {
+		if lead, _ := specPullRequestLead(r, key, t); !lead || !anyPullRequest(t, store.PRClosed) {
 			return nil
 		}
 		for _, o := range specWork(r, key, t) {
@@ -83,6 +83,9 @@ func (c *Core) cancelOne(ctx context.Context, key string, in CancelInput) (Writt
 		if err := transition(ctx, t, key, "cancel", "", now); err != nil {
 			return false, err
 		}
+		if err := refuseCancelOfMerged(r, key, before); err != nil {
+			return false, err
+		}
 		if actor != Human && len(in.Replacements) == 0 {
 			return false, invalid("replacements", "an agent cancels a Ticket only by naming at least one Replacement that takes over its work")
 		}
@@ -99,6 +102,27 @@ func (c *Core) cancelOne(ctx context.Context, key string, in CancelInput) (Writt
 		}
 		return true, nil
 	})
+}
+
+// refuseCancelOfMerged refuses cancelling t once any of its pull requests
+// has merged: that work is already in a base, and cancelling would lose
+// track of it (ADR 0050).
+func refuseCancelOfMerged(r store.Reader, key string, t store.Ticket) error {
+	var merged []string
+	p, _ := r.Project(key)
+	for _, pr := range t.PullRequests {
+		if pr.State == store.PRMerged {
+			merged = append(merged, recordRepository(key, pr.Repository))
+		}
+	}
+	if len(merged) == 0 {
+		return nil
+	}
+	where := "its pull request has merged"
+	if severalRepositories(p) {
+		where = fmt.Sprintf("its pull request in %s has merged", strings.Join(namesInLandingOrder(p, merged), ", "))
+	}
+	return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s can't be cancelled: %s, so its work is already in a base. Land the rest of it, or send it back to redo it", DisplayID(key, t.Number), where)}
 }
 
 // checkReplacements rejects Replacements for t that are t itself, that

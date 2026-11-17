@@ -9,8 +9,10 @@ import (
 	"github.com/tomoram/code-central/core"
 )
 
-// Landing across Repositories (Spec code-central-848): land takes a
-// Repository through every door, and report_base a Repository over HTTP.
+// Landing across Repositories (Spec code-central-848): land refuses a
+// Repository the Project hasn't through every door, and report_base takes
+// a Repository over HTTP. pullrequests_doors_test.go has land's
+// repository through every door.
 
 // acceptedInTwo adds the Repository api, then claims acme-3, finishes it
 // in the Home Repository and api, and accepts it.
@@ -26,33 +28,6 @@ func acceptedInTwo(t *testing.T, srv *codecentraltest.Server) {
 		_, err := srv.Core.Accept(core.WithActor(context.Background(), core.Human), "acme", core.TicketInput{Ticket: "3"})
 		return err
 	})
-}
-
-// land records the landing in the Repository it names through MCP, HTTP
-// and the CLI alike, leaving the Ticket Partly landed.
-func TestLandTakesARepositoryThroughEveryDoor(t *testing.T) {
-	for door, land := range map[string]func(*testing.T, *codecentraltest.Server){
-		"mcp": func(t *testing.T, srv *codecentraltest.Server) {
-			mcpOK(t, connect(t, srv, "acme"), "land", map[string]any{"ticket": "acme-3", "commit": "fff999", "repository": "api"})
-		},
-		"http": func(t *testing.T, srv *codecentraltest.Server) {
-			httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/3/land", `{"commit":"fff999","repository":"api"}`})
-		},
-		"cli": func(t *testing.T, srv *codecentraltest.Server) {
-			cliOK(t, srv, []string{"land", "acme-3", "--commit", "fff999", "--repository", "api"})
-		},
-	} {
-		t.Run(door, func(t *testing.T) {
-			srv := newServer(t, acceptedInTwo)
-			land(t, srv)
-			tk := httpOK(t, srv, httpCall{"GET", "/api/p/acme/tickets/3", ""})
-			api, _ := tk["repositories"].([]any)[1].(map[string]any)
-			landed, _ := api["landed"].(map[string]any)
-			if tk["state"] != "Accepted" || tk["partly_landed"] != true || landed["commit"] != "fff999" {
-				t.Fatalf("ticket %v, want it Accepted and Partly landed, landed in api at fff999", tk)
-			}
-		})
-	}
 }
 
 // land naming a Repository the Project hasn't is refused through every

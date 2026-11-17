@@ -106,6 +106,12 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
         ? `${r.repository_missing.repository}: ${r.repository_missing.problem}`
         : "A Repository has no clone";
     case "pull_request_closed":
+      // With several Repositories each closed one is named by its
+      // Repository (Spec code-central-848).
+      if (r.closed_pull_requests?.some((p) => p.repository)) {
+        const named = r.closed_pull_requests.map((p) => `#${p.number} in ${p.repository}`).join(", ");
+        return `Pull request ${named} ${r.closed_pull_requests.length === 1 ? "was" : "were"} closed without merging: send the work back or reopen it`;
+      }
       return r.pull_request
         ? `Pull request #${r.pull_request.number} was closed without merging: send the work back or cancel it`
         : "Its pull request was closed without merging";

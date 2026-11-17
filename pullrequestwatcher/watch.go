@@ -111,23 +111,59 @@ func (cfg Config) poll(ctx context.Context) (reachable, waiting bool, limit *wat
 	if !watch.On {
 		return false, false, nil
 	}
-	h, r, err := cfg.access(ctx, core.PullRequestCheckInput{CodeHost: watch.CodeHost, Repository: watch.Repository, GHPath: watch.GHPath, PATEnv: watch.PATEnv, ProjectURL: cfg.AzureProjectURL}, false)
-	if ctx.Err() != nil {
-		// Stopped mid-poll: what failed is the stop, not GitHub.
-		return false, false, nil
+	repositories := watch.Repositories
+	if len(repositories) == 0 {
+		// A service from before Repositories: the Home Repository alone.
+		repositories = []core.PullRequestRepositoryView{{CodeHost: watch.CodeHost, Repository: watch.Repository, Base: watch.Base}}
 	}
-	if r.Problem != "" {
-		cfg.report(ctx, core.ReportWatcherStatusInput{State: core.WatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
-		return false, false, nil
+	several := len(repositories) > 1
+	hosts := map[string]host{}
+	var problems []core.RepositoryProblem
+	for _, rv := range repositories {
+		h, r, err := cfg.access(ctx, core.PullRequestCheckInput{CodeHost: rv.CodeHost, Repository: rv.Repository, GHPath: watch.GHPath, PATEnv: watch.PATEnv, ProjectURL: cfg.AzureProjectURL}, false)
+		if ctx.Err() != nil {
+			// Stopped mid-poll: what failed is the stop, not the Code Host.
+			return false, false, nil
+		}
+		if r.Problem != "" {
+			problems = append(problems, core.RepositoryProblem{Repository: rv.Name, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
+			continue
+		}
+		if errors.As(err, &limit) {
+			return true, false, limit
+		}
+		hosts[rv.Name] = h(rv.Base)
 	}
-	if errors.As(err, &limit) {
-		return true, false, limit
+	if len(problems) > 0 {
+		// A failing Repository is named, and the others are still watched
+		// (ADR 0050); one Repository alone reports as it always did.
+		in := core.ReportWatcherStatusInput{State: core.WatcherError, Problem: problems[0].Problem, Message: problems[0].Message, Fix: problems[0].Fix}
+		if several {
+			sum := core.SumRepositoryProblems(problems)
+			in.Message, in.Fix, in.Repositories = sum.Reason, sum.Fix, problems
+		}
+		cfg.report(ctx, in)
+	}
+	for _, c := range watch.Close {
+		g, ok := hosts[c.Repository]
+		if !ok {
+			continue
+		}
+		if err := cfg.close(ctx, g, c); errors.As(err, &limit) {
+			return len(problems) == 0, waiting, limit
+		} else if err != nil && ctx.Err() == nil {
+			cfg.logf("%s: %v", c.Link, err)
+		}
 	}
 	for _, w := range watch.Work {
-		pr, err := cfg.follow(ctx, h(watch.Base), w)
+		g, ok := hosts[w.Repository]
+		if !ok {
+			continue
+		}
+		pr, err := cfg.follow(ctx, g, w, several)
 		switch {
 		case errors.As(err, &limit):
-			return true, waiting, limit
+			return len(problems) == 0, waiting, limit
 		case err != nil:
 			if ctx.Err() == nil {
 				cfg.logf("%s: %v", w.Branch, err)
@@ -137,39 +173,72 @@ func (cfg Config) poll(ctx context.Context) (reachable, waiting bool, limit *wat
 			waiting = true
 		}
 	}
-	return true, waiting, nil
+	return len(problems) == 0, waiting, nil
 }
 
 // follow brings one piece of pushed work's pull request up to date: it
 // finds the pull requests from its branch into the base, adopts the open
 // one, else the merged one, and opens one when none is open or merged and
 // the latest push is newer than the last closed one; then it reports what
-// changed. It returns the pull request as reported, nil when there is none.
-func (cfg Config) follow(ctx context.Context, g host, w core.PushedWorkView) (*pullRequest, error) {
+// changed. With several Repositories, a push newer than the merge opens
+// one again, as a Ticket sent back after its sibling merged brings new
+// work, and an open pull request's body is edited to list its siblings as
+// they stand. It returns the pull request as reported, nil when there is
+// none.
+func (cfg Config) follow(ctx context.Context, g host, w core.PushedWorkView, several bool) (*pullRequest, error) {
 	prs, err := g.list(ctx, w.Branch)
 	if err != nil {
 		return nil, err
 	}
 	pr := choose(prs)
 	switch {
-	case pr == nil, pr.state() == store.PRClosed && w.Pushed.After(pr.Closed):
+	case pr == nil, pr.state() == store.PRClosed && w.Pushed.After(pr.Closed),
+		several && pr.state() == store.PRMerged && !pr.Closed.IsZero() && w.Pushed.After(pr.Closed):
 		opened, err := g.open(ctx, w.Branch, w.Title, w.Body)
 		if err != nil {
 			// Nothing is open yet, so the next poll comes sooner.
 			return nil, err
 		}
 		pr = opened
+		pr.Body = w.Body
 	case pr.state() == store.PROpen:
 		if pr, err = g.refresh(ctx, pr); err != nil {
 			return pr, err
 		}
 	}
 	state := pr.state()
+	if several && (state == store.PROpen || state == store.PRConflicting) && !g.sameBody(pr.Body, w.Body) {
+		if err := g.edit(ctx, pr, w.Body); err != nil {
+			return pr, err
+		}
+	}
 	if have := w.PullRequest; have != nil && have.Number == pr.Number && have.Link == pr.Link && have.State == state && have.MergeCommit == pr.mergeCommit() {
 		return pr, nil
 	}
-	_, err = cfg.Client.ReportPullRequest(ctx, cfg.Project, core.ReportPullRequestInput{Branch: w.Branch, Number: pr.Number, Link: pr.Link, State: state, MergeCommit: pr.mergeCommit()})
+	_, err = cfg.Client.ReportPullRequest(ctx, cfg.Project, core.ReportPullRequestInput{Repository: w.Repository, Branch: w.Branch, Number: pr.Number, Link: pr.Link, State: state, MergeCommit: pr.mergeCommit()})
 	return pr, err
+}
+
+// close closes c, a pull request marked to close, unless it is no longer
+// open, and reports how it stands, which clears the mark.
+func (cfg Config) close(ctx context.Context, g host, c core.PullRequestToClose) error {
+	prs, err := g.list(ctx, c.Branch)
+	if err != nil {
+		return err
+	}
+	var pr *pullRequest
+	for _, p := range prs {
+		if p.Number == c.Number {
+			pr = p
+		}
+	}
+	if pr == nil || pr.state() == store.PROpen || pr.state() == store.PRConflicting {
+		if pr, err = g.close(ctx, c.Number); err != nil {
+			return err
+		}
+	}
+	_, err = cfg.Client.ReportPullRequest(ctx, cfg.Project, core.ReportPullRequestInput{Repository: c.Repository, Branch: c.Branch, Number: pr.Number, Link: pr.Link, State: pr.state(), MergeCommit: pr.mergeCommit()})
+	return err
 }
 
 // choose is the pull request that stands for a branch's pull requests,
@@ -219,6 +288,13 @@ type host interface {
 	refresh(ctx context.Context, p *pullRequest) (*pullRequest, error)
 	// open opens a pull request ready for review, with title and body.
 	open(ctx context.Context, branch, title, body string) (*pullRequest, error)
+	// sameBody reports whether a listed pull request's body is body as
+	// the host keeps it.
+	sameBody(listed, body string) bool
+	// edit sets an open pull request's body.
+	edit(ctx context.Context, p *pullRequest, body string) error
+	// close closes pull request number without merging it.
+	close(ctx context.Context, number int) (*pullRequest, error)
 }
 
 // github is the repository's pull requests as gh reaches them.
@@ -238,6 +314,7 @@ type pullRequest struct {
 	MergedAt       *time.Time `json:"merged_at"`
 	MergeSHA       string     `json:"merge_commit_sha"`
 	Closed         time.Time  `json:"closed_at"`
+	Body           string     `json:"body"`
 	Mergeable      *bool      `json:"mergeable"`
 	MergeableState string     `json:"mergeable_state"`
 }
@@ -318,6 +395,44 @@ func (g github) open(ctx context.Context, branch, title, body string) (*pullRequ
 	var pr pullRequest
 	if err := json.Unmarshal(out, &pr); err != nil || pr.Number == 0 {
 		return nil, fmt.Errorf("opening a pull request from %s into %s: GitHub's answer has no pull request", branch, g.base)
+	}
+	return &pr, nil
+}
+
+// sameBody reports whether a listed body is body: GitHub keeps a body as
+// it was sent.
+func (g github) sameBody(listed, body string) bool { return listed == body }
+
+// patch sets field (name=value) on pull request number, with GitHub's
+// answer; a refusal is wrapped with what, and a rate limit returned as
+// it is.
+func (g github) patch(ctx context.Context, number int, what, field string) ([]byte, error) {
+	out, msg, err := gh.API(ctx, g.env, g.prog, fmt.Sprintf("repos/%s/pulls/%d", g.repository, number), "--method", "PATCH", "-f", field)
+	if err != nil {
+		var limit *watchers.RateLimitError
+		if errors.As(err, &limit) {
+			return nil, err
+		}
+		return nil, fmt.Errorf(what+": %w: %s", number, err, msg)
+	}
+	return out, nil
+}
+
+// edit sets an open pull request's body.
+func (g github) edit(ctx context.Context, p *pullRequest, body string) error {
+	_, err := g.patch(ctx, p.Number, "editing pull request %d's body", "body="+body)
+	return err
+}
+
+// close closes pull request number without merging it.
+func (g github) close(ctx context.Context, number int) (*pullRequest, error) {
+	out, err := g.patch(ctx, number, "closing pull request %d", "state=closed")
+	if err != nil {
+		return nil, err
+	}
+	var pr pullRequest
+	if err := json.Unmarshal(out, &pr); err != nil || pr.Number == 0 {
+		return nil, fmt.Errorf("closing pull request %d: GitHub's answer has no pull request", number)
 	}
 	return &pr, nil
 }

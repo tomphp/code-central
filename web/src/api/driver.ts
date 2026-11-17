@@ -113,8 +113,9 @@ export interface Driver {
   // (code-central-256).
   // The branch it was pushed as is what the Pull Request Watcher opens a
   // pull request from; under Pull Request a push is recorded with CI
-  // Tracking off too (code-central-388).
-  reportPushedCommit(key: string, id: string, commit: string, branch?: string): Promise<void>;
+  // Tracking off too (code-central-388). repository names the Repository
+  // it was pushed in, the Home Repository when left out.
+  reportPushedCommit(key: string, id: string, commit: string, branch?: string, repository?: string): Promise<void>;
   // reportPullRequest reports the pull request of the work pushed as
   // branch, as the Pull Request Watcher does; it is recorded on every
   // Ticket the work covers (code-central-388).
@@ -343,8 +344,8 @@ export class HttpDriver implements Driver {
   };
 
   // code-central-256: as the Factory and the CI Watcher
-  reportPushedCommit: Driver["reportPushedCommit"] = async (key, id, commit, branch) => {
-    await this.agent(`${this.ticketPath(key, id)}/report_pushed_commit`, { commit, branch });
+  reportPushedCommit: Driver["reportPushedCommit"] = async (key, id, commit, branch, repository) => {
+    await this.agent(`${this.ticketPath(key, id)}/report_pushed_commit`, { commit, branch, ...(repository && { repository }) });
   };
 
   // code-central-388: as the Pull Request Watcher

@@ -210,7 +210,9 @@ export function LandingMethodSection({ project }: { project: ProjectRow }) {
         {project.landing.method === "pull_request" && (
           <WatcherStatus
             name="Pull Request Watcher"
-            repository={project.landing.repository}
+            repository={
+              project.repositories.length > 1 ? `its ${project.repositories.length} Repositories` : project.landing.repository
+            }
             watcher={project.landing.watcher}
           />
         )}

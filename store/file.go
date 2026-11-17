@@ -249,6 +249,10 @@ func (s *FileStore) loadProject(key string) error {
 			}
 			p.CI.Rules = append(p.CI.Rules, rule)
 		}
+		var at string
+		if p.CI.Repositories, at, err = decodeCIRepositories(c.Repositories); err != nil {
+			return &LoadError{File: rel, Field: "ci.repositories" + at, Msg: err.Error()}
+		}
 	}
 	if g := pf.GitHubIssues; g != nil {
 		p.GitHubIssues = GitHubIssues{On: g.On, Repository: g.Repository, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}

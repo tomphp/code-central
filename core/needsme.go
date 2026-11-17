@@ -199,6 +199,10 @@ type NeedsMeRow struct {
 	// PullRequest is the Ticket's pull request, for its item's link; left
 	// out until the Pull Request Watcher reports one.
 	PullRequest *PullRequestView `json:"pull_request,omitempty"`
+	// ClosedPullRequests are the Ticket's pull requests closed without
+	// merging, each naming its Repository while the Project has several,
+	// in landing order (Pull request closed).
+	ClosedPullRequests []PullRequestView `json:"closed_pull_requests,omitempty"`
 	// BaseDiverged is the local and remote base commits (Base diverged,
 	// whose row has no Ticket: its ID is empty).
 	BaseDiverged *BaseDivergedView `json:"base_diverged,omitempty"`
@@ -332,7 +336,7 @@ func (e *evaluation) row(t store.Ticket, tr ticketReason) NeedsMeRow {
 		Project: key, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: tr.reason, Since: tr.since, Link: linkView(t.Link),
 		Requirement: req, Spec: needsMeSpec(e.r, key, t, req), Prototype: slices.Contains(t.Labels, PrototypeLabel),
 		Retro:    slices.Contains(t.Labels, RetroLabel),
-		CIResult: e.ci.ticket(t).result, PullRequest: pullRequestView(t.PullRequest),
+		CIResult: e.ci.ticket(t).result, PullRequest: pullRequestView(homePullRequest(key, t)),
 	}
 	switch tr.reason {
 	case ReasonNeedsAnswer:
@@ -356,6 +360,13 @@ func (e *evaluation) row(t store.Ticket, tr ticketReason) NeedsMeRow {
 		row.Branch = branchOf(t)
 	case ReasonAcceptedNotLanded:
 		row.NotLanded = e.c.notLandedView(e.p, t)
+	case ReasonPullRequestClosed:
+		row.ClosedPullRequests = closedPullRequests(e.p, t)
+		if row.PullRequest == nil && len(row.ClosedPullRequests) > 0 {
+			// The row's link is a closed pull request when the Home
+			// Repository has none.
+			row.PullRequest = &row.ClosedPullRequests[0]
+		}
 	case ReasonBlockedByCancelled:
 		b, _ := cancelledBlocker(e.rule, t)
 		row.Blocker = &b

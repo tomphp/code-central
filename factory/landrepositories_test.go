@@ -19,16 +19,6 @@ import (
 // the Ticket Partly landed, to be tried again, and a broken base in one
 // Repository holds back only the work touching it.
 
-// landedIn is the commit tk landed at in the Repository name, or "".
-func landedIn(tk core.TicketView, name string) string {
-	for _, r := range tk.Repositories {
-		if r.Name == name && r.Landed != nil {
-			return r.Landed.Commit
-		}
-	}
-	return ""
-}
-
 // inTwo makes a Ready Ticket whose session commits in the Home Repository
 // and in api and finishes with both, and returns its ID.
 func inTwo(h *factorytest.Harness, title string) string {

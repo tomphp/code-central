@@ -82,6 +82,8 @@ type stageGuidesFile struct {
 // ciResponseFile is the human's response to one pushed commit's CI
 // result.
 type ciResponseFile struct {
+	// Repository is left out for the Home Repository.
+	Repository string           `yaml:"repository,omitempty"`
 	Commit     string           `yaml:"commit"`
 	LandAnyway string           `yaml:"land_anyway,omitempty"`
 	Rerun      string           `yaml:"rerun,omitempty"`
@@ -140,6 +142,19 @@ type ciFile struct {
 	// superseded by ADR 0032). It is read so a file that still holds it loads, and
 	// never kept or written.
 	UnblockOnPush bool `yaml:"unblock_on_push,omitempty"`
+	// Repositories is left out while no Repository but the Home has an
+	// entry.
+	Repositories []ciRepositoryFile `yaml:"repositories,omitempty"`
+}
+
+// ciRepositoryFile is the CI entry of one Repository other than the
+// Home.
+type ciRepositoryFile struct {
+	Name       string `yaml:"name"`
+	NotWatched bool   `yaml:"not_watched,omitempty"`
+	Provider   string `yaml:"provider,omitempty"`
+	Repository string `yaml:"repository,omitempty"`
+	ProjectURL string `yaml:"project_url,omitempty"`
 }
 
 type ciRuleFile struct {
@@ -195,6 +210,7 @@ type ticketFile struct {
 	PushedCommits   []pushedCommitFile  `yaml:"pushed_commits,omitempty"`
 	SpecMerge       *specMergeFile      `yaml:"spec_merge,omitempty"`
 	PullRequest     *pullRequestFile    `yaml:"pull_request,omitempty"`
+	PullRequests    []pullRequestFile   `yaml:"pull_requests,omitempty"`
 	Claims          []claimFile         `yaml:"claims"`
 	Rounds          []roundFile         `yaml:"rounds"`
 	FailureReports  []failureReportFile `yaml:"failure_reports"`
@@ -228,6 +244,7 @@ type pullRequestFile struct {
 	Link        string `yaml:"link"`
 	State       string `yaml:"state"`
 	MergeCommit string `yaml:"merge_commit,omitempty"`
+	Close       bool   `yaml:"close,omitempty"`
 }
 
 type pushedCommitFile struct {
@@ -248,6 +265,8 @@ type ciRunsFile struct {
 }
 
 type ciRunFile struct {
+	// Repository is left out for the Home Repository.
+	Repository string      `yaml:"repository,omitempty"`
 	ID         int64       `yaml:"id"`
 	Attempt    int         `yaml:"attempt"`
 	Workflow   string      `yaml:"workflow"`
@@ -432,15 +451,17 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 		}
 		t.PushedCommits = append(t.PushedCommits, p)
 	}
+	// The Home Repository's pull request is pull_request, as it always
+	// was, and the other Repositories' are pull_requests.
 	if f.PullRequest != nil {
-		pr := &PullRequest{Repository: f.PullRequest.Repository, Number: f.PullRequest.Number, Link: f.PullRequest.Link, State: PullRequestState(f.PullRequest.State), MergeCommit: f.PullRequest.MergeCommit}
-		if lerr := checkRepositoryName("pull_request.repository", pr.Repository); lerr != nil {
+		if lerr := decodePullRequest(&t, "pull_request", *f.PullRequest); lerr != nil {
 			return Ticket{}, lerr
 		}
-		if !slices.Contains(PullRequestStates, pr.State) {
-			return Ticket{}, &LoadError{Field: "pull_request.state", Msg: fmt.Sprintf("%q is not one of %v", pr.State, PullRequestStates)}
+	}
+	for i, pf := range f.PullRequests {
+		if lerr := decodePullRequest(&t, fmt.Sprintf("pull_requests[%d]", i), pf); lerr != nil {
+			return Ticket{}, lerr
 		}
-		t.PullRequest = pr
 	}
 	if f.SpecMerge != nil {
 		sm := &SpecMerge{Repository: f.SpecMerge.Repository, Commit: f.SpecMerge.Commit}
@@ -524,7 +545,7 @@ func decodeCIRuns(data []byte) ([]CIRun, *LoadError) {
 	var out []CIRun
 	for i, rf := range f.Runs {
 		field := fmt.Sprintf("runs[%d]", i)
-		r := CIRun{ID: rf.ID, Attempt: rf.Attempt, Workflow: rf.Workflow, Name: rf.Name, Branch: rf.Branch, Commit: rf.Commit,
+		r := CIRun{Repository: rf.Repository, ID: rf.ID, Attempt: rf.Attempt, Workflow: rf.Workflow, Name: rf.Name, Branch: rf.Branch, Commit: rf.Commit,
 			Status: CIRunStatus(rf.Status), Conclusion: CIConclusion(rf.Conclusion), URL: rf.URL, Ticket: rf.Ticket, Rule: rf.Rule, Ignored: rf.Ignored}
 		if !r.Status.Valid() {
 			return nil, &LoadError{Field: field + ".status", Msg: fmt.Sprintf("unknown CI Run status %q", rf.Status)}
@@ -585,6 +606,23 @@ func decodeChangedRepositories(fs []changedRepoFile) ([]ChangedRepository, *Load
 		out = append(out, r)
 	}
 	return out, nil
+}
+
+// decodePullRequest adds f, a pull request stored at field, to t's,
+// refusing a bad state and a second pull request in one Repository.
+func decodePullRequest(t *Ticket, field string, f pullRequestFile) *LoadError {
+	pr := PullRequest{Repository: f.Repository, Number: f.Number, Link: f.Link, State: PullRequestState(f.State), MergeCommit: f.MergeCommit, Close: f.Close}
+	if lerr := checkRepositoryName(field+".repository", pr.Repository); lerr != nil {
+		return lerr
+	}
+	if !slices.Contains(PullRequestStates, pr.State) {
+		return &LoadError{Field: field + ".state", Msg: fmt.Sprintf("%q is not one of %v", pr.State, PullRequestStates)}
+	}
+	if slices.ContainsFunc(t.PullRequests, func(o PullRequest) bool { return o.Repository == pr.Repository }) {
+		return &LoadError{Field: field + ".repository", Msg: fmt.Sprintf("a second pull request in %q", pr.Repository)}
+	}
+	t.PullRequests = append(t.PullRequests, pr)
+	return nil
 }
 
 // checkRepositoryName refuses a Repository Name that breaks the rules;
@@ -698,8 +736,13 @@ func encode(record any, project string) (string, []byte, error) {
 		for _, pc := range r.PushedCommits {
 			f.PushedCommits = append(f.PushedCommits, pushedCommitFile{Repository: pc.Repository, Commit: pc.Commit, Branch: pc.Branch, Pushed: formatTime(pc.Pushed)})
 		}
-		if r.PullRequest != nil {
-			f.PullRequest = &pullRequestFile{Repository: r.PullRequest.Repository, Number: r.PullRequest.Number, Link: r.PullRequest.Link, State: string(r.PullRequest.State), MergeCommit: r.PullRequest.MergeCommit}
+		for _, pr := range r.PullRequests {
+			pf := pullRequestFile{Repository: pr.Repository, Number: pr.Number, Link: pr.Link, State: string(pr.State), MergeCommit: pr.MergeCommit, Close: pr.Close}
+			if pr.Repository == "" && f.PullRequest == nil {
+				f.PullRequest = &pf
+			} else {
+				f.PullRequests = append(f.PullRequests, pf)
+			}
 		}
 		if r.SpecMerge != nil {
 			f.SpecMerge = &specMergeFile{Repository: r.SpecMerge.Repository, Commit: r.SpecMerge.Commit, Merged: formatTime(r.SpecMerge.Merged)}
@@ -740,7 +783,7 @@ func encode(record any, project string) (string, []byte, error) {
 		rel = filepath.Join("projects", project, ciRunsName)
 		f := ciRunsFile{Runs: []ciRunFile{}}
 		for _, run := range r.Runs {
-			rf := ciRunFile{ID: run.ID, Attempt: run.Attempt, Workflow: run.Workflow, Name: run.Name, Branch: run.Branch, Commit: run.Commit,
+			rf := ciRunFile{Repository: run.Repository, ID: run.ID, Attempt: run.Attempt, Workflow: run.Workflow, Name: run.Name, Branch: run.Branch, Commit: run.Commit,
 				Status: string(run.Status), Conclusion: string(run.Conclusion), Started: formatOptionalTime(run.Started), Finished: formatOptionalTime(run.Finished),
 				URL: run.URL, Ticket: run.Ticket, Rule: run.Rule, Ignored: run.Ignored}
 			for _, j := range run.Jobs {
@@ -796,7 +839,30 @@ func encodeCI(c CI) *ciFile {
 	for _, r := range c.Rules {
 		f.Rules = append(f.Rules, ciRuleFile{Spec: r.Spec, Workflow: r.Workflow, Branch: r.Branch, State: string(r.State), Created: formatTime(r.Created)})
 	}
+	for _, r := range c.Repositories {
+		f.Repositories = append(f.Repositories, ciRepositoryFile{Name: r.Name, NotWatched: r.NotWatched, Provider: string(r.Provider), Repository: r.Repository, ProjectURL: r.ProjectURL})
+	}
 	return f
+}
+
+// decodeCIRepositories checks a Project's CI entries as load does: each
+// names a Repository once, with a CI Provider unless it is Not watched.
+// It returns the field, relative to ci.repositories, with the error.
+func decodeCIRepositories(fs []ciRepositoryFile) ([]CIRepository, string, error) {
+	var out []CIRepository
+	for i, f := range fs {
+		r := CIRepository{Name: f.Name, NotWatched: f.NotWatched, Provider: CIProvider(f.Provider), Repository: f.Repository, ProjectURL: f.ProjectURL}
+		switch {
+		case !ValidRepositoryName(r.Name):
+			return nil, fmt.Sprintf("[%d].name", i), fmt.Errorf("%q isn't a Repository Name", r.Name)
+		case slices.ContainsFunc(out, func(o CIRepository) bool { return o.Name == r.Name }):
+			return nil, fmt.Sprintf("[%d].name", i), fmt.Errorf("%s has two CI entries", r.Name)
+		case r.Provider != "" && !r.Provider.Valid(), r.Provider == "" && !r.NotWatched:
+			return nil, fmt.Sprintf("[%d].provider", i), fmt.Errorf("unknown CI provider %q (%s)", f.Provider, strings.Join(ciProviderNames(), " or "))
+		}
+		out = append(out, r)
+	}
+	return out, "", nil
 }
 
 // encodeGitHubIssues leaves GitHub Issues out of project.yaml while it is
@@ -981,7 +1047,7 @@ func decodeModels(f modelsFile) (Models, string, error) {
 func encodeCIResponses(rs []CIResponse) []ciResponseFile {
 	var out []ciResponseFile
 	for _, r := range rs {
-		f := ciResponseFile{Commit: r.Commit, LandAnyway: formatOptionalTime(r.LandAnyway), Rerun: formatOptionalTime(r.Rerun), FixTicket: r.FixTicket}
+		f := ciResponseFile{Repository: r.Repository, Commit: r.Commit, LandAnyway: formatOptionalTime(r.LandAnyway), Rerun: formatOptionalTime(r.Rerun), FixTicket: r.FixTicket}
 		for _, ra := range r.Reruns {
 			f.Reruns = append(f.Reruns, runAttemptFile{ID: ra.ID, Attempt: ra.Attempt})
 		}
@@ -995,7 +1061,7 @@ func encodeCIResponses(rs []CIResponse) []ciResponseFile {
 func decodeCIResponses(fs []ciResponseFile) ([]CIResponse, string, error) {
 	var out []CIResponse
 	for i, f := range fs {
-		r := CIResponse{Commit: f.Commit, FixTicket: f.FixTicket}
+		r := CIResponse{Repository: f.Repository, Commit: f.Commit, FixTicket: f.FixTicket}
 		if r.Commit == "" {
 			return nil, fmt.Sprintf("[%d].commit", i), errors.New("required")
 		}

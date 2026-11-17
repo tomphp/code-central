@@ -22,10 +22,14 @@ import (
 // choose, each an operation's name, which act on every one of them;
 // none while CI unavailable.
 type CIItemView struct {
-	Reason  NeedsMeReason     `json:"reason"`
-	Commit  string            `json:"commit"`
-	Tickets []CIItemTicket    `json:"tickets"`
-	Options []CIFailureOption `json:"options"`
+	Reason NeedsMeReason `json:"reason"`
+	// Repository is the Repository Name the commit was pushed in, left
+	// out while the Project has the Home Repository alone. Each option
+	// acts on that Repository only.
+	Repository string            `json:"repository,omitempty"`
+	Commit     string            `json:"commit"`
+	Tickets    []CIItemTicket    `json:"tickets"`
+	Options    []CIFailureOption `json:"options"`
 }
 
 // CIItemTicket is one Ticket a CI item lists, with its Spec.
@@ -35,21 +39,35 @@ type CIItemTicket struct {
 	Spec  string `json:"spec"`
 }
 
-// ciItem is one CI item as worked out: its reason and commit, the
-// Tickets it lists, since when it waits (the earliest of theirs), and the
-// detail of its reason.
+// ciItem is one CI item as worked out: its reason, the Repository Name
+// and commit, the Tickets it lists, since when it waits (the earliest of
+// theirs), the detail of its reason and its CI result.
 type ciItem struct {
 	reason      NeedsMeReason
+	repository  string
 	commit      string
 	tickets     []store.Ticket
 	since       time.Time
 	failure     *CIFailureSummary
 	unavailable *CIUnavailableView
+	result      CIResult
+}
+
+// label is it's pushed commit as its title names it: Name@sha while p has
+// more than one Repository, the short commit otherwise.
+func (it ciItem) label(p store.Project) string {
+	if severalRepositories(p) {
+		return it.repository + "@" + shortCommit(it.commit)
+	}
+	return shortCommit(it.commit)
 }
 
 // ciItemView is it as the views carry it.
 func ciItemView(r store.Reader, p store.Project, it ciItem) *CIItemView {
 	v := &CIItemView{Reason: it.reason, Commit: it.commit, Tickets: []CIItemTicket{}, Options: ciItemOptions(r, p, it)}
+	if severalRepositories(p) {
+		v.Repository = it.repository
+	}
 	for _, t := range it.tickets {
 		v.Tickets = append(v.Tickets, CIItemTicket{ID: DisplayID(p.Key, t.Number), Title: t.Title, Spec: DisplayID(p.Key, t.Spec)})
 	}
@@ -82,22 +100,23 @@ func ciItemOptions(r store.Reader, p store.Project, it ciItem) []CIFailureOption
 }
 
 // failureOptions are the failure options the human may choose on t's CI
-// item while t is CI failed or CI cancelled, nil otherwise; see
-// ciItemOptions.
-func (e *evaluation) failureOptions(t store.Ticket) []CIFailureOption {
-	it, ok := e.itemOf(t)
+// item in the Repository name while t is CI failed or CI cancelled there,
+// nil otherwise; see ciItemOptions.
+func (e *evaluation) failureOptions(t store.Ticket, name string) []CIFailureOption {
+	it, ok := e.itemIn(t, name)
 	if !ok || it.reason == ReasonCIUnavailable {
 		return nil
 	}
 	return ciItemOptions(e.r, e.p, it)
 }
 
-// ciItemRow is it's Needs Me row: one per commit, with no Ticket.
+// ciItemRow is it's Needs Me row: one per Repository and commit, with no
+// Ticket.
 func (e *evaluation) ciItemRow(it ciItem) NeedsMeRow {
 	return NeedsMeRow{
-		Project: e.p.Key, Title: needsMeTitle(it.reason) + " at " + shortCommit(it.commit), Reason: it.reason, Since: it.since,
+		Project: e.p.Key, Title: needsMeTitle(it.reason) + " at " + it.label(e.p), Reason: it.reason, Since: it.since,
 		CIFailure: it.failure, CIUnavailable: it.unavailable, CIItem: ciItemView(e.r, e.p, it),
-		CIResult: e.ci.ticket(it.tickets[0]).result,
+		CIResult: it.result,
 	}
 }
 
@@ -120,21 +139,22 @@ func shortCommit(commit string) string {
 	return commit
 }
 
-// responseOf is p's response to commit, zero when it has none.
-func responseOf(p store.Project, commit string) store.CIResponse {
-	if i := slices.IndexFunc(p.CIResponses, func(r store.CIResponse) bool { return r.Commit == commit }); i >= 0 {
+// responseOf is p's response to commit in the Repository record names,
+// zero when it has none.
+func responseOf(p store.Project, record, commit string) store.CIResponse {
+	if i := slices.IndexFunc(p.CIResponses, func(r store.CIResponse) bool { return r.Repository == record && r.Commit == commit }); i >= 0 {
 		return p.CIResponses[i]
 	}
-	return store.CIResponse{Commit: commit}
+	return store.CIResponse{Repository: record, Commit: commit}
 }
 
-// respond applies change to p's response to commit, adding one when p
-// has none, on a copy of the list.
-func respond(p *store.Project, commit string, change func(*store.CIResponse)) {
+// respond applies change to p's response to commit in the Repository
+// record names, adding one when p has none, on a copy of the list.
+func respond(p *store.Project, record, commit string, change func(*store.CIResponse)) {
 	rs := slices.Clone(p.CIResponses)
-	i := slices.IndexFunc(rs, func(r store.CIResponse) bool { return r.Commit == commit })
+	i := slices.IndexFunc(rs, func(r store.CIResponse) bool { return r.Repository == record && r.Commit == commit })
 	if i < 0 {
-		rs = append(rs, store.CIResponse{Commit: commit})
+		rs = append(rs, store.CIResponse{Repository: record, Commit: commit})
 		i = len(rs) - 1
 	}
 	change(&rs[i])

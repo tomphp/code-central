@@ -361,6 +361,7 @@ export const TICKET_FIELDS = [
   "spec_merge",
   "spec_landed",
   "ci_item",
+  "ci_items",
   "waiting_for_spec",
   "ci_failure_options",
   "claims",
@@ -502,11 +503,15 @@ export interface TicketView {
   // Tickets); empty on any other Ticket.
   recommendation?: Recommendation;
   // PushedCommit is the latest commit the Factory pushed for the Ticket
-  // while CI Tracking was on, CIResult the Ticket's CI result and
-  // CICommit the pushed commit it comes from: under the CI gate one
-  // that passed, if any did, else the latest (code-central-430). All
-  // are left out while it has none. CIRuns are every CI Run tracked
-  // against it, the latest pushed commit's first. Computed on read.
+  // in the Home Repository while CI Tracking was on, and CICommit the
+  // pushed commit there the Home Repository's CI result comes from:
+  // under the CI gate one that passed, if any did, else the latest
+  // (code-central-430). CIResult is the Ticket's CI result, combined
+  // across its watched Repositories: running, else failed, else
+  // cancelled, else passed; each Repository's own is in Repositories.
+  // All are left out while it has none. CIRuns are every CI Run tracked
+  // against it, the Home Repository's first, each Repository's latest
+  // pushed commit's first. Computed on read.
   pushed_commit?: PushedCommitView;
   // PullRequest is the pull request the Pull Request Watcher reported
   // for the Ticket's pushed work; left out until it has one.
@@ -514,9 +519,10 @@ export interface TicketView {
   ci_result?: CIResult;
   ci_commit?: string;
   ci_runs?: CIRunView[];
-  // LandAnyway says the human accepted the latest pushed commit's
-  // failed CI result, so the Factory lands it (code-central-261), on
-  // this Ticket or on another sharing the commit (code-central-432).
+  // LandAnyway says the human accepted the failed CI result of the
+  // latest pushed commit in the Home Repository, so the Factory lands it
+  // there (code-central-261), on this Ticket or on another sharing the
+  // commit (code-central-432).
   land_anyway?: boolean;
   // SpecLanded says Land per Spec covers the Ticket, and WaitingForSpec
   // that it is Accepted and waits for its Spec to land (code-central-371).
@@ -525,8 +531,12 @@ export interface TicketView {
   spec_landed?: boolean;
   // CIItem is the CI failed, CI cancelled or CI unavailable item that
   // lists this Ticket, with every other Ticket waiting on its pushed
-  // commit (code-central-432); left out while none does.
+  // commit (code-central-432); left out while none does. A Ticket listed
+  // in several Repositories has the first in landing order whose reason
+  // is its own here, and CIItems lists each one, but only while the
+  // Project has more than one Repository.
   ci_item?: CIItemView;
+  ci_items?: CIItemView[];
   waiting_for_spec?: boolean;
   // CIFailureOptions are the failure options, each an operation's name,
   // the human may choose on the Ticket's CI item while it is CI failed
@@ -846,6 +856,12 @@ export interface CIView {
   rules: CIRuleView[];
   // Watcher is the CI Watcher's status, as it last reported it.
   watcher: WatcherView;
+  // Repositories are the CI entries of the Repositories other than the
+  // Home, in landing order; the fields above are the Home Repository's,
+  // and its PAT environment variable, Ignored workflows and CI Rules
+  // are every Repository's. Left out while the Project has the Home
+  // Repository alone.
+  repositories?: CIRepositoryView[];
 }
 
 // GitHubIssuesView is a Project's GitHub Issues settings as every Project
@@ -1010,9 +1026,14 @@ export interface ChangedRepositoryView {
   // out until the Pull Request Watcher reports one.
   pull_request?: PullRequestView;
   // CIResult is the Repository's CI result, from the pushed commit
-  // CICommit; both are left out while it has none.
+  // CICommit; both are left out while it has none. CINotWatched says CI
+  // Tracking never watches the Repository: it has no CI result.
   ci_result?: CIResult;
   ci_commit?: string;
+  ci_not_watched?: boolean;
+  // LandAnyway says the human accepted the failed CI result of the
+  // latest pushed commit there, so the Factory lands it there.
+  land_anyway?: boolean;
 }
 
 // PushedCommitView is a commit the Factory pushed for a Ticket, and when
@@ -1025,6 +1046,9 @@ export interface PushedCommitView {
 // PullRequestView is a pull request as reads show it: on a Ticket, on the
 // Spec page and in the Pull Request Watcher's list.
 export interface PullRequestView {
+  // Repository is the Repository Name the pull request is in; left out
+  // while the Project has one Repository.
+  repository?: string;
   number: number;
   link: string;
   state: PullRequestState;
@@ -1036,8 +1060,10 @@ export interface PullRequestView {
 // takes it: the CI Watcher names what it is tracked against, a Ticket or
 // a CI Rule's Spec; Code Central marks it ignored.
 export interface CIRunView {
-  // ID and Attempt are the CI Provider's run ID and attempt, which key
-  // the run.
+  // Repository is the Repository Name of the Repository the run is for,
+  // empty for the Home Repository. With the CI Provider's run ID and
+  // attempt, it keys the run.
+  repository?: string;
   id: number;
   attempt: number;
   // Workflow is the workflow file's base name, such as ci.yml; Name is
@@ -1077,6 +1103,10 @@ export interface SpecMergeView {
 // none while CI unavailable.
 export interface CIItemView {
   reason: NeedsMeReason;
+  // Repository is the Repository Name the commit was pushed in, left
+  // out while the Project has the Home Repository alone. Each option
+  // acts on that Repository only.
+  repository?: string;
   commit: string;
   tickets: CIItemTicket[];
   options: CIFailureOption[];
@@ -1373,6 +1403,10 @@ export interface WatcherView {
   problem?: WatcherProblem;
   message?: string;
   fix?: string;
+  // Repositories are the Repositories it can't watch, each with its
+  // problem and fix, while in error about some of them only: it carries
+  // on watching the rest.
+  repositories?: RepositoryProblem[];
   // RateLimitedUntil is when GitHub lets a rate-limited Watcher call it
   // again; until then it is still Watching, not in error.
   rate_limited_until?: string;
@@ -1396,6 +1430,16 @@ export interface CIRuleView {
   branch: string;
   state: State;
   created: string;
+}
+
+// CIRepositoryView is the CI entry of one Repository other than the Home:
+// its CI Provider and what that watches, or Not watched.
+export interface CIRepositoryView {
+  name: string;
+  not_watched: boolean;
+  provider?: CIProvider;
+  repository?: string;
+  project_url?: string;
 }
 
 // ModelRowView is one Models row's model and effort, each empty when the
@@ -1576,6 +1620,10 @@ export interface NeedsMeRow {
   // PullRequest is the Ticket's pull request, for its item's link; left
   // out until the Pull Request Watcher reports one.
   pull_request?: PullRequestView;
+  // ClosedPullRequests are the Ticket's pull requests closed without
+  // merging, each naming its Repository while the Project has several,
+  // in landing order (Pull request closed).
+  closed_pull_requests?: PullRequestView[];
   // BaseDiverged is the local and remote base commits (Base diverged,
   // whose row has no Ticket: its ID is empty).
   base_diverged?: BaseDivergedView;
@@ -1615,6 +1663,16 @@ export interface Tokens {
   cache_write_tokens: number;
   cache_read_tokens: number;
   output_tokens: number;
+}
+
+// RepositoryProblem is one Repository a Watcher can't watch, by
+// Repository Name, with what is wrong and its fix (Spec
+// code-central-848): the Watcher carries on with the others.
+export interface RepositoryProblem {
+  repository: string;
+  problem?: WatcherProblem;
+  message: string;
+  fix?: string;
 }
 
 // PlanLimitWindow is one window of the Plan Limits.

@@ -284,6 +284,10 @@ _Avoid_: CI integration
 The pluggable part of CI Tracking that talks to one CI system, through that system's own command-line tool and login, or its API and a token from the environment. There are two: GitHub Actions, through `gh`, and Azure Pipelines. It is chosen per Repository, so one Project may use both.
 _Avoid_: Integration, connector
 
+**Not watched**:
+The CI choice of a Repository other than the Home whose CI CI Tracking never watches: it has no CI Provider, never gates landing, never raises a CI item and never counts towards a Ticket's CI result. A Repository whose Clone URL names no host a CI Provider is on is Not watched until the human chooses one.
+_Avoid_: CI off, untracked, ignored Repository
+
 **Azure Pipelines**:
 The CI Provider for Azure DevOps' CI. It reaches one Azure DevOps project, named by its URL, over Azure DevOps' API, using a PAT that the service's environment holds under a variable the Project names.
 _Avoid_: ADO provider, Azure DevOps CI

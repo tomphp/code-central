@@ -55,8 +55,9 @@ function Landing({ r, waiting }: { r: ChangedRepositoryView; waiting: boolean })
 }
 
 // CI is the Repository's CI result with its pushed commit, else the
-// latest commit pushed for it.
+// latest commit pushed for it; or that CI Tracking doesn't watch it.
 function CI({ r }: { r: ChangedRepositoryView }) {
+  if (r.ci_not_watched) return <span className="small muted"> · CI not watched</span>;
   const pushed = r.ci_commit ?? r.pushed_commit?.commit;
   if (!r.ci_result && !pushed) return null;
   return (

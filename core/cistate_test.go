@@ -54,7 +54,7 @@ func TestTicketsSharingAPushedCommitReadTheSameCI(t *testing.T) {
 func TestAResponseOnTheProjectCoversEveryTicketOnTheCommit(t *testing.T) {
 	f := itemWorld(t)
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
-	if _, err := f.core.RerunCI(human, "acme", core.TicketInput{Ticket: "acme-5"}); err != nil {
+	if _, err := f.core.RerunCI(human, "acme", core.CIResponseInput{Ticket: "acme-5"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"acme-5", "acme-8"} {

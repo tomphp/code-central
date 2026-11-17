@@ -187,6 +187,10 @@ func (f *factory) detectMergedPullRequests(ctx context.Context, remote string) {
 		if f.halted(ctx) || f.paused() {
 			return
 		}
+		if tk.State == store.InReview && changedElsewhere(f.home.name, tk) {
+			f.detectMergedPullRequestsIn(ctx, tk, remote)
+			continue
+		}
 		if tk.PullRequest == nil || tk.PullRequest.State != store.PRMerged {
 			continue
 		}

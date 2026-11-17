@@ -138,6 +138,7 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 	if homeReady && policy.CIGateHolds() {
 		f.reportTip(ctx, p.Landing.Remote, policy)
 	}
+	f.landingRemote = p.Landing.Remote
 	for _, tk := range accepted {
 		if f.halted(ctx) || f.paused() {
 			return
@@ -167,7 +168,11 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 		case core.RouteBranch:
 			f.landMergedBranch(ctx, tk, p)
 		case core.RoutePullRequest:
-			f.landPullRequest(ctx, tk, p)
+			if changedElsewhere(f.home.name, tk) {
+				f.landPullRequests(ctx, tk, p)
+			} else {
+				f.landPullRequest(ctx, tk, p)
+			}
 		case core.RouteSpecBranch:
 			if tk.SpecMerge == nil || !tk.SpecMerge.Counts {
 				f.mergeIntoSpecBranch(ctx, tk)
@@ -593,41 +598,67 @@ func (f *factory) pushedBase(tk core.TicketView, remote, base, commit string) bo
 	return f.home.git.isAncestor(commit, pushed) && f.home.git.isAncestor(pushed, "refs/remotes/"+remote+"/"+base)
 }
 
-// landOnCI lands a Ticket the CI gate holds once its CI result is
-// passed, at the pushed commit that passed, or once the human chose Land
-// anyway on a failed one, at its latest. Until then it stays where it
-// is, with a line for each CI result it waits on.
+// landOnCI lands a Ticket the CI gate holds once its CI result in the
+// Home Repository is passed, at the pushed commit that passed, or once the
+// human chose Land anyway on a failed one there, at its latest: each
+// Repository lands on its own CI result, so another's red build doesn't
+// hold it back. Until then it stays where it is, with a line for each CI
+// result it waits on.
 func (f *factory) landOnCI(ctx context.Context, tk core.TicketView) {
 	pushed := tk.PushedCommit.Commit
-	if tk.CIResult == core.CIPassed {
-		f.landAt(ctx, tk, f.home, tk.CICommit)
+	result, commit, anyway := f.homeCI(tk)
+	if result == core.CIPassed {
+		f.landAt(ctx, tk, f.home, commit)
 		return
 	}
-	if (tk.CIResult == core.CIFailed || tk.CIResult == core.CICancelled) && tk.LandAnyway {
-		f.printf("%s: landing anyway at %s, as you chose, though its CI %s", tk.ID, short(pushed), tk.CIResult)
+	if (result == core.CIFailed || result == core.CICancelled) && anyway {
+		f.printf("%s: landing anyway at %s, as you chose, though its CI %s", tk.ID, short(pushed), result)
 		f.landAt(ctx, tk, f.home, pushed)
 		return
 	}
-	key := tk.ID + "@" + pushed + "@" + string(tk.CIResult)
+	key := tk.ID + "@" + pushed + "@" + string(result)
 	if f.saidOnCI[key] {
 		return
 	}
 	f.saidOnCI[key] = true
-	if tk.CIResult == core.CIFailed {
+	if result == core.CIFailed {
 		f.printf("%s: CI failed at %s, so it stays %s", tk.ID, short(pushed), tk.State)
 		return
 	}
-	if tk.CIResult == core.CICancelled {
+	if result == core.CICancelled {
 		f.printf("%s: CI cancelled at %s, so it stays %s", tk.ID, short(pushed), tk.State)
 		return
 	}
 	f.printf("%s: waiting on CI at %s before it lands", tk.ID, short(pushed))
 }
 
+// homeCI is tk's CI in the Home Repository: its CI result there, the
+// pushed commit that result comes from, and whether the human chose Land
+// anyway on it. With the Home Repository alone, the Ticket's own fields
+// are the Home's; with several, its Changed Repository's are, as its CI
+// result combines every Repository's, and one that didn't change the Home
+// Repository has no CI result there.
+func (f *factory) homeCI(tk core.TicketView) (result core.CIResult, commit string, landAnyway bool) {
+	if len(tk.Repositories) == 0 {
+		return tk.CIResult, tk.CICommit, tk.LandAnyway
+	}
+	for _, r := range tk.Repositories {
+		if r.Name == f.project {
+			return r.CIResult, r.CICommit, r.LandAnyway
+		}
+	}
+	return "", "", false
+}
+
 // remoteTip is the commit branch's remote-tracking ref on remote holds,
 // or, without one to read, pushed.
 func (f *factory) remoteTip(remote, branch, pushed string) string {
-	commit, err := f.home.git.commit("refs/remotes/" + remote + "/" + branch)
+	return f.remoteTipIn(f.home, remote, branch, pushed)
+}
+
+// remoteTipIn is remoteTip in r.
+func (f *factory) remoteTipIn(r *repository, remote, branch, pushed string) string {
+	commit, err := r.git.commit("refs/remotes/" + remote + "/" + branch)
 	if err != nil {
 		return pushed
 	}

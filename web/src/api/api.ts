@@ -12,6 +12,7 @@ import type {
   HeldSessionEvent,
   CIRuleChange,
   CITrackingChange,
+  RepositoryCIChange,
   LandingInput,
   LinkedRow,
   NeedsMeView,
@@ -157,6 +158,10 @@ export interface Api {
   // trimmed, and needed as owner/name to turn CI Tracking on; Ignored
   // workflows are trimmed, with blanks and repeats dropped.
   setCITracking(project: string, ci: CITrackingChange): Promise<ProjectView>;
+  // setRepositoryCI sets the CI entry of a Repository other than the
+  // Home: Not watched, or its CI Provider and what it watches, which,
+  // while CI Tracking is on, must pass the CI Watcher's check.
+  setRepositoryCI(project: string, name: string, ci: RepositoryCIChange): Promise<ProjectView>;
   // setGitHubIssues sets the Project's GitHub Issues settings. The
   // repository and label are trimmed; turning it on needs a repository as
   // owner/name and a passing Issues check, and the first time creates the

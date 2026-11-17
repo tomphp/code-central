@@ -46,8 +46,8 @@ func TestTheRealChainMigratesAFormat43StoreToTheChangedRepositoriesFormat(t *tes
 		if tk.Branch != "acme-2" || tk.Commit != "abc123" || tk.Repositories != nil {
 			t.Errorf("ticket after migrating: branch %q commit %q repositories %+v, want its branch and commit and no list", tk.Branch, tk.Commit, tk.Repositories)
 		}
-		if tk.PushedCommits[0].Repository != "" || tk.PullRequest.Repository != "" {
-			t.Errorf("pushed commit %+v and pull request %+v, want no Repository Name", tk.PushedCommits[0], tk.PullRequest)
+		if tk.PushedCommits[0].Repository != "" || tk.PullRequests[0].Repository != "" {
+			t.Errorf("pushed commit %+v and pull request %+v, want no Repository Name", tk.PushedCommits[0], tk.PullRequests)
 		}
 		return nil
 	})
@@ -63,7 +63,7 @@ func TestTheRealChainMigratesAFormat43StoreToTheChangedRepositoriesFormat(t *tes
 		tk, _ := w.Ticket("acme", 2)
 		tk.Repositories = changed
 		tk.PushedCommits = append(tk.PushedCommits, store.PushedCommit{Repository: "api", Commit: "fed789", Pushed: at})
-		tk.PullRequest.Repository = "api"
+		tk.PullRequests[0].Repository = "api"
 		tk.SpecMerge = &store.SpecMerge{Repository: "api", Commit: "aaa111", Merged: at}
 		return w.PutTicket("acme", tk)
 	}); err != nil {
@@ -75,8 +75,8 @@ func TestTheRealChainMigratesAFormat43StoreToTheChangedRepositoriesFormat(t *tes
 		if !reflect.DeepEqual(tk.Repositories, changed) {
 			t.Errorf("repositories %+v, want %+v", tk.Repositories, changed)
 		}
-		if tk.PushedCommits[1].Repository != "api" || tk.PullRequest.Repository != "api" || tk.SpecMerge.Repository != "api" {
-			t.Errorf("pushed commit %+v, pull request %+v, Spec merge %+v, want each in api", tk.PushedCommits[1], tk.PullRequest, tk.SpecMerge)
+		if tk.PushedCommits[1].Repository != "api" || tk.PullRequests[0].Repository != "api" || tk.SpecMerge.Repository != "api" {
+			t.Errorf("pushed commit %+v, pull request %+v, Spec merge %+v, want each in api", tk.PushedCommits[1], tk.PullRequests, tk.SpecMerge)
 		}
 		return nil
 	})

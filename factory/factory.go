@@ -347,6 +347,9 @@ type factory struct {
 	reportedChanged map[string]string
 	// oldBases are the bases the Project named earlier in this run.
 	oldBases []string
+	// landingRemote is the Push remote the last poll's Landing settings
+	// named, for a Claim's start to find the remote bases.
+	landingRemote string
 
 	// bases is what the Factory knows of each Repository's base, by
 	// Repository Name: whether it is missing, has diverged or was level

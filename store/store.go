@@ -251,8 +251,11 @@ type StageGuides struct {
 // (code-central-432): Land anyway, and a Re-run request with the failed
 // run attempts it asked for. Before code-central-585 a response could be
 // stored on the pushed commit itself; format 37 moved each one here.
+// Repository is the Repository Name the commit was pushed in, empty for
+// the Home Repository: a response is keyed by both.
 type CIResponse struct {
-	Commit string
+	Repository string
+	Commit     string
 	// LandAnyway is when the human accepted the commit's failed CI
 	// result; zero until then.
 	LandAnyway time.Time
@@ -394,7 +397,10 @@ func ciProviderNames() []string {
 // Repository is the GitHub repository,
 // ProjectURL the Azure DevOps project and PATEnv the name of the
 // environment variable holding its PAT (never the PAT); each provider
-// keeps its own.
+// keeps its own. Those name the Home Repository's CI: Repositories hold
+// the other Repositories' entries (Spec code-central-848), while the PAT
+// environment variable, the Ignored workflows and the CI Rules are the
+// Project's, for every Repository.
 type CI struct {
 	Tracking         bool
 	Provider         CIProvider
@@ -408,6 +414,22 @@ type CI struct {
 	// as the fallback for a Landing with no Base.
 	PushRemoteBase string
 	Rules          []CIRule
+	// Repositories are the CI entries of the Repositories other than the
+	// Home, each named once; a Repository without one reads as filled in
+	// from its Clone URL.
+	Repositories []CIRepository
+}
+
+// CIRepository is the CI entry of one Repository other than the Home:
+// its CI Provider and what that watches (the GitHub repository as
+// owner/name, or the Azure DevOps project's URL), or Not watched, when
+// its CI is never tracked.
+type CIRepository struct {
+	Name       string
+	NotWatched bool
+	Provider   CIProvider
+	Repository string
+	ProjectURL string
 }
 
 // AnyWorkflow is the workflow of a CI Rule that matches every workflow
@@ -439,7 +461,7 @@ func DefaultCI() CI { return CI{Provider: CIGitHubActions} }
 func (c CI) Equal(d CI) bool {
 	return c.Tracking == d.Tracking && c.Provider == d.Provider && c.Repository == d.Repository && c.ProjectURL == d.ProjectURL && c.PATEnv == d.PATEnv &&
 		slices.Equal(c.IgnoredWorkflows, d.IgnoredWorkflows) && c.PushRemoteURL == d.PushRemoteURL && c.PushRemoteBase == d.PushRemoteBase &&
-		slices.EqualFunc(c.Rules, d.Rules, CIRule.Equal)
+		slices.EqualFunc(c.Rules, d.Rules, CIRule.Equal) && slices.Equal(c.Repositories, d.Repositories)
 }
 
 // orDefault fills in what c leaves empty from DefaultCI.
@@ -703,11 +725,12 @@ type Ticket struct {
 	// work into under Land per Spec, and when Code Central heard of it;
 	// nil until then.
 	SpecMerge *SpecMerge
-	// PullRequest is the pull request the Pull Request Watcher reported
-	// for the Ticket's pushed work (code-central-388); nil until then.
-	PullRequest *PullRequest
-	Claims      []Claim
-	Rounds      []Round
+	// PullRequests are the pull requests the Pull Request Watcher
+	// reported for the Ticket's pushed work (code-central-388), one per
+	// Repository at most (Spec code-central-848); none until then.
+	PullRequests []PullRequest
+	Claims       []Claim
+	Rounds       []Round
 	// FailureReports are numbered and never edited.
 	FailureReports []FailureReport
 	Comments       []Comment
@@ -786,6 +809,11 @@ type PullRequest struct {
 	Link        string
 	State       PullRequestState
 	MergeCommit string
+	// Close marks an open pull request for the Pull Request Watcher to
+	// close on the Code Host, as sending its Ticket back while none of
+	// its siblings has merged does; it holds until the watcher reports
+	// the pull request closed or merged.
+	Close bool
 }
 
 // PushedCommit is one commit the Factory pushed for a Ticket, and when
@@ -855,12 +883,15 @@ func (c CIConclusion) Failed() bool { return c == CIFailure || c == CITimedOut }
 func (c CIConclusion) Cancelled() bool { return c == CICancelled }
 
 // CIRun is one attempt of one workflow run the CI Provider reported,
-// keyed by the provider's run ID and the attempt. It is tracked against
-// a Ticket or a CI Rule (the Spec number naming it). A run of an Ignored
-// workflow is kept, marked Ignored.
+// keyed by the Repository it ran for, the provider's run ID and the
+// attempt. It is tracked against a Ticket or a CI Rule (the Spec number
+// naming it). A run of an Ignored workflow is kept, marked Ignored.
 type CIRun struct {
-	ID      int64
-	Attempt int
+	// Repository is the Repository Name the run is for, empty for the
+	// Home Repository.
+	Repository string
+	ID         int64
+	Attempt    int
 	// Workflow is the workflow file's base name, such as ci.yml, and Name
 	// the name it shows.
 	Workflow   string
@@ -1118,10 +1149,7 @@ func (t Ticket) clone() Ticket {
 		sm := *t.SpecMerge
 		t.SpecMerge = &sm
 	}
-	if t.PullRequest != nil {
-		pr := *t.PullRequest
-		t.PullRequest = &pr
-	}
+	t.PullRequests = slices.Clone(t.PullRequests)
 	t.Claims = slices.Clone(t.Claims)
 	t.Rounds = slices.Clone(t.Rounds)
 	for i := range t.Rounds {

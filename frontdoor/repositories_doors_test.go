@@ -18,7 +18,8 @@ func init() {
 	cases["add_repository"] = opCase{
 		ok: call{http: addRepository(`{"name":"web","clone_url":"git@github.com:acme/web.git"}`)},
 		check: func(t *testing.T, out map[string]any) {
-			acknowledgement("acme", "repositories")(t, out)
+			// It brings its CI entry, filled in from its Clone URL.
+			acknowledgement("acme", "ci", "repositories")(t, out)
 		},
 		full: func(t *testing.T, out map[string]any) {
 			repositories(t, out, "acme", "web")
@@ -47,7 +48,8 @@ func init() {
 		setup: withRepository(`{"name":"web","clone_url":"git@github.com:acme/web.git"}`),
 		ok:    call{http: removeRepository(`{"name":"web"}`)},
 		check: func(t *testing.T, out map[string]any) {
-			acknowledgement("acme", "repositories")(t, out)
+			// Its CI entry goes with it.
+			acknowledgement("acme", "ci", "repositories")(t, out)
 		},
 		full: func(t *testing.T, out map[string]any) { repositories(t, out, "acme") },
 		bad:  call{http: removeRepository(`{"name":"acme"}`)},

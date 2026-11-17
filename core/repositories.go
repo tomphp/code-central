@@ -99,6 +99,9 @@ type AddRepositoryInput struct {
 	// LocalPath is an absolute path to an existing clone; left out, the
 	// Factory clones it beside the Home Repository.
 	LocalPath string `json:"local_path,omitempty"`
+	// CI is the Repository's CI entry; left out, it is filled in from the
+	// Clone URL, Not watched for a host no CI Provider is on.
+	CI *RepositoryCI `json:"ci,omitempty"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
@@ -150,6 +153,13 @@ func (c *Core) AddRepository(ctx context.Context, key string, in AddRepositoryIn
 	if err := checkRepositoryFields(r); err != nil {
 		return Written[ProjectView]{}, err
 	}
+	entry := ciEntryFromCloneURL(r.Name, r.CloneURL)
+	if in.CI != nil {
+		var err error
+		if entry, err = ciEntry(r.Name, *in.CI, "ci."); err != nil {
+			return Written[ProjectView]{}, err
+		}
+	}
 	add := func(rs []store.Repository) ([]store.Repository, error) {
 		if i := slices.IndexFunc(rs, func(o store.Repository) bool { return o.Name == r.Name }); i >= 0 {
 			what := "a Repository"
@@ -161,7 +171,7 @@ func (c *Core) AddRepository(ctx context.Context, key string, in AddRepositoryIn
 		}
 		return append(rs, r), nil
 	}
-	return c.updateRepositories(ctx, key, in.Full, r, true, add)
+	return c.updateRepositories(ctx, key, in.Full, r, true, &entry, add)
 }
 
 // EditRepository is the human's edit_repository: a Repository's Clone
@@ -215,7 +225,7 @@ func (c *Core) EditRepository(ctx context.Context, key string, in EditRepository
 	}
 	// Only a Clone URL naming another repository needs the Pull Request
 	// check again.
-	return c.updateRepositories(ctx, key, in.Full, r, NormalCloneURL(was) != NormalCloneURL(r.CloneURL), edit)
+	return c.updateRepositories(ctx, key, in.Full, r, NormalCloneURL(was) != NormalCloneURL(r.CloneURL), nil, edit)
 }
 
 // editHomeRefusal is why in can't edit the Home Repository.
@@ -242,7 +252,7 @@ func (c *Core) RemoveRepository(ctx context.Context, key string, in RemoveReposi
 		return Written[ProjectView]{}, err
 	}
 	name := strings.TrimSpace(in.Name)
-	return c.changeRepositories(key, in.Full, func(r store.Reader, p store.Project) ([]store.Repository, error) {
+	return c.changeRepositories(key, in.Full, nil, func(r store.Reader, p store.Project) ([]store.Repository, error) {
 		rs := p.RepositoryList()
 		i, err := repositoryNamed(key, rs, name)
 		if err != nil {
@@ -266,7 +276,7 @@ func (c *Core) SetLandingOrder(ctx context.Context, key string, in SetLandingOrd
 	if err := humanOnly(ctx, "set_landing_order"); err != nil {
 		return Written[ProjectView]{}, err
 	}
-	return c.changeRepositories(key, in.Full, func(_ store.Reader, p store.Project) ([]store.Repository, error) {
+	return c.changeRepositories(key, in.Full, nil, func(_ store.Reader, p store.Project) ([]store.Repository, error) {
 		rs := p.RepositoryList()
 		names := repositoryNames(rs)
 		var out []store.Repository
@@ -356,10 +366,12 @@ func repositoryNamed(key string, rs []store.Repository, name string) (int, error
 // updateRepositories writes the Repositories change makes, once r's Clone
 // URL and local path are listed nowhere else and, when checkHost and
 // under Pull Request, its Clone URL passes the Pull Request Watcher's
-// check. The check calls the Code Host, so it runs outside the store's
-// lock, between a read that refuses what the store alone can and the
-// write, which checks again.
-func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r store.Repository, checkHost bool, change func([]store.Repository) ([]store.Repository, error)) (Written[ProjectView], error) {
+// check. With ci, r's new CI entry, it is written with them, once, while
+// CI Tracking is on, it passes the CI Watcher's check. The checks call
+// the Code Host, so they run outside the store's lock, between a read
+// that refuses what the store alone can and the write, which checks
+// again.
+func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r store.Repository, checkHost bool, ci *store.CIRepository, change func([]store.Repository) ([]store.Repository, error)) (Written[ProjectView], error) {
 	apply := func(p store.Project) ([]store.Repository, error) {
 		rs, err := change(p.RepositoryList())
 		if err != nil {
@@ -368,6 +380,7 @@ func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r 
 		return rs, refuseListed(p, r)
 	}
 	var check *PullRequestCheckInput
+	var checkCI func() error
 	err := c.store.View(func(rd store.Reader) error {
 		if err := writable(rd, key); err != nil {
 			return err
@@ -379,23 +392,31 @@ func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r 
 		if checkHost && landingPolicyOf(p).RunsPullRequestWatcher() {
 			check = &PullRequestCheckInput{GHPath: rd.Options().GHPath, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv})}
 		}
+		if opts := rd.Options(); ci != nil && landingPolicyOf(p).RunsCIWatcher() {
+			checkCI = func() error { return c.checkCIEntry(ctx, p, opts, *ci, "ci.") }
+		}
 		return nil
 	})
 	if err != nil {
 		return Written[ProjectView]{}, err
 	}
 	if check != nil {
-		if err := c.checkRepositoryPullRequests(ctx, r.CloneURL, *check); err != nil {
+		if err := c.checkRepositoryPullRequests(ctx, r.Name, r.CloneURL, *check); err != nil {
 			return Written[ProjectView]{}, err
 		}
 	}
-	return c.changeRepositories(key, full, func(_ store.Reader, p store.Project) ([]store.Repository, error) { return apply(p) })
+	if checkCI != nil {
+		if err := checkCI(); err != nil {
+			return Written[ProjectView]{}, err
+		}
+	}
+	return c.changeRepositories(key, full, ci, func(_ store.Reader, p store.Project) ([]store.Repository, error) { return apply(p) })
 }
 
 // checkRepositoryPullRequests refuses a Repository whose Clone URL names
 // no Code Host Pull Request supports, or fails the Pull Request
 // Watcher's check, with the reason and fix.
-func (c *Core) checkRepositoryPullRequests(ctx context.Context, url string, in PullRequestCheckInput) error {
+func (c *Core) checkRepositoryPullRequests(ctx context.Context, name, url string, in PullRequestCheckInput) error {
 	if in.CodeHost, in.Repository = codeHostOf(url); in.CodeHost == CodeHostNone {
 		return &Error{Code: Invalid, Field: "clone_url", Message: url + " is on a host Pull Request doesn't support; it supports GitHub (github.com) and Azure Repos (dev.azure.com, ssh.dev.azure.com, *.visualstudio.com)",
 			Fix: "give its GitHub or Azure Repos Clone URL, or land by Merge or Branch"}
@@ -403,15 +424,22 @@ func (c *Core) checkRepositoryPullRequests(ctx context.Context, url string, in P
 	if c.pullRequestCheck == nil {
 		return nil
 	}
-	if res := c.pullRequestCheck(ctx, in); res.Problem != "" {
+	in.Repositories = []PullRequestCheckRepository{{Name: name, CodeHost: in.CodeHost, Repository: in.Repository}}
+	res := c.pullRequestCheck(ctx, in)
+	if len(res.Repositories) > 0 {
+		res.Reason, res.Fix = res.Repositories[0].Message, res.Repositories[0].Fix
+	}
+	if res.Problem != "" {
 		return &Error{Code: Invalid, Field: "clone_url", Message: res.Reason, Fix: res.Fix}
 	}
 	return nil
 }
 
 // changeRepositories writes the Repositories change makes of the
-// Project's, acknowledging the Project.
-func (c *Core) changeRepositories(key string, full bool, change func(store.Reader, store.Project) ([]store.Repository, error)) (Written[ProjectView], error) {
+// Project's, with ci, when given, as the CI entry of its Repository,
+// acknowledging the Project. A Repository no longer listed loses its CI
+// entry.
+func (c *Core) changeRepositories(key string, full bool, ci *store.CIRepository, change func(store.Reader, store.Project) ([]store.Repository, error)) (Written[ProjectView], error) {
 	var before, after ProjectView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
@@ -423,10 +451,15 @@ func (c *Core) changeRepositories(key string, full bool, change func(store.Reade
 		if err != nil {
 			return err
 		}
-		was := p.Repositories
+		was, wasCI := p.Repositories, p.CI
 		p.SetRepositories(rs)
+		names := repositoryNames(p.RepositoryList())
+		p.CI.Repositories = slices.DeleteFunc(slices.Clone(p.CI.Repositories), func(e store.CIRepository) bool { return !slices.Contains(names, e.Name) })
+		if ci != nil {
+			p.CI.Repositories = withCIEntry(p.CI.Repositories, *ci)
+		}
 		after = c.projectView(p)
-		if slices.Equal(was, p.Repositories) {
+		if slices.Equal(was, p.Repositories) && p.CI.Equal(wasCI) {
 			return nil
 		}
 		return w.PutProject(p)

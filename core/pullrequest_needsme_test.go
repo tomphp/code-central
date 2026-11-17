@@ -123,7 +123,7 @@ func TestCIFailedUnderPullRequestNeverOffersLandAnyway(t *testing.T) {
 	if want := []core.CIFailureOption{"rerun_ci", "send_back", "new_fix_ticket"}; !slices.Equal(v.CIFailureOptions, want) {
 		t.Fatalf("options %v, want %v", v.CIFailureOptions, want)
 	}
-	_, err := f.core.LandAnyway(human, "acme", core.TicketInput{Ticket: "acme-2"})
+	_, err := f.core.LandAnyway(human, "acme", core.CIResponseInput{Ticket: "acme-2"})
 	var e *core.Error
 	if !errors.As(err, &e) || e.Code != core.ActionNotAllowed || !strings.Contains(e.Message, "Pull Request") {
 		t.Fatalf("land_anyway: %v, want it refused naming Pull Request", err)

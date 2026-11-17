@@ -245,6 +245,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Repository: "acme/web"})
 		return err
 	},
+	"set_repository_ci": func(f fixture) error {
+		_, err := f.core.SetRepositoryCI(human, "acme", core.SetRepositoryCIInput{Name: "web", RepositoryCI: core.RepositoryCI{NotWatched: true}})
+		return err
+	},
 	"set_models": func(f fixture) error {
 		_, err := f.core.SetModels(human, "acme", core.SetModelsInput{Default: core.ModelRowView{Model: "opus"}})
 		return err
@@ -375,11 +379,11 @@ var writesOnAcme = map[string]func(f fixture) error{
 		return err
 	},
 	"land_anyway": func(f fixture) error {
-		_, err := f.core.LandAnyway(human, "acme", core.TicketInput{Ticket: "acme-2"})
+		_, err := f.core.LandAnyway(human, "acme", core.CIResponseInput{Ticket: "acme-2"})
 		return err
 	},
 	"rerun_ci": func(f fixture) error {
-		_, err := f.core.RerunCI(human, "acme", core.TicketInput{Ticket: "acme-2"})
+		_, err := f.core.RerunCI(human, "acme", core.CIResponseInput{Ticket: "acme-2"})
 		return err
 	},
 	"new_fix_ticket": func(f fixture) error {

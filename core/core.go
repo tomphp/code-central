@@ -252,11 +252,15 @@ type TicketView struct {
 	// Tickets); empty on any other Ticket.
 	Recommendation store.Recommendation `json:"recommendation,omitempty"`
 	// PushedCommit is the latest commit the Factory pushed for the Ticket
-	// while CI Tracking was on, CIResult the Ticket's CI result and
-	// CICommit the pushed commit it comes from: under the CI gate one
-	// that passed, if any did, else the latest (code-central-430). All
-	// are left out while it has none. CIRuns are every CI Run tracked
-	// against it, the latest pushed commit's first. Computed on read.
+	// in the Home Repository while CI Tracking was on, and CICommit the
+	// pushed commit there the Home Repository's CI result comes from:
+	// under the CI gate one that passed, if any did, else the latest
+	// (code-central-430). CIResult is the Ticket's CI result, combined
+	// across its watched Repositories: running, else failed, else
+	// cancelled, else passed; each Repository's own is in Repositories.
+	// All are left out while it has none. CIRuns are every CI Run tracked
+	// against it, the Home Repository's first, each Repository's latest
+	// pushed commit's first. Computed on read.
 	PushedCommit *PushedCommitView `json:"pushed_commit,omitempty"`
 	// PullRequest is the pull request the Pull Request Watcher reported
 	// for the Ticket's pushed work; left out until it has one.
@@ -264,9 +268,10 @@ type TicketView struct {
 	CIResult    CIResult         `json:"ci_result,omitempty"`
 	CICommit    string           `json:"ci_commit,omitempty"`
 	CIRuns      []CIRunView      `json:"ci_runs,omitempty"`
-	// LandAnyway says the human accepted the latest pushed commit's
-	// failed CI result, so the Factory lands it (code-central-261), on
-	// this Ticket or on another sharing the commit (code-central-432).
+	// LandAnyway says the human accepted the failed CI result of the
+	// latest pushed commit in the Home Repository, so the Factory lands it
+	// there (code-central-261), on this Ticket or on another sharing the
+	// commit (code-central-432).
 	LandAnyway bool `json:"land_anyway,omitempty"`
 	// SpecLanded says Land per Spec covers the Ticket, and WaitingForSpec
 	// that it is Accepted and waits for its Spec to land (code-central-371).
@@ -275,9 +280,13 @@ type TicketView struct {
 	SpecLanded bool           `json:"spec_landed,omitempty"`
 	// CIItem is the CI failed, CI cancelled or CI unavailable item that
 	// lists this Ticket, with every other Ticket waiting on its pushed
-	// commit (code-central-432); left out while none does.
-	CIItem         *CIItemView `json:"ci_item,omitempty"`
-	WaitingForSpec bool        `json:"waiting_for_spec,omitempty"`
+	// commit (code-central-432); left out while none does. A Ticket listed
+	// in several Repositories has the first in landing order whose reason
+	// is its own here, and CIItems lists each one, but only while the
+	// Project has more than one Repository.
+	CIItem         *CIItemView  `json:"ci_item,omitempty"`
+	CIItems        []CIItemView `json:"ci_items,omitempty"`
+	WaitingForSpec bool         `json:"waiting_for_spec,omitempty"`
 	// CIFailureOptions are the failure options, each an operation's name,
 	// the human may choose on the Ticket's CI item while it is CI failed
 	// or CI cancelled, acting on every Ticket it lists; left out
@@ -721,7 +730,7 @@ func (c *Core) ticketRow(r store.Reader, e *evaluation, t store.Ticket, onMap bo
 	row := TicketRow{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
 		Labels: orEmpty(t.Labels), Blocked: c.blockRule(r, key).blocked(t), Created: t.Created, Updated: t.Updated, Link: linkView(t.Link),
-		CIResult: e.ci.ticket(t).result, PullRequest: pullRequestView(t.PullRequest),
+		CIResult: e.ci.ticket(t).result, PullRequest: pullRequestView(homePullRequest(key, t)),
 		WaitingForSpec: waitingForSpec(r, e.p, t),
 	}
 	row.NeedsMeReason, _ = e.reason(t)
@@ -750,7 +759,7 @@ func finished(s store.State) bool { return s == store.Done || s == store.Cancell
 
 func (c *Core) projectView(p store.Project) ProjectView {
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
-		Landing: landingViewWith(p, c.watchers.view(watcherKey{WatcherPullRequests, p.Key})), CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key})),
+		Landing: landingViewWith(p, c.watchers.view(watcherKey{WatcherPullRequests, p.Key})), CI: ciView(p, c.watchers.view(watcherKey{WatcherCI, p.Key})),
 		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), Models: modelsView(p.Models),
 		ReportedModels: reportedModelsView(p.ReportedModels), StageGuides: stageGuidesView(p.StageGuides), AutoAccept: autoAcceptView(p),
 		FocusKinds: focusKindsView(p.FocusKindsOff), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now()), Repositories: repositoriesView(p)}
@@ -805,18 +814,21 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t store.Ticket) Ticke
 		v.Moves = append(v.Moves, moveView(m))
 	}
 	v.PushedCommit, v.CIResult, v.CICommit, v.CIRuns = e.ci.view(t)
-	v.PullRequest = pullRequestView(t.PullRequest)
+	v.PullRequest = pullRequestView(homePullRequest(key, t))
 	if t.SpecMerge != nil {
 		v.SpecMerge = &SpecMergeView{Commit: t.SpecMerge.Commit, Merged: t.SpecMerge.Merged, Counts: specMergeCounts(t)}
 	}
 	v.SpecLanded = specLanded(r, pr, t)
 	v.WaitingForSpec = waitingForSpec(r, pr, t)
 	if severalRepositories(pr) {
-		v.Repositories = changedRepositoryViews(pr, t, v)
+		v.Repositories = changedRepositoryViews(pr, t, e.ci)
 		for i, rv := range v.Repositories {
 			if t.State == store.Accepted && rv.Landed == nil {
 				v.Repositories[i].NotLanded = c.notLandedReason(pr, t, rv.Name)
 			}
+		}
+		for _, it := range e.itemsOf(t) {
+			v.CIItems = append(v.CIItems, *ciItemView(r, pr, it))
 		}
 	}
 	v.PartlyLanded = partlyLanded(key, t)
@@ -826,7 +838,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t store.Ticket) Ticke
 			v.CIFailureOptions = v.CIItem.Options
 		}
 	}
-	v.LandAnyway = e.ci.landAnyway(t)
+	v.LandAnyway = e.ci.landAnyway(e.ci.ticket(t).in(key))
 	v.Claimable = t.State == store.Ready && !v.Blocked
 	v.SilentSince = c.silentSince(t)
 	v.NeedsMeReason, _ = e.reason(t)
