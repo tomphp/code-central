@@ -258,7 +258,7 @@ Quiet, firm, signage-weight (600).
 
 ### Chips
 - **State chip:** a pill with a station ring before the State's name, on a 12% wash of the State's line with a 35% border. The current State (`here`) washes to 24%, takes a full-ink border and fills its station.
-- **Badges** (kind, stage, CI, label): 4px corners, 10.5 to 11px, outlined in the badge's colour or on linen; uppercase only for kind/stage.
+- **Badges** (kind, stage, CI, label): 4px corners, 10.5 to 11px, outlined in the badge's colour or on linen; uppercase only for kind/stage. CI badges are lowercase with no glyph: running and queued are In Progress Cobalt (the Activity Dashboard's CI Running block and its stations too, never Landing Teal), queued and partially succeeded dashed; cancelled, skipped and neutral share one grey outline. A CIRunEntry card has 6px corners, its link to the CI system level with the first row, and `·` between every part of its detail row.
 
 ### Cards / Containers
 - **Panel:** white, hairline border, 10px corners, 14px by 16px. The Round panel is outlined 1.5px in Answer Amber, its head carrying an amber station.

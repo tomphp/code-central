@@ -148,7 +148,7 @@ function RunCard({ run, provider, now, joined = false, projectName, to, navigate
         </span>
         <span className="dashboard-entry-detail">
           {run.branch} · <code>{shortCommit(run.commit)}</code> · <RunStatusBadge status={runStatus(run)} />
-          {run.started && ` ${runDuration(run, now)}`}
+          {run.started && ` · ${runDuration(run, now)}`}
         </span>
       </a>
       <RunLink run={run} provider={provider} className="dashboard-ci-github" />
