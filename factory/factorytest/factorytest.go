@@ -979,6 +979,23 @@ func (h *Harness) Finished(ticket, branch, commit string, repositories ...core.R
 	must(h.t, err)
 }
 
+// NeedsMeItems is the Project's Needs Me items of reason, in Needs Me's
+// order.
+func (h *Harness) NeedsMeItems(reason core.NeedsMeReason) []core.NeedsMeRow {
+	h.t.Helper()
+	v, err := h.Human().NeedsMe(context.Background())
+	must(h.t, err)
+	var out []core.NeedsMeRow
+	for _, g := range v.Groups {
+		for _, row := range g.Tickets {
+			if g.Reason == reason && row.Project == h.Project {
+				out = append(out, row)
+			}
+		}
+	}
+	return out
+}
+
 // Accept accepts ticket as the human.
 func (h *Harness) Accept(ticket string) {
 	h.t.Helper()

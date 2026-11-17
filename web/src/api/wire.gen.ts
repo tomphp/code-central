@@ -1672,12 +1672,12 @@ export interface RepositoryMissingView {
 // hasn't, each with why, in landing order.
 export interface NotLandedView {
   landed: string[];
-  unlanded: UnlandedRepositoryView[];
+  not_landed: NotLandedRepositoryView[];
 }
 
-// UnlandedRepositoryView is a Changed Repository a Ticket hasn't landed
+// NotLandedRepositoryView is a Changed Repository a Ticket hasn't landed
 // in, and why.
-export interface UnlandedRepositoryView {
+export interface NotLandedRepositoryView {
   name: string;
   // Reason is why: its broken base, or what the Factory last said about
   // it since the Ticket was accepted; left out when there's none to

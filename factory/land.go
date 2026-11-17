@@ -155,7 +155,7 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 		}
 		prMerged := tk.PullRequest != nil && tk.PullRequest.State == store.PRMerged
 		route := policy.Route(f.waitsOnSpecBranch(tk), prMerged)
-		ls, why := f.landingsFor(tk, route, policy)
+		ws, why := f.workToLand(tk, route, policy)
 		if why != "" {
 			if key := tk.ID + "@" + why; !f.saidHeld[key] {
 				f.saidHeld[key] = true
@@ -173,18 +173,18 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 				f.mergeIntoSpecBranch(ctx, tk)
 			}
 		case core.RouteMerge:
-			f.landAccepted(ctx, tk, p, ls)
+			f.landAccepted(ctx, tk, p, ws)
 		}
 	}
-	if !homeReady {
-		// Spec Branches and hand merges are the Home Repository's.
-		return
-	}
-	if policy.LandsByPullRequest() {
+	// Spec Branches are the Home Repository's; a hand merge is held per
+	// Repository.
+	switch {
+	case !homeReady:
+	case policy.LandsByPullRequest():
 		// A Spec Branch goes to the base through its own pull request,
 		// not by a merge here: it is pushed instead.
 		f.pushSpecs(ctx, accepted, p)
-	} else {
+	default:
 		f.landSpecs(ctx, p)
 	}
 	f.detectHandMerges(ctx, p)
@@ -280,7 +280,9 @@ func (f *factory) workIn(r *repository, tk core.TicketView) (commit, what string
 func (f *factory) detectHandMerges(ctx context.Context, p core.ProjectView) {
 	policy := p.LandingPolicy()
 	if policy.LandsByPullRequest() {
-		f.detectMergedPullRequests(ctx, p.Landing.Remote)
+		if f.held(f.home, policy) == "" {
+			f.detectMergedPullRequests(ctx, p.Landing.Remote)
+		}
 		return
 	}
 	for _, tk := range f.landable(ctx, mergeableStates...) {
@@ -312,34 +314,20 @@ func (f *factory) detectHandMerges(ctx context.Context, p core.ProjectView) {
 	}
 }
 
-// handMerge is a Changed Repository whose base holds a Ticket's finish
-// commit there, which it hasn't landed in.
-type handMerge struct {
-	r      *repository
-	commit string
-}
-
 // mergedByHand is tk's Changed Repositories, in landing order, whose base
 // holds tk's finish commit there and which it hasn't landed in, but for
 // one whose base is broken (held) under policy.
-func (f *factory) mergedByHand(tk core.TicketView, policy core.LandingPolicy) []handMerge {
-	if len(tk.Repositories) == 0 {
-		if tk.Commit == "" || !f.inBase(tk.Commit) {
-			return nil
-		}
-		return []handMerge{{f.home, tk.Commit}}
-	}
-	ls, why := f.landingsOf(tk)
+func (f *factory) mergedByHand(tk core.TicketView, policy core.LandingPolicy) []changedWork {
+	ws, why := f.changedWorkOf(tk)
 	if why != "" {
 		return nil
 	}
-	var out []handMerge
-	for i, l := range ls {
-		commit := tk.Repositories[i].Commit
-		if commit == "" || f.held(l.r, policy) != "" || !f.inBaseOf(l.r, commit) || l.landed != "" && l.r.git.isAncestor(commit, l.landed) {
+	var out []changedWork
+	for _, w := range ws {
+		if w.commit == "" || f.held(w.r, policy) != "" || !f.inBaseOf(w.r, w.commit) || w.landed != "" && w.r.git.isAncestor(w.commit, w.landed) {
 			continue
 		}
-		out = append(out, handMerge{l.r, commit})
+		out = append(out, w)
 	}
 	return out
 }
@@ -378,55 +366,59 @@ func acceptedAt(tk core.TicketView) time.Time {
 	return tk.Updated
 }
 
-// landing is one of an Accepted Ticket's Changed Repositories as the
-// Factory lands it: the Repository, and the commit the work last landed
-// at there, if it has.
-type landing struct {
-	r      *repository
-	landed string
+// changedWork is one of a Ticket's Changed Repositories as the Factory
+// lands it: the Repository, the Ticket's finish commit there, and the
+// commit the work last landed at there, if it has.
+type changedWork struct {
+	r              *repository
+	commit, landed string
 }
 
-// landingsOf is tk's Changed Repositories in landing order, or with none
-// named, as with the Home Repository alone, the Home Repository. It says
-// why not when one of them has no clone.
-func (f *factory) landingsOf(tk core.TicketView) ([]landing, string) {
+// changedWorkOf is tk's Changed Repositories in landing order, or with
+// none named, as with the Home Repository alone, the Home Repository. It
+// says why not when one it hasn't landed in has no clone.
+func (f *factory) changedWorkOf(tk core.TicketView) ([]changedWork, string) {
 	if len(tk.Repositories) == 0 {
-		return []landing{{r: f.home}}, ""
+		return []changedWork{{r: f.home, commit: tk.Commit}}, ""
 	}
-	var out []landing
+	var out []changedWork
 	for _, v := range tk.Repositories {
 		r := f.repositories[v.Name]
-		if r == nil || r.problem != "" {
+		switch {
+		case (r == nil || r.problem != "") && v.Landed != nil:
+			// Landed already: nothing to do there.
+			continue
+		case r == nil || r.problem != "":
 			return nil, "Repository " + v.Name + " has no clone"
 		}
-		l := landing{r: r}
+		w := changedWork{r: r, commit: v.Commit}
 		if v.Landed != nil {
-			l.landed = v.Landed.Commit
+			w.landed = v.Landed.Commit
 		}
-		out = append(out, l)
+		out = append(out, w)
 	}
 	return out, ""
 }
 
-// landingsFor is tk's Changed Repositories to land by route, or says why
+// workToLand is tk's Changed Repositories to land by route, or says why
 // tk doesn't land this poll: one of them has no clone, or a broken base
 // (held), though one it has landed in doesn't hold it back. A Ticket
 // landing other than by Merge lands in the Home Repository alone, so only
 // its base holds that Ticket back.
-func (f *factory) landingsFor(tk core.TicketView, route core.LandingRoute, policy core.LandingPolicy) ([]landing, string) {
+func (f *factory) workToLand(tk core.TicketView, route core.LandingRoute, policy core.LandingPolicy) ([]changedWork, string) {
 	if route != core.RouteMerge {
 		return nil, f.held(f.home, policy)
 	}
-	ls, why := f.landingsOf(tk)
+	ws, why := f.changedWorkOf(tk)
 	if why != "" {
 		return nil, why
 	}
-	for _, l := range ls {
-		if why := f.held(l.r, policy); why != "" && l.landed == "" {
-			return nil, why + l.r.where()
+	for _, w := range ws {
+		if why := f.held(w.r, policy); why != "" && w.landed == "" {
+			return nil, why + w.r.where()
 		}
 	}
-	return ls, ""
+	return ws, ""
 }
 
 // mergePlan is how the Factory lands a Ticket's work in one Repository,
@@ -443,15 +435,15 @@ type mergePlan struct {
 }
 
 // landAccepted merges an Accepted Ticket's work into the base of each of
-// ls, its Changed Repositories, it hasn't landed in, and lands it there
+// ws, its Changed Repositories, it hasn't landed in, and lands it there
 // (ADR 0049). It works out every merge first: a conflict in any lands
 // none, and sends the Ticket back. Then, in landing order, it merges,
 // advances the base, pushes and lands in each Repository in turn, and
 // stops at one it can't land in yet, to go on from there next poll.
-func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, p core.ProjectView, ls []landing) {
+func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, p core.ProjectView, ws []changedWork) {
 	var plans, conflicts []mergePlan
-	for _, l := range ls {
-		pl, landed, ok := f.planMerge(ctx, tk, l)
+	for _, w := range ws {
+		pl, landed, ok := f.planMerge(ctx, tk, w)
 		switch {
 		case !ok:
 			return
@@ -473,15 +465,15 @@ func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, p core.P
 	}
 }
 
-// planMerge works out how tk lands in l's Repository, or that it has
+// planMerge works out how tk lands in w's Repository, or that it has
 // landed there already: its landed commit holds its work. ok is false
 // when it can't be worked out this poll, with a comment or a line saying
 // why.
-func (f *factory) planMerge(ctx context.Context, tk core.TicketView, l landing) (pl mergePlan, landed, ok bool) {
-	r := l.r
+func (f *factory) planMerge(ctx context.Context, tk core.TicketView, w changedWork) (pl mergePlan, landed, ok bool) {
+	r := w.r
 	pl.r = r
-	if l.landed != "" {
-		if head, _, err := f.workIn(r, tk); err == nil && r.git.isAncestor(head, l.landed) {
+	if w.landed != "" {
+		if head, _, err := f.workIn(r, tk); err == nil && r.git.isAncestor(head, w.landed) {
 			return pl, true, true
 		}
 	}
@@ -542,17 +534,18 @@ func (f *factory) mergeAndLand(ctx context.Context, tk core.TicketView, p core.P
 
 // landPushed lands tk in r at commit, which is in r's base, and reports
 // whether landing can go on to the next Repository: false when the push
-// failed, which leaves tk where it is, commented. Under Merge with Push
-// on, it first makes sure the remote's base holds commit. With CI
-// Tracking on as well, the CI gate holds in the Home Repository: tk lands
-// there only once its CI result is passed, at the pushed commit that
-// passed (ADR 0019, ADR 0034). Any other Repository lands once pushed, as
-// one Not watched does.
+// failed, which leaves tk where it is, commented, or the land call did.
+// Under Merge with Push on, it first makes sure the remote's base holds
+// commit. With CI Tracking on as well, the CI gate holds in the Home
+// Repository: tk lands there only once its CI result is passed, at the
+// pushed commit that passed (ADR 0019, ADR 0034), and the next Repository
+// goes on once the push is made, as the gate holds only the land. Any
+// other Repository lands once pushed, as one Not watched does, until CI
+// Tracking covers it.
 func (f *factory) landPushed(ctx context.Context, tk core.TicketView, p core.ProjectView, r *repository, base, commit string) bool {
 	policy := p.LandingPolicy()
 	if !policy.PushesBase() {
-		f.landAt(ctx, tk, r, commit)
-		return true
+		return f.landAt(ctx, tk, r, commit)
 	}
 	gated := r.home && policy.CIGateHolds()
 	if gated && f.pushedBase(tk, p.Landing.Remote, base, commit) {
@@ -568,8 +561,7 @@ func (f *factory) landPushed(ctx context.Context, tk core.TicketView, p core.Pro
 		f.printf("%s: pushed %s to %s%s", tk.ID, base, p.Landing.Remote, r.where())
 	}
 	if !gated {
-		f.landAt(ctx, tk, r, commit)
-		return true
+		return f.landAt(ctx, tk, r, commit)
 	}
 	// CI runs on what the push left the remote's base holding. A push
 	// made on an earlier poll whose report failed is reported as what it
@@ -722,7 +714,13 @@ func (f *factory) cantLandIn(ctx context.Context, tk core.TicketView, r *reposit
 		f.cantLandYet(ctx, tk, why)
 		return
 	}
-	f.postOnce(ctx, tk, "can't land yet in "+r.name, why, core.CantLandComment(r.name, why, tk.State))
+	// Once since tk entered its State, as that is how far back Accepted
+	// but not landed reads it.
+	var since time.Time
+	if n := len(tk.Moves); n > 0 {
+		since = tk.Moves[n-1].Time
+	}
+	f.postOnce(ctx, tk, "can't land yet in "+r.name, why, core.CantLandComment(r.name, why, tk.State), since)
 }
 
 // cantPushYet leaves an Accepted Ticket whose branch couldn't be pushed
@@ -735,14 +733,14 @@ func (f *factory) cantPushYet(ctx context.Context, tk core.TicketView, why strin
 // commentOnce comments on tk that the Factory can't do something yet,
 // and why, unless that comment is already there, and prints a line.
 func (f *factory) commentOnce(ctx context.Context, tk core.TicketView, line, lead, why string) {
-	f.postOnce(ctx, tk, line, why, fmt.Sprintf("%s: %s\n\nIt stays %s and the Factory tries again on every poll.", lead, why, tk.State))
+	f.postOnce(ctx, tk, line, why, fmt.Sprintf("%s: %s\n\nIt stays %s and the Factory tries again on every poll.", lead, why, tk.State), time.Time{})
 }
 
-// postOnce comments body on tk unless that comment is already there, and
-// prints a line saying why.
-func (f *factory) postOnce(ctx context.Context, tk core.TicketView, line, why, body string) {
+// postOnce comments body on tk unless that comment is already there since
+// since, and prints a line saying why.
+func (f *factory) postOnce(ctx context.Context, tk core.TicketView, line, why, body string, since time.Time) {
 	for _, c := range tk.Comments {
-		if c.Body == body {
+		if c.Body == body && !c.Time.Before(since) {
 			return
 		}
 	}
@@ -874,7 +872,7 @@ func (f *factory) mergedOnOldBase(r *repository, id string) (mergeOn, bool) {
 
 // landAt calls land with the commit that put tk's work into r's base,
 // naming r unless it is the Home Repository.
-func (f *factory) landAt(ctx context.Context, tk core.TicketView, r *repository, commit string) {
+func (f *factory) landAt(ctx context.Context, tk core.TicketView, r *repository, commit string) (landed bool) {
 	in := core.LandInput{Ticket: core.Ref(tk.ID), Commit: commit}
 	if !r.home {
 		in.Repository = r.name
@@ -883,7 +881,7 @@ func (f *factory) landAt(ctx context.Context, tk core.TicketView, r *repository,
 		if ctx.Err() == nil {
 			f.printf("%s: land: %v", tk.ID, err)
 		}
-		return
+		return false
 	}
 	base, s := f.baseOf(r), f.stateOf(r)
 	if m, ok := s.mergedOn[tk.ID]; ok {
@@ -891,6 +889,7 @@ func (f *factory) landAt(ctx context.Context, tk core.TicketView, r *repository,
 		delete(s.mergedOn, tk.ID)
 	}
 	f.printf("%s: landed on %s at %s%s", tk.ID, base, short(commit), r.where())
+	return true
 }
 
 func short(commit string) string {

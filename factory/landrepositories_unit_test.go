@@ -100,3 +100,20 @@ func TestEachRepositoryLandsInTheLandingOrder(t *testing.T) {
 		t.Fatalf("stdout %q, want api landed before the Home Repository", out)
 	}
 }
+
+func TestARepositoryTheTicketHasLandedInHoldsNothingBackWithoutItsClone(t *testing.T) {
+	w := newLandWorld(t)
+	api := w.withAPI()
+	id, apiWork := w.acceptedInTwo(api, "Add an endpoint")
+	// Landed in api on an earlier poll, whose clone has gone since.
+	if _, err := w.srv.Client.Land(context.Background(), "acme", core.LandInput{Ticket: core.Ref(id), Commit: apiWork, Repository: "api"}); err != nil {
+		t.Fatal(err)
+	}
+	w.f.repositories["api"].problem, w.f.repositories["api"].git = "it isn't a git repository", nil
+
+	w.pollRepositories()
+
+	if tk := w.ticket(id); tk.State != store.Done {
+		t.Fatalf("%s %s, want Done once it lands in the Home Repository", id, tk.State)
+	}
+}

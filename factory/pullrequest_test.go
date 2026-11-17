@@ -201,18 +201,8 @@ func TestUnderPullRequestADivergedBaseStopsLandingAndClaiming(t *testing.T) {
 // baseDivergedItem is the Project's Base diverged item in Needs Me.
 func baseDivergedItem(t *testing.T, h *factorytest.Harness) (core.NeedsMeRow, bool) {
 	t.Helper()
-	v, err := h.Human().NeedsMe(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, g := range v.Groups {
-		if g.Reason == core.ReasonBaseDiverged {
-			for _, row := range g.Tickets {
-				if row.Project == h.Project {
-					return row, true
-				}
-			}
-		}
+	if rows := h.NeedsMeItems(core.ReasonBaseDiverged); len(rows) > 0 {
+		return rows[0], true
 	}
 	return core.NeedsMeRow{}, false
 }

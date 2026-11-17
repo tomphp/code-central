@@ -106,7 +106,7 @@ func (c *Core) ReportBase(_ context.Context, key string, in ReportBaseInput) (Wr
 		}
 		project, _ = r.Project(key)
 		var err error
-		if repository, err = reportedRepository(project, in.Repository); err != nil {
+		if repository, err = repositoryField(project, in.Repository); err != nil {
 			return err
 		}
 		before = c.projectView(project)
@@ -129,9 +129,10 @@ func (c *Core) ReportBase(_ context.Context, key string, in ReportBaseInput) (Wr
 	return acknowledgeProject(before, c.projectView(project), in.Full, now)
 }
 
-// reportedRepository is the Repository of p that report_base names: name,
-// or the Home Repository for none. It refuses a name p hasn't.
-func reportedRepository(p store.Project, name string) (store.Repository, error) {
+// repositoryField is the Repository of p that an operation's optional
+// repository field names: name, or the Home Repository for none. It
+// refuses a name p hasn't, as invalid in that field.
+func repositoryField(p store.Project, name string) (store.Repository, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		name = p.Key
@@ -259,16 +260,15 @@ func baseItemOf(p store.Project, r store.Repository) string {
 // work touching it, while its Factory reports it missing or diverged; ""
 // otherwise.
 func (c *Core) brokenBase(p store.Project, name string) string {
-	rs := p.RepositoryList()
-	i := slices.IndexFunc(rs, func(r store.Repository) bool { return r.Name == name })
-	if i < 0 {
+	r, err := repositoryField(p, name)
+	if err != nil {
 		return ""
 	}
-	if _, ok := c.reportedBase(p, rs[i], BaseMissing); ok {
-		return fmt.Sprintf("its base, %s, is missing", baseOfRepository(p, rs[i]))
+	if _, ok := c.reportedBase(p, r, BaseMissing); ok {
+		return fmt.Sprintf("its base, %s, is missing", baseOfRepository(p, r))
 	}
-	if _, ok := c.divergedBase(p, rs[i]); ok {
-		return fmt.Sprintf("its base, %s, has diverged from the remote's", baseOfRepository(p, rs[i]))
+	if _, ok := c.divergedBase(p, r); ok {
+		return fmt.Sprintf("its base, %s, has diverged from the remote's", baseOfRepository(p, r))
 	}
 	return ""
 }

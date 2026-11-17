@@ -20,13 +20,13 @@ import (
 // the Project has several: those its Ticket has landed in, and those it
 // hasn't, each with why, in landing order.
 type NotLandedView struct {
-	Landed   []string                 `json:"landed"`
-	Unlanded []UnlandedRepositoryView `json:"unlanded"`
+	Landed    []string                  `json:"landed"`
+	NotLanded []NotLandedRepositoryView `json:"not_landed"`
 }
 
-// UnlandedRepositoryView is a Changed Repository a Ticket hasn't landed
+// NotLandedRepositoryView is a Changed Repository a Ticket hasn't landed
 // in, and why.
-type UnlandedRepositoryView struct {
+type NotLandedRepositoryView struct {
 	Name string `json:"name"`
 	// Reason is why: its broken base, or what the Factory last said about
 	// it since the Ticket was accepted; left out when there's none to
@@ -72,12 +72,12 @@ func (c *Core) notLandedView(p store.Project, t store.Ticket) *NotLandedView {
 	}
 	rs = slices.Clone(rs)
 	inLandingOrder(p, rs, repositoryName)
-	v := &NotLandedView{Landed: []string{}, Unlanded: []UnlandedRepositoryView{}}
+	v := &NotLandedView{Landed: []string{}, NotLanded: []NotLandedRepositoryView{}}
 	for _, r := range rs {
 		if r.Landed != nil {
 			v.Landed = append(v.Landed, r.Name)
 		} else {
-			v.Unlanded = append(v.Unlanded, UnlandedRepositoryView{Name: r.Name, Reason: c.notLandedReason(p, t, r.Name)})
+			v.NotLanded = append(v.NotLanded, NotLandedRepositoryView{Name: r.Name, Reason: c.notLandedReason(p, t, r.Name)})
 		}
 	}
 	return v

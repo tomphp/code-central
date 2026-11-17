@@ -236,7 +236,7 @@ func TestAHomeRepositoryAloneNamesNoRepositoryOnItsBaseItems(t *testing.T) {
 	}
 }
 
-func TestAcceptedButNotLandedNamesTheLandedAndUnlandedRepositoriesWithWhy(t *testing.T) {
+func TestAcceptedButNotLandedNamesTheRepositoriesLandedAndNotLandedWithWhy(t *testing.T) {
 	f := newFixture(t)
 	f.acceptedInTwo(t)
 	f.landIn(t, core.LandInput{Repository: "api", Commit: "eee"})
@@ -250,8 +250,8 @@ func TestAcceptedButNotLandedNamesTheLandedAndUnlandedRepositoriesWithWhy(t *tes
 	if !ok || row.Reason != core.ReasonAcceptedNotLanded || row.NotLanded == nil {
 		t.Fatalf("row %+v, want Accepted but not landed naming the Repositories", row)
 	}
-	if !slices.Equal(row.NotLanded.Landed, []string{"api"}) || len(row.NotLanded.Unlanded) != 1 ||
-		row.NotLanded.Unlanded[0] != (core.UnlandedRepositoryView{Name: "acme", Reason: "couldn't push main to origin"}) {
+	if !slices.Equal(row.NotLanded.Landed, []string{"api"}) || len(row.NotLanded.NotLanded) != 1 ||
+		row.NotLanded.NotLanded[0] != (core.NotLandedRepositoryView{Name: "acme", Reason: "couldn't push main to origin"}) {
 		t.Fatalf("not landed %+v, want api landed and acme not, as the push was refused", row.NotLanded)
 	}
 	tk := f.get(t, "2")

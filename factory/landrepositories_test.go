@@ -174,10 +174,27 @@ func TestABrokenBaseInOneRepositoryHoldsBackOnlyTheTicketsTouchingIt(t *testing.
 	h.WantState(homeOnly, store.Done)
 	h.WantState(both, store.Accepted)
 	r.WantOutput(both + ": waits to land: its base, release, is missing in Repository api")
-	rows := needsMeRows(t, h, core.ReasonBaseMissing)
+	rows := h.NeedsMeItems(core.ReasonBaseMissing)
 	if len(rows) != 1 || rows[0].BaseMissing.Repository != "api" || rows[0].BaseMissing.Base != "release" {
 		t.Fatalf("Base missing items %+v, want one naming api's release", rows)
 	}
+}
+
+func TestAHandMergeInOneRepositoryLandsWhileTheHomeRepositorysBaseIsMissing(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	api := h.AddRepository("api")
+	id := h.ReadyTicket("Add an endpoint")
+	h.Script(id, append(factorytest.CommitIn("api", "endpoint.go", "package api\n"), factorytest.FinishIn("Done.", false, "api"), factorytest.Result("success"))...)
+	r := h.Start()
+	h.WantState(id, store.InReview)
+	setBase(h, "release")
+	h.GitIn(api.Path, "merge", "-q", "--no-ff", "-m", "Merge "+id, id)
+
+	r.Poll()
+
+	h.WantState(id, store.Done)
+	r.WantOutput(id + ": merged into main by hand in Repository api")
 }
 
 func TestADivergedBaseInOneRepositoryHoldsBackOnlyItsWork(t *testing.T) {
@@ -200,7 +217,7 @@ func TestADivergedBaseInOneRepositoryHoldsBackOnlyItsWork(t *testing.T) {
 	r.Poll()
 
 	h.WantState(homeOnly, store.Done)
-	rows := needsMeRows(t, h, core.ReasonBaseDiverged)
+	rows := h.NeedsMeItems(core.ReasonBaseDiverged)
 	if len(rows) != 1 || rows[0].BaseDiverged.Repository != "api" || rows[0].BaseDiverged.Remote != theirs {
 		t.Fatalf("Base diverged items %+v, want one naming api, its remote at %s", rows, theirs)
 	}
@@ -238,20 +255,4 @@ func pushElsewhere(t *testing.T, h *factorytest.Harness, api *factorytest.Reposi
 	h.GitIn(other, "commit", "-q", "-m", "Theirs: "+file)
 	h.GitIn(other, "push", "-q", "origin", "main")
 	return h.GitIn(other, "rev-parse", "HEAD")
-}
-
-// needsMeRows are the Project's Needs Me rows of reason.
-func needsMeRows(t *testing.T, h *factorytest.Harness, reason core.NeedsMeReason) []core.NeedsMeRow {
-	t.Helper()
-	v, err := h.Human().NeedsMe(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	var out []core.NeedsMeRow
-	for _, g := range v.Groups {
-		if g.Reason == reason {
-			out = append(out, g.Tickets...)
-		}
-	}
-	return out
 }

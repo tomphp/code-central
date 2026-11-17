@@ -139,8 +139,8 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
 function notLandedIn(r: NeedsMeRow): string {
   const n = r.not_landed;
   if (!n) return "";
-  const unlanded = n.unlanded.map((u) => (u.reason ? `${u.name} (${u.reason})` : u.name)).join(", ");
-  return ` in ${unlanded}${n.landed.length ? `; landed in ${n.landed.join(", ")}` : ""}`;
+  const notLanded = n.not_landed.map((u) => (u.reason ? `${u.name} (${u.reason})` : u.name)).join(", ");
+  return ` in ${notLanded}${n.landed.length ? `; landed in ${n.landed.join(", ")}` : ""}`;
 }
 
 // ciUnavailableDetail says why a CI unavailable row has had no word of

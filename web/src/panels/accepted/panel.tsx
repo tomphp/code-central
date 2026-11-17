@@ -14,6 +14,7 @@ import type { PanelDef, PanelProps } from "../ActionPanel";
 import { PullRequestBadge } from "../../ticket/PullRequestBadge";
 import { useAct } from "../../ticket/useAct";
 import { Button } from "../../controls/Button";
+import { Select } from "../../controls/Select";
 import { useApi } from "../../live";
 import "./accepted.css";
 
@@ -27,9 +28,9 @@ export function AcceptedPanel({ project, ticket: t }: PanelProps) {
   const [note, setNote] = useState("");
   // With several Repositories, land names the one it landed in: one the
   // Ticket hasn't landed in yet, the first of them unless chosen.
-  const unlanded = (t.repositories ?? []).filter((r) => !r.landed).map((r) => r.name);
+  const notLanded = (t.repositories ?? []).filter((r) => !r.landed).map((r) => r.name);
   const [chosen, setChosen] = useState("");
-  const repository = unlanded.includes(chosen) ? chosen : unlanded[0];
+  const repository = notLanded.includes(chosen) ? chosen : notLanded[0];
 
   return (
     <section aria-label="Accepted" className="panel accepted-panel">
@@ -69,14 +70,10 @@ export function AcceptedPanel({ project, ticket: t }: PanelProps) {
           {error}
         </p>
       )}
-      {unlanded.length > 1 && (
+      {notLanded.length > 1 && (
         <label className="land-commit">
           <span className="small muted">Repository it landed in</span>
-          <select value={repository} onChange={(e) => setChosen(e.target.value)}>
-            {unlanded.map((name) => (
-              <option key={name}>{name}</option>
-            ))}
-          </select>
+          <Select options={notLanded.map((name) => ({ value: name }))} value={repository} onChange={setChosen} />
         </label>
       )}
       <label className="land-commit">
