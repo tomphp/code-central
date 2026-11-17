@@ -90,14 +90,20 @@ build: web hooks
 # end-to-end tests and the real half of the UI's API contract suite. The
 # binaries' paths reach both through make's environment, not the shell.
 # The UI's service finds the fake gh, built here, on its PATH. The UI's
-# e2e config shares the test setup, so it needs core.wasm too.
+# e2e config shares the test setup, so it needs core.wasm too. With
+# F=web/src/e2e/<file> only that web e2e file runs (web's dependencies are
+# installed first); the Go end-to-end tests are skipped.
 e2e: export CODE_CENTRAL_BIN := $(CURDIR)/bin/code-central$(EXE)
 e2e: export CODE_CENTRAL_FACTORY_BIN := $(CURDIR)/bin/code-central-factory$(EXE)
 e2e: export CODE_CENTRAL_FAKE_GH_BIN := $(CURDIR)/bin/fake-gh$(EXE)
-e2e: build corewasm
+e2e: build corewasm $(if $(F),$(WEB_DEPS))
 	go build -o bin/fake-gh$(EXE) ./internal/fakegh/gh
+ifeq ($(F),)
 	go test -tags e2e -count=1 ./e2e/
 	cd web && npm run test:e2e
+else
+	cd web && npm run test:e2e -- $(F:web/%=%)
+endif
 
 # A scratch service on PORT (default 7801, never 7733) filled with a demo
 # Project, to look at the UI against; internal/demostore explains it.

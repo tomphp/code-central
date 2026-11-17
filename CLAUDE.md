@@ -26,7 +26,7 @@ To learn a Go API, read `go doc ./<pkg> <Name>` before the source.
 
 ## Checks
 
-While working, run `make typecheck` (after changing a Go wire type, `make wiretypes` regenerates the UI's types) `make lint F=<file>` (ESLint on one file, or all of `web/`) and `make vitest F=<file>` (they install web dependencies first in a fresh worktree); `make vitest-stress F=<file>` repeats one file under load to show a flake (`N=`, `LOAD=`); run `make test` once at the end (it prints only what failed; `make test-verbose` prints everything). `make ci-failures RUN=<id>` shows what failed in a CI run.
+While working, run `make typecheck` (after changing a Go wire type, `make wiretypes` regenerates the UI's types) `make lint F=<file>` (ESLint on one file, or all of `web/`) and `make vitest F=<file>` (they install web dependencies first in a fresh worktree); `make e2e F=web/src/e2e/<file>` builds what `make e2e` builds and runs that one web end-to-end file; `make vitest-stress F=<file>` repeats one file under load to show a flake (`N=`, `LOAD=`); run `make test` once at the end (it prints only what failed; `make test-verbose` prints everything). `make ci-failures RUN=<id>` shows what failed in a CI run.
 
 ## Context report
 
