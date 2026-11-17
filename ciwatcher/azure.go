@@ -45,7 +45,7 @@ func (a *AzurePipelines) CheckAccess(ctx context.Context) (core.WatcherCheckResu
 	case errors.Is(err, azdo.ErrNoPAT):
 		return core.WatcherCheckResult{Problem: core.ProblemPATMissing,
 			Reason: fmt.Sprintf("The environment variable %s is not set, or is empty, in the CI Watcher's environment.", a.PATEnv),
-			Fix:    patMissingFix(runtime.GOOS, a.PATEnv)}, nil
+			Fix:    azdo.PATMissingFix(runtime.GOOS, a.PATEnv, "Build: Read & execute")}, nil
 	case err != nil:
 		return unreadable(a.ProjectURL, err), nil
 	}
@@ -81,21 +81,6 @@ func unreadable(projectURL string, err error) core.WatcherCheckResult {
 	return core.WatcherCheckResult{Problem: core.ProblemProjectUnreadable,
 		Reason: fmt.Sprintf("Code Central can't read the Azure DevOps project %s: %v", projectURL, err),
 		Fix:    "Check the project URL is the one the browser shows, such as https://dev.azure.com/acme/web, and that the PAT's organization can see it."}
-}
-
-// patMissingFix is how to give the service the variable on goos, then
-// restart it.
-func patMissingFix(goos, name string) string {
-	var how string
-	switch goos {
-	case "darwin":
-		how = fmt.Sprintf("run `launchctl setenv %s <PAT>`", name)
-	case "windows":
-		how = fmt.Sprintf("set %s as a user environment variable", name)
-	default:
-		how = fmt.Sprintf("run `systemctl --user set-environment %s=<PAT>`, or put %s=<PAT> in a file under ~/.config/environment.d/", name, name)
-	}
-	return fmt.Sprintf("Make an Azure DevOps PAT with Build: Read & execute, %s, then restart the Code Central service.", how)
 }
 
 // azureRunLimit is how many of the project's latest builds RunsForCommit

@@ -154,6 +154,22 @@ func TestTheIntegrationsDefinitionUpdatesGoThroughEditHistory(t *testing.T) {
 	wantCode(t, err, core.Invalid, "spec")
 }
 
+// An external item that moved, such as a work item to another Azure
+// DevOps project, keeps its Link ID and has its Link's URL refreshed,
+// which isn't a definition edit.
+func TestTheIntegrationRefreshesALinksURL(t *testing.T) {
+	f := newFixture(t)
+	f.linked(t)
+	moved := "https://example.com/acme/api/issues/2"
+	v, err := record(f.core.UpdateLinkedTicket(integration, "acme", core.UpdateLinkedTicketInput{Ticket: "2", URL: &moved, Full: true}))
+	if err != nil || v.Link.URL != moved || len(v.Edits) != 0 {
+		t.Fatalf("ticket %+v, %v; want the Link's URL refreshed with no edit", v, err)
+	}
+	bad := "not a url"
+	_, err = f.core.UpdateLinkedTicket(integration, "acme", core.UpdateLinkedTicketInput{Ticket: "2", URL: &bad})
+	wantCode(t, err, core.Invalid, "url")
+}
+
 func TestTheIntegrationCantMoveState(t *testing.T) {
 	f := newFixture(t)
 	f.linked(t)

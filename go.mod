@@ -3,8 +3,11 @@ module github.com/tomoram/code-central
 go 1.27.3
 
 require (
+	github.com/JohannesKaufmann/dom v0.3.1
+	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
 	github.com/modelcontextprotocol/go-sdk v1.8.0
-	golang.org/x/sys v0.41.0
+	golang.org/x/net v0.55.0
+	golang.org/x/sys v0.45.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

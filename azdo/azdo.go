@@ -67,6 +67,21 @@ func New(environ []string, patEnv, projectURL string, httpClient *http.Client) (
 	return &Client{projectURL: u, pat: pat, http: &hc, baseURL: u}, nil
 }
 
+// PATMissingFix is how to give the service the PAT variable name on goos,
+// a PAT with scope, such as Build: Read & execute, then restart it.
+func PATMissingFix(goos, name, scope string) string {
+	var how string
+	switch goos {
+	case "darwin":
+		how = fmt.Sprintf("run `launchctl setenv %s <PAT>`", name)
+	case "windows":
+		how = fmt.Sprintf("set %s as a user environment variable", name)
+	default:
+		how = fmt.Sprintf("run `systemctl --user set-environment %s=<PAT>`, or put %s=<PAT> in a file under ~/.config/environment.d/", name, name)
+	}
+	return fmt.Sprintf("Make an Azure DevOps PAT with %s, %s, then restart the Code Central service.", scope, how)
+}
+
 func getenv(environ []string, key string) string {
 	for i := len(environ) - 1; i >= 0; i-- {
 		if k, v, ok := strings.Cut(environ[i], "="); ok && k == key {
@@ -255,7 +270,7 @@ func (c *Client) refusal(resp *http.Response, data []byte, method, rawURL string
 	case status == http.StatusNotFound:
 		return fmt.Errorf("%w: %s answered 404", ErrNotFound, what)
 	case status == http.StatusBadRequest, status == http.StatusConflict:
-		return fmt.Errorf("%w: %s answered %d: %s", ErrRefused, what, status, watchers.FirstLine(string(data)))
+		return &RefusedError{What: what, Status: status, Message: messageOf(data)}
 	case status >= 200 && status < 300:
 		return nil
 	}

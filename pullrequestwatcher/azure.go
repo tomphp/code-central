@@ -57,7 +57,7 @@ func checkAzureRepos(ctx context.Context, in core.PullRequestCheckInput, env gh.
 	case errors.Is(err, azdo.ErrNoPAT):
 		return nil, core.WatcherCheckResult{Problem: core.ProblemPATMissing,
 			Reason: fmt.Sprintf("The environment variable %s is not set, or is empty, in the Pull Request Watcher's environment.", patEnv),
-			Fix:    patMissingFix(runtime.GOOS, patEnv)}, nil
+			Fix:    azdo.PATMissingFix(runtime.GOOS, patEnv, "Code: Read & write")}, nil
 	case err != nil:
 		return nil, unreadableRepository(in.Repository, err), nil
 	}
@@ -98,21 +98,6 @@ func unreadableRepository(repository string, err error) core.WatcherCheckResult 
 	return core.WatcherCheckResult{Problem: core.ProblemRepositoryUnreadable,
 		Reason: fmt.Sprintf("Code Central can't read the Azure Repos repository %s: %v", repository, err),
 		Fix:    "Check the Push remote is the repository's URL as Azure Repos shows it, and that the PAT's organization can see it."}
-}
-
-// patMissingFix is how to give the service the variable on goos, then
-// restart it.
-func patMissingFix(goos, name string) string {
-	var how string
-	switch goos {
-	case "darwin":
-		how = fmt.Sprintf("run `launchctl setenv %s <PAT>`", name)
-	case "windows":
-		how = fmt.Sprintf("set %s as a user environment variable", name)
-	default:
-		how = fmt.Sprintf("run `systemctl --user set-environment %s=<PAT>`, or put %s=<PAT> in a file under ~/.config/environment.d/", name, name)
-	}
-	return fmt.Sprintf("Make an Azure DevOps PAT with Code: Read & write, %s, then restart the Code Central service.", how)
 }
 
 func ref(branch string) string { return "refs/heads/" + strings.TrimPrefix(branch, "refs/heads/") }
