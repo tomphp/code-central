@@ -58,6 +58,7 @@ type Request struct {
 	// Authorization is the Authorization header, so a test sees the PAT
 	// went as Basic auth.
 	Authorization string
+	ContentType   string
 	Body          string
 }
 
@@ -112,7 +113,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	req := Request{
 		Method: r.Method, Path: r.URL.EscapedPath(), Query: r.URL.Query(),
-		Authorization: r.Header.Get("Authorization"), Body: string(body),
+		Authorization: r.Header.Get("Authorization"), ContentType: r.Header.Get("Content-Type"), Body: string(body),
 	}
 	s.requests = append(s.requests, req)
 	var found *Answer

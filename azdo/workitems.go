@@ -159,6 +159,15 @@ func (c *Client) WorkItem(ctx context.Context, id int) (WorkItem, error) {
 	return w, err
 }
 
+// CheckTagWrite proves the PAT can write work item id's tags without
+// writing them: Azure DevOps validates a JSON Patch of System.Tags sent
+// with validateOnly=true, answering as it would, and saves nothing.
+func (c *Client) CheckTagWrite(ctx context.Context, id int) error {
+	patch := []map[string]string{{"op": "add", "path": "/fields/System.Tags", "value": "code-central:check"}}
+	return c.doAs(ctx, http.MethodPatch, c.collectionURL()+"/_apis/wit/workitems/"+strconv.Itoa(id),
+		url.Values{"validateOnly": {"true"}}, "application/json-patch+json", patch, nil)
+}
+
 // messageOf is Azure DevOps' message in an error answer's JSON, or the
 // answer's first line when it has none.
 func messageOf(data []byte) string {

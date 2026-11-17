@@ -208,6 +208,11 @@ func (c *Client) Retry(ctx context.Context, buildID int) error {
 // do calls method on rawURL with query, sending body as JSON when it isn't
 // nil, and decodes the JSON answer into out when it isn't nil.
 func (c *Client) do(ctx context.Context, method, rawURL string, query url.Values, body, out any) error {
+	return c.doAs(ctx, method, rawURL, query, "application/json", body, out)
+}
+
+// doAs is do, sending its body as contentType.
+func (c *Client) doAs(ctx context.Context, method, rawURL string, query url.Values, contentType string, body, out any) error {
 	if query == nil {
 		query = url.Values{}
 	}
@@ -227,7 +232,7 @@ func (c *Client) do(ctx context.Context, method, rawURL string, query url.Values
 	req.SetBasicAuth("", c.pat)
 	req.Header.Set("Accept", "application/json")
 	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", contentType)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
