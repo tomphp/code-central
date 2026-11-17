@@ -26,6 +26,7 @@ import type { InboxData, ProjectTicket } from "../live";
 import { STAGE_TITLE, stageOf } from "../requirement/progress";
 import { CILink } from "../ci/CILink";
 import { CIRunEntry, runKey } from "../ci/CIRunEntry";
+import { OneProject, ShortId } from "../inbox/ShortId";
 import { CIBadge } from "../ticket/CIBadge";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { usePulse } from "./pulse";
@@ -73,6 +74,7 @@ export function ActivityDashboardBody({ now, data, changes, ciRuns, loc, project
   );
 
   return (
+    <OneProject.Provider value={!!project}>
     <section aria-label="Activity Dashboard" className="view-body">
       <div className="dashboard-blocks">
         <StateCount state="Ready" count={inState("Ready").length} />
@@ -101,6 +103,7 @@ export function ActivityDashboardBody({ now, data, changes, ciRuns, loc, project
       )}
       {ciRuns && <CIRunningList now={now} data={data} runs={ciRuns} loc={loc} project={project} navigate={navigate} />}
     </section>
+    </OneProject.Provider>
   );
 }
 
@@ -204,7 +207,7 @@ function InProgressEntry({ now, data, ticket: t, changes, joined, loc, project, 
     <li {...pulse}>
       <a href={hrefFor(inbox)} onClick={clickTo(navigate, inbox)}>
         <span className="dashboard-entry-top">
-          <span className="tid">{t.id}</span>
+          <ShortId id={t.id} />
           <span className="dashboard-entry-title">{t.title}</span>
           <CIBadge result={t.ci_result} />
           {!project && <span className="muted">{nameOf(data, t.project)}</span>}

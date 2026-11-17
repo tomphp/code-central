@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 import { newWorld, type World } from "../api/core/core";
 import { WORK, type Scenario } from "../api/scenario";
 import { ApiError, type CIRunView } from "../api/types";
+import { shortOf } from "../inbox/ShortId";
 import { focus, loadedDashboard, renderApp, scenario, settle } from "./worldTesting";
 
 // dash is a world with Acme and Beta, its scenario and the IDs of its Tickets:
@@ -223,7 +224,7 @@ describe("the In Progress list", () => {
     const { w, signup } = await busy();
     await renderApp(w, "/?view=focus&project=acme");
     const d = await dashboard(w);
-    expect(entries(d)[0]).toHaveTextContent(new RegExp(`^${signup}Sign-up page$`));
+    expect(entries(d)[0]).toHaveTextContent(new RegExp(`^${shortOf(signup)}Sign-up page$`));
     expect(entries(d)).toHaveLength(3);
   });
 
@@ -333,7 +334,7 @@ describe("pulses", () => {
 
     await act(() => s.claimFor("beta", betaExport));
     expect(within(d).getByText("Beta export")).toBeInTheDocument();
-    expect(pulsing(entry(d, betaExport))).toBe(true);
+    expect(pulsing(entry(d, shortOf(betaExport)))).toBe(true);
   });
 });
 
@@ -597,8 +598,8 @@ describe("the CI Running list", () => {
     await renderApp(c.w, "/?view=focus&project=acme");
     const d = await dashboard(c.w);
     expect(ciEntries(d)).toHaveLength(2);
-    expect(ciEntry(d, "ci.yml")).toHaveTextContent(new RegExp(`^${c.theme}ci.yml${c.theme} · abc123 · queued 2m 0sView on GitHub$`));
-    expect(ciEntry(d, "lint.yml")).toHaveTextContent(new RegExp(`^${c.theme}lint.yml${c.theme} · abc123 · queuedView on GitHub$`));
+    expect(ciEntry(d, "ci.yml")).toHaveTextContent(new RegExp(`^${shortOf(c.theme)}ci.yml${c.theme} · abc123 · queued 2m 0sView on GitHub$`));
+    expect(ciEntry(d, "lint.yml")).toHaveTextContent(new RegExp(`^${shortOf(c.theme)}lint.yml${c.theme} · abc123 · queuedView on GitHub$`));
   });
 
   it("leaves out the Project when scoped to one", async () => {
@@ -607,7 +608,7 @@ describe("the CI Running list", () => {
     await renderApp(c.w, "/?view=focus&project=acme");
     const d = await dashboard(c.w);
     expect(ciEntries(d)).toHaveLength(1);
-    expect(ciEntry(d, "CI")).toHaveTextContent(new RegExp(`^${c.theme}CI${c.theme} · abc123 · running 3m 0sView on GitHub$`));
+    expect(ciEntry(d, "CI")).toHaveTextContent(new RegExp(`^${shortOf(c.theme)}CI${c.theme} · abc123 · running 3m 0sView on GitHub$`));
   });
 
   it("opens an entry's Ticket in the Inbox, keeping the Project filter", async () => {

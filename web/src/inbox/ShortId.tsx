@@ -3,8 +3,8 @@
 // Clicking copies the full ID and never follows the row's link.
 import { createContext, useContext, useEffect, useRef, useState, type MouseEvent } from "react";
 
-// OneProject says whether one Project is selected, or there is a Sole Project. The Inbox provides it, so
-// a pane or row needs no extra prop; outside the Inbox IDs show in full.
+// OneProject says whether one Project is selected, or there is a Sole Project. The Inbox, the Board, Focus
+// Mode and the Activity Dashboard provide it, so a pane or row needs no extra prop; elsewhere IDs show in full.
 export const OneProject = createContext(false);
 
 // shortOf is an ID's Short ID within its Project: `#452` for acme-452.
