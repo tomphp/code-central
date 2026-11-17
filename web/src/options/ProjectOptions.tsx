@@ -1,11 +1,12 @@
 // The Project Options page: one Project's settings, reached from its menu
 // in the left pane, a section each: the Repositories, the Landing Method,
-// CI with its CI Rules, GitHub Issues, Models, Stage Guides, and Focus.
+// CI with its CI Rules, GitHub Issues, Azure Boards, Models, Stage Guides, and Focus.
 import type { MouseEvent } from "react";
 import type { ProjectRow } from "../api/types";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { CISection } from "./CISection";
 import { FactoriesSection } from "./FactoriesSection";
+import { AzureBoardsSection } from "./AzureBoardsSection";
 import { GitHubIssuesSection } from "./GitHubIssuesSection";
 import { LandingMethodSection } from "./LandingMethodSection";
 import { ModelsSection } from "./ModelsSection";
@@ -29,6 +30,7 @@ export const SECTIONS = [
   { id: "project-options-landing-method", label: "Landing Method" },
   { id: "project-options-ci", label: "CI" },
   { id: "project-options-github-issues", label: "GitHub Issues" },
+  { id: "project-options-azure-boards", label: "Azure Boards" },
   { id: "project-options-models", label: "Models" },
   { id: "project-options-stage-guides", label: "Stage Guides" },
   { id: "project-options-auto-accept", label: "Auto-accept" },
@@ -85,6 +87,7 @@ export function ProjectOptions({
               <LandingMethodSection project={project} />
               <CISection project={project} />
               <GitHubIssuesSection project={project} />
+              <AzureBoardsSection project={project} />
               <ModelsSection project={project} />
               <StageGuidesSection project={project} />
               <AutoAcceptSection project={project} />
