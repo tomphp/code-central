@@ -254,6 +254,16 @@ func TestGitHubIssuesAndAzureBoardsAreOnAtOnce(t *testing.T) {
 
 func TestTheSameAzureBoardsSettingsWriteNothing(t *testing.T) {
 	srv := newServer(t)
+	if out := httpOK(t, srv, setAzureBoards(`{"on":false}`)); len(toStrings(out["changed"])) != 0 {
+		t.Fatalf("the default settings changed %v", out["changed"])
+	}
+	var stored store.AzureBoards
+	must(t, func() error {
+		return srv.Store.View(func(r store.Reader) error { p, _ := r.Project("acme"); stored = p.AzureBoards; return nil })
+	})
+	if stored != (store.AzureBoards{}) {
+		t.Fatalf("the default settings were stored as %+v, want nothing set", stored)
+	}
 	body := `{"on":true,"query_url":"` + webQuery + `"}`
 	httpOK(t, srv, setAzureBoards(body))
 	if out := httpOK(t, srv, setAzureBoards(body)); len(toStrings(out["changed"])) != 0 {

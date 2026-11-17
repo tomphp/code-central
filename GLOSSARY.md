@@ -646,7 +646,7 @@ A one-way, one-off migration of work into Code Central, after which Code Central
 _Avoid_: Sync, Integration
 
 **Integration**:
-A plugin with an ongoing link to an external ticketing system, which owns the definition of the work it links while Code Central owns its delivery. GitHub Issues is the first, run by the Issue Watcher, and Azure Boards the second, run by the Work Item Watcher. Each has its own inbox Spec, the Issues Spec or the Azure Boards Spec, and both may be on at once. CI Tracking is not an Integration: it owns no work, and only reports on CI.
+A plugin with an ongoing link to an external ticketing system, which owns the definition of the work it links while Code Central owns its delivery. GitHub Issues is the first, run by the Issue Watcher, and Azure Boards the second, run by the Work Item Watcher. Each has its own Spec that its Incoming Issues arrive on, the Issues Spec or the Azure Boards Spec, and both may be on at once. CI Tracking is not an Integration: it owns no work, and only reports on CI.
 _Avoid_: Import, connector, sync
 
 **Link**:
@@ -694,7 +694,7 @@ A Project's Long-lived Spec that Azure Boards' Incoming Issues arrive on, with n
 _Avoid_: Inbox Spec
 
 **Incoming Issue**:
-A linked Draft or Ready Ticket on an Integration's inbox Spec, the Issues Spec or the Azure Boards Spec, whose Link isn't detached, mirroring one GitHub issue or one Azure Boards work item. The external system owns its definition, and the triage actions are offered on it.
+A linked Draft or Ready Ticket on the Issues Spec or the Azure Boards Spec whose Link isn't detached, mirroring one GitHub issue or one Azure Boards work item. The external system owns its definition, and the triage actions are offered on it.
 _Avoid_: Issue Ticket, imported issue
 
 **New issue**:
@@ -710,7 +710,7 @@ What the human may do with an Incoming Issue, from either Integration: Keep as D
 _Avoid_: Triage option, disposition
 
 **New issues need me**:
-A setting of GitHub Issues and, its own, of Azure Boards, off by default: when on, each new Incoming Issue on that Integration's inbox Spec also shows in Needs Me and Focus Mode under New issue until the human triages it.
+A setting of GitHub Issues and, its own, of Azure Boards, off by default: when on, each new Incoming Issue from that Integration also shows in Needs Me and Focus Mode under New issue until the human triages it.
 _Avoid_: Notify on new issues
 
 **Keep as Draft**:

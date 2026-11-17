@@ -40,7 +40,7 @@ type AzureBoardsView struct {
 
 func azureBoardsView(p store.Project) AzureBoardsView {
 	a := p.AzureBoards
-	v := AzureBoardsView{On: a.On, Mode: modeOf(a), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
+	v := AzureBoardsView{On: a.On, Mode: azureBoardsModeOf(a), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
 		PATEnv: boardsPATEnvOf(p.CI, a), NewIssuesNeedMe: a.NewIssuesNeedMe}
 	if a.Spec != 0 {
 		v.Spec = DisplayID(p.Key, a.Spec)
@@ -48,8 +48,9 @@ func azureBoardsView(p store.Project) AzureBoardsView {
 	return v
 }
 
-// modeOf is a's Mode, a Saved query until the human chooses one.
-func modeOf(a store.AzureBoards) store.AzureBoardsMode {
+// azureBoardsModeOf is a's Mode, a Saved query unless the human chooses a
+// WIQL filter.
+func azureBoardsModeOf(a store.AzureBoards) store.AzureBoardsMode {
 	return cmp.Or(a.Mode, store.AzureBoardsSavedQuery)
 }
 
@@ -92,7 +93,7 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in SetAzureBoards
 	if err := humanOnly(ctx, "set_azure_boards"); err != nil {
 		return Written[ProjectView]{}, err
 	}
-	a := store.AzureBoards{On: in.On, Mode: cmp.Or(in.Mode, store.AzureBoardsSavedQuery), QueryURL: strings.TrimSpace(in.QueryURL),
+	a := store.AzureBoards{On: in.On, Mode: in.Mode, QueryURL: strings.TrimSpace(in.QueryURL),
 		ProjectURL: strings.TrimSpace(in.ProjectURL), Where: strings.TrimSpace(in.Where), PATEnv: strings.TrimSpace(in.PATEnv), NewIssuesNeedMe: in.NewIssuesNeedMe}
 	if err := checkAzureBoardsSettings(&a); err != nil {
 		return Written[ProjectView]{}, err
@@ -103,7 +104,7 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in SetAzureBoards
 	created := 0
 	if a.On {
 		var err error
-		created, err = c.createInboxSpec(key, func(p store.Project) int { return p.AzureBoards.Spec },
+		created, err = c.createIntegrationSpec(key, func(p store.Project) int { return p.AzureBoards.Spec },
 			store.Spec{Title: azureBoardsSpecTitle(a), Body: azureBoardsSpecBody})
 		if err != nil {
 			return Written[ProjectView]{}, err
@@ -133,7 +134,7 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in SetAzureBoards
 		return Written[ProjectView]{}, err
 	}
 	if title := azureBoardsSpecTitle(a); was.Spec != 0 && title != "" && title != azureBoardsSpecTitle(was) {
-		if err := c.retitleInboxSpec(ctx, key, was.Spec, givenAzureBoardsSpecTitle, title); err != nil {
+		if err := c.retitleIntegrationSpec(ctx, key, was.Spec, givenAzureBoardsSpecTitle, title); err != nil {
 			return Written[ProjectView]{}, err
 		}
 	}
@@ -145,8 +146,14 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in SetAzureBoards
 // needs the chosen Mode's: a Saved query's URL, or a WIQL filter's
 // project URL and WHERE clause.
 func checkAzureBoardsSettings(a *store.AzureBoards) error {
-	if !a.Mode.Valid() {
+	mode := azureBoardsModeOf(*a)
+	if !mode.Valid() {
 		return invalid("mode", "Azure Boards mode %q isn't %q or %q", a.Mode, store.AzureBoardsSavedQuery, store.AzureBoardsWIQL)
+	}
+	// The default Mode is stored as none, so settings never set stay
+	// unwritten.
+	if mode == store.AzureBoardsSavedQuery {
+		a.Mode = ""
 	}
 	if a.QueryURL != "" {
 		u, err := azdourl.ParseQueryURL(a.QueryURL)
@@ -165,18 +172,18 @@ func checkAzureBoardsSettings(a *store.AzureBoards) error {
 	if words := strings.Fields(a.Where); len(words) > 0 && (strings.EqualFold(words[0], "SELECT") || strings.EqualFold(words[0], "WHERE")) {
 		return invalid("where", "Give only the WHERE clause, without SELECT or the WHERE keyword: Code Central wraps it, such as %s", exampleWhere)
 	}
-	if a.PATEnv != "" && !patEnvPattern.MatchString(a.PATEnv) {
-		return invalid("pat_env", "%q isn't an environment variable name: a letter or underscore, then letters, digits and underscores, such as %s", a.PATEnv, store.DefaultPATEnv)
+	if err := checkPATEnv(a.PATEnv); err != nil {
+		return err
 	}
 	if !a.On {
 		return nil
 	}
 	switch {
-	case a.Mode == store.AzureBoardsSavedQuery && a.QueryURL == "":
+	case mode == store.AzureBoardsSavedQuery && a.QueryURL == "":
 		return invalid("query_url", "Azure Boards needs the saved query's URL, such as https://dev.azure.com/acme/web/_queries/query/<id>")
-	case a.Mode == store.AzureBoardsWIQL && a.ProjectURL == "":
+	case mode == store.AzureBoardsWIQL && a.ProjectURL == "":
 		return invalid("project_url", "A WIQL filter needs the Azure DevOps project it runs in, as its URL, such as https://dev.azure.com/acme/web")
-	case a.Mode == store.AzureBoardsWIQL && a.Where == "":
+	case mode == store.AzureBoardsWIQL && a.Where == "":
 		return invalid("where", "A WIQL filter needs a WHERE clause, such as %s", exampleWhere)
 	}
 	return nil
@@ -185,10 +192,10 @@ func checkAzureBoardsSettings(a *store.AzureBoards) error {
 // exampleWhere is a WHERE clause for messages.
 const exampleWhere = "[System.State] = 'Approved' AND [System.AssignedTo] = @Me"
 
-// chosenURL is the URL a's chosen Mode runs: the Saved query's or the
-// WIQL filter's project.
-func chosenURL(a store.AzureBoards) string {
-	if modeOf(a) == store.AzureBoardsWIQL {
+// chosenAzureBoardsURL is the URL a's chosen Mode runs: the Saved
+// query's or the WIQL filter's project.
+func chosenAzureBoardsURL(a store.AzureBoards) string {
+	if azureBoardsModeOf(a) == store.AzureBoardsWIQL {
 		return a.ProjectURL
 	}
 	return a.QueryURL
@@ -198,7 +205,7 @@ func chosenURL(a store.AzureBoards) string {
 // "Azure Boards: contoso/web", after the organization and project its
 // chosen Mode runs in; empty while a names none.
 func azureBoardsSpecTitle(a store.AzureBoards) string {
-	org, project := azdourl.Names(chosenURL(a))
+	org, project := azdourl.Names(chosenAzureBoardsURL(a))
 	if org == "" {
 		return ""
 	}
@@ -239,7 +246,7 @@ type AzureBoardsCheckInput struct {
 // azureBoardsCheckInput is what the check checks for a, in a Project
 // whose CI settings are ci.
 func azureBoardsCheckInput(ci store.CI, a store.AzureBoards) AzureBoardsCheckInput {
-	in := AzureBoardsCheckInput{Mode: modeOf(a), PATEnv: boardsPATEnvOf(ci, a)}
+	in := AzureBoardsCheckInput{Mode: azureBoardsModeOf(a), PATEnv: boardsPATEnvOf(ci, a)}
 	if in.Mode == store.AzureBoardsWIQL {
 		in.ProjectURL, in.Where = a.ProjectURL, a.Where
 	} else {

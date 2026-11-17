@@ -1,4 +1,4 @@
-# Azure Boards is a second Integration with its own Watcher and inbox Spec
+# Azure Boards is a second Integration with its own Watcher and Spec
 
 The human wants Azure DevOps work items to arrive in Code Central as GitHub issues do. [ADR 0020](0020-an-integration-runs-as-a-watcher-supervised-by-the-service.md) already says another system's Integration is one more kind of Watcher, so **Azure Boards** is a second Integration, run by a new kind, the **Work Item Watcher**, which polls Azure DevOps every 2 minutes. Azure DevOps' service hooks would need a public HTTPS endpoint, which a local service doesn't have.
 
@@ -15,6 +15,6 @@ The Work Item Watcher authenticates with a PAT read from an environment variable
 
 ## Consequences
 
-- "Is this the Issues Spec?" becomes "is this an Integration's inbox Spec?" wherever core asks it, and Awaiting triage reads the New issues need me of the Integration whose inbox the Ticket is on.
+- "Is this the Issues Spec?" becomes "is this the Issues Spec or the Azure Boards Spec?" wherever core asks it, and Awaiting triage reads the New issues need me of the Integration whose Spec the Ticket is on.
 - Each watch read lists only its own Integration's Links and Write-backs.
-- A further Integration follows the same shape: a Watcher kind, a setting with its own inbox Spec, and the shared triage.
+- A further Integration follows the same shape: a Watcher kind, a setting with its own Spec for its Incoming Issues, and the shared triage.
