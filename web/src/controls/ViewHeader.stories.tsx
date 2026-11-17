@@ -11,7 +11,7 @@ export const WithSlots: Story = {
   args: {
     title: "Board",
     left: <span className="muted small">3 Tickets</span>,
-    right: <button>+ New</button>,
+    right: <button className="btn primary">+ New</button>,
   },
 };
 
@@ -19,6 +19,6 @@ export const WithSlots: Story = {
 export const Untitled: Story = {
   args: {
     left: <span>Acme</span>,
-    right: <button>Exit</button>,
+    right: <button className="btn">Exit</button>,
   },
 };
