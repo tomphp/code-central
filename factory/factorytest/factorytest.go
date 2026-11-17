@@ -1070,7 +1070,8 @@ func (r *Remote) AcceptPushes() {
 type Repository struct {
 	// Name is its Repository Name.
 	Name string
-	// CloneURL is its own bare remote, holding one commit on main.
+	// CloneURL is its own bare remote, holding one commit on main; empty
+	// for a local-only Repository (AddLocalRepository).
 	CloneURL string
 	// Path is where the Factory clones it: beside the Home Repository,
 	// at <Repo's parent>/<Name>.
@@ -1123,6 +1124,25 @@ func (h *Harness) MakeRepository(name string) *Repository {
 	h.GitIn(seed, "commit", "-q", "-m", "Start "+name)
 	r := &Repository{Name: name, CloneURL: filepath.Join(root, "repositories", name+".git"), Path: filepath.Join(filepath.Dir(h.Repo), name), h: h}
 	h.GitIn(root, "clone", "-q", "--bare", seed, r.CloneURL)
+	return r
+}
+
+// AddLocalRepository makes a plain git repository named name beside the
+// Home Repository, with no remote and one commit on main, and adds it to
+// the Project through add_repository with that local path and no Clone
+// URL (Spec code-central-879): a local-only Repository, which the
+// Factory adopts and never clones.
+func (h *Harness) AddLocalRepository(name string) *Repository {
+	h.t.Helper()
+	r := &Repository{Name: name, Path: filepath.Join(filepath.Dir(h.Repo), name), h: h}
+	must(h.t, os.MkdirAll(r.Path, 0o755))
+	h.GitIn(r.Path, "init", "-q", "-b", "main")
+	must(h.t, os.WriteFile(filepath.Join(r.Path, "README.md"), []byte(name+"\n"), 0o644))
+	h.GitIn(r.Path, "add", "README.md")
+	h.GitIn(r.Path, "commit", "-q", "-m", "Start "+name)
+	if _, err := h.Human().AddRepository(context.Background(), h.Project, core.AddRepositoryInput{Name: name, LocalPath: r.Path}); err != nil {
+		h.t.Fatalf("add_repository %s: %v", name, err)
+	}
 	return r
 }
 

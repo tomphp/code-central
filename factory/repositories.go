@@ -16,9 +16,11 @@ import (
 // every poll. The Home Repository is the git top level the Factory starts
 // in; each other one has a clone at its local path, else beside the Home
 // Repository, which the Factory makes when nothing is there and adopts
-// when it is a clone of the Clone URL. Anything else there is Repository
-// missing, left untouched, and no new Claim starts while any Repository
-// is missing.
+// when it is a clone of the Clone URL. A local-only Repository, with no
+// Clone URL, is never cloned: its git repository is adopted with no
+// remote check (Spec code-central-879). Anything else there, or a path
+// another Repository has, is Repository missing, left untouched, and no
+// new Claim starts while any Repository is missing.
 
 // repository is one of the Project's Repositories as the Factory has it.
 type repository struct {
@@ -44,6 +46,21 @@ type repository struct {
 	problem string
 	// cloned is whether this poll made its clone.
 	cloned bool
+}
+
+// view is r as the Project lists it, as far as the Factory keeps it: its
+// Name, whether it is the Home, its Clone URL and its Base, which say
+// whether it is local-only. Its local path and Code Host are left out.
+func (r *repository) view() core.RepositoryView {
+	return core.RepositoryView{Name: r.name, Home: r.home, CloneURL: r.cloneURL, Base: r.base}
+}
+
+// policy is r's Landing Policy, which every landing step in r asks: the
+// Project's, projectPolicy, with Push off in a local-only Repository (ADR
+// 0039, Spec code-central-879). Project-wide rules ask the Project's, so
+// a function given a policy with r is given the Project's and asks this.
+func (r *repository) policy(projectPolicy core.LandingPolicy) core.LandingPolicy {
+	return projectPolicy.ForRepository(r.view())
 }
 
 // baseOf is r's Base: the Project's for the Home Repository.
@@ -108,10 +125,18 @@ func (f *factory) syncRepositories(ctx context.Context, p core.ProjectView) {
 	next := map[string]*repository{}
 	var inOrder []*repository
 	var report []core.RepositoryReport
+	// taken is each path an earlier Repository, or the Home, resolves
+	// to, with whose it is: a later one there is Repository missing.
+	taken := map[string]string{}
+	for _, v := range p.Repositories {
+		if v.Home {
+			taken[f.home.dir] = v.Name
+		}
+	}
 	for _, v := range p.Repositories {
 		r := f.home
 		if !v.Home {
-			r = f.cloneOf(ctx, v, p.Landing.Remote)
+			r = f.cloneOf(ctx, v, p.Landing.Remote, taken)
 			if ctx.Err() != nil {
 				// A stop cut the clone off: it isn't missing.
 				return
@@ -153,8 +178,11 @@ func (f *factory) syncRepositories(ctx context.Context, p core.ProjectView) {
 // cloneOf is the Repository v with its clone: cloned under the Push
 // remote's name when its path holds nothing, adopted when the path holds
 // a clone whose Push remote is v's Clone URL, and otherwise missing,
-// with the path untouched.
-func (f *factory) cloneOf(ctx context.Context, v core.RepositoryView, remote string) *repository {
+// with the path untouched. A local-only Repository, with no Clone URL, is
+// never cloned: whatever git repository of its own is at its path is
+// adopted with no remote check (Spec code-central-879). A path in taken
+// is another Repository's, so missing too; v's path is added to it.
+func (f *factory) cloneOf(ctx context.Context, v core.RepositoryView, remote string, taken map[string]string) *repository {
 	dir := v.LocalPath
 	if dir == "" {
 		dir = filepath.Join(filepath.Dir(f.home.dir), v.Name)
@@ -168,7 +196,15 @@ func (f *factory) cloneOf(ctx context.Context, v core.RepositoryView, remote str
 		r.git, r.problem = nil, fmt.Sprintf(format, args...)
 		return r
 	}
+	for path, other := range taken {
+		if samePath(path, dir) {
+			return missing("%s is Repository %s's clone", dir, other)
+		}
+	}
+	taken[dir] = v.Name
 	switch _, err := os.Lstat(dir); {
+	case errors.Is(err, fs.ErrNotExist) && v.CloneURL == "":
+		return missing("nothing at %s", dir)
 	case errors.Is(err, fs.ErrNotExist):
 		if out, err := cloneRepository(ctx, f.git, f.e.Environ, remote, v.CloneURL, dir); err != nil {
 			if out == "" {
@@ -188,6 +224,9 @@ func (f *factory) cloneOf(ctx context.Context, v core.RepositoryView, remote str
 	if !samePath(top, dir) {
 		return missing("%s is inside the git repository at %s, not a clone of its own", dir, top)
 	}
+	if v.CloneURL == "" {
+		return r
+	}
 	url, err := r.git.remoteURL(remote)
 	if err != nil {
 		return missing("%s has no remote %s, the Push remote", dir, remote)
@@ -204,7 +243,7 @@ func (f *factory) sayClone(r, was *repository) {
 	switch {
 	case r.problem != "":
 		if was == nil || was.problem != r.problem {
-			f.printf("warning: Repository %s is missing: %s: no new Claim starts until it is cloned", r.name, r.problem)
+			f.printf("warning: Repository %s is missing: %s: no new Claim starts until it has a clone", r.name, r.problem)
 		}
 	case r.cloned:
 		f.printf("repository %s: cloned %s to %s", r.name, r.cloneURL, r.dir)

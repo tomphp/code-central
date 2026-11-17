@@ -448,6 +448,71 @@ func TestTurningPullRequestOnChecksEveryRepositoryNamingEachThatFails(t *testing
 	}
 }
 
+func TestTurningPullRequestOnIsRefusedNamingEachLocalOnlyRepositoryBeforeTheCheck(t *testing.T) {
+	for name, withCheck := range map[string]bool{"with the check": true, "with no check": false} {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t)
+			f.project(t, "acme")
+			if _, err := f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/acme.git", Base: "main"}); err != nil {
+				t.Fatal(err)
+			}
+			f.addRepository(t, core.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes")})
+			f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git"})
+			f.addRepository(t, core.AddRepositoryInput{Name: "docs", LocalPath: srcPath("docs")})
+			checked := false
+			if withCheck {
+				f.core.SetPullRequestCheck(func(context.Context, core.PullRequestCheckInput) core.WatcherCheckResult {
+					checked = true
+					return core.WatcherCheckResult{}
+				})
+			}
+
+			_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest})
+			wantFix(t, err, core.Invalid, "method")
+			var e *core.Error
+			errors.As(err, &e)
+			message := "2 Repositories fail: notes: Pull Request needs a Clone URL in every Repository; docs: Pull Request needs a Clone URL in every Repository"
+			fix := "notes: give its Clone URL, or land by Merge or Branch; docs: give its Clone URL, or land by Merge or Branch"
+			if e.Message != message || e.Fix != fix {
+				t.Fatalf("refusal = %q, fix %q, want %q, fix %q", e.Message, e.Fix, message, fix)
+			}
+			if checked {
+				t.Error("the Pull Request check ran despite the local-only Repositories")
+			}
+			if v := f.projectView(t, "acme"); v.Landing.Method == store.LandingPullRequest {
+				t.Error("Pull Request turned on despite the refusal")
+			}
+
+			// Given a Clone URL each, Pull Request turns on.
+			for _, n := range []string{"notes", "docs"} {
+				url := "git@github.com:acme/" + n + ".git"
+				if _, err := f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: n, CloneURL: &url}); err != nil {
+					t.Fatalf("edit %s: %v", n, err)
+				}
+			}
+			if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest}); err != nil {
+				t.Fatalf("turn Pull Request on: %v", err)
+			}
+		})
+	}
+}
+
+func TestTurningPullRequestOnNamesALoneLocalOnlyRepository(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	if _, err := f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/acme.git", Base: "main"}); err != nil {
+		t.Fatal(err)
+	}
+	f.addRepository(t, core.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes")})
+
+	_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest})
+	wantFix(t, err, core.Invalid, "method")
+	var e *core.Error
+	if errors.As(err, &e); e.Message != "notes: Pull Request needs a Clone URL in every Repository" || e.Fix != "notes: give its Clone URL, or land by Merge or Branch" {
+		t.Fatalf("refusal = %q, fix %q, want notes named", e.Message, e.Fix)
+	}
+}
+
 func TestSendingBackATicketWithOnePullRequestLeavesItOpenForTheNextPush(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)

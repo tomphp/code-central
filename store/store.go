@@ -125,6 +125,12 @@ type Repository struct {
 	LocalPath string
 }
 
+// LocalOnly reports whether r is a Repository other than the Home with
+// no Clone URL: never cloned, skipped by Push and refused under Pull
+// Request. The Home's Clone URL is the reported Push remote URL, so it is
+// never local-only.
+func (r Repository) LocalOnly() bool { return !r.Home && r.CloneURL == "" }
+
 // DefaultRepositoryBase is a Repository's Base when the human names none.
 const DefaultRepositoryBase = "main"
 

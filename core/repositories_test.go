@@ -133,7 +133,7 @@ func TestAddRepositoryRefusesWhatBreaksItsRules(t *testing.T) {
 		"no name":                         {core.AddRepositoryInput{CloneURL: "git@github.com:acme/api.git"}, "name"},
 		"a name already listed":           {core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/api.git"}, "name"},
 		"the Home Repository's name":      {core.AddRepositoryInput{Name: "acme", CloneURL: "git@github.com:acme/api.git"}, "name"},
-		"no Clone URL":                    {core.AddRepositoryInput{Name: "api"}, "clone_url"},
+		"no Clone URL nor local path":     {core.AddRepositoryInput{Name: "api"}, "clone_url"},
 		"a Clone URL already listed":      {core.AddRepositoryInput{Name: "api", CloneURL: "https://github.com/Acme/Web"}, "clone_url"},
 		"the Home Repository's Clone URL": {core.AddRepositoryInput{Name: "api", CloneURL: "https://github.com/acme/acme.git/"}, "clone_url"},
 		"a bad Base":                      {core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git", Base: "a..b"}, "base"},
@@ -205,7 +205,7 @@ func TestEditRepositoryRefusesTheHomeRepositoryAndWhatBreaksTheRules(t *testing.
 		"the Home Repository's Clone URL":  {core.EditRepositoryInput{Name: "acme", CloneURL: s("git@github.com:acme/x.git")}, "clone_url"},
 		"the Home Repository's local path": {core.EditRepositoryInput{Name: "acme", LocalPath: s(srcPath("acme"))}, "local_path"},
 		"another's Clone URL":              {core.EditRepositoryInput{Name: "web", CloneURL: s("ssh://git@github.com/acme/api")}, "clone_url"},
-		"no Clone URL":                     {core.EditRepositoryInput{Name: "web", CloneURL: s(" ")}, "clone_url"},
+		"no Clone URL nor local path":      {core.EditRepositoryInput{Name: "web", CloneURL: s(" ")}, "clone_url"},
 		"a bad Base":                       {core.EditRepositoryInput{Name: "web", Base: s("-x")}, "base"},
 		"no Base":                          {core.EditRepositoryInput{Name: "web", Base: s("")}, "base"},
 	} {
@@ -219,6 +219,74 @@ func TestEditRepositoryRefusesTheHomeRepositoryAndWhatBreaksTheRules(t *testing.
 	// Its own Clone URL, written another way, is no clash.
 	if _, err := f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "web", CloneURL: s("https://github.com/acme/web")}); err != nil {
 		t.Fatalf("edit web to its own Clone URL: %v", err)
+	}
+}
+
+// A Repository other than the Home needs a Clone URL, a local path or
+// both (Spec code-central-879): one with no Clone URL is local-only.
+
+func TestAddRepositoryWithOnlyALocalPathIsLocalOnly(t *testing.T) {
+	f := reloaded(t, func(f fixture) {
+		f.project(t, "acme")
+		f.addRepository(t, core.AddRepositoryInput{Name: "web", LocalPath: srcPath("web")})
+		// The duplicate check skips an empty Clone URL, so two local-only
+		// Repositories sit side by side.
+		f.addRepository(t, core.AddRepositoryInput{Name: "api", LocalPath: srcPath("api")})
+	})
+	p := f.projectView(t, "acme")
+	for _, name := range []string{"web", "api"} {
+		if r := repository(t, p, name); r.CloneURL != "" || r.CodeHost != core.CodeHostNone || r.LocalPath != srcPath(name) || r.Base != "main" {
+			t.Fatalf("%s = %+v, want no Clone URL nor Code Host, at its local path with Base main", name, r)
+		}
+	}
+}
+
+func TestARepositoryWithNeitherCloneURLNorLocalPathIsRefusedWithTheFix(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	_, err := f.core.AddRepository(human, "acme", core.AddRepositoryInput{Name: "web", CloneURL: " ", LocalPath: " "})
+	wantFix(t, err, core.Invalid, "clone_url")
+	var e *core.Error
+	errors.As(err, &e)
+	if !strings.Contains(e.Message, "a Clone URL to clone from, or the local path of a clone it already has") {
+		t.Fatalf("message %q, want it to say a Repository needs a Clone URL or the local path of its clone", e.Message)
+	}
+	if !strings.Contains(e.Fix, "Clone URL") || !strings.Contains(e.Fix, "local path") {
+		t.Fatalf("fix %q, want it to say to give one or the other", e.Fix)
+	}
+}
+
+func TestEditRepositoryClearsACloneURLAndGivesItOneAgain(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git", LocalPath: srcPath("web")})
+	none, url := "", "git@github.com:acme/web.git"
+	v, err := f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "web", CloneURL: &none, Full: true})
+	if err != nil {
+		t.Fatalf("clear web's Clone URL: %v", err)
+	}
+	if web := repository(t, *v.Record, "web"); web.CloneURL != "" || web.CodeHost != core.CodeHostNone || web.LocalPath != srcPath("web") {
+		t.Fatalf("web = %+v, want no Clone URL nor Code Host, and its local path kept", web)
+	}
+	// Now local-only, its local path can't be cleared too.
+	_, err = f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "web", LocalPath: &none})
+	wantFix(t, err, core.Invalid, "clone_url")
+	v, err = f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "web", CloneURL: &url, Full: true})
+	if err != nil {
+		t.Fatalf("give web its Clone URL again: %v", err)
+	}
+	if web := repository(t, *v.Record, "web"); web.CloneURL != url || web.CodeHost != core.CodeHostGitHub {
+		t.Fatalf("web = %+v, want its Clone URL back on GitHub", web)
+	}
+	// With a Clone URL, its local path can be cleared, and then its Clone
+	// URL can't.
+	if _, err := f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "web", LocalPath: &none}); err != nil {
+		t.Fatalf("clear web's local path: %v", err)
+	}
+	_, err = f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "web", CloneURL: &none})
+	wantFix(t, err, core.Invalid, "clone_url")
+	if web := repository(t, f.projectView(t, "acme"), "web"); web.CloneURL != url || web.LocalPath != "" {
+		t.Fatalf("web = %+v after refusals, want its Clone URL and no local path", web)
 	}
 }
 
@@ -323,6 +391,47 @@ func TestAddRepositoryUnderPullRequestRunsTheWatchersCheckForIt(t *testing.T) {
 	}
 	_, err = f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "web", CloneURL: &private})
 	wantFix(t, err, core.Invalid, "clone_url")
+}
+
+func TestUnderPullRequestAddingOrEditingALocalOnlyRepositoryIsRefusedBeforeTheCodeHostCheck(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	if _, err := f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/acme.git"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest}); err != nil {
+		t.Fatal(err)
+	}
+	checked := 0
+	f.core.SetPullRequestCheck(func(context.Context, core.PullRequestCheckInput) core.WatcherCheckResult {
+		checked++
+		return core.WatcherCheckResult{}
+	})
+	wantNeedsCloneURL := func(t *testing.T, err error) {
+		t.Helper()
+		wantFix(t, err, core.Invalid, "clone_url")
+		if e := (*core.Error)(nil); errors.As(err, &e) && (e.Message != "Pull Request needs a Clone URL in every Repository" || e.Fix != "give its Clone URL, or land by Merge or Branch") {
+			t.Fatalf("refusal = %q, fix %q, want Pull Request's need for a Clone URL", e.Message, e.Fix)
+		}
+	}
+
+	_, err := f.core.AddRepository(human, "acme", core.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes")})
+	wantNeedsCloneURL(t, err)
+
+	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git", LocalPath: srcPath("web")})
+	empty := ""
+	_, err = f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "web", CloneURL: &empty})
+	wantNeedsCloneURL(t, err)
+	if checked != 1 {
+		t.Errorf("the Pull Request check ran %d times, want once, for web's add alone", checked)
+	}
+	v := f.projectView(t, "acme")
+	if got := repositoryNames(v); !slices.Equal(got, []string{"acme", "web"}) {
+		t.Fatalf("repositories = %v, want acme, web", got)
+	}
+	if got := repository(t, v, "web").CloneURL; got != "git@github.com:acme/web.git" {
+		t.Fatalf("web's Clone URL = %q after the refusal, want it kept", got)
+	}
 }
 
 func TestCloneURLsNormaliseAcrossSchemesAndSuffixes(t *testing.T) {

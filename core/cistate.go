@@ -140,7 +140,7 @@ func (s *ciState) repo(t store.Ticket, name string) *repoCI {
 		return rc
 	}
 	s.unhandled(rc)
-	if landingPolicyOf(s.p).CIGateHolds() && rc.result == CIRunning {
+	if landingPolicyIn(s.p, name).CIGateHolds() && rc.result == CIRunning {
 		rc.waiting, rc.unavailable = true, s.unavailable(rc)
 	}
 	return rc
@@ -195,7 +195,7 @@ func (a *ticketCI) in(name string) *repoCI {
 // pushed commit whose runs have all been pruned has no CI result: none is
 // running.
 func (s *ciState) result(t store.Ticket, rc *repoCI) (commit string, result CIResult) {
-	for _, pc := range s.resultCommits(t, rc.pushed) {
+	for _, pc := range s.resultCommits(t, rc.name, rc.pushed) {
 		if s.commitResult(rc.record, pc.Commit, rc.runs) == CIPassed {
 			return pc.Commit, CIPassed
 		}
@@ -265,13 +265,13 @@ func (s *ciState) unavailable(rc *repoCI) *CIUnavailableView {
 }
 
 // resultCommits are the commits of pushed, a Ticket's pushed commits in
-// one Repository, that its CI result there reads, newest first: under the
-// CI gate those pushed since it last moved back to Ready, any of which
-// passing passes it; otherwise, or when it has pushed none since, its
-// latest. pushed must hold one.
-func (s *ciState) resultCommits(t store.Ticket, pushed []store.PushedCommit) []store.PushedCommit {
+// the Repository name, that its CI result there reads, newest first:
+// under the CI gate there those pushed since it last moved back to Ready,
+// any of which passing passes it; otherwise, or when it has pushed none
+// since, its latest. pushed must hold one.
+func (s *ciState) resultCommits(t store.Ticket, name string, pushed []store.PushedCommit) []store.PushedCommit {
 	var out []store.PushedCommit
-	if landingPolicyOf(s.p).CIGateHolds() {
+	if landingPolicyIn(s.p, name).CIGateHolds() {
 		since := backToReady(t)
 		for _, pc := range slices.Backward(pushed) {
 			if !pc.Pushed.After(since) {
@@ -300,7 +300,7 @@ func (s *ciState) ticketsReading(record, commit string) []store.Ticket {
 	var out []store.Ticket
 	for _, t := range s.r.Tickets(s.p.Key) {
 		pushed := pushedIn(s.p.Key, t, name)
-		if len(pushed) > 0 && slices.ContainsFunc(s.resultCommits(t, pushed), func(pc store.PushedCommit) bool { return pc.Commit == commit }) {
+		if len(pushed) > 0 && slices.ContainsFunc(s.resultCommits(t, name, pushed), func(pc store.PushedCommit) bool { return pc.Commit == commit }) {
 			out = append(out, t)
 		}
 	}

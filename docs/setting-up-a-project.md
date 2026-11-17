@@ -210,7 +210,7 @@ You're starting `acme-shop` from nothing, in `~/src`.
 
 A Project's work can span more than one repository. The one you ran `init` in is its **Home Repository**: the Factory runs there and the Project's files live there. Every other repository is added to the Project, never set up with `init`. A Project with only its Home Repository needs nothing here.
 
-Add, edit, reorder and remove them in the **Repositories** section at the top of Project Options, or with `code-central repository`. Each has a **Repository Name**, fixed once added (lowercase letters, digits, `-`, `_` and `.`), a **Clone URL**, a **Base** (`main` unless you name another) and an optional local path, the full path of a clone you already have:
+Add, edit, reorder and remove them in the **Repositories** section at the top of Project Options, or with `code-central repository`. Each has a **Repository Name**, fixed once added (lowercase letters, digits, `-`, `_` and `.`), a **Clone URL**, a **Base** (`main` unless you name another) and a local path, the full path of a clone you already have. It needs a Clone URL, a local path or both:
 
 ```console
 $ code-central repository add web --clone-url git@github.com:acme/web.git
@@ -223,7 +223,17 @@ web              git@github.com:acme/web.git       main  -
 acme-api (home)  git@github.com:acme/acme-api.git  main  -
 ```
 
-The list is the **landing order**: accepted work lands in each Repository in that order. `code-central repository list` shows it; `edit <name>` takes `--clone-url`, `--base` and `--local-path` (an empty `--local-path ""` clears it); `remove <name>` takes one off the list and leaves its clone on disk. The Home Repository is listed under the Project Key: its Clone URL is the Push remote URL the Factory reports, and its Base is set in the Landing Method section. Each refusal says how to put it right: a Repository Name or a Clone URL already listed (`git@github.com:acme/web.git` and `https://github.com/acme/web` are the same one), removing the Home Repository, or removing one an unfinished Ticket has changed. While the Landing Method is Pull Request, a Repository is added only on a Code Host Pull Request supports, and only once the Pull Request Watcher's check passes for it.
+A repository you never push, with no remote or none you want the Factory to use, needs no Clone URL: give only the local path of its clone. In the Repositories section the add form's button enables once it has a name and a Clone URL or a local path, a hint under the Clone URL field says to leave it empty for a local-only repository, and **Watch its CI** shows only while a Clone URL is entered; emptying the Clone URL in a Repository's **Edit** form clears it. A local-only Repository's row shows **None: local only, never pushed** for its Clone URL. A Repository with no Clone URL is **local-only**. The Factory never clones it and adopts the git repository at its local path as it is; Push skips it, so work lands there once merged into its Base; the Pull Request Landing Method refuses it; and CI Tracking starts it Not watched:
+
+```console
+$ code-central repository add notes --local-path /home/you/src/notes
+NAME             CLONE URL                         BASE  LOCAL PATH
+web              git@github.com:acme/web.git       main  -
+acme-api (home)  git@github.com:acme/acme-api.git  main  -
+notes            (none: local only)                main  /home/you/src/notes
+```
+
+The list is the **landing order**: accepted work lands in each Repository in that order. `code-central repository list` shows it; `edit <name>` takes `--clone-url`, `--base` and `--local-path` (an empty `--clone-url ""` clears the Clone URL, making the Repository local-only, and an empty `--local-path ""` clears the local path, but never both); `remove <name>` takes one off the list and leaves its clone on disk. The Home Repository is listed under the Project Key: its Clone URL is the Push remote URL the Factory reports, and its Base is set in the Landing Method section. Each refusal says how to put it right: neither a Clone URL nor a local path, a Repository Name or a Clone URL already listed (`git@github.com:acme/web.git` and `https://github.com/acme/web` are the same one), removing the Home Repository, or removing one an unfinished Ticket has changed. While the Landing Method is Pull Request, a Repository is added only on a Code Host Pull Request supports, and only once the Pull Request Watcher's check passes for it.
 
 The Factory clones each Repository on its next poll, beside the Home Repository (`/home/you/src/web` for `web` when the Home Repository is `/home/you/src/acme-api`) unless you gave a local path, and adopts a clone of the Clone URL it finds there as it is. Each Ticket then gets a worktree in every Repository, named after it, and a session that starts in the Home worktree and reaches the others with `--add-dir`:
 

@@ -221,3 +221,28 @@ func TestChangingTheBaseResetsBaseDiverged(t *testing.T) {
 		t.Error("Base diverged is still raised, want it cleared by the new base")
 	}
 }
+
+func TestLandingByMergeWithoutPushResetsBaseDiverged(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	remote := h.AddRemote("origin")
+	h.Git("push", "-q", remote.Path, h.CommitOn("theirs", "theirs.txt", "t\n")+":refs/heads/main")
+	h.CommitOn("main", "ours.txt", "o\n")
+	pullRequestOn(h, "origin")
+	ready := h.ReadyTicket("Waits for the base")
+	h.Script(ready, factorytest.Wait())
+	r := h.Start()
+	r.WantOutput("has diverged from the remote's")
+	if tk := h.Ticket(ready); tk.State != store.Ready {
+		t.Fatalf("%s is %s, want it not claimed while the base has diverged", ready, tk.State)
+	}
+
+	// Merge without Push never keeps the base level with the remote's.
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge})
+	r.Poll()
+
+	h.WantState(ready, store.InProgress)
+	if _, ok := baseDivergedItem(t, h); ok {
+		t.Error("Base diverged is still raised, want it cleared under Merge without Push")
+	}
+}

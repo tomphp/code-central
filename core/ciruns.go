@@ -246,9 +246,10 @@ type ReportPushedCommitInput struct {
 // merged by hand), recorded with when. It is recorded only while CI
 // Tracking and Push are on, so turning CI Tracking on tracks only pushes
 // from then on; with either off, nothing changes; under Pull Request,
-// which implies Push, it is recorded whether or not CI Tracking is on. A
-// newer pushed commit in the Repository replaces the old one as the one
-// the Repository's CI result comes from.
+// which implies Push, it is recorded whether or not CI Tracking is on. It
+// is never recorded in a local-only Repository, whose Landing Policy has
+// Push off. A newer pushed commit in the Repository replaces the old one
+// as the one the Repository's CI result comes from.
 func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushedCommitInput) (Written[TicketView], error) {
 	commit := strings.TrimSpace(in.Commit)
 	if commit == "" {
@@ -266,7 +267,7 @@ func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushed
 		if err != nil {
 			return false, err
 		}
-		if !landingPolicyOf(p).RecordsPushedCommit() {
+		if !landingPolicyIn(p, name).RecordsPushedCommit() {
 			return false, nil
 		}
 		if pc, ok := latestPushedTo(key, *t, name); ok && pc.Commit == commit {
@@ -507,7 +508,7 @@ func ciWaiting(ci *ciState, name string) []CIWaitingCommit {
 		if rc == nil {
 			continue
 		}
-		for _, pc := range ci.resultCommits(t, rc.pushed) {
+		for _, pc := range ci.resultCommits(t, name, rc.pushed) {
 			if !ci.watched(rc, pc) {
 				continue
 			}

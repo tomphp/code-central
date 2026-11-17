@@ -45,18 +45,28 @@ type RepositoryView struct {
 	Clone *CloneView `json:"clone,omitempty"`
 }
 
+// LocalOnly reports whether r is a Repository other than the Home with no
+// Clone URL. The Home's is empty only until the Factory reports it, so it
+// is never local-only.
+func (r RepositoryView) LocalOnly() bool { return !r.Home && r.CloneURL == "" }
+
 // repositoriesView is p's Repositories in landing order.
 func repositoriesView(p store.Project) []RepositoryView {
 	var out []RepositoryView
 	for _, r := range p.RepositoryList() {
-		v := RepositoryView{Name: r.Name, Home: r.Home, CloneURL: r.CloneURL, Base: r.Base, LocalPath: r.LocalPath, ChangedBy: []string{}}
-		if r.Home {
-			v.CloneURL, v.Base = p.CI.PushRemoteURL, p.Base()
-		}
-		v.CodeHost, _ = codeHostOf(v.CloneURL)
-		out = append(out, v)
+		out = append(out, repositoryView(p, r))
 	}
 	return out
+}
+
+// repositoryView is p's Repository r as every Project read returns it.
+func repositoryView(p store.Project, r store.Repository) RepositoryView {
+	v := RepositoryView{Name: r.Name, Home: r.Home, CloneURL: r.CloneURL, Base: r.Base, LocalPath: r.LocalPath, ChangedBy: []string{}}
+	if r.Home {
+		v.CloneURL, v.Base = p.CI.PushRemoteURL, p.Base()
+	}
+	v.CodeHost, _ = codeHostOf(v.CloneURL)
+	return v
 }
 
 // fillChangedBy fills in each of v's Repositories' ChangedBy from the
@@ -88,19 +98,21 @@ func repositoryNames(rs []store.Repository) []string {
 	return names
 }
 
-// AddRepositoryInput is the human's add_repository(name, clone_url,
-// base?, local_path?, full?).
+// AddRepositoryInput is the human's add_repository(name, clone_url?,
+// base?, local_path?, full?): it needs clone_url, local_path or both.
 type AddRepositoryInput struct {
 	// Name is the Repository Name, fixed once added.
-	Name     string `json:"name"`
-	CloneURL string `json:"clone_url"`
+	Name string `json:"name"`
+	// CloneURL left out makes the Repository local-only: the Factory
+	// never clones or pushes it, and adopts the clone at LocalPath.
+	CloneURL string `json:"clone_url,omitempty"`
 	// Base is main when left out.
 	Base string `json:"base,omitempty"`
 	// LocalPath is an absolute path to an existing clone; left out, the
 	// Factory clones it beside the Home Repository.
 	LocalPath string `json:"local_path,omitempty"`
 	// CI is the Repository's CI entry; left out, it is filled in from the
-	// Clone URL, Not watched for a host no CI Provider is on.
+	// Clone URL, Not watched for none or a host no CI Provider is on.
 	CI *RepositoryCI `json:"ci,omitempty"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
@@ -110,11 +122,12 @@ type AddRepositoryInput struct {
 // base?, local_path?, full?): each field left out keeps its value. The
 // name only finds the Repository: a Repository Name never changes.
 type EditRepositoryInput struct {
-	Name     string  `json:"name"`
+	Name string `json:"name"`
+	// CloneURL, set empty, clears it, making the Repository local-only.
 	CloneURL *string `json:"clone_url,omitempty"`
 	Base     *string `json:"base,omitempty"`
 	// LocalPath, set empty, puts the clone back beside the Home
-	// Repository.
+	// Repository. A Repository keeps a Clone URL or a local path.
 	LocalPath *string `json:"local_path,omitempty"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
@@ -306,12 +319,13 @@ func (c *Core) SetLandingOrder(ctx context.Context, key string, in SetLandingOrd
 }
 
 // checkRepositoryFields refuses a Repository whose Clone URL, Base or
-// local path can't be one, with how to put it right.
+// local path can't be one, with how to put it right. It needs a Clone
+// URL, a local path or both: with no Clone URL it is local-only.
 func checkRepositoryFields(r store.Repository) error {
 	switch {
-	case r.CloneURL == "":
-		return &Error{Code: Invalid, Field: "clone_url", Message: "a Repository needs the Clone URL it's cloned from and pushed to",
-			Fix: "give the URL you'd pass to git clone, such as git@github.com:acme/web.git"}
+	case r.CloneURL == "" && r.LocalPath == "":
+		return &Error{Code: Invalid, Field: "clone_url", Message: "a Repository needs a Clone URL to clone from, or the local path of a clone it already has",
+			Fix: "give its Clone URL, such as git@github.com:acme/web.git, or the local path of its clone, such as /home/you/src/web"}
 	case strings.ContainsFunc(r.CloneURL, unicode.IsSpace):
 		return &Error{Code: Invalid, Field: "clone_url", Message: fmt.Sprintf("%s isn't a Clone URL: it holds a space", quote(r.CloneURL)),
 			Fix: "give the URL you'd pass to git clone, such as git@github.com:acme/web.git"}
@@ -332,7 +346,16 @@ func checkRepositoryFields(r store.Repository) error {
 // refuseListed refuses r when another Repository has its Clone URL, as
 // normalised, or its local path. The Home Repository's Clone URL is the
 // reported Push remote URL, so it can clash only once that is reported.
-func refuseListed(p store.Project, r store.Repository) error {
+// An empty Clone URL clashes with none, so local-only Repositories sit
+// side by side.
+//
+// The path check compares resolved clone paths: a Repository's local
+// path, else beside the Home Repository's clone, at home, the clone path
+// the Factory last reported, empty without one. Without it, only
+// explicit local paths are compared, and the Home Repository's clone
+// holds none.
+func refuseListed(p store.Project, r store.Repository, home string) error {
+	mine := resolvedClonePath(r, home)
 	for _, o := range p.RepositoryList() {
 		if o.Name == r.Name {
 			continue
@@ -341,16 +364,58 @@ func refuseListed(p store.Project, r store.Repository) error {
 		if o.Home {
 			url = p.CI.PushRemoteURL
 		}
-		if url != "" && NormalCloneURL(url) == NormalCloneURL(r.CloneURL) {
+		if url != "" && r.CloneURL != "" && NormalCloneURL(url) == NormalCloneURL(r.CloneURL) {
 			return &Error{Code: Invalid, Field: "clone_url", Message: fmt.Sprintf("%s is already listed as Repository %s, at %s", r.CloneURL, o.Name, url),
 				Fix: "a repository is listed once: edit " + o.Name + " instead, or give this one's own Clone URL"}
 		}
-		if o.LocalPath != "" && r.LocalPath != "" && filepath.Clean(o.LocalPath) == filepath.Clean(r.LocalPath) {
-			return &Error{Code: Invalid, Field: "local_path", Message: fmt.Sprintf("Repository %s's clone is already at %s", o.Name, o.LocalPath),
-				Fix: "give this Repository's own clone, or leave the local path out to clone it beside the Home Repository"}
+		theirs := resolvedClonePath(o, home)
+		if o.Home {
+			theirs = home
 		}
+		if mine == "" || theirs != mine {
+			continue
+		}
+		who := "Repository " + o.Name
+		if o.Home {
+			who = "the Home Repository"
+		}
+		if r.LocalPath == "" {
+			return &Error{Code: Invalid, Field: "local_path", Message: fmt.Sprintf("Repository %s's clone would be at %s, beside the Home Repository, where %s's clone already is", r.Name, mine, who),
+				Fix: "give this Repository the local path of its own clone"}
+		}
+		return &Error{Code: Invalid, Field: "local_path", Message: fmt.Sprintf("%s's clone is already at %s", who, mine),
+			Fix: "give this Repository's own clone, or leave the local path out to clone it beside the Home Repository"}
 	}
 	return nil
+}
+
+// resolvedClonePath is where r's clone is: its local path, else beside
+// the Home Repository's clone at home, or empty when home is unknown.
+func resolvedClonePath(r store.Repository, home string) string {
+	switch {
+	case r.LocalPath != "":
+		return filepath.Clean(r.LocalPath)
+	case home != "":
+		return filepath.Join(filepath.Dir(home), r.Name)
+	}
+	return ""
+}
+
+// reportedHomeClone is the path of p's Home Repository's clone as the
+// Factory's latest Repositories report says, empty while no Factory is
+// reporting or none has.
+func (c *Core) reportedHomeClone(p store.Project) string {
+	hs := c.heartbeats
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	for _, r := range p.RepositoryList() {
+		if r.Home {
+			if v := hs.cloneView(p.Key, r.Name, c.clock.Now()); v != nil {
+				return filepath.Clean(v.Path)
+			}
+		}
+	}
+	return ""
 }
 
 // repositoryNamed is the index of the Repository named name in rs.
@@ -364,9 +429,9 @@ func repositoryNamed(key string, rs []store.Repository, name string) (int, error
 }
 
 // updateRepositories writes the Repositories change makes, once r's Clone
-// URL and local path are listed nowhere else and, when checkHost and
-// under Pull Request, its Clone URL passes the Pull Request Watcher's
-// check. With ci, r's new CI entry, it is written with them, once, while
+// URL and resolved clone path are listed nowhere else and, under Pull
+// Request, r has a Clone URL that, when checkHost, passes the Pull Request
+// Watcher's check. With ci, r's new CI entry, it is written with them, once, while
 // CI Tracking is on, it passes the CI Watcher's check. The checks call
 // the Code Host, so they run outside the store's lock, between a read
 // that refuses what the store alone can and the write, which checks
@@ -377,7 +442,12 @@ func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r 
 		if err != nil {
 			return nil, err
 		}
-		return rs, refuseListed(p, r)
+		// Before the Code Host check, so an empty Clone URL never reads
+		// as a host Pull Request doesn't support.
+		if landingPolicyOf(p).EveryRepositoryNeedsCloneURL() && r.LocalOnly() {
+			return nil, &Error{Code: Invalid, Field: "clone_url", Message: needsCloneURL, Fix: needsCloneURLFix}
+		}
+		return rs, refuseListed(p, r, c.reportedHomeClone(p))
 	}
 	var check *PullRequestCheckInput
 	var checkCI func() error

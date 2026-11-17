@@ -51,9 +51,12 @@ func (c *Core) SetPullRequestCheck(check PullRequestCheck) { c.pullRequestCheck 
 // fails. It runs outside the store's lock, as the check calls the Code
 // Host. GitHub is checked through gh, and Azure Repos with the PAT
 // variable. With several Repositories every one of them is checked, and
-// the refusal names each failing Repository with its reason and fix.
+// the refusal names each failing Repository with its reason and fix. A
+// local-only Repository is refused before the check runs, with or without
+// one.
 func (c *Core) checkPullRequest(ctx context.Context, key string, l store.Landing) error {
-	if !landingPolicyOf(store.Project{Landing: l}).RunsPullRequestWatcher() || c.pullRequestCheck == nil {
+	lp := landingPolicyOf(store.Project{Landing: l})
+	if !lp.RunsPullRequestWatcher() {
 		return nil
 	}
 	var url, ghPath string
@@ -74,6 +77,12 @@ func (c *Core) checkPullRequest(ctx context.Context, key string, l store.Landing
 	// The Push remote's own refusals come first, with their own fixes.
 	if err := checkPullRequestHost(url); err != nil {
 		return err
+	}
+	if err := refuseLocalOnly(lp, repositories); err != nil {
+		return err
+	}
+	if c.pullRequestCheck == nil {
+		return nil
 	}
 	in := PullRequestCheckInput{GHPath: ghPath, PATEnv: patEnvOf(store.CI{PATEnv: l.PATEnv})}
 	if len(repositories) == 1 {
@@ -99,6 +108,29 @@ func (c *Core) checkPullRequest(ctx context.Context, key string, l store.Landing
 	ps := append(unsupported, res.Repositories...)
 	if len(ps) == 0 {
 		return nil
+	}
+	return checkRefusal(SumRepositoryProblems(ps), "method")
+}
+
+// needsCloneURL and needsCloneURLFix are the refusal of a local-only
+// Repository under Pull Request.
+const (
+	needsCloneURL    = "Pull Request needs a Clone URL in every Repository"
+	needsCloneURLFix = "give its Clone URL, or land by Merge or Branch"
+)
+
+// refuseLocalOnly refuses lp, a policy being turned on, on method while
+// it needs a Clone URL in every Repository and any of repositories is
+// local-only, naming each one.
+func refuseLocalOnly(lp LandingPolicy, repositories []RepositoryView) error {
+	if !lp.EveryRepositoryNeedsCloneURL() {
+		return nil
+	}
+	var ps []RepositoryProblem
+	for _, rv := range repositories {
+		if rv.LocalOnly() {
+			ps = append(ps, RepositoryProblem{Repository: rv.Name, Problem: ProblemCheckFailed, Message: needsCloneURL, Fix: needsCloneURLFix})
+		}
 	}
 	return checkRefusal(SumRepositoryProblems(ps), "method")
 }

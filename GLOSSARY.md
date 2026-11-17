@@ -21,7 +21,7 @@ The Project's one primary Repository, where the Factory runs and where the Proje
 _Avoid_: Home Repo, main repository, meta repository
 
 **Clone URL**:
-The remote a Repository is cloned from and pushed to. Code Central works out the Repository's Code Host from it, and the CI section of Project Options fills in what to watch in the Repository from it. The Home Repository's Clone URL is the Push remote URL the Factory reports.
+The remote a Repository is cloned from and pushed to. Code Central works out the Repository's Code Host from it, and the CI section of Project Options fills in what to watch in the Repository from it. The Home Repository's Clone URL is the Push remote URL the Factory reports. It is optional for a Repository other than the Home, which needs a Clone URL, a local path or both. Without a Clone URL a Repository is local-only: it is never cloned, is adopted at its local path with no remote check, is skipped by Push, is refused under Pull Request, and is Not watched by CI until the human sets it by hand.
 _Avoid_: remote, origin, repository URL
 
 **Changed Repositories**:
@@ -208,14 +208,14 @@ For a Ticket's accepted work to reach the base in every one of its Changed Repos
 _Avoid_: Merge, ship, deliver, complete
 
 **Landing Method**:
-A Project's choice of how accepted work reaches its base. It is Project-wide and applies in every Repository; nothing about landing is set per Repository. It is Merge (the Factory merges the branch into the base), Branch (the Factory leaves the branch for the human to merge, and lands the Ticket when it sees the merge) or Pull Request (the Factory pushes the branch and a pull request is opened on the Code Host). Merge and Branch have Push as an option, and Pull Request implies it; Land per Spec applies under Merge and Pull Request, and has no effect under Branch.
+A Project's choice of how accepted work reaches its base. It is Project-wide and applies in every Repository; nothing about landing is set per Repository. Push skipping a Repository with no Clone URL is derived from the missing URL, not set. It is Merge (the Factory merges the branch into the base), Branch (the Factory leaves the branch for the human to merge, and lands the Ticket when it sees the merge) or Pull Request (the Factory pushes the branch and a pull request is opened on the Code Host). Merge and Branch have Push as an option, and Pull Request implies it; Land per Spec applies under Merge and Pull Request, and has no effect under Branch.
 _Avoid_: Completion option, delivery mode, finish mode
 
 **Landing Policy**:
-The rules by which a Project's Landing Method, Push, Land per Spec and CI Tracking together decide how its accepted work lands: whether the CI gate holds, whether Land anyway is offered, whether a Ticket is To merge, whether the Pull Request Watcher runs, and the like. Every landing rule is one of its rules.
+The rules by which a Project's Landing Method, Push, Land per Spec and CI Tracking together decide how its accepted work lands: whether the CI gate holds, whether Land anyway is offered, whether a Ticket is To merge, whether the Pull Request Watcher runs, and the like. Every landing rule is one of its rules. A Repository's Landing Policy is the Project's with Push off in a Repository with no Clone URL, and unchanged in any other: there Merge + Push reads as Merge and Branch + Push as Branch. The Factory's landing steps in one Repository follow its Repository's Landing Policy; Project-wide rules follow the Project's.
 
 **Pull Request**:
-The third Landing Method: the Factory pushes the accepted branch to the Push remote, a Pull Request Watcher opens a pull request in each Changed Repository, into that Repository's own Base on its Code Host, and the Ticket lands when the hosts report them all merged. Push is implied. Under Land per Spec it opens one per Spec Branch per Changed Repository. Each pull request's body lists its sibling pull requests, if it has any, in the landing order, and the watcher keeps that list up to date; each one mentions the Spec's linked GitHub issue (`owner/repo#n`) with no closing keyword. The human decides the merge order, and Code Central doesn't enforce it. Each merge records that Repository's landed commit, at the host's merge commit, and the Ticket stays Partly landed until every pull request has merged.
+The third Landing Method: the Factory pushes the accepted branch to the Push remote, a Pull Request Watcher opens a pull request in each Changed Repository, into that Repository's own Base on its Code Host, and the Ticket lands when the hosts report them all merged. Push is implied. Every Repository needs a Clone URL on a supported Code Host, and turning Pull Request on is refused while any Repository has none. Under Land per Spec it opens one per Spec Branch per Changed Repository. Each pull request's body lists its sibling pull requests, if it has any, in the landing order, and the watcher keeps that list up to date; each one mentions the Spec's linked GitHub issue (`owner/repo#n`) with no closing keyword. The human decides the merge order, and Code Central doesn't enforce it. Each merge records that Repository's landed commit, at the host's merge commit, and the Ticket stays Partly landed until every pull request has merged.
 _Avoid_: PR, merge request
 
 **Code Host**:
@@ -239,13 +239,13 @@ The branch that a Project's work is cut from and lands on, under every Landing M
 _Avoid_: target branch, merge branch
 
 **Base missing**:
-The Needs Me reason of a Repository whose base exists neither locally nor on the Push remote. It is one Focus Item per Repository naming the Repository, the branch and the fix. Until a later poll finds the branch, the Factory starts no new Claims, and lands nothing whose Changed Repositories include that Repository; other work still lands. It sits beside Base diverged.
+The Needs Me reason of a Repository whose base exists neither locally nor on the Push remote; a local-only Repository's is never looked for on a remote, so it is missing when it isn't local. It is one Focus Item per Repository naming the Repository, the branch and the fix. Until a later poll finds the branch, the Factory starts no new Claims, and lands nothing whose Changed Repositories include that Repository; other work still lands. It sits beside Base diverged.
 
 **Repository missing**:
-The Needs Me reason of a Repository the Factory has no usable clone of: it couldn't clone it, or found something other than a clone with a matching Clone URL where the clone should be. It is one Focus Item per Repository naming the path, the Clone URL and what is wrong. The Factory never touches what it finds there, and starts no new Claims until a later poll finds the clone. It sits beside Base missing.
+The Needs Me reason of a Repository the Factory has no usable clone of: it couldn't clone it, or found something other than a clone with a matching Clone URL where the clone should be. It also covers a local-only Repository whose local path holds no clone of its own, and a Repository whose resolved path is another Repository's clone. It is one Focus Item per Repository naming the path, the Clone URL (left out when there is none) and what is wrong. The Factory never touches what it finds there, and starts no new Claims until a later poll finds the clone. It sits beside Base missing.
 
 **Base diverged**:
-The Needs Me reason of a Repository whose local base the Factory can't bring level with the remote base. Under Pull Request it means the local base holds commits the remote's doesn't, so the Factory can't fast-forward it. Under Merge + Push, where a local base that is only ahead is current, it means the local base and the remote's each hold commits the other lacks and the Factory couldn't move the local base onto the remote's: a rebuilt merge or a replayed commit conflicted, or an unpushed merge isn't one of the Factory's. It is one Focus Item per Repository naming the Repository and showing the local and remote commits and the fix. Until the human reconciles the base and the Factory's next poll brings it level cleanly, the Factory starts no new Claims, and lands nothing whose Changed Repositories include that Repository; other work still lands.
+The Needs Me reason of a Repository whose local base the Factory can't bring level with the remote base. Under Pull Request it means the local base holds commits the remote's doesn't, so the Factory can't fast-forward it. Under Merge + Push, where a local base that is only ahead is current, it means the local base and the remote's each hold commits the other lacks and the Factory couldn't move the local base onto the remote's: a rebuilt merge or a replayed commit conflicted, or an unpushed merge isn't one of the Factory's. It is one Focus Item per Repository naming the Repository and showing the local and remote commits and the fix. Until the human reconciles the base and the Factory's next poll brings it level cleanly, the Factory starts no new Claims, and lands nothing whose Changed Repositories include that Repository; other work still lands. A local-only Repository's base is never fetched or levelled, so it is never Base diverged.
 _Avoid_: Out of sync, base conflict
 
 **Land per Spec**:
@@ -273,7 +273,7 @@ The Needs Me reason of an Accepted Ticket, under Merge, that has not landed afte
 _Avoid_: Stuck, stale
 
 **Push**:
-A Landing Method's option to send the work to a named git remote, in each of the Ticket's Changed Repositories: each one's base after a Merge, or the Ticket's branch on accept under Branch. Under Merge + Push the Ticket lands in a Repository only once that push succeeds, and with CI Tracking on, only once its CI result is passed as well, from that push or a later one containing its work. Under Land per Spec the Factory pushes each Repository's base once for a whole Spec, after merging that Repository's Spec Branch into it; under Merge and Branch the Spec Branches and Ticket branches are never pushed. Under Pull Request, Push is implied, with no checkbox: the Factory pushes the Ticket's branch in each Changed Repository on accept, or the Spec Branches under Land per Spec.
+A Landing Method's option to send the work to a named git remote, in each of the Ticket's Changed Repositories: each one's base after a Merge, or the Ticket's branch on accept under Branch. Under Merge + Push the Ticket lands in a Repository only once that push succeeds, and with CI Tracking on, only once its CI result is passed as well, from that push or a later one containing its work. Under Land per Spec the Factory pushes each Repository's base once for a whole Spec, after merging that Repository's Spec Branch into it; under Merge and Branch the Spec Branches and Ticket branches are never pushed. Under Pull Request, Push is implied, with no checkbox: the Factory pushes the Ticket's branch in each Changed Repository on accept, or the Spec Branches under Land per Spec. In a Changed Repository with no Clone URL nothing is pushed: the Ticket lands there once its branch is merged into the base, and CI Tracking doesn't gate it there. So under Push "Done" means on the remote wherever there is one.
 _Avoid_: Publish, sync
 
 **CI Tracking**:
@@ -285,7 +285,7 @@ The pluggable part of CI Tracking that talks to one CI system, through that syst
 _Avoid_: Integration, connector
 
 **Not watched**:
-The CI choice of a Repository other than the Home whose CI CI Tracking never watches: it has no CI Provider, never gates landing, never raises a CI item and never counts towards a Ticket's CI result. A Repository whose Clone URL names no host a CI Provider is on is Not watched until the human chooses one.
+The CI choice of a Repository other than the Home whose CI CI Tracking never watches: it has no CI Provider, never gates landing, never raises a CI item and never counts towards a Ticket's CI result. A Repository whose Clone URL names no host a CI Provider is on, or that has no Clone URL, is Not watched until the human chooses one.
 _Avoid_: CI off, untracked, ignored Repository
 
 **Azure Pipelines**:
@@ -357,7 +357,7 @@ A Ticket's running, failed, cancelled or passed. A pushed commit's is worked out
 _Avoid_: Build status
 
 **CI gate**:
-What holds a pushed Ticket back from landing in a Repository until its CI result there is passed, so it holds on running, failed and cancelled. It holds per Repository, and a Not watched Repository is not gated. It holds only while Merge, Push and CI Tracking all do, and lifts when any is turned off; the Ticket waits in its State, with no State of its own. Under Land per Spec a Spec's waiting Tickets share one pushed commit per Repository, so one CI result in each Repository gates them all.
+What holds a pushed Ticket back from landing in a Repository until its CI result there is passed, so it holds on running, failed and cancelled. It holds per Repository, and neither a Not watched Repository nor a local-only one, where nothing is pushed, is gated. It holds only while Merge, Push and CI Tracking all do, and lifts when any is turned off; the Ticket waits in its State, with no State of its own. Under Land per Spec a Spec's waiting Tickets share one pushed commit per Repository, so one CI result in each Repository gates them all.
 _Avoid_: CI check, CI hold, waiting-on-CI State
 
 **Ignored workflows**:
@@ -514,7 +514,7 @@ The Needs Me reason of a pushed commit whose CI result is failed (a run failed o
 _Avoid_: Build broken, red
 
 **Land anyway**:
-The failure option by which the human accepts a CI failed or CI cancelled item's CI result, stored once on the Project for that pushed commit only, so the Factory lands every Ticket the item lists in that commit's Repository on its next poll. Their other Repositories keep their own CI result. Offered under Merge + Push only: under Branch + Push and under Pull Request the human's merge decides.
+The failure option by which the human accepts a CI failed or CI cancelled item's CI result, stored once on the Project for that pushed commit only, so the Factory lands every Ticket the item lists in that commit's Repository on its next poll. Their other Repositories keep their own CI result. Offered under Merge + Push only: under Branch + Push and under Pull Request the human's merge decides, and a local-only Repository lands once merged.
 _Avoid_: Override, force land
 
 **Re-run failed jobs**:

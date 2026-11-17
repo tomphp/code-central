@@ -91,7 +91,7 @@ func TestLoadRefusesAProjectsRepositoriesThatBreakTheirRules(t *testing.T) {
 		"no Home":               {"  - name: web\n    clone_url: u\n    base: main\n", "repositories"},
 		"Home not the key":      {"  - name: other\n    home: true\n", "repositories[0].name"},
 		"Home with a base":      {"  - name: acme\n    home: true\n    base: main\n", "repositories[0]"},
-		"no Clone URL":          {"  - name: acme\n    home: true\n  - name: web\n    base: main\n", "repositories[1].clone_url"},
+		"no Clone URL nor path": {"  - name: acme\n    home: true\n  - name: web\n    base: main\n", "repositories[1].clone_url"},
 		"no Base":               {"  - name: acme\n    home: true\n  - name: web\n    clone_url: u\n", "repositories[1].base"},
 		"two Home Repositories": {"  - name: acme\n    home: true\n  - name: acme\n    home: true\n", "repositories[1].name"},
 	} {
