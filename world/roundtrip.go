@@ -15,11 +15,11 @@ import (
 	"sync/atomic"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/frontdoor"
+	"github.com/tomoram/code-central/server"
 )
 
 // RoundTrip serves req through the world's handler as the Actor its
-// frontdoor.ActorHeader names, the human when it names none, and answers
+// server.ActorHeader names, the human when it names none, and answers
 // once the handler has written its status. The body streams as the
 // handler writes it; closing it, or ending req's context, ends the
 // handler.
@@ -115,8 +115,8 @@ func serverRequest(r *http.Request) *http.Request {
 		r.Body = http.NoBody
 	}
 	r.RequestURI = r.URL.RequestURI()
-	if r.Header.Get(frontdoor.ActorHeader) == "" {
-		r.Header.Set(frontdoor.ActorHeader, string(core.Human))
+	if r.Header.Get(server.ActorHeader) == "" {
+		r.Header.Set(server.ActorHeader, string(core.Human))
 	}
 	return r
 }
