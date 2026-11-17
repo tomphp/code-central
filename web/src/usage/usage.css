@@ -42,10 +42,10 @@
 .token-hit { fill: transparent; }
 .token-bar { outline: none; }
 .token-bar.hovered .token-hit { fill: var(--border); opacity: 0.5; }
-.token-input { fill: var(--accent); background: var(--accent); }
-.token-cache-write { fill: var(--r-answer); background: var(--r-answer); }
-.token-cache-read { fill: var(--r-answered); background: var(--r-answered); }
-.token-output { fill: var(--r-review); background: var(--r-review); }
+.token-input { fill: var(--chart-1); background: var(--chart-1); }
+.token-cache-write { fill: var(--chart-2); background: var(--chart-2); }
+.token-cache-read { fill: var(--chart-3); background: var(--chart-3); }
+.token-output { fill: var(--chart-4); background: var(--chart-4); }
 .token-figures { min-height: 44px; margin-top: 6px; font-size: 13px; }
 .token-figures dl { display: flex; gap: 18px; margin: 4px 0 0; }
 .token-figures dt { color: var(--muted); }
