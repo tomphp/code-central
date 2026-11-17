@@ -254,7 +254,7 @@ With CI Tracking on, each Repository has its own CI: adding one fills in its CI 
 
 Each Project has a **Landing Method**: what the Factory does with an implementation Ticket's branch once you accept it. A new Project starts on **Merge** with **Push** off: the Factory merges the branch into the base locally and lands the Ticket, and nothing leaves the machine. Leave it there unless you want something else.
 
-To change it, open the UI, click **⋯** beside the Project in the left pane, and choose **Options**. The Project Options page has its own address, `/?view=project-options&project=acme-api`, so you can bookmark it. On a wide screen a menu on the left lists the page's sections (Repositories, Landing Method, CI, GitHub Issues, Models, Stage Guides, Auto-accept and Focus) and stays in view as you scroll; choosing an entry jumps to that section. On a narrow screen the menu is hidden. Its **Landing Method** section starts with the **Base branch**, a text field showing the branch the Project's work is cut from and lands on (`main` until you change it; it is saved with the rest of the section, and Save refuses a name git would not accept). Below it are the three methods:
+To change it, open the UI, click **⋯** beside the Project in the left pane, and choose **Options**. The Project Options page has its own address, `/?view=project-options&project=acme-api`, so you can bookmark it. On a wide screen a menu on the left lists the page's sections (Repositories, Landing Method, CI, GitHub Issues, Azure Boards, Models, Stage Guides, Auto-accept and Focus) and stays in view as you scroll; choosing an entry jumps to that section. On a narrow screen the menu is hidden. Its **Landing Method** section starts with the **Base branch**, a text field showing the branch the Project's work is cut from and lands on (`main` until you change it; it is saved with the rest of the section, and Save refuses a name git would not accept). Below it are the three methods:
 
 - **Merge**: the Factory merges the accepted branch into the base and lands the Ticket. The default.
 - **Leave as a branch**: the Factory leaves the branch for you to merge, and lands the Ticket when it sees the merge in the base.
@@ -508,6 +508,17 @@ github acme/acme-api#7 came in 5m ago
 ```
 
 Its action panel, in the Inbox and as its Focus Item in Focus Mode, links to the issue and offers the triage actions, so you can triage new issues one at a time. Choosing one moves Focus Mode on to the next item. An issue that comes in while New issues need me is off isn't a New issue, even after you turn it on: triage it from its Ticket panel. An issue closed on GitHub before you triage it shows as **Closed externally** instead, and once you unlink it, it is no longer an Incoming Issue.
+
+## Linking Azure Boards work items
+
+**Azure Boards** brings Azure DevOps work items into Code Central as Incoming Issues on the Project's **Azure Boards Spec**, and writes the work's progress back as tags and comments. It is off until you turn it on in the **Azure Boards** section of Project Options, below GitHub Issues:
+
+- **Azure Boards**: on or off.
+- **Mode**: **Saved query** shows a **Query URL** field (a flat-list query, as the browser shows its URL); **WIQL filter** shows an **Azure DevOps project URL** field and a multi-line **WHERE clause** field. The project URL is filled in from an Azure Repos Repository's Clone URL or the Azure Pipelines CI setting, with a note saying so.
+- **PAT environment variable**: the variable holding an Azure DevOps PAT with Work Items: Read & write. Code Central keeps the name, never the PAT.
+- **New issues need me**: as for GitHub Issues.
+
+Turning it on, or changing a setting while it is on, runs a check first; a refused Save shows what is wrong and how to fix it in the section, and Azure Boards stays as it was. While it is on, the section shows the **Work Item Watcher**'s status. **Won't fix** on an Azure Boards Incoming Issue leaves the work item's State for you to move.
 
 ## Choosing models for each kind of work
 
