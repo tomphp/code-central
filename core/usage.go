@@ -19,7 +19,7 @@ import (
 
 // UsageDays are the ranges a Usage read takes, in local days; the first
 // is the default.
-var UsageDays = []int{7, 30, 90}
+func UsageDays() []int { return []int{7, 30, 90} }
 
 // SetUsage makes c record Usage with u. Call it before serving; without
 // one, nothing is recorded and every read is empty.
@@ -198,9 +198,9 @@ type UsageDayTokens struct {
 // UsageDays is invalid.
 func (c *Core) Usage(_ context.Context, in UsageInput) (UsageView, error) {
 	if in.Days == 0 {
-		in.Days = UsageDays[0]
+		in.Days = UsageDays()[0]
 	}
-	if !slices.Contains(UsageDays, in.Days) {
+	if !slices.Contains(UsageDays(), in.Days) {
 		return UsageView{}, invalid("days", "days must be 7, 30 or 90, not %d", in.Days)
 	}
 	if in.Project != "" && !c.projectExists(in.Project) {

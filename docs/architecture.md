@@ -131,7 +131,7 @@ Roughly in order of value for effort. Each would be its own Ticket.
 7. Have Go views carry derived flags (`editable`, stage progress, spec kind) and landing-method capabilities, so the UI's copies go away. *(medium)*
 8. Extract a `codehost` abstraction shared by `ciwatcher` and `pullrequestwatcher`, and decide whether `issuewatcher` needs a `Tracker` interface before a second tracker arrives. *(only if a second host/tracker is planned)*
 9. Move provider URL parsing out of `core`. *(small)*
-10. Split `factory/land.go`, `run.go` and `specbranch.go` into `landing` and `session`. Make `core`'s mutable enum slices functions. *(medium)*
+10. Split `factory/land.go`, `run.go` and `specbranch.go` into `landing` and `session`. Make `core`'s mutable enum slices functions (done; only `Operations` and `Workflow` remain package-level lists). *(medium)*
 11. Hygiene: CI check that `make wiretypes` leaves no diff, finish ADR 0044's migration off `waitFor`, split the biggest UI files and tests, rename `frontdoor` to `server`, and renumber the duplicate ADRs (0010, 0016, 0032, 0034, 0039, 0040, 0047).
 
 Splitting `core` itself is the hardest item, because every file is a method on `*Core`. Items 5 and 6 shrink what depends on it and make a later split cheaper, so do them first.
