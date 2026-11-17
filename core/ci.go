@@ -10,6 +10,7 @@ import (
 	"unicode"
 
 	"github.com/tomoram/code-central/azdourl"
+	"github.com/tomoram/code-central/codehost"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -115,14 +116,6 @@ type SetCITrackingInput struct {
 	Full bool `json:"full,omitempty"`
 }
 
-// repositoryPattern is a GitHub repository's owner/name.
-var repositoryPattern = regexp.MustCompile(`^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$`)
-
-// workflowPattern is a workflow file's base name: GitHub Actions keeps
-// every workflow in one folder, so the base name names it. It is a name,
-// not a pattern, so it holds no glob.
-var workflowPattern = regexp.MustCompile(`^[^/\\\s*?\[\]]+\.ya?ml$`)
-
 // patEnvPattern is an environment variable's name.
 var patEnvPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
@@ -142,7 +135,7 @@ func checkWorkflow(provider store.CIProvider, name string) (example string, ok b
 	if provider == store.CIAzurePipelines {
 		return "a pipeline's name, such as Build", name != "" && !strings.ContainsAny(name, `/\*?[]`)
 	}
-	return "a workflow file name, such as ci.yml", workflowPattern.MatchString(name)
+	return "a workflow file name, such as ci.yml", codehost.ValidGitHubWorkflow(name)
 }
 
 // SetCITracking is the human's set_ci_tracking: CI Tracking on or off,
@@ -213,7 +206,7 @@ func checkCITarget(ci *store.CI) error {
 		switch {
 		case ci.Repository == "" && ci.Tracking:
 			return invalid("repository", "CI Tracking needs the GitHub repository to watch, as owner/name")
-		case ci.Repository != "" && !repositoryPattern.MatchString(ci.Repository):
+		case ci.Repository != "" && !codehost.ValidGitHubRepository(ci.Repository):
 			return invalid("repository", "%q isn't a GitHub repository as owner/name, such as acme/web", ci.Repository)
 		}
 	}
