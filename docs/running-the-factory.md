@@ -672,17 +672,16 @@ An Accepted Ticket whose pull request is closed without merging shows **Pull req
 
 ### Push
 
-Either Landing Method has a **Push** option, also on the Project Options page, which names a git remote (`origin` by default). The Factory checks that its repository has that remote, with `git remote get-url`. It refuses to start when it doesn't:
+Either Landing Method has a **Push** option, also on the Project Options page, which names a git remote (`origin` by default). Each Repository may name its own Push remote, and each is pushed to, fetched from and cloned under its own.
 
-```console
-$ code-central-factory
-code-central-factory: refusing to start: Push names the remote "upstream", which this repository doesn't have: add it with `git remote add`, or change it on the Project's Project Options page in Code Central
-```
+When it starts, the Factory reports the Home Repository's Push remote to Code Central, read with `git remote get-url`, and again whenever you change the Home's Push remote name. When the Home's clone has no remote of that name, it reports none, and the Home is local-only: nothing is pushed or fetched there, a Ticket lands there once merged, and the CI gate never holds there, while the other Repositories push and gate as usual. A missing remote stops nothing. A remote you add to the Home's clone later is reported at the Factory's next start.
 
-If you change the setting to a missing remote while the Factory runs, it warns once and lands nothing, not even a Ticket you merged by hand, until you add the remote or change the setting back. It goes on claiming and resuming work meanwhile:
+A Repository other than the Home that has a Clone URL but whose clone lacks its Push remote is Repository missing, which holds back only the Tickets landing there.
+
+A Home that loses its remote while it lands by Pull Request is local-only under Pull Request. The Factory says so once, and nothing lands there until you give it another Landing or add the remote and restart the Factory:
 
 ```text
-warning: nothing lands until this is fixed: Push names the remote "upstream", which this repository doesn't have: add it with `git remote add`, or change it on the Project's Project Options page in Code Central
+warning: Repository acme-shop is local-only under Pull Request: nothing lands in it until you give it another Landing in Project Options, or add its Push remote, origin, to its clone and restart the Factory
 ```
 
 Under **Merge + Push**, after merging a Ticket into the base the Factory runs `git push <remote> <base>`, and lands the Ticket only once the push succeeds, so Done means the work is on the remote:
