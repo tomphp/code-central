@@ -29,6 +29,14 @@ func inTwo(h *factorytest.Harness, title string) string {
 	return id
 }
 
+// inAPI makes a Ready Ticket whose session commits in api alone and
+// finishes with it, and returns its ID.
+func inAPI(h *factorytest.Harness, title string) string {
+	id := h.ReadyTicket(title)
+	h.Script(id, append(factorytest.CommitIn("api", "endpoint.go", "package api\n"), factorytest.FinishIn("Done.", false, "api"), factorytest.Result("success"))...)
+	return id
+}
+
 // setLandingOrder has the human put the Repositories in names' order.
 func setLandingOrder(t *testing.T, h *factorytest.Harness, names ...string) {
 	t.Helper()
@@ -174,8 +182,7 @@ func TestAHandMergeInOneRepositoryLandsWhileTheHomeRepositorysBaseIsMissing(t *t
 	t.Parallel()
 	h := factorytest.New(t)
 	api := h.AddRepository("api")
-	id := h.ReadyTicket("Add an endpoint")
-	h.Script(id, append(factorytest.CommitIn("api", "endpoint.go", "package api\n"), factorytest.FinishIn("Done.", false, "api"), factorytest.Result("success"))...)
+	id := inAPI(h, "Add an endpoint")
 	r := h.Start()
 	h.WantState(id, store.InReview)
 	setBase(h, "release")
@@ -288,11 +295,7 @@ func gatedInTwo(t *testing.T, notWatched bool) (h *factorytest.Harness, api *fac
 	} else {
 		watchCIIn(t, h, "api", "acme/api")
 	}
-	id = inTwo(h, "Add an endpoint")
-	r = h.Start()
-	h.WantState(id, store.InReview)
-	h.Accept(id)
-	r.Poll()
+	id, r = acceptedIn(t, h)
 	return h, api, r, id
 }
 
@@ -316,6 +319,12 @@ func TestUnderTheCIGateEachRepositoryLandsOnceItsOwnCIResultPasses(t *testing.T)
 	tk = h.WantState(id, store.Accepted)
 	if landedIn(tk, "api") != apiPushed || !tk.PartlyLanded || tk.Repositories[0].Landed != nil {
 		t.Fatalf("Changed Repositories %+v, want api landed at its pushed commit that passed, %s, while the Home Repository waits on its CI", tk.Repositories, apiPushed)
+	}
+	// A later tip of api's base is no business of a Ticket landed there.
+	pushElsewhere(t, h, api, "other.go", "package api\n")
+	r.Poll()
+	if tk := h.Ticket(id); pushedIn(tk, "api") != apiPushed {
+		t.Fatalf("api's pushed commit is %q, want it left at %s: the Ticket has landed there", pushedIn(tk, "api"), apiPushed)
 	}
 
 	reportRun(t, h, 1, id, homePushed, store.CICompleted, store.CISuccess)
@@ -375,4 +384,23 @@ func TestUnderTheCIGateALaterTipOfARepositorysBaseIsReportedToTheTicketsWaitingT
 	if tk := h.Ticket(id); landedIn(tk, "api") != tip {
 		t.Fatalf("Changed Repositories %+v, want api landed at the tip that passed, %s", tk.Repositories, tip)
 	}
+}
+
+func TestUnderTheCIGateLandAnywayOnARepositorysRedBuildLandsItThere(t *testing.T) {
+	t.Parallel()
+	h, _, r, id := gatedInTwo(t, false)
+	apiPushed := pushedIn(h.Ticket(id), "api")
+	reportRunIn(t, h, "api", 7, id, apiPushed, store.CICompleted, store.CIFailure)
+	r.Poll()
+
+	if _, err := h.Server.Core.LandAnyway(core.WithActor(context.Background(), core.Human), h.Project, core.CIResponseInput{Ticket: core.Ref(id), Repository: "api"}); err != nil {
+		t.Fatal(err)
+	}
+	r.Poll()
+
+	tk := h.WantState(id, store.Accepted)
+	if landedIn(tk, "api") != apiPushed || tk.Repositories[0].Landed != nil {
+		t.Fatalf("Changed Repositories %+v, want api landed anyway at %s, and the Home Repository still waiting on its own CI", tk.Repositories, apiPushed)
+	}
+	r.WantOutput(id + ": landing anyway at " + apiPushed[:12] + " in Repository api, as you chose, though its CI failed")
 }

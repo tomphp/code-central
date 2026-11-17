@@ -93,6 +93,20 @@ func waitingIn(p store.Project, t store.Ticket, name string, ci *ciState) string
 	return "waiting on CI at " + shortCommit(commit)
 }
 
+// waitsOnCIAlone reports whether the CI gate holds t, p's, on a running
+// CI result, from a, in each of its Changed Repositories it hasn't landed
+// in: then its landing waits on CI alone. One stuck in a Repository
+// meanwhile, as on a refused push, waits on more than CI.
+func waitsOnCIAlone(p store.Project, t store.Ticket, a *ticketCI) bool {
+	if !a.waiting {
+		return false
+	}
+	return !slices.ContainsFunc(changedRepositories(p.Key, t), func(r store.ChangedRepository) bool {
+		rc := a.in(r.Name)
+		return r.Landed == nil && (rc == nil || !rc.waiting)
+	})
+}
+
 // notLandedView is t's NotLandedView, t being p's and Accepted but not
 // landed, with ci p's CI state; nil while p has the Home Repository
 // alone, or t has no Changed Repositories.

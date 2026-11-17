@@ -326,3 +326,27 @@ func TestAnOpenPullRequestIsWhyARepositoryHasntLanded(t *testing.T) {
 		t.Fatalf("Home %+v, api %+v: want api's open pull request as why it hasn't landed, and no reason for the Home Repository, which has no pull request yet", home, api)
 	}
 }
+
+func TestARepositoryStuckWhileAnotherWaitsOnCIIsAcceptedButNotLanded(t *testing.T) {
+	f := twoRepoWorld(t)
+	f.changes(t, 5, "acme", "api")
+	if _, err := f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "acme-5", Body: core.CantLandComment("api", "couldn't push main to origin", store.Accepted)}); err != nil {
+		t.Fatal(err)
+	}
+	f.clock.Advance(core.NotLandedAfter + time.Second)
+	// The Home Repository's latest pushed commit waits on its CI, but that
+	// isn't all the landing waits on: api's push was refused.
+	f.pushedFor(t, "", "acme-5", "abc124")
+	f.ciRun(t, 1, "ci.yml", "abc124", "acme-5", store.CIInProgress, "")
+	if v := f.getTicket(t, "acme-5"); changedIn(t, v, "acme").CIResult != core.CIRunning {
+		t.Fatalf("Home %+v, want it waiting on its running CI", changedIn(t, v, "acme"))
+	}
+
+	row, ok := longRow(t, f, "acme-5")
+	if !ok || row.Reason != core.ReasonAcceptedNotLanded || row.NotLanded == nil {
+		t.Fatalf("row %+v, want Accepted but not landed", row)
+	}
+	if want := (core.NotLandedRepositoryView{Name: "api", Reason: "couldn't push main to origin"}); !slices.Contains(row.NotLanded.NotLanded, want) {
+		t.Fatalf("not landed %+v, want api with its refused push", row.NotLanded.NotLanded)
+	}
+}

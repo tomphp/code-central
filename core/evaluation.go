@@ -156,10 +156,10 @@ func (e *evaluation) chain(t store.Ticket) (NeedsMeReason, time.Time) {
 		if a.unavailable != nil {
 			return ReasonCIUnavailable, a.unavailable.Pushed
 		}
-		// One the CI gate holds on a running CI result, or waiting for its
-		// Spec to land, is never Accepted but not landed: landing waits on
-		// them.
-		if s := c.notLandedSince(p, t); s != nil && !a.waiting && !waitingForSpec(e.r, p, t) {
+		// One the CI gate holds on a running CI result in every Repository
+		// it hasn't landed in, or waiting for its Spec to land, is never
+		// Accepted but not landed: landing waits on them.
+		if s := c.notLandedSince(p, t); s != nil && !waitsOnCIAlone(p, t, a) && !waitingForSpec(e.r, p, t) {
 			return ReasonAcceptedNotLanded, *s
 		}
 	case store.Failed:

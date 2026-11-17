@@ -83,7 +83,7 @@ func (f *factory) landPullRequests(ctx context.Context, tk core.TicketView, p co
 		if pushed {
 			f.printf("%s: pushed %s to %s%s", tk.ID, branch, remote, r.where())
 		}
-		f.reportPushed(ctx, tk, p.LandingPolicy(), r, branch, f.remoteTipIn(r, remote, branch, head))
+		f.reportPushed(ctx, tk, p.LandingPolicy(), r, branch, f.remoteTip(r, remote, branch, head))
 	}
 }
 

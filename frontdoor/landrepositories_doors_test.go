@@ -19,6 +19,13 @@ import (
 func acceptedInTwo(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	withAPI(claimedTicket)(t, srv)
+	acceptInTwo(t, srv)
+}
+
+// acceptInTwo finishes the claimed acme-3 in the Home Repository (at
+// abc123) and api (at def456), and accepts it.
+func acceptInTwo(t *testing.T, srv *codecentraltest.Server) {
+	t.Helper()
 	must(t, func() error {
 		_, err := srv.Core.Finish(context.Background(), "acme", core.FinishInput{Ticket: "3", ClaimID: "claim-1", Summary: "Done.", Branch: "acme-3", Commit: "abc123",
 			Repositories: []core.RepositoryWork{{Name: "api", Branch: "acme-3", Commit: "def456"}}})

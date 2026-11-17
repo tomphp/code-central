@@ -29,12 +29,7 @@ func acceptedInAPI(t *testing.T, srv *codecentraltest.Server) {
 		_, err := srv.Core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest, Remote: "origin"})
 		return err
 	})
-	must(t, func() error {
-		_, err := srv.Core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-3", ClaimID: "claim-1", Summary: "Done.", Branch: "acme-3", Commit: "abc123",
-			Repositories: []core.RepositoryWork{{Name: "api", Branch: "acme-3", Commit: "def456"}}})
-		return err
-	})
-	must(t, func() error { _, err := srv.Core.Accept(human, "acme", core.TicketInput{Ticket: "acme-3"}); return err })
+	acceptInTwo(t, srv)
 }
 
 // landedIn is the commit acme-3 landed at in the Repository name, as

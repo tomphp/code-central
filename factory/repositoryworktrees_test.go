@@ -42,9 +42,7 @@ func TestAClaimGetsAWorktreeOnTheSameBranchInEveryRepositoryAndTheSessionSeesThe
 	t.Parallel()
 	h := factorytest.New(t)
 	api := h.AddRepository("api")
-	id := h.ReadyTicket("Add an endpoint")
-	h.Script(id, append(factorytest.CommitIn("api", "endpoint.go", "package api\n"),
-		factorytest.FinishIn("Done.", false, "api"), factorytest.Result("success"))...)
+	id := inAPI(h, "Add an endpoint")
 
 	h.Start()
 	tk := h.WantState(id, store.InReview)
