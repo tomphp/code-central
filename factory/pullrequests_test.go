@@ -12,13 +12,11 @@ import (
 // Pull requests across Repositories (Spec code-central-848, ADR 0050).
 
 // acceptedIn is a Ticket of h that changed both the Home Repository and
-// api, In Review then Accepted, with the Factory running.
+// api (inTwo), In Review then Accepted and polled once, with the Factory
+// running.
 func acceptedIn(t *testing.T, h *factorytest.Harness) (id string, r *factorytest.Running) {
 	t.Helper()
-	id = h.ReadyTicket("Add an endpoint")
-	h.Script(id, append(factorytest.CommitIn("api", "endpoint.go", "package api\n"),
-		factorytest.WriteFile("client.go", "package acme\n"), factorytest.Git("add", "client.go"), factorytest.Git("commit", "-q", "-m", "Call it"),
-		factorytest.FinishIn("Done.", true, "api"), factorytest.Result("success"))...)
+	id = inTwo(h, "Add an endpoint")
 	r = h.Start()
 	h.WantState(id, store.InReview)
 	h.Accept(id)
@@ -134,5 +132,35 @@ func TestSentBackAfterASiblingMergedTheNextClaimStartsThatRepositorysBranchAtIts
 	}
 	if len(tk.FailureReports) != 0 {
 		t.Errorf("failure reports %+v, want the finish check passed", tk.FailureReports)
+	}
+}
+
+// A broken base in one Repository holds back only the work touching it,
+// under Pull Request as under Merge.
+func TestUnderPullRequestATicketInAnotherRepositoryLandsWhileTheHomeRepositorysBaseIsMissing(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	h.AddRemote("origin")
+	api := h.AddRepository("api")
+	pullRequestOn(h, "origin")
+	id := inAPI(h, "Add an endpoint")
+	r := h.Start()
+	h.WantState(id, store.InReview)
+	h.Accept(id)
+	r.Poll()
+	apiHead := wantPushedIn(t, h, "api", id)
+	// The Home Repository's Base becomes a branch that exists nowhere. The
+	// Factory has reported its remote's path, so the change needs the Code
+	// Host's URL reported again first.
+	pullRequestOn(h, "origin")
+	release := "release"
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingPullRequest, Remote: "origin", Base: &release})
+	h.GitIn(api.Path, "push", "-q", "origin", id+":refs/heads/main")
+	reportPullRequestIn(t, h, "api", id, 4, apiHead)
+
+	r.Poll()
+
+	if tk := h.WantState(id, store.Done); landedIn(tk, "api") != apiHead {
+		t.Errorf("api landed at %q, want its merge commit %s", landedIn(tk, "api"), apiHead)
 	}
 }

@@ -1,5 +1,6 @@
 // The Ticket card: a Ticket on the Board. Its top line is the Short ID, an
-// optional Stage badge, the CI badge (none on a Done Ticket), Blocked and the needs-you dot; then its title, then
+// optional Stage badge, the CI badge (none on a Done Ticket), Partly
+// landed, Blocked and the needs-you dot; then its title, then
 // its Changed Repositories' chips while the Project has several, live
 // while it is In Progress, then
 // its Spec's kind and title when given (a lane's cards leave it out). The
@@ -17,11 +18,12 @@ import { RepositoryChips } from "../controls/RepositoryChips";
 import { StateChip } from "../controls/StateChip";
 import { ShortId } from "../inbox/ShortId";
 import { ListCIBadge } from "./CIBadge";
+import { PartlyLandedBadge } from "./PartlyLandedBadge";
 
 // TicketCardProps are a Ticket card's Ticket, its link, and the parts the
 // Board shows.
 export interface TicketCardProps {
-  t: Pick<TicketRow, "id" | "title" | "blocked" | "updated" | "state" | "ci_result" | "repositories">;
+  t: Pick<TicketRow, "id" | "title" | "blocked" | "updated" | "state" | "ci_result" | "repositories" | "partly_landed">;
   link: { href: string; onClick(e: MouseEvent): void };
   // badge is the Ticket's Stage or other kind, as a Stage badge.
   badge?: string;
@@ -47,6 +49,7 @@ export function TicketCard({ t, link, badge, spec, joined, inNeedsMe }: TicketCa
         {badge && <StageBadge label={badge} />}
         <span className="board-spacer" />
         <ListCIBadge t={t} />
+        <PartlyLandedBadge partly={t.partly_landed} />
         {t.blocked && (
           <span className="board-blocked" title="Has open Blockers">
             ⛔ Blocked

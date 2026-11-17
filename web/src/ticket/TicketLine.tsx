@@ -13,6 +13,7 @@ import { ShortId } from "../inbox/ShortId";
 import { RowLatestEvent } from "../LatestEvent";
 import { LinkBadge } from "./LinkBadge";
 import { WaitingBadge } from "./WaitingBadge";
+import { PartlyLandedBadge } from "./PartlyLandedBadge";
 
 // RowLink is what a row's link spreads on itself.
 export interface RowLink {
@@ -27,7 +28,7 @@ export type InboxRowLinkFactory = (id: string) => RowLink;
 
 // TicketLineTicket is what a row shows of its Ticket; a Needs Me row has
 // it too.
-export type TicketLineTicket = Pick<TicketRow, "id" | "title" | "state" | "link" | "waiting_for_spec" | "latest_event">;
+export type TicketLineTicket = Pick<TicketRow, "id" | "title" | "state" | "link" | "waiting_for_spec" | "partly_landed" | "latest_event">;
 
 // TicketLineProps are a Ticket row's Ticket, its link, and the parts the
 // list shows.
@@ -62,6 +63,7 @@ export function TicketLine({ t, link, badge, chip, dotless, quiet, now, detail, 
         {chip && <StateChip state={t.state} />}
         {t.link && <LinkBadge link={t.link} plain />}
         <WaitingBadge waiting={t.waiting_for_spec} />
+        <PartlyLandedBadge partly={t.partly_landed} />
         {children}
         {!dotless && <NeedsYouDot id={t.id} />}
       </span>

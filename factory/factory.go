@@ -338,42 +338,33 @@ type factory struct {
 	// human to merge under the Branch Landing Method, already said; the
 	// poll's own.
 	leftOnBranch map[string]bool
+	// saidHeld is "<ticket>@<why>" of Accepted Tickets a broken base or a
+	// missing clone holds back from landing, already said; the poll's own.
+	saidHeld map[string]bool
 	// reportedChanged is the Changed Repositories last reported for each
 	// held Claim, by Claim ID, so a report goes only when they change;
 	// the poll's own.
 	reportedChanged map[string]string
-	// mergedOn is where the Factory merged each Ticket it hasn't landed
-	// yet, so a change of base leaves it to finish there.
-	mergedOn map[string]mergeOn
 	// oldBases are the bases the Project named earlier in this run.
 	oldBases []string
-	// fetchedElsewhere is the Repositories beside the Home one whose Push
-	// remote this poll fetched under Pull Request, so their remote bases
-	// are current; the poll's own.
-	fetchedElsewhere map[string]bool
 	// landingRemote is the Push remote the last poll's Landing settings
 	// named, for a Claim's start to find the remote bases.
 	landingRemote string
 
-	// baseDiverged is whether the local base holds commits the Push
-	// remote's doesn't (and, under Merge + Push, the remote's holds ones it
-	// doesn't and the Factory couldn't move the local base onto it), so
-	// nothing lands and no branch is cut. baseCurrent is whether it was
-	// level with the remote's this poll, fast-forwarded or moved if need
-	// be.
-	baseDiverged, baseCurrent bool
+	// bases is what the Factory knows of each Repository's base, by
+	// Repository Name: whether it is missing, has diverged or was level
+	// with the remote's this poll, and the merges made into it that
+	// haven't landed yet. They are the poll's own.
+	bases map[string]*baseState
 	// base is the Project's base as the last read of it said; baseMu
 	// guards it, because turns read it from their own goroutines.
 	baseMu sync.Mutex
 	base   string
-	// baseMissing is whether the base exists neither locally nor on the
-	// Landing remote, as the last poll found; mcpBase is the base whose
-	// .mcp.json was last found committed, and mcpHeld whether the file
-	// is missing from the base, so no branch or worktree is cut. All are
-	// the poll's own, like baseDiverged.
-	baseMissing bool
-	mcpBase     string
-	mcpHeld     bool
+	// mcpBase is the base whose .mcp.json was last found committed, and
+	// mcpHeld whether the file is missing from the base, so no branch or
+	// worktree is cut. Both are the poll's own.
+	mcpBase string
+	mcpHeld bool
 	// reportBaseFailing is whether the last report_base failed, so a
 	// failure warns once.
 	reportBaseFailing bool
@@ -383,9 +374,10 @@ type factory struct {
 	// saidOnCI is "<ticket>@<pushed commit>@<CI result>" of Tickets the
 	// CI gate holds, already said; the poll's own.
 	saidOnCI map[string]bool
-	// unreported is, by Ticket ID, the commit a push under Merge + Push
-	// left the remote's base holding, whose report as the Ticket's pushed
-	// commit failed, to report next poll; the poll's own.
+	// unreported is, by "<ticket>@<Repository Name>", the commit a push
+	// under Merge + Push left that Repository's remote base holding, whose
+	// report as the Ticket's pushed commit there failed, to report next
+	// poll; the poll's own.
 	unreported map[string]string
 	// accepts is what claude --help said claude accepts, read at startup.
 	accepts claudeAccepts
@@ -444,7 +436,7 @@ type factory struct {
 // rest.
 func newFactory(e Env, o options) *factory {
 	w := work{e.Work}
-	return &factory{e: e, o: o, drainCh: make(chan struct{}), wakeCh: make(chan func(), 1), work: w, polling: stint{w: w}, drainWork: newHandoff(), stopWork: newHandoff(), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, backInReady: map[string]time.Time{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, reportedChanged: map[string]string{}, mergedOn: map[string]mergeOn{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, warnedRemote: map[string]bool{}}
+	return &factory{e: e, o: o, drainCh: make(chan struct{}), wakeCh: make(chan func(), 1), work: w, polling: stint{w: w}, drainWork: newHandoff(), stopWork: newHandoff(), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, backInReady: map[string]time.Time{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, saidHeld: map[string]bool{}, reportedChanged: map[string]string{}, bases: map[string]*baseState{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, warnedRemote: map[string]bool{}}
 }
 
 // start makes every start-up check, refusing with the reason.
@@ -612,7 +604,7 @@ func (f *factory) setBase(base string) {
 	f.baseMu.Unlock()
 	if old != base {
 		f.printf("base: %s, was %s", base, old)
-		f.baseDiverged, f.baseCurrent = false, false
+		f.stateOf(f.home).changedBase()
 		f.oldBases = append(f.oldBases, old)
 	}
 }

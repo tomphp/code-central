@@ -1,7 +1,6 @@
 package factory_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
@@ -16,18 +15,8 @@ func setBase(h *factorytest.Harness, base string) {
 // baseMissingItem is the Project's Base missing item in Needs Me.
 func baseMissingItem(t *testing.T, h *factorytest.Harness) (core.NeedsMeRow, bool) {
 	t.Helper()
-	v, err := h.Human().NeedsMe(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, g := range v.Groups {
-		if g.Reason == core.ReasonBaseMissing {
-			for _, row := range g.Tickets {
-				if row.Project == h.Project {
-					return row, true
-				}
-			}
-		}
+	if rows := h.NeedsMeItems(core.ReasonBaseMissing); len(rows) > 0 {
+		return rows[0], true
 	}
 	return core.NeedsMeRow{}, false
 }

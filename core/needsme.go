@@ -212,6 +212,10 @@ type NeedsMeRow struct {
 	// RepositoryMissing is the missing Repository's path, Clone URL,
 	// problem and fix (Repository missing, whose row has no Ticket).
 	RepositoryMissing *RepositoryMissingView `json:"repository_missing,omitempty"`
+	// NotLanded is the Repositories the Ticket has landed in and those it
+	// hasn't, with why (Accepted but not landed, while the Project has
+	// several Repositories).
+	NotLanded *NotLandedView `json:"not_landed,omitempty"`
 }
 
 // NeedsMeRequirement is the Requirement a Needs Me row's Ticket is on:
@@ -354,6 +358,8 @@ func (e *evaluation) row(t store.Ticket, tr ticketReason) NeedsMeRow {
 		row.Summary = firstLine(finishSummary(t))
 	case ReasonToMerge:
 		row.Branch = branchOf(t)
+	case ReasonAcceptedNotLanded:
+		row.NotLanded = e.c.notLandedView(e.p, t, e.ci)
 	case ReasonPullRequestClosed:
 		row.ClosedPullRequests = closedPullRequests(e.p, t)
 		if row.PullRequest == nil && len(row.ClosedPullRequests) > 0 {

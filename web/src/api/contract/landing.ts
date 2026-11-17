@@ -56,6 +56,37 @@ export function landingContract(driver: () => Driver) {
     wantAcknowledgement(await d.api.act("acme", other, "accept", {}), other, "Accepted", ["state", "moves"]);
   });
 
+  it("lands in each Repository by name, Partly landed and not cancellable until it has landed in every one", async () => {
+    await d.createProject("acme", "Acme");
+    await d.api.addRepository("acme", { name: "api", clone_url: "git@github.com:acme/api.git" });
+    const id = await d.createTicket("acme", "Login page", "Ready");
+    await d.finish("acme", id, "Added the login page", {
+      branch: "impl-7",
+      commit: "abc123",
+      repositories: [{ name: "api", branch: "impl-7", commit: "def456" }],
+    });
+    await d.api.act("acme", id, "accept", {});
+
+    const unknown = await d.api.act("acme", id, "land", { commit: "fed789", repository: "web" }).catch((e) => e);
+    expect(unknown).toMatchObject({ status: 422, code: "invalid", field: "repository" });
+
+    wantAcknowledgement(await d.api.act("acme", id, "land", { commit: "fed789", repository: "api" }), id, "Accepted", ["repositories", "partly_landed"]);
+    const partly = await d.api.getTicket("acme", id);
+    expect(partly).toMatchObject({ state: "Accepted", partly_landed: true });
+    expect(partly.repositories!.map((r) => [r.name, r.landed?.commit])).toEqual([
+      ["acme", undefined],
+      ["api", "fed789"],
+    ]);
+    const [row] = await d.api.findTickets("acme", { state: ["Accepted"] });
+    expect(row.partly_landed).toBe(true);
+
+    const cancel = await d.api.act("acme", id, "cancel", {}).catch((e) => e);
+    expect(cancel).toBeInstanceOf(ApiError);
+    expect(cancel).toMatchObject({ status: 409, code: "action_not_allowed" });
+
+    wantAcknowledgement(await d.api.act("acme", id, "land", { commit: "aaa111" }), id, "Done", ["state", "moves", "repositories", "partly_landed"]);
+  });
+
   it("refuses a finish naming a Repository the Project hasn't, keeping the Claim", async () => {
     await d.createProject("acme", "Acme");
     await d.api.addRepository("acme", { name: "api", clone_url: "git@github.com:acme/api.git" });

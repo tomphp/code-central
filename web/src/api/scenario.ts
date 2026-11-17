@@ -300,13 +300,26 @@ export class Scenario extends HttpDriver {
   }
 
   // base has a Factory come online for the Project and report its base
-  // as state says. A diverged base shows only under Merge + Push or Pull
-  // Request, so landOn sets Merge + Push first unless the Project has one.
-  async base(key: string, state: "current" | "diverged" | "missing", commits: { local: string; remote: string } = { local: "aaa1111222", remote: "bbb2222333" }) {
+  // as state says: the Home Repository's, or the Repository named's. A
+  // diverged base shows only under Merge + Push or Pull Request, so landOn
+  // sets Merge + Push first unless the Project has one.
+  async base(
+    key: string,
+    state: "current" | "diverged" | "missing",
+    commits: { local: string; remote: string } = { local: "aaa1111222", remote: "bbb2222333" },
+    repository?: string,
+  ) {
     const p = (await this.api.listProjects()).find((p) => p.key === key);
     if (state === "diverged" && !p?.landing.push && p?.landing.method !== "pull_request") await this.landOn(key, "merge");
     await this.reportHeartbeat(key, { factory: "code-central-factory", host: "laptop", state: "online", interval_seconds: 30 });
-    await this.agent(`${this.projectPath(key)}/report_base`, { state, ...commits });
+    await this.agent(`${this.projectPath(key)}/report_base`, { state, ...commits, ...(repository && { repository }) });
+  }
+
+  // landedIn has the Factory land an Accepted Ticket's work in the
+  // Repository named at commit: Done once it has landed in each of its
+  // Changed Repositories, and Partly landed until then.
+  async landedIn(key: string, id: string, repository: string, commit = "def456") {
+    await this.agent(`${this.ticketPath(key, id)}/land`, { commit, repository });
   }
 
   // clones has a Factory come online for the Project and report its

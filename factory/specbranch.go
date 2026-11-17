@@ -168,7 +168,7 @@ func (f *factory) landSpecs(ctx context.Context, p core.ProjectView) {
 // instead. A later merge into it is pushed again, which updates the
 // pull request.
 func (f *factory) pushSpecs(ctx context.Context, accepted []core.TicketView, p core.ProjectView) {
-	if !p.LandingPolicy().PushesSpecBranches() || !f.baseCurrent {
+	if !p.LandingPolicy().PushesSpecBranches() || !f.stateOf(f.home).current {
 		return
 	}
 	seen := map[string]bool{}
@@ -230,7 +230,7 @@ func (f *factory) pushSpec(ctx context.Context, id string, p core.ProjectView) {
 		f.openSpecConflict(ctx, spec, tip, baseTip, conflicts)
 		return
 	}
-	pushed, why := f.push(ctx, p.Landing.Remote, branch, tip)
+	pushed, why := f.push(ctx, f.home, p.Landing.Remote, branch, tip)
 	if why != "" {
 		for _, tk := range tickets {
 			f.cantPushYet(ctx, tk, why)
@@ -241,7 +241,7 @@ func (f *factory) pushSpec(ctx context.Context, id string, p core.ProjectView) {
 		f.printf("%s: pushed %s to %s", id, branch, p.Landing.Remote)
 	}
 	for _, tk := range tickets {
-		f.reportPushed(ctx, tk, p.LandingPolicy(), branch, f.remoteTip(p.Landing.Remote, branch, tip))
+		f.reportPushed(ctx, tk, p.LandingPolicy(), f.home, branch, f.remoteTip(f.home, p.Landing.Remote, branch, tip))
 	}
 }
 
@@ -289,11 +289,11 @@ func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets [
 	if err != nil {
 		return false
 	}
-	if old, ok := f.mergedOnOldBase(firstID(tickets)); ok {
+	if old, ok := f.mergedOnOldBase(f.home, firstID(tickets)); ok {
 		// Merged before the base changed, so finishing on its push or CI:
 		// it lands on the base it was merged into.
 		for _, tk := range tickets {
-			f.landPushed(ctx, tk, p, old.base, old.commit)
+			f.landPushed(ctx, tk, p, f.home, old.base, old.commit)
 		}
 		return true
 	}
@@ -321,7 +321,7 @@ func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets [
 		f.printf("warning: %s: can't make the merge commit: %v", id, err)
 		return true
 	}
-	if why := f.advanceBase(baseTip, merge); why != "" {
+	if why := f.advanceBase(f.home, baseTip, merge); why != "" {
 		for _, tk := range tickets {
 			f.cantLandYet(ctx, tk, why)
 		}
@@ -330,8 +330,8 @@ func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets [
 	f.printf("%s: merged %s into %s at %s", id, specBranch(id), f.baseBranch(), short(merge))
 	f.printf("%s: landing its Tickets: %s", id, joinIDs(tickets))
 	for _, tk := range tickets {
-		f.mergedOn[tk.ID] = mergeOn{f.baseBranch(), merge}
-		f.landPushed(ctx, tk, p, f.baseBranch(), merge)
+		f.stateOf(f.home).mergedOn[tk.ID] = mergeOn{f.baseBranch(), merge}
+		f.landPushed(ctx, tk, p, f.home, f.baseBranch(), merge)
 	}
 	return true
 }

@@ -184,17 +184,25 @@ export function FocusItemView({
   );
 }
 
-// BaseDivergedFix is a Project's Base diverged item: both commits and the
-// fix, which is the human's by hand; the Factory carries on by itself.
+// BaseDivergedFix is a Base diverged item, a Project's or, with several
+// Repositories, one Repository's: both commits and the fix, which is the
+// human's by hand; the Factory carries on by itself.
 function BaseDivergedFix({ row }: { row: NeedsMeRow }) {
   const b = row.base_diverged!;
   const base = b.base ?? "the base";
   return (
     <section aria-label="Base diverged" className="panel">
-      <p>
-        The Factory can't fast-forward {base}: it holds commits the remote's
-        doesn't. Nothing lands and no new branch is cut until they agree.
-      </p>
+      {b.repository ? (
+        <p>
+          The Factory can't fast-forward {base} in Repository <code>{b.repository}</code>: it holds commits the remote's doesn't. Nothing touching{" "}
+          {b.repository} lands and no new branch is cut until they agree.
+        </p>
+      ) : (
+        <p>
+          The Factory can't fast-forward {base}: it holds commits the remote's
+          doesn't. Nothing lands and no new branch is cut until they agree.
+        </p>
+      )}
       <p>
         Local <code>{shortCommit(b.local)}</code> · remote{" "}
         <code>{shortCommit(b.remote)}</code>
@@ -207,8 +215,9 @@ function BaseDivergedFix({ row }: { row: NeedsMeRow }) {
   );
 }
 
-// BaseMissingFix is a Project's Base missing item: the branch and the fix,
-// with a link to where the base is changed.
+// BaseMissingFix is a Base missing item, a Project's or, with several
+// Repositories, one Repository's: the branch and the fix, with a link to
+// where the base is changed.
 function BaseMissingFix({
   row,
   navigate,
@@ -220,10 +229,17 @@ function BaseMissingFix({
   const options = { view: "project-options" as const, project: row.project };
   return (
     <section aria-label="Base missing" className="panel">
-      <p>
-        The base, <code>{b.base}</code>, exists neither locally nor on the
-        remote. Nothing lands and no new branch is cut until it does.
-      </p>
+      {b.repository ? (
+        <p>
+          The base of Repository <code>{b.repository}</code>, <code>{b.base}</code>, exists neither locally nor on the remote. Nothing touching{" "}
+          {b.repository} lands and no new branch is cut until it does.
+        </p>
+      ) : (
+        <p>
+          The base, <code>{b.base}</code>, exists neither locally nor on the
+          remote. Nothing lands and no new branch is cut until it does.
+        </p>
+      )}
       <p className="small">
         Create the branch, or change the base in{" "}
         <a href={hrefFor(options)} onClick={clickTo(navigate, options)}>

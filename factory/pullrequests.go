@@ -34,61 +34,11 @@ func (f *factory) repositoryNamed(name string) *repository {
 	return nil
 }
 
-// fetchElsewhere fetches remote in every Repository with a clone but the
-// Home one, which syncBase fetches, so their remote bases are current,
-// and fast-forwards each local base that is behind its remote's. A
-// failed fetch is a warning, and that Repository lands nothing this
-// poll.
-func (f *factory) fetchElsewhere(ctx context.Context, remote string) {
-	f.fetchedElsewhere = map[string]bool{}
-	for _, r := range f.readyRepositories() {
-		if r.home {
-			continue
-		}
-		if out, err := r.git.fetch(ctx, remote); err != nil {
-			if ctx.Err() == nil {
-				f.printf("warning: can't fetch %s%s, so nothing lands there this poll: %s", remote, r.where(), firstLine(out))
-			}
-			continue
-		}
-		f.fetchedElsewhere[r.name] = true
-		f.fastForwardBase(r, remote)
-	}
-}
-
-// fastForwardBase moves r's local base to its remote's when the remote's
-// holds it, never merging or forcing: in the worktree where it is checked
-// out, or by ref. One that can't move stays as it is, retried next poll.
-func (f *factory) fastForwardBase(r *repository, remote string) {
-	base := f.baseOf(r)
-	local, lerr := r.git.commit("refs/heads/" + base)
-	theirs, terr := r.git.commit("refs/remotes/" + remote + "/" + base)
-	if lerr != nil || terr != nil || local == theirs || !r.git.isAncestor(local, theirs) {
-		return
-	}
-	list, err := r.git.worktrees()
-	if err != nil {
-		return
-	}
-	if i := slices.IndexFunc(list, func(w gitWorktree) bool { return w.branch == base }); i >= 0 {
-		_, err = r.git.fastForward(list[i].path, theirs)
-	} else {
-		err = r.git.updateRef("refs/heads/"+base, theirs, local)
-	}
-	if err != nil {
-		return
-	}
-	f.printf("%s%s: fast-forwarded to %s/%s at %s", base, r.where(), remote, base, short(theirs))
-}
-
-// baseHolds reports whether r's base holds commit: for the Home
-// Repository, its base kept level with the remote's; for another, its
-// local base or the remote's as this poll fetched it.
+// baseHolds reports whether r's base, kept level with the remote's this
+// poll, holds commit; for the Home Repository, a base it named earlier
+// in this run may hold it instead.
 func (f *factory) baseHolds(r *repository, remote, commit string) bool {
-	if r.home {
-		return f.baseCurrent && (f.inBase(commit) || f.inOldBase(commit, remote))
-	}
-	return f.inBaseOf(r, commit) || f.fetchedElsewhere[r.name] && r.git.isAncestor(commit, "refs/remotes/"+remote+"/"+f.baseOf(r))
+	return f.stateOf(r).current && (f.inBaseOf(r, commit) || r.home && f.inOldBase(commit, remote))
 }
 
 // landPullRequests sees to an Accepted Ticket under Pull Request whose
@@ -125,7 +75,7 @@ func (f *factory) landPullRequests(ctx context.Context, tk core.TicketView, p co
 			f.landIn(ctx, tk, r, head)
 			continue
 		}
-		pushed, why := f.pushIn(ctx, r, remote, branch, head)
+		pushed, why := f.push(ctx, r, remote, branch, head)
 		if why != "" {
 			f.cantPushYet(ctx, tk, fmt.Sprintf("in %s, %s", r.name, why))
 			continue
@@ -133,7 +83,7 @@ func (f *factory) landPullRequests(ctx context.Context, tk core.TicketView, p co
 		if pushed {
 			f.printf("%s: pushed %s to %s%s", tk.ID, branch, remote, r.where())
 		}
-		f.reportPushedIn(ctx, tk, p.LandingPolicy(), r, rec, branch, f.remoteTipIn(r, remote, branch, head))
+		f.reportPushed(ctx, tk, p.LandingPolicy(), r, branch, f.remoteTip(r, remote, branch, head))
 	}
 }
 
@@ -172,21 +122,6 @@ func (f *factory) landIn(ctx context.Context, tk core.TicketView, r *repository,
 func (f *factory) pushedAlreadyIn(r *repository, remote, branch string) bool {
 	_, err := r.git.commit("refs/remotes/" + remote + "/" + branch)
 	return err == nil
-}
-
-// reportPushedIn is reportPushed for tk's work in r, rec: reported once,
-// when it isn't the commit last reported pushed there.
-func (f *factory) reportPushedIn(ctx context.Context, tk core.TicketView, policy core.LandingPolicy, r *repository, rec core.ChangedRepositoryView, branch, commit string) {
-	if !policy.RecordsPushedCommit() || rec.PushedCommit != nil && rec.PushedCommit.Commit == commit {
-		return
-	}
-	in := core.ReportPushedCommitInput{Ticket: core.Ref(tk.ID), Commit: commit, Branch: branch}
-	if !r.home {
-		in.Repository = r.name
-	}
-	if _, err := f.client.ReportPushedCommit(ctx, f.project, in); err != nil && ctx.Err() == nil {
-		f.printf("%s: report_pushed_commit%s: %v", tk.ID, r.where(), err)
-	}
 }
 
 // detectMergedPullRequestsIn lands an In Review Ticket whose work spans

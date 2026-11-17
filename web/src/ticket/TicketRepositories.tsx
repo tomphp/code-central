@@ -1,6 +1,6 @@
 // A Ticket's Repositories section (Spec code-central-848): one row per
 // Changed Repository, in landing order, with its branch@commit, its landed
-// commit (or not landed, while the Ticket waits to land), its pull request
+// commit (or not landed and why, while the Ticket waits to land), its pull request
 // badge and its CI result with the pushed commit it comes from. While the
 // Ticket is In Progress the rows are the Factory's live report, which its
 // finish settles. Reads carry the Changed Repositories only while the
@@ -39,8 +39,8 @@ function Work({ r }: { r: ChangedRepositoryView }) {
   return text ? <code>{text}</code> : null;
 }
 
-// Landing is the commit the work landed at, or not landed while the
-// Ticket waits to land.
+// Landing is the commit the work landed at, or not landed, with why, while
+// the Ticket waits to land.
 function Landing({ r, waiting }: { r: ChangedRepositoryView; waiting: boolean }) {
   if (r.landed) {
     return (
@@ -50,7 +50,8 @@ function Landing({ r, waiting }: { r: ChangedRepositoryView; waiting: boolean })
       </span>
     );
   }
-  return waiting ? <span className="small muted"> · not landed</span> : null;
+  if (!waiting) return null;
+  return <span className="small muted"> · not landed{r.not_landed && `: ${r.not_landed}`}</span>;
 }
 
 // CI is the Repository's CI result with its pushed commit, else the

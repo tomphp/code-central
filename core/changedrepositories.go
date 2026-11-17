@@ -38,6 +38,10 @@ type ChangedRepositoryView struct {
 	// Landed is the commit that put the work into the Repository's base;
 	// left out until it lands.
 	Landed *LandedView `json:"landed,omitempty"`
+	// NotLanded is why an Accepted Ticket hasn't landed in the Repository
+	// yet: its broken base, or what the Factory last said; left out once
+	// it lands, or while there's none to give.
+	NotLanded string `json:"not_landed,omitempty"`
 	// PushedCommit is the latest commit the Factory pushed for the Ticket
 	// in the Repository; left out while it has pushed none.
 	PushedCommit *PushedCommitView `json:"pushed_commit,omitempty"`
@@ -101,11 +105,44 @@ func landedSomewhere(home string, t store.Ticket) bool {
 	return slices.ContainsFunc(changedRepositories(home, t), func(r store.ChangedRepository) bool { return r.Landed != nil })
 }
 
+// landedNames is the Names of the Changed Repositories t has landed in.
+func landedNames(home string, t store.Ticket) []string {
+	var out []string
+	for _, r := range changedRepositories(home, t) {
+		if r.Landed != nil {
+			out = append(out, r.Name)
+		}
+	}
+	return out
+}
+
 // partlyLanded reports whether t is Partly landed: Accepted, and landed
 // in some of its Changed Repositories but not all.
 func partlyLanded(home string, t store.Ticket) bool {
 	return t.State == store.Accepted && landedSomewhere(home, t) &&
 		slices.ContainsFunc(changedRepositories(home, t), func(r store.ChangedRepository) bool { return r.Landed == nil })
+}
+
+// landingRepository is the Repository a land of t, p's, names: name, or
+// the Home Repository for none. It refuses a name that isn't one of p's
+// Repositories, or isn't one of t's Changed Repositories while t has any.
+func landingRepository(p store.Project, t store.Ticket, name string) (string, error) {
+	r, err := repositoryField(p, name)
+	if err != nil {
+		return "", err
+	}
+	changed := changedRepositoryNames(p.Key, t)
+	if len(changed) > 0 && !slices.Contains(changed, r.Name) {
+		return "", invalid("repository", "%s is not one of %s's Changed Repositories, which are %s: land the work in each of those, naming it",
+			r.Name, DisplayID(p.Key, t.Number), strings.Join(namesInLandingOrder(p, changed), ", "))
+	}
+	return r.Name, nil
+}
+
+// landsLast reports whether landing in the Repository name lands the
+// last of rs, a Ticket's Changed Repositories: every other one has landed.
+func landsLast(rs []store.ChangedRepository, name string) bool {
+	return !slices.ContainsFunc(rs, func(r store.ChangedRepository) bool { return r.Name != name && r.Landed == nil })
 }
 
 // landingRank orders Repository Names by p's landing order, with any

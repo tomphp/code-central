@@ -36,17 +36,9 @@ func clone(t *testing.T, h *factorytest.Harness, name string) *core.CloneView {
 // Needs Me.
 func repositoryMissingItems(t *testing.T, h *factorytest.Harness) []core.RepositoryMissingView {
 	t.Helper()
-	v, err := h.Human().NeedsMe(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
 	var out []core.RepositoryMissingView
-	for _, g := range v.Groups {
-		for _, row := range g.Tickets {
-			if g.Reason == core.ReasonRepositoryMissing && row.Project == h.Project {
-				out = append(out, *row.RepositoryMissing)
-			}
-		}
+	for _, row := range h.NeedsMeItems(core.ReasonRepositoryMissing) {
+		out = append(out, *row.RepositoryMissing)
 	}
 	return out
 }

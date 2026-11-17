@@ -575,7 +575,7 @@ warning: the base, main, has diverged from the remote's: it is at 9ad0fd655dd2 a
 main: no longer diverged from the remote's
 ```
 
-**Base missing.** Under every Landing Method, a base that exists neither locally nor on the Push remote is reported as missing through `report_base`. Code Central shows one **Base missing** item per Project in Needs Me and Focus Mode, naming the branch and the fix: create the branch, or change the Base branch in Project Options. The report clears when a later poll reports the base current.
+**Base missing.** Under every Landing Method, a base that exists neither locally nor on the Push remote is reported as missing through `report_base`. Code Central shows one **Base missing** item per Project in Needs Me and Focus Mode, naming the branch and the fix: create the branch, or change the Base branch in Project Options. The report clears when a later poll reports the base current. With [several Repositories](setting-up-a-project.md#several-repositories), each Repository's base is reported apart, and Base missing and Base diverged are one item per Repository, naming it (see **Landing across Repositories** below).
 
 On every poll, before it claims or lands, the Factory looks for the base. A local branch is used as it is. A base that exists only on the Push remote is created locally at the remote's commit, after a fetch. If it exists in neither place the Factory keeps running and heartbeating, but claims nothing and lands nothing until you create the branch or change the setting. It needs no restart:
 
@@ -613,6 +613,20 @@ acme-shop-14: deleted its unused branch acme-shop-14 in Repository api
 ```text
 acme-shop-14: the finish check failed: api is left out, but its branch acme-shop-14 holds commits beyond main, up to 4f1c2d9e8a7b
 acme-shop-14 turn ended (implementation): "Show prices from the API": exit 0, success (completed); now Failed; ran 6m12s
+```
+
+**Landing across Repositories.** Under Merge, an accepted Ticket lands in each of its Changed Repositories, and is Done once it has landed in all of them. The Factory first works out the merge in every one it hasn't landed in yet. If any conflicts, it lands none, and sends the Ticket back to Ready with one comment naming each conflicting Repository and its files. Otherwise it goes through them in the **landing order**, the order of Project Options' Repositories list (the Home Repository first by default): in each it makes the `Merge <ticket>: <title>` commit, advances that Repository's base, pushes it with Push on, and lands the Ticket there, recording that Repository's landed commit. A Ticket that has landed in some of its Repositories but not all is **Partly landed**, a badge on its card and page, and can't be cancelled. A failed push or base move stops there: the Factory comments once, naming the Repository, and tries again on every poll. It never force-pushes, resets or reverts what has landed. Under Merge + Push with CI Tracking on, the [CI gate](#with-ci-tracking) holds in each Repository whose CI is watched: once its merge is pushed there, the Ticket lands there when its CI result there passes, at a pushed commit holding the work, so a red build in one Repository holds back only that Repository's landing. The next Repository goes ahead once the push is made, and a **Not watched** Repository lands once pushed. A Ticket left Accepted a while is Accepted but not landed, naming the Repositories it has landed in and those it hasn't, each with why: its broken base, its CI there not passed yet, its pull request there still open, or what the Factory last commented, such as a refused push. Each Repository's base is located, kept level with its own remote and moved as the Project's is, and a missing or diverged one is a **Base missing** or **Base diverged** item naming it. It holds back only the Tickets landing in it, and no new Claim starts until it is fixed. The `land` operation names the Repository with `--repository` (`repository` over MCP); left out, it means the Home Repository. With the Home Repository alone, nothing of this shows and landing is as it always was:
+
+```text
+acme-shop-14: pushed main to origin
+acme-shop-14: landed on main at 7d1e0c9a2b3f
+acme-shop-14: can't land yet in api: couldn't push main to origin
+acme-shop-14: pushed main to origin in Repository api
+acme-shop-14: landed on main at 4b5c6d7e8f90 in Repository api
+acme-shop-15: waits to land: its base, release, is missing in Repository api
+acme-shop-16: pushed main to origin in Repository api
+acme-shop-16: CI tracks main at 0a1b2c3d4e5f in Repository api
+acme-shop-16: CI failed at 0a1b2c3d4e5f in Repository api, so it stays Accepted
 ```
 
 When a base is found for the first time in a run, or changes, the Factory checks that `.mcp.json` is committed on it. At start it refuses to start without the file. Mid-run it cuts no new branches or worktrees, and prints the same message once, until the file is committed; landing carries on.

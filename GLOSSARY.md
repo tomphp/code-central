@@ -265,7 +265,7 @@ The status shown on an Accepted Ticket under Land per Spec whose work isn't yet 
 _Avoid_: Held, queued, staged
 
 **Partly landed**:
-The status shown on an Accepted Ticket that has landed in some of its Changed Repositories but not all. Under Land per Spec it is shown on a Spec's Tickets the same way. It is a status, not a State, like Waiting for the Spec.
+The status shown on an Accepted Ticket that has landed in some of its Changed Repositories but not all. Under Land per Spec it is shown on a Spec's Tickets the same way. It is a status, not a State, like Waiting for the Spec. A Partly landed Ticket can't be cancelled, since what has landed stays landed: it is landed in the rest, or sent back.
 _Avoid_: Half landed, partially merged, split
 
 **Accepted but not landed**:

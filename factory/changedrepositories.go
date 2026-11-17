@@ -38,9 +38,14 @@ func (f *factory) changedIn(tk core.TicketView) []core.RepositoryWork {
 
 // changedHead is the head of tk's branch in r, when it holds commits
 // beyond r's Base and, for a Spec-landed Ticket, its Spec Branch there.
+// While r's Base is missing nothing can be said to be beyond it, so r
+// counts as unchanged until it is back (Base missing).
 func (f *factory) changedHead(r *repository, tk core.TicketView, branch string) (string, bool) {
 	head, err := r.git.commit("refs/heads/" + branch)
 	if err != nil || f.inBaseOf(r, head) {
+		return "", false
+	}
+	if _, err := r.git.commit("refs/heads/" + f.baseOf(r)); err != nil {
 		return "", false
 	}
 	if tk.SpecLanded && r.git.isAncestor(head, "refs/heads/"+specBranch(tk.Spec.ID)) {

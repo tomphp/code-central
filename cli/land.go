@@ -8,7 +8,7 @@ import (
 
 // Landing Accepted work (ADR 0006).
 func init() {
-	commands["land"] = command{op: "land", usage: "land <id> --commit <sha> [--repository <name>] [--full]  the work is in the base: Accepted or In Review to Done, recording the commit that put it there; with --repository, that Repository's landed commit, Done once every Changed Repository has landed", run: runLand}
+	commands["land"] = command{op: "land", usage: "land <id> --commit <sha> [--repository <name>] [--full]  the work is in the base of a Changed Repository, the Home Repository's unless named: records the commit that put it there, and once it has landed in every one, Accepted or In Review to Done", run: runLand}
 }
 
 func runLand(ctx context.Context, e Env, args []string) error {

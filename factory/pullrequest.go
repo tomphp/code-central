@@ -25,72 +25,88 @@ import (
 // Accepted Tickets whose merges it rebuilds. A failed fetch is a warning,
 // retried next poll; a local base that can't be brought level (under Pull
 // Request, any holding commits the remote's doesn't) is diverged, and
-// stops landing and new branches until a later poll finds it fixed.
-func (f *factory) syncBase(ctx context.Context, remote string, pushesBase bool, merged []core.TicketView) bool {
-	if out, err := f.home.git.fetch(ctx, remote); err != nil {
+// stops landing and new branches until a later poll finds it fixed. Each
+// Repository's base is synced apart, in r, with remote the name of its
+// own remote.
+func (f *factory) syncBase(ctx context.Context, r *repository, remote string, pushesBase bool, merged []core.TicketView) bool {
+	base := f.baseOf(r)
+	if out, err := r.git.fetch(ctx, remote); err != nil {
 		if ctx.Err() == nil {
-			f.printf("warning: can't fetch %s, so nothing lands this poll: %s", remote, firstLine(out))
+			if r.home {
+				f.printf("warning: can't fetch %s, so nothing lands this poll: %s", remote, firstLine(out))
+			} else {
+				f.printf("warning: can't fetch %s in Repository %s, so nothing touching it lands this poll: %s", remote, r.name, firstLine(out))
+			}
 		}
 		return false
 	}
-	local, err := f.home.git.commit("refs/heads/" + f.baseBranch())
+	local, err := r.git.commit("refs/heads/" + base)
 	if err != nil {
-		f.printf("warning: the base, %s, isn't a branch, so the Factory can't keep it level with %s", f.baseBranch(), remote)
+		f.printf("warning: the base, %s, isn't a branch%s, so the Factory can't keep it level with %s", base, r.where(), remote)
 		return false
 	}
-	theirs, err := f.home.git.commit("refs/remotes/" + remote + "/" + f.baseBranch())
+	theirs, err := r.git.commit("refs/remotes/" + remote + "/" + base)
 	if err != nil {
 		// The remote has no base yet: nothing to catch up with.
-		f.baseDiverged = false
+		f.stateOf(r).diverged = false
 		return true
 	}
 	switch {
-	case local == theirs, pushesBase && f.home.git.isAncestor(theirs, local):
-		f.noteBase(ctx, false, local, theirs)
+	case local == theirs, pushesBase && r.git.isAncestor(theirs, local):
+		f.noteBase(ctx, r, false, local, theirs)
 		return true
-	case f.home.git.isAncestor(local, theirs):
-		f.noteBase(ctx, false, local, theirs)
-		if why := f.advanceBase(local, theirs); why != "" {
-			f.printf("warning: can't fast-forward %s to %s yet: %s", f.baseBranch(), remote, firstLine(why))
+	case r.git.isAncestor(local, theirs):
+		f.noteBase(ctx, r, false, local, theirs)
+		if why := f.advanceBase(r, local, theirs); why != "" {
+			f.printf("warning: can't fast-forward %s%s to %s yet: %s", base, r.where(), remote, firstLine(why))
 			return false
 		}
-		f.printf("%s: fast-forwarded to %s/%s at %s", f.baseBranch(), remote, f.baseBranch(), short(theirs))
+		f.printf("%s: fast-forwarded to %s/%s at %s%s", base, remote, base, short(theirs), r.where())
 		return true
 	case pushesBase:
-		return f.moveBase(ctx, remote, local, theirs, merged)
+		return f.moveBase(ctx, r, remote, local, theirs, merged)
 	}
-	f.noteBase(ctx, true, local, theirs)
+	f.noteBase(ctx, r, true, local, theirs)
 	return false
 }
 
-// noteBase records whether the base has diverged, with a line when that
+// noteBase records whether r's base has diverged, with a line when that
 // changes, and reports it to Code Central. It reports on every poll that
 // reaches a verdict, since Code Central drops the report with the
 // Heartbeat: a failed fetch reaches none, so it leaves the last report.
-func (f *factory) noteBase(ctx context.Context, diverged bool, local, remote string) {
-	defer f.reportBase(ctx, diverged, local, remote)
-	if diverged && !f.baseDiverged {
-		f.printf("warning: the base, %s, has diverged from the remote's: it is at %s and the remote's at %s. Nothing lands and no branch is cut until you reconcile them by hand", f.baseBranch(), short(local), short(remote))
+func (f *factory) noteBase(ctx context.Context, r *repository, diverged bool, local, remote string) {
+	defer f.reportBase(ctx, r, diverged, local, remote)
+	s, base := f.stateOf(r), f.baseOf(r)
+	if diverged && !s.diverged {
+		if r.home {
+			f.printf("warning: the base, %s, has diverged from the remote's: it is at %s and the remote's at %s. Nothing lands and no branch is cut until you reconcile them by hand", base, short(local), short(remote))
+		} else {
+			f.printf("warning: the base, %s, in Repository %s has diverged from the remote's: it is at %s and the remote's at %s. Nothing touching it lands and no branch is cut until you reconcile them by hand", base, r.name, short(local), short(remote))
+		}
 	}
-	if !diverged && f.baseDiverged {
-		f.printf("%s: no longer diverged from the remote's", f.baseBranch())
+	if !diverged && s.diverged {
+		f.printf("%s: no longer diverged from the remote's%s", base, r.where())
 	}
-	f.baseDiverged = diverged
+	s.diverged = diverged
 }
 
-// reportBase tells Code Central whether the base is current or diverged,
+// reportBase tells Code Central whether r's base is current or diverged,
 // with the local and remote commits. A failed report is a warning once
 // until one goes through; the next poll reports again.
-func (f *factory) reportBase(ctx context.Context, diverged bool, local, remote string) {
+func (f *factory) reportBase(ctx context.Context, r *repository, diverged bool, local, remote string) {
 	state := core.BaseCurrent
 	if diverged {
 		state = core.BaseDiverged
 	}
-	f.reportBaseState(ctx, core.ReportBaseInput{State: state, Local: local, Remote: remote})
+	f.reportBaseState(ctx, r, core.ReportBaseInput{State: state, Local: local, Remote: remote})
 }
 
-// reportBaseState sends one report_base.
-func (f *factory) reportBaseState(ctx context.Context, in core.ReportBaseInput) {
+// reportBaseState sends one report_base, of r's base: the Home
+// Repository's names none, as a Factory from before Repositories did.
+func (f *factory) reportBaseState(ctx context.Context, r *repository, in core.ReportBaseInput) {
+	if !r.home {
+		in.Repository = r.name
+	}
 	ctx, cancel := context.WithTimeout(ctx, postTimeout)
 	defer cancel()
 	_, err := f.client.ReportBase(ctx, f.project, in)
@@ -110,9 +126,9 @@ func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, p cor
 		return
 	}
 	head, _, err := f.workOf(tk)
-	if err == nil && tk.PullRequest == nil && !f.pushedAlready(p.Landing.Remote, tk.Branch) && f.baseCurrent && f.inBase(head) {
+	if err == nil && tk.PullRequest == nil && !f.pushedAlready(p.Landing.Remote, tk.Branch) && f.stateOf(f.home).current && f.inBase(head) {
 		f.printf("%s: nothing to merge into %s", tk.ID, f.baseBranch())
-		f.landAt(ctx, tk, head)
+		f.landAt(ctx, tk, f.home, head)
 		return
 	}
 	if err != nil {
@@ -122,7 +138,7 @@ func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, p cor
 	if tk.Branch == "" {
 		return
 	}
-	pushed, why := f.push(ctx, p.Landing.Remote, tk.Branch, head)
+	pushed, why := f.push(ctx, f.home, p.Landing.Remote, tk.Branch, head)
 	if why != "" {
 		f.cantPushYet(ctx, tk, why)
 		return
@@ -130,7 +146,7 @@ func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, p cor
 	if pushed {
 		f.printf("%s: pushed %s to %s", tk.ID, tk.Branch, p.Landing.Remote)
 	}
-	f.reportPushed(ctx, tk, p.LandingPolicy(), tk.Branch, f.remoteTip(p.Landing.Remote, tk.Branch, head))
+	f.reportPushed(ctx, tk, p.LandingPolicy(), f.home, tk.Branch, f.remoteTip(f.home, p.Landing.Remote, tk.Branch, head))
 }
 
 // inOldBase reports whether the fetched remote holds commit on a base the
@@ -150,7 +166,7 @@ func (f *factory) inOldBase(commit, remote string) bool {
 // poll.
 func (f *factory) landMerged(ctx context.Context, tk core.TicketView, remote string) {
 	merge := tk.PullRequest.MergeCommit
-	if !f.baseCurrent || !f.inBase(merge) && !f.inOldBase(merge, remote) {
+	if !f.stateOf(f.home).current || !f.inBase(merge) && !f.inOldBase(merge, remote) {
 		key := tk.ID + "@" + merge
 		if !f.leftOnBranch[key] {
 			f.leftOnBranch[key] = true
@@ -159,7 +175,7 @@ func (f *factory) landMerged(ctx context.Context, tk core.TicketView, remote str
 		return
 	}
 	f.printf("%s: pull request %d merged", tk.ID, tk.PullRequest.Number)
-	f.landAt(ctx, tk, merge)
+	f.landAt(ctx, tk, f.home, merge)
 }
 
 // detectMergedPullRequests lands In Review Tickets whose pull request is

@@ -620,6 +620,9 @@ export interface TicketRow {
   // landing order, for its card's chips; left out while the Project has
   // the Home Repository alone.
   repositories?: string[];
+  // PartlyLanded says the Ticket is Accepted and has landed in some of
+  // its Changed Repositories but not all, for its card's badge.
+  partly_landed?: boolean;
 }
 
 // SpecDetail is get_spec's result: the Spec, its State summary and its
@@ -1014,6 +1017,10 @@ export interface ChangedRepositoryView {
   // Landed is the commit that put the work into the Repository's base;
   // left out until it lands.
   landed?: LandedView;
+  // NotLanded is why an Accepted Ticket hasn't landed in the Repository
+  // yet: its broken base, or what the Factory last said; left out once
+  // it lands, or while there's none to give.
+  not_landed?: string;
   // PushedCommit is the latest commit the Factory pushed for the Ticket
   // in the Repository; left out while it has pushed none.
   pushed_commit?: PushedCommitView;
@@ -1628,6 +1635,10 @@ export interface NeedsMeRow {
   // RepositoryMissing is the missing Repository's path, Clone URL,
   // problem and fix (Repository missing, whose row has no Ticket).
   repository_missing?: RepositoryMissingView;
+  // NotLanded is the Repositories the Ticket has landed in and those it
+  // hasn't, with why (Accepted but not landed, while the Project has
+  // several Repositories).
+  not_landed?: NotLandedView;
 }
 
 // SessionEvent is one thing a Claim's session did, as posted: agent text,
@@ -1722,15 +1733,19 @@ export interface NeedsMeSpec {
 }
 
 // BaseDivergedView is a Base diverged item's detail: both commits and the
-// base branch.
+// base branch, and the Repository whose base it is while the Project has
+// several.
 export interface BaseDivergedView {
+  repository?: string;
   base?: string;
   local: string;
   remote: string;
 }
 
-// BaseMissingView is a Base missing item's detail: the branch and the fix.
+// BaseMissingView is a Base missing item's detail: the branch and the fix,
+// and the Repository whose base it is while the Project has several.
 export interface BaseMissingView {
+  repository?: string;
   base: string;
   fix: string;
 }
@@ -1743,4 +1758,22 @@ export interface RepositoryMissingView {
   clone_url: string;
   problem: string;
   fix: string;
+}
+
+// NotLandedView is an Accepted but not landed item's Repositories, while
+// the Project has several: those its Ticket has landed in, and those it
+// hasn't, each with why, in landing order.
+export interface NotLandedView {
+  landed: string[];
+  not_landed: NotLandedRepositoryView[];
+}
+
+// NotLandedRepositoryView is a Changed Repository a Ticket hasn't landed
+// in, and why.
+export interface NotLandedRepositoryView {
+  name: string;
+  // Reason is why: its broken base, or what the Factory last said about
+  // it since the Ticket was accepted; left out when there's none to
+  // give.
+  reason?: string;
 }

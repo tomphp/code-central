@@ -73,6 +73,13 @@ func (c *Core) cancelOne(ctx context.Context, key string, in CancelInput) (Writt
 		}
 		before := *t
 		now := c.now()
+		if partlyLanded(key, *t) {
+			// Its landed work stays where it landed: the Factory never
+			// reverts (ADR 0049).
+			return false, &Error{Code: ActionNotAllowed, AllowedActions: slices.DeleteFunc(allowedActions(t.State, actor), func(a string) bool { return a == "cancel" }), Message: fmt.Sprintf(
+				"%s is Partly landed, its work already in the base of %s, so it can't be cancelled: land it in the rest of its Changed Repositories, or send it back",
+				DisplayID(key, t.Number), strings.Join(landedNames(key, *t), ", "))}
+		}
 		if err := transition(ctx, t, key, "cancel", "", now); err != nil {
 			return false, err
 		}
