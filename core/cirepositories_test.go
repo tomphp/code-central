@@ -192,7 +192,7 @@ func TestTurningCITrackingOnChecksEveryWatchedRepository(t *testing.T) {
 func TestATicketHasACIResultPerWatchedRepositoryAndACombinedOne(t *testing.T) {
 	f := twoRepoWorld(t)
 	f.changes(t, 5, "acme", "api")
-	f.pushedFor(t,"api", "acme-5", "def456")
+	f.pushedFor(t, "api", "acme-5", "def456")
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CISuccess)
 	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CIInProgress, "")
 
@@ -225,7 +225,7 @@ func TestATicketHasACIResultPerWatchedRepositoryAndACombinedOne(t *testing.T) {
 func TestARedBuildInOneRepositoryLeavesAnothersCIResultItsOwn(t *testing.T) {
 	f := twoRepoWorld(t)
 	f.changes(t, 5, "acme", "api")
-	f.pushedFor(t,"api", "acme-5", "def456")
+	f.pushedFor(t, "api", "acme-5", "def456")
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CISuccess)
 	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CICompleted, store.CIFailure)
 
@@ -249,7 +249,7 @@ func TestNotWatchedRepositoriesNeverAffectAResult(t *testing.T) {
 	f.addRepository(t, core.AddRepositoryInput{Name: "docs", CloneURL: "git@github.com:acme/docs.git", CI: &core.RepositoryCI{NotWatched: true}})
 	f.changes(t, 5, "acme", "docs")
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CISuccess)
-	f.pushedFor(t,"docs", "acme-5", "fed789")
+	f.pushedFor(t, "docs", "acme-5", "fed789")
 	f.ciRunIn(t, "docs", 1, "fed789", "acme-5", store.CICompleted, store.CIFailure)
 
 	v := f.getTicket(t, "acme-5")
@@ -272,7 +272,7 @@ func TestNotWatchedRepositoriesNeverAffectAResult(t *testing.T) {
 	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Docs"})
 	f.moveTo(t, 9, store.Accepted)
 	f.changes(t, 9, "docs")
-	f.pushedFor(t,"docs", "acme-9", "aaa111")
+	f.pushedFor(t, "docs", "acme-9", "aaa111")
 	f.clock.Advance(core.CIUnavailableAfter + time.Minute)
 	if v := f.getTicket(t, "acme-9"); v.CIResult != "" || v.CIItem != nil || v.NeedsMeReason == core.ReasonCIUnavailable {
 		t.Fatalf("acme-9: CI result %q, item %+v, reason %q: want none", v.CIResult, v.CIItem, v.NeedsMeReason)
@@ -282,7 +282,7 @@ func TestNotWatchedRepositoriesNeverAffectAResult(t *testing.T) {
 func TestATicketFailedInTwoRepositoriesIsOnTwoItemsAndEachOptionActsOnItsRepositoryOnly(t *testing.T) {
 	f := twoRepoWorld(t)
 	f.changes(t, 5, "acme", "api")
-	f.pushedFor(t,"api", "acme-5", "def456")
+	f.pushedFor(t, "api", "acme-5", "def456")
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
 	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CICompleted, store.CIFailure)
 
@@ -329,7 +329,7 @@ func TestATicketFailedInTwoRepositoriesIsOnTwoItemsAndEachOptionActsOnItsReposit
 func TestNewFixTicketNamesTheRepository(t *testing.T) {
 	f := twoRepoWorld(t)
 	f.changes(t, 5, "acme", "api")
-	f.pushedFor(t,"api", "acme-5", "def456")
+	f.pushedFor(t, "api", "acme-5", "def456")
 	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CICompleted, store.CIFailure)
 	w, err := f.core.NewFixTicket(human, "acme", core.NewFixTicketInput{Ticket: "acme-5", Note: "the api tests fail", Full: true})
 	if err != nil {
@@ -346,7 +346,7 @@ func TestNewFixTicketNamesTheRepository(t *testing.T) {
 func TestTheCIWatchHasEachWatchedRepositorysTargetAndPushedCommits(t *testing.T) {
 	f := twoRepoWorld(t)
 	f.changes(t, 5, "acme", "api")
-	f.pushedFor(t,"api", "acme-5", "def456")
+	f.pushedFor(t, "api", "acme-5", "def456")
 	watch, err := f.core.GetCIWatch(ctx, "acme")
 	if err != nil {
 		t.Fatal(err)
@@ -378,7 +378,7 @@ func TestReportsNamingNoRepositoryOfTheProjectAreRefused(t *testing.T) {
 func TestRunsInTwoRepositoriesWithOneRunIDAreTwoRuns(t *testing.T) {
 	f := twoRepoWorld(t)
 	f.changes(t, 5, "acme", "api")
-	f.pushedFor(t,"api", "acme-5", "def456")
+	f.pushedFor(t, "api", "acme-5", "def456")
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CISuccess)
 	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CICompleted, store.CIFailure)
 	if v := f.getTicket(t, "acme-5"); len(v.CIRuns) != 2 || changedIn(t, v, "acme").CIResult != core.CIPassed {
@@ -389,7 +389,7 @@ func TestRunsInTwoRepositoriesWithOneRunIDAreTwoRuns(t *testing.T) {
 func TestTheCIWatcherInErrorAboutOneRepositoryStillWatchesTheOthers(t *testing.T) {
 	f := twoRepoWorld(t)
 	f.changes(t, 5, "acme", "api")
-	f.pushedFor(t,"api", "acme-5", "def456")
+	f.pushedFor(t, "api", "acme-5", "def456")
 	w, err := f.core.ReportCIWatcherStatus(ctx, "acme", core.ReportWatcherStatusInput{State: core.WatcherError, Full: true,
 		Repositories: []core.RepositoryProblem{{Repository: "api", Problem: core.ProblemRepositoryUnreadable, Message: "gh can't read acme/api", Fix: "grant gh access to acme/api"}}})
 	if err != nil {
