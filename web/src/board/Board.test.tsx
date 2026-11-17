@@ -102,8 +102,12 @@ const titles = (state: string) => cards(state).map((c) => c.querySelector(".boar
 const card = (title: string) => within(board()).getByRole("link", { name: new RegExp(title) });
 const columnsButton = () => within(board()).getByRole("button", { name: /^Columns/ });
 const loaded = () => within(board()).getByRole("link", { name: /Login form/ });
-// noPopup checks no popup, nor any other dialog, is open.
-const noPopup = () => expect(screen.queryByRole("dialog")).toBeNull();
+// noPopup settles the world, then checks no popup, nor any other dialog, is
+// open: a popup closes as the world's last change reaches it.
+const noPopup = async () => {
+  await settled();
+  expect(screen.queryByRole("dialog")).toBeNull();
+};
 
 beforeEach(() => localStorage.clear());
 
@@ -414,7 +418,7 @@ describe("the Board's Ticket popup", () => {
     await click(within(popup()).getByRole("button", { name: "Move" }));
     await settled();
     expect((await fake.w.api.getTicket("acme", fake.ids.form)).state).not.toBe(before);
-    noPopup();
+    await noPopup();
   });
 
   it("stays a Ticket popup when its Ticket starts needing the human", async () => {
@@ -446,7 +450,7 @@ describe("the Board's Ticket popup", () => {
     const length = window.history.length;
     await openCard("Login form");
     await close();
-    noPopup();
+    await noPopup();
     expect(window.location.search).toBe("?view=board&project=acme&group=spec&hide=Draft");
     expect(window.history.length).toBe(length + 2);
     expect(heads()[0]).toBe("Ready 2");
@@ -458,7 +462,7 @@ describe("the Board's Ticket popup", () => {
     loaded();
     await openCard("Login form");
     await travel(() => window.history.back());
-    noPopup();
+    await noPopup();
     expect(window.location.search).toBe("?view=board&project=acme&hide=Draft");
     expect(card("Login form")).toHaveFocus();
 
@@ -497,7 +501,7 @@ describe("the Board's Ticket popup", () => {
       },
     });
     expect(within(board()).getByText("Loading…")).toBeInTheDocument();
-    noPopup();
+    await noPopup();
     await act(async () => release());
     await settled();
     expect(screen.getByRole("dialog", { name: "Ticket popup" })).toBeInTheDocument();
@@ -592,7 +596,7 @@ describe("the Board's Focus popup", () => {
     ]);
     await click(within(resume).getByRole("button", { name: "Release…" }));
     await click(within(resume).getByRole("button", { name: "Release Claim" }));
-    noPopup();
+    await noPopup();
     expect(window.location.search).toBe("?view=board&project=acme&hide=Draft");
     expect(heads()[0]).toBe("Ready 3");
     expect(screen.queryByRole("status")).toBeNull();
@@ -619,7 +623,7 @@ describe("the Board's Focus popup", () => {
 
     behind = false;
     await fake.s.pickUpAnswers("acme", fake.pick);
-    noPopup();
+    await noPopup();
   });
 
   it("closes quietly when the agent deals with its Ticket", async () => {
@@ -629,7 +633,7 @@ describe("the Board's Focus popup", () => {
     const length = window.history.length;
     await fake.w.api.act("acme", fake.pick, "move", { to_state: "In Progress" });
     await settled();
-    noPopup();
+    await noPopup();
     expect(window.location.search).toBe("?view=board&project=acme");
     expect(window.history.length).toBe(length + 1);
     expect(screen.queryByText(/Dealt with elsewhere/)).toBeNull();
@@ -648,7 +652,7 @@ describe("the Board's Focus popup", () => {
     const panel = within(ciItem).getByRole("region", { name: "CI failed" });
     await click(within(within(panel).getByRole("group", { name: "Failure options" })).getByRole("button", { name: "Land anyway" }));
     for (const id of [basket, checkout]) expect((await fake.w.api.getTicket("acme", id)).land_anyway).toBe(true);
-    noPopup();
+    await noPopup();
   });
 
   it("reopens as a Focus popup when the address with popup= is loaded for a Ticket that needs the human", async () => {
@@ -678,7 +682,7 @@ describe("the Board's Focus popup", () => {
     await click(within(card("Pick a colour")).getByText("Pick a colour"));
     question("Which colour?");
     await click(within(popup()).getByRole("button", { name: "Close" }));
-    noPopup();
+    await noPopup();
     expect(window.location.search).toBe("?view=board&project=acme");
     expect(card("Pick a colour")).toHaveFocus();
   });
@@ -815,7 +819,6 @@ describe("the Board's By Spec lanes", () => {
 
 describe("the Board's Spec popup", () => {
   const popup = () => screen.getByRole("dialog", { name: "Spec popup" });
-  const noPopup = () => expect(screen.queryByRole("dialog")).toBeNull();
   const lane = (title: string) => within(board()).getByRole("group", { name: `Lane: ${title}` });
   const header = (title: string) => within(within(lane(title)).getByRole("region", { name: title })).getByRole("link");
   const openLane = async (title: string) => {
@@ -843,10 +846,10 @@ describe("the Board's Spec popup", () => {
     loaded();
     const chevron = () => within(lane("Login")).getByRole("button", { name: "Login" });
     await click(chevron());
-    noPopup();
+    await noPopup();
     expect(chevron()).toHaveAttribute("aria-expanded", "false");
     await click(chevron());
-    noPopup();
+    await noPopup();
     await openLane("Login");
     expect(within(popup()).getByRole("region", { name: "Spec" })).toBeInTheDocument();
     expect(within(popup()).getByRole("heading", { name: "Login" })).toBeInTheDocument();
@@ -863,7 +866,7 @@ describe("the Board's Spec popup", () => {
     expect(header("Login")).toHaveAttribute("href", `?view=board&project=acme&group=spec&hide=Done&popup=${fake.ids.spec}`);
     fireEvent.click(header("Login"), { metaKey: true });
     fireEvent.click(header("Login"), { button: 1 });
-    noPopup();
+    await noPopup();
     expect(window.location.search).toBe(bySpec.slice(1));
   });
 
@@ -951,7 +954,7 @@ describe("the Board's Spec popup", () => {
     await click(within(lane("Login")).getByRole("button", { name: "Login" }));
     await openLane("Login");
     await close();
-    noPopup();
+    await noPopup();
     expect(window.location.search).toBe(bySpec.slice(1));
     expect(within(lane("Login")).getByRole("button", { name: "Login" })).toHaveAttribute("aria-expanded", "false");
     expect(within(board()).queryByRole("region", { name: "Done" })).toBeNull();
