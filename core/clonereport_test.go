@@ -97,6 +97,27 @@ func TestAMissingRepositoryIsAFocusItemNamingItsPathCloneURLProblemAndFix(t *tes
 	}
 }
 
+func TestAMissingLocalOnlyRepositorysItemHasNoCloneURLAndAFixToPutItThere(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	f.addRepository(t, core.AddRepositoryInput{Name: "web", LocalPath: "/src/web"})
+	beat(f, t, "cc", "box", core.HeartbeatOnline, 10)
+	f.reportRepositories(t, homeReady, core.RepositoryReport{Name: "web", Path: "/src/web", State: core.CloneMissing, Problem: "nothing at /src/web"})
+
+	rows := missingRows(t, f)
+	if len(rows) != 1 || rows[0].RepositoryMissing == nil {
+		t.Fatalf("rows %+v, want one Repository missing item", rows)
+	}
+	m := rows[0].RepositoryMissing
+	if m.Repository != "web" || m.Path != "/src/web" || m.CloneURL != "" || m.Problem != "nothing at /src/web" {
+		t.Fatalf("detail %+v, want web's path and problem, with no Clone URL", m)
+	}
+	want := "Put Repository web's git repository at /src/web, or set its local path to where it is in Project Options"
+	if m.Fix != want {
+		t.Fatalf("fix %q, want %q", m.Fix, want)
+	}
+}
+
 func TestAMissingRepositoryKeepsWaitingSinceItWasFirstReported(t *testing.T) {
 	f := twoRepositories(t)
 	f.reportRepositories(t, homeReady, webMissing)

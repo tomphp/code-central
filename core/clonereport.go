@@ -27,7 +27,9 @@ const (
 	// CloneReady is a clone the Factory made or adopted.
 	CloneReady CloneState = "ready"
 	// CloneMissing is Repository missing: the path holds something other
-	// than a clone of the Clone URL, or cloning it failed.
+	// than a clone of the Clone URL, or cloning it failed; for a
+	// local-only Repository, no git repository of its own; or the path
+	// is another Repository's.
 	CloneMissing CloneState = "missing"
 )
 
@@ -167,10 +169,14 @@ func (c *Core) repositoryMissingRows(p store.Project) []NeedsMeRow {
 		if r.Clone == nil || r.Clone.State != CloneMissing {
 			continue
 		}
+		fix := fmt.Sprintf("Clone %s to %s by hand, set Repository %s's local path to a clone of it in Project Options, or move what's at %s aside for the Factory to clone it there", r.CloneURL, r.Clone.Path, r.Name, r.Clone.Path)
+		if r.CloneURL == "" {
+			// Local-only: the Factory never clones it.
+			fix = fmt.Sprintf("Put Repository %s's git repository at %s, or set its local path to where it is in Project Options", r.Name, r.Clone.Path)
+		}
 		out = append(out, NeedsMeRow{
 			Project: p.Key, Title: "Repository missing: " + r.Name, Reason: ReasonRepositoryMissing, Since: r.Clone.Since,
-			RepositoryMissing: &RepositoryMissingView{Repository: r.Name, Path: r.Clone.Path, CloneURL: r.CloneURL, Problem: r.Clone.Problem,
-				Fix: fmt.Sprintf("Clone %s to %s by hand, set Repository %s's local path to a clone of it in Project Options, or move what's at %s aside for the Factory to clone it there", r.CloneURL, r.Clone.Path, r.Name, r.Clone.Path)},
+			RepositoryMissing: &RepositoryMissingView{Repository: r.Name, Path: r.Clone.Path, CloneURL: r.CloneURL, Problem: r.Clone.Problem, Fix: fix},
 		})
 	}
 	return out
