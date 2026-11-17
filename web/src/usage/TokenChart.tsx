@@ -3,7 +3,7 @@
 // hand-written SVG (no chart library). A kind filter picks the kinds of
 // session counted, from the days already read. Hovering or focusing a bar
 // shows its exact figures. Tokens only: never a price.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { UsageDay, UsageDayTokens } from "../api/types";
 import { count } from "../format";
 import { Select } from "../controls/Select";
@@ -26,7 +26,9 @@ type TokenType = (typeof TOKEN_TYPES)[number]["key"];
 type Totals = Record<TokenType, number>;
 
 // The chart's drawing area, in SVG units: the axis labels sit in the
-// left and bottom margins.
+// left and bottom margins. The viewBox is as wide as the chart's box (WIDTH
+// until it is measured), so one unit is one px and the labels' font size
+// stays fixed instead of scaling with the container.
 const WIDTH = 900;
 const HEIGHT = 220;
 const LEFT = 56;
@@ -38,10 +40,22 @@ export function TokenChart({ days, kinds }: TokenChartProps) {
   // A kind the new scope or range doesn't have counts as all kinds.
   const kind = kinds.includes(chosen) ? chosen : "";
   const [hovered, setHovered] = useState<number>();
+  const svg = useRef<SVGSVGElement>(null);
+  const [width, setWidth] = useState(WIDTH);
+  useEffect(() => {
+    const el = svg.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      const w = Math.round(el.getBoundingClientRect().width);
+      if (w > LEFT * 2) setWidth(w);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   const rows = days.map((d) => ({ day: d.day, totals: totals(d.kinds.filter((k) => !kind || k.kind === kind)) }));
   const top = niceMax(Math.max(0, ...rows.map((r) => sum(r.totals))));
   const plotHeight = HEIGHT - TOP - BOTTOM;
-  const slot = (WIDTH - LEFT) / rows.length;
+  const slot = (width - LEFT) / rows.length;
   const barWidth = Math.max(1, slot * 0.7);
   const y = (n: number) => TOP + plotHeight - (top ? (n / top) * plotHeight : 0);
   // Label about seven days along the axis, whatever the range.
@@ -64,10 +78,10 @@ export function TokenChart({ days, kinds }: TokenChartProps) {
           ))}
         </ul>
       </div>
-      <svg role="group" aria-label="Token usage per day" className="token-chart" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} onMouseLeave={() => setHovered(undefined)}>
+      <svg ref={svg} role="group" aria-label="Token usage per day" className="token-chart" viewBox={`0 0 ${width} ${HEIGHT}`} onMouseLeave={() => setHovered(undefined)}>
         {(top ? [0, top / 2, top] : [0]).map((n) => (
           <g key={n} className="token-grid" aria-hidden="true">
-            <line x1={LEFT} x2={WIDTH} y1={y(n)} y2={y(n)} />
+            <line x1={LEFT} x2={width}y1={y(n)} y2={y(n)} />
             <text x={LEFT - 6} y={y(n)} dy="0.32em" textAnchor="end">
               {compact(n)}
             </text>

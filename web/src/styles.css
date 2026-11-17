@@ -25,6 +25,11 @@
   --on-primary: #ffffff;
   /* Text on a filled line colour. */
   --on-line: #ffffff;
+  /* Chart ramp: ink to neutral, never a line ink. */
+  --chart-1: #12224a;
+  --chart-2: #5b6b8f;
+  --chart-3: #9aa5bf;
+  --chart-4: #cdd2de;
   /* Reason lines. */
   --r-answer: #e39b12;
   --r-answered: #7a4bc8;
@@ -67,6 +72,10 @@
     --primary: #8fb0ff;
     --on-primary: #0a1430;
     --on-line: #0a1430;
+    --chart-1: #e3e8f5;
+    --chart-2: #a3b0cf;
+    --chart-3: #6b7ba0;
+    --chart-4: #3f4f7a;
     --r-answer: #f5b43c;
     --r-answered: #a68cf2;
     --r-silent: #9aa3b8;
@@ -103,6 +112,10 @@
   --primary: #8fb0ff;
   --on-primary: #0a1430;
   --on-line: #0a1430;
+  --chart-1: #e3e8f5;
+  --chart-2: #a3b0cf;
+  --chart-3: #6b7ba0;
+  --chart-4: #3f4f7a;
   --r-answer: #f5b43c;
   --r-answered: #a68cf2;
   --r-silent: #9aa3b8;

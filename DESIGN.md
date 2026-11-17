@@ -188,7 +188,7 @@ The State lines (`state-*`) colour the rail's State keys, State chips and Board 
 - Dark theme: `night-rail`, `night-surface`, `night-panel`, `night-linen`, `night-text`, with `night-primary` as the primary fill and `night-on-primary` as text on it and on filled lines. Every line ink has a brighter dark counterpart in `styles.css`, defined twice (for `prefers-color-scheme` and for `data-theme="dark"`); the two copies must stay identical.
 
 ### Named Rules
-**The One Line, One Ink Rule.** Every State and every reason owns one line ink, and that ink means only that line. Project ribbons have their own palette and never borrow a line ink.
+**The One Line, One Ink Rule.** Every State and every reason owns one line ink, and that ink means only that line. Project ribbons have their own palette and never borrow a line ink, and neither does a chart: the Usage view's Token usage bars take the `--chart-1` to `--chart-4` ramp in `styles.css` (ink to neutral, with brighter-to-dimmer dark counterparts in both dark copies).
 
 **The Readable Ink Rule.** Line ink is never set as text at full strength. Text in a line's colour is `color-mix(in srgb, <line> 55%, var(--text))`, so it passes contrast in both themes; full-strength ink is for strokes, rings and fills only.
 
