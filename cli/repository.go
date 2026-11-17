@@ -213,10 +213,10 @@ func printRepositories(e Env, p core.ProjectView) error {
 			name += " (home)"
 		}
 		switch {
+		case r.LocalOnly:
+			url = "(none: local only)"
 		case url == "" && r.Home:
 			url = "(not reported yet)"
-		case url == "":
-			url = "(none: local only)"
 		}
 		if path == "" {
 			path = "-"

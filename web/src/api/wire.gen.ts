@@ -853,6 +853,10 @@ export interface LandingView {
 // CIView is a Project's CI settings as every Project read returns them.
 export interface CIView {
   tracking: boolean;
+  // Provider, Repository and ProjectURL are the Home Repository's CI
+  // entry as stored, for an older client, which set it here: GitHub
+  // Actions naming nothing while none is. Its Repository view's CI is
+  // its CI choice, filled in from its Clone URL while none is stored.
   provider: CIProvider;
   // Repository is the GitHub repository GitHub Actions watches.
   repository: string;
@@ -874,10 +878,10 @@ export interface CIView {
   // Watcher is the CI Watcher's status, as it last reported it.
   watcher: WatcherView;
   // Repositories are the CI entries of the Repositories other than the
-  // Home, in landing order; the fields above are the Home Repository's,
-  // and its PAT environment variable, Ignored workflows and CI Rules
-  // are every Repository's. Left out while the Project has the Home
-  // Repository alone.
+  // Home, in landing order; Provider, Repository and ProjectURL are the
+  // Home Repository's, and the PAT environment variable, Ignored
+  // workflows and CI Rules are every Repository's. Left out while the
+  // Project has the Home Repository alone.
   repositories?: CIRepositoryView[];
 }
 
@@ -970,8 +974,12 @@ export interface RepositoryView {
   home: boolean;
   // CloneURL is the remote the Repository is cloned from and pushed to:
   // the Push remote URL the Factory reported for the Home Repository,
-  // empty until it has.
+  // empty until it has, or when it reported none.
   clone_url: string;
+  // LocalOnly marks a Repository with no Clone URL, never cloned or
+  // pushed: the Home Repository once the Factory reports its clone has
+  // no Push remote, and not before.
+  local_only: boolean;
   // Base is the branch its work is cut from and lands on: the Project's
   // Base for the Home Repository.
   base: string;
@@ -1002,6 +1010,9 @@ export interface RepositoryView {
   // Landing is Pull Request, as only a Home that lost its remote can
   // be: nothing lands there until it has another Landing or a remote.
   local_only_under_pull_request: boolean;
+  // CI is its CI choice, the Home's included: its CI entry, stored or
+  // filled in from its Clone URL.
+  ci: CIRepositoryView;
 }
 
 // LinkView is a Spec's or Ticket's Link as reads show it: the external
@@ -1468,8 +1479,8 @@ export interface CIRuleView {
   created: string;
 }
 
-// CIRepositoryView is the CI entry of one Repository other than the Home:
-// its CI Provider and what that watches, or Not watched.
+// CIRepositoryView is the CI entry of one Repository: its CI Provider and
+// what that watches, or Not watched.
 export interface CIRepositoryView {
   name: string;
   not_watched: boolean;

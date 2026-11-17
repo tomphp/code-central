@@ -96,7 +96,7 @@ func (f *factory) locateBase(ctx context.Context, p core.ProjectView, r *reposit
 	s := f.stateOf(r)
 	base := f.baseOf(r)
 	ref := "refs/heads/" + base
-	localOnly := r.view().LocalOnly()
+	localOnly := r.view().LocalOnly
 	tip, err := r.git.commit(ref)
 	if err != nil && !localOnly && r.git.hasRemote(p.Landing.Remote) {
 		if out, ferr := r.git.fetch(ctx, p.Landing.Remote); ferr != nil {

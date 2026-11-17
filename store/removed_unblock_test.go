@@ -21,7 +21,7 @@ func TestAProjectFileStillHoldingUnblockOnPushLoadsAndDropsIt(t *testing.T) {
 	s := openFile(t, dir)
 	err := s.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
-		if !p.CI.Tracking || p.CI.Repository != "acme/web" {
+		if !p.CI.Tracking || homeCI(p).Repository != "acme/web" {
 			t.Errorf("ci = %+v, want tracking acme/web", p.CI)
 		}
 		return w.PutProject(p)

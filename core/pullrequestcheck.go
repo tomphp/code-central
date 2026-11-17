@@ -71,7 +71,9 @@ func (c *Core) checkPullRequest(ctx context.Context, key string, change func(sto
 		for _, rv := range all {
 			if now.In(rv.Name).LandsByPullRequest() && !was.In(rv.Name).LandsByPullRequest() {
 				repositories = append(repositories, rv)
-				homeUnder = homeUnder || rv.Home
+				// A local-only Home has no Push remote to check: it is
+				// refused as local-only.
+				homeUnder = homeUnder || rv.Home && !rv.LocalOnly
 			}
 		}
 		url, ghPath, patEnv, single = next.CI.PushRemoteURL, r.Options().GHPath, patEnvOf(store.CI{PATEnv: next.Landing.PATEnv}), len(all) == 1

@@ -147,3 +147,27 @@ func TestANotWatchedRepositoryIsNeverListed(t *testing.T) {
 		}
 	}
 }
+
+// The Home Repository may be Not watched too (Spec code-central-890):
+// the CI Watcher then never lists its runs, and still watches the others.
+func TestANotWatchedHomeIsNeverListedWhileTheOthersAreWatched(t *testing.T) {
+	w := newWatching(t)
+	id := w.pushedInTwo("abc123", "def456")
+	human := core.WithActor(context.Background(), core.Human)
+	must(t, func() error {
+		_, err := w.srv.Core.SetRepositoryCI(human, "acme", core.SetRepositoryCIInput{Name: "acme", RepositoryCI: core.RepositoryCI{NotWatched: true}})
+		return err
+	})
+	w.runsAnswerIn("acme/api", "def456", 11, "success")
+	w.start(w.h.Bin)
+	tk := w.repositoryCI(id, "api", core.CIPassed)
+	if tk.CIResult != core.CIPassed {
+		t.Fatalf("CI result %q, want passed: the Home is Not watched", tk.CIResult)
+	}
+	w.status(core.WatcherWatching)
+	for _, c := range w.h.Calls() {
+		if slices.ContainsFunc(c.Args, func(a string) bool { return strings.Contains(a, "acme/web") }) {
+			t.Fatalf("gh called on the Home's acme/web, which is Not watched: %v", c.Args)
+		}
+	}
+}

@@ -426,9 +426,9 @@ func TestDefaultCISettingsLeaveProjectYAMLUnchanged(t *testing.T) {
 	}
 	mustUpdate(t, s, func(w store.Writer) error {
 		return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: created, Mode: store.ModeCommitted,
-			CI: store.CI{Tracking: true, Repository: "acme/web", IgnoredWorkflows: []string{"nightly.yml"}}})
+			CI: store.CI{Tracking: true, IgnoredWorkflows: []string{"nightly.yml"}, Repositories: []store.CIRepository{{Name: "acme", Provider: store.CIGitHubActions, Repository: "acme/web"}}}})
 	})
-	want := plain + "ci:\n  tracking: true\n  provider: github_actions\n  repository: acme/web\n  ignored_workflows:\n    - nightly.yml\n"
+	want := plain + "ci:\n  tracking: true\n  ignored_workflows:\n    - nightly.yml\n  repositories:\n    - name: acme\n      provider: github_actions\n      repository: acme/web\n"
 	if got := readFile(t, filepath.Join(dir, "projects/acme/project.yaml")); got != want {
 		t.Fatalf("project.yaml = %q, want %q", got, want)
 	}
