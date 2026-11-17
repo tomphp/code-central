@@ -1,6 +1,6 @@
 // The GitHub Issues section of Project Options (code-central-284): GitHub
-// Issues off by default, its repository prefilled from the Push remote,
-// the filter label and New issues need me, and a refused turn-on's
+// Issues off by default, its repository list prefilled from the Push
+// remote, adding and removing repositories (code-central-858), the filter label and New issues need me, and a refused turn-on's
 // problem and fix in place; and while it is on, the Issue Watcher's status
 // (code-central-285). On the WASM Core.
 import { screen, within } from "@testing-library/react";
@@ -85,7 +85,7 @@ describe("the GitHub Issues section", () => {
     expect(await settings(w)).toEqual({ on: true, repositories: ["acme/tracker"], label: "", new_issues_need_me: false, spec: "acme-1" });
     expect(row("acme/tracker")).toBeInTheDocument();
     expect(within(listing()).queryByRole("listitem", { name: "acme/web" })).toBeNull();
-    expect(repository).not.toHaveAccessibleDescription(/Push remote/);
+    expect(field("GitHub repository")).not.toHaveAccessibleDescription(/Push remote/);
   });
 
   it("turns GitHub Issues on with a filter label and New issues need me, naming the Issues Spec", async () => {

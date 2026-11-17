@@ -126,6 +126,10 @@ func (cfg Config) poll(ctx context.Context) (reachable bool, limit *watchers.Rat
 		case r.Problem != "":
 			problems = append(problems, core.RepositoryProblem{Repository: repository, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
 		case errors.As(err, &limit):
+			// A repository that already failed is still reported.
+			if len(problems) > 0 {
+				cfg.reportProblems(ctx, problems, len(watch.Repositories) > 1)
+			}
 			return len(problems) == 0, limit
 		default:
 			passed = append(passed, polled{repository: repository, a: a})

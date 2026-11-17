@@ -297,7 +297,7 @@ export function projectSettingsContract(driver: () => Driver) {
     expect((await d.mcpCall("acme", "get_ticket", { ticket: id })).text).not.toContain("model_choice");
   });
 
-  it("creates the Issues Spec the first time GitHub Issues is turned on, retitled with the repository", async () => {
+  it("creates the Issues Spec the first time GitHub Issues is turned on, retitled with the repositories", async () => {
     await d.createProject("acme", "Acme");
     await d.letGHTriage("acme/web");
     const on = await d.api.setGitHubIssues("acme", { on: true, repositories: ["acme/web"], label: "", new_issues_need_me: false });

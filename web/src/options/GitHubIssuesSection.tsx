@@ -78,6 +78,8 @@ export function GitHubIssuesSection({ project }: { project: ProjectRow }) {
   const [saved, setSaved] = useState(false);
   const id = useId();
   const { on, repositories, label, new_issues_need_me } = stored;
+  // The list as one string, so the effect below re-runs only when the
+  // stored list changes, not on every read's new array.
   const storedRepositories = repositories.join("\n");
   useEffect(
     () => setDraft({ on, repositories: storedRepositories ? storedRepositories.split("\n") : [], label, new_issues_need_me }),

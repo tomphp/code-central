@@ -230,7 +230,7 @@ func (c *Core) checkIssues(ctx context.Context, key string, g store.GitHubIssues
 	}
 	var added []string
 	for _, repository := range g.Repositories {
-		if !was.On || !slices.Contains(was.Repositories, repository) {
+		if !was.On || !slices.ContainsFunc(was.Repositories, func(r string) bool { return strings.EqualFold(r, repository) }) {
 			added = append(added, repository)
 		}
 	}

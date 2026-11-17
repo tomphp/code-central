@@ -211,7 +211,7 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s store.Spec) (w Issu
 		text := "Finished. What landed:\n\n" + strings.Join(list, "\n")
 		if severalRepositories(p) {
 			var names []string
-			for _, name := range specRepositories(p, tickets) {
+			for _, name := range specRepositories(p, landed) {
 				names = append(names, repositoryLabel(p, name))
 			}
 			if len(names) > 0 {
