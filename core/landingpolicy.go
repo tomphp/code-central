@@ -35,13 +35,11 @@ func (p ProjectView) LandingPolicy() LandingPolicy {
 	return NewLandingPolicy(p.Landing.Method, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
 }
 
-// ForRepository is a Repository's Landing Policy: the Project's, with
-// Push off in a local-only Repository, which has no Clone URL to push to,
-// and unchanged in any other, the Home among them. So in a local-only
-// Repository Merge + Push reads as Merge and Branch + Push as Branch;
-// Pull Request never arises there, as EveryRepositoryNeedsCloneURL
-// refuses it. The Factory's landing steps in one Repository ask its
-// policy; Project-wide rules ask the Project's.
+// ForRepository answers the Landing Policy's "A Repository's Landing
+// Policy is the Project's with Push off in a Repository with no Clone
+// URL, and unchanged in any other": Push off when r is local-only. The
+// Home is never local-only. Pull Request never arises in a local-only
+// Repository, as EveryRepositoryNeedsCloneURL refuses it.
 func (lp LandingPolicy) ForRepository(r RepositoryView) LandingPolicy {
 	if r.LocalOnly() {
 		lp.push = false
