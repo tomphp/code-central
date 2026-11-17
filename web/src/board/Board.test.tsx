@@ -938,7 +938,7 @@ describe("the Board's Spec popup", () => {
     const fake = await finishedMap();
     await renderApp(fake as unknown as Fake, `/?view=board&project=acme&group=spec&popup=${fake.map}`);
     await click(within(specPopup()).getByRole("button", { name: "Write the Spec" }));
-    await click(within(screen.getByRole("dialog", { name: "Write the Spec" })).getByRole("button", { name: "Submit requirement" }));
+    await click(within(screen.getByRole("dialog", { name: "Write the Spec" })).getByRole("button", { name: "Write the Spec" }));
     expect(window.location.search).toContain("popup=acme-3");
     expect(within(specPopup()).getByRole("region", { name: "Requirement" })).toBeInTheDocument();
   });

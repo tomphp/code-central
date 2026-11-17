@@ -303,7 +303,7 @@ describe("Write the Spec", () => {
     const text = within(modal).getByRole<HTMLTextAreaElement>("textbox", { name: "Requirement" });
     expect(text.value).toBe(`Offline mode\n\nFrom the Map [${map}](${map}).\n\nThe app works on a plane.\n`);
     expect(within(modal).queryByRole("combobox")).toBeNull();
-    await userEvent.click(within(modal).getByRole("button", { name: "Submit requirement" }));
+    await userEvent.click(within(modal).getByRole("button", { name: "Write the Spec" }));
 
     await settle(w);
     expect(screen.queryByRole("dialog")).toBeNull();
