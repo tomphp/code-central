@@ -208,10 +208,18 @@ func (c *Client) Retry(ctx context.Context, buildID int) error {
 // do calls method on rawURL with query, sending body as JSON when it isn't
 // nil, and decodes the JSON answer into out when it isn't nil.
 func (c *Client) do(ctx context.Context, method, rawURL string, query url.Values, body, out any) error {
+	return c.doAs(ctx, "application/json", method, rawURL, query, body, out)
+}
+
+// doAs is do, sending body with contentType. A call whose query gives no
+// api-version is pinned to APIVersion.
+func (c *Client) doAs(ctx context.Context, contentType, method, rawURL string, query url.Values, body, out any) error {
 	if query == nil {
 		query = url.Values{}
 	}
-	query.Set("api-version", APIVersion)
+	if query.Get("api-version") == "" {
+		query.Set("api-version", APIVersion)
+	}
 	var rd io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -227,7 +235,7 @@ func (c *Client) do(ctx context.Context, method, rawURL string, query url.Values
 	req.SetBasicAuth("", c.pat)
 	req.Header.Set("Accept", "application/json")
 	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", contentType)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -269,7 +277,7 @@ func (c *Client) refusal(resp *http.Response, data []byte, method, rawURL string
 		return fmt.Errorf("%w: %s answered 403", ErrMissingScope, what)
 	case status == http.StatusNotFound:
 		return fmt.Errorf("%w: %s answered 404", ErrNotFound, what)
-	case status == http.StatusBadRequest, status == http.StatusConflict:
+	case status == http.StatusBadRequest, status == http.StatusConflict, status == http.StatusPreconditionFailed:
 		return &RefusedError{What: what, Status: status, Message: messageOf(data)}
 	case status >= 200 && status < 300:
 		return nil

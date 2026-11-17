@@ -116,3 +116,67 @@ func TestASavedQueryURLSplitsIntoItsProjectAndID(t *testing.T) {
 		t.Fatalf("SplitQueryURL = %q, %q, %v", project, id, err)
 	}
 }
+
+func TestCommentsAreListedInTheWorkItemsProjectAtTheCommentsAPIVersionFollowingPages(t *testing.T) {
+	fake := fakeazdo.New(t)
+	fake.PutWorkItems(fakeazdo.WorkItem{ID: 5, Title: "Moved", Project: "api"})
+	path := fakeazdo.CollectionPath + "/api/_apis/wit/workItems/5/comments"
+	// Scripted answers are taken latest first, so the first page, given
+	// once, is followed by the second.
+	first := fakeazdo.JSON("GET", path, 0, map[string]any{"comments": []map[string]string{{"text": "one"}}, "continuationToken": "next-page"})
+	first.Times = 1
+	fake.Script(fakeazdo.JSON("GET", path, 0, map[string]any{"comments": []map[string]string{{"text": "two"}, {"text": "three"}}}), first)
+	got, err := client(t, fake).Comments(context.Background(), "api", 5)
+	if err != nil || !slices.Equal(got, []string{"one", "two", "three"}) {
+		t.Fatalf("Comments = %q, %v; want the three, oldest first", got, err)
+	}
+	reqs := fake.Requests()
+	if len(reqs) != 2 || reqs[0].Path != path || reqs[0].Query["api-version"][0] != "7.1-preview.4" || reqs[1].Query["continuationToken"][0] != "next-page" {
+		t.Fatalf("requests = %+v, want the list, then its next page, at 7.1-preview.4", reqs)
+	}
+}
+
+func TestACommentIsPostedAsMarkdownAtTheCommentsAPIVersion(t *testing.T) {
+	fake := fakeazdo.New(t)
+	fake.PutWorkItems(fakeazdo.WorkItem{ID: 5, Title: "Item"})
+	if err := client(t, fake).AddComment(context.Background(), "web", 5, "<!-- k -->\nHello"); err != nil {
+		t.Fatal(err)
+	}
+	req := fake.Requests()[0]
+	if req.Method != "POST" || req.Path != fakeazdo.ProjectPath+"/_apis/wit/workItems/5/comments" || req.Query["format"][0] != "markdown" || req.Query["api-version"][0] != "7.1-preview.4" {
+		t.Fatalf("request = %+v, want POST comments as markdown at 7.1-preview.4", req)
+	}
+	if got := fake.Comments(5); len(got) != 1 || got[0].Text != "<!-- k -->\nHello" || got[0].Format != "markdown" {
+		t.Fatalf("comments = %+v", got)
+	}
+}
+
+func TestTagsAreSetByAJSONPatchThatTestsTheRevisionAndAStaleOneIsRefused(t *testing.T) {
+	fake := fakeazdo.New(t)
+	fake.PutWorkItems(fakeazdo.WorkItem{ID: 5, Rev: 3, Title: "Item", Tags: "old"})
+	c := client(t, fake)
+	if err := c.SetTags(context.Background(), 5, 3, []string{"old", "new"}); err != nil {
+		t.Fatal(err)
+	}
+	req := fake.Requests()[0]
+	want := `[{"op":"test","path":"/rev","value":3},{"op":"add","path":"/fields/System.Tags","value":"old; new"}]`
+	if req.Method != "PATCH" || req.Path != fakeazdo.CollectionPath+"/_apis/wit/workitems/5" || req.ContentType != "application/json-patch+json" || req.Body != want {
+		t.Fatalf("request = %+v, want a JSON Patch %s", req, want)
+	}
+	if w := fake.WorkItem(5); w.Tags != "old; new" || w.Rev != 4 {
+		t.Fatalf("work item = %+v", w)
+	}
+	err := c.SetTags(context.Background(), 5, 3, []string{"other"})
+	if !errors.Is(err, azdo.ErrRefused) || fake.WorkItem(5).Tags != "old; new" {
+		t.Fatalf("err = %v, tags %q, want a stale revision refused and nothing changed", err, fake.WorkItem(5).Tags)
+	}
+}
+
+func TestATagsFieldIsReadAsItsTags(t *testing.T) {
+	fake := fakeazdo.New(t)
+	fake.PutWorkItems(fakeazdo.WorkItem{ID: 5, Rev: 3, Title: "Item", Tags: "a; code-central:draft ;b"})
+	w, err := client(t, fake).WorkItem(context.Background(), 5)
+	if err != nil || !slices.Equal(w.Tags(), []string{"a", "code-central:draft", "b"}) || w.Rev != 3 {
+		t.Fatalf("WorkItem tags = %q, %v", w.Tags(), err)
+	}
+}

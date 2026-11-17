@@ -40,6 +40,7 @@ type Client interface {
 	CreateLinkedTicket(ctx context.Context, key string, in core.CreateLinkedTicketInput) (core.Written[core.TicketView], error)
 	UpdateLinkedTicket(ctx context.Context, key string, in core.UpdateLinkedTicketInput) (core.Written[core.TicketView], error)
 	SetExternalState(ctx context.Context, key string, in core.SetExternalStateInput) (core.LinkedRow, error)
+	ReportIssueWritten(ctx context.Context, key string, in core.ReportIssueWrittenInput) (core.LinkedRow, error)
 }
 
 // Config wires the watch mode.
@@ -119,7 +120,24 @@ func (cfg Config) poll(ctx context.Context) (reachable bool, limit *watchers.Rat
 		cfg.report(ctx, core.ReportWatcherStatusInput{State: core.WatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
 		return false, nil
 	}
-	return true, cfg.mirror(ctx, watch, q)
+	limit = cfg.mirror(ctx, watch, q)
+	if limit == nil && ctx.Err() == nil {
+		err = cfg.writeBack(ctx, q, watch)
+	}
+	switch {
+	case ctx.Err() != nil:
+		return false, nil
+	case limit != nil:
+		return true, limit
+	case errors.As(err, &limit):
+		return true, limit
+	case err != nil:
+		// Only the PAT's scope stops write-back this way.
+		r := writeScopeProblem(watch, q)
+		cfg.report(ctx, core.ReportWatcherStatusInput{State: core.WatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
+		return false, nil
+	}
+	return true, nil
 }
 
 // checkInput is what watch runs, as the Azure Boards check takes it.

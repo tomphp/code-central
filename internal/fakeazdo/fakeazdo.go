@@ -58,7 +58,10 @@ type Request struct {
 	// Authorization is the Authorization header, so a test sees the PAT
 	// went as Basic auth.
 	Authorization string
-	Body          string
+	// ContentType is the Content-Type header, so a test sees a JSON Patch
+	// went as one.
+	ContentType string
+	Body        string
 }
 
 // Server is a running fake.
@@ -112,7 +115,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	req := Request{
 		Method: r.Method, Path: r.URL.EscapedPath(), Query: r.URL.Query(),
-		Authorization: r.Header.Get("Authorization"), Body: string(body),
+		Authorization: r.Header.Get("Authorization"), ContentType: r.Header.Get("Content-Type"), Body: string(body),
 	}
 	s.requests = append(s.requests, req)
 	var found *Answer

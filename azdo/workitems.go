@@ -27,6 +27,7 @@ const (
 	FieldState              = "System.State"
 	FieldTeamProject        = "System.TeamProject"
 	FieldRev                = "System.Rev"
+	FieldTags               = "System.Tags"
 	FieldDescription        = "System.Description"
 	FieldReproSteps         = "Microsoft.VSTS.TCM.ReproSteps"
 	FieldAcceptanceCriteria = "Microsoft.VSTS.Common.AcceptanceCriteria"
@@ -35,7 +36,7 @@ const (
 // WorkItemFields are the fields every work item read asks for. The team
 // project is how the work item's web link is made, as Azure DevOps gives
 // no links with a list of fields.
-var WorkItemFields = []string{FieldTitle, FieldType, FieldState, FieldDescription, FieldReproSteps, FieldAcceptanceCriteria, FieldRev, FieldTeamProject}
+var WorkItemFields = []string{FieldTitle, FieldType, FieldState, FieldDescription, FieldReproSteps, FieldAcceptanceCriteria, FieldRev, FieldTags, FieldTeamProject}
 
 // WorkItem is one work item as WorkItemFields read it: its fields hold
 // HTML where the field is rich text, and are empty when the work item
@@ -48,6 +49,7 @@ type WorkItem struct {
 		Type               string `json:"System.WorkItemType"`
 		State              string `json:"System.State"`
 		TeamProject        string `json:"System.TeamProject"`
+		Tags               string `json:"System.Tags"`
 		Description        string `json:"System.Description"`
 		ReproSteps         string `json:"Microsoft.VSTS.TCM.ReproSteps"`
 		AcceptanceCriteria string `json:"Microsoft.VSTS.Common.AcceptanceCriteria"`
@@ -73,8 +75,8 @@ func (r QueryResult) IDs() []int {
 }
 
 // RefusedError is Azure DevOps refusing a request it understood but won't
-// act on (400 or 409), with its own message, such as a WIQL error's. It
-// is ErrRefused.
+// act on (400, 409 or 412), with its own message, such as a WIQL error's
+// or a stale revision's. It is ErrRefused.
 type RefusedError struct {
 	What   string
 	Status int
@@ -153,9 +155,20 @@ func (c *Client) WorkItems(ctx context.Context, ids []int) ([]WorkItem, error) {
 // WorkItem reads work item id. One deleted, or that the PAT can't read,
 // is ErrNotFound, as Azure DevOps answers both alike.
 func (c *Client) WorkItem(ctx context.Context, id int) (WorkItem, error) {
+	return c.workItemWith(ctx, id, WorkItemFields)
+}
+
+// WorkItemToWrite reads what a write to work item id needs: its project,
+// its revision and its tags. It is WorkItem's read of the work item,
+// without its text.
+func (c *Client) WorkItemToWrite(ctx context.Context, id int) (WorkItem, error) {
+	return c.workItemWith(ctx, id, []string{FieldTeamProject, FieldRev, FieldTags})
+}
+
+func (c *Client) workItemWith(ctx context.Context, id int, fields []string) (WorkItem, error) {
 	var w WorkItem
 	err := c.do(ctx, http.MethodGet, c.collectionURL()+"/_apis/wit/workitems/"+strconv.Itoa(id),
-		url.Values{"fields": {strings.Join(WorkItemFields, ",")}}, nil, &w)
+		url.Values{"fields": {strings.Join(fields, ",")}}, nil, &w)
 	return w, err
 }
 
@@ -169,4 +182,73 @@ func messageOf(data []byte) string {
 		return e.Message
 	}
 	return watchers.FirstLine(string(data))
+}
+
+// CommentsAPIVersion is the only API version that has work item comments.
+const CommentsAPIVersion = "7.1-preview.4"
+
+// Tags are the work item's tags, in the order Azure DevOps keeps them.
+// Azure DevOps joins them with semicolons.
+func (w WorkItem) Tags() []string { return SplitTags(w.Fields.Tags) }
+
+// SplitTags is the tags a System.Tags value holds: its semicolon-separated
+// parts, trimmed, leaving out empty ones.
+func SplitTags(field string) []string {
+	var out []string
+	for _, t := range strings.Split(field, ";") {
+		if t = strings.TrimSpace(t); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// Comments lists the texts of work item id's comments in project, oldest
+// first, as they are stored.
+func (c *Client) Comments(ctx context.Context, project string, id int) ([]string, error) {
+	var out []string
+	token := ""
+	for {
+		query := url.Values{"api-version": {CommentsAPIVersion}}
+		if token != "" {
+			query.Set("continuationToken", token)
+		}
+		var page struct {
+			Comments []struct {
+				Text string `json:"text"`
+			} `json:"comments"`
+			ContinuationToken string `json:"continuationToken"`
+		}
+		if err := c.do(ctx, http.MethodGet, c.commentsURL(project, id), query, nil, &page); err != nil {
+			return nil, err
+		}
+		for _, cm := range page.Comments {
+			out = append(out, cm.Text)
+		}
+		if token = page.ContinuationToken; token == "" {
+			return out, nil
+		}
+	}
+}
+
+// AddComment posts text, Markdown, to work item id's Discussion in
+// project.
+func (c *Client) AddComment(ctx context.Context, project string, id int, text string) error {
+	query := url.Values{"api-version": {CommentsAPIVersion}, "format": {"markdown"}}
+	return c.do(ctx, http.MethodPost, c.commentsURL(project, id), query, map[string]string{"text": text}, nil)
+}
+
+func (c *Client) commentsURL(project string, id int) string {
+	return fmt.Sprintf("%s/%s/_apis/wit/workItems/%d/comments", c.collectionURL(), url.PathEscape(project), id)
+}
+
+// SetTags makes tags the tags of work item id, which is at revision rev:
+// a JSON Patch that tests /rev first, so it changes nothing, and is
+// refused (ErrRefused), if the work item was edited since it was read.
+func (c *Client) SetTags(ctx context.Context, id, rev int, tags []string) error {
+	patch := []map[string]any{
+		{"op": "test", "path": "/rev", "value": rev},
+		{"op": "add", "path": "/fields/" + FieldTags, "value": strings.Join(tags, "; ")},
+	}
+	return c.doAs(ctx, "application/json-patch+json", http.MethodPatch, c.collectionURL()+"/_apis/wit/workitems/"+strconv.Itoa(id), nil, patch, nil)
 }

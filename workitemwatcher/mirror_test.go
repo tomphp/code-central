@@ -142,7 +142,9 @@ func (w *watching) read(from int) []int {
 				w.t.Fatal(err)
 			}
 			ids = append(ids, body.IDs...)
-		case strings.Contains(r.Path, "/_apis/wit/workitems/"):
+		case r.Method == "GET" && strings.Contains(r.Path, "/_apis/wit/workitems/") && strings.Contains(strings.Join(r.Query["fields"], ""), "System.Title"):
+			// A work item read for its text; write-backs read only its
+			// revision and tags.
 			var id int
 			fmt.Sscanf(r.Path[strings.LastIndex(r.Path, "/")+1:], "%d", &id)
 			ids = append(ids, id)
