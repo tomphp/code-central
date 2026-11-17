@@ -144,7 +144,7 @@ a { color: var(--accent); text-underline-offset: 2px; }
 .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .btn.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--primary) 86%, var(--accent)); }
 .btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
-textarea, select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
+textarea, select, input:not([type=checkbox], [type=radio], [type=range], [type=file], [type=color]) { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
 textarea { width: 100%; resize: vertical; }
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin: 12px 0; }
 .warning { font-size: 12.5px; padding: 6px 10px; border-radius: 6px; background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
