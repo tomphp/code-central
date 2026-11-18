@@ -1,6 +1,6 @@
 // The plain Spec pane, for a Spec that is neither a Requirement nor a Map,
 // above the shared Ticket pane: the header (ID, title, submitted time, New
-// Prototype, Retro), its Changed Repositories' chips while the Project has
+// Prototype, New Ticket when ticketable, Retro), its Changed Repositories' chips while the Project has
 // several, its body, collapsed, the sums of its Tickets' CI badges, then the Spec's Tickets
 // with their States.
 import type { SpecDetail } from "../api/types";
@@ -8,7 +8,7 @@ import { RepositoryChips } from "../controls/RepositoryChips";
 import { useApi } from "../live";
 import { BodySection } from "../edit/BodySection";
 import { SpecPaneHeader } from "../controls/SpecPaneHeader";
-import { NewPrototype, NewRetro } from "../requirement/NewRequirement";
+import { NewPrototype, NewRetro, NewTicket } from "../requirement/NewRequirement";
 import { CISums } from "../ticket/CIBadge";
 import { LinkBadge } from "../ticket/LinkBadge";
 import { OpenExternal } from "../ticket/OpenExternal";
@@ -38,6 +38,7 @@ export function SpecPane({ spec, archived, now, ticket, select }: SpecPaneProps)
       <RepositoryChips names={spec.repositories} />
       <div className="spec-actions">
         <NewPrototype spec={spec.id} onSubmitted={(t) => select(t.id)} />
+        {spec.ticketable && <NewTicket spec={spec.id} onSubmitted={(t) => select(t.id)} />}
         {spec.retroable && <NewRetro target={spec.id} onSubmitted={(t) => select(t.id)} />}
         {spec.link && <LinkBadge link={spec.link} />}
         <OpenExternal link={spec.link} />

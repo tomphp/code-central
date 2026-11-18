@@ -94,6 +94,17 @@ const prototypeOn = (spec: string): Kind<TicketAcknowledgement> => ({
   submit: (api, project, text) => api.submitPrototype(project, spec, text),
 });
 
+// ticketOn is New Ticket on spec: a Ready or Draft Ticket from the text.
+const ticketOn = (spec: string): Kind<TicketAcknowledgement> => ({
+  button: "New Ticket",
+  variant: "default",
+  noun: "Ticket",
+  placeholder: "Describe the work. The first line becomes the Ticket's title.",
+  creates: "Creates a Ready Ticket on this Spec. A Factory builds it.",
+  draftable: true,
+  submit: (api, project, text, draft) => api.newTicket(project, spec, text, draft),
+});
+
 // retroOn is Retro on target, a Done or Cancelled Ticket or a Finished Spec:
 // the note is optional.
 const retroOn = (target: string): Kind<TicketAcknowledgement> => ({
@@ -155,6 +166,16 @@ export interface NewPrototypeProps {
 
 export function NewPrototype({ spec, onSubmitted }: NewPrototypeProps) {
   return <NewFromText kind={prototypeOn(spec)} projects={[]} project={projectOf(spec)} onSubmitted={onSubmitted} />;
+}
+
+export interface NewTicketProps {
+  // spec is the Spec the Ticket goes on.
+  spec: string;
+  onSubmitted(t: TicketAcknowledgement): void;
+}
+
+export function NewTicket({ spec, onSubmitted }: NewTicketProps) {
+  return <NewFromText kind={ticketOn(spec)} projects={[]} project={projectOf(spec)} onSubmitted={onSubmitted} />;
 }
 
 export interface NewRetroProps {
