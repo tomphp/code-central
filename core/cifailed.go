@@ -97,7 +97,7 @@ func fixTicketOpen(r store.Reader, p domain.Project, record, commit string) bool
 // CIResponseInput is land_anyway's and rerun_ci's input: the Ticket, and
 // the Repository whose CI item to act on.
 type CIResponseInput struct {
-	Ticket Ref `json:"ticket"`
+	Ticket Ref `json:"ticket" path:"n"`
 	// Repository is the Repository Name of the CI item to act on; left
 	// out, the Ticket's only CI item's.
 	Repository string `json:"repository,omitempty"`
@@ -292,7 +292,7 @@ func whyNotRerun(key string, t domain.Ticket) string {
 // NewFixTicketInput is new_fix_ticket's input: the CI failed Ticket and
 // the note, which is required.
 type NewFixTicketInput struct {
-	Ticket Ref    `json:"ticket"`
+	Ticket Ref    `json:"ticket" path:"n"`
 	Note   string `json:"note"`
 	// Repository is the Repository Name of the CI item to fix; left out,
 	// the Ticket's only CI item's.

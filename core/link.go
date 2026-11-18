@@ -222,7 +222,7 @@ func (c *Core) CreateLinkedTicket(ctx context.Context, key string, in CreateLink
 // UpdateLinkedSpecInput is update_linked_spec's input. A field left out
 // is unchanged.
 type UpdateLinkedSpecInput struct {
-	Spec  Ref     `json:"spec"`
+	Spec  Ref     `json:"spec" path:"n"`
 	Title *string `json:"title,omitempty"`
 	Body  *string `json:"body,omitempty"`
 	// Full asks for the Spec in place of the Acknowledgement.
@@ -273,7 +273,7 @@ func (c *Core) UpdateLinkedSpec(ctx context.Context, key string, in UpdateLinked
 // external parent changed), and url refreshes its Link's URL (the
 // external item moved), which isn't a definition edit.
 type UpdateLinkedTicketInput struct {
-	Ticket      Ref     `json:"ticket"`
+	Ticket      Ref     `json:"ticket" path:"n"`
 	Title       *string `json:"title,omitempty"`
 	Description *string `json:"description,omitempty"`
 	Spec        *Ref    `json:"spec,omitempty"`

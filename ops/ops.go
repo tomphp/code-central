@@ -1,0 +1,378 @@
+// Package ops defines each of Code Central's operations once (ADR 0063).
+// It sits between core and the front doors: it imports core and nothing
+// from a transport, and httpapi, mcp, client and cli import it. A
+// Definition carries an operation's name, Audience, write flag, HTTP route,
+// the Core call that serves it, its one-line documentation and the
+// behaviour that varies by door; each door derives its route, tool, schema,
+// client call or command from it, so adding an operation means one
+// definition, one Core method and one cross-door case.
+package ops
+
+import (
+	"context"
+	"reflect"
+	"strings"
+
+	"github.com/tomoram/code-central/core"
+)
+
+// Audience says which front doors may expose an operation.
+type Audience int
+
+const (
+	// AgentAndHuman operations are exposed by MCP, the CLI and HTTP.
+	AgentAndHuman Audience = iota
+	// HumanOnly operations are exposed over HTTP only.
+	HumanOnly
+	// IntegrationOnly operations are an Integration's, over HTTP only.
+	IntegrationOnly
+	// FactoryOnly operations are the Factory's and the CI Watcher's own,
+	// over HTTP only: agents in a session get no MCP tool or CLI command
+	// for them.
+	FactoryOnly
+)
+
+// Op is what every door knows of an operation: its name, its Audience and
+// whether it writes.
+type Op struct {
+	Name     string
+	Audience Audience
+	Write    bool
+}
+
+// Definition defines one operation over its input and result types. Core's
+// input type is the single source of each field's wire shape and its
+// documentation, through struct tags:
+//
+//	desc:"…"        the MCP schema description of the field
+//	required:"true" the MCP schema lists the field in required, in field order
+//	enum:"A,B"      an explicit enum in the MCP schema
+//	minItems:"n"    a list's minItems in the MCP schema
+//	path:"n"        the field the HTTP path's {n} binds to; the path wins;
+//	                any other name, such as "stage", binds that {name}
+//	query:"name"    a GET's query parameter where it differs from the JSON name
+//	mcp:"-"         left out of the MCP schema
+//	cli:"…"         the field's place on a derived CLI command: a positional
+//	                argument as "<id>" or "<label>...", a flag as "--commit <sha>"
+//
+// A json:"-" field is never on any door, except through a query tag, which
+// names a GET parameter the JSON body never carries.
+type Definition[In, Out any] struct {
+	Name     string
+	Audience Audience
+	Write    bool
+	// HTTP is the method and path pattern in net/http ServeMux syntax, as
+	// "POST /api/p/{key}/tickets/{n}/comment". {key} is the Project key.
+	HTTP string
+	// Doc is the one-line documentation: the MCP tool description and the
+	// CLI help text.
+	Doc string
+	// Descriptions overrides a field's desc tag by JSON name, for an input
+	// type shared by operations whose wording differs.
+	Descriptions map[string]string
+	// Enums gives a string field's enum in the MCP schema by JSON name,
+	// where the values aren't known until run time.
+	Enums map[string][]string
+	// Call serves the operation: usually the Core method as a method
+	// expression, such as (*core.Core).CreateSpec.
+	Call func(c *core.Core, ctx context.Context, key string, in In) (Out, error)
+	// HTTPDefaults, when set, is applied to the input the HTTP door decoded,
+	// after the path is bound and before the call: the HTTP API's defaults
+	// where they differ from the agent doors'.
+	HTTPDefaults func(in *In)
+}
+
+// Operation is a Definition with its types erased, as Definitions lists
+// them for the doors.
+type Operation interface {
+	Op() Op
+	// Route is the HTTP method and path pattern.
+	Route() (method, pattern string)
+	// Description is the one-line documentation.
+	Description() string
+	// Input is the input type, In.
+	Input() reflect.Type
+	// NewInput is a new zero input, as *In, for the doors to decode into.
+	NewInput() any
+	// FieldDescription is the field's description override, by JSON name.
+	FieldDescription(name string) (string, bool)
+	// FieldEnum is the field's enum values, by JSON name.
+	FieldEnum(name string) ([]string, bool)
+	// ApplyHTTPDefaults applies the HTTP defaults to in, a *In.
+	ApplyHTTPDefaults(in any)
+	// Invoke calls the operation with in, a *In.
+	Invoke(ctx context.Context, c *core.Core, key string, in any) (any, error)
+}
+
+func (d *Definition[In, Out]) Op() Op { return Op{Name: d.Name, Audience: d.Audience, Write: d.Write} }
+
+func (d *Definition[In, Out]) Route() (method, pattern string) {
+	method, pattern, _ = strings.Cut(d.HTTP, " ")
+	return method, pattern
+}
+
+func (d *Definition[In, Out]) Description() string { return d.Doc }
+
+func (d *Definition[In, Out]) Input() reflect.Type { return reflect.TypeFor[In]() }
+
+func (d *Definition[In, Out]) NewInput() any { return new(In) }
+
+func (d *Definition[In, Out]) FieldDescription(name string) (string, bool) {
+	desc, ok := d.Descriptions[name]
+	return desc, ok
+}
+
+func (d *Definition[In, Out]) FieldEnum(name string) ([]string, bool) {
+	values, ok := d.Enums[name]
+	return values, ok
+}
+
+func (d *Definition[In, Out]) ApplyHTTPDefaults(in any) {
+	if d.HTTPDefaults != nil {
+		d.HTTPDefaults(in.(*In))
+	}
+}
+
+func (d *Definition[In, Out]) Invoke(ctx context.Context, c *core.Core, key string, in any) (any, error) {
+	return d.Call(c, ctx, key, *in.(*In))
+}
+
+// entry is one row of the list: an operation by its definition.
+type entry struct {
+	op  Op
+	def Operation
+}
+
+func defined(d Operation) entry { return entry{op: d.Op(), def: d} }
+
+// All is the one list of operations, in order. Every front door builds its
+// routes, tools or commands from it, and the cross-door suite checks each
+// door against it.
+func All() []Op {
+	out := make([]Op, len(all))
+	for i, e := range all {
+		out[i] = e.op
+	}
+	return out
+}
+
+// Definitions are the operations with a Definition, in All's order.
+func Definitions() []Operation {
+	var out []Operation
+	for _, e := range all {
+		if e.def != nil {
+			out = append(out, e.def)
+		}
+	}
+	return out
+}
+
+// Lookup finds an operation by name.
+func Lookup(name string) (Op, bool) {
+	for _, e := range all {
+		if e.op.Name == name {
+			return e.op, true
+		}
+	}
+	return Op{}, false
+}
+
+// DefinitionOf is the named operation's Definition, when it has one.
+func DefinitionOf(name string) (Operation, bool) {
+	for _, e := range all {
+		if e.op.Name == name && e.def != nil {
+			return e.def, true
+		}
+	}
+	return nil, false
+}
+
+// all is the list. Add a new operation here first, by its definition.
+var all = []entry{
+	defined(CreateProject),
+	defined(GetProject),
+	defined(CreateSpec),
+	defined(CreateTicket),
+	defined(GetTicket),
+	defined(FindTickets),
+	// Defining work.
+	defined(EditSpec),
+	defined(EditTicket),
+	defined(AddLabels),
+	defined(RemoveLabels),
+	defined(SetTags),
+	defined(RemoveTags),
+	defined(Comment),
+	defined(Approve),
+	defined(Defer),
+
+	// The delivery loop (ticket 25).
+	defined(Claim),
+	defined(Finish),
+	defined(Accept),
+	defined(Implement),
+	defined(Reject),
+
+	// Silent Claims and sessions (ticket 31).
+	defined(SetSession),
+	defined(Release),
+	// Blockers, Replacements and finding work (ticket 28).
+	defined(AddBlocker),
+	defined(RemoveBlocker),
+	defined(Cancel),
+	defined(GetSpec),
+	defined(FindSpecs),
+
+	// Failure Reports and giving up (ticket 30).
+	defined(ReportFailure),
+	defined(GiveUp),
+	// The agent sends Accepted work back on a conflict (ticket 72).
+	defined(SendBack),
+	defined(ToDraft),
+
+	// init's teaching files and modes (ticket 41).
+	defined(SetProjectMode),
+
+	// The published workflow (ticket 26).
+	defined(GetWorkflow),
+
+	// Rounds and Questions (ticket 29).
+	defined(PostRound),
+	defined(PickUpAnswers),
+	defined(Answer),
+	defined(AcceptRecommended),
+	defined(DismissQuestion),
+	// The roll-up of a Spec's Questions is HTTP-only, for the UI.
+	defined(GetSpecQuestions),
+
+	// Needs Me, moving by hand and Projects (ticket 32).
+	defined(NeedsMe),
+	defined(ListProjects),
+	defined(Move),
+	defined(RenameProject),
+	// The Landing Method (code-central-173).
+	defined(SetLandingMethod),
+	// Subagent Exploration (code-central-441).
+	defined(SetSubagentExploration),
+	defined(SetModelAssignment),
+	// Auto-accept (code-central-536): the human's alone, over HTTP only.
+	defined(SetAutoAccept),
+	// Focus Kinds (Spec code-central-550).
+	defined(SetFocusKinds),
+	// Repositories (Spec code-central-848): the human's alone, over HTTP
+	// and the CLI's repository command, never MCP.
+	defined(AddRepository),
+	defined(EditRepository),
+	defined(RemoveRepository),
+	defined(SetLandingOrder),
+
+	// The Integration contract (ticket 42).
+	defined(CreateLinkedSpec),
+	defined(CreateLinkedTicket),
+	defined(UpdateLinkedSpec),
+	defined(UpdateLinkedTicket),
+	defined(SetExternalState),
+	defined(FindLinked),
+	defined(Unlink),
+
+	// Scratch Import (ticket 40).
+	defined(GetImportGuide),
+	defined(Import),
+
+	// Finished work and Archived Projects (ticket 39).
+	defined(ArchiveProject),
+	defined(UnarchiveProject),
+
+	// Requirements and the local Factory (Spec 66).
+	defined(SubmitRequirement),
+	defined(Land),
+	defined(GetStageGuide),
+
+	// Maps and Prototypes (Spec code-central-213).
+	defined(SubmitMap),
+	defined(SubmitPrototype),
+	defined(SubmitSmallChange),
+	// Retros (Spec code-central-646).
+	defined(SubmitRetro),
+
+	// Options, the human's global preferences (Spec code-central-160).
+	// HTTP only: no MCP tool and no CLI command.
+	defined(GetOptions),
+	defined(SetOptions),
+
+	// CI Tracking (Spec code-central-247).
+	defined(SetCITracking),
+	// A Repository's CI entry (Spec code-central-848).
+	defined(SetRepositoryCI),
+	defined(ReportPushRemote),
+	defined(AddCIRule),
+	defined(EditCIRule),
+	defined(RemoveCIRule),
+	// The CI Watcher's own (code-central-253).
+	defined(GetCIWatch),
+	defined(ReportCIWatcherStatus),
+	// Tracking a pushed Ticket's CI Runs (code-central-256).
+	defined(ReportPushedCommit),
+	// The Pull Request Watcher's own (code-central-388).
+	defined(GetPullRequestWatch),
+	defined(ReportPullRequest),
+	defined(ReportPullRequestWatcherStatus),
+	defined(ReportCIRuns),
+	// Land per Spec (code-central-371).
+	defined(ReportSpecMerge),
+	// Spec merge Tickets (code-central-542).
+	defined(OpenSpecMerge),
+	// CI failed and its failure options (code-central-261).
+	defined(LandAnyway),
+	// Re-run failed jobs (code-central-265).
+	defined(RerunCI),
+	// Send back to fix and New fix Ticket (code-central-264).
+	defined(NewFixTicket),
+
+	// GitHub Issues (Spec code-central-279).
+	defined(SetGitHubIssues),
+	// The Issue Watcher's own (code-central-285).
+	defined(GetIssueWatch),
+	defined(ReportIssueWatcherStatus),
+	// New issue and the triage actions (code-central-287).
+	defined(KeepAsDraft),
+	// Write-backs and Won't fix (code-central-289).
+	defined(ReportIssueWritten),
+	defined(WontFix),
+	// To Requirement and the outbound Link (code-central-290).
+	defined(ToRequirement),
+	// Azure Boards (Spec code-central-894).
+	defined(SetAzureBoards),
+	// The Work Item Watcher's own; it reports each comment written with
+	// report_issue_written.
+	defined(GetWorkItemWatch),
+	defined(ReportWorkItemWatcherStatus),
+	// The Model Choice (Spec code-central-301).
+	defined(GetModelChoice),
+	defined(ReportModelChoice),
+	// The Models section of Project Options (Spec code-central-301).
+	defined(SetModels),
+	// The Reported Models (code-central-311).
+	defined(ReportModels),
+	defined(ReportHeartbeat),
+	// The Factory's base under Pull Request (code-central-394).
+	defined(ReportBase),
+	// The Factory's clones of the Repositories (Spec code-central-848).
+	defined(ReportRepositories),
+	// A Ticket's Changed Repositories, live, and the Factory's finish
+	// check (Spec code-central-848).
+	defined(ReportChangedRepositories),
+	defined(FailFinish),
+
+	// Chat (Spec code-central-633): the human's Conversation and the
+	// Factory's long-poll for its turns. Chat writes change only memory.
+	defined(GetChat),
+	defined(StartConversation),
+	defined(SendChatMessage),
+	defined(StopChatReply),
+	defined(NextChatWork),
+
+	// The Factory's wake (Spec code-central-743): a long-poll that ends
+	// when a write its poll acts on reaches the Project.
+	defined(NextFactoryWake),
+}

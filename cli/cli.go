@@ -21,6 +21,7 @@ import (
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/home"
 	"github.com/tomoram/code-central/notify"
+	"github.com/tomoram/code-central/ops"
 )
 
 // Env is everything a command touches outside itself, so tests can run
@@ -80,10 +81,13 @@ func (e usageError) Error() string { return e.msg }
 func usagef(format string, args ...any) error { return usageError{fmt.Sprintf(format, args...)} }
 
 // command is one subcommand. Operation commands carry the core operation
-// they expose; the cross-door suite checks them against core.Operations.
+// they expose; the cross-door suite checks them against ops.All().
 type command struct {
 	op    string // core operation name, "" for CLI-only commands
 	usage string
+	// help is what the command does, which --help prints after the usage:
+	// the operation's one-line documentation.
+	help string
 	// hidden leaves the command out of the usage: the service runs it.
 	hidden bool
 	run    func(ctx context.Context, e Env, args []string) error
@@ -101,36 +105,41 @@ func Commands() map[string]string {
 
 var commands map[string]command
 
+// An operation's command is derived from its definition where the input
+// type's cli tags give today's command (derive.go). The others are
+// hand-written: long input through --file or stdin, get-ticket's and
+// find-tickets' default parts and brief answer, and claim's and
+// set-session's session from the environment.
 func init() {
 	commands = map[string]command{
 		"init":          {usage: "init [--key <key>] [--local | --committed]  set this repository up as a Project (--local keeps init's files out of git)", run: runInit},
-		"create-spec":   {op: "create_spec", usage: "create-spec --title <t> [--body <md> | --file <path|->] [--full]", run: runCreateSpec},
-		"create-ticket": {op: "create_ticket", usage: "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--blocked-by <id>]... [--tag <key>=<value>]... [--description <md> | --file <path|->] [--full]", run: runCreateTicket},
-		"get-ticket":    {op: "get_ticket", usage: "get-ticket <id> [--part claims|failure_reports|comments|rounds|moves|edits]...", run: runGetTicket},
-		"find-tickets":  {op: "find_tickets", usage: "find-tickets [--state <s>]... [--title <t>] [--label <l>]... [--tag <key>=<value>]... [--spec <id>] [--claimable[=false]] [--full]", run: runFindTickets},
+		"create-spec":   handWritten(ops.CreateSpec, "create-spec --title <t> [--body <md> | --file <path|->] [--full]", runCreateSpec),
+		"create-ticket": handWritten(ops.CreateTicket, "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--blocked-by <id>]... [--tag <key>=<value>]... [--description <md> | --file <path|->] [--full]", runCreateTicket),
+		"get-ticket":    handWritten(ops.GetTicket, "get-ticket <id> [--part claims|failure_reports|comments|rounds|moves|edits]...", runGetTicket),
+		"find-tickets":  handWritten(ops.FindTickets, "find-tickets [--state <s>]... [--title <t>] [--label <l>]... [--tag <key>=<value>]... [--spec <id>] [--claimable[=false]] [--full]", runFindTickets),
 
-		"edit-spec":     {op: "edit_spec", usage: "edit-spec <id> [--title <t>] [--body <md> | --file <path|->] [--full]", run: runEditSpec},
-		"edit-ticket":   {op: "edit_ticket", usage: "edit-ticket <id> [--title <t>] [--description <md> | --file <path|->] [--full]", run: runEditTicket},
-		"add-labels":    {op: "add_labels", usage: "add-labels <id> <label>...", run: runAddLabels},
-		"remove-labels": {op: "remove_labels", usage: "remove-labels <id> <label>...", run: runRemoveLabels},
-		"set-tags":      {op: "set_tags", usage: "set-tags <id> <key>=<value>...", run: runSetTags},
-		"remove-tags":   {op: "remove_tags", usage: "remove-tags <id> <key>...", run: runRemoveTags},
-		"comment":       {op: "comment", usage: "comment <id> [--body <md> | --file <path|->] [--full]", run: runComment},
-		"approve":       {op: "approve", usage: "approve <id> [--full]", run: runApprove},
-		"defer":         {op: "defer", usage: "defer <id> [--reason <text> | --file <path|->] [--full]", run: runDefer},
-		"claim":         {op: "claim", usage: "claim [--spec <id> | --ticket <id>] [--session <id>] [--working-dir <dir>] [--resume-command <command>]", run: runClaim},
-		"finish":        {op: "finish", usage: "finish <id> --claim <claim-id> [--summary <md> | --file <path|->] [--branch <branch>] [--commit <sha>] [--repositories <json>] [--recommendation implement|split] [--full]  repositories as a JSON array of {name, branch, commit}", run: runFinish},
+		"edit-spec":     handWritten(ops.EditSpec, "edit-spec <id> [--title <t>] [--body <md> | --file <path|->] [--full]", runEditSpec),
+		"edit-ticket":   handWritten(ops.EditTicket, "edit-ticket <id> [--title <t>] [--description <md> | --file <path|->] [--full]", runEditTicket),
+		"add-labels":    derive(ops.AddLabels, (*client.Client).AddLabels, ""),
+		"remove-labels": derive(ops.RemoveLabels, (*client.Client).RemoveLabels, ""),
+		"set-tags":      derive(ops.SetTags, (*client.Client).SetTags, ""),
+		"remove-tags":   derive(ops.RemoveTags, (*client.Client).RemoveTags, ""),
+		"comment":       handWritten(ops.Comment, "comment <id> [--body <md> | --file <path|->] [--full]", runComment),
+		"approve":       derive(ops.Approve, (*client.Client).Approve, ""),
+		"defer":         handWritten(ops.Defer, "defer <id> [--reason <text> | --file <path|->] [--full]", runDefer),
+		"claim":         handWritten(ops.Claim, "claim [--spec <id> | --ticket <id>] [--session <id>] [--working-dir <dir>] [--resume-command <command>]", runClaim),
+		"finish":        handWritten(ops.Finish, "finish <id> --claim <claim-id> [--summary <md> | --file <path|->] [--branch <branch>] [--commit <sha>] [--repositories <json>] [--recommendation implement|split] [--full]  repositories as a JSON array of {name, branch, commit}", runFinish),
 
-		"set-session": {op: "set_session", usage: "set-session <id> --claim <claim-id> [--session <id>] [--working-dir <dir>] [--resume-command <command>] [--full]  (session defaults to $CLAUDE_CODE_SESSION_ID)", run: runSetSession},
+		"set-session": handWritten(ops.SetSession, "set-session <id> --claim <claim-id> [--session <id>] [--working-dir <dir>] [--resume-command <command>] [--full]  (session defaults to $CLAUDE_CODE_SESSION_ID)", runSetSession),
 		"ping":        {usage: "ping [--session <id>]  mark this session active (reads hook JSON on stdin); always exits 0", run: runPing},
 		"hook":        {usage: "hook session-id  PreToolUse hook: add session_id and client_version to the tool input", run: runHook},
 		// Failure Reports and giving up (ticket 30).
-		"report-failure": {op: "report_failure", usage: "report-failure <id> --claim <claim-id> --what-broke <md> --why <md> --what-to-fix <md> --where-work-stands <md> | --file <json-path|-> [--full]", run: runReportFailure},
-		"give-up":        {op: "give_up", usage: "give-up <id> --claim <claim-id> [--note <md> | --file <path|->] [--full]", run: runGiveUp},
-		"send-back":      {op: "send_back", usage: "send-back <id> [--note <md> | --file <path|->] [--full]  Accepted work that can't land (a merge conflict) back to Ready; the note is required", run: runSendBack},
+		"report-failure": handWritten(ops.ReportFailure, "report-failure <id> --claim <claim-id> --what-broke <md> --why <md> --what-to-fix <md> --where-work-stands <md> | --file <json-path|-> [--full]", runReportFailure),
+		"give-up":        handWritten(ops.GiveUp, "give-up <id> --claim <claim-id> [--note <md> | --file <path|->] [--full]", runGiveUp),
+		"send-back":      handWritten(ops.SendBack, "send-back <id> [--note <md> | --file <path|->] [--full]  Accepted work that can't land (a merge conflict) back to Ready; the note is required", runSendBack),
 		// Rounds and wait (ticket 29).
-		"post-round":      {op: "post_round", usage: "post-round <id> --claim <claim-id> [--session <id>] [--questions <json> | --file <path|->] [--full]  Questions as a JSON array of {title, body, recommended?}, on stdin by default", run: runPostRound},
-		"pick-up-answers": {op: "pick_up_answers", usage: "pick-up-answers <id> --claim <claim-id>", run: runPickUpAnswers},
+		"post-round":      handWritten(ops.PostRound, "post-round <id> --claim <claim-id> [--session <id>] [--questions <json> | --file <path|->] [--full]  Questions as a JSON array of {title, body, recommended?}, on stdin by default", runPostRound),
+		"pick-up-answers": derive(ops.PickUpAnswers, (*client.Client).PickUpAnswers, ""),
 		"wait":            {usage: "wait <id>  wait for the Ticket to leave Needs Answer: exit 0 when Answered, 3 when it left for another State", run: runWait},
 	}
 }
@@ -176,6 +185,12 @@ func Run(ctx context.Context, args []string, e Env) int {
 	switch {
 	case err == nil:
 		return exitOK
+	case errors.Is(err, flag.ErrHelp):
+		fmt.Fprintf(e.Stdout, "usage: code-central %s\n", cmd.usage)
+		if cmd.help != "" {
+			fmt.Fprintf(e.Stdout, "\n%s\n", cmd.help)
+		}
+		return exitOK
 	case errors.As(err, &ec):
 		return int(ec)
 	case errors.As(err, &ue):
@@ -217,10 +232,13 @@ func flagSet(name string) *flag.FlagSet {
 }
 
 // parse parses flags that may be interspersed with positional arguments.
+// -h or --help is flag.ErrHelp, for Run to print the command's help.
 func parse(fs *flag.FlagSet, args []string) ([]string, error) {
 	var positional []string
 	for {
-		if err := fs.Parse(args); err != nil {
+		if err := fs.Parse(args); errors.Is(err, flag.ErrHelp) {
+			return nil, err
+		} else if err != nil {
 			return nil, usageError{err.Error()}
 		}
 		args = fs.Args()

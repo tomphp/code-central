@@ -39,7 +39,7 @@ func TestTheWatchFailsAReplyWhoseFactoryWentOfflineAndSaysSo(t *testing.T) {
 	default:
 		t.Fatal("the tick sent no chat.changed")
 	}
-	v, err := f.core.GetChat(ctx, "acme")
+	v, err := f.core.GetChat(ctx, "acme", core.GetChatInput{})
 	if err != nil {
 		t.Fatal(err)
 	}

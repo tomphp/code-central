@@ -230,7 +230,7 @@ func countedRuns(commit string, runs []domain.CIRun) map[int64]domain.CIRun {
 // ReportPushedCommitInput is the Factory's report_pushed_commit(ticket,
 // commit, repository?, full?).
 type ReportPushedCommitInput struct {
-	Ticket Ref    `json:"ticket"`
+	Ticket Ref    `json:"ticket" path:"n"`
 	Commit string `json:"commit"`
 	// Branch is the branch the Factory pushed the commit as, so that the
 	// Pull Request Watcher knows the pull request's head branch.

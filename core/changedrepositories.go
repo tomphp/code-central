@@ -25,9 +25,9 @@ import (
 // RepositoryWork is a Ticket's branch and its head commit in one
 // Repository, as finish and report_changed_repositories take them.
 type RepositoryWork struct {
-	Name   string `json:"name"`
-	Branch string `json:"branch"`
-	Commit string `json:"commit"`
+	Name   string `json:"name" desc:"The Repository Name." required:"true"`
+	Branch string `json:"branch" desc:"The branch the work is on there." required:"true"`
+	Commit string `json:"commit" desc:"The branch's head commit there." required:"true"`
 }
 
 // ChangedRepositoryView is one of a Ticket's Changed Repositories as
@@ -346,7 +346,7 @@ func specRepositories(p domain.Project, tickets []domain.Ticket) []string {
 // Repositories whose branch holds the Ticket's work so far, each with its
 // branch and head commit.
 type ReportChangedRepositoriesInput struct {
-	Ticket       Ref              `json:"ticket"`
+	Ticket       Ref              `json:"ticket" path:"n"`
 	ClaimID      string           `json:"claim_id"`
 	Repositories []RepositoryWork `json:"repositories"`
 	// Full asks for the Ticket in place of the Acknowledgement.

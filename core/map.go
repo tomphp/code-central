@@ -24,13 +24,13 @@ func MapSections() []string {
 // SubmitMapInput is submit_map's input: the Map's free text, whose first
 // line becomes the Spec's title.
 type SubmitMapInput struct {
-	Text string `json:"text"`
+	Text string `json:"text" desc:"The Map's text, in Markdown; its first line becomes the Spec's title." required:"true"`
 	// Draft saves every Ticket the submit writes as Draft, not Ready, so
 	// nothing is claimed until the human moves them to Ready.
-	Draft bool `json:"draft,omitempty"`
+	Draft bool `json:"draft,omitempty" desc:"Save the Charting Ticket as Draft instead of Ready, so nothing is claimed until the human moves it to Ready."`
 	// Full asks for the Spec and Charting Ticket in place of their
 	// Acknowledgements.
-	Full bool `json:"full,omitempty"`
+	Full bool `json:"full,omitempty" desc:"Return the whole Spec and Charting Ticket instead of their acknowledgements."`
 }
 
 // SubmitMapResult is the new Map: its Spec and its Charting Ticket, each

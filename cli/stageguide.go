@@ -4,11 +4,12 @@ import (
 	"context"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ops"
 )
 
 // Stage Guides (ticket 73).
 func init() {
-	commands["get-stage-guide"] = command{op: "get_stage_guide", usage: "get-stage-guide grilling|spec|tickets|implementation  print the Project's Stage Guide", run: runStageGuide}
+	commands["get-stage-guide"] = handWritten(ops.GetStageGuide, "get-stage-guide grilling|spec|tickets|implementation  print the Project's Stage Guide", runStageGuide)
 }
 
 // runStageGuide prints the configured Project's guide.

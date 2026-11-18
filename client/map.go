@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ops"
 )
 
 // SubmitMap is submit_map: the Spec and Charting Ticket are decoded as an
@@ -14,7 +15,7 @@ func (c *Client) SubmitMap(ctx context.Context, key string, in core.SubmitMapInp
 		Spec     json.RawMessage `json:"spec"`
 		Charting json.RawMessage `json:"charting"`
 	}
-	if err := c.do(ctx, "POST", scoped(key, "submit_map"), in, &raw); err != nil {
+	if err := request(ctx, c, ops.SubmitMap, key, in, &raw); err != nil {
 		return core.SubmitMapResult{}, err
 	}
 	spec, err := decodeWritten[core.SpecView](raw.Spec, in.Full)

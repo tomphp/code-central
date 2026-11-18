@@ -13,245 +13,19 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/ops"
 )
 
-// Routes maps every core operation to its HTTP method and path pattern
-// (net/http ServeMux syntax). A test checks it against core.Operations.
-var Routes = map[string]string{
-	"create_project": "POST /api/projects/create_project",
-	"get_project":    "GET /api/projects/{key}",
-	"create_spec":    "POST /api/p/{key}/create_spec",
-	"create_ticket":  "POST /api/p/{key}/create_ticket",
-	"get_ticket":     "GET /api/p/{key}/tickets/{n}",
-	"find_tickets":   "GET /api/p/{key}/tickets",
-
-	"edit_spec":     "POST /api/p/{key}/specs/{n}/edit_spec",
-	"edit_ticket":   "POST /api/p/{key}/tickets/{n}/edit_ticket",
-	"add_labels":    "POST /api/p/{key}/add_labels",
-	"remove_labels": "POST /api/p/{key}/remove_labels",
-	"set_tags":      "POST /api/p/{key}/set_tags",
-	"remove_tags":   "POST /api/p/{key}/remove_tags",
-	"comment":       "POST /api/p/{key}/tickets/{n}/comment",
-	"approve":       "POST /api/p/{key}/tickets/{n}/approve",
-	"defer":         "POST /api/p/{key}/tickets/{n}/defer",
-
-	"claim":     "POST /api/p/{key}/claim",
-	"finish":    "POST /api/p/{key}/tickets/{n}/finish",
-	"accept":    "POST /api/p/{key}/tickets/{n}/accept",
-	"implement": "POST /api/p/{key}/tickets/{n}/implement",
-	"reject":    "POST /api/p/{key}/tickets/{n}/reject",
-
-	"set_session":  "POST /api/p/{key}/tickets/{n}/set_session",
-	"release":      "POST /api/p/{key}/tickets/{n}/release",
-	"get_workflow": "GET /api/workflow",
-}
-
 type handlerFunc func(c *core.Core, r *http.Request) (any, error)
-
-var handlers = map[string]handlerFunc{
-	"create_project": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.CreateProjectInput
-		if err := decodeBody(r, &in); err != nil {
-			return nil, err
-		}
-		return c.CreateProject(r.Context(), in)
-	},
-	"get_project": func(c *core.Core, r *http.Request) (any, error) {
-		return c.GetProject(r.Context(), r.PathValue("key"))
-	},
-	"create_spec": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.CreateSpecInput
-		if err := decodeBody(r, &in); err != nil {
-			return nil, err
-		}
-		return c.CreateSpec(r.Context(), r.PathValue("key"), in)
-	},
-	"create_ticket": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.CreateTicketInput
-		if err := decodeBody(r, &in); err != nil {
-			return nil, err
-		}
-		return c.CreateTicket(r.Context(), r.PathValue("key"), in)
-	},
-	"get_ticket": func(c *core.Core, r *http.Request) (any, error) {
-		q := r.URL.Query()
-		if err := onlyParams(q, "part"); err != nil {
-			return nil, err
-		}
-		// With no part named, the HTTP API returns the whole Ticket: the
-		// UI and the Factory read every part. The whole Ticket carries the
-		// Model Choice too, which the UI's Ticket panel shows; the CLI, an
-		// agent door, names its parts, so it leaves it out as MCP does.
-		in := core.GetTicketInput{Ticket: core.Ref(r.PathValue("n")), Parts: q["part"]}
-		if len(in.Parts) == 0 {
-			in.Parts, in.WithModelChoice = core.TicketParts(), true
-		}
-		return c.GetTicket(r.Context(), r.PathValue("key"), in)
-	},
-	"find_tickets": func(c *core.Core, r *http.Request) (any, error) {
-		q := r.URL.Query()
-		if err := onlyParams(q, "state", "title", "label", "tag", "spec", "claimable", "full", "part"); err != nil {
-			return nil, err
-		}
-		in := core.FindTicketsInput{Title: q.Get("title"), Labels: q["label"], Spec: core.Ref(q.Get("spec")), Parts: q["part"]}
-		for _, s := range q["state"] {
-			in.State = append(in.State, domain.State(s))
-		}
-		var err error
-		if in.Tags, err = tagParams(q); err != nil {
-			return nil, err
-		}
-		if in.Claimable, err = boolParam(q, "claimable"); err != nil {
-			return nil, err
-		}
-		full, err := boolParam(q, "full")
-		if err != nil {
-			return nil, err
-		}
-		if full == nil || !*full {
-			if len(in.Parts) > 0 {
-				return nil, &core.Error{Code: core.Invalid, Field: "part", Message: "part names the parts of full Tickets, so it needs full=true"}
-			}
-			return c.FindTickets(r.Context(), r.PathValue("key"), in)
-		}
-		// As get_ticket does, with no part named the HTTP API returns each
-		// whole Ticket, with its Model Choice.
-		in.Full = true
-		if len(in.Parts) == 0 {
-			in.Parts, in.WithModelChoice = core.TicketParts(), true
-		}
-		return c.FindTicketViews(r.Context(), r.PathValue("key"), in)
-	},
-
-	"edit_spec": func(c *core.Core, r *http.Request) (any, error) {
-		in, err := pathBody(r, func(in *core.EditSpecInput) *core.Ref { return &in.Spec })
-		if err != nil {
-			return nil, err
-		}
-		return c.EditSpec(r.Context(), r.PathValue("key"), in)
-	},
-	"edit_ticket": func(c *core.Core, r *http.Request) (any, error) {
-		in, err := pathBody(r, func(in *core.EditTicketInput) *core.Ref { return &in.Ticket })
-		if err != nil {
-			return nil, err
-		}
-		return c.EditTicket(r.Context(), r.PathValue("key"), in)
-	},
-	"add_labels": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.LabelsInput
-		if err := decodeBody(r, &in); err != nil {
-			return nil, err
-		}
-		return c.AddLabels(r.Context(), r.PathValue("key"), in)
-	},
-	"remove_labels": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.LabelsInput
-		if err := decodeBody(r, &in); err != nil {
-			return nil, err
-		}
-		return c.RemoveLabels(r.Context(), r.PathValue("key"), in)
-	},
-	"set_tags": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.SetTagsInput
-		if err := decodeBody(r, &in); err != nil {
-			return nil, err
-		}
-		return c.SetTags(r.Context(), r.PathValue("key"), in)
-	},
-	"remove_tags": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.RemoveTagsInput
-		if err := decodeBody(r, &in); err != nil {
-			return nil, err
-		}
-		return c.RemoveTags(r.Context(), r.PathValue("key"), in)
-	},
-	"comment": func(c *core.Core, r *http.Request) (any, error) {
-		in, err := pathBody(r, func(in *core.CommentInput) *core.Ref { return &in.Ticket })
-		if err != nil {
-			return nil, err
-		}
-		return c.Comment(r.Context(), r.PathValue("key"), in)
-	},
-	"approve": func(c *core.Core, r *http.Request) (any, error) {
-		in, err := pathBody(r, func(in *core.TicketInput) *core.Ref { return &in.Ticket })
-		if err != nil {
-			return nil, err
-		}
-		return c.Approve(r.Context(), r.PathValue("key"), in)
-	},
-	"defer": func(c *core.Core, r *http.Request) (any, error) {
-		in, err := pathBody(r, func(in *core.DeferInput) *core.Ref { return &in.Ticket })
-		if err != nil {
-			return nil, err
-		}
-		return c.Defer(r.Context(), r.PathValue("key"), in)
-	},
-	"claim": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.ClaimInput
-		if err := decodeBody(r, &in); err != nil {
-			return nil, err
-		}
-		return c.Claim(r.Context(), r.PathValue("key"), in)
-	},
-	"finish": func(c *core.Core, r *http.Request) (any, error) {
-		in, err := pathBody(r, func(in *core.FinishInput) *core.Ref { return &in.Ticket })
-		if err != nil {
-			return nil, err
-		}
-		return c.Finish(r.Context(), r.PathValue("key"), in)
-	},
-	"accept": func(c *core.Core, r *http.Request) (any, error) {
-		in, err := pathBody(r, func(in *core.TicketInput) *core.Ref { return &in.Ticket })
-		if err != nil {
-			return nil, err
-		}
-		return c.Accept(r.Context(), r.PathValue("key"), in)
-	},
-	"implement": func(c *core.Core, r *http.Request) (any, error) {
-		in, err := pathBody(r, func(in *core.TicketInput) *core.Ref { return &in.Ticket })
-		if err != nil {
-			return nil, err
-		}
-		return c.Implement(r.Context(), r.PathValue("key"), in)
-	},
-	"reject": func(c *core.Core, r *http.Request) (any, error) {
-		in, err := pathBody(r, func(in *core.RejectInput) *core.Ref { return &in.Ticket })
-		if err != nil {
-			return nil, err
-		}
-		return c.Reject(r.Context(), r.PathValue("key"), in)
-	},
-
-	"set_session": func(c *core.Core, r *http.Request) (any, error) {
-		in, err := pathBody(r, func(in *core.SetSessionInput) *core.Ref { return &in.Ticket })
-		if err != nil {
-			return nil, err
-		}
-		return c.SetSession(r.Context(), r.PathValue("key"), in)
-	},
-	"release": func(c *core.Core, r *http.Request) (any, error) {
-		in, err := pathBody(r, func(in *core.ReleaseInput) *core.Ref { return &in.Ticket })
-		if err != nil {
-			return nil, err
-		}
-		return c.Release(r.Context(), r.PathValue("key"), in)
-	},
-	"get_workflow": func(c *core.Core, r *http.Request) (any, error) {
-		if err := onlyParams(r.URL.Query()); err != nil {
-			return nil, err
-		}
-		return c.GetWorkflow(r.Context())
-	},
-}
 
 // Register adds the HTTP API under /api/ to the service's one mux. The
 // request's Actor is already in its context (server.Guard reads the
 // Actor header); without one it is agent.
 func Register(mux *http.ServeMux, c *core.Core) {
 	all := map[string]handlerFunc{WaitPath: wait, TranscriptPath: transcript, UsagePath: usageRead, SessionUsagePath: sessionUsageRead, CIOverviewPath: ciOverviewRead}
-	for name, pattern := range Routes {
-		all[pattern] = handlers[name]
+	for _, op := range ops.Definitions() {
+		method, pattern := op.Route()
+		all[method+" "+pattern] = derived[op.Op().Name]
 	}
 	for pattern, h := range all {
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
@@ -323,18 +97,6 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
-}
-
-// pathBody decodes a per-item action's body strictly, then sets the
-// item's ref (its Ticket or Spec) from the path's {n}, which wins over
-// any ref in the body. Every per-item route binds its path this way.
-func pathBody[In any](r *http.Request, item func(*In) *core.Ref) (In, error) {
-	var in In
-	if err := decodeBody(r, &in); err != nil {
-		return in, err
-	}
-	*item(&in) = core.Ref(r.PathValue("n"))
-	return in, nil
 }
 
 // decodeBody decodes a JSON body strictly: unknown fields are invalid.

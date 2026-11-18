@@ -11,20 +11,20 @@ import (
 
 // QuestionInput is one Question of a Round being posted.
 type QuestionInput struct {
-	Title       string `json:"title"`
-	Body        string `json:"body"`
-	Recommended string `json:"recommended,omitempty"`
+	Title       string `json:"title" desc:"A short title." required:"true"`
+	Body        string `json:"body" desc:"The Question in Markdown, with any choices as prose." required:"true"`
+	Recommended string `json:"recommended,omitempty" desc:"Your recommended answer, if you have one."`
 }
 
 // PostRoundInput is post_round's input.
 type PostRoundInput struct {
-	Ticket    Ref             `json:"ticket"`
-	ClaimID   string          `json:"claim_id"`
-	SessionID string          `json:"session_id,omitempty"`
-	Questions []QuestionInput `json:"questions"`
+	Ticket    Ref             `json:"ticket" path:"n" desc:"The Ticket." required:"true"`
+	ClaimID   string          `json:"claim_id" desc:"The Claim ID claim returned." required:"true"`
+	SessionID string          `json:"session_id,omitempty" desc:"Your session ID, shown to the human for resuming you."`
+	Questions []QuestionInput `json:"questions" minItems:"1" desc:"The Questions, each with a title, a body and an optional recommended answer." required:"true"`
 	// Full asks for the Round number and the next step without the
 	// Acknowledgement: post_round's record is its Round, not the Ticket.
-	Full bool `json:"full,omitempty"`
+	Full bool `json:"full,omitempty" desc:"Return only the Round number and the next step instead of the acknowledgement."`
 }
 
 // PostRoundResult is post_round's result: the Acknowledgement (none with
@@ -37,8 +37,8 @@ type PostRoundResult struct {
 
 // PickUpAnswersInput is pick_up_answers' input.
 type PickUpAnswersInput struct {
-	Ticket  Ref    `json:"ticket"`
-	ClaimID string `json:"claim_id"`
+	Ticket  Ref    `json:"ticket" path:"n" desc:"The Ticket." required:"true" cli:"<id>"`
+	ClaimID string `json:"claim_id" desc:"The Claim ID claim returned." required:"true" cli:"--claim <claim-id>"`
 }
 
 // PickUpAnswersResult is the latest Round with every answer and
@@ -52,7 +52,7 @@ type PickUpAnswersResult struct {
 // AnswerInput is the human's answer(question, text). Questions are
 // numbered across their Ticket.
 type AnswerInput struct {
-	Ticket   Ref    `json:"ticket"`
+	Ticket   Ref    `json:"ticket" path:"n"`
 	Question int    `json:"question"`
 	Text     string `json:"text"`
 	// Full asks for the Ticket in place of the Acknowledgement.
@@ -61,7 +61,7 @@ type AnswerInput struct {
 
 // DismissQuestionInput is the human's dismiss_question(question).
 type DismissQuestionInput struct {
-	Ticket   Ref `json:"ticket"`
+	Ticket   Ref `json:"ticket" path:"n"`
 	Question int `json:"question"`
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
@@ -69,7 +69,7 @@ type DismissQuestionInput struct {
 
 // AcceptRecommendedInput is the human's accept_recommended(round).
 type AcceptRecommendedInput struct {
-	Ticket Ref `json:"ticket"`
+	Ticket Ref `json:"ticket" path:"n"`
 	Round  int `json:"round"`
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
