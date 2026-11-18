@@ -283,6 +283,8 @@ a.filter { text-decoration: none; }
 .project-options-repository-form { margin-top: 12px; }
 .field { margin: 12px 0 0; }
 .field input { min-width: 0; }
+.project-options-add { display: flex; align-items: flex-end; gap: 10px; }
+.project-options-repositories > li > .warning { margin: 6px 0; }
 .project-options-actions { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 .stage-guide-row + .stage-guide-row { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
 .project-options-models { border-collapse: collapse; margin-top: 12px; width: 100%; }

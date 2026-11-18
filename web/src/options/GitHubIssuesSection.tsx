@@ -8,6 +8,7 @@ import type {
   ProjectRow,
 } from "../api/types";
 import { Button } from "../controls/Button";
+import { ErrorBanner } from "../controls/ErrorBanner";
 import { Field } from "../controls/Field";
 import { githubRepository } from "./githubRepository";
 import { Refusal } from "./Refusal";
@@ -171,18 +172,23 @@ export function GitHubIssuesSection({ project }: { project: ProjectRow }) {
             return (
               <li key={repository} aria-label={repository}>
                 <span className="repo-name">{repository}</span>
-                {status && (
-                  <span className={status.error ? "warning" : "muted"}>
-                    {": "}
-                    {status.text}
-                    {status.fix && (
-                      <>
-                        <br />
-                        {status.fix}
-                      </>
-                    )}
-                  </span>
-                )}{" "}
+                {status &&
+                  (status.error ? (
+                    <ErrorBanner>
+                      {status.text}
+                      {status.fix && (
+                        <>
+                          <br />
+                          {status.fix}
+                        </>
+                      )}
+                    </ErrorBanner>
+                  ) : (
+                    <span className="muted">
+                      {": "}
+                      {status.text}
+                    </span>
+                  ))}{" "}
                 <Button
                   type="button"
                   aria-label={`Remove ${repository}`}
@@ -196,36 +202,33 @@ export function GitHubIssuesSection({ project }: { project: ProjectRow }) {
             );
           })}
         </ul>
-        <Field
-          label="GitHub repository"
-          hintId={`${id}-repository`}
-          hint={
-            <>
-              {prefilled
-                ? `From the Push remote ${project.ci.push_remote_url}. `
-                : ""}
-              A repository whose issues come in, as owner/name; GitHub Issues
-              needs one. Add as many as you like: the filter label and New
-              issues need me apply to every one.
-            </>
-          }
-        >
-          <input
-            value={adding}
-            placeholder="owner/name"
-            onChange={(e) => {
-              setAdding(e.target.value);
-              setError(undefined);
-              setSaved(false);
-            }}
-            onKeyDown={onAddKey}
-            aria-describedby={describedBy("repositories", `${id}-repository`)}
-            aria-invalid={invalid("repositories")}
-          />
-        </Field>
-        <Button type="button" disabled={pending === ""} onClick={() => add(pending)}>
-          Add repository
-        </Button>
+        <div className="project-options-add">
+          <Field label="GitHub repository">
+            <input
+              value={adding}
+              placeholder="owner/name"
+              onChange={(e) => {
+                setAdding(e.target.value);
+                setError(undefined);
+                setSaved(false);
+              }}
+              onKeyDown={onAddKey}
+              aria-describedby={describedBy("repositories", `${id}-repository`)}
+              aria-invalid={invalid("repositories")}
+            />
+          </Field>
+          <Button type="button" disabled={pending === ""} onClick={() => add(pending)}>
+            Add repository
+          </Button>
+        </div>
+        <p className="field-hint" id={`${id}-repository`}>
+          {prefilled
+            ? `From the Push remote ${project.ci.push_remote_url}. `
+            : ""}
+          A repository whose issues come in, as owner/name; GitHub Issues
+          needs one. Add as many as you like: the filter label and New
+          issues need me apply to every one.
+        </p>
         {suggested.length > 0 && (
           <ul className="project-options-repositories" aria-label="Suggested repositories">
             {suggested.map(({ repository, name }) => (

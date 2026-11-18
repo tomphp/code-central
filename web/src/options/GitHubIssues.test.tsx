@@ -314,7 +314,9 @@ describe("the GitHub Issues section", () => {
         repositories: [{ repository: "acme/api", problem: "repository_unreadable", message: "gh can't read the repository acme/api", fix: "Check the repository is the owner/name GitHub shows." }],
       });
       expect(row("acme/web")).toHaveTextContent("acme/web: Watching");
-      expect(row("acme/api")).toHaveTextContent("acme/api: Error. gh can't read the repository acme/api");
+      expect(row("acme/api")).toHaveTextContent("Error. gh can't read the repository acme/api");
+      expect(row("acme/api")).not.toHaveTextContent("acme/api:");
+      expect(row("acme/api").querySelector("p.warning[role=alert]")).not.toBeNull();
       expect(row("acme/api")).toHaveTextContent("Check the repository is the owner/name GitHub shows.");
       expect(row("acme/api").querySelector(".warning")).not.toBeNull();
       expect(row("acme/web").querySelector(".warning")).toBeNull();
