@@ -7,11 +7,9 @@ package httpapi
 
 import (
 	"fmt"
-	"maps"
 	"net/http"
 	"net/url"
 	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -50,25 +48,14 @@ func init() {
 }
 
 // Routes maps every operation to its HTTP method and path pattern
-// (net/http ServeMux syntax): the definitions', and during the migration
-// the legacy map's. The cross-door suite checks it against ops.All().
+// (net/http ServeMux syntax), derived from the definitions. The cross-door
+// suite checks it against ops.All().
 func Routes() map[string]string {
-	out := maps.Clone(legacyRoutes)
+	out := map[string]string{}
 	for _, op := range ops.Definitions() {
 		method, pattern := op.Route()
 		out[op.Op().Name] = method + " " + pattern
 	}
-	return out
-}
-
-// LegacyRoutes names the operations the hand-written handlers still
-// serve, for the migration guard.
-func LegacyRoutes() []string {
-	var out []string
-	for name := range legacyRoutes {
-		out = append(out, name)
-	}
-	sort.Strings(out)
 	return out
 }
 

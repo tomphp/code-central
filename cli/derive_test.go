@@ -182,7 +182,8 @@ func TestEveryOperationCommandTakesItsHelpFromItsDefinition(t *testing.T) {
 		}
 		def, ok := ops.DefinitionOf(c.op)
 		if !ok {
-			continue // not converted yet: the legacy maps serve it
+			t.Errorf("%s: no definition for operation %q", name, c.op)
+			continue
 		}
 		if c.help != def.Description() {
 			t.Errorf("%s: help %q, want its definition's %q", name, c.help, def.Description())

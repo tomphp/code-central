@@ -6,7 +6,7 @@ So each operation is defined once, in the `ops` package, which sits between `cor
 
 A definition stays transport-free: each door's cross-cutting work, the Actor it acts as, the usage log and the one error shape, sits on its generic dispatch, around every derived call, not in the definitions.
 
-The doors convert one group of operations at a time. While legacy routes, handlers and tools remain, each door merges the derived set with its legacy map, and a migration guard test fails if any operation is served both ways or neither. The CLI derives a command from its definition and the input struct's `cli` tags only where the result equals the hand-written command it replaces, so its usage stays the same; a command with `--file` or stdin input, a default from the environment or more than one call stays hand-written against the client's unchanged method names, and takes only its operation name and `--help` text from the definition.
+The doors were converted one group of operations at a time; every operation is now defined in `ops`, and no legacy route, handler or tool map remains. The CLI derives a command from its definition and the input struct's `cli` tags only where the result equals the hand-written command it replaces, so its usage stays the same; a command with `--file` or stdin input, a default from the environment or more than one call stays hand-written against the client's unchanged method names, and takes only its operation name and `--help` text from the definition.
 
 ## Considered Options
 
@@ -19,4 +19,4 @@ The doors convert one group of operations at a time. While legacy routes, handle
 - Adding an operation is a Core method, one `ops.Definition` and the input struct's tags; the three snapshots in `server/testdata` show what each door now serves.
 - An input struct's `desc` tags are the agent-facing wording, so a change there changes the MCP tools/list snapshot.
 - The ADR was numbered 0056 in the Spec that decided it; 0056 to 0062 were taken by the time it was written, so it is 0063.
-- `httpapi.Routes` is a function, merging the definitions with the legacy map until the migration ends.
+- `httpapi.Routes` is a function, deriving the routes from the definitions.
