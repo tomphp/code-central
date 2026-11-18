@@ -197,22 +197,31 @@ function TicketBody({ project, ticket: t, specLabels, now, reported, openSpec, o
           {claims.map((c) => (
             <li key={c.number}>
               <div className="claim-line">
-                Claim {c.number} · started {ago(now, c.started)} · last activity {ago(now, c.last_activity)}
+                <span className="field">Claim {c.number}</span> · <span className="field">started {ago(now, c.started)}</span> ·{" "}
+                <span className="field">last activity {ago(now, c.last_activity)}</span>
                 {c.latest_event && (
                   <>
-                    {" "}
-                    · <LatestEventLine event={c.latest_event} now={now} />
+                    {" · "}
+                    <LatestEventLine event={c.latest_event} now={now} />
                   </>
                 )}
                 {c.ended && (
                   <>
-                    {" "}
-                    · ended{c.ended_by && <> by {c.ended_by}</>} {ago(now, c.ended)}
+                    {" · "}
+                    <span className="field">
+                      ended{c.ended_by && <> by {c.ended_by}</>} {ago(now, c.ended)}
+                    </span>
                   </>
                 )}
-                {" "}
-                · model {c.model || CLAUDE_CODE_DEFAULT} · effort {c.effort || CLAUDE_CODE_DEFAULT}
-                {c.session_id && <> · session {c.session_id}</>}
+                {" · "}
+                <span className="field">model {c.model || CLAUDE_CODE_DEFAULT}</span> ·{" "}
+                <span className="field">effort {c.effort || CLAUDE_CODE_DEFAULT}</span>
+                {c.session_id && (
+                  <>
+                    {" · "}
+                    <span className="field">session {c.session_id}</span>
+                  </>
+                )}
               </div>
               <Live
                 key={`${t.id}#${c.number}`}
