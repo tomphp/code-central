@@ -26,6 +26,9 @@ type repo interface {
 	commit(rev string) (string, error)
 	// isAncestor reports whether commit is reachable from rev.
 	isAncestor(commit, rev string) bool
+	// mergeBase is a best common ancestor of a and b, failing when they
+	// have none.
+	mergeBase(a, b string) (string, error)
 	// hasRemote reports whether the repository has the remote name.
 	hasRemote(name string) bool
 	// remoteURL is the URL of the remote name, failing when the
@@ -64,6 +67,8 @@ type repo interface {
 	updateRef(ref, new, old string) error
 	// specBranches is the names of the branches under spec/.
 	specBranches() ([]string, error)
+	// forkPoints is the Ticket IDs with a fork ref (forkRef).
+	forkPoints() ([]string, error)
 	// deleteRef deletes ref, failing unless it is at old.
 	deleteRef(ref, old string) error
 	// push pushes branch to remote, never forcing; out is git's output
@@ -112,6 +117,8 @@ func (g gitRepo) isAncestor(commit, rev string) bool {
 	_, err := g.out("merge-base", "--is-ancestor", commit, rev)
 	return err == nil
 }
+
+func (g gitRepo) mergeBase(a, b string) (string, error) { return g.out("merge-base", a, b) }
 
 func (g gitRepo) hasRemote(name string) bool {
 	_, err := g.remoteURL(name)
@@ -261,6 +268,15 @@ func (g gitRepo) updateRef(ref, new, old string) error {
 func (g gitRepo) specBranches() ([]string, error) {
 	out, err := g.out("for-each-ref", "--format=%(refname:short)", "refs/heads/spec/")
 	return strings.Fields(out), err
+}
+
+func (g gitRepo) forkPoints() ([]string, error) {
+	out, err := g.out("for-each-ref", "--format=%(refname)", forkRefs)
+	var ids []string
+	for _, ref := range strings.Fields(out) {
+		ids = append(ids, strings.TrimPrefix(ref, forkRefs))
+	}
+	return ids, err
 }
 
 func (g gitRepo) deleteRef(ref, old string) error {

@@ -161,6 +161,13 @@ func (rs *repositories) recordProblem(r *repository, tk core.TicketView, rec cor
 		// its branch, moved to the base's tip, holds nothing new.
 		return ""
 	}
+	if err == nil && tk.SpecLanded {
+		if _, ok := replayedTip(r, tk.ID, branch, commit); ok {
+			// Its work was replayed onto its Spec Branch under Rebase,
+			// and its branch moved to the replayed commits.
+			return ""
+		}
+	}
 	head, herr := r.git.commit("refs/heads/" + branch)
 	switch {
 	case herr != nil:

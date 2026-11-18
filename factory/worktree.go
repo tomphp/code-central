@@ -159,6 +159,7 @@ func (rs *repositories) moveLandedBranch(r *repository, tk core.TicketView, bran
 		rs.printf("warning: can't move %s%s to %s's tip: %v", branch, r.where(), rs.baseOf(r), err)
 		return
 	}
+	rs.moveForkPoint(r, tk.ID, tip)
 	rs.printf("%s: its work%s landed, so %s moved to %s's tip, %s", tk.ID, r.where(), branch, rs.baseOf(r), short(tip))
 }
 
@@ -180,19 +181,28 @@ func (rs *repositories) baseTipOf(r *repository) string {
 
 // cutBranchWorktree gives a claimed Ticket its worktree in r on branch. A
 // new branch is cut from r's base's tip, or for a Spec-landed Ticket from
-// its Spec Branch's tip in r; an existing branch is reused as it is.
+// its Spec Branch's tip in r, which its fork ref records; an existing
+// branch is reused as it is.
 func (rs *repositories) cutBranchWorktree(r *repository, tk core.TicketView, branch, wt string) error {
-	from := rs.baseOf(r)
+	from, fork := rs.baseOf(r), ""
 	if tk.SpecLanded {
 		if _, err := r.git.commit("refs/heads/" + branch); err != nil {
 			tip, err := rs.specBranchTip(r, tk.Spec.ID)
 			if err != nil {
 				return specBranchFailed(wt, err)
 			}
-			from = tip
+			from, fork = tip, tip
 		}
 	}
-	return rs.branchWorktree(r, branch, wt, from)
+	if err := rs.branchWorktree(r, branch, wt, from); err != nil {
+		return err
+	}
+	if fork != "" {
+		if err := setForkPoint(r, tk.ID, fork); err != nil {
+			rs.printf("warning: %s: can't record its fork point%s: %v", tk.ID, r.where(), err)
+		}
+	}
+	return nil
 }
 
 // gitWorktree is one entry of `git worktree list`.
@@ -387,6 +397,7 @@ func (l *lander) sweepIn(ctx context.Context, r *repository, policies core.Landi
 			l.sweepUnusedBranch(r, *tk, w.branch)
 		}
 	}
+	l.sweepForkPoints(ctx, r, tickets)
 }
 
 // sweepsBranch reports whether the sweep may delete tk's branch in r,
@@ -423,7 +434,10 @@ func (l *lander) sweptTicket(ctx context.Context, id string) *core.TicketView {
 // sweepUnusedBranch deletes branch, tk's in r, when tk never used it: its
 // tip is still on the first-parent line of r's Base, or of the Spec
 // Branch of tk's Spec, where it was cut, rather than merged into either or
-// beyond them. A branch with work of its own is kept.
+// beyond them. A branch with work of its own is kept, as is one replayed
+// onto its Spec Branch under Rebase, whose commits are on that line but
+// beyond its fork point, until tk is Done or Cancelled: landing reads it
+// till then. Its fork ref goes with it.
 func (l *lander) sweepUnusedBranch(r *repository, tk core.TicketView, branch string) {
 	if branch == "" {
 		return
@@ -436,11 +450,40 @@ func (l *lander) sweepUnusedBranch(r *repository, tk core.TicketView, branch str
 	if !onFirstParentLine(r.git, tip, "refs/heads/"+l.repos.baseOf(r)) && !onFirstParentLine(r.git, tip, "refs/heads/"+specBranch(tk.Spec.ID)) {
 		return
 	}
+	live := tk.State != domain.Done && tk.State != domain.Cancelled
+	if fork, err := r.git.commit(forkRef(tk.ID)); live && err == nil && fork != tip && r.git.isAncestor(fork, tip) {
+		return
+	}
 	if err := r.git.deleteRef(ref, tip); err != nil {
 		l.printf("warning: %s: can't delete its unused branch %s%s: %v", tk.ID, branch, r.where(), err)
 		return
 	}
+	l.repos.deleteForkPoint(r, tk.ID)
 	l.printf("%s: deleted its unused branch %s%s", tk.ID, branch, r.where())
+}
+
+// sweepForkPoints deletes, in r, the fork ref of each Ticket that is Done
+// or Cancelled: its branch is cleaned up, so nothing replays it again.
+// tickets is sweepIn's.
+func (l *lander) sweepForkPoints(ctx context.Context, r *repository, tickets map[string]*core.TicketView) {
+	ids, err := r.git.forkPoints()
+	if err != nil {
+		l.printf("warning: can't list the fork points%s: %v", r.where(), err)
+		return
+	}
+	for _, id := range ids {
+		if ctx.Err() != nil {
+			return
+		}
+		tk, ok := tickets[id]
+		if !ok {
+			tk = l.sweptTicket(ctx, id)
+			tickets[id] = tk
+		}
+		if tk != nil && (tk.State == domain.Done || tk.State == domain.Cancelled) {
+			l.repos.deleteForkPoint(r, id)
+		}
+	}
 }
 
 // onFirstParentLine reports whether commit is rev's tip or one of the
