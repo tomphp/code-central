@@ -23,16 +23,7 @@ import (
 var legacyRoutes = map[string]string{
 	"create_project": "POST /api/projects/create_project",
 	"get_project":    "GET /api/projects/{key}",
-
-	"claim":     "POST /api/p/{key}/claim",
-	"finish":    "POST /api/p/{key}/tickets/{n}/finish",
-	"accept":    "POST /api/p/{key}/tickets/{n}/accept",
-	"implement": "POST /api/p/{key}/tickets/{n}/implement",
-	"reject":    "POST /api/p/{key}/tickets/{n}/reject",
-
-	"set_session":  "POST /api/p/{key}/tickets/{n}/set_session",
-	"release":      "POST /api/p/{key}/tickets/{n}/release",
-	"get_workflow": "GET /api/workflow",
+	"get_workflow":   "GET /api/workflow",
 }
 
 type handlerFunc func(c *core.Core, r *http.Request) (any, error)
@@ -47,56 +38,6 @@ var handlers = map[string]handlerFunc{
 	},
 	"get_project": func(c *core.Core, r *http.Request) (any, error) {
 		return c.GetProject(r.Context(), r.PathValue("key"))
-	},
-	"claim": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.ClaimInput
-		if err := decodeBody(r, &in); err != nil {
-			return nil, err
-		}
-		return c.Claim(r.Context(), r.PathValue("key"), in)
-	},
-	"finish": func(c *core.Core, r *http.Request) (any, error) {
-		in, err := pathBody(r, func(in *core.FinishInput) *core.Ref { return &in.Ticket })
-		if err != nil {
-			return nil, err
-		}
-		return c.Finish(r.Context(), r.PathValue("key"), in)
-	},
-	"accept": func(c *core.Core, r *http.Request) (any, error) {
-		in, err := pathBody(r, func(in *core.TicketInput) *core.Ref { return &in.Ticket })
-		if err != nil {
-			return nil, err
-		}
-		return c.Accept(r.Context(), r.PathValue("key"), in)
-	},
-	"implement": func(c *core.Core, r *http.Request) (any, error) {
-		in, err := pathBody(r, func(in *core.TicketInput) *core.Ref { return &in.Ticket })
-		if err != nil {
-			return nil, err
-		}
-		return c.Implement(r.Context(), r.PathValue("key"), in)
-	},
-	"reject": func(c *core.Core, r *http.Request) (any, error) {
-		in, err := pathBody(r, func(in *core.RejectInput) *core.Ref { return &in.Ticket })
-		if err != nil {
-			return nil, err
-		}
-		return c.Reject(r.Context(), r.PathValue("key"), in)
-	},
-
-	"set_session": func(c *core.Core, r *http.Request) (any, error) {
-		in, err := pathBody(r, func(in *core.SetSessionInput) *core.Ref { return &in.Ticket })
-		if err != nil {
-			return nil, err
-		}
-		return c.SetSession(r.Context(), r.PathValue("key"), in)
-	},
-	"release": func(c *core.Core, r *http.Request) (any, error) {
-		in, err := pathBody(r, func(in *core.ReleaseInput) *core.Ref { return &in.Ticket })
-		if err != nil {
-			return nil, err
-		}
-		return c.Release(r.Context(), r.PathValue("key"), in)
 	},
 	"get_workflow": func(c *core.Core, r *http.Request) (any, error) {
 		if err := onlyParams(r.URL.Query()); err != nil {

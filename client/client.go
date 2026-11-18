@@ -93,34 +93,32 @@ func (c *Client) FindTicketViews(ctx context.Context, key string, in core.FindTi
 
 // Claim is claim.
 func (c *Client) Claim(ctx context.Context, key string, in core.ClaimInput) (core.ClaimResult, error) {
-	var out core.ClaimResult
-	return out, c.do(ctx, "POST", scoped(key, "claim"), in, &out)
+	return call(ctx, c, ops.Claim, key, in)
 }
 
 // Finish is finish.
 func (c *Client) Finish(ctx context.Context, key string, in core.FinishInput) (core.FinishResult, error) {
-	var out core.FinishResult
-	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "finish"), in, &out)
+	return call(ctx, c, ops.Finish, key, in)
 }
 
 // Accept is the human's accept; set Actor to human.
 func (c *Client) Accept(ctx context.Context, key string, in core.TicketInput) (core.Written[core.TicketView], error) {
-	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "accept"), in, in.Full)
+	return written(ctx, c, ops.Accept, key, in, in.Full)
 }
 
 // Reject is the human's reject; set Actor to human.
 func (c *Client) Reject(ctx context.Context, key string, in core.RejectInput) (core.Written[core.TicketView], error) {
-	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "reject"), in, in.Full)
+	return written(ctx, c, ops.Reject, key, in, in.Full)
 }
 
 // SetSession is set_session.
 func (c *Client) SetSession(ctx context.Context, key string, in core.SetSessionInput) (core.Written[core.TicketView], error) {
-	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "set_session"), in, in.Full)
+	return written(ctx, c, ops.SetSession, key, in, in.Full)
 }
 
 // Release is the human's release; set Actor to human.
 func (c *Client) Release(ctx context.Context, key string, in core.ReleaseInput) (core.Written[core.TicketView], error) {
-	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "release"), in, in.Full)
+	return written(ctx, c, ops.Release, key, in, in.Full)
 }
 
 // Ping is POST /api/ping: it marks activity on every live Claim with this

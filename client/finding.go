@@ -11,17 +11,17 @@ import (
 
 // AddBlocker is add_blocker.
 func (c *Client) AddBlocker(ctx context.Context, key string, in core.BlockerInput) (core.Written[core.TicketView], error) {
-	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "add_blocker"), in, in.Full)
+	return written(ctx, c, ops.AddBlocker, key, in, in.Full)
 }
 
 // RemoveBlocker is remove_blocker.
 func (c *Client) RemoveBlocker(ctx context.Context, key string, in core.BlockerInput) (core.Written[core.TicketView], error) {
-	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "remove_blocker"), in, in.Full)
+	return written(ctx, c, ops.RemoveBlocker, key, in, in.Full)
 }
 
 // Cancel is cancel.
 func (c *Client) Cancel(ctx context.Context, key string, in core.CancelInput) (core.Written[core.TicketView], error) {
-	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "cancel"), in, in.Full)
+	return written(ctx, c, ops.Cancel, key, in, in.Full)
 }
 
 // GetSpec is get_spec.
