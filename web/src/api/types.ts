@@ -104,6 +104,13 @@ export interface PullRequestReport {
 
 // ---- CI ----
 
+// The Auto-fix setting the human sets with setAutoFix.
+export interface AutoFixChange {
+  on: boolean;
+  fix_instructions: string;
+  limit: number;
+}
+
 // The CI settings the human sets with setCITracking.
 export interface CITrackingChange {
   tracking: boolean;

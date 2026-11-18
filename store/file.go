@@ -236,6 +236,12 @@ func (s *FileStore) loadProject(key string) error {
 	if c := pf.CI; c != nil {
 		p.CI = domain.CI{Tracking: c.Tracking, PATEnv: c.PATEnv,
 			IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, NoPushRemote: c.NoPushRemote, PushRemoteBase: c.PushRemoteBase}
+		if a := c.AutoFix; a != nil {
+			if a.Limit != 0 && (a.Limit < domain.MinAutoFixLimit || a.Limit > domain.MaxAutoFixLimit) {
+				return &LoadError{File: rel, Field: "ci.auto_fix.limit", Msg: fmt.Sprintf("the Auto-fix limit is %d to %d, not %d", domain.MinAutoFixLimit, domain.MaxAutoFixLimit, a.Limit)}
+			}
+			p.CI.AutoFix = domain.AutoFix{On: a.On, Instructions: a.Instructions, Limit: a.Limit}
+		}
 		if c.Provider != "" && !domain.CIProvider(c.Provider).Valid() {
 			return &LoadError{File: rel, Field: "ci.provider", Msg: fmt.Sprintf("unknown CI provider %q (%s)", c.Provider, strings.Join(domain.CIProviderNames(), " or "))}
 		}
