@@ -19,9 +19,6 @@ import (
 )
 
 const (
-	// chatWorktreeName is the folder of each Repository's Chat worktree,
-	// beside its Ticket worktrees: a Ticket ID is never chat.
-	chatWorktreeName = "chat"
 	// kindChat is the kind a Chat turn's model responses are posted
 	// under in Usage.
 	kindChat = "chat"
@@ -142,7 +139,7 @@ func (f *factory) runChatTurn(ctx context.Context, t core.ChatTurn, work *stint,
 // a Conversation's first turn, or for a later one those already there: a
 // Repository added mid-Conversation joins the next.
 func (f *factory) chatWorktrees(first bool) worktreeSet {
-	ws := f.worktreesNamed(chatWorktreeName, "")
+	ws := f.repos.worktreesNamed(chatWorktreeName, "")
 	if first {
 		return ws
 	}
@@ -247,7 +244,7 @@ func denialsItem(ds []denial, now time.Time) core.SessionEvent {
 // tip for a Conversation's first turn. Anything it can't move is left as
 // it was, with an error saying what is there and how to clear it.
 func (f *factory) chatWorktreeAtBase(r *repository, wt string) error {
-	left, err := f.detachAtBase(r, wt)
+	left, err := f.repos.detachAtBase(r, wt)
 	switch {
 	case err != nil:
 		return fmt.Errorf("The Factory couldn't set up the Chat worktree at %s: %v", wt, err)
@@ -258,7 +255,7 @@ func (f *factory) chatWorktreeAtBase(r *repository, wt string) error {
 	case left.branch != "":
 		return fmt.Errorf("The Chat worktree at %s is on branch %s, not detached, so the Factory can't use it. Detach it with `git -C %s switch --detach`, or remove it with `git worktree remove %s`, then send the message again.", wt, left.branch, wt, wt)
 	}
-	return fmt.Errorf("The Chat worktree at %s has uncommitted changes, so the Factory can't move it to %s's tip for a new Conversation. Changed files:\n\n%s\n\nA Chat writes nothing to the repository. Keep anything worth keeping elsewhere, then clean the worktree with `git -C %s reset --hard` and `git -C %s clean -fd`, and send the message again.", wt, f.baseOf(r), left.dirty, wt, wt)
+	return fmt.Errorf("The Chat worktree at %s has uncommitted changes, so the Factory can't move it to %s's tip for a new Conversation. Changed files:\n\n%s\n\nA Chat writes nothing to the repository. Keep anything worth keeping elsewhere, then clean the worktree with `git -C %s reset --hard` and `git -C %s clean -fd`, and send the message again.", wt, f.repos.baseOf(r), left.dirty, wt, wt)
 }
 
 // chatResumeCommand brings a Conversation's session back from anywhere,

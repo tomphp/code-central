@@ -59,9 +59,9 @@ func (f *factory) held(r *repository, policies core.LandingPolicies) string {
 	case r.localOnlyUnderPullRequest:
 		return "it is local-only under Pull Request"
 	case s.missing:
-		return "its base, " + f.baseOf(r) + ", is missing"
+		return "its base, " + f.repos.baseOf(r) + ", is missing"
 	case r.policy(policies).PushesBase() && !s.current:
-		return "its base, " + f.baseOf(r) + ", isn't level with the remote's"
+		return "its base, " + f.repos.baseOf(r) + ", isn't level with the remote's"
 	}
 	return ""
 }
@@ -69,7 +69,7 @@ func (f *factory) held(r *repository, policies core.LandingPolicies) string {
 // anyBaseHeld reports whether any Repository's base is missing or has
 // diverged, as the last poll found, so no Claim starts.
 func (f *factory) anyBaseHeld() bool {
-	for _, r := range f.readyRepositories() {
+	for _, r := range f.repos.ready() {
 		if s := f.bases[r.name]; s != nil && (s.missing || s.diverged) {
 			return true
 		}
@@ -80,7 +80,7 @@ func (f *factory) anyBaseHeld() bool {
 // locateBases finds every Repository's base, Home first, as locateBase
 // does each.
 func (f *factory) locateBases(ctx context.Context, p core.ProjectView) {
-	for _, r := range f.readyRepositories() {
+	for _, r := range f.repos.ready() {
 		f.locateBase(ctx, p, r)
 	}
 }
@@ -97,7 +97,7 @@ func (f *factory) locateBases(ctx context.Context, p core.ProjectView) {
 // claims.
 func (f *factory) locateBase(ctx context.Context, p core.ProjectView, r *repository) {
 	s := f.stateOf(r)
-	base := f.baseOf(r)
+	base := f.repos.baseOf(r)
 	ref := "refs/heads/" + base
 	localOnly, remote := r.localOnly, r.remote
 	tip, err := r.git.commit(ref)

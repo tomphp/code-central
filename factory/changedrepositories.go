@@ -28,7 +28,7 @@ func (f *factory) changedIn(tk core.TicketView) []core.RepositoryWork {
 		return nil
 	}
 	var out []core.RepositoryWork
-	for _, r := range f.readyRepositories() {
+	for _, r := range f.repos.ready() {
 		if head, ok := f.changedHead(r, tk, branch); ok {
 			out = append(out, core.RepositoryWork{Name: r.name, Branch: branch, Commit: head})
 		}
@@ -42,10 +42,10 @@ func (f *factory) changedIn(tk core.TicketView) []core.RepositoryWork {
 // counts as unchanged until it is back (Base missing).
 func (f *factory) changedHead(r *repository, tk core.TicketView, branch string) (string, bool) {
 	head, err := r.git.commit("refs/heads/" + branch)
-	if err != nil || f.inBaseOf(r, head) {
+	if err != nil || f.repos.inBaseOf(r, head) {
 		return "", false
 	}
-	if _, err := r.git.commit("refs/heads/" + f.baseOf(r)); err != nil {
+	if _, err := r.git.commit("refs/heads/" + f.repos.baseOf(r)); err != nil {
 		return "", false
 	}
 	if tk.SpecLanded && r.git.isAncestor(head, "refs/heads/"+specBranch(tk.Spec.ID)) {
@@ -58,7 +58,7 @@ func (f *factory) changedHead(r *repository, tk core.TicketView, branch string) 
 // Progress under c, when the set or a head has changed since the last
 // report for c.
 func (f *factory) reportChanged(ctx context.Context, c claim, tk core.TicketView) {
-	if !f.several() || tk.State != store.InProgress {
+	if !f.repos.several() || tk.State != store.InProgress {
 		return
 	}
 	work := f.changedIn(tk)
@@ -83,7 +83,7 @@ func (f *factory) reportChanged(ctx context.Context, c claim, tk core.TicketView
 // whether failing it moved tk to Failed; one that couldn't be failed yet
 // is failed by the check before it lands.
 func (f *factory) checkFinish(ctx context.Context, tk core.TicketView) (passed, failed bool) {
-	if !f.several() {
+	if !f.repos.several() {
 		return true, false
 	}
 	problems, stands := f.finishProblems(tk)
@@ -113,7 +113,7 @@ func (f *factory) checkFinish(ctx context.Context, tk core.TicketView) (passed, 
 // and where each Repository's work stands.
 func (f *factory) finishProblems(tk core.TicketView) (problems, stands []string) {
 	work := f.changedIn(tk)
-	for _, r := range f.readyRepositories() {
+	for _, r := range f.repos.ready() {
 		i := slices.IndexFunc(tk.Repositories, func(v core.ChangedRepositoryView) bool { return v.Name == r.name })
 		j := slices.IndexFunc(work, func(w core.RepositoryWork) bool { return w.Name == r.name })
 		if j >= 0 {
@@ -125,7 +125,7 @@ func (f *factory) finishProblems(tk core.TicketView) (problems, stands []string)
 				problems = append(problems, p)
 			}
 		case j >= 0:
-			problems = append(problems, fmt.Sprintf("%s is left out, but its branch %s holds commits beyond %s, up to %s", r.name, work[j].Branch, f.baseOf(r), short(work[j].Commit)))
+			problems = append(problems, fmt.Sprintf("%s is left out, but its branch %s holds commits beyond %s, up to %s", r.name, work[j].Branch, f.repos.baseOf(r), short(work[j].Commit)))
 		}
 	}
 	if len(stands) == 0 {
@@ -149,7 +149,7 @@ func (f *factory) recordProblem(r *repository, tk core.TicketView, rec core.Chan
 		return ""
 	}
 	commit, err := r.git.commit(rec.Commit)
-	if err == nil && !holdsWork && f.inBaseOf(r, commit) {
+	if err == nil && !holdsWork && f.repos.inBaseOf(r, commit) {
 		return ""
 	}
 	if rec.Landed != nil && !holdsWork {

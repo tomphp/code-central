@@ -508,7 +508,7 @@ func (f *factory) claimNext(ctx context.Context) bool {
 // .mcp.json, or a Repository is missing, so a Ticket would start without
 // a checkout of every Repository.
 func (f *factory) claimingHeld() bool {
-	return f.anyBaseHeld() || f.mcpHeld || f.repositoryMissing()
+	return f.anyBaseHeld() || f.mcpHeld || f.repos.anyMissing()
 }
 
 // claimLostAgain sends each claim whose answer was lost again, once, so
@@ -549,7 +549,7 @@ func (f *factory) startClaimed(ctx context.Context, in core.ClaimInput, res core
 	}
 	id := res.Ticket.ID
 	stage := core.GuideName(res.Ticket.Labels)
-	ws := f.worktreesNamed(id, workBranch(stage, id))
+	ws := f.repos.worktreesNamed(id, workBranch(stage, id))
 	conflicts := f.conflictsIn(ws, stage, *res.Ticket)
 	var guide core.StageGuideView
 	if len(conflicts) == 0 {
@@ -565,7 +565,7 @@ func (f *factory) startClaimed(ctx context.Context, in core.ClaimInput, res core
 		if len(conflicts) > 0 {
 			files = conflicts[0].files
 		}
-		c.SystemPrompt, prompt = systemPrompt(c, stage, wt, guide, files), firstPrompt(c, stage, f.baseBranch(), files)
+		c.SystemPrompt, prompt = systemPrompt(c, stage, wt, guide, files), firstPrompt(c, stage, f.repos.baseBranch(), files)
 	}
 	// The Ticket's Resume Command adds the folders its turns do.
 	resume := *in.ResumeCommand + addDirFlags(c.AddDirs)
@@ -578,7 +578,7 @@ func (f *factory) startClaimed(ctx context.Context, in core.ClaimInput, res core
 	}
 	f.claimed(c, *res.Ticket, wt, resume)
 	settingUp := f.work.busy("setting up the worktree of ", id)
-	fl := f.setUpWorktrees(*res.Ticket, ws)
+	fl := f.repos.setUpWorktrees(*res.Ticket, ws)
 	settingUp()
 	if fl != nil {
 		f.reportFailure(ctx, c, fl)
@@ -670,7 +670,7 @@ func (f *factory) resumeAnswered(ctx context.Context, c claim) {
 	if decided != "" {
 		prompt += "\n" + decided + "\n"
 	}
-	f.startTurn(ctx, c, turnInput{Dir: f.worktree(c.Ticket), Resume: true, Choice: mc, Prompt: prompt})
+	f.startTurn(ctx, c, turnInput{Dir: f.repos.worktree(c.Ticket), Resume: true, Choice: mc, Prompt: prompt})
 }
 
 // sessionHolder looks through the process list for a process other than
