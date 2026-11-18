@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -41,9 +42,9 @@ func TestAnAcceptedTicketUnderPullRequestIsToMergeLinkingItsPullRequest(t *testi
 		t.Fatalf("row %+v, want to_merge on acme-2 before any pull request", row)
 	}
 
-	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: store.PRConflicting})
+	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PRConflicting})
 	row, _ = longRow(t, f, "acme-2")
-	if row.Reason != core.ReasonToMerge || row.PullRequest == nil || row.PullRequest.State != store.PRConflicting ||
+	if row.Reason != core.ReasonToMerge || row.PullRequest == nil || row.PullRequest.State != domain.PRConflicting ||
 		row.PullRequest.Link != "https://github.com/acme/web/pull/7" {
 		t.Fatalf("row %+v, want to_merge linking the conflicting pull request", row)
 	}
@@ -63,25 +64,25 @@ func TestTheWatchNeverRaisesAcceptedNotLandedUnderPullRequest(t *testing.T) {
 func TestAClosedPullRequestIsPullRequestClosedUntilItIsReopened(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
-	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: store.PROpen})
+	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PROpen})
 	wantReason(t, f.get(t, "2"), core.ReasonToMerge)
 
 	f.clock.Advance(time.Hour)
-	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: store.PRClosed})
+	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PRClosed})
 	wantReason(t, f.get(t, "2"), core.ReasonPullRequestClosed)
 	row, _ := longRow(t, f, "acme-2")
-	if row.PullRequest == nil || row.PullRequest.State != store.PRClosed {
+	if row.PullRequest == nil || row.PullRequest.State != domain.PRClosed {
 		t.Fatalf("row %+v, want the closed pull request's link", row)
 	}
 
-	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: store.PROpen})
+	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PROpen})
 	wantReason(t, f.get(t, "2"), core.ReasonToMerge)
 }
 
 func TestPullRequestClosedOffersSendBackAndCancel(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
-	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: store.PRClosed})
+	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PRClosed})
 	wantReason(t, f.get(t, "2"), core.ReasonPullRequestClosed)
 
 	if _, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "2"}); err == nil {
@@ -90,7 +91,7 @@ func TestPullRequestClosedOffersSendBackAndCancel(t *testing.T) {
 	if _, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "2", Note: "reviewers closed it; redo the form"}); err != nil {
 		t.Fatalf("send_back: %v", err)
 	}
-	if v := f.get(t, "2"); v.State != store.Ready {
+	if v := f.get(t, "2"); v.State != domain.Ready {
 		t.Fatalf("state %s, want Ready", v.State)
 	}
 }
@@ -98,11 +99,11 @@ func TestPullRequestClosedOffersSendBackAndCancel(t *testing.T) {
 func TestPullRequestClosedOffersCancel(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
-	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: store.PRClosed})
+	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PRClosed})
 	if _, err := f.core.Cancel(human, "acme", core.CancelInput{Ticket: "acme-2"}); err != nil {
 		t.Fatalf("cancel: %v", err)
 	}
-	if v := f.get(t, "2"); v.State != store.Cancelled {
+	if v := f.get(t, "2"); v.State != domain.Cancelled {
 		t.Fatalf("state %s, want Cancelled", v.State)
 	}
 }
@@ -110,7 +111,7 @@ func TestPullRequestClosedOffersCancel(t *testing.T) {
 func TestAMergedPullRequestIsNotPullRequestClosed(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
-	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: store.PRMerged, MergeCommit: "def456"})
+	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PRMerged, MergeCommit: "def456"})
 	wantReason(t, f.get(t, "2"), core.ReasonToMerge)
 }
 
@@ -118,7 +119,7 @@ func TestCIFailedUnderPullRequestNeverOffersLandAnyway(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
 	f.withCITracking(t)
-	f.reportRun(t, "acme-2", store.CICompleted, store.CIFailure)
+	f.reportRun(t, "acme-2", domain.CICompleted, domain.CIFailure)
 
 	v := f.getTicket(t, "acme-2")
 	wantReason(t, f.get(t, "2"), core.ReasonCIFailed)
@@ -136,7 +137,7 @@ func TestCICancelledUnderPullRequestOffersRerunAndSendBack(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
 	f.withCITracking(t)
-	f.reportRun(t, "acme-2", store.CICompleted, store.CICancelled)
+	f.reportRun(t, "acme-2", domain.CICompleted, domain.CICancelled)
 
 	wantReason(t, f.get(t, "2"), core.ReasonCICancelled)
 	if want := []core.CIFailureOption{"rerun_ci", "send_back"}; !slices.Equal(f.getTicket(t, "acme-2").CIFailureOptions, want) {
@@ -159,13 +160,13 @@ func (f fixture) pullRequestWork(t *testing.T, n int) {
 	if _, err := f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/web.git", Base: "main"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest}); err != nil {
 		t.Fatal(err)
 	}
 	err := f.store.Update(func(w store.Writer) error {
 		tk, _ := w.Ticket("acme", n)
-		tk.State = store.Accepted
-		tk.PushedCommits = []store.PushedCommit{{Commit: "abc123", Branch: tk.Branch, Pushed: f.clock.Now()}}
+		tk.State = domain.Accepted
+		tk.PushedCommits = []domain.PushedCommit{{Commit: "abc123", Branch: tk.Branch, Pushed: f.clock.Now()}}
 		return w.PutTicket("acme", tk)
 	})
 	if err != nil {

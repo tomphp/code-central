@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // Landing in a local-only Repository (Spec code-central-879, ADR 0039):
@@ -44,7 +44,7 @@ func TestARepositoryWhoseCloneURLIsClearedNeitherWaitsOnItsCINorOffersLandAnyway
 	f := twoRepoWorld(t)
 	f.changes(t, 5, "acme", "api")
 	f.pushedFor(t, "api", "acme-5", "def456")
-	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CIInProgress, "")
+	f.ciRunIn(t, "api", 1, "def456", "acme-5", domain.CIInProgress, "")
 	if api := changedIn(t, f.getTicket(t, "acme-5"), "api"); api.NotLanded != "waiting on CI at def456" {
 		t.Fatalf("api %+v, want it waiting on its CI while it has a Clone URL", api)
 	}
@@ -54,7 +54,7 @@ func TestARepositoryWhoseCloneURLIsClearedNeitherWaitsOnItsCINorOffersLandAnyway
 	if api := changedIn(t, f.getTicket(t, "acme-5"), "api"); api.NotLanded != "" || api.CIResult != core.CIRunning {
 		t.Fatalf("api %+v, want its CI result shown and not waited on, as under Merge without Push", api)
 	}
-	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRunIn(t, "api", 1, "def456", "acme-5", domain.CICompleted, domain.CIFailure)
 	v := f.getTicket(t, "acme-5")
 	i := slices.IndexFunc(v.CIItems, func(it core.CIItemView) bool { return it.Repository == "api" })
 	if i < 0 || slices.Contains(v.CIItems[i].Options, core.OptionLandAnyway) {

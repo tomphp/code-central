@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // Pull requests per Repository (Spec code-central-848, ADR 0050): one
@@ -24,7 +24,7 @@ import (
 // and api, each pushed as acme-2.
 func (f fixture) pullRequestsAcross(t *testing.T) {
 	t.Helper()
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.acrossRepositories(t)
 }
 
@@ -39,7 +39,7 @@ func (f fixture) acrossRepositories(t *testing.T) {
 	if _, err := f.core.SetLandingOrder(human, "acme", core.SetLandingOrderInput{Names: []string{"web", "acme", "api"}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest}); err != nil {
 		t.Fatal(err)
 	}
 	f.claim(t, core.ClaimInput{})
@@ -61,7 +61,7 @@ func (f fixture) pushedIn(t *testing.T, repository, commit string) {
 }
 
 // reportIn reports pull request n in repository, in state.
-func (f fixture) reportIn(t *testing.T, repository string, n int, state store.PullRequestState, merge string) {
+func (f fixture) reportIn(t *testing.T, repository string, n int, state domain.PullRequestState, merge string) {
 	t.Helper()
 	link := "https://github.com/acme/acme/pull/" + string(rune('0'+n))
 	if repository == "api" {
@@ -126,7 +126,7 @@ func TestEachPullRequestsBodyListsItsSiblingsInLandingOrderKeptUpToDate(t *testi
 		t.Errorf("Home body = %q, want the Ticket named", body)
 	}
 
-	f.reportIn(t, "api", 4, store.PROpen, "")
+	f.reportIn(t, "api", 4, domain.PROpen, "")
 	w := f.watch(t)
 	if body := workIn(t, w, "acme").Body; !strings.HasSuffix(body, "- acme: this pull request\n- api: https://dev.azure.com/acme/shop/_git/api/pullrequest/4") {
 		t.Errorf("Home body = %q, want api's pull request linked once it is open", body)
@@ -146,7 +146,7 @@ func TestAPullRequestBodyMentionsTheSpecsLinkedIssueWithNoClosingKeyword(t *test
 		t.Fatal(err)
 	}
 	f.longLived(t, *s.Record)
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Ta", State: store.Ready})
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Ta", State: domain.Ready})
 	f.acrossRepositories(t)
 	w := f.watch(t)
 	home, api := workIn(t, w, "acme").Body, workIn(t, w, "api").Body
@@ -166,8 +166,8 @@ func TestAPullRequestBodyMentionsTheSpecsLinkedIssueWithNoClosingKeyword(t *test
 func TestEachRepositorysPullRequestIsRecordedOnItsOwn(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestsAcross(t)
-	f.reportIn(t, "", 7, store.PROpen, "")
-	f.reportIn(t, "api", 4, store.PRConflicting, "")
+	f.reportIn(t, "", 7, domain.PROpen, "")
+	f.reportIn(t, "api", 4, domain.PRConflicting, "")
 
 	tk := f.get(t, "2")
 	if tk.PullRequest == nil || tk.PullRequest.Number != 7 {
@@ -180,7 +180,7 @@ func TestEachRepositorysPullRequestIsRecordedOnItsOwn(t *testing.T) {
 				t.Errorf("acme's pull request = %+v", r.PullRequest)
 			}
 		case "api":
-			if r.PullRequest == nil || r.PullRequest.Number != 4 || r.PullRequest.State != store.PRConflicting {
+			if r.PullRequest == nil || r.PullRequest.Number != 4 || r.PullRequest.State != domain.PRConflicting {
 				t.Errorf("api's pull request = %+v", r.PullRequest)
 			}
 		}
@@ -189,31 +189,31 @@ func TestEachRepositorysPullRequestIsRecordedOnItsOwn(t *testing.T) {
 		t.Errorf("api's work = %+v, want its pull request", w)
 	}
 
-	_, err := f.core.ReportPullRequest(ctx, "acme", core.ReportPullRequestInput{Repository: "nope", Branch: "acme-2", Number: 1, Link: "l", State: store.PROpen})
+	_, err := f.core.ReportPullRequest(ctx, "acme", core.ReportPullRequestInput{Repository: "nope", Branch: "acme-2", Number: 1, Link: "l", State: domain.PROpen})
 	wantCode(t, err, core.Invalid, "repository")
-	_, err = f.core.ReportPullRequest(ctx, "acme", core.ReportPullRequestInput{Repository: "web", Branch: "acme-2", Number: 1, Link: "l", State: store.PROpen})
+	_, err = f.core.ReportPullRequest(ctx, "acme", core.ReportPullRequestInput{Repository: "web", Branch: "acme-2", Number: 1, Link: "l", State: domain.PROpen})
 	wantCode(t, err, core.NotFound, "")
 }
 
 func TestThePullRequestsMergeInAnyOrderEachLandingItsRepository(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestsAcross(t)
-	f.reportIn(t, "api", 4, store.PRMerged, "m-api")
-	f.reportIn(t, "", 7, store.PROpen, "")
+	f.reportIn(t, "api", 4, domain.PRMerged, "m-api")
+	f.reportIn(t, "", 7, domain.PROpen, "")
 
 	tk, err := record(f.core.Land(ctx, "acme", core.LandInput{Ticket: "2", Commit: "m-api", Repository: "api", Full: true}))
 	if err != nil {
 		t.Fatalf("land api: %v", err)
 	}
-	if tk.State != store.Accepted || !tk.PartlyLanded {
+	if tk.State != domain.Accepted || !tk.PartlyLanded {
 		t.Fatalf("after api lands: %s, partly landed %v, want Accepted and Partly landed", tk.State, tk.PartlyLanded)
 	}
-	f.reportIn(t, "", 7, store.PRMerged, "m-acme")
+	f.reportIn(t, "", 7, domain.PRMerged, "m-acme")
 	tk, err = record(f.core.Land(ctx, "acme", core.LandInput{Ticket: "2", Commit: "m-acme", Repository: "acme", Full: true}))
 	if err != nil {
 		t.Fatalf("land acme: %v", err)
 	}
-	if tk.State != store.Done {
+	if tk.State != domain.Done {
 		t.Fatalf("after both land: %s, want Done", tk.State)
 	}
 	for _, r := range tk.Repositories {
@@ -241,8 +241,8 @@ func TestLandingInARepositoryTheTicketDidntChangeIsRefused(t *testing.T) {
 func TestPullRequestClosedNamesEachClosedPullRequestsRepository(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestsAcross(t)
-	f.reportIn(t, "", 7, store.PROpen, "")
-	f.reportIn(t, "api", 4, store.PRClosed, "")
+	f.reportIn(t, "", 7, domain.PROpen, "")
+	f.reportIn(t, "api", 4, domain.PRClosed, "")
 
 	var row *core.NeedsMeRow
 	for _, r := range f.needsMe(t) {
@@ -258,15 +258,15 @@ func TestPullRequestClosedNamesEachClosedPullRequestsRepository(t *testing.T) {
 	}
 
 	// Reopened, it clears.
-	f.reportIn(t, "api", 4, store.PROpen, "")
+	f.reportIn(t, "api", 4, domain.PROpen, "")
 	wantReason(t, f.get(t, "2"), core.ReasonToMerge)
 }
 
 func TestSendingBackBeforeAnyMergeClosesTheOpenPullRequests(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestsAcross(t)
-	f.reportIn(t, "", 7, store.PROpen, "")
-	f.reportIn(t, "api", 4, store.PRClosed, "")
+	f.reportIn(t, "", 7, domain.PROpen, "")
+	f.reportIn(t, "api", 4, domain.PRClosed, "")
 
 	if _, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "2", Note: "Redo the API."}); err != nil {
 		t.Fatalf("send_back: %v", err)
@@ -279,7 +279,7 @@ func TestSendingBackBeforeAnyMergeClosesTheOpenPullRequests(t *testing.T) {
 		t.Fatalf("close = %+v, want acme's open pull request", w.Close)
 	}
 
-	f.reportIn(t, "", 7, store.PRClosed, "")
+	f.reportIn(t, "", 7, domain.PRClosed, "")
 	if w := f.watch(t); len(w.Close) != 0 {
 		t.Errorf("close = %+v after it closed, want none", w.Close)
 	}
@@ -288,8 +288,8 @@ func TestSendingBackBeforeAnyMergeClosesTheOpenPullRequests(t *testing.T) {
 func TestSendingBackAfterASiblingMergedKeepsItsLandedCommitAndClosesNothing(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestsAcross(t)
-	f.reportIn(t, "api", 4, store.PRMerged, "m-api")
-	f.reportIn(t, "", 7, store.PRClosed, "")
+	f.reportIn(t, "api", 4, domain.PRMerged, "m-api")
+	f.reportIn(t, "", 7, domain.PRClosed, "")
 	if _, err := f.core.Land(ctx, "acme", core.LandInput{Ticket: "2", Commit: "m-api", Repository: "api"}); err != nil {
 		t.Fatalf("land api: %v", err)
 	}
@@ -345,8 +345,8 @@ func TestNewWorkInALandedRepositoryNeedsLandingAgain(t *testing.T) {
 func TestCancelIsRefusedOnceAnyPullRequestHasMerged(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestsAcross(t)
-	f.reportIn(t, "", 7, store.PRClosed, "")
-	f.reportIn(t, "api", 4, store.PRMerged, "m-api")
+	f.reportIn(t, "", 7, domain.PRClosed, "")
+	f.reportIn(t, "api", 4, domain.PRMerged, "m-api")
 
 	_, err := f.core.Cancel(human, "acme", core.CancelInput{Ticket: "2"})
 	wantCode(t, err, core.ActionNotAllowed, "")
@@ -354,7 +354,7 @@ func TestCancelIsRefusedOnceAnyPullRequestHasMerged(t *testing.T) {
 	if errors.As(err, &e) && !strings.Contains(e.Message, "api") {
 		t.Errorf("refusal %q, want the merged Repository named", e.Message)
 	}
-	if got := f.get(t, "2").State; got != store.Accepted {
+	if got := f.get(t, "2").State; got != domain.Accepted {
 		t.Errorf("state %s, want still Accepted", got)
 	}
 }
@@ -417,7 +417,7 @@ func TestTheWatcherNamesEachFailingRepositoryAndNotifiesOnceOnEnteringError(t *t
 
 func TestTurningPullRequestOnChecksEveryRepositoryNamingEachThatFails(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	if _, err := f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/acme.git", Base: "main"}); err != nil {
 		t.Fatal(err)
 	}
@@ -430,7 +430,7 @@ func TestTurningPullRequestOnChecksEveryRepositoryNamingEachThatFails(t *testing
 		return core.WatcherCheckResult{Problem: p.Problem, Reason: p.Message, Fix: p.Fix, Repositories: []core.RepositoryProblem{p}}
 	})
 
-	_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest})
+	_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest})
 	wantFix(t, err, core.Invalid, "method")
 	var e *core.Error
 	if !errors.As(err, &e) || !strings.Contains(e.Message, "docs: ") || !strings.Contains(e.Message, "api: ADO_PAT isn't set") || !strings.Contains(e.Fix, "api: set ADO_PAT") {
@@ -443,7 +443,7 @@ func TestTurningPullRequestOnChecksEveryRepositoryNamingEachThatFails(t *testing
 	if len(checked.Repositories) != 2 || checked.Repositories[0] != want[0] || checked.Repositories[1] != want[1] {
 		t.Errorf("checked %+v, want every Repository on a supported host", checked.Repositories)
 	}
-	if v := f.projectView(t, "acme"); v.Landing.Method == store.LandingPullRequest {
+	if v := f.projectView(t, "acme"); v.Landing.Method == domain.LandingPullRequest {
 		t.Error("Pull Request turned on despite the refusal")
 	}
 }
@@ -467,7 +467,7 @@ func TestTurningPullRequestOnIsRefusedNamingEachLocalOnlyRepositoryBeforeTheChec
 				})
 			}
 
-			_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest})
+			_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest})
 			wantFix(t, err, core.Invalid, "method")
 			var e *core.Error
 			errors.As(err, &e)
@@ -480,7 +480,7 @@ func TestTurningPullRequestOnIsRefusedNamingEachLocalOnlyRepositoryBeforeTheChec
 			if checked {
 				t.Error("the Pull Request check ran despite the local-only Repositories")
 			}
-			if v := f.projectView(t, "acme"); v.Landing.Method == store.LandingPullRequest {
+			if v := f.projectView(t, "acme"); v.Landing.Method == domain.LandingPullRequest {
 				t.Error("Pull Request turned on despite the refusal")
 			}
 
@@ -491,7 +491,7 @@ func TestTurningPullRequestOnIsRefusedNamingEachLocalOnlyRepositoryBeforeTheChec
 					t.Fatalf("edit %s: %v", n, err)
 				}
 			}
-			if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest}); err != nil {
+			if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest}); err != nil {
 				t.Fatalf("turn Pull Request on: %v", err)
 			}
 		})
@@ -506,7 +506,7 @@ func TestTurningPullRequestOnNamesALoneLocalOnlyRepository(t *testing.T) {
 	}
 	f.addRepository(t, core.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes")})
 
-	_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest})
+	_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest})
 	wantFix(t, err, core.Invalid, "method")
 	var e *core.Error
 	if errors.As(err, &e); e.Message != "notes: local-only, with no Clone URL, and following the Default Landing, so it can't land by Pull Request" || e.Fix != "notes: give notes an Own Landing such as Merge, or a Clone URL" {
@@ -517,7 +517,7 @@ func TestTurningPullRequestOnNamesALoneLocalOnlyRepository(t *testing.T) {
 func TestSendingBackATicketWithOnePullRequestLeavesItOpenForTheNextPush(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
-	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: store.PROpen})
+	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PROpen})
 	if _, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "2", Note: "Redo it."}); err != nil {
 		t.Fatalf("send_back: %v", err)
 	}

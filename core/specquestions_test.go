@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // The roll-up of a Spec's Questions: each of its Tickets that has Rounds,
@@ -23,10 +23,10 @@ func TestGetSpecQuestionsRollsUpItsTicketsRounds(t *testing.T) {
 		t.Fatalf("got %+v, want only acme-2", v)
 	}
 	tk := v.Tickets[0]
-	if tk.ID != "acme-2" || tk.Title != "Ta" || tk.State != store.NeedsAnswer || len(tk.Rounds) != 1 {
+	if tk.ID != "acme-2" || tk.Title != "Ta" || tk.State != domain.NeedsAnswer || len(tk.Rounds) != 1 {
 		t.Fatalf("ticket %+v", tk)
 	}
-	if qs := tk.Rounds[0].Questions; len(qs) != 2 || qs[0].Title != "Which database?" || qs[1].Status != store.QuestionOpen {
+	if qs := tk.Rounds[0].Questions; len(qs) != 2 || qs[0].Title != "Which database?" || qs[1].Status != domain.QuestionOpen {
 		t.Fatalf("questions %+v", qs)
 	}
 

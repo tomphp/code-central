@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -16,10 +17,10 @@ type SpecQuestions struct {
 
 // TicketQuestions is one Ticket's Rounds in a Spec's roll-up.
 type TicketQuestions struct {
-	ID     string      `json:"id"`
-	Title  string      `json:"title"`
-	State  store.State `json:"state"`
-	Rounds []RoundView `json:"rounds"`
+	ID     string       `json:"id"`
+	Title  string       `json:"title"`
+	State  domain.State `json:"state"`
+	Rounds []RoundView  `json:"rounds"`
 }
 
 // GetSpecQuestions is the human's get_spec_questions(spec), for the UI.

@@ -5,6 +5,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
 )
@@ -15,9 +16,9 @@ const WaitTimeout = 60 * time.Second
 
 // WaitResult is a Ticket's State when a Wait returns, with its last move.
 type WaitResult struct {
-	Ticket   string      `json:"ticket"`
-	State    store.State `json:"state"`
-	LastMove *MoveView   `json:"last_move,omitempty"`
+	Ticket   string       `json:"ticket"`
+	State    domain.State `json:"state"`
+	LastMove *MoveView    `json:"last_move,omitempty"`
 }
 
 // Events is the bus core sends a change notice on after every write.
@@ -26,9 +27,9 @@ func (c *Core) Events() *events.Bus { return c.events }
 // Wait holds until the Ticket is no longer in State from, for at most
 // WaitTimeout or until ctx ends, and returns its State. It returns at
 // once if the Ticket has already left from. It is a read: no Claim ID.
-func (c *Core) Wait(ctx context.Context, key string, ref Ref, from store.State) (WaitResult, error) {
+func (c *Core) Wait(ctx context.Context, key string, ref Ref, from domain.State) (WaitResult, error) {
 	if !from.Valid() {
-		return WaitResult{}, invalid("from", "from must be a State, such as %q", store.NeedsAnswer)
+		return WaitResult{}, invalid("from", "from must be a State, such as %q", domain.NeedsAnswer)
 	}
 	notices, stop := c.events.Subscribe()
 	defer stop()
@@ -110,17 +111,17 @@ type noticeWriter struct {
 // PutProject, PutSpec, PutTicket and PutImport read the records as they
 // were before writing over them, to tell whether the write wakes the
 // Factories.
-func (w *noticeWriter) PutProject(p store.Project) error {
+func (w *noticeWriter) PutProject(p domain.Project) error {
 	wakes := projectWakesTheFactory(w.Writer, p)
 	return w.wakeIf(wakes, p.Key, w.put(w.Writer.PutProject(p), events.Event{Type: events.ProjectChanged, Project: p.Key}))
 }
 
-func (w *noticeWriter) PutSpec(key string, s store.Spec) error {
+func (w *noticeWriter) PutSpec(key string, s domain.Spec) error {
 	wakes := specWakesTheFactory(w.Writer, key, s)
 	return w.wakeIf(wakes, key, w.put(w.Writer.PutSpec(key, s), events.Event{Type: events.SpecChanged, Project: key, ID: DisplayID(key, s.Number)}))
 }
 
-func (w *noticeWriter) PutTicket(key string, t store.Ticket) error {
+func (w *noticeWriter) PutTicket(key string, t domain.Ticket) error {
 	wakes := wakesTheFactory(w.Writer, key, t)
 	return w.wakeIf(wakes, key, w.put(w.Writer.PutTicket(key, t), events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, t.Number)}))
 }
@@ -131,8 +132,8 @@ func (w *noticeWriter) PutTicket(key string, t store.Ticket) error {
 // when a record it rewrites would on its own, as implement's do.
 func (w *noticeWriter) PutImport(key string, im store.Import) error {
 	wakes := len(im.Specs) > 0 || len(im.Tickets) > 0 ||
-		slices.ContainsFunc(im.Rewritten, func(t store.Ticket) bool { return wakesTheFactory(w.Writer, key, t) }) ||
-		slices.ContainsFunc(im.RewrittenSpecs, func(s store.Spec) bool { return specWakesTheFactory(w.Writer, key, s) })
+		slices.ContainsFunc(im.Rewritten, func(t domain.Ticket) bool { return wakesTheFactory(w.Writer, key, t) }) ||
+		slices.ContainsFunc(im.RewrittenSpecs, func(s domain.Spec) bool { return specWakesTheFactory(w.Writer, key, s) })
 	return w.wakeIf(wakes, key, w.put(w.Writer.PutImport(key, im), events.Event{Type: events.ProjectChanged, Project: key}))
 }
 
@@ -146,12 +147,12 @@ func (w *noticeWriter) wakeIf(wakes bool, key string, err error) error {
 }
 
 // PutOptions sends options.changed, which names no Project and no ID.
-func (w *noticeWriter) PutOptions(o store.Options) error {
+func (w *noticeWriter) PutOptions(o domain.Options) error {
 	return w.put(w.Writer.PutOptions(o), events.Event{Type: events.OptionsChanged})
 }
 
 // PutCIRuns sends ci.changed, which names the Project only.
-func (w *noticeWriter) PutCIRuns(key string, runs []store.CIRun) error {
+func (w *noticeWriter) PutCIRuns(key string, runs []domain.CIRun) error {
 	return w.put(w.Writer.PutCIRuns(key, runs), events.Event{Type: events.CIChanged, Project: key})
 }
 

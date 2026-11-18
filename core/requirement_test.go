@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -44,7 +45,7 @@ func TestSubmittingARequirementCreatesItsSpecAndThreeChainedStages(t *testing.T)
 		if err != nil {
 			t.Fatalf("get_ticket %s: %v", w.id, err)
 		}
-		if res.Stages[i].ID != w.id || tk.State != store.Ready || tk.Spec.ID != "acme-2" ||
+		if res.Stages[i].ID != w.id || tk.State != domain.Ready || tk.Spec.ID != "acme-2" ||
 			!slices.Equal(tk.Labels, []string{w.label}) || !slices.Equal(tk.BlockedBy, w.blockedBy) {
 			t.Fatalf("stage %d: %+v", i, tk)
 		}
@@ -67,7 +68,7 @@ func TestARequirementIsWrittenAsTheHumanWhoeverSubmitsIt(t *testing.T) {
 	}
 	for _, id := range []string{"acme-2", "acme-3", "acme-4"} {
 		tk, _ := f.core.GetTicket(ctx, "acme", whole(core.Ref(id)))
-		if len(tk.Moves) != 1 || tk.Moves[0].Actor != "human" || tk.Moves[0].To != store.Ready || tk.Moves[0].Via != "submit_requirement" {
+		if len(tk.Moves) != 1 || tk.Moves[0].Actor != "human" || tk.Moves[0].To != domain.Ready || tk.Moves[0].Via != "submit_requirement" {
 			t.Fatalf("%s moves %+v", id, tk.Moves)
 		}
 	}
@@ -141,10 +142,10 @@ func TestSubmittingARequirementAcknowledgesItsSpecAndStages(t *testing.T) {
 	if len(res.Stages) != 3 {
 		t.Fatalf("stages %+v", res.Stages)
 	}
-	wantTicketAcknowledgement(t, res.Stages[0], "acme-2", t0, store.Ready,
+	wantTicketAcknowledgement(t, res.Stages[0], "acme-2", t0, domain.Ready,
 		[]string{"title", "state", "spec", "labels", "description", "moves", "claimable"}, 0)
 	for i, id := range []string{"acme-3", "acme-4"} {
-		wantTicketAcknowledgement(t, res.Stages[i+1], id, t0, store.Ready,
+		wantTicketAcknowledgement(t, res.Stages[i+1], id, t0, domain.Ready,
 			[]string{"title", "state", "spec", "labels", "blocked_by", "blockers", "description", "moves", "blocked"}, 0)
 	}
 }
@@ -187,7 +188,7 @@ func TestStraightToSpecCreatesOnlyTheSpecAndTicketsStages(t *testing.T) {
 	if spec == nil || tickets == nil {
 		t.Fatalf("stages %+v", res.Stages)
 	}
-	if spec.State != store.Ready || len(tickets.BlockedBy) != 1 {
+	if spec.State != domain.Ready || len(tickets.BlockedBy) != 1 {
 		t.Fatalf("stages: %+v %+v", spec, tickets)
 	}
 	want := "Write the Spec for the Requirement in Spec [acme-1](acme-1), from its text.\n"
@@ -221,7 +222,7 @@ func TestADraftRequirementsStageTicketsAreAllDraft(t *testing.T) {
 		t.Fatalf("stages %+v", res.Stages)
 	}
 	for _, s := range res.Stages {
-		if tk := f.get(t, core.Ref(s.ID)); tk.State != store.Draft || len(tk.Moves) != 0 {
+		if tk := f.get(t, core.Ref(s.ID)); tk.State != domain.Draft || len(tk.Moves) != 0 {
 			t.Fatalf("stage %+v", tk)
 		}
 	}

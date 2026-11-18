@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -20,7 +21,7 @@ func specMergeWorld(t *testing.T) fixture {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Offline mode")
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "First", State: store.Ready})
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "First", State: domain.Ready})
 	return f
 }
 
@@ -44,7 +45,7 @@ func TestOpenSpecMergeOpensAReadyMarkedTicketWithTheConflictInItsDescription(t *
 	tk := f.getTicket(t, "acme-3")
 	want := "The Spec Branch spec/acme-1 conflicts with the base, main, in these files:\n\n- README\n- go.mod\n\n" +
 		"The base's tip is aaa111 and the Spec Branch's tip is bbb222. Merge the base into this branch and resolve the conflicts.\n"
-	if tk.Title != specMergeTitle || tk.State != store.Ready || tk.Spec.ID != "acme-1" || tk.Description != want || !tk.SpecMergeTicket {
+	if tk.Title != specMergeTitle || tk.State != domain.Ready || tk.Spec.ID != "acme-1" || tk.Description != want || !tk.SpecMergeTicket {
 		t.Errorf("opened %+v, want a Ready marked Ticket on acme-1 titled %q describing the conflict", tk, specMergeTitle)
 	}
 }
@@ -75,7 +76,7 @@ func TestOpenSpecMergeCommentsOnTheOpenMarkedTicketAndWritesNothingOnARepeat(t *
 func TestOpenSpecMergeOpensAnotherOnceTheLastIsDone(t *testing.T) {
 	f := specMergeWorld(t)
 	f.openSpecMerge(t, "README")
-	f.moveTo(t, 3, store.Done)
+	f.moveTo(t, 3, domain.Done)
 
 	if res := f.openSpecMerge(t, "README"); res != (core.OpenSpecMergeResult{Ticket: "acme-4", Outcome: core.SpecMergeOpened}) {
 		t.Errorf("result %+v, want acme-4 opened", res)
@@ -84,7 +85,7 @@ func TestOpenSpecMergeOpensAnotherOnceTheLastIsDone(t *testing.T) {
 
 func TestOpenSpecMergeCommentsOnAnUnmarkedTicketWithItsTitleWithoutMarkingIt(t *testing.T) {
 	f := specMergeWorld(t)
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: specMergeTitle, Description: "Opened by an older Factory.\n", State: store.Ready})
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: specMergeTitle, Description: "Opened by an older Factory.\n", State: domain.Ready})
 
 	if res := f.openSpecMerge(t, "README"); res != (core.OpenSpecMergeResult{Ticket: "acme-3", Outcome: core.SpecMergeCommented}) {
 		t.Fatalf("result %+v, want acme-3 commented", res)
@@ -102,7 +103,7 @@ func TestOpenSpecMergeRefusesALongLivedSpecAMapAndAFinishedSpec(t *testing.T) {
 	for name, setup := range map[string]func(f fixture){
 		"Long-lived": func(f fixture) { f.longLived(t, core.SpecView{ID: "acme-1"}) },
 		"Map":        func(f fixture) { f.labelSpec(t, 1, core.MapLabel) },
-		"Finished":   func(f fixture) { f.moveTo(t, 2, store.Done) },
+		"Finished":   func(f fixture) { f.moveTo(t, 2, domain.Done) },
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := specMergeWorld(t)
@@ -118,7 +119,7 @@ func TestOpenSpecMergeRefusesALongLivedSpecAMapAndAFinishedSpec(t *testing.T) {
 
 func TestATicketCreatedWithTheSpecMergeTitleIsUnmarked(t *testing.T) {
 	f := specMergeWorld(t)
-	if tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: specMergeTitle, State: store.Ready}); tk.SpecMergeTicket {
+	if tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: specMergeTitle, State: domain.Ready}); tk.SpecMergeTicket {
 		t.Errorf("create_ticket made %+v, want an ordinary Ticket", tk)
 	}
 }

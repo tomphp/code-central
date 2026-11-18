@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // Why an Accepted Ticket hasn't landed in each of its Changed
@@ -41,7 +41,7 @@ const cantLandLead = "The Factory can't land this in "
 // CantLandComment is the Factory's comment that it can't land a Ticket's
 // work in the Repository name yet, and why, while the Ticket stays in
 // state. Core reads why's first line back as the Repository's reason.
-func CantLandComment(name, why string, state store.State) string {
+func CantLandComment(name, why string, state domain.State) string {
 	return fmt.Sprintf("%s%s yet: %s\n\nIt stays %s and the Factory tries again on every poll.", cantLandLead, name, why, state)
 }
 
@@ -50,7 +50,7 @@ func CantLandComment(name, why string, state store.State) string {
 // from ci, p's CI state (waitingIn); else the first line of what the
 // Factory last commented about it since t moved to its State; "" when
 // there's none of these.
-func (c *Core) notLandedReason(p store.Project, t store.Ticket, name string, ci *ciState) string {
+func (c *Core) notLandedReason(p domain.Project, t domain.Ticket, name string, ci *ciState) string {
 	if why := c.brokenBase(p, name); why != "" {
 		return why
 	}
@@ -71,9 +71,9 @@ func (c *Core) notLandedReason(p store.Project, t store.Ticket, name string, ci 
 // under the CI gate there, once pushed there since t moved to its State,
 // its CI result there, from ci, to pass. It is "" when it waits on
 // neither, as in a Repository Not watched or a local-only one.
-func waitingIn(p store.Project, t store.Ticket, name string, ci *ciState) string {
+func waitingIn(p domain.Project, t domain.Ticket, name string, ci *ciState) string {
 	policy := landingPolicyIn(p, name)
-	if pr := pullRequestIn(p.Key, t, name); policy.LandsByPullRequest() && pr != nil && pr.State == store.PROpen {
+	if pr := pullRequestIn(p.Key, t, name); policy.LandsByPullRequest() && pr != nil && pr.State == domain.PROpen {
 		return fmt.Sprintf("its pull request %d is open", pr.Number)
 	}
 	rc := ci.ticket(t).in(name)
@@ -97,11 +97,11 @@ func waitingIn(p store.Project, t store.Ticket, name string, ci *ciState) string
 // CI result, from a, in each of its Changed Repositories it hasn't landed
 // in: then its landing waits on CI alone. One stuck in a Repository
 // meanwhile, as on a refused push, waits on more than CI.
-func waitsOnCIAlone(p store.Project, t store.Ticket, a *ticketCI) bool {
+func waitsOnCIAlone(p domain.Project, t domain.Ticket, a *ticketCI) bool {
 	if !a.waiting {
 		return false
 	}
-	return !slices.ContainsFunc(changedRepositories(p.Key, t), func(r store.ChangedRepository) bool {
+	return !slices.ContainsFunc(changedRepositories(p.Key, t), func(r domain.ChangedRepository) bool {
 		rc := a.in(r.Name)
 		return r.Landed == nil && (rc == nil || !rc.waiting)
 	})
@@ -110,7 +110,7 @@ func waitsOnCIAlone(p store.Project, t store.Ticket, a *ticketCI) bool {
 // notLandedView is t's NotLandedView, t being p's and Accepted but not
 // landed, with ci p's CI state; nil while p has the Home Repository
 // alone, or t has no Changed Repositories.
-func (c *Core) notLandedView(p store.Project, t store.Ticket, ci *ciState) *NotLandedView {
+func (c *Core) notLandedView(p domain.Project, t domain.Ticket, ci *ciState) *NotLandedView {
 	rs := changedRepositories(p.Key, t)
 	if !severalRepositories(p) || len(rs) == 0 {
 		return nil

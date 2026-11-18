@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // LandingPolicy is how one Repository's Landing Method and Push, and the
@@ -12,15 +12,15 @@ import (
 // there. It is a pure value: it is built from the normalised Landing, so
 // Pull Request with Push on reads as Push off and can't reach any rule.
 type LandingPolicy struct {
-	method      store.LandingMethod
+	method      domain.LandingMethod
 	push        bool
 	landPerSpec bool
 	tracking    bool
 }
 
 // NewLandingPolicy is the policy of a Repository with these four inputs.
-func NewLandingPolicy(method store.LandingMethod, push, landPerSpec, ciTracking bool) LandingPolicy {
-	l := store.Landing{Method: method, Push: push}.Normalized()
+func NewLandingPolicy(method domain.LandingMethod, push, landPerSpec, ciTracking bool) LandingPolicy {
+	l := domain.Landing{Method: method, Push: push}.Normalized()
 	return LandingPolicy{method: l.Method, push: l.Push, landPerSpec: landPerSpec, tracking: ciTracking}
 }
 
@@ -62,13 +62,13 @@ func (l RepositoryLanding) Valid() bool { return slices.Contains(RepositoryLandi
 
 // repositoryLandingOf is the RepositoryLanding of a Landing Method with
 // its Push option, normalised: Pull Request implies Push.
-func repositoryLandingOf(method store.LandingMethod, push bool) RepositoryLanding {
+func repositoryLandingOf(method domain.LandingMethod, push bool) RepositoryLanding {
 	switch {
-	case method == store.LandingPullRequest:
+	case method == domain.LandingPullRequest:
 		return RepositoryLandingPullRequest
-	case method == store.LandingBranch && push:
+	case method == domain.LandingBranch && push:
 		return RepositoryLandingBranchPush
-	case method == store.LandingBranch:
+	case method == domain.LandingBranch:
 		return RepositoryLandingBranch
 	case push:
 		return RepositoryLandingMergePush
@@ -78,32 +78,32 @@ func repositoryLandingOf(method store.LandingMethod, push bool) RepositoryLandin
 
 // methodAndPush is l's Landing Method and Push option; Merge for the
 // default, which a view never holds.
-func (l RepositoryLanding) methodAndPush() (store.LandingMethod, bool) {
+func (l RepositoryLanding) methodAndPush() (domain.LandingMethod, bool) {
 	switch l {
 	case RepositoryLandingMergePush:
-		return store.LandingMerge, true
+		return domain.LandingMerge, true
 	case RepositoryLandingBranch:
-		return store.LandingBranch, false
+		return domain.LandingBranch, false
 	case RepositoryLandingBranchPush:
-		return store.LandingBranch, true
+		return domain.LandingBranch, true
 	case RepositoryLandingPullRequest:
-		return store.LandingPullRequest, false
+		return domain.LandingPullRequest, false
 	}
-	return store.LandingMerge, false
+	return domain.LandingMerge, false
 }
 
 // ownLanding is l as a stored Own Landing: none for the default.
-func (l RepositoryLanding) ownLanding() store.OwnLanding {
+func (l RepositoryLanding) ownLanding() domain.OwnLanding {
 	if l == RepositoryLandingDefault {
-		return store.OwnLanding{}
+		return domain.OwnLanding{}
 	}
 	m, push := l.methodAndPush()
-	return store.OwnLanding{Method: m, Push: push}
+	return domain.OwnLanding{Method: m, Push: push}
 }
 
 // effectiveLanding is r's Landing in p, its Own Landing or else p's
 // Default Landing, and whether it is its own.
-func effectiveLanding(p store.Project, r store.Repository) (RepositoryLanding, bool) {
+func effectiveLanding(p domain.Project, r domain.Repository) (RepositoryLanding, bool) {
 	if o := r.OwnLanding; o.Set() {
 		return repositoryLandingOf(o.Method, o.Push), true
 	}
@@ -116,7 +116,7 @@ func effectiveLanding(p store.Project, r store.Repository) (RepositoryLanding, b
 // settings fields into a policy: a Repository's policy is the Landing
 // Policy's "its Own Landing, or else the Default Landing, with Push off
 // when the Repository is local-only".
-func repositoryLandingPolicies(repositories []RepositoryView, method store.LandingMethod, push, landPerSpec, ciTracking bool) LandingPolicies {
+func repositoryLandingPolicies(repositories []RepositoryView, method domain.LandingMethod, push, landPerSpec, ciTracking bool) LandingPolicies {
 	ps := LandingPolicies{byName: map[string]LandingPolicy{}, fallback: NewLandingPolicy(method, push, landPerSpec, ciTracking)}
 	for _, r := range repositories {
 		m, p := r.Landing.methodAndPush()
@@ -129,7 +129,7 @@ func repositoryLandingPolicies(repositories []RepositoryView, method store.Landi
 // markLocalOnlyUnderPullRequest flags each of vs, p's Repositories'
 // views, that is local-only with a policy that needs a Clone URL: only a
 // Home that lost its remote can be, and it keeps its Landing.
-func markLocalOnlyUnderPullRequest(p store.Project, vs []RepositoryView) {
+func markLocalOnlyUnderPullRequest(p domain.Project, vs []RepositoryView) {
 	ps := repositoryLandingPolicies(vs, p.Landing.Method, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
 	for i, v := range vs {
 		vs[i].LocalOnlyUnderPullRequest = v.LocalOnly && ps.In(v.Name).NeedsCloneURL()
@@ -137,7 +137,7 @@ func markLocalOnlyUnderPullRequest(p store.Project, vs []RepositoryView) {
 }
 
 // landingPolicies is the policies of p's Repositories.
-func landingPolicies(p store.Project) LandingPolicies {
+func landingPolicies(p domain.Project) LandingPolicies {
 	return repositoryLandingPolicies(repositoriesView(p), p.Landing.Method, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
 }
 
@@ -148,7 +148,7 @@ func (p ProjectView) LandingPolicies() LandingPolicies {
 
 // landingPolicyIn is the Landing Policy of p's Repository name, which
 // every rule about one Repository's landing asks.
-func landingPolicyIn(p store.Project, name string) LandingPolicy {
+func landingPolicyIn(p domain.Project, name string) LandingPolicy {
 	return landingPolicies(p).In(name)
 }
 
@@ -164,7 +164,7 @@ func (ps LandingPolicies) In(name string) LandingPolicy {
 // ticketLandingPolicies is the policies of t's Changed Repositories in p,
 // which a rule about t's landing asks across: the Home's while it has
 // none.
-func ticketLandingPolicies(p store.Project, t store.Ticket) LandingPolicies {
+func ticketLandingPolicies(p domain.Project, t domain.Ticket) LandingPolicies {
 	names := changedRepositoryNames(p.Key, t)
 	if len(names) == 0 {
 		names = []string{p.Key}
@@ -225,28 +225,28 @@ func (ps LandingPolicies) LandPerSpecInForce() bool {
 // Repository follows it": Pull Request, which can't land where there is
 // no Clone URL.
 func (lp LandingPolicy) NeedsCloneURL() bool {
-	return lp.method == store.LandingPullRequest
+	return lp.method == domain.LandingPullRequest
 }
 
 // LandPerSpecInForce answers "Land per Spec applies under Merge and Pull
 // Request, and has no effect under Branch": Merge or Pull Request, with
 // Land per Spec on.
 func (lp LandingPolicy) LandPerSpecInForce() bool {
-	return (lp.method == store.LandingMerge || lp.method == store.LandingPullRequest) && lp.landPerSpec
+	return (lp.method == domain.LandingMerge || lp.method == domain.LandingPullRequest) && lp.landPerSpec
 }
 
 // CIGateHolds answers "Under Merge + Push with CI Tracking on, a Ticket
 // lands only once its CI result is passed, at the pushed commit that
 // passed": Merge and Push and CI Tracking.
 func (lp LandingPolicy) CIGateHolds() bool {
-	return lp.method == store.LandingMerge && lp.push && lp.tracking
+	return lp.method == domain.LandingMerge && lp.push && lp.tracking
 }
 
 // RecordsPushedCommit answers whether a pushed commit is kept on its
 // Ticket: under Pull Request it is, for its pull request; otherwise only
 // with Push and CI Tracking, for its CI result.
 func (lp LandingPolicy) RecordsPushedCommit() bool {
-	return lp.method == store.LandingPullRequest || (lp.push && lp.tracking)
+	return lp.method == domain.LandingPullRequest || (lp.push && lp.tracking)
 }
 
 // TracksCIResults answers whether a pushed commit has CI results: "Under
@@ -256,33 +256,33 @@ func (lp LandingPolicy) RecordsPushedCommit() bool {
 // CI Tracking alone: under Merge or Branch without CI Tracking a pushed
 // commit still has CI results, though no CI Watcher runs to report them.
 func (lp LandingPolicy) TracksCIResults() bool {
-	return !(lp.method == store.LandingPullRequest && !lp.tracking)
+	return !(lp.method == domain.LandingPullRequest && !lp.tracking)
 }
 
 // NeedsPushRemote answers whether the Factory pushes to a remote: Push is
 // on, or "Under Pull Request, Push is implied".
 func (lp LandingPolicy) NeedsPushRemote() bool {
-	return lp.push || lp.method == store.LandingPullRequest
+	return lp.push || lp.method == domain.LandingPullRequest
 }
 
 // PushesBase answers "the Factory pushes the base after a Merge": Merge
 // and Push.
 func (lp LandingPolicy) PushesBase() bool {
-	return lp.method == store.LandingMerge && lp.push
+	return lp.method == domain.LandingMerge && lp.push
 }
 
 // KeepsBaseLevel answers whether the Factory fetches the Push remote and
 // fast-forwards the local base before it lands or cuts a branch, and
 // reports Base diverged when it can't: Pull Request, or Merge and Push.
 func (lp LandingPolicy) KeepsBaseLevel() bool {
-	return lp.method == store.LandingPullRequest || lp.PushesBase()
+	return lp.method == domain.LandingPullRequest || lp.PushesBase()
 }
 
 // LandsOnHumanMerge answers whether a Ticket lands when a human merges it,
 // so it needs them to merge: Branch (the human merges the branch) or Pull
 // Request (the human merges the pull request). This is the To merge rule.
 func (lp LandingPolicy) LandsOnHumanMerge() bool {
-	return lp.method == store.LandingBranch || lp.method == store.LandingPullRequest
+	return lp.method == domain.LandingBranch || lp.method == domain.LandingPullRequest
 }
 
 // OffersLandAnyway answers Land anyway's "Offered under Merge + Push only:
@@ -290,19 +290,19 @@ func (lp LandingPolicy) LandsOnHumanMerge() bool {
 // Merge and Push. Under Merge without Push it isn't offered, though no CI
 // item could offer it there anyway: no pushed commit is recorded.
 func (lp LandingPolicy) OffersLandAnyway() bool {
-	return lp.method == store.LandingMerge && lp.push
+	return lp.method == domain.LandingMerge && lp.push
 }
 
 // FlagsNotLanded answers Accepted but not landed's "an Accepted Ticket,
 // under Merge, that has not landed after a while": Merge.
 func (lp LandingPolicy) FlagsNotLanded() bool {
-	return lp.method == store.LandingMerge
+	return lp.method == domain.LandingMerge
 }
 
 // LandsByPullRequest answers Pull Request's "the Ticket lands when the
 // host reports it merged": Pull Request.
 func (lp LandingPolicy) LandsByPullRequest() bool {
-	return lp.method == store.LandingPullRequest
+	return lp.method == domain.LandingPullRequest
 }
 
 // RunsCIWatcher answers the CI Watcher's "The service starts one per
@@ -318,27 +318,27 @@ func (lp LandingPolicy) RunsCIWatcher() bool {
 // the base once the Spec is ready to land": Merge, with Land per Spec in
 // force.
 func (lp LandingPolicy) MergesSpecBranches() bool {
-	return lp.method == store.LandingMerge && lp.LandPerSpecInForce()
+	return lp.method == domain.LandingMerge && lp.LandPerSpecInForce()
 }
 
 // PushesSpecBranches answers the Spec Branch's "It is pushed only under
 // Pull Request, where the Spec's one pull request is opened from it": Pull
 // Request, with Land per Spec in force.
 func (lp LandingPolicy) PushesSpecBranches() bool {
-	return lp.method == store.LandingPullRequest && lp.LandPerSpecInForce()
+	return lp.method == domain.LandingPullRequest && lp.LandPerSpecInForce()
 }
 
 // MergesLeftoverSpecBranches answers Land per Spec's "turning it off …
 // lands the Spec's waiting Tickets together at once, ready or not": Merge,
 // where the Factory merges a Spec Branch Land per Spec no longer covers.
 func (lp LandingPolicy) MergesLeftoverSpecBranches() bool {
-	return lp.method == store.LandingMerge
+	return lp.method == domain.LandingMerge
 }
 
 // PushesAcceptedBranch answers Push's "the Ticket's branch on accept under
 // Branch": Branch and Push.
 func (lp LandingPolicy) PushesAcceptedBranch() bool {
-	return lp.method == store.LandingBranch && lp.push
+	return lp.method == domain.LandingBranch && lp.push
 }
 
 // KeepsAcceptedWorktree answers whether the Factory keeps an Accepted
@@ -348,7 +348,7 @@ func (lp LandingPolicy) PushesAcceptedBranch() bool {
 // counts is done with too, but that is a fact of the Ticket, not of the
 // policy.
 func (lp LandingPolicy) KeepsAcceptedWorktree() bool {
-	return lp.method != store.LandingBranch
+	return lp.method != domain.LandingBranch
 }
 
 // LandingRoute is the way the Factory lands one Accepted Ticket.
@@ -389,9 +389,9 @@ func (r LandingRoute) String() string {
 // is merged into the base.
 func (lp LandingPolicy) Route(onSpecBranch, prMerged bool) LandingRoute {
 	switch {
-	case lp.method == store.LandingBranch:
+	case lp.method == domain.LandingBranch:
 		return RouteBranch
-	case lp.method == store.LandingPullRequest && (prMerged || !onSpecBranch):
+	case lp.method == domain.LandingPullRequest && (prMerged || !onSpecBranch):
 		return RoutePullRequest
 	case onSpecBranch:
 		return RouteSpecBranch

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -21,7 +22,7 @@ import (
 // cancels it with no Replacements.
 func (f fixture) cancelledBlocker(t *testing.T, id, spec core.Ref) {
 	t.Helper()
-	b := f.ticket(t, "acme", core.CreateTicketInput{Spec: spec, Title: "Gone", State: store.Ready})
+	b := f.ticket(t, "acme", core.CreateTicketInput{Spec: spec, Title: "Gone", State: domain.Ready})
 	f.addBlocker(t, id, core.Ref(b.ID))
 	f.cancel(t, core.CancelInput{Ticket: core.Ref(b.ID)}, core.Human)
 }
@@ -54,7 +55,7 @@ func wantEverywhere(t *testing.T, f fixture, key, id string, want core.NeedsMeRe
 	if v.NeedsMeReason != want {
 		t.Errorf("get_ticket %s: needs_me_reason %q, want %q", id, v.NeedsMeReason, want)
 	}
-	rows, err := f.core.FindTickets(ctx, key, core.FindTicketsInput{State: store.States})
+	rows, err := f.core.FindTickets(ctx, key, core.FindTicketsInput{State: domain.States})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,14 +110,14 @@ func TestWhenTwoReasonsApplyTheEarlierOneWinsForEveryReader(t *testing.T) {
 		}, "acme-2", core.ReasonInReview},
 		{"Silent Claim over Long Claim", func(t *testing.T) fixture {
 			f := newFixture(t)
-			f.work(t, store.Ready)
+			f.work(t, domain.Ready)
 			f.claim(t, core.ClaimInput{SessionID: "s1"})
 			f.clock.Advance(core.LongAfter + time.Minute)
 			return f
 		}, "acme-2", core.ReasonSilentClaim},
 		{"Long Claim over Blocked by a Cancelled Ticket", func(t *testing.T) fixture {
 			f := newFixture(t)
-			f.work(t, store.Ready)
+			f.work(t, domain.Ready)
 			f.claim(t, core.ClaimInput{SessionID: "s1"})
 			f.cancelledBlocker(t, "acme-2", "acme-1")
 			f.keepActive(core.LongAfter + time.Second)
@@ -124,19 +125,19 @@ func TestWhenTwoReasonsApplyTheEarlierOneWinsForEveryReader(t *testing.T) {
 		}, "acme-2", core.ReasonLongClaim},
 		{"CI failed over Accepted but not landed", func(t *testing.T) fixture {
 			f := itemWorld(t)
-			f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
+			f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 			f.clock.Advance(core.NotLandedAfter + time.Minute)
 			return f
 		}, "acme-5", core.ReasonCIFailed},
 		{"CI failed over Blocked by a Cancelled Ticket", func(t *testing.T) fixture {
 			f := itemWorld(t)
 			f.cancelledBlocker(t, "acme-8", "acme-7")
-			f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
+			f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 			return f
 		}, "acme-8", core.ReasonCIFailed},
 		{"CI cancelled over Accepted but not landed", func(t *testing.T) fixture {
 			f := itemWorld(t)
-			f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CICancelled)
+			f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CICancelled)
 			f.clock.Advance(core.NotLandedAfter + time.Minute)
 			return f
 		}, "acme-5", core.ReasonCICancelled},
@@ -146,22 +147,22 @@ func TestWhenTwoReasonsApplyTheEarlierOneWinsForEveryReader(t *testing.T) {
 			f.acceptedOnSpecBranch(t, 5, "Built the first part.")
 			f.acceptedOnSpecBranch(t, 6, "Built the second part.")
 			f.pushSpecBranch(t, "abc123", "acme-5", "acme-6")
-			f.ciRun(t, 1, "ci.yml", "abc123", "acme-6", store.CICompleted, store.CIFailure)
+			f.ciRun(t, 1, "ci.yml", "abc123", "acme-6", domain.CICompleted, domain.CIFailure)
 			return f
 		}, "acme-6", core.ReasonCIFailed},
 		{"CI failed over Pull request closed", func(t *testing.T) fixture {
 			f := newFixture(t)
 			f.pullRequestAccepted(t)
 			f.withCITracking(t)
-			f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: store.PRClosed})
-			f.reportRun(t, "acme-2", store.CICompleted, store.CIFailure)
+			f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PRClosed})
+			f.reportRun(t, "acme-2", domain.CICompleted, domain.CIFailure)
 			return f
 		}, "acme-2", core.ReasonCIFailed},
 		{"CI cancelled over To merge", func(t *testing.T) fixture {
 			f := newFixture(t)
 			f.pullRequestAccepted(t)
 			f.withCITracking(t)
-			f.reportRun(t, "acme-2", store.CICompleted, store.CICancelled)
+			f.reportRun(t, "acme-2", domain.CICompleted, domain.CICancelled)
 			return f
 		}, "acme-2", core.ReasonCICancelled},
 		// A Spec's pull request is one item, on its lead Ticket: the
@@ -184,13 +185,13 @@ func TestWhenTwoReasonsApplyTheEarlierOneWinsForEveryReader(t *testing.T) {
 		{"Pull request closed over To merge", func(t *testing.T) fixture {
 			f := newFixture(t)
 			f.pullRequestAccepted(t)
-			f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: store.PRClosed})
+			f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PRClosed})
 			return f
 		}, "acme-2", core.ReasonPullRequestClosed},
 		{"Pull request closed over Blocked by a Cancelled Ticket", func(t *testing.T) fixture {
 			f := newFixture(t)
 			f.pullRequestAccepted(t)
-			f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: store.PRClosed})
+			f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PRClosed})
 			f.cancelledBlocker(t, "acme-2", "acme-1")
 			return f
 		}, "acme-2", core.ReasonPullRequestClosed},
@@ -222,14 +223,14 @@ func TestWhenTwoReasonsApplyTheEarlierOneWinsForEveryReader(t *testing.T) {
 			f := newFixture(t)
 			f.linked(t)
 			f.cancelledBlocker(t, "acme-2", "acme-1")
-			f.setExternal(t, "2", store.ExternalClosed)
+			f.setExternal(t, "2", domain.ExternalClosed)
 			return f
 		}, "acme-2", core.ReasonBlockedByCancelled},
 		{"Closed externally over New issue", func(t *testing.T) fixture {
 			f := newFixture(t)
 			f.linked(t)
 			f.incomingIssue(t, 1, 2)
-			f.setExternal(t, "2", store.ExternalClosed)
+			f.setExternal(t, "2", domain.ExternalClosed)
 			return f
 		}, "acme-2", core.ReasonClosedExternally},
 	}
@@ -247,7 +248,7 @@ func (f fixture) incomingIssue(t *testing.T, spec, n int) {
 	t.Helper()
 	err := f.store.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
-		p.GitHubIssues = store.GitHubIssues{On: true, Repositories: []string{"acme/web"}, NewIssuesNeedMe: true, Spec: spec}
+		p.GitHubIssues = domain.GitHubIssues{On: true, Repositories: []string{"acme/web"}, NewIssuesNeedMe: true, Spec: spec}
 		return w.PutProject(p)
 	})
 	if err == nil {
@@ -282,21 +283,21 @@ func agreementWorld(t *testing.T) fixture {
 			t.Fatal(err)
 		}
 	}
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 	// next is a new Ready Ticket on acme-7, and its number.
 	next := func(title string) (core.Ref, int) {
-		tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-7", Title: title, State: store.Ready})
+		tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-7", Title: title, State: domain.Ready})
 		n, err := strconv.Atoi(strings.TrimPrefix(tk.ID, "acme-"))
 		must(nil, err)
 		return core.Ref(tk.ID), n
 	}
 	accepted := func(title string) string {
 		ref, n := next(title)
-		f.moveTo(t, n, store.Accepted)
+		f.moveTo(t, n, domain.Accepted)
 		return string(ref)
 	}
 	f.pushed(t, accepted("Cancelled run"), "c4c4c4") // acme-9
-	f.ciRun(t, 2, "ci.yml", "c4c4c4", "acme-9", store.CICompleted, store.CICancelled)
+	f.ciRun(t, 2, "ci.yml", "c4c4c4", "acme-9", domain.CICompleted, domain.CICancelled)
 	f.pushed(t, accepted("No word of CI"), "d5d5d5") // acme-10
 	accepted("Not landed")                           // acme-11
 	claim := func(session string) (core.Ref, string) {
@@ -321,25 +322,25 @@ func agreementWorld(t *testing.T) fixture {
 	must(f.core.CreateLinkedSpec(integration, "acme", core.CreateLinkedSpecInput{Title: "Issues", Body: "Issues.\n", Link: ghLink("10")}))
 	must(f.core.CreateLinkedTicket(integration, "acme", core.CreateLinkedTicketInput{Spec: "acme-20", Title: "Closed", Link: ghLink("11")}))
 	must(f.core.CreateLinkedTicket(integration, "acme", core.CreateLinkedTicketInput{Spec: "acme-20", Title: "New", Link: ghLink("12")}))
-	f.setExternal(t, "acme-21", store.ExternalClosed)
+	f.setExternal(t, "acme-21", domain.ExternalClosed)
 	f.incomingIssue(t, 20, 22)
 
 	f.project(t, "web")
 	sp := f.spec(t, "web", "Login")
 	must(f.core.AddLabels(ctx, "web", core.LabelsInput{Target: core.Ref(sp.ID), Labels: []string{core.LongLivedLabel}}))
 	for _, branch := range []string{"web-2", "web-3"} {
-		f.ticket(t, "web", core.CreateTicketInput{Spec: core.Ref(sp.ID), Title: "W", State: store.Ready})
+		f.ticket(t, "web", core.CreateTicketInput{Spec: core.Ref(sp.ID), Title: "W", State: domain.Ready})
 		res, err := f.core.Claim(ctx, "web", core.ClaimInput{Ticket: core.Ref(branch)})
 		must(res, err)
 		must(f.core.Finish(ctx, "web", core.FinishInput{Ticket: core.Ref(branch), ClaimID: res.ClaimID, Summary: "Done.", Branch: branch}))
 		must(f.core.Accept(human, "web", core.TicketInput{Ticket: core.Ref(branch)}))
 	}
 	must(f.core.ReportPushRemote(ctx, "web", core.ReportPushRemoteInput{URL: "git@github.com:acme/web.git", Base: "main"}))
-	must(f.core.SetLandingMethod(human, "web", core.SetLandingMethodInput{Method: store.LandingPullRequest}))
+	must(f.core.SetLandingMethod(human, "web", core.SetLandingMethodInput{Method: domain.LandingPullRequest}))
 	for _, branch := range []string{"web-2", "web-3"} {
 		must(f.core.ReportPushedCommit(ctx, "web", core.ReportPushedCommitInput{Ticket: core.Ref(branch), Commit: branch + "-tip", Branch: branch}))
 	}
-	must(f.core.ReportPullRequest(ctx, "web", core.ReportPullRequestInput{Branch: "web-3", State: store.PRClosed, Number: 8, Link: "https://github.com/acme/web/pull/8"}))
+	must(f.core.ReportPullRequest(ctx, "web", core.ReportPullRequestInput{Branch: "web-3", State: domain.PRClosed, Number: 8, Link: "https://github.com/acme/web/pull/8"}))
 
 	f.keepActive(core.LongAfter + time.Second)
 	for _, key := range []string{"acme", "web"} {
@@ -482,7 +483,7 @@ func TestTurningFocusKindsOffChangesNoReader(t *testing.T) {
 func TestTicketsSharingAPushedCommitShareItsCIItemForEveryReader(t *testing.T) {
 	f := itemWorld(t)
 	f.cancelledBlocker(t, "acme-8", "acme-7")
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 	f.clock.Advance(core.NotLandedAfter + time.Minute)
 	it := f.theItem(t, core.ReasonCIFailed).CIItem
 	if !slices.Equal(listed(it), []string{"acme-5", "acme-8"}) {
@@ -531,7 +532,7 @@ func (f fixture) theCIItem(t *testing.T, reason core.NeedsMeReason) *core.CIItem
 // time passing gives it no timed reason, so the watch sends nothing.
 func TestTheWatchSendsNothingForATicketACIItemListsAsTimePasses(t *testing.T) {
 	f := itemWorld(t)
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 	tick := watch(t, f)
 	tick()
 	f.clock.Advance(core.NotLandedAfter + time.Minute)

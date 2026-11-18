@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -21,7 +22,7 @@ const specBranch = "spec/acme-1"
 func specPullRequestWorld(t *testing.T) fixture {
 	t.Helper()
 	f := landWorld(t, true)
-	f.landing(t, store.Landing{Method: store.LandingPullRequest, Remote: "origin", LandPerSpec: true})
+	f.landing(t, domain.Landing{Method: domain.LandingPullRequest, Remote: "origin", LandPerSpec: true})
 	return f
 }
 
@@ -32,15 +33,15 @@ func (f fixture) acceptedOnSpecBranch(t *testing.T, n int, summary string) {
 	at := f.clock.Now()
 	err := f.store.Update(func(w store.Writer) error {
 		tk, _ := w.Ticket("acme", n)
-		tk.Comments = append(tk.Comments, store.Comment{Number: 1, Actor: "agent", Time: at, Body: summary})
-		tk.Moves = append(tk.Moves, store.Move{From: tk.State, To: store.InReview, Time: at})
+		tk.Comments = append(tk.Comments, domain.Comment{Number: 1, Actor: "agent", Time: at, Body: summary})
+		tk.Moves = append(tk.Moves, domain.Move{From: tk.State, To: domain.InReview, Time: at})
 		return w.PutTicket("acme", tk)
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	f.clock.Advance(time.Minute)
-	f.moveTo(t, n, store.Accepted)
+	f.moveTo(t, n, domain.Accepted)
 	f.specMerge(t, "acme-"+itoa(n), "merge"+itoa(n))
 	f.clock.Advance(time.Minute)
 }
@@ -111,9 +112,9 @@ func TestAPullRequestForTheSpecBranchIsRecordedOnEveryWaitingTicket(t *testing.T
 	f.acceptedOnSpecBranch(t, 5, "one")
 	f.acceptedOnSpecBranch(t, 6, "two")
 	f.pushSpecBranch(t, "tip1", "acme-5", "acme-6")
-	f.reportPR(t, core.ReportPullRequestInput{Branch: specBranch, State: store.PRMerged, MergeCommit: "m1"})
+	f.reportPR(t, core.ReportPullRequestInput{Branch: specBranch, State: domain.PRMerged, MergeCommit: "m1"})
 	for _, id := range []string{"acme-5", "acme-6"} {
-		if pr := f.getTicket(t, id).PullRequest; pr == nil || pr.State != store.PRMerged || pr.MergeCommit != "m1" {
+		if pr := f.getTicket(t, id).PullRequest; pr == nil || pr.State != domain.PRMerged || pr.MergeCommit != "m1" {
 			t.Errorf("%s pull request = %+v, want merged at m1", id, pr)
 		}
 	}
@@ -127,14 +128,14 @@ func TestTheSpecsToMergeIsOneItemOnItsLeadTicket(t *testing.T) {
 		t.Fatalf("reason %q before the Spec Branch is pushed, want none", got)
 	}
 	f.pushSpecBranch(t, "tip1", "acme-5", "acme-6")
-	f.reportPR(t, core.ReportPullRequestInput{Branch: specBranch, State: store.PRConflicting})
+	f.reportPR(t, core.ReportPullRequestInput{Branch: specBranch, State: domain.PRConflicting})
 
 	wantReason(t, f.getTicket(t, "acme-5"), core.ReasonToMerge)
 	if got := f.getTicket(t, "acme-6").NeedsMeReason; got != "" {
 		t.Fatalf("acme-6 reason %q, want none: the Spec is one item on acme-5", got)
 	}
 	row, ok := longRow(t, f, "acme-5")
-	if !ok || row.PullRequest == nil || row.PullRequest.State != store.PRConflicting || row.Branch != specBranch {
+	if !ok || row.PullRequest == nil || row.PullRequest.State != domain.PRConflicting || row.Branch != specBranch {
 		t.Fatalf("row %+v, want the Spec's conflicting pull request on its lead", row)
 	}
 	if _, ok := longRow(t, f, "acme-6"); ok {
@@ -147,7 +148,7 @@ func TestASpecsToMergeOffersNewFixTicketNotSendBack(t *testing.T) {
 	f.acceptedOnSpecBranch(t, 5, "one")
 	f.acceptedOnSpecBranch(t, 6, "two")
 	f.pushSpecBranch(t, "tip1", "acme-5", "acme-6")
-	f.reportPR(t, core.ReportPullRequestInput{Branch: specBranch, State: store.PROpen})
+	f.reportPR(t, core.ReportPullRequestInput{Branch: specBranch, State: domain.PROpen})
 
 	if _, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "acme-5", Note: "x"}); err == nil {
 		t.Fatal("send_back of a Spec's lead succeeded")
@@ -156,11 +157,11 @@ func TestASpecsToMergeOffersNewFixTicketNotSendBack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new_fix_ticket: %v", err)
 	}
-	if fix.Record == nil || fix.Record.State != store.Ready || fix.Record.Spec.ID != "acme-1" {
+	if fix.Record == nil || fix.Record.State != domain.Ready || fix.Record.Spec.ID != "acme-1" {
 		t.Fatalf("fix Ticket = %+v, want a Ready Ticket on acme-1", fix.Record)
 	}
 	for _, id := range []string{"acme-5", "acme-6"} {
-		if got := f.getTicket(t, id).State; got != store.Accepted {
+		if got := f.getTicket(t, id).State; got != domain.Accepted {
 			t.Errorf("%s is %s, want it still waiting Accepted", id, got)
 		}
 	}
@@ -179,7 +180,7 @@ func TestASpecsClosedPullRequestIsOneItemOffersNewFixTicketAndCancel(t *testing.
 	f.acceptedOnSpecBranch(t, 5, "one")
 	f.acceptedOnSpecBranch(t, 6, "two")
 	f.pushSpecBranch(t, "tip1", "acme-5", "acme-6")
-	f.reportPR(t, core.ReportPullRequestInput{Branch: specBranch, State: store.PRClosed})
+	f.reportPR(t, core.ReportPullRequestInput{Branch: specBranch, State: domain.PRClosed})
 
 	wantReason(t, f.getTicket(t, "acme-5"), core.ReasonPullRequestClosed)
 	if got := f.getTicket(t, "acme-6").NeedsMeReason; got != "" {
@@ -193,7 +194,7 @@ func TestASpecsClosedPullRequestIsOneItemOffersNewFixTicketAndCancel(t *testing.
 		t.Fatalf("cancel: %v", err)
 	}
 	for _, id := range []string{"acme-5", "acme-6"} {
-		if got := f.getTicket(t, id).State; got != store.Cancelled {
+		if got := f.getTicket(t, id).State; got != domain.Cancelled {
 			t.Errorf("%s is %s, want Cancelled with the Spec's waiting Tickets", id, got)
 		}
 	}
@@ -201,8 +202,8 @@ func TestASpecsClosedPullRequestIsOneItemOffersNewFixTicketAndCancel(t *testing.
 
 func TestATicketOutsideLandPerSpecGetsItsOwnPullRequestUnderPullRequest(t *testing.T) {
 	f := landWorld(t, true)
-	f.landing(t, store.Landing{Method: store.LandingPullRequest, Remote: "origin", LandPerSpec: false})
-	f.moveTo(t, 5, store.Accepted)
+	f.landing(t, domain.Landing{Method: domain.LandingPullRequest, Remote: "origin", LandPerSpec: false})
+	f.moveTo(t, 5, domain.Accepted)
 	if _, err := f.core.ReportPushedCommit(ctx, "acme", core.ReportPushedCommitInput{Ticket: "acme-5", Commit: "c5", Branch: "acme-5"}); err != nil {
 		t.Fatal(err)
 	}

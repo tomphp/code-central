@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -58,8 +59,8 @@ func (c *Core) SubmitMap(_ context.Context, key string, in SubmitMapInput) (Subm
 		now := c.now()
 		specN = w.NextNumber(key)
 		return w.PutImport(key, store.Import{
-			Specs: []store.Spec{{Number: specN, Title: title, Labels: []string{MapLabel}, Created: now, Updated: now, Body: mapBody(in.Text)}},
-			Tickets: []store.Ticket{{
+			Specs: []domain.Spec{{Number: specN, Title: title, Labels: []string{MapLabel}, Created: now, Updated: now, Body: mapBody(in.Text)}},
+			Tickets: []domain.Ticket{{
 				Number: specN + 1, Title: "Charting: " + title, State: submitState(in.Draft), Spec: specN,
 				Labels: []string{WayfinderPrefix + "chart"}, Created: now, Updated: now,
 				Description: fmt.Sprintf(chartingDescription, DisplayID(key, specN)),
@@ -74,11 +75,11 @@ func (c *Core) SubmitMap(_ context.Context, key string, in SubmitMapInput) (Subm
 	err = c.store.View(func(r store.Reader) error {
 		s, _ := r.Spec(key, specN)
 		var err error
-		if res.Spec, err = acknowledgeCreate(specView(key, store.Spec{}), specView(key, s), in.Full); err != nil {
+		if res.Spec, err = acknowledgeCreate(specView(key, domain.Spec{}), specView(key, s), in.Full); err != nil {
 			return err
 		}
 		t, _ := r.Ticket(key, specN+1)
-		res.Charting, err = acknowledgeCreate(c.ticketView(r, key, store.Ticket{}), c.ticketView(r, key, t), in.Full)
+		res.Charting, err = acknowledgeCreate(c.ticketView(r, key, domain.Ticket{}), c.ticketView(r, key, t), in.Full)
 		return err
 	})
 	return res, err
@@ -127,7 +128,7 @@ func isMap(labels []string) bool { return slices.Contains(labels, MapLabel) }
 
 // mapView is the Map block for Spec s with these Tickets, or nil when s
 // isn't a Map, reading their reasons from their Project's evaluation e.
-func mapView(e *evaluation, s store.Spec, tickets []store.Ticket) *MapView {
+func mapView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *MapView {
 	if !isMap(s.Labels) {
 		return nil
 	}
@@ -144,11 +145,11 @@ func mapView(e *evaluation, s store.Spec, tickets []store.Ticket) *MapView {
 			v.NeedsYou++
 		}
 		v.CanWriteSpec = v.CanWriteSpec && finished(t.State)
-		if !slices.Contains(WayfinderTypes(), NodeTypeOf(t.Labels)) || t.State == store.Cancelled {
+		if !slices.Contains(WayfinderTypes(), NodeTypeOf(t.Labels)) || t.State == domain.Cancelled {
 			continue
 		}
 		v.Total++
-		if t.State == store.Done {
+		if t.State == domain.Done {
 			v.Decided++
 		}
 	}

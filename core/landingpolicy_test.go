@@ -3,15 +3,15 @@ package core
 import (
 	"testing"
 
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 func TestLandingPolicyMatrix(t *testing.T) {
-	for _, m := range []store.LandingMethod{store.LandingMerge, store.LandingBranch, store.LandingPullRequest} {
+	for _, m := range []domain.LandingMethod{domain.LandingMerge, domain.LandingBranch, domain.LandingPullRequest} {
 		for _, push := range []bool{false, true} {
 			for _, lps := range []bool{false, true} {
 				for _, ci := range []bool{false, true} {
-					pr, merge, branch := m == store.LandingPullRequest, m == store.LandingMerge, m == store.LandingBranch
+					pr, merge, branch := m == domain.LandingPullRequest, m == domain.LandingMerge, m == domain.LandingBranch
 					// Pull Request with Push on reads as Push off.
 					effPush := push && !pr
 					want := map[string][2]bool{
@@ -53,14 +53,14 @@ func TestLandingPolicyMatrix(t *testing.T) {
 // there; that every other Repository, the Home among them, reads it
 // unchanged; and that the Project-wide rules ask across the Repositories.
 func TestARepositorysLandingPolicy(t *testing.T) {
-	owns := []store.OwnLanding{{}, {Method: store.LandingMerge, Push: true}, {Method: store.LandingBranch}, {Method: store.LandingPullRequest}}
-	for _, m := range []store.LandingMethod{store.LandingMerge, store.LandingBranch, store.LandingPullRequest} {
+	owns := []domain.OwnLanding{{}, {Method: domain.LandingMerge, Push: true}, {Method: domain.LandingBranch}, {Method: domain.LandingPullRequest}}
+	for _, m := range []domain.LandingMethod{domain.LandingMerge, domain.LandingBranch, domain.LandingPullRequest} {
 		for _, push := range []bool{false, true} {
 			for _, lps := range []bool{false, true} {
 				for _, ci := range []bool{false, true} {
 					for _, own := range owns {
-						p := store.Project{Key: "acme", Landing: store.Landing{Method: m, Push: push, LandPerSpec: lps}, CI: store.CI{Tracking: ci, PushRemoteURL: "git@github.com:acme/acme.git"}}
-						p.SetRepositories([]store.Repository{
+						p := domain.Project{Key: "acme", Landing: domain.Landing{Method: m, Push: push, LandPerSpec: lps}, CI: domain.CI{Tracking: ci, PushRemoteURL: "git@github.com:acme/acme.git"}}
+						p.SetRepositories([]domain.Repository{
 							{Name: "acme", Home: true, OwnLanding: own},
 							{Name: "web", CloneURL: "git@github.com:acme/web.git", Base: "main", OwnLanding: own},
 							{Name: "notes", LocalPath: "/src/notes", Base: "main", OwnLanding: own},
@@ -75,7 +75,7 @@ func TestARepositorysLandingPolicy(t *testing.T) {
 								t.Errorf("%s's policy under (default %s, push %v, own %+v, land per spec %v, ci %v) = %+v, want %+v", name, m, push, own, lps, ci, got, want)
 							}
 						}
-						if got, want := ps.RunsPullRequestWatcher(), em == store.LandingPullRequest; got != want {
+						if got, want := ps.RunsPullRequestWatcher(), em == domain.LandingPullRequest; got != want {
 							t.Errorf("RunsPullRequestWatcher under (default %s, own %+v) = %v, want %v", m, own, got, want)
 						}
 						if got := ps.RunsCIWatcher(); got != ci {
@@ -86,17 +86,17 @@ func TestARepositorysLandingPolicy(t *testing.T) {
 			}
 		}
 	}
-	p := store.Project{Key: "acme", Landing: store.Landing{Method: store.LandingMerge, Push: true}, CI: store.CI{Tracking: true}}
-	p.SetRepositories([]store.Repository{{Name: "acme", Home: true}, {Name: "notes", LocalPath: "/src/notes", Base: "main"}})
+	p := domain.Project{Key: "acme", Landing: domain.Landing{Method: domain.LandingMerge, Push: true}, CI: domain.CI{Tracking: true}}
+	p.SetRepositories([]domain.Repository{{Name: "acme", Home: true}, {Name: "notes", LocalPath: "/src/notes", Base: "main"}})
 	if lp := landingPolicyIn(p, "notes"); lp.PushesBase() || lp.KeepsBaseLevel() || lp.CIGateHolds() || lp.OffersLandAnyway() || lp.RecordsPushedCommit() {
 		t.Errorf("Merge + Push in a local-only Repository = %+v, want Merge's: no push, no fetch-and-level, no CI gate, no Land anyway and no pushed commit", lp)
 	}
-	p.Landing.Method = store.LandingBranch
+	p.Landing.Method = domain.LandingBranch
 	if lp := landingPolicyIn(p, "notes"); lp.PushesAcceptedBranch() {
 		t.Errorf("Branch + Push in a local-only Repository = %+v, want Branch's: no branch push on accept", lp)
 	}
-	p.Landing.Method = store.LandingMerge
-	p.SetRepositories([]store.Repository{{Name: "acme", Home: true}, {Name: "web", CloneURL: "git@github.com:acme/web.git", Base: "main", OwnLanding: store.OwnLanding{Method: store.LandingPullRequest}}})
+	p.Landing.Method = domain.LandingMerge
+	p.SetRepositories([]domain.Repository{{Name: "acme", Home: true}, {Name: "web", CloneURL: "git@github.com:acme/web.git", Base: "main", OwnLanding: domain.OwnLanding{Method: domain.LandingPullRequest}}})
 	if ps := landingPolicies(p); !ps.RunsPullRequestWatcher() || ps.In("acme").LandsByPullRequest() {
 		t.Errorf("one Repository under Pull Request: watcher %v, the Home by Pull Request %v; want the watcher on and the Home on Merge", ps.RunsPullRequestWatcher(), ps.In("acme").LandsByPullRequest())
 	}
@@ -106,17 +106,17 @@ func TestARepositorysLandingPolicy(t *testing.T) {
 // Factory's land takes today, where onSpecBranch is what waitsOnSpecBranch
 // reports and prMerged is whether the Ticket's pull request is merged.
 func TestLandingPolicyRoute(t *testing.T) {
-	today := func(m store.LandingMethod, onSpecBranch, prMerged bool) LandingRoute {
-		if m == store.LandingBranch {
+	today := func(m domain.LandingMethod, onSpecBranch, prMerged bool) LandingRoute {
+		if m == domain.LandingBranch {
 			return RouteBranch
-		} else if m == store.LandingPullRequest && (prMerged || !onSpecBranch) {
+		} else if m == domain.LandingPullRequest && (prMerged || !onSpecBranch) {
 			return RoutePullRequest
 		} else if onSpecBranch {
 			return RouteSpecBranch
 		}
 		return RouteMerge
 	}
-	for _, m := range []store.LandingMethod{store.LandingMerge, store.LandingBranch, store.LandingPullRequest} {
+	for _, m := range []domain.LandingMethod{domain.LandingMerge, domain.LandingBranch, domain.LandingPullRequest} {
 		for _, push := range []bool{false, true} {
 			for _, lps := range []bool{false, true} {
 				for _, ci := range []bool{false, true} {
