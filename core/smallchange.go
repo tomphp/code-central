@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -40,7 +41,7 @@ func (c *Core) SubmitSmallChange(_ context.Context, key string, in SubmitSmallCh
 			return err
 		}
 		now := c.now()
-		t := store.Ticket{
+		t := domain.Ticket{
 			Number: w.NextNumber(key), Title: title, State: submitState(in.Draft), Spec: spec,
 			Created: now, Updated: now, Description: in.Text,
 			Moves: submitMoves(in.Draft, now, "submit_small_change"),
@@ -48,27 +49,27 @@ func (c *Core) SubmitSmallChange(_ context.Context, key string, in SubmitSmallCh
 		if err := w.PutTicket(key, t); err != nil {
 			return err
 		}
-		v, err = acknowledgeCreate(c.ticketView(w, key, store.Ticket{}), c.ticketView(w, key, t), in.Full)
+		v, err = acknowledgeCreate(c.ticketView(w, key, domain.Ticket{}), c.ticketView(w, key, t), in.Full)
 		return err
 	})
 	return v, err
 }
 
 // submitState is the State a submit writes its Tickets in.
-func submitState(draft bool) store.State {
+func submitState(draft bool) domain.State {
 	if draft {
-		return store.Draft
+		return domain.Draft
 	}
-	return store.Ready
+	return domain.Ready
 }
 
 // submitMoves is the Moves of a Ticket a submit writes: its move to
 // Ready, or none when it is a Draft.
-func submitMoves(draft bool, now time.Time, via string) []store.Move {
+func submitMoves(draft bool, now time.Time, via string) []domain.Move {
 	if draft {
 		return nil
 	}
-	return []store.Move{{To: store.Ready, Actor: string(Human), Time: now, Via: via}}
+	return []domain.Move{{To: domain.Ready, Actor: string(Human), Time: now, Via: via}}
 }
 
 // smallChangesSpecBody is the Small Changes Spec's body.

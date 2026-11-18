@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // Reserved Wayfinder Labels and their Guides (Spec 213, ticket 217).
@@ -182,7 +182,7 @@ func TestClaimCarriesTheGuideForEachWayfinderTypeAndAPrototype(t *testing.T) {
 	f.project(t, "acme")
 	f.spec(t, "acme", "Map")
 	for l, name := range ticketTypeLabels {
-		tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: l, State: store.Ready, Labels: []string{l}})
+		tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: l, State: domain.Ready, Labels: []string{l}})
 		res, err := f.core.Claim(ctx, "acme", core.ClaimInput{Ticket: core.Ref(tk.ID)})
 		if err != nil {
 			t.Fatal(err)

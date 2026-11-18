@@ -48,7 +48,7 @@ func main() {
 
 // Enum ties a typed string the UI reaches to its Go value list.
 type Enum struct {
-	// Type is the typed string, such as store.State.
+	// Type is the typed string, such as domain.State.
 	Type reflect.Type
 	// List is the value list's Go name, such as "States". Its
 	// SCREAMING_SNAKE_CASE form names the TypeScript value array.

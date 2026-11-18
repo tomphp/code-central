@@ -1,11 +1,11 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // hasInOrder checks that c has want in a row after the Factory's flags,
@@ -30,7 +30,7 @@ func TestClaudeArgsReachEveryStartAndResumeBeforeThePrompt(t *testing.T) {
 	h := factorytest.New(t)
 	id, first, r := answeredTicket(t, h, "--", "--chrome", "--add-dir", "a", "b")
 	r.Poll()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	calls := h.Calls()
 	if len(calls) != 2 {
 		t.Fatalf("%d calls, want a start and a resume", len(calls))
@@ -78,7 +78,7 @@ func TestTheFactoryWarnsAndCarriesOnWhenTheClaudeArgsCheckIsNotUnderstood(t *tes
 	h.ClaudeSays("something new")
 	id := h.ReadyTicket("Work")
 	r := h.Start("--", "--chrome")
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	if out := r.Stderr() + r.Stdout(); !strings.Contains(out, "can't tell whether claude accepts the Claude Args") || !strings.Contains(out, "something new") {
 		t.Errorf("no warning with claude's output:\n%s", out)
 	}
@@ -90,7 +90,7 @@ func TestTheClaudeArgsCheckIsNotATurnAndOnlyRunsWithClaudeArgs(t *testing.T) {
 	h.ClaudeSays("would warn")
 	id := h.ReadyTicket("Work")
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	if strings.Contains(r.Stderr()+r.Stdout(), "Claude Args") {
 		t.Errorf("a Factory with no Claude Args mentioned them:\n%s%s", r.Stderr(), r.Stdout())
 	}
@@ -117,7 +117,7 @@ func TestAFailureReportForATurnWithNoResultListsTheClaudeArgs(t *testing.T) {
 			args = []string{"--", "--chrome"}
 		}
 		h.Start(args...)
-		fr := h.WantState(id, store.Failed).FailureReports[0]
+		fr := h.WantState(id, domain.Failed).FailureReports[0]
 		if got := strings.Contains(fr.WhatToFix, "--chrome"); got != withArgs {
 			t.Errorf("with Claude Args %v, what-to-fix is %q", withArgs, fr.WhatToFix)
 		}

@@ -3,6 +3,7 @@ package store_test
 import (
 	"errors"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,7 +22,7 @@ func seedAcmeFormat1(t *testing.T, dir string) *store.FileStore {
 	t.Helper()
 	s := openFormat(t, dir, 1)
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutProject(store.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed"})
+		return w.PutProject(domain.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed"})
 	})
 	return s
 }
@@ -33,11 +34,11 @@ func seedFormat1(t *testing.T) string {
 	dir := filepath.Join(t.TempDir(), "code-central")
 	s := seedAcmeFormat1(t, dir)
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutSpec("acme", store.Spec{Number: 1, Title: "Login", Created: t0, Updated: t0, Body: "# Login\n"})
+		return w.PutSpec("acme", domain.Spec{Number: 1, Title: "Login", Created: t0, Updated: t0, Body: "# Login\n"})
 	})
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutTicket("acme", store.Ticket{Number: 2, Title: "Form", State: store.Ready, Spec: 1, Created: t0, Updated: t0,
-			Moves: []store.Move{{From: store.Draft, To: store.Ready, Actor: "agent", Time: t0}}})
+		return w.PutTicket("acme", domain.Ticket{Number: 2, Title: "Form", State: domain.Ready, Spec: 1, Created: t0, Updated: t0,
+			Moves: []domain.Move{{From: domain.Draft, To: domain.Ready, Actor: "agent", Time: t0}}})
 	})
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
@@ -143,7 +144,7 @@ func TestAnOlderFormatIsMigratedThroughStagingAndBackedUp(t *testing.T) {
 		t.Fatalf("second open of the migrated store: %v, want ErrLocked", err)
 	}
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutTicket("acme", store.Ticket{Number: 3, Title: "More", State: store.Draft, Spec: 1, Created: t0, Updated: t0})
+		return w.PutTicket("acme", domain.Ticket{Number: 3, Title: "More", State: domain.Draft, Spec: 1, Created: t0, Updated: t0})
 	})
 	if _, err := os.Stat(filepath.Join(bak, "projects/acme/tickets/3.yaml")); err == nil {
 		t.Fatal("a write after the migration reached the backup")

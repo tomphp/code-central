@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // specClaimed is requirement with its spec Stage, acme-4, claimed as
@@ -13,8 +13,8 @@ import (
 func (f fixture) specClaimed(t *testing.T) {
 	t.Helper()
 	f.requirement(t)
-	f.setState(t, 3, store.Done)
-	f.setState(t, 4, store.Ready)
+	f.setState(t, 3, domain.Done)
+	f.setState(t, 4, domain.Ready)
 	f.claim(t, core.ClaimInput{Ticket: "acme-4"})
 }
 
@@ -24,7 +24,7 @@ func TestFinishingASpecStageStoresItsRecommendation(t *testing.T) {
 	if _, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-4", ClaimID: "claim-1", Summary: "Small Spec: implement.", Recommendation: "implement"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := f.get(t, "acme-4"); got.State != store.InReview || got.Recommendation != "implement" {
+	if got := f.get(t, "acme-4"); got.State != domain.InReview || got.Recommendation != "implement" {
 		t.Fatalf("spec Stage %s with recommendation %q, want In Review with implement", got.State, got.Recommendation)
 	}
 }
@@ -47,12 +47,12 @@ func TestALaterFinishReplacesTheRecommendation(t *testing.T) {
 }
 
 func TestASpecStageCannotFinishWithoutAValidRecommendation(t *testing.T) {
-	for _, rec := range []store.Recommendation{"", "  ", "maybe"} {
+	for _, rec := range []domain.Recommendation{"", "  ", "maybe"} {
 		f := newFixture(t)
 		f.specClaimed(t)
 		_, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-4", ClaimID: "claim-1", Summary: "Done.", Recommendation: rec})
 		wantCode(t, err, core.Invalid, "recommendation")
-		if got := f.get(t, "acme-4"); got.State != store.InProgress || got.Recommendation != "" {
+		if got := f.get(t, "acme-4"); got.State != domain.InProgress || got.Recommendation != "" {
 			t.Fatalf("recommendation %q: spec Stage %s with %q, want still In Progress with none", rec, got.State, got.Recommendation)
 		}
 	}
@@ -60,11 +60,11 @@ func TestASpecStageCannotFinishWithoutAValidRecommendation(t *testing.T) {
 
 func TestOnlyASpecStageTakesARecommendation(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{})
 	_, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-2", ClaimID: "claim-1", Summary: "Done.", Recommendation: "split"})
 	wantCode(t, err, core.Invalid, "recommendation")
-	if got := f.get(t, "acme-2"); got.State != store.InProgress || got.Recommendation != "" {
+	if got := f.get(t, "acme-2"); got.State != domain.InProgress || got.Recommendation != "" {
 		t.Fatalf("Ticket %s with %q, want still In Progress with no recommendation", got.State, got.Recommendation)
 	}
 	// Without one, it finishes and reads no recommendation.

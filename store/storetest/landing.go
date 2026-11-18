@@ -2,6 +2,7 @@ package storetest
 
 import (
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"testing"
 
 	"github.com/tomoram/code-central/store"
@@ -16,7 +17,7 @@ func runLanding(t *testing.T, f Factory) {
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
 				p, _ := r.Project("acme")
-				if want := store.DefaultLanding(); p.Landing != want {
+				if want := domain.DefaultLanding(); p.Landing != want {
 					t.Fatalf("landing = %+v, want %+v", p.Landing, want)
 				}
 			})
@@ -29,9 +30,9 @@ func runLanding(t *testing.T, f Factory) {
 
 	t.Run("a project's landing method reads back after it is written", func(t *testing.T) {
 		s := f.New(t)
-		want := store.Landing{Method: store.LandingBranch, Push: true, Remote: "upstream"}
+		want := domain.Landing{Method: domain.LandingBranch, Push: true, Remote: "upstream"}
 		put(t, s, func(w store.Writer) error {
-			return w.PutProject(store.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed", Landing: want})
+			return w.PutProject(domain.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed", Landing: want})
 		})
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
@@ -49,9 +50,9 @@ func runLanding(t *testing.T, f Factory) {
 	for _, on := range []bool{true, false} {
 		t.Run(fmt.Sprintf("a project's land per spec %v reads back after it is written", on), func(t *testing.T) {
 			s := f.New(t)
-			want := store.Landing{Method: store.LandingMerge, Push: true, Remote: "upstream", LandPerSpec: on}
+			want := domain.Landing{Method: domain.LandingMerge, Push: true, Remote: "upstream", LandPerSpec: on}
 			put(t, s, func(w store.Writer) error {
-				return w.PutProject(store.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed", Landing: want})
+				return w.PutProject(domain.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed", Landing: want})
 			})
 			check := func(s store.Store) {
 				read(t, s, func(r store.Reader) {

@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // The Stage strip (Spec code-central-931): a Requirement's segments,
@@ -67,15 +67,15 @@ func (f fixture) stripOf(t *testing.T, ref core.Ref) *core.RequirementView {
 
 // stagesDone is f.requirement with all three Stages Done and these Build
 // Tickets from acme-6 on, in claim order, each in its State.
-func (f fixture) stagesDone(t *testing.T, states ...store.State) {
+func (f fixture) stagesDone(t *testing.T, states ...domain.State) {
 	t.Helper()
 	f.requirement(t)
 	for _, n := range []int{3, 4, 5} {
-		f.setState(t, n, store.Done)
+		f.setState(t, n, domain.Done)
 	}
 	for _, s := range states {
-		tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "2", Title: "Build", State: store.Ready})
-		if s != store.Ready {
+		tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "2", Title: "Build", State: domain.Ready})
+		if s != domain.Ready {
 			f.setState(t, ticketNumber(t, tk.ID), s)
 		}
 		f.clock.Advance(1)
@@ -118,23 +118,27 @@ func TestTheStageStripFollowsEachStageAndBuildThroughItsProgress(t *testing.T) {
 			want{[]string{"grilling running acme-3", "spec waiting acme-4", "tickets waiting acme-5", "build waiting"}, "grilling", []string{}, "acme-3"},
 		},
 		"a Stage waiting on the human needs it, and the Requirement opens on it": {
-			func(f fixture, t *testing.T) core.Ref { f.requirement(t); f.setState(t, 3, store.InReview); return "2" },
+			func(f fixture, t *testing.T) core.Ref {
+				f.requirement(t)
+				f.setState(t, 3, domain.InReview)
+				return "2"
+			},
 			want{[]string{"grilling needs acme-3 in_review", "spec waiting acme-4", "tickets waiting acme-5", "build waiting"}, "grilling", []string{"acme-3 in_review grilling"}, "acme-3"},
 		},
 		"a Draft first Stage waits, as no Factory can claim it": {
-			func(f fixture, t *testing.T) core.Ref { f.requirement(t); f.setState(t, 3, store.Draft); return "2" },
+			func(f fixture, t *testing.T) core.Ref { f.requirement(t); f.setState(t, 3, domain.Draft); return "2" },
 			want{[]string{"grilling waiting acme-3", "spec waiting acme-4", "tickets waiting acme-5", "build waiting"}, "grilling", []string{}, "acme-3"},
 		},
 		"a Done Stage is done, and the next is current": {
-			func(f fixture, t *testing.T) core.Ref { f.requirement(t); f.setState(t, 3, store.Done); return "2" },
+			func(f fixture, t *testing.T) core.Ref { f.requirement(t); f.setState(t, 3, domain.Done); return "2" },
 			want{[]string{"grilling done acme-3", "spec queued acme-4", "tickets waiting acme-5", "build waiting"}, "spec", []string{}, "acme-4"},
 		},
 		"a Cancelled Stage is skipped, passed over as a Done one is": {
 			func(f fixture, t *testing.T) core.Ref {
 				f.requirement(t)
-				f.setState(t, 3, store.Done)
-				f.setState(t, 4, store.Done)
-				f.ticket(t, "acme", core.CreateTicketInput{Spec: "2", Title: "Everything", State: store.Ready}) // acme-6
+				f.setState(t, 3, domain.Done)
+				f.setState(t, 4, domain.Done)
+				f.ticket(t, "acme", core.CreateTicketInput{Spec: "2", Title: "Everything", State: domain.Ready}) // acme-6
 				f.cancel(t, core.CancelInput{Ticket: "acme-5", Replacements: []core.Ref{"acme-6"}}, core.Human)
 				return "2"
 			},
@@ -154,7 +158,7 @@ func TestTheStageStripFollowsEachStageAndBuildThroughItsProgress(t *testing.T) {
 		"a Requirement made from a Map has a done Map segment in place of Grilling": {
 			func(f fixture, t *testing.T) core.Ref {
 				f.mapWith(t)
-				f.setState(t, 2, store.Done)
+				f.setState(t, 2, domain.Done)
 				if _, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode, Map: "acme-1"}); err != nil {
 					t.Fatalf("submit_requirement: %v", err)
 				}
@@ -169,12 +173,12 @@ func TestTheStageStripFollowsEachStageAndBuildThroughItsProgress(t *testing.T) {
 			want{[]string{"grilling done acme-3", "spec done acme-4", "tickets done acme-5", "build waiting"}, "build", []string{}, "acme-5"},
 		},
 		"Build is queued while a Build Ticket waits for a Factory, and opens on the first unfinished one": {
-			func(f fixture, t *testing.T) core.Ref { f.stagesDone(t, store.Done, store.Ready); return "2" },
+			func(f fixture, t *testing.T) core.Ref { f.stagesDone(t, domain.Done, domain.Ready); return "2" },
 			want{[]string{"grilling done acme-3", "spec done acme-4", "tickets done acme-5", "build queued"}, "build", []string{}, "acme-7"},
 		},
 		"Build is running while a Factory holds a Build Ticket": {
 			func(f fixture, t *testing.T) core.Ref {
-				f.stagesDone(t, store.Ready, store.Ready)
+				f.stagesDone(t, domain.Ready, domain.Ready)
 				f.claim(t, core.ClaimInput{Ticket: "acme-7"})
 				return "2"
 			},
@@ -182,13 +186,13 @@ func TestTheStageStripFollowsEachStageAndBuildThroughItsProgress(t *testing.T) {
 		},
 		"Build needs the human when a Build Ticket does, with its first need's reason": {
 			func(f fixture, t *testing.T) core.Ref {
-				f.stagesDone(t, store.Ready, store.Failed, store.InReview)
+				f.stagesDone(t, domain.Ready, domain.Failed, domain.InReview)
 				return "2"
 			},
 			want{[]string{"grilling done acme-3", "spec done acme-4", "tickets done acme-5", "build needs failed"}, "build", []string{"acme-7 failed", "acme-8 in_review"}, "acme-7"},
 		},
 		"Build is done when every Build Ticket is, and opens on the last Build Ticket": {
-			func(f fixture, t *testing.T) core.Ref { f.stagesDone(t, store.Done, store.Cancelled); return "2" },
+			func(f fixture, t *testing.T) core.Ref { f.stagesDone(t, domain.Done, domain.Cancelled); return "2" },
 			want{[]string{"grilling done acme-3", "spec done acme-4", "tickets done acme-5", "build done"}, "build", []string{}, "acme-7"},
 		},
 		// Needs: the Stage Tickets first, in Stage order, then the Build
@@ -197,11 +201,11 @@ func TestTheStageStripFollowsEachStageAndBuildThroughItsProgress(t *testing.T) {
 		"needs list the Stages first, then Build in claim order": {
 			func(f fixture, t *testing.T) core.Ref {
 				f.requirement(t)
-				f.setState(t, 3, store.Done)
-				f.ticket(t, "acme", core.CreateTicketInput{Spec: "2", Title: "Toggle", State: store.Ready}) // acme-6
-				f.ticket(t, "acme", core.CreateTicketInput{Spec: "2", Title: "Docs", State: store.Ready})   // acme-7
+				f.setState(t, 3, domain.Done)
+				f.ticket(t, "acme", core.CreateTicketInput{Spec: "2", Title: "Toggle", State: domain.Ready}) // acme-6
+				f.ticket(t, "acme", core.CreateTicketInput{Spec: "2", Title: "Docs", State: domain.Ready})   // acme-7
 				for _, n := range []int{7, 6, 4} {
-					f.setState(t, n, store.InReview)
+					f.setState(t, n, domain.InReview)
 				}
 				return "2"
 			},

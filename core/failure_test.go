@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 func report(ticket, claimID string) core.ReportFailureInput {
@@ -27,7 +27,7 @@ func fullReport(ticket, claimID string) core.ReportFailureInput {
 // failed is acme-2 claimed (claim-1, session s1) and failed at t0+1h.
 func (f fixture) failed(t *testing.T) {
 	t.Helper()
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{SessionID: "s1"})
 	f.clock.Set(t0.Add(time.Hour))
 	if _, err := f.core.ReportFailure(ctx, "acme", report("2", "claim-1")); err != nil {
@@ -37,7 +37,7 @@ func (f fixture) failed(t *testing.T) {
 
 func TestReportFailureMovesToFailedEndsTheClaimAndSaysStop(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{SessionID: "s1"})
 	f.clock.Set(t0.Add(time.Hour))
 
@@ -45,7 +45,7 @@ func TestReportFailureMovesToFailedEndsTheClaimAndSaysStop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Ticket.State != store.Failed || res.NextStep != "stop working this Ticket" {
+	if res.Ticket.State != domain.Failed || res.NextStep != "stop working this Ticket" {
 		t.Fatalf("state %s, next step %q", res.Ticket.State, res.NextStep)
 	}
 	want := core.FailureReportView{
@@ -67,7 +67,7 @@ func TestReportFailureMovesToFailedEndsTheClaimAndSaysStop(t *testing.T) {
 
 func TestReportFailureNeedsEveryField(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{})
 	for field, blank := range map[string]func(*core.ReportFailureInput){
 		"what_broke":        func(in *core.ReportFailureInput) { in.WhatBroke = "" },
@@ -80,14 +80,14 @@ func TestReportFailureNeedsEveryField(t *testing.T) {
 		_, err := f.core.ReportFailure(ctx, "acme", in)
 		wantCode(t, err, core.Invalid, field)
 	}
-	if got, _ := f.core.GetTicket(ctx, "acme", whole("2")); got.State != store.InProgress || len(got.FailureReports) != 0 {
+	if got, _ := f.core.GetTicket(ctx, "acme", whole("2")); got.State != domain.InProgress || len(got.FailureReports) != 0 {
 		t.Fatalf("state %s, reports %d: want still In Progress with none", got.State, len(got.FailureReports))
 	}
 }
 
 func TestReportFailureIsOnlyForTheHolderFromInProgress(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready)
+	f.work(t, domain.Ready, domain.Ready)
 	f.claim(t, core.ClaimInput{})
 	// Not the holder, even as the human.
 	_, err := f.core.ReportFailure(human, "acme", report("2", "claim-9"))
@@ -120,10 +120,10 @@ func TestFailureReportsAreNumberedAndKeptAcrossClaims(t *testing.T) {
 // code-central-848), which no Actor is offered.
 func TestOnlyAFailureReportEntersFailed(t *testing.T) {
 	for _, a := range core.Workflow {
-		if a.To == store.Failed && a.Name != "report_failure" && (a.Name != "fail_finish" || a.Who != core.FactoryMove) {
+		if a.To == domain.Failed && a.Name != "report_failure" && (a.Name != "fail_finish" || a.Who != core.FactoryMove) {
 			t.Errorf("%s moves to Failed", a.Name)
 		}
-		if a.To == "" && !slices.Contains(a.Except, store.Failed) {
+		if a.To == "" && !slices.Contains(a.Except, domain.Failed) {
 			t.Errorf("%s can choose Failed", a.Name)
 		}
 	}
@@ -132,14 +132,14 @@ func TestOnlyAFailureReportEntersFailed(t *testing.T) {
 func TestSendBackMovesFailedToReadyKeepingItsPlace(t *testing.T) {
 	f := newFixture(t)
 	f.failed(t)
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Later", State: store.Ready})
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Later", State: domain.Ready})
 	f.clock.Set(t0.Add(2 * time.Hour))
 
 	v, err := record(f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "2", Note: "Migration 12 is in now.", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.State != store.Ready {
+	if v.State != domain.Ready {
 		t.Fatalf("state %s", v.State)
 	}
 	want := core.CommentView{Number: 1, Actor: "human", Time: t0.Add(2 * time.Hour), Body: "Migration 12 is in now."}
@@ -159,7 +159,7 @@ func TestSendBackWithoutANoteStoresNoComment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.State != store.Ready || len(v.Comments) != 0 {
+	if v.State != domain.Ready || len(v.Comments) != 0 {
 		t.Fatalf("state %s, comments %+v", v.State, v.Comments)
 	}
 }
@@ -171,7 +171,7 @@ func TestToDraftMovesFailedToDraft(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.State != store.Draft {
+	if v.State != domain.Draft {
 		t.Fatalf("state %s", v.State)
 	}
 }
@@ -192,7 +192,7 @@ func TestSendBackAndToDraftAreHumanOnlyFromFailed(t *testing.T) {
 func TestTheHumanMayCancelAFailedTicket(t *testing.T) {
 	var ok bool
 	for _, a := range core.Workflow {
-		if a.Name == "cancel" && a.Who == core.HumanActor && a.To == store.Cancelled && slices.Contains(a.From, store.Failed) {
+		if a.Name == "cancel" && a.Who == core.HumanActor && a.To == domain.Cancelled && slices.Contains(a.From, domain.Failed) {
 			ok = true
 		}
 	}
@@ -203,7 +203,7 @@ func TestTheHumanMayCancelAFailedTicket(t *testing.T) {
 
 func TestGiveUpMovesInProgressToReadyWithTheNote(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{})
 	f.clock.Set(t0.Add(time.Hour))
 
@@ -211,7 +211,7 @@ func TestGiveUpMovesInProgressToReadyWithTheNote(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Ticket.State != store.Ready || res.NextStep != "stop working this Ticket" {
+	if res.Ticket.State != domain.Ready || res.NextStep != "stop working this Ticket" {
 		t.Fatalf("state %s, next step %q", res.Ticket.State, res.NextStep)
 	}
 	want := core.CommentView{Number: 1, Actor: "agent", Time: t0.Add(time.Hour), Claim: 1, Body: "Out of context; nothing is wrong."}
@@ -225,20 +225,20 @@ func TestGiveUpMovesInProgressToReadyWithTheNote(t *testing.T) {
 
 func TestGiveUpNeedsANoteAndTheHolder(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{})
 	_, err := f.core.GiveUp(ctx, "acme", core.GiveUpInput{Ticket: "2", ClaimID: "claim-1", Note: " "})
 	wantCode(t, err, core.Invalid, "note")
 	_, err = f.core.GiveUp(ctx, "acme", core.GiveUpInput{Ticket: "2", ClaimID: "claim-9", Note: "n"})
 	wantCode(t, err, core.StaleClaim, "")
-	if got, _ := f.core.GetTicket(ctx, "acme", whole("2")); got.State != store.InProgress {
+	if got, _ := f.core.GetTicket(ctx, "acme", whole("2")); got.State != domain.InProgress {
 		t.Fatalf("state %s", got.State)
 	}
 }
 
 func TestTheNextClaimSeesTheWholeHistory(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{SessionID: "s1"}) // t0+1m
 	f.clock.Set(t0.Add(10 * time.Minute))
 	f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: "Halfway."})
@@ -271,7 +271,7 @@ func TestTheNextClaimSeesTheWholeHistory(t *testing.T) {
 
 func TestAClaimsLastActivityIsTheLatestAgentWriteDuringIt(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{}) // t0+1m
 	got, _ := f.core.GetTicket(ctx, "acme", whole("2"))
 	if la := got.Claims[0].LastActivity; !la.Equal(t0.Add(time.Minute)) {

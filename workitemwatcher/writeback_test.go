@@ -3,6 +3,7 @@ package workitemwatcher_test
 import (
 	"context"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"net/http"
 	"slices"
 	"strings"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakeazdo"
-	"github.com/tomoram/code-central/store"
 )
 
 // agent is the context an agent's writes are made in.
@@ -356,7 +356,7 @@ func (w *watching) workedDone(ticket, comment, commit string) {
 	if err == nil {
 		in := core.FinishInput{Ticket: core.Ref(ticket), ClaimID: c.ClaimID, Summary: "Finished " + ticket + ".", Branch: branch}
 		if core.StageOf(c.Ticket.Labels) == "spec" {
-			in.Recommendation = store.RecommendSplit
+			in.Recommendation = domain.RecommendSplit
 		}
 		_, err = w.srv.Core.Finish(agent, "acme", in)
 	}

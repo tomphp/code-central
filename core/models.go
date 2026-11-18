@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -37,7 +38,7 @@ type KindModelsView struct {
 	ModelRowView
 }
 
-func modelsView(m store.Models) ModelsView {
+func modelsView(m domain.Models) ModelsView {
 	v := ModelsView{Default: ModelRowView(m.Default), Chat: ModelRowView(m.Chat), Kinds: []KindModelsView{}}
 	for _, g := range GuideNames {
 		v.Kinds = append(v.Kinds, KindModelsView{Kind: g, ModelRowView: ModelRowView(m.Kind(g))})
@@ -91,33 +92,33 @@ func (c *Core) SetModels(ctx context.Context, key string, in SetModelsInput) (Wr
 
 // checkedModels checks in's rows and returns them as stored: only the rows that
 // set something, in GuideNames order.
-func checkedModels(r store.Reader, key string, in SetModelsInput) (store.Models, error) {
-	var m store.Models
+func checkedModels(r store.Reader, key string, in SetModelsInput) (domain.Models, error) {
+	var m domain.Models
 	var err error
 	if m.Default, err = modelRow(r, key, "default", "the Project default", in.Default); err != nil {
-		return store.Models{}, err
+		return domain.Models{}, err
 	}
 	if m.Chat, err = modelRow(r, key, "chat", "the Chat row", in.Chat); err != nil {
-		return store.Models{}, err
+		return domain.Models{}, err
 	}
 	seen := map[string]bool{}
 	for _, k := range in.Kinds {
 		switch {
 		case !slices.Contains(GuideNames, k.Kind):
-			return store.Models{}, invalid("kinds", "%q isn't a kind of work; the kinds are %s", k.Kind, strings.Join(GuideNames, ", "))
+			return domain.Models{}, invalid("kinds", "%q isn't a kind of work; the kinds are %s", k.Kind, strings.Join(GuideNames, ", "))
 		case seen[k.Kind]:
-			return store.Models{}, invalid("kinds", "there are two rows for %q; give each kind of work one", k.Kind)
+			return domain.Models{}, invalid("kinds", "there are two rows for %q; give each kind of work one", k.Kind)
 		}
 		seen[k.Kind] = true
 		row, err := modelRow(r, key, "kinds."+k.Kind, "the "+k.Kind+" row", k.ModelRowView)
 		if err != nil {
-			return store.Models{}, err
+			return domain.Models{}, err
 		}
-		if row != (store.ModelRow{}) {
-			m.Kinds = append(m.Kinds, store.KindModels{Kind: k.Kind, ModelRow: row})
+		if row != (domain.ModelRow{}) {
+			m.Kinds = append(m.Kinds, domain.KindModels{Kind: k.Kind, ModelRow: row})
 		}
 	}
-	slices.SortFunc(m.Kinds, func(a, b store.KindModels) int {
+	slices.SortFunc(m.Kinds, func(a, b domain.KindModels) int {
 		return slices.Index(GuideNames, a.Kind) - slices.Index(GuideNames, b.Kind)
 	})
 	return m, nil
@@ -126,18 +127,18 @@ func checkedModels(r store.Reader, key string, in SetModelsInput) (store.Models,
 // modelRow checks one row, named for messages, whose fields start with
 // field: a model is one line that isn't blank, an effort one of the
 // Project's valid levels, and either may be empty to leave it unset.
-func modelRow(r store.Reader, key, field, name string, v ModelRowView) (store.ModelRow, error) {
+func modelRow(r store.Reader, key, field, name string, v ModelRowView) (domain.ModelRow, error) {
 	model := strings.TrimSpace(v.Model)
 	switch {
 	case v.Model != "" && model == "":
-		return store.ModelRow{}, invalid(field+".model", "%s's model is blank; leave it empty for Default", name)
+		return domain.ModelRow{}, invalid(field+".model", "%s's model is blank; leave it empty for Default", name)
 	case strings.ContainsAny(model, "\r\n"):
-		return store.ModelRow{}, invalid(field+".model", "%s's model spans more than one line; a model is one line", name)
+		return domain.ModelRow{}, invalid(field+".model", "%s's model spans more than one line; a model is one line", name)
 	}
 	if v.Effort != "" {
 		if err := checkEffort(r, key, field+".effort", v.Effort); err != nil {
-			return store.ModelRow{}, err
+			return domain.ModelRow{}, err
 		}
 	}
-	return store.ModelRow{Model: model, Effort: v.Effort}, nil
+	return domain.ModelRow{Model: model, Effort: v.Effort}, nil
 }

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // The published workflow (ticket 26): get_workflow, the MCP instructions
@@ -14,14 +14,14 @@ import (
 
 func TestTheWorkflowListsEveryStateWithItsMeaning(t *testing.T) {
 	w := workflow(t)
-	var names []store.State
+	var names []domain.State
 	for _, s := range w.States {
 		names = append(names, s.Name)
 		if s.Meaning == "" {
 			t.Errorf("State %s has no meaning", s.Name)
 		}
 	}
-	if !slices.Equal(names, store.States) {
+	if !slices.Equal(names, domain.States) {
 		t.Fatalf("States %v, want the ten in workflow order", names)
 	}
 	if w.States[3].Meaning != "The agent is stopped on an unanswered Question" {
@@ -35,7 +35,7 @@ func TestTheWorkflowsActionsAreTheTableCoreEnforces(t *testing.T) {
 		t.Fatalf("%d actions, want one per row of core.Workflow (%d)", len(w.Actions), len(core.Workflow))
 	}
 	finish := action(t, w, "finish", "agent (holder)")
-	if !slices.Equal(finish.From, []store.State{store.InProgress}) || finish.To != store.InReview {
+	if !slices.Equal(finish.From, []domain.State{domain.InProgress}) || finish.To != domain.InReview {
 		t.Fatalf("finish %+v", finish)
 	}
 	if finish.Requires == "" || !finish.ClaimID {
@@ -47,22 +47,22 @@ func TestTheWorkflowsActionsAreTheTableCoreEnforces(t *testing.T) {
 	if a := action(t, w, "approve", "human or agent"); a.ClaimID || a.Requires != "" {
 		t.Fatalf("approve needs no content and no Claim ID: %+v", a)
 	}
-	if move := action(t, w, "move", "human"); move.To != "" || !slices.Equal(move.Except, []store.State{store.NeedsAnswer, store.Failed}) {
+	if move := action(t, w, "move", "human"); move.To != "" || !slices.Equal(move.Except, []domain.State{domain.NeedsAnswer, domain.Failed}) {
 		t.Fatalf("move goes anywhere except Needs Answer and Failed (entered only by a Round or a Failure Report): %+v", move)
 	}
 	// The agent's cancel and the human's are two rows.
 	action(t, w, "cancel", "agent")
 	action(t, w, "cancel", "human")
 	// land is the way from Accepted to Done, for either Actor (ADR 0006).
-	if land := action(t, w, "land", "human or agent"); !slices.Equal(land.From, []store.State{store.Accepted, store.InReview}) || land.To != store.Done || land.Requires == "" {
+	if land := action(t, w, "land", "human or agent"); !slices.Equal(land.From, []domain.State{domain.Accepted, domain.InReview}) || land.To != domain.Done || land.Requires == "" {
 		t.Fatalf("land %+v", land)
 	}
 	// send_back has the human's row from Failed and the agent's from
 	// Accepted, whose note is required (ticket 72).
-	if sb := action(t, w, "send_back", "human"); !slices.Equal(sb.From, []store.State{store.Failed}) || sb.To != store.Ready {
+	if sb := action(t, w, "send_back", "human"); !slices.Equal(sb.From, []domain.State{domain.Failed}) || sb.To != domain.Ready {
 		t.Fatalf("human send_back %+v", sb)
 	}
-	if sb := action(t, w, "send_back", "agent"); !slices.Equal(sb.From, []store.State{store.Accepted}) || sb.To != store.Ready || !strings.Contains(sb.Requires, "required") {
+	if sb := action(t, w, "send_back", "agent"); !slices.Equal(sb.From, []domain.State{domain.Accepted}) || sb.To != domain.Ready || !strings.Contains(sb.Requires, "required") {
 		t.Fatalf("agent send_back %+v", sb)
 	}
 }

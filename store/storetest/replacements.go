@@ -1,6 +1,7 @@
 package storetest
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"slices"
 	"testing"
 
@@ -13,30 +14,30 @@ func runReplacements(t *testing.T, f Factory) {
 	t.Run("replacements are followed on read without rewriting dependants", func(t *testing.T) {
 		s := f.New(t)
 		seedProject(t, s)
-		tk := func(n int, state store.State, blockedBy, replacements []int) store.Ticket {
-			return store.Ticket{Number: n, Title: "T", State: state, Spec: 1, BlockedBy: blockedBy, Replacements: replacements, Created: t0, Updated: t0}
+		tk := func(n int, state domain.State, blockedBy, replacements []int) domain.Ticket {
+			return domain.Ticket{Number: n, Title: "T", State: state, Spec: 1, BlockedBy: blockedBy, Replacements: replacements, Created: t0, Updated: t0}
 		}
 		put(t, s, func(w store.Writer) error {
-			return w.PutSpec("acme", store.Spec{Number: 1, Title: "S", Created: t0, Updated: t0})
+			return w.PutSpec("acme", domain.Spec{Number: 1, Title: "S", Created: t0, Updated: t0})
 		})
-		for _, x := range []store.Ticket{
-			tk(2, store.Ready, []int{3}, nil),     // blocked by 3
-			tk(3, store.Ready, nil, nil),          // cancelled below
-			tk(4, store.Ready, nil, nil),          // a Replacement
-			tk(5, store.Cancelled, nil, []int{6}), // a Cancelled Replacement, itself replaced
-			tk(6, store.Draft, nil, nil),
-			tk(7, store.Cancelled, nil, nil),      // Cancelled with no Replacements
-			tk(8, store.Cancelled, nil, []int{9}), // a loop (only by hand edits)
-			tk(9, store.Cancelled, nil, []int{8}),
-			tk(10, store.Cancelled, nil, []int{11, 12}), // a diamond: both sides reach 13
-			tk(11, store.Cancelled, nil, []int{13}),
-			tk(12, store.Cancelled, nil, []int{13}),
-			tk(13, store.Ready, nil, nil),
+		for _, x := range []domain.Ticket{
+			tk(2, domain.Ready, []int{3}, nil),     // blocked by 3
+			tk(3, domain.Ready, nil, nil),          // cancelled below
+			tk(4, domain.Ready, nil, nil),          // a Replacement
+			tk(5, domain.Cancelled, nil, []int{6}), // a Cancelled Replacement, itself replaced
+			tk(6, domain.Draft, nil, nil),
+			tk(7, domain.Cancelled, nil, nil),      // Cancelled with no Replacements
+			tk(8, domain.Cancelled, nil, []int{9}), // a loop (only by hand edits)
+			tk(9, domain.Cancelled, nil, []int{8}),
+			tk(10, domain.Cancelled, nil, []int{11, 12}), // a diamond: both sides reach 13
+			tk(11, domain.Cancelled, nil, []int{13}),
+			tk(12, domain.Cancelled, nil, []int{13}),
+			tk(13, domain.Ready, nil, nil),
 		} {
 			put(t, s, func(w store.Writer) error { return w.PutTicket("acme", x) })
 		}
 		// Cancelling 3 writes 3's file only.
-		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", tk(3, store.Cancelled, nil, []int{4, 5})) })
+		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", tk(3, domain.Cancelled, nil, []int{4, 5})) })
 
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {

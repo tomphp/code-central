@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // stateTickets is the Tickets of the Claims in the Factory's state file.
@@ -42,7 +42,7 @@ func TestAReleasedClaimsTurnIsStoppedAndDropped(t *testing.T) {
 	id := h.ReadyTicket("Stopped")
 	h.Script(id, factorytest.Wait())
 	r := h.Start()
-	h.WantState(id, store.InProgress)
+	h.WantState(id, domain.InProgress)
 	h.WantCalls(1)
 
 	if _, err := h.Human().Release(context.Background(), h.Project, core.ReleaseInput{Ticket: core.Ref(id)}); err != nil {
@@ -136,7 +136,7 @@ func TestAReleasedTicketIsClaimedAfreshInItsWorktreeOnItsBranch(t *testing.T) {
 
 	h.Continue(id)
 	r.Settle()
-	tk := h.WantState(id, store.InReview)
+	tk := h.WantState(id, domain.InReview)
 	if n := len(tk.Claims); n != 2 {
 		t.Errorf("%s has %d Claims, want 2", id, n)
 	}

@@ -74,8 +74,8 @@ import (
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/home"
-	"github.com/tomoram/code-central/store"
 )
 
 // Env is everything the Factory touches outside itself, so tests can run
@@ -507,7 +507,7 @@ func start(e Env, o options) (*factory, error) {
 	p, readErr := f.client.GetProject(context.Background(), project)
 	// The base is the Project's, read again on every poll; until it can be
 	// read, it is the default.
-	base := store.DefaultBase
+	base := domain.DefaultBase
 	if readErr == nil {
 		base = p.Landing.Base
 	}

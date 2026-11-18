@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"slices"
 	"testing"
 	"time"
@@ -9,7 +10,6 @@ import (
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
-	"github.com/tomoram/code-central/store"
 )
 
 // CI failed and Land anyway (code-central-261): an Accepted Ticket whose
@@ -45,9 +45,9 @@ var failedAt = codecentraltest.Start.Add(5 * time.Minute)
 func failedCI(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	pushedAccepted(t, srv)
-	failed := ciRun(1, "ci.yml", "abc123", store.CICompleted, store.CIFailure)
+	failed := ciRun(1, "ci.yml", "abc123", domain.CICompleted, domain.CIFailure)
 	failed.Finished = &failedAt
-	reportRuns(t, srv, failed, ciRun(2, "lint.yml", "abc123", store.CICompleted, store.CISuccess))
+	reportRuns(t, srv, failed, ciRun(2, "lint.yml", "abc123", domain.CICompleted, domain.CISuccess))
 }
 
 // needsMeRowOf is id's Needs Me row, as the HTTP API gives it, if it has
@@ -122,9 +122,9 @@ func workflowNeedsMe(t *testing.T) []core.NeedsMeReason {
 
 func TestOnlyAFailedCIResultIsCIFailed(t *testing.T) {
 	for name, runs := range map[string][]core.CIRunView{
-		"running": {ciRun(1, "ci.yml", "abc123", store.CIInProgress, "")},
-		"passed":  {ciRun(1, "ci.yml", "abc123", store.CICompleted, store.CISuccess)},
-		"ignored": {ciRun(1, "nightly.yml", "abc123", store.CICompleted, store.CIFailure)},
+		"running": {ciRun(1, "ci.yml", "abc123", domain.CIInProgress, "")},
+		"passed":  {ciRun(1, "ci.yml", "abc123", domain.CICompleted, domain.CISuccess)},
+		"ignored": {ciRun(1, "nightly.yml", "abc123", domain.CICompleted, domain.CIFailure)},
 	} {
 		t.Run(name, func(t *testing.T) {
 			srv := newServer(t, pushedAccepted)
@@ -162,7 +162,7 @@ func TestLandAnywayHoldsOnlyForThePushedCommitItWasChosenFor(t *testing.T) {
 	srv := newServer(t, failedCI)
 	httpOK(t, srv, landAnyway("3"))
 	pushCommit(t, srv, "def456")
-	reportRuns(t, srv, ciRun(3, "ci.yml", "def456", store.CICompleted, store.CIFailure))
+	reportRuns(t, srv, ciRun(3, "ci.yml", "def456", domain.CICompleted, domain.CIFailure))
 	tk := ticket3(t, srv)
 	if tk.LandAnyway || tk.NeedsMeReason != core.ReasonCIFailed {
 		t.Fatalf("land anyway %v, reason %q: want def456's failure CI failed again", tk.LandAnyway, tk.NeedsMeReason)
@@ -175,7 +175,7 @@ func TestLandAnywayNeedsAFailedCIResult(t *testing.T) {
 		"running":      pushedAccepted,
 		"passed": func(t *testing.T, srv *codecentraltest.Server) {
 			pushedAccepted(t, srv)
-			reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", store.CICompleted, store.CISuccess))
+			reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", domain.CICompleted, domain.CISuccess))
 		},
 		"not Accepted": func(t *testing.T, srv *codecentraltest.Server) {
 			ciTrackingOn(t, srv)

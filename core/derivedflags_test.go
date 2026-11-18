@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // The rules the UI reads from Go's views and only formats (Spec
@@ -65,13 +65,13 @@ func (f fixture) specRead(t *testing.T, ref core.Ref) core.SpecDetail {
 // plainSpec is Project acme with Spec acme-1, neither a Requirement, a Map
 // nor Long-lived, and a Ticket on it in each of states from acme-2 on, in
 // claim order, each moved there by the human unless it is Draft or Ready.
-func (f fixture) plainSpec(t *testing.T, states ...store.State) {
+func (f fixture) plainSpec(t *testing.T, states ...domain.State) {
 	t.Helper()
 	f.project(t, "acme")
 	f.spec(t, "acme", "Login")
 	for _, s := range states {
 		tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Work"})
-		if s != store.Draft {
+		if s != domain.Draft {
 			f.move(t, core.Ref(tk.ID), s)
 		}
 		f.clock.Advance(1)
@@ -82,7 +82,7 @@ func (f fixture) plainSpec(t *testing.T, states ...store.State) {
 // and unlinks both, so their Links no longer own their definitions.
 func (f fixture) detach(t *testing.T) {
 	t.Helper()
-	f.setExternal(t, "2", store.ExternalClosed)
+	f.setExternal(t, "2", domain.ExternalClosed)
 	for _, target := range []core.Ref{"2", "1"} {
 		if _, err := f.core.Unlink(human, "acme", core.UnlinkInput{Target: target}); err != nil {
 			t.Fatalf("unlink %s: %v", target, err)
@@ -120,7 +120,7 @@ func (f fixture) aMap(t *testing.T) {
 // by Done Ticket acme-2, and Spec acme-3 with no Tickets.
 func (f fixture) archivedWork(t *testing.T) {
 	t.Helper()
-	f.plainSpec(t, store.Done)
+	f.plainSpec(t, domain.Done)
 	f.spec(t, "acme", "Empty")
 	f.archive(t, "acme")
 }
@@ -132,13 +132,13 @@ func TestEditIsOfferedOnADraftTicketWhoseDefinitionIsCodeCentralsInAProjectThatT
 		setup func(f fixture, t *testing.T)
 		want  bool
 	}{
-		"a Draft Ticket":                       {func(f fixture, t *testing.T) { f.plainSpec(t, store.Draft) }, true},
-		"a Ready Ticket isn't Draft":           {func(f fixture, t *testing.T) { f.plainSpec(t, store.Ready) }, false},
+		"a Draft Ticket":                       {func(f fixture, t *testing.T) { f.plainSpec(t, domain.Draft) }, true},
+		"a Ready Ticket isn't Draft":           {func(f fixture, t *testing.T) { f.plainSpec(t, domain.Ready) }, false},
 		"an owned Link defines the Ticket":     {func(f fixture, t *testing.T) { f.linked(t) }, false},
 		"a detached Link no longer defines it": {func(f fixture, t *testing.T) { f.linked(t); f.detach(t) }, true},
 		"an Archived Project takes no edits": {func(f fixture, t *testing.T) {
-			f.plainSpec(t, store.Draft)
-			f.move(t, "2", store.Cancelled)
+			f.plainSpec(t, domain.Draft)
+			f.move(t, "2", domain.Cancelled)
 			f.archive(t, "acme")
 		}, false},
 	} {
@@ -159,17 +159,17 @@ func TestEditIsOfferedOnASpecThatIsNeitherFinishedNorAMapWhoseDefinitionIsCodeCe
 		setup func(f fixture, t *testing.T) core.Ref
 		want  bool
 	}{
-		"an unfinished Spec": {func(f fixture, t *testing.T) core.Ref { f.plainSpec(t, store.Ready); return "1" }, true},
+		"an unfinished Spec":                    {func(f fixture, t *testing.T) core.Ref { f.plainSpec(t, domain.Ready); return "1" }, true},
 		"a Spec with no Tickets isn't Finished": {func(f fixture, t *testing.T) core.Ref { f.plainSpec(t); return "1" }, true},
 		"a Finished Spec": {func(f fixture, t *testing.T) core.Ref {
-			f.plainSpec(t, store.Done, store.Cancelled)
+			f.plainSpec(t, domain.Done, domain.Cancelled)
 			return "1"
 		}, false},
-		"a Map":                              {func(f fixture, t *testing.T) core.Ref { f.aMap(t); return "1" }, false},
-		"an owned Link defines the Spec":     {func(f fixture, t *testing.T) core.Ref { f.linked(t); return "1" }, false},
+		"a Map":                                {func(f fixture, t *testing.T) core.Ref { f.aMap(t); return "1" }, false},
+		"an owned Link defines the Spec":       {func(f fixture, t *testing.T) core.Ref { f.linked(t); return "1" }, false},
 		"a detached Link no longer defines it": {func(f fixture, t *testing.T) core.Ref { f.linked(t); f.detach(t); return "1" }, true},
-		"an Outbound Link is Code Central's": {func(f fixture, t *testing.T) core.Ref { return f.outbound(t) }, true},
-		"an Archived Project takes no edits": {func(f fixture, t *testing.T) core.Ref { f.archivedWork(t); return "3" }, false},
+		"an Outbound Link is Code Central's":   {func(f fixture, t *testing.T) core.Ref { return f.outbound(t) }, true},
+		"an Archived Project takes no edits":   {func(f fixture, t *testing.T) core.Ref { f.archivedWork(t); return "3" }, false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFixture(t)
@@ -185,18 +185,18 @@ func TestEditIsOfferedOnASpecThatIsNeitherFinishedNorAMapWhoseDefinitionIsCodeCe
 // isn't Archived.
 func TestTheRetroButtonIsOfferedOnAFinishedTicketInAProjectThatTakesWrites(t *testing.T) {
 	for name, c := range map[string]struct {
-		state store.State
+		state domain.State
 		want  bool
 	}{
-		"a Done Ticket":      {store.Done, true},
-		"a Cancelled Ticket": {store.Cancelled, true},
-		"an In Review Ticket isn't finished": {store.InReview, false},
-		"a Draft Ticket isn't finished":      {store.Draft, false},
+		"a Done Ticket":                      {domain.Done, true},
+		"a Cancelled Ticket":                 {domain.Cancelled, true},
+		"an In Review Ticket isn't finished": {domain.InReview, false},
+		"a Draft Ticket isn't finished":      {domain.Draft, false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFixture(t)
-			f.plainSpec(t, store.Draft)
-			if c.state != store.Draft {
+			f.plainSpec(t, domain.Draft)
+			if c.state != domain.Draft {
 				f.move(t, "2", c.state)
 			}
 			if _, retroable := f.ticketFlags(t, "2"); retroable != c.want {
@@ -220,16 +220,16 @@ func TestTheRetroButtonIsOfferedOnAFinishedSpecThatIsNotLongLived(t *testing.T) 
 		setup func(f fixture, t *testing.T) core.Ref
 		want  bool
 	}{
-		"a Finished Spec": {func(f fixture, t *testing.T) core.Ref { f.plainSpec(t, store.Done, store.Cancelled); return "1" }, true},
-		"an unfinished Spec": {func(f fixture, t *testing.T) core.Ref { f.plainSpec(t, store.Done, store.Ready); return "1" }, false},
+		"a Finished Spec":    {func(f fixture, t *testing.T) core.Ref { f.plainSpec(t, domain.Done, domain.Cancelled); return "1" }, true},
+		"an unfinished Spec": {func(f fixture, t *testing.T) core.Ref { f.plainSpec(t, domain.Done, domain.Ready); return "1" }, false},
 		"a Finished Long-lived Spec": {func(f fixture, t *testing.T) core.Ref {
-			f.plainSpec(t, store.Done)
+			f.plainSpec(t, domain.Done)
 			f.longLived(t, core.SpecView{ID: "acme-1"})
 			return "1"
 		}, false},
 		"a finished Map": {func(f fixture, t *testing.T) core.Ref {
 			f.aMap(t)
-			f.move(t, "2", store.Done)
+			f.move(t, "2", domain.Done)
 			return "1"
 		}, true},
 		"an Archived Project takes no Retro": {func(f fixture, t *testing.T) core.Ref { f.archivedWork(t); return "1" }, false},
@@ -289,7 +289,7 @@ func TestASpecsKindIsRequirementThenMapThenLongLivedThenSpec(t *testing.T) {
 // it; none when none does.
 func TestASpecsNeedIsTheReasonOfItsFirstTicketInClaimOrderThatNeedsTheHuman(t *testing.T) {
 	f := newFixture(t)
-	f.plainSpec(t, store.Ready, store.Ready, store.Ready)
+	f.plainSpec(t, domain.Ready, domain.Ready, domain.Ready)
 	if got := f.specRead(t, "1").Need; got != "" {
 		t.Fatalf("need %q while no Ticket needs the human, want none", got)
 	}
@@ -302,7 +302,7 @@ func TestASpecsNeedIsTheReasonOfItsFirstTicketInClaimOrderThatNeedsTheHuman(t *t
 	if got := f.specRead(t, "1").Need; got != core.ReasonFailed {
 		t.Fatalf("need %q, want %q", got, core.ReasonFailed)
 	}
-	f.move(t, "3", store.InReview)
+	f.move(t, "3", domain.InReview)
 	if got := f.specRead(t, "1").Need; got != core.ReasonInReview {
 		t.Fatalf("need %q, want acme-3's %q", got, core.ReasonInReview)
 	}
@@ -313,7 +313,7 @@ func TestASpecsNeedIsTheReasonOfItsFirstTicketInClaimOrderThatNeedsTheHuman(t *t
 // back.
 func TestASpecIsClaimedWhileAnyOfItsTicketsHoldsALiveClaim(t *testing.T) {
 	f := newFixture(t)
-	f.plainSpec(t, store.Ready, store.Ready)
+	f.plainSpec(t, domain.Ready, domain.Ready)
 	if f.specRead(t, "1").Claimed {
 		t.Fatal("claimed with no Claim")
 	}

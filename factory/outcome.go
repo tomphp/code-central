@@ -6,14 +6,14 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // afterTurn acts on how a turn ended, and returns the State the Ticket
 // was left in, as the Factory read it or moved it; "" when it read none.
 // A turn the Factory stopped, or one that ended because the Factory is
 // stopping, is left alone.
-func (f *factory) afterTurn(ctx context.Context, t *turn, out turnOutcome) store.State {
+func (f *factory) afterTurn(ctx context.Context, t *turn, out turnOutcome) domain.State {
 	if ctx.Err() != nil || out.Kind == turnStopped || t.stopped.Load() {
 		return ""
 	}
@@ -38,7 +38,7 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, out turnOutcome) store
 	// The Claim may already be dropped by a poll that saw the finish, so
 	// liveness here is read from the Ticket alone.
 	ended, by := claimEnded(tk, c)
-	if ended || tk.State != store.InProgress {
+	if ended || tk.State != domain.InProgress {
 		// The session ended its turn itself (finish, a Round, give_up):
 		// its denials are for the human to see.
 		if len(denials) > 0 {
@@ -46,7 +46,7 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, out turnOutcome) store
 		}
 		if checksFinish(by, tk.State) {
 			if _, failed := checkFinish(ctx, f.repos, f.client, f.project, tk); failed {
-				return store.Failed
+				return domain.Failed
 			}
 		}
 		return tk.State
@@ -59,15 +59,15 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, out turnOutcome) store
 		f.cutOff(c, end.apiError())
 	case out.Kind == turnModelRejected:
 		if f.reportRejectedModel(ctx, t, end) {
-			return store.Failed
+			return domain.Failed
 		}
 	case len(denials) > 0:
 		if f.postDenials(ctx, t, denials) {
-			return store.NeedsAnswer
+			return domain.NeedsAnswer
 		}
 	default:
 		if f.reportStuck(ctx, t, end) {
-			return store.Failed
+			return domain.Failed
 		}
 	}
 	return tk.State

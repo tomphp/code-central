@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -51,7 +52,7 @@ func (c *Core) closedSpecOthers(ctx context.Context, key string, ref Ref) []int 
 		if err != nil {
 			return nil
 		}
-		if lead, _ := specPullRequestLead(r, key, t); !lead || !anyPullRequest(t, store.PRClosed) {
+		if lead, _ := specPullRequestLead(r, key, t); !lead || !anyPullRequest(t, domain.PRClosed) {
 			return nil
 		}
 		for _, o := range specWork(r, key, t) {
@@ -66,7 +67,7 @@ func (c *Core) closedSpecOthers(ctx context.Context, key string, ref Ref) []int 
 
 func (c *Core) cancelOne(ctx context.Context, key string, in CancelInput) (Written[TicketView], error) {
 	actor := ActorOf(ctx)
-	return c.updateTicketIn(key, "cancel", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
+	return c.updateTicketIn(key, "cancel", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
 		claim := 0
 		if live, ok := liveClaim(*t); ok {
 			claim = live.Number
@@ -107,11 +108,11 @@ func (c *Core) cancelOne(ctx context.Context, key string, in CancelInput) (Writt
 // refuseCancelOfMerged refuses cancelling t once any of its pull requests
 // has merged: that work is already in a base, and cancelling would lose
 // track of it (ADR 0050).
-func refuseCancelOfMerged(r store.Reader, key string, t store.Ticket) error {
+func refuseCancelOfMerged(r store.Reader, key string, t domain.Ticket) error {
 	var merged []string
 	p, _ := r.Project(key)
 	for _, pr := range t.PullRequests {
-		if pr.State == store.PRMerged {
+		if pr.State == domain.PRMerged {
 			merged = append(merged, recordRepository(key, pr.Repository))
 		}
 	}
@@ -128,7 +129,7 @@ func refuseCancelOfMerged(r store.Reader, key string, t store.Ticket) error {
 // checkReplacements rejects Replacements for t that are t itself, that
 // lead back to t through other Replacements, or that would make a Ticket
 // t was blocking wait on itself.
-func checkReplacements(r store.Reader, key string, t store.Ticket, reps []int) error {
+func checkReplacements(r store.Reader, key string, t domain.Ticket, reps []int) error {
 	var from []int
 	for _, n := range reps {
 		if n == t.Number {
@@ -150,7 +151,7 @@ func checkReplacements(r store.Reader, key string, t store.Ticket, reps []int) e
 		return nil
 	}
 	cancelled := t
-	cancelled.State, cancelled.Replacements = store.Cancelled, reps
+	cancelled.State, cancelled.Replacements = domain.Cancelled, reps
 	ov := overlay{Reader: r, key: key, t: cancelled}
 	for _, d := range dependants {
 		if path := waitPath(ov, key, from, func(n int) bool { return n == d }); path != nil {

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // Rounds and `wait` (ticket 29).
@@ -87,9 +87,9 @@ func runPickUpAnswers(ctx context.Context, e Env, args []string) error {
 
 // waitAnswered is what wait prints when the Ticket is Answered.
 type waitAnswered struct {
-	Ticket   string      `json:"ticket"`
-	State    store.State `json:"state"`
-	NextStep string      `json:"next_step"`
+	Ticket   string       `json:"ticket"`
+	State    domain.State `json:"state"`
+	NextStep string       `json:"next_step"`
 }
 
 // runWait loops on the long-poll until the Ticket leaves Needs Answer,
@@ -102,7 +102,7 @@ func runWait(ctx context.Context, e Env, args []string) error {
 		return err
 	}
 	for {
-		res, err := sc.client.Wait(ctx, sc.project, ref, store.NeedsAnswer)
+		res, err := sc.client.Wait(ctx, sc.project, ref, domain.NeedsAnswer)
 		var ce *core.Error
 		if errors.As(err, &ce) && ce.Code == core.ServiceUnavailable {
 			select {
@@ -116,9 +116,9 @@ func runWait(ctx context.Context, e Env, args []string) error {
 			return err
 		}
 		switch res.State {
-		case store.NeedsAnswer:
+		case domain.NeedsAnswer:
 			continue
-		case store.Answered:
+		case domain.Answered:
 			return printJSON(e, waitAnswered{Ticket: res.Ticket, State: res.State, NextStep: fmt.Sprintf(
 				"Call pick_up_answers on %s with your Claim ID to read the answers and carry on.", res.Ticket)})
 		}

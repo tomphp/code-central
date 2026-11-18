@@ -11,8 +11,8 @@ import (
 	"strconv"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
-	"github.com/tomoram/code-central/store"
 )
 
 // Integration is the name every Link the Issue Watcher makes carries.
@@ -99,7 +99,7 @@ func (cfg Config) arrive(ctx context.Context, watch core.IssueWatch, repository 
 			continue
 		}
 		_, err := cfg.Client.CreateLinkedTicket(ctx, cfg.Project, core.CreateLinkedTicketInput{
-			Spec: core.Ref(watch.Spec), Title: i.Title, Description: i.Body, State: store.Draft,
+			Spec: core.Ref(watch.Spec), Title: i.Title, Description: i.Body, State: domain.Draft,
 			Link: core.LinkInput{Integration: Integration, ID: id, URL: i.HTMLURL},
 		})
 		if err != nil {

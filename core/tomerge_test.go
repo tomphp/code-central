@@ -5,14 +5,14 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
-	"github.com/tomoram/code-central/store"
 )
 
 // To merge: an Accepted Ticket under the Branch Landing Method waits on
 // the human at once (code-central-175).
 
-func (f fixture) setLanding(t *testing.T, m store.LandingMethod) {
+func (f fixture) setLanding(t *testing.T, m domain.LandingMethod) {
 	t.Helper()
 	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: m}); err != nil {
 		t.Fatalf("set_landing_method %s: %v", m, err)
@@ -22,7 +22,7 @@ func (f fixture) setLanding(t *testing.T, m store.LandingMethod) {
 func TestAnAcceptedTicketUnderBranchIsToMergeAtOnce(t *testing.T) {
 	f := newFixture(t)
 	f.accepted(t) // at t0+2h
-	f.setLanding(t, store.LandingBranch)
+	f.setLanding(t, domain.LandingBranch)
 	acceptedAt := t0.Add(2 * time.Hour)
 
 	wantReason(t, f.get(t, "2"), core.ReasonToMerge)
@@ -38,9 +38,9 @@ func TestAnAcceptedTicketUnderBranchIsToMergeAtOnce(t *testing.T) {
 func TestToMergeComesStraightAfterInReview(t *testing.T) {
 	f := newFixture(t)
 	f.accepted(t)
-	f.setLanding(t, store.LandingBranch)
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Tc", State: store.Ready}) // acme-3
-	if _, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "3", ToState: store.InReview}); err != nil {
+	f.setLanding(t, domain.LandingBranch)
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Tc", State: domain.Ready}) // acme-3
+	if _, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "3", ToState: domain.InReview}); err != nil {
 		t.Fatalf("move: %v", err)
 	}
 	v, err := f.core.NeedsMe(human)
@@ -62,10 +62,10 @@ func TestSwitchingTheLandingMethodSwitchesTheReason(t *testing.T) {
 	f.clock.Advance(core.NotLandedAfter + time.Second)
 	wantReason(t, f.get(t, "2"), core.ReasonAcceptedNotLanded)
 
-	f.setLanding(t, store.LandingBranch)
+	f.setLanding(t, domain.LandingBranch)
 	wantReason(t, f.get(t, "2"), core.ReasonToMerge)
 
-	f.setLanding(t, store.LandingMerge)
+	f.setLanding(t, domain.LandingMerge)
 	wantReason(t, f.get(t, "2"), core.ReasonAcceptedNotLanded)
 }
 
@@ -75,7 +75,7 @@ func TestSwitchingTheLandingMethodSendsANoticeForEachAcceptedTicket(t *testing.T
 	notices, stop := f.core.Events().Subscribe()
 	defer stop()
 
-	f.setLanding(t, store.LandingBranch)
+	f.setLanding(t, domain.LandingBranch)
 	got := map[events.Event]bool{}
 	for len(notices) > 0 {
 		got[<-notices] = true
@@ -87,7 +87,7 @@ func TestSwitchingTheLandingMethodSendsANoticeForEachAcceptedTicket(t *testing.T
 		t.Fatalf("notices %v, want project.changed too", got)
 	}
 
-	f.setLanding(t, store.LandingBranch) // the same method: nothing changes
+	f.setLanding(t, domain.LandingBranch) // the same method: nothing changes
 	if n := len(notices); n != 0 {
 		t.Fatalf("%d notices for setting the same method, want none", n)
 	}
@@ -96,7 +96,7 @@ func TestSwitchingTheLandingMethodSendsANoticeForEachAcceptedTicket(t *testing.T
 func TestTheWatchNeverRaisesAcceptedNotLandedUnderBranch(t *testing.T) {
 	f := newFixture(t)
 	f.accepted(t)
-	f.setLanding(t, store.LandingBranch)
+	f.setLanding(t, domain.LandingBranch)
 
 	tick := watch(t, f)
 

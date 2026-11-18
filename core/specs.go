@@ -7,13 +7,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
 // A Spec's State is never stored: its StateSummary is derived as a count
 // per State of its Tickets, or {Draft: 0} when it has no Tickets. A Spec
 // is finished when it has Tickets and all of them are finished.
-type StateSummary map[store.State]int
+type StateSummary map[domain.State]int
 
 // SpecDetail is get_spec's result: the Spec, its State summary and its
 // Tickets as find_tickets rows (finished ones too), in claim order. Its
@@ -130,7 +131,7 @@ func SpecKinds() []SpecKind {
 
 // specKind is s's kind, given its Requirement view: a Requirement, else a
 // Map, else Long-lived, else a Spec.
-func specKind(s store.Spec, req *RequirementView) SpecKind {
+func specKind(s domain.Spec, req *RequirementView) SpecKind {
 	switch {
 	case req != nil:
 		return SpecKindRequirement
@@ -144,7 +145,7 @@ func specKind(s store.Spec, req *RequirementView) SpecKind {
 
 // specNeed is the reason of the first of tickets, in claim order, that
 // waits on the human, read from e as Needs Me reads it; "" when none does.
-func specNeed(e *evaluation, tickets []store.Ticket) NeedsMeReason {
+func specNeed(e *evaluation, tickets []domain.Ticket) NeedsMeReason {
 	for _, t := range tickets {
 		if r, _ := e.reason(t); r != "" {
 			return r
@@ -154,8 +155,8 @@ func specNeed(e *evaluation, tickets []store.Ticket) NeedsMeReason {
 }
 
 // specClaimed reports whether any of tickets holds a live Claim.
-func specClaimed(tickets []store.Ticket) bool {
-	return slices.ContainsFunc(tickets, func(t store.Ticket) bool {
+func specClaimed(tickets []domain.Ticket) bool {
+	return slices.ContainsFunc(tickets, func(t domain.Ticket) bool {
 		_, ok := liveClaim(t)
 		return ok
 	})
@@ -322,16 +323,16 @@ func (c *Core) FindSpecs(_ context.Context, key string, in FindSpecsInput) ([]Sp
 }
 
 // specTickets are Spec n's Tickets in claim order.
-func specTickets(r store.Reader, key string, n int) []store.Ticket {
-	tickets := slices.DeleteFunc(r.Tickets(key), func(t store.Ticket) bool { return t.Spec != n })
+func specTickets(r store.Reader, key string, n int) []domain.Ticket {
+	tickets := slices.DeleteFunc(r.Tickets(key), func(t domain.Ticket) bool { return t.Spec != n })
 	slices.SortStableFunc(tickets, claimOrder)
 	return tickets
 }
 
 // summarise derives a Spec's State summary and whether it is finished.
-func summarise(tickets []store.Ticket) (StateSummary, bool) {
+func summarise(tickets []domain.Ticket) (StateSummary, bool) {
 	if len(tickets) == 0 {
-		return StateSummary{store.Draft: 0}, false
+		return StateSummary{domain.Draft: 0}, false
 	}
 	out, done := StateSummary{}, true
 	for _, t := range tickets {

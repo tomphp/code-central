@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
 )
@@ -76,8 +77,8 @@ func TestEveryProjectReadCarriesAModelsRowForEachKindOfWorkSettingNothing(t *tes
 }
 
 func TestTheStoresKindsOfWorkAreTheGuideNames(t *testing.T) {
-	if !slices.Equal(store.ModelKinds, core.GuideNames) {
-		t.Fatalf("store.ModelKinds = %v, want core.GuideNames %v", store.ModelKinds, core.GuideNames)
+	if !slices.Equal(domain.ModelKinds, core.GuideNames) {
+		t.Fatalf("store.ModelKinds = %v, want core.GuideNames %v", domain.ModelKinds, core.GuideNames)
 	}
 }
 
@@ -247,7 +248,7 @@ func guideLabels(guide string) []string {
 func (f fixture) kindTicket(t *testing.T, n int, guide string) {
 	t.Helper()
 	err := f.store.Update(func(w store.Writer) error {
-		return w.PutTicket("acme", store.Ticket{Number: n, Title: guide, State: store.Ready, Spec: 1,
+		return w.PutTicket("acme", domain.Ticket{Number: n, Title: guide, State: domain.Ready, Spec: 1,
 			Labels: append([]string{"ui"}, guideLabels(guide)...), Created: t0, Updated: t0})
 	})
 	if err != nil {

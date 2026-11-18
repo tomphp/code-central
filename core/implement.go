@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -65,13 +66,13 @@ func (c *Core) Implement(ctx context.Context, key string, in TicketInput) (Finis
 // implemented is what an implement step made besides the spec Stage: the
 // new implementation Ticket and the Cancelled tickets Stage.
 type implemented struct {
-	build, tickets store.Ticket
+	build, tickets domain.Ticket
 	newID          string
 }
 
 // records is the one write an implement makes, with the spec Stage t.
-func (d implemented) records(t store.Ticket) store.Import {
-	return store.Import{Tickets: []store.Ticket{d.build}, Rewritten: []store.Ticket{t, d.tickets}}
+func (d implemented) records(t domain.Ticket) store.Import {
+	return store.Import{Tickets: []domain.Ticket{d.build}, Rewritten: []domain.Ticket{t, d.tickets}}
 }
 
 // implementStep is the implement step on the spec Stage t, the step the
@@ -82,15 +83,15 @@ func (d implemented) records(t store.Ticket) store.Import {
 // Ticket Ready; an auto-accept builds it in the tickets Stage's State,
 // so a Draft Requirement stays unbuilt. It is action_not_allowed unless
 // t is a spec Stage In Review whose tickets Stage can still run.
-func (c *Core) implementStep(ctx context.Context, r store.Reader, key string, t *store.Ticket, cause store.AutoAcceptCause, now time.Time) (implemented, error) {
+func (c *Core) implementStep(ctx context.Context, r store.Reader, key string, t *domain.Ticket, cause domain.AutoAcceptCause, now time.Time) (implemented, error) {
 	id := DisplayID(key, t.Number)
 	if StageOf(t.Labels) != "spec" {
 		return implemented{}, notAllowed("%s is not a spec Stage, so implement is not allowed: only a Requirement's spec Stage is implemented", id)
 	}
-	if t.State != store.InReview {
+	if t.State != domain.InReview {
 		return implemented{}, notAllowed("%s is %s, so implement is not allowed: the spec Stage must be In Review", id, t.State)
 	}
-	var tickets store.Ticket
+	var tickets domain.Ticket
 	found := false
 	for _, o := range r.Tickets(key) {
 		if o.Spec == t.Spec && StageOf(o.Labels) == "tickets" {
@@ -101,30 +102,30 @@ func (c *Core) implementStep(ctx context.Context, r store.Reader, key string, t 
 	if !found {
 		return implemented{}, notAllowed("%s has no tickets Stage, so implement is not allowed", DisplayID(key, t.Spec))
 	}
-	if tickets.State != store.Draft && tickets.State != store.Ready {
+	if tickets.State != domain.Draft && tickets.State != domain.Ready {
 		return implemented{}, notAllowed("the tickets Stage %s is %s, so implement is not allowed: it must still be able to run (Draft or Ready, not claimed)",
 			DisplayID(key, tickets.Number), tickets.State)
 	}
 	spec, _ := r.Spec(key, t.Spec)
 	specID := DisplayID(key, t.Spec)
 
-	if err := transitionTo(ctx, t, key, "implement", "", store.Done, now); err != nil {
+	if err := transitionTo(ctx, t, key, "implement", "", domain.Done, now); err != nil {
 		return implemented{}, err
 	}
 	t.Moves[len(t.Moves)-1].Via = implementVia
 	t.Moves[len(t.Moves)-1].Cause = cause
 	t.Updated = now
 
-	state := store.Ready
+	state := domain.Ready
 	if cause != "" {
 		state = tickets.State
 	}
 	n := r.NextNumber(key)
 	newID := DisplayID(key, n)
-	build := store.Ticket{
+	build := domain.Ticket{
 		Number: n, Title: "Implement: " + spec.Title, State: state, Spec: t.Spec,
 		Created: now, Updated: now, Description: fmt.Sprintf(implementDescription, specID),
-		Moves: []store.Move{{To: state, Actor: string(Human), Time: now, Via: implementVia}},
+		Moves: []domain.Move{{To: state, Actor: string(Human), Time: now, Via: implementVia}},
 	}
 
 	if err := transition(ctx, &tickets, key, "cancel", "", now); err != nil {

@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // Landing capabilities (Spec code-central-931): the Project's landing
@@ -12,7 +12,7 @@ import (
 // Landing Policy, so the UI never branches on the method itself.
 
 // setDefaultLanding sets acme's Default Landing to method with push.
-func (f fixture) setDefaultLanding(t *testing.T, method store.LandingMethod, push bool) {
+func (f fixture) setDefaultLanding(t *testing.T, method domain.LandingMethod, push bool) {
 	t.Helper()
 	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: method, Push: push, Remote: "origin"}); err != nil {
 		t.Fatalf("set_landing_method %s push %v: %v", method, push, err)
@@ -38,7 +38,7 @@ func TestEachLandingMethodSaysWhatTheOptionsFormOffersAsIfItWereTheDefault(t *te
 	// The table is the same whatever the saved Default Landing and Land
 	// per Spec: Land per Spec is offered under Merge with it off.
 	off := false
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingBranch, Push: true, Remote: "origin", LandPerSpec: &off}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin", LandPerSpec: &off}); err != nil {
 		t.Fatal(err)
 	}
 	if got := f.landingOf(t).Methods; got != want {
@@ -87,7 +87,7 @@ func TestThePullRequestWatcherRunsAsSavedNotAsDrafted(t *testing.T) {
 		t.Fatal("the Pull Request Watcher doesn't run with web's Own Landing Pull Request")
 	}
 	f.editLanding(t, "web", core.RepositoryLandingDefault)
-	f.setDefaultLanding(t, store.LandingPullRequest, false)
+	f.setDefaultLanding(t, domain.LandingPullRequest, false)
 	if !f.landingOf(t).RunsPullRequestWatcher {
 		t.Fatal("the Pull Request Watcher doesn't run with a Default Landing of Pull Request")
 	}
@@ -96,16 +96,16 @@ func TestThePullRequestWatcherRunsAsSavedNotAsDrafted(t *testing.T) {
 func TestTheDefaultLandingIsNamedAsARepositoryLanding(t *testing.T) {
 	f, _ := prWorld(t)
 	for _, c := range []struct {
-		method store.LandingMethod
+		method domain.LandingMethod
 		push   bool
 		want   core.RepositoryLanding
 	}{
-		{store.LandingMerge, false, core.RepositoryLandingMerge},
-		{store.LandingMerge, true, core.RepositoryLandingMergePush},
-		{store.LandingBranch, false, core.RepositoryLandingBranch},
-		{store.LandingBranch, true, core.RepositoryLandingBranchPush},
+		{domain.LandingMerge, false, core.RepositoryLandingMerge},
+		{domain.LandingMerge, true, core.RepositoryLandingMergePush},
+		{domain.LandingBranch, false, core.RepositoryLandingBranch},
+		{domain.LandingBranch, true, core.RepositoryLandingBranchPush},
 		// "Under Pull Request, Push is implied".
-		{store.LandingPullRequest, true, core.RepositoryLandingPullRequest},
+		{domain.LandingPullRequest, true, core.RepositoryLandingPullRequest},
 	} {
 		f.setDefaultLanding(t, c.method, c.push)
 		if got := f.landingOf(t).RepositoryLanding; got != c.want {
@@ -128,12 +128,12 @@ func TestPushPushesNothingWhileEveryRepositoryIsLocalOnly(t *testing.T) {
 		t.Fatal("pushes_nothing with Push off everywhere")
 	}
 
-	f.setDefaultLanding(t, store.LandingMerge, true)
+	f.setDefaultLanding(t, domain.LandingMerge, true)
 	if !f.landingOf(t).PushesNothing {
 		t.Fatal("not pushes_nothing with a Default Landing of Merge + Push and every Repository local-only")
 	}
 
-	f.setDefaultLanding(t, store.LandingMerge, false)
+	f.setDefaultLanding(t, domain.LandingMerge, false)
 	f.editLanding(t, "docs", core.RepositoryLandingBranchPush)
 	if !f.landingOf(t).PushesNothing {
 		t.Fatal("not pushes_nothing with docs's Own Landing Branch + Push and every Repository local-only")

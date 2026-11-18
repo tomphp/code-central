@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // The Needs Me count is the number of things in Needs Me as the human
@@ -28,10 +28,10 @@ func wantCounts(t *testing.T, f fixture, count int, counts map[string]int) {
 func TestARequirementsStageTicketsCountOnceAsTheRequirement(t *testing.T) {
 	f := newFixture(t)
 	f.requirement(t)
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "2", Title: "Toggle", State: store.Ready}) // acme-6
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", State: store.Ready})   // acme-7
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "2", Title: "Toggle", State: domain.Ready}) // acme-6
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", State: domain.Ready})   // acme-7
 	for _, n := range []int{3, 4, 5, 6, 7} {
-		f.setState(t, n, store.InReview)
+		f.setState(t, n, domain.InReview)
 	}
 	if rows := f.needsMe(t); len(rows) != 5 {
 		t.Fatalf("needs_me has %d rows, want the 3 Stage Tickets, the build Ticket and the plain one", len(rows))
@@ -42,7 +42,7 @@ func TestARequirementsStageTicketsCountOnceAsTheRequirement(t *testing.T) {
 
 func TestACIItemListingSeveralTicketsCountsOnce(t *testing.T) {
 	f := itemWorld(t)
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 	f.theItem(t, core.ReasonCIFailed)
 	wantCounts(t, f, 1, map[string]int{"acme": 1})
 }
@@ -55,8 +55,8 @@ func TestBaseRowsCountOnceEach(t *testing.T) {
 	f.reportBase(t, core.ReportBaseInput{State: core.BaseMissing})
 	wantCounts(t, f, 1, map[string]int{"acme": 1})
 	f.spec(t, "acme", "Login")
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", State: store.Ready})
-	f.setState(t, 3, store.InReview)
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", State: domain.Ready})
+	f.setState(t, 3, domain.InReview)
 	wantCounts(t, f, 2, map[string]int{"acme": 2})
 }
 
@@ -90,12 +90,12 @@ func TestNeedsMeIsEmptyCountsNoProject(t *testing.T) {
 
 func TestFindTicketsRowsCarryTheReasonGetTicketGives(t *testing.T) {
 	f := itemWorld(t)
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 	// acme-5 and acme-8 are listed by the CI item.
 	for _, id := range []string{"acme-5", "acme-8"} {
 		wantEverywhere(t, f, "acme", id, core.ReasonCIFailed)
 	}
-	rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: store.States})
+	rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: domain.States})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestTurningAReasonOffMarksItsRowsNotFocusItemsAndChangesNothingElse(t *test
 		}
 	}
 	reasons := func() map[string]core.NeedsMeReason {
-		rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: store.States})
+		rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: domain.States})
 		if err != nil {
 			t.Fatal(err)
 		}

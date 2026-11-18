@@ -2,6 +2,7 @@ package factory
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -12,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/client"
-	"github.com/tomoram/code-central/store"
 )
 
 // The Factory reads the Tickets it may land with one find_tickets call
@@ -84,7 +84,7 @@ func TestAPollWithSeveralAcceptedTicketsLandsThemAllThroughTheSingleRead(t *test
 	w.poll()
 
 	for _, id := range ids {
-		if tk := w.ticket(id); tk.State != store.Done {
+		if tk := w.ticket(id); tk.State != domain.Done {
 			t.Errorf("%s is %s, want it landed", id, tk.State)
 		}
 	}
@@ -105,7 +105,7 @@ func TestAFailedBatchReadGivesOneWarningAndLandsNothingThatPoll(t *testing.T) {
 	failing.Store(true)
 	w.proxied(func(r *http.Request) bool { return failing.Load() && isFullFind(r) })
 
-	if got := w.l.landable(context.Background(), store.Accepted); len(got) != 0 {
+	if got := w.l.landable(context.Background(), domain.Accepted); len(got) != 0 {
 		t.Errorf("landable gave %d Tickets from a failed read, want none", len(got))
 	}
 	if n := w.lines("warning: can't find [Accepted] Tickets"); n != 1 {
@@ -114,7 +114,7 @@ func TestAFailedBatchReadGivesOneWarningAndLandsNothingThatPoll(t *testing.T) {
 
 	w.poll()
 	for _, id := range []string{first, second} {
-		if tk := w.ticket(id); tk.State != store.Accepted {
+		if tk := w.ticket(id); tk.State != domain.Accepted {
 			t.Errorf("%s is %s, want it left Accepted", id, tk.State)
 		}
 	}
@@ -122,7 +122,7 @@ func TestAFailedBatchReadGivesOneWarningAndLandsNothingThatPoll(t *testing.T) {
 	failing.Store(false)
 	w.poll()
 	for _, id := range []string{first, second} {
-		if tk := w.ticket(id); tk.State != store.Done {
+		if tk := w.ticket(id); tk.State != domain.Done {
 			t.Errorf("%s is %s, want it landed once the read works", id, tk.State)
 		}
 	}

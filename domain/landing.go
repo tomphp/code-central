@@ -1,4 +1,4 @@
-package store
+package domain
 
 // Normalized is l as it is stored: Push is implied under Pull Request, so
 // it is cleared there and never kept.

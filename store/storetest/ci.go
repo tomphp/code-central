@@ -1,6 +1,7 @@
 package storetest
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"testing"
 	"time"
 
@@ -16,7 +17,7 @@ func runCI(t *testing.T, f Factory) {
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
 				p, _ := r.Project("acme")
-				if want := (store.CI{}); !p.CI.Equal(want) {
+				if want := (domain.CI{}); !p.CI.Equal(want) {
 					t.Fatalf("ci = %+v, want %+v", p.CI, want)
 				}
 			})
@@ -29,14 +30,14 @@ func runCI(t *testing.T, f Factory) {
 
 	t.Run("a project's ci settings read back after they are written", func(t *testing.T) {
 		s := f.New(t)
-		want := store.CI{Tracking: true, Repositories: []store.CIRepository{{Name: "acme", Provider: store.CIGitHubActions, Repository: "acme/web"}},
+		want := domain.CI{Tracking: true, Repositories: []domain.CIRepository{{Name: "acme", Provider: domain.CIGitHubActions, Repository: "acme/web"}},
 			IgnoredWorkflows: []string{"nightly.yml", "preview.yaml"}, PushRemoteURL: "git@github.com:acme/web.git",
-			Rules: []store.CIRule{
-				{Spec: 4, Workflow: "ci.yml", Branch: "main", State: store.Ready, Created: t0},
-				{Spec: 7, Workflow: store.AnyWorkflow, Branch: "release/2.x", State: store.Draft, Created: t0.Add(time.Hour)},
+			Rules: []domain.CIRule{
+				{Spec: 4, Workflow: "ci.yml", Branch: "main", State: domain.Ready, Created: t0},
+				{Spec: 7, Workflow: domain.AnyWorkflow, Branch: "release/2.x", State: domain.Draft, Created: t0.Add(time.Hour)},
 			}}
 		put(t, s, func(w store.Writer) error {
-			return w.PutProject(store.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed", CI: want})
+			return w.PutProject(domain.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed", CI: want})
 		})
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
@@ -53,9 +54,9 @@ func runCI(t *testing.T, f Factory) {
 
 	t.Run("a home reported with no push remote reads back so, not watched", func(t *testing.T) {
 		s := f.New(t)
-		want := store.CI{NoPushRemote: true, Repositories: []store.CIRepository{{Name: "acme", NotWatched: true}}}
+		want := domain.CI{NoPushRemote: true, Repositories: []domain.CIRepository{{Name: "acme", NotWatched: true}}}
 		put(t, s, func(w store.Writer) error {
-			return w.PutProject(store.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed", CI: want})
+			return w.PutProject(domain.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed", CI: want})
 		})
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {

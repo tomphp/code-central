@@ -3,6 +3,7 @@ package client_test
 import (
 	"context"
 	"errors"
+	"github.com/tomoram/code-central/domain"
 	"io"
 	"net"
 	"slices"
@@ -12,7 +13,6 @@ import (
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/usage"
 )
 
@@ -46,8 +46,8 @@ func TestProjectSpecAndTicketRoundTrip(t *testing.T) {
 	if s, err := c.EditSpec(ctx, "acme", core.EditSpecInput{Spec: "1", Full: true}); err != nil || s.Record == nil || s.Record.Body != "# Login\n" {
 		t.Fatalf("edit_spec with full: %+v, %v", s, err)
 	}
-	tk, err := c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Form", State: store.Ready, Labels: []string{"ui"}})
-	if err != nil || tk.ID != "acme-2" || tk.State != store.Ready || tk.Record != nil {
+	tk, err := c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Form", State: domain.Ready, Labels: []string{"ui"}})
+	if err != nil || tk.ID != "acme-2" || tk.State != domain.Ready || tk.Record != nil {
 		t.Fatalf("create_ticket: %+v, %v", tk, err)
 	}
 	if tk, err := c.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: "Hi.", Full: true}); err != nil || tk.Record == nil || tk.Record.Spec.Title != "Login" {
@@ -57,11 +57,11 @@ func TestProjectSpecAndTicketRoundTrip(t *testing.T) {
 	if err != nil || got.ID != "acme-2" || got.Title != "Form" || !got.Claimable {
 		t.Fatalf("get_ticket: %+v, %v", got, err)
 	}
-	rows, err := c.FindTickets(ctx, "acme", core.FindTicketsInput{State: []store.State{store.Ready}, Labels: []string{"ui"}, Title: "form", Spec: "1"})
+	rows, err := c.FindTickets(ctx, "acme", core.FindTicketsInput{State: []domain.State{domain.Ready}, Labels: []string{"ui"}, Title: "form", Spec: "1"})
 	if err != nil || len(rows) != 1 || rows[0].ID != "acme-2" {
 		t.Fatalf("find_tickets: %+v, %v", rows, err)
 	}
-	if rows, err := c.FindTickets(ctx, "acme", core.FindTicketsInput{State: []store.State{store.Draft}}); err != nil || len(rows) != 0 {
+	if rows, err := c.FindTickets(ctx, "acme", core.FindTicketsInput{State: []domain.State{domain.Draft}}); err != nil || len(rows) != 0 {
 		t.Fatalf("find_tickets Draft: %+v, %v", rows, err)
 	}
 }
@@ -71,15 +71,15 @@ func TestTheDeliveryLoopRoundTrip(t *testing.T) {
 	agent := srv.Client
 	agent.CreateProject(ctx, core.CreateProjectInput{Key: "acme"})
 	agent.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"})
-	agent.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "A", State: store.Ready})
-	agent.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "B", State: store.Ready})
+	agent.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "A", State: domain.Ready})
+	agent.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "B", State: domain.Ready})
 
 	c, err := agent.Claim(ctx, "acme", core.ClaimInput{Ticket: "acme-3"})
 	if err != nil || c.ClaimID == "" || c.Ticket.ID != "acme-3" {
 		t.Fatalf("claim: %+v, %v", c, err)
 	}
 	f, err := agent.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-3", ClaimID: c.ClaimID, Summary: "Done."})
-	if err != nil || f.Acknowledgement == nil || f.State != store.InReview || f.NextStep != "stop working this Ticket" {
+	if err != nil || f.Acknowledgement == nil || f.State != domain.InReview || f.NextStep != "stop working this Ticket" {
 		t.Fatalf("finish: %+v, %v", f, err)
 	}
 	_, err = agent.Accept(ctx, "acme", core.TicketInput{Ticket: "acme-3"})
@@ -87,12 +87,12 @@ func TestTheDeliveryLoopRoundTrip(t *testing.T) {
 
 	human := client.New(srv.URL)
 	human.Actor = core.Human
-	if v, err := human.Reject(ctx, "acme", core.RejectInput{Ticket: "3", Comment: "Again."}); err != nil || v.State != store.Ready {
+	if v, err := human.Reject(ctx, "acme", core.RejectInput{Ticket: "3", Comment: "Again."}); err != nil || v.State != domain.Ready {
 		t.Fatalf("reject: %+v, %v", v, err)
 	}
 	c, _ = agent.Claim(ctx, "acme", core.ClaimInput{Ticket: "3"})
 	agent.Finish(ctx, "acme", core.FinishInput{Ticket: "3", ClaimID: c.ClaimID, Summary: "Fixed."})
-	if v, err := human.Accept(ctx, "acme", core.TicketInput{Ticket: "3"}); err != nil || v.State != store.Done {
+	if v, err := human.Accept(ctx, "acme", core.TicketInput{Ticket: "3"}); err != nil || v.State != domain.Done {
 		t.Fatalf("accept: %+v, %v", v, err)
 	}
 	if none, err := agent.Claim(ctx, "acme", core.ClaimInput{Spec: "1"}); err != nil || none.Ticket == nil || none.Ticket.ID != "acme-2" {
@@ -138,7 +138,7 @@ func TestPostUsageIsReadBackAsTheClaimsSession(t *testing.T) {
 	c := srv.Client
 	c.CreateProject(ctx, core.CreateProjectInput{Key: "acme"})
 	c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"})
-	c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "A", State: store.Ready})
+	c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "A", State: domain.Ready})
 	if _, err := c.Claim(ctx, "acme", core.ClaimInput{SessionID: "s1"}); err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestPostSessionEventsReachesTheClaimsTranscript(t *testing.T) {
 	c := srv.Client
 	c.CreateProject(ctx, core.CreateProjectInput{Key: "acme"})
 	c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"})
-	c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "A", State: store.Ready})
+	c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "A", State: domain.Ready})
 	if _, err := c.Claim(ctx, "acme", core.ClaimInput{SessionID: "s1"}); err != nil {
 		t.Fatal(err)
 	}

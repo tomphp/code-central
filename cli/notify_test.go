@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,7 +40,7 @@ func storeInReview(t *testing.T) string {
 	ctx := context.Background()
 	c.CreateProject(ctx, core.CreateProjectInput{Key: "acme"})
 	c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login", Body: "b\n"})
-	c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", State: store.Ready})
+	c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", State: domain.Ready})
 	res, err := c.Claim(ctx, "acme", core.ClaimInput{})
 	if err != nil {
 		t.Fatal(err)

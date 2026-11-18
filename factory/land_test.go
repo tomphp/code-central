@@ -1,6 +1,7 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,7 +9,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // accepted makes an Accepted Ticket whose branch adds file.
@@ -27,7 +27,7 @@ func TestAnAcceptedTicketIsMergedIntoTheBaseAndLanded(t *testing.T) {
 	oldMain := h.Git("rev-parse", "main")
 
 	h.Start()
-	tk := h.WantState(id, store.Done)
+	tk := h.WantState(id, domain.Done)
 
 	merge := h.Git("rev-parse", "main")
 	if got := h.Git("log", "-1", "--format=%P", merge); got != oldMain+" "+commit {
@@ -36,7 +36,7 @@ func TestAnAcceptedTicketIsMergedIntoTheBaseAndLanded(t *testing.T) {
 	if got := h.Git("log", "-1", "--format=%s", merge); got != "Merge "+id+": Add a feature" {
 		t.Errorf("merge commit subject %q", got)
 	}
-	if m := tk.Moves[len(tk.Moves)-1]; m.Commit != merge || m.From != store.Accepted {
+	if m := tk.Moves[len(tk.Moves)-1]; m.Commit != merge || m.From != domain.Accepted {
 		t.Errorf("land move %+v, want from Accepted with commit %s", m, merge)
 	}
 	// main is checked out in the repo, so it was fast-forwarded there.
@@ -58,7 +58,7 @@ func TestAConflictIsSentBackNamingTheBaseCommitAndTheConflictingFiles(t *testing
 	// Hold the next Claim's turn, so the Ticket stays where send_back put it.
 	h.Script(id, factorytest.Wait())
 	h.Start()
-	if !movedTo(h.Ticket(id), store.Accepted, store.Ready) {
+	if !movedTo(h.Ticket(id), domain.Accepted, domain.Ready) {
 		t.Fatalf("%s wasn't sent back: %+v", id, h.Ticket(id).Moves)
 	}
 
@@ -82,7 +82,7 @@ func TestUncommittedChangesInTheBaseCheckoutHoldACleanMergeAndAreLeftAlone(t *te
 
 	h.Start()
 	tk := h.Ticket(id)
-	if tk.State != store.Accepted || h.Git("rev-parse", "main") != base {
+	if tk.State != domain.Accepted || h.Git("rev-parse", "main") != base {
 		t.Fatalf("%s is %s and main at %s; want it left Accepted with main unmoved", id, tk.State, h.Git("rev-parse", "main"))
 	}
 	if !commented(tk, "uncommitted changes in "+h.Repo, "feature.txt") {
@@ -94,7 +94,7 @@ func TestUncommittedChangesInTheBaseCheckoutHoldACleanMergeAndAreLeftAlone(t *te
 }
 
 // movedTo reports whether tk ever moved from one State to another.
-func movedTo(tk core.TicketView, from, to store.State) bool {
+func movedTo(tk core.TicketView, from, to domain.State) bool {
 	for _, m := range tk.Moves {
 		if m.From == from && m.To == to {
 			return true
@@ -122,13 +122,13 @@ func TestAnAcceptedTicketIsMergedIntoTheBaseTheProjectNames(t *testing.T) {
 	h := factorytest.New(t)
 	h.Git("branch", "release")
 	base := "release"
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, Base: &base})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Base: &base})
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	oldMain := h.Git("rev-parse", "main")
 	oldRelease := h.Git("rev-parse", "release")
 
 	r := h.Start()
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 
 	if h.Git("rev-parse", "main") != oldMain {
 		t.Error("main moved, want the merge on release")
@@ -141,10 +141,10 @@ func TestAnAcceptedTicketIsMergedIntoTheBaseTheProjectNames(t *testing.T) {
 	// Changing the base takes hold on the next poll.
 	h.Git("branch", "next")
 	next := "next"
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, Base: &next})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Base: &next})
 	id2, commit2 := accepted(h, "Another feature", "other.txt", "other\n")
 	r.Poll()
-	h.WantState(id2, store.Done)
+	h.WantState(id2, domain.Done)
 	if h.Git("rev-parse", "release") != merge {
 		t.Error("release moved after the base changed")
 	}

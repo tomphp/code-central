@@ -9,7 +9,7 @@ import (
 	"fmt"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // startTurn runs c's Turn in, which says where it runs, whether it
@@ -66,7 +66,7 @@ func (f *factory) startTurn(ctx context.Context, c claim, in turnInput) {
 		// The turn keeps its slot until its outcome is acted on, and
 		// "turn ended" is printed once the slot is free.
 		state := f.afterTurn(ctx, t, out)
-		if state == store.Ready {
+		if state == domain.Ready {
 			f.holdBack(c.Ticket)
 		}
 		f.freeSlot(c)

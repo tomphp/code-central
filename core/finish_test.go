@@ -6,13 +6,13 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // inReview is acme-2 claimed (claim-1) and finished, at t0+1h.
 func (f fixture) inReview(t *testing.T) {
 	t.Helper()
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{})
 	f.clock.Set(t0.Add(time.Hour))
 	if _, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: "Done on acme-2."}); err != nil {
@@ -22,7 +22,7 @@ func (f fixture) inReview(t *testing.T) {
 
 func TestFinishMovesToInReviewWithTheSummaryAsAComment(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{})
 	f.clock.Set(t0.Add(time.Hour))
 
@@ -30,14 +30,14 @@ func TestFinishMovesToInReviewWithTheSummaryAsAComment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Ticket.State != store.InReview || res.NextStep != "stop working this Ticket" {
+	if res.Ticket.State != domain.InReview || res.NextStep != "stop working this Ticket" {
 		t.Fatalf("state %s, next step %q", res.Ticket.State, res.NextStep)
 	}
 	wantComment := core.CommentView{Number: 1, Actor: "agent", Time: t0.Add(time.Hour), Claim: 1, Body: "Built on branch acme-2."}
 	if len(res.Ticket.Comments) != 1 || res.Ticket.Comments[0] != wantComment {
 		t.Fatalf("comments %+v, want [%+v]", res.Ticket.Comments, wantComment)
 	}
-	wantMove := core.MoveView{From: store.InProgress, To: store.InReview, Actor: "agent", Time: t0.Add(time.Hour), Claim: 1}
+	wantMove := core.MoveView{From: domain.InProgress, To: domain.InReview, Actor: "agent", Time: t0.Add(time.Hour), Claim: 1}
 	if m := res.Ticket.Moves; len(m) != 2 || m[1] != wantMove {
 		t.Fatalf("moves %+v, want the finish %+v last", m, wantMove)
 	}
@@ -49,18 +49,18 @@ func TestFinishMovesToInReviewWithTheSummaryAsAComment(t *testing.T) {
 
 func TestFinishNeedsASummary(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{})
 	_, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: " "})
 	wantCode(t, err, core.Invalid, "summary")
-	if got, _ := f.core.GetTicket(ctx, "acme", whole("2")); got.State != store.InProgress {
+	if got, _ := f.core.GetTicket(ctx, "acme", whole("2")); got.State != domain.InProgress {
 		t.Fatalf("state %s, want still In Progress", got.State)
 	}
 }
 
 func TestAWriteWithAClaimIDThatIsNotTheLiveClaimIsStale(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{})
 	for _, id := range []string{"", "claim-9"} {
 		_, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: id, Summary: "S"})
@@ -81,8 +81,8 @@ func TestAcceptMovesInReviewToDoneAsTheHuman(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := core.MoveView{From: store.InReview, To: store.Done, Actor: "human", Time: t0.Add(2 * time.Hour)}
-	if v.State != store.Done || v.Moves[len(v.Moves)-1] != want {
+	want := core.MoveView{From: domain.InReview, To: domain.Done, Actor: "human", Time: t0.Add(2 * time.Hour)}
+	if v.State != domain.Done || v.Moves[len(v.Moves)-1] != want {
 		t.Fatalf("state %s, moves %+v; want last move %+v", v.State, v.Moves, want)
 	}
 
@@ -97,7 +97,7 @@ func TestAcceptAndRejectAreHumanActions(t *testing.T) {
 	wantCode(t, err, core.ActionNotAllowed, "")
 	_, err = f.core.Reject(core.WithActor(ctx, core.Integration), "acme", core.RejectInput{Ticket: "2", Comment: "No."})
 	wantCode(t, err, core.ActionNotAllowed, "")
-	if got, _ := f.core.GetTicket(ctx, "acme", whole("2")); got.State != store.InReview {
+	if got, _ := f.core.GetTicket(ctx, "acme", whole("2")); got.State != domain.InReview {
 		t.Fatalf("state %s, want still In Review", got.State)
 	}
 }
@@ -115,7 +115,7 @@ func TestRejectSendsTheTicketBackToReadyWithTheComment(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantComment := core.CommentView{Number: 2, Actor: "human", Time: t0.Add(2 * time.Hour), Body: "The button is missing."}
-	if v.State != store.Ready || v.Comments[1] != wantComment {
+	if v.State != domain.Ready || v.Comments[1] != wantComment {
 		t.Fatalf("state %s, comments %+v; want Ready with %+v", v.State, v.Comments, wantComment)
 	}
 	if !v.Claimable {
@@ -125,8 +125,8 @@ func TestRejectSendsTheTicketBackToReadyWithTheComment(t *testing.T) {
 
 func TestARejectedTicketNeedsAFreshClaimAndKeepsItsPlace(t *testing.T) {
 	f := newFixture(t)
-	f.inReview(t)                                                                              // acme-2, created first
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Newer", State: store.Ready}) // acme-3
+	f.inReview(t)                                                                               // acme-2, created first
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Newer", State: domain.Ready}) // acme-3
 	f.core.Reject(human, "acme", core.RejectInput{Ticket: "2", Comment: "Again."})
 
 	_, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: "S"})
@@ -142,7 +142,7 @@ func TestARejectedTicketNeedsAFreshClaimAndKeepsItsPlace(t *testing.T) {
 }
 
 func TestEveryActionIsCheckedAgainstTheOneTable(t *testing.T) {
-	if got := len(store.States); got != 10 {
+	if got := len(domain.States); got != 10 {
 		t.Fatalf("%d States, want ten", got)
 	}
 	for _, a := range core.Workflow {
@@ -169,7 +169,7 @@ func TestEveryActionIsCheckedAgainstTheOneTable(t *testing.T) {
 		t.Fatalf("allowed from Done for the human: %v, want [move]", e.AllowedActions)
 	}
 	// approve and defer share the table, so their rejections are complete too.
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "R", State: store.Ready}) // acme-3
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "R", State: domain.Ready}) // acme-3
 	_, err = f.core.Approve(ctx, "acme", core.TicketInput{Ticket: "3"})
 	e = err.(*core.Error)
 	if !slices.Equal(e.AllowedActions, []string{"defer", "claim", "cancel"}) {

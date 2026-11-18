@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -55,8 +56,8 @@ func (c *Core) SubmitRetro(_ context.Context, key string, in SubmitRetroInput) (
 			return err
 		}
 		now := c.now()
-		t := store.Ticket{
-			Number: w.NextNumber(key), Title: "Retro: " + target.title, State: store.Ready, Spec: spec,
+		t := domain.Ticket{
+			Number: w.NextNumber(key), Title: "Retro: " + target.title, State: domain.Ready, Spec: spec,
 			Labels: []string{RetroLabel}, Tags: map[string]string{RetroOfTag: target.id},
 			Created: now, Updated: now, Description: target.description(in.Note),
 			Moves: submitMoves(false, now, "submit_retro"),
@@ -64,7 +65,7 @@ func (c *Core) SubmitRetro(_ context.Context, key string, in SubmitRetroInput) (
 		if err := w.PutTicket(key, t); err != nil {
 			return err
 		}
-		v, err = acknowledgeCreate(c.ticketView(w, key, store.Ticket{}), c.ticketView(w, key, t), in.Full)
+		v, err = acknowledgeCreate(c.ticketView(w, key, domain.Ticket{}), c.ticketView(w, key, t), in.Full)
 		return err
 	})
 	return v, err
@@ -75,7 +76,7 @@ type retroTarget struct {
 	key, id, kind, title string
 	// tickets are the target Ticket alone, or every Ticket of the target
 	// Spec in claim order.
-	tickets []store.Ticket
+	tickets []domain.Ticket
 }
 
 // resolveRetroTarget reads the finished work ref names: a Done or
@@ -100,7 +101,7 @@ func resolveRetroTarget(r store.Reader, key string, ref Ref) (retroTarget, error
 		if !finished(t.State) {
 			return retroTarget{}, invalid("target", "%s is %s; a Retro looks back on finished work, so start it once the Ticket is Done or Cancelled", id, t.State)
 		}
-		return retroTarget{key: key, id: id, kind: "Ticket", title: t.Title, tickets: []store.Ticket{t}}, nil
+		return retroTarget{key: key, id: id, kind: "Ticket", title: t.Title, tickets: []domain.Ticket{t}}, nil
 	}
 	return retroTarget{}, invalid("target", "there is no Spec or Ticket %s", id)
 }
@@ -108,7 +109,7 @@ func resolveRetroTarget(r store.Reader, key string, ref Ref) (retroTarget, error
 // ticketRetroable is whether the UI offers the Retro button on t: once it
 // is Done or Cancelled, as resolveRetroTarget requires, and while its
 // Project p takes writes, which writable refuses. TicketView's retroable.
-func ticketRetroable(p store.Project, t store.Ticket) bool {
+func ticketRetroable(p domain.Project, t domain.Ticket) bool {
 	return finished(t.State) && p.Archived.IsZero()
 }
 
@@ -117,7 +118,7 @@ func ticketRetroable(p store.Project, t store.Ticket) bool {
 // unless it is Long-lived, as resolveRetroTarget requires, a finished Map
 // too, and while its Project p takes writes, which writable refuses.
 // SpecDetail's retroable.
-func specRetroable(p store.Project, s store.Spec, specFinished bool) bool {
+func specRetroable(p domain.Project, s domain.Spec, specFinished bool) bool {
 	return specFinished && !slices.Contains(s.Labels, LongLivedLabel) && p.Archived.IsZero()
 }
 
@@ -146,7 +147,7 @@ func (rt retroTarget) description(note string) string {
 
 // claimToRead is one Claim's entry in a Retro's Claims to read: its
 // session, its working folder and how it ended.
-func claimToRead(cl store.Claim) string {
+func claimToRead(cl domain.Claim) string {
 	session := "no session to read"
 	if cl.SessionID != "" {
 		session = "session_id `" + cl.SessionID + "`"
@@ -169,9 +170,9 @@ const retrosSpecBody = "This Spec holds the Retros the human opens on finished w
 
 // RetroView is a Retro as a read of its target lists it.
 type RetroView struct {
-	ID    string      `json:"id"`
-	Title string      `json:"title"`
-	State store.State `json:"state"`
+	ID    string       `json:"id"`
+	Title string       `json:"title"`
+	State domain.State `json:"state"`
 }
 
 // retrosOf lists the Retros whose retro-of Tag names target, oldest first,

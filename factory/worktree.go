@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // chatWorktreeName is the folder of each Repository's Chat worktree,
@@ -403,7 +403,7 @@ func (l *lander) sweepsBranch(r *repository, tk core.TicketView, branch string) 
 	case !l.repos.several():
 		return false
 	}
-	return tk.State == store.Done || tk.State == store.Cancelled || tk.Branch != branch
+	return tk.State == domain.Done || tk.State == domain.Cancelled || tk.Branch != branch
 }
 
 // sweptTicket is the Ticket id for the sweep, or nil when it can't be
@@ -467,11 +467,11 @@ func onFirstParentLine(g repo, commit, rev string) bool {
 
 // doneWithWorktree reports whether the Factory is done with the worktree
 // of tk, under the Landing Policy of the worktree's Repository.
-func doneWithWorktree(tk core.TicketView, policy core.LandingPolicy) bool {
+func doneWithWorktree(tk core.TicketView, policy domain.LandingPolicy) bool {
 	switch tk.State {
-	case store.Done, store.Cancelled:
+	case domain.Done, domain.Cancelled:
 		return true
-	case store.Accepted:
+	case domain.Accepted:
 		// Under Land per Spec its work is safe in the Spec Branch once
 		// the merge is recorded.
 		return !policy.KeepsAcceptedWorktree() || tk.SpecLanded && tk.SpecMerge != nil && tk.SpecMerge.Counts

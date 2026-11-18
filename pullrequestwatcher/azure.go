@@ -15,9 +15,9 @@ import (
 
 	"github.com/tomoram/code-central/azdo"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
-	"github.com/tomoram/code-central/store"
 )
 
 // azureRepos is one Azure Repos repository's pull requests.
@@ -46,7 +46,7 @@ func projectURLOf(in core.PullRequestCheckInput) (projectURL, repository string,
 func checkAzureRepos(ctx context.Context, in core.PullRequestCheckInput, env gh.Env, full bool) (func(string) host, core.WatcherCheckResult, error) {
 	patEnv := in.PATEnv
 	if patEnv == "" {
-		patEnv = store.DefaultPATEnv
+		patEnv = domain.DefaultPATEnv
 	}
 	projectURL, repository, ok := projectURLOf(in)
 	if !ok {

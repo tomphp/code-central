@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // The lighter get_spec (ticket 134): parts, Sections and the outline.
@@ -18,7 +18,7 @@ const specBody = "Why.\n\n## Solution\n\nDo it.\n\n### Detail\n\nSmall print.\n\
 // sectionedSpec is Spec acme-1 with specBody, one edit and two Tickets.
 func (f fixture) sectionedSpec(t *testing.T) {
 	t.Helper()
-	f.work(t, store.Ready, store.Draft)
+	f.work(t, domain.Ready, domain.Draft)
 	body := specBody
 	if _, err := f.core.EditSpec(ctx, "acme", core.EditSpecInput{Spec: "1", Body: &body}); err != nil {
 		t.Fatalf("edit_spec: %v", err)

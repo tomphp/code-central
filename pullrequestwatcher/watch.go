@@ -16,9 +16,9 @@ import (
 
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
-	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/watchers"
 )
 
@@ -193,8 +193,8 @@ func (cfg Config) follow(ctx context.Context, g host, w core.PushedWorkView, sev
 	}
 	pr := choose(prs)
 	switch {
-	case pr == nil, pr.state() == store.PRClosed && w.Pushed.After(pr.Closed),
-		several && pr.state() == store.PRMerged && !pr.Closed.IsZero() && w.Pushed.After(pr.Closed):
+	case pr == nil, pr.state() == domain.PRClosed && w.Pushed.After(pr.Closed),
+		several && pr.state() == domain.PRMerged && !pr.Closed.IsZero() && w.Pushed.After(pr.Closed):
 		opened, err := g.open(ctx, w.Branch, w.Title, w.Body)
 		if err != nil {
 			// Nothing is open yet, so the next poll comes sooner.
@@ -202,13 +202,13 @@ func (cfg Config) follow(ctx context.Context, g host, w core.PushedWorkView, sev
 		}
 		pr = opened
 		pr.Body = w.Body
-	case pr.state() == store.PROpen:
+	case pr.state() == domain.PROpen:
 		if pr, err = g.refresh(ctx, pr); err != nil {
 			return pr, err
 		}
 	}
 	state := pr.state()
-	if several && (state == store.PROpen || state == store.PRConflicting) && !g.sameBody(pr.Body, w.Body) {
+	if several && (state == domain.PROpen || state == domain.PRConflicting) && !g.sameBody(pr.Body, w.Body) {
 		if err := g.edit(ctx, pr, w.Body); err != nil {
 			return pr, err
 		}
@@ -233,7 +233,7 @@ func (cfg Config) close(ctx context.Context, g host, c core.PullRequestToClose) 
 			pr = p
 		}
 	}
-	if pr == nil || pr.state() == store.PROpen || pr.state() == store.PRConflicting {
+	if pr == nil || pr.state() == domain.PROpen || pr.state() == domain.PRConflicting {
 		if pr, err = g.close(ctx, c.Number); err != nil {
 			return err
 		}
@@ -249,13 +249,13 @@ func choose(prs []*pullRequest) *pullRequest {
 	var merged *pullRequest
 	for _, p := range prs {
 		switch p.state() {
-		case store.PROpen, store.PRConflicting:
+		case domain.PROpen, domain.PRConflicting:
 			return p
-		case store.PRMerged:
+		case domain.PRMerged:
 			if merged == nil {
 				merged = p
 			}
-		case store.PRClosed:
+		case domain.PRClosed:
 			if closed == nil {
 				closed = p
 			}
@@ -323,20 +323,20 @@ type pullRequest struct {
 // state maps GitHub's state and mergeability to Code Central's: closed
 // with a merge time is merged, and an open one GitHub says can't merge
 // cleanly is conflicting.
-func (p *pullRequest) state() store.PullRequestState {
+func (p *pullRequest) state() domain.PullRequestState {
 	switch {
 	case p.MergedAt != nil:
-		return store.PRMerged
+		return domain.PRMerged
 	case p.Status == "closed":
-		return store.PRClosed
+		return domain.PRClosed
 	case p.MergeableState == "dirty" || (p.Mergeable != nil && !*p.Mergeable):
-		return store.PRConflicting
+		return domain.PRConflicting
 	}
-	return store.PROpen
+	return domain.PROpen
 }
 
 func (p *pullRequest) mergeCommit() string {
-	if p.state() == store.PRMerged {
+	if p.state() == domain.PRMerged {
 		return p.MergeSHA
 	}
 	return ""

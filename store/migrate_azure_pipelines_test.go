@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"testing"
 
@@ -44,7 +45,7 @@ func TestTheRealChainMigratesAFormat19StoreToTheAzurePipelinesFormat(t *testing.
 	// The new settings and conclusion read back, each provider's own kept.
 	if err := s.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
-		p.CI.Repositories[0].Provider, p.CI.Repositories[0].ProjectURL, p.CI.PATEnv = store.CIAzurePipelines, "https://dev.azure.com/acme/web", "ACME_PAT"
+		p.CI.Repositories[0].Provider, p.CI.Repositories[0].ProjectURL, p.CI.PATEnv = domain.CIAzurePipelines, "https://dev.azure.com/acme/web", "ACME_PAT"
 		return w.PutProject(p)
 	}); err != nil {
 		t.Fatal(err)
@@ -52,12 +53,12 @@ func TestTheRealChainMigratesAFormat19StoreToTheAzurePipelinesFormat(t *testing.
 	s = reopen(t, s)
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
-		if h := homeCI(p); h.Provider != store.CIAzurePipelines || h.ProjectURL != "https://dev.azure.com/acme/web" || p.CI.PATEnv != "ACME_PAT" || h.Repository != "acme/web" {
+		if h := homeCI(p); h.Provider != domain.CIAzurePipelines || h.ProjectURL != "https://dev.azure.com/acme/web" || p.CI.PATEnv != "ACME_PAT" || h.Repository != "acme/web" {
 			t.Errorf("ci = %+v, want Azure Pipelines settings with the repository kept", p.CI)
 		}
 		return nil
 	})
-	if !store.CIPartiallySucceeded.Valid() || store.CIPartiallySucceeded.Failed() || store.CIPartiallySucceeded.Cancelled() {
+	if !domain.CIPartiallySucceeded.Valid() || domain.CIPartiallySucceeded.Failed() || domain.CIPartiallySucceeded.Cancelled() {
 		t.Error("partially_succeeded must be a valid conclusion that is neither failed nor cancelled")
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -55,7 +56,7 @@ func TestARepositoryFollowsTheDefaultLandingUntilItHasItsOwn(t *testing.T) {
 		}
 	}
 
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingMerge, Push: true, Remote: "github"}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "github"}); err != nil {
 		t.Fatal(err)
 	}
 	if l, own, remote := f.landingIn(t, "web"); l != core.RepositoryLandingMergePush || own || remote != "github" {
@@ -111,7 +112,7 @@ func TestARepositorysOwnLandingDecidesItsLandingRules(t *testing.T) {
 	f := twoRepoWorld(t) // Merge + Push with CI Tracking on
 	f.changes(t, 5, "acme", "api")
 	f.pushedFor(t, "api", "acme-5", "def456")
-	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CIInProgress, "")
+	f.ciRunIn(t, "api", 1, "def456", "acme-5", domain.CIInProgress, "")
 	if api := changedIn(t, f.getTicket(t, "acme-5"), "api"); api.NotLanded != "waiting on CI at def456" {
 		t.Fatalf("api %+v, want it waiting on its CI under the Default Landing, Merge + Push", api)
 	}
@@ -205,14 +206,14 @@ func TestTheDefaultLandingOfPullRequestIsRefusedWhileALocalOnlyRepositoryFollows
 	f.addRepository(t, core.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes")})
 	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git"})
 
-	_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest})
+	_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest})
 	wantRefusalNaming(t, err, "method", "notes", "Own Landing such as Merge")
 	if strings.Contains(err.Error(), "web") {
 		t.Fatalf("refusal %q names web, which has a Clone URL", err)
 	}
 
 	f.editLanding(t, "notes", core.RepositoryLandingMerge)
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest}); err != nil {
 		t.Fatalf("Pull Request with the local-only notes on its Own Landing: %v", err)
 	}
 	if l, own, _ := f.landingIn(t, "notes"); l != core.RepositoryLandingMerge || !own {
@@ -232,7 +233,7 @@ func TestAClonelessRepositoryUnderPullRequestIsRefused(t *testing.T) {
 	_, err := f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "web", CloneURL: &none})
 	wantRefusalNaming(t, err, "clone_url", "web", "Clone URL")
 
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest}); err != nil {
 		t.Fatal(err)
 	}
 	_, err = f.core.AddRepository(human, "acme", core.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes")})
@@ -245,7 +246,7 @@ func TestAProjectWhoseOtherRepositoriesAreAllLocalOnlyIsNotRefusedPushOrCITracki
 	f.project(t, "acme")
 	f.addRepository(t, core.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes")})
 	f.addRepository(t, core.AddRepositoryInput{Name: "docs", LocalPath: srcPath("docs")})
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingMerge, Push: true, Remote: "origin"}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"}); err != nil {
 		t.Fatalf("Merge + Push: %v", err)
 	}
 	if _, err := f.core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Repository: "acme/acme"}); err != nil {
@@ -260,7 +261,7 @@ func TestARepositoryLocalOnlyUnderPullRequestIsShownAsSuchAndNotReRouted(t *test
 	// remote), so the store is written directly.
 	err := f.store.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
-		p.SetRepositories(append(p.RepositoryList(), store.Repository{Name: "notes", Base: "main", LocalPath: srcPath("notes"), OwnLanding: store.OwnLanding{Method: store.LandingPullRequest}}))
+		p.SetRepositories(append(p.RepositoryList(), domain.Repository{Name: "notes", Base: "main", LocalPath: srcPath("notes"), OwnLanding: domain.OwnLanding{Method: domain.LandingPullRequest}}))
 		return w.PutProject(p)
 	})
 	if err != nil {

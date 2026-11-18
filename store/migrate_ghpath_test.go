@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"testing"
 
@@ -32,7 +33,7 @@ func TestTheRealChainMigratesAFormat9StoreToTheGHPathFormat(t *testing.T) {
 		t.Errorf("store.yaml = %q", got)
 	}
 	s.View(func(r store.Reader) error {
-		if got, want := r.Options(), (store.Options{FocusClear: store.FocusAllClear, FocusPopup: store.FocusPopupOff, LimitsPopup: store.LimitsPopupOn}); got != want {
+		if got, want := r.Options(), (domain.Options{FocusClear: domain.FocusAllClear, FocusPopup: domain.FocusPopupOff, LimitsPopup: domain.LimitsPopupOn}); got != want {
 			t.Errorf("options after migrating = %+v, want %+v", got, want)
 		}
 		return nil

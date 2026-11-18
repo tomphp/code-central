@@ -6,14 +6,14 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // asking is acme-2 claimed as claim-1 (session sess-1) and asking a Round
 // of the given Questions at t0+1h.
 func (f fixture) asking(t *testing.T, qs ...core.QuestionInput) core.PostRoundResult {
 	t.Helper()
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{SessionID: "sess-1"})
 	f.clock.Set(t0.Add(time.Hour))
 	res, err := f.core.PostRound(ctx, "acme", core.PostRoundInput{Ticket: "acme-2", ClaimID: "claim-1", Questions: qs})
@@ -35,7 +35,7 @@ func TestPostRoundStoresANumberedRoundAndMovesToNeedsAnswer(t *testing.T) {
 		t.Fatalf("got round %d, next step %q; want round 1, %q", res.Round, res.NextStep, want)
 	}
 	v := f.get(t, "2")
-	if v.State != store.NeedsAnswer {
+	if v.State != domain.NeedsAnswer {
 		t.Fatalf("state %s", v.State)
 	}
 	if len(v.Rounds) != 1 {
@@ -46,8 +46,8 @@ func TestPostRoundStoresANumberedRoundAndMovesToNeedsAnswer(t *testing.T) {
 		t.Fatalf("round %+v: the session ID defaults to the Claim's", r)
 	}
 	wantQs := []core.QuestionView{
-		{Number: 1, Title: "Which database?", Body: "Postgres or SQLite?", Recommended: "SQLite", Status: store.QuestionOpen},
-		{Number: 2, Title: "Name?", Body: "What is it called?", Status: store.QuestionOpen},
+		{Number: 1, Title: "Which database?", Body: "Postgres or SQLite?", Recommended: "SQLite", Status: domain.QuestionOpen},
+		{Number: 2, Title: "Name?", Body: "What is it called?", Status: domain.QuestionOpen},
 	}
 	if !slices.EqualFunc(r.Questions, wantQs, sameQuestion) {
 		t.Fatalf("questions %+v, want %+v", r.Questions, wantQs)
@@ -55,7 +55,7 @@ func TestPostRoundStoresANumberedRoundAndMovesToNeedsAnswer(t *testing.T) {
 	if c := v.Claims[0]; c.Ended != nil {
 		t.Fatalf("posting a Round keeps the Claim: %+v", c)
 	}
-	wantMove := core.MoveView{From: store.InProgress, To: store.NeedsAnswer, Actor: "agent", Time: t0.Add(time.Hour), Claim: 1}
+	wantMove := core.MoveView{From: domain.InProgress, To: domain.NeedsAnswer, Actor: "agent", Time: t0.Add(time.Hour), Claim: 1}
 	if m := v.Moves[len(v.Moves)-1]; m != wantMove {
 		t.Fatalf("move %+v, want %+v", m, wantMove)
 	}
@@ -104,12 +104,12 @@ func TestPostRoundRejections(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			f := newFixture(t)
-			f.work(t, store.Ready)
+			f.work(t, domain.Ready)
 			f.claim(t, core.ClaimInput{})
 			c.in.Ticket = "2"
 			_, err := f.core.PostRound(ctx, "acme", c.in)
 			wantCode(t, err, c.code, c.field)
-			if v := f.get(t, "2"); v.State != store.InProgress || len(v.Rounds) != 0 {
+			if v := f.get(t, "2"); v.State != domain.InProgress || len(v.Rounds) != 0 {
 				t.Fatalf("a rejected Round changed the Ticket: %s, %+v", v.State, v.Rounds)
 			}
 		})

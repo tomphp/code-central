@@ -2,11 +2,11 @@ package server_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"testing"
 
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
 )
 
 // specStageClaimed submits Requirement acme-4, passes its grilling Stage,
@@ -15,7 +15,7 @@ func specStageClaimed(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	submittedRequirement(t, srv)
 	must(t, func() error {
-		_, err := srv.Core.Move(core.WithActor(context.Background(), core.Human), "acme", core.MoveInput{Ticket: "5", ToState: store.Done})
+		_, err := srv.Core.Move(core.WithActor(context.Background(), core.Human), "acme", core.MoveInput{Ticket: "5", ToState: domain.Done})
 		return err
 	})
 	for _, ref := range []core.Ref{"acme-6", "acme-3"} {

@@ -13,7 +13,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // Routes maps every core operation to its HTTP method and path pattern
@@ -96,7 +96,7 @@ var handlers = map[string]handlerFunc{
 		}
 		in := core.FindTicketsInput{Title: q.Get("title"), Labels: q["label"], Spec: core.Ref(q.Get("spec")), Parts: q["part"]}
 		for _, s := range q["state"] {
-			in.State = append(in.State, store.State(s))
+			in.State = append(in.State, domain.State(s))
 		}
 		var err error
 		if in.Tags, err = tagParams(q); err != nil {

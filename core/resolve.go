@@ -1,6 +1,9 @@
 package core
 
-import "github.com/tomoram/code-central/store"
+import (
+	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/store"
+)
 
 // Specs and Tickets share one number counter per Project, so a number
 // that isn't the kind asked for may be the other kind. specNotTicket and
@@ -11,38 +14,38 @@ import "github.com/tomoram/code-central/store"
 // the field.
 
 // resolveTicket reads the Ticket ref names as op's field.
-func resolveTicket(r store.Reader, key, op, field string, ref Ref) (store.Ticket, error) {
+func resolveTicket(r store.Reader, key, op, field string, ref Ref) (domain.Ticket, error) {
 	n, err := ref.number(key, field)
 	if err != nil {
-		return store.Ticket{}, err
+		return domain.Ticket{}, err
 	}
 	return ticketNumbered(r, key, op, field, n)
 }
 
 // ticketNumbered is resolveTicket for a number already parsed.
-func ticketNumbered(r store.Reader, key, op, field string, n int) (store.Ticket, error) {
+func ticketNumbered(r store.Reader, key, op, field string, n int) (domain.Ticket, error) {
 	if t, ok := r.Ticket(key, n); ok {
 		return t, nil
 	}
 	if err := specNotTicket(r, key, op, field, n); err != nil {
-		return store.Ticket{}, err
+		return domain.Ticket{}, err
 	}
-	return store.Ticket{}, missing(op, field, "there is no Ticket %s", DisplayID(key, n))
+	return domain.Ticket{}, missing(op, field, "there is no Ticket %s", DisplayID(key, n))
 }
 
 // resolveSpec reads the Spec ref names as op's field.
-func resolveSpec(r store.Reader, key, op, field string, ref Ref) (store.Spec, error) {
+func resolveSpec(r store.Reader, key, op, field string, ref Ref) (domain.Spec, error) {
 	n, err := ref.number(key, field)
 	if err != nil {
-		return store.Spec{}, err
+		return domain.Spec{}, err
 	}
 	if s, ok := r.Spec(key, n); ok {
 		return s, nil
 	}
 	if err := ticketNotSpec(r, key, op, field, n); err != nil {
-		return store.Spec{}, err
+		return domain.Spec{}, err
 	}
-	return store.Spec{}, missing(op, field, "there is no Spec %s", DisplayID(key, n))
+	return domain.Spec{}, missing(op, field, "there is no Spec %s", DisplayID(key, n))
 }
 
 // specNotTicket is the error for n, which isn't a Ticket, given as op's

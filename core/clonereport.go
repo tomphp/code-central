@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
 )
@@ -103,7 +104,7 @@ func (c *Core) ReportRepositories(_ context.Context, key string, in ReportReposi
 		report[name] = CloneView{State: r.State, Path: path, Problem: problem, Since: now}
 	}
 	var before ProjectView
-	var project store.Project
+	var project domain.Project
 	if err := c.store.View(func(r store.Reader) error {
 		if err := writable(r, key); err != nil {
 			return err
@@ -158,7 +159,7 @@ func (c *Core) fillClones(key string, rs []RepositoryView) {
 // repositoryMissingRows are p's Repository missing items: one per listed
 // Repository its Factory reports missing, in landing order, with no
 // Ticket.
-func (c *Core) repositoryMissingRows(p store.Project) []NeedsMeRow {
+func (c *Core) repositoryMissingRows(p domain.Project) []NeedsMeRow {
 	if !p.Archived.IsZero() {
 		return nil
 	}

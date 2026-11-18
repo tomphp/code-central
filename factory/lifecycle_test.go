@@ -2,6 +2,7 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,13 +10,12 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // lastFailure is the newest Failure Report on a Failed Ticket.
 func lastFailure(t *testing.T, h *factorytest.Harness, id string) string {
 	t.Helper()
-	tk := h.WantState(id, store.Failed)
+	tk := h.WantState(id, domain.Failed)
 	r := tk.FailureReports[len(tk.FailureReports)-1]
 	return r.WhatBroke + "\n" + r.Why + "\n" + r.WhatToFix + "\n" + r.WhereWorkStands
 }
@@ -105,7 +105,7 @@ func TestAStageWorktreePathHoldingABranchWorktreeIsAFailureReport(t *testing.T) 
 }
 
 // move moves a Ticket to state as the human.
-func move(t *testing.T, h *factorytest.Harness, id string, state store.State) {
+func move(t *testing.T, h *factorytest.Harness, id string, state domain.State) {
 	t.Helper()
 	if _, err := h.Human().Move(context.Background(), h.Project, core.MoveInput{Ticket: core.Ref(id), ToState: state}); err != nil {
 		t.Fatal(err)
@@ -127,9 +127,9 @@ func TestWorktreesAreKeptThroughInReviewGiveUpAndFailed(t *testing.T) {
 	h.Script(failed, factorytest.CLI("report-failure", "{{ticket}}", "--claim", "{{claim}}", "--what-broke", "x", "--why", "x", "--what-to-fix", "x", "--where-work-stands", "x"), factorytest.Result("success"))
 
 	r := h.Start()
-	h.WantState(review, store.InReview)
-	h.WantState(failed, store.Failed)
-	if tk := h.WantState(gaveUp, store.Ready); len(tk.Claims) == 0 {
+	h.WantState(review, domain.InReview)
+	h.WantState(failed, domain.Failed)
+	if tk := h.WantState(gaveUp, domain.Ready); len(tk.Claims) == 0 {
 		t.Fatalf("%s is Ready but was never claimed, want its turn to have given up", gaveUp)
 	}
 	r.Poll()
@@ -151,11 +151,11 @@ func TestACleanWorktreeIsRemovedOnDoneAndItsBranchKept(t *testing.T) {
 		factorytest.Git("commit", "-q", "-m", "x"),
 		factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	r.WantOutput(id + " turn ended")
 	tip := h.Git("rev-parse", id)
 
-	move(t, h, id, store.Done)
+	move(t, h, id, domain.Done)
 	r.Poll()
 
 	if exists(h.Worktree(id)) {
@@ -175,10 +175,10 @@ func TestADirtyWorktreeIsLeftOnCancelledWithAWarning(t *testing.T) {
 	id := h.ReadyTicket("Abandoned")
 	h.Script(id, factorytest.WriteFile("wip.txt", "wip\n"), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	r.WantOutput(id + " turn ended")
 
-	move(t, h, id, store.Cancelled)
+	move(t, h, id, domain.Cancelled)
 	r.Poll()
 
 	if got, _ := os.ReadFile(filepath.Join(h.Worktree(id), "wip.txt")); string(got) != "wip\n" {
@@ -198,10 +198,10 @@ func TestTheSweepAtStartRemovesFinishedTicketsWorktreesAndPrunes(t *testing.T) {
 	h := factorytest.New(t)
 	done := h.ReadyTicket("Done before")
 	h.Git("worktree", "add", "-q", "-b", done, h.Worktree(done), "main")
-	move(t, h, done, store.Done)
+	move(t, h, done, domain.Done)
 	stage := h.StageTicket("spec", "Spec: cancelled before")
 	h.Git("worktree", "add", "-q", "--detach", h.Worktree(stage), "main")
-	move(t, h, stage, store.Cancelled)
+	move(t, h, stage, domain.Cancelled)
 	gone := h.Repo + "-gone"
 	h.Git("worktree", "add", "-q", "--detach", gone, "main")
 	if err := os.RemoveAll(gone); err != nil {

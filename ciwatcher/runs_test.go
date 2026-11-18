@@ -7,6 +7,7 @@ package ciwatcher_test
 import (
 	"context"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +15,6 @@ import (
 	"github.com/tomoram/code-central/ciwatcher"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
-	"github.com/tomoram/code-central/store"
 )
 
 // pushed makes acme-2 an Accepted Ticket whose pushed commit is commit,
@@ -25,12 +25,12 @@ func (w *watching) pushed(commit string) string {
 	human := core.WithActor(ctx, core.Human)
 	c := w.srv.Core
 	must(w.t, func() error {
-		_, err := c.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingMerge, Push: true, Remote: "origin"})
+		_, err := c.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"})
 		return err
 	})
 	must(w.t, func() error { _, err := c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"}); return err })
 	must(w.t, func() error {
-		_, err := c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form", State: store.Ready})
+		_, err := c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form", State: domain.Ready})
 		return err
 	})
 	res, err := c.Claim(ctx, "acme", core.ClaimInput{Ticket: "2"})
@@ -145,15 +145,15 @@ func TestTheCIWatcherReportsAPushedCommitsRunsAgainstItsTicket(t *testing.T) {
 	}
 	ci, nightly := tk.CIRuns[0], tk.CIRuns[1]
 	if ci.ID != 11 || ci.Workflow != "ci.yml" || ci.Name != "Build ci.yml" || ci.Branch != "main" || ci.Commit != "abc123" || ci.Ticket != id ||
-		ci.Status != store.CICompleted || ci.Conclusion != store.CISuccess || ci.URL != "https://github.com/acme/web/actions/runs/11" ||
+		ci.Status != domain.CICompleted || ci.Conclusion != domain.CISuccess || ci.URL != "https://github.com/acme/web/actions/runs/11" ||
 		ci.Started == nil || ci.Finished == nil || !ci.Finished.Equal(time.Date(2026, 1, 5, 9, 5, 0, 0, time.UTC)) || ci.Ignored {
 		t.Fatalf("ci.yml's run = %+v", ci)
 	}
-	if len(ci.Jobs) != 2 || ci.Jobs[0] != (core.CIJobView{Name: "test", Conclusion: store.CISuccess, URL: "https://github.com/acme/web/actions/runs/11/job/1"}) ||
-		ci.Jobs[1].Conclusion != store.CISkipped {
+	if len(ci.Jobs) != 2 || ci.Jobs[0] != (core.CIJobView{Name: "test", Conclusion: domain.CISuccess, URL: "https://github.com/acme/web/actions/runs/11/job/1"}) ||
+		ci.Jobs[1].Conclusion != domain.CISkipped {
 		t.Fatalf("ci.yml's jobs = %+v", ci.Jobs)
 	}
-	if !nightly.Ignored || nightly.Conclusion != store.CIFailure {
+	if !nightly.Ignored || nightly.Conclusion != domain.CIFailure {
 		t.Fatalf("nightly.yml's run = %+v, want its failure kept and marked ignored", nightly)
 	}
 }
@@ -165,7 +165,7 @@ func TestTheCIWatcherReportsARunAgainOnlyOnceItChanges(t *testing.T) {
 	w.jobsAnswer(11, 1, [2]string{"test", ""})
 	w.start(w.h.Bin)
 	tk := w.ciResult(id, core.CIRunning)
-	if tk.CIRuns[0].Status != store.CIInProgress || tk.CIRuns[0].Jobs[0].Conclusion != "" {
+	if tk.CIRuns[0].Status != domain.CIInProgress || tk.CIRuns[0].Jobs[0].Conclusion != "" {
 		t.Fatalf("run = %+v, want in progress with its job unfinished", tk.CIRuns[0])
 	}
 
@@ -180,7 +180,7 @@ func TestTheCIWatcherReportsARunAgainOnlyOnceItChanges(t *testing.T) {
 	w.jobsAnswer(11, 1, [2]string{"test", "failure"})
 	w.waitingPoll()
 	tk = w.ciResult(id, core.CIFailed)
-	if tk.CIRuns[0].Jobs[0].Conclusion != store.CIFailure {
+	if tk.CIRuns[0].Jobs[0].Conclusion != domain.CIFailure {
 		t.Fatalf("run = %+v, want its job failed", tk.CIRuns[0])
 	}
 }

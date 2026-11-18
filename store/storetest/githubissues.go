@@ -1,6 +1,7 @@
 package storetest
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"reflect"
 	"testing"
 
@@ -15,7 +16,7 @@ func runGitHubIssues(t *testing.T, f Factory) {
 		seedProject(t, s)
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
-				if p, _ := r.Project("acme"); !reflect.DeepEqual(p.GitHubIssues, store.GitHubIssues{}) {
+				if p, _ := r.Project("acme"); !reflect.DeepEqual(p.GitHubIssues, domain.GitHubIssues{}) {
 					t.Fatalf("github issues = %+v, want off with nothing set", p.GitHubIssues)
 				}
 			})
@@ -28,9 +29,9 @@ func runGitHubIssues(t *testing.T, f Factory) {
 
 	t.Run("a project's github issues settings read back after they are written", func(t *testing.T) {
 		s := f.New(t)
-		want := store.GitHubIssues{On: true, Repositories: []string{"acme/web", "acme/api"}, Label: "good first issue", NewIssuesNeedMe: true, Spec: 4}
+		want := domain.GitHubIssues{On: true, Repositories: []string{"acme/web", "acme/api"}, Label: "good first issue", NewIssuesNeedMe: true, Spec: 4}
 		put(t, s, func(w store.Writer) error {
-			return w.PutProject(store.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed", GitHubIssues: want})
+			return w.PutProject(domain.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed", GitHubIssues: want})
 		})
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
@@ -53,13 +54,13 @@ func runAwaitingTriage(t *testing.T, f Factory) {
 		s := f.New(t)
 		seedProject(t, s)
 		put(t, s, func(w store.Writer) error {
-			return w.PutSpec("acme", store.Spec{Number: 1, Title: "GitHub Issues: acme/web", Created: t0, Updated: t0})
+			return w.PutSpec("acme", domain.Spec{Number: 1, Title: "GitHub Issues: acme/web", Created: t0, Updated: t0})
 		})
 		put(t, s, func(w store.Writer) error {
-			return w.PutTicket("acme", store.Ticket{Number: 2, Title: "New", State: store.Draft, Spec: 1, AwaitingTriage: true, Created: t0, Updated: t0})
+			return w.PutTicket("acme", domain.Ticket{Number: 2, Title: "New", State: domain.Draft, Spec: 1, AwaitingTriage: true, Created: t0, Updated: t0})
 		})
 		put(t, s, func(w store.Writer) error {
-			return w.PutTicket("acme", store.Ticket{Number: 3, Title: "Kept", State: store.Draft, Spec: 1, Created: t0, Updated: t0})
+			return w.PutTicket("acme", domain.Ticket{Number: 3, Title: "Kept", State: domain.Draft, Spec: 1, Created: t0, Updated: t0})
 		})
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {

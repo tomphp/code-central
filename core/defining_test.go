@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -218,7 +219,7 @@ func TestCommentWorksOnAnyTicketWithNoClaim(t *testing.T) {
 	f := defining(t)
 	// A Ticket some agent holds, written straight to the store.
 	f.store.Update(func(w store.Writer) error {
-		return w.PutTicket("acme", store.Ticket{Number: 3, Title: "Held", State: store.InProgress, Spec: 1, Created: t0, Updated: t0})
+		return w.PutTicket("acme", domain.Ticket{Number: 3, Title: "Held", State: domain.InProgress, Spec: 1, Created: t0, Updated: t0})
 	})
 	f.clock.Advance(time.Minute)
 	v, err := record(f.core.Comment(core.WithActor(ctx, core.Human), "acme", core.CommentInput{Ticket: "3", Body: "Try the other API.\n", Full: true}))
@@ -226,7 +227,7 @@ func TestCommentWorksOnAnyTicketWithNoClaim(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := core.CommentView{Number: 1, Actor: "human", Time: t0.Add(time.Minute), Body: "Try the other API.\n"}
-	if len(v.Comments) != 1 || v.Comments[0] != want || v.State != store.InProgress || !v.Updated.Equal(want.Time) {
+	if len(v.Comments) != 1 || v.Comments[0] != want || v.State != domain.InProgress || !v.Updated.Equal(want.Time) {
 		t.Fatalf("view: %+v", v)
 	}
 	v, _ = record(f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "acme-3", Body: "Noted.", Full: true}))
@@ -247,8 +248,8 @@ func TestApproveMovesDraftToReady(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := core.MoveView{From: store.Draft, To: store.Ready, Actor: "human", Time: t0.Add(time.Minute)}
-	if v.State != store.Ready || !v.Claimable || len(v.Moves) != 1 || v.Moves[0] != want {
+	want := core.MoveView{From: domain.Draft, To: domain.Ready, Actor: "human", Time: t0.Add(time.Minute)}
+	if v.State != domain.Ready || !v.Claimable || len(v.Moves) != 1 || v.Moves[0] != want {
 		t.Fatalf("view: %+v", v)
 	}
 	_, err = f.core.Approve(ctx, "acme", core.TicketInput{Ticket: "2"})
@@ -257,7 +258,7 @@ func TestApproveMovesDraftToReady(t *testing.T) {
 
 func TestDeferMovesReadyToDraftWithTheReasonAsAComment(t *testing.T) {
 	f := defining(t)
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "API", State: store.Ready}) // 3
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "API", State: domain.Ready}) // 3
 	_, err := f.core.Defer(ctx, "acme", core.DeferInput{Ticket: "3", Reason: " "})
 	wantCode(t, err, core.Invalid, "reason")
 	f.clock.Advance(time.Minute)
@@ -266,7 +267,7 @@ func TestDeferMovesReadyToDraftWithTheReasonAsAComment(t *testing.T) {
 		t.Fatal(err)
 	}
 	at := t0.Add(time.Minute)
-	if v.State != store.Draft || v.Claimable || len(v.Moves) != 1 || v.Moves[0] != (core.MoveView{From: store.Ready, To: store.Draft, Actor: "agent", Time: at}) {
+	if v.State != domain.Draft || v.Claimable || len(v.Moves) != 1 || v.Moves[0] != (core.MoveView{From: domain.Ready, To: domain.Draft, Actor: "agent", Time: at}) {
 		t.Fatalf("view: %+v", v)
 	}
 	if len(v.Comments) != 1 || v.Comments[0] != (core.CommentView{Number: 1, Actor: "agent", Time: at, Body: "Needs the schema first."}) {

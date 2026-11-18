@@ -2,6 +2,7 @@ package ciwatcher_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -12,7 +13,6 @@ import (
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakegh"
-	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/watchers/watchertest"
 )
 
@@ -24,7 +24,7 @@ func check(h *watchertest.Harness, ghPath string, path []string, places ...strin
 	if places == nil {
 		places = []string{}
 	}
-	in := core.CICheckInput{Provider: store.CIGitHubActions, Repository: "acme/web", GHPath: ghPath}
+	in := core.CICheckInput{Provider: domain.CIGitHubActions, Repository: "acme/web", GHPath: ghPath}
 	return ciwatcher.Check(context.Background(), in, gh.Env{Environ: h.Environ(path...), InstallPlaces: places})
 }
 
@@ -158,7 +158,7 @@ func TestGHThatDoesntRunFailsTheCheck(t *testing.T) {
 	h.Answer(fakegh.Answer{Args: []string{"auth"}, Exit: 0})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	in := core.CICheckInput{Provider: store.CIGitHubActions, Repository: "acme/web"}
+	in := core.CICheckInput{Provider: domain.CIGitHubActions, Repository: "acme/web"}
 	r := ciwatcher.Check(ctx, in, gh.Env{Environ: h.Environ(h.Bin), InstallPlaces: []string{}})
 	if r.Problem != core.ProblemCheckFailed || !strings.Contains(r.Reason, "didn't run") {
 		t.Fatalf("check = %+v, want the check failed as gh didn't run", r)

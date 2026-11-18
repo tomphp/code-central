@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // specBranch is the name of a Spec's Spec Branch, where its Spec-landed
@@ -195,7 +195,7 @@ func (l *lander) landSpecs(ctx context.Context, p core.ProjectView) {
 	}
 	waiting := map[string]bool{}
 	var specs []string
-	for _, tk := range l.landable(ctx, store.Accepted) {
+	for _, tk := range l.landable(ctx, domain.Accepted) {
 		if tk.SpecLanded && !waiting[tk.Spec.ID] {
 			waiting[tk.Spec.ID] = true
 			specs = append(specs, tk.Spec.ID)
@@ -306,7 +306,7 @@ func (l *lander) landSpec(ctx context.Context, id string, p core.ProjectView) {
 			return
 		}
 	}
-	l.mergeSpec(ctx, spec, tickets, p, core.LandingPolicy.MergesSpecBranches, true)
+	l.mergeSpec(ctx, spec, tickets, p, domain.LandingPolicy.MergesSpecBranches, true)
 }
 
 // anyUncloned reports whether one of tickets has a Changed Repository it
@@ -363,7 +363,7 @@ type specPlan struct {
 // are handled this poll: false means every Spec Branch is already in its
 // base or one can't be read, and the Tickets land through the plain path,
 // as their work is in the base.
-func (l *lander) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets []core.TicketView, p core.ProjectView, mergesThere func(core.LandingPolicy) bool, pushes bool) (handled bool) {
+func (l *lander) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets []core.TicketView, p core.ProjectView, mergesThere func(domain.LandingPolicy) bool, pushes bool) (handled bool) {
 	sort.SliceStable(tickets, func(i, j int) bool { return acceptedAt(tickets[i]).Before(acceptedAt(tickets[j])) })
 	policies := p.LandingPolicies()
 	if l.anyUncloned(tickets) {
@@ -508,7 +508,7 @@ func (l *lander) landEachAt(ctx context.Context, tickets []core.TicketView, p co
 // poll.
 func (l *lander) landSpecsOff(ctx context.Context, accepted []core.TicketView, p core.ProjectView) map[string]bool {
 	handled := map[string]bool{}
-	if !p.LandingPolicies().Any(core.LandingPolicy.MergesLeftoverSpecBranches) {
+	if !p.LandingPolicies().Any(domain.LandingPolicy.MergesLeftoverSpecBranches) {
 		return handled
 	}
 	groups := map[string][]core.TicketView{}
@@ -542,7 +542,7 @@ func (l *lander) landSpecsOff(ctx context.Context, accepted []core.TicketView, p
 			}
 			continue
 		}
-		if l.mergeSpec(ctx, spec, groups[id], p, core.LandingPolicy.MergesLeftoverSpecBranches, false) {
+		if l.mergeSpec(ctx, spec, groups[id], p, domain.LandingPolicy.MergesLeftoverSpecBranches, false) {
 			for _, tk := range groups[id] {
 				handled[tk.ID] = true
 			}
@@ -602,7 +602,7 @@ func (l *lander) openSpecConflict(ctx context.Context, spec core.SpecDetail, con
 // nothing the base lacks, even after a squash merge.
 func (l *lander) specLanded(spec core.SpecDetail) bool {
 	for _, r := range spec.Tickets {
-		if r.State == store.Done {
+		if r.State == domain.Done {
 			return true
 		}
 	}
@@ -645,7 +645,7 @@ func (l *lander) finishedSpec(ctx context.Context, id string) *core.SpecDetail {
 		return nil
 	}
 	for _, r := range spec.Tickets {
-		if r.State != store.Done && r.State != store.Cancelled {
+		if r.State != domain.Done && r.State != domain.Cancelled {
 			return nil
 		}
 	}

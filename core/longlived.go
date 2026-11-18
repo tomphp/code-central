@@ -1,6 +1,9 @@
 package core
 
-import "github.com/tomoram/code-central/store"
+import (
+	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/store"
+)
 
 // projectSpec is one of a Project's own Long-lived Specs, created on first
 // use and found only by the number the Project stores for it (ADR 0035):
@@ -9,14 +12,14 @@ type projectSpec struct {
 	title, body string
 	// number is the Project's field holding the Spec's number, 0 until it
 	// exists.
-	number func(*store.Project) *int
+	number func(*domain.Project) *int
 }
 
 // The Project's own Long-lived Specs.
 var (
-	ciFixesSpec      = projectSpec{"CI Fixes", ciFixesSpecBody, func(p *store.Project) *int { return &p.CIFixesSpec }}
-	smallChangesSpec = projectSpec{"Small Changes", smallChangesSpecBody, func(p *store.Project) *int { return &p.SmallChangesSpec }}
-	retrosSpec       = projectSpec{"Retros", retrosSpecBody, func(p *store.Project) *int { return &p.RetrosSpec }}
+	ciFixesSpec      = projectSpec{"CI Fixes", ciFixesSpecBody, func(p *domain.Project) *int { return &p.CIFixesSpec }}
+	smallChangesSpec = projectSpec{"Small Changes", smallChangesSpecBody, func(p *domain.Project) *int { return &p.SmallChangesSpec }}
+	retrosSpec       = projectSpec{"Retros", retrosSpecBody, func(p *domain.Project) *int { return &p.RetrosSpec }}
 )
 
 // projectSpecNumber is the number of key's Spec ps, created on first use;
@@ -34,7 +37,7 @@ func (c *Core) projectSpecNumber(key string, ps projectSpec) (int, error) {
 		}
 		now := c.now()
 		n = w.NextNumber(key)
-		return w.PutSpec(key, store.Spec{Number: n, Title: ps.title, Body: ps.body, Labels: []string{LongLivedLabel}, Created: now, Updated: now})
+		return w.PutSpec(key, domain.Spec{Number: n, Title: ps.title, Body: ps.body, Labels: []string{LongLivedLabel}, Created: now, Updated: now})
 	})
 	if err != nil {
 		return 0, err

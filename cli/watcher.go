@@ -8,8 +8,8 @@ import (
 	"github.com/tomoram/code-central/ciwatcher"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
-	"github.com/tomoram/code-central/store"
 )
 
 // The CI Watcher (Spec code-central-247) is a hidden subcommand: the
@@ -32,10 +32,10 @@ func runCIWatcher(ctx context.Context, e Env, args []string) error {
 	check := fs.Bool("check", false, "check access once and exit")
 	project := fs.String("project", "", "the Project to watch")
 	var in core.CICheckInput
-	provider := fs.String("provider", string(store.CIGitHubActions), "CI Provider")
+	provider := fs.String("provider", string(domain.CIGitHubActions), "CI Provider")
 	fs.StringVar(&in.Repository, "repository", "", "GitHub repository, owner/name")
 	fs.StringVar(&in.ProjectURL, "project-url", "", "Azure DevOps project URL")
-	fs.StringVar(&in.PATEnv, "pat-env", store.DefaultPATEnv, "the environment variable holding the Azure DevOps PAT")
+	fs.StringVar(&in.PATEnv, "pat-env", domain.DefaultPATEnv, "the environment variable holding the Azure DevOps PAT")
 	fs.StringVar(&in.GHPath, "gh-path", "", "the gh path Option")
 	pos, err := parse(fs, args)
 	if err != nil {
@@ -50,11 +50,11 @@ func runCIWatcher(ctx context.Context, e Env, args []string) error {
 		return ciwatcher.Watch(ctx, ciwatcher.Config{Client: newClient(e), Project: *project, Env: gh.Env{Environ: os.Environ()},
 			Clock: clock.System{}, Stdin: e.Stdin, Log: e.Stderr})
 	}
-	in.Provider = store.CIProvider(*provider)
+	in.Provider = domain.CIProvider(*provider)
 	switch {
-	case in.Provider == store.CIAzurePipelines && in.ProjectURL == "":
+	case in.Provider == domain.CIAzurePipelines && in.ProjectURL == "":
 		return usagef("--check needs --project-url")
-	case in.Provider != store.CIAzurePipelines && in.Repository == "":
+	case in.Provider != domain.CIAzurePipelines && in.Repository == "":
 		return usagef("--check needs --repository")
 	}
 	r := ciwatcher.Check(ctx, in, gh.Env{Environ: os.Environ()})

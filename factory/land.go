@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // landing reads the Project, whose Landing Method, with its Push option, the
@@ -77,7 +77,7 @@ func (l *lander) land(ctx context.Context, p core.ProjectView) {
 	if l.stateOf(l.repos.home).missing && !l.repos.several() {
 		return
 	}
-	accepted := l.landable(ctx, store.Accepted)
+	accepted := l.landable(ctx, domain.Accepted)
 	sort.SliceStable(accepted, func(i, j int) bool { return acceptedAt(accepted[i]).Before(acceptedAt(accepted[j])) })
 	var held map[string]bool
 	if !l.stateOf(l.repos.home).missing {
@@ -99,7 +99,7 @@ func (l *lander) land(ctx context.Context, p core.ProjectView) {
 	if !homeReady && !l.repos.several() {
 		return
 	}
-	if policies.Any(core.LandingPolicy.CIGateHolds) {
+	if policies.Any(domain.LandingPolicy.CIGateHolds) {
 		l.reportTip(ctx, policies)
 	}
 	for _, tk := range accepted {
@@ -149,14 +149,14 @@ func (l *lander) land(ctx context.Context, p core.ProjectView) {
 func (l *lander) landEach(ctx context.Context, tk core.TicketView, p core.ProjectView, ws []changedWork) {
 	policies := p.LandingPolicies()
 	onSpec := l.waitsOnSpecBranch(tk)
-	routes := make([]core.LandingRoute, len(ws))
+	routes := make([]domain.LandingRoute, len(ws))
 	var merges, specs []changedWork
 	for i, w := range ws {
 		routes[i] = w.r.policy(policies).Route(onSpec, pullRequestMergedIn(tk, w.r))
 		switch routes[i] {
-		case core.RouteMerge:
+		case domain.RouteMerge:
 			merges = append(merges, w)
-		case core.RouteSpecBranch:
+		case domain.RouteSpecBranch:
 			specs = append(specs, w)
 		}
 	}
@@ -169,11 +169,11 @@ func (l *lander) landEach(ctx context.Context, tk core.TicketView, p core.Projec
 	}
 	for i, w := range ws {
 		switch routes[i] {
-		case core.RouteMerge:
+		case domain.RouteMerge:
 			if pl, ok := plans[w.r]; ok && !l.mergeAndLand(ctx, tk, p, pl) {
 				return
 			}
-		case core.RoutePullRequest:
+		case domain.RoutePullRequest:
 			if changedElsewhere(l.repos.home.name, tk) {
 				l.landPullRequestIn(ctx, tk, policies, w.r, onSpec)
 			} else {
@@ -181,7 +181,7 @@ func (l *lander) landEach(ctx context.Context, tk core.TicketView, p core.Projec
 				// by the Ticket's own pull request.
 				l.landPullRequest(ctx, tk, p)
 			}
-		case core.RouteBranch:
+		case domain.RouteBranch:
 			l.landMergedBranch(ctx, tk, policies, w)
 		}
 	}
@@ -301,7 +301,7 @@ func (l *lander) detectHandMerges(ctx context.Context, p core.ProjectView) {
 		if len(merged) == 0 {
 			continue
 		}
-		if tk.State == store.InReview {
+		if tk.State == domain.InReview {
 			if passed, _ := checkFinish(ctx, l.repos, l.client, l.project, tk); !passed {
 				continue
 			}
@@ -347,8 +347,8 @@ func (l *lander) mergedByHand(tk core.TicketView, policies core.LandingPolicies)
 // mergeableStates are the States a Ticket with a finish commit can be in
 // short of Accepted, Done and Cancelled: every State but those and Draft,
 // which comes before any work.
-var mergeableStates = slices.DeleteFunc(slices.Clone(store.States), func(s store.State) bool {
-	return s == store.Draft || s == store.Accepted || s == store.Done || s == store.Cancelled
+var mergeableStates = slices.DeleteFunc(slices.Clone(domain.States), func(s domain.State) bool {
+	return s == domain.Draft || s == domain.Accepted || s == domain.Done || s == domain.Cancelled
 })
 
 // inBase reports whether commit is reachable from the Home Repository's
@@ -357,7 +357,7 @@ func (l *lander) inBase(commit string) bool { return l.repos.inBaseOf(l.repos.ho
 
 // landable is every Ticket in these States, read in full by one
 // find_tickets call. If the call fails it lands nothing this poll.
-func (l *lander) landable(ctx context.Context, states ...store.State) []core.TicketView {
+func (l *lander) landable(ctx context.Context, states ...domain.State) []core.TicketView {
 	out, err := l.client.FindTicketViews(ctx, l.project, core.FindTicketsInput{State: states})
 	if err != nil {
 		if ctx.Err() == nil {
@@ -371,7 +371,7 @@ func (l *lander) landable(ctx context.Context, states ...store.State) []core.Tic
 // acceptedAt is when the Ticket last moved to Accepted.
 func acceptedAt(tk core.TicketView) time.Time {
 	for i := len(tk.Moves) - 1; i >= 0; i-- {
-		if tk.Moves[i].To == store.Accepted {
+		if tk.Moves[i].To == domain.Accepted {
 			return tk.Moves[i].Time
 		}
 	}
@@ -714,7 +714,7 @@ func (l *lander) reportTip(ctx context.Context, policies core.LandingPolicies) {
 	if len(tips) == 0 {
 		return
 	}
-	for _, tk := range l.landable(ctx, store.Accepted, store.InReview) {
+	for _, tk := range l.landable(ctx, domain.Accepted, domain.InReview) {
 		if l.hooks.stopped(ctx) {
 			return
 		}
@@ -723,7 +723,7 @@ func (l *lander) reportTip(ctx context.Context, policies core.LandingPolicies) {
 			switch {
 			case !ok || v.Landed != nil || v.PushedCommit == nil:
 			case v.PushedCommit.Commit == t.tip || !t.r.git.isAncestor(v.PushedCommit.Commit, t.tip):
-			case tk.State == store.InReview && (v.Commit == "" || !l.repos.inBaseOf(t.r, v.Commit)):
+			case tk.State == domain.InReview && (v.Commit == "" || !l.repos.inBaseOf(t.r, v.Commit)):
 			default:
 				l.reportPushed(ctx, tk, policies, t.r, l.repos.baseOf(t.r), t.tip)
 			}

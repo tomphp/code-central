@@ -6,7 +6,7 @@ import (
 	"slices"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // Pull requests across Repositories (Spec code-central-848, ADR 0050,
@@ -27,7 +27,7 @@ func changedElsewhere(home string, tk core.TicketView) bool {
 }
 
 // hasMerged reports whether pr is a pull request that has merged.
-func hasMerged(pr *core.PullRequestView) bool { return pr != nil && pr.State == store.PRMerged }
+func hasMerged(pr *core.PullRequestView) bool { return pr != nil && pr.State == domain.PRMerged }
 
 // repositoryNamed is the Repository name with a clone, or nil.
 func (l *lander) repositoryNamed(name string) *repository {

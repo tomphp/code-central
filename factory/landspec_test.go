@@ -2,6 +2,7 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // holdTicketsStage adds a Draft tickets Stage Ticket, which keeps the Spec
@@ -17,7 +17,7 @@ import (
 func holdTicketsStage(t *testing.T, h *factorytest.Harness) (release func()) {
 	t.Helper()
 	ctx := context.Background()
-	made, err := h.Server.Client.CreateTicket(ctx, h.Project, core.CreateTicketInput{Spec: core.Ref(h.SpecID()), Title: "Tickets", State: store.Draft, Labels: []string{core.StageLabel("tickets")}})
+	made, err := h.Server.Client.CreateTicket(ctx, h.Project, core.CreateTicketInput{Spec: core.Ref(h.SpecID()), Title: "Tickets", State: domain.Draft, Labels: []string{core.StageLabel("tickets")}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,8 +44,8 @@ func TestAReadySpecIsMergedIntoTheBaseAndItsTicketsLandAtTheMergeCommit(t *testi
 	a, b := twoAccepted(t, h)
 
 	r := h.Start()
-	h.WantState(a, store.Done)
-	tkB := h.WantState(b, store.Done)
+	h.WantState(a, domain.Done)
+	tkB := h.WantState(b, domain.Done)
 
 	merge := h.Git("rev-parse", "main")
 	if got := h.Git("log", "-1", "--format=%s", merge); got != "Merge spec "+h.SpecID()+": Work" {
@@ -69,7 +69,7 @@ func TestNothingLandsWhileTheSpecIsNotReady(t *testing.T) {
 	r := h.Start()
 	r.WantOutput(a + ": merged into spec/")
 	r.Poll()
-	if h.Ticket(a).State != store.Accepted {
+	if h.Ticket(a).State != domain.Accepted {
 		t.Error("landed before the tickets Stage was finished")
 	}
 	release()
@@ -77,10 +77,10 @@ func TestNothingLandsWhileTheSpecIsNotReady(t *testing.T) {
 	later := h.ReadyTicket("Added later")
 	h.Script(later, factorytest.Wait())
 	r.Poll()
-	h.WantState(later, store.InProgress)
+	h.WantState(later, domain.InProgress)
 	r.Poll()
 	r.Poll()
-	if h.Ticket(a).State != store.Accepted {
+	if h.Ticket(a).State != domain.Accepted {
 		t.Error("landed with a Ticket In Progress")
 	}
 }
@@ -93,8 +93,8 @@ func TestUnderPushASpecIsPushedOnceAndItsTicketsLand(t *testing.T) {
 	a, b := twoAccepted(t, h)
 
 	h.Start()
-	h.WantState(a, store.Done)
-	h.WantState(b, store.Done)
+	h.WantState(a, domain.Done)
+	h.WantState(b, domain.Done)
 	if got, want := remote.Git("rev-parse", "main"), h.Git("rev-parse", "main"); got != want {
 		t.Errorf("the remote's main is %s, want %s", got, want)
 	}
@@ -117,7 +117,7 @@ func TestAFailedPushLeavesTheSpecsTicketsAcceptedAndRetries(t *testing.T) {
 	r.Poll()
 	for _, id := range []string{a, b} {
 		tk := h.Ticket(id)
-		if tk.State != store.Accepted || !commented(tk, "couldn't push main to origin") {
+		if tk.State != domain.Accepted || !commented(tk, "couldn't push main to origin") {
 			t.Errorf("%s is %s with comments %+v, want Accepted and commented", id, tk.State, tk.Comments)
 		}
 	}
@@ -127,8 +127,8 @@ func TestAFailedPushLeavesTheSpecsTicketsAcceptedAndRetries(t *testing.T) {
 
 	remote.AcceptPushes()
 	r.Poll()
-	h.WantState(a, store.Done)
-	h.WantState(b, store.Done)
+	h.WantState(a, domain.Done)
+	h.WantState(b, domain.Done)
 }
 
 func TestWithCITrackingASpecsTicketsShareOnePushedCommitAndLandOncePassed(t *testing.T) {
@@ -150,15 +150,15 @@ func TestWithCITrackingASpecsTicketsShareOnePushedCommitAndLandOncePassed(t *tes
 
 	// One shared run per commit, as the real CI Watcher reports, tracked
 	// against one of the Tickets; both read it.
-	reportRun(t, h, 1, a, pa.Commit, store.CICompleted, store.CIFailure)
+	reportRun(t, h, 1, a, pa.Commit, domain.CICompleted, domain.CIFailure)
 	stillAccepted(t, h, r, a, "with a failed CI result")
 	stillAccepted(t, h, r, b, "with a failed CI result")
 
 	// A re-run passes.
-	reportAttempt(t, h, 1, 2, a, pa.Commit, store.CICompleted, store.CISuccess)
+	reportAttempt(t, h, 1, 2, a, pa.Commit, domain.CICompleted, domain.CISuccess)
 	r.Poll()
-	h.WantState(a, store.Done)
-	h.WantState(b, store.Done)
+	h.WantState(a, domain.Done)
+	h.WantState(b, domain.Done)
 }
 
 func TestASpecBranchThatConflictsWithTheBaseOpensOneConflictTicket(t *testing.T) {
@@ -191,7 +191,7 @@ func TestASpecBranchThatConflictsWithTheBaseOpensOneConflictTicket(t *testing.T)
 		!strings.Contains(fix.Description, "base's tip is "+baseTip) || !strings.Contains(fix.Description, "Spec Branch's tip is "+specTip) {
 		t.Errorf("conflict Ticket %+v, want it marked, naming README, %s and %s", fix, baseTip, specTip)
 	}
-	if h.Ticket(a).State != store.Accepted {
+	if h.Ticket(a).State != domain.Accepted {
 		t.Errorf("%s landed despite the conflict", a)
 	}
 }
@@ -216,7 +216,7 @@ func TestASpecBranchConflictingWithAMovedBaseCommentsOnItsOpenSpecMergeTicket(t 
 	// not, so the moved base meets the same conflict.
 	h.CommitOn("main", "README", "base side again\n")
 	baseTip := h.Git("rev-parse", "main")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, LandPerSpec: off()})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, LandPerSpec: off()})
 	r.Poll()
 	r.WantOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main again: commented on " + fix)
 
@@ -247,10 +247,10 @@ func TestOnceTheConflictTicketIsAcceptedTheSpecLandsAgain(t *testing.T) {
 	release()
 	r.Poll()
 	r.WantOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main in README: opened " + fix)
-	h.WantState(fix, store.InReview)
+	h.WantState(fix, domain.InReview)
 
 	h.Accept(fix)
 	r.Poll()
-	h.WantState(a, store.Done)
-	h.WantState(fix, store.Done)
+	h.WantState(a, domain.Done)
+	h.WantState(fix, domain.Done)
 }

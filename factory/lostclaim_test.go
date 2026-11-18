@@ -2,12 +2,12 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // A claim whose answer is lost (Spec code-central-779): the Factory claims
@@ -24,7 +24,7 @@ func TestAClaimWhoseAnswerIsLostIsClaimedAgainAndRuns(t *testing.T) {
 	h.LoseAnswer("/claim", 1)
 	r := h.Start()
 
-	h.WantState(id, store.NeedsAnswer)
+	h.WantState(id, domain.NeedsAnswer)
 	r.WantOutput(id + " turn ended")
 	out := r.Stdout()
 	for _, want := range []string{id + ": claim: the answer was lost (", "): claiming it again", id + ": claim: the answer came back on claiming it again"} {
@@ -47,7 +47,7 @@ func TestAClaimThatNeverArrivedIsClaimedAgainAndRuns(t *testing.T) {
 	h.LoseRequest("/claim", 1)
 	r := h.Start()
 
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	if n := len(h.Ticket(id).Claims); n != 1 {
 		t.Errorf("%s has %d Claims, want 1", id, n)
 	}
@@ -91,7 +91,7 @@ func TestAClaimAnotherSessionTakesBeforeTheRetryIsDropped(t *testing.T) {
 	if strings.Contains(r.Stdout(), "the answer came back") {
 		t.Errorf("printed a recovered line for a refused claim; stdout:\n%s", r.Stdout())
 	}
-	if tk.State != store.InProgress {
+	if tk.State != domain.InProgress {
 		t.Errorf("%s is %s, want In Progress under the other session's Claim", id, tk.State)
 	}
 }
@@ -114,7 +114,7 @@ func TestAClaimLostOnEveryTryIsSentFourTimes(t *testing.T) {
 	if strings.Contains(r.Stdout(), "the answer came back") || len(h.Calls()) != 0 {
 		t.Errorf("a claim lost on every try was recovered; stdout:\n%s", r.Stdout())
 	}
-	if s := h.Ticket(id).State; s != store.Ready {
+	if s := h.Ticket(id).State; s != domain.Ready {
 		t.Errorf("%s is %s, want Ready: no try reached Code Central", id, s)
 	}
 }
@@ -138,7 +138,7 @@ func TestAClaimLostOnEveryTryIsClaimedAgainAtLaterPolls(t *testing.T) {
 		t.Fatalf("after the second poll %d claims cut and claude ran %d times, want 5 and none", n, len(h.Calls()))
 	}
 	r.Poll()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	if n := len(h.Ticket(id).Claims); n != 1 {
 		t.Errorf("%s has %d Claims, want 1: claiming again gets the same Claim", id, n)
 	}
@@ -167,7 +167,7 @@ func TestALostClaimHoldsItsSlot(t *testing.T) {
 	if n := len(callsFor(h, b)); n != 1 {
 		t.Fatalf("%s ran %d times at the second poll, want once", b, n)
 	}
-	if s := h.Ticket(c).State; s != store.Ready {
+	if s := h.Ticket(c).State; s != domain.Ready {
 		t.Fatalf("with %s's claim lost and %s running, %s is %s; want it left Ready", a, b, c, s)
 	}
 	r.Poll()
@@ -175,7 +175,7 @@ func TestALostClaimHoldsItsSlot(t *testing.T) {
 		t.Fatalf("%s ran %d times at the third poll, want once", a, n)
 	}
 	r.Poll()
-	if s := h.Ticket(c).State; s != store.Ready || len(h.Calls()) != 2 {
+	if s := h.Ticket(c).State; s != domain.Ready || len(h.Calls()) != 2 {
 		t.Errorf("with two turns running, %s is %s and claude ran %d times; want it left Ready", c, s, len(h.Calls()))
 	}
 	if n := len(h.Ticket(a).Claims); n != 1 {
@@ -196,7 +196,7 @@ func TestALostClaimRefusedAtALaterPollIsDropped(t *testing.T) {
 	}
 
 	r.Poll()
-	h.WantState(b, store.InReview)
+	h.WantState(b, domain.InReview)
 	r.Poll()
 	if n := strings.Count(r.Stdout(), a+": claim: action_not_allowed"); n != 1 {
 		t.Errorf("the refusal printed %d times, want once; stdout:\n%s", n, r.Stdout())
@@ -225,10 +225,10 @@ func TestADrainingFactoryStillClaimsALostClaimAgain(t *testing.T) {
 		t.Errorf("exit code %d, want 0", code)
 	}
 	tk := h.Ticket(id)
-	if tk.State != store.InReview || len(tk.Claims) != 1 {
+	if tk.State != domain.InReview || len(tk.Claims) != 1 {
 		t.Errorf("%s is %s with %d Claims, want In Review with 1", id, tk.State, len(tk.Claims))
 	}
-	if s := h.Ticket(later).State; s != store.Ready || len(h.Calls()) != 1 {
+	if s := h.Ticket(later).State; s != domain.Ready || len(h.Calls()) != 1 {
 		t.Errorf("%s is %s after %d runs; a draining Factory claims nothing new", later, s, len(h.Calls()))
 	}
 }
@@ -247,7 +247,7 @@ func TestAStoppingFactoryAbandonsALostClaim(t *testing.T) {
 	if n := h.Refused(claimPath); n != 4 || len(h.Calls()) != 0 {
 		t.Errorf("%d claims cut and claude ran %d times, want 4 and none", n, len(h.Calls()))
 	}
-	if s := h.Ticket(id).State; s != store.InProgress {
+	if s := h.Ticket(id).State; s != domain.InProgress {
 		t.Errorf("%s is %s, want In Progress under the Claim the stop left", id, s)
 	}
 }
@@ -270,7 +270,7 @@ func TestALostClaimsTicketIsNotChosenAgainAsNewWork(t *testing.T) {
 	if n := len(callsFor(h, b)); n != 1 {
 		t.Fatalf("%s ran %d times at the second poll, want once", b, n)
 	}
-	if s := h.Ticket(a).State; s != store.Ready || len(callsFor(h, a)) != 0 {
+	if s := h.Ticket(a).State; s != domain.Ready || len(callsFor(h, a)) != 0 {
 		t.Fatalf("%s is %s after %d runs, want Ready and none: its claim is still lost", a, s, len(callsFor(h, a)))
 	}
 	r.Poll()

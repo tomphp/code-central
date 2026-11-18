@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -36,17 +37,17 @@ func TestTheRealChainMigratesAFormat49StoreToTheOwnLandingFormat(t *testing.T) {
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
 		for _, rp := range p.RepositoryList() {
-			if rp.OwnLanding != (store.OwnLanding{}) || rp.PushRemote != "" {
+			if rp.OwnLanding != (domain.OwnLanding{}) || rp.PushRemote != "" {
 				t.Errorf("%s = %+v, want it following the Default Landing with the Project's Push remote", rp.Name, rp)
 			}
 		}
 		return nil
 	})
 
-	want := []store.Repository{
-		{Name: "acme", Home: true, OwnLanding: store.OwnLanding{Method: store.LandingMerge}},
-		{Name: "web", CloneURL: "git@github.com:acme/web.git", Base: "main", OwnLanding: store.OwnLanding{Method: store.LandingPullRequest}, PushRemote: "upstream"},
-		{Name: "notes", Base: "main", LocalPath: "/src/notes", OwnLanding: store.OwnLanding{Method: store.LandingBranch, Push: true}},
+	want := []domain.Repository{
+		{Name: "acme", Home: true, OwnLanding: domain.OwnLanding{Method: domain.LandingMerge}},
+		{Name: "web", CloneURL: "git@github.com:acme/web.git", Base: "main", OwnLanding: domain.OwnLanding{Method: domain.LandingPullRequest}, PushRemote: "upstream"},
+		{Name: "notes", Base: "main", LocalPath: "/src/notes", OwnLanding: domain.OwnLanding{Method: domain.LandingBranch, Push: true}},
 	}
 	if err := s.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
@@ -76,7 +77,7 @@ func TestTheHomeAloneKeepsItsOwnLandingAndPullRequestsPushIsNormalised(t *testin
 		"key: acme\ndisplay_name: Acme\ncreated: 2026-01-02T03:04:05Z\nmode: committed\nrepositories:\n"+
 			"  - name: acme\n    home: true\n    landing:\n      method: pull_request\n      push: true\n    push_remote: upstream\n")
 	s := openFile(t, dir)
-	want := []store.Repository{{Name: "acme", Home: true, OwnLanding: store.OwnLanding{Method: store.LandingPullRequest}, PushRemote: "upstream"}}
+	want := []domain.Repository{{Name: "acme", Home: true, OwnLanding: domain.OwnLanding{Method: domain.LandingPullRequest}, PushRemote: "upstream"}}
 	check := func(s *store.FileStore) {
 		t.Helper()
 		s.View(func(r store.Reader) error {

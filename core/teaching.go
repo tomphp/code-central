@@ -4,23 +4,24 @@ import (
 	"context"
 	"embed"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
 // A Project's mode (store.Mode) says where init puts its files: committed
 // to the repository, or kept local to one checkout (`init --local`).
 const (
-	ModeCommitted = store.ModeCommitted
-	ModeLocal     = store.ModeLocal
+	ModeCommitted = domain.ModeCommitted
+	ModeLocal     = domain.ModeLocal
 )
 
-func invalidMode(m store.Mode) *Error {
+func invalidMode(m domain.Mode) *Error {
 	return invalid("mode", "mode %q is neither %q nor %q", m, ModeCommitted, ModeLocal)
 }
 
 // SetProjectModeInput is set_project_mode's input.
 type SetProjectModeInput struct {
-	Mode store.Mode `json:"mode"`
+	Mode domain.Mode `json:"mode"`
 }
 
 // SetProjectMode is set_project_mode(key, mode): init calls it when the

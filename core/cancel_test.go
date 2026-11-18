@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 func (f fixture) cancel(t *testing.T, c core.CancelInput, as ...core.Actor) core.TicketView {
@@ -25,15 +25,15 @@ func (f fixture) cancel(t *testing.T, c core.CancelInput, as ...core.Actor) core
 
 func TestAnAgentCancelsADraftOrReadyTicketByNamingItsReplacements(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Draft, store.Draft) // acme-2, acme-3, acme-4
+	f.work(t, domain.Ready, domain.Draft, domain.Draft) // acme-2, acme-3, acme-4
 	v := f.cancel(t, core.CancelInput{Ticket: "acme-2", Replacements: []core.Ref{"acme-3", "4"}, Reason: "split in two"})
-	if v.State != store.Cancelled || !slices.Equal(v.Replacements, []string{"acme-3", "acme-4"}) {
+	if v.State != domain.Cancelled || !slices.Equal(v.Replacements, []string{"acme-3", "acme-4"}) {
 		t.Fatalf("state %s replacements %v", v.State, v.Replacements)
 	}
 	if len(v.Comments) != 1 || v.Comments[0].Body != "split in two" || v.Comments[0].Actor != "agent" {
 		t.Fatalf("comments %+v", v.Comments)
 	}
-	if m := v.Moves[len(v.Moves)-1]; m.From != store.Ready || m.To != store.Cancelled || m.Actor != "agent" {
+	if m := v.Moves[len(v.Moves)-1]; m.From != domain.Ready || m.To != domain.Cancelled || m.Actor != "agent" {
 		t.Fatalf("move %+v", m)
 	}
 	// The reason is optional.
@@ -44,7 +44,7 @@ func TestAnAgentCancelsADraftOrReadyTicketByNamingItsReplacements(t *testing.T) 
 
 func TestAnAgentCannotCancelWithoutAReplacementOrOnceWorkHasStarted(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready) // acme-2, acme-3
+	f.work(t, domain.Ready, domain.Ready) // acme-2, acme-3
 	_, err := f.core.Cancel(ctx, "acme", core.CancelInput{Ticket: "acme-2"})
 	wantCode(t, err, core.Invalid, "replacements")
 
@@ -55,10 +55,10 @@ func TestAnAgentCannotCancelWithoutAReplacementOrOnceWorkHasStarted(t *testing.T
 
 func TestTheHumanCancelsAnyUnfinishedTicketWithOrWithoutReplacements(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready) // acme-2, acme-3
+	f.work(t, domain.Ready, domain.Ready) // acme-2, acme-3
 	f.claim(t, core.ClaimInput{Ticket: "acme-2"})
 	v := f.cancel(t, core.CancelInput{Ticket: "acme-2"}, core.Human)
-	if v.State != store.Cancelled || v.Claims[0].Ended == nil || v.Claims[0].EndedBy != "cancel" || v.Moves[len(v.Moves)-1].Actor != "human" {
+	if v.State != domain.Cancelled || v.Claims[0].Ended == nil || v.Claims[0].EndedBy != "cancel" || v.Moves[len(v.Moves)-1].Actor != "human" {
 		t.Fatalf("got %+v", v)
 	}
 	_, err := f.core.Cancel(human, "acme", core.CancelInput{Ticket: "acme-2"})
@@ -67,7 +67,7 @@ func TestTheHumanCancelsAnyUnfinishedTicketWithOrWithoutReplacements(t *testing.
 
 func TestCancelRejectsBadReplacements(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready) // acme-2, acme-3
+	f.work(t, domain.Ready, domain.Ready) // acme-2, acme-3
 	for _, c := range []struct {
 		name string
 		reps []core.Ref
@@ -87,7 +87,7 @@ func TestCancelRejectsBadReplacements(t *testing.T) {
 
 func TestAnythingBlockedByACancelledTicketIsBlockedByItsReplacements(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready, store.Draft, store.Draft) // acme-2..acme-5
+	f.work(t, domain.Ready, domain.Ready, domain.Draft, domain.Draft) // acme-2..acme-5
 	f.addBlocker(t, "acme-2", "acme-3")
 	before := f.get(t, "acme-2")
 
@@ -97,14 +97,14 @@ func TestAnythingBlockedByACancelledTicketIsBlockedByItsReplacements(t *testing.
 		t.Fatalf("blocked %v blocked_by %v updated %v (dependant must not be rewritten)", v.Blocked, v.BlockedBy, v.Updated)
 	}
 	want := []core.BlockerView{
-		{ID: "acme-4", Title: "Tc", State: store.Draft, Via: "acme-3", Cleared: boolPtr(false)},
-		{ID: "acme-5", Title: "Td", State: store.Draft, Via: "acme-3", Cleared: boolPtr(false)},
+		{ID: "acme-4", Title: "Tc", State: domain.Draft, Via: "acme-3", Cleared: boolPtr(false)},
+		{ID: "acme-5", Title: "Td", State: domain.Draft, Via: "acme-3", Cleared: boolPtr(false)},
 	}
 	if !reflect.DeepEqual(v.Blockers, want) {
 		t.Fatalf("blockers %+v, want %+v", v.Blockers, want)
 	}
-	f.setState(t, 4, store.Done)
-	f.setState(t, 5, store.Done)
+	f.setState(t, 4, domain.Done)
+	f.setState(t, 5, domain.Done)
 	if v := f.get(t, "acme-2"); v.Blocked || !v.Claimable {
 		t.Fatalf("still blocked once every Replacement is Done: %+v", v.Blockers)
 	}
@@ -112,7 +112,7 @@ func TestAnythingBlockedByACancelledTicketIsBlockedByItsReplacements(t *testing.
 
 func TestACancelledBlockerWithNoReplacementsKeepsItsDependantsBlocked(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready) // acme-2, acme-3
+	f.work(t, domain.Ready, domain.Ready) // acme-2, acme-3
 	f.addBlocker(t, "acme-2", "acme-3")
 	f.cancel(t, core.CancelInput{Ticket: "acme-3"}, core.Human)
 	v := f.get(t, "acme-2")
@@ -127,7 +127,7 @@ func TestACancelledBlockerWithNoReplacementsKeepsItsDependantsBlocked(t *testing
 
 func TestReplacementsThatWouldFormACycleAreRejected(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready, store.Ready) // acme-2, acme-3, acme-4
+	f.work(t, domain.Ready, domain.Ready, domain.Ready) // acme-2, acme-3, acme-4
 	// acme-2 waits on acme-3; replacing acme-3 with acme-2 would make
 	// acme-2 wait on itself.
 	f.addBlocker(t, "acme-2", "acme-3")
@@ -139,14 +139,14 @@ func TestReplacementsThatWouldFormACycleAreRejected(t *testing.T) {
 	f.addBlocker(t, "acme-4", "acme-2")
 	_, err = f.core.Cancel(ctx, "acme", core.CancelInput{Ticket: "acme-3", Replacements: []core.Ref{"acme-4"}})
 	wantCode(t, err, core.Cycle, "")
-	if v := f.get(t, "acme-3"); v.State != store.Ready {
+	if v := f.get(t, "acme-3"); v.State != domain.Ready {
 		t.Fatalf("rejected cancel was written: %s", v.State)
 	}
 }
 
 func TestAReplacementChainCannotLoopBack(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready, store.Ready) // acme-2, acme-3, acme-4
+	f.work(t, domain.Ready, domain.Ready, domain.Ready) // acme-2, acme-3, acme-4
 	f.cancel(t, core.CancelInput{Ticket: "acme-3", Replacements: []core.Ref{"acme-2"}})
 	// acme-3 is replaced by acme-2, so replacing acme-2 by acme-3 loops.
 	_, err := f.core.Cancel(ctx, "acme", core.CancelInput{Ticket: "acme-2", Replacements: []core.Ref{"acme-3"}})

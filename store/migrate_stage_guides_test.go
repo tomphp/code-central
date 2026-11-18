@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"testing"
 
@@ -34,7 +35,7 @@ func TestTheRealChainMigratesAFormat26StoreToTheStageGuidesFormat(t *testing.T) 
 	}
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
-		if p.StageGuides != (store.StageGuides{}) {
+		if p.StageGuides != (domain.StageGuides{}) {
 			t.Errorf("stage guides = %+v, want every optional line on", p.StageGuides)
 		}
 		return nil

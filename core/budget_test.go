@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/mcp"
-	"github.com/tomoram/code-central/store"
 )
 
 // The context budget for what agents load. These are ceilings, not
@@ -168,7 +168,7 @@ func TestEveryWritesAcknowledgementStaysWithinItsBudget(t *testing.T) {
 func acknowledgements(t *testing.T) map[string][]byte {
 	t.Helper()
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready, store.Ready, store.Ready) // acme-2 to acme-5
+	f.work(t, domain.Ready, domain.Ready, domain.Ready, domain.Ready) // acme-2 to acme-5
 	out := map[string][]byte{}
 	write := func(name string, v any, err error) {
 		t.Helper()

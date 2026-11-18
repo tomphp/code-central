@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -11,7 +12,6 @@ import (
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/events"
-	"github.com/tomoram/code-central/store"
 )
 
 // The CI Watcher's own operations (code-central-253): get_ci_watch, the
@@ -115,7 +115,7 @@ func TestGetCIWatchHasWhenEachRulesLatestRunFinished(t *testing.T) {
 		t.Fatalf("rule = %+v, want no last run before one is reported", got)
 	}
 	run := func(id int64, finished time.Time) core.CIRunView {
-		r := ciRun(id, "ci.yml", "def456", store.CICompleted, store.CIFailure)
+		r := ciRun(id, "ci.yml", "def456", domain.CICompleted, domain.CIFailure)
 		r.Ticket, r.Rule, r.Finished = "", "acme-4", &finished
 		return r
 	}
