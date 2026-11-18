@@ -31,12 +31,6 @@ type tool struct {
 	call        func(ctx context.Context, c *core.Core, key string, args []byte) (any, error)
 }
 
-// tools maps each agent operation not yet defined in ops to its
-// hand-written tool; derived (schema.go) holds the rest. The cross-door
-// suite checks the served list against ops.All(), and a migration guard
-// that no operation is in both.
-var tools = map[string]tool{}
-
 // decoded makes a tool call that decodes its arguments strictly into In.
 func decoded[In any](f func(ctx context.Context, c *core.Core, key string, in In) (any, error)) func(context.Context, *core.Core, string, []byte) (any, error) {
 	return func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
@@ -91,9 +85,6 @@ func newServer(c *core.Core, key string, log io.Writer) *sdk.Server {
 	s := sdk.NewServer(&sdk.Implementation{Name: "code-central", Version: "v1"}, &sdk.ServerOptions{Instructions: core.Instructions})
 	for _, op := range ops.All() {
 		t, ok := derived[op.Name]
-		if !ok {
-			t, ok = tools[op.Name]
-		}
 		if !ok || op.Audience != ops.AgentAndHuman {
 			continue
 		}

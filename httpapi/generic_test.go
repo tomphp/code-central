@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -225,21 +224,12 @@ func TestADefinitionTheHandlerCannotDecodeFailsNamingTheField(t *testing.T) {
 	}
 }
 
-func TestRoutesMergeTheDefinitionsAndTheLegacyMap(t *testing.T) {
+func TestRoutesDeriveFromTheDefinitions(t *testing.T) {
 	routes := Routes()
 	if routes["comment"] != "POST /api/p/{key}/tickets/{n}/comment" {
 		t.Fatalf("comment: %q", routes["comment"])
 	}
 	if routes["claim"] != "POST /api/p/{key}/claim" {
-		t.Fatalf("claim (legacy): %q", routes["claim"])
-	}
-	var legacyErr error
-	for _, name := range LegacyRoutes() {
-		if _, ok := routes[name]; !ok {
-			legacyErr = errors.Join(legacyErr, errors.New(name+" is legacy but not routed"))
-		}
-	}
-	if legacyErr != nil {
-		t.Fatal(legacyErr)
+		t.Fatalf("claim: %q", routes["claim"])
 	}
 }

@@ -16,24 +16,13 @@ import (
 	"github.com/tomoram/code-central/ops"
 )
 
-// legacyRoutes maps each operation not yet defined in ops to its HTTP
-// method and path pattern (net/http ServeMux syntax), with its handler in
-// handlers. Routes merges them with the definitions'; a migration guard
-// checks that no operation is in both.
-var legacyRoutes = map[string]string{}
-
 type handlerFunc func(c *core.Core, r *http.Request) (any, error)
-
-var handlers = map[string]handlerFunc{}
 
 // Register adds the HTTP API under /api/ to the service's one mux. The
 // request's Actor is already in its context (server.Guard reads the
 // Actor header); without one it is agent.
 func Register(mux *http.ServeMux, c *core.Core) {
 	all := map[string]handlerFunc{WaitPath: wait, TranscriptPath: transcript, UsagePath: usageRead, SessionUsagePath: sessionUsageRead, CIOverviewPath: ciOverviewRead}
-	for name, pattern := range legacyRoutes {
-		all[pattern] = handlers[name]
-	}
 	for _, op := range ops.Definitions() {
 		method, pattern := op.Route()
 		all[method+" "+pattern] = derived[op.Op().Name]

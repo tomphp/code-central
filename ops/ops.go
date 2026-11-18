@@ -6,11 +6,6 @@
 // behaviour that varies by door; each door derives its route, tool, schema,
 // client call or command from it, so adding an operation means one
 // definition, one Core method and one cross-door case.
-//
-// All lists every operation. While the migration runs (Spec code-central-928),
-// an operation not yet converted is listed by its Op alone and the doors'
-// legacy maps still serve it; the migration guard in server checks that each
-// operation is defined exactly one way.
 package ops
 
 import (
@@ -142,14 +137,12 @@ func (d *Definition[In, Out]) Invoke(ctx context.Context, c *core.Core, key stri
 	return d.Call(c, ctx, key, *in.(*In))
 }
 
-// entry is one row of the list: a converted operation by its definition,
-// an unconverted one by its Op alone.
+// entry is one row of the list: an operation by its definition.
 type entry struct {
 	op  Op
 	def Operation
 }
 
-func legacy(op Op) entry        { return entry{op: op} }
 func defined(d Operation) entry { return entry{op: d.Op(), def: d} }
 
 // All is the one list of operations, in order. Every front door builds its

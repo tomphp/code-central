@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -40,23 +39,9 @@ func init() {
 // budget test.
 func Descriptions() map[string]string {
 	out := map[string]string{}
-	for name, t := range tools {
-		out[name] = t.description
-	}
 	for name, t := range derived {
 		out[name] = t.description
 	}
-	return out
-}
-
-// LegacyTools names the agent operations the hand-written tools still
-// serve, for the migration guard.
-func LegacyTools() []string {
-	var out []string
-	for name := range tools {
-		out = append(out, name)
-	}
-	sort.Strings(out)
 	return out
 }
 
