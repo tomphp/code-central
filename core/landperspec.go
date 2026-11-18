@@ -225,9 +225,9 @@ func leadOf(g []domain.Ticket, t domain.Ticket) (lead, waiting bool) {
 }
 
 // takesSpecFixTicket is whether new_fix_ticket on t opens a fix Ticket on
-// its Spec, from its Project's evaluation e: t is its Spec's pull-request
-// lead, and no CI item offers it failure options, which decide instead.
-func takesSpecFixTicket(e *evaluation, t domain.Ticket) bool {
+// its Spec: t is its Spec's pull-request lead, and no CI item offers it
+// failure options, which decide instead.
+func (e *evaluation) takesSpecFixTicket(t domain.Ticket) bool {
 	lead, _ := e.evaluated().specPullRequestLead(t)
 	return lead && len(e.ciFailureOptions(t)) == 0
 }
@@ -247,7 +247,7 @@ func (c *Core) newSpecFixTicket(ctx context.Context, key string, in NewFixTicket
 			return nil // the CI failure path reports what is wrong
 		}
 		p, _ := r.Project(key)
-		if !takesSpecFixTicket(c.evaluate(r, p), t) {
+		if !c.evaluate(r, p).takesSpecFixTicket(t) {
 			return nil
 		}
 		lead, handled = t, true

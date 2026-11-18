@@ -221,18 +221,24 @@ func (c *Core) SendBack(ctx context.Context, key string, in SendBackInput) (Writ
 func (c *Core) refuseSendBackOfShared(key string, ref Ref) error {
 	return c.store.View(func(r store.Reader) error {
 		t, err := resolveTicket(r, key, "send_back", "ticket", ref)
-		if err != nil {
+		if err != nil || !sharedCandidate(t) {
 			return nil // the send-back itself reports what is wrong
 		}
 		p, _ := r.Project(key)
-		return sharedSendBackRefusal(c.evaluate(r, p), t)
+		return c.evaluate(r, p).sharedSendBackRefusal(t)
 	})
 }
 
-// sharedSendBackRefusal is refuseSendBackOfShared's refusal of t, from
-// its Project's evaluation e, or nil when it allows the send-back.
-func sharedSendBackRefusal(e *evaluation, t domain.Ticket) error {
-	if t.State != domain.Accepted || len(t.PushedCommits) == 0 {
+// sharedCandidate is whether refuseSendBackOfShared may refuse t at all:
+// it is Accepted and pushed.
+func sharedCandidate(t domain.Ticket) bool {
+	return t.State == domain.Accepted && len(t.PushedCommits) > 0
+}
+
+// sharedSendBackRefusal is refuseSendBackOfShared's refusal of t, or nil
+// when it allows the send-back.
+func (e *evaluation) sharedSendBackRefusal(t domain.Ticket) error {
+	if !sharedCandidate(t) {
 		return nil
 	}
 	key := e.p.Key

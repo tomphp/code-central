@@ -252,8 +252,8 @@ export const CI_FAILURE_OPTIONS = [
 ] as const;
 export type CIFailureOption = (typeof CI_FAILURE_OPTIONS)[number];
 
-// ToMergeOption is an option the human may choose on an Accepted Ticket
-// they merge, as the Accepted panel offers it: an operation's name.
+// ToMergeOption is a To merge option: what the human may choose on an
+// Accepted Ticket they merge, an operation's name.
 export const TO_MERGE_OPTIONS = [
   "send_back",
   "new_fix_ticket",

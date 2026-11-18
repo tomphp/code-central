@@ -892,7 +892,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t domain.Ticket) Tick
 			v.CIFailureOptions = v.CIItem.Options
 		}
 	}
-	v.ToMergeOptions = toMergeOptions(e, t)
+	v.ToMergeOptions = e.toMergeOptions(t)
 	v.LandAnyway = e.ci.landAnyway(e.ci.ticket(t).in(key))
 	v.CIAutoFix = e.ciAutoFix(t, key)
 	v.Claimable = t.State == domain.Ready && !v.Blocked

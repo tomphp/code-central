@@ -117,6 +117,17 @@ func TestASpecWaitingTicketThatIsNotItsLeadOffersNothing(t *testing.T) {
 	}
 }
 
+func TestASpecWaitingTicketOffersNothingBeforeItsSpecBranchIsPushed(t *testing.T) {
+	f := specPullRequestWorld(t)
+	f.acceptedOnSpecBranch(t, 5, "one")
+
+	v := f.getTicket(t, "acme-5")
+	if !v.WaitingForSpec || v.NeedsMeReason != "" {
+		t.Fatalf("waiting %v, reason %q: want acme-5 waiting on its Spec with no item", v.WaitingForSpec, v.NeedsMeReason)
+	}
+	wantToMergeOptions(t, v)
+}
+
 func TestToMergeOptionsAreLeftOutUnderMerge(t *testing.T) {
 	f := landWorld(t, false)
 	f.moveTo(t, 5, domain.Accepted)
