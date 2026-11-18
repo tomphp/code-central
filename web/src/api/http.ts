@@ -77,6 +77,7 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
       call("POST", `${p(project)}/submit_retro`, { target, ...(note && { note }) }),
     submitSmallChange: (project, text, draft) =>
       call("POST", `${p(project)}/submit_small_change`, { text, ...(draft && { draft }) }),
+    newTicket: (project, spec, text, draft) => call("POST", `${p(project)}/new_ticket`, { spec, text, ...(draft && { draft }) }),
     specQuestions: (project, spec) => call("GET", `${p(project)}/specs/${encodeURIComponent(numberOf(spec))}/questions`),
     act: <A extends TicketAction>(project: string, id: string, action: A, body: TicketActions[A]["body"]) =>
       call<TicketActions[A]["result"]>("POST", `${p(project)}/tickets/${encodeURIComponent(numberOf(id))}/${action}`, body),

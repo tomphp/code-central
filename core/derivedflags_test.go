@@ -43,7 +43,7 @@ func (f fixture) specRead(t *testing.T, ref core.Ref) core.SpecDetail {
 	if err != nil {
 		t.Fatalf("get_spec %s outline: %v", ref, err)
 	}
-	if light.Editable != full.Editable || light.Retroable != full.Retroable || light.Kind != full.Kind || light.Need != full.Need || light.Claimed != full.Claimed {
+	if light.Editable != full.Editable || light.Retroable != full.Retroable || light.Ticketable != full.Ticketable || light.Kind != full.Kind || light.Need != full.Need || light.Claimed != full.Claimed {
 		t.Fatalf("get_spec %s: lighter read %+v, full read %+v; every read sets the derived fields alike", ref, light, full)
 	}
 	rows, err := f.core.FindSpecs(ctx, "acme", core.FindSpecsInput{Finished: true})

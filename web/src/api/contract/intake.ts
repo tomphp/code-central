@@ -341,6 +341,46 @@ export function intakeContract(driver: () => Driver) {
     expect(blank).toMatchObject({ status: 422, code: "invalid", field: "text" });
   });
 
+  // ---- New Ticket (Spec code-central-1067) ----
+  it("opens a New Ticket on a ticketable Spec, Ready or Draft, titled by the text's first line", async () => {
+    await d.createProject("acme", "Acme");
+    const spec = (await d.api.getTicket("acme", await d.createTicket("acme", "Build", "Ready"))).spec.id;
+    expect((await d.api.getSpec("acme", spec)).ticketable).toBe(true);
+
+    const ack = await d.api.newTicket("acme", spec, "Rename the button\nReview asked for Start.");
+    wantAcknowledgement(ack, ack.id, "Ready", ["title", "state", "spec", "description", "moves", "claimable"]);
+    const t = await d.api.getTicket("acme", ack.id);
+    expect(t).toMatchObject({
+      title: "Rename the button",
+      description: "Rename the button\nReview asked for Start.",
+      state: "Ready",
+      spec: { id: spec },
+      labels: [],
+      tags: {},
+      blocked_by: [],
+    });
+    expect(t.moves).toMatchObject([{ to: "Ready", actor: "human", via: "new_ticket" }]);
+
+    const draft = await d.api.newTicket("acme", spec, "Fix the typo", true);
+    expect(await d.api.getTicket("acme", draft.id)).toMatchObject({ state: "Draft", claimable: false, moves: [] });
+
+    const blank = await d.api.newTicket("acme", spec, "  \n ").catch((e) => e);
+    expect(blank).toBeInstanceOf(ApiError);
+    expect(blank).toMatchObject({ status: 422, code: "invalid", field: "text" });
+  });
+
+  it("refuses a New Ticket where the Spec isn't ticketable, saying why", async () => {
+    await d.createProject("acme", "Acme");
+    const small = await d.api.getTicket("acme", (await d.api.submitSmallChange("acme", "Rename the button")).id);
+    expect((await d.api.getSpec("acme", small.spec.id)).ticketable).toBe(false);
+    const refused = await d.api.newTicket("acme", small.spec.id, "More").catch((e) => e);
+    expect(refused).toBeInstanceOf(ApiError);
+    expect(refused).toMatchObject({ status: 409, code: "action_not_allowed", message: expect.stringContaining("Long-lived") });
+
+    const r = await d.api.submitRequirement("acme", "Offline mode");
+    expect((await d.api.getSpec("acme", r.spec.id)).ticketable).toBe(false);
+  });
+
   it("saves a Requirement, a Map and a Small Change as Draft: every Ticket Draft and none claimable", async () => {
     await d.createProject("acme", "Acme");
     const r = await d.api.submitRequirement("acme", "Offline mode", undefined, false, true);

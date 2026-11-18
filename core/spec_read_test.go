@@ -55,7 +55,7 @@ func keys(m map[string]any) []string {
 // always is every key a lighter read returns whatever is asked for (Link
 // and Requirement are left out here because acme-1 is neither, and need
 // because none of its Tickets needs the human).
-var always = []string{"claimed", "created", "editable", "finished", "id", "kind", "labels", "outline", "retroable", "state_summary", "tags", "title", "updated"}
+var always = []string{"claimed", "created", "editable", "finished", "id", "kind", "labels", "outline", "retroable", "state_summary", "tags", "ticketable", "title", "updated"}
 
 var specOutline = []any{
 	map[string]any{"text": "Solution", "level": float64(2), "size": float64(45)},
@@ -67,7 +67,7 @@ func TestGetSpecWithNeitherInputIsTheFullSpec(t *testing.T) {
 	f := newFixture(t)
 	f.sectionedSpec(t)
 	full := f.readSpec(t, core.GetSpecInput{Spec: "acme-1"})
-	want := []string{"body", "claimed", "created", "editable", "edits", "finished", "id", "kind", "labels", "retroable", "state_summary", "tags", "tickets", "title", "updated"}
+	want := []string{"body", "claimed", "created", "editable", "edits", "finished", "id", "kind", "labels", "retroable", "state_summary", "tags", "ticketable", "tickets", "title", "updated"}
 	if got := keys(full); !slices.Equal(got, want) {
 		t.Fatalf("keys %v, want %v: no outline on a full read", got, want)
 	}
