@@ -91,22 +91,20 @@ function RuleRow({
     <li>
       <span>
         <strong>{watches}</strong>: opens {rule.state} Tickets on {rule.spec}
-      </span>{" "}
-      <Button
-        type="button"
-        aria-label={`Edit ${watches}`}
-        onClick={edit}
-      >
-        Edit
-      </Button>{" "}
-      <Button
-        type="button"
-        aria-label={`Remove ${watches}`}
-        aria-describedby={removeHint}
-        onClick={() => remove().catch(setError)}
-      >
-        Remove
-      </Button>
+      </span>
+      <div className="project-options-row-actions">
+        <Button type="button" aria-label={`Edit ${watches}`} onClick={edit}>
+          Edit
+        </Button>
+        <Button
+          type="button"
+          aria-label={`Remove ${watches}`}
+          aria-describedby={removeHint}
+          onClick={() => remove().catch(setError)}
+        >
+          Remove
+        </Button>
+      </div>
       {error && (
         <p className="warning" role="alert">
           {error.message}
