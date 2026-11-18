@@ -251,7 +251,7 @@ type ReportPushedCommitInput struct {
 // is never recorded in a local-only Repository, whose Landing Policy has
 // Push off. A newer pushed commit in the Repository replaces the old one
 // as the one the Repository's CI result comes from.
-func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushedCommitInput) (Written[TicketView], error) {
+func (c *Core) ReportPushedCommit(ctx context.Context, key string, in ReportPushedCommitInput) (Written[TicketView], error) {
 	commit := strings.TrimSpace(in.Commit)
 	if commit == "" {
 		return Written[TicketView]{}, invalid("commit", "report_pushed_commit needs the commit the Factory pushed")
@@ -287,6 +287,10 @@ func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushed
 	}
 	for _, n := range sharing {
 		c.publishTicketChanged(key, n)
+	}
+	// Tickets riding onto a later commit can make its item Auto-fix ready.
+	if err := c.sweepAutoFix(ctx, key); err != nil {
+		return Written[TicketView]{}, err
 	}
 	return v, nil
 }
@@ -328,7 +332,7 @@ type CIRunsView struct {
 // ignored, and prunes the runs finished more than ciKeep ago. It needs
 // CI Tracking on. Every Ticket whose runs changed gets a change notice,
 // as the Project gets ci.changed, so the UI updates live.
-func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput) (Written[CIRunsView], error) {
+func (c *Core) ReportCIRuns(ctx context.Context, key string, in ReportCIRunsInput) (Written[CIRunsView], error) {
 	var reported CIRunsView
 	changed := map[int]bool{}
 	wrote := false
@@ -380,6 +384,10 @@ func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput)
 	// In Ticket order, so what watches the events sees them the same way each time.
 	for _, n := range slices.Sorted(maps.Keys(changed)) {
 		c.events.Publish(events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, n)})
+	}
+	// A failed result can make its commit's item Auto-fix ready.
+	if err := c.sweepAutoFix(ctx, key); err != nil {
+		return Written[CIRunsView]{}, err
 	}
 	if reported.Runs == nil {
 		reported.Runs = []CIRunView{}

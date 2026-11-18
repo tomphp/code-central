@@ -127,6 +127,11 @@ func cloneTicket(t domain.Ticket) domain.Ticket {
 		sm := *t.SpecMerge
 		t.SpecMerge = &sm
 	}
+	if t.AutoFix != nil {
+		a := *t.AutoFix
+		a.Covers = slices.Clone(a.Covers)
+		t.AutoFix = &a
+	}
 	t.PullRequests = slices.Clone(t.PullRequests)
 	t.Claims = slices.Clone(t.Claims)
 	t.Rounds = slices.Clone(t.Rounds)

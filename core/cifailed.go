@@ -81,17 +81,17 @@ func acceptFailedCI(p *domain.Project, record, commit string, now time.Time) {
 	respond(p, record, commit, func(res *domain.CIResponse) { res.LandAnyway = now })
 }
 
-// fixTicketOpen reports whether the human opened a fix Ticket for the
-// failure of commit, in the Repository record names, that is neither Done
-// nor Cancelled, which leaves the commit's CI failed item out of Needs
-// Me.
-func fixTicketOpen(r store.Reader, p domain.Project, record, commit string) bool {
+// fixTicketOpen is the fix Ticket the human, or Auto-fix, opened for the
+// failure of commit, in the Repository record names, while it is neither
+// Done nor Cancelled, which leaves the commit's CI failed item out of
+// Needs Me.
+func fixTicketOpen(r store.Reader, p domain.Project, record, commit string) (domain.Ticket, bool) {
 	n := responseOf(p, record, commit).FixTicket
 	if n == 0 {
-		return false
+		return domain.Ticket{}, false
 	}
 	fix, ok := r.Ticket(p.Key, n)
-	return ok && fix.State != domain.Done && fix.State != domain.Cancelled
+	return fix, ok && !finished(fix.State)
 }
 
 // CIResponseInput is land_anyway's and rerun_ci's input: the Ticket, and
@@ -207,6 +207,8 @@ func (c *Core) LandAnyway(ctx context.Context, key string, in CIResponseInput) (
 	if err := humanOnly(ctx, "land_anyway"); err != nil {
 		return Written[TicketView]{}, err
 	}
+	// Not between an Auto-fix sweep's read and its fix Ticket's response.
+	defer c.lockAutoFix(key)()
 	return c.respondCI(key, OptionLandAnyway, in,
 		func(ci *ciState, rc *repoCI) bool { return ci.landAnyway(rc) },
 		whyNotLandAnyway,
@@ -258,6 +260,8 @@ func (c *Core) RerunCI(ctx context.Context, key string, in CIResponseInput) (Wri
 	if err := humanOnly(ctx, "rerun_ci"); err != nil {
 		return Written[TicketView]{}, err
 	}
+	// Not between an Auto-fix sweep's read and its fix Ticket's response.
+	defer c.lockAutoFix(key)()
 	return c.respondCI(key, OptionRerunCI, in,
 		func(_ *ciState, rc *repoCI) bool { return len(rc.reruns) > 0 },
 		func(_ *ciState, t domain.Ticket, _ *repoCI) string { return whyNotRerun(key, t) },
@@ -324,6 +328,9 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in NewFixTicketInpu
 	if v, handled, err := c.newSpecFixTicket(ctx, key, in); handled {
 		return v, err
 	}
+	// One fix Ticket per commit: an Auto-fix sweep can't open its own
+	// between this check and the response.
+	defer c.lockAutoFix(key)()
 	var failed domain.Ticket
 	// name is the failed item's Repository, which where names in the fix
 	// Ticket's title while the Project has more than one.
@@ -350,6 +357,25 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in NewFixTicketInpu
 	if err != nil {
 		return Written[TicketView]{}, err
 	}
+	return c.openFixTicket(ctx, key, failed, name, where, in.Note, nil, in.Full)
+}
+
+// fixTicketDescription is a fix Ticket's description: the header naming
+// the failed Ticket and where, then body, which is the Run summary and the
+// Fix instructions, as the human edited them or as Auto-fix wrote them.
+func fixTicketDescription(id, where, body string) string {
+	return fmt.Sprintf("%s's CI failed%s: fix the failure forward, on top of its work in the base. It stays Accepted, and lands when a later commit passes CI.\n\n%s", id, where, body)
+}
+
+// openFixTicket is the path New fix Ticket takes, shared with Auto-fix:
+// it creates the Project's CI Fixes Spec on first use, opens the Ready fix
+// Ticket on it with description as the body after the header and mark, nil
+// for a manual fix Ticket, stores it on the response of failed's pushed
+// commit in the Repository name, and comments on failed as ctx's Actor. An
+// update writes one record, so they are written in that order: nothing
+// names what doesn't exist. Its result is the fix Ticket's create
+// Acknowledgement.
+func (c *Core) openFixTicket(ctx context.Context, key string, failed domain.Ticket, name, where, body string, mark *domain.AutoFixMark, full bool) (Written[TicketView], error) {
 	spec, err := c.projectSpecNumber(key, ciFixesSpec)
 	if err != nil {
 		return Written[TicketView]{}, err
@@ -365,39 +391,47 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in NewFixTicketInpu
 		f := domain.Ticket{
 			Number: w.NextNumber(key), Title: fmt.Sprintf("Fix the CI failure of %s%s: %s", id, where, failed.Title), State: domain.Ready, Spec: spec,
 			Created: now, Updated: now,
-			Description: fmt.Sprintf("%s's CI failed%s: fix the failure forward, on top of its work in the base. It stays Accepted, and lands when a later commit passes CI.\n\n%s", id, where, in.Note),
+			Description: fixTicketDescription(id, where, body), AutoFix: mark,
 		}
 		if err := w.PutTicket(key, f); err != nil {
 			return err
 		}
 		fix = f.Number
-		v, err = acknowledgeCreate(c.ticketView(w, key, domain.Ticket{}), c.ticketView(w, key, f), in.Full)
+		v, err = acknowledgeCreate(c.ticketView(w, key, domain.Ticket{}), c.ticketView(w, key, f), full)
 		return err
 	})
 	if err != nil {
 		return Written[TicketView]{}, err
 	}
-	_, err = c.respondCI(key, OptionNewFixTicket, CIResponseInput{Ticket: in.Ticket, Repository: name, Full: true},
+	if err := c.recordFixTicket(ctx, key, failed, name, fix); err != nil {
+		return Written[TicketView]{}, err
+	}
+	return v, nil
+}
+
+// recordFixTicket ends openFixTicket once the fix Ticket fix exists: it
+// stores fix on the response of failed's pushed commit in the Repository
+// name, then comments on failed, naming fix, as ctx's Actor.
+func (c *Core) recordFixTicket(ctx context.Context, key string, failed domain.Ticket, name string, fix int) error {
+	ref := Ref(DisplayID(key, failed.Number))
+	_, err := c.respondCI(key, OptionNewFixTicket, CIResponseInput{Ticket: ref, Repository: name, Full: true},
 		func(*ciState, *repoCI) bool { return false },
 		func(_ *ciState, t domain.Ticket, _ *repoCI) string { return whyNotNewFixTicket(key, t) },
 		func(p *domain.Project, rc *repoCI) {
 			respond(p, rc.record, rc.latest.Commit, func(res *domain.CIResponse) { res.FixTicket = fix })
 		})
 	if err != nil {
-		return Written[TicketView]{}, err
+		return err
 	}
-	_, err = c.updateTicketIn(key, "new_fix_ticket", in.Ticket, true, func(_ store.Reader, t *domain.Ticket) (bool, error) {
+	_, err = c.updateTicketIn(key, "new_fix_ticket", ref, true, func(_ store.Reader, t *domain.Ticket) (bool, error) {
 		addComment(t, ActorOf(ctx), c.now(), 0, fmt.Sprintf("New fix Ticket: %s fixes this CI failure forward; %s stays Accepted and lands when a later commit passes CI.", DisplayID(key, fix), DisplayID(key, t.Number)))
 		return true, nil
 	})
-	if err != nil {
-		return Written[TicketView]{}, err
-	}
-	return v, nil
+	return err
 }
 
 // ciFixesSpecBody is the CI Fixes Spec's body.
-const ciFixesSpecBody = "This Spec holds the fix Tickets the human opens with New fix Ticket when a commit's CI failed. " +
+const ciFixesSpecBody = "This Spec holds the fix Tickets the human opens with New fix Ticket, or Auto-fix opens, when a commit's CI failed. " +
 	"Each fixes its failure forward, and the Tickets waiting on that commit land when a later commit passes CI.\n"
 
 // whyNotNewFixTicket says why t isn't offered New fix Ticket.

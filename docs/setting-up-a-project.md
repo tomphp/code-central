@@ -306,6 +306,7 @@ Under Pull Request there is no CI gate and **Land anyway** isn't offered.
 - **CI Provider**: **GitHub Actions** or **Azure Pipelines**. GitHub Actions uses your existing `gh` login and stores no GitHub token. Azure Pipelines calls Azure DevOps' API with a PAT that the service's environment holds; see [Azure Pipelines](#azure-pipelines) below. Each provider keeps its own fields, so switching the CI Provider loses nothing.
 - **GitHub repository** (GitHub Actions): the repository to watch, as `owner/name`, such as `acme/acme-api`. CI Tracking can't be on without one: Save says so, as it does for anything that isn't `owner/name`. When the Factory starts, it reports the URL of the Push remote (the Landing Method's Remote, `origin` unless you changed it), leaving out any login an HTTPS URL carries. If that URL is GitHub's, over HTTPS or SSH, the field is filled in from it, with a note naming the URL; change it if CI runs somewhere else, such as a fork.
 - **Azure DevOps project URL** and **PAT environment variable** (Azure Pipelines): see [Azure Pipelines](#azure-pipelines) below.
+- **Auto-fix**: see [Auto-fix](#auto-fix) below.
 - **Ignored workflows**: workflow names, separated by commas. Their runs won't count towards a Ticket's CI result. For GitHub Actions a workflow is its file name, such as `nightly.yml, preview.yml`: name the file, not its path, `ci.yml`, not `.github/workflows/ci.yml`. For Azure Pipelines it is the pipeline's name, such as `Nightly build, Deploy preview`, spaces allowed, without its folder. Changing the CI Provider leaves the list as it is; names that no longer match anything match nothing.
 
 **Save** applies the settings, and every open UI tab shows them. Turning CI Tracking on is checked first: Code Central checks that `gh`, the GitHub CLI, is installed and logged in, and can read the repository. If any of these fails, Save refuses, and the CI section says what is wrong and how to fix it, for example:
@@ -388,6 +389,31 @@ Lint lint.yml   main     3f9c2a1   passed    48s       acme-api-17       View on
 Code Central keeps each CI Run for 30 days after it finishes, then prunes it. A Ticket whose runs have all been pruned keeps its pushed commit and has no CI result.
 
 Scripts can read the CI view over the HTTP API: `GET /api/ci?project=<key>`, or leave out `project` for All Projects. An unknown Project is `not_found`. The answer's `projects` are the CI Watchers' statuses, each with its `project`, `tracking`, `repository` and `watcher`, and `runs` the rows in order, each a CI Run with its `project`. Add `running=true` for only the CI Runs that count as running towards a Ticket's CI result: queued or in progress, each at its latest attempt, tracked against a Ticket rather than a CI Rule, on that Ticket's latest pushed commit (or, under Merge + Push, any it pushed since it was last sent back) and not of an Ignored workflow, newest started first. A `running` that isn't true or false is `invalid`.
+
+### Auto-fix
+
+**Auto-fix** opens the **New fix Ticket** for you. It is off on every Project until you turn it on, only you can (Agents have no tool or command for it), and it acts only while CI Tracking is on. In the **CI** section, below the CI settings, the **Auto-fix** block has:
+
+- **Auto-fix**: a checkbox. While on, a CI failure that would wait in Needs Me opens a fix Ticket on the Project's CI Fixes Spec at once, with a comment on the failed Ticket, instead of waiting for you. A failure already waiting when you turn it on is acted on too.
+- **Fix instructions**: added to every fix Ticket's description after its run summary, whether Auto-fix or you open it. **Use the default instructions** restores the default:
+
+  ```text
+  Work out what kind of failure this is before changing anything: a bug in the code, a broken test, or a flaky test. Then fix it the way that kind needs: fix the bug in the code, fix the test so it checks the right thing, or make the flaky test stable (never just retry or skip it). Compare against the last successful run: the commits since it are the likeliest cause (`git log <last green>..<failed commit>`). Look at other CI runs, on this branch and others, to see whether the failure is new, recurring or intermittent.
+  ```
+
+- **Auto-fix limit**: the most attempts for one failure, 1 to 10 (3 until you change it).
+
+**Save Auto-fix** applies them. Code Central doesn't re-run the failed jobs first: the default instructions ask the fix Ticket to look for a flaky test.
+
+If a fix Ticket's own push fails CI, Auto-fix opens the next attempt, on the same failure, until the limit. Past it Auto-fix stops and the failure comes back to you in Needs Me. The Ticket's **CI** section shows what Auto-fix is doing about its failure:
+
+```text
+Auto-fix is fixing it: acme-api-61 (attempt 2 of 3).
+Auto-fix covers it: acme-api-61, opened for 3f9c2a1.
+Auto-fix stopped after 3 attempts: acme-api-61, acme-api-64, acme-api-67.
+```
+
+*Fixing* is the open fix Ticket and its attempt; *covers* is a Ticket whose failure a fix Ticket opened for another commit already handles; *stopped* lists every attempt made. **Cancel hands back**: cancelling an auto fix Ticket returns its failure, and the Tickets it covered, to you in Needs Me rather than starting again at attempt 1, since you cancelled it for a reason. [ADR 0066](adr/0066-auto-fix-opens-fix-tickets-in-code-central-on-the-humans-behalf-and-its-attempts-chain-through-the-fix-tickets.md) has the reasons.
 
 ### CI Rules
 

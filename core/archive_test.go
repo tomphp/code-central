@@ -246,6 +246,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Repository: "acme/web"})
 		return err
 	},
+	"set_auto_fix": func(f fixture) error {
+		_, err := f.core.SetAutoFix(human, "acme", core.SetAutoFixInput{FixInstructions: "Fix it.", Limit: 2})
+		return err
+	},
 	"set_repository_ci": func(f fixture) error {
 		_, err := f.core.SetRepositoryCI(human, "acme", core.SetRepositoryCIInput{Name: "web", RepositoryCI: core.RepositoryCI{NotWatched: true}})
 		return err

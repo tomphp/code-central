@@ -58,6 +58,9 @@ type ChangedRepositoryView struct {
 	// LandAnyway says the human accepted the failed CI result of the
 	// latest pushed commit there, so the Factory lands it there.
 	LandAnyway bool `json:"land_anyway,omitempty"`
+	// CIAutoFix is what Auto-fix does about the Ticket's CI failure
+	// there; left out while it does nothing.
+	CIAutoFix *CIAutoFixView `json:"ci_auto_fix,omitempty"`
 }
 
 // LandedView is the commit that put a Ticket's work into a Repository's
