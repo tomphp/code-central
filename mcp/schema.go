@@ -138,7 +138,7 @@ func property(t reflect.Type, desc, enum string) (map[string]any, error) {
 		}
 		return map[string]any{"type": "array", "items": items, "description": desc}, nil
 	case t.Kind() == reflect.Map && t.Key().Kind() == reflect.String && t.Elem().Kind() == reflect.String:
-		return map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}, "description": desc}, nil
+		return tagFilter(desc), nil
 	}
 	return nil, fmt.Errorf("a %s has no schema", t)
 }

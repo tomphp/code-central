@@ -1,12 +1,19 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ids"
+	"github.com/tomoram/code-central/ops"
+	"github.com/tomoram/code-central/store"
 )
 
 // The fixtures: small types, one or two per derivation rule.
@@ -164,4 +171,52 @@ func asJSON(t *testing.T, v any) string {
 		t.Fatal(err)
 	}
 	return string(out)
+}
+
+// A derived tool on an operation whose path has no {key} checks the
+// Project itself, as get_workflow's hand-written tool does, so that every
+// tool on an unknown key answers unknown_project.
+func TestADerivedToolOnAPathWithoutAKeyChecksTheProject(t *testing.T) {
+	c := core.New(store.NewMemory(), clock.NewFake(time.Date(2026, 11, 18, 9, 0, 0, 0, time.UTC)), &ids.Sequence{})
+	ctx := context.Background()
+	if _, err := c.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}); err != nil {
+		t.Fatal(err)
+	}
+	called := 0
+	pathless := &ops.Definition[struct{}, string]{
+		Name: "ping", HTTP: "GET /api/ping", Doc: "Ping.",
+		Call: func(*core.Core, context.Context, string, struct{}) (string, error) { called++; return "pong", nil },
+	}
+	keyed := &ops.Definition[struct{}, string]{
+		Name: "ping", HTTP: "GET /api/p/{key}/ping", Doc: "Ping.",
+		Call: func(*core.Core, context.Context, string, struct{}) (string, error) { called++; return "pong", nil },
+	}
+	for _, c2 := range []struct {
+		name string
+		def  ops.Operation
+		key  string
+		want core.Code
+	}{
+		{"no {key}, unknown Project", pathless, "nowhere", core.UnknownProject},
+		{"no {key}, known Project", pathless, "acme", ""},
+		{"{key}, unknown Project: the Core answers", keyed, "nowhere", ""},
+	} {
+		t.Run(c2.name, func(t *testing.T) {
+			tl, err := derive(c2.def)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = tl.call(ctx, c, c2.key, []byte(`{}`))
+			var e *core.Error
+			switch {
+			case c2.want == "" && err != nil:
+				t.Fatalf("error %v", err)
+			case c2.want != "" && (!errors.As(err, &e) || e.Code != c2.want):
+				t.Fatalf("error %v, want %s", err, c2.want)
+			}
+		})
+	}
+	if called != 2 {
+		t.Fatalf("the call ran %d times, want 2: never on an unknown Project without {key}", called)
+	}
 }

@@ -2,9 +2,11 @@ package ops_test
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fieldwalk"
 	"github.com/tomoram/code-central/ops"
 )
@@ -62,5 +64,32 @@ func TestEveryDefinitionIsListedWithItsOp(t *testing.T) {
 	}
 	if _, ok := ops.DefinitionOf("claim"); ok {
 		t.Error("claim has no definition yet")
+	}
+}
+
+func TestQueryParamFollowsTheTags(t *testing.T) {
+	type in struct {
+		Ticket core.Ref          `json:"ticket" path:"n"`
+		Title  string            `json:"title,omitempty"`
+		Labels []string          `json:"labels,omitempty" query:"label"`
+		Parts  []string          `json:"-" query:"part"`
+		Hidden bool              `json:"-"`
+		Tags   map[string]string `json:"tags,omitempty"`
+	}
+	var got []string
+	var scalars []string
+	for _, f := range fieldwalk.AllFields(reflect.TypeFor[in]()) {
+		if name, ok := ops.QueryParam(f); ok {
+			got = append(got, name)
+		}
+		if ops.QueryScalar(f.Type) {
+			scalars = append(scalars, f.Name)
+		}
+	}
+	if want := []string{"title", "label", "part", "tags"}; !slices.Equal(got, want) {
+		t.Fatalf("parameters %v, want %v", got, want)
+	}
+	if want := []string{"ticket", "title", "labels", "Parts", "Hidden"}; !slices.Equal(scalars, want) {
+		t.Fatalf("scalars %v, want %v: a map needs the type's own query methods", scalars, want)
 	}
 }

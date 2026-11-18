@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fieldwalk"
@@ -36,10 +37,7 @@ func init() {
 		}
 		custom := op.Input().Implements(reflect.TypeFor[queryEncoder]())
 		for _, f := range fieldwalk.AllFields(op.Input()) {
-			if f.Hidden && f.Tag.Get("query") == "" {
-				continue
-			}
-			if f.Tag.Get("path") == "" && !encodable(f.Type) && !custom {
+			if _, ok := ops.QueryParam(f); ok && !ops.QueryScalar(f.Type) && !custom {
 				panic(fmt.Sprintf("client: %s: field %s is a %s, which no query tag encodes; give the input type an EncodeQuery method", op.Op().Name, f.Name, f.Type))
 			}
 		}
@@ -77,55 +75,28 @@ func written[In, V any](ctx context.Context, c *Client, def *ops.Definition[In, 
 }
 
 // pathOf is pattern with {key} filled from key and {n} from in's
-// path-tagged field.
+// path-tagged field, both escaped.
 func pathOf(pattern, key string, in any) string {
 	v := reflect.ValueOf(in)
 	for _, f := range fieldwalk.Fields(v.Type()) {
 		if f.Tag.Get("path") == "n" {
-			pattern = replace(pattern, "{n}", v.FieldByIndex(f.Index).String())
+			pattern = strings.ReplaceAll(pattern, "{n}", url.PathEscape(v.FieldByIndex(f.Index).String()))
 		}
 	}
-	return replace(pattern, "{key}", key)
+	return strings.ReplaceAll(pattern, "{key}", url.PathEscape(key))
 }
 
-func replace(pattern, hole, value string) string {
-	out := ""
-	for {
-		i := indexOf(pattern, hole)
-		if i < 0 {
-			return out + pattern
-		}
-		out += pattern[:i] + url.PathEscape(value)
-		pattern = pattern[i+len(hole):]
-	}
-}
-
-func indexOf(s, sub string) int {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
-}
-
-// queryOf encodes in as a GET's query: each field under its query tag,
-// else its JSON name, leaving zero values out; a string once, a list
-// repeated, a bool as true, a *bool as true or false. The path-bound
-// field is in the path. The type encodes what no tag can itself.
+// queryOf encodes in as a GET's query: each field under ops.QueryParam,
+// leaving zero values out; a string once, a list repeated, a bool as
+// true, a *bool as true or false. The type encodes what no tag can
+// itself.
 func queryOf(in any) url.Values {
 	q := url.Values{}
 	v := reflect.ValueOf(in)
 	for _, f := range fieldwalk.AllFields(v.Type()) {
-		if f.Tag.Get("path") != "" {
+		name, ok := ops.QueryParam(f)
+		if !ok {
 			continue
-		}
-		name := f.Tag.Get("query")
-		if name == "" && f.Hidden {
-			continue
-		}
-		if name == "" {
-			name = f.Name
 		}
 		fv := v.FieldByIndex(f.Index)
 		switch {
@@ -151,18 +122,4 @@ func queryOf(in any) url.Values {
 		e.EncodeQuery(q)
 	}
 	return q
-}
-
-// encodable reports whether queryOf encodes a t: a string, a bool or a
-// *bool, or a list of strings.
-func encodable(t reflect.Type) bool {
-	switch t.Kind() {
-	case reflect.String, reflect.Bool:
-		return true
-	case reflect.Pointer:
-		return t.Elem().Kind() == reflect.Bool
-	case reflect.Slice:
-		return t.Elem().Kind() == reflect.String
-	}
-	return false
 }

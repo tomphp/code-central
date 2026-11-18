@@ -4,14 +4,15 @@ Code Central has one list of operations, and three doors onto them: the HTTP API
 
 So each operation is defined once, in the `ops` package, which sits between `core` and the doors and imports only `core`. A definition is a generic `ops.Definition[In, Out]` holding the name, Audience and write flag, the HTTP method and path pattern in ServeMux syntax, the Core method to call, a one-line description, per-field description overrides and a hook for the HTTP door's defaults. Everything else is on the input struct's tags: `desc` and `required` for the MCP schema, `enum` for a fixed string set, `path:"n"` for the field the path's `{n}` binds, `query` for a parameter whose name differs from its JSON name, and `mcp:"-"` to keep a field out of the tool. One field walker, `internal/fieldwalk`, reads those tags for every reader of a struct's wire shape, including the UI's generated wire types. `ops.All()` replaces `core.Operations`, and the doors derive from `ops.Definitions()`: the HTTP door one handler that binds the path, decodes the query or body and applies the defaults; the MCP door one tool whose schema is derived from the input type, checking the Project itself for an operation whose path has no `{key}`; the client one call that fills the path and encodes a GET's query by the same tags the handler decodes with. The derivation fails at start-up, naming the operation and the field, for a shape it can't express, so a mistake never reaches a request. A query shape the tags can't carry, such as a Tag filter's `tag=<key>=<value>`, is decoded and encoded by small methods on the input type.
 
+A definition stays transport-free: each door's cross-cutting work, the Actor it acts as, the usage log and the one error shape, sits on its generic dispatch, around every derived call, not in the definitions.
+
 The doors convert one group of operations at a time. While legacy routes, handlers and tools remain, each door merges the derived set with its legacy map, and a migration guard test fails if any operation is served both ways or neither. The CLI's commands derive from the definitions in a later change; until then the CLI stays hand-written against the client's unchanged method names.
 
 ## Considered Options
 
 - **Keep the three hand-written translations and check them with more tests.** Rejected: the cross-door suite already checked names, and the drift was in the shapes, which a test per operation per door would have to spell out a fourth time.
-- **Put the handler on `core.Operation` as a closure over the Core.** Rejected: core would then know HTTP and MCP, which ADR 0001 keeps out of it, and a closure can't be reflected on to derive a schema or a client call.
+- **Put the handler on `core.Operation` as a closure over the Core.** Rejected: core would then know HTTP and MCP, where the coding standards keep an operation in core and the doors translating only, and a closure can't be reflected on to derive a schema or a client call.
 - **Generate the doors' code from the input structs.** Rejected: a generator adds a build step and a second copy to keep in sync; reflection at start-up gives the same single source with the same start-up failure for a bad shape.
-- **A Spec section's middleware per door.** Each door's cross-cutting work, the Actor, the usage log and the error shape, sits on the generic dispatch, not in the definitions, so a definition stays transport-free.
 
 ## Consequences
 

@@ -77,7 +77,7 @@ func handle(op ops.Operation) (handlerFunc, error) {
 	}
 	var q *queryShape
 	if method == http.MethodGet {
-		if q, err = queryShapeOf(op.Input(), path); err != nil {
+		if q, err = queryShapeOf(op.Input()); err != nil {
 			return nil, err
 		}
 	}
@@ -139,25 +139,18 @@ type queryParam struct {
 	field fieldwalk.Field
 }
 
-// queryShapeOf reads t's query shape. A field's parameter is its query
-// tag, else its JSON name; a json:"-" field is a parameter only with a
-// query tag, and the path-bound field is never one. A field no tag can
-// decode needs the type to implement QueryDecoder.
-func queryShapeOf(t reflect.Type, path *fieldwalk.Field) (*queryShape, error) {
+// queryShapeOf reads t's query shape: each field's parameter is
+// ops.QueryParam. A field no tag can decode needs the type to implement
+// QueryDecoder.
+func queryShapeOf(t reflect.Type) (*queryShape, error) {
 	s := &queryShape{custom: reflect.PointerTo(t).Implements(reflect.TypeFor[QueryDecoder]())}
 	for _, f := range fieldwalk.AllFields(t) {
-		if path != nil && f.Name == path.Name {
+		name, ok := ops.QueryParam(f)
+		if !ok {
 			continue
-		}
-		name := f.Tag.Get("query")
-		if name == "" && f.Hidden {
-			continue
-		}
-		if name == "" {
-			name = f.Name
 		}
 		s.allowed = append(s.allowed, name)
-		if !decodable(f.Type) {
+		if !ops.QueryScalar(f.Type) {
 			if !s.custom {
 				return nil, fmt.Errorf("field %s is a %s, which no query tag decodes; give the input type a DecodeQuery method", f.Name, f.Type)
 			}
@@ -166,20 +159,6 @@ func queryShapeOf(t reflect.Type, path *fieldwalk.Field) (*queryShape, error) {
 		s.params = append(s.params, queryParam{name, f})
 	}
 	return s, nil
-}
-
-// decodable reports whether the generic decoder reads a t from the query:
-// a string, a bool or a *bool, or a list of strings.
-func decodable(t reflect.Type) bool {
-	switch t.Kind() {
-	case reflect.String, reflect.Bool:
-		return true
-	case reflect.Pointer:
-		return t.Elem().Kind() == reflect.Bool
-	case reflect.Slice:
-		return t.Elem().Kind() == reflect.String
-	}
-	return false
 }
 
 // decode fills in, a pointer to the input type, from q. Repeated
