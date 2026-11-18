@@ -63,7 +63,7 @@ Your list: core logic, factory, ci watcher, issue tracker, web api, frontend, st
 | Your term | Actual module(s) | Notes |
 |---|---|---|
 | core logic | `core` | One package, but really ~5 sub-domains (below). |
-| factory | `factory`, `cmd/code-central-factory` | A separate-process HTTP client. |
+| factory | `factory`, `cmd/code-central-factory` | A separate-process HTTP client. A session part (`*factory`) and a landing part (`lander`) over a shared repository registry (`repositories`). |
 | ci watcher | `ciwatcher` (+ `gh`, `azdo`, `azdourl`) | Provider split: GitHub Actions, Azure Pipelines. |
 | issue tracker | **Specs/Tickets live in `core`**; GitHub Issues inbound is `issuewatcher` | There is no separate tracker module. Say which you mean. |
 | web api | `httpapi` (+ `mcp` sibling, assembled by `server`) | MCP is not layered on httpapi; both call `*core.Core`. |
@@ -118,8 +118,8 @@ Anti-patterns and leaks found:
 6. **Transport policy is split**: `mcp` records usage and forces the Actor; `server.Guard` sets the Actor for HTTP.
 7. **Provider knowledge in core** *(mostly resolved)*: remote-URL and repository-name parsing now lives in the leaf `codehost` (`Of`, `ValidGitHubRepository`, `ValidGitHubWorkflow`), and `core.CodeHost` stays the wire enum, converted from `codehost.Host`. What remains is `core` calling `azdourl` to validate Azure DevOps URLs, which stays a separate leaf.
 8. **Watcher plumbing**: each watcher has its own check/config/poll trio; `issuewatcher` is hard-wired to `gh`. (Done: `RateLimitError` and `FirstLine` now live in the leaf package `ratelimit`, so `gh` and `azdo` no longer import `watchers`, and the shared test harness is `watchers/watchertest`.)
-9. ~~**Landing rules straddle packages**: `store.Landing.Normalized` versus `core.LandingPolicy`.~~ **Fixed:** `domain.Landing.Normalized` and `domain.LandingPolicy` now sit together in `domain`. Still open: the UI's `LandingMethodSection.tsx` also branches on the method, though ADR 0039 says no caller should.
-10. **Frontend duplicates some derived rules** (`edit/editable.ts`, `requirement/progress.ts`, `inbox/describeSpec.ts`). Mild.
+9. ~~**Landing rules straddle packages**: `store.Landing.Normalized` versus `core.LandingPolicy`.~~ **Fixed:** `domain.Landing.Normalized` and `domain.LandingPolicy` now sit together in `domain`. The UI's part is done too (ADR 0063): the Default Landing section (`options/DefaultLandingSection.tsx`) and Repositories section read the Landing capabilities the Project's landing view says instead of branching on the method, and the landing scan in `web/src/test-setup.test.ts` guards them.
+10. **Frontend duplicates some derived rules** *(done, ADR 0063)*: `TicketView` and `SpecDetail` carry `editable` and `retroable`, so `edit/editable.ts` is gone; Spec rows carry `kind`, `need` and `claimed`, so `inbox/describeSpec.ts` only words them; and `RequirementView` carries the Stage strip's `segments`, `current`, `needs` and `default_ticket`, so `requirement/progress.ts` only names segments and words the headline and waiting note.
 11. **Naming** (done: the package was `frontdoor`, now `server`): it is ~150 lines of production code plus an 11k-line contract suite, and `httpapi`/`mcp` both call themselves "front doors", so the old name said nothing about what it does.
 
 ## 3. Suggested improvements
@@ -132,10 +132,10 @@ Roughly in order of value for effort. Each would be its own Ticket.
 4. Move server composition from `cli/serve.go` into an `app`/`service` package. *(medium)*
 5. Define each operation once (input type plus handler on `core.Operation`) and derive the httpapi route, MCP tool and schema from it. *(large, biggest drift win)*
 6. Give transports narrow interfaces over core (as `notify` does), and centralise usage/actor handling in one middleware. *(medium)*
-7. Have Go views carry derived flags (`editable`, stage progress, spec kind) and landing-method capabilities, so the UI's copies go away. *(medium)*
+7. Have Go views carry derived flags (`editable`, stage progress, spec kind) and landing-method capabilities, so the UI's copies go away. *(done, ADR 0063: `editable`, `retroable`, Spec kind, need and claimed, the Stage strip and Landing capabilities)*
 8. Extract a `codehost` abstraction shared by `ciwatcher` and `pullrequestwatcher`, and decide whether `issuewatcher` needs a `Tracker` interface before a second tracker arrives. *(only if a second host/tracker is planned)*
 9. ~~Move provider URL parsing out of `core`.~~ Done: `codehost` holds the remote-URL and repository-name parsing; `azdourl` stays beside it. *(small)*
-10. Split `factory/land.go`, `run.go` and `specbranch.go` into `landing` and `session`. Make `core`'s mutable enum slices functions (done; only `Operations` and `Workflow` remain package-level lists). *(medium)*
+10. ~~Split `factory/land.go`, `run.go` and `specbranch.go` into `landing` and `session`.~~ Done, as two unexported types in the one `factory` package: the session part (`*factory`) and the landing part (`lander`), over a shared repository registry (`repositories`). The lander gets two hooks from the session part (`landerHooks`: `stopped` and `turnRunningOn`) and offers it two calls (`poll`, once per poll, and `claimingHeld`); the `factory` package documentation states the interface. Make `core`'s mutable enum slices functions (done; only `Operations` and `Workflow` remain package-level lists). *(medium)*
 11. Hygiene: CI check that `make wiretypes` leaves no diff, finish ADR 0044's migration off `waitFor`, split the biggest UI files and tests.
 
 Splitting `core` itself is the hardest item, because every file is a method on `*Core`. Items 5 and 6 shrink what depends on it and make a later split cheaper, so do them first.

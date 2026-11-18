@@ -44,7 +44,7 @@ func (l *requestLog) count(match func(string) bool) int {
 	return n
 }
 
-// proxied points the factory at Code Central through a proxy that logs
+// proxied points the lander at Code Central through a proxy that logs
 // each request, and refuses those fail says to with a 503.
 func (w *landWorld) proxied(fail func(*http.Request) bool) *requestLog {
 	w.t.Helper()
@@ -63,7 +63,7 @@ func (w *landWorld) proxied(fail func(*http.Request) bool) *requestLog {
 		rp.ServeHTTP(rw, r)
 	}))
 	w.t.Cleanup(proxy.Close)
-	w.f.client = client.New(proxy.URL)
+	w.l.client = client.New(proxy.URL)
 	return log
 }
 
@@ -105,7 +105,7 @@ func TestAFailedBatchReadGivesOneWarningAndLandsNothingThatPoll(t *testing.T) {
 	failing.Store(true)
 	w.proxied(func(r *http.Request) bool { return failing.Load() && isFullFind(r) })
 
-	if got := w.f.landable(context.Background(), domain.Accepted); len(got) != 0 {
+	if got := w.l.landable(context.Background(), domain.Accepted); len(got) != 0 {
 		t.Errorf("landable gave %d Tickets from a failed read, want none", len(got))
 	}
 	if n := w.lines("warning: can't find [Accepted] Tickets"); n != 1 {

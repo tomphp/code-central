@@ -39,6 +39,7 @@ export function TicketPopupView({ now, id, projects, ticket, onClose, openSpec, 
         project={project}
         ticket={ticket.data?.id === id ? ticket.data : undefined}
         error={ticket.error?.message}
+        back={onClose}
         now={now}
         archived={!!row?.archived}
         reported={row?.reported_models}

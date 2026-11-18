@@ -44,7 +44,7 @@ describe("Count", () => {
 
   it("as a block's number, shows a dash until the count is known", () => {
     const { rerender } = render(<Count big />);
-    expect(screen.getByTestId("count")).toHaveTextContent("–");
+    expect(screen.getByTestId("count")).toHaveTextContent("…");
     rerender(<Count n={0} big />);
     expect(screen.getByTestId("count")).toHaveTextContent("0");
   });

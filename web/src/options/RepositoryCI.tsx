@@ -32,12 +32,12 @@ export function RepositoryCI({ project, entry }: { project: string; entry: CIRep
   const [editing, setEditing] = useState(false);
   if (editing) return <RepositoryCIForm project={project} entry={entry} close={() => setEditing(false)} />;
   return (
-    <>
-      {ciTarget(entry)}{" "}
+    <div className="project-options-row">
+      <span className={entry.not_watched ? "muted" : undefined}>{ciTarget(entry)}</span>
       <Button type="button" onClick={() => setEditing(true)} aria-label={`Edit ${entry.name}'s CI`}>
         Edit
       </Button>
-    </>
+    </div>
   );
 }
 

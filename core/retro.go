@@ -106,6 +106,22 @@ func resolveRetroTarget(r store.Reader, key string, ref Ref) (retroTarget, error
 	return retroTarget{}, invalid("target", "there is no Spec or Ticket %s", id)
 }
 
+// ticketRetroable is whether the UI offers the Retro button on t: once it
+// is Done or Cancelled, as resolveRetroTarget requires, and while its
+// Project p takes writes, which writable refuses. TicketView's retroable.
+func ticketRetroable(p domain.Project, t domain.Ticket) bool {
+	return finished(t.State) && p.Archived.IsZero()
+}
+
+// specRetroable is whether the UI offers the Retro button on s, whose
+// Tickets are all finished when specFinished: once it is Finished and
+// unless it is Long-lived, as resolveRetroTarget requires, a finished Map
+// too, and while its Project p takes writes, which writable refuses.
+// SpecDetail's retroable.
+func specRetroable(p domain.Project, s domain.Spec, specFinished bool) bool {
+	return specFinished && !slices.Contains(s.Labels, LongLivedLabel) && p.Archived.IsZero()
+}
+
 // description is a Retro's description: the target as a link, the
 // human's note under its own heading when there is one, and the Claims to
 // read.

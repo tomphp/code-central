@@ -86,13 +86,15 @@ function RunRow({ run, provider, now, joined = false, projectName, navigate }: C
       </td>
       <td className="num">{runDuration(run, now)}</td>
       <td>
-        {tracked && (
+        {tracked ? (
           <>
             {run.rule && "CI Rule "}
             <a href={hrefFor(to)} onClick={clickTo(navigate, to)}>
               {tracked}
             </a>
           </>
+        ) : (
+          <span className="muted" aria-label="Not tracked">–</span>
         )}
       </td>
       {projectName !== undefined && <td>{projectName}</td>}
@@ -124,7 +126,7 @@ function RunItem({ run }: CIRunItemProps) {
               <a href={job.url} target="_blank" rel="noreferrer">
                 {job.name}
               </a>{" "}
-              <span className="muted">{jobStatus(job)}</span>
+              <RunStatusBadge status={jobStatus(job)} />
             </li>
           ))}
         </ul>
@@ -147,7 +149,7 @@ function RunCard({ run, provider, now, joined = false, projectName, to, navigate
           {projectName !== undefined && <span className="muted">{projectName}</span>}
         </span>
         <span className="dashboard-entry-detail">
-          {run.branch} · <code>{shortCommit(run.commit)}</code> · <RunStatusBadge status={runStatus(run)} />
+          {run.branch !== run.ticket && `${run.branch} · `}<code>{shortCommit(run.commit)}</code> · <RunStatusBadge status={runStatus(run)} />
           {run.started && ` · ${runDuration(run, now)}`}
         </span>
       </a>

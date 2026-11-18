@@ -19,6 +19,19 @@ func NewLandingPolicy(method LandingMethod, push, landPerSpec, ciTracking bool) 
 	return LandingPolicy{method: l.Method, push: l.Push, landPerSpec: landPerSpec, tracking: ciTracking}
 }
 
+// OffersPush answers Push's "Under Pull Request, Push is implied", so the
+// human chooses it only under Merge and Branch.
+func (lp LandingPolicy) OffersPush() bool {
+	return lp.method != LandingPullRequest
+}
+
+// OffersLandPerSpec answers "Land per Spec applies under Merge and Pull
+// Request, and has no effect under Branch": Merge or Pull Request,
+// whatever the Land per Spec setting, unlike LandPerSpecInForce.
+func (lp LandingPolicy) OffersLandPerSpec() bool {
+	return lp.method == LandingMerge || lp.method == LandingPullRequest
+}
+
 // NeedsCloneURL answers Pull Request's "it is refused as a local-only
 // Repository's Own Landing, and as the Default Landing while a local-only
 // Repository follows it": Pull Request, which can't land where there is

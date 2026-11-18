@@ -1,7 +1,7 @@
 // UsageBody is Usage's page below its header, presentational: the figures
 // the view read, the sort of the calls table and the open tab come in as
-// props, and the view fetches them. The loading and error banners sit
-// above the tab strip, and each tab's panel shows its part or says it has
+// props, and the view fetches them. The loading banner sits above the
+// tab strip, the error banner below it, and each tab's panel shows its part or says it has
 // nothing to show. Its parts are components of their own in this folder;
 // the Session popup the view shows over it is SessionPopup.
 import type { UsageOperation, UsageView } from "../api/types";

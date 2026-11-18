@@ -7,9 +7,7 @@
 import type { SpecDetail } from "../api/types";
 import { RepositoryChips } from "../controls/RepositoryChips";
 import { useApi } from "../live";
-import { useNeedsMe } from "../needsme/context";
 import { BodySection } from "../edit/BodySection";
-import { specRetroable } from "../edit/editable";
 import { LandPerSpec } from "../spec/LandPerSpec";
 import { SpecAutoAccept } from "../spec/SpecAutoAccept";
 import { RetroList } from "../spec/RetroList";
@@ -19,13 +17,15 @@ import { LinkBadge } from "../ticket/LinkBadge";
 import { OpenExternal } from "../ticket/OpenExternal";
 import type { Link } from "../url";
 import { NewPrototype, NewRetro } from "./NewRequirement";
-import { progress, waitingNote } from "./progress";
+import { isStage, waitingNote } from "./progress";
 import { Strip } from "./Strip";
 import { SpecPaneHeader } from "../controls/SpecPaneHeader";
 
 export interface RequirementPaneProps {
   spec: SpecDetail & { requirement: NonNullable<SpecDetail["requirement"]> };
-  // archived is whether the Requirement's Project is Archived, which takes no edits.
+  // archived is whether the Requirement's Project is Archived, whose
+  // Auto-accept switch is shown off. The Spec's editable and retroable
+  // already count it.
   archived?: boolean;
   now: Date;
   // ticket is the selected Ticket.
@@ -37,9 +37,8 @@ export interface RequirementPaneProps {
 
 export function RequirementPane({ spec, archived, now, ticket, select, specLink }: RequirementPaneProps) {
   const api = useApi();
-  const { reasonOf } = useNeedsMe();
-  const p = progress(spec.requirement, spec.tickets ?? [], reasonOf);
-  const note = waitingNote(p);
+  const build = (spec.tickets ?? []).filter((t) => !isStage(t));
+  const note = waitingNote(spec.requirement);
   const specDone = spec.requirement.stages.some((s) => s.name === "spec" && s.state === "Done");
   return (
     <section aria-label="Requirement" className="req-head">
@@ -47,16 +46,18 @@ export function RequirementPane({ spec, archived, now, ticket, select, specLink 
       <RepositoryChips names={spec.repositories} />
       <div className="spec-actions">
         <NewPrototype spec={spec.id} onSubmitted={(t) => select(t.id)} />
-        {specRetroable(spec, !!archived) && <NewRetro target={spec.id} onSubmitted={(t) => select(t.id)} />}
+        {spec.retroable && <NewRetro target={spec.id} onSubmitted={(t) => select(t.id)} />}
         {spec.link && <LinkBadge link={spec.link} />}
         <OpenExternal link={spec.link} />
       </div>
       <Strip
-        p={p}
+        requirement={spec.requirement}
+        build={build}
         current={ticket}
         mapLink={specLink}
         onPick={(s) => {
-          const t = s.ticket ?? (p.build.find((t) => reasonOf(t.id)) ?? p.build[0])?.id;
+          // Build opens on its first Ticket that needs the human, else its first.
+          const t = s.ticket ?? spec.requirement.needs.find((n) => !n.stage)?.ticket ?? build[0]?.id;
           if (t) select(t);
         }}
       />
@@ -64,9 +65,9 @@ export function RequirementPane({ spec, archived, now, ticket, select, specLink 
       <SpecAutoAccept spec={spec} archived={archived} />
       <LandPerSpec status={spec.land_per_spec} />
       {/* The text is the Requirement's until its spec Stage has written the Spec. */}
-      <BodySection api={api} spec={spec} heading={specDone ? "Spec" : "Requirement's text"} archived={archived} />
-      <CISums tickets={p.build} />
-      {p.build.length > 0 && <TicketList label="Build" tickets={p.build} now={now} ticket={ticket} select={select} />}
+      <BodySection api={api} spec={spec} heading={specDone ? "Spec" : "Requirement's text"} />
+      <CISums tickets={build} />
+      {build.length > 0 && <TicketList label="Build" tickets={build} now={now} ticket={ticket} select={select} />}
       <RetroList retros={spec.retros} select={select} />
     </section>
   );

@@ -267,6 +267,26 @@ export const STAGES = [
 ] as const;
 export type StageName = (typeof STAGES)[number];
 
+// SegmentStage is a Stage strip segment's Stage: a Stage's name, or build.
+export const SEGMENT_STAGES = [
+  "grilling",
+  "spec",
+  "tickets",
+  "build",
+] as const;
+export type SegmentStage = (typeof SEGMENT_STAGES)[number];
+
+// SegmentProgress is how far a Stage strip segment has got.
+export const SEGMENT_PROGRESSES = [
+  "done",
+  "skipped",
+  "needs",
+  "queued",
+  "running",
+  "waiting",
+] as const;
+export type SegmentProgress = (typeof SEGMENT_PROGRESSES)[number];
+
 // NodeType is a Ticket's type on a Map (NodeTypeOf): one of the
 // WayfinderTypes, prototype, or ticket for a Ticket with neither.
 export const NODE_TYPES = [
@@ -278,6 +298,16 @@ export const NODE_TYPES = [
   "ticket",
 ] as const;
 export type NodeType = (typeof NODE_TYPES)[number];
+
+// SpecKind is a Spec's kind (the glossary's Spec kind), which its badge
+// shows.
+export const SPEC_KINDS = [
+  "requirement",
+  "map",
+  "long_lived",
+  "spec",
+] as const;
+export type SpecKind = (typeof SPEC_KINDS)[number];
 
 // Recommendation is a spec Stage's Spec recommendation: how its agent
 // recommends the human accepts it.
@@ -396,6 +426,8 @@ export const TICKET_FIELDS = [
   "left_out",
   "blocked",
   "claimable",
+  "editable",
+  "retroable",
   "silent_since",
   "needs_me_reason",
   "link",
@@ -581,6 +613,11 @@ export interface TicketView {
   left_out?: Record<string, number>;
   blocked: boolean;
   claimable: boolean;
+  // Editable says the UI offers Edit on the Ticket, and Retroable its
+  // Retro button, as ticketEditable and ticketRetroable decide them.
+  // Every read sets them. Computed on read.
+  editable: boolean;
+  retroable: boolean;
   // SilentSince is set while the Ticket is a Silent Claim: In Progress
   // with no activity for 30 minutes. It is the time of the last
   // activity, so the quiet time is now minus it. Computed, never stored.
@@ -676,6 +713,15 @@ export interface SpecDetail {
   outline?: Heading[];
   state_summary: Partial<Record<State, number>>;
   finished: boolean;
+  // Kind, Need and Claimed are as on SpecRow.
+  kind: SpecKind;
+  need?: NeedsMeReason;
+  claimed: boolean;
+  // Editable says the UI offers Edit on the Spec, and Retroable its
+  // Retro button, as specEditable and specRetroable decide them. Every
+  // read sets them.
+  editable: boolean;
+  retroable: boolean;
   // Repositories are the Spec's Changed Repositories, the union of its
   // Tickets', by Name in landing order; left out while the Project has
   // the Home Repository alone.
@@ -704,6 +750,14 @@ export interface SpecRow {
   finished: boolean;
   updated: string;
   link?: LinkView;
+  // Kind is the Spec's kind, for its badge.
+  kind: SpecKind;
+  // Need is the reason of the first of its Tickets, in claim order,
+  // that waits on the human, as Needs Me reads it; left out when none
+  // does. Claimed says any of its Tickets holds a live Claim. A plain
+  // Spec's headline says them. Computed at read time.
+  need?: NeedsMeReason;
+  claimed: boolean;
   // Requirement is set only when the Spec is a Requirement.
   requirement?: RequirementView;
   // Map is set only when the Spec is a Map.
@@ -858,6 +912,19 @@ export interface LandingView {
   // Base is the branch the Project's work is cut from and lands on: the
   // stored one, else the reported fallback, else main.
   base: string;
+  // Methods is the Landing capabilities of each Landing Method, as if
+  // it were the Default Landing: what the Options form offers while the
+  // human drafts it.
+  methods: LandingMethodsCapabilities;
+  // RunsPullRequestWatcher is whether the Pull Request Watcher runs, as
+  // saved: any Repository is under Pull Request.
+  runs_pull_request_watcher: boolean;
+  // RepositoryLanding is the Default Landing named as a Repository's
+  // Landing names it.
+  repository_landing: RepositoryLanding;
+  // PushesNothing is whether Push is on in some Landing while every
+  // Repository is local-only, so it pushes nothing.
+  pushes_nothing: boolean;
   // Watcher is the Pull Request Watcher's status, not_reported unless the
   // method is Pull Request.
   watcher: WatcherView;
@@ -1328,6 +1395,20 @@ export interface RequirementView {
   // WaitingForFactory is whether the next Ticket can be claimed but
   // nothing has claimed it.
   waiting_for_factory: boolean;
+  // Segments are the Stage strip's: one per Stage, then Build, with a
+  // first grilling segment for a Requirement made from a Map (done) or
+  // one submitted Straight to Spec (skipped).
+  segments: Segment[];
+  // Current is the Stage of the first segment neither done nor skipped,
+  // else build.
+  current: SegmentStage;
+  // Needs are every Ticket of the Requirement waiting on the human: the
+  // Stage Tickets in Stage order, then the Build Tickets in claim order.
+  needs: RequirementNeed[];
+  // DefaultTicket is the Ticket the Requirement opens on: the first of
+  // Needs, else the current segment's, else the first unfinished Build
+  // Ticket, else the last Build Ticket, else the last segment's with one.
+  default_ticket?: string;
 }
 
 // LandPerSpecView is a Spec's Land per Spec status on a Spec read,
@@ -1483,6 +1564,17 @@ export interface ChatMessageView {
   items?: HeldSessionEvent[];
   outcome?: ChatOutcome;
   error?: string;
+}
+
+// LandingMethodsCapabilities is the Landing capabilities of every Landing
+// Method, each as if it were the Default Landing.
+export interface LandingMethodsCapabilities {
+  // Merge is what the form offers with Merge drafted.
+  merge: LandingMethodCapabilities;
+  // Branch is what the form offers with Leave as a branch drafted.
+  branch: LandingMethodCapabilities;
+  // PullRequest is what the form offers with Pull Request drafted.
+  pull_request: LandingMethodCapabilities;
 }
 
 // WatcherView is a Project's Watcher's status, in its kind's settings.
@@ -1651,6 +1743,28 @@ export interface BuildProgress {
   total: number;
 }
 
+// Segment is one segment of a Requirement's Stage strip.
+export interface Segment {
+  stage: SegmentStage;
+  progress: SegmentProgress;
+  // Ticket is the Stage Ticket; Build and a Map's segment have none.
+  ticket?: string;
+  // Map is the Map the Requirement was made from, on the segment that
+  // stands in for its grilling Stage.
+  map?: string;
+  // Reason is why the segment needs the human: its Stage Ticket's
+  // reason, or Build's first need's.
+  reason?: NeedsMeReason;
+}
+
+// RequirementNeed is one Ticket of a Requirement waiting on the human,
+// with its Stage when it is a Stage Ticket.
+export interface RequirementNeed {
+  ticket: string;
+  reason: NeedsMeReason;
+  stage?: StageName;
+}
+
 // NeedsMeRow is one waiting Ticket with what its one-line detail needs.
 // Since is when it started waiting: the Round posted, the last answer,
 // the last activity (Silent Claim, so the quiet time is now minus it),
@@ -1752,6 +1866,21 @@ export interface Tokens {
   cache_write_tokens: number;
   cache_read_tokens: number;
   output_tokens: number;
+}
+
+// LandingMethodCapabilities is what the Options form offers with one
+// Landing Method drafted as the Default Landing: its Landing
+// capabilities.
+export interface LandingMethodCapabilities {
+  // OffersPush is whether the Push checkbox is offered.
+  offers_push: boolean;
+  // OffersLandPerSpec is whether Land per Spec can be changed.
+  offers_land_per_spec: boolean;
+  // ShowsCodeHost is whether the Code Host worked out from the Push
+  // remote URL is shown.
+  shows_code_host: boolean;
+  // UsesAzureReposPAT is whether the PAT variable is used.
+  uses_azure_repos_pat: boolean;
 }
 
 // RepositoryProblem is one Repository a Watcher can't watch, by

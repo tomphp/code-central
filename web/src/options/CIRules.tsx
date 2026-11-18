@@ -22,7 +22,7 @@ export function CIRules({ project }: { project: ProjectRow }) {
 
   return (
     <fieldset className="project-options-rules-section">
-      <legend>CI Rules</legend>
+      <legend className="project-options-subhead">CI Rules</legend>
       <p className="project-options-hint">
         A CI Rule says &ldquo;when this workflow fails on this branch, open a
         Ticket to fix it&rdquo;, on the rule&apos;s own Spec. For now rules are
@@ -91,22 +91,20 @@ function RuleRow({
     <li>
       <span>
         <strong>{watches}</strong>: opens {rule.state} Tickets on {rule.spec}
-      </span>{" "}
-      <Button
-        type="button"
-        aria-label={`Edit ${watches}`}
-        onClick={edit}
-      >
-        Edit
-      </Button>{" "}
-      <Button
-        type="button"
-        aria-label={`Remove ${watches}`}
-        aria-describedby={removeHint}
-        onClick={() => remove().catch(setError)}
-      >
-        Remove
-      </Button>
+      </span>
+      <div className="project-options-row-actions">
+        <Button type="button" aria-label={`Edit ${watches}`} onClick={edit}>
+          Edit
+        </Button>
+        <Button
+          type="button"
+          aria-label={`Remove ${watches}`}
+          aria-describedby={removeHint}
+          onClick={() => remove().catch(setError)}
+        >
+          Remove
+        </Button>
+      </div>
       {error && (
         <p className="warning" role="alert">
           {error.message}

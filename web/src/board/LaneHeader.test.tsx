@@ -6,7 +6,7 @@ import type { ProjectSpec, ProjectTicket } from "../live";
 import { Needing } from "../needsme/fixture";
 import { LaneHeader } from "./LaneHeader";
 
-const spec: ProjectSpec = { id: "acme-1", project: "acme", title: "Sign-in", labels: [], tags: {}, state_summary: { Ready: 1, Done: 1 }, finished: false, updated: "" };
+const spec: ProjectSpec = { id: "acme-1", project: "acme", title: "Sign-in", labels: [], tags: {}, state_summary: { Ready: 1, Done: 1 }, finished: false, updated: "", kind: "spec", claimed: false };
 const all = [
   { id: "acme-2", state: "Ready", spec: "acme-1", labels: [] as string[] },
   { id: "acme-3", state: "Done", spec: "acme-1", labels: [] as string[] },

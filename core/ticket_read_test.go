@@ -58,7 +58,7 @@ func asJSON(t *testing.T, v any) map[string]any {
 
 // scalars is every key a read returns whatever parts it asks for (on
 // acme-2, which has no branch, link or silence).
-var scalars = []string{"blocked", "blocked_by", "blockers", "claimable", "created", "description", "id", "labels", "needs_me_reason", "replacements", "spec", "state", "tags", "title", "updated"}
+var scalars = []string{"blocked", "blocked_by", "blockers", "claimable", "created", "description", "editable", "id", "labels", "needs_me_reason", "replacements", "retroable", "spec", "state", "tags", "title", "updated"}
 
 // redoneCounts is how many of each part redone leaves on acme-2.
 var redoneCounts = map[string]int{"claims": 2, "failure_reports": 1, "comments": 1, "rounds": 1, "moves": 5, "edits": 1}

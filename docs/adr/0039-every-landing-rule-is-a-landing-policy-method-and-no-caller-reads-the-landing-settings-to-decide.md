@@ -15,4 +15,8 @@ Moving the policy into core leaves [ADR 0003](0003-the-store-is-yaml-files-loade
 
 Adding or changing a landing rule is one method and one row of the matrix test.
 
-Amended by [ADR 0063](0063-the-domain-model-is-its-own-package-apart-from-persistence.md): the policy value belongs in `domain` beside `Landing.Normalized`, and `core` keeps the builders; the rule stands.
+Amended by [ADR 0064](0064-the-domain-model-is-its-own-package-apart-from-persistence.md): the policy value belongs in `domain` beside `Landing.Normalized`, and `core` keeps the builders; the rule stands.
+
+## Amendment: "no caller" covers the UI (code-central-986)
+
+The web UI is a caller too ([ADR 0063](0063-the-ui-reads-derived-rules-from-gos-views-and-only-formats-them.md)). The Options form reads the Landing capabilities `core.LandingView` carries, built from the policy in `landingViewWith`: `methods`, what each Landing Method offers as if it were the Default Landing (`OffersPush`, `OffersLandPerSpec`, `LandsByPullRequest` for the Code Host and `LandingPolicies.UsesAzureReposPAT`), and `runs_pull_request_watcher`, `repository_landing` and `pushes_nothing`. A vitest scan in `web/src/test-setup.test.ts` guards the UI as `TestNoLandingSettingIsReadOutsideThePolicy` guards Go: it fails on a comparison with a Landing Method or Repository Landing value, a `.method` comparison or a `"_push"` test, unless the line or the one before carries `// landing: <reason>`, as a radio's `checked` does to show the chosen method.

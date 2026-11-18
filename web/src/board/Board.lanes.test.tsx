@@ -81,6 +81,20 @@ describe("the Board's By Spec lanes", () => {
     expect(window.location.search).toBe("?view=board&project=acme&group=spec&popup=acme-1");
   });
 
+  it("badges each Lane header with its Spec's kind, and heads a Spec a Factory is on with that", async () => {
+    const fake = await lanesWorld();
+    await fake.w.api.addLabels("acme", "acme-7", ["long-lived"]);
+    await fake.w.api.submitMap("acme", "Plan the year"); // acme-12, its Charting Ticket Ready
+    await renderApp(fake, "/?view=board&project=acme&group=spec");
+    loaded();
+    const head = (title: string) => within(lane(title)).getByRole("region", { name: title });
+    expect(within(head("Login")).getByText("Spec")).toHaveClass("kind-badge", "kind-spec");
+    expect(within(head("Billing")).getByText("Long-lived")).toHaveClass("kind-badge", "kind-long-lived");
+    expect(within(head("Plan the year")).getByText("Map")).toHaveClass("kind-badge", "kind-map");
+    // Refunds is In Progress, so a Factory holds its Claim.
+    expect(head("Billing")).toHaveTextContent("A Factory is on it · 0 of 2 Done");
+  });
+
   it("puts each Ticket's card in its lane's column, without the Spec line", async () => {
     await bySpec();
     loaded();

@@ -33,6 +33,8 @@ func TestLandingPolicyMatrix(t *testing.T) {
 						"PushesAcceptedBranch":       {NewLandingPolicy(m, push, lps, ci).PushesAcceptedBranch(), branch && effPush},
 						"KeepsAcceptedWorktree":      {NewLandingPolicy(m, push, lps, ci).KeepsAcceptedWorktree(), !branch},
 						"NeedsCloneURL":              {NewLandingPolicy(m, push, lps, ci).NeedsCloneURL(), pr},
+						"OffersPush":                 {NewLandingPolicy(m, push, lps, ci).OffersPush(), merge || branch},
+						"OffersLandPerSpec":          {NewLandingPolicy(m, push, lps, ci).OffersLandPerSpec(), merge || pr},
 					}
 					for name, v := range want {
 						if v[0] != v[1] {
@@ -44,7 +46,6 @@ func TestLandingPolicyMatrix(t *testing.T) {
 		}
 	}
 }
-
 
 // TestLandingPolicyRoute checks Route against the if/else chain the
 // Factory's land takes today, where onSpecBranch is what waitsOnSpecBranch

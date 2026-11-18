@@ -6,17 +6,15 @@ import type { Api } from "../api/api";
 import type { SpecDetail } from "../api/types";
 import { Markdown } from "../Markdown";
 import { EditForm } from "./EditForm";
-import { specEditable } from "./editable";
 import { Button } from "../controls/Button";
 
 export interface BodySectionProps {
   api: Api;
   spec: SpecDetail;
   heading: string;
-  archived?: boolean;
 }
 
-export function BodySection({ api, spec, heading, archived = false }: BodySectionProps) {
+export function BodySection({ api, spec, heading }: BodySectionProps) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const project = spec.id.slice(0, spec.id.lastIndexOf("-"));
@@ -26,7 +24,7 @@ export function BodySection({ api, spec, heading, archived = false }: BodySectio
         <button type="button" className="link" aria-expanded={open || editing} disabled={editing} onClick={() => setOpen(!open)}>
           {heading}
         </button>
-        {!editing && specEditable(spec, archived) && (
+        {!editing && spec.editable && (
           <Button
             type="button"
 
@@ -48,7 +46,7 @@ export function BodySection({ api, spec, heading, archived = false }: BodySectio
           close={() => setEditing(false)}
         />
       ) : (
-        open && (spec.body ? <Markdown>{spec.body}</Markdown> : <p className="muted">No body.</p>)
+        (open || !spec.body) && (spec.body ? <Markdown>{spec.body}</Markdown> : <p className="muted">No body.</p>)
       )}
     </section>
   );

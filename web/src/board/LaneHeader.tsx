@@ -28,7 +28,7 @@ export interface LaneHeaderProps {
 export function LaneHeader({ id, spec, all, shown, link, collapsed, onToggle }: LaneHeaderProps) {
   const { reasonOf } = useNeedsMe();
   const title = spec?.title ?? id;
-  const { kind, headline } = describeSpec(spec, all, spec?.state_summary ?? countStates(all), reasonOf);
+  const { kind, headline } = describeSpec(spec, spec?.state_summary ?? countStates(all));
   return (
     <section className={`lane-header${reasonOf(id) ? " needs" : ""}`} aria-label={title}>
       <div className="lane-header-line">

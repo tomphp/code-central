@@ -84,6 +84,23 @@ func requirementBlock(t *testing.T, out map[string]any) {
 	if build["done"] != float64(0) || build["total"] != float64(0) {
 		t.Fatalf("build %v", req["build"])
 	}
+	segments, _ := req["segments"].([]any)
+	if len(segments) != 4 {
+		t.Fatalf("segments %v", req["segments"])
+	}
+	for i, want := range [][3]string{{"grilling", "queued", "acme-5"}, {"spec", "waiting", "acme-6"}, {"tickets", "waiting", "acme-7"}, {"build", "waiting", ""}} {
+		seg := segments[i].(map[string]any)
+		field("stage", want[0])(t, seg)
+		field("progress", want[1])(t, seg)
+		if ticket, _ := seg["ticket"].(string); ticket != want[2] {
+			t.Fatalf("segment %d ticket %v, want %q", i, seg["ticket"], want[2])
+		}
+	}
+	field("current", "grilling")(t, req)
+	field("default_ticket", "acme-5")(t, req)
+	if needs, ok := req["needs"].([]any); !ok || len(needs) != 0 {
+		t.Fatalf("needs %v", req["needs"])
+	}
 }
 
 // The requirement read and filter (ticket 68) are the same on
