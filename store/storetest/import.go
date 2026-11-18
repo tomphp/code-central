@@ -29,11 +29,11 @@ func runImport(t *testing.T, f Factory) {
 				if sp.Title != "Login" || sp.Body != "Users log in.\n" || sp.Tags["source"] != ".scratch/login/spec.md" {
 					t.Fatalf("spec: %+v", sp)
 				}
-				tk, _ := r.Ticket("acme", 3)
+				tk, _ := r.Ticket("acme", 3, store.Moves)
 				if tk.State != domain.Done || len(tk.Moves) != 1 || tk.Moves[0] != ImportBatch().Tickets[0].Moves[0] {
 					t.Fatalf("ticket 3: %+v", tk)
 				}
-				if tk, _ := r.Ticket("acme", 6); len(tk.Comments) != 1 || len(tk.Replacements) != 1 || tk.Replacements[0] != 4 {
+				if tk, _ := r.Ticket("acme", 6, store.Comments); len(tk.Comments) != 1 || len(tk.Replacements) != 1 || tk.Replacements[0] != 4 {
 					t.Fatalf("ticket 6: %+v", tk)
 				}
 				if n := r.NextNumber("acme"); n != 7 {

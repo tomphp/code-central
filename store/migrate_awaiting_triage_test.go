@@ -37,7 +37,7 @@ func TestTheRealChainMigratesAFormat15StoreToTheAwaitingTriageFormat(t *testing.
 		t.Errorf("store.yaml = %q", got)
 	}
 	s.View(func(r store.Reader) error {
-		tk, _ := r.Ticket("acme", 2)
+		tk, _ := r.Ticket("acme", 2, store.History...)
 		if tk.AwaitingTriage || tk.Link.ID != "acme/web#7" {
 			t.Errorf("ticket after migrating = %+v, want its Link kept and not awaiting triage", tk)
 		}

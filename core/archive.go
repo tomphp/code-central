@@ -134,11 +134,11 @@ func (w guardedWriter) PutSpec(key string, s domain.Spec) error {
 	return w.Writer.PutSpec(key, s)
 }
 
-func (w guardedWriter) PutTicket(key string, t domain.Ticket) error {
+func (w guardedWriter) PutTicket(key string, t domain.Ticket, parts ...store.Part) error {
 	if err := writable(w, key); err != nil {
 		return err
 	}
-	return w.Writer.PutTicket(key, t)
+	return w.Writer.PutTicket(key, t, parts...)
 }
 
 func (w guardedWriter) PutCIRuns(key string, runs []domain.CIRun) error {

@@ -426,9 +426,9 @@ type importOverlay struct {
 	tickets map[int]domain.Ticket
 }
 
-func (o importOverlay) Ticket(project string, n int) (domain.Ticket, bool) {
+func (o importOverlay) Ticket(project string, n int, parts ...store.Part) (domain.Ticket, bool) {
 	if t, ok := o.tickets[n]; ok && project == o.key {
 		return t, true
 	}
-	return o.Reader.Ticket(project, n)
+	return o.Reader.Ticket(project, n, parts...)
 }

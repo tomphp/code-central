@@ -43,7 +43,7 @@ func TestTheRealChainMigratesAFormat43StoreToTheChangedRepositoriesFormat(t *tes
 		}
 	}
 	s.View(func(r store.Reader) error {
-		tk, _ := r.Ticket("acme", 2)
+		tk, _ := r.Ticket("acme", 2, store.History...)
 		if tk.Branch != "acme-2" || tk.Commit != "abc123" || tk.Repositories != nil {
 			t.Errorf("ticket after migrating: branch %q commit %q repositories %+v, want its branch and commit and no list", tk.Branch, tk.Commit, tk.Repositories)
 		}
@@ -61,18 +61,18 @@ func TestTheRealChainMigratesAFormat43StoreToTheChangedRepositoriesFormat(t *tes
 		{Name: "api", Branch: "acme-2", Commit: "fed789"},
 	}
 	if err := s.Update(func(w store.Writer) error {
-		tk, _ := w.Ticket("acme", 2)
+		tk, _ := w.Ticket("acme", 2, store.History...)
 		tk.Repositories = changed
 		tk.PushedCommits = append(tk.PushedCommits, domain.PushedCommit{Repository: "api", Commit: "fed789", Pushed: at})
 		tk.PullRequests[0].Repository = "api"
 		tk.SpecMerge = &domain.SpecMerge{Repository: "api", Commit: "aaa111", Merged: at}
-		return w.PutTicket("acme", tk)
+		return w.PutTicket("acme", tk, store.History...)
 	}); err != nil {
 		t.Fatal(err)
 	}
 	s = reopen(t, s)
 	s.View(func(r store.Reader) error {
-		tk, _ := r.Ticket("acme", 2)
+		tk, _ := r.Ticket("acme", 2, store.History...)
 		if !reflect.DeepEqual(tk.Repositories, changed) {
 			t.Errorf("repositories %+v, want %+v", tk.Repositories, changed)
 		}

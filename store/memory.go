@@ -85,23 +85,29 @@ func (r reader) Specs(project string) []domain.Spec {
 	return out
 }
 
-func (r reader) Ticket(project string, n int) (domain.Ticket, bool) {
+// readOf is a copy of the stored Ticket t with only the History parts
+// named, as every Store Kind reads one.
+func readOf(t domain.Ticket, parts []Part) domain.Ticket {
+	return cloneTicket(withParts(t, domain.Ticket{}, parts))
+}
+
+func (r reader) Ticket(project string, n int, parts ...Part) (domain.Ticket, bool) {
 	p, ok := r.x.projects[project]
 	if !ok {
 		return domain.Ticket{}, false
 	}
 	t, ok := p.tickets[n]
-	return cloneTicket(t), ok
+	return readOf(t, parts), ok
 }
 
-func (r reader) Tickets(project string) []domain.Ticket {
+func (r reader) Tickets(project string, parts ...Part) []domain.Ticket {
 	p, ok := r.x.projects[project]
 	if !ok {
 		return nil
 	}
 	out := make([]domain.Ticket, 0, len(p.tickets))
 	for _, t := range p.tickets {
-		out = append(out, cloneTicket(t))
+		out = append(out, readOf(t, parts))
 	}
 	slices.SortFunc(out, func(a, b domain.Ticket) int { return cmp.Compare(a.Number, b.Number) })
 	return out
@@ -174,8 +180,12 @@ func (w *writer) PutSpec(project string, s domain.Spec) error {
 	return nil
 }
 
-func (w *writer) PutTicket(project string, t domain.Ticket) error {
-	t = cloneTicket(t)
+func (w *writer) PutTicket(project string, t domain.Ticket, parts ...Part) error {
+	var stored domain.Ticket
+	if p, ok := w.x.projects[project]; ok {
+		stored = p.tickets[t.Number]
+	}
+	t = withHead(cloneTicket(withParts(t, stored, parts)))
 	if err := w.begin(t, project); err != nil {
 		return err
 	}
@@ -185,6 +195,12 @@ func (w *writer) PutTicket(project string, t domain.Ticket) error {
 
 func (w *writer) PutImport(project string, im Import) error {
 	im = im.clone()
+	for i, t := range im.Tickets {
+		im.Tickets[i] = withHead(t)
+	}
+	for i, t := range im.Rewritten {
+		im.Rewritten[i] = withHead(t)
+	}
 	if p, ok := w.x.projects[project]; ok {
 		seen := map[int]bool{}
 		taken := func(n int) bool {

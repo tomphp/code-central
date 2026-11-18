@@ -324,9 +324,10 @@ func (c *Core) FindSpecs(_ context.Context, key string, in FindSpecsInput) ([]Sp
 	return rows, nil
 }
 
-// specTickets are Spec n's Tickets in claim order.
-func specTickets(r store.Reader, key string, n int) []domain.Ticket {
-	tickets := slices.DeleteFunc(r.Tickets(key), func(t domain.Ticket) bool { return t.Spec != n })
+// specTickets are Spec n's Tickets in claim order, with the History parts
+// named.
+func specTickets(r store.Reader, key string, n int, parts ...store.Part) []domain.Ticket {
+	tickets := slices.DeleteFunc(r.Tickets(key, parts...), func(t domain.Ticket) bool { return t.Spec != n })
 	slices.SortStableFunc(tickets, claimOrder)
 	return tickets
 }

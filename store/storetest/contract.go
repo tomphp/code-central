@@ -119,10 +119,10 @@ func Run(t *testing.T, f Factory) {
 			Comments: []domain.Comment{{Number: 1, Actor: "agent", Time: t0.Add(time.Hour), Claim: 1, Body: "Did it.\n"}},
 			Moves:    []domain.Move{{From: domain.Ready, To: domain.InProgress, Actor: "agent", Time: t0, Claim: 1}},
 		}
-		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", tk) })
+		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", tk, store.History...) })
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
-				got, _ := r.Ticket("acme", 1)
+				got, _ := r.Ticket("acme", 1, store.History...)
 				if len(got.Claims) != 2 || got.Claims[0] != tk.Claims[0] || got.Claims[1] != tk.Claims[1] {
 					t.Fatalf("claims: got %+v", got.Claims)
 				}
@@ -154,10 +154,10 @@ func Run(t *testing.T, f Factory) {
 				{Number: 3, Title: "Skip?", Body: "Skip it?", Status: domain.QuestionDismissed, Closed: t0.Add(time.Hour)},
 			}}},
 		}
-		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", tk) })
+		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", tk, store.Rounds) })
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
-				got, _ := r.Ticket("acme", 1)
+				got, _ := r.Ticket("acme", 1, store.Rounds)
 				if len(got.Rounds) != 1 {
 					t.Fatalf("rounds: got %+v", got.Rounds)
 				}
@@ -168,7 +168,7 @@ func Run(t *testing.T, f Factory) {
 				got.Rounds[0].Questions[1].Status = domain.QuestionAnswered
 			})
 			read(t, s, func(r store.Reader) {
-				if again, _ := r.Ticket("acme", 1); again.Rounds[0].Questions[1].Status != domain.QuestionOpen {
+				if again, _ := r.Ticket("acme", 1, store.Rounds); again.Rounds[0].Questions[1].Status != domain.QuestionOpen {
 					t.Fatal("changing a read Ticket's Questions changed the store")
 				}
 			})
@@ -188,7 +188,7 @@ func Run(t *testing.T, f Factory) {
 			Comments: []domain.Comment{{Number: 1, Actor: "human", Time: t0, Body: "Looks good.\nShip it.\n"}},
 			Edits:    []domain.Edit{{Number: 1, Actor: "agent", Time: t0, Previous: map[string]string{"description": ""}}}}
 		put(t, s, func(w store.Writer) error { return w.PutSpec("acme", spec) })
-		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", ticket) })
+		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", ticket, store.Comments, store.Edits) })
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
 				gs, _ := r.Spec("acme", 1)
@@ -196,7 +196,7 @@ func Run(t *testing.T, f Factory) {
 					gs.Edits[0].Previous["title"] != "Login" || gs.Edits[0].Actor != "agent" || !gs.Edits[0].Time.Equal(t0) {
 					t.Fatalf("spec: got %+v", gs)
 				}
-				gt, _ := r.Ticket("acme", 2)
+				gt, _ := r.Ticket("acme", 2, store.Comments, store.Edits)
 				if len(gt.Comments) != 1 || gt.Comments[0] != ticket.Comments[0] {
 					t.Fatalf("comments: got %+v", gt.Comments)
 				}
@@ -295,6 +295,7 @@ func Run(t *testing.T, f Factory) {
 		}
 	})
 
+	runHistory(t, f)
 	runReplacements(t, f)
 	runImport(t, f)
 	runLinks(t, f)

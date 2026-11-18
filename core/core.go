@@ -579,7 +579,7 @@ func (c *Core) CreateTicket(ctx context.Context, key string, in CreateTicketInpu
 			Number: w.NextNumber(key), Title: in.Title, State: state, Spec: specN,
 			Labels: in.Labels, Tags: maps.Clone(in.Tags), BlockedBy: blockedBy, Created: now, Updated: now, Description: in.Description,
 		}
-		if err := w.PutTicket(key, t); err != nil {
+		if err := whole.put(w, key, &t); err != nil {
 			return err
 		}
 		v, err = acknowledgeCreate(c.ticketView(w, key, domain.Ticket{}), c.ticketView(w, key, t), in.Full)
@@ -601,7 +601,8 @@ func (c *Core) GetTicket(_ context.Context, key string, in GetTicketInput) (Tick
 		if !ok {
 			return unknownProject(key)
 		}
-		t, err := resolveTicket(r, key, "get_ticket", "ticket", in.Ticket)
+		// It is read whole: left_out counts the parts it leaves out.
+		t, err := resolveTicket(r, key, "get_ticket", "ticket", in.Ticket, whole...)
 		if err != nil {
 			return err
 		}
@@ -669,6 +670,8 @@ func (c *Core) FindTicketViews(_ context.Context, key string, in FindTicketsInpu
 			return err
 		}
 		for _, t := range tickets {
+			// Each is read whole, as get_ticket reads it.
+			t, _ = r.Ticket(key, t.Number, whole...)
 			views = append(views, shapeView(c.ticketViewIn(r, e, t), r, e.p, t, in.Parts, parts, in.WithModelChoice))
 		}
 		return nil

@@ -109,7 +109,9 @@ func (c *Core) OpenSpecMerge(ctx context.Context, key string, in OpenSpecMergeIn
 			body = specMergeBodyPerRepository(p, id, cs)
 		}
 		now := c.now()
-		if t, ok := openSpecMergeTicket(tickets, title); ok {
+		if open, ok := openSpecMergeTicket(tickets, title); ok {
+			h := held{store.Comments}
+			t, _ := w.Ticket(key, open.Number, h...)
 			res.Ticket = DisplayID(key, t.Number)
 			if t.Description == body || slices.ContainsFunc(t.Comments, func(cm domain.Comment) bool { return cm.Body == body }) {
 				res.Outcome = SpecMergeUnchanged
@@ -118,14 +120,14 @@ func (c *Core) OpenSpecMerge(ctx context.Context, key string, in OpenSpecMergeIn
 			addComment(&t, ActorOf(ctx), now, 0, body)
 			t.Updated = now
 			res.Outcome = SpecMergeCommented
-			return w.PutTicket(key, t)
+			return h.put(w, key, &t)
 		}
 		t := domain.Ticket{
 			Number: w.NextNumber(key), Title: title, State: domain.Ready, Spec: sp.Number,
 			SpecMergeTicket: true, Created: now, Updated: now, Description: body,
 		}
 		res = OpenSpecMergeResult{Ticket: DisplayID(key, t.Number), Outcome: SpecMergeOpened}
-		return w.PutTicket(key, t)
+		return whole.put(w, key, &t)
 	})
 	return res, err
 }

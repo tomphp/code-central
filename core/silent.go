@@ -78,23 +78,31 @@ func (c *Core) Ping(_ context.Context, sessionID string) {
 // Claim is live, its session's last counted ping if that is later.
 func (c *Core) claimActivity(t domain.Ticket, cl domain.Claim) time.Time {
 	last := lastActivity(t, cl)
-	if cl.Live() && cl.SessionID != "" {
-		c.activity.mu.Lock()
-		ping := c.activity.pings[cl.SessionID]
-		c.activity.mu.Unlock()
-		if ping.After(last) {
-			last = ping
-		}
+	if ping := c.lastPing(cl); ping.After(last) {
+		last = ping
 	}
 	return last
 }
 
+// lastPing is a live Claim's session's last counted ping; zero when there
+// is none or the Claim has ended.
+func (c *Core) lastPing(cl domain.Claim) time.Time {
+	if !cl.Live() || cl.SessionID == "" {
+		return time.Time{}
+	}
+	c.activity.mu.Lock()
+	defer c.activity.mu.Unlock()
+	return c.activity.pings[cl.SessionID]
+}
+
 // quietSince is when the Ticket last saw any activity on its live Claim:
 // the latest of service start (pings are not kept across a restart), any
-// write to the Ticket by anyone, and the Claim's own activity.
+// write to the Ticket by anyone, and the Claim's own activity. Every write
+// that stores the Claim's activity also sets Updated, so it reads only
+// the Ticket's head and the Claim's pings, as the evaluation does.
 func (c *Core) quietSince(t domain.Ticket, cl domain.Claim) time.Time {
 	last := c.activity.started
-	for _, at := range []time.Time{t.Updated, c.claimActivity(t, cl)} {
+	for _, at := range []time.Time{t.Updated, cl.Started, c.lastPing(cl)} {
 		if at.After(last) {
 			last = at
 		}

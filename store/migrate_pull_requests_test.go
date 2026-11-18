@@ -40,7 +40,7 @@ func TestTheRealChainMigratesAFormat44StoreToThePullRequestsFormat(t *testing.T)
 	}
 	home := domain.PullRequest{Number: 7, Link: "https://example.com/7", State: domain.PROpen}
 	s.View(func(r store.Reader) error {
-		if tk, _ := r.Ticket("acme", 2); !reflect.DeepEqual(tk.PullRequests, []domain.PullRequest{home}) {
+		if tk, _ := r.Ticket("acme", 2, store.History...); !reflect.DeepEqual(tk.PullRequests, []domain.PullRequest{home}) {
 			t.Errorf("pull requests after migrating = %+v, want the Home Repository's alone", tk.PullRequests)
 		}
 		return nil
@@ -51,15 +51,15 @@ func TestTheRealChainMigratesAFormat44StoreToThePullRequestsFormat(t *testing.T)
 	home.Close = true
 	want := []domain.PullRequest{home, {Repository: "api", Number: 3, Link: "https://example.com/api/3", State: domain.PRMerged, MergeCommit: "def456"}}
 	if err := s.Update(func(w store.Writer) error {
-		tk, _ := w.Ticket("acme", 2)
+		tk, _ := w.Ticket("acme", 2, store.History...)
 		tk.PullRequests = want
-		return w.PutTicket("acme", tk)
+		return w.PutTicket("acme", tk, store.History...)
 	}); err != nil {
 		t.Fatal(err)
 	}
 	s = reopen(t, s)
 	s.View(func(r store.Reader) error {
-		if tk, _ := r.Ticket("acme", 2); !reflect.DeepEqual(tk.PullRequests, want) {
+		if tk, _ := r.Ticket("acme", 2, store.History...); !reflect.DeepEqual(tk.PullRequests, want) {
 			t.Errorf("pull requests = %+v, want %+v", tk.PullRequests, want)
 		}
 		return nil

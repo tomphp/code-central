@@ -61,7 +61,7 @@ func (c *Core) waitResult(key string, ref Ref) (WaitResult, error) {
 		if _, ok := r.Project(key); !ok {
 			return unknownProject(key)
 		}
-		t, err := resolveTicket(r, key, "wait", "ticket", ref)
+		t, err := resolveTicket(r, key, "wait", "ticket", ref, store.Moves)
 		if err != nil {
 			return err
 		}
@@ -121,9 +121,9 @@ func (w *noticeWriter) PutSpec(key string, s domain.Spec) error {
 	return w.wakeIf(wakes, key, w.put(w.Writer.PutSpec(key, s), events.Event{Type: events.SpecChanged, Project: key, ID: DisplayID(key, s.Number)}))
 }
 
-func (w *noticeWriter) PutTicket(key string, t domain.Ticket) error {
+func (w *noticeWriter) PutTicket(key string, t domain.Ticket, parts ...store.Part) error {
 	wakes := wakesTheFactory(w.Writer, key, t)
-	return w.wakeIf(wakes, key, w.put(w.Writer.PutTicket(key, t), events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, t.Number)}))
+	return w.wakeIf(wakes, key, w.put(w.Writer.PutTicket(key, t, parts...), events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, t.Number)}))
 }
 
 // PutImport sends one project.changed notice for the whole Import, so a

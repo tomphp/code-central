@@ -166,7 +166,8 @@ func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementIn
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		t, err := resolveTicket(w, key, string(OptionToRequirement), "ticket", in.Ticket)
+		// An Import rewrites it whole, so it is read whole.
+		t, err := resolveTicket(w, key, string(OptionToRequirement), "ticket", in.Ticket, whole...)
 		if err != nil {
 			return err
 		}

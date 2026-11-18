@@ -145,7 +145,8 @@ func (c *Core) respondCI(key string, op CIFailureOption, in CIResponseInput, don
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		t, err := resolveTicket(w, key, string(op), "ticket", in.Ticket)
+		// Its view is the result, so it is read whole.
+		t, err := resolveTicket(w, key, string(op), "ticket", in.Ticket, whole...)
 		if err != nil {
 			return err
 		}
@@ -367,7 +368,7 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in NewFixTicketInpu
 			Created: now, Updated: now,
 			Description: fmt.Sprintf("%s's CI failed%s: fix the failure forward, on top of its work in the base. It stays Accepted, and lands when a later commit passes CI.\n\n%s", id, where, in.Note),
 		}
-		if err := w.PutTicket(key, f); err != nil {
+		if err := whole.put(w, key, &f); err != nil {
 			return err
 		}
 		fix = f.Number
