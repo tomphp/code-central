@@ -289,7 +289,6 @@ func (f *factory) printf(format string, args ...any) {
 type factory struct {
 	e      Env
 	o      options
-	git    string
 	claude string
 	// repos is the registry of the Home Repository, the Project's
 	// Repositories and its base, and of their worktrees.
@@ -440,7 +439,7 @@ func start(e Env, o options) (*factory, error) {
 	if !ok {
 		return nil, errors.New("git isn't on PATH")
 	}
-	f.git, f.repos.git = git, git
+	f.repos.git = git
 	top, err := f.gitOut(e.Dir, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return nil, fmt.Errorf("not in a git repository (%s)", e.Dir)
@@ -577,7 +576,7 @@ func writable(dir string) error {
 
 // gitOut runs git in dir and returns its trimmed output.
 func (f *factory) gitOut(dir string, args ...string) (string, error) {
-	return gitOut(f.git, f.e.Environ, dir, args...)
+	return f.repos.gitOut(dir, args...)
 }
 
 // setBase takes the base the Project names this poll into the registry.

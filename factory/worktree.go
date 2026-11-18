@@ -502,6 +502,8 @@ func setUpFailed(wt string, err error) *failure {
 	}}
 }
 
+// strayDirectory is the failure for something that isn't a worktree at
+// wt, a worktree path in r.
 func strayDirectory(r *repository, wt string) error {
 	return &failure{core.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("Something that isn't a git worktree is at this Ticket's worktree path, %s, so the Factory can't set up the worktree.", wt),
@@ -511,6 +513,8 @@ func strayDirectory(r *repository, wt string) error {
 	}}
 }
 
+// wrongWorktree is the failure for the worktree w at wt being other than
+// want: on another branch, or detached.
 func wrongWorktree(wt string, w gitWorktree, want string) error {
 	on := "detached"
 	if w.branch != "" {
@@ -524,6 +528,8 @@ func wrongWorktree(wt string, w gitWorktree, want string) error {
 	}}
 }
 
+// branchElsewhere is the failure for branch being checked out at
+// elsewhere when the Ticket's worktree at wt needs it.
 func branchElsewhere(branch, wt, elsewhere string) error {
 	return &failure{core.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("Branch %s is checked out at %s, so the Factory can't add this Ticket's worktree at %s on it.", branch, elsewhere, wt),

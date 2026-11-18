@@ -90,12 +90,13 @@ func (r *repository) where() string {
 // repositories is the registry the landing and the sessions share: the
 // Home Repository, the Project's Repositories by Repository Name and in
 // landing order, the Project's base, and how a Ticket's or the Chat's
-// worktrees are named and set up in them (worktree.go). Only the poll's
-// landing step writes it (replace, setBase); turns and the Chat loop read
-// it from their own goroutines, under its mutexes.
+// worktrees are named and set up in them (worktree.go). start fills it
+// in; after that only the poll's landing step writes it (replace,
+// setBase), and turns and the Chat loop read it from their own
+// goroutines, under its mutexes.
 type repositories struct {
-	// git is the git binary and environ the environment every git call in
-	// a clone runs with; printf writes the Factory's lines.
+	// git is the git binary and environ the environment every git call of
+	// the Factory's runs with; printf writes the Factory's lines.
 	git     string
 	environ []string
 	printf  func(format string, args ...any)
@@ -307,7 +308,7 @@ func (f *factory) cloneOf(ctx context.Context, v core.RepositoryView, taken map[
 	case errors.Is(err, fs.ErrNotExist) && v.CloneURL == "":
 		return missing("nothing at %s", dir)
 	case errors.Is(err, fs.ErrNotExist):
-		if out, err := cloneRepository(ctx, f.git, f.e.Environ, remote, v.CloneURL, dir); err != nil {
+		if out, err := cloneRepository(ctx, f.repos.git, f.repos.environ, remote, v.CloneURL, dir); err != nil {
 			if out == "" {
 				out = err.Error()
 			}
