@@ -85,9 +85,9 @@ describe("Focus Mode's body with a queue", () => {
     expect(session.say).toHaveBeenCalledWith("Requirement added");
   });
 
-  it("opens the item's Ticket in the Inbox", async () => {
+  it("opens the item's Ticket in the Inbox from its title", async () => {
     const { navigate } = await renderBody();
-    await userEvent.click(within(focus()).getByRole("link", { name: "Open in Inbox" }));
+    await userEvent.click(within(focus()).getByRole("link", { name: f.item.row.title }));
     expect(navigate).toHaveBeenCalledWith({ view: "inbox", project: undefined, requirement: undefined, ticket: f.item.row.id });
   });
 

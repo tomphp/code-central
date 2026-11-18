@@ -19,7 +19,7 @@ import { OneProject } from "../inbox/ShortId";
 import type { InboxData } from "../live";
 import { NewSplit } from "../requirement/NewSplit";
 import type { UiLocation } from "../url";
-import { FocusItemView, inboxOf } from "./FocusItemView";
+import { FocusItemView, ticketLinkOf } from "./FocusItemView";
 import type { FocusSession } from "./session";
 import "./focus.css";
 
@@ -116,7 +116,7 @@ export function FocusBody({ now, data, session, dashboard, loc, project: scoped,
           ticket={session.ticket}
           navigate={navigate}
           skip={session.skip}
-          inbox={inboxOf(item.row, loc.project)}
+          ticketLink={ticketLinkOf(item.row, loc.project)}
           inOneProject={!!scope}
         />
       ) : (

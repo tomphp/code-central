@@ -88,7 +88,7 @@ describe("a Question Focus Item", () => {
     await renderApp(w);
     expect(question("Which colour?")).toBeInTheDocument();
     expect(within(item()).getByText("Requirement: Dark mode · grilling")).toBeInTheDocument();
-    expect(within(item()).getByRole("link", { name: "Open in Inbox" })).toHaveAttribute("href", `?view=inbox&requirement=${spec}&ticket=${stage}`);
+    expect(within(within(item()).getByRole("heading", { level: 2 })).getByRole("link")).toHaveAttribute("href", `?view=inbox&requirement=${spec}&ticket=${stage}`);
   });
 });
 

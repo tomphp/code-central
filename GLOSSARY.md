@@ -574,7 +574,7 @@ A view showing the human one Focus Item at a time from Needs Me, moving to the n
 _Avoid_: Zen mode, queue view
 
 **Focus Item**:
-One thing in Needs Me, of a reason its Project's Focus Kinds leave on, that the human can decide alone: one open Question, one waiting Ticket, one pushed commit's CI failed, CI cancelled or CI unavailable, a Project's Base diverged or Base missing, or a Repository missing. It opens with a Focus badge naming its reason. Its Ticket IDs show as Short IDs.
+One thing in Needs Me, of a reason its Project's Focus Kinds leave on, that the human can decide alone: one open Question, one waiting Ticket, one pushed commit's CI failed, CI cancelled or CI unavailable, a Project's Base diverged or Base missing, or a Repository missing. It opens with a Focus badge naming its reason. Its Ticket IDs show as Short IDs. When it is one Ticket's, its title links to that Ticket in the Inbox, a Stage Ticket's in its Requirement; a CI item's title and an item with no Ticket have no link.
 _Avoid_: Action, card, task
 
 **Reason badge**:

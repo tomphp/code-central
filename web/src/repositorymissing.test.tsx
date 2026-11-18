@@ -57,7 +57,7 @@ describe("Repository missing", () => {
     const link = within(panel).getByRole("link", { name: "Project Options" });
     expect(link.getAttribute("href")).toContain("view=project-options");
     expect(link.getAttribute("href")).toContain("project=acme");
-    expect(within(it).queryByRole("link", { name: /Open in Inbox/ })).toBeNull();
+    expect(within(within(it).getByRole("heading", { level: 2 })).queryByRole("link")).toBeNull();
   });
 
   it("leaves out the Clone URL row for a local-only Repository", async () => {

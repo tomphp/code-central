@@ -179,7 +179,7 @@ function CIRunningList({ now, data, runs, loc, project, navigate }: CIRunningLis
 }
 
 // inboxFor is where a Ticket opens in the Inbox from the dashboard, as a
-// Focus Item's "Open in Inbox" does: a Stage Ticket in its Requirement,
+// Focus Item's title link does: a Stage Ticket in its Requirement,
 // with it selected, in the body's Project scope.
 // A Ticket the Inbox data doesn't hold yet opens on its own.
 function inboxFor(data: InboxData, project: string, id: string, loc: UiLocation): UiLocation {
