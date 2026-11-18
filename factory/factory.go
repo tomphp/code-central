@@ -1,6 +1,62 @@
 // Package factory is the local Factory, code-central-factory (ADR 0005):
 // plain code that claims a Project's Ready Tickets through the HTTP API
 // and runs one `claude -p` session per Claim in the Ticket's worktree.
+//
+// # Parts
+//
+// The Factory is two parts over one shared registry (Spec
+// code-central-934), all unexported types in this package:
+//
+//   - repositories (repositories.go) is the registry: the Home
+//     Repository, the Project's Repositories and its base, and the
+//     worktree set-up. Both parts read it; only the lander writes it
+//     (replace after a sync, setBase on a Project read).
+//   - lander (lander.go) is the landing part: each poll it reads the
+//     Project and its Landing Policy, keeps the clones and bases current,
+//     lands Accepted work, detects hand merges and merged pull requests,
+//     and sweeps the worktrees and Spec Branches it is done with. It owns
+//     every "already said" map and all base state, and starts no session.
+//   - *factory is the session part: the poll loop, slots and turns,
+//     Claims, Chat, Heartbeats, outages, Stage set-up, and the Changed
+//     Repositories report and finish check. It holds the registry and the
+//     lander as fields.
+//
+// # The interface between the parts
+//
+// The session part gives the lander landerHooks, the only things landing
+// asks of sessions:
+//
+//   - stopped: the Factory is halted, draining or paused, so nothing more
+//     lands this poll. The landing loops ask it between steps.
+//   - turnRunningOn: a turn is running on the Ticket, so the sweep keeps
+//     its worktrees.
+//
+// newLander builds the lander once, in start, over the registry, the
+// Client, the Project Key, the shared work hook, the shared output (the
+// factory's printf, under its one output mutex) and the hooks. The
+// session part then calls only two methods on it:
+//
+//   - poll, once per poll, after reconciling and before claiming. It
+//     returns the Project and whether it was read; when it was, the
+//     session part makes the report of what claude accepts (reportModels)
+//     until Code Central takes it. Landing never makes that report.
+//   - claimingHeld, wherever claiming is gated: a base is missing or has
+//     diverged, .mcp.json is missing from the base, or a Repository is
+//     missing.
+//
+// The rules that keep the split from changing behaviour:
+//
+//   - One call to poll per poll, in the place the landing step ran
+//     before the split.
+//   - Both parts write lines through the same output and report work in
+//     flight through the same work value, so a test that settles on
+//     Env.Work (ADR 0045) hears landing's git and post steps too. The
+//     lander has no timer of its own and takes no clock; every wait stays
+//     on Env.Clock in the session part.
+//   - The base name is written into the registry by the lander on a
+//     Project read, and read by turns there under the registry's mutex.
+//   - ADR 0005 is untouched: the Factory is plain code that starts one
+//     session per Claim, and the lander starts none.
 package factory
 
 import (
