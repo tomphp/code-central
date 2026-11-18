@@ -11,7 +11,7 @@ export const CONCLUSION_LABEL: Record<CIConclusion, string> = {
   timed_out: "timed out",
   skipped: "skipped",
   neutral: "neutral",
-  partially_succeeded: "Partially succeeded",
+  partially_succeeded: "partially succeeded",
 };
 
 // runStatus is a run's status as a CI Run display says it.
@@ -28,14 +28,9 @@ export const runName = (run: CIRunView) => run.name || run.workflow;
 const statusClass = (status: string) => `ci-${status.toLowerCase().replace(" ", "-")}`;
 
 // RunStatusBadge is a status as a badge. A partially succeeded one has the
-// passed styling plus a warning mark.
+// passed styling with a dashed border.
 export function RunStatusBadge({ status }: { status: string }) {
-  return (
-    <span className={`ci-status ${statusClass(status)}`}>
-      {status === CONCLUSION_LABEL.partially_succeeded && <span aria-hidden="true">⚠ </span>}
-      {status}
-    </span>
-  );
+  return <span className={`ci-status ${statusClass(status)}`}>{status}</span>;
 }
 
 // IgnoredMark marks a run of an ignored workflow; the entry holding it
