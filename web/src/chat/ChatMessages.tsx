@@ -57,7 +57,7 @@ function Message({ message: m }: { message: ChatMessage }) {
       {!m.outcome && items.length === 0 && <p className="muted small chat-working">Claude is working on it…</p>}
       {m.outcome === "stopped" && <p className="muted chat-ending chat-stopped">Stopped</p>}
       {m.outcome === "failed" && (
-        <p role="alert" className="chat-ending chat-failed">
+        <p role="alert" className="banner chat-ending chat-failed">
           Error: {m.error || "the reply failed"}
         </p>
       )}
