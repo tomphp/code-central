@@ -1,6 +1,6 @@
 // The plain Spec pane, for a Spec that is neither a Requirement nor a Map,
 // above the shared Ticket pane: the header (ID, title, submitted time, New
-// Prototype, Retro), its Changed Repositories' chips while the Project has
+// Prototype, New Ticket when ticketable, Retro), its Changed Repositories' chips while the Project has
 // several, its body, collapsed, the sums of its Tickets' CI badges, then the Spec's Tickets
 // with their States.
 import type { SpecDetail } from "../api/types";
