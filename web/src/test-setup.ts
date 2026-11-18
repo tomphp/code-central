@@ -19,9 +19,11 @@ globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
 pulseTiming.ms = 60_000;
 pulseTiming.board = 60_000;
 
-// waitFor and findBy* wait up to 1s (the library default); a passing test
-// never waits it out, and a test that needs longer waits for the world to settle.
-configure({ asyncUtilTimeout: 1000 });
+// waitFor and findBy* wait up to 4s: under `make test` the Go suite runs
+// alongside and starves the workers, so the library's 1s default timed out
+// on tests that pass alone. A passing test never waits it out, and a test
+// that needs longer waits for the world to settle.
+configure({ asyncUtilTimeout: 4000 });
 
 afterEach(() => {
   cleanup();

@@ -40,12 +40,22 @@ export async function settle(w: World) {
   const fetched = () => {
     if (++rounds > SETTLE_ROUNDS) throw new Error(`the UI keeps fetching: it was still starting fetches after ${SETTLE_ROUNDS} rounds of settling`);
   };
-  for (;;) {
+  // A pass that starts no fetch isn't the end on a loaded machine: the
+  // world counts a response answered before the UI has read its body and
+  // rendered it, and what the render starts comes a task or two later. So
+  // the UI must stay quiet through QUIET_PASSES passes, each after a
+  // macrotask, before settle returns.
+  for (let quiet = 0; quiet < QUIET_PASSES; ) {
     const started = w.fetchesStarted();
     await settlePass(w, fetched);
-    if (w.fetchesStarted() === started) return;
+    quiet = w.fetchesStarted() === started ? quiet + 1 : 0;
+    if (quiet < QUIET_PASSES) await nextTask();
   }
 }
+
+// QUIET_PASSES is how many passes in a row settle sees start no fetch
+// before it returns.
+const QUIET_PASSES = 3;
 
 // settlePass is one of settle's passes: act around w.settled(), after
 // which act renders until React has nothing left to do. It calls fetched
