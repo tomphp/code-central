@@ -13,11 +13,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/tomoram/code-central/watchers"
 	"time"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
+	"github.com/tomoram/code-central/ratelimit"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -26,7 +26,7 @@ import (
 type Provider interface {
 	// CheckAccess checks the CI Watcher can watch the repository: a
 	// result with no Problem when it can, else what is wrong and its fix.
-	// The CI Provider rate-limiting it is a *watchers.RateLimitError, as from
+	// The CI Provider rate-limiting it is a *ratelimit.Error, as from
 	// every method: not a problem, just a wait.
 	CheckAccess(ctx context.Context) (core.WatcherCheckResult, error)
 	// RunsForCommit lists the workflow runs started for commit, with
@@ -77,7 +77,7 @@ func Check(ctx context.Context, in core.CICheckInput, env gh.Env) core.WatcherCh
 		return *bad
 	}
 	r, err := p.CheckAccess(ctx)
-	var limit *watchers.RateLimitError
+	var limit *ratelimit.Error
 	if errors.As(err, &limit) {
 		r = limit.CheckResult(time.Now())
 	}

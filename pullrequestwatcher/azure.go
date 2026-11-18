@@ -16,8 +16,8 @@ import (
 	"github.com/tomoram/code-central/azdo"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
+	"github.com/tomoram/code-central/ratelimit"
 	"github.com/tomoram/code-central/store"
-	"github.com/tomoram/code-central/watchers"
 )
 
 // azureRepos is one Azure Repos repository's pull requests.
@@ -78,7 +78,7 @@ func checkAzureRepos(ctx context.Context, in core.PullRequestCheckInput, env gh.
 // azureRefused is the check's answer to err from a call. A rate limit is
 // returned as the error, not a problem.
 func azureRefused(patEnv, repository string, err error) (core.WatcherCheckResult, error) {
-	var limit *watchers.RateLimitError
+	var limit *ratelimit.Error
 	switch {
 	case errors.As(err, &limit):
 		return core.WatcherCheckResult{}, limit
@@ -121,7 +121,7 @@ func (a azureRepos) refresh(_ context.Context, p *pullRequest) (*pullRequest, er
 func (a azureRepos) open(ctx context.Context, branch, title, body string) (*pullRequest, error) {
 	p, err := a.c.OpenPullRequest(ctx, a.repository, ref(branch), ref(a.base), title, body)
 	if err != nil {
-		var limit *watchers.RateLimitError
+		var limit *ratelimit.Error
 		if errors.As(err, &limit) {
 			return nil, err
 		}

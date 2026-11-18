@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/tomoram/code-central/watchers"
 	"io"
 	"net/http"
 	"net/textproto"
@@ -22,6 +21,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ratelimit"
 )
 
 // Env is everything a Watcher touches outside itself to reach gh, so
@@ -109,7 +109,7 @@ func isProgram(path string) (string, bool) {
 
 // CheckLogin checks prog, gh, is logged in to GitHub with gh auth status:
 // a result with no Problem when it is, else the problem and its fix.
-// GitHub rate-limiting the check is a *watchers.RateLimitError, not a problem.
+// GitHub rate-limiting the check is a *ratelimit.Error, not a problem.
 func CheckLogin(ctx context.Context, env Env, prog string) (core.WatcherCheckResult, error) {
 	cmd, stdout, stderr := command(ctx, env, prog, "auth", "status", "--hostname", "github.com")
 	err := cmd.Run()
@@ -127,9 +127,9 @@ func CheckLogin(ctx context.Context, env Env, prog string) (core.WatcherCheckRes
 	// gh auth status calls GitHub too, and says so when that is
 	// rate-limited, with no reset time.
 	if strings.Contains(strings.ToLower(out), "rate limit") {
-		return core.WatcherCheckResult{}, &watchers.RateLimitError{System: "GitHub", Message: rateLimitLine(out)}
+		return core.WatcherCheckResult{}, &ratelimit.Error{System: "GitHub", Message: rateLimitLine(out)}
 	}
-	return core.WatcherCheckResult{Problem: core.ProblemLoggedOut, Reason: "gh isn't logged in to GitHub: " + watchers.FirstLine(out),
+	return core.WatcherCheckResult{Problem: core.ProblemLoggedOut, Reason: "gh isn't logged in to GitHub: " + ratelimit.FirstLine(out),
 		Fix: "Run `gh auth login` as the user the service runs as."}, nil
 }
 
@@ -150,7 +150,7 @@ func rateLimitLine(out string) string {
 			return strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(l), "-X "))
 		}
 	}
-	return watchers.FirstLine(out)
+	return ratelimit.FirstLine(out)
 }
 
 // DidntRun is a check failing because prog, gh, didn't run at all,
@@ -167,7 +167,7 @@ func DidntRun(prog string, err error) (r core.WatcherCheckResult, ran bool) {
 // API runs prog, gh, as gh api path with args, never prompting, and with
 // --include, so the response's headers say when a rate limit ends. It
 // returns the response's body and, when it fails, the first line gh wrote
-// to stderr; GitHub refusing it for a rate limit is a *watchers.RateLimitError,
+// to stderr; GitHub refusing it for a rate limit is a *ratelimit.Error,
 // and any other answer with a status is a *StatusError.
 func API(ctx context.Context, env Env, prog, path string, args ...string) (body []byte, msg string, err error) {
 	cmd, stdout, stderr := command(ctx, env, prog, append(append([]string{"api", path}, args...), "--include")...)
@@ -176,7 +176,7 @@ func API(ctx context.Context, env Env, prog, path string, args ...string) (body 
 	if err == nil {
 		return body, "", nil
 	}
-	msg = watchers.FirstLine(stderr.String())
+	msg = ratelimit.FirstLine(stderr.String())
 	if limit := rateLimit(status, header, msg); limit != nil {
 		return nil, msg, limit
 	}
@@ -225,11 +225,11 @@ func response(out []byte) (status int, header http.Header, body []byte) {
 // it for, or nil: a 403 or 429 with no requests remaining, or one saying
 // how long to wait, or a message naming a rate limit, as GitHub's
 // secondary rate limits may give with neither.
-func rateLimit(status int, header http.Header, msg string) *watchers.RateLimitError {
+func rateLimit(status int, header http.Header, msg string) *ratelimit.Error {
 	if status != 0 && status != http.StatusForbidden && status != http.StatusTooManyRequests {
 		return nil
 	}
-	limit := &watchers.RateLimitError{System: "GitHub", Message: msg}
+	limit := &ratelimit.Error{System: "GitHub", Message: msg}
 	limited := strings.Contains(strings.ToLower(msg), "rate limit")
 	if secs, err := strconv.Atoi(header.Get("Retry-After")); err == nil && secs > 0 {
 		limit.RetryAfter, limited = time.Duration(secs)*time.Second, true

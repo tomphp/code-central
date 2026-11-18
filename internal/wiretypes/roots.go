@@ -47,6 +47,7 @@ var enums = []Enum{
 	enumOf("TriageActions", core.TriageActions()),
 	enumOf("Modes", store.Modes),
 	enumOf("LandingMethods", store.LandingMethods),
+	enumOf("RepositoryLandings", core.RepositoryLandings()),
 	enumOf("CodeHosts", core.CodeHosts()),
 	enumOf("CloneStates", core.CloneStates()),
 	enumOf("CIProviders", store.CIProviders),

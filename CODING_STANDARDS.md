@@ -10,7 +10,7 @@ Name types, functions, props, CSS classes and test descriptions with the `GLOSSA
 
 An operation lives in `core`; the front doors (MCP, the HTTP API, the CLI) only translate. When the diff adds or changes an operation:
 
-- every door that exposes it is covered in the cross-door suite, `frontdoor/doors_test.go`: one successful and one rejected call each;
+- every door that exposes it is covered in the cross-door suite, `server/doors_test.go`: one successful and one rejected call each;
 - a new HTTP route joins the shared handlers in `httpapi/httpapi.go` rather than getting its own decoding and error mapping;
 - the UI's tests run on the real Core, built to WebAssembly (the WASM Core), and the contract, `web/src/api/contract/` (a file per feature), pins `createHttpApi` against it and against `serve`. A UI test reaches its state through the scenario builder (`web/src/api/scenario.ts`), never by seeding one.
 

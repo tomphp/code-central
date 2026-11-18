@@ -228,14 +228,16 @@ func whyNotLandAnyway(ci *ciState, t store.Ticket, rc *repoCI) string {
 		}
 		return fmt.Sprintf("%s has no failed or cancelled CI result%s to land anyway", id, where)
 	}
-	if lp := landingPolicyOf(ci.p); !lp.OffersLandAnyway() {
-		if lp.LandsByPullRequest() {
-			return fmt.Sprintf("%s's Project lands by Pull Request, so your merge on the Code Host decides whether it lands, whatever its CI result", id)
-		}
-		return fmt.Sprintf("%s's Project lands by Branch, so your merge decides whether it lands, whatever its CI result", id)
-	}
-	if !landingPolicyIn(ci.p, rc.name).OffersLandAnyway() {
+	switch lp := landingPolicyIn(ci.p, rc.name); {
+	case lp.OffersLandAnyway():
+	case lp.LandsByPullRequest():
+		return fmt.Sprintf("%s lands by Pull Request%s, so your merge on the Code Host decides whether it lands, whatever its CI result", id, inRepository(ci.p, rc.name))
+	case lp.LandsOnHumanMerge():
+		return fmt.Sprintf("%s lands by Branch%s, so your merge decides whether it lands, whatever its CI result", id, inRepository(ci.p, rc.name))
+	case localOnlyIn(ci.p, rc.name):
 		return fmt.Sprintf("%s lands in %s once merged, whatever its CI result: %s is local-only, with no Clone URL, so nothing is pushed there", id, rc.name, rc.name)
+	default:
+		return fmt.Sprintf("%s lands%s once merged, whatever its CI result: it lands by Merge without Push there", id, inRepository(ci.p, rc.name))
 	}
 	// Unreached: under a Repository's Merge + Push an Accepted Ticket
 	// whose CI failed or was cancelled there is on a CI item, which offers

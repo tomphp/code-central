@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/ciwatcher"
-	"github.com/tomoram/code-central/ciwatcher/ciwatchertest"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakegh"
+	"github.com/tomoram/code-central/watchers/watchertest"
 )
 
 // watching is a real Code Central with acme watching acme/web, and the
@@ -22,7 +22,7 @@ import (
 // ends or its stdin closes.
 type watching struct {
 	t   *testing.T
-	h   *ciwatchertest.Harness
+	h   *watchertest.Harness
 	srv *codecentraltest.Server
 	// stdin is the CI Watcher's stdin; closing it stops the loop.
 	stdin *io.PipeWriter
@@ -39,7 +39,7 @@ func newWatching(t *testing.T) *watching {
 	if _, err := srv.Core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Repository: "acme/web"}); err != nil {
 		t.Fatal(err)
 	}
-	return &watching{t: t, h: ciwatchertest.New(t), srv: srv}
+	return &watching{t: t, h: watchertest.New(t), srv: srv}
 }
 
 // start runs the loop, gh found on path or nowhere.

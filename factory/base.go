@@ -49,15 +49,18 @@ func (f *factory) stateOf(r *repository) *baseState {
 	return s
 }
 
-// held says why nothing touching r lands this poll under policy, the
-// Project's: its base is missing, or under r's Merge + Push isn't level
-// with the remote's. It is "" when r's base is ready.
-func (f *factory) held(r *repository, policy core.LandingPolicy) string {
+// held says why nothing touching r lands this poll under policies, the
+// Project's Repositories': it is local-only under Pull Request, its base
+// is missing, or under r's Merge + Push isn't level with the remote's. It
+// is "" when r's base is ready.
+func (f *factory) held(r *repository, policies core.LandingPolicies) string {
 	s := f.stateOf(r)
 	switch {
+	case r.localOnlyUnderPullRequest:
+		return "it is local-only under Pull Request"
 	case s.missing:
 		return "its base, " + f.baseOf(r) + ", is missing"
-	case r.policy(policy).PushesBase() && !s.current:
+	case r.policy(policies).PushesBase() && !s.current:
 		return "its base, " + f.baseOf(r) + ", isn't level with the remote's"
 	}
 	return ""
@@ -83,7 +86,7 @@ func (f *factory) locateBases(ctx context.Context, p core.ProjectView) {
 }
 
 // locateBase finds r's base on every poll, before anything is claimed or
-// landed: the local branch, else a local branch created at the Landing
+// landed: the local branch, else a local branch created at its Push
 // remote's (after a fetch of it), else the base is missing. A local-only
 // Repository's remotes, if it has any, aren't the Repository's, so it is
 // never fetched and its base is the local branch or missing (Spec
@@ -96,18 +99,18 @@ func (f *factory) locateBase(ctx context.Context, p core.ProjectView, r *reposit
 	s := f.stateOf(r)
 	base := f.baseOf(r)
 	ref := "refs/heads/" + base
-	localOnly := r.view().LocalOnly()
+	localOnly, remote := r.localOnly, r.remote
 	tip, err := r.git.commit(ref)
-	if err != nil && !localOnly && r.git.hasRemote(p.Landing.Remote) {
-		if out, ferr := r.git.fetch(ctx, p.Landing.Remote); ferr != nil {
+	if err != nil && !localOnly && r.git.hasRemote(remote) {
+		if out, ferr := r.git.fetch(ctx, remote); ferr != nil {
 			if ctx.Err() == nil {
-				f.printf("warning: can't fetch %s to look for the base, %s%s: %s", p.Landing.Remote, base, r.where(), firstLine(out))
+				f.printf("warning: can't fetch %s to look for the base, %s%s: %s", remote, base, r.where(), firstLine(out))
 			}
-		} else if theirs, rerr := r.git.commit("refs/remotes/" + p.Landing.Remote + "/" + base); rerr == nil {
+		} else if theirs, rerr := r.git.commit("refs/remotes/" + remote + "/" + base); rerr == nil {
 			if _, berr := f.gitOut(r.dir, "branch", "--no-track", base, theirs); berr != nil {
-				f.printf("warning: can't create the base, %s, from %s/%s%s: %v", base, p.Landing.Remote, base, r.where(), berr)
+				f.printf("warning: can't create the base, %s, from %s/%s%s: %v", base, remote, base, r.where(), berr)
 			} else {
-				f.printf("base: created %s at %s from %s/%s%s", base, short(theirs), p.Landing.Remote, base, r.where())
+				f.printf("base: created %s at %s from %s/%s%s", base, short(theirs), remote, base, r.where())
 				tip, err = theirs, nil
 			}
 		}
@@ -115,12 +118,14 @@ func (f *factory) locateBase(ctx context.Context, p core.ProjectView, r *reposit
 	if err != nil {
 		if !s.missing {
 			switch {
+			case r.home && localOnly:
+				f.printf("warning: the base, %s, doesn't exist here, and this repository is local-only: nothing lands and no branch is cut until you create it or change the Base branch in Project Options", base)
 			case r.home:
-				f.printf("warning: the base, %s, exists neither here nor on %s: nothing lands and no branch is cut until you create it or change the Base branch in Project Options", base, p.Landing.Remote)
+				f.printf("warning: the base, %s, exists neither here nor on %s: nothing lands and no branch is cut until you create it or change the Base branch in Project Options", base, remote)
 			case localOnly:
 				f.printf("warning: the base, %s, doesn't exist in Repository %s, which is local-only: nothing touching it lands and no branch is cut until you create it or change its Base in Project Options", base, r.name)
 			default:
-				f.printf("warning: the base, %s, exists neither in Repository %s nor on its %s: nothing touching it lands and no branch is cut until you create it or change its Base in Project Options", base, r.name, p.Landing.Remote)
+				f.printf("warning: the base, %s, exists neither in Repository %s nor on its %s: nothing touching it lands and no branch is cut until you create it or change its Base in Project Options", base, r.name, remote)
 			}
 		}
 		s.missing = true
@@ -137,15 +142,16 @@ func (f *factory) locateBase(ctx context.Context, p core.ProjectView, r *reposit
 	if r.home {
 		f.checkMCP(base)
 	}
-	if !r.policy(p.LandingPolicy()).KeepsBaseLevel() {
+	if localOnly || !r.policy(p.LandingPolicies()).KeepsBaseLevel() {
 		// Where the Factory keeps the base level, syncing it reports it.
-		// Elsewhere it never diverges.
+		// Elsewhere, a local-only Repository's included, it never
+		// diverges.
 		s.diverged = false
-		remote := tip
-		if theirs, rerr := r.git.commit("refs/remotes/" + p.Landing.Remote + "/" + base); rerr == nil && !localOnly {
-			remote = theirs
+		theirs := tip
+		if t, rerr := r.git.commit("refs/remotes/" + remote + "/" + base); rerr == nil && !localOnly {
+			theirs = t
 		}
-		f.reportBaseState(ctx, r, core.ReportBaseInput{State: core.BaseCurrent, Local: tip, Remote: remote})
+		f.reportBaseState(ctx, r, core.ReportBaseInput{State: core.BaseCurrent, Local: tip, Remote: theirs})
 	}
 }
 

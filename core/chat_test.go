@@ -11,7 +11,7 @@ import (
 // The Factory Status watch settles Conversations too: a reply whose
 // Factory goes Offline with no write ends failed on the tick, and the UI
 // hears of it without asking. The Chat operations' own cases are in
-// frontdoor/chat_doors_test.go.
+// server/chat_doors_test.go.
 func TestTheWatchFailsAReplyWhoseFactoryWentOfflineAndSaysSo(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")

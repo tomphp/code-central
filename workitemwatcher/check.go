@@ -11,6 +11,7 @@ import (
 	"github.com/tomoram/code-central/azdo"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
+	"github.com/tomoram/code-central/ratelimit"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/watchers"
 )
@@ -49,7 +50,7 @@ func Check(ctx context.Context, in core.AzureBoardsCheckInput, env gh.Env) core.
 		err = q.c.CheckTagWrite(ctx, q.ids[0])
 		r = writeProblem(in, err)
 	}
-	var limit *watchers.RateLimitError
+	var limit *ratelimit.Error
 	if errors.As(err, &limit) {
 		return limit.CheckResult(time.Now())
 	}

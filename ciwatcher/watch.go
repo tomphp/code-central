@@ -14,6 +14,7 @@ import (
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
+	"github.com/tomoram/code-central/ratelimit"
 	"github.com/tomoram/code-central/watchers"
 )
 
@@ -162,7 +163,7 @@ type pollResult struct {
 	// reports Watching; a poll that finds an error reports it itself.
 	reachable bool
 	// limit is the CI Provider's rate limit, if it refused a call for it.
-	limit *watchers.RateLimitError
+	limit *ratelimit.Error
 }
 
 // target is one watched Repository as a poll watches it: its Name as
@@ -176,10 +177,14 @@ type target struct {
 	reruns     []core.CIRerun
 }
 
-// targets are watch's watched Repositories, the Home Repository first.
+// targets are watch's watched Repositories, the Home Repository first
+// unless it is Not watched.
 func targets(watch core.CIWatch) []target {
-	out := []target{{name: watch.Project, waiting: watch.Waiting, reruns: watch.Reruns,
-		in: core.CICheckInput{Provider: watch.Provider, Repository: watch.Repository, ProjectURL: watch.ProjectURL, PATEnv: watch.PATEnv, GHPath: watch.GHPath}}}
+	var out []target
+	if !watch.NotWatched {
+		out = append(out, target{name: watch.Project, waiting: watch.Waiting, reruns: watch.Reruns,
+			in: core.CICheckInput{Provider: watch.Provider, Repository: watch.Repository, ProjectURL: watch.ProjectURL, PATEnv: watch.PATEnv, GHPath: watch.GHPath}})
+	}
 	for _, r := range watch.Repositories {
 		out = append(out, target{repo: r.Name, name: r.Name, waiting: r.Waiting, reruns: r.Reruns,
 			in: core.CICheckInput{Provider: r.Provider, Repository: r.Repository, ProjectURL: r.ProjectURL, PATEnv: watch.PATEnv, GHPath: watch.GHPath}})
@@ -233,7 +238,7 @@ func (w *watcher) poll(ctx context.Context) (res pollResult) {
 // reached, then carries out its Re-run requests, reports the runs of its
 // waiting commits and, for runs on its CI Rules' branches, fires them. It
 // returns the problem when its CI Provider can't be reached, and a
-// *watchers.RateLimitError when it was rate-limited.
+// *ratelimit.Error when it was rate-limited.
 func (w *watcher) pollTarget(ctx context.Context, watch core.CIWatch, t target) (core.WatcherCheckResult, error) {
 	p, bad := w.provider(t.repo, t.in)
 	if bad != nil {
@@ -272,7 +277,7 @@ func (w *watcher) rerunFailed(ctx context.Context, p Provider, repo string, reru
 			continue
 		}
 		err := p.RerunFailedJobs(ctx, r.ID)
-		var limit *watchers.RateLimitError
+		var limit *ratelimit.Error
 		if errors.As(err, &limit) {
 			return limit
 		}
@@ -291,10 +296,10 @@ func (w *watcher) rerunFailed(ctx context.Context, p Provider, repo string, reru
 // Repository repo, fetches the jobs of those that changed, and reports
 // them in repo, tracked against the commit's Ticket. A rate limit stops
 // it calling the CI Provider: it reports what changed so far and returns
-// the *watchers.RateLimitError.
+// the *ratelimit.Error.
 func (w *watcher) reportRuns(ctx context.Context, p Provider, repo string, waiting []core.CIWaitingCommit) error {
 	var changed []Run
-	var limit *watchers.RateLimitError
+	var limit *ratelimit.Error
 list:
 	for _, c := range waiting {
 		runs, err := p.RunsForCommit(ctx, c.Commit, c.PullRequest)

@@ -589,43 +589,55 @@ func TestUnderMergeAndPushAnInReviewTicketMergedByHandLandsOnceTheBaseIsPushed(t
 	}
 }
 
-func TestAPushRemoteThatGoesMissingHoldsLandingWithAWarningUntilFixed(t *testing.T) {
+// homeLocalOnly reports whether the Project lists the Home as local-only.
+func (w *landWorld) homeLocalOnly() bool {
+	w.t.Helper()
+	p, err := w.human.GetProject(context.Background(), "acme")
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	return p.Repositories[0].LocalOnly
+}
+
+func TestAMissingHomePushRemoteIsReportedAsLocalOnlyAndStopsNothing(t *testing.T) {
 	t.Parallel()
 	w := newLandWorld(t)
-	w.repo.addRemote("origin")
+	origin := w.repo.addRemote("origin")
 	w.setLanding(store.LandingMerge, true, "nowhere")
 	id, _ := w.accepted("Add a feature")
 	reviewed, _ := w.reviewed("Merged by hand")
-	base := w.repo.mergeByHand(reviewed)
+	w.repo.mergeByHand(reviewed)
 
 	w.poll()
-	w.poll()
-	if got := w.lines(`warning: nothing lands until this is fixed: Push names the remote "nowhere", which this repository doesn't have`); got != 1 {
-		t.Errorf("want one warning over two polls, got %d in %q", got, w.out)
-	}
-	if s := w.ticket(id).State; s != store.Accepted {
-		t.Errorf("%s is %s, want it held Accepted", id, s)
-	}
-	if s := w.ticket(reviewed).State; s != store.InReview {
-		t.Errorf("%s is %s, want the hand merge held In Review", reviewed, s)
-	}
-	if w.repo.tip("refs/heads/main") != base {
-		t.Error("main moved while the Push remote was missing")
-	}
 
-	w.setLanding(store.LandingMerge, true, "origin")
-	w.poll()
+	if !w.homeLocalOnly() {
+		t.Fatal("the Home isn't local-only, though its clone has no remote nowhere")
+	}
 	for _, tk := range []string{id, reviewed} {
 		if s := w.ticket(tk).State; s != store.Done {
-			t.Errorf("%s is %s, want it landed once the remote is back", tk, s)
+			t.Errorf("%s is %s, want it landed on merge, with nothing pushed", tk, s)
 		}
 	}
+	if len(origin.refs) != 0 || strings.Contains(w.out.String(), "nothing lands") {
+		t.Errorf("origin holds %v and the lines say %q, want nothing pushed and nothing stopped", origin.refs, w.out)
+	}
 
-	// Missing again after being back: warned of again.
+	// Renamed to one its clone has: reported, and pushed again.
+	w.setLanding(store.LandingMerge, true, "origin")
+	again, _ := w.accepted("Add another feature")
+	w.poll()
+	if w.homeLocalOnly() {
+		t.Fatal("the Home is local-only, though its clone has origin")
+	}
+	if s := w.ticket(again).State; s != store.Done || w.repo.remoteTip("origin", "main") != w.repo.tip("refs/heads/main") {
+		t.Errorf("%s is %s and origin's main at %q, want it landed with main pushed", again, s, w.repo.remoteTip("origin", "main"))
+	}
+
+	// Gone while the Home is pushed: reported once more.
 	w.repo.removeRemote("origin")
 	w.poll()
-	if got := w.lines(`Push names the remote "origin"`); got != 1 {
-		t.Errorf("want a warning once origin goes missing after being back, got %d in %q", got, w.out)
+	if !w.homeLocalOnly() {
+		t.Fatal("the Home isn't local-only, though origin has gone from its clone")
 	}
 }
 

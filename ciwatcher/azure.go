@@ -16,8 +16,8 @@ import (
 	"github.com/tomoram/code-central/azdo"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
+	"github.com/tomoram/code-central/ratelimit"
 	"github.com/tomoram/code-central/store"
-	"github.com/tomoram/code-central/watchers"
 )
 
 // AzurePipelines is the Azure Pipelines CI Provider for one Azure DevOps
@@ -36,7 +36,7 @@ type AzurePipelines struct {
 }
 
 // CheckAccess checks the PAT variable is set, reads the project, and
-// lists one build. Azure DevOps throttling it is a *watchers.RateLimitError,
+// lists one build. Azure DevOps throttling it is a *ratelimit.Error,
 // not a problem. The execute scope can't be confirmed without retrying a
 // run, so it isn't checked.
 func (a *AzurePipelines) CheckAccess(ctx context.Context) (core.WatcherCheckResult, error) {
@@ -60,7 +60,7 @@ func (a *AzurePipelines) CheckAccess(ctx context.Context) (core.WatcherCheckResu
 
 // refused is the check's answer to err from a call.
 func (a *AzurePipelines) refused(err error) (core.WatcherCheckResult, error) {
-	var limit *watchers.RateLimitError
+	var limit *ratelimit.Error
 	switch {
 	case errors.As(err, &limit):
 		return core.WatcherCheckResult{}, limit

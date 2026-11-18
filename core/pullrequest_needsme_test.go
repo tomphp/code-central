@@ -20,7 +20,9 @@ func (f fixture) withCITracking(t *testing.T) {
 	t.Helper()
 	err := f.store.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
-		p.CI = store.CI{Tracking: true, Provider: store.CIGitHubActions, Repository: "acme/web", PushRemoteURL: p.CI.PushRemoteURL}
+		url := p.CI.PushRemoteURL
+		p.CI = trackingOn("acme/web")
+		p.CI.PushRemoteURL = url
 		return w.PutProject(p)
 	})
 	if err != nil {

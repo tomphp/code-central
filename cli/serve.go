@@ -16,11 +16,11 @@ import (
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/events"
-	"github.com/tomoram/code-central/frontdoor"
 	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/issuewatcher"
 	"github.com/tomoram/code-central/notify"
 	"github.com/tomoram/code-central/pullrequestwatcher"
+	"github.com/tomoram/code-central/server"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/usage"
 	"github.com/tomoram/code-central/watchers"
@@ -179,7 +179,7 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 	go c.WatchFactoryStatus(ctx, factoryTicker.C, func(project string) {
 		c.Events().Publish(events.Event{Type: events.ProjectChanged, Project: project})
 	})
-	handler := frontdoor.Versioned(frontdoor.Handler(c, web.Handler(), e.Stderr, bindHosts...), e.version())
+	handler := server.Versioned(server.Handler(c, web.Handler(), e.Stderr, bindHosts...), e.version())
 
 	bound := make([]string, 0, len(listeners))
 	for _, l := range listeners {

@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tomoram/code-central/watchers"
+	"github.com/tomoram/code-central/ratelimit"
 )
 
 // APIVersion is the REST API version every call pins.
@@ -263,7 +263,7 @@ func (c *Client) refusal(resp *http.Response, data []byte, method, rawURL string
 	switch {
 	case status == http.StatusTooManyRequests,
 		status == http.StatusServiceUnavailable && resp.Header.Get("Retry-After") != "":
-		limit := &watchers.RateLimitError{System: "Azure DevOps", Message: fmt.Sprintf("%s answered %d", what, status)}
+		limit := &ratelimit.Error{System: "Azure DevOps", Message: fmt.Sprintf("%s answered %d", what, status)}
 		if secs, err := strconv.Atoi(strings.TrimSpace(resp.Header.Get("Retry-After"))); err == nil && secs > 0 {
 			limit.RetryAfter = time.Duration(secs) * time.Second
 		}
@@ -282,5 +282,5 @@ func (c *Client) refusal(resp *http.Response, data []byte, method, rawURL string
 	case status >= 200 && status < 300:
 		return nil
 	}
-	return fmt.Errorf("Azure DevOps answered %s with %d: %s", what, status, watchers.FirstLine(string(data)))
+	return fmt.Errorf("Azure DevOps answered %s with %d: %s", what, status, ratelimit.FirstLine(string(data)))
 }

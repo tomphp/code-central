@@ -15,8 +15,8 @@ import (
 
 	"github.com/tomoram/code-central/azdo"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ratelimit"
 	"github.com/tomoram/code-central/store"
-	"github.com/tomoram/code-central/watchers"
 )
 
 // Integration is the name every Link the Work Item Watcher makes carries.
@@ -47,7 +47,7 @@ func workItemID(org, linkID string) (int, bool) {
 // leaves (leave). It returns Azure DevOps' rate limit, if it refused a
 // call for it; anything else that goes wrong is logged and tried again on
 // the next poll.
-func (cfg Config) mirror(ctx context.Context, watch core.WorkItemWatch, q queryRun) *watchers.RateLimitError {
+func (cfg Config) mirror(ctx context.Context, watch core.WorkItemWatch, q queryRun) *ratelimit.Error {
 	linked := map[string]bool{}
 	for _, id := range watch.Linked {
 		linked[id] = true
@@ -83,7 +83,7 @@ func (cfg Config) mirror(ctx context.Context, watch core.WorkItemWatch, q queryR
 // when its work item, read alone, can't be: Azure DevOps answers one that
 // was deleted, or that the PAT may not read, as not found, or refuses it.
 // One of another organization than q's is out of scope without reading.
-func (cfg Config) leave(ctx context.Context, q queryRun, issues []core.IncomingIssue) *watchers.RateLimitError {
+func (cfg Config) leave(ctx context.Context, q queryRun, issues []core.IncomingIssue) *ratelimit.Error {
 	for _, i := range issues {
 		id, ours := workItemID(q.org, i.Link.ID)
 		if ours && slices.Contains(q.ids, id) {
@@ -157,8 +157,8 @@ func (cfg Config) setExternalState(ctx context.Context, i core.IncomingIssue, st
 // limitOrLog is err, from doing what, as Azure DevOps' rate limit, when
 // it is one; any other error is logged, unless the poll is stopping, and
 // is nil.
-func (cfg Config) limitOrLog(ctx context.Context, what string, err error) *watchers.RateLimitError {
-	var limit *watchers.RateLimitError
+func (cfg Config) limitOrLog(ctx context.Context, what string, err error) *ratelimit.Error {
+	var limit *ratelimit.Error
 	if errors.As(err, &limit) {
 		return limit
 	}

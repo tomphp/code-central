@@ -246,7 +246,7 @@ var handlers = map[string]handlerFunc{
 }
 
 // Register adds the HTTP API under /api/ to the service's one mux. The
-// request's Actor is already in its context (frontdoor.Guard reads the
+// request's Actor is already in its context (server.Guard reads the
 // Actor header); without one it is agent.
 func Register(mux *http.ServeMux, c *core.Core) {
 	all := map[string]handlerFunc{WaitPath: wait, TranscriptPath: transcript, UsagePath: usageRead, SessionUsagePath: sessionUsageRead, CIOverviewPath: ciOverviewRead}
