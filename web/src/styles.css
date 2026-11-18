@@ -525,25 +525,25 @@ a.link-badge:hover { text-decoration: underline; }
 .map-graph svg { display: block; }
 .map-edge { fill: none; stroke: var(--muted); stroke-width: 1.2; }
 .map-arrow { fill: var(--muted); }
-.map-node { box-sizing: border-box; height: 100%; display: flex; flex-direction: column; gap: 3px; padding: 5px 8px; background: var(--surface); border: 1.5px solid var(--mn); border-radius: 6px; font-size: 12px; overflow: hidden; }
+.map-node-slot { height: 100%; display: flex; align-items: center; }
+.map-node { box-sizing: border-box; width: 100%; display: flex; flex-direction: column; gap: 3px; padding: 5px 8px; background: var(--surface); border: 1.5px solid var(--mn); border-radius: 6px; font-size: 12px; overflow: hidden; }
 /* A Map's Tickets are stations on its network: each node is ringed, and
    its type carries a station, in its progress colour. */
-.map-node { --mn: var(--border); }
+.map-node { --mn: var(--st, var(--border)); }
 .map-node-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
 .map-node-type { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .map-node-type::before { content: ""; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; border: 3px solid var(--mn); background: var(--surface); flex: none; }
 .map-node .map-node-title { color: var(--text); text-align: left; font-size: 12px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .map-node .map-node-title[aria-current="true"] { font-weight: 600; }
-.map-node.progress-done { --mn: var(--r-review); }
-.map-node.progress-running { --mn: var(--accent); }
-.map-node.progress-queued { --mn: var(--accent); border-style: dashed; }
-.map-node.progress-needs { --mn: var(--rc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--rc) 22%, transparent); }
+.map-node.progress-queued { border-style: dashed; }
+.map-node.progress-needs { box-shadow: 0 0 0 3px color-mix(in srgb, var(--rc, var(--st)) 28%, transparent); }
 .map-node.progress-waiting { color: var(--muted); }
 .map-node.cancelled { opacity: .55; }
 .map-node.cancelled .map-node-title { text-decoration: line-through; }
 .map-start { align-self: flex-start; padding: 1px 10px; font-size: 11.5px; margin-top: auto; }
-.map-fog { box-sizing: border-box; width: 100%; height: 100%; border: 1px dashed var(--border); border-radius: 22px; background: var(--surface-2); color: var(--muted); font: 12px system-ui; cursor: pointer; opacity: .7; }
-.map-fog:hover, .map-fog[aria-expanded="true"] { opacity: 1; }
+.map-fog { box-sizing: border-box; width: 100%; height: 100%; border: 1px dashed var(--border); border-radius: 6px; background: var(--surface-2); color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.map-fog { border-color: color-mix(in srgb, var(--border) 70%, transparent); }
+.map-fog:hover, .map-fog[aria-expanded="true"] { border-color: var(--muted); }
 .map-side { flex: 1 1 12rem; font-size: 12.5px; }
 .map-details { margin: 0 0 8px; }
 .map-details summary { cursor: pointer; font-weight: 600; }
