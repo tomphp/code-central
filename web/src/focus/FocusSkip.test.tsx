@@ -51,12 +51,13 @@ const skip = async (w: World) => {
 };
 
 describe("Skip", () => {
-  it("sits next to Answer, Dismiss and Prototype this on a Question Focus Item", async () => {
+  it("sits under the answer buttons on a Question Focus Item, not among them", async () => {
     const { w } = await waiting();
     await renderApp(w);
     expect(heading("Which colour?")).toBeInTheDocument();
     const buttons = within(focus()).getByRole("button", { name: "Answer" }).parentElement!;
-    expect(within(buttons).getAllByRole("button").map((b) => b.textContent)).toEqual(["Answer", "Dismiss", "Prototype this", "Skip"]);
+    expect(within(buttons).getAllByRole("button").map((b) => b.textContent)).toEqual(["Answer", "Dismiss", "Prototype this"]);
+    expect(within(buttons.nextElementSibling as HTMLElement).getByRole("button", { name: "Skip" })).toBeInTheDocument();
   });
 
   it("sits with a Ticket Focus Item's panel buttons", async () => {
