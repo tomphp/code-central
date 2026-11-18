@@ -52,8 +52,10 @@ const connectTimeout = 10 * time.Second
 
 // OpenPostgres opens the Postgres Store at url: a postgres:// URL, or a
 // key=value string, as pgx reads them, holding the credential. It creates
-// the schema if needed, and refuses a database at another format by name.
-// It takes no lock: the Store is shared by design.
+// the schema if needed, and refuses a database at another format by name:
+// a newer one as every Kind does, and an older one until a Postgres
+// Store's Migrations land (Ticket code-central-1049). It takes no lock:
+// the Store is shared by design.
 func OpenPostgres(url string) (*SQLStore, error) {
 	cfg, addr, err := parsePostgres(url)
 	if err != nil {
@@ -69,7 +71,11 @@ func OpenPostgres(url string) (*SQLStore, error) {
 	db.SetMaxIdleConns(4)
 	s := &SQLStore{db: db, d: postgres, path: addr, url: url}
 	s.usage = &sqlUsage{db: db, d: postgres}
-	if err := prepare(context.Background(), db, postgres, Format, addr); err != nil {
+	older, err := prepare(context.Background(), db, postgres, Format, addr)
+	if err == nil && older > 0 {
+		err = fmt.Errorf("%s: format %d: this code-central cannot yet migrate a postgres store (it understands format %d)", addr, older, Format)
+	}
+	if err != nil {
 		s.Close()
 		var connect *pgconn.ConnectError
 		if errors.As(err, &connect) {

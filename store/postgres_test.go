@@ -52,6 +52,23 @@ func TestPostgresRefusesAnUnknownFormat(t *testing.T) {
 	}
 }
 
+// A Postgres Store has no Migrations yet (Ticket code-central-1049): one
+// at an older format is refused by name, and left as it is.
+func TestPostgresRefusesAnOlderFormatUntilItMigrates(t *testing.T) {
+	url := storetest.FreshPostgres(t)
+	s := openPostgres(t, url)
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store.SetPostgresFormat(t, url, store.Format-1)
+	_, err := store.OpenPostgres(url)
+	if err == nil || !strings.Contains(err.Error(), "cannot yet migrate") || !strings.Contains(err.Error(), s.Path()) {
+		t.Fatalf("open at an older format: %v", err)
+	}
+	store.SetPostgresFormat(t, url, store.Format)
+	openPostgres(t, url) // the refusal changed nothing
+}
+
 // Where a Postgres Store is shows as its host, port and database, never
 // the credential its URL holds.
 func TestAPostgresLocationShowsNoCredential(t *testing.T) {

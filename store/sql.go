@@ -77,16 +77,19 @@ type SQLStore struct {
 	url   string
 	lock  *storeLock
 	usage usage.Store
+	// migrated is the Migration this open ran, if any.
+	migrated *Migration
 }
 
 // Path is where the database is: the SQLite file, or the Postgres
 // address (host:port/database).
 func (s *SQLStore) Path() string { return s.path }
 
-// Migrated is the migration Open ran: none yet, a database Store at an
-// older format is refused until its Migrations land (Tickets
-// code-central-1047 and code-central-1049).
-func (s *SQLStore) Migrated() *Migration { return nil }
+// Migrated is the Migration the open ran, or nil if the database was
+// already at this build's format. A Postgres Store never migrates yet:
+// one at an older format is refused until its Migrations land (Ticket
+// code-central-1049).
+func (s *SQLStore) Migrated() *Migration { return s.migrated }
 
 // Close closes the database and releases the Store's lock.
 func (s *SQLStore) Close() error {
@@ -258,19 +261,21 @@ func (d dialect) schema() []string {
 	}
 }
 
-// prepare creates the schema and checks the format, in one transaction
-// on one connection, behind the dialect's schema lock: a fresh database
-// takes format, and one at any other refuses to open, naming both. The
-// transaction reads what is committed as it goes, so a service that
-// waited for another's to create the schema sees it.
-func prepare(ctx context.Context, db *sql.DB, d dialect, format int, what string) (err error) {
+// prepare checks the database's format and creates its schema, in one
+// transaction on one connection, behind the dialect's schema lock. A
+// fresh database takes format, and one at format is ready. One at an
+// older format is left as it is, and its format returned as older for its
+// Migration to start from; one at a newer or unknown format refuses to
+// open, naming both. The transaction reads what is committed as it goes,
+// so a service that waited for another's to create the schema sees it.
+func prepare(ctx context.Context, db *sql.DB, d dialect, format int, what string) (older int, err error) {
 	conn, err := db.Conn(ctx)
 	if err != nil {
-		return fmt.Errorf("%s: %w", what, err)
+		return 0, fmt.Errorf("%s: %w", what, err)
 	}
 	defer conn.Close()
 	if _, err := conn.ExecContext(ctx, "BEGIN"); err != nil {
-		return fmt.Errorf("%s: %w", what, err)
+		return 0, fmt.Errorf("%s: %w", what, err)
 	}
 	committed := false
 	defer func() {
@@ -278,34 +283,48 @@ func prepare(ctx context.Context, db *sql.DB, d dialect, format int, what string
 			conn.ExecContext(ctx, "ROLLBACK")
 		}
 	}()
-	stmts := d.schema()
-	if d.lockSchema != "" {
-		stmts = append([]string{d.lockSchema}, stmts...)
-	}
-	for _, stmt := range stmts {
-		if _, err := conn.ExecContext(ctx, stmt); err != nil {
+	commit := func() error {
+		if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
 			return fmt.Errorf("%s: %w", what, err)
 		}
+		committed = true
+		return nil
+	}
+	if d.lockSchema != "" {
+		if _, err := conn.ExecContext(ctx, d.lockSchema); err != nil {
+			return 0, fmt.Errorf("%s: %w", what, err)
+		}
+	}
+	schema := d.schema()
+	if _, err := conn.ExecContext(ctx, schema[0]); err != nil { // meta, which every format has
+		return 0, fmt.Errorf("%s: %w", what, err)
 	}
 	var stored string
 	err = conn.QueryRowContext(ctx, d.rebind(`SELECT value FROM meta WHERE key = 'format'`)).Scan(&stored)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
+	fresh := errors.Is(err, sql.ErrNoRows)
+	if err != nil && !fresh {
+		return 0, fmt.Errorf("%s: %w", what, err)
+	}
+	if !fresh {
+		f, err := strconv.Atoi(stored)
+		if err == nil && f >= 1 && f < format {
+			return f, commit()
+		}
+		if err != nil || f != format {
+			return 0, fmt.Errorf("%s: unknown format %s (this code-central understands format %d)", what, stored, format)
+		}
+	}
+	for _, stmt := range schema[1:] {
+		if _, err := conn.ExecContext(ctx, stmt); err != nil {
+			return 0, fmt.Errorf("%s: %w", what, err)
+		}
+	}
+	if fresh {
 		if _, err := conn.ExecContext(ctx, d.rebind(`INSERT INTO meta (key, value) VALUES ('format', ?)`), strconv.Itoa(format)); err != nil {
-			return fmt.Errorf("%s: %w", what, err)
-		}
-	case err != nil:
-		return fmt.Errorf("%s: %w", what, err)
-	default:
-		if f, err := strconv.Atoi(stored); err != nil || f != format {
-			return fmt.Errorf("%s: unknown format %s (this code-central understands format %d)", what, stored, format)
+			return 0, fmt.Errorf("%s: %w", what, err)
 		}
 	}
-	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
-		return fmt.Errorf("%s: %w", what, err)
-	}
-	committed = true
-	return nil
+	return 0, commit()
 }
 
 // placeholders is n comma-separated ? placeholders.
