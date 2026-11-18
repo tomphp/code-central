@@ -56,15 +56,16 @@ type SQLStore struct {
 	path  string
 	lock  *storeLock
 	usage usage.Store
+	// migrated is the Migration this open ran, if any.
+	migrated *Migration
 }
 
 // Path is where the database is.
 func (s *SQLStore) Path() string { return s.path }
 
-// Migrated is the migration Open ran: none yet, a database Store at an
-// older format is refused until its Migrations land (Ticket
-// code-central-1047).
-func (s *SQLStore) Migrated() *Migration { return nil }
+// Migrated is the Migration the open ran, or nil if the database was
+// already at this build's format.
+func (s *SQLStore) Migrated() *Migration { return s.migrated }
 
 // Close closes the database and releases the Store's lock.
 func (s *SQLStore) Close() error {
@@ -189,27 +190,41 @@ func (d dialect) schema() []string {
 	}
 }
 
-// prepare creates the schema and checks the format: a fresh database
-// takes format, and one at any other refuses to open, naming both.
-func prepare(ctx context.Context, db *sql.DB, d dialect, format int, what string) error {
-	for _, stmt := range d.schema() {
-		if _, err := db.ExecContext(ctx, stmt); err != nil {
-			return fmt.Errorf("%s: %w", what, err)
-		}
+// prepare checks the database's format and creates its schema. A fresh
+// database takes format, and one at format is ready. One at an older
+// format is left as it is, and its format returned as older for its
+// Migration to start from; one at a newer or unknown format refuses to
+// open, naming both.
+func prepare(ctx context.Context, db *sql.DB, d dialect, format int, what string) (older int, err error) {
+	schema := d.schema()
+	if _, err := db.ExecContext(ctx, schema[0]); err != nil { // meta, which every format has
+		return 0, fmt.Errorf("%s: %w", what, err)
 	}
 	var stored string
-	err := db.QueryRowContext(ctx, d.rebind(`SELECT value FROM meta WHERE key = 'format'`)).Scan(&stored)
-	if errors.Is(err, sql.ErrNoRows) {
+	err = db.QueryRowContext(ctx, d.rebind(`SELECT value FROM meta WHERE key = 'format'`)).Scan(&stored)
+	fresh := errors.Is(err, sql.ErrNoRows)
+	if err != nil && !fresh {
+		return 0, fmt.Errorf("%s: %w", what, err)
+	}
+	if !fresh {
+		f, err := strconv.Atoi(stored)
+		if err == nil && f >= 1 && f < format {
+			return f, nil
+		}
+		if err != nil || f != format {
+			return 0, fmt.Errorf("%s: unknown format %s (this code-central understands format %d)", what, stored, format)
+		}
+	}
+	for _, stmt := range schema[1:] {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return 0, fmt.Errorf("%s: %w", what, err)
+		}
+	}
+	if fresh {
 		_, err = db.ExecContext(ctx, d.rebind(`INSERT INTO meta (key, value) VALUES ('format', ?)`), strconv.Itoa(format))
-		return err
+		return 0, err
 	}
-	if err != nil {
-		return fmt.Errorf("%s: %w", what, err)
-	}
-	if f, err := strconv.Atoi(stored); err != nil || f != format {
-		return fmt.Errorf("%s: unknown format %s (this code-central understands format %d)", what, stored, format)
-	}
-	return nil
+	return 0, nil
 }
 
 // placeholders is n comma-separated ? placeholders.
