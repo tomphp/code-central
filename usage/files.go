@@ -31,8 +31,8 @@ func NewFiles(dir string) *Files { return &Files{dir: dir} }
 
 // The record types, each line's "type".
 const (
-	typeCall     = "mcp_call"
-	typeResponse = "model_response"
+	TypeCall     = "mcp_call"
+	TypeResponse = "model_response"
 )
 
 // callLine and responseLine are each record type's line of a file: its
@@ -53,9 +53,9 @@ func (f *Files) Append(project, day string, r Record) error {
 	var v any
 	switch {
 	case r.Call != nil:
-		v = callLine{typeCall, *r.Call}
+		v = callLine{TypeCall, *r.Call}
 	case r.Response != nil:
-		v = responseLine{typeResponse, *r.Response}
+		v = responseLine{TypeResponse, *r.Response}
 	default:
 		return errors.New("usage: a record holds neither a call nor a response")
 	}
@@ -119,9 +119,9 @@ func (f *Files) readFile(project, d string, out *Records) error {
 		}
 		var err error
 		switch line.Type {
-		case typeCall:
+		case TypeCall:
 			out.Calls, err = appendRecord(out.Calls, sc.Bytes())
-		case typeResponse:
+		case TypeResponse:
 			out.Responses, err = appendRecord(out.Responses, sc.Bytes())
 			if err == nil {
 				resp := &out.Responses[len(out.Responses)-1]

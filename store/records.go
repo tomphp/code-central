@@ -407,13 +407,19 @@ func decodeSpec(data []byte, n int) (domain.Spec, *LoadError) {
 	if field, err := decodeStrict(front, &f); err != nil {
 		return domain.Spec{}, &LoadError{Field: field, Msg: err.Error()}
 	}
+	return specOf(f, string(body), n)
+}
+
+// specOf is the Spec its file f holds, with the body, checked as a load
+// checks it. The returned LoadError names the field, not the file.
+func specOf(f specFront, body string, n int) (domain.Spec, *LoadError) {
 	if f.ID != n {
 		return domain.Spec{}, &LoadError{Field: "id", Msg: fmt.Sprintf("id %d does not match the file name", f.ID)}
 	}
 	if f.Title == "" {
 		return domain.Spec{}, &LoadError{Field: "title", Msg: "required"}
 	}
-	sp := domain.Spec{Number: n, Title: f.Title, Labels: f.Labels, Tags: f.Tags, Body: string(body)}
+	sp := domain.Spec{Number: n, Title: f.Title, Labels: f.Labels, Tags: f.Tags, Body: body}
 	var lerr *LoadError
 	if sp.Link, lerr = decodeLink(f.Link); lerr != nil {
 		return domain.Spec{}, lerr
@@ -436,6 +442,12 @@ func decodeTicket(data []byte, n int) (domain.Ticket, *LoadError) {
 	if field, err := decodeStrict(data, &f); err != nil {
 		return domain.Ticket{}, &LoadError{Field: field, Msg: err.Error()}
 	}
+	return ticketOf(f, n)
+}
+
+// ticketOf is the Ticket its file f holds, checked as a load checks it.
+// The returned LoadError names the field, not the file.
+func ticketOf(f ticketFile, n int) (domain.Ticket, *LoadError) {
 	t := domain.Ticket{
 		Number: n, Title: f.Title, State: domain.State(f.State), Spec: f.Spec, Labels: f.Labels, Tags: f.Tags,
 		BlockedBy: f.BlockedBy, Replacements: f.Replacements, AwaitingTriage: f.AwaitingTriage, SpecMergeTicket: f.SpecMergeTicket, Description: f.Description,
@@ -505,63 +517,101 @@ func decodeTicket(data []byte, n int) (domain.Ticket, *LoadError) {
 		}
 		t.SpecMerge = sm
 	}
-	for i, c := range f.Claims {
-		cl := domain.Claim{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, Model: c.Model, Effort: c.Effort, EndedBy: c.EndedBy}
-		field := fmt.Sprintf("claims[%d]", i)
-		if cl.ID == "" {
-			return domain.Ticket{}, &LoadError{Field: field + ".id", Msg: "required"}
-		}
-		if cl.Started, err = parseTime(c.Started); err != nil {
-			return domain.Ticket{}, &LoadError{Field: field + ".started", Msg: err.Error()}
-		}
-		if c.Ended != "" {
-			if cl.Ended, err = parseTime(c.Ended); err != nil {
-				return domain.Ticket{}, &LoadError{Field: field + ".ended", Msg: err.Error()}
-			}
-		}
-		t.Claims = append(t.Claims, cl)
+	if t.Claims, lerr = decodeClaims(f.Claims); lerr != nil {
+		return domain.Ticket{}, lerr
 	}
 	if t.Rounds, err = decodeRounds(f.Rounds); err != nil {
 		return domain.Ticket{}, err.(*LoadError)
 	}
-	for i, r := range f.FailureReports {
-		fr := domain.FailureReport{
-			Number: r.Number, Claim: r.Claim, SessionID: r.SessionID, WorkingDir: r.WorkingDir, ResumeCommand: r.ResumeCommand, Actor: r.Actor,
-			WhatBroke: r.WhatBroke, Why: r.Why, WhatToFix: r.WhatToFix, WhereWorkStands: r.WhereWorkStands,
-		}
-		if fr.Time, err = parseTime(r.Time); err != nil {
-			return domain.Ticket{}, &LoadError{Field: fmt.Sprintf("failure_reports[%d].time", i), Msg: err.Error()}
-		}
-		t.FailureReports = append(t.FailureReports, fr)
+	if t.FailureReports, lerr = decodeFailureReports(f.FailureReports); lerr != nil {
+		return domain.Ticket{}, lerr
 	}
-	for i, c := range f.Comments {
-		cm := domain.Comment{Number: c.Number, Actor: c.Actor, Claim: c.Claim, Body: c.Body}
-		if cm.Time, err = parseTime(c.Time); err != nil {
-			return domain.Ticket{}, &LoadError{Field: fmt.Sprintf("comments[%d].time", i), Msg: err.Error()}
-		}
-		t.Comments = append(t.Comments, cm)
+	if t.Comments, lerr = decodeComments(f.Comments); lerr != nil {
+		return domain.Ticket{}, lerr
 	}
-	for i, m := range f.Moves {
-		mv := domain.Move{From: domain.State(m.From), To: domain.State(m.To), Actor: m.Actor, Claim: m.Claim, Via: m.Via, Commit: m.Commit, Cause: domain.AutoAcceptCause(m.Cause)}
-		if mv.Cause != "" && !mv.Cause.Valid() {
-			return domain.Ticket{}, &LoadError{Field: fmt.Sprintf("moves[%d].cause", i), Msg: fmt.Sprintf("unknown auto-accept cause %q", m.Cause)}
-		}
-		field := fmt.Sprintf("moves[%d]", i)
-		if m.From != "" && !mv.From.Valid() {
-			return domain.Ticket{}, &LoadError{Field: field + ".from", Msg: fmt.Sprintf("unknown State %q", m.From)}
-		}
-		if !mv.To.Valid() {
-			return domain.Ticket{}, &LoadError{Field: field + ".to", Msg: fmt.Sprintf("unknown State %q", m.To)}
-		}
-		if mv.Time, err = parseTime(m.Time); err != nil {
-			return domain.Ticket{}, &LoadError{Field: field + ".time", Msg: err.Error()}
-		}
-		t.Moves = append(t.Moves, mv)
+	if t.Moves, lerr = decodeMoves(f.Moves); lerr != nil {
+		return domain.Ticket{}, lerr
 	}
 	if t.Edits, err = decodeEdits(f.Edits, ticketEditFields...); err != nil {
 		return domain.Ticket{}, err.(*LoadError)
 	}
 	return t, nil
+}
+
+// The History parts' decoders, each naming a bad field as claims[2].id.
+
+func decodeClaims(fs []claimFile) ([]domain.Claim, *LoadError) {
+	var out []domain.Claim
+	for i, c := range fs {
+		cl := domain.Claim{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, Model: c.Model, Effort: c.Effort, EndedBy: c.EndedBy}
+		field := fmt.Sprintf("claims[%d]", i)
+		if cl.ID == "" {
+			return nil, &LoadError{Field: field + ".id", Msg: "required"}
+		}
+		var err error
+		if cl.Started, err = parseTime(c.Started); err != nil {
+			return nil, &LoadError{Field: field + ".started", Msg: err.Error()}
+		}
+		if c.Ended != "" {
+			if cl.Ended, err = parseTime(c.Ended); err != nil {
+				return nil, &LoadError{Field: field + ".ended", Msg: err.Error()}
+			}
+		}
+		out = append(out, cl)
+	}
+	return out, nil
+}
+
+func decodeFailureReports(fs []failureReportFile) ([]domain.FailureReport, *LoadError) {
+	var out []domain.FailureReport
+	for i, r := range fs {
+		fr := domain.FailureReport{
+			Number: r.Number, Claim: r.Claim, SessionID: r.SessionID, WorkingDir: r.WorkingDir, ResumeCommand: r.ResumeCommand, Actor: r.Actor,
+			WhatBroke: r.WhatBroke, Why: r.Why, WhatToFix: r.WhatToFix, WhereWorkStands: r.WhereWorkStands,
+		}
+		var err error
+		if fr.Time, err = parseTime(r.Time); err != nil {
+			return nil, &LoadError{Field: fmt.Sprintf("failure_reports[%d].time", i), Msg: err.Error()}
+		}
+		out = append(out, fr)
+	}
+	return out, nil
+}
+
+func decodeComments(fs []commentFile) ([]domain.Comment, *LoadError) {
+	var out []domain.Comment
+	for i, c := range fs {
+		cm := domain.Comment{Number: c.Number, Actor: c.Actor, Claim: c.Claim, Body: c.Body}
+		var err error
+		if cm.Time, err = parseTime(c.Time); err != nil {
+			return nil, &LoadError{Field: fmt.Sprintf("comments[%d].time", i), Msg: err.Error()}
+		}
+		out = append(out, cm)
+	}
+	return out, nil
+}
+
+func decodeMoves(fs []moveFile) ([]domain.Move, *LoadError) {
+	var out []domain.Move
+	for i, m := range fs {
+		mv := domain.Move{From: domain.State(m.From), To: domain.State(m.To), Actor: m.Actor, Claim: m.Claim, Via: m.Via, Commit: m.Commit, Cause: domain.AutoAcceptCause(m.Cause)}
+		field := fmt.Sprintf("moves[%d]", i)
+		if mv.Cause != "" && !mv.Cause.Valid() {
+			return nil, &LoadError{Field: field + ".cause", Msg: fmt.Sprintf("unknown auto-accept cause %q", m.Cause)}
+		}
+		if m.From != "" && !mv.From.Valid() {
+			return nil, &LoadError{Field: field + ".from", Msg: fmt.Sprintf("unknown State %q", m.From)}
+		}
+		if !mv.To.Valid() {
+			return nil, &LoadError{Field: field + ".to", Msg: fmt.Sprintf("unknown State %q", m.To)}
+		}
+		var err error
+		if mv.Time, err = parseTime(m.Time); err != nil {
+			return nil, &LoadError{Field: field + ".time", Msg: err.Error()}
+		}
+		out = append(out, mv)
+	}
+	return out, nil
 }
 
 // decodeCIRuns decodes ci-runs.yaml, checking each run's status and
@@ -571,6 +621,12 @@ func decodeCIRuns(data []byte) ([]domain.CIRun, *LoadError) {
 	if field, err := decodeStrict(data, &f); err != nil {
 		return nil, &LoadError{Field: field, Msg: err.Error()}
 	}
+	return ciRunsOf(f)
+}
+
+// ciRunsOf is the CI Runs their file f holds, checked as a load checks
+// them.
+func ciRunsOf(f ciRunsFile) ([]domain.CIRun, *LoadError) {
 	var out []domain.CIRun
 	for i, rf := range f.Runs {
 		field := fmt.Sprintf("runs[%d]", i)
@@ -729,102 +785,152 @@ func encode(record any, project string) (string, []byte, error) {
 	switch r := record.(type) {
 	case domain.Project:
 		rel = filepath.Join("projects", r.Key, "project.yaml")
-		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI),
-			GitHubIssues: encodeGitHubIssues(r.GitHubIssues), AzureBoards: encodeAzureBoards(r.AzureBoards), Models: encodeModels(r.Models),
-			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), FocusKindsOff: r.FocusKindsOff, CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec, SmallChangesSpec: r.SmallChangesSpec, RetrosSpec: r.RetrosSpec, AutoAccept: encodeAutoAccept(r.AutoAccept),
-			Repositories: encodeRepositories(r.Repositories)})
+		data, err = encodeYAML(projectFileOf(r))
 	case domain.Options:
 		rel = "options.yaml"
-		f := optionsFile{FocusClear: string(r.FocusClear), FocusPopup: string(r.FocusPopup), GHPath: r.GHPath}
-		if r.LimitsPopup != domain.DefaultOptions().LimitsPopup {
-			f.LimitsPopup = string(r.LimitsPopup)
-		}
-		data, err = encodeYAML(f)
+		data, err = encodeYAML(optionsFileOf(r))
 	case domain.Spec:
 		rel = filepath.Join("projects", project, "specs", strconv.Itoa(r.Number)+".md")
 		var front []byte
-		front, err = encodeYAML(specFront{ID: r.Number, Title: r.Title, Labels: r.Labels, Tags: r.Tags, Link: encodeLink(r.Link), Created: formatTime(r.Created), Updated: formatTime(r.Updated), Edits: encodeEdits(r.Edits)})
+		front, err = encodeYAML(specFrontOf(r))
 		data = append(append(append([]byte("---\n"), front...), "---\n"...), r.Body...)
 	case domain.Ticket:
 		rel = filepath.Join("projects", project, "tickets", strconv.Itoa(r.Number)+".yaml")
-		f := ticketFile{
-			Title: r.Title, State: string(r.State), Spec: r.Spec, Labels: r.Labels, Tags: r.Tags,
-			BlockedBy: r.BlockedBy, Replacements: r.Replacements, Link: encodeLink(r.Link), AwaitingTriage: r.AwaitingTriage,
-			SpecMergeTicket: r.SpecMergeTicket, Created: formatTime(r.Created), Updated: formatTime(r.Updated), Description: r.Description,
-			Branch: r.Branch, Commit: r.Commit, Recommendation: string(r.Recommendation),
-			Claims: []claimFile{}, Rounds: []roundFile{}, FailureReports: []failureReportFile{},
-			Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),
-		}
-		for _, cr := range r.Repositories {
-			cf := changedRepoFile{Name: cr.Name, Branch: cr.Branch, Commit: cr.Commit}
-			if cr.Landed != nil {
-				cf.Landed = &landedFile{Commit: cr.Landed.Commit, Time: formatTime(cr.Landed.Time)}
-			}
-			f.Repositories = append(f.Repositories, cf)
-		}
-		for _, pc := range r.PushedCommits {
-			f.PushedCommits = append(f.PushedCommits, pushedCommitFile{Repository: pc.Repository, Commit: pc.Commit, Branch: pc.Branch, Pushed: formatTime(pc.Pushed)})
-		}
-		for _, pr := range r.PullRequests {
-			pf := pullRequestFile{Repository: pr.Repository, Number: pr.Number, Link: pr.Link, State: string(pr.State), MergeCommit: pr.MergeCommit, Close: pr.Close}
-			if pr.Repository == "" && f.PullRequest == nil {
-				f.PullRequest = &pf
-			} else {
-				f.PullRequests = append(f.PullRequests, pf)
-			}
-		}
-		if r.SpecMerge != nil {
-			f.SpecMerge = &specMergeFile{Repository: r.SpecMerge.Repository, Commit: r.SpecMerge.Commit, Merged: formatTime(r.SpecMerge.Merged)}
-		}
-		for _, c := range r.Claims {
-			cf := claimFile{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, Model: c.Model, Effort: c.Effort, Started: formatTime(c.Started), EndedBy: c.EndedBy}
-			if !c.Ended.IsZero() {
-				cf.Ended = formatTime(c.Ended)
-			}
-			f.Claims = append(f.Claims, cf)
-		}
-		for _, rd := range r.Rounds {
-			rf := roundFile{Number: rd.Number, Claim: rd.Claim, SessionID: rd.SessionID, Posted: formatTime(rd.Posted), Questions: []questionFile{}}
-			for _, q := range rd.Questions {
-				qf := questionFile{Number: q.Number, Title: q.Title, Body: q.Body, Recommended: q.Recommended, Status: string(q.Status), Answer: q.Answer}
-				if !q.Closed.IsZero() {
-					qf.Closed = formatTime(q.Closed)
-				}
-				rf.Questions = append(rf.Questions, qf)
-			}
-			f.Rounds = append(f.Rounds, rf)
-		}
-		for _, fr := range r.FailureReports {
-			f.FailureReports = append(f.FailureReports, failureReportFile{
-				Number: fr.Number, Claim: fr.Claim, SessionID: fr.SessionID, WorkingDir: fr.WorkingDir, ResumeCommand: fr.ResumeCommand,
-				Actor: fr.Actor, Time: formatTime(fr.Time),
-				WhatBroke: fr.WhatBroke, Why: fr.Why, WhatToFix: fr.WhatToFix, WhereWorkStands: fr.WhereWorkStands,
-			})
-		}
-		for _, c := range r.Comments {
-			f.Comments = append(f.Comments, commentFile{Number: c.Number, Actor: c.Actor, Time: formatTime(c.Time), Claim: c.Claim, Body: c.Body})
-		}
-		for _, m := range r.Moves {
-			f.Moves = append(f.Moves, moveFile{From: string(m.From), To: string(m.To), Actor: m.Actor, Time: formatTime(m.Time), Claim: m.Claim, Via: m.Via, Commit: m.Commit, Cause: string(m.Cause)})
-		}
-		data, err = encodeYAML(f)
+		data, err = encodeYAML(ticketFileOf(r))
 	case domain.CIRuns:
 		rel = filepath.Join("projects", project, ciRunsName)
-		f := ciRunsFile{Runs: []ciRunFile{}}
-		for _, run := range r.Runs {
-			rf := ciRunFile{Repository: run.Repository, ID: run.ID, Attempt: run.Attempt, Workflow: run.Workflow, Name: run.Name, Branch: run.Branch, Commit: run.Commit,
-				Status: string(run.Status), Conclusion: string(run.Conclusion), Started: formatOptionalTime(run.Started), Finished: formatOptionalTime(run.Finished),
-				URL: run.URL, Ticket: run.Ticket, Rule: run.Rule, Ignored: run.Ignored}
-			for _, j := range run.Jobs {
-				rf.Jobs = append(rf.Jobs, ciJobFile{Name: j.Name, Conclusion: string(j.Conclusion), URL: j.URL})
-			}
-			f.Runs = append(f.Runs, rf)
-		}
-		data, err = encodeYAML(f)
+		data, err = encodeYAML(ciRunsFileOf(r))
 	default:
 		return "", nil, fmt.Errorf("store: cannot write %T", record)
 	}
 	return rel, data, err
+}
+
+// The records' file shapes, as a Store Kind writes them: the File Store
+// as YAML, the database Stores as JSON documents of the same keys.
+
+func projectFileOf(r domain.Project) projectFile {
+	return projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI),
+		GitHubIssues: encodeGitHubIssues(r.GitHubIssues), AzureBoards: encodeAzureBoards(r.AzureBoards), Models: encodeModels(r.Models),
+		ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), FocusKindsOff: r.FocusKindsOff, CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec, SmallChangesSpec: r.SmallChangesSpec, RetrosSpec: r.RetrosSpec, AutoAccept: encodeAutoAccept(r.AutoAccept),
+		Repositories: encodeRepositories(r.Repositories)}
+}
+
+func optionsFileOf(r domain.Options) optionsFile {
+	f := optionsFile{FocusClear: string(r.FocusClear), FocusPopup: string(r.FocusPopup), GHPath: r.GHPath}
+	if r.LimitsPopup != domain.DefaultOptions().LimitsPopup {
+		f.LimitsPopup = string(r.LimitsPopup)
+	}
+	return f
+}
+
+func specFrontOf(r domain.Spec) specFront {
+	return specFront{ID: r.Number, Title: r.Title, Labels: r.Labels, Tags: r.Tags, Link: encodeLink(r.Link), Created: formatTime(r.Created), Updated: formatTime(r.Updated), Edits: encodeEdits(r.Edits)}
+}
+
+func ticketFileOf(r domain.Ticket) ticketFile {
+	f := ticketFile{
+		Title: r.Title, State: string(r.State), Spec: r.Spec, Labels: r.Labels, Tags: r.Tags,
+		BlockedBy: r.BlockedBy, Replacements: r.Replacements, Link: encodeLink(r.Link), AwaitingTriage: r.AwaitingTriage,
+		SpecMergeTicket: r.SpecMergeTicket, Created: formatTime(r.Created), Updated: formatTime(r.Updated), Description: r.Description,
+		Branch: r.Branch, Commit: r.Commit, Recommendation: string(r.Recommendation),
+		Claims: encodeClaims(r.Claims), Rounds: encodeRounds(r.Rounds), FailureReports: encodeFailureReports(r.FailureReports),
+		Comments: encodeComments(r.Comments), Moves: encodeMoves(r.Moves), Edits: encodeEdits(r.Edits),
+	}
+	for _, cr := range r.Repositories {
+		cf := changedRepoFile{Name: cr.Name, Branch: cr.Branch, Commit: cr.Commit}
+		if cr.Landed != nil {
+			cf.Landed = &landedFile{Commit: cr.Landed.Commit, Time: formatTime(cr.Landed.Time)}
+		}
+		f.Repositories = append(f.Repositories, cf)
+	}
+	for _, pc := range r.PushedCommits {
+		f.PushedCommits = append(f.PushedCommits, pushedCommitFile{Repository: pc.Repository, Commit: pc.Commit, Branch: pc.Branch, Pushed: formatTime(pc.Pushed)})
+	}
+	for _, pr := range r.PullRequests {
+		pf := pullRequestFile{Repository: pr.Repository, Number: pr.Number, Link: pr.Link, State: string(pr.State), MergeCommit: pr.MergeCommit, Close: pr.Close}
+		if pr.Repository == "" && f.PullRequest == nil {
+			f.PullRequest = &pf
+		} else {
+			f.PullRequests = append(f.PullRequests, pf)
+		}
+	}
+	if r.SpecMerge != nil {
+		f.SpecMerge = &specMergeFile{Repository: r.SpecMerge.Repository, Commit: r.SpecMerge.Commit, Merged: formatTime(r.SpecMerge.Merged)}
+	}
+	return f
+}
+
+// The History parts' encoders. Each writes an empty list, never null.
+
+func encodeClaims(cs []domain.Claim) []claimFile {
+	out := []claimFile{}
+	for _, c := range cs {
+		cf := claimFile{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, Model: c.Model, Effort: c.Effort, Started: formatTime(c.Started), EndedBy: c.EndedBy}
+		if !c.Ended.IsZero() {
+			cf.Ended = formatTime(c.Ended)
+		}
+		out = append(out, cf)
+	}
+	return out
+}
+
+func encodeRounds(rs []domain.Round) []roundFile {
+	out := []roundFile{}
+	for _, rd := range rs {
+		rf := roundFile{Number: rd.Number, Claim: rd.Claim, SessionID: rd.SessionID, Posted: formatTime(rd.Posted), Questions: []questionFile{}}
+		for _, q := range rd.Questions {
+			qf := questionFile{Number: q.Number, Title: q.Title, Body: q.Body, Recommended: q.Recommended, Status: string(q.Status), Answer: q.Answer}
+			if !q.Closed.IsZero() {
+				qf.Closed = formatTime(q.Closed)
+			}
+			rf.Questions = append(rf.Questions, qf)
+		}
+		out = append(out, rf)
+	}
+	return out
+}
+
+func encodeFailureReports(frs []domain.FailureReport) []failureReportFile {
+	out := []failureReportFile{}
+	for _, fr := range frs {
+		out = append(out, failureReportFile{
+			Number: fr.Number, Claim: fr.Claim, SessionID: fr.SessionID, WorkingDir: fr.WorkingDir, ResumeCommand: fr.ResumeCommand,
+			Actor: fr.Actor, Time: formatTime(fr.Time),
+			WhatBroke: fr.WhatBroke, Why: fr.Why, WhatToFix: fr.WhatToFix, WhereWorkStands: fr.WhereWorkStands,
+		})
+	}
+	return out
+}
+
+func encodeComments(cs []domain.Comment) []commentFile {
+	out := []commentFile{}
+	for _, c := range cs {
+		out = append(out, commentFile{Number: c.Number, Actor: c.Actor, Time: formatTime(c.Time), Claim: c.Claim, Body: c.Body})
+	}
+	return out
+}
+
+func encodeMoves(ms []domain.Move) []moveFile {
+	out := []moveFile{}
+	for _, m := range ms {
+		out = append(out, moveFile{From: string(m.From), To: string(m.To), Actor: m.Actor, Time: formatTime(m.Time), Claim: m.Claim, Via: m.Via, Commit: m.Commit, Cause: string(m.Cause)})
+	}
+	return out
+}
+
+func ciRunsFileOf(r domain.CIRuns) ciRunsFile {
+	f := ciRunsFile{Runs: []ciRunFile{}}
+	for _, run := range r.Runs {
+		rf := ciRunFile{Repository: run.Repository, ID: run.ID, Attempt: run.Attempt, Workflow: run.Workflow, Name: run.Name, Branch: run.Branch, Commit: run.Commit,
+			Status: string(run.Status), Conclusion: string(run.Conclusion), Started: formatOptionalTime(run.Started), Finished: formatOptionalTime(run.Finished),
+			URL: run.URL, Ticket: run.Ticket, Rule: run.Rule, Ignored: run.Ignored}
+		for _, j := range run.Jobs {
+			rf.Jobs = append(rf.Jobs, ciJobFile{Name: j.Name, Conclusion: string(j.Conclusion), URL: j.URL})
+		}
+		f.Runs = append(f.Runs, rf)
+	}
+	return f
 }
 
 func splitFrontmatter(data []byte) (front, body []byte, ok bool) {
@@ -1220,4 +1326,129 @@ func parseTime(s string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("not an RFC 3339 timestamp: %q", s)
 	}
 	return t.UTC(), nil
+}
+
+// optionsOf is the Options their file f holds over the defaults, checked
+// as a load checks them. The returned LoadError names the field, not the
+// file.
+func optionsOf(f optionsFile) (domain.Options, *LoadError) {
+	o := domain.DefaultOptions()
+	if f.FocusClear != "" {
+		o.FocusClear = domain.FocusClear(f.FocusClear)
+	}
+	if f.FocusPopup != "" {
+		o.FocusPopup = domain.FocusPopup(f.FocusPopup)
+	}
+	if f.LimitsPopup != "" {
+		o.LimitsPopup = domain.LimitsPopup(f.LimitsPopup)
+	}
+	o.GHPath = f.GHPath
+	if !o.FocusClear.Valid() {
+		return o, &LoadError{Field: "focus_clear", Msg: fmt.Sprintf("unknown value %q (%s)", f.FocusClear, strings.Join(domain.FocusClearNames(), " or "))}
+	}
+	if !o.FocusPopup.Valid() {
+		return o, &LoadError{Field: "focus_popup", Msg: fmt.Sprintf("unknown value %q (%s)", f.FocusPopup, strings.Join(domain.FocusPopupNames(), " or "))}
+	}
+	if !o.LimitsPopup.Valid() {
+		return o, &LoadError{Field: "limits_popup", Msg: fmt.Sprintf("unknown value %q (%s)", f.LimitsPopup, strings.Join(domain.LimitsPopupNames(), " or "))}
+	}
+	return o, nil
+}
+
+// projectOf is the Project its file pf holds, checked as a load checks
+// it. The returned LoadError names the field, not the file.
+func projectOf(pf projectFile) (domain.Project, *LoadError) {
+	var err error
+	fail := func(field, msg string) (domain.Project, *LoadError) {
+		return domain.Project{}, &LoadError{Field: field, Msg: msg}
+	}
+	p := domain.Project{Key: pf.Key, DisplayName: pf.DisplayName, Mode: domain.Mode(pf.Mode)}
+	if !p.Mode.Valid() {
+		return fail("mode", fmt.Sprintf("unknown mode %q (committed or local)", pf.Mode))
+	}
+	if p.Created, err = parseTime(pf.Created); err != nil {
+		return fail("created", err.Error())
+	}
+	if pf.Archived != "" {
+		if p.Archived, err = parseTime(pf.Archived); err != nil {
+			return fail("archived", err.Error())
+		}
+	}
+	if l := pf.Landing; l != nil {
+		p.Landing = domain.Landing{Method: domain.LandingMethod(l.Method), Push: l.Push, Remote: l.Remote, LandPerSpec: l.LandPerSpec == nil || *l.LandPerSpec, PATEnv: l.PATEnv, Base: l.Base}
+		if !p.Landing.Method.Valid() {
+			return fail("landing.method", fmt.Sprintf("unknown landing method %q (%s)", l.Method, strings.Join(domain.LandingMethodNames(), " or ")))
+		}
+	}
+	if c := pf.CI; c != nil {
+		p.CI = domain.CI{Tracking: c.Tracking, PATEnv: c.PATEnv,
+			IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, NoPushRemote: c.NoPushRemote, PushRemoteBase: c.PushRemoteBase}
+		if c.Provider != "" && !domain.CIProvider(c.Provider).Valid() {
+			return fail("ci.provider", fmt.Sprintf("unknown CI provider %q (%s)", c.Provider, strings.Join(domain.CIProviderNames(), " or ")))
+		}
+		for i, r := range c.Rules {
+			field := fmt.Sprintf("ci.rules[%d]", i)
+			rule := domain.CIRule{Spec: r.Spec, Workflow: r.Workflow, Branch: r.Branch, State: domain.State(r.State)}
+			if rule.State != domain.Draft && rule.State != domain.Ready {
+				return fail(field+".state", fmt.Sprintf("a CI Rule's Tickets open as Draft or Ready, not %q", r.State))
+			}
+			if rule.Created, err = parseTime(r.Created); err != nil {
+				return fail(field+".created", err.Error())
+			}
+			p.CI.Rules = append(p.CI.Rules, rule)
+		}
+		var at string
+		if p.CI.Repositories, at, err = decodeCIRepositories(c.Repositories); err != nil {
+			return fail("ci.repositories"+at, err.Error())
+		}
+		p.CI.Repositories = withLegacyHomeCI(p.Key, p.CI.Repositories, *c)
+	}
+	if g := pf.GitHubIssues; g != nil {
+		p.GitHubIssues = domain.GitHubIssues{On: g.On, Repositories: g.Repositories, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
+	}
+	if a := pf.AzureBoards; a != nil {
+		p.AzureBoards = domain.AzureBoards{On: a.On, Mode: domain.AzureBoardsMode(a.Mode), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
+			PATEnv: a.PATEnv, NewIssuesNeedMe: a.NewIssuesNeedMe, Spec: a.Spec}
+		if a.Mode != "" && !p.AzureBoards.Mode.Valid() {
+			return fail("azure_boards.mode", fmt.Sprintf("unknown Azure Boards mode %q (%s)", a.Mode, strings.Join(domain.AzureBoardsModeNames(), " or ")))
+		}
+	}
+	if m := pf.Models; m != nil {
+		var field string
+		if p.Models, field, err = decodeModels(*m); err != nil {
+			return fail("models."+field, err.Error())
+		}
+	}
+	if m := pf.ReportedModels; m != nil {
+		var field string
+		if p.ReportedModels, field, err = decodeReportedModels(*m); err != nil {
+			return fail("reported_models."+field, err.Error())
+		}
+	}
+	if g := pf.StageGuides; g != nil {
+		p.StageGuides = domain.StageGuides{SubagentExplorationOff: g.SubagentExplorationOff, ModelAssignmentOn: g.ModelAssignmentOn}
+	}
+	var at string
+	if p.FocusKindsOff, at, err = decodeFocusKindsOff(pf.FocusKindsOff); err != nil {
+		return fail("focus_kinds_off"+at, err.Error())
+	}
+	rs, at, err := decodeCIResponses(pf.CIResponses)
+	if err != nil {
+		return fail("ci_responses"+at, err.Error())
+	}
+	p.CIResponses = rs
+	p.CIFixesSpec = pf.CIFixesSpec
+	p.SmallChangesSpec = pf.SmallChangesSpec
+	p.RetrosSpec = pf.RetrosSpec
+	for i, k := range pf.AutoAccept {
+		kind := domain.AutoAcceptKind(k)
+		if !kind.Valid() {
+			return fail(fmt.Sprintf("auto_accept[%d]", i), fmt.Sprintf("unknown Auto-accept kind %q", k))
+		}
+		p.SetAutoAccept(kind, true)
+	}
+	if p.Repositories, at, err = decodeRepositories(p.Key, pf.Repositories); err != nil {
+		return fail("repositories"+at, err.Error())
+	}
+	return p, nil
 }

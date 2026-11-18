@@ -77,10 +77,10 @@ func runQueries(t *testing.T, f Factory) {
 		for _, x := range []domain.Ticket{
 			{Number: 2, State: domain.Ready, Labels: []string{"ui", "auth"}, Tags: map[string]string{"source": "gh-1"}},
 			{Number: 3, State: domain.InReview, Labels: []string{"ui"}, Tags: map[string]string{"source": "gh-2", "area": "web"},
-				Link: domain.Link{Integration: "github-issues", ID: "12"}},
-			{Number: 4, State: domain.Accepted, Link: domain.Link{Integration: "github-issues", ID: "13", Detached: true},
+				Link: domain.Link{Integration: "github-issues", ID: "12", ExternalState: domain.ExternalOpen}},
+			{Number: 4, State: domain.Accepted, Link: domain.Link{Integration: "github-issues", ID: "13", ExternalState: domain.ExternalOpen, Detached: true},
 				PushedCommits: []domain.PushedCommit{pushed("", "aaa", "acme-4"), pushed("", "bbb", "acme-4")}},
-			{Number: 5, State: domain.Accepted, Link: domain.Link{Integration: "azure-boards", ID: "12"},
+			{Number: 5, State: domain.Accepted, Link: domain.Link{Integration: "azure-boards", ID: "12", ExternalState: domain.ExternalOpen},
 				PushedCommits: []domain.PushedCommit{pushed("api", "aaa", "acme-5")}, BlockedBy: []int{2, 3}},
 			{Number: 6, State: domain.Cancelled, Replacements: []int{7, 8}, BlockedBy: []int{3}},
 			{Number: 7, State: domain.Done, Labels: []string{"auth"}, Replacements: []int{8}},
@@ -154,10 +154,10 @@ func runQueries(t *testing.T, f Factory) {
 		s := f.New(t)
 		seedProject(t, s)
 		for _, x := range []domain.Spec{
-			{Number: 3, Labels: []string{"map"}, Tags: map[string]string{"source": "gh-1"}, Link: domain.Link{Integration: "github-issues", ID: "12"}},
+			{Number: 3, Labels: []string{"map"}, Tags: map[string]string{"source": "gh-1"}, Link: domain.Link{Integration: "github-issues", ID: "12", ExternalState: domain.ExternalOpen}},
 			{Number: 1, Labels: []string{"map", "auto-accept"}, Tags: map[string]string{"source": "gh-2"}},
-			{Number: 2, Link: domain.Link{Integration: "github-issues", ID: "13", Detached: true}},
-			{Number: 4, Tags: map[string]string{"area": "web"}, Link: domain.Link{Integration: "azure-boards", ID: "12"}},
+			{Number: 2, Link: domain.Link{Integration: "github-issues", ID: "13", ExternalState: domain.ExternalOpen, Detached: true}},
+			{Number: 4, Tags: map[string]string{"area": "web"}, Link: domain.Link{Integration: "azure-boards", ID: "12", ExternalState: domain.ExternalOpen}},
 		} {
 			x.Title, x.Created, x.Updated = "S", t0, t0
 			put(t, s, func(w store.Writer) error { return w.PutSpec("acme", x) })
