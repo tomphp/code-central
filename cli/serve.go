@@ -43,7 +43,7 @@ func loopback(port int) []string {
 
 func init() {
 	commands["serve"] = command{
-		usage: "serve [--store <dir>] [--bind <ip>] [--no-notify] [--log <file>]  run the service in the foreground; --bind adds one address " +
+		usage: "serve [--store <dir>] [--port <n>] [--bind <ip>] [--no-notify] [--log <file>]  run the service in the foreground; --port serves on that loopback port instead of 7733; --bind adds one address " +
 			"(such as the Docker bridge IP), never a LAN address; --log appends serve's output to a file",
 		run: runServe,
 	}
@@ -53,6 +53,8 @@ func init() {
 // parseServe.
 type serveOptions struct {
 	store string
+	// port is --port: the loopback port to serve on, 0 for the setting's.
+	port int
 	// bind is --bind: one extra address, "" for none.
 	bind    string
 	bindSet bool
@@ -67,6 +69,7 @@ func parseServe(args []string) (serveOptions, error) {
 	fs := flagSet("serve")
 	var o serveOptions
 	fs.StringVar(&o.store, "store", "", "store directory")
+	fs.IntVar(&o.port, "port", 0, "loopback port to serve on")
 	fs.StringVar(&o.bind, "bind", "", "one extra address to listen on")
 	fs.BoolVar(&o.noNotify, "no-notify", false, "send no OS Notifications this run")
 	fs.StringVar(&o.log, "log", "", "file to append output to")
@@ -76,6 +79,9 @@ func parseServe(args []string) (serveOptions, error) {
 	}
 	if len(pos) > 0 {
 		return o, usagef("unexpected argument %q", pos[0])
+	}
+	if o.port != 0 && (o.port < 1 || o.port > 65535) {
+		return o, usagef("--port %d is not a port", o.port)
 	}
 	o.bindSet = isSet(fs, "bind")
 	return o, nil
@@ -138,6 +144,9 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 	}
 
 	addrs := e.ServeAddrs
+	if addrs == nil && o.port != 0 {
+		addrs = loopback(o.port)
+	}
 	if l := e.Getenv("CODE_CENTRAL_LISTEN"); addrs == nil && l != "" {
 		// For the end-to-end tier, which must never bind the real port.
 		addrs = strings.Split(l, ",")
