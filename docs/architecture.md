@@ -27,6 +27,7 @@ flowchart TB
     API["httpapi<br/>REST /api"]
     MCP["mcp<br/>/p/key/mcp (agents)"]
     CORE["core<br/>*Core: workflow, landing, CI, chat, views<br/>core.Operations = the one op list"]
+    DOMAIN["domain<br/>records, enums, Landing Policy"]
     STORE["store<br/>YAML files in memory"]
     SUP["watchers.Supervise"]
     SIDE["clock · events · ids · home · usage · notify"]
@@ -43,6 +44,9 @@ flowchart TB
   FD --> API --> CORE
   FD --> MCP --> CORE
   CORE --> STORE
+  CORE --> DOMAIN
+  STORE --> DOMAIN
+  API --> DOMAIN
   CORE --> SIDE
   SUP -.starts.-> W
   FAC --> GIT
@@ -64,7 +68,7 @@ Your list: core logic, factory, ci watcher, issue tracker, web api, frontend, st
 | issue tracker | **Specs/Tickets live in `core`**; GitHub Issues inbound is `issuewatcher` | There is no separate tracker module. Say which you mean. |
 | web api | `httpapi` (+ `mcp` sibling, assembled by `server`) | MCP is not layered on httpapi; both call `*core.Core`. |
 | frontend | `web/` | Embedded via `web/web.go`. |
-| storage | `store` | Persistence and the stored domain records in one package. |
+| storage | `store` (+ `domain`) | `store` is persistence: file shapes, migrations, locking. `domain` holds the records (`Ticket`, `State`, `Landing`, `CI`…) and `LandingPolicy`; it imports nothing of Code Central. |
 
 **Missing from your list:**
 
@@ -91,7 +95,7 @@ Your list: core logic, factory, ci watcher, issue tracker, web api, frontend, st
 
 ## Dependency rules (as intended and as found)
 
-Intended: `clients → client → HTTP → server → httpapi/mcp → core → store → leaves`. Mostly held. No import cycles. `core` never imports a transport, `factory`, or `gh`/`azdo`. Watchers and the Factory never touch the store directly.
+Intended: `clients → client → HTTP → server → httpapi/mcp → core → store → domain → leaves`; `client` and `httpapi` import `domain` but not `store`; only `core` and the service's composition root (`cli/serve.go`) link persistence. Mostly held. No import cycles. `core` never imports a transport, `factory`, or `gh`/`azdo`. Watchers and the Factory never touch the store directly.
 
 ## 2. Are the interfaces clearly defined?
 
@@ -107,14 +111,14 @@ Good:
 Anti-patterns and leaks found:
 
 1. ~~**`factory` imports `cli`** for `ResolveProject` and `ServiceURL`.~~ **Fixed:** both now live in `client`, and `factory/imports_test.go` guards against the import coming back.
-2. **`httpapi` and `client` import `store`** for domain enums (`httpapi/httpapi.go`, `httpapi/rounds.go`, `client/rounds.go`), though they should be HTTP-only (ADR 0002/0004). Root cause: `store` holds the domain model (`Ticket`, `State`, `Landing`…) as well as persistence, and 69 `core` files import it.
+2. ~~**`httpapi` and `client` import `store`** for domain enums, though they should be HTTP-only (ADR 0002/0004).~~ **Fixed:** the domain model (`Ticket`, `State`, `Landing`…) now lives in `domain`, and `store` is persistence only.
 3. **`cli` is a god package** (~16 internal imports): commands, `serve` composition (store, core, server, supervisor), service install, `init` scaffolding.
 4. **Per-operation wiring is duplicated** across `httpapi` (routes + handlers), `mcp` (tools), `client` and `cli`. Only tests catch drift. Ack-versus-full and `get_ticket` parts are handled per door.
 5. **`*core.Core` is a god object** and a concrete dependency of both transports, so they can't be tested against a fake.
 6. **Transport policy is split**: `mcp` records usage and forces the Actor; `server.Guard` sets the Actor for HTTP.
 7. **Provider knowledge in core** *(mostly resolved)*: remote-URL and repository-name parsing now lives in the leaf `codehost` (`Of`, `ValidGitHubRepository`, `ValidGitHubWorkflow`), and `core.CodeHost` stays the wire enum, converted from `codehost.Host`. What remains is `core` calling `azdourl` to validate Azure DevOps URLs, which stays a separate leaf.
 8. **Watcher plumbing**: each watcher has its own check/config/poll trio; `issuewatcher` is hard-wired to `gh`. (Done: `RateLimitError` and `FirstLine` now live in the leaf package `ratelimit`, so `gh` and `azdo` no longer import `watchers`, and the shared test harness is `watchers/watchertest`.)
-9. **Landing rules straddle packages**: `store.Landing.Normalized` versus `core.LandingPolicy`. The UI's `LandingMethodSection.tsx` also branches on the method, though ADR 0039 says no caller should.
+9. ~~**Landing rules straddle packages**: `store.Landing.Normalized` versus `core.LandingPolicy`.~~ **Fixed:** `domain.Landing.Normalized` and `domain.LandingPolicy` now sit together in `domain`. Still open: the UI's `LandingMethodSection.tsx` also branches on the method, though ADR 0039 says no caller should.
 10. **Frontend duplicates some derived rules** (`edit/editable.ts`, `requirement/progress.ts`, `inbox/describeSpec.ts`). Mild.
 11. **Naming** (done: the package was `frontdoor`, now `server`): it is ~150 lines of production code plus an 11k-line contract suite, and `httpapi`/`mcp` both call themselves "front doors", so the old name said nothing about what it does.
 
@@ -124,7 +128,7 @@ Roughly in order of value for effort. Each would be its own Ticket.
 
 1. ~~Move `ResolveProject` and `ServiceURL` out of `cli` into `client`, so `factory` stops importing `cli`.~~ **Fixed.**
 2. ~~Move `RateLimitError` and `FirstLine` out of `watchers` into a leaf package. Move `ciwatchertest` to a shared watcher test package.~~ *(done: `ratelimit` and `watchers/watchertest`)*
-3. Split `store` into persistence and a domain-model package (`model`/`domain`) and re-home `LandingPolicy` and `Normalized` with it, so `httpapi`, `client` and `cli` no longer link persistence. *(medium, mechanical)*
+3. ~~Split `store` into persistence and a domain-model package and re-home `LandingPolicy` and `Normalized` with it.~~ **Fixed:** see `domain`.
 4. Move server composition from `cli/serve.go` into an `app`/`service` package. *(medium)*
 5. Define each operation once (input type plus handler on `core.Operation`) and derive the httpapi route, MCP tool and schema from it. *(large, biggest drift win)*
 6. Give transports narrow interfaces over core (as `notify` does), and centralise usage/actor handling in one middleware. *(medium)*
