@@ -244,11 +244,20 @@ a.filter { text-decoration: none; }
   .project-options-layout { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: 24px; align-items: start; }
   .project-options-menu { display: block; position: sticky; top: 16px; }
 }
-.project-options-section { border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px 16px; margin: 0; }
+.project-options-section { border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px 16px; margin: 0; }
 .project-options-section legend { font-weight: 600; padding: 0 4px; }
 .project-options-choice { margin: 8px 0; }
-.project-options-hint, .field-hint { margin: 2px 0 0 1.6rem; font-size: 13px; color: var(--muted); }
-.project-options-remote { display: block; margin: 8px 0 0 1.6rem; }
+/* Intros and hints sit at the section's edge; only a hint under a checkbox or radio is indented. */
+.project-options-hint, .field-hint { margin: 4px 0 0; max-width: 70ch; font-size: 12.5px; color: var(--muted); }
+.project-options-choice > .project-options-hint { margin-left: 1.6rem; }
+.project-options-subhead { font-weight: 600; font-size: 14px; }
+.project-options-note { margin: 0 0 8px; padding: 6px 10px; max-width: 70ch; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--muted); font-size: 12.5px; }
+.project-options input[type="checkbox"], .project-options input[type="radio"] { accent-color: var(--accent); }
+.project-options input:disabled:checked { opacity: 1; }
+/* One label column, so every input's left edge lines up. */
+.project-options-remote, .field { display: grid; grid-template-columns: 11rem minmax(0, 24rem); column-gap: 12px; align-items: center; }
+.project-options-remote { margin: 8px 0 0; }
+.project-options-watcher, .project-options-section .muted, .project-options-repository-details { font-size: 12.5px; }
 .project-options-focus { border-collapse: collapse; margin: 8px 0; }
 .project-options-focus th { text-align: left; font-weight: 500; }
 .project-options-focus thead th { font-size: 12.5px; color: var(--muted); }
@@ -258,8 +267,7 @@ a.filter { text-decoration: none; }
 .project-options-remote input[aria-invalid="true"], .field input[aria-invalid="true"] { border-color: var(--danger); }
 .project-options form + form, .project-options form + fieldset { margin-top: 16px; }
 .project-options-rules-section { border: 0; border-top: 1px solid var(--border); padding: 12px 0 0; margin: 16px 0 0; }
-.project-options-rules-section legend { font-weight: 600; padding: 0 4px 0 0; }
-.project-options-rules-section > .project-options-hint { margin-left: 0; }
+.project-options-rules-section legend { font-weight: 600; font-size: 14px; padding: 0 4px 0 0; }
 .project-options-rules { list-style: none; margin: 12px 0 0; padding: 0; }
 .project-options-rules > li { padding: 8px 0; border-bottom: 1px solid var(--border); }
 .project-options-rules .btn { margin-left: 4px; }
@@ -273,12 +281,10 @@ a.filter { text-decoration: none; }
 .project-options-repository-details dd { margin: 0; overflow-wrap: anywhere; }
 .project-options-clone-missing { color: var(--danger); }
 .project-options-repository-form { margin-top: 12px; }
-.field { display: block; margin: 12px 0 0; }
-.field input { min-width: 16rem; }
-.field + .project-options-hint, .field + .field-hint { margin-left: 0; }
+.field { margin: 12px 0 0; }
+.field input { min-width: 0; }
 .project-options-actions { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 .stage-guide-row + .stage-guide-row { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
-.project-options-models-hint { margin-left: 0; }
 .project-options-models { border-collapse: collapse; margin-top: 12px; width: 100%; }
 .project-options-models th, .project-options-models td { text-align: left; padding: 4px 8px 4px 0; font-size: 14px; }
 .project-options-models thead th { font-weight: 600; font-size: 13px; color: var(--muted); }
