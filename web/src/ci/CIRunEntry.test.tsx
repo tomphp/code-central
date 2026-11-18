@@ -100,7 +100,7 @@ describe("CIRunEntry's card", () => {
 
   it("shows the Ticket, the workflow, the Project, the branch, the short commit, the status as a badge and how long it has run", () => {
     const { entry } = card({ projectName: "Acme" });
-    expect(entry).toHaveTextContent(/^acme-1CIAcmemain · 1abcdef · running 3m 0sView on GitHub$/);
+    expect(entry).toHaveTextContent(/^acme-1CIAcmemain · 1abcdef · running · 3m 0sView on GitHub$/);
     expect(within(entry).getByText("running")).toHaveClass("ci-status");
   });
 

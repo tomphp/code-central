@@ -56,7 +56,7 @@ describe("Pull request closed across Repositories", () => {
 });
 
 describe("the Pull Request Watcher across Repositories", () => {
-  const landing = () => within(screen.getByRole("main", { name: "Project Options" })).getByRole("group", { name: "Landing Method" });
+  const landing = () => within(screen.getByRole("main", { name: "Project Options" })).getByRole("group", { name: "Default Landing" });
 
   it("watches every Repository and names each one it can't watch with its fix", async () => {
     const { w, s } = await world("open", "open");

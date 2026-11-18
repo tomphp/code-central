@@ -33,7 +33,7 @@ export function SpecPane({ spec, archived, now, ticket, select }: SpecPaneProps)
   const tickets = spec.tickets ?? [];
   return (
     <section aria-label="Spec" className="req-head">
-      <SpecPaneHeader id={spec.id} kind="Spec" title={spec.title} now={now} created={spec.created} />
+      <SpecPaneHeader id={spec.id} kind="Spec" title={spec.title} now={now} created={spec.created} archived={archived} />
       <RepositoryChips names={spec.repositories} />
       <div className="spec-actions">
         <NewPrototype spec={spec.id} onSubmitted={(t) => select(t.id)} />

@@ -1,5 +1,5 @@
 // The one-line header of a full-width view: its title, a left slot, a
-// spacer, then a right slot. Focus Mode's has no title.
+// spacer, then a right slot. Focus Mode's is "Focus".
 import type { ReactNode } from "react";
 
 export interface ViewHeaderProps {

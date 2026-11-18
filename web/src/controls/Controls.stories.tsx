@@ -24,7 +24,7 @@ export const CountOf: Story = { render: () => <Count n={2} of="left" /> };
 // A count block's number, as the Activity Dashboard's, and its dash before the count is known.
 export const BigCounts: Story = {
   render: () => (
-    <div style={{ display: "flex", gap: 24, background: "var(--s-ready)", color: "#fff", padding: 24 }}>
+    <div style={{ display: "flex", gap: 24, background: "var(--s-ready)", color: "var(--on-line)", padding: 24 }}>
       <Count n={12} big />
       <Count big />
     </div>

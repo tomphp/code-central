@@ -173,7 +173,7 @@ A midnight-and-porcelain base with a full set of transit line inks, each owned b
 ### Tertiary: line inks
 The reason lines (`line-*`) colour Needs Me groups and their stations, a needing Stage, a needing Map node and a needing Board card:
 - **Answer Amber** (`line-answer`): Needs Answer; the loudest line, also the Round panel's outline and the Needs Me count.
-- **Answered Violet** (`line-answered`), **Failed Scarlet** (`line-failed`, also CI failed, base diverged/missing), **Review Green** (`line-review`, also done Stages and passed CI), **Landing Teal** (`line-landing`, to merge / accepted not landed), **Blocked Ochre** (`line-blocked`), **External Cyan** (`line-external`, Incoming Issues), **Silent Grey** (`line-silent`) and **Long Slate** (`line-long`).
+- **Answered Violet** (`line-answered`), **Failed Scarlet** (`line-failed`, also CI failed, base diverged/missing, repository missing, pull request closed), **Review Green** (`line-review`, also done Stages and passed CI), **Landing Teal** (`line-landing`, to merge / accepted not landed), **Blocked Ochre** (`line-blocked`), **External Cyan** (`line-external`, Incoming Issues), **Silent Grey** (`line-silent`) and **Long Slate** (`line-long`).
 
 The State lines (`state-*`) colour the rail's State keys, State chips and Board column heads: **Draft Grey**, **Ready Slate-Blue**, **In Progress Cobalt**, **Done Green**, **Cancelled Grey**. The workflow States Needs Answer, Answered, Failed, In Review and Accepted reuse their reason's line, so one State keeps one ink everywhere.
 
@@ -258,7 +258,7 @@ Quiet, firm, signage-weight (600).
 
 ### Chips
 - **State chip:** a pill with a station ring before the State's name, on a 12% wash of the State's line with a 35% border. The current State (`here`) washes to 24%, takes a full-ink border and fills its station.
-- **Badges** (kind, stage, CI, label): 4px corners, 10.5 to 11px, outlined in the badge's colour or on linen; uppercase only for kind/stage.
+- **Badges** (kind, stage, CI, label): 4px corners, 10.5 to 11px, outlined in the badge's colour or on linen; uppercase only for kind/stage. CI badges are lowercase with no glyph: running and queued are In Progress Cobalt (the Activity Dashboard's CI Running block and its stations too, never Landing Teal), queued and partially succeeded dashed; cancelled, skipped and neutral share one grey outline. A CIRunEntry card has 6px corners, its link to the CI system level with the first row, and `·` between every part of its detail row.
 
 ### Cards / Containers
 - **Panel:** white, hairline border, 10px corners, 14px by 16px. The Round panel is outlined 1.5px in Answer Amber, its head carrying an amber station.

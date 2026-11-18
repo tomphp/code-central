@@ -21,10 +21,19 @@ export function TicketRepositories({ ticket: t }: { ticket: Pick<TicketView, "st
       <ul className="repos">
         {rs.map((r) => (
           <li key={r.name} aria-label={r.name}>
-            <span className="repo-name">{r.name}</span> <Work r={r} />
-            <Landing r={r} waiting={t.state === "Accepted"} />
-            <PullRequestBadge pr={r.pull_request} />
-            <CI r={r} />
+            <span className="repo-name">{r.name}</span>
+            <span>
+              <Landing r={r} waiting={t.state === "Accepted"} />
+            </span>
+            <span>
+              <PullRequestBadge pr={r.pull_request} />
+            </span>
+            <span>
+              <CI r={r} />
+            </span>
+            <span>
+              <Work r={r} />
+            </span>
           </li>
         ))}
       </ul>
@@ -44,27 +53,25 @@ function Work({ r }: { r: ChangedRepositoryView }) {
 function Landing({ r, waiting }: { r: ChangedRepositoryView; waiting: boolean }) {
   if (r.landed) {
     return (
-      <span className="small muted">
-        {" "}
-        · landed at <code>{shortCommit(r.landed.commit)}</code>
+      <span className="small">
+        <span className="muted">landed at</span> <code>{shortCommit(r.landed.commit)}</code>
       </span>
     );
   }
   if (!waiting) return null;
-  return <span className="small muted"> · not landed{r.not_landed && `: ${r.not_landed}`}</span>;
+  return <span className="small muted">not landed{r.not_landed && `: ${r.not_landed}`}</span>;
 }
 
 // CI is the Repository's CI result with its pushed commit, else the
 // latest commit pushed for it; or that CI Tracking doesn't watch it.
 function CI({ r }: { r: ChangedRepositoryView }) {
-  if (r.ci_not_watched) return <span className="small muted"> · CI not watched</span>;
+  if (r.ci_not_watched) return <span className="small muted">CI not watched</span>;
   const pushed = r.ci_commit ?? r.pushed_commit?.commit;
   if (!r.ci_result && !pushed) return null;
   return (
     <span className="small">
-      {" "}
       {r.ci_result ? <span className={`ci-result ci-${r.ci_result}`}>CI {r.ci_result}</span> : "pushed"}
-      {pushed && (
+      {pushed && pushed !== r.commit && (
         <>
           {" "}
           <code>{shortCommit(pushed)}</code>

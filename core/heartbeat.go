@@ -35,7 +35,9 @@ const (
 )
 
 // FactoryStatusNames are the Factory Statuses.
-var FactoryStatusNames = []FactoryStatusName{FactoryOnline, FactoryDraining, FactoryOffline}
+func FactoryStatusNames() []FactoryStatusName {
+	return []FactoryStatusName{FactoryOnline, FactoryDraining, FactoryOffline}
+}
 
 const (
 	maxHeartbeatNote       = 200

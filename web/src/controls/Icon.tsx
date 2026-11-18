@@ -58,3 +58,54 @@ export function Blocked({ size = 12 }: { size?: number }) {
     </Svg>
   );
 }
+
+// RequirementMark is a station on its line: a ring with the line running in and out.
+export function RequirementMark({ size = 14 }: { size?: number }) {
+  return (
+    <Svg size={size}>
+      <path d="M1 8h3M12 8h3" />
+      <circle cx="8" cy="8" r="3.5" />
+    </Svg>
+  );
+}
+
+// MapMark is a node with two branches leaving it.
+export function MapMark({ size = 14 }: { size?: number }) {
+  return (
+    <Svg size={size}>
+      <path d="M5 8l6-4M5 8l6 4" />
+      <circle cx="4" cy="8" r="2" fill="currentColor" />
+      <circle cx="12" cy="4" r="1.2" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.2" fill="currentColor" />
+    </Svg>
+  );
+}
+
+// StopMark is a single stop: one filled dot, with no line.
+export function StopMark({ size = 14 }: { size?: number }) {
+  return (
+    <Svg size={size}>
+      <circle cx="8" cy="8" r="3" fill="currentColor" />
+    </Svg>
+  );
+}
+
+// Elbow marks a row as under its parent.
+export function Elbow({ size = 12 }: { size?: number }) {
+  return (
+    <Svg size={size}>
+      <path d="M4 2v7a2 2 0 002 2h6M9 8l3 3-3 3" />
+    </Svg>
+  );
+}
+
+// SortCue is a column's sort state: a caret up or down for the sorted
+// column, both faint for a column that can be sorted.
+export function SortCue({ direction, size = 12 }: { direction?: "ascending" | "descending"; size?: number }) {
+  if (direction) return <Svg size={size}>{direction === "ascending" ? <path d="M4 10l4-4 4 4" /> : <path d="M4 6l4 4 4-4" />}</Svg>;
+  return (
+    <Svg size={size}>
+      <path d="M4 6l4-3 4 3M4 10l4 3 4-3" opacity=".45" />
+    </Svg>
+  );
+}

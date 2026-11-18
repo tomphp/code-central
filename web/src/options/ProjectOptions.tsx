@@ -1,5 +1,5 @@
 // The Project Options page: one Project's settings, reached from its menu
-// in the left pane, a section each: the Repositories, the Landing Method,
+// in the left pane, a section each: the Repositories, the Default Landing,
 // CI with its CI Rules, GitHub Issues, Azure Boards, Models, Stage Guides, and Focus.
 import type { MouseEvent } from "react";
 import type { ProjectRow } from "../api/types";
@@ -9,7 +9,7 @@ import { CISection } from "./CISection";
 import { FactoriesSection } from "./FactoriesSection";
 import { AzureBoardsSection } from "./AzureBoardsSection";
 import { GitHubIssuesSection } from "./GitHubIssuesSection";
-import { LandingMethodSection } from "./LandingMethodSection";
+import { DefaultLandingSection } from "./DefaultLandingSection";
 import { ModelsSection } from "./ModelsSection";
 import { RepositoriesSection } from "./RepositoriesSection";
 import { StageGuidesSection } from "./StageGuidesSection";
@@ -28,7 +28,7 @@ export interface ProjectOptionsProps {
 // of that section's fieldset.
 export const SECTIONS = [
   { id: "project-options-repositories", label: "Repositories" },
-  { id: "project-options-landing-method", label: "Landing Method" },
+  { id: "project-options-default-landing", label: "Default Landing" },
   { id: "project-options-ci", label: "CI" },
   { id: "project-options-github-issues", label: "GitHub Issues" },
   { id: "project-options-azure-boards", label: "Azure Boards" },
@@ -86,7 +86,7 @@ export function ProjectOptions({
             </nav>
             <div className="project-options-sections">
               <RepositoriesSection project={project} />
-              <LandingMethodSection project={project} />
+              <DefaultLandingSection project={project} />
               <CISection project={project} />
               <GitHubIssuesSection project={project} />
               <AzureBoardsSection project={project} />

@@ -33,7 +33,7 @@ const (
 )
 
 // BaseStates are the states of a reported base.
-var BaseStates = []BaseState{BaseCurrent, BaseDiverged, BaseMissing}
+func BaseStates() []BaseState { return []BaseState{BaseCurrent, BaseDiverged, BaseMissing} }
 
 // BaseView is a Project's reported base, as its Factory Status carries it;
 // absent while no Factory is reporting.

@@ -46,16 +46,16 @@ const (
 
 // WayfinderTypes are the Map's Ticket types, each named as its Label's
 // suffix.
-var WayfinderTypes = []NodeType{NodeChart, NodeGrilling, NodeResearch, NodeTask}
+func WayfinderTypes() []NodeType { return []NodeType{NodeChart, NodeGrilling, NodeResearch, NodeTask} }
 
 // NodeTypes are the node types: the WayfinderTypes, then prototype and
 // ticket.
-var NodeTypes = append(slices.Clone(WayfinderTypes), NodePrototype, NodeTicket)
+var NodeTypes = append(slices.Clone(WayfinderTypes()), NodePrototype, NodeTicket)
 
 // wayfinderNames are every name the wayfinder: prefix allows.
 var wayfinderNames = func() []string {
 	names := []string{"map"}
-	for _, t := range WayfinderTypes {
+	for _, t := range WayfinderTypes() {
 		names = append(names, string(t))
 	}
 	return names
@@ -78,10 +78,10 @@ func typeGuide(l string) (guide string, ok bool) {
 	if l == PrototypeLabel || l == RetroLabel {
 		return l, true
 	}
-	if name, ok := strings.CutPrefix(l, WayfinderPrefix); ok && slices.Contains(WayfinderTypes, NodeType(name)) {
+	if name, ok := strings.CutPrefix(l, WayfinderPrefix); ok && slices.Contains(WayfinderTypes(), NodeType(name)) {
 		return mapGuidePrefix + name, true
 	}
-	if name, ok := strings.CutPrefix(l, StagePrefix); ok && slices.Contains(Stages, StageName(name)) {
+	if name, ok := strings.CutPrefix(l, StagePrefix); ok && slices.Contains(Stages(), StageName(name)) {
 		return name, true
 	}
 	return "", false

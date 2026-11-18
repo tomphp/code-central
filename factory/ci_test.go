@@ -47,7 +47,7 @@ func TestThePushRemoteReportedIsTheOneTheLandingMethodNames(t *testing.T) {
 	}
 }
 
-func TestAFactoryWithNoPushRemoteReportsNothingAndStillStarts(t *testing.T) {
+func TestAFactoryWithNoPushRemoteReportsNoURLAndStillStarts(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Still claimed")
@@ -56,7 +56,7 @@ func TestAFactoryWithNoPushRemoteReportsNothingAndStillStarts(t *testing.T) {
 	h.Start()
 	h.WantState(id, store.InProgress)
 	if got := pushRemoteURL(t, h); got != "" {
-		t.Fatalf("push remote URL %q, want none reported", got)
+		t.Fatalf("push remote URL %q, want none", got)
 	}
 }
 

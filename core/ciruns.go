@@ -40,7 +40,7 @@ const (
 )
 
 // CIResults are the CI results.
-var CIResults = []CIResult{CIRunning, CIPassed, CIFailed, CICancelled}
+func CIResults() []CIResult { return []CIResult{CIRunning, CIPassed, CIFailed, CICancelled} }
 
 // ciNewlyPushed is how long after its push a pushed commit is still
 // watched once its runs have all finished: GitHub may start a workflow
@@ -336,7 +336,7 @@ func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput)
 			return err
 		}
 		p, _ := w.Project(key)
-		if !landingPolicyOf(p).RunsCIWatcher() {
+		if !landingPolicies(p).RunsCIWatcher() {
 			return &Error{Code: ActionNotAllowed, Message: "CI Tracking is off on " + key + ", so it tracks no CI Runs"}
 		}
 		stored := w.CIRuns(key)

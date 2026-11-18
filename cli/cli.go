@@ -250,7 +250,7 @@ func addScope(fs *flag.FlagSet) *string {
 }
 
 func resolveScope(e Env, projectFlag string) (scope, error) {
-	project, err := ResolveProject(e.Dir, projectFlag, e.Getenv)
+	project, err := client.ResolveProject(e.Dir, projectFlag, e.Getenv)
 	if err != nil {
 		return scope{}, err
 	}
@@ -258,19 +258,6 @@ func resolveScope(e Env, projectFlag string) (scope, error) {
 		return scope{}, usagef("no Project: pass --project <key>, set CODE_CENTRAL_PROJECT, or run `code-central init` in the repository")
 	}
 	return scope{project: project, client: newClient(e)}, nil
-}
-
-// ResolveProject is the Project Key every client of the service resolves:
-// projectFlag, else CODE_CENTRAL_PROJECT, else the key in the nearest
-// .mcp.json at or above dir. It is "" when none of them names one.
-func ResolveProject(dir, projectFlag string, getenv func(string) string) (string, error) {
-	if projectFlag != "" {
-		return projectFlag, nil
-	}
-	if p := getenv("CODE_CENTRAL_PROJECT"); p != "" {
-		return p, nil
-	}
-	return nearestKey(dir)
 }
 
 func printJSON(e Env, v any) error {
@@ -393,7 +380,7 @@ func runGetTicket(ctx context.Context, e Env, args []string) error {
 	// CLI names get_ticket's default parts itself, and briefs them.
 	brief := len(parts) == 0
 	if brief {
-		parts = core.DefaultTicketParts
+		parts = core.DefaultTicketParts()
 	}
 	v, err := sc.client.GetTicket(ctx, sc.project, core.Ref(pos[0]), parts...)
 	if err != nil {
@@ -439,7 +426,7 @@ func runFindTickets(ctx context.Context, e Env, args []string) error {
 	}
 	if *full {
 		// As get-ticket does: the default parts, brief.
-		views, err := sc.client.FindTicketViews(ctx, sc.project, in, core.DefaultTicketParts...)
+		views, err := sc.client.FindTicketViews(ctx, sc.project, in, core.DefaultTicketParts()...)
 		if err != nil {
 			return err
 		}

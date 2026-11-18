@@ -41,6 +41,7 @@ func TestABaseOnlyOnTheRemoteIsCreatedLocally(t *testing.T) {
 func TestAMissingBaseHoldsClaimsAndLandingUntilItIsCreated(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
+	h.AddRemote("origin")
 	setBase(h, "release")
 	landing, _ := accepted(h, "Waits to land", "feature.txt", "feature\n")
 	ready := h.ReadyTicket("Waits to start")

@@ -111,10 +111,10 @@ type Project struct {
 }
 
 // Repository is one git repository a Project's work changes. The Home
-// Repository, where the Factory runs, keeps only its Name, the Project
-// Key, and its place in the landing order: its Base is the Project's
-// (Landing.Base) and its Clone URL the Push remote URL the Factory
-// reports.
+// Repository, where the Factory runs, keeps its Name, the Project Key,
+// its place in the landing order, and any Own Landing and Push remote:
+// its Base is the Project's (Landing.Base) and its Clone URL the Push
+// remote URL the Factory reports.
 type Repository struct {
 	// Name is the Repository Name, fixed once added.
 	Name string
@@ -126,13 +126,34 @@ type Repository struct {
 	// LocalPath is where the Factory finds the Repository's clone, when
 	// it isn't beside the Home Repository; empty for there.
 	LocalPath string
+	// OwnLanding is the Repository's Own Landing, the zero OwnLanding
+	// while it follows the Project's Default Landing (Spec
+	// code-central-890).
+	OwnLanding OwnLanding
+	// PushRemote names the git remote the Factory pushes the Repository
+	// to and fetches it from; empty for the Project's (Landing.Remote).
+	PushRemote string
 }
 
-// LocalOnly reports whether r is a Repository other than the Home with
-// no Clone URL: never cloned, skipped by Push and refused under Pull
-// Request. The Home's Clone URL is the reported Push remote URL, so it is
-// never local-only.
-func (r Repository) LocalOnly() bool { return !r.Home && r.CloneURL == "" }
+// OwnLanding is a Repository's own Landing Method and Push option, set
+// in place of the Project's Default Landing. Its zero value, with no
+// Method, is none: the Repository follows the Default Landing.
+type OwnLanding struct {
+	Method LandingMethod
+	Push   bool
+}
+
+// Set reports whether o is an Own Landing, not the zero one.
+func (o OwnLanding) Set() bool { return o.Method != "" }
+
+// Normalized is o as it is stored: Push is implied under Pull Request,
+// so it is cleared there, as for the Default Landing.
+func (o OwnLanding) Normalized() OwnLanding {
+	if o.Method == LandingPullRequest {
+		o.Push = false
+	}
+	return o
+}
 
 // DefaultRepositoryBase is a Repository's Base when the human names none.
 const DefaultRepositoryBase = "main"
@@ -168,9 +189,9 @@ func (p Project) RepositoryList() []Repository {
 }
 
 // SetRepositories stores rs as the Project's Repositories, none while
-// they are the Home Repository alone.
+// they are the Home Repository alone with nothing more than its name.
 func (p *Project) SetRepositories(rs []Repository) {
-	if len(rs) == 1 && rs[0].Home {
+	if len(rs) == 1 && rs[0] == (Repository{Name: rs[0].Name, Home: true}) {
 		rs = nil
 	}
 	p.Repositories = rs
@@ -399,40 +420,38 @@ func ciProviderNames() []string {
 	return out
 }
 
-// CI is a Project's CI settings: whether CI Tracking is on, the CI
-// Provider and the repository it watches, the Ignored workflows (each a
-// workflow file's base name, such as ci.yml, or a pipeline's name), the
-// URL of the Push remote the Factory last reported, and the CI Rules.
-// Repository is the GitHub repository,
-// ProjectURL the Azure DevOps project and PATEnv the name of the
-// environment variable holding its PAT (never the PAT); each provider
-// keeps its own. Those name the Home Repository's CI: Repositories hold
-// the other Repositories' entries (Spec code-central-848), while the PAT
-// environment variable, the Ignored workflows and the CI Rules are the
-// Project's, for every Repository.
+// CI is a Project's CI settings: whether CI Tracking is on, the name of
+// the environment variable holding the Azure DevOps PAT (never the PAT),
+// the Ignored workflows (each a workflow file's base name, such as
+// ci.yml, or a pipeline's name), the URL of the Home Repository's Push
+// remote the Factory last reported, or that it reported none, the CI
+// Rules, and each Repository's CI entry, the Home's included (Spec
+// code-central-890). The PAT environment variable, the Ignored workflows
+// and the CI Rules are the Project's, for every Repository.
 type CI struct {
 	Tracking         bool
-	Provider         CIProvider
-	Repository       string
-	ProjectURL       string
 	PATEnv           string
 	IgnoredWorkflows []string
 	PushRemoteURL    string
+	// NoPushRemote is whether the Factory last reported that the Home
+	// Repository's clone has no Push remote, which makes it local-only;
+	// PushRemoteURL is empty then. A Factory that never reports none
+	// leaves it false, and the Home pushed.
+	NoPushRemote bool
 	// PushRemoteBase is the base branch a Factory reported before the base
 	// became a Project setting. It is frozen: only Project.Base reads it,
 	// as the fallback for a Landing with no Base.
 	PushRemoteBase string
 	Rules          []CIRule
-	// Repositories are the CI entries of the Repositories other than the
-	// Home, each named once; a Repository without one reads as filled in
-	// from its Clone URL.
+	// Repositories are the Repositories' CI entries, the Home's included,
+	// each named once; a Repository without one reads as filled in from
+	// its Clone URL.
 	Repositories []CIRepository
 }
 
-// CIRepository is the CI entry of one Repository other than the Home:
-// its CI Provider and what that watches (the GitHub repository as
-// owner/name, or the Azure DevOps project's URL), or Not watched, when
-// its CI is never tracked.
+// CIRepository is the CI entry of one Repository: its CI Provider and
+// what that watches (the GitHub repository as owner/name, or the Azure
+// DevOps project's URL), or Not watched, when its CI is never tracked.
 type CIRepository struct {
 	Name       string
 	NotWatched bool
@@ -463,22 +482,14 @@ func (r CIRule) Equal(s CIRule) bool {
 }
 
 // DefaultCI is the CI of a Project that has never had any set: CI
-// Tracking off, on GitHub Actions, with nothing named.
-func DefaultCI() CI { return CI{Provider: CIGitHubActions} }
+// Tracking off, with nothing named.
+func DefaultCI() CI { return CI{} }
 
 // Equal reports whether c and d are the same settings.
 func (c CI) Equal(d CI) bool {
-	return c.Tracking == d.Tracking && c.Provider == d.Provider && c.Repository == d.Repository && c.ProjectURL == d.ProjectURL && c.PATEnv == d.PATEnv &&
-		slices.Equal(c.IgnoredWorkflows, d.IgnoredWorkflows) && c.PushRemoteURL == d.PushRemoteURL && c.PushRemoteBase == d.PushRemoteBase &&
+	return c.Tracking == d.Tracking && c.PATEnv == d.PATEnv &&
+		slices.Equal(c.IgnoredWorkflows, d.IgnoredWorkflows) && c.PushRemoteURL == d.PushRemoteURL && c.NoPushRemote == d.NoPushRemote && c.PushRemoteBase == d.PushRemoteBase &&
 		slices.EqualFunc(c.Rules, d.Rules, CIRule.Equal) && slices.Equal(c.Repositories, d.Repositories)
-}
-
-// orDefault fills in what c leaves empty from DefaultCI.
-func (c CI) orDefault() CI {
-	if c.Provider == "" {
-		c.Provider = CIGitHubActions
-	}
-	return c
 }
 
 // GitHubIssues is a Project's GitHub Issues settings (Spec

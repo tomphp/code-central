@@ -13,7 +13,7 @@ import (
 
 // whole asks get_ticket for every part: the whole Ticket.
 func whole(ref core.Ref) core.GetTicketInput {
-	return core.GetTicketInput{Ticket: ref, Parts: core.TicketParts}
+	return core.GetTicketInput{Ticket: ref, Parts: core.TicketParts()}
 }
 
 func (f fixture) get(t *testing.T, ref core.Ref) core.TicketView {

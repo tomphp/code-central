@@ -29,7 +29,7 @@ func itemWorldOn(t *testing.T, f fixture) fixture {
 	f.landing(t, store.Landing{Method: store.LandingMerge, Push: true, Remote: "origin"})
 	err := f.store.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
-		p.CI = store.CI{Tracking: true, Provider: store.CIGitHubActions, Repository: "acme/web"}
+		p.CI = trackingOn("acme/web")
 		return w.PutProject(p)
 	})
 	if err != nil {

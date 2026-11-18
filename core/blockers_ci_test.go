@@ -20,7 +20,7 @@ func (f fixture) gatedBlocker(t *testing.T, n int) {
 	err := f.store.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
 		p.Landing = store.Landing{Method: store.LandingMerge, Push: true, Remote: "origin"}
-		p.CI = store.CI{Tracking: true, Provider: store.CIGitHubActions, Repository: "acme/web"}
+		p.CI = trackingOn("acme/web")
 		return w.PutProject(p)
 	})
 	if err != nil {

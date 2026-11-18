@@ -93,7 +93,7 @@ func (c *Core) SetOptions(ctx context.Context, in SetOptionsInput) (OptionsView,
 }
 
 // OptionNames is every Option there is, for the refusal of an unknown one.
-var OptionNames = []string{"focus_clear", "focus_popup", "limits_popup", "gh_path"}
+func OptionNames() []string { return []string{"focus_clear", "focus_popup", "limits_popup", "gh_path"} }
 
 func optionsView(o store.Options) OptionsView {
 	return OptionsView{FocusClear: o.FocusClear, FocusPopup: o.FocusPopup, LimitsPopup: o.LimitsPopup, GHPath: o.GHPath}

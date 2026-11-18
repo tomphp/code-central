@@ -28,10 +28,10 @@ const mapGuidePrefix = "map-"
 // type, prototype, retro, then implementation.
 var GuideNames = func() []string {
 	var names []string
-	for _, s := range Stages {
+	for _, s := range Stages() {
 		names = append(names, string(s))
 	}
-	for _, t := range WayfinderTypes {
+	for _, t := range WayfinderTypes() {
 		names = append(names, mapGuidePrefix+string(t))
 	}
 	return append(names, PrototypeLabel, RetroLabel, ImplementationStage)

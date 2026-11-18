@@ -63,13 +63,13 @@ type watcherKind struct {
 
 // watcherKinds is every kind of Watcher.
 var watcherKinds = map[WatcherKind]watcherKind{
-	WatcherCI: {name: "CI Watcher", setting: "CI Tracking", on: func(p store.Project) bool { return landingPolicyOf(p).RunsCIWatcher() },
+	WatcherCI: {name: "CI Watcher", setting: "CI Tracking", on: func(p store.Project) bool { return landingPolicies(p).RunsCIWatcher() },
 		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemPATMissing, ProblemPATRejected,
 			ProblemProjectUnreadable, ProblemPATScope, ProblemCheckFailed}, watches: "CI"},
 	WatcherIssues: {name: "Issue Watcher", setting: "GitHub Issues", on: func(p store.Project) bool { return p.GitHubIssues.On },
 		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemIssuesDisabled, ProblemNoTriage, ProblemCheckFailed},
 		watches:  "GitHub Issues", watched: func(p store.Project) []string { return p.GitHubIssues.Repositories }},
-	WatcherPullRequests: {name: "Pull Request Watcher", setting: "Pull Request", on: func(p store.Project) bool { return landingPolicyOf(p).RunsPullRequestWatcher() },
+	WatcherPullRequests: {name: "Pull Request Watcher", setting: "Pull Request", on: func(p store.Project) bool { return landingPolicies(p).RunsPullRequestWatcher() },
 		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemNoWrite, ProblemPATMissing, ProblemPATRejected,
 			ProblemPATScope, ProblemCheckFailed}, watches: "pull requests"},
 	WatcherWorkItems: {name: "Work Item Watcher", setting: "Azure Boards", on: func(p store.Project) bool { return p.AzureBoards.On },
@@ -132,9 +132,11 @@ const (
 )
 
 // WatcherProblems are the problems.
-var WatcherProblems = []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable,
-	ProblemIssuesDisabled, ProblemNoTriage, ProblemNoWrite, ProblemPATMissing, ProblemPATRejected,
-	ProblemProjectUnreadable, ProblemPATScope, ProblemQueryUnusable, ProblemTooManyWorkItems, ProblemCheckFailed, ProblemCrashed}
+func WatcherProblems() []WatcherProblem {
+	return []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable,
+		ProblemIssuesDisabled, ProblemNoTriage, ProblemNoWrite, ProblemPATMissing, ProblemPATRejected,
+		ProblemProjectUnreadable, ProblemPATScope, ProblemQueryUnusable, ProblemTooManyWorkItems, ProblemCheckFailed, ProblemCrashed}
+}
 
 // WatcherCheckResult is a Watcher's check mode's answer: no Problem when
 // it can watch, else what is wrong and its fix.
@@ -172,7 +174,9 @@ const (
 )
 
 // WatcherStates are the states a Watcher can be in.
-var WatcherStates = []WatcherState{WatcherNotReported, WatcherWatching, WatcherError}
+func WatcherStates() []WatcherState {
+	return []WatcherState{WatcherNotReported, WatcherWatching, WatcherError}
+}
 
 // WatcherView is a Project's Watcher's status, in its kind's settings.
 type WatcherView struct {
