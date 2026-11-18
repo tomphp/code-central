@@ -38,6 +38,10 @@ type CIItemView struct {
 	// choosing it.
 	NewFixNote   string `json:"new_fix_note,omitempty"`
 	SendBackNote string `json:"send_back_note,omitempty"`
+	// AutoFixStopped is the "Auto-fix stopped after N attempts" line
+	// while Auto-fix has stopped at the limit on the item, which waits on
+	// the human again; left out otherwise.
+	AutoFixStopped *AutoFixStoppedView `json:"auto_fix_stopped,omitempty"`
 }
 
 // CIItemTicket is one Ticket a CI item lists, with its Spec.
@@ -87,6 +91,7 @@ func (e *evaluation) ciItemView(it ciItem) *CIItemView {
 	if slices.Contains(v.Options, OptionNewFixTicket) {
 		v.NewFixNote = e.newFixNote(it)
 	}
+	v.AutoFixStopped = e.autoFixStoppedLine(it)
 	return v
 }
 

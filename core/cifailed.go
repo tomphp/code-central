@@ -81,17 +81,17 @@ func acceptFailedCI(p *domain.Project, record, commit string, now time.Time) {
 	respond(p, record, commit, func(res *domain.CIResponse) { res.LandAnyway = now })
 }
 
-// fixTicketOpen reports whether the human opened a fix Ticket for the
-// failure of commit, in the Repository record names, that is neither Done
-// nor Cancelled, which leaves the commit's CI failed item out of Needs
-// Me.
-func fixTicketOpen(r store.Reader, p domain.Project, record, commit string) bool {
+// fixTicketOpen is the fix Ticket the human, or Auto-fix, opened for the
+// failure of commit, in the Repository record names, while it is neither
+// Done nor Cancelled, which leaves the commit's CI failed item out of
+// Needs Me.
+func fixTicketOpen(r store.Reader, p domain.Project, record, commit string) (domain.Ticket, bool) {
 	n := responseOf(p, record, commit).FixTicket
 	if n == 0 {
-		return false
+		return domain.Ticket{}, false
 	}
 	fix, ok := r.Ticket(p.Key, n)
-	return ok && fix.State != domain.Done && fix.State != domain.Cancelled
+	return fix, ok && !finished(fix.State)
 }
 
 // CIResponseInput is land_anyway's and rerun_ci's input: the Ticket, and
