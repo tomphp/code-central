@@ -1,56 +1,6 @@
 package store
 
-import (
-	"fmt"
-	"slices"
-)
-
-// ExternalState is a linked item's status in its external system, as its
-// Integration last saw it.
-type ExternalState string
-
-// The four external states.
-const (
-	ExternalOpen       ExternalState = "open"
-	ExternalClosed     ExternalState = "closed"
-	ExternalDeleted    ExternalState = "deleted"
-	ExternalOutOfScope ExternalState = "out_of_scope"
-)
-
-// ExternalStates lists every external state.
-var ExternalStates = []ExternalState{ExternalOpen, ExternalClosed, ExternalDeleted, ExternalOutOfScope}
-
-// Valid reports whether s is one of the four external states.
-func (s ExternalState) Valid() bool { return slices.Contains(ExternalStates, s) }
-
-// Link records the external item a Spec or Ticket mirrors (ADR 0004). The
-// zero Link means the item isn't linked. A detached Link is kept so
-// lookups still find it, but no longer owns the item's definition. An
-// outbound Link (Spec code-central-279) doesn't own it either: Code
-// Central owns the item and only writes to the external item.
-type Link struct {
-	Integration   string
-	ID            string
-	URL           string
-	ExternalState ExternalState
-	Detached      bool
-	Outbound      bool
-	// Written are the keys of the comments the Integration has written
-	// to the external item for it (Spec code-central-279), so none is
-	// written twice.
-	Written []string
-}
-
-// Linked reports whether the item has a Link at all, detached or not.
-func (l Link) Linked() bool { return l.Integration != "" }
-
-// Owned reports whether the Link still owns the item's definition: it is
-// linked, not detached and not outbound.
-func (l Link) Owned() bool { return l.Attached() && !l.Outbound }
-
-// Attached reports whether the Link is linked and not detached, so the
-// Integration still writes to the external item.
-func (l Link) Attached() bool { return l.Linked() && !l.Detached }
+import "fmt"
 
 type linkFile struct {
 	Integration   string   `yaml:"integration"`

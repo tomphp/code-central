@@ -229,14 +229,14 @@ func (s *FileStore) loadProject(key string) error {
 	if l := pf.Landing; l != nil {
 		p.Landing = Landing{Method: LandingMethod(l.Method), Push: l.Push, Remote: l.Remote, LandPerSpec: l.LandPerSpec == nil || *l.LandPerSpec, PATEnv: l.PATEnv, Base: l.Base}
 		if !p.Landing.Method.Valid() {
-			return &LoadError{File: rel, Field: "landing.method", Msg: fmt.Sprintf("unknown landing method %q (%s)", l.Method, strings.Join(landingMethodNames(), " or "))}
+			return &LoadError{File: rel, Field: "landing.method", Msg: fmt.Sprintf("unknown landing method %q (%s)", l.Method, strings.Join(LandingMethodNames(), " or "))}
 		}
 	}
 	if c := pf.CI; c != nil {
 		p.CI = CI{Tracking: c.Tracking, PATEnv: c.PATEnv,
 			IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, NoPushRemote: c.NoPushRemote, PushRemoteBase: c.PushRemoteBase}
 		if c.Provider != "" && !CIProvider(c.Provider).Valid() {
-			return &LoadError{File: rel, Field: "ci.provider", Msg: fmt.Sprintf("unknown CI provider %q (%s)", c.Provider, strings.Join(ciProviderNames(), " or "))}
+			return &LoadError{File: rel, Field: "ci.provider", Msg: fmt.Sprintf("unknown CI provider %q (%s)", c.Provider, strings.Join(CIProviderNames(), " or "))}
 		}
 		for i, r := range c.Rules {
 			field := fmt.Sprintf("ci.rules[%d]", i)
@@ -262,7 +262,7 @@ func (s *FileStore) loadProject(key string) error {
 		p.AzureBoards = AzureBoards{On: a.On, Mode: AzureBoardsMode(a.Mode), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
 			PATEnv: a.PATEnv, NewIssuesNeedMe: a.NewIssuesNeedMe, Spec: a.Spec}
 		if a.Mode != "" && !p.AzureBoards.Mode.Valid() {
-			return &LoadError{File: rel, Field: "azure_boards.mode", Msg: fmt.Sprintf("unknown Azure Boards mode %q (%s)", a.Mode, strings.Join(azureBoardsModeNames(), " or "))}
+			return &LoadError{File: rel, Field: "azure_boards.mode", Msg: fmt.Sprintf("unknown Azure Boards mode %q (%s)", a.Mode, strings.Join(AzureBoardsModeNames(), " or "))}
 		}
 	}
 	if m := pf.Models; m != nil {

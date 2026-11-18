@@ -846,7 +846,7 @@ func formatTime(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
 // encodeLanding leaves the default Landing out of project.yaml, so a
 // Project that never had one set keeps the file it always had.
 func encodeLanding(l Landing) *landingFile {
-	if l = l.orDefault(); l == DefaultLanding() {
+	if l = landingOrDefault(l); l == DefaultLanding() {
 		return nil
 	}
 	f := &landingFile{Method: string(l.Method), Push: l.Push, Remote: l.Remote, PATEnv: l.PATEnv, Base: l.Base}
@@ -886,7 +886,7 @@ func decodeCIRepositories(fs []ciRepositoryFile) ([]CIRepository, string, error)
 		case slices.ContainsFunc(out, func(o CIRepository) bool { return o.Name == r.Name }):
 			return nil, fmt.Sprintf("[%d].name", i), fmt.Errorf("%s has two CI entries", r.Name)
 		case r.Provider != "" && !r.Provider.Valid(), r.Provider == "" && !r.NotWatched:
-			return nil, fmt.Sprintf("[%d].provider", i), fmt.Errorf("unknown CI provider %q (%s)", f.Provider, strings.Join(ciProviderNames(), " or "))
+			return nil, fmt.Sprintf("[%d].provider", i), fmt.Errorf("unknown CI provider %q (%s)", f.Provider, strings.Join(CIProviderNames(), " or "))
 		}
 		out = append(out, r)
 	}
@@ -985,7 +985,7 @@ func decodeRepositories(key string, fs []repositoryFile) ([]Repository, string, 
 		var own OwnLanding
 		if l := f.Landing; l != nil {
 			if own = (OwnLanding{Method: LandingMethod(l.Method), Push: l.Push}).Normalized(); !own.Method.Valid() {
-				return nil, field + ".landing.method", fmt.Errorf("unknown landing method %q (%s)", l.Method, strings.Join(landingMethodNames(), " or "))
+				return nil, field + ".landing.method", fmt.Errorf("unknown landing method %q (%s)", l.Method, strings.Join(LandingMethodNames(), " or "))
 			}
 		}
 		if f.Home {

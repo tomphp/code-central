@@ -26,10 +26,12 @@ import (
 var guardedFields = []string{"Method", "Push", "LandPerSpec", "Tracking", "Landing"}
 
 // guardedTypes hold the landing inputs, as package path and type name.
+// The type checker names an alias's type by where it is declared, so a
+// read through store.Landing is a read of domain.Landing.
 var guardedTypes = []string{
-	"github.com/tomoram/code-central/store.Landing",
-	"github.com/tomoram/code-central/store.OwnLanding",
-	"github.com/tomoram/code-central/store.CI",
+	"github.com/tomoram/code-central/domain.Landing",
+	"github.com/tomoram/code-central/domain.OwnLanding",
+	"github.com/tomoram/code-central/domain.CI",
 	"github.com/tomoram/code-central/core.LandingView",
 	"github.com/tomoram/code-central/core.RepositoryView",
 }
@@ -184,12 +186,13 @@ func fieldOwner(s *types.Selection) string {
 	return named.Obj().Pkg().Path() + "." + named.Obj().Name()
 }
 
-// derefPointer is the type t points to, or t when it isn't a pointer.
+// derefPointer is the type t points to, or t when it isn't a pointer,
+// with any alias resolved to the type it names.
 func derefPointer(t types.Type) types.Type {
 	if p, ok := t.Underlying().(*types.Pointer); ok {
-		return p.Elem()
+		t = p.Elem()
 	}
-	return t
+	return types.Unalias(t)
 }
 
 // allowlisted reports whether the allowlist covers the read.
@@ -296,9 +299,9 @@ func TestTheLandingGuardFlagsAReadOfALandingSetting(t *testing.T) {
 	msg := guardFailure(landingGuardAllowlist, landingReads(pkg))
 	want := "these read a landing setting to decide; ask the Landing Policy instead " +
 		"(see docs/agents/recipes.md, \"Adding or changing a landing rule\"):\n" +
-		"\tfixture/fixture.go:16: Method of github.com/tomoram/code-central/store.Landing\n" +
-		"\tfixture/fixture.go:19: Tracking of github.com/tomoram/code-central/store.CI\n" +
-		"\tfixture/fixture.go:21: Push of github.com/tomoram/code-central/store.Landing\n" +
+		"\tfixture/fixture.go:16: Method of github.com/tomoram/code-central/domain.Landing\n" +
+		"\tfixture/fixture.go:19: Tracking of github.com/tomoram/code-central/domain.CI\n" +
+		"\tfixture/fixture.go:21: Push of github.com/tomoram/code-central/domain.Landing\n" +
 		"\tfixture/fixture.go:23: LandPerSpec of github.com/tomoram/code-central/core.LandingView\n"
 	if msg != want {
 		t.Errorf("failure =\n%s\nwant\n%s", msg, want)
