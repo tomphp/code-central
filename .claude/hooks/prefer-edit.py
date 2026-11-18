@@ -45,16 +45,36 @@ def rewrites_one_path(body):
     return bool(reads & writes)
 
 
+def command_words(shell):
+    """The words of each simple command in the shell text.
+
+    Commands are split on `;`, `&`, `|` and newlines outside quotes, so a `;`
+    or newline inside a quoted script stays in its word.
+    """
+    lexer = shlex.shlex(shell, posix=True, punctuation_chars="\n;&|")
+    lexer.whitespace = " \t\r"
+    lexer.whitespace_split = True
+    try:
+        tokens = list(lexer)
+    except ValueError:
+        return []
+    commands, words = [], []
+    for token in tokens:
+        if token and set(token) <= set("\n;&|"):
+            commands.append(words)
+            words = []
+        else:
+            words.append(token)
+    return commands + [words]
+
+
 def sed_operands(shell):
     """The file operands of the `sed -i` in the shell text: the words after its expression."""
-    for segment in re.split(r"[;&|\n]", shell):
-        try:
-            words = shlex.split(segment)
-        except ValueError:
-            continue
+    for words in command_words(shell):
         if not words or words[0] != "sed" or not any(re.fullmatch(r"-\w*i\w*|--in-place.*", w) for w in words[1:]):
             continue
-        rest = [w for w in words[1:] if not w.startswith("-")]
+        # BSD `sed -i ''` passes an empty backup suffix as its own word.
+        rest = [w for w in words[1:] if w and not w.startswith("-")]
         scripted = any(w in ("-e", "-f") or w.startswith("--expression") for w in words[1:])
         return rest if scripted else rest[1:]
     return []
@@ -72,11 +92,7 @@ def perl_rewrites_one_path(body):
 
 def perl_operands(shell):
     """The file operands of the `perl -i` in the shell text: the words after its script."""
-    for segment in re.split(r"[;&|\n]", shell):
-        try:
-            words = shlex.split(segment)
-        except ValueError:
-            continue
+    for words in command_words(shell):
         if not words or words[0] != "perl" or not any(PERL_INPLACE_FLAG.fullmatch(w) for w in words[1:]):
             continue
         rest, scripted, skip = [], False, False
@@ -129,7 +145,9 @@ def main():
                 "Edit the file with the Edit tool, not `sed -i`, `perl -i` or a python or perl replace. "
                 "Read the lines you are changing first (Read with offset and limit, "
                 "which Edit accepts), then Edit. Edit fails when old_string isn't "
-                "found or isn't unique, so a missed change can't pass silently."
+                "found or isn't unique, so a missed change can't pass silently. "
+                "A command that rewrites several files (`sed -i` or `perl -pi` with two or more "
+                "file operands, a glob, or a loop) is allowed."
             ),
         }}, sys.stdout)
 
