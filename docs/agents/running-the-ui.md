@@ -13,6 +13,14 @@ CODE_CENTRAL_URL=http://127.0.0.1:7875 npm --prefix web run dev    # run_in_back
 
 The store is keyed on the port, so pick a spare `PORT=` per session (your Ticket's number, say): worktrees running in parallel then don't collide on the store's lock.
 
+To seed a scratch service of your own (`code-central serve --store <scratch> --port <spare>`) by hand, `curl` it as the human: a request without `X-Code-Central-Actor: human` is made as the agent, and the human's writes (such as adding a Repository) answer `action_not_allowed`. Operations live at `/api/p/<key>/<op>`:
+
+```
+curl -X POST http://127.0.0.1:<spare>/api/p/demo/add_repository \
+  -H 'Content-Type: application/json' -H 'X-Code-Central-Actor: human' \
+  -d '{"name":"web","local_path":"/abs/path/to/clone"}'
+```
+
 To change what it seeds, edit `internal/demostore/main.go`.
 
 ## Gotchas
