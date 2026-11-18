@@ -116,7 +116,14 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 			return ProjectView{}, invalid("base", "%s", err)
 		}
 	}
-	if err := c.checkPullRequest(ctx, key, store.Landing{Method: in.Method, PATEnv: patEnv}); err != nil {
+	withLanding := func(p store.Project) store.Project {
+		p.Landing.Method, p.Landing.Push = l.Method, l.Push
+		if patEnv != "" {
+			p.Landing.PATEnv = patEnv
+		}
+		return p
+	}
+	if err := c.checkPullRequest(ctx, key, withLanding); err != nil {
 		return ProjectView{}, err
 	}
 	var v ProjectView
@@ -135,20 +142,23 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		if patEnv != "" {
 			l.PATEnv = patEnv
 		}
-		if l.Method == store.LandingPullRequest {
+		if in.LandPerSpec != nil {
+			l.LandPerSpec = *in.LandPerSpec
+		}
+		nextP := p
+		nextP.Landing = l
+		was, next := landingPolicies(p), landingPolicies(nextP)
+		// A local-only Home has no Push remote to check: refused below
+		// when it comes under Pull Request, and flagged when already there.
+		if next.In(key).LandsByPullRequest() && !localOnlyIn(p, key) {
 			if err := checkPullRequestHost(p.CI.PushRemoteURL); err != nil {
 				return err
 			}
 		}
-		if in.LandPerSpec != nil {
-			l.LandPerSpec = *in.LandPerSpec
-		}
-		was, next := landingPolicyOf(p), NewLandingPolicy(l.Method, l.Push, l.LandPerSpec, p.CI.Tracking)
-		// Only turning Pull Request on is refused.
-		if !was.EveryRepositoryNeedsCloneURL() {
-			if err := refuseLocalOnly(next, repositoriesView(p)); err != nil {
-				return err
-			}
+		// Only bringing a local-only Repository under Pull Request is
+		// refused.
+		if err := refuseLocalOnlyFollowers(p, nextP); err != nil {
+			return err
 		}
 		if p.Landing == l {
 			v = c.projectView(p)
@@ -202,7 +212,8 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		}
 	}
 	if err := c.store.View(func(r store.Reader) error {
-		v.Landing.OpenPullRequests = openPullRequests(r, key, v.LandingPolicy())
+		p, _ := r.Project(key)
+		v.Landing.OpenPullRequests = openPullRequests(r, p)
 		return nil
 	}); err != nil {
 		return v, err
@@ -231,7 +242,7 @@ func (c *Core) ListProjects(context.Context) ([]ProjectRow, error) {
 	err := c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
 			row := ProjectRow{ProjectView: c.projectView(p)}
-			row.Landing.OpenPullRequests = openPullRequests(r, p.Key, landingPolicyOf(p))
+			row.Landing.OpenPullRequests = openPullRequests(r, p)
 			fillChangedBy(r, &row.ProjectView)
 			e := c.evaluate(r, p)
 			row.NeedsMe = len(e.baseRows())

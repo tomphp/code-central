@@ -18,6 +18,7 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
+	"github.com/tomoram/code-central/ratelimit"
 	"github.com/tomoram/code-central/watchers"
 )
 
@@ -71,7 +72,7 @@ func Check(ctx context.Context, in core.IssuesCheckInput, env gh.Env) core.Watch
 // checkOne is Check for one repository.
 func checkOne(ctx context.Context, repository, ghPath string, env gh.Env) core.WatcherCheckResult {
 	_, r, err := checkAccess(ctx, repository, ghPath, env)
-	var limit *watchers.RateLimitError
+	var limit *ratelimit.Error
 	if errors.As(err, &limit) {
 		r = limit.CheckResult(time.Now())
 	}
@@ -86,7 +87,7 @@ type access struct {
 }
 
 // checkAccess is Check, as each poll runs it too, with what it found:
-// GitHub rate-limiting a call is a *watchers.RateLimitError, not a problem.
+// GitHub rate-limiting a call is a *ratelimit.Error, not a problem.
 func checkAccess(ctx context.Context, repository, ghPath string, env gh.Env) (a access, r core.WatcherCheckResult, err error) {
 	prog, missing := gh.Find(ghPath, env)
 	if missing != nil {
@@ -127,11 +128,11 @@ func (r ghRepository) canTriage() bool {
 // checkRepository reads repository through prog, gh, and checks its issues
 // are on and gh's login can triage them. It returns the repository's name
 // as GitHub gives it, once it could read it. GitHub rate-limiting the
-// read is a *watchers.RateLimitError, not a problem.
+// read is a *ratelimit.Error, not a problem.
 func checkRepository(ctx context.Context, env gh.Env, prog, repository string) (string, core.WatcherCheckResult, error) {
 	body, msg, err := gh.API(ctx, env, prog, "repos/"+repository)
 	if err != nil {
-		var limit *watchers.RateLimitError
+		var limit *ratelimit.Error
 		if errors.As(err, &limit) {
 			return "", core.WatcherCheckResult{}, limit
 		}

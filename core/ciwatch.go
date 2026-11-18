@@ -18,8 +18,12 @@ import (
 // restart. Provider, Repository, ProjectURL, Waiting and Reruns are the
 // Home Repository's; Repositories hold every other watched Repository's.
 type CIWatch struct {
-	Project    string           `json:"project"`
-	Tracking   bool             `json:"tracking"`
+	Project  string `json:"project"`
+	Tracking bool   `json:"tracking"`
+	// NotWatched is whether the Home Repository is Not watched (Spec
+	// code-central-890): the CI Watcher then leaves it alone. Provider,
+	// Repository and ProjectURL are the Home Repository's CI otherwise.
+	NotWatched bool             `json:"not_watched,omitempty"`
 	Provider   store.CIProvider `json:"provider"`
 	Repository string           `json:"repository"`
 	ProjectURL string           `json:"project_url"`
@@ -123,7 +127,8 @@ func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
 			return unknownProject(key)
 		}
 		v := ciView(p, WatcherView{})
-		out = CIWatch{Project: key, Tracking: v.Tracking, Provider: v.Provider, Repository: v.Repository, ProjectURL: v.ProjectURL, PATEnv: v.PATEnv,
+		home, _ := ciEntryOf(p, key)
+		out = CIWatch{Project: key, Tracking: v.Tracking, NotWatched: home.NotWatched, Provider: providerOrDefault(home.Provider), Repository: home.Repository, ProjectURL: home.ProjectURL, PATEnv: v.PATEnv,
 			IgnoredWorkflows: v.IgnoredWorkflows, Rules: []CIWatchRule{}, GHPath: r.Options().GHPath,
 			Waiting: []CIWaitingCommit{}, Reruns: []CIRerun{}, Repositories: []CIWatchRepository{}, Pushed: []CITicketCommit{}, Landed: []CITicketCommit{}}
 		last := ciRulesLastRuns(r.CIRuns(key))
@@ -134,7 +139,7 @@ func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
 			}
 			out.Rules = append(out.Rules, w)
 		}
-		runs := landingPolicyOf(p).RunsCIWatcher()
+		runs := landingPolicies(p).RunsCIWatcher()
 		var ci *ciState
 		if runs {
 			ci = c.ciStateOf(r, p)
@@ -142,6 +147,9 @@ func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
 			out.Pushed, out.Landed = ciTicketCommits(r, key)
 		}
 		for _, t := range ciTargets(p) {
+			if t.name == key {
+				continue
+			}
 			w := CIWatchRepository{Name: t.name, Provider: t.provider, Repository: t.repository, ProjectURL: t.projectURL,
 				Waiting: []CIWaitingCommit{}, Reruns: []CIRerun{}}
 			if runs {

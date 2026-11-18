@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/ciwatcher/ciwatchertest"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakeazdo"
+	"github.com/tomoram/code-central/watchers/watchertest"
 	"github.com/tomoram/code-central/workitemwatcher"
 )
 
@@ -26,7 +26,7 @@ type checking struct {
 
 func newChecking(t *testing.T, environ ...string) *checking {
 	t.Helper()
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	srv := codecentraltest.NewServer(t, codecentraltest.WithAzureBoardsCheck(workitemwatcher.Checker(h.CodeCentral, append(h.Environ(), environ...))))
 	if _, err := srv.Core.CreateProject(human, core.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)

@@ -25,6 +25,11 @@
   --on-primary: #ffffff;
   /* Text on a filled line colour. */
   --on-line: #ffffff;
+  /* Chart ramp: ink to neutral, never a line ink. */
+  --chart-1: #12224a;
+  --chart-2: #5b6b8f;
+  --chart-3: #9aa5bf;
+  --chart-4: #cdd2de;
   /* Reason lines. */
   --r-answer: #e39b12;
   --r-answered: #7a4bc8;
@@ -67,6 +72,10 @@
     --primary: #8fb0ff;
     --on-primary: #0a1430;
     --on-line: #0a1430;
+    --chart-1: #e3e8f5;
+    --chart-2: #a3b0cf;
+    --chart-3: #6b7ba0;
+    --chart-4: #3f4f7a;
     --r-answer: #f5b43c;
     --r-answered: #a68cf2;
     --r-silent: #9aa3b8;
@@ -103,6 +112,10 @@
   --primary: #8fb0ff;
   --on-primary: #0a1430;
   --on-line: #0a1430;
+  --chart-1: #e3e8f5;
+  --chart-2: #a3b0cf;
+  --chart-3: #6b7ba0;
+  --chart-4: #3f4f7a;
   --r-answer: #f5b43c;
   --r-answered: #a68cf2;
   --r-silent: #9aa3b8;
@@ -133,21 +146,24 @@ a { color: var(--accent); text-underline-offset: 2px; }
 .muted { color: var(--muted); }
 .small { font-size: 12px; }
 .empty { color: var(--muted); padding: 2rem; text-align: center; }
-.banner { margin: 0; padding: 6px 14px; background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+.banner { margin: 0; padding: 6px 14px; background: color-mix(in srgb, var(--danger) 12%, transparent); color: color-mix(in srgb, var(--danger) 55%, var(--text)); }
 .tid { font: 600 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 .label { font-size: 11px; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--border); }
 
 /* Shared by panels (tickets 34-37). */
 .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 6px; padding: 5px 12px; font: inherit; font-weight: 600; cursor: pointer; transition: border-color 120ms ease-out, background-color 120ms ease-out; }
 .btn:hover { border-color: var(--muted); }
-.btn:disabled { opacity: .45; cursor: default; }
+/* One disabled look for every button: the hairline border stays, the text drops to about 55%, and a primary keeps its fill at reduced opacity. */
+.btn:disabled { color: color-mix(in srgb, var(--text) 55%, transparent); background: var(--surface); border-color: var(--border); cursor: default; }
+.btn.danger:disabled { color: color-mix(in srgb, var(--text) 55%, transparent); border-color: var(--border); }
+.btn.primary:disabled { background: color-mix(in srgb, var(--primary) 45%, transparent); border-color: color-mix(in srgb, var(--primary) 45%, transparent); color: var(--on-primary); }
 .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .btn.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--primary) 86%, var(--accent)); }
 .btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
 textarea, select, input:not([type=checkbox], [type=radio], [type=range], [type=file], [type=color]) { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
 textarea { width: 100%; resize: vertical; }
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin: 12px 0; }
-.warning { font-size: 12.5px; padding: 6px 10px; border-radius: 6px; background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+.warning { font-size: 12.5px; padding: 6px 10px; border-radius: 6px; background: color-mix(in srgb, var(--danger) 12%, transparent); color: color-mix(in srgb, var(--danger) 55%, var(--text)); }
 
 /* Reason colours. */
 .reason-needs_answer { --rc: var(--r-answer); }
@@ -267,7 +283,7 @@ a.filter { text-decoration: none; }
 .archived-group { margin-top: auto; padding-top: 16px; }
 .archived-group > summary { cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 4px 8px; }
 .archived-group .filter { opacity: .7; }
-.count { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 500; }
+.count { color: var(--muted); font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 500; }
 .count.loud { color: color-mix(in srgb, var(--r-answer) 55%, var(--text)); font-weight: 700; }
 /* A Project's ribbon: a short bar in its own colour (a bar, never a ring,
    so it never reads as a State). The palette is the rail's, in both themes. */
@@ -336,16 +352,16 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .ci-fix-note { display: grid; gap: 4px; margin-top: 8px; }
 .ci-fixes { display: flex; gap: 8px; flex-wrap: wrap; }
 .ci-result, .ci-status { font-size: 11px; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--border); }
-.ci-passed, .ci-partially-succeeded { color: var(--r-review); border-color: var(--r-review); }
-.ci-failed, .ci-timed-out { color: var(--r-failed); border-color: var(--r-failed); }
+.ci-passed, .ci-partially-succeeded { color: color-mix(in srgb, var(--r-review) 55%, var(--text)); border-color: var(--r-review); }
+.ci-failed, .ci-timed-out { color: color-mix(in srgb, var(--r-failed) 55%, var(--text)); border-color: var(--r-failed); }
 /* Cancelled is neutral grey, not red: a cancelled run is no failure. */
 .ci-cancelled { color: var(--muted); border-color: var(--muted); }
-.ci-running, .ci-queued { color: var(--s-in-progress); border-color: var(--s-in-progress); }
+.ci-running, .ci-queued { color: color-mix(in srgb, var(--s-in-progress) 55%, var(--text)); border-color: var(--s-in-progress); }
 /* CI badges on rows, and the Spec view's sums of them (code-central-259). */
 .ci-badge { white-space: nowrap; }
 .impl-list .ci-badge { margin-left: 6px; }
 .ci-sums { display: flex; gap: 6px; align-items: center; margin: 8px 0; }
-.ci-runs { list-style: none; padding: 0; margin: 4px 0; font-size: 13px; }
+.ci-runs { font-variant-numeric: tabular-nums; list-style: none; padding: 0; margin: 4px 0; font-size: 13px; }
 .ci-run { margin-bottom: 6px; }
 .ci-run .label { margin-left: 6px; }
 /* Any CIRunEntry of an ignored workflow is greyed, in every layout. */
@@ -363,7 +379,7 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .transcript-call { display: block; background: none; padding: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ticket-body .transcript-result > summary { margin: 2px 0 0 12px; }
 .transcript-result > summary time { margin-right: 4px; }
-.transcript-result pre { margin: 4px 0 2px 12px; padding: 6px 8px; max-height: 240px; overflow: auto; background: var(--surface-2); border-radius: 4px; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+.transcript-result pre { margin: 4px 0 2px 12px; padding: 6px 8px; max-height: 240px; overflow: auto; background: var(--surface-2); border-radius: 4px; font: 12px var(--mono); white-space: pre-wrap; }
 .transcript-mark { margin-left: 6px; padding: 0 5px; border-radius: 3px; border: 1px solid var(--border); font-size: 11px; }
 .transcript-error { color: var(--danger); border-color: var(--danger); }
 .transcript-factory { background: var(--surface-2); color: var(--muted); font-size: 12.5px; }
@@ -429,6 +445,7 @@ a.link-badge:hover { text-decoration: underline; }
 .map-count { display: block; font-size: 12.5px; margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
 .modal { position: fixed; inset: 0; background: rgb(0 0 0 / .35); display: grid; place-items: start center; padding-top: 12vh; z-index: 40; }
 .modal-card { background: var(--surface); width: min(40rem, 92vw); border-radius: 12px; padding: 18px 20px; box-shadow: 0 12px 40px rgb(0 0 0 / .25); }
+.modal-card:focus:not(:focus-visible) { outline: none; }
 .modal-card h2 { font-size: 16px; margin-bottom: 10px; }
 .modal-card textarea { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); resize: vertical; }
 .modal-project { display: block; margin-bottom: 8px; }
@@ -439,7 +456,7 @@ a.link-badge:hover { text-decoration: underline; }
 /* PopupShell's header row: its title, anything else it holds such as the
    Focus popup's N left, then × at the right. It stays in view while a wide
    card's content scrolls. */
-.popup-head { position: sticky; top: -18px; z-index: 1; display: flex; align-items: center; margin: -18px -20px 0; padding: 8px 10px 0; background: var(--surface); }
+.popup-head { position: sticky; top: -18px; z-index: 1; display: flex; align-items: center; margin: -18px -20px 0; padding: 8px 10px 0; background: var(--surface); border-radius: 12px 12px 0 0; }
 .popup-head > :not(.popup-close) { padding-left: 10px; }
 .popup-head h2 { margin: 10px 0; }
 .popup-close { margin-left: auto; border: 0; background: none; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 8px; border-radius: 6px; cursor: pointer; }
@@ -574,11 +591,11 @@ a.link-badge:hover { text-decoration: underline; }
 .spec-row-tickets .row:last-child { border-bottom: 0; }
 .chev { border: 0; background: none; color: var(--muted); width: 20px; height: 20px; padding: 0; margin: 9px 0 0 6px; cursor: pointer; font-size: 12px; flex: none; border-radius: 4px; }
 .chev:hover { background: var(--surface-2); color: var(--text); }
-.kind-badge { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 4px; flex: none; border: 1px solid currentColor; }
-.kind-requirement { color: var(--accent); }
-.kind-map { color: var(--r-answered); }
+.kind-badge { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 4px; flex: none; font-weight: 600; border: 1px solid var(--kc, currentColor); }
+.kind-requirement { --kc: var(--accent); color: color-mix(in srgb, var(--accent) 55%, var(--text)); }
+.kind-map { --kc: var(--r-answered); color: color-mix(in srgb, var(--r-answered) 55%, var(--text)); }
 .kind-spec { color: var(--muted); }
-.kind-long-lived { color: var(--r-landing); }
+.kind-long-lived { --kc: var(--r-landing); color: color-mix(in srgb, var(--r-landing) 55%, var(--text)); }
 .stage-badge { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; padding: 0 5px; border-radius: 4px; background: var(--surface-2); color: var(--muted); flex: none; }
 .state-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; }
 /* A State chip: a station ring and the State's name, on a wash of its line. */
@@ -630,7 +647,7 @@ a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
 .data-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .data-table th, .data-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; }
 .data-table tbody th { font-weight: 500; }
-.data-table-mono tbody th { font-family: ui-monospace, monospace; }
+.data-table-mono tbody th { font-family: var(--mono); }
 .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .data-table .label { margin-left: 6px; }
 /* A pulse: a brief background flash when what an element shows changes.
@@ -647,3 +664,6 @@ a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
   @keyframes flash-0 { 30% { filter: brightness(1.4); } }
   @keyframes flash-1 { 30% { filter: brightness(1.4); } }
 }
+
+/* The rail and the view head restyle .btn, so their disabled buttons dim the way the rest do. */
+.inbox-nav .btn:disabled, .view-head .btn:disabled { opacity: .55; }

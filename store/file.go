@@ -233,9 +233,9 @@ func (s *FileStore) loadProject(key string) error {
 		}
 	}
 	if c := pf.CI; c != nil {
-		p.CI = CI{Tracking: c.Tracking, Provider: CIProvider(c.Provider), Repository: c.Repository, ProjectURL: c.ProjectURL, PATEnv: c.PATEnv,
-			IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, PushRemoteBase: c.PushRemoteBase}
-		if !p.CI.Provider.Valid() {
+		p.CI = CI{Tracking: c.Tracking, PATEnv: c.PATEnv,
+			IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, NoPushRemote: c.NoPushRemote, PushRemoteBase: c.PushRemoteBase}
+		if c.Provider != "" && !CIProvider(c.Provider).Valid() {
 			return &LoadError{File: rel, Field: "ci.provider", Msg: fmt.Sprintf("unknown CI provider %q (%s)", c.Provider, strings.Join(ciProviderNames(), " or "))}
 		}
 		for i, r := range c.Rules {
@@ -253,6 +253,7 @@ func (s *FileStore) loadProject(key string) error {
 		if p.CI.Repositories, at, err = decodeCIRepositories(c.Repositories); err != nil {
 			return &LoadError{File: rel, Field: "ci.repositories" + at, Msg: err.Error()}
 		}
+		p.CI.Repositories = withLegacyHomeCI(p.Key, p.CI.Repositories, *c)
 	}
 	if g := pf.GitHubIssues; g != nil {
 		p.GitHubIssues = GitHubIssues{On: g.On, Repositories: g.Repositories, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}

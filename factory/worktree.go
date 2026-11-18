@@ -243,19 +243,20 @@ func (f *factory) prune(r *repository) {
 // when the Ticket never used it (sweepsBranch, sweepUnusedBranch); with
 // the Home Repository alone, branches are never deleted. Anything else is
 // kept, the Chat worktrees among it.
-func (f *factory) sweep(ctx context.Context, policy core.LandingPolicy) {
+func (f *factory) sweep(ctx context.Context, policies core.LandingPolicies) {
 	tickets := map[string]*core.TicketView{}
 	for _, r := range f.readyRepositories() {
 		if ctx.Err() != nil {
 			return
 		}
-		f.sweepIn(ctx, r, policy, tickets)
+		f.sweepIn(ctx, r, policies, tickets)
 	}
 }
 
 // sweepIn is sweep's work in r. tickets holds each Ticket the sweep has
 // read, by ID, nil for one it couldn't, so each is read once.
-func (f *factory) sweepIn(ctx context.Context, r *repository, policy core.LandingPolicy, tickets map[string]*core.TicketView) {
+func (f *factory) sweepIn(ctx context.Context, r *repository, policies core.LandingPolicies, tickets map[string]*core.TicketView) {
+	policy := r.policy(policies)
 	list, err := r.git.worktrees()
 	if err != nil {
 		f.printf("warning: can't list the worktrees%s: %v", r.where(), err)
@@ -383,7 +384,7 @@ func onFirstParentLine(g repo, commit, rev string) bool {
 }
 
 // doneWithWorktree reports whether the Factory is done with the worktree
-// of tk, under the Landing Policy.
+// of tk, under the Landing Policy of the worktree's Repository.
 func doneWithWorktree(tk core.TicketView, policy core.LandingPolicy) bool {
 	switch tk.State {
 	case store.Done, store.Cancelled:

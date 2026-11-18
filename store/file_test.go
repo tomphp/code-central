@@ -426,9 +426,9 @@ func TestDefaultCISettingsLeaveProjectYAMLUnchanged(t *testing.T) {
 	}
 	mustUpdate(t, s, func(w store.Writer) error {
 		return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: created, Mode: store.ModeCommitted,
-			CI: store.CI{Tracking: true, Repository: "acme/web", IgnoredWorkflows: []string{"nightly.yml"}}})
+			CI: store.CI{Tracking: true, IgnoredWorkflows: []string{"nightly.yml"}, Repositories: []store.CIRepository{{Name: "acme", Provider: store.CIGitHubActions, Repository: "acme/web"}}}})
 	})
-	want := plain + "ci:\n  tracking: true\n  provider: github_actions\n  repository: acme/web\n  ignored_workflows:\n    - nightly.yml\n"
+	want := plain + "ci:\n  tracking: true\n  ignored_workflows:\n    - nightly.yml\n  repositories:\n    - name: acme\n      provider: github_actions\n      repository: acme/web\n"
 	if got := readFile(t, filepath.Join(dir, "projects/acme/project.yaml")); got != want {
 		t.Fatalf("project.yaml = %q, want %q", got, want)
 	}
@@ -500,6 +500,7 @@ func TestInvalidFilesStopStartupNamingFileAndField(t *testing.T) {
 		{"bad mode", "projects/acme/project.yaml", strings.Replace(project, "mode: committed", "mode: shared", 1), "mode"},
 		{"unknown project field", "projects/acme/project.yaml", project + "path: /src\n", "path"},
 		{"landing method outside its set", "projects/acme/project.yaml", project + "landing:\n  method: squash\n  push: false\n  remote: origin\n", "landing.method"},
+		{"repository landing method outside its set", "projects/acme/project.yaml", project + "repositories:\n  - name: acme\n    home: true\n  - name: web\n    clone_url: git@github.com:acme/web.git\n    base: main\n    landing:\n      method: rebase\n", "repositories[1].landing.method"},
 		{"ci provider outside its set", "projects/acme/project.yaml", project + "ci:\n  tracking: true\n  provider: circleci\n", "ci.provider"},
 		{"ci rule state outside draft and ready", "projects/acme/project.yaml", project + "ci:\n  tracking: false\n  provider: github_actions\n  rules:\n    - spec: 4\n      workflow: ci.yml\n      branch: main\n      state: Done\n      created: 2026-11-07T09:30:00Z\n", "ci.rules[0].state"},
 		{"ci rule without created", "projects/acme/project.yaml", project + "ci:\n  tracking: false\n  provider: github_actions\n  rules:\n    - spec: 4\n      workflow: ci.yml\n      branch: main\n      state: Ready\n      created: \"\"\n", "ci.rules[0].created"},

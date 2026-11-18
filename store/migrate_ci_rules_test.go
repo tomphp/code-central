@@ -34,7 +34,7 @@ func TestTheRealChainMigratesAFormat8StoreToTheCIRulesFormat(t *testing.T) {
 	}
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
-		if want := (store.CI{Tracking: true, Provider: store.CIGitHubActions, Repository: "acme/web"}); !p.CI.Equal(want) {
+		if want := (store.CI{Tracking: true, Repositories: []store.CIRepository{{Name: "acme", Provider: store.CIGitHubActions, Repository: "acme/web"}}}); !p.CI.Equal(want) {
 			t.Errorf("ci after migrating = %+v, want %+v", p.CI, want)
 		}
 		return nil
