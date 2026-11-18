@@ -22,7 +22,7 @@ type index struct {
 	usage usage.Store
 }
 
-// Usage is the Store's Usage (ADR 0066): appended to, read and pruned
+// Usage is the Store's Usage (ADR 0069): appended to, read and pruned
 // outside any Update, under its own lock.
 func (x *index) Usage() usage.Store { return x.usage }
 

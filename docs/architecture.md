@@ -81,7 +81,7 @@ Your list: core logic, factory, ci watcher, issue tracker, web api, frontend, st
 - **`app`**: the service's composition root. `app.Run` opens the store, builds the Core with its Watcher check modes and usage, serves `server`'s handler, supervises the Watchers and starts `notify`.
 - **`cli` and `cmd/*`**: the command surface. `serve` reads its flags and the local settings and calls `app.Run`.
 - **`watchers`**: generic supervision (restart with backoff).
-- **Support leaves**: `clock`, `events` (in-memory change bus), `ids`, `home` (XDG paths), `usage` (usage records and the Recorder; the Store keeps them, ADR 0066), `notify` (OS notifications).
+- **Support leaves**: `clock`, `events` (in-memory change bus), `ids`, `home` (XDG paths), `usage` (usage records and the Recorder; the Store keeps them, ADR 0069), `notify` (OS notifications).
 - **Test and wasm tooling**: `world`, `cmd/corewasm`, `internal/*`, `codecentraltest`, `e2e`.
 
 ### What `core` contains

@@ -119,3 +119,57 @@ describe("a CI item in Needs Me", () => {
     expect(within(panel).queryByRole("group", { name: "Failure options" })).toBeNull();
   });
 });
+
+// Auto-fix's lines in a Ticket's CI section (Spec code-central-1022): Go
+// derives which auto fix Ticket is fixing, covering or has stopped, and the
+// UI formats it with a link to each fix Ticket.
+describe("Auto-fix in a Ticket's CI section", () => {
+  const LATER = "def4567890";
+  const FIX_PUSH = "ghi7890123";
+
+  async function autoFixWorld(limit: number) {
+    const { w, s, login, basket } = await world();
+    await s.human(`${s.projectPath("acme")}/set_auto_fix`, { on: true, fix_instructions: "Fix it.", limit });
+    // Turning Auto-fix on acts on the item already waiting.
+    const fixing = (await w.api.getTicket("acme", login)).ci_auto_fix!.fixing!;
+    return { w, s, login, basket, fix: fixing.fix_ticket };
+  }
+
+  const ciSection = () => within(screen.getByRole("complementary", { name: "Ticket" })).getByRole("region", { name: "CI" });
+
+  it("shows the auto fix Ticket fixing it, as attempt n of N, linked", async () => {
+    const { w, login, fix } = await autoFixWorld(3);
+    await renderApp(w, `/?view=inbox&ticket=${login}`);
+    const line = within(ciSection()).getByText(/Auto-fix is fixing it/);
+    expect(line).toHaveTextContent(`Auto-fix is fixing it: ${fix} (attempt 1 of 3).`);
+    expect(within(line).getByRole("link", { name: fix })).toHaveAttribute("href", expect.stringContaining(`ticket=${fix}`));
+  });
+
+  it("shows the auto fix Ticket covering a later commit, with the commit it was opened for", async () => {
+    const { w, s, basket, fix } = await autoFixWorld(3);
+    await s.pushed("acme", basket, LATER);
+    await s.ci("acme", basket, "failed", LATER, 2);
+    await renderApp(w, `/?view=inbox&ticket=${basket}`);
+    const line = within(ciSection()).getByText(/Auto-fix covers it/);
+    expect(line).toHaveTextContent(`Auto-fix covers it: ${fix}, opened for abc1234.`);
+    expect(within(line).getByRole("link", { name: fix })).toHaveAttribute("href", expect.stringContaining(`ticket=${fix}`));
+  });
+
+  it("shows the stopped line with each attempt linked, once the limit is spent", async () => {
+    const { w, s, login, fix } = await autoFixWorld(1);
+    await s.accepted("acme", fix);
+    await s.pushed("acme", fix, FIX_PUSH);
+    await s.pushed("acme", login, FIX_PUSH);
+    await s.ci("acme", fix, "failed", FIX_PUSH, 2);
+    await renderApp(w, `/?view=inbox&ticket=${login}`);
+    const line = within(ciSection()).getByText(/Auto-fix stopped/);
+    expect(line).toHaveTextContent(`Auto-fix stopped after 1 attempt: ${fix}.`);
+    expect(within(line).getByRole("link", { name: fix })).toHaveAttribute("href", expect.stringContaining(`ticket=${fix}`));
+  });
+
+  it("shows no line while Auto-fix is off", async () => {
+    const { w, login } = await world();
+    await renderApp(w, `/?view=inbox&ticket=${login}`);
+    expect(within(ciSection()).queryByText(/Auto-fix/)).toBeNull();
+  });
+});

@@ -174,6 +174,16 @@ type ciFile struct {
 	UnblockOnPush bool `yaml:"unblock_on_push,omitempty"`
 	// Repositories is left out while no Repository has an entry.
 	Repositories []ciRepositoryFile `yaml:"repositories,omitempty"`
+	// AutoFix is left out while it is never set.
+	AutoFix *autoFixFile `yaml:"auto_fix,omitempty"`
+}
+
+// autoFixFile is the Auto-fix setting; instructions and limit are left
+// out while never set.
+type autoFixFile struct {
+	On           bool   `yaml:"on,omitempty"`
+	Instructions string `yaml:"instructions,omitempty"`
+	Limit        int    `yaml:"limit,omitempty"`
 }
 
 // ciRepositoryFile is the CI entry of one Repository, the Home's
@@ -229,6 +239,7 @@ type ticketFile struct {
 	Link            *linkFile           `yaml:"link,omitempty"`
 	AwaitingTriage  bool                `yaml:"awaiting_triage,omitempty"`
 	SpecMergeTicket bool                `yaml:"spec_merge_ticket,omitempty"`
+	AutoFix         *autoFixMarkFile    `yaml:"auto_fix,omitempty"`
 	Created         string              `yaml:"created"`
 	Updated         string              `yaml:"updated"`
 	Description     string              `yaml:"description"`
@@ -246,6 +257,15 @@ type ticketFile struct {
 	Comments        []commentFile       `yaml:"comments"`
 	Moves           []moveFile          `yaml:"moves"`
 	Edits           []editFile          `yaml:"edits"`
+}
+
+// autoFixMarkFile is an auto fix Ticket's Auto-fix mark.
+type autoFixMarkFile struct {
+	Attempt    int    `yaml:"attempt"`
+	Repository string `yaml:"repository,omitempty"`
+	Commit     string `yaml:"commit"`
+	Covers     []int  `yaml:"covers"`
+	Previous   int    `yaml:"previous,omitempty"`
 }
 
 // changedRepoFile is one of a Ticket's Changed Repositories.
@@ -478,6 +498,18 @@ func ticketOf(f ticketFile, n int) (domain.Ticket, *LoadError) {
 	}
 	if t.Repositories, lerr = decodeChangedRepositories(f.Repositories); lerr != nil {
 		return domain.Ticket{}, lerr
+	}
+	if a := f.AutoFix; a != nil {
+		if a.Attempt < 1 {
+			return domain.Ticket{}, &LoadError{Field: "auto_fix.attempt", Msg: fmt.Sprintf("an Auto-fix attempt is 1 or more, not %d", a.Attempt)}
+		}
+		if lerr := checkRepositoryName("auto_fix.repository", a.Repository); lerr != nil {
+			return domain.Ticket{}, lerr
+		}
+		if a.Commit == "" {
+			return domain.Ticket{}, &LoadError{Field: "auto_fix.commit", Msg: "required"}
+		}
+		t.AutoFix = &domain.AutoFixMark{Attempt: a.Attempt, Repository: a.Repository, Commit: a.Commit, Covers: a.Covers, Previous: a.Previous}
 	}
 	for i, pc := range f.PushedCommits {
 		p := domain.PushedCommit{Repository: pc.Repository, Commit: pc.Commit, Branch: pc.Branch}
@@ -858,6 +890,12 @@ func ticketFileOf(r domain.Ticket) ticketFile {
 	if r.SpecMerge != nil {
 		f.SpecMerge = &specMergeFile{Repository: r.SpecMerge.Repository, Commit: r.SpecMerge.Commit, Merged: formatTime(r.SpecMerge.Merged)}
 	}
+	if a := r.AutoFix; a != nil {
+		f.AutoFix = &autoFixMarkFile{Attempt: a.Attempt, Repository: a.Repository, Commit: a.Commit, Covers: a.Covers, Previous: a.Previous}
+		if f.AutoFix.Covers == nil {
+			f.AutoFix.Covers = []int{}
+		}
+	}
 	return f
 }
 
@@ -973,6 +1011,9 @@ func encodeCI(c domain.CI) *ciFile {
 		IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, NoPushRemote: c.NoPushRemote, PushRemoteBase: c.PushRemoteBase}
 	for _, r := range c.Rules {
 		f.Rules = append(f.Rules, ciRuleFile{Spec: r.Spec, Workflow: r.Workflow, Branch: r.Branch, State: string(r.State), Created: formatTime(r.Created)})
+	}
+	if c.AutoFix != (domain.AutoFix{}) {
+		f.AutoFix = &autoFixFile{On: c.AutoFix.On, Instructions: c.AutoFix.Instructions, Limit: c.AutoFix.Limit}
 	}
 	for _, r := range c.Repositories {
 		f.Repositories = append(f.Repositories, ciRepositoryFile{Name: r.Name, NotWatched: r.NotWatched, Provider: string(r.Provider), Repository: r.Repository, ProjectURL: r.ProjectURL})
@@ -1383,6 +1424,12 @@ func projectOf(pf projectFile) (domain.Project, *LoadError) {
 	if c := pf.CI; c != nil {
 		p.CI = domain.CI{Tracking: c.Tracking, PATEnv: c.PATEnv,
 			IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, NoPushRemote: c.NoPushRemote, PushRemoteBase: c.PushRemoteBase}
+		if a := c.AutoFix; a != nil {
+			if a.Limit != 0 && (a.Limit < domain.MinAutoFixLimit || a.Limit > domain.MaxAutoFixLimit) {
+				return fail("ci.auto_fix.limit", fmt.Sprintf("the Auto-fix limit is %d to %d, not %d", domain.MinAutoFixLimit, domain.MaxAutoFixLimit, a.Limit))
+			}
+			p.CI.AutoFix = domain.AutoFix{On: a.On, Instructions: a.Instructions, Limit: a.Limit}
+		}
 		if c.Provider != "" && !domain.CIProvider(c.Provider).Valid() {
 			return fail("ci.provider", fmt.Sprintf("unknown CI provider %q (%s)", c.Provider, strings.Join(domain.CIProviderNames(), " or ")))
 		}

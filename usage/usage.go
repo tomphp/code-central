@@ -1,4 +1,4 @@
-// Package usage is the usage recorder (ADR 0016, amended by ADR 0066):
+// Package usage is the usage recorder (ADR 0016, amended by ADR 0069):
 // what agents consume, kept by the Store: in the File Store as
 // append-only JSON Lines files, one per Project per local day, at
 // projects/<key>/usage/<YYYY-MM-DD>.jsonl, or in memory beside the

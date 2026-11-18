@@ -45,7 +45,7 @@ The short, permanent name that identifies a Project to anything connecting to Co
 _Avoid_: Slug, Project ID
 
 **Project Options**:
-The page where the human sets a Project's settings, such as its Landing Method, CI Tracking, GitHub Issues, Models, Stage Guides, Auto-accept and Focus, and its Repositories section, where the human adds and removes the Project's Repositories (the CLI does the same) and, in each Repository's row, sets its Own Landing, Push remote and CI choice. Unlike an Option, what it sets belongs to one Project.
+The page where the human sets a Project's settings, such as its Landing Method, CI Tracking, GitHub Issues, Models, Stage Guides, Auto-accept and Focus, with Auto-fix in its CI section, and its Repositories section, where the human adds and removes the Project's Repositories (the CLI does the same) and, in each Repository's row, sets its Own Landing, Push remote and CI choice. Unlike an Option, what it sets belongs to one Project.
 _Avoid_: Project settings, preferences, config
 
 **Store**:
@@ -413,7 +413,7 @@ A Project's standing rule, "when Workflow X fails on branch Y, open a Ticket to 
 _Avoid_: Trigger, watch, alert
 
 **Fix Ticket**:
-An ordinary implementation Ticket opened to fix a failed CI Run: by a CI Rule on its Spec, linking the run and naming its failed jobs, never its cancelled ones, or by the human's New fix Ticket on a CI failed item, on the CI Fixes Spec. While a CI Rule's fix Ticket is unfinished, further failures only comment on it.
+An ordinary implementation Ticket opened to fix a failed CI Run: by a CI Rule on its Spec, linking the run and naming its failed jobs, never its cancelled ones, or by the human's New fix Ticket on a CI failed item, or by Auto-fix, on the CI Fixes Spec. While a CI Rule's fix Ticket is unfinished, further failures only comment on it.
 _Avoid_: CI Ticket, failure Ticket
 
 **Push remote**:
@@ -565,7 +565,7 @@ The Needs Me reason of a pushed commit whose CI result is cancelled, listing the
 _Avoid_: CI aborted
 
 **CI failed**:
-The Needs Me reason of a pushed commit whose CI result is failed (a run failed or timed out; a cancelled run is CI cancelled instead), listing the Accepted Tickets waiting on it, across Specs, that the human hasn't dealt with yet: re-run the failed jobs, land them anyway, open a new fix Ticket, or send it back to fix. The item is left out of Needs Me while its fix Ticket is neither Done nor Cancelled, and returns if the fix Ticket is Cancelled while the commit is still failing. It is one item per commit, named `Name@sha` (its Repository's name and the commit), with no Ticket of its own, listing every Ticket that shares it, and each option acts on every listed Ticket, on that Repository's commit only: a listed Ticket's other Repositories keep their own CI result and land on their own green; send it back to fix is offered only when the item lists one Ticket that isn't Spec-landed. Each listed Ticket's view shows its CI result and links the item.
+The Needs Me reason of a pushed commit whose CI result is failed (a run failed or timed out; a cancelled run is CI cancelled instead), listing the Accepted Tickets waiting on it, across Specs, that the human hasn't dealt with yet: re-run the failed jobs, land them anyway, open a new fix Ticket, or send it back to fix. The item is left out of Needs Me while its fix Ticket is neither Done nor Cancelled, and while Auto-fix handles or covers it, and it shows the "Auto-fix stopped" line once Auto-fix has reached its limit; it returns if the fix Ticket is Cancelled while the commit is still failing. It is one item per commit, named `Name@sha` (its Repository's name and the commit), with no Ticket of its own, listing every Ticket that shares it, and each option acts on every listed Ticket, on that Repository's commit only: a listed Ticket's other Repositories keep their own CI result and land on their own green; send it back to fix is offered only when the item lists one Ticket that isn't Spec-landed. Each listed Ticket's view shows its CI result and links the item.
 _Avoid_: Build broken, red
 
 **Land anyway**:
@@ -585,11 +585,11 @@ The failure option by which the human sends a CI failed Ticket back to Ready wit
 _Avoid_: Revert, reject
 
 **New fix Ticket**:
-The failure option by which the human opens a Ready Ticket on the Project's CI Fixes Spec, carrying the note, and stores it once on the commit's response. It doesn't accept the failed CI result: every Ticket the item lists stays Accepted, and lands in that commit's Repository when a later commit there containing the work passes CI, such as the fix's push. Its other Repositories keep their own CI result. Offered under Merge + Push and Branch + Push.
+The failure option by which the human opens a Ready Ticket on the Project's CI Fixes Spec, carrying the note, which starts from the run summary and the Fix instructions, and stores it once on the commit's response. It doesn't accept the failed CI result: every Ticket the item lists stays Accepted, and lands in that commit's Repository when a later commit there containing the work passes CI, such as the fix's push. Its other Repositories keep their own CI result. Offered under Merge + Push and Branch + Push.
 _Avoid_: Follow-up ticket, hotfix
 
 **CI Fixes Spec**:
-The Long-lived Spec, one per Project, that New fix Tickets open their fix Ticket on. Code Central creates it on first use, titled `CI Fixes` and labelled `long-lived`, as it does a CI Rule's Spec.
+The Long-lived Spec, one per Project, that New fix Tickets, and Auto-fix, open their fix Ticket on. Code Central creates it on first use, titled `CI Fixes` and labelled `long-lived`, as it does a CI Rule's Spec.
 _Avoid_: Fix Spec
 
 **CI unavailable**:
@@ -601,7 +601,7 @@ A pushed commit's CI failed, CI cancelled or CI unavailable as Needs Me shows it
 _Avoid_: CI group, lead Ticket
 
 **CI response**:
-The human's Land anyway or Re-run request for one pushed commit, stored once on the Project for that commit, so every Ticket whose latest pushed commit it is reads it.
+The human's Land anyway or Re-run request for one pushed commit, or the fix Ticket opened for it, by whoever opened it, stored once on the Project for that commit, so every Ticket whose latest pushed commit it is reads it.
 _Avoid_: CI choice, override record
 
 **Focus Mode**:
@@ -679,6 +679,29 @@ _Avoid_: Auto label, opt-in Label
 **Auto-accept switch**:
 The control on a Ticket's detail or a Spec's page by which the human adds or removes that item's Auto-accept Label. It reflects only that item's own Label. It is offered only where the item can be auto-accepted, and asks first when turning it on would accept Tickets already In Review.
 _Avoid_: Auto-accept toggle, Label editor
+
+**Auto-fix**:
+The Project setting, off unless the human turns it on, that opens a fix Ticket on the CI Fixes Spec for a CI failed item on the human's behalf instead of showing it in Needs Me, up to the Auto-fix limit. It is set in the CI section of Project Options, only while CI Tracking is on, and only the human sets it. Turning CI Tracking off leaves the setting as it is, but it acts only while CI Tracking is on.
+_Avoid_: Auto fix tickets, auto-heal
+
+**Fix instructions**:
+The Project's text appended to every fix Ticket's description after its run summary, whether Auto-fix or the human's New fix Ticket opened it. It reads as a default text until the human sets their own, and can't be empty.
+_Avoid_: Prompt, custom message
+
+**Auto-fix attempt**:
+One fix Ticket that Auto-fix opened, numbered within its failure chain: 1 for a failure listing no auto fix Ticket, otherwise one more than the highest it lists.
+_Avoid_: Retry
+
+**Auto-fix limit**:
+The most Auto-fix attempts per failure chain, 3 unless the human sets 1 to 10. Past it, the CI failed item comes back to the human.
+
+**Auto-fix mark**:
+What marks an auto fix Ticket, one Auto-fix opened: its Auto-fix attempt, the Repository and commit it was opened for, the Tickets its CI failed item listed, and the previous attempt's fix Ticket. Only Code Central sets it, and nothing clears it; a fix Ticket the human opens with New fix Ticket has none.
+_Avoid_: Auto flag
+
+**Run summary**:
+The part of a fix Ticket's description, and of the Send back to fix note, that Code Central writes from a pushed commit's CI: each failed run (or cancelled run, for CI cancelled) linked with its Workflow and failed jobs, the `gh run view <id> --log-failed` commands, and the last passed commit in that Repository when there is one.
+_Avoid_: Fix note, failure note
 
 **Spec recommendation**:
 The `implement` or `split` that a spec Stage's `finish` must carry. The Ticket keeps the latest one; the web UI highlights the matching button, and a spec Stage is auto-accept eligible only if its latest finish carried one.

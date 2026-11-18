@@ -34,6 +34,12 @@ type ciState struct {
 	runs     []domain.CIRun
 	runsRead bool
 	tickets  map[int]*ticketCI
+	// autoFixes are the Project's open auto fix Tickets, read on first
+	// use, and coveredBy those covering each CI failed item asked about
+	// (see coveringFixes).
+	autoFixes     []domain.Ticket
+	autoFixesRead bool
+	coveredBy     map[itemKey][]domain.Ticket
 }
 
 // ticketCI is one Ticket's answers in its Project's CI state: one per
@@ -86,11 +92,15 @@ type repoCI struct {
 	// reruns are the Re-run requests for its latest pushed commit still
 	// waiting on the CI Watcher.
 	reruns []domain.CIRunAttempt
+	// fixing is the open fix Ticket the failure of its latest pushed
+	// commit waits on, and covering the open auto fix Ticket covering
+	// that commit's CI failed item; either leaves it out of Needs Me.
+	fixing, covering *domain.Ticket
 }
 
 // ciStateOf is p's CI state as r has it at now.
 func (c *Core) ciStateOf(r store.Reader, p domain.Project) *ciState {
-	return &ciState{c: c, r: r, p: p, now: c.now(), tickets: map[int]*ticketCI{}}
+	return &ciState{c: c, r: r, p: p, now: c.now(), tickets: map[int]*ticketCI{}, coveredBy: map[itemKey][]domain.Ticket{}}
 }
 
 // keptRuns are the Project's CI Runs kept at now.
@@ -130,20 +140,28 @@ func (s *ciState) ticket(t domain.Ticket) *ticketCI {
 
 // repo is t's answers in the watched Repository name, where it pushed.
 func (s *ciState) repo(t domain.Ticket, name string) *repoCI {
-	rc := &repoCI{name: name, record: recordName(s.p.Key, name), pushed: pushedIn(s.p.Key, t, name)}
-	rc.latest = rc.pushed[len(rc.pushed)-1]
-	rc.runs = runsIn(s.keptRuns(), rc.record, rc.pushed)
-	rc.commit, rc.result = s.result(t, rc)
+	rc := s.repoResult(t, name)
 	rc.reruns = s.pendingReruns(rc.record, rc.latest.Commit, rc.runs)
 	// Work that has landed in the Repository stays landed: its CI no
 	// longer waits on anything.
 	if t.State != domain.Accepted || landedIn(t, name) {
 		return rc
 	}
-	s.unhandled(rc)
+	s.unhandled(t, rc)
 	if landingPolicyIn(s.p, name).CIGateHolds() && rc.result == CIRunning {
 		rc.waiting, rc.unavailable = true, s.unavailable(rc)
 	}
+	return rc
+}
+
+// repoResult is t's answers in the watched Repository name, where it
+// pushed, as far as its CI result: its pushed commits and their runs
+// there, and its CI result and the commit it comes from.
+func (s *ciState) repoResult(t domain.Ticket, name string) *repoCI {
+	rc := &repoCI{name: name, record: recordName(s.p.Key, name), pushed: pushedIn(s.p.Key, t, name)}
+	rc.latest = rc.pushed[len(rc.pushed)-1]
+	rc.runs = runsIn(s.keptRuns(), rc.record, rc.pushed)
+	rc.commit, rc.result = s.result(t, rc)
 	return rc
 }
 
@@ -208,10 +226,12 @@ func (s *ciState) result(t domain.Ticket, rc *repoCI) (commit string, result CIR
 	return latest.Commit, s.commitResult(rc.record, latest.Commit, rc.runs)
 }
 
-// unhandled marks rc CI failed or CI cancelled when the human hasn't
-// dealt with its latest pushed commit's result: chosen Land anyway, or,
-// for a failure, opened a fix Ticket that is still open.
-func (s *ciState) unhandled(rc *repoCI) {
+// unhandled marks rc, t's answers in one Repository, CI failed or CI
+// cancelled when the human hasn't dealt with its latest pushed commit's
+// result: chosen Land anyway, or, for a failure, opened a fix Ticket that
+// is still open, or had Auto-fix open one that covers the commit's CI
+// failed item.
+func (s *ciState) unhandled(t domain.Ticket, rc *repoCI) {
 	commit := rc.latest.Commit
 	if !s.response(rc.record, commit).LandAnyway.IsZero() {
 		return
@@ -219,7 +239,12 @@ func (s *ciState) unhandled(rc *repoCI) {
 	var finished []domain.CIRun
 	switch rc.result {
 	case CIFailed:
-		if fixTicketOpen(s.r, s.p, rc.record, commit) {
+		if fix, ok := fixTicketOpen(s.r, s.p, rc.record, commit); ok {
+			rc.fixing = &fix
+			return
+		}
+		if fix, ok := s.covering(t, rc); ok {
+			rc.covering = &fix
 			return
 		}
 		finished = failedRuns(commit, rc.runs)

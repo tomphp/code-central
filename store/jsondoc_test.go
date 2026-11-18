@@ -23,6 +23,7 @@ func TestAJSONDocumentReadsBackAsItsFileDoes(t *testing.T) {
 		Comments:      []domain.Comment{{Number: 1, Actor: "human", Time: at, Body: "hi"}},
 		Moves:         []domain.Move{{From: domain.Ready, To: domain.InProgress, Actor: "agent", Time: at, Claim: 1}},
 		Edits:         []domain.Edit{{Actor: "human", Time: at, Previous: map[string]string{"title": "old"}}},
+		AutoFix:       &domain.AutoFixMark{Attempt: 2, Repository: "api", Commit: "abc123", Covers: []int{5, 8}, Previous: 1},
 	}
 	doc, err := jsonDoc(ticketFileOf(tk))
 	if err != nil {
@@ -51,7 +52,8 @@ func TestAJSONDocumentReadsBackAsItsFileDoes(t *testing.T) {
 	}
 
 	// A false left in the file, as land_per_spec is, must come back false.
-	p := domain.Project{Key: "acme", DisplayName: "Acme", Created: at, Mode: "committed", Landing: domain.Landing{Method: domain.LandingMerge, Remote: "origin", LandPerSpec: false}}
+	p := domain.Project{Key: "acme", DisplayName: "Acme", Created: at, Mode: "committed", Landing: domain.Landing{Method: domain.LandingMerge, Remote: "origin", LandPerSpec: false},
+		CI: domain.CI{AutoFix: domain.AutoFix{On: true, Instructions: "Mine.", Limit: 7}}}
 	doc, err = jsonDoc(projectFileOf(p))
 	if err != nil {
 		t.Fatal(err)

@@ -138,7 +138,7 @@ type Store interface {
 	// Changes makes deliver hear of the Changes other services sharing the
 	// Store commit. A Store no other service shares never calls it.
 	Changes(deliver func(Change))
-	// Usage is the Store's Usage (ADR 0066): what agents consume, kept
+	// Usage is the Store's Usage (ADR 0069): what agents consume, kept
 	// the way the Store Kind keeps it, and appended to, read and pruned on
 	// its own, outside any View or Update.
 	Usage() usage.Store
@@ -186,6 +186,11 @@ func cloneTicket(t domain.Ticket) domain.Ticket {
 	if t.SpecMerge != nil {
 		sm := *t.SpecMerge
 		t.SpecMerge = &sm
+	}
+	if t.AutoFix != nil {
+		a := *t.AutoFix
+		a.Covers = slices.Clone(a.Covers)
+		t.AutoFix = &a
 	}
 	t.PullRequests = slices.Clone(t.PullRequests)
 	t.Claims = slices.Clone(t.Claims)

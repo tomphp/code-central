@@ -37,6 +37,10 @@ func (c *Core) Cancel(ctx context.Context, key string, in CancelInput) (Written[
 			return out, err
 		}
 	}
+	// Cancelling an auto fix Ticket hands its failure back to the human.
+	if err := c.sweepAutoFix(ctx, key); err != nil {
+		return out, err
+	}
 	return out, nil
 }
 

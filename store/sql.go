@@ -102,7 +102,7 @@ func (s *SQLStore) Close() error {
 	return errors.Join(errs...)
 }
 
-// Usage is the Store's Usage (ADR 0066): a table written on its own
+// Usage is the Store's Usage (ADR 0069): a table written on its own
 // connection, outside any Update.
 func (s *SQLStore) Usage() usage.Store { return s.usage }
 

@@ -106,9 +106,15 @@ export function defaultCI(overrides: Partial<CISettings> = {}): CISettings {
     push_remote_url: "",
     rules: [],
     watcher: { state: "not_reported" },
+    auto_fix: { on: false, fix_instructions: DEFAULT_FIX_INSTRUCTIONS, default_fix_instructions: DEFAULT_FIX_INSTRUCTIONS, limit: 3 },
     ...overrides,
   };
 }
+
+// DEFAULT_FIX_INSTRUCTIONS is the Fix instructions a Project that never set
+// its own has, as Go's domain.DefaultFixInstructions.
+export const DEFAULT_FIX_INSTRUCTIONS =
+  "Work out what kind of failure this is before changing anything: a bug in the code, a broken test, or a flaky test. Then fix it the way that kind needs: fix the bug in the code, fix the test so it checks the right thing, or make the flaky test stable (never just retry or skip it). Compare against the last successful run: the commits since it are the likeliest cause (`git log <last green>..<failed commit>`). Look at other CI runs, on this branch and others, to see whether the failure is new, recurring or intermittent.";
 
 export const REPORT = {
   what_broke: "Tests fail on CI\nlogin_test.go times out",

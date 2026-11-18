@@ -12,7 +12,7 @@ import (
 	"github.com/tomoram/code-central/usage"
 )
 
-// sqlUsage is a database Store's Usage (ADR 0066): one row per record,
+// sqlUsage is a database Store's Usage (ADR 0069): one row per record,
 // keyed by Project and local day, written on the pool's own connections
 // outside every Update's transaction and lock. SQLite commits one
 // writer at a time, so an append in the moment of a commit waits for

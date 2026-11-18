@@ -78,7 +78,7 @@ describe("a red build in one of several Repositories", () => {
     const { w, ticket } = await world();
     await renderApp(w, `/?view=inbox&ticket=${ticket}`);
     const options = within(ticketPane()).getByRole("group", { name: "Failure options in api" });
-    expect((within(options).getByRole("textbox") as HTMLTextAreaElement).value).toMatch(/^CI failed at api@1234567:/);
+    expect((within(options).getByRole("textbox", { name: /Note for New fix Ticket/ }) as HTMLTextAreaElement).value).toMatch(/^CI failed at api@1234567:/);
     await userEvent.click(within(options).getByRole("button", { name: "New fix Ticket" }));
     await settle(w);
     const fixes = (await w.api.findTickets("acme")).filter((t) => t.title.startsWith("Fix the CI failure"));
