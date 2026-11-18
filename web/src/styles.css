@@ -269,8 +269,11 @@ a.filter { text-decoration: none; }
 .project-options-rules-section { border: 0; border-top: 1px solid var(--border); padding: 12px 0 0; margin: 16px 0 0; }
 .project-options-rules-section legend { font-weight: 600; font-size: 14px; padding: 0 4px 0 0; }
 .project-options-rules { list-style: none; margin: 12px 0 0; padding: 0; }
-.project-options-rules > li { padding: 8px 0; border-bottom: 1px solid var(--border); }
-.project-options-rules .btn { margin-left: 4px; }
+.project-options-rules > li { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.project-options-rules > li > .warning { grid-column: 1 / -1; }
+.project-options-rules strong { font-family: var(--mono); font-size: 12.5px; }
+.project-options-row-actions { display: flex; gap: 4px; justify-content: flex-end; }
+.project-options-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .project-options-rules-section > .project-options-rule { margin-top: 12px; }
 .project-options-repositories { margin: 12px 0 0; padding: 0 0 0 20px; }
 .project-options-repositories > li { padding: 8px 0; border-bottom: 1px solid var(--border); }
