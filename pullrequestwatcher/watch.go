@@ -6,12 +6,9 @@ package pullrequestwatcher
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
-	"strings"
 	"time"
 
 	"github.com/tomoram/code-central/clock"
@@ -118,10 +115,11 @@ func (cfg Config) poll(ctx context.Context) (reachable, waiting bool, limit *rat
 		repositories = []core.PullRequestRepositoryView{{CodeHost: watch.CodeHost, Repository: watch.Repository, Base: watch.Base}}
 	}
 	several := len(repositories) > 1
-	hosts := map[string]host{}
+	hosts := map[string]Host{}
 	var problems []core.RepositoryProblem
 	for _, rv := range repositories {
-		h, r, err := cfg.access(ctx, core.PullRequestCheckInput{CodeHost: rv.CodeHost, Repository: rv.Repository, GHPath: watch.GHPath, PATEnv: watch.PATEnv, ProjectURL: cfg.AzureProjectURL}, false)
+		in := core.PullRequestCheckInput{CodeHost: rv.CodeHost, Repository: rv.Repository, GHPath: watch.GHPath, PATEnv: watch.PATEnv, ProjectURL: cfg.AzureProjectURL}
+		h, r, err := access(ctx, in, rv.Base, cfg.Env, false)
 		if ctx.Err() != nil {
 			// Stopped mid-poll: what failed is the stop, not the Code Host.
 			return false, false, nil
@@ -133,7 +131,7 @@ func (cfg Config) poll(ctx context.Context) (reachable, waiting bool, limit *rat
 		if errors.As(err, &limit) {
 			return true, false, limit
 		}
-		hosts[rv.Name] = h(rv.Base)
+		hosts[rv.Name] = h
 	}
 	if len(problems) > 0 {
 		// A failing Repository is named, and the others are still watched
@@ -186,7 +184,7 @@ func (cfg Config) poll(ctx context.Context) (reachable, waiting bool, limit *rat
 // work, and an open pull request's body is edited to list its siblings as
 // they stand. It returns the pull request as reported, nil when there is
 // none.
-func (cfg Config) follow(ctx context.Context, g host, w core.PushedWorkView, several bool) (*pullRequest, error) {
+func (cfg Config) follow(ctx context.Context, g pullRequests, w core.PushedWorkView, several bool) (*pullRequest, error) {
 	prs, err := g.list(ctx, w.Branch)
 	if err != nil {
 		return nil, err
@@ -222,7 +220,7 @@ func (cfg Config) follow(ctx context.Context, g host, w core.PushedWorkView, sev
 
 // close closes c, a pull request marked to close, unless it is no longer
 // open, and reports how it stands, which clears the mark.
-func (cfg Config) close(ctx context.Context, g host, c core.PullRequestToClose) error {
+func (cfg Config) close(ctx context.Context, g pullRequests, c core.PullRequestToClose) error {
 	prs, err := g.list(ctx, c.Branch)
 	if err != nil {
 		return err
@@ -280,32 +278,6 @@ func (cfg Config) logf(format string, args ...any) {
 	}
 }
 
-// host is the repository's pull requests on one Code Host, for one base.
-type host interface {
-	// list is every pull request from branch into the base, newest first.
-	list(ctx context.Context, branch string) ([]*pullRequest, error)
-	// refresh is an open pull request read singly, for what a list leaves
-	// out; a host that lists it all returns p.
-	refresh(ctx context.Context, p *pullRequest) (*pullRequest, error)
-	// open opens a pull request ready for review, with title and body.
-	open(ctx context.Context, branch, title, body string) (*pullRequest, error)
-	// sameBody reports whether a listed pull request's body is body as
-	// the host keeps it.
-	sameBody(listed, body string) bool
-	// edit sets an open pull request's body.
-	edit(ctx context.Context, p *pullRequest, body string) error
-	// close closes pull request number without merging it.
-	close(ctx context.Context, number int) (*pullRequest, error)
-}
-
-// github is the repository's pull requests as gh reaches them.
-type github struct {
-	prog       string
-	env        gh.Env
-	repository string
-	base       string
-}
-
 // pullRequest is a pull request as GitHub's REST API gives it; Azure
 // Repos' are mapped into the same fields.
 type pullRequest struct {
@@ -340,100 +312,4 @@ func (p *pullRequest) mergeCommit() string {
 		return p.MergeSHA
 	}
 	return ""
-}
-
-// list is every pull request from branch into the base, newest first.
-func (g github) list(ctx context.Context, branch string) ([]*pullRequest, error) {
-	owner, _, _ := strings.Cut(g.repository, "/")
-	path := fmt.Sprintf("repos/%s/pulls?state=all&sort=created&direction=desc&per_page=100&head=%s&base=%s",
-		g.repository, url.QueryEscape(owner+":"+branch), url.QueryEscape(g.base))
-	body, _, err := gh.API(ctx, g.env, g.prog, path)
-	if err != nil {
-		return nil, fmt.Errorf("listing pull requests from %s: %w", branch, err)
-	}
-	var prs []*pullRequest
-	if len(strings.TrimSpace(string(body))) > 0 {
-		if err := json.Unmarshal(body, &prs); err != nil {
-			return nil, fmt.Errorf("reading pull requests from %s: %w", branch, err)
-		}
-	}
-	return prs, nil
-}
-
-// refresh is the open pull request read singly, as only that read
-// tells whether GitHub finds it conflicting; a pull request GitHub hasn't
-// worked the mergeability of yet reads as open.
-func (g github) refresh(ctx context.Context, p *pullRequest) (*pullRequest, error) {
-	body, _, err := gh.API(ctx, g.env, g.prog, fmt.Sprintf("repos/%s/pulls/%d", g.repository, p.Number))
-	if err != nil {
-		return p, fmt.Errorf("reading pull request %d: %w", p.Number, err)
-	}
-	if len(strings.TrimSpace(string(body))) == 0 {
-		return p, nil
-	}
-	var one pullRequest
-	if err := json.Unmarshal(body, &one); err != nil {
-		return p, fmt.Errorf("reading pull request %d: %w", p.Number, err)
-	}
-	if one.Number != p.Number {
-		return p, nil
-	}
-	return &one, nil
-}
-
-// open opens a pull request from branch into the base, ready for review,
-// with title and body.
-func (g github) open(ctx context.Context, branch, title, body string) (*pullRequest, error) {
-	out, msg, err := gh.API(ctx, g.env, g.prog, "repos/"+g.repository+"/pulls", "--method", "POST",
-		"-f", "title="+title, "-f", "body="+body, "-f", "head="+branch, "-f", "base="+g.base)
-	if err != nil {
-		var limit *ratelimit.Error
-		if errors.As(err, &limit) {
-			return nil, err
-		}
-		return nil, fmt.Errorf("opening a pull request from %s into %s: %w: %s", branch, g.base, err, msg)
-	}
-	var pr pullRequest
-	if err := json.Unmarshal(out, &pr); err != nil || pr.Number == 0 {
-		return nil, fmt.Errorf("opening a pull request from %s into %s: GitHub's answer has no pull request", branch, g.base)
-	}
-	return &pr, nil
-}
-
-// sameBody reports whether a listed body is body: GitHub keeps a body as
-// it was sent.
-func (g github) sameBody(listed, body string) bool { return listed == body }
-
-// patch sets field (name=value) on pull request number, with GitHub's
-// answer; a refusal is wrapped with what, and a rate limit returned as
-// it is.
-func (g github) patch(ctx context.Context, number int, what, field string) ([]byte, error) {
-	out, msg, err := gh.API(ctx, g.env, g.prog, fmt.Sprintf("repos/%s/pulls/%d", g.repository, number), "--method", "PATCH", "-f", field)
-	if err != nil {
-		var limit *ratelimit.Error
-		if errors.As(err, &limit) {
-			return nil, err
-		}
-		return nil, fmt.Errorf(what+": %w: %s", number, err, msg)
-	}
-	return out, nil
-}
-
-// edit sets an open pull request's body.
-func (g github) edit(ctx context.Context, p *pullRequest, body string) error {
-	_, err := g.patch(ctx, p.Number, "editing pull request %d's body", "body="+body)
-	return err
-}
-
-// close closes pull request number without merging it.
-func (g github) close(ctx context.Context, number int) (*pullRequest, error) {
-	out, err := g.patch(ctx, number, "closing pull request %d", "state=closed")
-	if err != nil {
-		return nil, err
-	}
-	var pr pullRequest
-	if err := json.Unmarshal(out, &pr); err != nil || pr.Number == 0 {
-		return nil, fmt.Errorf("closing pull request %d: GitHub's answer has no pull request", number)
-	}
-	return &pr, nil
 }

@@ -18,3 +18,4 @@ The Work Item Watcher authenticates with a PAT read from an environment variable
 - "Is this the Issues Spec?" becomes "is this the Issues Spec or the Azure Boards Spec?" wherever core asks it, and Awaiting triage reads the New issues need me of the Integration whose Spec the Ticket is on.
 - Each watch read lists only its own Integration's Links and Write-backs.
 - A further Integration follows the same shape: a Watcher kind, a setting with its own Spec for its Incoming Issues, and the shared triage.
+- No `Tracker` interface sits over the GitHub Issues Watcher: a second tracker is a second Watcher. What the Watchers share is how they reach a host, `gh.Ready` and `azdo.Access`, which give the same gh missing, logged out, PAT missing and PAT rejected problems to every check.

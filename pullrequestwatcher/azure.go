@@ -8,23 +8,25 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/tomoram/code-central/azdo"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
 )
 
-// azureRepos is one Azure Repos repository's pull requests.
+// azureRepos is one Azure Repos repository's pull requests into one base.
 type azureRepos struct {
+	in   core.PullRequestCheckInput
+	env  gh.Env
+	base string
+	// c is the client CheckAccess made, and repository the repository's
+	// name in its project.
 	c          *azdo.Client
 	repository string
-	base       string
 }
 
 // projectURLOf is the Azure DevOps project URL of a repository written
@@ -41,57 +43,56 @@ func projectURLOf(in core.PullRequestCheckInput) (projectURL, repository string,
 	return "https://dev.azure.com/" + org + "/" + project, repository, true
 }
 
-// checkAzureRepos is the Azure Repos check: the PAT variable is set, the
-// repository can be read, and the PAT can contribute to pull requests.
-func checkAzureRepos(ctx context.Context, in core.PullRequestCheckInput, env gh.Env, full bool) (func(string) host, core.WatcherCheckResult, error) {
-	patEnv := in.PATEnv
-	if patEnv == "" {
-		patEnv = domain.DefaultPATEnv
-	}
-	projectURL, repository, ok := projectURLOf(in)
-	if !ok {
-		return nil, unreadableRepository(in.Repository, errors.New("it isn't <organization>/<project>/<repository>")), nil
-	}
-	c, err := azdo.New(env.Environ, patEnv, projectURL, nil)
-	switch {
-	case errors.Is(err, azdo.ErrNoPAT):
-		return nil, core.WatcherCheckResult{Problem: core.ProblemPATMissing,
-			Reason: fmt.Sprintf("The environment variable %s is not set, or is empty, in the Pull Request Watcher's environment.", patEnv),
-			Fix:    azdo.PATMissingFix(runtime.GOOS, patEnv, "Code: Read & write")}, nil
-	case err != nil:
-		return nil, unreadableRepository(in.Repository, err), nil
-	}
-	if _, err := c.Repository(ctx, repository); err != nil {
-		r, err := azureRefused(patEnv, in.Repository, err)
-		return nil, r, err
-	}
-	if !full {
-		return func(base string) host { return azureRepos{c: c, repository: repository, base: base} }, core.WatcherCheckResult{}, nil
-	}
-	if err := c.CanContribute(ctx, repository); err != nil {
-		r, err := azureRefused(patEnv, in.Repository, err)
-		return nil, r, err
-	}
-	return func(base string) host { return azureRepos{c: c, repository: repository, base: base} }, core.WatcherCheckResult{}, nil
+// codeScope is the PAT scope the Pull Request Watcher needs, as Azure
+// DevOps names it.
+const codeScope = "Code: Read & write"
+
+// access is how the Pull Request Watcher reaches Azure DevOps.
+func (a *azureRepos) access() azdo.Access {
+	return azdo.Access{Environ: a.env.Environ, PATEnv: a.in.PATEnv, Watcher: "Pull Request Watcher", Scope: codeScope}
 }
 
-// azureRefused is the check's answer to err from a call. A rate limit is
+// CheckAccess checks the PAT variable is set, the repository can be read,
+// and, on a full check, the PAT can contribute to pull requests.
+func (a *azureRepos) CheckAccess(ctx context.Context, full bool) (core.WatcherCheckResult, error) {
+	projectURL, repository, ok := projectURLOf(a.in)
+	if !ok {
+		return unreadableRepository(a.in.Repository, errors.New("it isn't <organization>/<project>/<repository>")), nil
+	}
+	c, r, err := a.access().Ready(projectURL)
+	switch {
+	case err != nil:
+		return unreadableRepository(a.in.Repository, err), nil
+	case r.Problem != "":
+		return r, nil
+	}
+	if _, err := c.Repository(ctx, repository); err != nil {
+		return a.refused(err)
+	}
+	if full {
+		if err := c.CanContribute(ctx, repository); err != nil {
+			return a.refused(err)
+		}
+	}
+	a.c, a.repository = c, repository
+	return core.WatcherCheckResult{}, nil
+}
+
+// refused is the check's answer to err from a call. A rate limit is
 // returned as the error, not a problem.
-func azureRefused(patEnv, repository string, err error) (core.WatcherCheckResult, error) {
+func (a *azureRepos) refused(err error) (core.WatcherCheckResult, error) {
 	var limit *ratelimit.Error
 	switch {
 	case errors.As(err, &limit):
 		return core.WatcherCheckResult{}, limit
 	case errors.Is(err, azdo.ErrPATRejected):
-		return core.WatcherCheckResult{Problem: core.ProblemPATRejected,
-			Reason: fmt.Sprintf("Azure DevOps rejected the PAT in %s: it may have expired or been revoked.", patEnv),
-			Fix:    fmt.Sprintf("Make a new PAT with Code: Read & write, and set it in %s for the service.", patEnv)}, nil
+		return a.access().Rejected(), nil
 	case errors.Is(err, azdo.ErrMissingScope):
 		return core.WatcherCheckResult{Problem: core.ProblemPATScope,
-			Reason: fmt.Sprintf("The PAT in %s can't contribute to pull requests in %s.", patEnv, repository),
-			Fix:    "The PAT needs Code: Read & write. Make a new PAT with that scope, and set it for the service. It may share the variable with Azure Pipelines if it has both scopes."}, nil
+			Reason: fmt.Sprintf("The PAT in %s can't contribute to pull requests in %s.", a.access().PATVariable(), a.in.Repository),
+			Fix:    "The PAT needs " + codeScope + ". Make a new PAT with that scope, and set it for the service. It may share the variable with Azure Pipelines if it has both scopes."}, nil
 	}
-	return unreadableRepository(repository, err), nil
+	return unreadableRepository(a.in.Repository, err), nil
 }
 
 func unreadableRepository(repository string, err error) core.WatcherCheckResult {
@@ -102,7 +103,7 @@ func unreadableRepository(repository string, err error) core.WatcherCheckResult 
 
 func ref(branch string) string { return "refs/heads/" + strings.TrimPrefix(branch, "refs/heads/") }
 
-func (a azureRepos) list(ctx context.Context, branch string) ([]*pullRequest, error) {
+func (a *azureRepos) list(ctx context.Context, branch string) ([]*pullRequest, error) {
 	prs, err := a.c.PullRequests(ctx, a.repository, ref(branch), ref(a.base))
 	if err != nil {
 		return nil, fmt.Errorf("listing pull requests from %s: %w", branch, err)
@@ -116,9 +117,9 @@ func (a azureRepos) list(ctx context.Context, branch string) ([]*pullRequest, er
 }
 
 // refresh needs no second read: Azure Repos' list has the merge status.
-func (a azureRepos) refresh(_ context.Context, p *pullRequest) (*pullRequest, error) { return p, nil }
+func (a *azureRepos) refresh(_ context.Context, p *pullRequest) (*pullRequest, error) { return p, nil }
 
-func (a azureRepos) open(ctx context.Context, branch, title, body string) (*pullRequest, error) {
+func (a *azureRepos) open(ctx context.Context, branch, title, body string) (*pullRequest, error) {
 	p, err := a.c.OpenPullRequest(ctx, a.repository, ref(branch), ref(a.base), title, body)
 	if err != nil {
 		var limit *ratelimit.Error
@@ -136,7 +137,7 @@ func (a azureRepos) open(ctx context.Context, branch, title, body string) (*pull
 // edit sets p's description to body, as Azure Repos cuts it. A list may
 // give a long description cut short, so it reads p singly first and
 // writes only when that differs.
-func (a azureRepos) edit(ctx context.Context, p *pullRequest, body string) error {
+func (a *azureRepos) edit(ctx context.Context, p *pullRequest, body string) error {
 	want := azdo.CutDescription(body)
 	one, err := a.c.PullRequest(ctx, a.repository, p.Number)
 	if err == nil && one.Description == want {
@@ -150,10 +151,10 @@ func (a azureRepos) edit(ctx context.Context, p *pullRequest, body string) error
 
 // sameBody reports whether a listed description is body as Azure Repos
 // keeps it.
-func (a azureRepos) sameBody(listed, body string) bool { return listed == azdo.CutDescription(body) }
+func (a *azureRepos) sameBody(listed, body string) bool { return listed == azdo.CutDescription(body) }
 
 // close abandons pull request number: Azure Repos' close without merging.
-func (a azureRepos) close(ctx context.Context, number int) (*pullRequest, error) {
+func (a *azureRepos) close(ctx context.Context, number int) (*pullRequest, error) {
 	p, err := a.c.AbandonPullRequest(ctx, a.repository, number)
 	if err != nil {
 		return nil, fmt.Errorf("abandoning pull request %d: %w", number, err)
@@ -164,7 +165,7 @@ func (a azureRepos) close(ctx context.Context, number int) (*pullRequest, error)
 // mapped is p in the watcher's terms: active is open, or conflicting while
 // its merge status says conflicts; abandoned is closed; completed is
 // merged, at the merge commit Azure Repos reports.
-func (a azureRepos) mapped(p azdo.PullRequest) *pullRequest {
+func (a *azureRepos) mapped(p azdo.PullRequest) *pullRequest {
 	pr := &pullRequest{Number: p.ID, Link: a.c.WebURL(a.repository, p.ID), Status: "open", Closed: p.Closed, Body: p.Description}
 	switch p.Status {
 	case "abandoned":

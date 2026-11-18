@@ -89,12 +89,8 @@ type access struct {
 // checkAccess is Check, as each poll runs it too, with what it found:
 // GitHub rate-limiting a call is a *ratelimit.Error, not a problem.
 func checkAccess(ctx context.Context, repository, ghPath string, env gh.Env) (a access, r core.WatcherCheckResult, err error) {
-	prog, missing := gh.Find(ghPath, env)
-	if missing != nil {
-		return access{}, *missing, nil
-	}
+	prog, r, err := gh.Ready(ctx, env, ghPath)
 	a = access{prog: prog, repository: repository}
-	r, err = gh.CheckLogin(ctx, env, prog)
 	if r.Problem == "" && err == nil {
 		var name string
 		name, r, err = checkRepository(ctx, env, prog, repository)

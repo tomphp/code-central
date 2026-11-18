@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -40,14 +39,12 @@ type AzurePipelines struct {
 // not a problem. The execute scope can't be confirmed without retrying a
 // run, so it isn't checked.
 func (a *AzurePipelines) CheckAccess(ctx context.Context) (core.WatcherCheckResult, error) {
-	c, err := azdo.New(a.Env.Environ, a.PATEnv, a.ProjectURL, nil)
+	c, r, err := a.access().Ready(a.ProjectURL)
 	switch {
-	case errors.Is(err, azdo.ErrNoPAT):
-		return core.WatcherCheckResult{Problem: core.ProblemPATMissing,
-			Reason: fmt.Sprintf("The environment variable %s is not set, or is empty, in the CI Watcher's environment.", a.PATEnv),
-			Fix:    azdo.PATMissingFix(runtime.GOOS, a.PATEnv, "Build: Read & execute")}, nil
 	case err != nil:
 		return unreadable(a.ProjectURL, err), nil
+	case r.Problem != "":
+		return r, nil
 	}
 	if _, err := c.Project(ctx); err != nil {
 		return a.refused(err)
@@ -65,15 +62,22 @@ func (a *AzurePipelines) refused(err error) (core.WatcherCheckResult, error) {
 	case errors.As(err, &limit):
 		return core.WatcherCheckResult{}, limit
 	case errors.Is(err, azdo.ErrPATRejected):
-		return core.WatcherCheckResult{Problem: core.ProblemPATRejected,
-			Reason: fmt.Sprintf("Azure DevOps rejected the PAT in %s: it may have expired or been revoked.", a.PATEnv),
-			Fix:    fmt.Sprintf("Make a new PAT with Build: Read & execute, and set it in %s for the service.", a.PATEnv)}, nil
+		return a.access().Rejected(), nil
 	case errors.Is(err, azdo.ErrMissingScope):
 		return core.WatcherCheckResult{Problem: core.ProblemPATScope,
 			Reason: fmt.Sprintf("The PAT in %s can't read builds in %s.", a.PATEnv, a.ProjectURL),
-			Fix:    "The PAT needs Build: Read & execute. Make a new PAT with that scope, and set it for the service."}, nil
+			Fix:    "The PAT needs " + buildScope + ". Make a new PAT with that scope, and set it for the service."}, nil
 	}
 	return unreadable(a.ProjectURL, err), nil
+}
+
+// buildScope is the PAT scope the CI Watcher needs, as Azure DevOps
+// names it.
+const buildScope = "Build: Read & execute"
+
+// access is how the CI Watcher reaches Azure DevOps.
+func (a *AzurePipelines) access() azdo.Access {
+	return azdo.Access{Environ: a.Env.Environ, PATEnv: a.PATEnv, Watcher: "CI Watcher", Scope: buildScope}
 }
 
 // unreadable is the project not found, or its host not reached.
@@ -165,7 +169,7 @@ func (a *AzurePipelines) client() (*azdo.Client, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.c == nil {
-		c, err := azdo.New(a.Env.Environ, a.PATEnv, a.ProjectURL, nil)
+		c, err := azdo.New(a.Env.Environ, a.access().PATVariable(), a.ProjectURL, nil)
 		if err != nil {
 			return nil, err
 		}

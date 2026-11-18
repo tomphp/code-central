@@ -1,8 +1,9 @@
-// Package azdo is how the CI Watcher reaches Azure DevOps: its REST API
+// Package azdo is how every Watcher reaches Azure DevOps: its REST API
 // directly, with a Personal Access Token (PAT) read from the environment
 // by the variable's name, so Code Central stores no PAT. It parses project
 // URLs, makes the API's calls, and turns refusals into errors: a missing
 // or rejected PAT, a missing scope, a project not found, and a rate limit.
+// Access is the one way a Watcher's check gets a ready client.
 package azdo
 
 import (
