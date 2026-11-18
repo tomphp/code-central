@@ -122,7 +122,7 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 	if !homeReady && !f.several() {
 		return
 	}
-	if policies.Any(core.LandingPolicy.CIGateHolds) {
+	if policies.Any(domain.LandingPolicy.CIGateHolds) {
 		f.reportTip(ctx, policies)
 	}
 	for _, tk := range accepted {
@@ -172,14 +172,14 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 func (f *factory) landEach(ctx context.Context, tk core.TicketView, p core.ProjectView, ws []changedWork) {
 	policies := p.LandingPolicies()
 	onSpec := f.waitsOnSpecBranch(tk)
-	routes := make([]core.LandingRoute, len(ws))
+	routes := make([]domain.LandingRoute, len(ws))
 	var merges, specs []changedWork
 	for i, w := range ws {
 		routes[i] = w.r.policy(policies).Route(onSpec, pullRequestMergedIn(tk, w.r))
 		switch routes[i] {
-		case core.RouteMerge:
+		case domain.RouteMerge:
 			merges = append(merges, w)
-		case core.RouteSpecBranch:
+		case domain.RouteSpecBranch:
 			specs = append(specs, w)
 		}
 	}
@@ -192,11 +192,11 @@ func (f *factory) landEach(ctx context.Context, tk core.TicketView, p core.Proje
 	}
 	for i, w := range ws {
 		switch routes[i] {
-		case core.RouteMerge:
+		case domain.RouteMerge:
 			if pl, ok := plans[w.r]; ok && !f.mergeAndLand(ctx, tk, p, pl) {
 				return
 			}
-		case core.RoutePullRequest:
+		case domain.RoutePullRequest:
 			if changedElsewhere(f.home.name, tk) {
 				f.landPullRequestIn(ctx, tk, policies, w.r, onSpec)
 			} else {
@@ -204,7 +204,7 @@ func (f *factory) landEach(ctx context.Context, tk core.TicketView, p core.Proje
 				// by the Ticket's own pull request.
 				f.landPullRequest(ctx, tk, p)
 			}
-		case core.RouteBranch:
+		case domain.RouteBranch:
 			f.landMergedBranch(ctx, tk, policies, w)
 		}
 	}

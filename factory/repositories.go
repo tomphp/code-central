@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 )
 
 // The Factory's Repositories (Spec code-central-848): a registry of the
@@ -72,7 +73,7 @@ func (r *repository) listedAs(v core.RepositoryView) {
 // landing step in r asks: its Own Landing, else the Default Landing, with
 // Push off in a local-only Repository (ADR 0039, Spec code-central-890).
 // A function given the policies with r asks this.
-func (r *repository) policy(policies core.LandingPolicies) core.LandingPolicy {
+func (r *repository) policy(policies core.LandingPolicies) domain.LandingPolicy {
 	return policies.In(r.name)
 }
 

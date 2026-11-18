@@ -142,10 +142,10 @@ func (e *evaluation) chain(t domain.Ticket) (NeedsMeReason, time.Time) {
 			return "", time.Time{}
 		}
 		lp := ticketLandingPolicies(p, t)
-		if t.State == domain.Accepted && lp.Any(LandingPolicy.LandsByPullRequest) && anyPullRequest(t, domain.PRClosed) {
+		if t.State == domain.Accepted && lp.Any(domain.LandingPolicy.LandsByPullRequest) && anyPullRequest(t, domain.PRClosed) {
 			return ReasonPullRequestClosed, entered(t)
 		}
-		if t.State == domain.Accepted && lp.Any(LandingPolicy.LandsOnHumanMerge) {
+		if t.State == domain.Accepted && lp.Any(domain.LandingPolicy.LandsOnHumanMerge) {
 			return ReasonToMerge, entered(t)
 		}
 		if s := c.silentSince(t); s != nil {

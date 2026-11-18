@@ -323,7 +323,7 @@ func (f *factory) landSpec(ctx context.Context, id string, p core.ProjectView) {
 			return
 		}
 	}
-	f.mergeSpec(ctx, spec, tickets, p, core.LandingPolicy.MergesSpecBranches, true)
+	f.mergeSpec(ctx, spec, tickets, p, domain.LandingPolicy.MergesSpecBranches, true)
 }
 
 // anyUncloned reports whether one of tickets has a Changed Repository it
@@ -380,7 +380,7 @@ type specPlan struct {
 // are handled this poll: false means every Spec Branch is already in its
 // base or one can't be read, and the Tickets land through the plain path,
 // as their work is in the base.
-func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets []core.TicketView, p core.ProjectView, mergesThere func(core.LandingPolicy) bool, pushes bool) (handled bool) {
+func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets []core.TicketView, p core.ProjectView, mergesThere func(domain.LandingPolicy) bool, pushes bool) (handled bool) {
 	sort.SliceStable(tickets, func(i, j int) bool { return acceptedAt(tickets[i]).Before(acceptedAt(tickets[j])) })
 	policies := p.LandingPolicies()
 	if f.anyUncloned(tickets) {
@@ -525,7 +525,7 @@ func (f *factory) landEachAt(ctx context.Context, tickets []core.TicketView, p c
 // poll.
 func (f *factory) landSpecsOff(ctx context.Context, accepted []core.TicketView, p core.ProjectView) map[string]bool {
 	handled := map[string]bool{}
-	if !p.LandingPolicies().Any(core.LandingPolicy.MergesLeftoverSpecBranches) {
+	if !p.LandingPolicies().Any(domain.LandingPolicy.MergesLeftoverSpecBranches) {
 		return handled
 	}
 	groups := map[string][]core.TicketView{}
@@ -559,7 +559,7 @@ func (f *factory) landSpecsOff(ctx context.Context, accepted []core.TicketView, 
 			}
 			continue
 		}
-		if f.mergeSpec(ctx, spec, groups[id], p, core.LandingPolicy.MergesLeftoverSpecBranches, false) {
+		if f.mergeSpec(ctx, spec, groups[id], p, domain.LandingPolicy.MergesLeftoverSpecBranches, false) {
 			for _, tk := range groups[id] {
 				handled[tk.ID] = true
 			}

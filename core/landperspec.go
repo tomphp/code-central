@@ -186,7 +186,7 @@ func specWork(r store.Reader, key string, t domain.Ticket) []domain.Ticket {
 // Project p: one of its Changed Repositories is under Pull Request, and t
 // is Accepted and Spec-landed.
 func inSpecWork(r store.Reader, p domain.Project, t domain.Ticket) bool {
-	return t.State == domain.Accepted && ticketLandingPolicies(p, t).Any(LandingPolicy.LandsByPullRequest) && specLanded(r, p, t)
+	return t.State == domain.Accepted && ticketLandingPolicies(p, t).Any(domain.LandingPolicy.LandsByPullRequest) && specLanded(r, p, t)
 }
 
 // specWorkOf is the work of Spec spec among tickets, Project p's: the
