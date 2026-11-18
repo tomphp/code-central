@@ -104,7 +104,7 @@ func checkEffort(r store.Reader, key, field, effort string) error {
 
 // GetModelChoiceInput is the Factory's get_model_choice(ticket).
 type GetModelChoiceInput struct {
-	Ticket Ref `json:"ticket"`
+	Ticket Ref `json:"ticket" path:"n"`
 }
 
 // GetModelChoice is the Factory's get_model_choice: the Model Choice for
@@ -130,7 +130,7 @@ func (c *Core) GetModelChoice(_ context.Context, key string, in GetModelChoiceIn
 // claim_id, model, effort, full?): what a turn was started with, after
 // the Factory's fallbacks, empty meaning Claude Code's default.
 type ReportModelChoiceInput struct {
-	Ticket  Ref    `json:"ticket"`
+	Ticket  Ref    `json:"ticket" path:"n"`
 	ClaimID string `json:"claim_id"`
 	Model   string `json:"model,omitempty"`
 	Effort  string `json:"effort,omitempty"`

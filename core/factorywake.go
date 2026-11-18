@@ -26,8 +26,8 @@ type FactoryWake struct {
 // NextFactoryWakeInput is the Factory's next_factory_wake(factory, host),
 // named as its Heartbeat names it.
 type NextFactoryWakeInput struct {
-	Factory string
-	Host    string
+	Factory string `json:"-" query:"factory"`
+	Host    string `json:"-" query:"host"`
 }
 
 // longPoll is one open long-poll call: next_chat_work or
