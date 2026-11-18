@@ -324,10 +324,7 @@ func pushedWork(r store.Reader, key string) []PushedWorkView {
 // Tickets marked to close, by Ticket.
 func pullRequestsToClose(r store.Reader, p domain.Project) []PullRequestToClose {
 	out := []PullRequestToClose{}
-	for _, t := range r.Tickets(p.Key) {
-		if finished(t.State) {
-			continue
-		}
+	for _, t := range r.FindTickets(p.Key, store.TicketFilter{States: unfinished}) {
 		for _, pr := range t.PullRequests {
 			if !pr.Close || (pr.State != domain.PROpen && pr.State != domain.PRConflicting) {
 				continue
@@ -577,10 +574,7 @@ func pullRequestOpen(p domain.PullRequest) bool {
 func openPullRequests(r store.Reader, p domain.Project) []OpenPullRequest {
 	out := []OpenPullRequest{}
 	ps := landingPolicies(p)
-	for _, t := range r.Tickets(p.Key) {
-		if t.State != domain.Accepted {
-			continue
-		}
+	for _, t := range r.FindTickets(p.Key, store.TicketFilter{States: []domain.State{domain.Accepted}}) {
 		for _, pr := range t.PullRequests {
 			if pullRequestOpen(pr) && !ps.In(recordRepository(p.Key, pr.Repository)).LandsByPullRequest() {
 				out = append(out, OpenPullRequest{Ticket: DisplayID(p.Key, t.Number), Link: pr.Link})

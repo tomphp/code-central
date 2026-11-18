@@ -166,17 +166,15 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 			return nil
 		}
 		if p.Landing.Method != l.Method {
-			for _, t := range w.Tickets(key) {
-				if t.State == domain.Accepted {
-					accepted = append(accepted, t.Number)
-				}
+			for _, t := range w.FindTickets(key, store.TicketFilter{States: []domain.State{domain.Accepted}}) {
+				accepted = append(accepted, t.Number)
 			}
 		}
 		if was.RunsPullRequestWatcher() && !next.RunsPullRequestWatcher() {
 			// What the Pull Request Watcher said was about the old method.
 			c.watchers.reset(watcherKey{WatcherPullRequests, key})
-			for _, t := range w.Tickets(key) {
-				if t.State == domain.Accepted && slices.ContainsFunc(t.PullRequests, pullRequestOpen) {
+			for _, t := range w.FindTickets(key, store.TicketFilter{States: []domain.State{domain.Accepted}}) {
+				if slices.ContainsFunc(t.PullRequests, pullRequestOpen) {
 					left = append(left, t.Number)
 				}
 			}

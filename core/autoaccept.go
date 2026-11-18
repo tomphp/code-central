@@ -183,13 +183,8 @@ func (c *Core) sweepAutoAccept(ctx context.Context, r store.Reader, key string, 
 	im := target
 	if len(target.RewrittenSpecs) == 1 {
 		sp = target.RewrittenSpecs[0]
-		for _, t := range r.Tickets(key) {
-			if t.Spec == sp.Number && t.State == domain.InReview {
-				// An accepted Ticket is rewritten whole.
-				t, _ = r.Ticket(key, t.Number, whole...)
-				covered = append(covered, t)
-			}
-		}
+		// An accepted Ticket is rewritten whole.
+		covered = r.FindTickets(key, store.TicketFilter{Spec: []int{sp.Number}, States: []domain.State{domain.InReview}, Parts: whole})
 	} else {
 		// The labelled Ticket is written once, accepted or as it is.
 		covered, im = target.Rewritten, store.Import{}

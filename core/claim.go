@@ -177,10 +177,12 @@ func claimTarget(rule blockRule, in ClaimInput) (t domain.Ticket, found bool, er
 		}
 		specN = sp.Number
 	}
-	tickets := r.Tickets(key)
-	slices.SortStableFunc(tickets, claimOrder)
-	for _, t := range tickets {
-		if t.State == domain.Ready && !rule.blocked(t) && (specN == 0 || t.Spec == specN) {
+	f := store.TicketFilter{States: []domain.State{domain.Ready}, Order: store.ByClaim}
+	if specN != 0 {
+		f.Spec = []int{specN}
+	}
+	for _, t := range r.FindTickets(key, f) {
+		if !rule.blocked(t) {
 			return t, true, nil
 		}
 	}

@@ -179,7 +179,7 @@ func specWork(r store.Reader, key string, t domain.Ticket) []domain.Ticket {
 	if !inSpecWork(r, p, t) {
 		return nil
 	}
-	return specWorkOf(r, p, r.Tickets(key), t.Spec)
+	return specWorkOf(r, p, r.FindTickets(key, store.TicketFilter{Spec: []int{t.Spec}, States: []domain.State{domain.Accepted}}), t.Spec)
 }
 
 // inSpecWork reports whether t waits on its Spec's one pull request in

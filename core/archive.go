@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -92,13 +91,9 @@ func (c *Core) UnarchiveProject(ctx context.Context, key string) (ProjectView, e
 // unfinishedTickets names each unfinished Ticket in the Project with its
 // State, in number order.
 func unfinishedTickets(r store.Reader, key string) []string {
-	tickets := r.Tickets(key)
-	slices.SortFunc(tickets, func(a, b domain.Ticket) int { return a.Number - b.Number })
 	var out []string
-	for _, t := range tickets {
-		if !finished(t.State) {
-			out = append(out, fmt.Sprintf("%s (%s)", DisplayID(key, t.Number), t.State))
-		}
+	for _, t := range r.FindTickets(key, store.TicketFilter{States: unfinished}) {
+		out = append(out, fmt.Sprintf("%s (%s)", DisplayID(key, t.Number), t.State))
 	}
 	return out
 }

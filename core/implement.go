@@ -94,8 +94,8 @@ func (c *Core) implementStep(ctx context.Context, r store.Reader, key string, t 
 	}
 	var tickets domain.Ticket
 	found := false
-	for _, o := range r.Tickets(key) {
-		if o.Spec == t.Spec && StageOf(o.Labels) == "tickets" {
+	for _, o := range r.FindTickets(key, store.TicketFilter{Spec: []int{t.Spec}}) {
+		if StageOf(o.Labels) == "tickets" {
 			// It is rewritten whole.
 			tickets, found = r.Ticket(key, o.Number, whole...)
 			break
