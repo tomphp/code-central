@@ -660,6 +660,10 @@ _Avoid_: Retry
 **Auto-fix limit**:
 The most Auto-fix attempts per failure chain, 3 unless the human sets 1 to 10. Past it, the CI failed item comes back to the human.
 
+**Auto-fix mark**:
+What marks an auto fix Ticket, one Auto-fix opened: its Auto-fix attempt, the Repository and commit it was opened for, the Tickets its CI failed item listed, and the previous attempt's fix Ticket. Only Code Central sets it, and nothing clears it; a fix Ticket the human opens with New fix Ticket has none.
+_Avoid_: Auto flag
+
 **Run summary**:
 The part of a fix Ticket's description, and of the Send back to fix note, that Code Central writes from a pushed commit's CI: each failed run (or cancelled run, for CI cancelled) linked with its Workflow and failed jobs, the `gh run view <id> --log-failed` commands, and the last passed commit in that Repository when there is one.
 _Avoid_: Fix note, failure note

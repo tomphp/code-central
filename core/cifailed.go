@@ -207,6 +207,8 @@ func (c *Core) LandAnyway(ctx context.Context, key string, in CIResponseInput) (
 	if err := humanOnly(ctx, "land_anyway"); err != nil {
 		return Written[TicketView]{}, err
 	}
+	// Not between an Auto-fix sweep's read and its fix Ticket's response.
+	defer c.lockAutoFix(key)()
 	return c.respondCI(key, OptionLandAnyway, in,
 		func(ci *ciState, rc *repoCI) bool { return ci.landAnyway(rc) },
 		whyNotLandAnyway,
@@ -258,6 +260,8 @@ func (c *Core) RerunCI(ctx context.Context, key string, in CIResponseInput) (Wri
 	if err := humanOnly(ctx, "rerun_ci"); err != nil {
 		return Written[TicketView]{}, err
 	}
+	// Not between an Auto-fix sweep's read and its fix Ticket's response.
+	defer c.lockAutoFix(key)()
 	return c.respondCI(key, OptionRerunCI, in,
 		func(_ *ciState, rc *repoCI) bool { return len(rc.reruns) > 0 },
 		func(_ *ciState, t domain.Ticket, _ *repoCI) string { return whyNotRerun(key, t) },

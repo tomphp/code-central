@@ -385,6 +385,7 @@ func (c *Core) ReportCIRuns(ctx context.Context, key string, in ReportCIRunsInpu
 	for _, n := range slices.Sorted(maps.Keys(changed)) {
 		c.events.Publish(events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, n)})
 	}
+	// A failed result can make its commit's item Auto-fix ready.
 	if err := c.sweepAutoFix(ctx, key); err != nil {
 		return Written[CIRunsView]{}, err
 	}

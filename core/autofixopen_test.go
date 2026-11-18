@@ -262,3 +262,55 @@ func TestAnAutoFixTicketLeftUnrecordedByACrashIsRecordedNotOpenedAgain(t *testin
 		t.Fatalf("acme-5 comments %+v, want Auto-fix's naming acme-9", c)
 	}
 }
+
+func TestAutoFixLeavesACIFailureUnderPullRequestToTheHuman(t *testing.T) {
+	f := newFixture(t)
+	f.pullRequestAccepted(t)
+	f.withCITracking(t)
+	f.autoFixOn(t, 3)
+	f.reportRun(t, "acme-2", domain.CICompleted, domain.CIFailure)
+	wantReason(t, f.get(t, "2"), core.ReasonCIFailed)
+	f.noTicket(t, "acme-3")
+}
+
+func TestAutoFixOpensOneFixTicketUnderBranchPushAndLandPerSpec(t *testing.T) {
+	for name, landing := range map[string]domain.Landing{
+		"Branch + Push":                   {Method: domain.LandingBranch, Push: true, Remote: "origin"},
+		"Merge + Push with Land per Spec": {Method: domain.LandingMerge, Push: true, Remote: "origin", LandPerSpec: true},
+	} {
+		f := itemWorld(t)
+		f.landing(t, landing)
+		f.autoFixOn(t, 3)
+		f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
+		// Under Branch + Push each Ticket is still To merge, for the human.
+		for _, row := range f.needsMe(t) {
+			if row.CIItem != nil {
+				t.Errorf("%s: needs me lists %s, want the item handled", name, row.Title)
+			}
+		}
+		if m := f.getTicket(t, "acme-10").AutoFix; m == nil || !reflect.DeepEqual(m.Covers, []string{"acme-5", "acme-8"}) {
+			t.Errorf("%s: mark %+v, want one fix Ticket covering acme-5 and acme-8", name, m)
+		}
+		f.noTicket(t, "acme-11")
+	}
+}
+
+func TestTheFixTicketsOwnFailedPushIsTheNextAttempt(t *testing.T) {
+	f := itemWorld(t)
+	f.autoFixOn(t, 3)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
+	f.moveTo(t, 10, domain.Accepted)
+	for _, id := range []string{"acme-10", "acme-5", "acme-8"} {
+		f.pushed(t, id, "def456")
+	}
+	f.ciRun(t, 2, "ci.yml", "def456", "acme-10", domain.CICompleted, domain.CIFailure)
+
+	fix := f.getTicket(t, "acme-11")
+	want := &core.AutoFixMarkView{Attempt: 2, Commit: "def456", Covers: []string{"acme-5", "acme-8", "acme-10"}, Previous: "acme-10"}
+	if !reflect.DeepEqual(fix.AutoFix, want) {
+		t.Fatalf("mark %+v, want %+v", fix.AutoFix, want)
+	}
+	if !strings.HasSuffix(fix.Description, "Auto-fix attempt 2 of 3.") {
+		t.Fatalf("description ends %q", fix.Description[len(fix.Description)-40:])
+	}
+}

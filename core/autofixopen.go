@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"sync"
@@ -88,7 +89,7 @@ func (c *Core) sweepAutoFix(ctx context.Context, key string) error {
 		}
 		e := c.evaluate(r, p)
 		for _, it := range e.evaluated().ciItems {
-			if _, ok := e.autoFixPlan(it); ok {
+			if _, ok := e.planAutoFix(it); ok {
 				ready = append(ready, itemKey{it.repository, it.commit})
 			}
 		}
@@ -99,7 +100,11 @@ func (c *Core) sweepAutoFix(ctx context.Context, key string) error {
 	}
 	ctx = WithActor(ctx, Integration)
 	for _, k := range ready {
-		if err := c.autoFixItem(ctx, key, k); err != nil {
+		// An item a Ticket's move changed under the sweep is skipped; a
+		// fix Ticket it opened by then is recorded once its item is ready
+		// again.
+		var e *Error
+		if err := c.autoFixItem(ctx, key, k); err != nil && !(errors.As(err, &e) && e.Code == ActionNotAllowed) {
 			return err
 		}
 	}
@@ -117,8 +122,10 @@ func (c *Core) autoFixItem(ctx context.Context, key string, k itemKey) error {
 			return nil
 		}
 		e := c.evaluate(r, p)
-		if i := slices.IndexFunc(e.evaluated().ciItems, func(it ciItem) bool { return it.repository == k.name && it.commit == k.commit }); i >= 0 {
-			plan, ready = e.autoFixPlan(e.ciItems[i])
+		for _, it := range e.evaluated().ciItems {
+			if it.repository == k.name && it.commit == k.commit {
+				plan, ready = e.planAutoFix(it)
+			}
 		}
 		return nil
 	})
@@ -138,15 +145,17 @@ func autoFixActs(p domain.Project) bool {
 	return p.CI.AutoFix.On && ciTrackingOn(p.CI)
 }
 
-// autoFixPlan is it's plan while it is Auto-fix ready: CI failed and
-// offering New fix Ticket, with no Land anyway, its commit's response
-// naming no fix Ticket (a manual, Done or Cancelled one leaves the commit
-// to the human), and its next attempt within the limit. An auto fix
-// Ticket already marked for its commit, left unrecorded by a crash
-// between the two writes, is recorded whatever the limit.
-func (e *evaluation) autoFixPlan(it ciItem) (autoFixPlan, bool) {
+// planAutoFix is it's plan while it is Auto-fix ready: CI failed and
+// offering New fix Ticket, in a Repository not under Pull Request, whose
+// CI failures stay the human's (Spec code-central-1022, User Story 29),
+// with no Land anyway, its commit's response naming no fix Ticket (a
+// manual, Done or Cancelled one leaves the commit to the human), and its
+// next attempt within the limit. An auto fix Ticket already marked for
+// its commit, left unrecorded by a crash between the two writes, is
+// recorded whatever the limit.
+func (e *evaluation) planAutoFix(it ciItem) (autoFixPlan, bool) {
 	p := e.p
-	if it.reason != ReasonCIFailed || !slices.Contains(ciItemOptions(e.r, p, it), OptionNewFixTicket) {
+	if it.reason != ReasonCIFailed || !slices.Contains(ciItemOptions(e.r, p, it), OptionNewFixTicket) || landingPolicyIn(p, it.repository).LandsByPullRequest() {
 		return autoFixPlan{}, false
 	}
 	record := recordName(p.Key, it.repository)
@@ -163,7 +172,8 @@ func (e *evaluation) autoFixPlan(it ciItem) (autoFixPlan, bool) {
 	mark := domain.AutoFixMark{Attempt: 1, Repository: record, Commit: it.commit}
 	for _, t := range it.tickets {
 		mark.Covers = append(mark.Covers, t.Number)
-		if t.AutoFix != nil && t.AutoFix.Attempt >= mark.Attempt {
+		// The next attempt is one more than the highest listed.
+		if t.AutoFix != nil && t.AutoFix.Attempt+1 > mark.Attempt {
 			mark.Attempt, mark.Previous = t.AutoFix.Attempt+1, t.Number
 		}
 	}
