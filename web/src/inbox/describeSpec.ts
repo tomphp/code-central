@@ -1,12 +1,12 @@
-// What a Spec row and a Lane header say of a Spec: its kind, its Stage
-// progress for a Requirement, whether it needs the human and why, and its
-// one-line headline. Its kind, first need and whether a Factory is on it
-// are the Spec row's, from Go; this only words them.
-import { STATES, type NeedsMeReason, type SpecKind, type StateSummary } from "../api/types";
+// What a Spec row and a Lane header say of a Spec: its kind and its
+// one-line headline. Its kind, first need, whether a Factory is on it and
+// a Requirement's progress are the Spec row's, from Go; this only words
+// them.
+import { STATES, type SpecKind, type StateSummary } from "../api/types";
 import { REASON_LABEL } from "../format";
 import type { ProjectSpec, ProjectTicket } from "../live";
 import { mapCount } from "../map/mapCount";
-import { headline, progress, type Progress } from "../requirement/progress";
+import { headline } from "../requirement/progress";
 
 // KindText is what a Spec row's badge says: nothing for a Requirement.
 export type KindText = "Requirement" | "Map" | "Long-lived" | "Spec";
@@ -19,21 +19,13 @@ const KIND_TEXT: Record<SpecKind, KindText> = { requirement: "Requirement", map:
 export const kindText = (spec?: ProjectSpec): KindText => KIND_TEXT[spec?.kind ?? "spec"];
 
 // describeSpec is what a Spec row says of its Spec, by kind; whether it
-// needs the human is the Needs Me read model's to say. A Requirement has
-// its Stage progress and today's headline. A Map's headline is its
-// decision count. Any other Spec's headline is its first need, else
+// needs the human is the Needs Me read model's to say. A Requirement's
+// headline is what needs the human or what it waits for. A Map's headline
+// is its decision count. Any other Spec's headline is its first need, else
 // whether a Factory is on it, then how many of its Tickets are Done.
-export function describeSpec(
-  spec: ProjectSpec | undefined,
-  all: ProjectTicket[],
-  summary: StateSummary,
-  reasonOf: (id: string) => NeedsMeReason | undefined,
-): { kind: KindText; progress?: Progress; headline: string } {
+export function describeSpec(spec: ProjectSpec | undefined, summary: StateSummary): { kind: KindText; headline: string } {
   const kind = kindText(spec);
-  if (spec?.requirement) {
-    const p = progress(spec.requirement, all, reasonOf);
-    return { kind, progress: p, headline: headline(spec.finished, p) };
-  }
+  if (spec?.requirement) return { kind, headline: headline(spec.finished, spec.requirement) };
   if (spec?.map) return { kind, headline: spec.finished ? "Finished" : mapCount(spec.map) };
   return { kind, headline: spec ? specHeadline(spec, summary) : "" };
 }

@@ -267,6 +267,26 @@ export const STAGES = [
 ] as const;
 export type StageName = (typeof STAGES)[number];
 
+// SegmentStage is a Stage strip segment's Stage: a Stage's name, or build.
+export const SEGMENT_STAGES = [
+  "grilling",
+  "spec",
+  "tickets",
+  "build",
+] as const;
+export type SegmentStage = (typeof SEGMENT_STAGES)[number];
+
+// SegmentProgress is how far a Stage strip segment has got.
+export const SEGMENT_PROGRESSES = [
+  "done",
+  "skipped",
+  "needs",
+  "queued",
+  "running",
+  "waiting",
+] as const;
+export type SegmentProgress = (typeof SEGMENT_PROGRESSES)[number];
+
 // NodeType is a Ticket's type on a Map (NodeTypeOf): one of the
 // WayfinderTypes, prototype, or ticket for a Ticket with neither.
 export const NODE_TYPES = [
@@ -1375,6 +1395,20 @@ export interface RequirementView {
   // WaitingForFactory is whether the next Ticket can be claimed but
   // nothing has claimed it.
   waiting_for_factory: boolean;
+  // Segments are the Stage strip's: one per Stage, then Build, with a
+  // first grilling segment for a Requirement made from a Map (done) or
+  // one submitted Straight to Spec (skipped).
+  segments: Segment[];
+  // Current is the Stage of the first segment neither done nor skipped,
+  // else build.
+  current: SegmentStage;
+  // Needs are every Ticket of the Requirement waiting on the human: the
+  // Stage Tickets in Stage order, then the Build Tickets in claim order.
+  needs: RequirementNeed[];
+  // DefaultTicket is the Ticket the Requirement opens on: the first of
+  // Needs, else the current segment's, else the first unfinished Build
+  // Ticket, else the last Build Ticket, else the last segment's with one.
+  default_ticket?: string;
 }
 
 // LandPerSpecView is a Spec's Land per Spec status on a Spec read,
@@ -1707,6 +1741,28 @@ export interface StageView {
 export interface BuildProgress {
   done: number;
   total: number;
+}
+
+// Segment is one segment of a Requirement's Stage strip.
+export interface Segment {
+  stage: SegmentStage;
+  progress: SegmentProgress;
+  // Ticket is the Stage Ticket; Build and a Map's segment have none.
+  ticket?: string;
+  // Map is the Map the Requirement was made from, on the segment that
+  // stands in for its grilling Stage.
+  map?: string;
+  // Reason is why the segment needs the human: its Stage Ticket's
+  // reason, or Build's first need's.
+  reason?: NeedsMeReason;
+}
+
+// RequirementNeed is one Ticket of a Requirement waiting on the human,
+// with its Stage when it is a Stage Ticket.
+export interface RequirementNeed {
+  ticket: string;
+  reason: NeedsMeReason;
+  stage?: StageName;
 }
 
 // NeedsMeRow is one waiting Ticket with what its one-line detail needs.
