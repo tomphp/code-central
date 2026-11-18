@@ -3,7 +3,7 @@
 // and each Landing Method variant that changes the options. Each world is
 // built with the scenario builder, read back as the Inbox reads it, and
 // handed to the Focus session, so the story shows the whole Focus Item
-// with its Focus badge, Skip and Open in Inbox, not the bare panel. The
+// with its Focus badge, Skip and a title linking to its Ticket, not the bare panel. The
 // api is Core's, since the panels act on it.
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { Api } from "../api/api";
@@ -16,7 +16,7 @@ import { Loading } from "../controls/Empty";
 import { loadInbox, type InboxData } from "../live";
 import { NeedsMeProvider } from "../needsme/context";
 import { needsMeOf } from "../needsme/model";
-import { FocusItemView, inboxOf } from "./FocusItemView";
+import { FocusItemView, ticketLinkOf } from "./FocusItemView";
 import { useFocusSession } from "./session";
 
 const meta = { title: "Focus Items/FocusItemView" } satisfies Meta;
@@ -60,7 +60,7 @@ function Shown({ api, now, data, scope, whole }: Loaded) {
           ticket={session.ticket}
           navigate={() => {}}
           skip={session.skip}
-          inbox={inboxOf(item.row, "acme")}
+          ticketLink={ticketLinkOf(item.row, "acme")}
         />
       ) : (
         <Loading />

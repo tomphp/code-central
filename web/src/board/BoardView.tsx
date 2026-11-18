@@ -197,6 +197,7 @@ export function BoardView({ now, data, loc, navigate, onFocusPopupGone }: BoardV
           now={now}
           data={data}
           id={loc.popup}
+          project={scope}
           onClose={closePopup}
           onGone={onFocusPopupGone}
           navigate={navigate}

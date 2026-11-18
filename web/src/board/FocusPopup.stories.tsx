@@ -36,7 +36,7 @@ type Story = StoryObj<typeof meta>;
 
 const props = ({ now, data }: World) => ({ now, data, onClose: () => {}, navigate: () => {} });
 
-// Ticket mode: scoped to the one Ticket, with no Skip, N left or Open in Inbox.
+// Ticket mode: scoped to the one Ticket, with no Skip or N left, and its title linking to the Ticket.
 export const TicketMode: Story = {
   render: (_, { loaded }) => {
     const w = loaded.world as World;
@@ -48,7 +48,7 @@ export const TicketMode: Story = {
   },
 };
 
-// Queue mode: every Focus Item in the Project, with Skip, N left and Open in Inbox.
+// Queue mode: every Focus Item in the Project, with Skip and N left, and its title linking to the Ticket.
 export const QueueMode: Story = {
   render: (_, { loaded }) => {
     const w = loaded.world as World;

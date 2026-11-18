@@ -123,11 +123,15 @@ describe("a Ticket Focus Item", () => {
   });
 });
 
-describe("Open in Inbox", () => {
+// titleLink is the link in the Focus Item's title.
+const titleLink = () => within(within(item()).getByRole("heading", { level: 2 })).getByRole("link");
+
+describe("the title link", () => {
   it("opens the Ticket in the Inbox, keeping the Project filter", async () => {
     const { w, failed } = await world();
     await renderApp(w, "/?view=focus&project=acme");
-    const link = within(item()).getByRole("link", { name: "Open in Inbox" });
+    const link = titleLink();
+    expect(within(item()).queryByRole("link", { name: "Open in Inbox" })).toBeNull();
     expect(link).toHaveAttribute("href", `?view=inbox&project=acme&ticket=${failed}`);
     await userEvent.click(link);
     await settle(w);
@@ -140,7 +144,7 @@ describe("Open in Inbox", () => {
     const dark = await spec(s, "acme", "Dark mode");
     const id = await stage(s, dark, "Spec: Dark mode");
     await renderApp(w);
-    const link = within(item()).getByRole("link", { name: "Open in Inbox" });
+    const link = titleLink();
     expect(link).toHaveAttribute("href", `?view=inbox&requirement=${dark}&ticket=${id}`);
   });
 });
@@ -275,7 +279,7 @@ describe("a Map Ticket or Prototype Focus Item", () => {
     expect(within(it).getByText("Map: Find the way")).toHaveClass("focus-requirement");
     expect(within(it).getByText("Prototype")).toHaveClass("label", "prototype-badge");
     expect(within(it).getByText("Focus: In Review")).toBeInTheDocument();
-    expect(within(it).getByRole("link", { name: "Open in Inbox" })).toHaveAttribute("href", `?view=inbox&ticket=${id}`);
+    expect(titleLink()).toHaveAttribute("href", `?view=inbox&ticket=${id}`);
   });
 
   it("shows no badge on a Map Ticket that isn't a Prototype", async () => {

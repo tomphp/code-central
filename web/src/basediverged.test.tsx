@@ -46,7 +46,7 @@ describe("Base diverged", () => {
       within(it).getByText(/carries on by itself on its next poll/),
     ).toBeInTheDocument();
     expect(
-      within(it).queryByRole("link", { name: /Open in Inbox/ }),
+      within(within(it).getByRole("heading", { level: 2 })).queryByRole("link"),
     ).toBeNull();
 
     // It can be skipped like any item.
