@@ -393,7 +393,7 @@ func runGetTicket(ctx context.Context, e Env, args []string) error {
 	// CLI names get_ticket's default parts itself, and briefs them.
 	brief := len(parts) == 0
 	if brief {
-		parts = core.DefaultTicketParts
+		parts = core.DefaultTicketParts()
 	}
 	v, err := sc.client.GetTicket(ctx, sc.project, core.Ref(pos[0]), parts...)
 	if err != nil {
@@ -439,7 +439,7 @@ func runFindTickets(ctx context.Context, e Env, args []string) error {
 	}
 	if *full {
 		// As get-ticket does: the default parts, brief.
-		views, err := sc.client.FindTicketViews(ctx, sc.project, in, core.DefaultTicketParts...)
+		views, err := sc.client.FindTicketViews(ctx, sc.project, in, core.DefaultTicketParts()...)
 		if err != nil {
 			return err
 		}

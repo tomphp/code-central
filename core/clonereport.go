@@ -34,7 +34,7 @@ const (
 )
 
 // CloneStates are the states of a reported clone.
-var CloneStates = []CloneState{CloneReady, CloneMissing}
+func CloneStates() []CloneState { return []CloneState{CloneReady, CloneMissing} }
 
 // RepositoryReport is one Repository's clone in report_repositories.
 type RepositoryReport struct {
@@ -89,7 +89,7 @@ func (c *Core) ReportRepositories(_ context.Context, key string, in ReportReposi
 			return Written[ProjectView]{}, invalid("repositories", "each Repository needs its name")
 		case path == "":
 			return Written[ProjectView]{}, invalid("repositories", "Repository %s needs the path of its clone", name)
-		case !slices.Contains(CloneStates, r.State):
+		case !slices.Contains(CloneStates(), r.State):
 			return Written[ProjectView]{}, invalid("repositories", "Repository %s's state is ready or missing, not %q", name, r.State)
 		case r.State == CloneMissing && problem == "":
 			return Written[ProjectView]{}, invalid("repositories", "Repository %s is missing, so needs the problem", name)

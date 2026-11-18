@@ -40,7 +40,7 @@ const (
 )
 
 // CIResults are the CI results.
-var CIResults = []CIResult{CIRunning, CIPassed, CIFailed, CICancelled}
+func CIResults() []CIResult { return []CIResult{CIRunning, CIPassed, CIFailed, CICancelled} }
 
 // ciNewlyPushed is how long after its push a pushed commit is still
 // watched once its runs have all finished: GitHub may start a workflow

@@ -38,7 +38,9 @@ const (
 )
 
 // ChoiceSources are the sources.
-var ChoiceSources = []ChoiceSource{SourceTicketTag, SourceProjectKind, SourceProjectDefault, SourceNone}
+func ChoiceSources() []ChoiceSource {
+	return []ChoiceSource{SourceTicketTag, SourceProjectKind, SourceProjectDefault, SourceNone}
+}
 
 // ChoiceValue is one of a Model Choice's values with its source; Value is
 // empty when the source is none. Kind names the kind of work whose

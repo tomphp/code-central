@@ -25,7 +25,7 @@ func landWorldOn(t *testing.T, f fixture, landPerSpec bool) fixture {
 	t.Helper()
 	f.project(t, "acme")
 	f.spec(t, "acme", "Requirement")
-	for _, stage := range core.Stages {
+	for _, stage := range core.Stages() {
 		f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: string(stage), Labels: []string{core.StageLabel(stage)}})
 	}
 	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "First"})

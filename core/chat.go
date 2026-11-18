@@ -52,7 +52,9 @@ const (
 )
 
 // ChatAvailabilities are the Chat availabilities.
-var ChatAvailabilities = []ChatAvailability{ChatNone, ChatAvailable, ChatUnavailable}
+func ChatAvailabilities() []ChatAvailability {
+	return []ChatAvailability{ChatNone, ChatAvailable, ChatUnavailable}
+}
 
 // ChatOutcome is how a Claude Chat Message ended.
 type ChatOutcome string
@@ -67,7 +69,7 @@ const (
 )
 
 // ChatOutcomes are the ways a Claude Chat Message ends.
-var ChatOutcomes = []ChatOutcome{ChatDone, ChatStopped, ChatFailed}
+func ChatOutcomes() []ChatOutcome { return []ChatOutcome{ChatDone, ChatStopped, ChatFailed} }
 
 // ChatAuthor is who wrote a Chat Message.
 type ChatAuthor string
@@ -79,7 +81,7 @@ const (
 )
 
 // ChatAuthors are the authors of Chat Messages.
-var ChatAuthors = []ChatAuthor{ChatFromHuman, ChatFromClaude}
+func ChatAuthors() []ChatAuthor { return []ChatAuthor{ChatFromHuman, ChatFromClaude} }
 
 // ConversationView is a Project's current Conversation as get_chat and
 // the Chat writes return it. With none, Availability is none and the rest

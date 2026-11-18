@@ -33,22 +33,24 @@ const (
 
 // TicketParts is every part of a Ticket: a read asking for them all is
 // the whole Ticket.
-var TicketParts = []string{PartClaims, PartFailureReports, PartComments, PartRounds, PartMoves, PartEdits}
+func TicketParts() []string {
+	return []string{PartClaims, PartFailureReports, PartComments, PartRounds, PartMoves, PartEdits}
+}
 
 // DefaultTicketParts is what get_ticket and claim return of a Ticket when
 // no parts are named: how each Claim ended, every Failure Report and every
 // comment, which carry the rejection, give-up and send-back notes a redo
 // needs. Rounds, moves and edits are left out (ADR 0015), and the view is
 // Brief.
-var DefaultTicketParts = []string{PartClaims, PartFailureReports, PartComments}
+func DefaultTicketParts() []string { return []string{PartClaims, PartFailureReports, PartComments} }
 
 // parts is the set of parts the read returns.
 func (in GetTicketInput) parts() (map[string]bool, error) {
 	asked := in.Parts
 	if len(asked) == 0 {
-		asked = DefaultTicketParts
+		asked = DefaultTicketParts()
 	}
-	return partSet(asked, TicketParts)
+	return partSet(asked, TicketParts())
 }
 
 // partSet is the parts asked for as a set, each checked against all the
@@ -98,7 +100,7 @@ func (v TicketView) only(parts map[string]bool) TicketView {
 // defaultView is the Ticket as a read naming no parts returns it.
 func defaultView(v TicketView) TicketView {
 	parts := map[string]bool{}
-	for _, p := range DefaultTicketParts {
+	for _, p := range DefaultTicketParts() {
 		parts[p] = true
 	}
 	return v.only(parts).Brief()

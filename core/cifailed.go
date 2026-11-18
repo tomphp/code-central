@@ -43,7 +43,9 @@ const (
 
 // CIFailureOptions are the failure options, in the order they are
 // offered.
-var CIFailureOptions = []CIFailureOption{OptionRerunCI, OptionLandAnyway, OptionSendBack, OptionNewFixTicket}
+func CIFailureOptions() []CIFailureOption {
+	return []CIFailureOption{OptionRerunCI, OptionLandAnyway, OptionSendBack, OptionNewFixTicket}
+}
 
 // CIFailureSummary is what failed on a CI failed item's pushed commit:
 // the commit and its failed runs' workflow file names.
