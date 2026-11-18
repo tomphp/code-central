@@ -44,6 +44,10 @@ type IncomingIssue struct {
 	Description string   `json:"description"`
 }
 
+// WatchInput is the input of the Issue Watcher's and the Work Item Watcher's
+// read, which takes nothing.
+type WatchInput struct{}
+
 // GetIssueWatch is the Issue Watcher's get_issue_watch.
 func (c *Core) GetIssueWatch(_ context.Context, key string) (IssueWatch, error) {
 	var out IssueWatch

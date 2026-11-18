@@ -262,13 +262,13 @@ var all = []entry{
 	defined(SetLandingOrder),
 
 	// The Integration contract (ticket 42).
-	legacy(Op{Name: "create_linked_spec", Audience: IntegrationOnly, Write: true}),
-	legacy(Op{Name: "create_linked_ticket", Audience: IntegrationOnly, Write: true}),
-	legacy(Op{Name: "update_linked_spec", Audience: IntegrationOnly, Write: true}),
-	legacy(Op{Name: "update_linked_ticket", Audience: IntegrationOnly, Write: true}),
-	legacy(Op{Name: "set_external_state", Audience: IntegrationOnly, Write: true}),
-	legacy(Op{Name: "find_linked", Audience: IntegrationOnly}),
-	legacy(Op{Name: "unlink", Audience: HumanOnly, Write: true}),
+	defined(CreateLinkedSpec),
+	defined(CreateLinkedTicket),
+	defined(UpdateLinkedSpec),
+	defined(UpdateLinkedTicket),
+	defined(SetExternalState),
+	defined(FindLinked),
+	defined(Unlink),
 
 	// Scratch Import (ticket 40).
 	legacy(Op{Name: "get_import_guide", Audience: AgentAndHuman}),
@@ -327,12 +327,12 @@ var all = []entry{
 	// GitHub Issues (Spec code-central-279).
 	legacy(Op{Name: "set_github_issues", Audience: HumanOnly, Write: true}),
 	// The Issue Watcher's own (code-central-285).
-	legacy(Op{Name: "get_issue_watch", Audience: IntegrationOnly}),
-	legacy(Op{Name: "report_issue_watcher_status", Audience: IntegrationOnly, Write: true}),
+	defined(GetIssueWatch),
+	defined(ReportIssueWatcherStatus),
 	// New issue and the triage actions (code-central-287).
 	legacy(Op{Name: "keep_as_draft", Audience: HumanOnly, Write: true}),
 	// Write-backs and Won't fix (code-central-289).
-	legacy(Op{Name: "report_issue_written", Audience: IntegrationOnly, Write: true}),
+	defined(ReportIssueWritten),
 	legacy(Op{Name: "wont_fix", Audience: HumanOnly, Write: true}),
 	// To Requirement and the outbound Link (code-central-290).
 	legacy(Op{Name: "to_requirement", Audience: HumanOnly, Write: true}),
@@ -340,8 +340,8 @@ var all = []entry{
 	legacy(Op{Name: "set_azure_boards", Audience: HumanOnly, Write: true}),
 	// The Work Item Watcher's own; it reports each comment written with
 	// report_issue_written.
-	legacy(Op{Name: "get_work_item_watch", Audience: IntegrationOnly}),
-	legacy(Op{Name: "report_work_item_watcher_status", Audience: IntegrationOnly, Write: true}),
+	defined(GetWorkItemWatch),
+	defined(ReportWorkItemWatcherStatus),
 	// The Model Choice (Spec code-central-301).
 	legacy(Op{Name: "get_model_choice", Audience: FactoryOnly}),
 	legacy(Op{Name: "report_model_choice", Audience: FactoryOnly, Write: true}),
