@@ -261,7 +261,8 @@ func (w *sqlWriter) PutOptions(o domain.Options) error {
 	return nil
 }
 
-// Announce is ignored: no other service shares a SQLite Store.
+// Announce is ignored: no other service shares a SQLite Store, and a
+// Postgres Store's notices come with Ticket code-central-1048.
 func (w *sqlWriter) Announce(Change) {}
 
 func (w *sqlWriter) PutCIRuns(project string, runs []domain.CIRun) error {

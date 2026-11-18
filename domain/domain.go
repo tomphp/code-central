@@ -429,6 +429,46 @@ type CI struct {
 	// each named once; a Repository without one reads as filled in from
 	// its Clone URL.
 	Repositories []CIRepository
+	// AutoFix is the Auto-fix setting (Spec code-central-1022). It is
+	// kept while CI Tracking is off, but acts only while it is on.
+	AutoFix AutoFix
+}
+
+// DefaultFixInstructions is the Fix instructions a Project that never
+// set its own has.
+const DefaultFixInstructions = "Work out what kind of failure this is before changing anything: a bug in the code, a broken test, or a flaky test. Then fix it the way that kind needs: fix the bug in the code, fix the test so it checks the right thing, or make the flaky test stable (never just retry or skip it). Compare against the last successful run: the commits since it are the likeliest cause (`git log <last green>..<failed commit>`). Look at other CI runs, on this branch and others, to see whether the failure is new, recurring or intermittent."
+
+// The Auto-fix limit of a Project that never set one, and the range the
+// human may set.
+const (
+	DefaultAutoFixLimit = 3
+	MinAutoFixLimit     = 1
+	MaxAutoFixLimit     = 10
+)
+
+// AutoFix is a Project's Auto-fix setting: whether it is on, the Fix
+// instructions and the Auto-fix limit. Instructions empty and Limit 0
+// are never set, and read as the defaults.
+type AutoFix struct {
+	On           bool
+	Instructions string
+	Limit        int
+}
+
+// FixInstructions is the Fix instructions in force.
+func (a AutoFix) FixInstructions() string {
+	if a.Instructions == "" {
+		return DefaultFixInstructions
+	}
+	return a.Instructions
+}
+
+// AttemptLimit is the Auto-fix limit in force.
+func (a AutoFix) AttemptLimit() int {
+	if a.Limit == 0 {
+		return DefaultAutoFixLimit
+	}
+	return a.Limit
 }
 
 // CIRepository is the CI entry of one Repository: its CI Provider and
@@ -471,7 +511,7 @@ func DefaultCI() CI { return CI{} }
 func (c CI) Equal(d CI) bool {
 	return c.Tracking == d.Tracking && c.PATEnv == d.PATEnv &&
 		slices.Equal(c.IgnoredWorkflows, d.IgnoredWorkflows) && c.PushRemoteURL == d.PushRemoteURL && c.NoPushRemote == d.NoPushRemote && c.PushRemoteBase == d.PushRemoteBase &&
-		slices.EqualFunc(c.Rules, d.Rules, CIRule.Equal) && slices.Equal(c.Repositories, d.Repositories)
+		slices.EqualFunc(c.Rules, d.Rules, CIRule.Equal) && slices.Equal(c.Repositories, d.Repositories) && c.AutoFix == d.AutoFix
 }
 
 // GitHubIssues is a Project's GitHub Issues settings (Spec
@@ -750,9 +790,14 @@ type Ticket struct {
 	// with open_spec_merge to merge the base into a Spec Branch
 	// (code-central-542). Only that operation sets it; nothing clears it.
 	SpecMergeTicket bool
-	Created         time.Time
-	Updated         time.Time
-	Description     string
+	// AutoFix marks an auto fix Ticket: one Auto-fix opened for a CI
+	// failed item (Spec code-central-1022). Only Code Central sets it;
+	// nothing clears it. nil on every other Ticket, a manual fix Ticket
+	// too.
+	AutoFix     *AutoFixMark
+	Created     time.Time
+	Updated     time.Time
+	Description string
 	// Branch and Commit are what the last finish naming them gave: the
 	// work's branch and its head commit in the Home Repository.
 	// Free-form, never parsed.
@@ -852,6 +897,23 @@ type ChangedRepository struct {
 type Landed struct {
 	Commit string
 	Time   time.Time
+}
+
+// AutoFixMark is an auto fix Ticket's mark: its Auto-fix attempt, the
+// pushed commit it was opened for, the Tickets it covers and the attempt
+// before it.
+type AutoFixMark struct {
+	// Attempt is the Auto-fix attempt, 1 for the first in its chain.
+	Attempt int
+	// Repository is the Repository Name the commit was pushed in, empty
+	// for the Home Repository, and Commit the commit it was opened for.
+	Repository string
+	Commit     string
+	// Covers are the Tickets the CI failed item listed when it was
+	// opened.
+	Covers []int
+	// Previous is the previous attempt's fix Ticket, 0 for attempt 1.
+	Previous int
 }
 
 // SpecMerge is the Spec Branch commit a Ticket's work was merged into, and

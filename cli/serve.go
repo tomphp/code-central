@@ -139,12 +139,29 @@ func storeIsAFolder(flag string, local settings, h home.Lookup) bool {
 
 // storeLocation resolves the Store serve opens: the --store flag or
 // CODE_CENTRAL_STORE name a File Store at their folder, else the
-// settings' store: block names the Kind and place, else it is a File
-// Store in the data folder.
+// settings' store: block names the Kind and place (a postgres store's
+// URL, with its credential, comes from the environment variable url_env
+// names, and the Location keeps it unseen), else it is a File Store in
+// the data folder.
 func storeLocation(flag string, local settings, h home.Lookup) (store.Location, error) {
 	if storeIsAFolder(flag, local, h) {
 		dir, err := store.Dir(flag, h)
 		return store.Location{Kind: store.Files, Path: dir}, err
+	}
+	if store.Kind(local.Store.Kind) == store.Postgres {
+		name := local.Store.URLEnv
+		if name == "" {
+			name = defaultURLEnv
+		}
+		url := h.Getenv(name)
+		if url == "" {
+			return store.Location{}, fmt.Errorf("the postgres store needs its URL in %s, which is not set", name)
+		}
+		l, err := store.PostgresLocation(url)
+		if err != nil {
+			return l, fmt.Errorf("%s: %w", name, err)
+		}
+		return l, nil
 	}
 	l := store.Location{Kind: store.Kind(local.Store.Kind), Path: local.Store.Path}
 	if l.Path == "" {

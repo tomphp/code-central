@@ -175,7 +175,12 @@ export function ciContract(driver: () => Driver) {
       commit: "abc123",
       tickets: [{ id, title: "Login page", spec: failed.spec.id }],
       options: ["rerun_ci", "land_anyway", "send_back", "new_fix_ticket"],
+      // Core writes the notes the failure options start from: the Run
+      // summary, and with the Fix instructions after it for a new fix Ticket.
+      send_back_note: expect.stringMatching(/^CI failed at abc123:[\s\S]*gh run view 1 --log-failed/),
+      new_fix_note: expect.stringMatching(/^CI failed at abc123:[\s\S]*gh run view 1 --log-failed[\s\S]*the last successful run/),
     });
+    expect(failed.ci_item!.new_fix_note!.startsWith(failed.ci_item!.send_back_note!)).toBe(true);
 
     // Under Branch the human's merge decides: no Land anyway.
     await d.api.setLandingMethod("acme", { method: "branch", push: true, remote: "origin" });

@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
 	"net"
 	"os"
@@ -11,7 +12,9 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/tomoram/code-central/cli"
+	"github.com/tomoram/code-central/store/storetest"
 )
 
 // serveWith runs serve with the given environment, flags and addresses
@@ -266,12 +269,72 @@ func TestWithNoStoreSettingTheStoreIsFilesInTheDataFolder(t *testing.T) {
 	}
 }
 
+// A postgres store reads its URL, credential and all, from the
+// environment variable url_env names, or CODE_CENTRAL_DATABASE_URL; the
+// settings never hold it.
+func TestTheStoreSettingOpensAPostgresStore(t *testing.T) {
+	t.Parallel()
+	url := storetest.FreshPostgres(t)
+	home := t.TempDir()
+	writeHomeSettings(t, home, "store:\n  kind: postgres\n  url_env: CC_TEST_DB\n")
+	bound, failed := serveAt(t, map[string]string{"HOME": home, "CC_TEST_DB": url})
+	if failed != nil {
+		t.Fatalf("serve: %+v", *failed)
+	}
+	r := run(t, map[string]string{"CODE_CENTRAL_URL": "http://" + bound[0]}, "", "get-workflow")
+	if r.code != 0 {
+		t.Fatalf("a call to the service failed: %+v", r)
+	}
+	// The service made its tables in that schema.
+	db, err := sql.Open("pgx", url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var format string
+	if err := db.QueryRow(`SELECT value FROM meta WHERE key = 'format'`).Scan(&format); err != nil {
+		t.Fatalf("the service didn't make its tables in the schema: %v", err)
+	}
+}
+
+func TestAPostgresStoreWithoutItsURLRefusesToStartNamingTheVariable(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ name, text, variable string }{
+		{"the default variable", "store:\n  kind: postgres\n", "CODE_CENTRAL_DATABASE_URL"},
+		{"the variable url_env names", "store:\n  kind: postgres\n  url_env: MY_DB\n", "MY_DB"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home := t.TempDir()
+			writeHomeSettings(t, home, c.text)
+			_, failed := serveAt(t, map[string]string{"HOME": home})
+			if failed == nil || failed.code != 1 || !strings.Contains(failed.stderr, c.variable) {
+				t.Fatalf("serve didn't refuse naming %s: %+v", c.variable, failed)
+			}
+		})
+	}
+}
+
+func TestAPostgresStoreWithABadURLRefusesToStartWithoutShowingThePassword(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	writeHomeSettings(t, home, "store:\n  kind: postgres\n")
+	_, failed := serveAt(t, map[string]string{"HOME": home, "CODE_CENTRAL_DATABASE_URL": "postgres://alice:s3cret@db.example.com:notaport/central"})
+	if failed == nil || failed.code != 1 || !strings.Contains(failed.stderr, "CODE_CENTRAL_DATABASE_URL") {
+		t.Fatalf("serve didn't refuse naming the variable: %+v", failed)
+	}
+	if strings.Contains(failed.stderr, "s3cret") {
+		t.Fatalf("the password shows: %s", failed.stderr)
+	}
+}
+
 func TestABadStoreSettingRefusesToStartNamingTheField(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct{ name, text, field string }{
 		{"an unknown kind", "store:\n  kind: mysql\n", "store.kind"},
 		{"no kind", "store:\n  path: /tmp/x\n", "store.kind"},
 		{"url_env on a sqlite store", "store:\n  kind: sqlite\n  url_env: DB\n", "store.url_env"},
+		{"path on a postgres store", "store:\n  kind: postgres\n  path: /tmp/x\n", "store.path"},
 		{"an unknown key", "store:\n  kind: files\n  colour: red\n", "colour"},
 	} {
 		t.Run(c.name, func(t *testing.T) {

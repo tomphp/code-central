@@ -411,6 +411,7 @@ export const TICKET_FIELDS = [
   "ci_commit",
   "ci_runs",
   "land_anyway",
+  "ci_auto_fix",
   "spec_merge",
   "spec_landed",
   "ci_item",
@@ -433,6 +434,7 @@ export const TICKET_FIELDS = [
   "link",
   "awaiting_triage",
   "spec_merge_ticket",
+  "auto_fix",
   "triage_actions",
   "triage_notes",
   "model_choice",
@@ -583,6 +585,11 @@ export interface TicketView {
   // there (code-central-261), on this Ticket or on another sharing the
   // commit (code-central-432).
   land_anyway?: boolean;
+  // CIAutoFix is what Auto-fix does about the Ticket's CI failure in the
+  // Home Repository: the auto fix Ticket fixing it, the one covering it,
+  // or the chain it stopped at the limit; left out while it does
+  // nothing. Each Repository's own is in Repositories. Computed on read.
+  ci_auto_fix?: CIAutoFixView;
   // SpecLanded says Land per Spec covers the Ticket, and WaitingForSpec
   // that it is Accepted and waits for its Spec to land (code-central-371).
   // Computed on read.
@@ -632,6 +639,9 @@ export interface TicketView {
   // SpecMergeTicket marks a Spec merge Ticket, one open_spec_merge
   // opened; left out on any other Ticket.
   spec_merge_ticket?: boolean;
+  // AutoFix is an auto fix Ticket's Auto-fix mark; left out on any
+  // other Ticket, a manual fix Ticket too.
+  auto_fix?: AutoFixMarkView;
   // TriageActions are the triage actions, each an operation's name, the
   // human may take on an Incoming Issue; left out on any other Ticket.
   // Computed on read.
@@ -967,6 +977,8 @@ export interface CIView {
   // workflows and CI Rules are every Repository's. Left out while the
   // Project has the Home Repository alone.
   repositories?: CIRepositoryView[];
+  // AutoFix is the Auto-fix setting, kept while CI Tracking is off.
+  auto_fix: AutoFixView;
 }
 
 // GitHubIssuesView is a Project's GitHub Issues settings as every Project
@@ -1187,6 +1199,9 @@ export interface ChangedRepositoryView {
   // LandAnyway says the human accepted the failed CI result of the
   // latest pushed commit there, so the Factory lands it there.
   land_anyway?: boolean;
+  // CIAutoFix is what Auto-fix does about the Ticket's CI failure
+  // there; left out while it does nothing.
+  ci_auto_fix?: CIAutoFixView;
 }
 
 // PushedCommitView is a commit the Factory pushed for a Ticket, and when
@@ -1240,6 +1255,16 @@ export interface CIRunView {
   ignored: boolean;
 }
 
+// CIAutoFixView is what Auto-fix does about a Ticket's CI failure in one
+// Repository, worked out in Go for the UI to format (ADR 0063): the auto
+// fix Ticket fixing it, the one covering it, or the chain Auto-fix
+// stopped at the limit. One of them is set.
+export interface CIAutoFixView {
+  fixing?: AutoFixFixingView;
+  covering?: AutoFixCoveringView;
+  stopped?: AutoFixStoppedView;
+}
+
 // SpecMergeView is the Spec Branch commit a Ticket's work was merged
 // into and when Code Central heard of it; Counts is false for a merge no
 // later than the Ticket's last move back to Ready.
@@ -1266,6 +1291,17 @@ export interface CIItemView {
   commit: string;
   tickets: CIItemTicket[];
   options: CIFailureOption[];
+  // NewFixNote is the note New fix Ticket starts from, the Run summary
+  // and the Project's Fix instructions; SendBackNote is the note Send
+  // back to fix starts from, the Run summary alone. Each is left out
+  // while its option isn't offered, and the human edits either before
+  // choosing it.
+  new_fix_note?: string;
+  send_back_note?: string;
+  // AutoFixStopped is the "Auto-fix stopped after N attempts" line
+  // while Auto-fix has stopped at the limit on the item, which waits on
+  // the human again; left out otherwise.
+  auto_fix_stopped?: AutoFixStoppedView;
 }
 
 // ClaimView is one Claim as reads show it: never with its Claim ID.
@@ -1348,6 +1384,23 @@ export interface EditView {
   actor: string;
   time: string;
   previous: Record<string, string>;
+}
+
+// AutoFixMarkView is an auto fix Ticket's Auto-fix mark as its view
+// carries it.
+export interface AutoFixMarkView {
+  // Attempt is its Auto-fix attempt, 1 for the first in its chain.
+  attempt: number;
+  // Repository is the Repository Name of the commit it was opened for,
+  // left out while the Project has the Home Repository alone.
+  repository?: string;
+  commit: string;
+  // Covers are the Tickets its CI failed item listed when it was
+  // opened.
+  covers: string[];
+  // Previous is the previous attempt's fix Ticket, left out for attempt
+  // 1.
+  previous?: string;
 }
 
 // ModelChoice is the model and effort a Ticket's next turn runs with, as
@@ -1623,6 +1676,20 @@ export interface CIRepositoryView {
   project_url?: string;
 }
 
+// AutoFixView is a Project's Auto-fix setting as every Project read
+// returns it: the defaults while the human never set them.
+export interface AutoFixView {
+  on: boolean;
+  // FixInstructions are appended to every fix Ticket's description.
+  fix_instructions: string;
+  // DefaultFixInstructions is the text FixInstructions starts from, for
+  // the UI's way back to it.
+  default_fix_instructions: string;
+  // Limit is the Auto-fix limit: the most Auto-fix attempts per failure
+  // chain, 1 to 10.
+  limit: number;
+}
+
 // ModelRowView is one Models row's model and effort, each empty when the
 // row leaves it to the tier below.
 export interface ModelRowView {
@@ -1698,6 +1765,30 @@ export interface CIJobView {
   name: string;
   conclusion?: CIConclusion;
   url: string;
+}
+
+// AutoFixFixingView is the auto fix Ticket fixing the failure of a
+// Ticket's latest pushed commit: attempt Attempt of the Auto-fix limit,
+// Limit.
+export interface AutoFixFixingView {
+  fix_ticket: string;
+  attempt: number;
+  limit: number;
+}
+
+// AutoFixCoveringView is the open auto fix Ticket covering a Ticket whose
+// later commit carries the failure it fixes, and the commit it was opened
+// for.
+export interface AutoFixCoveringView {
+  fix_ticket: string;
+  commit: string;
+}
+
+// AutoFixStoppedView is the chain Auto-fix stopped at the limit on a CI
+// failed item, which comes back to the human: "Auto-fix stopped after N
+// attempts", Attempts being the N auto fix Tickets, attempt 1 first.
+export interface AutoFixStoppedView {
+  attempts: string[];
 }
 
 // CIItemTicket is one Ticket a CI item lists, with its Spec.

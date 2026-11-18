@@ -29,7 +29,7 @@ flowchart TB
     MCP["mcp<br/>/p/key/mcp (agents)"]
     CORE["core<br/>*Core: workflow, landing, CI, chat, views<br/>ops.All() = the one op list"]
     DOMAIN["domain<br/>records, enums, Landing Policy"]
-    STORE["store<br/>YAML files in memory"]
+    STORE["store<br/>YAML files in memory · SQLite · Postgres"]
     SUP["watchers.Supervise"]
     SIDE["clock · events · ids · home · usage · notify"]
   end
@@ -70,7 +70,7 @@ Your list: core logic, factory, ci watcher, issue tracker, web api, frontend, st
 | issue tracker | **Specs/Tickets live in `core`**; GitHub Issues inbound is `issuewatcher` | There is no separate tracker module. Say which you mean. |
 | web api | `httpapi` (+ `mcp` sibling, assembled by `server`) | MCP is not layered on httpapi; both dispatch through `ops.Service`, which `ops.Serve` adapts `*core.Core` to. |
 | frontend | `web/` | Embedded via `web/web.go`. |
-| storage | `store` (+ `domain`) | `store` is persistence: file shapes, migrations, locking. `domain` holds the records (`Ticket`, `State`, `Landing`, `CI`…) and `LandingPolicy`; it imports nothing of Code Central. |
+| storage | `store` (+ `domain`) | `store` is persistence: file shapes, migrations, locking, and the Store Kinds (files, SQLite, Postgres; ADR 0067, 0068). `domain` holds the records (`Ticket`, `State`, `Landing`, `CI`…) and `LandingPolicy`; it imports nothing of Code Central. |
 
 **Missing from your list:**
 
@@ -81,7 +81,7 @@ Your list: core logic, factory, ci watcher, issue tracker, web api, frontend, st
 - **`app`**: the service's composition root. `app.Run` opens the store, builds the Core with its Watcher check modes and usage, serves `server`'s handler, supervises the Watchers and starts `notify`.
 - **`cli` and `cmd/*`**: the command surface. `serve` reads its flags and the local settings and calls `app.Run`.
 - **`watchers`**: generic supervision (restart with backoff).
-- **Support leaves**: `clock`, `events` (in-memory change bus), `ids`, `home` (XDG paths), `usage` (usage records and the Recorder; the Store keeps them, ADR 0066), `notify` (OS notifications).
+- **Support leaves**: `clock`, `events` (in-memory change bus), `ids`, `home` (XDG paths), `usage` (usage records and the Recorder; the Store keeps them, ADR 0069), `notify` (OS notifications).
 - **Test and wasm tooling**: `world`, `cmd/corewasm`, `internal/*`, `codecentraltest`, `e2e`.
 
 ### What `core` contains

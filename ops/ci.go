@@ -153,3 +153,12 @@ var ReportPullRequestWatcherStatus = &Definition[core.ReportWatcherStatusInput, 
 	Doc:  "The Pull Request Watcher's report of its status.",
 	Call: (*core.Core).ReportPullRequestWatcherStatus,
 }
+
+// SetAutoFix is set_auto_fix (Spec code-central-1022): the Project's own
+// setting and the human's alone, over HTTP only.
+var SetAutoFix = &Definition[core.SetAutoFixInput, core.Written[core.ProjectView]]{
+	Name: "set_auto_fix", Audience: HumanOnly, Write: true,
+	HTTP: "POST /api/p/{key}/set_auto_fix",
+	Doc:  "Set whether the Project opens fix Tickets for CI failures itself, with its Fix instructions and limit.",
+	Call: (*core.Core).SetAutoFix,
+}

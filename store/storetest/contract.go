@@ -23,6 +23,11 @@ type Factory struct {
 	// appends alone. A Kind with no way to fail leaves it nil and the
 	// failing-append case is skipped.
 	BreakUsage func(t *testing.T, s store.Store, project string)
+	// Second, when non-nil, opens another handle on the Store s holds, as
+	// a second service sharing it would, closed when t ends. A Kind one
+	// service holds alone leaves it nil, and the Shared Store cases (two
+	// services' Updates at the same moment) are skipped.
+	Second func(t *testing.T, s store.Store) store.Store
 }
 
 var t0 = time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC)
@@ -316,6 +321,7 @@ func Run(t *testing.T, f Factory) {
 	runAwaitingTriage(t, f)
 	runCIRuns(t, f)
 	runUsage(t, f)
+	runConcurrency(t, f)
 }
 
 func seedProject(t *testing.T, s store.Store) {

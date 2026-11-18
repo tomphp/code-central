@@ -21,10 +21,11 @@ import (
 // sqlite is SQLite's dialect: documents are TEXT, and the placeholders
 // are the ? the statements are written with.
 var sqlite = dialect{
-	json:   "TEXT",
-	serial: "INTEGER PRIMARY KEY AUTOINCREMENT",
-	rebind: func(q string) string { return q },
-	begin:  "BEGIN IMMEDIATE",
+	json:        "TEXT",
+	serial:      "INTEGER PRIMARY KEY AUTOINCREMENT",
+	rebind:      func(q string) string { return q },
+	begin:       "BEGIN IMMEDIATE",
+	schemaBegin: "BEGIN",
 }
 
 // OpenSQLite locks and opens the SQLite Store at path, creating the

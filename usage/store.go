@@ -1,4 +1,4 @@
-// The Store interface a Store Kind implements to keep usage (ADR 0066),
+// The Store interface a Store Kind implements to keep usage (ADR 0069),
 // which a Recorder works over.
 
 package usage

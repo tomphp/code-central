@@ -1,10 +1,11 @@
 // Package store is the persistence interface core writes through.
 //
-// Two implementations exist: Open (YAML files on disk, loaded whole into
-// memory at startup) and NewMemory (an in-memory fake). Both pass the
-// contract suite in store/storetest. Every read comes from memory; every
-// Update writes at most one record, and memory changes only after that
-// record is durable.
+// Its Store Kinds (ADR 0067) are Open (YAML files on disk, loaded whole
+// into memory at startup), OpenSQLite (one database file), OpenPostgres
+// (a database several services share, ADR 0068) and NewMemory (an
+// in-memory fake). All pass the contract suite in store/storetest. Every
+// Update writes at most one record, and what a Reader sees changes only
+// after that record is durable.
 package store
 
 import (
@@ -121,21 +122,23 @@ func (im Import) clone() Import {
 	return out
 }
 
-// Store is the persistence interface. View and Update share one
-// store-wide read-write mutex, so a check and the write it guards are
-// atomic.
+// Store is the persistence interface. A check and the write it guards
+// are atomic: View and Update share one store-wide read-write mutex, or,
+// on a Shared Store, each Update is one transaction the database orders
+// against the other services' (ADR 0068).
 type Store interface {
 	View(fn func(Reader) error) error
-	// Update runs fn under the write lock. fn may write at most one
-	// record; a second write fails with ErrSecondWrite. A Store that
-	// retries on conflict runs fn again from the start, discarding the
-	// earlier attempt's write, so fn must be safe to run more than once;
-	// when its attempts run out, Update fails with ErrConflict.
+	// Update runs fn under the write lock, or in a transaction of its
+	// own. fn may write at most one record; a second write fails with
+	// ErrSecondWrite. A Store that retries on conflict runs fn again from
+	// the start, discarding the earlier attempt's write, so fn must be
+	// safe to run more than once; when its attempts run out, Update fails
+	// with ErrConflict.
 	Update(fn func(Writer) error) error
 	// Changes makes deliver hear of the Changes other services sharing the
 	// Store commit. A Store no other service shares never calls it.
 	Changes(deliver func(Change))
-	// Usage is the Store's Usage (ADR 0066): what agents consume, kept
+	// Usage is the Store's Usage (ADR 0069): what agents consume, kept
 	// the way the Store Kind keeps it, and appended to, read and pruned on
 	// its own, outside any View or Update.
 	Usage() usage.Store
@@ -183,6 +186,11 @@ func cloneTicket(t domain.Ticket) domain.Ticket {
 	if t.SpecMerge != nil {
 		sm := *t.SpecMerge
 		t.SpecMerge = &sm
+	}
+	if t.AutoFix != nil {
+		a := *t.AutoFix
+		a.Covers = slices.Clone(a.Covers)
+		t.AutoFix = &a
 	}
 	t.PullRequests = slices.Clone(t.PullRequests)
 	t.Claims = slices.Clone(t.Claims)

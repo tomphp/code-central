@@ -11,18 +11,28 @@ const (
 	Files Kind = "files"
 	// SQLite is one SQLite database file, on this machine's disk.
 	SQLite Kind = "sqlite"
+	// Postgres is a Postgres database, which several services may share
+	// (ADR 0068).
+	Postgres Kind = "postgres"
 )
 
-// Location names a Store to open: its Kind and where it is. It names no
+// Location names a Store to open: its Kind and where it is. It shows no
 // credential, so it is safe to print.
 type Location struct {
 	Kind Kind
-	// Path is the File Store's folder, or the SQLite database file.
+	// Path is the File Store's folder, the SQLite database file, or the
+	// Postgres Store's address (host:port/database).
 	Path string
+	// url is the Postgres Store's URL, with its credential, which only
+	// OpenAt reads: PostgresLocation sets it, and nothing shows it.
+	url string
 }
 
 // String is the Location as the startup line shows it: "files at /path".
 func (l Location) String() string { return fmt.Sprintf("%s at %s", l.Kind, l.Path) }
+
+// GoString is the same, so %#v shows no more than %v does.
+func (l Location) GoString() string { return l.String() }
 
 // OpenedStore is a Store some Open has opened and holds until Close:
 // what serve runs on, whatever its Kind.

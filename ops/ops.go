@@ -302,6 +302,7 @@ var all = []entry{
 
 	// CI Tracking (Spec code-central-247).
 	defined(SetCITracking),
+	defined(SetAutoFix),
 	// A Repository's CI entry (Spec code-central-848).
 	defined(SetRepositoryCI),
 	defined(ReportPushRemote),
