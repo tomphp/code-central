@@ -316,7 +316,9 @@ describe("the Ticket detail's CI section", () => {
         ],
       },
     ]);
-    const ci = within(await detailOf(w, id)).getByRole("region", { name: "CI" });
+    await detailOf(w, id);
+    // The CI section sits under the header, outside the details.
+    const ci = screen.getByRole("region", { name: "CI" });
     // Core's result is running while any counted run is unfinished.
     expect(within(ci).getByRole("heading")).toHaveTextContent("CI running def4567");
 
@@ -337,7 +339,9 @@ describe("the Ticket detail's CI section", () => {
       [{ commit: "def4567890", runs: [run(1, "ci.yml", "def4567890"), run(2, "nightly.yml", "def4567890", { conclusion: "failure" })] }],
       ["nightly.yml"],
     );
-    const ci = within(await detailOf(w, id)).getByRole("region", { name: "CI" });
+    await detailOf(w, id);
+    // The CI section sits under the header, outside the details.
+    const ci = screen.getByRole("region", { name: "CI" });
     const ignored = within(ci).getByRole("listitem", { name: "Build nightly.yml" });
     expect(ignored).toHaveClass("ignored");
     expect(within(ignored).getByText("ignored")).toBeInTheDocument();
@@ -351,7 +355,9 @@ describe("the Ticket detail's CI section", () => {
       { commit: "abc1234567", runs: [run(1, "ci.yml", "abc1234567", { conclusion: "failure" })] },
       { commit: "def4567890", runs: [run(2, "ci.yml", "def4567890")] },
     ]);
-    const ci = within(await detailOf(w, id)).getByRole("region", { name: "CI" });
+    await detailOf(w, id);
+    // The CI section sits under the header, outside the details.
+    const ci = screen.getByRole("region", { name: "CI" });
     const earlier = within(ci).getByText("Earlier pushes (1 run)");
     expect(within(ci).getByRole("heading")).toHaveTextContent("CI passed def4567");
     await userEvent.click(earlier);
@@ -374,6 +380,22 @@ describe("the Ticket pane's body", () => {
     await renderLive(w, <TicketDetail project="acme" now={w.now()} error="acme-9 not found" />);
     expect(screen.getByRole("alert")).toHaveTextContent("acme-9 not found");
     expect(screen.queryByText("Loading…")).toBeNull();
+  });
+
+  it("leads back from the read's error", async () => {
+    const { w } = await acme();
+    const back = vi.fn();
+    await renderLive(w, <TicketDetail project="acme" now={w.now()} error="acme-9 not found" back={back} />);
+    await userEvent.click(screen.getByRole("link", { name: "Back" }));
+    expect(back).toHaveBeenCalled();
+  });
+
+  it("doesn't repeat the State in the header as a reason", async () => {
+    const { w, s } = await acme();
+    const id = await s.ticket("acme", { title: "Migrate", state: "Failed" });
+    await renderLive(w, <TicketDetail project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} />);
+    expect(screen.getByText("Failed", { selector: ".state-chip" })).toBeInTheDocument();
+    expect(screen.queryByText("Failed", { selector: ".reason" })).toBeNull();
   });
 
   it("heads the Ticket with its State chip and Reason badge", async () => {
