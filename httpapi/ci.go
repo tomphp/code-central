@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ops"
 )
 
 // CIOverviewPath reads the CI view (code-central-258):
@@ -14,7 +15,7 @@ import (
 // Routes.
 const CIOverviewPath = "GET /api/ci"
 
-func ciOverviewRead(c *core.Core, r *http.Request) (any, error) {
+func ciOverviewRead(s ops.Service, r *http.Request) (any, error) {
 	q := r.URL.Query()
 	if err := onlyParams(q, "project", "running"); err != nil {
 		return nil, err
@@ -23,5 +24,5 @@ func ciOverviewRead(c *core.Core, r *http.Request) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return c.CIOverview(r.Context(), core.CIOverviewInput{Project: q.Get("project"), Running: running != nil && *running})
+	return s.CIOverview(r.Context(), core.CIOverviewInput{Project: q.Get("project"), Running: running != nil && *running})
 }

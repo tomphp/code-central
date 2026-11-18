@@ -23,7 +23,6 @@ import (
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 	"github.com/tomoram/code-central/ops"
-	"github.com/tomoram/code-central/server"
 )
 
 // A call is one invocation of an operation, spelled for each door. A door
@@ -738,7 +737,7 @@ func httpDoAs(t *testing.T, srv *codecentraltest.Server, actor core.Actor, c htt
 	if err != nil {
 		t.Fatal(err)
 	}
-	req.Header.Set(server.ActorHeader, string(actor))
+	req.Header.Set(httpapi.ActorHeader, string(actor))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

@@ -5,7 +5,6 @@ package httpapi
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,12 +15,16 @@ import (
 	"github.com/tomoram/code-central/ops"
 )
 
-type handlerFunc func(c *core.Core, r *http.Request) (any, error)
+type handlerFunc func(s ops.Service, r *http.Request) (any, error)
 
-// Register adds the HTTP API under /api/ to the service's one mux. The
-// request's Actor is already in its context (server.Guard reads the
-// Actor header); without one it is agent.
-func Register(mux *http.ServeMux, c *core.Core) {
+// ActorHeader names the Actor making a request: human, agent or
+// integration, defaulting to agent. Only the UI sends human. An operation
+// passes it on in its ops.Call, unchecked: the dispatch acts as it or
+// refuses it.
+const ActorHeader = "X-Code-Central-Actor"
+
+// Register adds the HTTP API under /api/ to the service's one mux, over s.
+func Register(mux *http.ServeMux, s ops.Service) {
 	all := map[string]handlerFunc{WaitPath: wait, TranscriptPath: transcript, UsagePath: usageRead, SessionUsagePath: sessionUsageRead, CIOverviewPath: ciOverviewRead}
 	for _, op := range ops.Definitions() {
 		method, pattern := op.Route()
@@ -29,7 +32,7 @@ func Register(mux *http.ServeMux, c *core.Core) {
 	}
 	for pattern, h := range all {
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
-			v, err := h(c, r)
+			v, err := h(s, r)
 			if err != nil {
 				WriteError(w, err)
 				return
@@ -37,13 +40,13 @@ func Register(mux *http.ServeMux, c *core.Core) {
 			writeJSON(w, http.StatusOK, v)
 		})
 	}
-	mux.HandleFunc("POST /api/ping", ping(c))
-	mux.HandleFunc(SessionEventsPath, sessionEvents(c))
-	mux.HandleFunc(ChatEventsPath, chatEvents(c))
-	mux.HandleFunc(PostUsagePath, postUsage(c))
-	mux.HandleFunc(EventsPath, events(c))
-	mux.HandleFunc(TranscriptStreamPath, transcriptStream(c))
-	mux.HandleFunc(ChatStreamPath, chatStream(c))
+	mux.HandleFunc("POST /api/ping", ping(s))
+	mux.HandleFunc(SessionEventsPath, sessionEvents(s))
+	mux.HandleFunc(ChatEventsPath, chatEvents(s))
+	mux.HandleFunc(PostUsagePath, postUsage(s))
+	mux.HandleFunc(EventsPath, events(s))
+	mux.HandleFunc(TranscriptStreamPath, transcriptStream(s))
+	mux.HandleFunc(ChatStreamPath, chatStream(s))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodPost {
 			// There is no PUT, PATCH or DELETE: writes are named POST actions.
@@ -57,13 +60,13 @@ func Register(mux *http.ServeMux, c *core.Core) {
 // ping is POST /api/ping {session_id}. It is not one of core's
 // operations: it updates memory only, and always answers 204, even for an
 // unknown session or a body it can't read, so a hook never fails on it.
-func ping(c *core.Core) http.HandlerFunc {
+func ping(s ops.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			SessionID string `json:"session_id"`
 		}
 		if decodeBody(r, &in) == nil {
-			c.Ping(r.Context(), in.SessionID)
+			s.Ping(r.Context(), in.SessionID)
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
@@ -85,11 +88,7 @@ func Status(code core.Code) int {
 // WriteError writes err as the API's JSON error with its status; an error
 // that is not a *core.Error is internal.
 func WriteError(w http.ResponseWriter, err error) {
-	var e *core.Error
-	if !errors.As(err, &e) {
-		// Not a domain error: something broke inside the service.
-		e = &core.Error{Code: "internal", Message: err.Error()}
-	}
+	e := core.ErrorOf(err)
 	writeJSON(w, Status(e.Code), e)
 }
 

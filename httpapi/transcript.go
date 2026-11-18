@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ops"
 )
 
 // SessionEventsPath is where a Factory posts a session's Session Events
@@ -30,20 +31,20 @@ const TranscriptPath = "GET /api/projects/{key}/tickets/{n}/claims/{c}/transcrip
 // Like the Transcript read, it is outside core's operations and MCP.
 const TranscriptStreamPath = "GET /api/projects/{key}/tickets/{n}/claims/{c}/transcript/stream"
 
-func sessionEvents(c *core.Core) http.HandlerFunc {
+func sessionEvents(s ops.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			SessionID string              `json:"session_id"`
 			Events    []core.SessionEvent `json:"events"`
 		}
 		if decodeBody(r, &in) == nil {
-			c.PostSessionEvents(r.Context(), in.SessionID, in.Events)
+			s.PostSessionEvents(r.Context(), in.SessionID, in.Events)
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
-func transcript(c *core.Core, r *http.Request) (any, error) {
+func transcript(s ops.Service, r *http.Request) (any, error) {
 	if err := onlyParams(r.URL.Query()); err != nil {
 		return nil, err
 	}
@@ -51,7 +52,7 @@ func transcript(c *core.Core, r *http.Request) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return c.Transcript(r.Context(), r.PathValue("key"), core.Ref(r.PathValue("n")), claim)
+	return s.Transcript(r.Context(), r.PathValue("key"), core.Ref(r.PathValue("n")), claim)
 }
 
 func claimNumber(r *http.Request) (int, error) {
@@ -62,7 +63,7 @@ func claimNumber(r *http.Request) (int, error) {
 	return claim, nil
 }
 
-func transcriptStream(c *core.Core) http.HandlerFunc {
+func transcriptStream(s ops.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		flusher, ok := w.(http.Flusher)
 		if !ok {
@@ -80,7 +81,7 @@ func transcriptStream(c *core.Core) http.HandlerFunc {
 		}
 		// A Last-Event-ID that isn't a seq is no resume: send it all.
 		after, _ := strconv.Atoi(r.Header.Get("Last-Event-ID"))
-		feed, err := c.FollowTranscript(r.Context(), r.PathValue("key"), core.Ref(r.PathValue("n")), claim, after)
+		feed, err := s.FollowTranscript(r.Context(), r.PathValue("key"), core.Ref(r.PathValue("n")), claim, after)
 		if err != nil {
 			WriteError(w, err)
 			return

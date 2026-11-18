@@ -73,7 +73,7 @@ func serveOp(t *testing.T, op ops.Operation) http.Handler {
 	mux := http.NewServeMux()
 	method, pattern := op.Route()
 	mux.HandleFunc(method+" "+pattern, func(w http.ResponseWriter, r *http.Request) {
-		v, err := h(nil, r)
+		v, err := h(ops.Serve(nil), r)
 		if err != nil {
 			WriteError(w, err)
 			return

@@ -1,12 +1,10 @@
 package mcp
 
 // A tool derived from an operation's definition (ops.Definitions): its
-// input schema comes from the input type by reflection, its description
-// from the definition, and its call decodes the arguments strictly into
-// the input type and invokes the definition.
+// input schema comes from the input type by reflection and its
+// description from the definition; a call dispatches the definition.
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -45,38 +43,19 @@ func Descriptions() map[string]string {
 	return out
 }
 
-// derive is op's tool. An operation whose HTTP path has no {key} isn't on
-// one Project, so the door checks the Project itself before calling it:
-// every tool on an unknown key then returns unknown_project.
+// derive is op's tool.
 func derive(op ops.Operation) (tool, error) {
 	s, err := schema(op.Input(), op.FieldDescription)
 	if err != nil {
 		return tool{}, err
 	}
-	_, pattern := op.Route()
 	props := s["properties"].(map[string]any)
 	for name, p := range props {
 		if values, ok := op.FieldEnum(name); ok {
 			p.(map[string]any)["enum"] = values
 		}
 	}
-	checkProject := !strings.Contains(pattern, "{key}")
-	return tool{
-		description: op.Description(),
-		schema:      s,
-		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
-			in := op.NewInput()
-			if err := core.Decode(ctx, args, in); err != nil {
-				return nil, err
-			}
-			if checkProject {
-				if _, err := c.GetProject(ctx, key); err != nil {
-					return nil, err
-				}
-			}
-			return op.Invoke(ctx, c, key, in)
-		},
-	}, nil
+	return tool{description: op.Description(), schema: s, op: op}, nil
 }
 
 var refType = reflect.TypeFor[core.Ref]()
