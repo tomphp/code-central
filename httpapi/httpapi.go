@@ -77,7 +77,7 @@ func Status(code core.Code) int {
 	switch code {
 	case core.UnknownProject, core.NotFound:
 		return http.StatusNotFound
-	case core.ActionNotAllowed, core.StaleClaim, core.Cycle:
+	case core.ActionNotAllowed, core.StaleClaim, core.Cycle, core.Conflict:
 		return http.StatusConflict
 	case core.Invalid:
 		return http.StatusUnprocessableEntity

@@ -53,6 +53,13 @@ type options struct {
 	issuesCheck      core.IssuesCheck
 	azureBoardsCheck core.AzureBoardsCheck
 	pullRequestCheck core.PullRequestCheck
+	wrapStore        func(store.Store) store.Store
+}
+
+// WithStore makes core persist through wrap's Store over the in-memory
+// fake, such as one that fails some writes; Server.Store stays the fake.
+func WithStore(wrap func(store.Store) store.Store) Option {
+	return func(o *options) { o.wrapStore = wrap }
 }
 
 // WithVersion makes the server report version in its version header.
@@ -110,7 +117,11 @@ func NewServer(t testing.TB, opts ...Option) *Server {
 	}
 	s := store.NewMemory()
 	clk := clock.NewFake(o.start)
-	c := core.New(s, clk, &ids.Sequence{})
+	persisted := s
+	if o.wrapStore != nil {
+		persisted = o.wrapStore(s)
+	}
+	c := core.New(persisted, clk, &ids.Sequence{})
 	c.SetUsage(usage.New(o.usageDir, clk, o.location, o.log))
 	c.SetCICheck(o.ciCheck)
 	c.SetIssuesCheck(o.issuesCheck)

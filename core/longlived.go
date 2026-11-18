@@ -42,7 +42,9 @@ func (c *Core) projectSpecNumber(key string, ps projectSpec) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	created := n
 	err = c.store.Update(func(w store.Writer) error {
+		n = created
 		p, _ := w.Project(key)
 		if *ps.number(&p) != 0 {
 			n = *ps.number(&p)

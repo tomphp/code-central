@@ -99,18 +99,18 @@ func (c *Core) SetGitHubIssues(ctx context.Context, key string, in SetGitHubIssu
 		}
 	}
 	var was domain.GitHubIssues
-	var before, after ProjectView
+	var before ProjectView
+	var p domain.Project
 	var resetWatcher bool
 	err := c.store.Update(func(w store.Writer) error {
 		resetWatcher = false
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		p, _ := w.Project(key)
+		p, _ = w.Project(key)
 		before, was = c.projectView(p), p.GitHubIssues
 		g.Spec = cmp.Or(was.Spec, created)
 		p.GitHubIssues = g
-		after = c.projectView(p)
 		if sameGitHubIssues(g, was) {
 			return nil
 		}
@@ -126,6 +126,7 @@ func (c *Core) SetGitHubIssues(ctx context.Context, key string, in SetGitHubIssu
 	if resetWatcher {
 		c.watchers.reset(watcherKey{WatcherIssues, key})
 	}
+	after := c.projectView(p)
 	if was.Spec != 0 && len(g.Repositories) > 0 && !slices.Equal(was.Repositories, g.Repositories) {
 		if err := c.retitleIntegrationSpec(ctx, key, was.Spec, givenIssuesSpecTitle, issuesSpecTitle(g.Repositories)); err != nil {
 			return Written[ProjectView]{}, err

@@ -166,6 +166,30 @@ func ciWatching(t *testing.T, f fixture) {
 	}
 }
 
+// issuesWatching is work in acme, with GitHub Issues on and the Issue
+// Watcher Watching.
+func issuesWatching(t *testing.T, f fixture) {
+	f.work(t, domain.Ready)
+	if _, err := f.core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.core.ReportIssueWatcherStatus(integration, "acme", core.ReportWatcherStatusInput{State: core.WatcherWatching}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// boardsWatching is work in acme, with Azure Boards on and the Work Item
+// Watcher Watching.
+func boardsWatching(t *testing.T, f fixture) {
+	f.work(t, domain.Ready)
+	if _, err := f.core.SetAzureBoards(human, "acme", core.SetAzureBoardsInput{On: true, QueryURL: azureBoardsQuery}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.core.ReportWorkItemWatcherStatus(integration, "acme", core.ReportWatcherStatusInput{State: core.WatcherWatching}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 var retryCases = []retryCase{
 	{"landing method change", prWatching, func(f fixture) (any, error) {
 		return f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Remote: "origin"})
@@ -208,26 +232,10 @@ var retryCases = []retryCase{
 	{"turning GitHub Issues on", func(t *testing.T, f fixture) { f.work(t, domain.Ready) }, func(f fixture) (any, error) {
 		return f.core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}})
 	}},
-	{"setting GitHub Issues", func(t *testing.T, f fixture) {
-		f.work(t, domain.Ready)
-		if _, err := f.core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := f.core.ReportIssueWatcherStatus(integration, "acme", core.ReportWatcherStatusInput{State: core.WatcherWatching}); err != nil {
-			t.Fatal(err)
-		}
-	}, func(f fixture) (any, error) {
+	{"setting GitHub Issues", issuesWatching, func(f fixture) (any, error) {
 		return f.core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: false, Repositories: []string{"acme/web"}})
 	}},
-	{"setting Azure Boards", func(t *testing.T, f fixture) {
-		f.work(t, domain.Ready)
-		if _, err := f.core.SetAzureBoards(human, "acme", core.SetAzureBoardsInput{On: true, QueryURL: azureBoardsQuery}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := f.core.ReportWorkItemWatcherStatus(integration, "acme", core.ReportWatcherStatusInput{State: core.WatcherWatching}); err != nil {
-			t.Fatal(err)
-		}
-	}, func(f fixture) (any, error) {
+	{"setting Azure Boards", boardsWatching, func(f fixture) (any, error) {
 		return f.core.SetAzureBoards(human, "acme", core.SetAzureBoardsInput{On: false, QueryURL: azureBoardsQuery})
 	}},
 	{"claim", func(t *testing.T, f fixture) { f.work(t, domain.Ready) }, func(f fixture) (any, error) {
@@ -310,5 +318,42 @@ func TestARetriedLandingMethodChangeCommentsOnceAndResetsTheWatcher(t *testing.T
 	}
 	if got := f.switchTo(t, domain.LandingPullRequest).Landing.Watcher.State; got != core.WatcherNotReported {
 		t.Fatalf("Pull Request Watcher %q, want not reported: what it said was about the old method", got)
+	}
+}
+
+// A setting's write that resets its Watcher's status returns the Project
+// with the status reset, though the reset waits for the write to commit.
+func TestASettingsResultShowsItsWatcherReset(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		setup   func(t *testing.T, f fixture)
+		op      func(f fixture) (core.Written[core.ProjectView], error)
+		watcher func(p core.ProjectView) core.WatcherView
+	}{
+		{"setting CI", ciWatching, func(f fixture) (core.Written[core.ProjectView], error) {
+			return f.core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: false, Full: true})
+		}, func(p core.ProjectView) core.WatcherView { return p.CI.Watcher }},
+		{"reporting the push remote", ciWatching, func(f fixture) (core.Written[core.ProjectView], error) {
+			return f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{Full: true})
+		}, func(p core.ProjectView) core.WatcherView { return p.CI.Watcher }},
+		{"setting GitHub Issues", issuesWatching, func(f fixture) (core.Written[core.ProjectView], error) {
+			return f.core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/site"}, Full: true})
+		}, func(p core.ProjectView) core.WatcherView { return p.GitHubIssues.Watcher }},
+		{"setting Azure Boards", boardsWatching, func(f fixture) (core.Written[core.ProjectView], error) {
+			return f.core.SetAzureBoards(human, "acme", core.SetAzureBoardsInput{On: false, QueryURL: azureBoardsQuery, Full: true})
+		}, func(p core.ProjectView) core.WatcherView { return p.AzureBoards.Watcher }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f, rs := retryFixture()
+			c.setup(t, f)
+			rs.attempts = twice
+			v, err := c.op(f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := c.watcher(*v.Record).State; got != core.WatcherNotReported {
+				t.Fatalf("the result's Watcher is %q, want not reported", got)
+			}
+		})
 	}
 }
