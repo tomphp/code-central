@@ -18,10 +18,10 @@ import (
 
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/home"
 	"github.com/tomoram/code-central/notify"
 	"github.com/tomoram/code-central/ops"
-	"github.com/tomoram/code-central/store"
 )
 
 // Env is everything a command touches outside itself, so tests can run
@@ -366,7 +366,7 @@ func runCreateTicket(ctx context.Context, e Env, args []string) error {
 		return err
 	}
 	in := core.CreateTicketInput{
-		Spec: core.Ref(*spec), Title: *title, Description: text, State: store.State(*state), Labels: labels, Tags: tags, Full: *full,
+		Spec: core.Ref(*spec), Title: *title, Description: text, State: domain.State(*state), Labels: labels, Tags: tags, Full: *full,
 	}
 	for _, b := range blockedBy {
 		in.BlockedBy = append(in.BlockedBy, core.Ref(b))
@@ -434,7 +434,7 @@ func runFindTickets(ctx context.Context, e Env, args []string) error {
 	}
 	in := core.FindTicketsInput{Title: *title, Labels: labels, Spec: core.Ref(*spec)}
 	for _, s := range states {
-		in.State = append(in.State, store.State(s))
+		in.State = append(in.State, domain.State(s))
 	}
 	if in.Tags, err = tagFlags(tags); err != nil {
 		return err
@@ -513,7 +513,7 @@ func runFinish(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	in := core.FinishInput{Ticket: core.Ref(pos[0]), ClaimID: *claim, Summary: text, Branch: *branch, Commit: *commit, Recommendation: store.Recommendation(*recommendation), Full: *full}
+	in := core.FinishInput{Ticket: core.Ref(pos[0]), ClaimID: *claim, Summary: text, Branch: *branch, Commit: *commit, Recommendation: domain.Recommendation(*recommendation), Full: *full}
 	if *repositories != "" {
 		if err := decodeField(ctx, *repositories, "repositories", &in.Repositories); err != nil {
 			return err

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
 )
@@ -47,7 +48,7 @@ type watcherKind struct {
 	// setting is the Project setting that turns it on, such as CI
 	// Tracking, and on whether it is on.
 	setting string
-	on      func(store.Project) bool
+	on      func(domain.Project) bool
 	// problems are the problems an error it reports may name; crashed is
 	// the service's, never the Watcher's. A problem it may not name is
 	// refused as not a problem of watches, such as CI.
@@ -58,23 +59,23 @@ type watcherKind struct {
 	// unless set, as the Issue Watcher's repositories are GitHub's
 	// owner/name, and the Work Item Watcher, which runs one query, has
 	// none.
-	watched func(store.Project) []string
+	watched func(domain.Project) []string
 }
 
 // watcherKinds is every kind of Watcher.
 var watcherKinds = map[WatcherKind]watcherKind{
-	WatcherCI: {name: "CI Watcher", setting: "CI Tracking", on: func(p store.Project) bool { return landingPolicies(p).RunsCIWatcher() },
+	WatcherCI: {name: "CI Watcher", setting: "CI Tracking", on: func(p domain.Project) bool { return landingPolicies(p).RunsCIWatcher() },
 		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemPATMissing, ProblemPATRejected,
 			ProblemProjectUnreadable, ProblemPATScope, ProblemCheckFailed}, watches: "CI"},
-	WatcherIssues: {name: "Issue Watcher", setting: "GitHub Issues", on: func(p store.Project) bool { return p.GitHubIssues.On },
+	WatcherIssues: {name: "Issue Watcher", setting: "GitHub Issues", on: func(p domain.Project) bool { return p.GitHubIssues.On },
 		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemIssuesDisabled, ProblemNoTriage, ProblemCheckFailed},
-		watches:  "GitHub Issues", watched: func(p store.Project) []string { return p.GitHubIssues.Repositories }},
-	WatcherPullRequests: {name: "Pull Request Watcher", setting: "Pull Request", on: func(p store.Project) bool { return landingPolicies(p).RunsPullRequestWatcher() },
+		watches:  "GitHub Issues", watched: func(p domain.Project) []string { return p.GitHubIssues.Repositories }},
+	WatcherPullRequests: {name: "Pull Request Watcher", setting: "Pull Request", on: func(p domain.Project) bool { return landingPolicies(p).RunsPullRequestWatcher() },
 		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemNoWrite, ProblemPATMissing, ProblemPATRejected,
 			ProblemPATScope, ProblemCheckFailed}, watches: "pull requests"},
-	WatcherWorkItems: {name: "Work Item Watcher", setting: "Azure Boards", on: func(p store.Project) bool { return p.AzureBoards.On },
+	WatcherWorkItems: {name: "Work Item Watcher", setting: "Azure Boards", on: func(p domain.Project) bool { return p.AzureBoards.On },
 		problems: []WatcherProblem{ProblemPATMissing, ProblemPATRejected, ProblemProjectUnreadable, ProblemPATScope, ProblemQueryUnusable,
-			ProblemTooManyWorkItems, ProblemCheckFailed}, watches: "Azure Boards", watched: func(store.Project) []string { return nil }},
+			ProblemTooManyWorkItems, ProblemCheckFailed}, watches: "Azure Boards", watched: func(domain.Project) []string { return nil }},
 }
 
 // Name is the kind's glossary name, such as CI Watcher.
@@ -480,7 +481,7 @@ const WatcherSteadyAfter = 10 * time.Minute
 
 // watched is whether p should have a Watcher of kind: its setting on,
 // and not archived.
-func watched(kind WatcherKind, p store.Project) bool {
+func watched(kind WatcherKind, p domain.Project) bool {
 	return watcherKinds[kind].on(p) && p.Archived.IsZero()
 }
 

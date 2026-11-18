@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -58,7 +59,7 @@ func (c *Core) AttentionOf(_ context.Context, project, id string) (AttentionTick
 	var out AttentionTicket
 	var ok bool
 	c.store.View(func(r store.Reader) error {
-		var t store.Ticket
+		var t domain.Ticket
 		if t, ok = r.Ticket(project, n); ok {
 			p, _ := r.Project(project)
 			out = attention(c.evaluate(r, p), t)
@@ -70,7 +71,7 @@ func (c *Core) AttentionOf(_ context.Context, project, id string) (AttentionTick
 
 // attention is t as notify watches it, with its reason from its
 // Project's evaluation e.
-func attention(e *evaluation, t store.Ticket) AttentionTicket {
+func attention(e *evaluation, t domain.Ticket) AttentionTicket {
 	a := AttentionTicket{
 		Project: e.p.Key, ID: DisplayID(e.p.Key, t.Number), Title: t.Title,
 		Rounds: len(t.Rounds), FailureReports: len(t.FailureReports),

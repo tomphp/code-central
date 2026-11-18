@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -38,12 +39,12 @@ type CIOverview struct {
 // CIProjectStatus is one Project's CI Tracking and its CI Watcher's
 // status, as the CI view heads its runs with them.
 type CIProjectStatus struct {
-	Project    string           `json:"project"`
-	Tracking   bool             `json:"tracking"`
-	Provider   store.CIProvider `json:"provider"`
-	Repository string           `json:"repository"`
-	ProjectURL string           `json:"project_url"`
-	Watcher    WatcherView      `json:"watcher"`
+	Project    string            `json:"project"`
+	Tracking   bool              `json:"tracking"`
+	Provider   domain.CIProvider `json:"provider"`
+	Repository string            `json:"repository"`
+	ProjectURL string            `json:"project_url"`
+	Watcher    WatcherView       `json:"watcher"`
 }
 
 // CIRunRow is one CI Run in the CI view, with its Project.
@@ -62,17 +63,17 @@ func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, er
 	now := c.now()
 	type listed struct {
 		project string
-		run     store.CIRun
+		run     domain.CIRun
 	}
 	var rows []listed
 	err := c.store.View(func(r store.Reader) error {
-		var projects []store.Project
+		var projects []domain.Project
 		if in.Project != "" {
 			p, ok := r.Project(in.Project)
 			if !ok {
 				return &Error{Code: NotFound, Message: fmt.Sprintf("no Project %q", in.Project)}
 			}
-			projects = []store.Project{p}
+			projects = []domain.Project{p}
 		} else {
 			for _, p := range r.Projects() {
 				if landingPolicies(p).RunsCIWatcher() && p.Archived.IsZero() {
@@ -91,7 +92,7 @@ func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, er
 					}
 					continue
 				}
-				if ended := ciRunEnded(run); run.Status != store.CICompleted || (!ended.IsZero() && now.Sub(ended) <= ciViewDays*24*time.Hour) {
+				if ended := ciRunEnded(run); run.Status != domain.CICompleted || (!ended.IsZero() && now.Sub(ended) <= ciViewDays*24*time.Hour) {
 					rows = append(rows, listed{p.Key, run})
 				}
 			}
@@ -124,8 +125,8 @@ func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, er
 // the kept runs, counts as running towards a Ticket's CI result: it is
 // unfinished, tracked against a Ticket rather than a CI Rule, and on a
 // commit some Ticket's CI result reads.
-func runningForTicket(ci *ciState, run store.CIRun) bool {
-	if run.Status != store.CIQueued && run.Status != store.CIInProgress || run.Ticket == 0 {
+func runningForTicket(ci *ciState, run domain.CIRun) bool {
+	if run.Status != domain.CIQueued && run.Status != domain.CIInProgress || run.Ticket == 0 {
 		return false
 	}
 	return ci.reads(run.Repository, run.Commit) && !run.Ignored
@@ -133,7 +134,7 @@ func runningForTicket(ci *ciState, run store.CIRun) bool {
 
 // latestAttempts is runs with each run's latest attempt only, a run being
 // its Repository's run ID.
-func latestAttempts(runs []store.CIRun) []store.CIRun {
+func latestAttempts(runs []domain.CIRun) []domain.CIRun {
 	type runID struct {
 		repository string
 		id         int64
@@ -143,5 +144,5 @@ func latestAttempts(runs []store.CIRun) []store.CIRun {
 		k := runID{run.Repository, run.ID}
 		latest[k] = max(latest[k], run.Attempt)
 	}
-	return slices.DeleteFunc(runs, func(run store.CIRun) bool { return run.Attempt < latest[runID{run.Repository, run.ID}] })
+	return slices.DeleteFunc(runs, func(run domain.CIRun) bool { return run.Attempt < latest[runID{run.Repository, run.ID}] })
 }

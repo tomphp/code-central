@@ -15,9 +15,9 @@ import (
 
 	"github.com/tomoram/code-central/azdo"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
-	"github.com/tomoram/code-central/store"
 )
 
 // AzurePipelines is the Azure Pipelines CI Provider for one Azure DevOps
@@ -189,7 +189,7 @@ func (a *AzurePipelines) run(ctx context.Context, b azdo.Build) (Run, error) {
 	}
 	run := Run{Updated: b.LastChanged, CIRunView: core.CIRunView{ID: int64(b.ID), Attempt: attempt, Workflow: b.Definition.Name, Name: b.BuildNumber,
 		Branch: strings.TrimPrefix(b.SourceBranch, azureBranchPrefix), Commit: b.SourceVersion, Status: azureStatus(b.Status), URL: b.Links.Web.Href}}
-	if run.Status == store.CICompleted {
+	if run.Status == domain.CICompleted {
 		run.Conclusion = azureConclusion(b.Result)
 		if !b.FinishTime.IsZero() {
 			at := b.FinishTime.UTC()
@@ -265,42 +265,42 @@ func (a *AzurePipelines) Jobs(ctx context.Context, id int64, attempt int) ([]cor
 }
 
 // azureStatus maps a build's status to Code Central's.
-func azureStatus(s string) store.CIRunStatus {
+func azureStatus(s string) domain.CIRunStatus {
 	switch s {
 	case "completed":
-		return store.CICompleted
+		return domain.CICompleted
 	case "inProgress", "cancelling":
-		return store.CIInProgress
+		return domain.CIInProgress
 	default:
-		return store.CIQueued
+		return domain.CIQueued
 	}
 }
 
 // azureConclusion maps a build's result to Code Central's. Azure DevOps
 // has no timed-out result: it reports one as failed or cancelled.
-func azureConclusion(r string) store.CIConclusion {
+func azureConclusion(r string) domain.CIConclusion {
 	switch r {
 	case "succeeded":
-		return store.CISuccess
+		return domain.CISuccess
 	case "partiallySucceeded":
-		return store.CIPartiallySucceeded
+		return domain.CIPartiallySucceeded
 	case "canceled":
-		return store.CICancelled
+		return domain.CICancelled
 	default:
-		return store.CIFailure
+		return domain.CIFailure
 	}
 }
 
 // azureJobConclusion maps a job's result: a build's, plus the job-only
 // ones.
-func azureJobConclusion(r string) store.CIConclusion {
+func azureJobConclusion(r string) domain.CIConclusion {
 	switch r {
 	case "succeededWithIssues":
-		return store.CIPartiallySucceeded
+		return domain.CIPartiallySucceeded
 	case "skipped":
-		return store.CISkipped
+		return domain.CISkipped
 	case "abandoned":
-		return store.CICancelled
+		return domain.CICancelled
 	default:
 		return azureConclusion(r)
 	}

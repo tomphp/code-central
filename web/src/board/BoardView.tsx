@@ -17,7 +17,7 @@ import { kindLabel, newestFirst } from "../inbox/AllTickets";
 import { groupBySpec } from "../inbox/groupBySpec";
 import { hiddenColumns, needsMeColumn, storedGroup, storeGroup, storeHidden, storeNeedsMe } from "../inbox/groupPreference";
 import { OneProject } from "../inbox/ShortId";
-import { specKindOf } from "../inbox/describeSpec";
+import { kindText } from "../inbox/describeSpec";
 import { stateSlug } from "../controls/StateChip";
 import { useApi, type InboxData, type ProjectSpec, type ProjectTicket } from "../live";
 import { useNote } from "../focus/useNote";
@@ -318,7 +318,7 @@ function Cells({
                     t={t}
                     link={link(t)}
                     badge={kindLabel(t)}
-                    spec={spec && { kind: specKindOf(spec), title: spec.title }}
+                    spec={spec && { kind: kindText(spec), title: spec.title }}
                     joined={joined(t)}
                     inNeedsMe={s === NEEDS_ME}
                   />

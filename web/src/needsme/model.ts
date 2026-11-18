@@ -85,7 +85,7 @@ export function needsMeOf(data: InboxData | undefined): NeedsMe {
   const specs = new Set((data?.specs ?? []).map((s) => s.id));
   const ticketsOf = (spec: string) => bySpec.get(spec) ?? [];
   // A Spec's reason is its Stage Tickets', in Stage order, then its other
-  // Tickets' in list order, as progress orders a Requirement's needs.
+  // Tickets' in list order, as a Requirement's needs are ordered.
   const reasonOf = (id: string): NeedsMeReason | undefined => {
     const t = byId.get(id);
     if (t) return t.needs_me_reason;

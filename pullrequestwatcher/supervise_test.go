@@ -2,6 +2,7 @@ package pullrequestwatcher_test
 
 import (
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 	"time"
@@ -10,7 +11,6 @@ import (
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/pullrequestwatcher"
-	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/watchers/watchertest"
 )
 
@@ -39,7 +39,7 @@ func newSupervising(t *testing.T) *supervising {
 	return &supervising{t: t, h: h, srv: srv}
 }
 
-func (s *supervising) method(m store.LandingMethod) {
+func (s *supervising) method(m domain.LandingMethod) {
 	s.t.Helper()
 	must(s.t, func() error {
 		_, err := s.srv.Core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: m, Remote: "origin"})
@@ -63,11 +63,11 @@ func (s *supervising) status(state core.WatcherState) core.WatcherView {
 
 func TestTheServiceRunsAPullRequestWatcherOnlyUnderPullRequestAndStopsItOnSwitchingAway(t *testing.T) {
 	s := newSupervising(t)
-	s.method(store.LandingPullRequest)
+	s.method(domain.LandingPullRequest)
 	s.Supervising = s.h.Supervise(s.srv, s.h.CodeCentral, pullrequestwatcher.Kind)
 	s.Logged("started the Pull Request Watcher for acme", 1)
 	s.status(core.WatcherWatching)
-	s.method(store.LandingBranch)
+	s.method(domain.LandingBranch)
 	s.Logged("stopped the Pull Request Watcher for acme", 1)
 	if got := s.status(core.WatcherNotReported); got.State != core.WatcherNotReported {
 		t.Fatalf("status %+v, want not reported once switched away", got)
@@ -76,7 +76,7 @@ func TestTheServiceRunsAPullRequestWatcherOnlyUnderPullRequestAndStopsItOnSwitch
 
 func TestArchivingAProjectStopsItsPullRequestWatcher(t *testing.T) {
 	s := newSupervising(t)
-	s.method(store.LandingPullRequest)
+	s.method(domain.LandingPullRequest)
 	s.Supervising = s.h.Supervise(s.srv, s.h.CodeCentral, pullrequestwatcher.Kind)
 	s.Logged("started the Pull Request Watcher for acme", 1)
 	must(t, func() error { _, err := s.srv.Core.ArchiveProject(human, "acme"); return err })
@@ -85,7 +85,7 @@ func TestArchivingAProjectStopsItsPullRequestWatcher(t *testing.T) {
 
 func TestACrashingPullRequestWatcherIsRestartedWithBackoffAndNotifiesOnce(t *testing.T) {
 	s := newSupervising(t)
-	s.method(store.LandingPullRequest)
+	s.method(domain.LandingPullRequest)
 	s.Supervising = s.h.Supervise(s.srv, s.h.Crashing, pullrequestwatcher.Kind)
 	for i, d := range []time.Duration{time.Second, 2 * time.Second} {
 		codecentraltest.Eventually(t, func() bool { return s.h.CrashRuns() == i+1 }, "the crashing Pull Request Watcher didn't start %d times", i+1)

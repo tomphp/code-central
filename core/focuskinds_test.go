@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
-	"github.com/tomoram/code-central/store"
 )
 
 func TestTheStoresNeedsMeReasonsAreCoresInGroupOrder(t *testing.T) {
@@ -18,8 +18,8 @@ func TestTheStoresNeedsMeReasonsAreCoresInGroupOrder(t *testing.T) {
 	for _, r := range w.NeedsMe {
 		reasons = append(reasons, string(r.Reason))
 	}
-	if !slices.Equal(store.NeedsMeReasons, reasons) {
-		t.Fatalf("store.NeedsMeReasons = %v, want core's %v", store.NeedsMeReasons, reasons)
+	if !slices.Equal(domain.NeedsMeReasons, reasons) {
+		t.Fatalf("domain.NeedsMeReasons = %v, want core's %v", domain.NeedsMeReasons, reasons)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -75,7 +76,7 @@ func (c *Core) Ping(_ context.Context, sessionID string) {
 // claimActivity is a Claim's last activity as reads show it: the latest
 // stored write its agent made (lastActivity, ticket 30), or, while the
 // Claim is live, its session's last counted ping if that is later.
-func (c *Core) claimActivity(t store.Ticket, cl store.Claim) time.Time {
+func (c *Core) claimActivity(t domain.Ticket, cl domain.Claim) time.Time {
 	last := lastActivity(t, cl)
 	if cl.Live() && cl.SessionID != "" {
 		c.activity.mu.Lock()
@@ -91,7 +92,7 @@ func (c *Core) claimActivity(t store.Ticket, cl store.Claim) time.Time {
 // quietSince is when the Ticket last saw any activity on its live Claim:
 // the latest of service start (pings are not kept across a restart), any
 // write to the Ticket by anyone, and the Claim's own activity.
-func (c *Core) quietSince(t store.Ticket, cl store.Claim) time.Time {
+func (c *Core) quietSince(t domain.Ticket, cl domain.Claim) time.Time {
 	last := c.activity.started
 	for _, at := range []time.Time{t.Updated, c.claimActivity(t, cl)} {
 		if at.After(last) {
@@ -104,8 +105,8 @@ func (c *Core) quietSince(t store.Ticket, cl store.Claim) time.Time {
 // silentSince is the Ticket's last activity when it is a Silent Claim,
 // else nil. Needs Answer and Answered are never Silent: the session is
 // waiting on the human there, not working.
-func (c *Core) silentSince(t store.Ticket) *time.Time {
-	if t.State != store.InProgress {
+func (c *Core) silentSince(t domain.Ticket) *time.Time {
+	if t.State != domain.InProgress {
 		return nil
 	}
 	cl, ok := liveClaim(t)
@@ -123,8 +124,8 @@ func (c *Core) silentSince(t store.Ticket) *time.Time {
 // Progress with a live Claim, and more than LongAfter since it last moved
 // into In Progress. Whether that makes it a Long Claim is the
 // evaluation's call: Silent takes precedence.
-func (c *Core) longSince(t store.Ticket) *time.Time {
-	if t.State != store.InProgress {
+func (c *Core) longSince(t domain.Ticket) *time.Time {
+	if t.State != domain.InProgress {
 		return nil
 	}
 	if _, ok := liveClaim(t); !ok {
@@ -142,8 +143,8 @@ func (c *Core) longSince(t store.Ticket) *time.Time {
 // Method in any of its Changed Repositories, else nil. It needs no Claim
 // or Factory: only the time since the accept counts. Under Branch,
 // Accepted work is To merge at once instead.
-func (c *Core) notLandedSince(p store.Project, t store.Ticket) *time.Time {
-	if t.State != store.Accepted || !ticketLandingPolicies(p, t).Any(LandingPolicy.FlagsNotLanded) {
+func (c *Core) notLandedSince(p domain.Project, t domain.Ticket) *time.Time {
+	if t.State != domain.Accepted || !ticketLandingPolicies(p, t).Any(domain.LandingPolicy.FlagsNotLanded) {
 		return nil
 	}
 	accepted := entered(t)

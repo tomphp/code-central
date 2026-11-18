@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -23,12 +24,12 @@ const AutoAcceptLabel = "auto-accept"
 
 // AutoAcceptView is a Project's Auto-accept setting: on or off for
 // every Auto-accept kind.
-type AutoAcceptView map[store.AutoAcceptKind]bool
+type AutoAcceptView map[domain.AutoAcceptKind]bool
 
 // autoAcceptView is p's Auto-accept setting with every kind present.
-func autoAcceptView(p store.Project) AutoAcceptView {
+func autoAcceptView(p domain.Project) AutoAcceptView {
 	v := AutoAcceptView{}
-	for _, k := range store.AutoAcceptKinds {
+	for _, k := range domain.AutoAcceptKinds {
 		v[k] = p.AutoAccepts(k)
 	}
 	return v
@@ -38,7 +39,7 @@ func autoAcceptView(p store.Project) AutoAcceptView {
 type SetAutoAcceptInput struct {
 	// Kinds is on or off per Auto-accept kind; a kind left out keeps its
 	// value.
-	Kinds map[store.AutoAcceptKind]bool `json:"kinds"`
+	Kinds map[domain.AutoAcceptKind]bool `json:"kinds"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
@@ -88,22 +89,22 @@ func (c *Core) SetAutoAccept(ctx context.Context, key string, in SetAutoAcceptIn
 // carries: its Stage, the Spec merge mark, or Implementation results for
 // every other Ticket. A Prototype, a Wayfinder-type Ticket and a Map's
 // Ticket have none. sp is t's Spec.
-func autoAcceptKind(sp store.Spec, t store.Ticket) (store.AutoAcceptKind, bool) {
+func autoAcceptKind(sp domain.Spec, t domain.Ticket) (domain.AutoAcceptKind, bool) {
 	if slices.ContainsFunc(t.Labels, isWayfinderType) || isMap(sp.Labels) {
 		return "", false
 	}
 	switch StageOf(t.Labels) {
 	case "grilling":
-		return store.AutoAcceptGrilling, true
+		return domain.AutoAcceptGrilling, true
 	case "spec":
-		return store.AutoAcceptSpec, true
+		return domain.AutoAcceptSpec, true
 	case "tickets":
-		return store.AutoAcceptTickets, true
+		return domain.AutoAcceptTickets, true
 	}
 	if t.SpecMergeTicket {
-		return store.AutoAcceptMerge, true
+		return domain.AutoAcceptMerge, true
 	}
-	return store.AutoAcceptImplementation, true
+	return domain.AutoAcceptImplementation, true
 }
 
 // autoAcceptCause is why t, In Review, is auto-accept eligible in
@@ -111,17 +112,17 @@ func autoAcceptKind(sp store.Spec, t store.Ticket) (store.AutoAcceptKind, bool) 
 // on t, the Label on sp, then p's setting for t's kind), or false when
 // none does. A spec Stage is eligible only once a finish has given its
 // Spec recommendation.
-func autoAcceptCause(p store.Project, sp store.Spec, t store.Ticket) (store.AutoAcceptCause, bool) {
+func autoAcceptCause(p domain.Project, sp domain.Spec, t domain.Ticket) (domain.AutoAcceptCause, bool) {
 	kind, ok := autoAcceptKind(sp, t)
 	switch {
-	case !ok || kind == store.AutoAcceptSpec && t.Recommendation == "":
+	case !ok || kind == domain.AutoAcceptSpec && t.Recommendation == "":
 		return "", false
 	case slices.Contains(t.Labels, AutoAcceptLabel):
-		return store.CauseTicketLabel, true
+		return domain.CauseTicketLabel, true
 	case slices.Contains(sp.Labels, AutoAcceptLabel):
-		return store.CauseSpecLabel, true
+		return domain.CauseSpecLabel, true
 	case p.AutoAccepts(kind):
-		return store.CauseProject, true
+		return domain.CauseProject, true
 	}
 	return "", false
 }
@@ -129,7 +130,7 @@ func autoAcceptCause(p store.Project, sp store.Spec, t store.Ticket) (store.Auto
 // autoAccept ends finish's write: when t, now In Review, is auto-accept
 // eligible it carries out the human's accept in the same write, else it
 // writes t as it is.
-func (c *Core) autoAccept(ctx context.Context, w store.Writer, key string, t store.Ticket, now time.Time) error {
+func (c *Core) autoAccept(ctx context.Context, w store.Writer, key string, t domain.Ticket, now time.Time) error {
 	p, _ := w.Project(key)
 	sp, _ := w.Spec(key, t.Spec)
 	if cause, ok := autoAcceptCause(p, sp, t); ok {
@@ -151,9 +152,9 @@ func (c *Core) autoAccept(ctx context.Context, w store.Writer, key string, t sto
 // accepted. The accepting Move's Actor is human, with the cause.
 // accepted is false, with no records, when implement isn't allowed just
 // now, so the spec Stage stays In Review for the human.
-func (c *Core) acceptOnBehalf(ctx context.Context, r store.Reader, key string, t store.Ticket, cause store.AutoAcceptCause, now time.Time) (im store.Import, accepted bool, err error) {
+func (c *Core) acceptOnBehalf(ctx context.Context, r store.Reader, key string, t domain.Ticket, cause domain.AutoAcceptCause, now time.Time) (im store.Import, accepted bool, err error) {
 	human := WithActor(ctx, Human)
-	if t.Recommendation == store.RecommendImplement {
+	if t.Recommendation == domain.RecommendImplement {
 		done, err := c.implementStep(human, r, key, &t, cause, now)
 		var e *Error
 		if errors.As(err, &e) && e.Code == ActionNotAllowed {
@@ -168,7 +169,7 @@ func (c *Core) acceptOnBehalf(ctx context.Context, r store.Reader, key string, t
 		return store.Import{}, false, err
 	}
 	t.Updated = now
-	return store.Import{Rewritten: []store.Ticket{t}}, true, nil
+	return store.Import{Rewritten: []domain.Ticket{t}}, true, nil
 }
 
 // sweepAutoAccept is the write that gives a Spec or a Ticket the
@@ -177,8 +178,8 @@ func (c *Core) acceptOnBehalf(ctx context.Context, r store.Reader, key string, t
 // accepted on the human's behalf in the same write.
 func (c *Core) sweepAutoAccept(ctx context.Context, r store.Reader, key string, target store.Import, now time.Time) (store.Import, error) {
 	p, _ := r.Project(key)
-	var sp store.Spec
-	var covered []store.Ticket
+	var sp domain.Spec
+	var covered []domain.Ticket
 	im := target
 	if len(target.RewrittenSpecs) == 1 {
 		sp = target.RewrittenSpecs[0]
@@ -193,7 +194,7 @@ func (c *Core) sweepAutoAccept(ctx context.Context, r store.Reader, key string, 
 		sp, _ = r.Spec(key, covered[0].Spec)
 	}
 	for _, t := range covered {
-		if t.State != store.InReview {
+		if t.State != domain.InReview {
 			continue
 		}
 		cause, ok := autoAcceptCause(p, sp, t)
@@ -231,8 +232,8 @@ func putRecords(w store.Writer, key string, im store.Import) error {
 
 // joinKinds lists the Auto-accept kinds for an error message.
 func joinKinds() string {
-	names := make([]string, 0, len(store.AutoAcceptKinds))
-	for _, k := range store.AutoAcceptKinds {
+	names := make([]string, 0, len(domain.AutoAcceptKinds))
+	for _, k := range domain.AutoAcceptKinds {
 		names = append(names, fmt.Sprintf("%q", k))
 	}
 	return strings.Join(names, ", ")

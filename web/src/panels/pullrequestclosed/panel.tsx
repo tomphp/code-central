@@ -22,7 +22,7 @@ export function PullRequestClosedPanel({ project, ticket: t }: PanelProps) {
   const closed = repositories.filter((r) => r.pull_request?.state === "closed");
   const merged = repositories.filter((r) => r.pull_request?.state === "merged");
   return (
-    <section aria-label="Pull request closed" className="panel accepted-panel">
+    <section aria-label="Pull request closed" className="panel accepted-panel pull-request-closed-panel">
       <h3>Pull request closed</h3>
       {closed.length === 0 ? (
         <p className="small">

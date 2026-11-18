@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/clock"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/store"
@@ -82,11 +83,11 @@ func (c *Core) now() time.Time { return c.clock.Now().UTC().Truncate(time.Second
 
 // ProjectView is a Project as every read returns it.
 type ProjectView struct {
-	Key         string     `json:"key"`
-	DisplayName string     `json:"display_name"`
-	Created     time.Time  `json:"created"`
-	Mode        store.Mode `json:"mode"`
-	Archived    bool       `json:"archived"`
+	Key         string      `json:"key"`
+	DisplayName string      `json:"display_name"`
+	Created     time.Time   `json:"created"`
+	Mode        domain.Mode `json:"mode"`
+	Archived    bool        `json:"archived"`
 	// ArchivedAt is when the human archived the Project, while it is.
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
 	// Landing is how the Project's accepted work lands, always filled in:
@@ -129,9 +130,9 @@ type ProjectView struct {
 // LandingView is a Project's Landing Method with its Push option and the
 // remote it uses.
 type LandingView struct {
-	Method store.LandingMethod `json:"method"`
-	Push   bool                `json:"push"`
-	Remote string              `json:"remote"`
+	Method domain.LandingMethod `json:"method"`
+	Push   bool                 `json:"push"`
+	Remote string               `json:"remote"`
 	// LandPerSpec is the Merge option to land a Spec's work together,
 	// shown whatever the method.
 	LandPerSpec bool `json:"land_per_spec"`
@@ -149,6 +150,19 @@ type LandingView struct {
 	// Base is the branch the Project's work is cut from and lands on: the
 	// stored one, else the reported fallback, else main.
 	Base string `json:"base"`
+	// Methods is the Landing capabilities of each Landing Method, as if
+	// it were the Default Landing: what the Options form offers while the
+	// human drafts it.
+	Methods LandingMethodsCapabilities `json:"methods"`
+	// RunsPullRequestWatcher is whether the Pull Request Watcher runs, as
+	// saved: any Repository is under Pull Request.
+	RunsPullRequestWatcher bool `json:"runs_pull_request_watcher"`
+	// RepositoryLanding is the Default Landing named as a Repository's
+	// Landing names it.
+	RepositoryLanding RepositoryLanding `json:"repository_landing"`
+	// PushesNothing is whether Push is on in some Landing while every
+	// Repository is local-only, so it pushes nothing.
+	PushesNothing bool `json:"pushes_nothing"`
 	// Watcher is the Pull Request Watcher's status, not_reported unless the
 	// method is Pull Request.
 	Watcher WatcherView `json:"watcher"`
@@ -187,21 +201,21 @@ type SpecRef struct {
 
 // MoveView is one State move. An imported Ticket's one move has no From.
 type MoveView struct {
-	From  store.State `json:"from,omitempty"`
-	To    store.State `json:"to"`
-	Actor string      `json:"actor"`
-	Time  time.Time   `json:"time"`
-	Claim int         `json:"claim,omitempty"`
-	Via   string      `json:"via,omitempty"`
+	From  domain.State `json:"from,omitempty"`
+	To    domain.State `json:"to"`
+	Actor string       `json:"actor"`
+	Time  time.Time    `json:"time"`
+	Claim int          `json:"claim,omitempty"`
+	Via   string       `json:"via,omitempty"`
 	// Commit is the commit that put the work into the base, on a land.
 	Commit string `json:"commit,omitempty"`
 	// Cause is why an auto-accept made the Move (project, ticket-label or
 	// spec-label); left out on every other Move.
-	Cause store.AutoAcceptCause `json:"cause,omitempty"`
+	Cause domain.AutoAcceptCause `json:"cause,omitempty"`
 }
 
 // moveView is one Move as reads show it.
-func moveView(m store.Move) MoveView {
+func moveView(m domain.Move) MoveView {
 	return MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via, Commit: m.Commit, Cause: m.Cause}
 }
 
@@ -233,7 +247,7 @@ type ClaimView struct {
 type TicketView struct {
 	ID           string            `json:"id"`
 	Title        string            `json:"title"`
-	State        store.State       `json:"state"`
+	State        domain.State      `json:"state"`
 	Spec         SpecRef           `json:"spec"`
 	Labels       []string          `json:"labels"`
 	Tags         map[string]string `json:"tags"`
@@ -259,7 +273,7 @@ type TicketView struct {
 	// Recommendation is a spec Stage's Spec recommendation, as its last
 	// finish gave it: implement (Implement) or split (Split into
 	// Tickets); empty on any other Ticket.
-	Recommendation store.Recommendation `json:"recommendation,omitempty"`
+	Recommendation domain.Recommendation `json:"recommendation,omitempty"`
 	// PushedCommit is the latest commit the Factory pushed for the Ticket
 	// in the Home Repository while CI Tracking was on, and CICommit the
 	// pushed commit there the Home Repository's CI result comes from:
@@ -312,6 +326,11 @@ type TicketView struct {
 	LeftOut   map[string]int `json:"left_out,omitempty"`
 	Blocked   bool           `json:"blocked"`
 	Claimable bool           `json:"claimable"`
+	// Editable says the UI offers Edit on the Ticket, and Retroable its
+	// Retro button, as ticketEditable and ticketRetroable decide them.
+	// Every read sets them. Computed on read.
+	Editable  bool `json:"editable"`
+	Retroable bool `json:"retroable"`
 	// SilentSince is set while the Ticket is a Silent Claim: In Progress
 	// with no activity for 30 minutes. It is the time of the last
 	// activity, so the quiet time is now minus it. Computed, never stored.
@@ -343,20 +362,20 @@ type TicketView struct {
 	// AutoAcceptKind is the Ticket's Auto-accept kind (grilling, spec,
 	// tickets, implementation or merge); left out when it has none. Only
 	// the UI's read carries it.
-	AutoAcceptKind store.AutoAcceptKind `json:"auto_accept_kind,omitempty"`
+	AutoAcceptKind domain.AutoAcceptKind `json:"auto_accept_kind,omitempty"`
 }
 
 // TicketRow is one find_tickets result.
 type TicketRow struct {
-	ID      string      `json:"id"`
-	Title   string      `json:"title"`
-	State   store.State `json:"state"`
-	Spec    string      `json:"spec"`
-	Labels  []string    `json:"labels"`
-	Blocked bool        `json:"blocked"`
-	Created time.Time   `json:"created"`
-	Updated time.Time   `json:"updated"`
-	Link    *LinkView   `json:"link,omitempty"`
+	ID      string       `json:"id"`
+	Title   string       `json:"title"`
+	State   domain.State `json:"state"`
+	Spec    string       `json:"spec"`
+	Labels  []string     `json:"labels"`
+	Blocked bool         `json:"blocked"`
+	Created time.Time    `json:"created"`
+	Updated time.Time    `json:"updated"`
+	Link    *LinkView    `json:"link,omitempty"`
 	// NodeType is the Ticket's type on a Map (see NodeTypeOf); left out
 	// for a Ticket on any other Spec.
 	NodeType NodeType `json:"node_type,omitempty"`
@@ -392,7 +411,7 @@ type CreateProjectInput struct {
 	Key         string `json:"key"`
 	DisplayName string `json:"display_name,omitempty"`
 	// Mode is committed (the default) or local.
-	Mode store.Mode `json:"mode,omitempty"`
+	Mode domain.Mode `json:"mode,omitempty"`
 }
 
 // CreateSpecInput is create_spec's input.
@@ -405,12 +424,12 @@ type CreateSpecInput struct {
 
 // CreateTicketInput is create_ticket's input. State defaults to Draft.
 type CreateTicketInput struct {
-	Spec        Ref         `json:"spec" desc:"The Spec it belongs to." required:"true"`
-	Title       string      `json:"title" desc:"The Ticket's title." required:"true"`
-	Description string      `json:"description,omitempty" desc:"What to build, in Markdown."`
-	State       store.State `json:"state,omitempty" desc:"Draft (the default) or Ready." enum:"Draft,Ready"`
-	Labels      []string    `json:"labels,omitempty" desc:"Labels to add."`
-	BlockedBy   []Ref       `json:"blocked_by,omitempty" desc:"Tickets it waits on until they are Done. IDs: <key>-<n> or <n>."`
+	Spec        Ref          `json:"spec" desc:"The Spec it belongs to." required:"true"`
+	Title       string       `json:"title" desc:"The Ticket's title." required:"true"`
+	Description string       `json:"description,omitempty" desc:"What to build, in Markdown."`
+	State       domain.State `json:"state,omitempty" desc:"Draft (the default) or Ready." enum:"Draft,Ready"`
+	Labels      []string     `json:"labels,omitempty" desc:"Labels to add."`
+	BlockedBy   []Ref        `json:"blocked_by,omitempty" desc:"Tickets it waits on until they are Done. IDs: <key>-<n> or <n>."`
 	// Tags are the Ticket's Tags from the start, checked as set_tags checks them.
 	Tags map[string]string `json:"tags,omitempty" desc:"Tags to set on it, as {key: value}; checked as set_tags checks them, so effort must be a valid level."`
 	// Full asks for the Ticket in place of the Acknowledgement.
@@ -419,9 +438,9 @@ type CreateTicketInput struct {
 
 // FindTicketsInput is find_tickets' filters; every filter given must match.
 type FindTicketsInput struct {
-	State  []store.State `json:"state,omitempty" desc:"Only Tickets in one of these States."`
-	Title  string        `json:"title,omitempty" desc:"Only Tickets whose title contains this text."`
-	Labels []string      `json:"labels,omitempty" query:"label" desc:"Only Tickets with all of these Labels."`
+	State  []domain.State `json:"state,omitempty" desc:"Only Tickets in one of these States."`
+	Title  string         `json:"title,omitempty" desc:"Only Tickets whose title contains this text."`
+	Labels []string       `json:"labels,omitempty" query:"label" desc:"Only Tickets with all of these Labels."`
 	// Tags must all be present with exactly these values. Over HTTP each
 	// is a tag=<key>=<value> parameter, which DecodeQuery reads.
 	Tags map[string]string `json:"tags,omitempty" query:"tag" desc:"Only Tickets with all of these Tags, as {key: value}."`
@@ -461,7 +480,7 @@ func (c *Core) CreateProject(_ context.Context, in CreateProjectInput) (ProjectV
 	if !mode.Valid() {
 		return ProjectView{}, invalidMode(mode)
 	}
-	p := store.Project{Key: in.Key, DisplayName: name, Created: c.now(), Mode: mode}
+	p := domain.Project{Key: in.Key, DisplayName: name, Created: c.now(), Mode: mode}
 	err := c.store.Update(func(w store.Writer) error {
 		if _, ok := w.Project(in.Key); ok {
 			return invalid("key", "a Project with key %q already exists", in.Key)
@@ -501,12 +520,12 @@ func (c *Core) CreateSpec(_ context.Context, key string, in CreateSpecInput) (Wr
 			return err
 		}
 		now := c.now()
-		s := store.Spec{Number: w.NextNumber(key), Title: in.Title, Created: now, Updated: now, Body: in.Body}
+		s := domain.Spec{Number: w.NextNumber(key), Title: in.Title, Created: now, Updated: now, Body: in.Body}
 		if err := w.PutSpec(key, s); err != nil {
 			return err
 		}
 		var err error
-		v, err = acknowledgeCreate(specView(key, store.Spec{}), specView(key, s), in.Full)
+		v, err = acknowledgeCreate(specView(key, domain.Spec{}), specView(key, s), in.Full)
 		return err
 	})
 	return v, err
@@ -520,9 +539,9 @@ func (c *Core) CreateTicket(ctx context.Context, key string, in CreateTicketInpu
 	}
 	state := in.State
 	if state == "" {
-		state = store.Draft
+		state = domain.Draft
 	}
-	if state != store.Draft && state != store.Ready {
+	if state != domain.Draft && state != domain.Ready {
 		return Written[TicketView]{}, invalid("state", "a new Ticket is Draft or Ready, not %q", state)
 	}
 	if in.Spec == "" {
@@ -556,14 +575,14 @@ func (c *Core) CreateTicket(ctx context.Context, key string, in CreateTicketInpu
 			return err
 		}
 		now := c.now()
-		t := store.Ticket{
+		t := domain.Ticket{
 			Number: w.NextNumber(key), Title: in.Title, State: state, Spec: specN,
 			Labels: in.Labels, Tags: maps.Clone(in.Tags), BlockedBy: blockedBy, Created: now, Updated: now, Description: in.Description,
 		}
 		if err := w.PutTicket(key, t); err != nil {
 			return err
 		}
-		v, err = acknowledgeCreate(c.ticketView(w, key, store.Ticket{}), c.ticketView(w, key, t), in.Full)
+		v, err = acknowledgeCreate(c.ticketView(w, key, domain.Ticket{}), c.ticketView(w, key, t), in.Full)
 		return err
 	})
 	return v, err
@@ -595,7 +614,7 @@ func (c *Core) GetTicket(_ context.Context, key string, in GetTicketInput) (Tick
 
 // shapeView is v as a read asking for the parts asked, which parts is as
 // a set, returns it: the default view when it names none.
-func shapeView(v TicketView, r store.Reader, p store.Project, t store.Ticket, asked []string, parts map[string]bool, withUIFields bool) TicketView {
+func shapeView(v TicketView, r store.Reader, p domain.Project, t domain.Ticket, asked []string, parts map[string]bool, withUIFields bool) TicketView {
 	if len(asked) == 0 {
 		v = defaultView(v)
 	} else {
@@ -662,7 +681,7 @@ func (c *Core) FindTicketViews(_ context.Context, key string, in FindTicketsInpu
 
 // findIn is the Tickets of Project key matching in's filters, in claim
 // order, with the Project's evaluation they are read from.
-func (c *Core) findIn(r store.Reader, key string, in FindTicketsInput) (*evaluation, []store.Ticket, error) {
+func (c *Core) findIn(r store.Reader, key string, in FindTicketsInput) (*evaluation, []domain.Ticket, error) {
 	for _, s := range in.State {
 		if !s.Valid() {
 			return nil, nil, invalid("state", "unknown State %q", s)
@@ -696,7 +715,7 @@ func (c *Core) findIn(r store.Reader, key string, in FindTicketsInput) (*evaluat
 		if !matches(t, in, specN) {
 			continue
 		}
-		if in.Claimable != nil && *in.Claimable != (t.State == store.Ready && !e.rule.blocked(t)) {
+		if in.Claimable != nil && *in.Claimable != (t.State == domain.Ready && !e.rule.blocked(t)) {
 			continue
 		}
 		found = append(found, t)
@@ -704,7 +723,7 @@ func (c *Core) findIn(r store.Reader, key string, in FindTicketsInput) (*evaluat
 	return e, found, nil
 }
 
-func matches(t store.Ticket, in FindTicketsInput, specN int) bool {
+func matches(t domain.Ticket, in FindTicketsInput, specN int) bool {
 	if len(in.State) > 0 {
 		if !slices.Contains(in.State, t.State) {
 			return false
@@ -740,7 +759,7 @@ func hasAll(labels []string, tags map[string]string, wantLabels []string, wantTa
 // ticketRow is t as a find_tickets row, its CI and reason read from its
 // Project's evaluation e; onMap says t is on a Map, so the row carries
 // its node type.
-func (c *Core) ticketRow(r store.Reader, e *evaluation, t store.Ticket, onMap bool) TicketRow {
+func (c *Core) ticketRow(r store.Reader, e *evaluation, t domain.Ticket, onMap bool) TicketRow {
 	key := e.p.Key
 	row := TicketRow{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
@@ -763,16 +782,16 @@ func (c *Core) ticketRow(r store.Reader, e *evaluation, t store.Ticket, onMap bo
 	return row
 }
 
-func claimOrder(a, b store.Ticket) int {
+func claimOrder(a, b domain.Ticket) int {
 	if c := a.Created.Compare(b.Created); c != 0 {
 		return c
 	}
 	return cmp.Compare(a.Number, b.Number)
 }
 
-func finished(s store.State) bool { return s == store.Done || s == store.Cancelled }
+func finished(s domain.State) bool { return s == domain.Done || s == domain.Cancelled }
 
-func (c *Core) projectView(p store.Project) ProjectView {
+func (c *Core) projectView(p domain.Project) ProjectView {
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
 		Landing: landingViewWith(p, c.watchers.view(watcherKey{WatcherPullRequests, p.Key})), CI: ciView(p, c.watchers.view(watcherKey{WatcherCI, p.Key})),
 		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), AzureBoards: azureBoardsView(p, c.watchers.view(watcherKey{WatcherWorkItems, p.Key})), Models: modelsView(p.Models),
@@ -786,21 +805,21 @@ func (c *Core) projectView(p store.Project) ProjectView {
 	return v
 }
 
-func specView(key string, s store.Spec) SpecView {
+func specView(key string, s domain.Spec) SpecView {
 	return SpecView{
 		ID: DisplayID(key, s.Number), Title: s.Title, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags),
 		Created: s.Created, Updated: s.Updated, Body: s.Body, Edits: editViews(s.Edits), Link: linkView(s.Link),
 	}
 }
 
-func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView {
+func (c *Core) ticketView(r store.Reader, key string, t domain.Ticket) TicketView {
 	pr, _ := r.Project(key)
 	// A write's view of t may come before t is stored.
 	return c.ticketViewIn(r, c.evaluateWith(r, pr, t), t)
 }
 
 // ticketViewIn is t's view, read from its Project's evaluation e.
-func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t store.Ticket) TicketView {
+func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t domain.Ticket) TicketView {
 	key, pr := e.p.Key, e.p
 	sp, _ := r.Spec(key, t.Spec)
 	rule := e.rule
@@ -815,6 +834,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t store.Ticket) Ticke
 		Claims: []ClaimView{}, Rounds: roundViews(t.Rounds), FailureReports: failureReportViews(t.FailureReports),
 		Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
 		Blocked: rule.blocked(t), Link: linkView(t.Link),
+		Editable: ticketEditable(pr, t), Retroable: ticketRetroable(pr, t),
 	}
 	for _, cl := range t.Claims {
 		cv := ClaimView{Number: cl.Number, SessionID: cl.SessionID, WorkingDir: cl.WorkingDir, ResumeCommand: cl.ResumeCommand, Model: cl.Model, Effort: cl.Effort, Started: cl.Started, LastActivity: c.claimActivity(t, cl), EndedBy: cl.EndedBy,
@@ -838,7 +858,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t store.Ticket) Ticke
 	if severalRepositories(pr) {
 		v.Repositories = changedRepositoryViews(pr, t, e.ci)
 		for i, rv := range v.Repositories {
-			if t.State == store.Accepted && rv.Landed == nil {
+			if t.State == domain.Accepted && rv.Landed == nil {
 				v.Repositories[i].NotLanded = c.notLandedReason(pr, t, rv.Name, e.ci)
 			}
 		}
@@ -854,7 +874,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t store.Ticket) Ticke
 		}
 	}
 	v.LandAnyway = e.ci.landAnyway(e.ci.ticket(t).in(key))
-	v.Claimable = t.State == store.Ready && !v.Blocked
+	v.Claimable = t.State == domain.Ready && !v.Blocked
 	v.SilentSince = c.silentSince(t)
 	v.NeedsMeReason, _ = e.reason(t)
 	v.AwaitingTriage, v.TriageActions = t.AwaitingTriage, ticketTriageActions(r, key, t)
@@ -889,12 +909,12 @@ func orEmptyMap(m map[string]string) map[string]string {
 
 // landingView is p's Landing with the Code Host worked out from the Push
 // remote URL. Push reads as off under Pull Request, which implies it.
-func landingView(p store.Project) LandingView {
+func landingView(p domain.Project) LandingView {
 	return landingViewWith(p, WatcherView{State: WatcherNotReported})
 }
 
 // landingViewWith is landingView with the Pull Request Watcher's status.
-func landingViewWith(p store.Project, watcher WatcherView) LandingView {
+func landingViewWith(p domain.Project, watcher WatcherView) LandingView {
 	host, repo := codeHostOf(p.CI.PushRemoteURL)
 	push := p.Landing.Normalized().Push
 	var azure []string
@@ -903,7 +923,10 @@ func landingViewWith(p store.Project, watcher WatcherView) LandingView {
 			azure = append(azure, rv.Name)
 		}
 	}
+	ps := landingPolicies(p)
 	return LandingView{Method: p.Landing.Method, Push: push, Remote: p.Landing.Remote, LandPerSpec: p.Landing.LandPerSpec,
-		CodeHost: host, Repository: repo, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv}), UsesAzureReposPAT: landingPolicies(p).UsesAzureReposPAT(azure),
+		CodeHost: host, Repository: repo, PATEnv: patEnvOf(domain.CI{PATEnv: p.Landing.PATEnv}), UsesAzureReposPAT: ps.UsesAzureReposPAT(azure),
+		Methods: landingCapabilities(p, azure), RunsPullRequestWatcher: ps.RunsPullRequestWatcher(),
+		RepositoryLanding: repositoryLandingOf(p.Landing.Method, p.Landing.Push), PushesNothing: pushesNothing(p),
 		Base: p.Base(), Watcher: watcher, OpenPullRequests: []OpenPullRequest{}}
 }

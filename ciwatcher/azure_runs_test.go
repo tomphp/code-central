@@ -8,6 +8,7 @@ package ciwatcher_test
 import (
 	"context"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"io"
 	"strings"
 	"testing"
@@ -17,7 +18,6 @@ import (
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakeazdo"
-	"github.com/tomoram/code-central/store"
 )
 
 const buildsPath = fakeazdo.ProjectPath + "/_apis/build/builds"
@@ -41,7 +41,7 @@ func (a *azureWatching) track(ignored ...string) {
 	a.t.Helper()
 	human := core.WithActor(context.Background(), core.Human)
 	must(a.t, func() error {
-		_, err := a.srv.Core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Provider: store.CIAzurePipelines,
+		_, err := a.srv.Core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Provider: domain.CIAzurePipelines,
 			ProjectURL: a.azdo.ProjectURL(), IgnoredWorkflows: ignored})
 		return err
 	})
@@ -177,13 +177,13 @@ func TestTheCIWatcherReportsAnAzureCommitsBuildsAsRunsMatchedByCommit(t *testing
 	}
 	ci, nightly := tk.CIRuns[0], tk.CIRuns[1]
 	if ci.ID != 11 || ci.Workflow != "CI" || ci.Name != "20260105.11" || ci.Branch != "main" || ci.Commit != "abc123" || ci.Ticket != id ||
-		ci.Status != store.CICompleted || ci.Conclusion != store.CIPartiallySucceeded || ci.URL != "https://dev.azure.com/acme/web/_build/results?buildId=11" ||
+		ci.Status != domain.CICompleted || ci.Conclusion != domain.CIPartiallySucceeded || ci.URL != "https://dev.azure.com/acme/web/_build/results?buildId=11" ||
 		ci.Started == nil || ci.Finished == nil || !ci.Finished.Equal(time.Date(2026, 1, 5, 9, 5, 0, 0, time.UTC)) || ci.Ignored {
 		t.Fatalf("CI's run = %+v", ci)
 	}
 	want := []core.CIJobView{
-		{Name: "test", Conclusion: store.CISuccess}, {Name: "lint", Conclusion: store.CIPartiallySucceeded},
-		{Name: "docs", Conclusion: store.CISkipped}, {Name: "deploy", Conclusion: store.CICancelled}}
+		{Name: "test", Conclusion: domain.CISuccess}, {Name: "lint", Conclusion: domain.CIPartiallySucceeded},
+		{Name: "docs", Conclusion: domain.CISkipped}, {Name: "deploy", Conclusion: domain.CICancelled}}
 	if len(ci.Jobs) != len(want) {
 		t.Fatalf("CI's jobs = %+v, want the Job records only", ci.Jobs)
 	}
@@ -192,7 +192,7 @@ func TestTheCIWatcherReportsAnAzureCommitsBuildsAsRunsMatchedByCommit(t *testing
 			t.Fatalf("job %d = %+v, want %+v with its logs link", i, j, want[i])
 		}
 	}
-	if !nightly.Ignored || nightly.Conclusion != store.CIFailure {
+	if !nightly.Ignored || nightly.Conclusion != domain.CIFailure {
 		t.Fatalf("Nightly's run = %+v, want its failure kept and marked ignored", nightly)
 	}
 }
@@ -201,16 +201,16 @@ func TestAnAzureStatusAndResultMapToCodeCentrals(t *testing.T) {
 	for _, c := range []struct {
 		status, result string
 		wantResult     core.CIResult
-		wantStatus     store.CIRunStatus
-		wantConclusion store.CIConclusion
+		wantStatus     domain.CIRunStatus
+		wantConclusion domain.CIConclusion
 	}{
-		{"notStarted", "", core.CIRunning, store.CIQueued, ""},
-		{"postponed", "", core.CIRunning, store.CIQueued, ""},
-		{"inProgress", "", core.CIRunning, store.CIInProgress, ""},
-		{"cancelling", "", core.CIRunning, store.CIInProgress, ""},
-		{"completed", "succeeded", core.CIPassed, store.CICompleted, store.CISuccess},
-		{"completed", "failed", core.CIFailed, store.CICompleted, store.CIFailure},
-		{"completed", "canceled", core.CICancelled, store.CICompleted, store.CICancelled},
+		{"notStarted", "", core.CIRunning, domain.CIQueued, ""},
+		{"postponed", "", core.CIRunning, domain.CIQueued, ""},
+		{"inProgress", "", core.CIRunning, domain.CIInProgress, ""},
+		{"cancelling", "", core.CIRunning, domain.CIInProgress, ""},
+		{"completed", "succeeded", core.CIPassed, domain.CICompleted, domain.CISuccess},
+		{"completed", "failed", core.CIFailed, domain.CICompleted, domain.CIFailure},
+		{"completed", "canceled", core.CICancelled, domain.CICompleted, domain.CICancelled},
 	} {
 		t.Run(c.status+"/"+c.result, func(t *testing.T) {
 			a := newAzureWatching(t)
@@ -248,7 +248,7 @@ func TestAnUnchangedAzureBuildCostsNoFurtherTimelineCall(t *testing.T) {
 	a.timeline(11, azRecord{"Job", "test", "failed", 1})
 	a.poll()
 	tk := a.ciResult(id, core.CIFailed)
-	if tk.CIRuns[0].Jobs[0].Conclusion != store.CIFailure || a.requests("/timeline") != 2 {
+	if tk.CIRuns[0].Jobs[0].Conclusion != domain.CIFailure || a.requests("/timeline") != 2 {
 		t.Fatalf("run = %+v after %d timeline reads, want its job failed after one more", tk.CIRuns[0], a.requests("/timeline"))
 	}
 }
@@ -273,7 +273,7 @@ func TestARetriedAzureBuildsAttemptIsItsHighestJobAttempt(t *testing.T) {
 			latest = &tk.CIRuns[i]
 		}
 	}
-	if latest == nil || len(latest.Jobs) != 2 || latest.Jobs[0].Conclusion != store.CISuccess {
+	if latest == nil || len(latest.Jobs) != 2 || latest.Jobs[0].Conclusion != domain.CISuccess {
 		t.Fatalf("runs = %+v, want an attempt 2 with its jobs at their latest attempt", tk.CIRuns)
 	}
 }
@@ -302,7 +302,7 @@ func (a *azureWatching) rulePollAzure() {
 
 func TestAFailingAzureBuildARuleMatchesOpensAFixTicketNamingItsFailedJobs(t *testing.T) {
 	a := newAzureWatching(t)
-	spec := a.rule("My Pipeline", "main", store.Ready)
+	spec := a.rule("My Pipeline", "main", domain.Ready)
 	finished := at(5).Format(time.RFC3339)
 	a.builds(
 		azBuild{id: 21, pipeline: "My Pipeline", commit: "fff111", status: "completed", result: "failed", changed: finished, finished: finished},
@@ -345,7 +345,7 @@ func TestAFailingAzureBuildARuleMatchesOpensAFixTicketNamingItsFailedJobs(t *tes
 
 func TestAnAnyRuleMatchesAnAzurePipelineWhateverItsName(t *testing.T) {
 	a := newAzureWatching(t)
-	spec := a.rule("any", "main", store.Draft)
+	spec := a.rule("any", "main", domain.Draft)
 	finished := at(5).Format(time.RFC3339)
 	a.builds(azBuild{id: 21, pipeline: "Deploy web", commit: "fff111", status: "completed", result: "failed", changed: finished, finished: finished})
 	a.timeline(21, azRecord{"Job", "ship", "failed", 1})
@@ -367,11 +367,11 @@ func (a *azureWatching) pullRequestPushed(commit string) string {
 		return err
 	})
 	must(a.t, func() error {
-		_, err := c.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest})
+		_, err := c.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest})
 		return err
 	})
 	must(a.t, func() error {
-		_, err := c.ReportPullRequest(ctx, "acme", core.ReportPullRequestInput{Branch: id, Number: 7, Link: "https://dev.azure.com/acme/web/_git/web/pullrequest/7", State: store.PROpen})
+		_, err := c.ReportPullRequest(ctx, "acme", core.ReportPullRequestInput{Branch: id, Number: 7, Link: "https://dev.azure.com/acme/web/_git/web/pullrequest/7", State: domain.PROpen})
 		return err
 	})
 	return id

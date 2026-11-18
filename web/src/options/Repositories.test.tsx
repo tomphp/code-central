@@ -253,6 +253,25 @@ describe("the Repositories section", () => {
     expect(detail("web", "CI")).toHaveTextContent("Not watched");
   });
 
+  it("names the Default Landing in Project default as the service names it", async () => {
+    const { w, s } = await fresh({ repositories: ["web"] });
+    await s.reportPushRemote("acme", "git@github.com:acme/acme.git");
+    await renderApp(w);
+    const landingOf = () => within(row("web")).getByText("Landing", { selector: "dt" }).nextElementSibling;
+
+    await w.api.setLandingMethod("acme", { method: "branch", push: true, remote: "origin" });
+    await settle(w);
+    expect(landingOf()).toHaveTextContent("Branch + Push (Project default)");
+
+    // Under Pull Request, Push is implied.
+    await w.api.setLandingMethod("acme", { method: "pull_request", push: true, remote: "origin" });
+    await settle(w);
+    expect(landingOf()).toHaveTextContent("Pull Request (Project default)");
+    await userEvent.click(within(row("web")).getByRole("button", { name: "Edit web" }));
+    const form = within(section()).getByRole("form", { name: "Edit web" });
+    expect(within(form).getByRole("option", { name: "Project default (Pull Request)" })).toBeInTheDocument();
+  });
+
   it("shows a Home whose clone has no Push remote as local-only, Not watched", async () => {
     const { w, s } = await fresh();
     await s.reportPushRemote("acme", "");

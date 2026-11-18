@@ -1,12 +1,12 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // requirementAccepted is accepted on a Requirement Spec.
@@ -34,7 +34,7 @@ func TestAnAcceptedSpecLandedTicketIsMergedIntoTheSpecBranchAndNotTheBase(t *tes
 		t.Error("main moved: nothing reaches the base until the Spec lands")
 	}
 	tk := h.Ticket(id)
-	if tk.State != store.Accepted || tk.SpecMerge == nil || tk.SpecMerge.Commit != tip || !tk.SpecMerge.Counts {
+	if tk.State != domain.Accepted || tk.SpecMerge == nil || tk.SpecMerge.Commit != tip || !tk.SpecMerge.Counts {
 		t.Errorf("%s is %s with Spec merge %+v, want Accepted merged at %s", id, tk.State, tk.SpecMerge, tip)
 	}
 }
@@ -48,7 +48,7 @@ func TestASpecBranchConflictSendsTheTicketBack(t *testing.T) {
 
 	h.Script(second, factorytest.Wait())
 	h.Start()
-	if !movedTo(h.Ticket(second), store.Accepted, store.Ready) {
+	if !movedTo(h.Ticket(second), domain.Accepted, domain.Ready) {
 		t.Fatalf("%s was not sent back: %+v", second, h.Ticket(second).Moves)
 	}
 
@@ -67,7 +67,7 @@ func TestATicketWhoseWorkIsInTheBaseLandsAsPlainMerge(t *testing.T) {
 	h.Git("merge", "-q", "--ff-only", commit)
 
 	h.Start()
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 	if got := h.Git("branch", "--list", "spec/*"); got != "" {
 		t.Errorf("a Spec Branch was made: %q", got)
 	}
@@ -132,10 +132,10 @@ func TestAnAcceptedTicketsWorktreeIsRemovedOnceItsSpecMergeIsRecorded(t *testing
 func TestUnderTheBranchMethodNoSpecBranchIsMade(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingBranch})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch})
 	id, _ := requirementAccepted(h, "Add a feature", "feature.txt", "feature\n")
 	h.Start()
-	if h.Ticket(id).State != store.Accepted || h.Git("branch", "--list", "spec/*") != "" {
+	if h.Ticket(id).State != domain.Accepted || h.Git("branch", "--list", "spec/*") != "" {
 		t.Errorf("want %s left Accepted with no Spec Branch", id)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -120,7 +121,7 @@ func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequire
 			}
 			stages, mapID = Stages()[1:], DisplayID(key, m.Number)
 		}
-		sp := store.Spec{Title: title, Body: in.Text}
+		sp := domain.Spec{Title: title, Body: in.Text}
 		if mapID != "" {
 			sp.Tags = map[string]string{MapTag: mapID}
 		}
@@ -139,11 +140,11 @@ func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequire
 // body, Tags and Link, as a Requirement with these Stages, with the
 // Spec's number and its Stage Tickets'. mapID is the Map it is made
 // from, if any.
-func (c *Core) requirementImport(r store.Reader, key string, sp store.Spec, stages []StageName, mapID string, draft bool) (store.Import, int, []int) {
+func (c *Core) requirementImport(r store.Reader, key string, sp domain.Spec, stages []StageName, mapID string, draft bool) (store.Import, int, []int) {
 	now := c.now()
 	specN := r.NextNumber(key)
 	sp.Number, sp.Created, sp.Updated = specN, now, now
-	im := store.Import{Specs: []store.Spec{sp}}
+	im := store.Import{Specs: []domain.Spec{sp}}
 	specID := DisplayID(key, specN)
 	var stageNs []int
 	for i, stage := range stages {
@@ -158,7 +159,7 @@ func (c *Core) requirementImport(r store.Reader, key string, sp store.Spec, stag
 		} else if stage == "spec" && stages[0] == "spec" {
 			description = fmt.Sprintf(straightSpecDescription, specID)
 		}
-		im.Tickets = append(im.Tickets, store.Ticket{
+		im.Tickets = append(im.Tickets, domain.Ticket{
 			Number: n, Title: stageTickets[stage].title + ": " + sp.Title, State: submitState(draft), Spec: specN,
 			Labels: []string{StageLabel(stage)}, BlockedBy: blockedBy, Created: now, Updated: now,
 			Description: description,
@@ -175,12 +176,12 @@ func (c *Core) requirementResult(r store.Reader, key string, specN int, stageNs 
 	var res SubmitRequirementResult
 	s, _ := r.Spec(key, specN)
 	var err error
-	if res.Spec, err = acknowledgeCreate(specView(key, store.Spec{}), specView(key, s), full); err != nil {
+	if res.Spec, err = acknowledgeCreate(specView(key, domain.Spec{}), specView(key, s), full); err != nil {
 		return res, err
 	}
 	for _, n := range stageNs {
 		t, _ := r.Ticket(key, n)
-		stage, err := acknowledgeCreate(c.ticketView(r, key, store.Ticket{}), c.ticketView(r, key, t), full)
+		stage, err := acknowledgeCreate(c.ticketView(r, key, domain.Ticket{}), c.ticketView(r, key, t), full)
 		if err != nil {
 			return res, err
 		}
@@ -191,14 +192,14 @@ func (c *Core) requirementResult(r store.Reader, key string, specN int, stageNs 
 
 // finishedMap reads the Map ref names as submit_requirement's map, which
 // must be labelled wayfinder:map and have no unfinished Tickets.
-func finishedMap(r store.Reader, key string, ref Ref) (store.Spec, error) {
+func finishedMap(r store.Reader, key string, ref Ref) (domain.Spec, error) {
 	m, err := resolveSpec(r, key, "submit_requirement", "map", ref)
 	if err != nil {
-		return store.Spec{}, err
+		return domain.Spec{}, err
 	}
 	id := DisplayID(key, m.Number)
 	if !isMap(m.Labels) {
-		return store.Spec{}, invalid("map", "%s isn't a Map: a Map is a Spec labelled %s", id, MapLabel)
+		return domain.Spec{}, invalid("map", "%s isn't a Map: a Map is a Spec labelled %s", id, MapLabel)
 	}
 	var open []string
 	for _, t := range specTickets(r, key, m.Number) {
@@ -207,7 +208,7 @@ func finishedMap(r store.Reader, key string, ref Ref) (store.Spec, error) {
 		}
 	}
 	if len(open) > 0 {
-		return store.Spec{}, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf(
+		return domain.Spec{}, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf(
 			"Map %s still has unfinished Tickets, so its Spec can't be written until every one is Done or Cancelled: %s",
 			id, strings.Join(open, ", "))}
 	}
@@ -240,6 +241,78 @@ type RequirementView struct {
 	// WaitingForFactory is whether the next Ticket can be claimed but
 	// nothing has claimed it.
 	WaitingForFactory bool `json:"waiting_for_factory"`
+	// Segments are the Stage strip's: one per Stage, then Build, with a
+	// first grilling segment for a Requirement made from a Map (done) or
+	// one submitted Straight to Spec (skipped).
+	Segments []Segment `json:"segments"`
+	// Current is the Stage of the first segment neither done nor skipped,
+	// else build.
+	Current SegmentStage `json:"current"`
+	// Needs are every Ticket of the Requirement waiting on the human: the
+	// Stage Tickets in Stage order, then the Build Tickets in claim order.
+	Needs []RequirementNeed `json:"needs"`
+	// DefaultTicket is the Ticket the Requirement opens on: the first of
+	// Needs, else the current segment's, else the first unfinished Build
+	// Ticket, else the last Build Ticket, else the last segment's with one.
+	DefaultTicket string `json:"default_ticket,omitempty"`
+}
+
+// SegmentStage is a Stage strip segment's Stage: a Stage's name, or build.
+type SegmentStage string
+
+// SegmentBuild is the Build segment's Stage.
+const SegmentBuild SegmentStage = "build"
+
+// SegmentStages are the segments' Stages in strip order.
+func SegmentStages() []SegmentStage {
+	return []SegmentStage{SegmentStage(StageGrilling), SegmentStage(StageSpec), SegmentStage(StageTickets), SegmentBuild}
+}
+
+// SegmentProgress is how far a Stage strip segment has got.
+type SegmentProgress string
+
+// The segments' progress values (the glossary's Stage strip).
+const (
+	// ProgressDone is finished.
+	ProgressDone SegmentProgress = "done"
+	// ProgressSkipped is a Cancelled Stage, or the grilling of a
+	// Requirement submitted Straight to Spec: passed over as a done one is.
+	ProgressSkipped SegmentProgress = "skipped"
+	// ProgressNeeds is waiting on the human.
+	ProgressNeeds SegmentProgress = "needs"
+	// ProgressQueued is claimable, waiting for a Factory.
+	ProgressQueued SegmentProgress = "queued"
+	// ProgressRunning is a Factory on it.
+	ProgressRunning SegmentProgress = "running"
+	// ProgressWaiting is not started, behind an earlier segment.
+	ProgressWaiting SegmentProgress = "waiting"
+)
+
+// SegmentProgresses are the segments' progress values.
+func SegmentProgresses() []SegmentProgress {
+	return []SegmentProgress{ProgressDone, ProgressSkipped, ProgressNeeds, ProgressQueued, ProgressRunning, ProgressWaiting}
+}
+
+// Segment is one segment of a Requirement's Stage strip.
+type Segment struct {
+	Stage    SegmentStage    `json:"stage"`
+	Progress SegmentProgress `json:"progress"`
+	// Ticket is the Stage Ticket; Build and a Map's segment have none.
+	Ticket string `json:"ticket,omitempty"`
+	// Map is the Map the Requirement was made from, on the segment that
+	// stands in for its grilling Stage.
+	Map string `json:"map,omitempty"`
+	// Reason is why the segment needs the human: its Stage Ticket's
+	// reason, or Build's first need's.
+	Reason NeedsMeReason `json:"reason,omitempty"`
+}
+
+// RequirementNeed is one Ticket of a Requirement waiting on the human,
+// with its Stage when it is a Stage Ticket.
+type RequirementNeed struct {
+	Ticket string        `json:"ticket"`
+	Reason NeedsMeReason `json:"reason"`
+	Stage  StageName     `json:"stage,omitempty"`
 }
 
 // StageView is one Stage Ticket: its Stage name, Ticket ID, State and
@@ -247,7 +320,7 @@ type RequirementView struct {
 type StageView struct {
 	Name          StageName     `json:"name"`
 	Ticket        string        `json:"ticket"`
-	State         store.State   `json:"state"`
+	State         domain.State  `json:"state"`
 	NeedsMeReason NeedsMeReason `json:"needs_me_reason,omitempty"`
 }
 
@@ -272,8 +345,8 @@ func StageOf(labels []string) StageName {
 // requirementView is the requirement block for Spec s with these Tickets
 // (in claim order), or nil when none of them is a Stage Ticket, reading
 // their reasons from their Project's evaluation e.
-func requirementView(e *evaluation, s store.Spec, tickets []store.Ticket) *RequirementView {
-	var stages, build []store.Ticket
+func requirementView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *RequirementView {
+	var stages, build []domain.Ticket
 	for _, t := range tickets {
 		if StageOf(t.Labels) != "" {
 			stages = append(stages, t)
@@ -284,45 +357,138 @@ func requirementView(e *evaluation, s store.Spec, tickets []store.Ticket) *Requi
 	if len(stages) == 0 {
 		return nil
 	}
-	slices.SortStableFunc(stages, func(a, b store.Ticket) int {
+	slices.SortStableFunc(stages, func(a, b domain.Ticket) int {
 		return slices.Index(Stages(), StageOf(a.Labels)) - slices.Index(Stages(), StageOf(b.Labels))
 	})
 	// claimable is a Ticket a Factory could claim now; one waiting on the
 	// human doesn't count.
-	claimable := func(t store.Ticket) bool {
+	claimable := func(t domain.Ticket) bool {
 		reason, _ := e.reason(t)
-		return t.State == store.Ready && !e.rule.blocked(t) && reason == ""
+		return t.State == domain.Ready && !e.rule.blocked(t) && reason == ""
 	}
 	v := &RequirementView{Stages: []StageView{}}
-	if StageOf(stages[0].Labels) != "grilling" {
+	if StageOf(stages[0].Labels) != StageGrilling {
 		v.Map = s.Tags[MapTag]
 	}
-	current := -1
+	firstOpen := -1
 	for i, t := range stages {
 		reason, _ := e.reason(t)
 		v.Stages = append(v.Stages, StageView{Name: StageOf(t.Labels), Ticket: DisplayID(e.p.Key, t.Number), State: t.State, NeedsMeReason: reason})
-		if current < 0 && t.State != store.Done && t.State != store.Cancelled {
-			current = i
+		if firstOpen < 0 && !finished(t.State) {
+			firstOpen = i
 		}
 	}
 	anyClaimable := false
 	for _, t := range build {
-		if t.State == store.Cancelled {
+		if t.State == domain.Cancelled {
 			continue
 		}
 		v.Build.Total++
-		if t.State == store.Done {
+		if t.State == domain.Done {
 			v.Build.Done++
 		}
 		anyClaimable = anyClaimable || claimable(t)
 	}
-	if current >= 0 {
-		v.WaitingForFactory = claimable(stages[current])
+	if firstOpen >= 0 {
+		v.WaitingForFactory = claimable(stages[firstOpen])
 	} else {
-		v.WaitingForFactory = anyClaimable && !slices.ContainsFunc(tickets, func(t store.Ticket) bool {
+		v.WaitingForFactory = anyClaimable && !slices.ContainsFunc(tickets, func(t domain.Ticket) bool {
 			_, held := liveClaim(t)
 			return held
 		})
 	}
+	v.setStrip(e, stages, build, firstOpen)
 	return v
+}
+
+// setStrip sets v's Stage strip, its current segment, needs and default
+// Ticket from its Stage Tickets (in Stage order) and Build Tickets (in
+// claim order), firstOpen being the index of the first open Stage or -1,
+// and v's Map, Build and WaitingForFactory already set.
+func (v *RequirementView) setStrip(e *evaluation, stages, build []domain.Ticket, firstOpen int) {
+	id := func(t domain.Ticket) string { return DisplayID(e.p.Key, t.Number) }
+	v.Segments, v.Needs = []Segment{}, []RequirementNeed{}
+	// A Requirement made from a Map has no grilling Stage: the Map did that.
+	// One with neither was submitted Straight to Spec (ADR 0036).
+	if v.Map != "" {
+		v.Segments = append(v.Segments, Segment{Stage: SegmentStage(StageGrilling), Progress: ProgressDone, Map: v.Map})
+	} else if StageOf(stages[0].Labels) != StageGrilling {
+		v.Segments = append(v.Segments, Segment{Stage: SegmentStage(StageGrilling), Progress: ProgressSkipped})
+	}
+	for i, t := range stages {
+		reason, _ := e.reason(t)
+		seg := Segment{Stage: SegmentStage(StageOf(t.Labels)), Ticket: id(t), Reason: reason}
+		switch {
+		case t.State == domain.Done:
+			seg.Progress = ProgressDone
+		case t.State == domain.Cancelled:
+			seg.Progress = ProgressSkipped
+		case reason != "":
+			seg.Progress = ProgressNeeds
+		case i == firstOpen && v.WaitingForFactory:
+			seg.Progress = ProgressQueued
+		case t.State == domain.Ready || t.State == domain.Draft:
+			seg.Progress = ProgressWaiting
+		default:
+			seg.Progress = ProgressRunning
+		}
+		v.Segments = append(v.Segments, seg)
+		if reason != "" {
+			v.Needs = append(v.Needs, RequirementNeed{Ticket: seg.Ticket, Reason: reason, Stage: StageOf(t.Labels)})
+		}
+	}
+	stageNeeds := len(v.Needs)
+	for _, t := range build {
+		if reason, _ := e.reason(t); reason != "" {
+			v.Needs = append(v.Needs, RequirementNeed{Ticket: id(t), Reason: reason})
+		}
+	}
+	buildNeeds := v.Needs[stageNeeds:]
+	seg := Segment{Stage: SegmentBuild}
+	inBuild := firstOpen < 0
+	switch {
+	case v.Build.Total > 0 && v.Build.Done == v.Build.Total && len(buildNeeds) == 0:
+		seg.Progress = ProgressDone
+	case len(buildNeeds) > 0:
+		seg.Progress, seg.Reason = ProgressNeeds, buildNeeds[0].Reason
+	case inBuild && v.WaitingForFactory:
+		seg.Progress = ProgressQueued
+	case inBuild && v.Build.Total > 0:
+		seg.Progress = ProgressRunning
+	default:
+		seg.Progress = ProgressWaiting
+	}
+	v.Segments = append(v.Segments, seg)
+
+	at := slices.IndexFunc(v.Segments, func(s Segment) bool { return s.Progress != ProgressDone && s.Progress != ProgressSkipped })
+	if at < 0 {
+		at = len(v.Segments) - 1
+	}
+	v.Current = v.Segments[at].Stage
+	v.DefaultTicket = v.defaultTicket(v.Segments[at], build, id)
+}
+
+// defaultTicket is the Ticket the Requirement opens on, given its current
+// segment and its Build Tickets: the first of its needs, else the current
+// segment's, else the first unfinished Build Ticket, else the last of
+// them, else the last segment's with one; "" when there is none.
+func (v *RequirementView) defaultTicket(current Segment, build []domain.Ticket, id func(domain.Ticket) string) string {
+	if len(v.Needs) > 0 {
+		return v.Needs[0].Ticket
+	}
+	if current.Ticket != "" {
+		return current.Ticket
+	}
+	if i := slices.IndexFunc(build, func(t domain.Ticket) bool { return !finished(t.State) }); i >= 0 {
+		return id(build[i])
+	}
+	if len(build) > 0 {
+		return id(build[len(build)-1])
+	}
+	for _, s := range slices.Backward(v.Segments) {
+		if s.Ticket != "" {
+			return s.Ticket
+		}
+	}
+	return ""
 }

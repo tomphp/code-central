@@ -11,6 +11,7 @@ import (
 
 	"github.com/tomoram/code-central/azdourl"
 	"github.com/tomoram/code-central/codehost"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -27,7 +28,7 @@ type CIView struct {
 	// entry as stored, for an older client, which set it here: GitHub
 	// Actions naming nothing while none is. Its Repository view's CI is
 	// its CI choice, filled in from its Clone URL while none is stored.
-	Provider store.CIProvider `json:"provider"`
+	Provider domain.CIProvider `json:"provider"`
 	// Repository is the GitHub repository GitHub Actions watches.
 	Repository string `json:"repository"`
 	// ProjectURL is the Azure DevOps project Azure Pipelines watches.
@@ -60,23 +61,23 @@ type CIView struct {
 type CIRuleView struct {
 	Spec string `json:"spec"`
 	// Workflow is a workflow file's base name or a pipeline's name, or any.
-	Workflow string      `json:"workflow"`
-	Branch   string      `json:"branch"`
-	State    store.State `json:"state"`
-	Created  time.Time   `json:"created"`
+	Workflow string       `json:"workflow"`
+	Branch   string       `json:"branch"`
+	State    domain.State `json:"state"`
+	Created  time.Time    `json:"created"`
 }
 
 // CIRepositoryView is the CI entry of one Repository: its CI Provider and
 // what that watches, or Not watched.
 type CIRepositoryView struct {
-	Name       string           `json:"name"`
-	NotWatched bool             `json:"not_watched"`
-	Provider   store.CIProvider `json:"provider,omitempty"`
-	Repository string           `json:"repository,omitempty"`
-	ProjectURL string           `json:"project_url,omitempty"`
+	Name       string            `json:"name"`
+	NotWatched bool              `json:"not_watched"`
+	Provider   domain.CIProvider `json:"provider,omitempty"`
+	Repository string            `json:"repository,omitempty"`
+	ProjectURL string            `json:"project_url,omitempty"`
 }
 
-func ciView(p store.Project, watcher WatcherView) CIView {
+func ciView(p domain.Project, watcher WatcherView) CIView {
 	key, c := p.Key, p.CI
 	v := CIView{Tracking: c.Tracking, PATEnv: patEnvOf(c),
 		IgnoredWorkflows: orEmpty(c.IgnoredWorkflows), PushRemoteURL: c.PushRemoteURL, Rules: []CIRuleView{}, Watcher: watcher}
@@ -94,17 +95,17 @@ func ciView(p store.Project, watcher WatcherView) CIView {
 }
 
 // providerOrDefault is p, or GitHub Actions for none.
-func providerOrDefault(p store.CIProvider) store.CIProvider {
+func providerOrDefault(p domain.CIProvider) domain.CIProvider {
 	if p == "" {
-		return store.CIGitHubActions
+		return domain.CIGitHubActions
 	}
 	return p
 }
 
 // patEnvOf is c's PAT environment variable, ADO_PAT when it names none.
-func patEnvOf(c store.CI) string {
+func patEnvOf(c domain.CI) string {
 	if c.PATEnv == "" {
-		return store.DefaultPATEnv
+		return domain.DefaultPATEnv
 	}
 	return c.PATEnv
 }
@@ -120,8 +121,8 @@ type SetCITrackingInput struct {
 	// Repository for GitHub Actions, ProjectURL for Azure Pipelines.
 	// Otherwise they are ignored, and the Home's entry kept. Provider is
 	// github_actions when left out.
-	Provider   store.CIProvider `json:"provider,omitempty"`
-	Repository string           `json:"repository,omitempty"`
+	Provider   domain.CIProvider `json:"provider,omitempty"`
+	Repository string            `json:"repository,omitempty"`
 	// ProjectURL is the Azure DevOps project, as its URL.
 	ProjectURL string `json:"project_url,omitempty"`
 	// PATEnv names the environment variable holding the Azure DevOps PAT;
@@ -139,7 +140,7 @@ var patEnvPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 // pat_env; empty, which reads as the default, passes.
 func checkPATEnv(name string) error {
 	if name != "" && !patEnvPattern.MatchString(name) {
-		return invalid("pat_env", "%q isn't an environment variable name: a letter or underscore, then letters, digits and underscores, such as %s", name, store.DefaultPATEnv)
+		return invalid("pat_env", "%q isn't an environment variable name: a letter or underscore, then letters, digits and underscores, such as %s", name, domain.DefaultPATEnv)
 	}
 	return nil
 }
@@ -148,10 +149,10 @@ func checkPATEnv(name string) error {
 // providers, with an example of one, for the first, for messages. GitHub
 // Actions names workflow files. A pipeline's name is any non-empty name
 // without a folder separator or a glob, spaces allowed.
-func checkWorkflow(providers []store.CIProvider, name string) (example string, ok bool) {
+func checkWorkflow(providers []domain.CIProvider, name string) (example string, ok bool) {
 	for i, provider := range providers {
 		e, ok := "a workflow file name, such as ci.yml", codehost.ValidGitHubWorkflow(name)
-		if provider == store.CIAzurePipelines {
+		if provider == domain.CIAzurePipelines {
 			e, ok = "a pipeline's name, such as Build", name != "" && !strings.ContainsAny(name, `/\*?[]`)
 		}
 		if i == 0 {
@@ -182,7 +183,7 @@ func (c *Core) SetCITracking(ctx context.Context, key string, in SetCITrackingIn
 		return Written[ProjectView]{}, err
 	}
 	// change is the write, on p's CI settings ci.
-	change := func(p store.Project, ci *store.CI) error {
+	change := func(p domain.Project, ci *domain.CI) error {
 		ci.Tracking, ci.PATEnv, ci.IgnoredWorkflows = in.Tracking, patEnv, nil
 		if home != nil && !keepsHomeCI(p, *home) {
 			ci.Repositories = withCIEntry(ci.Repositories, *home)
@@ -201,8 +202,8 @@ func (c *Core) SetCITracking(ctx context.Context, key string, in SetCITrackingIn
 		}
 		return nil
 	}
-	var p store.Project
-	var opts store.Options
+	var p domain.Project
+	var opts domain.Options
 	err = c.store.View(func(r store.Reader) error {
 		if err := writable(r, key); err != nil {
 			return err
@@ -221,7 +222,7 @@ func (c *Core) SetCITracking(ctx context.Context, key string, in SetCITrackingIn
 	if err := c.checkCI(ctx, p, next, opts); err != nil {
 		return Written[ProjectView]{}, err
 	}
-	return c.updateCIIn(key, in.Full, func(p store.Project, ci *store.CI) error {
+	return c.updateCIIn(key, in.Full, func(p domain.Project, ci *domain.CI) error {
 		next := p
 		next.CI = *ci
 		if err := change(p, &next.CI); err != nil {
@@ -240,14 +241,14 @@ func (c *Core) SetCITracking(ctx context.Context, key string, in SetCITrackingIn
 // older client's set_ci_tracking names it, checked as it was before the
 // Home had a CI entry: what to watch is needed only to turn CI Tracking
 // on. It is nil when in names no provider, repository or project URL.
-func olderClientsHomeCI(key string, in SetCITrackingInput) (*store.CIRepository, error) {
-	e := store.CIRepository{Name: key, Provider: in.Provider, Repository: strings.TrimSpace(in.Repository), ProjectURL: strings.TrimSpace(in.ProjectURL)}
+func olderClientsHomeCI(key string, in SetCITrackingInput) (*domain.CIRepository, error) {
+	e := domain.CIRepository{Name: key, Provider: in.Provider, Repository: strings.TrimSpace(in.Repository), ProjectURL: strings.TrimSpace(in.ProjectURL)}
 	if e.Provider == "" && e.Repository == "" && e.ProjectURL == "" {
 		return nil, nil
 	}
 	e.Provider = providerOrDefault(e.Provider)
 	if !e.Provider.Valid() {
-		return nil, invalid("provider", "CI Provider %q isn't %q or %q", e.Provider, store.CIGitHubActions, store.CIAzurePipelines)
+		return nil, invalid("provider", "CI Provider %q isn't %q or %q", e.Provider, domain.CIGitHubActions, domain.CIAzurePipelines)
 	}
 	checked := e
 	checked.NotWatched = !in.Tracking
@@ -262,8 +263,8 @@ func olderClientsHomeCI(key string, in SetCITrackingInput) (*store.CIRepository,
 // naming nothing to watch on GitHub Actions, the default it sends, leaves
 // the Home's entry as p stores it: none, so filled in from its Clone URL,
 // or Not watched, a choice an older client can't show.
-func keepsHomeCI(p store.Project, e store.CIRepository) bool {
-	if e != (store.CIRepository{Name: e.Name, Provider: store.CIGitHubActions}) {
+func keepsHomeCI(p domain.Project, e domain.CIRepository) bool {
+	if e != (domain.CIRepository{Name: e.Name, Provider: domain.CIGitHubActions}) {
 		return false
 	}
 	stored, ok := storedCIEntry(p, e.Name)
@@ -275,9 +276,9 @@ func keepsHomeCI(p store.Project, e store.CIRepository) bool {
 // unless e is Not watched. Each provider's other field is kept as given,
 // unchecked, until that provider is chosen. It replaces the project URL
 // with the one it parses to.
-func checkCITarget(e *store.CIRepository) error {
+func checkCITarget(e *domain.CIRepository) error {
 	switch e.Provider {
-	case store.CIAzurePipelines:
+	case domain.CIAzurePipelines:
 		if e.ProjectURL == "" && !e.NotWatched {
 			return invalid("project_url", "CI Tracking needs the Azure DevOps project to watch, as its URL")
 		}
@@ -302,7 +303,7 @@ func checkCITarget(e *store.CIRepository) error {
 // watchesAnother reports whether next, p with other CI settings, watches
 // something p didn't: another CI target in a Repository, or another PAT
 // environment variable.
-func watchesAnother(p, next store.Project) bool {
+func watchesAnother(p, next domain.Project) bool {
 	return patEnvOf(p.CI) != patEnvOf(next.CI) || !slices.Equal(ciTargets(p), ciTargets(next))
 }
 
@@ -311,11 +312,11 @@ func watchesAnother(p, next store.Project) bool {
 // through gh, found with the gh path Option, or the Azure DevOps project
 // through its API with the PAT the environment variable PATEnv names.
 type CICheckInput struct {
-	Provider   store.CIProvider `json:"provider"`
-	Repository string           `json:"repository"`
-	ProjectURL string           `json:"project_url,omitempty"`
-	PATEnv     string           `json:"pat_env,omitempty"`
-	GHPath     string           `json:"gh_path,omitempty"`
+	Provider   domain.CIProvider `json:"provider"`
+	Repository string            `json:"repository"`
+	ProjectURL string            `json:"project_url,omitempty"`
+	PATEnv     string            `json:"pat_env,omitempty"`
+	GHPath     string            `json:"gh_path,omitempty"`
 }
 
 // CICheck runs the CI Watcher once in its check mode. The service makes
@@ -336,7 +337,7 @@ func (c *Core) SetCICheck(check CICheck) { c.ciCheck = check }
 // tracking for the Home Repository, as before it had a CI entry, and on
 // provider for another, which is named, under repositories.
 // It runs outside the store's lock, as the check calls GitHub.
-func (c *Core) checkCI(ctx context.Context, p, next store.Project, opts store.Options) error {
+func (c *Core) checkCI(ctx context.Context, p, next domain.Project, opts domain.Options) error {
 	if !next.CI.Tracking {
 		return nil
 	}
@@ -348,10 +349,10 @@ func (c *Core) checkCI(ctx context.Context, p, next store.Project, opts store.Op
 	}
 	newPAT := patEnvOf(p.CI) != patEnvOf(next.CI)
 	for _, t := range ciTargets(next) {
-		if w, ok := was[t.name]; ok && w == t && (!newPAT || t.provider != store.CIAzurePipelines) {
+		if w, ok := was[t.name]; ok && w == t && (!newPAT || t.provider != domain.CIAzurePipelines) {
 			continue
 		}
-		e := store.CIRepository{Name: t.name, Provider: t.provider, Repository: t.repository, ProjectURL: t.projectURL}
+		e := domain.CIRepository{Name: t.name, Provider: t.provider, Repository: t.repository, ProjectURL: t.projectURL}
 		check := func() error { return c.checkCIEntry(ctx, next, opts, e, "repositories.") }
 		if t.name == p.Key {
 			check = func() error { return c.checkCIEntryOn(ctx, next, opts, e, "", "tracking", "") }
@@ -382,9 +383,9 @@ type ReportPushRemoteInput struct {
 // A URL makes it pushed again, and leaves its CI entry as it was.
 func (c *Core) ReportPushRemote(_ context.Context, key string, in ReportPushRemoteInput) (Written[ProjectView], error) {
 	url := strings.TrimSpace(in.URL)
-	return c.updateCI(key, in.Full, func(p *store.CI) error {
+	return c.updateCI(key, in.Full, func(p *domain.CI) error {
 		if url == "" && !p.NoPushRemote {
-			p.Repositories = withCIEntry(p.Repositories, store.CIRepository{Name: key, NotWatched: true})
+			p.Repositories = withCIEntry(p.Repositories, domain.CIRepository{Name: key, NotWatched: true})
 			// What the CI Watcher said may have been about the Home.
 			c.watchers.reset(watcherKey{WatcherCI, key})
 		}
@@ -407,12 +408,12 @@ func withoutLogin(url string) string {
 
 // updateCI changes a Project's CI settings with change, writing nothing
 // when they come out the same.
-func (c *Core) updateCI(key string, full bool, change func(*store.CI) error) (Written[ProjectView], error) {
-	return c.updateCIIn(key, full, func(_ store.Project, ci *store.CI) error { return change(ci) })
+func (c *Core) updateCI(key string, full bool, change func(*domain.CI) error) (Written[ProjectView], error) {
+	return c.updateCIIn(key, full, func(_ domain.Project, ci *domain.CI) error { return change(ci) })
 }
 
 // updateCIIn is updateCI with the Project as the write reads it.
-func (c *Core) updateCIIn(key string, full bool, change func(store.Project, *store.CI) error) (Written[ProjectView], error) {
+func (c *Core) updateCIIn(key string, full bool, change func(domain.Project, *domain.CI) error) (Written[ProjectView], error) {
 	var before, after ProjectView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
@@ -456,7 +457,7 @@ type CIRuleInput struct {
 	Branch string `json:"branch"`
 	// State is Draft or Ready: Draft when add_ci_rule leaves it out, and
 	// the rule's own when edit_ci_rule does.
-	State store.State `json:"state,omitempty"`
+	State domain.State `json:"state,omitempty"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
@@ -482,9 +483,9 @@ func (c *Core) AddCIRule(ctx context.Context, key string, in CIRuleInput) (Writt
 		return Written[ProjectView]{}, err
 	}
 	if in.State == "" {
-		in.State = store.Draft
+		in.State = domain.Draft
 	}
-	var r store.CIRule
+	var r domain.CIRule
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -499,12 +500,12 @@ func (c *Core) AddCIRule(ctx context.Context, key string, in CIRuleInput) (Writt
 		}
 		r.Created = c.now()
 		r.Spec = w.NextNumber(key)
-		return w.PutSpec(key, store.Spec{Number: r.Spec, Title: ciRuleTitle(r), Body: ciRuleSpecBody, Labels: []string{LongLivedLabel}, Created: r.Created, Updated: r.Created})
+		return w.PutSpec(key, domain.Spec{Number: r.Spec, Title: ciRuleTitle(r), Body: ciRuleSpecBody, Labels: []string{LongLivedLabel}, Created: r.Created, Updated: r.Created})
 	})
 	if err != nil {
 		return Written[ProjectView]{}, err
 	}
-	return c.updateCI(key, in.Full, func(ci *store.CI) error {
+	return c.updateCI(key, in.Full, func(ci *domain.CI) error {
 		if err := ruleIsNew(key, ci.Rules, r, 0); err != nil {
 			return err
 		}
@@ -524,8 +525,8 @@ func (c *Core) EditCIRule(ctx context.Context, key string, in CIRuleInput) (Writ
 	if err != nil {
 		return Written[ProjectView]{}, err
 	}
-	var old, r store.CIRule
-	v, err := c.updateCIIn(key, in.Full, func(p store.Project, ci *store.CI) error {
+	var old, r domain.CIRule
+	v, err := c.updateCIIn(key, in.Full, func(p domain.Project, ci *domain.CI) error {
 		i, err := ruleOn(key, ci.Rules, n)
 		if err != nil {
 			return err
@@ -560,7 +561,7 @@ func (c *Core) RemoveCIRule(ctx context.Context, key string, in RemoveCIRuleInpu
 	if err != nil {
 		return Written[ProjectView]{}, err
 	}
-	return c.updateCI(key, in.Full, func(ci *store.CI) error {
+	return c.updateCI(key, in.Full, func(ci *domain.CI) error {
 		i, err := ruleOn(key, ci.Rules, n)
 		if err != nil {
 			return err
@@ -572,23 +573,23 @@ func (c *Core) RemoveCIRule(ctx context.Context, key string, in RemoveCIRuleInpu
 
 // checkCIRule is in's rule for a Project on providers, trimmed, or why it
 // isn't one.
-func checkCIRule(providers []store.CIProvider, in CIRuleInput) (store.CIRule, error) {
-	r := store.CIRule{Workflow: strings.TrimSpace(in.Workflow), Branch: strings.TrimSpace(in.Branch), State: in.State}
-	if example, ok := checkWorkflow(providers, r.Workflow); r.Workflow != store.AnyWorkflow && !ok {
-		return r, invalid("workflow", "%q isn't %s, or %s for any workflow", r.Workflow, example, store.AnyWorkflow)
+func checkCIRule(providers []domain.CIProvider, in CIRuleInput) (domain.CIRule, error) {
+	r := domain.CIRule{Workflow: strings.TrimSpace(in.Workflow), Branch: strings.TrimSpace(in.Branch), State: in.State}
+	if example, ok := checkWorkflow(providers, r.Workflow); r.Workflow != domain.AnyWorkflow && !ok {
+		return r, invalid("workflow", "%q isn't %s, or %s for any workflow", r.Workflow, example, domain.AnyWorkflow)
 	}
 	if r.Branch == "" || strings.ContainsAny(r.Branch, globChars) || strings.IndexFunc(r.Branch, unicode.IsSpace) >= 0 {
 		return r, invalid("branch", "%q isn't an exact branch name, such as main: a CI Rule's branch takes no globs", r.Branch)
 	}
-	if r.State != store.Draft && r.State != store.Ready {
-		return r, invalid("state", "a CI Rule's Tickets open as %s or %s, not %q", store.Draft, store.Ready, r.State)
+	if r.State != domain.Draft && r.State != domain.Ready {
+		return r, invalid("state", "a CI Rule's Tickets open as %s or %s, not %q", domain.Draft, domain.Ready, r.State)
 	}
 	return r, nil
 }
 
 // ruleOn is the index of the rule on Spec n.
-func ruleOn(key string, rules []store.CIRule, n int) (int, error) {
-	i := slices.IndexFunc(rules, func(r store.CIRule) bool { return r.Spec == n })
+func ruleOn(key string, rules []domain.CIRule, n int) (int, error) {
+	i := slices.IndexFunc(rules, func(r domain.CIRule) bool { return r.Spec == n })
 	if i < 0 {
 		return 0, notFound("there is no CI Rule on Spec %s", DisplayID(key, n))
 	}
@@ -597,7 +598,7 @@ func ruleOn(key string, rules []store.CIRule, n int) (int, error) {
 
 // ruleIsNew refuses r when another rule, not the one on Spec self,
 // already watches its workflow on its branch.
-func ruleIsNew(key string, rules []store.CIRule, r store.CIRule, self int) error {
+func ruleIsNew(key string, rules []domain.CIRule, r domain.CIRule, self int) error {
 	for _, o := range rules {
 		if o.Spec != self && o.Workflow == r.Workflow && o.Branch == r.Branch {
 			return invalid("workflow", "the CI Rule on Spec %s already watches %s", DisplayID(key, o.Spec), ciRuleWatches(r))
@@ -608,7 +609,7 @@ func ruleIsNew(key string, rules []store.CIRule, r store.CIRule, self int) error
 
 // followRule retitles the Spec of the rule edited from old to r, unless
 // the human has changed its title.
-func (c *Core) followRule(ctx context.Context, key string, old, r store.CIRule) error {
+func (c *Core) followRule(ctx context.Context, key string, old, r domain.CIRule) error {
 	if ciRuleTitle(old) == ciRuleTitle(r) {
 		return nil
 	}
@@ -618,7 +619,7 @@ func (c *Core) followRule(ctx context.Context, key string, old, r store.CIRule) 
 			return nil
 		}
 		s.Updated = c.now()
-		s.Edits = append(s.Edits, store.Edit{Number: len(s.Edits) + 1, Actor: string(ActorOf(ctx)), Time: s.Updated, Previous: map[string]string{"title": s.Title}})
+		s.Edits = append(s.Edits, domain.Edit{Number: len(s.Edits) + 1, Actor: string(ActorOf(ctx)), Time: s.Updated, Previous: map[string]string{"title": s.Title}})
 		s.Title = ciRuleTitle(r)
 		return w.PutSpec(key, s)
 	})
@@ -626,16 +627,16 @@ func (c *Core) followRule(ctx context.Context, key string, old, r store.CIRule) 
 
 // ciRuleWatches is what a rule watches: "ci.yml on main" or "any workflow
 // on main".
-func ciRuleWatches(r store.CIRule) string {
+func ciRuleWatches(r domain.CIRule) string {
 	w := r.Workflow
-	if w == store.AnyWorkflow {
+	if w == domain.AnyWorkflow {
 		w = "any workflow"
 	}
 	return w + " on " + r.Branch
 }
 
 // ciRuleTitle is the title of a rule's Spec: "CI: ci.yml on main".
-func ciRuleTitle(r store.CIRule) string { return "CI: " + ciRuleWatches(r) }
+func ciRuleTitle(r domain.CIRule) string { return "CI: " + ciRuleWatches(r) }
 
 // ciRuleSpecBody is a rule's Spec's body. It names neither workflow nor
 // branch, which the title carries, so an edit leaves it as it is.

@@ -588,8 +588,8 @@ describe("the CI Running list", () => {
     await renderApp(c.w);
     const d = await dashboard(c.w);
     expect(ciEntries(d)).toHaveLength(2);
-    expect(ciEntry(d, "CI")).toHaveTextContent(new RegExp(`^${c.theme}CIAcme${c.theme} · abc1234 · running · 3m 0sView on GitHub$`));
-    expect(ciEntry(d, "lint.yml")).toHaveTextContent(new RegExp(`^${c.theme}lint.ymlAcme${c.theme} · abc1234 · running · 2m 0sView on GitHub$`));
+    expect(ciEntry(d, "CI")).toHaveTextContent(new RegExp(`^${c.theme}CIAcmeabc1234 · running · 3m 0sView on GitHub$`));
+    expect(ciEntry(d, "lint.yml")).toHaveTextContent(new RegExp(`^${c.theme}lint.ymlAcmeabc1234 · running · 2m 0sView on GitHub$`));
   });
 
   it("says a queued run is queued, and leaves out the duration of one not started", async () => {
@@ -598,8 +598,8 @@ describe("the CI Running list", () => {
     await renderApp(c.w, "/?view=focus&project=acme");
     const d = await dashboard(c.w);
     expect(ciEntries(d)).toHaveLength(2);
-    expect(ciEntry(d, "ci.yml")).toHaveTextContent(new RegExp(`^${shortOf(c.theme)}ci.yml${c.theme} · abc123 · queued · 2m 0sView on GitHub$`));
-    expect(ciEntry(d, "lint.yml")).toHaveTextContent(new RegExp(`^${shortOf(c.theme)}lint.yml${c.theme} · abc123 · queuedView on GitHub$`));
+    expect(ciEntry(d, "ci.yml")).toHaveTextContent(new RegExp(`^${shortOf(c.theme)}ci.ymlabc123 · queued · 2m 0sView on GitHub$`));
+    expect(ciEntry(d, "lint.yml")).toHaveTextContent(new RegExp(`^${shortOf(c.theme)}lint.ymlabc123 · queuedView on GitHub$`));
   });
 
   it("leaves out the Project when scoped to one", async () => {
@@ -608,7 +608,7 @@ describe("the CI Running list", () => {
     await renderApp(c.w, "/?view=focus&project=acme");
     const d = await dashboard(c.w);
     expect(ciEntries(d)).toHaveLength(1);
-    expect(ciEntry(d, "CI")).toHaveTextContent(new RegExp(`^${shortOf(c.theme)}CI${c.theme} · abc123 · running · 3m 0sView on GitHub$`));
+    expect(ciEntry(d, "CI")).toHaveTextContent(new RegExp(`^${shortOf(c.theme)}CIabc123 · running · 3m 0sView on GitHub$`));
   });
 
   it("opens an entry's Ticket in the Inbox, keeping the Project filter", async () => {
@@ -617,7 +617,7 @@ describe("the CI Running list", () => {
     await renderApp(c.w, "/?view=focus&project=acme");
     const d = await dashboard(c.w);
     expect(ciEntries(d)).toHaveLength(1);
-    const link = within(ciEntry(d, "CI")).getByRole("link", { name: new RegExp(c.theme) });
+    const link = within(ciEntry(d, "CI")).getByRole("link", { name: /CI/ });
     expect(link).toHaveAttribute("href", `?view=inbox&project=acme&ticket=${c.theme}`);
 
     await userEvent.click(link);

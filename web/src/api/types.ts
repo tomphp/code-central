@@ -78,7 +78,7 @@ export type ChatItem = HeldSessionEvent;
 
 // What setLandingMethod takes: the Code Host and repository are derived, and
 // leaving land_per_spec, pat_env or base out keeps the stored value.
-export type LandingInput = Omit<Landing, "land_per_spec" | "code_host" | "repository" | "pat_env" | "uses_azure_repos_pat" | "base" | "watcher" | "open_pull_requests"> & {
+export type LandingInput = Pick<Landing, "method" | "push" | "remote"> & {
   land_per_spec?: boolean;
   pat_env?: string;
   base?: string;

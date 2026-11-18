@@ -1,10 +1,10 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"testing"
 
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // callsFor is the claude runs for ticket, oldest first.
@@ -29,13 +29,13 @@ func TestParallelCapsTheTurnsRunningAtOnce(t *testing.T) {
 	r := h.Start("--parallel", "2")
 	h.WantCalls(2)
 	r.Poll()
-	if s := h.Ticket(c).State; s != store.Ready || len(h.Calls()) != 2 {
+	if s := h.Ticket(c).State; s != domain.Ready || len(h.Calls()) != 2 {
 		t.Fatalf("with two turns running, %s is %s and claude ran %d times; want it left Ready", c, s, len(h.Calls()))
 	}
 
 	h.Continue(a)
 	r.Settle()
-	h.WantState(a, store.InReview)
+	h.WantState(a, domain.InReview)
 	r.WantOutput(a + " turn ended")
 	r.Poll()
 	if n := len(callsFor(h, c)); n != 1 {
@@ -51,7 +51,7 @@ func TestAClaimParkedInNeedsAnswerDoesNotTakeASlot(t *testing.T) {
 	h.Script(b, factorytest.Wait())
 
 	r := h.Start("--parallel", "1")
-	h.WantState(a, store.NeedsAnswer)
+	h.WantState(a, domain.NeedsAnswer)
 	r.WantOutput(a + " turn ended")
 	r.Poll()
 	if n := len(callsFor(h, b)); n != 1 {

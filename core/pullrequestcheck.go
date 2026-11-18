@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -54,7 +55,7 @@ func (c *Core) SetPullRequestCheck(check PullRequestCheck) { c.pullRequestCheck 
 // variable. With several Repositories the refusal names each failing
 // Repository with its reason and fix. A local-only Repository is refused
 // before the check runs, with or without one.
-func (c *Core) checkPullRequest(ctx context.Context, key string, change func(store.Project) store.Project) error {
+func (c *Core) checkPullRequest(ctx context.Context, key string, change func(domain.Project) domain.Project) error {
 	var url, ghPath, patEnv string
 	var repositories []RepositoryView
 	var homeUnder, single bool
@@ -76,7 +77,7 @@ func (c *Core) checkPullRequest(ctx context.Context, key string, change func(sto
 				homeUnder = homeUnder || rv.Home && !rv.LocalOnly
 			}
 		}
-		url, ghPath, patEnv, single = next.CI.PushRemoteURL, r.Options().GHPath, patEnvOf(store.CI{PATEnv: next.Landing.PATEnv}), len(all) == 1
+		url, ghPath, patEnv, single = next.CI.PushRemoteURL, r.Options().GHPath, patEnvOf(domain.CI{PATEnv: next.Landing.PATEnv}), len(all) == 1
 		return nil
 	})
 	if err != nil || len(repositories) == 0 {
@@ -137,7 +138,7 @@ func localOnlyUnderPullRequestFix(rv RepositoryView) string {
 // Landing, and a Clone URL can't be cleared or left out while the
 // Repository would be under Pull Request. It is refused on landing when
 // the human chose the Landing, else on clone_url.
-func refuseLocalOnlyUnderPullRequest(p store.Project, name string, landing bool) error {
+func refuseLocalOnlyUnderPullRequest(p domain.Project, name string, landing bool) error {
 	for _, rv := range repositoriesView(p) {
 		if rv.Name == name && rv.LocalOnlyUnderPullRequest {
 			field := "clone_url"
@@ -154,7 +155,7 @@ func refuseLocalOnlyUnderPullRequest(p store.Project, name string, landing bool)
 // on method while it brings a local-only Repository following it under
 // Pull Request, naming each one with its fix. One already there, as only
 // a Home that lost its remote can be, isn't refused again.
-func refuseLocalOnlyFollowers(p, next store.Project) error {
+func refuseLocalOnlyFollowers(p, next domain.Project) error {
 	was := landingPolicies(p)
 	var ps []RepositoryProblem
 	for _, rv := range repositoriesView(next) {

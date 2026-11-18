@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 const fixTypo = "Fix the typo in the footer\n\nIt says \"Copyrigth\".\n"
@@ -24,10 +24,10 @@ func TestTheFirstSmallChangeCreatesALongLivedSmallChangesSpecAndAReadyTicketOnIt
 	f.project(t, "acme")
 	tk := submitSmallChange(t, f, fixTypo).Record
 	if tk.ID != "acme-2" || tk.Title != "Fix the typo in the footer" || tk.Description != fixTypo ||
-		tk.State != store.Ready || tk.Spec.ID != "acme-1" || len(tk.Labels) != 0 || !tk.Claimable {
+		tk.State != domain.Ready || tk.Spec.ID != "acme-1" || len(tk.Labels) != 0 || !tk.Claimable {
 		t.Fatalf("Small Change %+v", tk)
 	}
-	if len(tk.Moves) != 1 || tk.Moves[0].Actor != "human" || tk.Moves[0].To != store.Ready || tk.Moves[0].Via != "submit_small_change" {
+	if len(tk.Moves) != 1 || tk.Moves[0].Actor != "human" || tk.Moves[0].To != domain.Ready || tk.Moves[0].Via != "submit_small_change" {
 		t.Fatalf("moves %+v", tk.Moves)
 	}
 	sp, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-1"})
@@ -104,7 +104,7 @@ func TestADraftSmallChangeIsADraftTicketWithNoMoves(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tk := res.Record; tk.State != store.Draft || tk.Claimable || len(tk.Moves) != 0 {
+	if tk := res.Record; tk.State != domain.Draft || tk.Claimable || len(tk.Moves) != 0 {
 		t.Fatalf("Draft Small Change %+v", tk)
 	}
 }

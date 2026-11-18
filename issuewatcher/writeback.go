@@ -16,9 +16,9 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
-	"github.com/tomoram/code-central/store"
 )
 
 // labelColour is the colour a status label is created with.
@@ -99,7 +99,7 @@ func (cfg Config) writeIssue(ctx context.Context, prog string, w core.IssueWrite
 		}
 	}
 	// The issue is closed: its label and closing are no longer due.
-	_, err = cfg.Client.SetExternalState(ctx, cfg.Project, core.SetExternalStateInput{Target: core.Ref(w.Target), ExternalState: store.ExternalClosed})
+	_, err = cfg.Client.SetExternalState(ctx, cfg.Project, core.SetExternalStateInput{Target: core.Ref(w.Target), ExternalState: domain.ExternalClosed})
 	return err
 }
 

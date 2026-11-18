@@ -2,6 +2,7 @@ package workitemwatcher_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"io"
 	"net/http"
 	"os"
@@ -16,7 +17,6 @@ import (
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakeazdo"
-	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/watchers"
 	"github.com/tomoram/code-central/watchers/watchertest"
 	"github.com/tomoram/code-central/workitemwatcher"
@@ -287,7 +287,7 @@ func TestAQueryMatchingMoreThan1000WorkItemsIsAnErrorThatChangesNothing(t *testi
 	// Work item 1, which no longer matches, isn't out of scope, and
 	// work item 2, which does, hasn't arrived.
 	wantIncoming(t, w, 1)
-	wantExternal(t, w, 1, store.ExternalOpen)
+	wantExternal(t, w, 1, domain.ExternalOpen)
 	if got := w.read(from); len(got) != 0 {
 		t.Fatalf("read work items %v on a poll matching too many, want none", got)
 	}

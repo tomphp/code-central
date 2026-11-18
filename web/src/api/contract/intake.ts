@@ -44,6 +44,15 @@ export function intakeContract(driver: () => Driver) {
       ],
       build: { done: 0, total: 0 },
       waiting_for_factory: true,
+      segments: [
+        { stage: "grilling", progress: "queued", ticket: r.stages[0].id },
+        { stage: "spec", progress: "waiting", ticket: r.stages[1].id },
+        { stage: "tickets", progress: "waiting", ticket: r.stages[2].id },
+        { stage: "build", progress: "waiting" },
+      ],
+      current: "grilling",
+      needs: [],
+      default_ticket: r.stages[0].id,
     });
   });
 
@@ -157,6 +166,15 @@ export function intakeContract(driver: () => Driver) {
       ],
       build: { done: 0, total: 0 },
       waiting_for_factory: true,
+      segments: [
+        { stage: "grilling", progress: "done", map: m.spec.id },
+        { stage: "spec", progress: "queued", ticket: spec.id },
+        { stage: "tickets", progress: "waiting", ticket: tickets.id },
+        { stage: "build", progress: "waiting" },
+      ],
+      current: "spec",
+      needs: [],
+      default_ticket: spec.id,
     });
     expect((await d.api.getSpec("acme", m.spec.id)).map?.requirements).toEqual([r.spec.id]);
     expect((await d.api.getSpec("acme", plain.spec.id)).requirement?.map).toBeUndefined();

@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"testing"
 
@@ -34,8 +35,8 @@ func TestTheRealChainMigratesAFormat7StoreToTheCIFormat(t *testing.T) {
 	}
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
-		if !p.CI.Equal(store.DefaultCI()) {
-			t.Errorf("ci after migrating = %+v, want %+v", p.CI, store.DefaultCI())
+		if !p.CI.Equal(domain.DefaultCI()) {
+			t.Errorf("ci after migrating = %+v, want %+v", p.CI, domain.DefaultCI())
 		}
 		return nil
 	})

@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -11,11 +12,11 @@ import (
 
 // homeCI is the Home Repository's stored CI entry in p, named by its Key,
 // or the zero entry when it has none.
-func homeCI(p store.Project) store.CIRepository {
-	if i := slices.IndexFunc(p.CI.Repositories, func(e store.CIRepository) bool { return e.Name == p.Key }); i >= 0 {
+func homeCI(p domain.Project) domain.CIRepository {
+	if i := slices.IndexFunc(p.CI.Repositories, func(e domain.CIRepository) bool { return e.Name == p.Key }); i >= 0 {
 		return p.CI.Repositories[i]
 	}
-	return store.CIRepository{}
+	return domain.CIRepository{}
 }
 
 // Format 51 (code-central-900) moved the Home Repository's CI choice
@@ -52,12 +53,12 @@ func TestTheRealChainMigratesAFormat50StoreToTheHomeCIEntryFormat(t *testing.T) 
 	}
 	s.View(func(r store.Reader) error {
 		acme, _ := r.Project("acme")
-		want := []store.CIRepository{{Name: "acme", Provider: store.CIGitHubActions, Repository: "acme/web"}, {Name: "api", NotWatched: true}}
+		want := []domain.CIRepository{{Name: "acme", Provider: domain.CIGitHubActions, Repository: "acme/web"}, {Name: "api", NotWatched: true}}
 		if !acme.CI.Tracking || !slices.Equal(acme.CI.Repositories, want) || acme.CI.NoPushRemote {
 			t.Errorf("acme's CI = %+v, want tracking on with the Home's entry %+v first", acme.CI, want)
 		}
 		ops, _ := r.Project("ops")
-		if got, want := homeCI(ops), (store.CIRepository{Name: "ops", Provider: store.CIAzurePipelines, Repository: "acme/stale", ProjectURL: "https://dev.azure.com/acme/ops"}); got != want {
+		if got, want := homeCI(ops), (domain.CIRepository{Name: "ops", Provider: domain.CIAzurePipelines, Repository: "acme/stale", ProjectURL: "https://dev.azure.com/acme/ops"}); got != want {
 			t.Errorf("ops's Home entry = %+v, want %+v, each provider's own kept", got, want)
 		}
 		// GitHub Actions naming no repository watched nothing: the Home's
@@ -85,7 +86,7 @@ func TestTheRealChainMigratesAFormat50StoreToTheHomeCIEntryFormat(t *testing.T) 
 	s = reopen(t, s)
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
-		if got := homeCI(p); got != (store.CIRepository{Name: "acme", Provider: store.CIGitHubActions, Repository: "acme/web"}) {
+		if got := homeCI(p); got != (domain.CIRepository{Name: "acme", Provider: domain.CIGitHubActions, Repository: "acme/web"}) {
 			t.Errorf("the Home's entry after a write = %+v, want it kept", got)
 		}
 		return nil

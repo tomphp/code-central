@@ -2,13 +2,13 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // A local-only Home and per-Repository Push remotes (Spec
@@ -50,7 +50,7 @@ func TestUnderMergeAndPushAnUnpushedHomeLandsOnMergeWhileAPushedRepositoryIsPush
 	watchCIIn(t, h, "api", "acme/api")
 	id := inTwo(h, "Add an endpoint")
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	if home := repositoryView(t, h, h.Project); !home.LocalOnly {
 		t.Fatalf("Home %+v, want it local-only, its clone having no Push remote", home)
 	}
@@ -58,7 +58,7 @@ func TestUnderMergeAndPushAnUnpushedHomeLandsOnMergeWhileAPushedRepositoryIsPush
 	h.Accept(id)
 	r.Poll()
 
-	tk := h.WantState(id, store.Accepted)
+	tk := h.WantState(id, domain.Accepted)
 	homeMerge, apiPushed := h.Git("rev-parse", "main"), pushedIn(tk, "api")
 	if landedIn(tk, h.Project) != homeMerge || pushedIn(tk, h.Project) != "" {
 		t.Fatalf("Changed Repositories %+v, want the Home landed at its merge %s with nothing pushed", tk.Repositories, homeMerge)
@@ -69,10 +69,10 @@ func TestUnderMergeAndPushAnUnpushedHomeLandsOnMergeWhileAPushedRepositoryIsPush
 	r.WantOutput(id + ": pushed main to origin in Repository api\n")
 	r.WantOutput(id + ": CI tracks main at " + apiPushed[:12] + " in Repository api")
 
-	reportRunIn(t, h, "api", 7, id, apiPushed, store.CICompleted, store.CISuccess)
+	reportRunIn(t, h, "api", 7, id, apiPushed, domain.CICompleted, domain.CISuccess)
 	r.Poll()
 
-	if tk := h.WantState(id, store.Done); landedIn(tk, "api") != apiPushed {
+	if tk := h.WantState(id, domain.Done); landedIn(tk, "api") != apiPushed {
 		t.Fatalf("Changed Repositories %+v, want api landed at its pushed commit that passed, %s", tk.Repositories, apiPushed)
 	}
 	if out := r.Stdout(); strings.Contains(out, "nothing lands") || strings.Contains(out, "doesn't have") {
@@ -89,7 +89,7 @@ func TestEachRepositoryIsClonedPushedAndFetchedByItsOwnPushRemote(t *testing.T) 
 	setPushRemote(t, h, "api", "upstream")
 	id := inTwo(h, "Add an endpoint")
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	if got := h.GitIn(api.Path, "remote"); got != "upstream" {
 		t.Fatalf("api's clone has the remotes %q, want its own Push remote, upstream, alone", got)
 	}
@@ -97,7 +97,7 @@ func TestEachRepositoryIsClonedPushedAndFetchedByItsOwnPushRemote(t *testing.T) 
 	h.Accept(id)
 	r.Poll()
 
-	tk := h.WantState(id, store.Done)
+	tk := h.WantState(id, domain.Done)
 	homeMerge, apiMerge := h.Git("rev-parse", "main"), h.GitIn(api.Path, "rev-parse", "main")
 	if got := home.Git("rev-parse", "main"); got != homeMerge {
 		t.Errorf("the Home's origin's main is at %s, want its merge %s pushed", got, homeMerge)
@@ -120,7 +120,7 @@ func TestARepositoryWhoseCloneLacksItsOwnPushRemoteIsMissingAndHoldsBackOnlyItsT
 	mergeAndPush(h, "origin")
 	both := inTwo(h, "Add an endpoint")
 	r := h.Start()
-	h.WantState(both, store.InReview)
+	h.WantState(both, domain.InReview)
 
 	// Its clone has origin alone.
 	setPushRemote(t, h, "api", "upstream")
@@ -129,8 +129,8 @@ func TestARepositoryWhoseCloneLacksItsOwnPushRemoteIsMissingAndHoldsBackOnlyItsT
 	r.Poll()
 
 	wantMissing(t, h, api, "has no remote upstream, the Push remote")
-	h.WantState(home, store.Done)
-	h.WantState(both, store.Accepted)
+	h.WantState(home, domain.Done)
+	h.WantState(both, domain.Accepted)
 	r.WantOutput(both + ": waits to land: Repository api has no clone")
 	if out := r.Stdout(); strings.Contains(out, "nothing lands until") {
 		t.Errorf("stdout %q, want no Project-wide stop", out)
@@ -140,11 +140,11 @@ func TestARepositoryWhoseCloneLacksItsOwnPushRemoteIsMissingAndHoldsBackOnlyItsT
 func TestTheFactoryReportsAHomeWithNoPushRemoteAtStartAndOneAddedLaterAtTheNextStart(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, Push: true, Remote: "origin"})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"})
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	r := h.Start()
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 	if home := repositoryView(t, h, h.Project); !home.LocalOnly || home.CloneURL != "" {
 		t.Fatalf("Home %+v, want it local-only: its clone has no Push remote", home)
 	}
@@ -181,7 +181,7 @@ func TestAChangedHomePushRemoteNameIsReportedAndLandingGoesOn(t *testing.T) {
 	if home := repositoryView(t, h, h.Project); !home.LocalOnly {
 		t.Fatalf("Home %+v, want it local-only: its clone has no remote nowhere", home)
 	}
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 
 	setPushRemote(t, h, h.Project, "")
 	r.Poll()
@@ -200,8 +200,8 @@ func TestALocalOnlyHomeUnderPullRequestIsSaidOnceAndHoldsBackOnlyTheTicketsLandi
 	both := inTwo(h, "Add an endpoint")
 	only := inAPI(h, "Add another endpoint")
 	r := h.Start()
-	h.WantState(both, store.InReview)
-	h.WantState(only, store.InReview)
+	h.WantState(both, domain.InReview)
+	h.WantState(only, domain.InReview)
 	if home := repositoryView(t, h, h.Project); !home.LocalOnlyUnderPullRequest {
 		t.Fatalf("Home %+v, want it local-only under Pull Request", home)
 	}
@@ -211,7 +211,7 @@ func TestALocalOnlyHomeUnderPullRequestIsSaidOnceAndHoldsBackOnlyTheTicketsLandi
 	r.Poll()
 	r.Poll()
 
-	h.WantState(both, store.Accepted)
+	h.WantState(both, domain.Accepted)
 	if got := api.Remote("origin").Git("branch", "--list", both); got != "" {
 		t.Errorf("api's origin holds %q, want nothing of %s pushed while the Home holds it back", got, both)
 	}

@@ -1,16 +1,16 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
-var branchLanding = core.SetLandingMethodInput{Method: store.LandingBranch}
+var branchLanding = core.SetLandingMethodInput{Method: domain.LandingBranch}
 
 // withWorktree makes an Accepted Ticket whose branch adds file, with the
 // worktree a Factory Claim would have left at its path.
@@ -29,7 +29,7 @@ func TestUnderBranchAnAcceptedTicketIsLeftOnItsBranchAndLandedOnceMergedByHand(t
 
 	r := h.Start()
 	r.Poll()
-	if s := h.Ticket(id).State; s != store.Accepted {
+	if s := h.Ticket(id).State; s != domain.Accepted {
 		t.Fatalf("%s is %s, want it left Accepted", id, s)
 	}
 	if h.Git("rev-parse", "main") != base {
@@ -45,8 +45,8 @@ func TestUnderBranchAnAcceptedTicketIsLeftOnItsBranchAndLandedOnceMergedByHand(t
 
 	h.Git("merge", "-q", "--no-ff", "-m", "My own merge", id)
 	r.Poll()
-	tk := h.WantState(id, store.Done)
-	if m := tk.Moves[len(tk.Moves)-1]; m.From != store.Accepted || m.Commit != commit {
+	tk := h.WantState(id, domain.Done)
+	if m := tk.Moves[len(tk.Moves)-1]; m.From != domain.Accepted || m.Commit != commit {
 		t.Errorf("land move %+v, want from Accepted with the finish commit %s", m, commit)
 	}
 	if strings.Count(r.Stdout(), "Accepted under the Branch Landing Method") != 1 {

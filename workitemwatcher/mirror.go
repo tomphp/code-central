@@ -15,8 +15,8 @@ import (
 
 	"github.com/tomoram/code-central/azdo"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/ratelimit"
-	"github.com/tomoram/code-central/store"
 )
 
 // Integration is the name every Link the Work Item Watcher makes carries.
@@ -89,12 +89,12 @@ func (cfg Config) leave(ctx context.Context, q queryRun, issues []core.IncomingI
 		if ours && slices.Contains(q.ids, id) {
 			continue
 		}
-		state := store.ExternalOutOfScope
+		state := domain.ExternalOutOfScope
 		if ours {
 			_, err := q.c.WorkItem(ctx, id)
 			switch {
 			case errors.Is(err, azdo.ErrNotFound), errors.Is(err, azdo.ErrMissingScope):
-				state = store.ExternalDeleted
+				state = domain.ExternalDeleted
 			case err != nil:
 				if limit := cfg.limitOrLog(ctx, "reading work item "+i.Link.ID, err); limit != nil {
 					return limit
@@ -112,7 +112,7 @@ func (cfg Config) leave(ctx context.Context, q queryRun, issues []core.IncomingI
 func (cfg Config) arrive(ctx context.Context, q queryRun, spec string, w azdo.WorkItem) {
 	link := q.c.WorkItemURL(w.Fields.TeamProject, w.ID)
 	_, err := cfg.Client.CreateLinkedTicket(ctx, cfg.Project, core.CreateLinkedTicketInput{
-		Spec: core.Ref(spec), Title: w.Fields.Title, Description: body(w, link), State: store.Draft,
+		Spec: core.Ref(spec), Title: w.Fields.Title, Description: body(w, link), State: domain.Draft,
 		Link: core.LinkInput{Integration: Integration, ID: LinkID(q.org, w.ID), URL: link},
 	})
 	if err != nil && ctx.Err() == nil {
@@ -140,11 +140,11 @@ func (cfg Config) follow(ctx context.Context, q queryRun, i core.IncomingIssue, 
 			cfg.logf("update_linked_ticket for %s: %v", i.Link.ID, err)
 		}
 	}
-	cfg.setExternalState(ctx, i, store.ExternalOpen)
+	cfg.setExternalState(ctx, i, domain.ExternalOpen)
 }
 
 // setExternalState sets i's external state to state, if it isn't already.
-func (cfg Config) setExternalState(ctx context.Context, i core.IncomingIssue, state store.ExternalState) {
+func (cfg Config) setExternalState(ctx context.Context, i core.IncomingIssue, state domain.ExternalState) {
 	if state == i.Link.ExternalState {
 		return
 	}

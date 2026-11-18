@@ -1,6 +1,9 @@
 package core
 
-import "github.com/tomoram/code-central/store"
+import (
+	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/store"
+)
 
 // The Integrations (Spec code-central-894): GitHub Issues and Azure
 // Boards. Each has its own inbox Spec, the Issues Spec or the Azure
@@ -27,7 +30,7 @@ type inbox struct {
 
 // inboxes are p's Integrations' inboxes, GitHub Issues' then Azure
 // Boards'.
-func inboxes(p store.Project) []inbox {
+func inboxes(p domain.Project) []inbox {
 	return []inbox{
 		{IntegrationGitHub, p.GitHubIssues.Spec, p.GitHubIssues.NewIssuesNeedMe},
 		{IntegrationAzureBoards, p.AzureBoards.Spec, p.AzureBoards.NewIssuesNeedMe},

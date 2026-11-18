@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // GetTicketInput is get_ticket's input. With no Parts, the read is the
@@ -115,7 +115,7 @@ func (v TicketView) Brief() TicketView {
 	if v.Blockers != nil {
 		v.Blockers = slices.Clone(v.Blockers)
 		for i := range v.Blockers {
-			if b := &v.Blockers[i]; b.State == store.Done {
+			if b := &v.Blockers[i]; b.State == domain.Done {
 				b.Title, b.Via, b.Cleared = "", "", nil
 			}
 		}

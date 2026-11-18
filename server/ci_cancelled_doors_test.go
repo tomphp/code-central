@@ -1,12 +1,12 @@
 package server_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"slices"
 	"testing"
 
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
 )
 
 // CI cancelled: an Accepted Ticket whose CI result is cancelled waits in
@@ -18,9 +18,9 @@ import (
 func cancelledCI(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	pushedAccepted(t, srv)
-	run := ciRun(1, "ci.yml", "abc123", store.CICompleted, store.CICancelled)
+	run := ciRun(1, "ci.yml", "abc123", domain.CICompleted, domain.CICancelled)
 	run.Finished = &failedAt
-	reportRuns(t, srv, run, ciRun(2, "lint.yml", "abc123", store.CICompleted, store.CISuccess))
+	reportRuns(t, srv, run, ciRun(2, "lint.yml", "abc123", domain.CICompleted, domain.CISuccess))
 }
 
 func TestAnAcceptedTicketWhoseCIWasCancelledIsInNeedsMeAsCICancelled(t *testing.T) {
@@ -41,7 +41,7 @@ func TestAnAcceptedTicketWhoseCIWasCancelledIsInNeedsMeAsCICancelled(t *testing.
 
 func TestAFailedRunAlongsideACancelledOneStaysCIFailed(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
-	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", store.CICompleted, store.CICancelled), ciRun(2, "lint.yml", "abc123", store.CICompleted, store.CIFailure))
+	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", domain.CICompleted, domain.CICancelled), ciRun(2, "lint.yml", "abc123", domain.CICompleted, domain.CIFailure))
 	if tk := ticket3(t, srv); tk.NeedsMeReason != core.ReasonCIFailed {
 		t.Fatalf("reason %q, want CI failed", tk.NeedsMeReason)
 	}
@@ -77,7 +77,7 @@ func TestRerunOfACancelledRunWaitsAndNothingReRunsByItself(t *testing.T) {
 		t.Fatalf("ci result %q, want running", tk.CIResult)
 	}
 	// Its new attempt passing reads as passed.
-	again := ciRun(1, "ci.yml", "abc123", store.CICompleted, store.CISuccess)
+	again := ciRun(1, "ci.yml", "abc123", domain.CICompleted, domain.CISuccess)
 	again.Attempt = 2
 	reportRuns(t, srv, again)
 	if tk := ticket3(t, srv); tk.CIResult != core.CIPassed || tk.NeedsMeReason == core.ReasonCICancelled {

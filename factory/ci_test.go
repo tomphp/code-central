@@ -2,12 +2,12 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // pushRemoteURL is the Push remote URL the Factory last reported on the
@@ -39,7 +39,7 @@ func TestThePushRemoteReportedIsTheOneTheLandingMethodNames(t *testing.T) {
 	h.AddRemote("origin")
 	h.AddRemote("upstream")
 	h.Git("remote", "set-url", "upstream", "https://github.com/acme/web.git")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, Push: true, Remote: "upstream"})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "upstream"})
 
 	h.Start()
 	if got := pushRemoteURL(t, h); got != "https://github.com/acme/web.git" {
@@ -54,7 +54,7 @@ func TestAFactoryWithNoPushRemoteReportsNoURLAndStillStarts(t *testing.T) {
 	h.Script(id, factorytest.Wait())
 
 	h.Start()
-	h.WantState(id, store.InProgress)
+	h.WantState(id, domain.InProgress)
 	if got := pushRemoteURL(t, h); got != "" {
 		t.Fatalf("push remote URL %q, want none", got)
 	}
@@ -92,7 +92,7 @@ func TestUnderBranchAndPushTheFactoryReportsThePushedBranchAsTheTicketsPushedCom
 	t.Parallel()
 	h := factorytest.New(t)
 	h.AddRemote("origin")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingBranch, Push: true, Remote: "origin"})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 	trackCI(t, h)
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
@@ -100,7 +100,7 @@ func TestUnderBranchAndPushTheFactoryReportsThePushedBranchAsTheTicketsPushedCom
 	r.WantOutput(id + ": CI tracks " + id + " at ")
 	r.Poll()
 	tk := h.Ticket(id)
-	if tk.State != store.Accepted || tk.PushedCommit == nil || tk.PushedCommit.Commit != commit {
+	if tk.State != domain.Accepted || tk.PushedCommit == nil || tk.PushedCommit.Commit != commit {
 		t.Fatalf("%s with pushed commit %+v, want Accepted with the pushed branch's %s", tk.State, tk.PushedCommit, commit)
 	}
 	if n := strings.Count(r.Stdout(), id+": CI tracks"); n != 1 {
@@ -116,7 +116,7 @@ func TestWithCITrackingOffThePushedCommitIsNotReported(t *testing.T) {
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	h.Start()
-	if tk := h.WantState(id, store.Done); tk.PushedCommit != nil {
+	if tk := h.WantState(id, domain.Done); tk.PushedCommit != nil {
 		t.Fatalf("pushed commit %+v, want none with CI Tracking off", tk.PushedCommit)
 	}
 }
@@ -125,7 +125,7 @@ func TestABranchPushedBeforeCITrackingWasOnIsNotTracked(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	h.AddRemote("origin")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingBranch, Push: true, Remote: "origin"})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	r := h.Start()

@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/ops"
-	"github.com/tomoram/code-central/store"
 )
 
 // The Integration contract (ticket 42, ADR 0004).
@@ -43,16 +43,16 @@ func wantLink(t *testing.T, got *core.LinkView, want core.LinkView) {
 func TestAnIntegrationCreatesLinkedSpecsAndTicketsInDraftOrReady(t *testing.T) {
 	f := newFixture(t)
 	sp, tk := f.linked(t)
-	wantLink(t, sp.Link, core.LinkView{Integration: "github", ID: "10", URL: "https://github.com/acme/web/issues/10", ExternalState: store.ExternalOpen})
-	if tk.State != store.Draft || tk.Spec.ID != "acme-1" || tk.Description != "Build it.\n" {
+	wantLink(t, sp.Link, core.LinkView{Integration: "github", ID: "10", URL: "https://github.com/acme/web/issues/10", ExternalState: domain.ExternalOpen})
+	if tk.State != domain.Draft || tk.Spec.ID != "acme-1" || tk.Description != "Build it.\n" {
 		t.Fatalf("ticket %+v", tk)
 	}
-	wantLink(t, tk.Link, core.LinkView{Integration: "github", ID: "11", URL: "https://github.com/acme/web/issues/11", ExternalState: store.ExternalOpen})
+	wantLink(t, tk.Link, core.LinkView{Integration: "github", ID: "11", URL: "https://github.com/acme/web/issues/11", ExternalState: domain.ExternalOpen})
 	if got := f.get(t, "2"); got.Link == nil || got.Link.ID != "11" {
 		t.Fatalf("get_ticket link %+v", got.Link)
 	}
-	ready, err := record(f.core.CreateLinkedTicket(integration, "acme", core.CreateLinkedTicketInput{Spec: "1", Title: "API", State: store.Ready, Link: ghLink("12"), Full: true}))
-	if err != nil || ready.State != store.Ready {
+	ready, err := record(f.core.CreateLinkedTicket(integration, "acme", core.CreateLinkedTicketInput{Spec: "1", Title: "API", State: domain.Ready, Link: ghLink("12"), Full: true}))
+	if err != nil || ready.State != domain.Ready {
 		t.Fatalf("ready: %+v, %v", ready, err)
 	}
 	rows, _ := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{})
@@ -60,7 +60,7 @@ func TestAnIntegrationCreatesLinkedSpecsAndTicketsInDraftOrReady(t *testing.T) {
 		t.Fatalf("find_tickets row link %+v", rows[0].Link)
 	}
 
-	_, err = f.core.CreateLinkedTicket(integration, "acme", core.CreateLinkedTicketInput{Spec: "1", Title: "X", State: store.InProgress, Link: ghLink("13")})
+	_, err = f.core.CreateLinkedTicket(integration, "acme", core.CreateLinkedTicketInput{Spec: "1", Title: "X", State: domain.InProgress, Link: ghLink("13")})
 	wantCode(t, err, core.Invalid, "state")
 	_, err = f.core.CreateLinkedTicket(integration, "acme", core.CreateLinkedTicketInput{Spec: "1", Title: "X", Link: core.LinkInput{Integration: "github"}})
 	wantCode(t, err, core.Invalid, "link.id")
@@ -106,7 +106,7 @@ func TestOnlyTheIntegrationWritesALinkedDefinition(t *testing.T) {
 		wantCode(t, err, core.ActionNotAllowed, "")
 		_, err = f.core.UpdateLinkedTicket(c, "acme", core.UpdateLinkedTicketInput{Ticket: "2", Title: &title})
 		wantCode(t, err, core.ActionNotAllowed, "")
-		_, err = f.core.SetExternalState(c, "acme", core.SetExternalStateInput{Target: "2", ExternalState: store.ExternalClosed})
+		_, err = f.core.SetExternalState(c, "acme", core.SetExternalStateInput{Target: "2", ExternalState: domain.ExternalClosed})
 		wantCode(t, err, core.ActionNotAllowed, "")
 	}
 	// Delivery stays Code Central's: Labels, Tags and comments still work.
@@ -178,14 +178,14 @@ func TestTheIntegrationCantMoveState(t *testing.T) {
 	wantCode(t, err, core.ActionNotAllowed, "")
 	_, err = f.core.Cancel(integration, "acme", core.CancelInput{Ticket: "2", Replacements: []core.Ref{"2"}})
 	wantCode(t, err, core.ActionNotAllowed, "")
-	_, err = f.core.Move(integration, "acme", core.MoveInput{Ticket: "2", ToState: store.Ready})
+	_, err = f.core.Move(integration, "acme", core.MoveInput{Ticket: "2", ToState: domain.Ready})
 	wantCode(t, err, core.ActionNotAllowed, "")
-	if got := f.get(t, "2"); got.State != store.Draft {
+	if got := f.get(t, "2"); got.State != domain.Draft {
 		t.Fatalf("state %s", got.State)
 	}
 }
 
-func (f fixture) setExternal(t *testing.T, ref core.Ref, s store.ExternalState) core.LinkedRow {
+func (f fixture) setExternal(t *testing.T, ref core.Ref, s domain.ExternalState) core.LinkedRow {
 	t.Helper()
 	row, err := f.core.SetExternalState(integration, "acme", core.SetExternalStateInput{Target: ref, ExternalState: s})
 	if err != nil {
@@ -198,8 +198,8 @@ func TestALinkedTicketClosedExternallyNeedsMeUntilReopened(t *testing.T) {
 	f := newFixture(t)
 	f.linked(t)
 	f.clock.Advance(time.Hour)
-	row := f.setExternal(t, "2", store.ExternalClosed)
-	if row.Kind != "ticket" || row.ID != "acme-2" || row.Link.ExternalState != store.ExternalClosed {
+	row := f.setExternal(t, "2", domain.ExternalClosed)
+	if row.Kind != "ticket" || row.ID != "acme-2" || row.Link.ExternalState != domain.ExternalClosed {
 		t.Fatalf("row %+v", row)
 	}
 	wantReason(t, f.get(t, "2"), core.ReasonClosedExternally)
@@ -214,11 +214,11 @@ func TestALinkedTicketClosedExternallyNeedsMeUntilReopened(t *testing.T) {
 	if !r.Since.Equal(t0.Add(time.Hour)) || r.Link == nil || r.Link.URL != "https://github.com/acme/web/issues/11" {
 		t.Fatalf("needs me row %+v", r)
 	}
-	for _, s := range []store.ExternalState{store.ExternalDeleted, store.ExternalOutOfScope} {
+	for _, s := range []domain.ExternalState{domain.ExternalDeleted, domain.ExternalOutOfScope} {
 		f.setExternal(t, "2", s)
 		wantReason(t, f.get(t, "2"), core.ReasonClosedExternally)
 	}
-	f.setExternal(t, "2", store.ExternalOpen)
+	f.setExternal(t, "2", domain.ExternalOpen)
 	wantReason(t, f.get(t, "2"), "")
 
 	_, err := f.core.SetExternalState(integration, "acme", core.SetExternalStateInput{Target: "2", ExternalState: "gone"})
@@ -228,9 +228,9 @@ func TestALinkedTicketClosedExternallyNeedsMeUntilReopened(t *testing.T) {
 func TestClosedExternallyIsLastInTheNeedsMeOrder(t *testing.T) {
 	f := newFixture(t)
 	f.linked(t)
-	f.setExternal(t, "2", store.ExternalClosed)
+	f.setExternal(t, "2", domain.ExternalClosed)
 	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Review me"}) // acme-3
-	f.setState(t, 3, store.InReview)
+	f.setState(t, 3, domain.InReview)
 	nm, _ := f.core.NeedsMe(ctx)
 	if len(nm.Groups) != 2 || nm.Groups[0].Reason != core.ReasonInReview || nm.Groups[1].Reason != core.ReasonClosedExternally {
 		t.Fatalf("groups %+v", nm.Groups)
@@ -244,15 +244,15 @@ func TestClosedExternallyIsLastInTheNeedsMeOrder(t *testing.T) {
 func TestAFinishedTicketIsNotClosedExternally(t *testing.T) {
 	f := newFixture(t)
 	f.linked(t)
-	f.setExternal(t, "2", store.ExternalClosed)
-	f.move(t, "2", store.Done)
+	f.setExternal(t, "2", domain.ExternalClosed)
+	f.move(t, "2", domain.Done)
 	wantReason(t, f.get(t, "2"), "")
 }
 
 func TestUnlinkDetachesTheLinkMakingTheDefinitionEditable(t *testing.T) {
 	f := newFixture(t)
 	f.linked(t)
-	f.setExternal(t, "2", store.ExternalClosed)
+	f.setExternal(t, "2", domain.ExternalClosed)
 
 	_, err := f.core.Unlink(ctx, "acme", core.UnlinkInput{Target: "2"})
 	wantCode(t, err, core.ActionNotAllowed, "")
@@ -290,7 +290,7 @@ func TestLookupsByLinkFindDetachedLinksToo(t *testing.T) {
 	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Local"})
 
 	all, err := f.core.FindLinked(integration, "acme", core.FindLinkedInput{Integration: "github"})
-	if err != nil || len(all) != 2 || all[0].ID != "acme-1" || all[0].Kind != "spec" || all[1].ID != "acme-2" || all[1].State != store.Draft || !all[1].Link.Detached {
+	if err != nil || len(all) != 2 || all[0].ID != "acme-1" || all[0].Kind != "spec" || all[1].ID != "acme-2" || all[1].State != domain.Draft || !all[1].Link.Detached {
 		t.Fatalf("find_linked: %+v, %v", all, err)
 	}
 	one, _ := f.core.FindLinked(integration, "acme", core.FindLinkedInput{Integration: "github", ID: "11"})

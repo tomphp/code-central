@@ -2,12 +2,12 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // The gate (code-central-257): under Merge + Push with CI Tracking on, a
@@ -22,7 +22,7 @@ func gated(t *testing.T, h *factorytest.Harness, r *factorytest.Running, title, 
 	r.Poll()
 	r.WantOutput(id + ": CI tracks main at ")
 	tk := h.Ticket(id)
-	if tk.State != store.Accepted || tk.PushedCommit == nil {
+	if tk.State != domain.Accepted || tk.PushedCommit == nil {
 		t.Fatalf("%s with pushed commit %+v, want it pushed and left Accepted", tk.State, tk.PushedCommit)
 	}
 	return id, tk.PushedCommit.Commit
@@ -41,14 +41,14 @@ func gatedHarness(t *testing.T) (*factorytest.Harness, *factorytest.Remote, *fac
 
 // reportRun reports, as the CI Watcher, one run of ci.yml on commit
 // tracked against ticket, with its status and conclusion.
-func reportRun(t *testing.T, h *factorytest.Harness, id int64, ticket, commit string, status store.CIRunStatus, conclusion store.CIConclusion) {
+func reportRun(t *testing.T, h *factorytest.Harness, id int64, ticket, commit string, status domain.CIRunStatus, conclusion domain.CIConclusion) {
 	t.Helper()
 	reportAttempt(t, h, id, 1, ticket, commit, status, conclusion)
 }
 
 // reportAttempt reports, as the CI Watcher, attempt of run id of ci.yml
 // on commit tracked against ticket, with its status and conclusion.
-func reportAttempt(t *testing.T, h *factorytest.Harness, id int64, attempt int, ticket, commit string, status store.CIRunStatus, conclusion store.CIConclusion) {
+func reportAttempt(t *testing.T, h *factorytest.Harness, id int64, attempt int, ticket, commit string, status domain.CIRunStatus, conclusion domain.CIConclusion) {
 	t.Helper()
 	started := h.Clock.Now()
 	run := core.CIRunView{ID: id, Attempt: attempt, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: commit,
@@ -62,7 +62,7 @@ func reportAttempt(t *testing.T, h *factorytest.Harness, id int64, attempt int, 
 func stillAccepted(t *testing.T, h *factorytest.Harness, r *factorytest.Running, ticket, why string) {
 	t.Helper()
 	r.Poll()
-	if s := h.Ticket(ticket).State; s != store.Accepted {
+	if s := h.Ticket(ticket).State; s != domain.Accepted {
 		t.Fatalf("%s is %s, want it left Accepted %s", ticket, s, why)
 	}
 }
@@ -76,12 +76,12 @@ func TestUnderMergeAndPushWithCITrackingATicketLandsAtItsPushedCommitOncePassed(
 	}
 	stillAccepted(t, h, r, id, "with no CI Runs reported")
 
-	reportRun(t, h, 1, id, pushed, store.CIInProgress, "")
+	reportRun(t, h, 1, id, pushed, domain.CIInProgress, "")
 	stillAccepted(t, h, r, id, "while its run is running")
 
-	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CISuccess)
+	reportRun(t, h, 1, id, pushed, domain.CICompleted, domain.CISuccess)
 	r.Poll()
-	tk := h.WantState(id, store.Done)
+	tk := h.WantState(id, domain.Done)
 	if m := tk.Moves[len(tk.Moves)-1]; m.Commit != pushed {
 		t.Errorf("landed with %q, want the pushed commit %s", m.Commit, pushed)
 	}
@@ -95,7 +95,7 @@ func TestUnderMergeAndPushWithCITrackingAFailedCIResultDoesNotLand(t *testing.T)
 	h, _, r := gatedHarness(t)
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
 
-	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CIFailure)
+	reportRun(t, h, 1, id, pushed, domain.CICompleted, domain.CIFailure)
 	stillAccepted(t, h, r, id, "with a failed CI result")
 	r.WantOutput(id + ": CI failed at " + pushed[:12])
 }
@@ -105,7 +105,7 @@ func TestUnderMergeAndPushWithCITrackingACancelledCIResultDoesNotLand(t *testing
 	h, _, r := gatedHarness(t)
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
 
-	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CICancelled)
+	reportRun(t, h, 1, id, pushed, domain.CICompleted, domain.CICancelled)
 	stillAccepted(t, h, r, id, "with a cancelled CI result")
 	r.WantOutput(id + ": CI cancelled at " + pushed[:12])
 }
@@ -117,18 +117,18 @@ func TestUnderTheCIGateATicketLandsAtAnEarlierPushedCommitThatPassedAfterALaterO
 	t.Parallel()
 	h, remote, r := gatedHarness(t)
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
-	reportRun(t, h, 1, id, pushed, store.CIInProgress, "")
+	reportRun(t, h, 1, id, pushed, domain.CIInProgress, "")
 	later := h.CommitOn("later", "later.txt", "later\n")
 	h.Git("push", "-q", remote.Path, "later:refs/heads/main")
 	if _, err := h.Server.Client.ReportPushedCommit(context.Background(), h.Project, core.ReportPushedCommitInput{Ticket: core.Ref(id), Commit: later, Branch: "main"}); err != nil {
 		t.Fatal(err)
 	}
-	reportRun(t, h, 2, id, later, store.CICompleted, store.CIFailure)
+	reportRun(t, h, 2, id, later, domain.CICompleted, domain.CIFailure)
 	stillAccepted(t, h, r, id, "with its latest pushed commit failed and the earlier one running")
 
-	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CISuccess)
+	reportRun(t, h, 1, id, pushed, domain.CICompleted, domain.CISuccess)
 	r.Poll()
-	tk := h.WantState(id, store.Done)
+	tk := h.WantState(id, domain.Done)
 	if m := tk.Moves[len(tk.Moves)-1]; m.Commit != pushed {
 		t.Errorf("landed with %q, want the pushed commit that passed, %s", m.Commit, pushed)
 	}
@@ -141,14 +141,14 @@ func TestAfterLandAnywayAFailedTicketLandsOnTheNextPoll(t *testing.T) {
 	t.Parallel()
 	h, _, r := gatedHarness(t)
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
-	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CIFailure)
+	reportRun(t, h, 1, id, pushed, domain.CICompleted, domain.CIFailure)
 	stillAccepted(t, h, r, id, "with a failed CI result")
 
 	if _, err := h.Server.Core.LandAnyway(core.WithActor(context.Background(), core.Human), h.Project, core.CIResponseInput{Ticket: core.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
 	r.Poll()
-	tk := h.WantState(id, store.Done)
+	tk := h.WantState(id, domain.Done)
 	if m := tk.Moves[len(tk.Moves)-1]; m.Commit != pushed {
 		t.Errorf("landed with %q, want the pushed commit %s", m.Commit, pushed)
 	}
@@ -166,15 +166,15 @@ func TestATicketBlockedByAGatedTicketStaysBlockedUntilItLands(t *testing.T) {
 	h.Script(blocked, factorytest.Wait())
 
 	stillAccepted(t, h, r, id, "with no CI Runs reported")
-	if tk := h.Ticket(blocked); !tk.Blocked || tk.State != store.Ready {
+	if tk := h.Ticket(blocked); !tk.Blocked || tk.State != domain.Ready {
 		t.Fatalf("%s is %s, blocked %v: want it Ready and blocked while %s waits on CI", blocked, tk.State, tk.Blocked, id)
 	}
 
-	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CISuccess)
+	reportRun(t, h, 1, id, pushed, domain.CICompleted, domain.CISuccess)
 	r.Poll()
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 	r.Poll()
-	h.WantState(blocked, store.InProgress)
+	h.WantState(blocked, domain.InProgress)
 }
 
 func TestTheGateLiftingLandsAWaitingTicketOnTheNextPoll(t *testing.T) {
@@ -186,10 +186,10 @@ func TestTheGateLiftingLandsAWaitingTicketOnTheNextPoll(t *testing.T) {
 			}
 		},
 		"push off": func(t *testing.T, h *factorytest.Harness) {
-			h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge})
+			h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge})
 		},
 		"branch": func(t *testing.T, h *factorytest.Harness) {
-			h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingBranch, Push: true, Remote: "origin"})
+			h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -201,7 +201,7 @@ func TestTheGateLiftingLandsAWaitingTicketOnTheNextPoll(t *testing.T) {
 			lift(t, h)
 			r.Poll()
 			tk := h.Ticket(id)
-			if tk.State != store.Done {
+			if tk.State != domain.Done {
 				t.Fatalf("%s is %s, want it landed on the poll after the gate lifts", id, tk.State)
 			}
 			if m := tk.Moves[len(tk.Moves)-1]; m.Commit == "" {
@@ -227,16 +227,16 @@ func TestUnderBranchAndPushTheHumansMergeLandsWhateverTheCIResult(t *testing.T) 
 	t.Parallel()
 	h := factorytest.New(t)
 	h.AddRemote("origin")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingBranch, Push: true, Remote: "origin"})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 	trackCI(t, h)
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	r := h.Start()
 	r.WantOutput(id + ": CI tracks " + id + " at ")
-	reportRun(t, h, 1, id, commit, store.CICompleted, store.CIFailure)
+	reportRun(t, h, 1, id, commit, domain.CICompleted, domain.CIFailure)
 	h.Git("merge", "-q", "--no-ff", "-m", "Merge "+id, id)
 	r.Poll()
-	if tk := h.WantState(id, store.Done); tk.CIResult != core.CIFailed {
+	if tk := h.WantState(id, domain.Done); tk.CIResult != core.CIFailed {
 		t.Fatalf("ci result %q, want it landed with its failed CI result", tk.CIResult)
 	}
 }
@@ -253,20 +253,20 @@ func TestAnInReviewTicketMergedByHandWaitsOnCIInReview(t *testing.T) {
 	r.WantOutput(id + ": CI tracks main at ")
 	tk := h.Ticket(id)
 	merge := h.Git("rev-parse", "main")
-	if tk.State != store.InReview || tk.PushedCommit == nil || tk.PushedCommit.Commit != merge {
+	if tk.State != domain.InReview || tk.PushedCommit == nil || tk.PushedCommit.Commit != merge {
 		t.Fatalf("%s with pushed commit %+v, want it In Review with the pushed merge %s", tk.State, tk.PushedCommit, merge)
 	}
 	if got := remote.Git("rev-parse", "main"); got != merge {
 		t.Fatalf("the remote's main is at %q, want the merge %s", got, merge)
 	}
 	r.Poll()
-	if s := h.Ticket(id).State; s != store.InReview {
+	if s := h.Ticket(id).State; s != domain.InReview {
 		t.Fatalf("%s is %s, want it left In Review while CI runs", id, s)
 	}
 
-	reportRun(t, h, 1, id, merge, store.CICompleted, store.CISuccess)
+	reportRun(t, h, 1, id, merge, domain.CICompleted, domain.CISuccess)
 	r.Poll()
-	if tk := h.WantState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != merge {
+	if tk := h.WantState(id, domain.Done); tk.Moves[len(tk.Moves)-1].Commit != merge {
 		t.Errorf("landed with %q, want the pushed merge %s", tk.Moves[len(tk.Moves)-1].Commit, merge)
 	}
 }
@@ -280,7 +280,7 @@ func TestASentBackCIFailureIsFixedOnItsBranchAndItsNewPushedCommitDecides(t *tes
 	h, remote, r := gatedHarness(t)
 	id, failed := sentBackCIFailure(t, h, r)
 	r.Poll()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	if calls := h.Calls(); len(calls) != 2 || calls[1].Ticket != id || calls[1].Dir != h.Worktree(id) {
 		t.Fatalf("calls %+v, want the second Claim run in %s", calls, h.Worktree(id))
 	}
@@ -300,9 +300,9 @@ func TestASentBackCIFailureIsFixedOnItsBranchAndItsNewPushedCommitDecides(t *tes
 	}
 	stillAccepted(t, h, r, id, "while its new pushed commit's CI runs")
 
-	reportRun(t, h, 2, id, fixed, store.CICompleted, store.CISuccess)
+	reportRun(t, h, 2, id, fixed, domain.CICompleted, domain.CISuccess)
 	r.Poll()
-	if tk := h.WantState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != fixed {
+	if tk := h.WantState(id, domain.Done); tk.Moves[len(tk.Moves)-1].Commit != fixed {
 		t.Errorf("landed with %q, want the new pushed commit %s", tk.Moves[len(tk.Moves)-1].Commit, fixed)
 	}
 }
@@ -321,12 +321,12 @@ func sentBackCIFailure(t *testing.T, h *factorytest.Harness, r *factorytest.Runn
 		factorytest.CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", "Added.", "--branch", "{{ticket}}"),
 		factorytest.Result("success"))
 	r.Poll()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	h.Accept(id)
 	r.Poll()
 	r.WantOutput(id + ": CI tracks main at ")
 	failed = h.Ticket(id).PushedCommit.Commit
-	reportRun(t, h, 1, id, failed, store.CICompleted, store.CIFailure)
+	reportRun(t, h, 1, id, failed, domain.CICompleted, domain.CIFailure)
 	stillAccepted(t, h, r, id, "with a failed CI result")
 
 	note := "CI failed at " + failed[:12] + ": https://github.com/acme/web/actions/runs/1, failed jobs: test."
@@ -350,7 +350,7 @@ func TestAfterNewFixTicketTheFailedTicketKeepsWaiting(t *testing.T) {
 	t.Parallel()
 	h, _, r := gatedHarness(t)
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
-	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CIFailure)
+	reportRun(t, h, 1, id, pushed, domain.CICompleted, domain.CIFailure)
 	stillAccepted(t, h, r, id, "with a failed CI result")
 
 	res, err := h.Server.Core.NewFixTicket(core.WithActor(context.Background(), core.Human), h.Project, core.NewFixTicketInput{Ticket: core.Ref(id), Note: "Fix test."})
@@ -382,10 +382,10 @@ func TestAfterAnotherTicketsMergeIsPushedEarlierWaitingTicketsGetTheNewTipAndLan
 		t.Errorf("reported the tip onto %s %d times, want once however often it polls:\n%s", first, n, r.Stdout())
 	}
 
-	reportRun(t, h, 1, second, tip, store.CICompleted, store.CISuccess)
+	reportRun(t, h, 1, second, tip, domain.CICompleted, domain.CISuccess)
 	r.Poll()
 	for _, id := range []string{first, second} {
-		tk := h.WantState(id, store.Done)
+		tk := h.WantState(id, domain.Done)
 		if m := tk.Moves[len(tk.Moves)-1]; m.Commit != tip {
 			t.Errorf("%s landed with %q, want the tip that passed, %s", id, m.Commit, tip)
 		}
@@ -408,9 +408,9 @@ func TestACommitPushedByHandFromAnotherCloneIsReportedToWaitingTicketsAndLandsTh
 		t.Fatalf("%s's pushed commit is %+v, want the hand-pushed %s, which contains its work at %s", id, pc, byHand, pushed)
 	}
 
-	reportRun(t, h, 1, id, byHand, store.CICompleted, store.CISuccess)
+	reportRun(t, h, 1, id, byHand, domain.CICompleted, domain.CISuccess)
 	r.Poll()
-	if tk := h.WantState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != byHand {
+	if tk := h.WantState(id, domain.Done); tk.Moves[len(tk.Moves)-1].Commit != byHand {
 		t.Errorf("landed with %q, want the hand-pushed commit %s", tk.Moves[len(tk.Moves)-1].Commit, byHand)
 	}
 }
@@ -428,9 +428,9 @@ func TestAnInReviewTicketMergedByHandGetsALaterTipToo(t *testing.T) {
 
 	r.Poll()
 	r.WantOutput(id + ": CI tracks main at " + byHand[:12])
-	reportRun(t, h, 1, id, byHand, store.CICompleted, store.CISuccess)
+	reportRun(t, h, 1, id, byHand, domain.CICompleted, domain.CISuccess)
 	r.Poll()
-	if tk := h.WantState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != byHand {
+	if tk := h.WantState(id, domain.Done); tk.Moves[len(tk.Moves)-1].Commit != byHand {
 		t.Errorf("landed with %q, want the later commit %s", tk.Moves[len(tk.Moves)-1].Commit, byHand)
 	}
 }
@@ -453,7 +453,7 @@ func TestUnderBranchAndPushALaterTipIsNotReportedToATicket(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	remote := h.AddRemote("origin")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingBranch, Push: true, Remote: "origin"})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 	trackCI(t, h)
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	r := h.Start()
@@ -490,14 +490,14 @@ func TestUnderTheCIGateARedBuildInAnotherRepositoryDoesNotHoldBackTheHomes(t *te
 	if _, err := h.Server.Client.ReportPushedCommit(context.Background(), h.Project, core.ReportPushedCommitInput{Ticket: core.Ref(id), Commit: "def456", Branch: "main", Repository: "api"}); err != nil {
 		t.Fatal(err)
 	}
-	reportRunIn(t, h, "api", 1, id, "def456", store.CICompleted, store.CIFailure)
+	reportRunIn(t, h, "api", 1, id, "def456", domain.CICompleted, domain.CIFailure)
 	if tk := h.Ticket(id); tk.NeedsMeReason != core.ReasonCIFailed || tk.CIItem == nil || tk.CIItem.Repository != "api" {
 		t.Fatalf("reason %q, item %+v: want CI failed in api", tk.NeedsMeReason, tk.CIItem)
 	}
 
-	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CISuccess)
+	reportRun(t, h, 1, id, pushed, domain.CICompleted, domain.CISuccess)
 	r.Poll()
-	tk := h.WantState(id, store.Done)
+	tk := h.WantState(id, domain.Done)
 	if m := tk.Moves[len(tk.Moves)-1]; m.Commit != pushed {
 		t.Errorf("landed with %q, want the Home's pushed commit that passed, %s", m.Commit, pushed)
 	}
@@ -505,7 +505,7 @@ func TestUnderTheCIGateARedBuildInAnotherRepositoryDoesNotHoldBackTheHomes(t *te
 
 // reportRunIn reports, as the CI Watcher, run id of ci.yml on commit in
 // the Repository repo, tracked against ticket.
-func reportRunIn(t *testing.T, h *factorytest.Harness, repo string, id int64, ticket, commit string, status store.CIRunStatus, conclusion store.CIConclusion) {
+func reportRunIn(t *testing.T, h *factorytest.Harness, repo string, id int64, ticket, commit string, status domain.CIRunStatus, conclusion domain.CIConclusion) {
 	t.Helper()
 	started := h.Clock.Now()
 	run := core.CIRunView{Repository: repo, ID: id, Attempt: 1, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: commit,

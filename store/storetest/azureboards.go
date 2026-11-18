@@ -1,6 +1,7 @@
 package storetest
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"testing"
 
 	"github.com/tomoram/code-central/store"
@@ -15,7 +16,7 @@ func runAzureBoards(t *testing.T, f Factory) {
 		seedProject(t, s)
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
-				if p, _ := r.Project("acme"); p.AzureBoards != (store.AzureBoards{}) {
+				if p, _ := r.Project("acme"); p.AzureBoards != (domain.AzureBoards{}) {
 					t.Fatalf("azure boards = %+v, want off with nothing set", p.AzureBoards)
 				}
 			})
@@ -28,10 +29,10 @@ func runAzureBoards(t *testing.T, f Factory) {
 
 	t.Run("a project's azure boards settings read back after they are written", func(t *testing.T) {
 		s := f.New(t)
-		want := store.AzureBoards{On: true, Mode: store.AzureBoardsSavedQuery, QueryURL: "https://dev.azure.com/contoso/web/_queries/query/6b4a0c1e-9f1d-4a51-8f43-2a7d3c1b9e10",
+		want := domain.AzureBoards{On: true, Mode: domain.AzureBoardsSavedQuery, QueryURL: "https://dev.azure.com/contoso/web/_queries/query/6b4a0c1e-9f1d-4a51-8f43-2a7d3c1b9e10",
 			ProjectURL: "https://dev.azure.com/contoso/api", Where: "[System.State] = 'Approved'", PATEnv: "BOARDS_PAT", NewIssuesNeedMe: true, Spec: 4}
 		put(t, s, func(w store.Writer) error {
-			return w.PutProject(store.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed", AzureBoards: want})
+			return w.PutProject(domain.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed", AzureBoards: want})
 		})
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {

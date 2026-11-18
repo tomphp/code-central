@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -130,12 +131,12 @@ func (c *Core) issueComment(target, open, key, text string) IssueComment {
 // triageComment is the comment the human's triage action via gave when
 // it Cancelled t, if it ever did: empty when it gave none. latest
 // reports whether that Cancel is still t's last Move.
-func triageComment(t store.Ticket, via TriageAction) (comment string, latest, ok bool) {
+func triageComment(t domain.Ticket, via TriageAction) (comment string, latest, ok bool) {
 	for i, m := range slices.Backward(t.Moves) {
-		if m.To != store.Cancelled || m.Via != string(via) {
+		if m.To != domain.Cancelled || m.Via != string(via) {
 			continue
 		}
-		latest = i == len(t.Moves)-1 && t.State == store.Cancelled
+		latest = i == len(t.Moves)-1 && t.State == domain.Cancelled
 		for _, cm := range slices.Backward(t.Comments) {
 			if cm.Time.Equal(m.Time) && cm.Actor == string(Human) {
 				return cm.Body, latest, true
@@ -183,7 +184,7 @@ func (c *Core) integrationWrites(r store.Reader, key, integration string) []Issu
 
 // ticketIssueWrites is what is due on the issue t, a Ticket on key's
 // inbox Spec, is linked to; ok is false when nothing is.
-func (c *Core) ticketIssueWrites(key string, t store.Ticket) (w IssueWrites, ok bool) {
+func (c *Core) ticketIssueWrites(key string, t domain.Ticket) (w IssueWrites, ok bool) {
 	if !t.Link.Attached() {
 		return IssueWrites{}, false
 	}
@@ -194,7 +195,7 @@ func (c *Core) ticketIssueWrites(key string, t store.Ticket) (w IssueWrites, ok 
 		if strings.TrimSpace(reason) != "" && !slices.Contains(t.Link.Written, CommentWontFix) {
 			w.Comments = append(w.Comments, c.issueComment(id, ticketLink, CommentWontFix, reason))
 		}
-	} else if t.State == store.Draft || t.State == store.Ready {
+	} else if t.State == domain.Draft || t.State == domain.Ready {
 		w.Label = LabelDraft
 	}
 	return dueWhile(t.Link.ExternalState, w)
@@ -208,7 +209,7 @@ func (c *Core) ticketIssueWrites(key string, t store.Ticket) (w IssueWrites, ok 
 // what landed once the Spec is Finished. The label follows the work, and
 // the issue is closed once the Spec is Finished: as completed if
 // anything landed, as not planned if nothing did.
-func (c *Core) specIssueWrites(r store.Reader, key string, s store.Spec) (w IssueWrites, ok bool) {
+func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec) (w IssueWrites, ok bool) {
 	if !s.Link.Attached() || !s.Link.Outbound {
 		return IssueWrites{}, false
 	}
@@ -221,23 +222,23 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s store.Spec) (w Issu
 	}
 	due(CommentContext, requirementContext(r, key, s.Link))
 	tickets := specTickets(r, key, s.Number)
-	stages, stagesDone := map[StageName]store.Ticket{}, true
-	var landed []store.Ticket
+	stages, stagesDone := map[StageName]domain.Ticket{}, true
+	var landed []domain.Ticket
 	for _, t := range tickets {
 		if stage := StageOf(t.Labels); stage != "" {
 			stages[stage] = t
-			stagesDone = stagesDone && (t.State == store.Done || t.State == store.Cancelled)
-		} else if t.State == store.Done {
+			stagesDone = stagesDone && (t.State == domain.Done || t.State == domain.Cancelled)
+		} else if t.State == domain.Done {
 			landed = append(landed, t)
 		}
 	}
-	if g, done := stages["grilling"]; done && g.State == store.Done {
+	if g, done := stages["grilling"]; done && g.State == domain.Done {
 		due(CommentGrilling, resolution(g))
 	}
-	if sp, done := stages["spec"]; done && sp.State == store.Done {
+	if sp, done := stages["spec"]; done && sp.State == domain.Done {
 		due(CommentSpec, bodyAt(s, doneMove(sp).Time))
 	}
-	slices.SortStableFunc(landed, func(a, b store.Ticket) int { return doneMove(a).Time.Compare(doneMove(b).Time) })
+	slices.SortStableFunc(landed, func(a, b domain.Ticket) int { return doneMove(a).Time.Compare(doneMove(b).Time) })
 	p, _ := r.Project(key)
 	var list []string
 	for _, t := range landed {
@@ -282,7 +283,7 @@ func requirementStatus(finished, landed, stagesDone bool) (string, IssueClose) {
 // resolution is the grilling Stage Ticket t's resolution comment: the
 // latest agent comment on it that isn't its finish summary, nor any
 // other note stored under a Claim; empty when there is none.
-func resolution(t store.Ticket) string {
+func resolution(t domain.Ticket) string {
 	for _, cm := range slices.Backward(t.Comments) {
 		if cm.Actor == string(Agent) && cm.Claim == 0 {
 			return cm.Body
@@ -294,18 +295,18 @@ func resolution(t store.Ticket) string {
 // doneMove is the Move that last made t, a Done Ticket, Done, with its
 // land commit if it landed; a Ticket with none, such as one imported
 // Done, is taken as Done when it was last updated.
-func doneMove(t store.Ticket) store.Move {
+func doneMove(t domain.Ticket) domain.Move {
 	for _, m := range slices.Backward(t.Moves) {
-		if m.To == store.Done {
+		if m.To == domain.Done {
 			return m
 		}
 	}
-	return store.Move{To: store.Done, Time: t.Updated}
+	return domain.Move{To: domain.Done, Time: t.Updated}
 }
 
 // bodyAt is s's body as it was at the time at, undoing each later edit
 // to it.
-func bodyAt(s store.Spec, at time.Time) string {
+func bodyAt(s domain.Spec, at time.Time) string {
 	body := s.Body
 	for _, e := range slices.Backward(s.Edits) {
 		if !e.Time.After(at) {
@@ -322,7 +323,7 @@ func bodyAt(s store.Spec, at time.Time) string {
 // it: its title and ID, and its land commit if it has one. With several
 // Repositories it gives one commit per Changed Repository that landed,
 // in landing order, each as repositoryLabel@commit.
-func landedLine(p store.Project, t store.Ticket) string {
+func landedLine(p domain.Project, t domain.Ticket) string {
 	line := fmt.Sprintf("**%s** (%s)", t.Title, DisplayID(p.Key, t.Number))
 	if !severalRepositories(p) {
 		if commit := doneMove(t).Commit; commit != "" {
@@ -354,7 +355,7 @@ func landedLine(p store.Project, t store.Ticket) string {
 // repositoryLabel names the Repository called name for an issue's
 // reader: owner/repo when its Clone URL is on GitHub, else its Repository
 // Name.
-func repositoryLabel(p store.Project, name string) string {
+func repositoryLabel(p domain.Project, name string) string {
 	for _, rv := range repositoriesView(p) {
 		if rv.Name != name {
 			continue
@@ -370,7 +371,7 @@ func repositoryLabel(p store.Project, name string) string {
 // the issue l links to: the comment to_requirement made on its Incoming
 // Issue, empty when it gave none. It stays due if the Incoming Issue is
 // moved on later.
-func requirementContext(r store.Reader, key string, l store.Link) string {
+func requirementContext(r store.Reader, key string, l domain.Link) string {
 	for _, t := range r.Tickets(key) {
 		if t.Link.Integration != l.Integration || t.Link.ID != l.ID {
 			continue
@@ -385,11 +386,11 @@ func requirementContext(r store.Reader, key string, l store.Link) string {
 // dueWhile is w, the writes due on an issue last seen as state: its label
 // and closing are due only while it is open, and nothing is due on a
 // deleted issue. ok is false when nothing is due.
-func dueWhile(state store.ExternalState, w IssueWrites) (IssueWrites, bool) {
-	if state != store.ExternalOpen {
+func dueWhile(state domain.ExternalState, w IssueWrites) (IssueWrites, bool) {
+	if state != domain.ExternalOpen {
 		w.Label, w.Close = "", ""
 	}
-	if state == store.ExternalDeleted {
+	if state == domain.ExternalDeleted {
 		w.Comments = []IssueComment{}
 	}
 	return w, len(w.Comments) > 0 || w.Label != "" || w.Close != ""
@@ -413,7 +414,7 @@ func (c *Core) ReportIssueWritten(ctx context.Context, key string, in ReportIssu
 	if strings.TrimSpace(in.Key) == "" {
 		return LinkedRow{}, invalid("key", "name the key of the comment written")
 	}
-	return c.updateLink(ctx, key, in.Target, func(l *store.Link) (map[string]string, error) {
+	return c.updateLink(ctx, key, in.Target, func(l *domain.Link) (map[string]string, error) {
 		if slices.Contains(l.Written, in.Key) {
 			return nil, nil
 		}

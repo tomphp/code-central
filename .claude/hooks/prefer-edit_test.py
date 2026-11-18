@@ -43,6 +43,19 @@ END"""
     def test_sed_several_files(self):
         self.assertFalse(edits_one_file("sed -i 's/foo/bar/' a.go b.go"))
 
+    def test_semicolon_in_script_several_files(self):
+        self.assertFalse(edits_one_file("sed -i '' 's/a/b/; s/c/d/' a.go b.go"))
+        self.assertFalse(edits_one_file(
+            "perl -pi -e 's/^func \\(f \\*factory\\)/func (l *lander)/; s/\\bf\\./l./g' base.go land.go movebase.go"))
+
+    def test_newline_in_script_several_files(self):
+        self.assertFalse(edits_one_file("perl -pi -e '\ns/a/b/;\ns/c/d/;\n' a.go b.go c.go"))
+        self.assertFalse(edits_one_file("sed -i '' 's/a/b/\ns/c/d/' a.go b.go"))
+
+    def test_semicolon_in_script_one_file(self):
+        self.assertTrue(edits_one_file("sed -i '' 's/a/b/; s/c/d/' a.go"))
+        self.assertTrue(edits_one_file("perl -pi -e 's/a/b/; s/c/d/' a.go"))
+
     def test_multi_file_rename_passes(self):
         self.assertFalse(edits_one_file("for f in a.go b.go; do sed -i 's/x/y/' $f; done"))
         self.assertFalse(edits_one_file("find . -name '*.go' | xargs sed -i 's/x/y/'"))

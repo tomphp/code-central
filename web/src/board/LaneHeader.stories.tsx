@@ -31,16 +31,20 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-// spec is the row of the world's one Spec, the first ID Core hands out.
-const spec = (title: string, labels: string[] = []): ProjectSpec => ({
+// spec is the row of the world's one Spec, the first ID Core hands out: a
+// Factory is on its In Progress Ticket, and what each story sets.
+const spec = (title: string, set: Partial<ProjectSpec> = {}): ProjectSpec => ({
   id: "acme-1",
   project: "acme",
   title,
-  labels,
+  labels: [],
   tags: {},
   state_summary: { Ready: 1, "In Progress": 1, Accepted: 1, "Needs Answer": 1 },
   finished: false,
   updated: "",
+  kind: "spec",
+  claimed: true,
+  ...set,
 });
 
 // header renders a story from the world's Tickets, as wide as a Board, with
@@ -64,14 +68,14 @@ export const Folded = header((_, all) => (
 ));
 // One of its Tickets needs the human: the dot, a left border, and the need as the headline.
 export const NeedsYou = header(
-  (_, all) => <LaneHeader id="acme-1" spec={spec("Sign-in")} all={all} shown={3} link={storyLink("acme-1")} collapsed={false} onToggle={() => {}} />,
+  (_, all) => <LaneHeader id="acme-1" spec={spec("Sign-in", { need: "needs_answer" })} all={all} shown={3} link={storyLink("acme-1")} collapsed={false} onToggle={() => {}} />,
   ({ stage }) => ({ [stage.id]: "needs_answer" }),
 );
 // A long title gives way to the headline and the count.
 export const LongTitle = header((_, all) => (
   <LaneHeader
     id="acme-1"
-    spec={spec("Search across Tickets and Specs with filters that remember what you last picked, per Project and per browser", ["long-lived"])}
+    spec={spec("Search across Tickets and Specs with filters that remember what you last picked, per Project and per browser", { labels: ["long-lived"], kind: "long_lived" })}
     all={all}
     shown={4}
     link={storyLink("acme-1")}

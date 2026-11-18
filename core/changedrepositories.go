@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -68,23 +69,23 @@ type LandedView struct {
 
 // severalRepositories reports whether p has more than one Repository:
 // only then do reads name Repositories (the visibility rule).
-func severalRepositories(p store.Project) bool { return len(p.RepositoryList()) > 1 }
+func severalRepositories(p domain.Project) bool { return len(p.RepositoryList()) > 1 }
 
 // changedRepositories is t's Changed Repositories as recorded, or with
 // none recorded, the Home Repository's, named home, when t has a branch
 // or a commit.
-func changedRepositories(home string, t store.Ticket) []store.ChangedRepository {
+func changedRepositories(home string, t domain.Ticket) []domain.ChangedRepository {
 	if t.Repositories != nil {
 		return t.Repositories
 	}
 	if t.Branch != "" || t.Commit != "" {
-		return []store.ChangedRepository{{Name: home, Branch: t.Branch, Commit: t.Commit}}
+		return []domain.ChangedRepository{{Name: home, Branch: t.Branch, Commit: t.Commit}}
 	}
 	return nil
 }
 
 // changedRepositoryNames is the Names of t's Changed Repositories.
-func changedRepositoryNames(home string, t store.Ticket) []string {
+func changedRepositoryNames(home string, t domain.Ticket) []string {
 	var names []string
 	for _, r := range changedRepositories(home, t) {
 		names = append(names, r.Name)
@@ -95,18 +96,18 @@ func changedRepositoryNames(home string, t store.Ticket) []string {
 // hasBranchToLand reports whether accepting t moves it to Accepted to
 // wait to land rather than to Done: one of its Changed Repositories has a
 // branch, as a finish naming a branch always gave the Home Repository.
-func hasBranchToLand(home string, t store.Ticket) bool {
-	return slices.ContainsFunc(changedRepositories(home, t), func(r store.ChangedRepository) bool { return r.Branch != "" })
+func hasBranchToLand(home string, t domain.Ticket) bool {
+	return slices.ContainsFunc(changedRepositories(home, t), func(r domain.ChangedRepository) bool { return r.Branch != "" })
 }
 
 // landedSomewhere reports whether t's work has landed in any of its
 // Changed Repositories.
-func landedSomewhere(home string, t store.Ticket) bool {
-	return slices.ContainsFunc(changedRepositories(home, t), func(r store.ChangedRepository) bool { return r.Landed != nil })
+func landedSomewhere(home string, t domain.Ticket) bool {
+	return slices.ContainsFunc(changedRepositories(home, t), func(r domain.ChangedRepository) bool { return r.Landed != nil })
 }
 
 // landedNames is the Names of the Changed Repositories t has landed in.
-func landedNames(home string, t store.Ticket) []string {
+func landedNames(home string, t domain.Ticket) []string {
 	var out []string
 	for _, r := range changedRepositories(home, t) {
 		if r.Landed != nil {
@@ -118,15 +119,15 @@ func landedNames(home string, t store.Ticket) []string {
 
 // partlyLanded reports whether t is Partly landed: Accepted, and landed
 // in some of its Changed Repositories but not all.
-func partlyLanded(home string, t store.Ticket) bool {
-	return t.State == store.Accepted && landedSomewhere(home, t) &&
-		slices.ContainsFunc(changedRepositories(home, t), func(r store.ChangedRepository) bool { return r.Landed == nil })
+func partlyLanded(home string, t domain.Ticket) bool {
+	return t.State == domain.Accepted && landedSomewhere(home, t) &&
+		slices.ContainsFunc(changedRepositories(home, t), func(r domain.ChangedRepository) bool { return r.Landed == nil })
 }
 
 // landingRepository is the Repository a land of t, p's, names: name, or
 // the Home Repository for none. It refuses a name that isn't one of p's
 // Repositories, or isn't one of t's Changed Repositories while t has any.
-func landingRepository(p store.Project, t store.Ticket, name string) (string, error) {
+func landingRepository(p domain.Project, t domain.Ticket, name string) (string, error) {
 	r, err := repositoryField(p, name)
 	if err != nil {
 		return "", err
@@ -141,13 +142,13 @@ func landingRepository(p store.Project, t store.Ticket, name string) (string, er
 
 // landsLast reports whether landing in the Repository name lands the
 // last of rs, a Ticket's Changed Repositories: every other one has landed.
-func landsLast(rs []store.ChangedRepository, name string) bool {
-	return !slices.ContainsFunc(rs, func(r store.ChangedRepository) bool { return r.Name != name && r.Landed == nil })
+func landsLast(rs []domain.ChangedRepository, name string) bool {
+	return !slices.ContainsFunc(rs, func(r domain.ChangedRepository) bool { return r.Name != name && r.Landed == nil })
 }
 
 // landingRank orders Repository Names by p's landing order, with any
 // name no longer listed after the rest.
-func landingRank(p store.Project) func(name string) int {
+func landingRank(p domain.Project) func(name string) int {
 	names := repositoryNames(p.RepositoryList())
 	return func(name string) int {
 		if i := slices.Index(names, name); i >= 0 {
@@ -158,34 +159,34 @@ func landingRank(p store.Project) func(name string) int {
 }
 
 // inLandingOrder sorts xs, each named by name, by p's landing order.
-func inLandingOrder[X any](p store.Project, xs []X, name func(X) string) {
+func inLandingOrder[X any](p domain.Project, xs []X, name func(X) string) {
 	rank := landingRank(p)
 	slices.SortStableFunc(xs, func(a, b X) int { return rank(name(a)) - rank(name(b)) })
 }
 
 // namesInLandingOrder is names sorted by p's landing order.
-func namesInLandingOrder(p store.Project, names []string) []string {
+func namesInLandingOrder(p domain.Project, names []string) []string {
 	out := slices.Clone(names)
 	inLandingOrder(p, out, func(n string) string { return n })
 	return out
 }
 
 // repositoryName is r's Repository Name, for inLandingOrder.
-func repositoryName(r store.ChangedRepository) string { return r.Name }
+func repositoryName(r domain.ChangedRepository) string { return r.Name }
 
 // checkRepositoryWork is ws as Changed Repositories of p, refusing a
 // name that isn't one of p's Repositories, a name given twice and an
 // entry without its branch or commit. field names the list.
-func checkRepositoryWork(p store.Project, field string, ws []RepositoryWork) ([]store.ChangedRepository, error) {
+func checkRepositoryWork(p domain.Project, field string, ws []RepositoryWork) ([]domain.ChangedRepository, error) {
 	names := repositoryNames(p.RepositoryList())
-	var out []store.ChangedRepository
+	var out []domain.ChangedRepository
 	for i, w := range ws {
 		at := fmt.Sprintf("%s[%d]", field, i)
-		r := store.ChangedRepository{Name: strings.TrimSpace(w.Name), Branch: strings.TrimSpace(w.Branch), Commit: strings.TrimSpace(w.Commit)}
+		r := domain.ChangedRepository{Name: strings.TrimSpace(w.Name), Branch: strings.TrimSpace(w.Branch), Commit: strings.TrimSpace(w.Commit)}
 		switch {
 		case !slices.Contains(names, r.Name):
 			return nil, invalid(at+".name", "%q is not one of this Project's Repositories, which are %s: name each as your first prompt's Repositories list does", w.Name, strings.Join(names, ", "))
-		case slices.ContainsFunc(out, func(o store.ChangedRepository) bool { return o.Name == r.Name }):
+		case slices.ContainsFunc(out, func(o domain.ChangedRepository) bool { return o.Name == r.Name }):
 			return nil, invalid(at+".name", "%s is listed twice: give each Repository once, with its branch's head commit", r.Name)
 		case r.Branch == "" || r.Commit == "":
 			return nil, invalid(at, "%s needs both its branch and its branch's head commit", r.Name)
@@ -203,20 +204,20 @@ func checkRepositoryWork(p store.Project, field string, ws []RepositoryWork) ([]
 // branch there holds nothing new (ADR 0050). They are stored as none
 // while they are just what t's branch and commit read as, so a
 // single-repository Ticket's file is as it always was.
-func setChangedRepositories(p store.Project, t *store.Ticket, rs []store.ChangedRepository) {
+func setChangedRepositories(p domain.Project, t *domain.Ticket, rs []domain.ChangedRepository) {
 	was := changedRepositories(p.Key, *t)
 	for i := range rs {
-		if j := slices.IndexFunc(was, func(w store.ChangedRepository) bool { return w.Name == rs[i].Name }); j >= 0 && rs[i].Landed == nil && rs[i].Commit == was[j].Commit {
+		if j := slices.IndexFunc(was, func(w domain.ChangedRepository) bool { return w.Name == rs[i].Name }); j >= 0 && rs[i].Landed == nil && rs[i].Commit == was[j].Commit {
 			rs[i].Landed = was[j].Landed
 		}
 	}
 	for _, w := range was {
-		if w.Landed != nil && !slices.ContainsFunc(rs, func(r store.ChangedRepository) bool { return r.Name == w.Name }) {
+		if w.Landed != nil && !slices.ContainsFunc(rs, func(r domain.ChangedRepository) bool { return r.Name == w.Name }) {
 			rs = append(rs, w)
 		}
 	}
 	inLandingOrder(p, rs, repositoryName)
-	if len(rs) == 0 || len(rs) == 1 && reflect.DeepEqual(rs, changedRepositories(p.Key, store.Ticket{Branch: t.Branch, Commit: t.Commit})) {
+	if len(rs) == 0 || len(rs) == 1 && reflect.DeepEqual(rs, changedRepositories(p.Key, domain.Ticket{Branch: t.Branch, Commit: t.Commit})) {
 		rs = nil
 	}
 	t.Repositories = rs
@@ -227,13 +228,13 @@ func setChangedRepositories(p store.Project, t *store.Ticket, rs []store.Changed
 // branch and commit keep meaning it: one left out keeps its stored value.
 // The finish then replaces t's Changed Repositories with the Home
 // Repository's, when it has a branch or commit, and the others it names.
-func settleFinish(p store.Project, t *store.Ticket, in FinishInput) error {
+func settleFinish(p domain.Project, t *domain.Ticket, in FinishInput) error {
 	rs, err := checkRepositoryWork(p, "repositories", in.Repositories)
 	if err != nil {
 		return err
 	}
 	branch, commit := strings.TrimSpace(in.Branch), strings.TrimSpace(in.Commit)
-	home := slices.IndexFunc(rs, func(r store.ChangedRepository) bool { return r.Name == p.Key })
+	home := slices.IndexFunc(rs, func(r domain.ChangedRepository) bool { return r.Name == p.Key })
 	switch {
 	case home >= 0 && (branch != "" || commit != ""):
 		return invalid("repositories", "%s is the Home Repository, given both in branch and commit and in repositories: give it in one form or the other", p.Key)
@@ -249,7 +250,7 @@ func settleFinish(p store.Project, t *store.Ticket, in FinishInput) error {
 		}
 	}
 	if t.Branch != "" || t.Commit != "" {
-		rs = append(rs, store.ChangedRepository{Name: p.Key, Branch: t.Branch, Commit: t.Commit})
+		rs = append(rs, domain.ChangedRepository{Name: p.Key, Branch: t.Branch, Commit: t.Commit})
 	}
 	setChangedRepositories(p, t, rs)
 	return nil
@@ -259,7 +260,7 @@ func settleFinish(p store.Project, t *store.Ticket, in FinishInput) error {
 // settled them, leave out any of was, those it had before. Such a finish
 // isn't auto-accepted: it waits In Review for the Factory's finish check,
 // which an Auto-accept to Done would otherwise skip.
-func dropsRepositories(home string, t store.Ticket, was []string) bool {
+func dropsRepositories(home string, t domain.Ticket, was []string) bool {
 	now := changedRepositoryNames(home, t)
 	return slices.ContainsFunc(was, func(name string) bool { return !slices.Contains(now, name) })
 }
@@ -267,7 +268,7 @@ func dropsRepositories(home string, t store.Ticket, was []string) bool {
 // changedRepositoryViews is t's Changed Repositories as t's view in p
 // shows them: each with its landed commit, latest pushed commit, pull
 // request, and from ci, p's CI state, its CI result there.
-func changedRepositoryViews(p store.Project, t store.Ticket, s *ciState) []ChangedRepositoryView {
+func changedRepositoryViews(p domain.Project, t domain.Ticket, s *ciState) []ChangedRepositoryView {
 	ci := s.ticket(t)
 	rs := slices.Clone(changedRepositories(p.Key, t))
 	inLandingOrder(p, rs, repositoryName)
@@ -304,7 +305,7 @@ func recordRepository(home, name string) string {
 
 // latestPushedIn is the latest commit the Factory pushed for t in the
 // Repository name; nil when it pushed none there.
-func latestPushedIn(home string, t store.Ticket, name string) *PushedCommitView {
+func latestPushedIn(home string, t domain.Ticket, name string) *PushedCommitView {
 	for i := len(t.PushedCommits) - 1; i >= 0; i-- {
 		if pc := t.PushedCommits[i]; recordRepository(home, pc.Repository) == name {
 			return &PushedCommitView{Commit: pc.Commit, Pushed: pc.Pushed}
@@ -316,8 +317,8 @@ func latestPushedIn(home string, t store.Ticket, name string) *PushedCommitView 
 // landedByMove is the commit a Done t landed at, from its land, for a
 // Ticket that landed before landed commits were recorded per Repository;
 // nil when its last Move isn't a land with a commit.
-func landedByMove(t store.Ticket) *LandedView {
-	if t.State != store.Done || len(t.Moves) == 0 {
+func landedByMove(t domain.Ticket) *LandedView {
+	if t.State != domain.Done || len(t.Moves) == 0 {
 		return nil
 	}
 	if m := t.Moves[len(t.Moves)-1]; m.Via == "merge" && m.Commit != "" {
@@ -328,7 +329,7 @@ func landedByMove(t store.Ticket) *LandedView {
 
 // specRepositories is the Changed Repositories of tickets, a Spec's, by
 // Name in p's landing order: the union of theirs.
-func specRepositories(p store.Project, tickets []store.Ticket) []string {
+func specRepositories(p domain.Project, tickets []domain.Ticket) []string {
 	var names []string
 	for _, t := range tickets {
 		for _, name := range changedRepositoryNames(p.Key, t) {
@@ -357,11 +358,11 @@ type ReportChangedRepositoriesInput struct {
 // Repositories as the Ticket's live Changed Repositories, replacing the
 // last report's. A report the same as the record writes nothing.
 func (c *Core) ReportChangedRepositories(ctx context.Context, key string, in ReportChangedRepositoriesInput) (Written[TicketView], error) {
-	return c.updateTicketIn(key, "report_changed_repositories", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
+	return c.updateTicketIn(key, "report_changed_repositories", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
 		if _, err := holder(t, key, in.ClaimID); err != nil {
 			return false, err
 		}
-		if t.State != store.InProgress {
+		if t.State != domain.InProgress {
 			return false, &Error{Code: ActionNotAllowed, AllowedActions: allowedActions(t.State, ActorOf(ctx)), Message: fmt.Sprintf(
 				"%s is %s: its Changed Repositories are reported only while it is In Progress, and its finish settles them", DisplayID(key, t.Number), t.State)}
 		}

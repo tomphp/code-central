@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -36,7 +37,7 @@ func (c *Core) EditTicket(ctx context.Context, key string, in EditTicketInput) (
 	if in.Title != nil && strings.TrimSpace(*in.Title) == "" {
 		return Written[TicketView]{}, invalid("title", "a Ticket needs a title")
 	}
-	return c.updateTicket(key, "edit_ticket", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, "edit_ticket", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		if err := definitionOwned(ctx, DisplayID(key, t.Number), t.Link); err != nil {
 			return false, err
 		}
@@ -46,9 +47,26 @@ func (c *Core) EditTicket(ctx context.Context, key string, in EditTicketInput) (
 		if len(prev) == 0 {
 			return false, nil
 		}
-		t.Edits = append(t.Edits, store.Edit{Number: len(t.Edits) + 1, Actor: string(ActorOf(ctx)), Time: c.now(), Previous: prev})
+		t.Edits = append(t.Edits, domain.Edit{Number: len(t.Edits) + 1, Actor: string(ActorOf(ctx)), Time: c.now(), Previous: prev})
 		return true, nil
 	})
+}
+
+// ticketEditable is whether the UI offers Edit on t (the glossary's
+// Edit): while it is Draft, its Link doesn't own its definition, which
+// definitionOwned refuses, and its Project p takes writes, which writable
+// refuses. TicketView's editable.
+func ticketEditable(p domain.Project, t domain.Ticket) bool {
+	return t.State == domain.Draft && !t.Link.Owned() && p.Archived.IsZero()
+}
+
+// specEditable is whether the UI offers Edit on s, whose Tickets are all
+// finished when specFinished (the glossary's Edit): until it is Finished,
+// never on a Map, while its Link doesn't own its definition, which
+// definitionOwned refuses, and its Project p takes writes, which writable
+// refuses. SpecDetail's editable.
+func specEditable(p domain.Project, s domain.Spec, specFinished bool) bool {
+	return !specFinished && !isMap(s.Labels) && !s.Link.Owned() && p.Archived.IsZero()
 }
 
 // EditSpecInput is edit_spec's input. A field left out is unchanged; a
@@ -86,7 +104,7 @@ func (c *Core) EditSpec(ctx context.Context, key string, in EditSpecInput) (Writ
 		change(prev, "body", &s.Body, in.Body)
 		if len(prev) > 0 {
 			s.Updated = c.now()
-			s.Edits = append(s.Edits, store.Edit{Number: len(s.Edits) + 1, Actor: string(ActorOf(ctx)), Time: s.Updated, Previous: prev})
+			s.Edits = append(s.Edits, domain.Edit{Number: len(s.Edits) + 1, Actor: string(ActorOf(ctx)), Time: s.Updated, Previous: prev})
 			if err := w.PutSpec(key, s); err != nil {
 				return err
 			}
@@ -136,7 +154,7 @@ func (c *Core) Comment(ctx context.Context, key string, in CommentInput) (Writte
 	if strings.TrimSpace(in.Body) == "" {
 		return Written[TicketView]{}, invalid("body", "a comment needs a body")
 	}
-	return c.updateTicket(key, "comment", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, "comment", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		addComment(t, ActorOf(ctx), c.now(), 0, in.Body)
 		return true, nil
 	})
@@ -144,7 +162,7 @@ func (c *Core) Comment(ctx context.Context, key string, in CommentInput) (Writte
 
 // Approve is approve(ticket): Draft to Ready.
 func (c *Core) Approve(ctx context.Context, key string, in TicketInput) (Written[TicketView], error) {
-	return c.updateTicket(key, "approve", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, "approve", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		return true, transition(ctx, t, key, "approve", "", c.now())
 	})
 }
@@ -155,7 +173,7 @@ func (c *Core) Defer(ctx context.Context, key string, in DeferInput) (Written[Ti
 	if strings.TrimSpace(in.Reason) == "" {
 		return Written[TicketView]{}, invalid("reason", "defer needs a reason")
 	}
-	return c.updateTicket(key, "defer", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, "defer", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		if err := transition(ctx, t, key, "defer", "", c.now()); err != nil {
 			return false, err
 		}
@@ -166,16 +184,16 @@ func (c *Core) Defer(ctx context.Context, key string, in DeferInput) (Written[Ti
 
 // addComment adds a numbered comment to t. claim is the number of the
 // Claim a required note was made under, 0 for none.
-func addComment(t *store.Ticket, a Actor, at time.Time, claim int, body string) {
-	t.Comments = append(t.Comments, store.Comment{Number: len(t.Comments) + 1, Actor: string(a), Time: at, Claim: claim, Body: body})
+func addComment(t *domain.Ticket, a Actor, at time.Time, claim int, body string) {
+	t.Comments = append(t.Comments, domain.Comment{Number: len(t.Comments) + 1, Actor: string(a), Time: at, Claim: claim, Body: body})
 }
 
 // updateTicket loads the Ticket ref names, for operation op, under the
 // write lock and applies fn. When fn reports a change, the Ticket's
 // updated time is set and it is written. Its result is the write's
 // Acknowledgement, or with full the Ticket.
-func (c *Core) updateTicket(key, op string, ref Ref, full bool, fn func(t *store.Ticket) (bool, error)) (Written[TicketView], error) {
-	return c.updateTicketIn(key, op, ref, full, func(_ store.Reader, t *store.Ticket) (bool, error) { return fn(t) })
+func (c *Core) updateTicket(key, op string, ref Ref, full bool, fn func(t *domain.Ticket) (bool, error)) (Written[TicketView], error) {
+	return c.updateTicketIn(key, op, ref, full, func(_ store.Reader, t *domain.Ticket) (bool, error) { return fn(t) })
 }
 
 // RecordKind says whether a record is a Spec or a Ticket.
@@ -402,7 +420,7 @@ func (c *Core) updateTargetThen(key string, ref Ref, fn func(r store.Reader, onS
 			}
 			if changed {
 				s.Updated = c.now()
-				if err := put(store.Import{RewrittenSpecs: []store.Spec{s}}); err != nil {
+				if err := put(store.Import{RewrittenSpecs: []domain.Spec{s}}); err != nil {
 					return err
 				}
 			}
@@ -416,7 +434,7 @@ func (c *Core) updateTargetThen(key string, ref Ref, fn func(r store.Reader, onS
 			}
 			if changed {
 				t.Updated = c.now()
-				if err := put(store.Import{Rewritten: []store.Ticket{t}}); err != nil {
+				if err := put(store.Import{Rewritten: []domain.Ticket{t}}); err != nil {
 					return err
 				}
 			}
@@ -428,7 +446,7 @@ func (c *Core) updateTargetThen(key string, ref Ref, fn func(r store.Reader, onS
 	return v, err
 }
 
-func editViews(es []store.Edit) []EditView {
+func editViews(es []domain.Edit) []EditView {
 	out := []EditView{}
 	for _, e := range es {
 		out = append(out, EditView{Number: e.Number, Actor: e.Actor, Time: e.Time, Previous: e.Previous})
@@ -445,7 +463,7 @@ type CommentView struct {
 	Body   string    `json:"body"`
 }
 
-func commentViews(cs []store.Comment) []CommentView {
+func commentViews(cs []domain.Comment) []CommentView {
 	out := []CommentView{}
 	for _, c := range cs {
 		out = append(out, CommentView{Number: c.Number, Actor: c.Actor, Time: c.Time, Claim: c.Claim, Body: c.Body})

@@ -2,6 +2,7 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"slices"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // The Factory's Repositories (Spec code-central-848): it clones each of
@@ -97,14 +97,14 @@ func TestARepositoryAddedWhileTheFactoryRunsIsClonedOnTheNextPoll(t *testing.T) 
 
 	id := h.ReadyTicket("Starts with every Repository cloned")
 	r.Poll()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 }
 
 func TestTheCloneIsMadeUnderThePushRemotesName(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	h.AddRemote("upstream")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, Push: true, Remote: "upstream"})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "upstream"})
 	web := h.AddRepository("web")
 
 	h.Start()
@@ -187,7 +187,7 @@ func TestAPathHoldingSomethingElseIsRepositoryMissingAndHoldsClaimsUntilMovedAsi
 	r.WantOutput("warning: Repository web is missing: " + web.Path + " isn't a git repository")
 	r.Poll()
 	wantMissing(t, h, web, "isn't a git repository")
-	if s := h.Ticket(id).State; s != store.Ready {
+	if s := h.Ticket(id).State; s != domain.Ready {
 		t.Errorf("%s is %s, want it not claimed while web is missing", id, s)
 	}
 	if got := files(t, web.Path); !slices.Equal(got, []string{"plans.txt"}) {
@@ -198,7 +198,7 @@ func TestAPathHoldingSomethingElseIsRepositoryMissingAndHoldsClaimsUntilMovedAsi
 		t.Fatal(err)
 	}
 	r.Poll()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	if c := clone(t, h, "web"); c == nil || c.State != core.CloneReady {
 		t.Errorf("web's clone %+v, want ready once cloned", c)
 	}
@@ -240,7 +240,7 @@ func TestAFailedCloneIsRepositoryMissing(t *testing.T) {
 	r := h.Start()
 	r.Poll()
 	wantMissing(t, h, &factorytest.Repository{Name: "gone", CloneURL: gone, Path: filepath.Join(filepath.Dir(h.Repo), "gone")}, "git clone failed")
-	if s := h.Ticket(id).State; s != store.Ready {
+	if s := h.Ticket(id).State; s != domain.Ready {
 		t.Errorf("%s is %s, want it not claimed while gone is missing", id, s)
 	}
 	if got := files(t, filepath.Dir(h.Repo)); !slices.Equal(got, []string{"repo", "repo.worktrees"}) {

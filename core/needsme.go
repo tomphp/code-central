@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -156,7 +157,7 @@ type NeedsMeRow struct {
 	Project string        `json:"project"`
 	ID      string        `json:"id"`
 	Title   string        `json:"title"`
-	State   store.State   `json:"state"`
+	State   domain.State  `json:"state"`
 	Reason  NeedsMeReason `json:"reason"`
 	Since   time.Time     `json:"since"`
 	// FocusItem says the Project's Focus Kinds leave the row's reason on.
@@ -229,7 +230,7 @@ type NeedsMeRequirement struct {
 
 // requirement is the Requirement t is on, or nil when its Spec isn't
 // one.
-func (e *evaluation) requirement(t store.Ticket) *NeedsMeRequirement {
+func (e *evaluation) requirement(t domain.Ticket) *NeedsMeRequirement {
 	if !e.evaluated().requirements[t.Spec] {
 		return nil
 	}
@@ -248,7 +249,7 @@ type NeedsMeSpec struct {
 
 // needsMeSpec is the Spec t is on when t is on a Map, or is a Map Ticket
 // or a Prototype, and its Spec isn't a Requirement; nil otherwise.
-func needsMeSpec(r store.Reader, key string, t store.Ticket, req *NeedsMeRequirement) *NeedsMeSpec {
+func needsMeSpec(r store.Reader, key string, t domain.Ticket, req *NeedsMeRequirement) *NeedsMeSpec {
 	if req != nil {
 		return nil
 	}
@@ -329,7 +330,7 @@ func needsMeCount(items []needsMeItem) int {
 
 // row is the Needs Me row of its own of t, which waits for tr and no CI
 // item lists.
-func (e *evaluation) row(t store.Ticket, tr ticketReason) NeedsMeRow {
+func (e *evaluation) row(t domain.Ticket, tr ticketReason) NeedsMeRow {
 	key := e.p.Key
 	req := e.requirement(t)
 	row := NeedsMeRow{
@@ -344,7 +345,7 @@ func (e *evaluation) row(t store.Ticket, tr ticketReason) NeedsMeRow {
 			rd := t.Rounds[n-1]
 			s := RoundSummary{Number: rd.Number, Questions: len(rd.Questions)}
 			for _, q := range rd.Questions {
-				if q.Status == store.QuestionOpen {
+				if q.Status == domain.QuestionOpen {
 					s.Open++
 				}
 			}
@@ -376,7 +377,7 @@ func (e *evaluation) row(t store.Ticket, tr ticketReason) NeedsMeRow {
 
 // finishSummary is the comment stored with t's last move into In Review,
 // or "" when that move had none (a human move).
-func finishSummary(t store.Ticket) string {
+func finishSummary(t domain.Ticket) string {
 	at := entered(t)
 	for i := len(t.Comments) - 1; i >= 0; i-- {
 		if cm := t.Comments[i]; cm.Time.Equal(at) && cm.Actor != string(Human) {
@@ -393,7 +394,7 @@ func firstLine(s string) string {
 
 // entered is when t moved into its current State (its last write, if no
 // move records it).
-func entered(t store.Ticket) time.Time {
+func entered(t domain.Ticket) time.Time {
 	for i := len(t.Moves) - 1; i >= 0; i-- {
 		if t.Moves[i].To == t.State {
 			return t.Moves[i].Time
@@ -404,9 +405,9 @@ func entered(t store.Ticket) time.Time {
 
 // cancelledBlocker is the first open Blocker of t that is Cancelled with
 // no Replacements left to follow.
-func cancelledBlocker(rule blockRule, t store.Ticket) (BlockerView, bool) {
+func cancelledBlocker(rule blockRule, t domain.Ticket) (BlockerView, bool) {
 	for _, b := range rule.openBlockers(t) {
-		if b.State == store.Cancelled {
+		if b.State == domain.Cancelled {
 			return b, true
 		}
 	}

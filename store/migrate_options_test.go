@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"testing"
 
@@ -64,7 +65,7 @@ edits: []
 		t.Errorf("the backup is not the format-5 store:\n%v", got)
 	}
 	s.View(func(r store.Reader) error {
-		if o := r.Options(); o.FocusClear != store.FocusActivityDashboard {
+		if o := r.Options(); o.FocusClear != domain.FocusActivityDashboard {
 			t.Errorf("options after migrating = %+v, want the defaults", o)
 		}
 		return nil

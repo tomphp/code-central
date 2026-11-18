@@ -2,12 +2,12 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // Landing in a local-only Repository (Spec code-central-879, ADR 0039):
@@ -24,12 +24,12 @@ func TestUnderMergeAndPushTheHomeIsPushedAndALocalOnlyRepositoryLandsOnMerge(t *
 	mergeAndPush(h, "origin")
 	id := inTwo(h, "Add an endpoint")
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	h.Accept(id)
 	r.Poll()
 
-	tk := h.WantState(id, store.Done)
+	tk := h.WantState(id, domain.Done)
 	homeMerge, apiMerge := h.Git("rev-parse", "main"), h.GitIn(api.Path, "rev-parse", "main")
 	if got := home.Git("rev-parse", "main"); got != homeMerge {
 		t.Errorf("the Home Repository's remote main is at %s, want its merge %s pushed", got, homeMerge)
@@ -54,12 +54,12 @@ func TestUnderMergeAndPushALocalOnlyRepositorysOwnRemoteIsNeverFetchedPushedOrLe
 	mergeAndPush(h, "origin")
 	id := inAPI(h, "Add an endpoint")
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	h.Accept(id)
 	r.Poll()
 
-	tk := h.WantState(id, store.Done)
+	tk := h.WantState(id, domain.Done)
 	if merge := h.GitIn(api.Path, "rev-parse", "main"); landedIn(tk, "api") != merge {
 		t.Fatalf("Changed Repositories %+v, want api landed at its merge %s", tk.Repositories, merge)
 	}
@@ -111,12 +111,12 @@ func TestUnderTheCIGateATicketChangingOnlyALocalOnlyRepositoryLandsOnMergeWithNo
 	watchCIIn(t, h, "api", "acme/api")
 	id := inAPI(h, "Add an endpoint")
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	h.Accept(id)
 	r.Poll()
 
-	tk := h.WantState(id, store.Done)
+	tk := h.WantState(id, domain.Done)
 	if merge := h.GitIn(api.Path, "rev-parse", "main"); landedIn(tk, "api") != merge {
 		t.Fatalf("Changed Repositories %+v, want api landed at its merge %s", tk.Repositories, merge)
 	}
@@ -138,15 +138,15 @@ func TestUnderBranchAndPushAcceptPushesTheBranchOnlyWhereThereIsACloneURL(t *tes
 	h := factorytest.New(t)
 	home := h.AddRemote("origin")
 	api := h.AddLocalRepository("api")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingBranch, Push: true, Remote: "origin"})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 	id := inTwo(h, "Add an endpoint")
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	h.Accept(id)
 	r.Poll()
 
-	tk := h.WantState(id, store.Accepted)
+	tk := h.WantState(id, domain.Accepted)
 	if got, want := home.Git("rev-parse", "refs/heads/"+id), h.Git("rev-parse", "refs/heads/"+id); got != want {
 		t.Errorf("the Home Repository's remote %s is at %q, want %s", id, got, want)
 	}
@@ -159,13 +159,13 @@ func TestUnderBranchAndPushAcceptPushesTheBranchOnlyWhereThereIsACloneURL(t *tes
 	h.GitIn(api.Path, "merge", "-q", "--no-ff", "-m", "Merge "+id, id)
 	h.Git("merge", "-q", "--no-ff", "-m", "Merge "+id, id)
 	r.Poll()
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 }
 
 func TestATicketWaitingOnCIInARepositoryWhoseCloneURLIsClearedLandsThereWithNoGate(t *testing.T) {
 	t.Parallel()
 	h, api, r, id := gatedInTwo(t, false)
-	tk := h.WantState(id, store.Accepted)
+	tk := h.WantState(id, domain.Accepted)
 	apiPushed := pushedIn(tk, "api")
 	if apiPushed == "" || landedIn(tk, "api") != "" {
 		t.Fatalf("Changed Repositories %+v, want api pushed and waiting on its CI", tk.Repositories)
@@ -181,7 +181,7 @@ func TestATicketWaitingOnCIInARepositoryWhoseCloneURLIsClearedLandsThereWithNoGa
 
 	r.Poll()
 
-	tk = h.WantState(id, store.Accepted)
+	tk = h.WantState(id, domain.Accepted)
 	if landedIn(tk, "api") == "" || tk.Repositories[0].Landed != nil {
 		t.Fatalf("Changed Repositories %+v, want api landed with no CI gate, and the Home Repository still waiting on its own CI", tk.Repositories)
 	}
@@ -202,12 +202,12 @@ func TestUnderLandPerSpecALocalOnlyRepositorysSpecBranchMergeLandsOnMerge(t *tes
 	id := inTwo(h, "Add an endpoint")
 	mergeAndPush(h, "origin")
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	h.Accept(id)
 	r.Poll()
 
-	tk := h.WantState(id, store.Done)
+	tk := h.WantState(id, domain.Done)
 	homeMerge, apiMerge := h.Git("rev-parse", "main"), h.GitIn(api.Path, "rev-parse", "main")
 	want := "Merge spec " + h.SpecID() + ": Work"
 	if got := subject(h, api.Path, apiMerge); got != want {
@@ -229,12 +229,12 @@ func TestUnderMergeAndPushAHandMergeInALocalOnlyRepositoryLandsWithNoPush(t *tes
 	mergeAndPush(h, "origin")
 	id := inAPI(h, "Add an endpoint")
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	h.GitIn(api.Path, "merge", "-q", "--no-ff", "-m", "Merge "+id, id)
 
 	r.Poll()
 
-	tk := h.WantState(id, store.Done)
+	tk := h.WantState(id, domain.Done)
 	if work := h.GitIn(api.Path, "rev-parse", "refs/heads/"+id); landedIn(tk, "api") != work {
 		t.Fatalf("Changed Repositories %+v, want api landed at its work %s", tk.Repositories, work)
 	}
@@ -257,7 +257,7 @@ func TestARepositoryWhoseCloneURLIsClearedWhileItsBaseHasDivergedNoLongerHoldsBa
 	ready := h.ReadyTicket("Waits for the base")
 	h.Script(ready, factorytest.Wait())
 	r.Poll()
-	if tk := h.Ticket(ready); tk.State != store.Ready {
+	if tk := h.Ticket(ready); tk.State != domain.Ready {
 		t.Fatalf("%s is %s, want it not claimed while api's base has diverged", ready, tk.State)
 	}
 
@@ -268,7 +268,7 @@ func TestARepositoryWhoseCloneURLIsClearedWhileItsBaseHasDivergedNoLongerHoldsBa
 	}
 	r.Poll()
 
-	h.WantState(ready, store.InProgress)
+	h.WantState(ready, domain.InProgress)
 	if rows := h.NeedsMeItems(core.ReasonBaseDiverged); len(rows) != 0 {
 		t.Errorf("Base diverged items %+v, want none once api is local-only", rows)
 	}

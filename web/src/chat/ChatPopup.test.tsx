@@ -99,6 +99,12 @@ describe("the Chat pop-up's messages", () => {
     expect(within(log()).getByText("Claude is working on it…")).toBeInTheDocument();
   });
 
+  it("shows Working… while only the human's message is there", () => {
+    renderPopup(conversation([human("one")], { running: true }));
+
+    expect(screen.getByText("Working…")).toBeInTheDocument();
+  });
+
   it("says older messages were dropped, only for a tail", () => {
     renderPopup(conversation([human("late")], { tail: true }));
 

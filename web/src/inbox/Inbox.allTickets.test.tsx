@@ -59,6 +59,21 @@ describe("the All Tickets view", () => {
     expect(within(within(list()).getByRole("link", { name: /acme-7/ })).getByLabelText("Needs you")).toBeInTheDocument();
   });
 
+  it("badges each row's Spec line with its Spec's kind", async () => {
+    const w = await ticketsWorld();
+    const s = scenario(w);
+    const longLived = await s.spec("acme", { title: "CI Fixes", labels: ["long-lived"] }); // acme-14
+    await s.ticket("acme", { title: "Fix lint", spec: longLived }); // acme-15
+    await renderApp(w);
+    within(nav()).getByRole("button", { name: /^All Tickets/ });
+    await allTickets();
+    const badge = (id: string, kind: string) => within(list().querySelector<HTMLElement>(`a[data-id="${id}"]`)!).getByText(kind);
+    expect(badge("acme-3", "Requirement")).toHaveClass("kind-badge", "kind-requirement");
+    expect(badge("acme-6", "Spec")).toHaveClass("kind-badge", "kind-spec");
+    expect(badge("acme-10", "Map")).toHaveClass("kind-badge", "kind-map");
+    expect(badge("acme-15", "Long-lived")).toHaveClass("kind-badge", "kind-long-lived");
+  });
+
   it("follows the Project filter and opens a Ticket on the right", async () => {
     await renderApp(await ticketsWorld(), "/?view=inbox&list=tickets&project=beta");
     expect(rowIds()).toEqual(["beta-3", "beta-2"]);

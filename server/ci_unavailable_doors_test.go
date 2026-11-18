@@ -2,12 +2,12 @@ package server_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"testing"
 	"time"
 
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
 )
 
 // CI unavailable (code-central-262): a Ticket the CI gate has held for
@@ -51,7 +51,7 @@ func watcherReports(t *testing.T, srv *codecentraltest.Server, in core.ReportWat
 var (
 	watching   = core.ReportWatcherStatusInput{State: core.WatcherWatching}
 	loggedOut  = core.ReportWatcherStatusInput{State: core.WatcherError, Problem: core.ProblemLoggedOut, Message: "gh is logged out", Fix: "Run gh auth login."}
-	runningRun = ciRun(1, "ci.yml", "abc123", store.CIInProgress, "")
+	runningRun = ciRun(1, "ci.yml", "abc123", domain.CIInProgress, "")
 )
 
 func TestAGatedTicketWithNoCIRunsIsCIUnavailableAfterTenMinutes(t *testing.T) {
@@ -109,7 +109,7 @@ func TestTheCIWatcherNotWatchingIsSaidBeforeNoCIRuns(t *testing.T) {
 func TestOnlyIgnoredRunsAreNoCIRuns(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
 	watcherReports(t, srv, watching)
-	reportRuns(t, srv, ciRun(1, "nightly.yml", "abc123", store.CICompleted, store.CISuccess))
+	reportRuns(t, srv, ciRun(1, "nightly.yml", "abc123", domain.CICompleted, domain.CISuccess))
 	srv.Clock.Advance(core.CIUnavailableAfter)
 	wantCIUnavailable(t, srv, core.CINoRuns)
 }
@@ -117,7 +117,7 @@ func TestOnlyIgnoredRunsAreNoCIRuns(t *testing.T) {
 func TestRunsForAnOlderPushedCommitAreNoCIRuns(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
 	watcherReports(t, srv, watching)
-	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", store.CIInProgress, ""))
+	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", domain.CIInProgress, ""))
 	srv.Clock.Advance(core.CIUnavailableAfter)
 	pushCommit(t, srv, "def456")
 	wantNotInNeedsMe(t, srv, "just after a newer push")
@@ -140,7 +140,7 @@ func TestCIUnavailableClearsWhenTheGateLifts(t *testing.T) {
 		{"Push off", func(t *testing.T, srv *codecentraltest.Server) {
 			must(t, func() error {
 				_, err := srv.Core.SetLandingMethod(core.WithActor(context.Background(), core.Human), "acme",
-					core.SetLandingMethodInput{Method: store.LandingMerge})
+					core.SetLandingMethodInput{Method: domain.LandingMerge})
 				return err
 			})
 		}},
@@ -161,7 +161,7 @@ func TestCIUnavailableClearsWhenTheGateLifts(t *testing.T) {
 
 func TestAGatedTicketWhoseCIPassedIsNotCIUnavailable(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
-	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", store.CICompleted, store.CISuccess))
+	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", domain.CICompleted, domain.CISuccess))
 	srv.Clock.Advance(core.NotLandedAfter + time.Minute)
 	// The Factory lands a passed Ticket; if it hasn't, it isn't landing.
 	row, _ := needsMeRowOf(t, srv, "acme-3")

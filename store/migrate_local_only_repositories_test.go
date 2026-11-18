@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -31,7 +32,7 @@ func TestTheRealChainMigratesAFormat47StoreToTheLocalOnlyRepositoriesFormat(t *t
 		}
 	}
 
-	want := []store.Repository{
+	want := []domain.Repository{
 		{Name: "acme", Home: true},
 		{Name: "web", CloneURL: "git@github.com:acme/web.git", Base: "main"},
 		{Name: "notes", Base: "main", LocalPath: "/src/notes"},

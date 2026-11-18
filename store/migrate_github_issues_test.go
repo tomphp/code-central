@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -37,7 +38,7 @@ func TestTheRealChainMigratesAFormat13StoreToTheGitHubIssuesFormat(t *testing.T)
 	}
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
-		if !reflect.DeepEqual(p.GitHubIssues, store.GitHubIssues{}) {
+		if !reflect.DeepEqual(p.GitHubIssues, domain.GitHubIssues{}) {
 			t.Errorf("github issues after migrating = %+v, want off with nothing set", p.GitHubIssues)
 		}
 		if !p.CI.Tracking || homeCI(p).Repository != "acme/web" {

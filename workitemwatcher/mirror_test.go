@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakeazdo"
-	"github.com/tomoram/code-central/store"
 )
 
 // org is the fake's organization, its collection, as Link IDs carry it:
@@ -119,10 +119,10 @@ func (w *watching) ticketOf(id int) core.TicketView {
 
 // wantExternal checks the Incoming Issue linked to work item id is still
 // Draft, linked and not detached, with external state want.
-func wantExternal(t *testing.T, w *watching, id int, want store.ExternalState) {
+func wantExternal(t *testing.T, w *watching, id int, want domain.ExternalState) {
 	t.Helper()
 	got := w.ticketOf(id)
-	if got.State != store.Draft || got.Link == nil || got.Link.Detached || got.Link.ExternalState != want {
+	if got.State != domain.Draft || got.Link == nil || got.Link.Detached || got.Link.ExternalState != want {
 		t.Fatalf("work item %d's Ticket is %s with Link %+v, want Draft, linked, %s", id, got.State, got.Link, want)
 	}
 }
@@ -166,7 +166,7 @@ func TestMatchingWorkItemsArriveAsDraftIncomingIssuesOnTheAzureBoardsSpec(t *tes
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.State != store.Draft || got.Spec.ID != watch.Spec || got.Link.Integration != core.IntegrationAzureBoards || got.Link.ExternalState != store.ExternalOpen {
+		if got.State != domain.Draft || got.Spec.ID != watch.Spec || got.Link.Integration != core.IntegrationAzureBoards || got.Link.ExternalState != domain.ExternalOpen {
 			t.Fatalf("%s is %s on %s, linked %+v, want Draft on the Azure Boards Spec %s, open on azure-boards", i.Ticket, got.State, got.Spec.ID, got.Link, watch.Spec)
 		}
 	}
@@ -248,17 +248,17 @@ func TestAWorkItemLeavingTheResultsIsOutOfScopeAndRestoredWhenItReturns(t *testi
 	w.fake.SavedQuery(queryID, 1)
 	from := len(w.fake.Requests())
 	w.polled()
-	wantExternal(t, w, 1, store.ExternalOpen)
-	wantExternal(t, w, 2, store.ExternalOutOfScope)
-	wantExternal(t, w, 3, store.ExternalDeleted)
+	wantExternal(t, w, 1, domain.ExternalOpen)
+	wantExternal(t, w, 2, domain.ExternalOutOfScope)
+	wantExternal(t, w, 3, domain.ExternalDeleted)
 	if got := w.read(from); !slices.Equal(got, []int{1, 2, 3}) {
 		t.Fatalf("read %v, want 1, the match, and 2 and 3, which left", got)
 	}
 
 	w.fake.SavedQuery(queryID, 1, 2)
 	w.polled()
-	wantExternal(t, w, 2, store.ExternalOpen)
-	wantExternal(t, w, 3, store.ExternalDeleted)
+	wantExternal(t, w, 2, domain.ExternalOpen)
+	wantExternal(t, w, 3, domain.ExternalDeleted)
 	if got := len(w.linked()); got != 3 {
 		t.Fatalf("%d linked items, want 3: nothing arrives twice", got)
 	}
@@ -272,8 +272,8 @@ func TestAnUnreadableWorkItemThatLeftTheResultsIsDeleted(t *testing.T) {
 	w.fake.Script(fakeazdo.JSON("GET", fakeazdo.CollectionPath+"/_apis/wit/workitems/2", 403, map[string]string{"message": "TF401019: no permission"}))
 	w.fake.SavedQuery(queryID, 1)
 	w.polled()
-	wantExternal(t, w, 1, store.ExternalOpen)
-	wantExternal(t, w, 2, store.ExternalDeleted)
+	wantExternal(t, w, 1, domain.ExternalOpen)
+	wantExternal(t, w, 2, domain.ExternalDeleted)
 }
 
 // Changing the query, or the mode, behaves as the work items changing:
@@ -286,16 +286,16 @@ func TestChangingTheQueryOrTheModeMovesWorkItemsInAndOutOfScope(t *testing.T) {
 	w.fake.SavedQuery(otherQuery, 2, 3)
 	w.setBoards(core.SetAzureBoardsInput{On: true, QueryURL: w.queryURL(otherQuery)})
 	w.polled()
-	wantExternal(t, w, 1, store.ExternalOutOfScope)
-	wantExternal(t, w, 2, store.ExternalOpen)
-	wantExternal(t, w, 3, store.ExternalOpen)
+	wantExternal(t, w, 1, domain.ExternalOutOfScope)
+	wantExternal(t, w, 2, domain.ExternalOpen)
+	wantExternal(t, w, 3, domain.ExternalOpen)
 
 	w.fake.Filter("[System.AssignedTo] = @Me", 1)
 	w.setBoards(core.SetAzureBoardsInput{On: true, Mode: "wiql", QueryURL: w.queryURL(otherQuery), ProjectURL: w.fake.ProjectURL(), Where: "[System.AssignedTo] = @Me"})
 	w.polled()
-	wantExternal(t, w, 1, store.ExternalOpen)
-	wantExternal(t, w, 2, store.ExternalOutOfScope)
-	wantExternal(t, w, 3, store.ExternalOutOfScope)
+	wantExternal(t, w, 1, domain.ExternalOpen)
+	wantExternal(t, w, 2, domain.ExternalOutOfScope)
+	wantExternal(t, w, 3, domain.ExternalOutOfScope)
 	if got := len(w.linked()); got != 3 {
 		t.Fatalf("%d linked items, want 3", got)
 	}
@@ -348,7 +348,7 @@ func TestAWorkItemThatBecameARequirementIsUnaffectedByTheQuery(t *testing.T) {
 		t.Fatalf("read %v, want only the Incoming Issue's work item", got)
 	}
 	for _, row := range w.linked() {
-		if row.Link.ID == linkID(1) && row.Link.ExternalState != store.ExternalOpen {
+		if row.Link.ID == linkID(1) && row.Link.ExternalState != domain.ExternalOpen {
 			t.Fatalf("the Requirement's work item is %s, want open still", row.Link.ExternalState)
 		}
 	}

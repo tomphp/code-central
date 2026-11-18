@@ -1,12 +1,12 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 func off() *bool { v := false; return &v }
@@ -20,10 +20,10 @@ func TestTurningLandPerSpecOffLandsTheWaitingTicketsAsAGroupAndLaterOnesSingly(t
 	r.WantOutput(b + ": merged into spec/" + h.SpecID())
 	oldMain := h.Git("rev-parse", "main")
 
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, LandPerSpec: off()})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, LandPerSpec: off()})
 	r.Poll()
-	h.WantState(a, store.Done)
-	h.WantState(b, store.Done)
+	h.WantState(a, domain.Done)
+	h.WantState(b, domain.Done)
 	merge := h.Git("rev-parse", "main")
 	if got := h.Git("log", "-1", "--format=%s", merge); got != "Merge spec "+h.SpecID()+": Work" {
 		t.Errorf("merge subject %q", got)
@@ -35,7 +35,7 @@ func TestTurningLandPerSpecOffLandsTheWaitingTicketsAsAGroupAndLaterOnesSingly(t
 	release()
 	c, _ := accepted(h, "Later", "three.txt", "3\n")
 	r.Poll()
-	h.WantState(c, store.Done)
+	h.WantState(c, domain.Done)
 	if got := h.Git("log", "-1", "--format=%s", "main"); got != "Merge "+c+": Later" {
 		t.Errorf("later Ticket landed with %q, want a plain merge", got)
 	}
@@ -45,29 +45,29 @@ func TestTurningLandPerSpecOnHoldsOnlyLaterTickets(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	h.MakeRequirement()
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, LandPerSpec: off()})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, LandPerSpec: off()})
 	a, _ := accepted(h, "First", "one.txt", "1\n")
 	r := h.Start()
-	h.WantState(a, store.Done)
+	h.WantState(a, domain.Done)
 
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, LandPerSpec: func() *bool { v := true; return &v }()})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, LandPerSpec: func() *bool { v := true; return &v }()})
 	release := holdTicketsStage(t, h)
 	b, _ := accepted(h, "Second", "two.txt", "2\n")
 	r.Poll()
 	r.WantOutput(b + ": merged into spec/" + h.SpecID())
-	if h.Ticket(b).State != store.Accepted {
+	if h.Ticket(b).State != domain.Accepted {
 		t.Error("the later Ticket landed before its Spec")
 	}
 	release()
 	r.Poll()
-	h.WantState(b, store.Done)
+	h.WantState(b, domain.Done)
 }
 
 // cancelDrafts cancels the Spec's Draft Stage Tickets, so only the
 // implementation Tickets keep it unfinished.
 func cancelDrafts(t *testing.T, h *factorytest.Harness) {
 	t.Helper()
-	rows, err := h.Server.Client.FindTickets(t.Context(), h.Project, core.FindTicketsInput{Spec: core.Ref(h.SpecID()), State: []store.State{store.Draft}})
+	rows, err := h.Server.Client.FindTickets(t.Context(), h.Project, core.FindTicketsInput{Spec: core.Ref(h.SpecID()), State: []domain.State{domain.Draft}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,8 +84,8 @@ func TestASpecBranchInTheBaseIsDeletedOnceEveryTicketIsDone(t *testing.T) {
 	a, b := twoAccepted(t, h)
 	cancelDrafts(t, h)
 	r := h.Start()
-	h.WantState(a, store.Done)
-	h.WantState(b, store.Done)
+	h.WantState(a, domain.Done)
+	h.WantState(b, domain.Done)
 	r.Poll()
 	r.WantOutput(h.SpecID() + ": deleted spec/" + h.SpecID() + ", which is in main")
 	if out := h.Git("branch", "--list", "spec/*"); out != "" {

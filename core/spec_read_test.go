@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // The lighter get_spec (ticket 134): parts, Sections and the outline.
@@ -18,7 +18,7 @@ const specBody = "Why.\n\n## Solution\n\nDo it.\n\n### Detail\n\nSmall print.\n\
 // sectionedSpec is Spec acme-1 with specBody, one edit and two Tickets.
 func (f fixture) sectionedSpec(t *testing.T) {
 	t.Helper()
-	f.work(t, store.Ready, store.Draft)
+	f.work(t, domain.Ready, domain.Draft)
 	body := specBody
 	if _, err := f.core.EditSpec(ctx, "acme", core.EditSpecInput{Spec: "1", Body: &body}); err != nil {
 		t.Fatalf("edit_spec: %v", err)
@@ -53,8 +53,9 @@ func keys(m map[string]any) []string {
 }
 
 // always is every key a lighter read returns whatever is asked for (Link
-// and Requirement are left out here because acme-1 is neither).
-var always = []string{"created", "finished", "id", "labels", "outline", "state_summary", "tags", "title", "updated"}
+// and Requirement are left out here because acme-1 is neither, and need
+// because none of its Tickets needs the human).
+var always = []string{"claimed", "created", "editable", "finished", "id", "kind", "labels", "outline", "retroable", "state_summary", "tags", "title", "updated"}
 
 var specOutline = []any{
 	map[string]any{"text": "Solution", "level": float64(2), "size": float64(45)},
@@ -66,7 +67,7 @@ func TestGetSpecWithNeitherInputIsTheFullSpec(t *testing.T) {
 	f := newFixture(t)
 	f.sectionedSpec(t)
 	full := f.readSpec(t, core.GetSpecInput{Spec: "acme-1"})
-	want := []string{"body", "created", "edits", "finished", "id", "labels", "state_summary", "tags", "tickets", "title", "updated"}
+	want := []string{"body", "claimed", "created", "editable", "edits", "finished", "id", "kind", "labels", "retroable", "state_summary", "tags", "tickets", "title", "updated"}
 	if got := keys(full); !slices.Equal(got, want) {
 		t.Fatalf("keys %v, want %v: no outline on a full read", got, want)
 	}

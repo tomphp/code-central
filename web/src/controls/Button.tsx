@@ -6,6 +6,7 @@ export interface ButtonProps extends ComponentProps<"button"> {
 }
 
 export function Button({ variant = "default", className, ...props }: ButtonProps) {
+  // landing: a button style, not a Landing
   const classes = ["btn", variant === "default" ? "" : variant, className ?? ""].filter(Boolean).join(" ");
   return <button {...props} className={classes} />;
 }

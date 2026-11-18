@@ -1,13 +1,13 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 func TestAnExistingWorktreeOnTheTicketsBranchIsReused(t *testing.T) {
@@ -22,7 +22,7 @@ func TestAnExistingWorktreeOnTheTicketsBranchIsReused(t *testing.T) {
 	h.Script(id, factorytest.NeedFile("left-by-an-earlier-claim.txt"), factorytest.Finish("Done."), factorytest.Result("success"))
 
 	h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	if c := h.Calls()[0]; c.Dir != h.Worktree(id) {
 		t.Errorf("claude ran in %s, want the reused worktree", c.Dir)
 	}
@@ -37,7 +37,7 @@ func TestAnExistingBranchNamedAfterTheTicketGetsTheWorktree(t *testing.T) {
 	branchTip := h.Git("rev-parse", id)
 
 	h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	if got := h.GitIn(h.Worktree(id), "rev-parse", "HEAD"); got != branchTip {
 		t.Errorf("worktree at %s, want the existing branch's tip %s", got, branchTip)
 	}
@@ -52,11 +52,11 @@ func TestANewBranchStartsFromTheProjectsBase(t *testing.T) {
 	h.Git("checkout", "-q", "--detach")
 	releaseTip := h.Git("rev-parse", "release")
 	release := "release"
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, Base: &release})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Base: &release})
 
 	r := h.Start()
 	r.WantOutput("base: release")
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	if got := h.GitIn(h.Worktree(id), "rev-parse", "HEAD"); got != releaseTip {
 		t.Errorf("branch %s starts at %s, want release's tip %s", id, got, releaseTip)
 	}

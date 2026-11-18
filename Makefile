@@ -46,8 +46,10 @@ vitest: $(WEB_DEPS) hooks corewasm
 # while LOAD busy workers (default 4, 0 for none) take the CPU, the way a
 # loaded CI runner does. It prints a line per run and "N runs, F failures",
 # and fails if any run failed. Go, so the workers stop however it exits.
+# WITH="go test ./factory" also runs that command over and over, the Go
+# suite load of make test.
 vitest-stress: $(WEB_DEPS) hooks corewasm
-	go run ./internal/vitestress -n $(or $(N),20) -load $(or $(LOAD),4) $(F)
+	go run ./internal/vitestress -n $(or $(N),20) -load $(or $(LOAD),4) $(if $(WITH),-with "$(WITH)") $(F)
 
 # Turns on the committed commit-msg hook in .githooks/, which refuses a
 # message that isn't a conventional commit (see CLAUDE.md's Commits). The

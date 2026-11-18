@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"testing"
 
@@ -35,7 +36,7 @@ func TestTheRealChainMigratesAFormat6StoreToTheLandingMethodFormat(t *testing.T)
 	}
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
-		if want := store.DefaultLanding(); p.Landing != want {
+		if want := domain.DefaultLanding(); p.Landing != want {
 			t.Errorf("landing after migrating = %+v, want %+v", p.Landing, want)
 		}
 		return nil

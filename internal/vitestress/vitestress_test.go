@@ -48,3 +48,9 @@ func TestLoadStops(t *testing.T) {
 		t.Errorf("%d goroutines after stop, %d before", after, before)
 	}
 }
+
+func TestCommandLoadRunsAndStops(t *testing.T) {
+	stop := startCommandLoad([]string{os.Args[0], "-test.run=^$"})
+	time.Sleep(200 * time.Millisecond)
+	stop()
+}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -39,12 +40,12 @@ func (f fixture) pushedFor(t *testing.T, repo, ticket, commit string) {
 
 // ciRunIn reports, as the CI Watcher, attempt 1 of run id of ci.yml on
 // commit in the Repository repo, tracked against ticket.
-func (f fixture) ciRunIn(t *testing.T, repo string, id int64, commit, ticket string, status store.CIRunStatus, conclusion store.CIConclusion) {
+func (f fixture) ciRunIn(t *testing.T, repo string, id int64, commit, ticket string, status domain.CIRunStatus, conclusion domain.CIConclusion) {
 	t.Helper()
 	started := f.clock.Now()
 	run := core.CIRunView{Repository: repo, ID: id, Attempt: 1, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: commit,
 		Status: status, Conclusion: conclusion, Started: &started, URL: "https://github.com/acme/" + repo + "/actions/runs/1", Ticket: ticket}
-	if status == store.CICompleted {
+	if status == domain.CICompleted {
 		run.Finished = &started
 	}
 	if _, err := f.core.ReportCIRuns(ctx, "acme", core.ReportCIRunsInput{Runs: []core.CIRunView{run}}); err != nil {
@@ -71,7 +72,7 @@ func (f fixture) changes(t *testing.T, n int, repos ...string) {
 		tk, _ := w.Ticket("acme", n)
 		tk.Repositories = nil
 		for _, r := range repos {
-			tk.Repositories = append(tk.Repositories, store.ChangedRepository{Name: r, Branch: "acme-x", Commit: "head-" + r})
+			tk.Repositories = append(tk.Repositories, domain.ChangedRepository{Name: r, Branch: "acme-x", Commit: "head-" + r})
 		}
 		return w.PutTicket("acme", tk)
 	})
@@ -88,8 +89,8 @@ func TestAddingARepositoryFillsItsCIEntryInFromItsCloneURL(t *testing.T) {
 	f.addRepository(t, core.AddRepositoryInput{Name: "docs", CloneURL: "https://gitlab.com/acme/docs.git"})
 	p := f.addRepository(t, core.AddRepositoryInput{Name: "site", CloneURL: "git@github.com:acme/site.git", CI: &core.RepositoryCI{NotWatched: true}})
 	want := []core.CIRepositoryView{
-		{Name: "web", Provider: store.CIGitHubActions, Repository: "acme/web"},
-		{Name: "infra", Provider: store.CIAzurePipelines, ProjectURL: "https://dev.azure.com/acme/ops"},
+		{Name: "web", Provider: domain.CIGitHubActions, Repository: "acme/web"},
+		{Name: "infra", Provider: domain.CIAzurePipelines, ProjectURL: "https://dev.azure.com/acme/ops"},
 		{Name: "docs", NotWatched: true},
 		{Name: "site", NotWatched: true},
 	}
@@ -115,11 +116,11 @@ func TestALocalOnlyRepositoryStartsNotWatchedAndCanBeGivenACIProviderByHand(t *t
 		t.Fatalf("CI entries %+v, want %+v", p.CI.Repositories, want)
 	}
 	w, err := f.core.SetRepositoryCI(human, "acme", core.SetRepositoryCIInput{Name: "web", Full: true,
-		RepositoryCI: core.RepositoryCI{Provider: store.CIGitHubActions, Repository: "acme/web"}})
+		RepositoryCI: core.RepositoryCI{Provider: domain.CIGitHubActions, Repository: "acme/web"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []core.CIRepositoryView{{Name: "web", Provider: store.CIGitHubActions, Repository: "acme/web"}}; !slices.Equal(w.Record.CI.Repositories, want) {
+	if want := []core.CIRepositoryView{{Name: "web", Provider: domain.CIGitHubActions, Repository: "acme/web"}}; !slices.Equal(w.Record.CI.Repositories, want) {
 		t.Fatalf("CI entries %+v, want %+v", w.Record.CI.Repositories, want)
 	}
 }
@@ -141,11 +142,11 @@ func TestSetRepositoryCIEditsARepositorysEntry(t *testing.T) {
 	f.project(t, "acme")
 	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git"})
 	w, err := f.core.SetRepositoryCI(human, "acme", core.SetRepositoryCIInput{Name: "web", Full: true,
-		RepositoryCI: core.RepositoryCI{Provider: store.CIAzurePipelines, ProjectURL: "https://dev.azure.com/acme/web/"}})
+		RepositoryCI: core.RepositoryCI{Provider: domain.CIAzurePipelines, ProjectURL: "https://dev.azure.com/acme/web/"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := w.Record.CI.Repositories; len(got) != 1 || got[0].Provider != store.CIAzurePipelines || got[0].ProjectURL != "https://dev.azure.com/acme/web" {
+	if got := w.Record.CI.Repositories; len(got) != 1 || got[0].Provider != domain.CIAzurePipelines || got[0].ProjectURL != "https://dev.azure.com/acme/web" {
 		t.Fatalf("CI entries %+v, want web on Azure Pipelines", got)
 	}
 	_, err = f.core.SetRepositoryCI(human, "acme", core.SetRepositoryCIInput{Name: "nope", RepositoryCI: core.RepositoryCI{NotWatched: true}})
@@ -208,8 +209,8 @@ func TestATicketHasACIResultPerWatchedRepositoryAndACombinedOne(t *testing.T) {
 	f := twoRepoWorld(t)
 	f.changes(t, 5, "acme", "api")
 	f.pushedFor(t, "api", "acme-5", "def456")
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CISuccess)
-	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CIInProgress, "")
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CISuccess)
+	f.ciRunIn(t, "api", 1, "def456", "acme-5", domain.CIInProgress, "")
 
 	v := f.getTicket(t, "acme-5")
 	if v.CIResult != core.CIRunning || v.CICommit != "abc123" || v.PushedCommit.Commit != "abc123" {
@@ -223,15 +224,15 @@ func TestATicketHasACIResultPerWatchedRepositoryAndACombinedOne(t *testing.T) {
 	}
 
 	// Running, else failed, else cancelled, else passed.
-	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRunIn(t, "api", 1, "def456", "acme-5", domain.CICompleted, domain.CIFailure)
 	if v := f.getTicket(t, "acme-5"); v.CIResult != core.CIFailed || changedIn(t, v, "acme").CIResult != core.CIPassed {
 		t.Fatalf("CI result %q, want failed combined while acme passed", v.CIResult)
 	}
-	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CICompleted, store.CICancelled)
+	f.ciRunIn(t, "api", 1, "def456", "acme-5", domain.CICompleted, domain.CICancelled)
 	if v := f.getTicket(t, "acme-5"); v.CIResult != core.CICancelled {
 		t.Fatalf("CI result %q, want cancelled", v.CIResult)
 	}
-	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CICompleted, store.CISuccess)
+	f.ciRunIn(t, "api", 1, "def456", "acme-5", domain.CICompleted, domain.CISuccess)
 	if v := f.getTicket(t, "acme-5"); v.CIResult != core.CIPassed {
 		t.Fatalf("CI result %q, want passed", v.CIResult)
 	}
@@ -241,8 +242,8 @@ func TestARedBuildInOneRepositoryLeavesAnothersCIResultItsOwn(t *testing.T) {
 	f := twoRepoWorld(t)
 	f.changes(t, 5, "acme", "api")
 	f.pushedFor(t, "api", "acme-5", "def456")
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CISuccess)
-	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CISuccess)
+	f.ciRunIn(t, "api", 1, "def456", "acme-5", domain.CICompleted, domain.CIFailure)
 
 	// The Home Repository's own result, which the Factory lands it on, is
 	// passed: api's red build doesn't hold it back.
@@ -263,9 +264,9 @@ func TestNotWatchedRepositoriesNeverAffectAResult(t *testing.T) {
 	f := itemWorld(t)
 	f.addRepository(t, core.AddRepositoryInput{Name: "docs", CloneURL: "git@github.com:acme/docs.git", CI: &core.RepositoryCI{NotWatched: true}})
 	f.changes(t, 5, "acme", "docs")
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CISuccess)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CISuccess)
 	f.pushedFor(t, "docs", "acme-5", "fed789")
-	f.ciRunIn(t, "docs", 1, "fed789", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRunIn(t, "docs", 1, "fed789", "acme-5", domain.CICompleted, domain.CIFailure)
 
 	v := f.getTicket(t, "acme-5")
 	if v.CIResult != core.CIPassed || v.NeedsMeReason != "" {
@@ -285,7 +286,7 @@ func TestNotWatchedRepositoriesNeverAffectAResult(t *testing.T) {
 	// A Ticket that pushed only in a Not watched Repository has no CI
 	// result, and is never CI unavailable.
 	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Docs"})
-	f.moveTo(t, 9, store.Accepted)
+	f.moveTo(t, 9, domain.Accepted)
 	f.changes(t, 9, "docs")
 	f.pushedFor(t, "docs", "acme-9", "aaa111")
 	f.clock.Advance(core.CIUnavailableAfter + time.Minute)
@@ -298,8 +299,8 @@ func TestATicketFailedInTwoRepositoriesIsOnTwoItemsAndEachOptionActsOnItsReposit
 	f := twoRepoWorld(t)
 	f.changes(t, 5, "acme", "api")
 	f.pushedFor(t, "api", "acme-5", "def456")
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
-	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
+	f.ciRunIn(t, "api", 1, "def456", "acme-5", domain.CICompleted, domain.CIFailure)
 
 	var titles []string
 	for _, row := range f.needsMe(t) {
@@ -345,7 +346,7 @@ func TestNewFixTicketNamesTheRepository(t *testing.T) {
 	f := twoRepoWorld(t)
 	f.changes(t, 5, "acme", "api")
 	f.pushedFor(t, "api", "acme-5", "def456")
-	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRunIn(t, "api", 1, "def456", "acme-5", domain.CICompleted, domain.CIFailure)
 	w, err := f.core.NewFixTicket(human, "acme", core.NewFixTicketInput{Ticket: "acme-5", Note: "the api tests fail", Full: true})
 	if err != nil {
 		t.Fatal(err)
@@ -373,7 +374,7 @@ func TestTheCIWatchHasEachWatchedRepositorysTargetAndPushedCommits(t *testing.T)
 		t.Fatalf("Repositories %+v, want api", watch.Repositories)
 	}
 	api := watch.Repositories[0]
-	if api.Name != "api" || api.Provider != store.CIGitHubActions || api.Repository != "acme/api" || len(api.Waiting) != 1 || api.Waiting[0].Commit != "def456" || api.Waiting[0].Ticket != "acme-5" {
+	if api.Name != "api" || api.Provider != domain.CIGitHubActions || api.Repository != "acme/api" || len(api.Waiting) != 1 || api.Waiting[0].Commit != "def456" || api.Waiting[0].Ticket != "acme-5" {
 		t.Fatalf("api %+v, want acme/api waiting on def456 for acme-5", api)
 	}
 	if i := slices.IndexFunc(watch.Pushed, func(c core.CITicketCommit) bool { return c.Commit == "def456" }); i < 0 || watch.Pushed[i].Repository != "api" {
@@ -385,7 +386,7 @@ func TestReportsNamingNoRepositoryOfTheProjectAreRefused(t *testing.T) {
 	f := twoRepoWorld(t)
 	_, err := f.core.ReportPushedCommit(ctx, "acme", core.ReportPushedCommitInput{Ticket: "acme-5", Commit: "fed", Repository: "nope"})
 	wantCode(t, err, core.Invalid, "repository")
-	run := core.CIRunView{Repository: "nope", ID: 1, Attempt: 1, Workflow: "ci.yml", Commit: "fed", Status: store.CIQueued, Ticket: "acme-5"}
+	run := core.CIRunView{Repository: "nope", ID: 1, Attempt: 1, Workflow: "ci.yml", Commit: "fed", Status: domain.CIQueued, Ticket: "acme-5"}
 	_, err = f.core.ReportCIRuns(ctx, "acme", core.ReportCIRunsInput{Runs: []core.CIRunView{run}})
 	wantCode(t, err, core.Invalid, "runs[0].repository")
 }
@@ -394,8 +395,8 @@ func TestRunsInTwoRepositoriesWithOneRunIDAreTwoRuns(t *testing.T) {
 	f := twoRepoWorld(t)
 	f.changes(t, 5, "acme", "api")
 	f.pushedFor(t, "api", "acme-5", "def456")
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CISuccess)
-	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CISuccess)
+	f.ciRunIn(t, "api", 1, "def456", "acme-5", domain.CICompleted, domain.CIFailure)
 	if v := f.getTicket(t, "acme-5"); len(v.CIRuns) != 2 || changedIn(t, v, "acme").CIResult != core.CIPassed {
 		t.Fatalf("runs %+v, want each Repository's run 1 kept", v.CIRuns)
 	}

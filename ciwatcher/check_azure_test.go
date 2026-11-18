@@ -2,6 +2,7 @@ package ciwatcher_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"io"
 	"reflect"
 	"runtime"
@@ -12,14 +13,13 @@ import (
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakeazdo"
-	"github.com/tomoram/code-central/store"
 )
 
 const secretPAT = "s3cret-pat-value"
 
 // checkAzure runs the check mode for the fake's project with environ.
 func checkAzure(srv *fakeazdo.Server, environ ...string) core.WatcherCheckResult {
-	in := core.CICheckInput{Provider: store.CIAzurePipelines, ProjectURL: srv.ProjectURL(), PATEnv: "ADO_PAT"}
+	in := core.CICheckInput{Provider: domain.CIAzurePipelines, ProjectURL: srv.ProjectURL(), PATEnv: "ADO_PAT"}
 	return ciwatcher.Check(context.Background(), in, gh.Env{Environ: environ})
 }
 
@@ -76,7 +76,7 @@ func TestAProjectNotFoundOrUnreachableIsProjectUnreadable(t *testing.T) {
 	down := fakeazdo.New(t)
 	url := down.ProjectURL()
 	down.Close()
-	in := core.CICheckInput{Provider: store.CIAzurePipelines, ProjectURL: url, PATEnv: "ADO_PAT"}
+	in := core.CICheckInput{Provider: domain.CIAzurePipelines, ProjectURL: url, PATEnv: "ADO_PAT"}
 	r := ciwatcher.Check(context.Background(), in, gh.Env{Environ: []string{"ADO_PAT=" + secretPAT}})
 	if r.Problem != core.ProblemProjectUnreadable {
 		t.Fatalf("unreachable: check = %+v, want project_unreadable", r)
@@ -114,7 +114,7 @@ func watchingAzure(t *testing.T, srv *fakeazdo.Server, environ ...string) *watch
 	t.Helper()
 	w := newWatching(t)
 	human := core.WithActor(context.Background(), core.Human)
-	if _, err := w.srv.Core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Provider: store.CIAzurePipelines, ProjectURL: srv.ProjectURL(), PATEnv: "MY_PAT"}); err != nil {
+	if _, err := w.srv.Core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Provider: domain.CIAzurePipelines, ProjectURL: srv.ProjectURL(), PATEnv: "MY_PAT"}); err != nil {
 		t.Fatal(err)
 	}
 	r, pw := io.Pipe()

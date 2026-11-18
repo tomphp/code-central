@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // claimInfo is what the Factory's lines say of a held Claim's Ticket. It
@@ -68,7 +68,7 @@ func (f *factory) claimed(c claim, tk core.TicketView, wt, resume string) {
 // turnEnded prints the line for a turn that has ended and freed its
 // slot: how it exited, the State the Factory left its Ticket in, if it
 // read one, and how long it ran.
-func (f *factory) turnEnded(t *turn, end turnEnd, state store.State, ran time.Duration) {
+func (f *factory) turnEnded(t *turn, end turnEnd, state domain.State, ran time.Duration) {
 	c := t.claim
 	now := ""
 	if state != "" {

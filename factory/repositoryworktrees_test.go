@@ -2,6 +2,7 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"slices"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // Worktrees in every Repository (Spec code-central-848, ADR 0048): at
@@ -45,7 +45,7 @@ func TestAClaimGetsAWorktreeOnTheSameBranchInEveryRepositoryAndTheSessionSeesThe
 	id := inAPI(h, "Add an endpoint")
 
 	h.Start()
-	tk := h.WantState(id, store.InReview)
+	tk := h.WantState(id, domain.InReview)
 
 	wantOnBranch(t, h, id, h.Worktree(id), api.Worktree(id))
 	if parent, base := h.GitIn(api.Path, "rev-parse", id+"^"), h.GitIn(api.Path, "rev-parse", "main"); parent != base {
@@ -92,7 +92,7 @@ func TestAWorktreeIsNamedAfterItsRepositoryBesideAClonesLocalPath(t *testing.T) 
 	id := h.ReadyTicket("Add an endpoint")
 
 	h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	wt := filepath.Join(filepath.Dir(checkout), "api.worktrees", id)
 	wantAddDirs(t, h.WantCalls(1)[0], wt)
@@ -104,7 +104,7 @@ func TestTheHomeRepositoryAloneGetsNoAddedDirectoriesAndNoRepositoriesList(t *te
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Add a button")
 	r := h.Start()
-	tk := h.WantState(id, store.InReview)
+	tk := h.WantState(id, domain.InReview)
 	h.SendChat("Hi")
 	cv := h.WaitForReply()
 
@@ -126,7 +126,7 @@ func TestTheHomeRepositoryAloneGetsNoAddedDirectoriesAndNoRepositoriesList(t *te
 
 	// Done, its unused branch is kept, as a Ticket branch always was.
 	h.Accept(id)
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 	r.Poll()
 	r.WantOutput(id + ": Done: removed its worktree " + h.Worktree(id))
 	if b := h.Git("branch", "--list", id); b == "" {
@@ -141,7 +141,7 @@ func TestAStageGetsADetachedWorktreeAtEachRepositorysBaseTip(t *testing.T) {
 	id := h.StageTicket("spec", "Spec: Add an endpoint")
 
 	h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	wantOnBranch(t, h, "", h.Worktree(id), api.Worktree(id))
 	for _, w := range []struct{ wt, clone string }{{h.Worktree(id), h.Repo}, {api.Worktree(id), api.Path}} {
@@ -170,7 +170,7 @@ func TestARepositoryAddedMidSessionGetsItsWorktreeAtTheTicketsNextClaim(t *testi
 	web := h.AddRepository("web")
 
 	r.Poll()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	resumed := h.WantCalls(2)[1]
 	if s, _ := resumed.Flag("--resume"); s != first.Session {
 		t.Fatalf("args %q, want the session %s resumed", resumed.Args, first.Session)
@@ -185,7 +185,7 @@ func TestARepositoryAddedMidSessionGetsItsWorktreeAtTheTicketsNextClaim(t *testi
 		t.Fatal(err)
 	}
 	r.Poll()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	wantAddDirs(t, h.WantCalls(3)[2], api.Worktree(id), web.Worktree(id))
 	wantOnBranch(t, h, id, web.Worktree(id))
 }
@@ -261,11 +261,11 @@ func TestADoneTicketsWorktreesAndTheBranchesItNeverUsedAreSweptInEveryRepository
 	api := h.AddRepository("api")
 	id := h.ReadyTicket("Change nothing in api")
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	// api's Base moves on after the branch was cut from it.
 	api.CommitOn("main", "later.go", "package api\n")
 	h.Accept(id)
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 
 	r.Poll()
 
@@ -290,7 +290,7 @@ func TestABranchWithWorkOfItsOwnIsKeptInEveryRepositoryEvenOnceMerged(t *testing
 		factorytest.WriteFile("client.go", "package acme\n"), factorytest.Git("add", "client.go"), factorytest.Git("commit", "-q", "-m", "Call it"),
 		factorytest.FinishIn("Done.", true, "api"), factorytest.Result("success"))...)
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	heads := map[string]string{}
 	for _, clone := range []string{h.Repo, api.Path} {
 		heads[clone] = h.GitIn(clone, "rev-parse", id)
@@ -299,7 +299,7 @@ func TestABranchWithWorkOfItsOwnIsKeptInEveryRepositoryEvenOnceMerged(t *testing
 	}
 	h.Accept(id)
 	r.Poll()
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 
 	r.Poll()
 
@@ -350,12 +350,12 @@ func TestASpecBranchInEachRepositorysBaseIsDeletedOnceEveryTicketIsDone(t *testi
 	cancelDrafts(t, h)
 	id := h.ReadyTicket("Change nothing")
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	if h.GitIn(api.Path, "branch", "--list", "spec/*") == "" {
 		t.Fatal("the Claim made no Spec Branch in api")
 	}
 	h.Accept(id)
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 
 	r.Poll()
 
@@ -421,7 +421,7 @@ func TestAStrayDirectoryAtAnotherRepositorysWorktreePathFailsTheClaimNamingIt(t 
 	}
 
 	r.Poll()
-	tk := h.WantState(id, store.Failed)
+	tk := h.WantState(id, domain.Failed)
 
 	if n := len(h.Calls()); n != 0 {
 		t.Errorf("claude ran %d times, want none", n)
@@ -474,7 +474,7 @@ func TestADirtyStageWorktreeInAnotherRepositoryFailsTheClaimNamingIt(t *testing.
 	}
 
 	r.Poll()
-	tk := h.WantState(id, store.Failed)
+	tk := h.WantState(id, domain.Failed)
 
 	if n := len(h.Calls()); n != 0 {
 		t.Errorf("claude ran %d times with a dirty Stage worktree, want none", n)

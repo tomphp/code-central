@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"testing"
 
@@ -20,7 +21,7 @@ func TestTheRealChainMigratesAFormat31StoreToTheFocusPopupFormat(t *testing.T) {
 		t.Fatalf("migrated = %+v, want a migration from format 31", m)
 	}
 	s.View(func(r store.Reader) error {
-		want := store.Options{FocusClear: store.FocusAllClear, FocusPopup: store.FocusPopupOff, LimitsPopup: store.LimitsPopupOn}
+		want := domain.Options{FocusClear: domain.FocusAllClear, FocusPopup: domain.FocusPopupOff, LimitsPopup: domain.LimitsPopupOn}
 		if got := r.Options(); got != want {
 			t.Errorf("options after migrating = %+v, want %+v", got, want)
 		}
