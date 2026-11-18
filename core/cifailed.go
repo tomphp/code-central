@@ -350,6 +350,24 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in NewFixTicketInpu
 	if err != nil {
 		return Written[TicketView]{}, err
 	}
+	return c.openFixTicket(ctx, key, failed, name, where, in.Note, in.Full)
+}
+
+// fixTicketDescription is a fix Ticket's description: the header naming
+// the failed Ticket and where, then body, which is the Run summary and the
+// Fix instructions, as the human edited them or as Auto-fix wrote them.
+func fixTicketDescription(id, where, body string) string {
+	return fmt.Sprintf("%s's CI failed%s: fix the failure forward, on top of its work in the base. It stays Accepted, and lands when a later commit passes CI.\n\n%s", id, where, body)
+}
+
+// openFixTicket is the path New fix Ticket takes, shared with Auto-fix:
+// it creates the Project's CI Fixes Spec on first use, opens the Ready fix
+// Ticket on it with description as the body after the header, stores it on
+// the response of failed's pushed commit in the Repository name, and
+// comments on failed. An update writes one record, so they are written in
+// that order: nothing names what doesn't exist. Its result is the fix
+// Ticket's create Acknowledgement.
+func (c *Core) openFixTicket(ctx context.Context, key string, failed domain.Ticket, name, where, body string, full bool) (Written[TicketView], error) {
 	spec, err := c.projectSpecNumber(key, ciFixesSpec)
 	if err != nil {
 		return Written[TicketView]{}, err
@@ -365,19 +383,20 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in NewFixTicketInpu
 		f := domain.Ticket{
 			Number: w.NextNumber(key), Title: fmt.Sprintf("Fix the CI failure of %s%s: %s", id, where, failed.Title), State: domain.Ready, Spec: spec,
 			Created: now, Updated: now,
-			Description: fmt.Sprintf("%s's CI failed%s: fix the failure forward, on top of its work in the base. It stays Accepted, and lands when a later commit passes CI.\n\n%s", id, where, in.Note),
+			Description: fixTicketDescription(id, where, body),
 		}
 		if err := w.PutTicket(key, f); err != nil {
 			return err
 		}
 		fix = f.Number
-		v, err = acknowledgeCreate(c.ticketView(w, key, domain.Ticket{}), c.ticketView(w, key, f), in.Full)
+		v, err = acknowledgeCreate(c.ticketView(w, key, domain.Ticket{}), c.ticketView(w, key, f), full)
 		return err
 	})
 	if err != nil {
 		return Written[TicketView]{}, err
 	}
-	_, err = c.respondCI(key, OptionNewFixTicket, CIResponseInput{Ticket: in.Ticket, Repository: name, Full: true},
+	ref := Ref(DisplayID(key, failed.Number))
+	_, err = c.respondCI(key, OptionNewFixTicket, CIResponseInput{Ticket: ref, Repository: name, Full: true},
 		func(*ciState, *repoCI) bool { return false },
 		func(_ *ciState, t domain.Ticket, _ *repoCI) string { return whyNotNewFixTicket(key, t) },
 		func(p *domain.Project, rc *repoCI) {
@@ -386,7 +405,7 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in NewFixTicketInpu
 	if err != nil {
 		return Written[TicketView]{}, err
 	}
-	_, err = c.updateTicketIn(key, "new_fix_ticket", in.Ticket, true, func(_ store.Reader, t *domain.Ticket) (bool, error) {
+	_, err = c.updateTicketIn(key, "new_fix_ticket", ref, true, func(_ store.Reader, t *domain.Ticket) (bool, error) {
 		addComment(t, ActorOf(ctx), c.now(), 0, fmt.Sprintf("New fix Ticket: %s fixes this CI failure forward; %s stays Accepted and lands when a later commit passes CI.", DisplayID(key, fix), DisplayID(key, t.Number)))
 		return true, nil
 	})

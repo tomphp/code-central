@@ -13,9 +13,8 @@ import "../api/actions/new_fix_ticket";
 import "../api/actions/rerun_ci";
 import "../api/actions/send_back";
 import { projectOf } from "../api/api";
-import type { CIConclusion, CIFailureOption, CIResult, CIRunView, TicketView } from "../api/types";
+import type { CIFailureOption, CIItemView, CIResult, CIRunView, TicketView } from "../api/types";
 import { CIRunEntry } from "../ci/CIRunEntry";
-import { runName } from "../ci/RunParts";
 import { shortCommit } from "../format";
 import { useAct } from "./useAct";
 import { Button } from "../controls/Button";
@@ -38,6 +37,8 @@ interface RepositoryCI {
   latest?: string;
   runs: CIRunView[];
   options?: CIFailureOption[];
+  // item is its CI item, which carries the prefilled fix notes.
+  item?: CIItemView;
   landAnyway?: boolean;
 }
 
@@ -46,7 +47,7 @@ interface RepositoryCI {
 function repositoriesCI(t: TicketView): RepositoryCI[] {
   const runs = t.ci_runs ?? [];
   if (!t.repositories?.length) {
-    return [{ result: t.ci_result, latest: t.pushed_commit?.commit, runs, options: t.ci_failure_options, landAnyway: t.land_anyway }];
+    return [{ result: t.ci_result, latest: t.pushed_commit?.commit, runs, options: t.ci_failure_options, item: t.ci_item, landAnyway: t.land_anyway }];
   }
   // A run names its Repository, and leaves the Home Repository's out.
   const home = projectOf(t.id);
@@ -61,6 +62,7 @@ function repositoriesCI(t: TicketView): RepositoryCI[] {
         latest: r.pushed_commit?.commit,
         runs: of(r.name),
         options: item && item.reason !== "ci_unavailable" ? item.options : undefined,
+        item,
         landAnyway: r.land_anyway,
       };
     });
@@ -138,41 +140,6 @@ function CIRuns({ runs }: { runs: CIRunView[] }) {
   );
 }
 
-// FAILED is the conclusions that fail a run or job, as core counts them;
-// a cancelled one is no failure.
-const FAILED: CIConclusion[] = ["failure", "timed_out"];
-const failed = (c?: CIConclusion) => c !== undefined && FAILED.includes(c);
-
-// fixNote is the note Send back to fix and New fix Ticket start from: each
-// failed run of the latest pushed commit, linked, with its failed jobs'
-// names. No logs: the next agent reads them with gh.
-function fixNote(ci: RepositoryCI): string {
-  const latest = ci.latest ?? "";
-  const runs = new Map<number, CIRunView>();
-  for (const r of ci.runs) {
-    if (r.commit !== latest || r.ignored) continue;
-    if ((runs.get(r.id)?.attempt ?? 0) < r.attempt) runs.set(r.id, r);
-  }
-  // A CI cancelled Ticket's note names its cancelled runs instead.
-  const bad = ci.result === "cancelled" ? (c?: CIConclusion) => c === "cancelled" : failed;
-  const failedRuns = [...runs.values()].filter((r) => bad(r.conclusion));
-  const lines = failedRuns.map((r) => {
-    const jobs = r.jobs.filter((j) => bad(j.conclusion)).map((j) => j.name).sort();
-    return `- [${runName(r)}](${r.url}) (${r.workflow})${jobs.length > 0 ? `: failed jobs ${jobs.join(", ")}` : ""}`;
-  });
-  const logs = failedRuns.map((r) => `\`gh run view ${r.id} --log-failed\``).join(", ");
-  const at = ci.repository ? `${ci.repository}@${shortCommit(latest)}` : shortCommit(latest);
-  return [`CI failed at ${at}:`, lines.join("\n"), ...(logs ? [`Read the failed jobs' logs with ${logs}.`] : [])].join("\n\n");
-}
-
-// CIFailureOptions are the failure options of a Ticket's CI failed or
-// CI cancelled item, which act on every Ticket it lists, in its
-// Repository only:
-// Re-run failed jobs under either Landing Method; Land anyway under
-// Merge, where under Branch the human's merge decides; then under both,
-// Send back to fix and New fix Ticket, which fix forward with
-// the note. Once the human accepted the failed result (Land anyway or
-// New fix Ticket, whose comment names the fix Ticket) it says so.
 // fitToContent grows a textarea to hold all its lines: on mount, and on
 // each edit.
 function fitToContent(el: HTMLTextAreaElement | null) {
@@ -181,17 +148,45 @@ function fitToContent(el: HTMLTextAreaElement | null) {
   el.style.height = `${el.scrollHeight}px`;
 }
 
+// FixNote is the editable note one fix option starts from.
+function FixNote({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="ci-fix-note">
+      <span className="small muted">{label}</span>
+      <textarea
+        rows={2}
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          fitToContent(e.target);
+        }}
+        ref={fitToContent}
+      />
+    </label>
+  );
+}
+
+// CIFailureOptions are the failure options of a Ticket's CI failed or
+// CI cancelled item, which act on every Ticket it lists, in its
+// Repository only:
+// Re-run failed jobs under either Landing Method; Land anyway under
+// Merge, where under Branch the human's merge decides; then under both,
+// Send back to fix and New fix Ticket, which fix forward with
+// a note each, which Go prefills (the item's send_back_note and
+// new_fix_note) and the human edits. Once the human accepted the failed
+// result (Land anyway or New fix Ticket, whose comment names the fix
+// Ticket) it says so.
 function CIFailureOptions({ project, ticket: t, ci }: { project: string; ticket: TicketView; ci: RepositoryCI }) {
   const api = useApi();
   const { busy, error, run } = useAct();
-  const [note, setNote] = useState(() => fixNote(ci));
+  const [sendBackNote, setSendBackNote] = useState(ci.item?.send_back_note ?? "");
+  const [newFixNote, setNewFixNote] = useState(ci.item?.new_fix_note ?? "");
   if (ci.landAnyway && ci.result === "failed") {
     return <p className="small ci-options">You accepted its failed CI result, so CI no longer holds it back.</p>;
   }
   const options = ci.options;
   if (!options) return null;
   const fixes = options.includes("send_back") || options.includes("new_fix_ticket");
-  const noNote = !note.trim();
   // The options act on the item's Repository, which they name with
   // several.
   const where = ci.repository ? { repository: ci.repository } : {};
@@ -241,31 +236,34 @@ function CIFailureOptions({ project, ticket: t, ci }: { project: string; ticket:
             To fix it, send it back for the next agent to fix on its branch, or open a new fix Ticket on the CI Fixes Spec, which this one waits for. Either
             way the fix goes on top: nothing is reverted.
           </p>
-          <label className="ci-fix-note">
-            <span className="small muted">Note for the fix (required)</span>
-            <textarea rows={2} value={note} onChange={(e) => {
-                setNote(e.target.value);
-                fitToContent(e.target);
-              }}
-              ref={fitToContent}
-            />
-          </label>
-          <p className="ci-fixes">
-            {options.includes("send_back") && (
-              <Button type="button" disabled={busy || noNote} onClick={() => run(() => api.act(project, t.id, "send_back", { note: note.trim() }))}>
-                Send back to fix
-              </Button>
-            )}
-            {options.includes("new_fix_ticket") && (
-              <Button
-                type="button"
-                disabled={busy || noNote}
-                onClick={() => run(() => api.act(project, t.id, "new_fix_ticket", { note: note.trim(), ...where }))}
-              >
-                New fix Ticket
-              </Button>
-            )}
-          </p>
+          {options.includes("send_back") && (
+            <>
+              <FixNote label="Note for Send back to fix (required)" value={sendBackNote} onChange={setSendBackNote} />
+              <p className="ci-fixes">
+                <Button
+                  type="button"
+                  disabled={busy || !sendBackNote.trim()}
+                  onClick={() => run(() => api.act(project, t.id, "send_back", { note: sendBackNote.trim() }))}
+                >
+                  Send back to fix
+                </Button>
+              </p>
+            </>
+          )}
+          {options.includes("new_fix_ticket") && (
+            <>
+              <FixNote label="Note for New fix Ticket (required)" value={newFixNote} onChange={setNewFixNote} />
+              <p className="ci-fixes">
+                <Button
+                  type="button"
+                  disabled={busy || !newFixNote.trim()}
+                  onClick={() => run(() => api.act(project, t.id, "new_fix_ticket", { note: newFixNote.trim(), ...where }))}
+                >
+                  New fix Ticket
+                </Button>
+              </p>
+            </>
+          )}
         </>
       )}
     </div>

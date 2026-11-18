@@ -9,12 +9,14 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../../App";
 import { newWorld, type World } from "../../api/core/core";
+import { DEFAULT_FIX_INSTRUCTIONS } from "../../api/scenario";
 import type { CIRunView, LandingMethod } from "../../api/types";
 import { rowDetail } from "../../format";
 import { scenario, settle } from "../../worldTesting";
 
 const COMMIT = "abc1234567";
 const RUN_URL = "https://github.com/acme/web/actions/runs/1";
+const SUMMARY = `CI failed at abc1234:\n\n- [CI](${RUN_URL}) (ci.yml): failed jobs build, test\n\nRead the failed jobs' logs with \`gh run view 1 --log-failed\`.`;
 
 // world has Login page Accepted under method with Push and CI Tracking
 // on, landing on its own, its pushed commit abc1234567's run of ci.yml
@@ -172,18 +174,26 @@ describe("the CI failed panel", () => {
     expect(rowDetail(w.now(), row)).toBe(`${id} · ci.yml failed`);
   });
 
-  it("prefills the note with the failed run's link and its failed jobs' names", async () => {
+  it("prefills Send back to fix with the Run summary: the failed run's link and its failed jobs' names", async () => {
     const p = await pane(await world());
-    const note = within(p).getByRole("textbox", { name: /Note for the fix/ });
-    expect(note).toHaveValue(
-      `CI failed at abc1234:\n\n- [CI](${RUN_URL}) (ci.yml): failed jobs build, test\n\nRead the failed jobs' logs with \`gh run view 1 --log-failed\`.`,
-    );
+    const note = within(p).getByRole("textbox", { name: /Note for Send back to fix/ });
+    expect(note).toHaveValue(SUMMARY);
+  });
+
+  it("prefills New fix Ticket with the Go-built note: the Run summary, then the Fix instructions", async () => {
+    const x = await world();
+    const p = await pane(x);
+    const note = within(p).getByRole("textbox", { name: /Note for New fix Ticket/ });
+    expect(note).toHaveValue(`${SUMMARY}\n\n${DEFAULT_FIX_INSTRUCTIONS}`);
+    const item = (await x.w.api.getTicket("acme", x.id)).ci_item!;
+    expect(note).toHaveValue(item.new_fix_note);
+    expect(within(p).getByRole("textbox", { name: /Note for Send back to fix/ })).toHaveValue(item.send_back_note);
   });
 
   it("sends it back to fix with the note: it goes Ready and leaves Needs Me", async () => {
     const x = await world();
     const p = await pane(x);
-    const note = within(p).getByRole("textbox", { name: /Note for the fix/ });
+    const note = within(p).getByRole("textbox", { name: /Note for Send back to fix/ });
     await userEvent.type(note, " Also check the login test.");
     await userEvent.click(within(p).getByRole("button", { name: "Send back to fix" }));
 
@@ -215,8 +225,10 @@ describe("the CI failed panel", () => {
 
   it("needs a note for either fix", async () => {
     const p = await pane(await world());
-    await userEvent.clear(within(p).getByRole("textbox", { name: /Note for the fix/ }));
+    await userEvent.clear(within(p).getByRole("textbox", { name: /Note for Send back to fix/ }));
     expect(within(p).getByRole("button", { name: "Send back to fix" })).toBeDisabled();
+    expect(within(p).getByRole("button", { name: "New fix Ticket" })).toBeEnabled();
+    await userEvent.clear(within(p).getByRole("textbox", { name: /Note for New fix Ticket/ }));
     expect(within(p).getByRole("button", { name: "New fix Ticket" })).toBeDisabled();
   });
 

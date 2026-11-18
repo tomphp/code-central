@@ -31,6 +31,13 @@ type CIItemView struct {
 	Commit     string            `json:"commit"`
 	Tickets    []CIItemTicket    `json:"tickets"`
 	Options    []CIFailureOption `json:"options"`
+	// NewFixNote is the note New fix Ticket starts from, the Run summary
+	// and the Project's Fix instructions; SendBackNote is the note Send
+	// back to fix starts from, the Run summary alone. Each is left out
+	// while its option isn't offered, and the human edits either before
+	// choosing it.
+	NewFixNote   string `json:"new_fix_note,omitempty"`
+	SendBackNote string `json:"send_back_note,omitempty"`
 }
 
 // CIItemTicket is one Ticket a CI item lists, with its Spec.
@@ -64,13 +71,20 @@ func (it ciItem) label(p domain.Project) string {
 }
 
 // ciItemView is it as the views carry it.
-func ciItemView(r store.Reader, p domain.Project, it ciItem) *CIItemView {
-	v := &CIItemView{Reason: it.reason, Commit: it.commit, Tickets: []CIItemTicket{}, Options: ciItemOptions(r, p, it)}
+func (e *evaluation) ciItemView(it ciItem) *CIItemView {
+	p := e.p
+	v := &CIItemView{Reason: it.reason, Commit: it.commit, Tickets: []CIItemTicket{}, Options: ciItemOptions(e.r, p, it)}
 	if severalRepositories(p) {
 		v.Repository = it.repository
 	}
 	for _, t := range it.tickets {
 		v.Tickets = append(v.Tickets, CIItemTicket{ID: DisplayID(p.Key, t.Number), Title: t.Title, Spec: DisplayID(p.Key, t.Spec)})
+	}
+	if slices.Contains(v.Options, OptionSendBack) {
+		v.SendBackNote = e.runSummary(it)
+	}
+	if slices.Contains(v.Options, OptionNewFixTicket) {
+		v.NewFixNote = e.newFixNote(it)
 	}
 	return v
 }
@@ -118,7 +132,7 @@ func (e *evaluation) failureOptions(t domain.Ticket, name string) []CIFailureOpt
 func (e *evaluation) ciItemRow(it ciItem) NeedsMeRow {
 	return NeedsMeRow{
 		Project: e.p.Key, Title: needsMeTitle(it.reason) + " at " + it.label(e.p), Reason: it.reason, Since: it.since,
-		CIFailure: it.failure, CIUnavailable: it.unavailable, CIItem: ciItemView(e.r, e.p, it),
+		CIFailure: it.failure, CIUnavailable: it.unavailable, CIItem: e.ciItemView(it),
 		CIResult: it.result,
 	}
 }
