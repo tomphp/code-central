@@ -7,18 +7,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/ciwatcher/ciwatchertest"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/pullrequestwatcher"
 	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/watchers/watchertest"
 )
 
 // checking is a real Code Central whose Pull Request check runs the test
 // binary as code-central, as the service runs its own executable, with gh
 // found on path, and whose acme reported a GitHub Push remote.
-func checking(t *testing.T, h *ciwatchertest.Harness, path ...string) *codecentraltest.Server {
+func checking(t *testing.T, h *watchertest.Harness, path ...string) *codecentraltest.Server {
 	t.Helper()
 	srv := codecentraltest.NewServer(t, codecentraltest.WithPullRequestCheck(pullrequestwatcher.Checker(h.CodeCentral, h.Environ(path...))))
 	must(t, func() error {
@@ -47,7 +47,7 @@ func method(t *testing.T, srv *codecentraltest.Server) store.LandingMethod {
 }
 
 func TestPullRequestTurnsOnWhenTheCheckPassesAndCreatesNoPullRequest(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	h.Answer(fakegh.Answer{Args: []string{"api", repoPath}, Stdout: write})
 	srv := checking(t, h, h.Bin)
 	if err := turnOn(srv); err != nil {
@@ -72,22 +72,22 @@ func TestEachFailedCheckRefusesPullRequestWithItsReasonAndFix(t *testing.T) {
 	noGH := filepath.Join(t.TempDir(), "gh")
 	for _, c := range []struct {
 		name        string
-		setup       func(h *ciwatchertest.Harness, srv *codecentraltest.Server)
+		setup       func(h *watchertest.Harness, srv *codecentraltest.Server)
 		reason, fix string
 	}{
-		{"gh missing", func(_ *ciwatchertest.Harness, srv *codecentraltest.Server) {
+		{"gh missing", func(_ *watchertest.Harness, srv *codecentraltest.Server) {
 			if _, err := srv.Core.SetOptions(human, core.SetOptionsInput{GHPath: &noGH}); err != nil {
 				t.Fatal(err)
 			}
 		}, "gh isn't there", "gh path Option"},
-		{"logged out", func(h *ciwatchertest.Harness, _ *codecentraltest.Server) { h.LoggedOut() }, "isn't logged in", "gh auth login"},
-		{"no read access", func(h *ciwatchertest.Harness, _ *codecentraltest.Server) { h.Unreadable("acme/web") }, "can't read the repository acme/web", "owner/name"},
-		{"no write access", func(h *ciwatchertest.Harness, _ *codecentraltest.Server) {
+		{"logged out", func(h *watchertest.Harness, _ *codecentraltest.Server) { h.LoggedOut() }, "isn't logged in", "gh auth login"},
+		{"no read access", func(h *watchertest.Harness, _ *codecentraltest.Server) { h.Unreadable("acme/web") }, "can't read the repository acme/web", "owner/name"},
+		{"no write access", func(h *watchertest.Harness, _ *codecentraltest.Server) {
 			h.Answer(fakegh.Answer{Args: []string{"api", repoPath}, Stdout: readOnly})
 		}, "can't write to acme/web", "write access"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			h := ciwatchertest.New(t)
+			h := watchertest.New(t)
 			h.Answer(fakegh.Answer{Args: []string{"api", repoPath}, Stdout: write})
 			srv := checking(t, h, h.Bin)
 			c.setup(h, srv)
@@ -107,7 +107,7 @@ func TestEachFailedCheckRefusesPullRequestWithItsReasonAndFix(t *testing.T) {
 }
 
 func TestThePushRemotesOwnRefusalsComeBeforeTheCheck(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	srv := codecentraltest.NewServer(t, codecentraltest.WithPullRequestCheck(pullrequestwatcher.Checker(h.CodeCentral, h.Environ(h.Bin))))
 	must(t, func() error {
 		_, err := srv.Core.CreateProject(human, core.CreateProjectInput{Key: "acme"})

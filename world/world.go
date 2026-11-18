@@ -16,9 +16,9 @@ import (
 
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/frontdoor"
 	"github.com/tomoram/code-central/httpapi"
 	"github.com/tomoram/code-central/ids"
+	"github.com/tomoram/code-central/server"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/usage"
 )
@@ -74,7 +74,7 @@ func New(start time.Time) *World {
 	w := &World{
 		core:     c,
 		clock:    clk,
-		handler:  frontdoor.Versioned(frontdoor.Handler(c, nil, nil), Version),
+		handler:  server.Versioned(server.Handler(c, nil, nil), Version),
 		requests: map[*request]struct{}{},
 	}
 	c.SetCICheck(func(context.Context, core.CICheckInput) core.WatcherCheckResult { return w.answer(&w.ciCheck) })

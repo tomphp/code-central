@@ -23,7 +23,7 @@ const (
 )
 
 // CodeHosts are the Code Hosts, then none.
-var CodeHosts = []CodeHost{CodeHostGitHub, CodeHostAzureRepos, CodeHostNone}
+func CodeHosts() []CodeHost { return []CodeHost{CodeHostGitHub, CodeHostAzureRepos, CodeHostNone} }
 
 // codeHostOf works out the Code Host and repository a Push remote URL
 // names, or "" when it is none Code Central supports.

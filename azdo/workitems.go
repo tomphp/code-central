@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/azdourl"
-	"github.com/tomoram/code-central/watchers"
+	"github.com/tomoram/code-central/ratelimit"
 )
 
 // Azure Boards: the Work Item Watcher's Work Item Tracking calls (Spec
@@ -190,7 +190,7 @@ func messageOf(data []byte) string {
 	if json.Unmarshal(data, &e) == nil && e.Message != "" {
 		return e.Message
 	}
-	return watchers.FirstLine(string(data))
+	return ratelimit.FirstLine(string(data))
 }
 
 // CommentsAPIVersion is the only API version that has work item comments.

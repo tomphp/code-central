@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/ciwatcher"
-	"github.com/tomoram/code-central/ciwatcher/ciwatchertest"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/watchers/watchertest"
 )
 
 var ctx = context.Background()
@@ -18,7 +18,7 @@ var ctx = context.Background()
 // serviceWith is a real Code Central with a Project acme whose CI check
 // runs the test binary as code-central, as the service runs its own
 // executable, with gh found on path. Its client is the human's.
-func serviceWith(t *testing.T, h *ciwatchertest.Harness, path ...string) *codecentraltest.Server {
+func serviceWith(t *testing.T, h *watchertest.Harness, path ...string) *codecentraltest.Server {
 	t.Helper()
 	srv := codecentraltest.NewServer(t, codecentraltest.WithCICheck(ciwatcher.Checker(h.CodeCentral, h.Environ(path...))))
 	if _, err := srv.Client.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}); err != nil {
@@ -63,7 +63,7 @@ func tracking(t *testing.T, srv *codecentraltest.Server) bool {
 }
 
 func TestCITrackingTurnsOnWhenTheCheckPasses(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	srv := serviceWith(t, h, h.Bin)
 	if err := turnOn(srv); err != nil || !tracking(t, srv) {
 		t.Fatalf("turning on: %v; tracking %v", err, tracking(t, srv))
@@ -80,15 +80,15 @@ func TestEachFailedCheckRefusesCITrackingWithItsFix(t *testing.T) {
 	noGH := filepath.Join(t.TempDir(), "gh")
 	for _, c := range []struct {
 		name        string
-		setup       func(h *ciwatchertest.Harness, srv *codecentraltest.Server)
+		setup       func(h *watchertest.Harness, srv *codecentraltest.Server)
 		reason, fix string
 	}{
-		{"gh missing", func(_ *ciwatchertest.Harness, srv *codecentraltest.Server) { setGHPath(t, srv, noGH) }, "gh isn't there", "gh path Option"},
-		{"logged out", func(h *ciwatchertest.Harness, _ *codecentraltest.Server) { h.LoggedOut() }, "isn't logged in", "gh auth login"},
-		{"repository unreadable", func(h *ciwatchertest.Harness, _ *codecentraltest.Server) { h.Unreadable("acme/web") }, "can't read the repository acme/web", "owner/name"},
+		{"gh missing", func(_ *watchertest.Harness, srv *codecentraltest.Server) { setGHPath(t, srv, noGH) }, "gh isn't there", "gh path Option"},
+		{"logged out", func(h *watchertest.Harness, _ *codecentraltest.Server) { h.LoggedOut() }, "isn't logged in", "gh auth login"},
+		{"repository unreadable", func(h *watchertest.Harness, _ *codecentraltest.Server) { h.Unreadable("acme/web") }, "can't read the repository acme/web", "owner/name"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			h := ciwatchertest.New(t)
+			h := watchertest.New(t)
 			srv := serviceWith(t, h, h.Bin)
 			c.setup(h, srv)
 			e := refusal(t, turnOn(srv))
@@ -103,7 +103,7 @@ func TestEachFailedCheckRefusesCITrackingWithItsFix(t *testing.T) {
 }
 
 func TestTheCheckFindsGHThroughTheGHPathOption(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	srv := serviceWith(t, h, t.TempDir())
 	gh := h.GH(filepath.Join(t.TempDir(), "tools"))
 	setGHPath(t, srv, gh)
@@ -116,7 +116,7 @@ func TestTheCheckFindsGHThroughTheGHPathOption(t *testing.T) {
 }
 
 func TestTurningCITrackingOffRunsNoCheck(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	srv := serviceWith(t, h, h.Bin)
 	if err := turnOn(srv); err != nil {
 		t.Fatal(err)
@@ -132,7 +132,7 @@ func TestTurningCITrackingOffRunsNoCheck(t *testing.T) {
 }
 
 func TestACheckThatDoesntFinishRefusesCITracking(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	srv := codecentraltest.NewServer(t, codecentraltest.WithCICheck(ciwatcher.Checker(filepath.Join(t.TempDir(), "missing"), h.Environ(h.Bin))))
 	if _, err := srv.Client.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)

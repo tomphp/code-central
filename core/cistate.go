@@ -113,13 +113,13 @@ func (s *ciState) ticket(t store.Ticket) *ticketCI {
 	}
 	a := &ticketCI{}
 	s.tickets[t.Number] = a
-	// Under Pull Request without CI Tracking a push is recorded for its
-	// pull request alone: it has no CI result.
-	if len(t.PushedCommits) == 0 || !landingPolicyOf(s.p).TracksCIResults() {
+	if len(t.PushedCommits) == 0 {
 		return a
 	}
 	for _, name := range namesInLandingOrder(s.p, pushedRepositories(s.p.Key, t)) {
-		if watchesCI(s.p, name) {
+		// Under Pull Request without CI Tracking a push is recorded for
+		// its pull request alone: it has no CI result.
+		if watchesCI(s.p, name) && landingPolicyIn(s.p, name).TracksCIResults() {
 			a.repos = append(a.repos, s.repo(t, name))
 		}
 	}

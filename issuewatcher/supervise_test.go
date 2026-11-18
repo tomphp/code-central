@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/ciwatcher"
-	"github.com/tomoram/code-central/ciwatcher/ciwatchertest"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/issuewatcher"
 	"github.com/tomoram/code-central/watchers"
+	"github.com/tomoram/code-central/watchers/watchertest"
 )
 
 // supervising is a real Code Central and the service's supervision of
@@ -21,15 +21,15 @@ import (
 // able to triage acme/web.
 type supervising struct {
 	t   *testing.T
-	h   *ciwatchertest.Harness
+	h   *watchertest.Harness
 	srv *codecentraltest.Server
 	// Supervising is the supervision, once started.
-	*ciwatchertest.Supervising
+	*watchertest.Supervising
 }
 
 func newSupervising(t *testing.T) *supervising {
 	t.Helper()
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	repository(h, true, triage)
 	return &supervising{t: t, h: h, srv: codecentraltest.NewServer(t)}
 }

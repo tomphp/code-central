@@ -138,6 +138,7 @@ export function WriteTheSpec({ map, onSubmitted }: WriteTheSpecProps) {
     straight: undefined,
     draftable: false,
     button: "Write the Spec",
+    submitLabel: "Write the Spec",
     variant: "default",
     creates: "Creates a Spec and its Spec and Tickets Stages, from the Map's decisions. A Factory picks up Spec.",
     text: [map.title, `From the Map [${map.id}](${map.id}).`, map.destination].filter(Boolean).join("\n\n") + "\n",
@@ -270,7 +271,7 @@ function NewFromTextPopup<R>({ kind, projects, project, onClose, onSubmitted }: 
           onChange={(e) => setText(e.target.value)}
         />
         {kind.straight && (
-          <label className="small">
+          <label className="modal-straight small">
             <input type="checkbox" checked={straight} onChange={(e) => setStraight(e.target.checked)} /> Straight to Spec (no grilling)
           </label>
         )}

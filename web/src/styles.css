@@ -25,6 +25,11 @@
   --on-primary: #ffffff;
   /* Text on a filled line colour. */
   --on-line: #ffffff;
+  /* Chart ramp: ink to neutral, never a line ink. */
+  --chart-1: #12224a;
+  --chart-2: #5b6b8f;
+  --chart-3: #9aa5bf;
+  --chart-4: #cdd2de;
   /* Reason lines. */
   --r-answer: #e39b12;
   --r-answered: #7a4bc8;
@@ -44,8 +49,6 @@
   /* The Activity Dashboard's State blocks follow the State lines. */
   --s-ready: var(--st-ready);
   --s-in-progress: var(--st-in-progress);
-  /* The Activity Dashboard's CI Running block. */
-  --ci-running: #10847a;
   --shadow: 0 6px 20px rgb(18 34 74 / .14);
   color-scheme: light;
 }
@@ -67,6 +70,10 @@
     --primary: #8fb0ff;
     --on-primary: #0a1430;
     --on-line: #0a1430;
+    --chart-1: #e3e8f5;
+    --chart-2: #a3b0cf;
+    --chart-3: #6b7ba0;
+    --chart-4: #3f4f7a;
     --r-answer: #f5b43c;
     --r-answered: #a68cf2;
     --r-silent: #9aa3b8;
@@ -81,7 +88,6 @@
     --st-in-progress: #7ea0ff;
     --st-done: #4fb878;
     --st-cancelled: #8f96a8;
-    --ci-running: #3cc4b5;
     --shadow: 0 8px 28px rgb(0 0 0 / .45);
     color-scheme: dark;
   }
@@ -103,6 +109,10 @@
   --primary: #8fb0ff;
   --on-primary: #0a1430;
   --on-line: #0a1430;
+  --chart-1: #e3e8f5;
+  --chart-2: #a3b0cf;
+  --chart-3: #6b7ba0;
+  --chart-4: #3f4f7a;
   --r-answer: #f5b43c;
   --r-answered: #a68cf2;
   --r-silent: #9aa3b8;
@@ -117,7 +127,6 @@
   --st-in-progress: #7ea0ff;
   --st-done: #4fb878;
   --st-cancelled: #8f96a8;
-  --ci-running: #3cc4b5;
   --shadow: 0 8px 28px rgb(0 0 0 / .45);
   color-scheme: dark;
 }
@@ -135,12 +144,15 @@ a { color: var(--accent); text-underline-offset: 2px; }
 .empty { color: var(--muted); padding: 2rem; text-align: center; }
 .banner { margin: 0; padding: 6px 14px; background: color-mix(in srgb, var(--danger) 12%, transparent); color: color-mix(in srgb, var(--danger) 55%, var(--text)); }
 .tid { font: 600 12px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
-.label { font-size: 11px; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--border); }
+.label { font-size: 11px; line-height: 14px; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--border); }
 
 /* Shared by panels (tickets 34-37). */
 .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 6px; padding: 5px 12px; font: inherit; font-weight: 600; cursor: pointer; transition: border-color 120ms ease-out, background-color 120ms ease-out; }
 .btn:hover { border-color: var(--muted); }
-.btn:disabled { opacity: .45; cursor: default; }
+/* One disabled look for every button: the hairline border stays, the text drops to about 55%, and a primary keeps its fill at reduced opacity. */
+.btn:disabled { color: color-mix(in srgb, var(--text) 55%, transparent); background: var(--surface); border-color: var(--border); cursor: default; }
+.btn.danger:disabled { color: color-mix(in srgb, var(--text) 55%, transparent); border-color: var(--border); }
+.btn.primary:disabled { background: color-mix(in srgb, var(--primary) 45%, transparent); border-color: color-mix(in srgb, var(--primary) 45%, transparent); color: var(--on-primary); }
 .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .btn.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--primary) 86%, var(--accent)); }
 .btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
@@ -160,6 +172,8 @@ textarea { width: 100%; resize: vertical; }
 .reason-ci_cancelled { --rc: var(--muted); }
 .reason-base_diverged { --rc: var(--r-failed); }
 .reason-base_missing { --rc: var(--r-failed); }
+.reason-repository_missing { --rc: var(--r-failed); }
+.reason-pull_request_closed { --rc: var(--r-failed); }
 .reason-to_merge { --rc: var(--r-landing); }
 .reason-ci_unavailable { --rc: var(--r-landing); }
 .reason-accepted_not_landed { --rc: var(--r-landing); }
@@ -232,6 +246,11 @@ a.filter { text-decoration: none; }
 .project-options-choice { margin: 8px 0; }
 .project-options-hint { margin: 2px 0 0 1.6rem; font-size: 13px; color: var(--muted); }
 .project-options-remote { display: block; margin: 8px 0 0 1.6rem; }
+.project-options-focus { border-collapse: collapse; margin: 8px 0; }
+.project-options-focus th { text-align: left; font-weight: 500; }
+.project-options-focus thead th { font-size: 12.5px; color: var(--muted); }
+.project-options-focus th, .project-options-focus td { padding: 6px 16px 6px 0; border-bottom: 1px solid var(--border); }
+.project-options-focus tbody tr:last-child > * { border-bottom: 0; }
 .project-options-remote input, .project-options-field input, .project-options-field select { font: inherit; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
 .project-options-remote input[aria-invalid="true"], .project-options-field input[aria-invalid="true"] { border-color: var(--danger); }
 .project-options form + form, .project-options form + fieldset { margin-top: 16px; }
@@ -255,6 +274,7 @@ a.filter { text-decoration: none; }
 .project-options-field input { min-width: 16rem; }
 .project-options-field + .project-options-hint { margin-left: 0; }
 .project-options-actions { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.stage-guide-row + .stage-guide-row { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
 .project-options-models-hint { margin-left: 0; }
 .project-options-models { border-collapse: collapse; margin-top: 12px; width: 100%; }
 .project-options-models th, .project-options-models td { text-align: left; padding: 4px 8px 4px 0; font-size: 14px; }
@@ -267,7 +287,7 @@ a.filter { text-decoration: none; }
 .archived-group { margin-top: auto; padding-top: 16px; }
 .archived-group > summary { cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 4px 8px; }
 .archived-group .filter { opacity: .7; }
-.count { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 500; }
+.count { color: var(--muted); font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 500; }
 .count.loud { color: color-mix(in srgb, var(--r-answer) 55%, var(--text)); font-weight: 700; }
 /* A Project's ribbon: a short bar in its own colour (a bar, never a ring,
    so it never reads as a State). The palette is the rail's, in both themes. */
@@ -285,7 +305,8 @@ a.filter { text-decoration: none; }
 .row:hover { background: color-mix(in srgb, var(--surface) 70%, transparent); }
 .row[aria-current="true"] { background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); }
 .row[aria-current="true"] .row-title { font-weight: 700; }
-.row.quiet { opacity: .7; }
+/* A quiet row dims all but its id, which stays at --muted: it is how a row is found. */
+.row.quiet > :not(.row-top), .row.quiet > .row-top > :not(.tid) { opacity: .7; }
 /* A Needs Me group is one line in its reason's ink, dropping from the
    group head, with a station on every row; it ends at the last. */
 .line-group > .row { position: relative; padding-left: 40px; }
@@ -322,12 +343,14 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .ticket-body .claims > li { margin-bottom: 4px; }
 /* The latest Session Event, shown short and faintly. */
 .latest-event { color: var(--muted); }
+/* A Claim line's fields: it breaks between them, never inside one. */
+.claim-line .field { white-space: nowrap; }
 /* Changed Repositories (Spec code-central-848): name chips on a card and a
    Spec, and a Ticket's Repositories section, one row per Repository. */
 .repo-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .repo-chip { font-size: 10.5px; padding: 0 5px; color: var(--muted); }
-.repos { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.repos li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.repos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, auto); justify-content: start; gap: 4px 16px; }
+.repos li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: baseline; }
 .repo-name { font-weight: 500; }
 .accepted-repos { margin: 0 0 6px; padding-left: 18px; }
 /* A Ticket's CI section (code-central-256), and the CI Run status badges. */
@@ -338,14 +361,15 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .ci-result, .ci-status { font-size: 11px; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--border); }
 .ci-passed, .ci-partially-succeeded { color: color-mix(in srgb, var(--r-review) 55%, var(--text)); border-color: var(--r-review); }
 .ci-failed, .ci-timed-out { color: color-mix(in srgb, var(--r-failed) 55%, var(--text)); border-color: var(--r-failed); }
-/* Cancelled is neutral grey, not red: a cancelled run is no failure. */
-.ci-cancelled { color: var(--muted); border-color: var(--muted); }
+/* Cancelled, skipped and neutral are one grey outline: none is a failure. */
+.ci-cancelled, .ci-skipped, .ci-neutral { color: var(--muted); border-color: var(--muted); }
 .ci-running, .ci-queued { color: color-mix(in srgb, var(--s-in-progress) 55%, var(--text)); border-color: var(--s-in-progress); }
+.ci-queued, .ci-partially-succeeded { border-style: dashed; }
 /* CI badges on rows, and the Spec view's sums of them (code-central-259). */
 .ci-badge { white-space: nowrap; }
 .impl-list .ci-badge { margin-left: 6px; }
 .ci-sums { display: flex; gap: 6px; align-items: center; margin: 8px 0; }
-.ci-runs { list-style: none; padding: 0; margin: 4px 0; font-size: 13px; }
+.ci-runs { font-variant-numeric: tabular-nums; list-style: none; padding: 0; margin: 4px 0; font-size: 13px; }
 .ci-run { margin-bottom: 6px; }
 .ci-run .label { margin-left: 6px; }
 /* Any CIRunEntry of an ignored workflow is greyed, in every layout. */
@@ -363,7 +387,7 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .transcript-call { display: block; background: none; padding: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ticket-body .transcript-result > summary { margin: 2px 0 0 12px; }
 .transcript-result > summary time { margin-right: 4px; }
-.transcript-result pre { margin: 4px 0 2px 12px; padding: 6px 8px; max-height: 240px; overflow: auto; background: var(--surface-2); border-radius: 4px; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+.transcript-result pre { margin: 4px 0 2px 12px; padding: 6px 8px; max-height: 240px; overflow: auto; background: var(--surface-2); border-radius: 4px; font: 12px var(--mono); white-space: pre-wrap; }
 .transcript-mark { margin-left: 6px; padding: 0 5px; border-radius: 3px; border: 1px solid var(--border); font-size: 11px; }
 .transcript-error { color: var(--danger); border-color: var(--danger); }
 .transcript-factory { background: var(--surface-2); color: var(--muted); font-size: 12.5px; }
@@ -429,9 +453,13 @@ a.link-badge:hover { text-decoration: underline; }
 .map-count { display: block; font-size: 12.5px; margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
 .modal { position: fixed; inset: 0; background: rgb(0 0 0 / .35); display: grid; place-items: start center; padding-top: 12vh; z-index: 40; }
 .modal-card { background: var(--surface); width: min(40rem, 92vw); border-radius: 12px; padding: 18px 20px; box-shadow: 0 12px 40px rgb(0 0 0 / .25); }
+.modal-card:focus:not(:focus-visible) { outline: none; }
 .modal-card h2 { font-size: 16px; margin-bottom: 10px; }
-.modal-card textarea { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); resize: vertical; }
+.modal-card textarea { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); resize: vertical; }
 .modal-project { display: block; margin-bottom: 8px; }
+.modal-card form { padding-top: 4px; }
+.modal-straight { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.modal-straight input { margin: 0; accent-color: var(--accent); }
 .modal-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
 .modal-actions .muted { flex: 1; }
 .modal.modal-popup { padding-top: 6vh; }
@@ -439,7 +467,7 @@ a.link-badge:hover { text-decoration: underline; }
 /* PopupShell's header row: its title, anything else it holds such as the
    Focus popup's N left, then × at the right. It stays in view while a wide
    card's content scrolls. */
-.popup-head { position: sticky; top: -18px; z-index: 1; display: flex; align-items: center; margin: -18px -20px 0; padding: 8px 10px 0; background: var(--surface); }
+.popup-head { position: sticky; top: -18px; z-index: 1; display: flex; align-items: center; margin: -18px -20px 0; padding: 8px 10px 0; background: var(--surface); border-radius: 12px 12px 0 0; }
 .popup-head > :not(.popup-close) { padding-left: 10px; }
 .popup-head h2 { margin: 10px 0; }
 .popup-close { margin-left: auto; border: 0; background: none; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 8px; border-radius: 6px; cursor: pointer; }
@@ -579,10 +607,10 @@ a.link-badge:hover { text-decoration: underline; }
 .kind-map { --kc: var(--r-answered); color: color-mix(in srgb, var(--r-answered) 55%, var(--text)); }
 .kind-spec { color: var(--muted); }
 .kind-long-lived { --kc: var(--r-landing); color: color-mix(in srgb, var(--r-landing) 55%, var(--text)); }
-.stage-badge { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; padding: 0 5px; border-radius: 4px; background: var(--surface-2); color: var(--muted); flex: none; }
+.stage-badge { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; padding: 0 5px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); flex: none; }
 .state-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; }
 /* A State chip: a station ring and the State's name, on a wash of its line. */
-.state-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 1px 8px 1px 5px; border-radius: 999px; color: var(--text); background: color-mix(in srgb, var(--st) 12%, transparent); border: 1px solid color-mix(in srgb, var(--st) 35%, transparent); white-space: nowrap; flex: none; }
+.state-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; line-height: 14px; font-weight: 600; padding: 1px 8px 1px 5px; border-radius: 999px; color: var(--text); background: color-mix(in srgb, var(--st) 12%, transparent); border: 1px solid color-mix(in srgb, var(--st) 35%, transparent); white-space: nowrap; flex: none; }
 .state-chip::before { content: ""; width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box; border: 2.5px solid var(--st); background: var(--surface); flex: none; }
 .state-chip.here { background: color-mix(in srgb, var(--st) 24%, var(--surface)); border-color: var(--st); font-weight: 700; }
 .state-chip.here::before { background: var(--st); }
@@ -591,8 +619,9 @@ a.link-badge:hover { text-decoration: underline; }
 .pr-badge { white-space: nowrap; text-decoration: none; color: inherit; cursor: pointer; }
 a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
 .impl-list .pr-badge { margin-left: 6px; }
-.pr-conflicting, .pr-closed { color: var(--bad, inherit); }
-.pr-merged { opacity: 0.7; }
+/* Conflicting is the state that needs the human; merged is landed. Open and closed stay neutral. */
+.pr-conflicting { color: color-mix(in srgb, var(--r-failed) 55%, var(--text)); border-color: var(--r-failed); }
+.pr-merged { border-color: var(--r-landing); }
 .short-id { cursor: copy; }
 
 /* A full-width view's header is the rail laid across the top: the same
@@ -630,7 +659,7 @@ a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
 .data-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .data-table th, .data-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; }
 .data-table tbody th { font-weight: 500; }
-.data-table-mono tbody th { font-family: ui-monospace, monospace; }
+.data-table-mono tbody th { font-family: var(--mono); }
 .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .data-table .label { margin-left: 6px; }
 /* A pulse: a brief background flash when what an element shows changes.
@@ -647,3 +676,6 @@ a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
   @keyframes flash-0 { 30% { filter: brightness(1.4); } }
   @keyframes flash-1 { 30% { filter: brightness(1.4); } }
 }
+
+/* The rail and the view head restyle .btn, so their disabled buttons dim the way the rest do. */
+.inbox-nav .btn:disabled, .view-head .btn:disabled { opacity: .55; }

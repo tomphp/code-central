@@ -214,26 +214,40 @@ Add, edit, reorder and remove them in the **Repositories** section at the top of
 
 ```console
 $ code-central repository add web --clone-url git@github.com:acme/web.git
-NAME             CLONE URL                         BASE  LOCAL PATH
-acme-api (home)  git@github.com:acme/acme-api.git  main  -
-web              git@github.com:acme/web.git       main  -
+NAME             CLONE URL                         BASE  LOCAL PATH  LANDING          PUSH REMOTE
+acme-api (home)  git@github.com:acme/acme-api.git  main  -           Merge (default)  origin
+web              git@github.com:acme/web.git       main  -           Merge (default)  origin
 $ code-central repository move web --before acme-api
-NAME             CLONE URL                         BASE  LOCAL PATH
-web              git@github.com:acme/web.git       main  -
-acme-api (home)  git@github.com:acme/acme-api.git  main  -
+NAME             CLONE URL                         BASE  LOCAL PATH  LANDING          PUSH REMOTE
+web              git@github.com:acme/web.git       main  -           Merge (default)  origin
+acme-api (home)  git@github.com:acme/acme-api.git  main  -           Merge (default)  origin
 ```
 
-A repository you never push, with no remote or none you want the Factory to use, needs no Clone URL: give only the local path of its clone. In the Repositories section the add form's button enables once it has a name and a Clone URL or a local path, a hint under the Clone URL field says to leave it empty for a local-only repository, and **Watch its CI** shows only while a Clone URL is entered; emptying the Clone URL in a Repository's **Edit** form clears it. A local-only Repository's row shows **None: local only, never pushed** for its Clone URL. A Repository with no Clone URL is **local-only**. The Factory never clones it and adopts the git repository at its local path as it is; Push skips it, so work lands there once merged into its Base; the Pull Request Landing Method refuses it; and CI Tracking starts it Not watched:
+A repository you never push, with no remote or none you want the Factory to use, needs no Clone URL: give only the local path of its clone. In the Repositories section the add form's button enables once it has a name and a Clone URL or a local path, a hint under the Clone URL field says to leave it empty for a local-only repository, and **Watch its CI** shows only while a Clone URL is entered; emptying the Clone URL in a Repository's **Edit** form clears it. A local-only Repository's row shows **None: local only, never pushed** for its Clone URL. A Repository with no Clone URL is **local-only**. The Factory never clones it and adopts the git repository at its local path as it is; Push skips it, so work lands there once merged into its Base; it can't be under Pull Request; and CI Tracking starts it Not watched:
 
 ```console
 $ code-central repository add notes --local-path /home/you/src/notes
-NAME             CLONE URL                         BASE  LOCAL PATH
-web              git@github.com:acme/web.git       main  -
-acme-api (home)  git@github.com:acme/acme-api.git  main  -
-notes            (none: local only)                main  /home/you/src/notes
+NAME             CLONE URL                         BASE  LOCAL PATH           LANDING          PUSH REMOTE
+web              git@github.com:acme/web.git       main  -                    Merge (default)  origin
+acme-api (home)  git@github.com:acme/acme-api.git  main  -                    Merge (default)  origin
+notes            (none: local only)                main  /home/you/src/notes  Merge (default)  origin
 ```
 
-The list is the **landing order**: accepted work lands in each Repository in that order. `code-central repository list` shows it; `edit <name>` takes `--clone-url`, `--base` and `--local-path` (an empty `--clone-url ""` clears the Clone URL, making the Repository local-only, and an empty `--local-path ""` clears the local path, but never both); `remove <name>` takes one off the list and leaves its clone on disk. The Home Repository is listed under the Project Key: its Clone URL is the Push remote URL the Factory reports, and its Base is set in the Landing Method section. Each refusal says how to put it right: neither a Clone URL nor a local path, a Repository Name or a Clone URL already listed (`git@github.com:acme/web.git` and `https://github.com/acme/web` are the same one), removing the Home Repository, or removing one an unfinished Ticket has changed. While the Landing Method is Pull Request, a Repository is added only on a Code Host Pull Request supports, and only once the Pull Request Watcher's check passes for it.
+Each Repository, the Home included, follows the Project's **Default Landing** (the Landing Method section) or has its **Own Landing**, and may name its own Push remote. `--landing` takes `default`, `merge`, `merge+push`, `branch`, `branch+push` or `pull-request`, and an empty `--push-remote ""` goes back to the Project's; `repository edit` takes the Home Repository's name for these two flags alone. The list's LANDING column marks each Landing `(default)` or `(own)`:
+
+```console
+$ code-central repository edit web --landing pull-request --push-remote upstream
+NAME             CLONE URL                         BASE  LOCAL PATH           LANDING             PUSH REMOTE
+web              git@github.com:acme/web.git       main  -                    Pull Request (own)  upstream
+acme-api (home)  git@github.com:acme/acme-api.git  main  -                    Merge (default)     origin
+notes            (none: local only)                main  /home/you/src/notes  Merge (default)     origin
+```
+
+Pull Request is refused only where a local-only Repository would end up under it: as its Own Landing, as the Default Landing while one follows it, or by clearing the Clone URL of one under it. The refusal names the Repository and says to give it an Own Landing such as Merge, or a Clone URL.
+
+**A local-only Home beside pushed Repositories.** The Home Repository needs no remote. When its clone has none of the Push remote's name, the Factory reports that when it starts and the Home shows as `(none: local only)`: nothing is pushed or fetched there, a Ticket lands there once merged, and the CI gate never holds there, while the other Repositories push and gate by their own Landing and Push remote. A missing remote on the Home stops no landing anywhere.
+
+The list is the **landing order**: accepted work lands in each Repository in that order. `code-central repository list` shows it; `edit <name>` takes `--clone-url`, `--base`, `--local-path`, `--landing` and `--push-remote` (an empty `--clone-url ""` clears the Clone URL, making the Repository local-only, and an empty `--local-path ""` clears the local path, but never both); `remove <name>` takes one off the list and leaves its clone on disk. The Home Repository is listed under the Project Key: its Clone URL is the Push remote URL the Factory reports, and its Base is set in the Landing Method section. Each refusal says how to put it right: neither a Clone URL nor a local path, a Repository Name or a Clone URL already listed (`git@github.com:acme/web.git` and `https://github.com/acme/web` are the same one), removing the Home Repository, or removing one an unfinished Ticket has changed. A Repository that comes under Pull Request, as it is added or by its Landing, needs a Clone URL on a Code Host Pull Request supports, and the Pull Request Watcher's check to pass for it.
 
 The Factory clones each Repository on its next poll, beside the Home Repository (`/home/you/src/web` for `web` when the Home Repository is `/home/you/src/acme-api`) unless you gave a local path, and adopts a clone of the Clone URL it finds there as it is. Each Ticket then gets a worktree in every Repository, named after it, and a session that starts in the Home worktree and reaches the others with `--add-dir`:
 
@@ -328,7 +342,7 @@ Everything else works as for GitHub Actions, with these differences:
 - A run's **Workflow** is its pipeline's name, without its folder, and its name is the build number. Ignored workflows and CI Rules match pipeline names.
 - Runs are matched to a Ticket by its pushed commit, whatever repository in the project they built. Only the project's latest 200 builds are searched, which is plenty for a commit that is still waiting.
 - A run's jobs are the build's jobs; stages and tasks aren't listed.
-- A run that **partially succeeded** counts as **passed**, and its row says **Partially succeeded** with a warning mark.
+- A run that **partially succeeded** counts as **passed**, and its row says **partially succeeded**, with a dashed border.
 - **Re-run failed jobs** asks Azure DevOps to retry the build's failed jobs, as a new attempt of the same build.
 - Azure DevOps timing a job out reports it as failed or cancelled, and Code Central takes that as given.
 - Links read **View on Azure DevOps**.
@@ -361,7 +375,7 @@ Under **Merge + Push**, CI Tracking gates landing: the Factory pushes an accepte
 
 **CI**, in the **Admin** section of the Inbox's left pane above **Usage**, opens the CI view on the Project chosen in the left pane, or on **All Projects** when none is (with one active Project, the Sole Project, it opens on that Project and its picker doesn't offer All Projects). Its **Projects** picker changes that, and goes in the address (`/?view=ci&project=acme`); **Back to the Inbox** returns you to where you were. All Projects covers every active Project with CI Tracking on.
 
-At the top, each Project's CI Watcher status: Watching its repository (or Azure DevOps project URL), Starting, or an error with its fix, as in the CI section; a Project with CI Tracking off says so, linking its Project Options. Below it, the CI Runs: those still running first, newest first, then those that finished in the last 7 days, the latest to finish first. Each row has the workflow's name and file, branch, short commit, status, how long it ran (so far, while running), the Ticket or CI Rule it is tracked against, which opens it, and **View on GitHub** (**View on Azure DevOps** for an Azure Pipelines Project). A run that partially succeeded shows as **Partially succeeded**, in the passed colour with a warning mark. A re-run shows its latest attempt. Runs of Ignored workflows are greyed and marked **ignored**. The view follows the live feed: a run that changes, or a new one, pulses.
+At the top, each Project's CI Watcher status: Watching its repository (or Azure DevOps project URL), Starting, or an error with its fix, as in the CI section; a Project with CI Tracking off says so, linking its Project Options. Below it, the CI Runs: those still running first, newest first, then those that finished in the last 7 days, the latest to finish first. Each row has the workflow's name and file, branch, short commit, status, how long it ran (so far, while running), the Ticket or CI Rule it is tracked against, which opens it, and **View on GitHub** (**View on Azure DevOps** for an Azure Pipelines Project). A run that partially succeeded shows as **partially succeeded**, in the passed colour with a dashed border. A re-run shows its latest attempt. Runs of Ignored workflows are greyed and marked **ignored**. The view follows the live feed: a run that changes, or a new one, pulses.
 
 ```
 Acme API: Watching acme/acme-api.

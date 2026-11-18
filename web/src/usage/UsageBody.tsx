@@ -49,9 +49,9 @@ export function UsageBody({ data, error, days, scopeName, here, projectName, nav
   const over = `in ${scopeName} over the last ${days} days`;
   return (
     <div className="view-body">
-      {error && <ErrorBanner>{error}</ErrorBanner>}
       {!data && !error && <Loading />}
       <Tabs label="Usage" tabs={TABS} value={tab} onChange={onTab}>
+        {error && <ErrorBanner>{error}</ErrorBanner>}
         {data && tab === "tokens" &&
           (data.kinds.length ? (
             <TokenChart days={data.days} kinds={data.kinds.map((k) => k.kind)} />

@@ -1,6 +1,7 @@
 // CallsTable is Usage's Code Central calls table: one row per operation,
 // sortable by every column.
 import type { UsageOperation } from "../api/types";
+import { SortCue } from "../controls/Icon";
 import { bytes, count } from "../format";
 
 export interface Sort {
@@ -63,6 +64,7 @@ export function CallsTable({ operations, sort, onSort }: CallsTableProps) {
             >
               <button className="usage-sort" onClick={() => onSort(c.key)}>
                 {c.label}
+                <SortCue direction={sort.key === c.key ? (sort.descending ? "descending" : "ascending") : undefined} />
               </button>
             </th>
           ))}

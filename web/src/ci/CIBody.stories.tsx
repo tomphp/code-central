@@ -38,7 +38,7 @@ export const ManyProjects: Story = {
   args: {
     overview: {
       projects: [status("acme"), status("beta", { tracking: false })],
-      runs: [running("acme", 3), finished("acme", 4, { rule: "acme-r1" })],
+      runs: [running("acme", 3), finished("beta", 4, { rule: "beta-r1" })],
     },
   },
 };

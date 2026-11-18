@@ -22,7 +22,7 @@ func ciResultWorld(t *testing.T, landing store.Landing) fixture {
 	err := f.store.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
 		p.Landing = landing
-		p.CI = store.CI{Tracking: true, Provider: store.CIGitHubActions, Repository: "acme/web"}
+		p.CI = trackingOn("acme/web")
 		return w.PutProject(p)
 	})
 	if err != nil {

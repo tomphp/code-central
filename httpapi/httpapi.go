@@ -85,7 +85,7 @@ var handlers = map[string]handlerFunc{
 		// agent door, names its parts, so it leaves it out as MCP does.
 		in := core.GetTicketInput{Ticket: core.Ref(r.PathValue("n")), Parts: q["part"]}
 		if len(in.Parts) == 0 {
-			in.Parts, in.WithModelChoice = core.TicketParts, true
+			in.Parts, in.WithModelChoice = core.TicketParts(), true
 		}
 		return c.GetTicket(r.Context(), r.PathValue("key"), in)
 	},
@@ -119,7 +119,7 @@ var handlers = map[string]handlerFunc{
 		// whole Ticket, with its Model Choice.
 		in.Full = true
 		if len(in.Parts) == 0 {
-			in.Parts, in.WithModelChoice = core.TicketParts, true
+			in.Parts, in.WithModelChoice = core.TicketParts(), true
 		}
 		return c.FindTicketViews(r.Context(), r.PathValue("key"), in)
 	},
@@ -246,7 +246,7 @@ var handlers = map[string]handlerFunc{
 }
 
 // Register adds the HTTP API under /api/ to the service's one mux. The
-// request's Actor is already in its context (frontdoor.Guard reads the
+// request's Actor is already in its context (server.Guard reads the
 // Actor header); without one it is agent.
 func Register(mux *http.ServeMux, c *core.Core) {
 	all := map[string]handlerFunc{WaitPath: wait, TranscriptPath: transcript, UsagePath: usageRead, SessionUsagePath: sessionUsageRead, CIOverviewPath: ciOverviewRead}

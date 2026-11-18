@@ -44,7 +44,9 @@ const (
 )
 
 // SessionEventKinds are the kinds of Session Event.
-var SessionEventKinds = []SessionEventKind{EventText, EventToolCall, EventToolResult, EventFactory, EventPermissionDenials}
+func SessionEventKinds() []SessionEventKind {
+	return []SessionEventKind{EventText, EventToolCall, EventToolResult, EventFactory, EventPermissionDenials}
+}
 
 // SessionEvent is one thing a Claim's session did, as posted: agent text,
 // a tool call, a tool result or a Factory log line. Tool and Text are

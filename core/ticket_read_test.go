@@ -98,7 +98,7 @@ func TestGetTicketByDefaultLeavesOutRoundsMovesAndEditsAndCountsThem(t *testing.
 }
 
 func TestGetTicketWithOnePartReturnsTheScalarsAndOnlyThatPart(t *testing.T) {
-	for _, part := range core.TicketParts {
+	for _, part := range core.TicketParts() {
 		t.Run(part, func(t *testing.T) {
 			f := newFixture(t)
 			f.redone(t)
@@ -125,8 +125,8 @@ func TestGetTicketWithOnePartReturnsTheScalarsAndOnlyThatPart(t *testing.T) {
 func TestGetTicketWithEveryPartIsTheWholeTicket(t *testing.T) {
 	f := newFixture(t)
 	f.redone(t)
-	v := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2", Parts: core.TicketParts})
-	if got, want := keys(v), withKeys(scalars, core.TicketParts...); !slices.Equal(got, want) {
+	v := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2", Parts: core.TicketParts()})
+	if got, want := keys(v), withKeys(scalars, core.TicketParts()...); !slices.Equal(got, want) {
 		t.Fatalf("keys %v, want %v: no left_out on the whole Ticket", got, want)
 	}
 	// It is what a write returns with full.
@@ -364,7 +364,7 @@ func TestFindTicketViewsGivesEachTicketAsGetTicketDoes(t *testing.T) {
 	f.redone(t)
 	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Logout", State: store.Ready})
 	in := core.FindTicketsInput{State: store.States, Full: true}
-	for _, parts := range [][]string{nil, core.TicketParts} {
+	for _, parts := range [][]string{nil, core.TicketParts()} {
 		in.Parts = parts
 		views, err := f.core.FindTicketViews(ctx, "acme", in)
 		if err != nil {

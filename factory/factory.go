@@ -15,7 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
@@ -347,9 +346,6 @@ type factory struct {
 	reportedChanged map[string]string
 	// oldBases are the bases the Project named earlier in this run.
 	oldBases []string
-	// landingRemote is the Push remote the last poll's Landing settings
-	// named, for a Claim's start to find the remote bases.
-	landingRemote string
 
 	// bases is what the Factory knows of each Repository's base, by
 	// Repository Name: whether it is missing, has diverged or was level
@@ -368,9 +364,17 @@ type factory struct {
 	// reportBaseFailing is whether the last report_base failed, so a
 	// failure warns once.
 	reportBaseFailing bool
-	// warnedRemote is the Push remotes found missing, already warned of
-	// and not back since; the poll's own.
-	warnedRemote map[string]bool
+	// reportedRemote is the Home's Push remote name whose URL, or its
+	// absence, was last reported to Code Central, and remoteReported
+	// whether one was; reportRemoteFailing is whether the last report
+	// failed, so a failure warns once. They are the poll's own, once
+	// started.
+	reportedRemote      string
+	remoteReported      bool
+	reportRemoteFailing bool
+	// saidLocalOnly is the Repositories said to be local-only under Pull
+	// Request, and not put right since; the poll's own.
+	saidLocalOnly map[string]bool
 	// saidOnCI is "<ticket>@<pushed commit>@<CI result>" of Tickets the
 	// CI gate holds, already said; the poll's own.
 	saidOnCI map[string]bool
@@ -436,7 +440,7 @@ type factory struct {
 // rest.
 func newFactory(e Env, o options) *factory {
 	w := work{e.Work}
-	return &factory{e: e, o: o, drainCh: make(chan struct{}), wakeCh: make(chan func(), 1), work: w, polling: stint{w: w}, drainWork: newHandoff(), stopWork: newHandoff(), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, backInReady: map[string]time.Time{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, saidHeld: map[string]bool{}, reportedChanged: map[string]string{}, bases: map[string]*baseState{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, warnedRemote: map[string]bool{}}
+	return &factory{e: e, o: o, drainCh: make(chan struct{}), wakeCh: make(chan func(), 1), work: w, polling: stint{w: w}, drainWork: newHandoff(), stopWork: newHandoff(), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, backInReady: map[string]time.Time{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, saidHeld: map[string]bool{}, reportedChanged: map[string]string{}, bases: map[string]*baseState{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, saidLocalOnly: map[string]bool{}}
 }
 
 // start makes every start-up check, refusing with the reason.
@@ -457,7 +461,7 @@ func start(e Env, o options) (*factory, error) {
 	if err := f.checkGitVersion(); err != nil {
 		return nil, err
 	}
-	project, err := cli.ResolveProject(e.Dir, o.project, e.getenv)
+	project, err := client.ResolveProject(e.Dir, o.project, e.getenv)
 	if err != nil {
 		return nil, err
 	}
@@ -477,7 +481,7 @@ func start(e Env, o options) (*factory, error) {
 	if err := writable(f.home.worktrees); err != nil {
 		return nil, fmt.Errorf("can't use the worktree folder %s: %v", f.home.worktrees, err)
 	}
-	f.client = client.New(cli.ServiceURL(e.getenv))
+	f.client = client.New(client.ServiceURL(e.getenv))
 	every := e.EventBatchEvery
 	if every <= 0 {
 		every = postEvery
@@ -504,11 +508,6 @@ func start(e Env, o options) (*factory, error) {
 		}
 		f.mcpBase = f.base
 	}
-	if readErr == nil {
-		if why := f.missingRemote(p.Landing.Remote, p.LandingPolicy()); why != "" {
-			return nil, errors.New(why)
-		}
-	}
 	f.accepts = f.readClaudeHelp()
 	if err := f.checkEffortFlag(); err != nil {
 		return nil, err
@@ -518,7 +517,7 @@ func start(e Env, o options) (*factory, error) {
 		return nil, err
 	}
 	if readErr == nil {
-		f.reportPushRemote(p.Landing.Remote)
+		f.reportPushRemote(context.Background(), p)
 		f.modelsReported = f.reportModels(context.Background())
 	}
 	statePath, err := e.home().State("code-central-factory", project+".json")

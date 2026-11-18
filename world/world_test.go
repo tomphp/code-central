@@ -13,7 +13,7 @@ import (
 
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/frontdoor"
+	"github.com/tomoram/code-central/server"
 	"github.com/tomoram/code-central/world"
 )
 
@@ -34,7 +34,7 @@ func send(t *testing.T, w *world.World, actor, method, path, body string) (int, 
 	req, _ := http.NewRequest(method, "http://localhost"+path, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	if actor != "" {
-		req.Header.Set(frontdoor.ActorHeader, actor)
+		req.Header.Set(server.ActorHeader, actor)
 	}
 	res, err := w.RoundTrip(req)
 	if err != nil {

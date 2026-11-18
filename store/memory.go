@@ -263,7 +263,6 @@ func (w *writer) PutCIRuns(project string, runs []CIRun) error {
 
 func (x *index) setProject(p Project) {
 	p.Landing = p.Landing.orDefault()
-	p.CI = p.CI.orDefault()
 	if d, ok := x.projects[p.Key]; ok {
 		d.project = p
 		return

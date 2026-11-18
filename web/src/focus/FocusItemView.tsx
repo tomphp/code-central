@@ -34,6 +34,9 @@ export interface FocusItemViewProps {
   // inbox is where Open in Inbox goes; no link shows without it, or for an
   // item with no Ticket.
   inbox?: UiLocation;
+  // inOneProject drops the Project name above the item, when the host's
+  // header already names the one Project in scope.
+  inOneProject?: boolean;
 }
 
 // inboxOf is where Open in Inbox goes for a row, if it has a Ticket, on
@@ -62,6 +65,7 @@ export function FocusItemView({
   navigate,
   skip,
   inbox,
+  inOneProject,
 }: FocusItemViewProps) {
   const project = data.projects.find((p) => p.key === row.project);
   const Panel = panelFor(row.reason, ticket?.state)?.Component;
@@ -79,11 +83,13 @@ export function FocusItemView({
       aria-label="Focus Item"
       className={question ? "focus-item focus-item-question" : "focus-item"}
     >
-      <p className="focus-from">
-        <span className="focus-item-project">
-          <ProjectName name={project?.display_name ?? row.project} projectKey={row.project} />
-        </span>
-      </p>
+      {!inOneProject && (
+        <p className="focus-from">
+          <span className="focus-item-project">
+            <ProjectName name={project?.display_name ?? row.project} projectKey={row.project} />
+          </span>
+        </p>
+      )}
       <p className="focus-badges">
         <FocusBadge reason={row.reason} />
         {row.prototype && <PrototypeBadge />}

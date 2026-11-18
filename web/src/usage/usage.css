@@ -4,22 +4,24 @@
    the other views. */
 .usage-sort { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 600; padding: 0; cursor: pointer; }
 .usage th[aria-sort] .usage-sort { color: var(--text); }
-.usage th[aria-sort="ascending"] .usage-sort::after { content: " ▲"; }
-.usage th[aria-sort="descending"] .usage-sort::after { content: " ▼"; }
+.usage-sort .icon { vertical-align: -1px; margin-left: 4px; }
 .usage-subhead { font-size: 13.5px; font-weight: 600; margin: 18px 0 8px; }
-.usage-session { font-family: ui-monospace, monospace; font-size: 12.5px; overflow-wrap: anywhere; }
+.usage-session { font-family: var(--mono); font-size: 12.5px; overflow-wrap: anywhere; }
 .usage-session a { color: inherit; }
-.usage-session .usage-disclosure { display: block; margin-top: 2px; font-family: system-ui, -apple-system, sans-serif; white-space: nowrap; }
+.usage-session .usage-disclosure { display: block; margin-top: 2px; font-family: inherit; white-space: nowrap; }
 .usage-subagent .usage-session { padding-left: 28px; }
 .usage-open { background: var(--surface-2); }
 /* The Session popup portals out of .usage, so its classes stand alone. */
-.session-popup-title { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+.session-popup-title { font-family: var(--mono); overflow-wrap: anywhere; }
 .session-popup-meta { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 0 0 4px; font-size: 13px; }
 .line-chart { position: relative; margin-top: 10px; }
 .line-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
 .line-chart-grid line { stroke: var(--border); }
 .line-chart-grid text, .line-chart-axis { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .line-chart-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.line-chart-peak { fill: var(--text); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; pointer-events: none; }
+.session-popup-chart { min-height: 260px; }
+.session-popup-chart .empty { text-align: left; }
 .line-chart-point { fill: var(--bg); stroke: var(--accent); stroke-width: 2; cursor: pointer; }
 .line-chart-point:focus-visible { outline: none; stroke: var(--text); stroke-width: 3; }
 .line-chart-point.active { fill: var(--accent); }
@@ -42,10 +44,10 @@
 .token-hit { fill: transparent; }
 .token-bar { outline: none; }
 .token-bar.hovered .token-hit { fill: var(--border); opacity: 0.5; }
-.token-input { fill: var(--accent); background: var(--accent); }
-.token-cache-write { fill: var(--r-answer); background: var(--r-answer); }
-.token-cache-read { fill: var(--r-answered); background: var(--r-answered); }
-.token-output { fill: var(--r-review); background: var(--r-review); }
+.token-input { fill: var(--chart-1); background: var(--chart-1); }
+.token-cache-write { fill: var(--chart-2); background: var(--chart-2); }
+.token-cache-read { fill: var(--chart-3); background: var(--chart-3); }
+.token-output { fill: var(--chart-4); background: var(--chart-4); }
 .token-figures { min-height: 44px; margin-top: 6px; font-size: 13px; }
 .token-figures dl { display: flex; gap: 18px; margin: 4px 0 0; }
 .token-figures dt { color: var(--muted); }

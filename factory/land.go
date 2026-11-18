@@ -13,21 +13,22 @@ import (
 )
 
 // landAndSweep is a poll's landing: it reads the Landing Method and the
-// Repositories, makes sure each Repository has a clone, lands what it can
-// unless the Factory is paused, halted or missing the Push remote, and
-// sweeps the worktrees the Factory is done with.
+// Repositories, reports the Home's Push remote when it needs to, makes
+// sure each Repository has a clone, lands what it can unless the Factory
+// is paused or halted, and sweeps the worktrees the Factory is done with.
 func (f *factory) landAndSweep(ctx context.Context) {
 	p, ok := f.landing(ctx)
 	if ok {
+		p = f.reportPushRemote(ctx, p)
 		f.syncRepositories(ctx, p)
 		f.locateBases(ctx, p)
 	}
-	if ok && !f.paused() && !f.halted(ctx) && f.remoteReady(p) {
+	if ok && !f.paused() && !f.halted(ctx) {
 		f.land(ctx, p)
 	}
-	policy := p.LandingPolicy()
-	f.sweep(ctx, policy)
-	f.sweepSpecBranches(ctx, policy)
+	policies := p.LandingPolicies()
+	f.sweep(ctx, policies)
+	f.sweepSpecBranches(ctx, policies)
 }
 
 // landing reads the Project, whose Landing Method, with its Push option, the
@@ -50,56 +51,45 @@ func (f *factory) landing(ctx context.Context) (p core.ProjectView, ok bool) {
 	return p, true
 }
 
-// missingRemote says why landing can't go on when Push names a remote
-// this repository doesn't have, or is "".
-func (f *factory) missingRemote(remote string, policy core.LandingPolicy) string {
-	if !policy.NeedsPushRemote() {
-		return ""
+// reportPushRemote reports the URL of the Home's own Push remote in p, or
+// "" when its clone has none, making the Home local-only (Spec
+// code-central-890): at start, when the name changes, and when the remote
+// has gone while p has the Home pushed; one added later waits for the next
+// start. It returns p as the report left it.
+func (f *factory) reportPushRemote(ctx context.Context, p core.ProjectView) core.ProjectView {
+	i := slices.IndexFunc(p.Repositories, func(v core.RepositoryView) bool { return v.Home })
+	if i < 0 {
+		return p
 	}
-	if f.home.git.hasRemote(remote) {
-		return ""
-	}
-	return fmt.Sprintf("Push names the remote %q, which this repository doesn't have: add it with `git remote add`, or change it on the Project's Project Options page in Code Central", remote)
-}
-
-// reportPushRemote reports the URL of the Push remote, when the
-// repository has it, so the human's CI settings can offer its GitHub
-// repository. It is reported even with Push off: the remote is the one
-// Push would use.
-func (f *factory) reportPushRemote(remote string) {
-	url, err := f.home.git.remoteURL(remote)
+	home := p.Repositories[i]
+	url, err := f.home.git.remoteURL(home.PushRemote)
 	if err != nil {
-		return
+		url = ""
 	}
-	if _, err := f.client.ReportPushRemote(context.Background(), f.project, core.ReportPushRemoteInput{URL: url}); err != nil {
-		f.printf("warning: can't report the Push remote's URL to Code Central: %v", err)
+	if f.remoteReported && home.PushRemote == f.reportedRemote && (url != "" || home.LocalOnly) {
+		return p
 	}
-}
-
-// remoteReady reports whether landing can go on this poll: it can't when
-// Push names a missing remote, and a warning says so once per remote.
-func (f *factory) remoteReady(p core.ProjectView) bool {
-	why := f.missingRemote(p.Landing.Remote, p.LandingPolicy())
-	if why == "" {
-		// Back again: should it go missing later, that is warned of too.
-		delete(f.warnedRemote, p.Landing.Remote)
-		return true
+	got, err := f.client.ReportPushRemote(ctx, f.project, core.ReportPushRemoteInput{URL: url, Full: true})
+	if err != nil {
+		if ctx.Err() == nil && !f.reportRemoteFailing {
+			f.printf("warning: can't report the Push remote's URL to Code Central: %v", err)
+		}
+		f.reportRemoteFailing = true
+		return p
 	}
-	if !f.warnedRemote[p.Landing.Remote] {
-		f.warnedRemote[p.Landing.Remote] = true
-		f.printf("warning: nothing lands until this is fixed: %s", why)
+	f.reportRemoteFailing = false
+	f.reportedRemote, f.remoteReported = home.PushRemote, true
+	if got.Record == nil {
+		return p
 	}
-	return false
+	return *got.Record
 }
 
 // land lands Accepted Tickets one at a time, oldest accept first (ADR
-// 0006), each by the route the Landing Policy gives it, and detects merges
-// made by hand. By Merge the Factory merges it into the base and, with
-// Push on, pushes the base before landing it; by Branch it leaves it for
-// the human to merge, and lands it once merged; by Pull Request it lands
-// it through its pull request; by Spec Branch it merges it into
-// its Spec Branch. The Factory never accepts: only the human moves a
-// Ticket to Accepted.
+// 0006), each in each of its Changed Repositories by the route that
+// Repository's Landing Policy gives it (landEach), lands ready Specs in
+// each Repository by its Landing, and detects merges made by hand. The
+// Factory never accepts: only the human moves a Ticket to Accepted.
 //
 // Each Repository's base is synced apart, under its own Landing Policy,
 // so a local-only Repository's never is, and a broken one (missing, or
@@ -116,25 +106,25 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 	if !f.stateOf(f.home).missing {
 		held = f.landSpecsOff(ctx, accepted, p)
 	}
-	policy := p.LandingPolicy()
+	policies := p.LandingPolicies()
 	// Each base its Landing Policy keeps level is brought up to the
-	// remote's before anything lands.
+	// remote's before anything lands: never a local-only one's, which a
+	// Home that lost its remote under Pull Request is.
 	for _, r := range f.readyRepositories() {
-		s, own := f.stateOf(r), r.policy(policy)
-		if !s.missing && own.KeepsBaseLevel() {
-			s.current = f.syncBase(ctx, r, p.Landing.Remote, own.PushesBase(), accepted)
+		s, own := f.stateOf(r), r.policy(policies)
+		if !s.missing && !r.localOnly && own.KeepsBaseLevel() {
+			s.current = f.syncBase(ctx, r, r.remote, own.PushesBase(), accepted)
 		}
 	}
 	// Under Merge + Push a base that isn't level lands nothing touching
 	// it: not a Ticket, nor a merge into a Spec Branch cut from it.
-	homeReady := f.held(f.home, policy) == ""
+	homeReady := f.held(f.home, policies) == ""
 	if !homeReady && !f.several() {
 		return
 	}
-	if policy.CIGateHolds() {
-		f.reportTip(ctx, p.Landing.Remote, policy)
+	if policies.Any(core.LandingPolicy.CIGateHolds) {
+		f.reportTip(ctx, policies)
 	}
-	f.landingRemote = p.Landing.Remote
 	for _, tk := range accepted {
 		if f.halted(ctx) || f.paused() {
 			return
@@ -150,8 +140,7 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 				continue
 			}
 		}
-		route := policy.Route(f.waitsOnSpecBranch(tk), pullRequestMerged(tk))
-		ws, why := f.workToLand(tk, route, policy)
+		ws, why := f.workToLand(tk, policies)
 		if why != "" {
 			if key := tk.ID + "@" + why; !f.saidHeld[key] {
 				f.saidHeld[key] = true
@@ -159,73 +148,102 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 			}
 			continue
 		}
-		switch route {
-		case core.RouteBranch:
-			f.landMergedBranch(ctx, tk, p, ws)
-		case core.RoutePullRequest:
-			if f.landsInEach(tk, route) {
-				f.landPullRequests(ctx, tk, p)
-			} else {
-				f.landPullRequest(ctx, tk, p)
-			}
-		case core.RouteSpecBranch:
-			if tk.SpecMerge == nil || !tk.SpecMerge.Counts {
-				f.mergeIntoSpecBranch(ctx, tk, ws)
-			}
-		case core.RouteMerge:
-			f.landAccepted(ctx, tk, p, ws)
-		}
+		f.landEach(ctx, tk, p, ws)
 	}
-	// Ready Specs land, and hand merges are detected, each held back only
-	// by the broken bases of the Repositories it touches.
-	switch {
-	case policy.LandsByPullRequest():
-		// A Spec Branch goes to the base through its own pull request,
-		// not by a merge here: it is pushed instead.
-		f.pushSpecs(ctx, accepted, p)
-	default:
-		f.landSpecs(ctx, p)
-	}
+	// Ready Specs land in each Repository by its Landing, and hand merges
+	// are detected, each held back only by the broken bases of the
+	// Repositories it touches.
+	f.landSpecs(ctx, p)
 	f.detectHandMerges(ctx, p)
 }
 
-// landMergedBranch lands an Accepted Ticket under the Branch Landing
-// Method in each of ws, its Changed Repositories, once its work is in
-// that Repository's base: the human merged it there. It is Done once
-// merged in every one (ADR 0049). Until then each Repository it isn't
-// merged in is left as it is, with a line saying so once: never merged,
-// never sent back. With Push on there, as it is in every Repository but a
-// local-only one, its branch there is pushed to the remote meanwhile.
-func (f *factory) landMergedBranch(ctx context.Context, tk core.TicketView, p core.ProjectView, ws []changedWork) {
-	policy := p.LandingPolicy()
-	for _, w := range ws {
-		r := w.r
-		head, what, err := f.workIn(r, tk)
-		switch {
-		case err == nil && w.landed != "" && r.git.isAncestor(head, w.landed):
-			continue
-		case err == nil && f.inBaseOf(r, head):
-			f.printf("%s: merged into %s by hand%s", tk.ID, f.baseOf(r), r.where())
-			f.landAt(ctx, tk, r, head)
-			continue
-		case err == nil && r.policy(policy).PushesAcceptedBranch():
-			f.pushBranch(ctx, tk, policy, p.Landing.Remote, r, head)
+// landEach lands tk in each of ws, its Changed Repositories, by the route
+// that Repository's own Landing Policy gives it (Spec code-central-890):
+// by Merge the Factory merges it into the base there and, with Push on,
+// pushes the base before landing it; by Spec Branch it merges it into its
+// Spec Branch there; by Pull Request it pushes its branch there for its
+// pull request, and lands it there once that is merged; by Branch it
+// leaves it for the human to merge there, and lands it there once
+// merged. Every merge the Factory makes is worked out before tk lands in
+// any Repository: one that conflicts, or can't be worked out this poll,
+// moves nothing of tk anywhere (ADR 0049). Then it goes through them in
+// the landing order, and stops at a merge it can't land yet, to go on
+// from there next poll. tk is Partly landed until it has landed in each.
+func (f *factory) landEach(ctx context.Context, tk core.TicketView, p core.ProjectView, ws []changedWork) {
+	policies := p.LandingPolicies()
+	onSpec := f.waitsOnSpecBranch(tk)
+	routes := make([]core.LandingRoute, len(ws))
+	var merges, specs []changedWork
+	for i, w := range ws {
+		routes[i] = w.r.policy(policies).Route(onSpec, pullRequestMergedIn(tk, w.r))
+		switch routes[i] {
+		case core.RouteMerge:
+			merges = append(merges, w)
+		case core.RouteSpecBranch:
+			specs = append(specs, w)
 		}
-		key := tk.ID + "@" + head + r.where()
-		if f.leftOnBranch[key] {
-			continue
-		}
-		f.leftOnBranch[key] = true
-		if err != nil {
-			f.printf("warning: %s is Accepted under the Branch Landing Method, but %s isn't in this repository", tk.ID, what)
-			continue
-		}
-		merge := branchIn(tk, r)
-		if merge == "" {
-			merge = short(head)
-		}
-		f.printf("%s: Accepted under the Branch Landing Method: merge %s into %s%s and the Factory lands it", tk.ID, merge, f.baseOf(r), r.where())
 	}
+	plans, ok := f.planMerges(ctx, tk, merges)
+	if !ok {
+		return
+	}
+	if len(specs) > 0 && !f.mergeIntoSpecBranch(ctx, tk, specs) {
+		return
+	}
+	for i, w := range ws {
+		switch routes[i] {
+		case core.RouteMerge:
+			if pl, ok := plans[w.r]; ok && !f.mergeAndLand(ctx, tk, p, pl) {
+				return
+			}
+		case core.RoutePullRequest:
+			if changedElsewhere(f.home.name, tk) {
+				f.landPullRequestIn(ctx, tk, policies, w.r, onSpec)
+			} else {
+				// Its work is in the Home Repository alone, which lands
+				// by the Ticket's own pull request.
+				f.landPullRequest(ctx, tk, p)
+			}
+		case core.RouteBranch:
+			f.landMergedBranch(ctx, tk, policies, w)
+		}
+	}
+}
+
+// landMergedBranch lands an Accepted Ticket in w, one of its Changed
+// Repositories under the Branch Landing Method, once its work is in that
+// Repository's base: the human merged it there. It is Done once landed in
+// every one (ADR 0049). Until then the Repository is left as it is, with
+// a line saying so once: never merged, never sent back. With Push on
+// there, as it is in every Repository but a local-only one, its branch
+// there is pushed to the remote meanwhile.
+func (f *factory) landMergedBranch(ctx context.Context, tk core.TicketView, policies core.LandingPolicies, w changedWork) {
+	r := w.r
+	head, what, err := f.workIn(r, tk)
+	switch {
+	case err == nil && w.landed != "" && r.git.isAncestor(head, w.landed):
+		return
+	case err == nil && f.inBaseOf(r, head):
+		f.printf("%s: merged into %s by hand%s", tk.ID, f.baseOf(r), r.where())
+		f.landAt(ctx, tk, r, head)
+		return
+	case err == nil && r.policy(policies).PushesAcceptedBranch():
+		f.pushBranch(ctx, tk, policies, r, head)
+	}
+	key := tk.ID + "@" + head + r.where()
+	if f.leftOnBranch[key] {
+		return
+	}
+	f.leftOnBranch[key] = true
+	if err != nil {
+		f.printf("warning: %s is Accepted under the Branch Landing Method, but %s isn't in this repository", tk.ID, what)
+		return
+	}
+	merge := branchIn(tk, r)
+	if merge == "" {
+		merge = short(head)
+	}
+	f.printf("%s: Accepted under the Branch Landing Method: merge %s into %s%s and the Factory lands it", tk.ID, merge, f.baseOf(r), r.where())
 }
 
 // branchIn is tk's branch in r: the one its finish named there.
@@ -234,24 +252,25 @@ func branchIn(tk core.TicketView, r *repository) string {
 	return v.Branch
 }
 
-// pushBranch makes sure tk's branch in r, holding commit, is on remote,
-// and comments when it can't be pushed yet, to be retried next poll.
-func (f *factory) pushBranch(ctx context.Context, tk core.TicketView, policy core.LandingPolicy, remote string, r *repository, commit string) {
+// pushBranch makes sure tk's branch in r, holding commit, is on r's Push
+// remote, and comments when it can't be pushed yet, to be retried next
+// poll.
+func (f *factory) pushBranch(ctx context.Context, tk core.TicketView, policies core.LandingPolicies, r *repository, commit string) {
 	branch := branchIn(tk, r)
 	if branch == "" {
 		f.cantPushYet(ctx, tk, "it was finished without a branch, so there is no branch to push.")
 		return
 	}
-	pushed, why := f.push(ctx, r, remote, branch, commit)
+	pushed, why := f.push(ctx, r, r.remote, branch, commit)
 	if why != "" {
 		f.cantPushIn(ctx, tk, r, why)
 		return
 	}
 	if pushed {
-		f.printf("%s: pushed %s to %s%s", tk.ID, branch, remote, r.where())
+		f.printf("%s: pushed %s to %s%s", tk.ID, branch, r.remote, r.where())
 		// Only a push made now: one made before CI Tracking was turned on
 		// isn't tracked.
-		f.reportPushed(ctx, tk, policy, r, branch, f.remoteTip(r, remote, branch, commit))
+		f.reportPushed(ctx, tk, policies, r, branch, f.remoteTip(r, r.remote, branch, commit))
 	}
 }
 
@@ -290,20 +309,18 @@ func (f *factory) workIn(r *repository, tk core.TicketView) (commit, what string
 // the base is pushed. (land sees to Accepted ones.) A Ticket merged while in any other State
 // gets a warning line, once. With several Repositories it lands each
 // Changed Repository whose base holds the Ticket's finish commit there,
-// and the Ticket is Done once it has landed in all of them.
+// and the Ticket is Done once it has landed in all of them. In a
+// Repository under Pull Request it is a merged pull request that lands
+// the Ticket there, not its finish commit in the base
+// (detectMergedPullRequests).
 func (f *factory) detectHandMerges(ctx context.Context, p core.ProjectView) {
-	policy := p.LandingPolicy()
-	if policy.LandsByPullRequest() {
-		if f.held(f.home, policy) == "" {
-			f.detectMergedPullRequests(ctx, p.Landing.Remote)
-		}
-		return
-	}
+	policies := p.LandingPolicies()
 	for _, tk := range f.landable(ctx, mergeableStates...) {
 		if f.halted(ctx) || f.paused() {
 			return
 		}
-		merged := f.mergedByHand(tk, policy)
+		f.detectMergedPullRequests(ctx, tk, policies)
+		merged := f.mergedByHand(tk, policies)
 		if len(merged) == 0 {
 			continue
 		}
@@ -330,15 +347,19 @@ func (f *factory) detectHandMerges(ctx context.Context, p core.ProjectView) {
 
 // mergedByHand is tk's Changed Repositories, in landing order, whose base
 // holds tk's finish commit there and which it hasn't landed in, but for
-// one whose base is broken (held) under policy.
-func (f *factory) mergedByHand(tk core.TicketView, policy core.LandingPolicy) []changedWork {
+// one whose base is broken (held) under policies, and one under Pull
+// Request, where its pull request lands it.
+func (f *factory) mergedByHand(tk core.TicketView, policies core.LandingPolicies) []changedWork {
 	ws, why := f.changedWorkOf(tk)
 	if why != "" {
 		return nil
 	}
 	var out []changedWork
 	for _, w := range ws {
-		if w.commit == "" || f.held(w.r, policy) != "" || !f.inBaseOf(w.r, w.commit) || w.landed != "" && w.r.git.isAncestor(w.commit, w.landed) {
+		if w.r.policy(policies).LandsByPullRequest() {
+			continue
+		}
+		if w.commit == "" || f.held(w.r, policies) != "" || !f.inBaseOf(w.r, w.commit) || w.landed != "" && w.r.git.isAncestor(w.commit, w.landed) {
 			continue
 		}
 		out = append(out, w)
@@ -414,28 +435,17 @@ func (f *factory) changedWorkOf(tk core.TicketView) ([]changedWork, string) {
 	return out, ""
 }
 
-// landsInEach reports whether tk lands by route in each of its Changed
-// Repositories, not in the Home Repository alone: by every route but Pull
-// Request without work beside the Home Repository (ADR 0049, ADR 0050).
-func (f *factory) landsInEach(tk core.TicketView, route core.LandingRoute) bool {
-	return route != core.RoutePullRequest || changedElsewhere(f.home.name, tk)
-}
-
-// workToLand is tk's Changed Repositories to land by route, or says why
-// tk doesn't land this poll: one of them has no clone, or a broken base
-// (held), though one it has landed in doesn't hold it back. A Ticket that
-// doesn't land in each of them lands in the Home Repository alone, so
-// only its base holds that Ticket back.
-func (f *factory) workToLand(tk core.TicketView, route core.LandingRoute, policy core.LandingPolicy) ([]changedWork, string) {
-	if !f.landsInEach(tk, route) {
-		return nil, f.held(f.home, policy)
-	}
+// workToLand is tk's Changed Repositories to land, or says why tk doesn't
+// land this poll: one of them has no clone, or a broken base (held),
+// though one it has landed in doesn't hold it back. Every one is checked
+// before tk lands in any, whatever its route (ADR 0049).
+func (f *factory) workToLand(tk core.TicketView, policies core.LandingPolicies) ([]changedWork, string) {
 	ws, why := f.changedWorkOf(tk)
 	if why != "" {
 		return nil, why
 	}
 	for _, w := range ws {
-		if why := f.held(w.r, policy); why != "" && w.landed == "" {
+		if why := f.held(w.r, policies); why != "" && w.landed == "" {
 			return nil, why + w.r.where()
 		}
 	}
@@ -455,36 +465,31 @@ type mergePlan struct {
 	conflicts           []string
 }
 
-// landAccepted merges an Accepted Ticket's work into the base of each of
-// ws, its Changed Repositories, it hasn't landed in, and lands it there
-// (ADR 0049). It works out every merge first: a conflict in any lands
-// none, and sends the Ticket back. Then, in landing order, it merges,
-// advances the base, pushes and lands in each Repository in turn, and
-// stops at one it can't land in yet, to go on from there next poll.
-func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, p core.ProjectView, ws []changedWork) {
-	var plans []mergePlan
+// planMerges works out how an Accepted Ticket's work is merged into the
+// base of each of ws, the Changed Repositories it lands in by Merge, that
+// it hasn't landed in (ADR 0049), by Repository. ok is false when it
+// lands in none this poll: a merge can't be worked out yet, or one
+// conflicts, which sends the Ticket back.
+func (f *factory) planMerges(ctx context.Context, tk core.TicketView, ws []changedWork) (plans map[*repository]mergePlan, ok bool) {
+	plans = map[*repository]mergePlan{}
 	var conflicts []landConflict
 	for _, w := range ws {
-		pl, landed, ok := f.planMerge(ctx, tk, w)
+		pl, landed, planned := f.planMerge(ctx, tk, w)
 		switch {
-		case !ok:
-			return
+		case !planned:
+			return nil, false
 		case landed:
 		case len(pl.conflicts) > 0:
 			conflicts = append(conflicts, landConflict{r: pl.r, head: pl.head, into: f.baseOf(pl.r), tip: pl.baseTip, files: pl.conflicts})
 		default:
-			plans = append(plans, pl)
+			plans[w.r] = pl
 		}
 	}
 	if len(conflicts) > 0 {
 		f.sendBackConflicts(ctx, tk, "base", conflicts)
-		return
+		return nil, false
 	}
-	for _, pl := range plans {
-		if !f.mergeAndLand(ctx, tk, p, pl) {
-			return
-		}
-	}
+	return plans, true
 }
 
 // planMerge works out how tk lands in w's Repository, or that it has
@@ -566,24 +571,24 @@ func (f *factory) mergeAndLand(ctx context.Context, tk core.TicketView, p core.P
 // land. A Repository Not watched lands once pushed, and a local-only one,
 // with Push off, once merged.
 func (f *factory) landPushed(ctx context.Context, tk core.TicketView, p core.ProjectView, r *repository, base, commit string) bool {
-	policy := p.LandingPolicy()
-	own := r.policy(policy)
+	policies := p.LandingPolicies()
+	own := r.policy(policies)
 	if !own.PushesBase() {
 		return f.landAt(ctx, tk, r, commit)
 	}
 	v, _ := viewIn(tk, r)
 	gated := own.CIGateHolds() && !v.CINotWatched
-	if gated && f.pushedBase(r, v.PushedCommit, p.Landing.Remote, base, commit) {
+	if gated && f.pushedBase(r, v.PushedCommit, r.remote, base, commit) {
 		f.landOnCI(ctx, tk, r, v)
 		return true
 	}
-	pushed, why := f.push(ctx, r, p.Landing.Remote, base, commit)
+	pushed, why := f.push(ctx, r, r.remote, base, commit)
 	if why != "" {
 		f.cantLandIn(ctx, tk, r, why)
 		return false
 	}
 	if pushed {
-		f.printf("%s: pushed %s to %s%s", tk.ID, base, p.Landing.Remote, r.where())
+		f.printf("%s: pushed %s to %s%s", tk.ID, base, r.remote, r.where())
 	}
 	if !gated {
 		return f.landAt(ctx, tk, r, commit)
@@ -595,11 +600,11 @@ func (f *factory) landPushed(ctx context.Context, tk core.TicketView, p core.Pro
 	key := tk.ID + "@" + r.name
 	switch {
 	case pushed:
-		commit = f.remoteTip(r, p.Landing.Remote, base, commit)
+		commit = f.remoteTip(r, r.remote, base, commit)
 	case f.unreported[key] != "":
 		commit = f.unreported[key]
 	}
-	if f.reportPushed(ctx, tk, policy, r, base, commit) {
+	if f.reportPushed(ctx, tk, policies, r, base, commit) {
 		delete(f.unreported, key)
 	} else {
 		f.unreported[key] = commit
@@ -676,13 +681,13 @@ func (f *factory) remoteTip(r *repository, remote, branch, pushed string) string
 	return commit
 }
 
-// reportPushed reports, when r's Landing Policy, from policy, the
-// Project's, records pushed commits, commit, pushed as branch in r, as
-// tk's pushed commit there: the one CI runs on. It is reported once, when
-// it isn't tk's pushed commit there already. ok is false when the report
-// failed.
-func (f *factory) reportPushed(ctx context.Context, tk core.TicketView, policy core.LandingPolicy, r *repository, branch, commit string) (ok bool) {
-	own := r.policy(policy)
+// reportPushed reports, when r's Landing Policy, among policies, the
+// Project's Repositories', records pushed commits, commit, pushed as
+// branch in r, as tk's pushed commit there: the one CI runs on. It is
+// reported once, when it isn't tk's pushed commit there already. ok is
+// false when the report failed.
+func (f *factory) reportPushed(ctx context.Context, tk core.TicketView, policies core.LandingPolicies, r *repository, branch, commit string) (ok bool) {
+	own := r.policy(policies)
 	if !own.RecordsPushedCommit() {
 		return true
 	}
@@ -713,18 +718,19 @@ func (f *factory) reportPushed(ctx context.Context, tk core.TicketView, policy c
 // it passes, the Ticket lands there (ADR 0034). A tip that doesn't contain
 // the work, as after a force push, is reported to no Ticket, and a broken
 // base's to none until it is fixed. A Repository whose own Landing Policy
-// has no CI gate, a local-only one, has no tip to report.
-func (f *factory) reportTip(ctx context.Context, remote string, policy core.LandingPolicy) {
+// has no CI gate, a local-only one, has no tip to report. Each tip is
+// read from the Repository's own Push remote.
+func (f *factory) reportTip(ctx context.Context, policies core.LandingPolicies) {
 	type tipIn struct {
 		r   *repository
 		tip string
 	}
 	var tips []tipIn
 	for _, r := range f.readyRepositories() {
-		if !r.policy(policy).CIGateHolds() || f.held(r, policy) != "" {
+		if !r.policy(policies).CIGateHolds() || f.held(r, policies) != "" {
 			continue
 		}
-		if tip, err := r.git.commit("refs/remotes/" + remote + "/" + f.baseOf(r)); err == nil {
+		if tip, err := r.git.commit("refs/remotes/" + r.remote + "/" + f.baseOf(r)); err == nil {
 			tips = append(tips, tipIn{r, tip})
 		}
 	}
@@ -742,7 +748,7 @@ func (f *factory) reportTip(ctx context.Context, remote string, policy core.Land
 			case v.PushedCommit.Commit == t.tip || !t.r.git.isAncestor(v.PushedCommit.Commit, t.tip):
 			case tk.State == store.InReview && (v.Commit == "" || !f.inBaseOf(t.r, v.Commit)):
 			default:
-				f.reportPushed(ctx, tk, policy, t.r, f.baseOf(t.r), t.tip)
+				f.reportPushed(ctx, tk, policies, t.r, f.baseOf(t.r), t.tip)
 			}
 		}
 	}

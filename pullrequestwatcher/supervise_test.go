@@ -6,26 +6,26 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/ciwatcher/ciwatchertest"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/pullrequestwatcher"
 	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/watchers/watchertest"
 )
 
 // supervising is a real Code Central with acme under Pull Request, and the
 // service's supervision of the Pull Request Watcher, run as program.
 type supervising struct {
 	t   *testing.T
-	h   *ciwatchertest.Harness
+	h   *watchertest.Harness
 	srv *codecentraltest.Server
-	*ciwatchertest.Supervising
+	*watchertest.Supervising
 }
 
 func newSupervising(t *testing.T) *supervising {
 	t.Helper()
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	h.Answer(fakegh.Answer{Args: []string{"api", repoPath}, Stdout: write})
 	srv := codecentraltest.NewServer(t)
 	must(t, func() error {

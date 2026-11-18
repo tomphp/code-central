@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ratelimit"
 )
 
 // checkLimit bounds a check: gh auth status and one API read. It is on
@@ -37,7 +38,7 @@ func Check(ctx context.Context, program string, environ, args []string, kind cor
 		err = json.Unmarshal(stdout.Bytes(), &r)
 	}
 	if err != nil {
-		if line := FirstLine(stderr.String()); line != "" {
+		if line := ratelimit.FirstLine(stderr.String()); line != "" {
 			err = fmt.Errorf("%w: %s", err, line)
 		}
 		return core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: fmt.Sprintf("The %s's check didn't finish: %v", kind.Name(), err),

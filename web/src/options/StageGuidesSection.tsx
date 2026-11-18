@@ -28,7 +28,7 @@ export function StageGuidesSection({ project }: { project: ProjectRow }) {
         subagent when understanding existing code means reading across several
         files, so only its conclusion stays in context. Turn it off if your
         agents have no subagents or can&apos;t afford them. A change applies
-        from the next Claim and the next get_stage_guide call, not to a
+        from the next Claim and the next <code>get_stage_guide</code> call, not to a
         running or resumed session.
       </StageGuideCheckbox>
       <StageGuideCheckbox
@@ -38,7 +38,7 @@ export function StageGuidesSection({ project }: { project: ProjectRow }) {
       >
         While on, the tickets Stage gives each Ticket it creates a model and
         effort, chosen from the Project&apos;s Reported Models. A change applies
-        from the next get_stage_guide call.
+        from the next <code>get_stage_guide</code> call.
       </StageGuideCheckbox>
     </fieldset>
   );
@@ -77,7 +77,7 @@ function StageGuideCheckbox({
   const changed = draft !== stored;
 
   return (
-    <form onSubmit={save}>
+    <form onSubmit={save} className="stage-guide-row">
       <label>
         <input
           type="checkbox"

@@ -213,9 +213,10 @@ func (c *Core) SendBack(ctx context.Context, key string, in SendBackInput) (Writ
 
 // refuseSendBackOfShared rejects the human's send_back of an Accepted
 // pushed Ticket that is Spec-landed (code-central-379), whose work is in
-// the base with the Spec's, so there is nothing of its own to send back
-// to fix, or whose CI failed or CI cancelled item lists other Tickets
-// too (code-central-432), which the commit's fix must cover as well.
+// the base with the Spec's in a Changed Repository where Land per Spec is
+// in force, so there is nothing of its own to send back to fix, or whose
+// CI failed or CI cancelled item lists other Tickets too
+// (code-central-432), which the commit's fix must cover as well.
 func (c *Core) refuseSendBackOfShared(key string, ref Ref) error {
 	return c.store.View(func(r store.Reader) error {
 		t, err := resolveTicket(r, key, "send_back", "ticket", ref)
@@ -224,7 +225,7 @@ func (c *Core) refuseSendBackOfShared(key string, ref Ref) error {
 		}
 		p, _ := r.Project(key)
 		id := DisplayID(key, t.Number)
-		if specLanded(r, p, t) {
+		if specLanded(r, p, t) && ticketLandingPolicies(p, t).LandPerSpecInForce() {
 			return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s's work is in the base with its Spec's, so there is no branch of its own to send back: land it anyway or open a fix Ticket", id)}
 		}
 		if it, ok := c.evaluate(r, p).itemOf(t); ok && it.reason != ReasonCIUnavailable && len(it.tickets) > 1 {

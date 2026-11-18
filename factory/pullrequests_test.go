@@ -24,22 +24,40 @@ func acceptedIn(t *testing.T, h *factorytest.Harness) (id string, r *factorytest
 	return id, r
 }
 
-// wantPushedIn checks the Factory has reported ticket's branch in
-// repository as pushed: the Pull Request Watcher would open a pull request
-// there. It returns the pushed commit.
-func wantPushedIn(t *testing.T, h *factorytest.Harness, repository, ticket string) string {
+// pullRequestWatch is what the Pull Request Watcher reads for h's Project.
+func pullRequestWatch(t *testing.T, h *factorytest.Harness) core.PullRequestWatch {
 	t.Helper()
 	w, err := h.Server.Client.GetPullRequestWatch(context.Background(), h.Project)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, work := range w.Work {
-		if work.Repository == repository && work.Branch == ticket {
-			return work.Commit
+	return w
+}
+
+// pushedWorkIn is the work the Factory has reported pushed in repository,
+// for the Pull Request Watcher to open pull requests on, by branch.
+func pushedWorkIn(t *testing.T, h *factorytest.Harness, repository string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	for _, work := range pullRequestWatch(t, h).Work {
+		if work.Repository == repository {
+			out[work.Branch] = work.Commit
 		}
 	}
-	t.Fatalf("the pushed work in %s isn't reported: the Watcher's list is %+v", repository, w.Work)
-	return ""
+	return out
+}
+
+// wantPushedIn checks the Factory has reported ticket's branch in
+// repository as pushed: the Pull Request Watcher would open a pull request
+// there. It returns the pushed commit.
+func wantPushedIn(t *testing.T, h *factorytest.Harness, repository, ticket string) string {
+	t.Helper()
+	work := pushedWorkIn(t, h, repository)
+	commit, ok := work[ticket]
+	if !ok {
+		t.Fatalf("the pushed work in %s isn't reported: the Watcher's list there is %v", repository, work)
+	}
+	return commit
 }
 
 // reportPullRequestIn is the Pull Request Watcher reporting ticket's pull

@@ -178,10 +178,14 @@ func (c *Core) GetPullRequestWatch(_ context.Context, key string) (PullRequestWa
 			return unknownProject(key)
 		}
 		lv := landingView(p)
-		out = PullRequestWatch{Project: key, On: landingPolicyOf(p).RunsPullRequestWatcher(), CodeHost: lv.CodeHost, Repository: lv.Repository,
+		ps := landingPolicies(p)
+		out = PullRequestWatch{Project: key, On: ps.RunsPullRequestWatcher(), CodeHost: lv.CodeHost, Repository: lv.Repository,
 			Base: p.Base(), Repositories: []PullRequestRepositoryView{}, PATEnv: lv.PATEnv, GHPath: r.Options().GHPath, Work: []PushedWorkView{}, Close: []PullRequestToClose{}}
 		if out.On {
 			for _, rv := range repositoriesView(p) {
+				if !ps.In(rv.Name).LandsByPullRequest() {
+					continue
+				}
 				_, repository := codeHostOf(rv.CloneURL)
 				out.Repositories = append(out.Repositories, PullRequestRepositoryView{Name: rv.Name, CodeHost: rv.CodeHost, Repository: repository, Base: rv.Base})
 			}
@@ -563,21 +567,19 @@ func pullRequestOpen(p store.PullRequest) bool {
 }
 
 // openPullRequests is the notice after a switch away from Pull Request:
-// the open pull requests of each Accepted Ticket, by Ticket. A Spec's one
-// pull request shows for each of its Tickets. It is empty when lp lands by
-// Pull Request.
-func openPullRequests(r store.Reader, key string, lp LandingPolicy) []OpenPullRequest {
+// the open pull requests of each Accepted Ticket of p, by Ticket, in the
+// Repositories no longer under Pull Request. A Spec's one pull request
+// shows for each of its Tickets.
+func openPullRequests(r store.Reader, p store.Project) []OpenPullRequest {
 	out := []OpenPullRequest{}
-	if lp.LandsByPullRequest() {
-		return out
-	}
-	for _, t := range r.Tickets(key) {
+	ps := landingPolicies(p)
+	for _, t := range r.Tickets(p.Key) {
 		if t.State != store.Accepted {
 			continue
 		}
 		for _, pr := range t.PullRequests {
-			if pullRequestOpen(pr) {
-				out = append(out, OpenPullRequest{Ticket: DisplayID(key, t.Number), Link: pr.Link})
+			if pullRequestOpen(pr) && !ps.In(recordRepository(p.Key, pr.Repository)).LandsByPullRequest() {
+				out = append(out, OpenPullRequest{Ticket: DisplayID(p.Key, t.Number), Link: pr.Link})
 			}
 		}
 	}
