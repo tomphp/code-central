@@ -5,6 +5,7 @@ The Code Central service on port 7733 is the human's own instance, with their re
 Never do any of this to it:
 
 - run `serve`, `service install`, `service uninstall`, `pkill` or a restart against it;
+- run `store move`: it opens the Store `serve` would open (the human's, unless `--store`, `CODE_CENTRAL_STORE` or a scratch `HOME` and `XDG_*` folders point elsewhere) and rewrites the `store:` block of their `settings.yaml`. To try it, give it a scratch home: `HOME=<scratch> XDG_CONFIG_HOME=<scratch>/config XDG_DATA_HOME=<scratch>/data code-central store move --to sqlite`;
 - run `init` or `ping` (they reach whatever `CODE_CENTRAL_URL` names, else 7733) from a test, a demo or a scratch repo;
 - `curl` a write to it;
 - point `CODE_CENTRAL_URL` at it from a test, a demo or a script.

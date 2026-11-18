@@ -184,6 +184,35 @@ func (f *Files) Prune(before string) error {
 	return errors.Join(errs...)
 }
 
+// Days lists each Project's files whose name is a day. A name that
+// isn't a day is left out, as Prune leaves it.
+func (f *Files) Days() (map[string][]string, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	out := map[string][]string{}
+	var errs []error
+	for _, p := range f.projects() {
+		entries, err := os.ReadDir(f.folder(p))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			errs = append(errs, fmt.Errorf("cannot read %s: %w", f.folder(p), err))
+			continue
+		}
+		for _, e := range entries { // ReadDir sorts by name, so oldest first
+			d, ok := strings.CutSuffix(e.Name(), ".jsonl")
+			if !ok {
+				continue
+			}
+			if _, err := time.Parse(time.DateOnly, d); err == nil {
+				out[p] = append(out[p], d)
+			}
+		}
+	}
+	return out, errors.Join(errs...)
+}
+
 // projects is every Project with a folder, sorted.
 func (f *Files) projects() []string {
 	entries, err := os.ReadDir(filepath.Join(f.dir, "projects"))
