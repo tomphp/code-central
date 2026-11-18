@@ -8,6 +8,7 @@
 import { useState } from "react";
 import "../../api/actions/land";
 import "../../api/actions/cancel";
+import "../../api/actions/new_fix_ticket";
 import "../../api/actions/send_back";
 import type { TicketView } from "../../api/types";
 import type { PanelDef, PanelProps } from "../ActionPanel";
@@ -16,6 +17,7 @@ import { useAct } from "../../ticket/useAct";
 import { Button } from "../../controls/Button";
 import { Select } from "../../controls/Select";
 import { useApi } from "../../live";
+import { hrefFor } from "../../url";
 import "./accepted.css";
 
 export function AcceptedPanel({ project, ticket: t }: PanelProps) {
@@ -26,6 +28,8 @@ export function AcceptedPanel({ project, ticket: t }: PanelProps) {
   const toMerge = t.needs_me_reason === "to_merge";
   const pr = t.pull_request;
   const [note, setNote] = useState("");
+  const [fixTicket, setFixTicket] = useState<string>();
+  const options = t.to_merge_options ?? [];
   // With several Repositories, land names the one it landed in: one the
   // Ticket hasn't landed in yet, the first of them unless chosen.
   const notLanded = (t.repositories ?? []).filter((r) => !r.landed).map((r) => r.name);
@@ -37,32 +41,52 @@ export function AcceptedPanel({ project, ticket: t }: PanelProps) {
       <h3>Accepted, waiting to land</h3>
       <WaitingWork ticket={t} />
       {toMerge && pr && (
-        <>
-          <p className="small">
-            <PullRequestBadge pr={pr} /> Merge, squash or rebase it on your Code Host and the Factory lands it at the merge commit.
-            {pr.state === "conflicting" && " The host reports it conflicting, so it can't merge until it is fixed."} Pull request comments aren't read here: put
-            what to fix in the note.
-          </p>
-          <label className="land-commit">
-            <span className="small muted">Note for the fix (required)</span>
-            <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
-          </label>
-          <p>
-            <Button
-              type="button"
-
-              disabled={busy || !note.trim()}
-              onClick={() => run(() => api.act(project, t.id, "send_back", { note: note.trim() }))}
-            >
-              Send back to fix
-            </Button>
-          </p>
-        </>
+        <p className="small">
+          <PullRequestBadge pr={pr} /> Merge, squash or rebase it on your Code Host and the Factory lands it at the merge commit.
+          {pr.state === "conflicting" && " The host reports it conflicting, so it can't merge until it is fixed."} Pull request comments aren't read here: put
+          what to fix in the note.
+        </p>
       )}
       {toMerge && !pr && (
         <p className="small">
           The Factory leaves the branch for you: merge {t.branch ? <code>{t.branch}</code> : "it"} into the base and the Factory lands it, or
           Land it yourself with the commit.
+        </p>
+      )}
+      {toMerge && options.length > 0 && (
+        <>
+          <label className="land-commit">
+            <span className="small muted">Note for the fix (required)</span>
+            <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
+          </label>
+          <p>
+            {options.includes("send_back") && (
+              <Button
+                type="button"
+                disabled={busy || !note.trim()}
+                onClick={() => run(() => api.act(project, t.id, "send_back", { note: note.trim() }))}
+              >
+                Send back to fix
+              </Button>
+            )}{" "}
+            {options.includes("new_fix_ticket") && (
+              <Button
+                type="button"
+                disabled={busy || !note.trim()}
+                onClick={async () => {
+                  let opened: string | undefined;
+                  if (await run(async () => (opened = (await api.act(project, t.id, "new_fix_ticket", { note: note.trim() })).id))) setFixTicket(opened);
+                }}
+              >
+                New fix Ticket
+              </Button>
+            )}
+          </p>
+        </>
+      )}
+      {fixTicket && (
+        <p role="status" className="small">
+          Opened fix Ticket <a href={hrefFor({ view: "inbox", ticket: fixTicket })}>{fixTicket}</a>.
         </p>
       )}
       {error && (

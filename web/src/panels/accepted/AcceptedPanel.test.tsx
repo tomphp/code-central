@@ -4,7 +4,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { newWorld } from "../../api/core/core";
-import { renderApp, renderLive, scenario } from "../../worldTesting";
+import { renderApp, renderLive, scenario, settle } from "../../worldTesting";
 import { AcceptedPanel } from "./panel";
 
 // world has acme's Login page Accepted, under Merge unless method says,
@@ -93,6 +93,56 @@ describe("the Accepted panel", () => {
     const panel = await renderPanel(await world());
     expect(panel).not.toHaveTextContent("into the base and the Factory");
     expect(panel).toHaveTextContent("It is Done once it is merged into the base and landed.");
+  });
+
+  describe("To merge options", () => {
+    it("under Branch, offers only Send back to fix, which needs the note, and sends it back", async () => {
+      const x = await world("branch");
+      const panel = await renderPanel(x);
+      expect(within(panel).queryByRole("button", { name: "New fix Ticket" })).toBeNull();
+      const send = within(panel).getByRole("button", { name: "Send back to fix" });
+      expect(send).toBeDisabled();
+      await userEvent.type(within(panel).getByLabelText(/Note for the fix/), "Rename it");
+      await userEvent.click(send);
+      await settle(x.w);
+      expect(x.w.actions()).toContain("send_back");
+      expect((await x.w.api.getTicket("acme", x.id)).state).toBe("Ready");
+    });
+
+    it("offers nothing under Merge, where the Ticket isn't To merge", async () => {
+      const panel = await renderPanel(await world());
+      expect(within(panel).queryByRole("button", { name: "Send back to fix" })).toBeNull();
+      expect(within(panel).queryByRole("button", { name: "New fix Ticket" })).toBeNull();
+      expect(within(panel).queryByLabelText(/Note for the fix/)).toBeNull();
+    });
+
+    it("on a Spec's pull-request lead offers New fix Ticket, not Send back to fix, and says where the new Ticket is", async () => {
+      const x = await world();
+      await x.s.pullRequest("acme", x.id);
+      await x.s.human(`${x.s.projectPath("acme")}/set_landing_method`, { method: "pull_request", push: false, remote: "origin", land_per_spec: true });
+      const panel = await renderPanel(x);
+      expect(within(panel).queryByRole("button", { name: "Send back to fix" })).toBeNull();
+      const fix = within(panel).getByRole("button", { name: "New fix Ticket" });
+      expect(fix).toBeDisabled();
+      await userEvent.type(within(panel).getByLabelText(/Note for the fix/), "Reviewers want a rename");
+      await userEvent.click(fix);
+      await settle(x.w);
+      expect(x.w.actions()).toContain("new_fix_ticket");
+      const link = within(panel).getByRole("link", { name: /^\S+-\d+$/ });
+      const opened = await x.w.api.getTicket("acme", link.textContent!);
+      expect(opened).toMatchObject({ state: "Ready", title: expect.any(String) });
+    });
+
+    it("shows the core's refusal", async () => {
+      const x = await world("branch");
+      const ticket = { ...(await x.w.api.getTicket("acme", x.id)), to_merge_options: ["new_fix_ticket" as const] };
+      await renderLive(x.w, <AcceptedPanel project="acme" ticket={ticket} now={x.w.now()} />);
+      const panel = screen.getByRole("region", { name: "Accepted" });
+      await userEvent.type(within(panel).getByLabelText(/Note for the fix/), "x");
+      await userEvent.click(within(panel).getByRole("button", { name: "New fix Ticket" }));
+      await settle(x.w);
+      expect(within(panel).getByRole("alert")).toBeInTheDocument();
+    });
   });
 
   it("shows To merge in Needs Me, naming the branch, with this panel", async () => {
