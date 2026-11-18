@@ -275,8 +275,8 @@ func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushed
 			return false, nil
 		}
 		t.PushedCommits = append(t.PushedCommits, domain.PushedCommit{Repository: recordName(key, name), Commit: commit, Branch: strings.TrimSpace(in.Branch), Pushed: c.now()})
-		for _, o := range r.Tickets(key) {
-			if pushed := pushedIn(key, o, name); o.Number != t.Number && len(pushed) > 0 && pushed[len(pushed)-1].Commit == commit {
+		for _, o := range r.FindTickets(key, store.TicketFilter{PushedCommit: &store.PushedCommitFilter{Repository: recordName(key, name), Commit: commit}}) {
+			if pushed := pushedIn(key, o, name); o.Number != t.Number && pushed[len(pushed)-1].Commit == commit {
 				sharing = append(sharing, o.Number)
 			}
 		}
@@ -501,8 +501,8 @@ type CIWaitingCommit struct {
 func ciWaiting(ci *ciState, name string) []CIWaitingCommit {
 	out := []CIWaitingCommit{}
 	key := ci.p.Key
-	for _, t := range ci.r.Tickets(key) {
-		if len(t.PushedCommits) == 0 || t.State == domain.Cancelled {
+	for _, t := range ci.r.FindTickets(key, store.TicketFilter{HasPushes: true}) {
+		if t.State == domain.Cancelled {
 			continue
 		}
 		rc := ci.ticket(t).in(name)
