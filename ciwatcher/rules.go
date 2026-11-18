@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/ratelimit"
-	"github.com/tomoram/code-central/store"
 )
 
 // fireRules fires watch's CI Rules for the failed runs on their branches.
@@ -101,7 +101,7 @@ func matchRule(rules []core.CIWatchRule, run Run, ignored []string) (core.CIWatc
 	if slices.Contains(ignored, run.Workflow) {
 		return core.CIWatchRule{}, false
 	}
-	i := slices.IndexFunc(rules, func(r core.CIWatchRule) bool { return r.Workflow == store.AnyWorkflow })
+	i := slices.IndexFunc(rules, func(r core.CIWatchRule) bool { return r.Workflow == domain.AnyWorkflow })
 	if i < 0 {
 		return core.CIWatchRule{}, false
 	}
@@ -149,7 +149,7 @@ func (w *watcher) openOrComment(ctx context.Context, watch core.CIWatch, rule co
 		return err
 	}
 	for _, t := range rows {
-		if t.State != store.Done && t.State != store.Cancelled {
+		if t.State != domain.Done && t.State != domain.Cancelled {
 			_, err := w.Client.Comment(ctx, w.Project, core.CommentInput{Ticket: core.Ref(t.ID), Body: fixComment(watch, run)})
 			return err
 		}

@@ -11,7 +11,7 @@ import (
 
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // init's teaching files, --local and the Project's mode (ticket 41).
@@ -44,7 +44,7 @@ type setup struct {
 	inGit    bool
 	key      string
 	project  core.ProjectView
-	wantMode store.Mode // from --local or --committed; "" follows the stored mode
+	wantMode domain.Mode // from --local or --committed; "" follows the stored mode
 	wroteMCP bool
 }
 

@@ -5,7 +5,7 @@ import (
 	"net/url"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // PostRound is post_round.
@@ -37,7 +37,7 @@ func (c *Client) DismissQuestion(ctx context.Context, key string, in core.Dismis
 
 // Wait is one long-poll: it holds for up to a minute and returns the
 // Ticket's State, at once if it has already left from.
-func (c *Client) Wait(ctx context.Context, key string, ref core.Ref, from store.State) (core.WaitResult, error) {
+func (c *Client) Wait(ctx context.Context, key string, ref core.Ref, from domain.State) (core.WaitResult, error) {
 	var out core.WaitResult
 	path := item(key, "tickets", ref, "wait") + "?" + url.Values{"from": {string(from)}}.Encode()
 	return out, c.do(ctx, "GET", path, nil, &out)

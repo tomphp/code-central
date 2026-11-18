@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
-	"github.com/tomoram/code-central/store"
 )
 
 // GitHubActions is the GitHub Actions CI Provider for one repository.
@@ -114,7 +114,7 @@ func (g *GitHubActions) runs(ctx context.Context, path string) ([]Run, error) {
 	for _, r := range out.Runs {
 		run := Run{Updated: r.Updated, CIRunView: core.CIRunView{ID: r.ID, Attempt: max(r.Attempt, 1), Workflow: workflowName(r.Path), Name: r.Name,
 			Branch: r.Branch, Commit: r.Commit, Status: runStatus(r.Status), URL: r.URL}}
-		if run.Status == store.CICompleted {
+		if run.Status == domain.CICompleted {
 			run.Conclusion = conclusion(r.Conclusion)
 			if !r.Updated.IsZero() {
 				at := r.Updated.UTC()
@@ -141,7 +141,7 @@ func (g *GitHubActions) Jobs(ctx context.Context, id int64, attempt int) ([]core
 	jobs := []core.CIJobView{}
 	for _, j := range out.Jobs {
 		job := core.CIJobView{Name: j.Name, URL: j.URL}
-		if runStatus(j.Status) == store.CICompleted {
+		if runStatus(j.Status) == domain.CICompleted {
 			job.Conclusion = conclusion(j.Conclusion)
 		}
 		jobs = append(jobs, job)
@@ -188,33 +188,33 @@ func workflowName(p string) string {
 
 // runStatus maps a GitHub run or job status to Code Central's: requested,
 // waiting and pending are all still queued.
-func runStatus(s string) store.CIRunStatus {
+func runStatus(s string) domain.CIRunStatus {
 	switch s {
 	case "completed":
-		return store.CICompleted
+		return domain.CICompleted
 	case "in_progress":
-		return store.CIInProgress
+		return domain.CIInProgress
 	default:
-		return store.CIQueued
+		return domain.CIQueued
 	}
 }
 
 // conclusion maps a GitHub conclusion to Code Central's: a run that
 // needed an action or failed to start failed, and a stale one was
 // cancelled.
-func conclusion(c string) store.CIConclusion {
+func conclusion(c string) domain.CIConclusion {
 	switch c {
 	case "success":
-		return store.CISuccess
+		return domain.CISuccess
 	case "cancelled", "stale":
-		return store.CICancelled
+		return domain.CICancelled
 	case "timed_out":
-		return store.CITimedOut
+		return domain.CITimedOut
 	case "skipped":
-		return store.CISkipped
+		return domain.CISkipped
 	case "neutral":
-		return store.CINeutral
+		return domain.CINeutral
 	default:
-		return store.CIFailure
+		return domain.CIFailure
 	}
 }

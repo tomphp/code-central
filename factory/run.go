@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // loop polls until ctx ends: the first poll is at once, the rest on a
@@ -319,7 +319,7 @@ func (f *factory) reconcile(ctx context.Context) []claim {
 		}
 		f.noteTicket(c, tk)
 		f.reportChanged(ctx, c, tk)
-		if tk.State == store.Answered && f.turnFor(c.ClaimID) == nil {
+		if tk.State == domain.Answered && f.turnFor(c.ClaimID) == nil {
 			answered = append(answered, c)
 		}
 	}
@@ -707,7 +707,7 @@ Claim: %s
 	for _, q := range res.Round.Questions {
 		fmt.Fprintf(&b, "\n## Question %d: %s\n\n", q.Number, q.Title)
 		switch q.Status {
-		case store.QuestionAnswered:
+		case domain.QuestionAnswered:
 			fmt.Fprintf(&b, "Answer: %s\n", q.Answer)
 		default:
 			fmt.Fprintf(&b, "(%s, with no answer)\n", q.Status)

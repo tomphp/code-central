@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // restart reconciles the Claims a past Factory saved, before the first
@@ -30,10 +30,10 @@ func (f *factory) restart(ctx context.Context) {
 		}
 		f.noteTicket(c, tk)
 		switch tk.State {
-		case store.InProgress:
+		case domain.InProgress:
 			f.claimf(c, "%s: saved Claim %s was cut off: resuming it", c.Ticket, c.ClaimID)
 			f.restarted = append(f.restarted, c)
-		case store.Answered, store.NeedsAnswer:
+		case domain.Answered, domain.NeedsAnswer:
 			f.claimf(c, "%s: saved Claim %s is %s: keeping it", c.Ticket, c.ClaimID, tk.State)
 		default:
 			f.claimf(c, "%s: saved Claim %s is %s: dropping it", c.Ticket, c.ClaimID, tk.State)

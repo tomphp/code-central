@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // landAndSweep is a poll's landing: it reads the Landing Method and the
@@ -100,7 +100,7 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 	if f.stateOf(f.home).missing && !f.several() {
 		return
 	}
-	accepted := f.landable(ctx, store.Accepted)
+	accepted := f.landable(ctx, domain.Accepted)
 	sort.SliceStable(accepted, func(i, j int) bool { return acceptedAt(accepted[i]).Before(acceptedAt(accepted[j])) })
 	var held map[string]bool
 	if !f.stateOf(f.home).missing {
@@ -324,7 +324,7 @@ func (f *factory) detectHandMerges(ctx context.Context, p core.ProjectView) {
 		if len(merged) == 0 {
 			continue
 		}
-		if tk.State == store.InReview {
+		if tk.State == domain.InReview {
 			if passed, _ := f.checkFinish(ctx, tk); !passed {
 				continue
 			}
@@ -370,8 +370,8 @@ func (f *factory) mergedByHand(tk core.TicketView, policies core.LandingPolicies
 // mergeableStates are the States a Ticket with a finish commit can be in
 // short of Accepted, Done and Cancelled: every State but those and Draft,
 // which comes before any work.
-var mergeableStates = slices.DeleteFunc(slices.Clone(store.States), func(s store.State) bool {
-	return s == store.Draft || s == store.Accepted || s == store.Done || s == store.Cancelled
+var mergeableStates = slices.DeleteFunc(slices.Clone(domain.States), func(s domain.State) bool {
+	return s == domain.Draft || s == domain.Accepted || s == domain.Done || s == domain.Cancelled
 })
 
 // inBase reports whether commit is reachable from the Home Repository's
@@ -380,7 +380,7 @@ func (f *factory) inBase(commit string) bool { return f.inBaseOf(f.home, commit)
 
 // landable is every Ticket in these States, read in full by one
 // find_tickets call. If the call fails it lands nothing this poll.
-func (f *factory) landable(ctx context.Context, states ...store.State) []core.TicketView {
+func (f *factory) landable(ctx context.Context, states ...domain.State) []core.TicketView {
 	out, err := f.client.FindTicketViews(ctx, f.project, core.FindTicketsInput{State: states})
 	if err != nil {
 		if ctx.Err() == nil {
@@ -394,7 +394,7 @@ func (f *factory) landable(ctx context.Context, states ...store.State) []core.Ti
 // acceptedAt is when the Ticket last moved to Accepted.
 func acceptedAt(tk core.TicketView) time.Time {
 	for i := len(tk.Moves) - 1; i >= 0; i-- {
-		if tk.Moves[i].To == store.Accepted {
+		if tk.Moves[i].To == domain.Accepted {
 			return tk.Moves[i].Time
 		}
 	}
@@ -737,7 +737,7 @@ func (f *factory) reportTip(ctx context.Context, policies core.LandingPolicies) 
 	if len(tips) == 0 {
 		return
 	}
-	for _, tk := range f.landable(ctx, store.Accepted, store.InReview) {
+	for _, tk := range f.landable(ctx, domain.Accepted, domain.InReview) {
 		if f.halted(ctx) || f.paused() {
 			return
 		}
@@ -746,7 +746,7 @@ func (f *factory) reportTip(ctx context.Context, policies core.LandingPolicies) 
 			switch {
 			case !ok || v.Landed != nil || v.PushedCommit == nil:
 			case v.PushedCommit.Commit == t.tip || !t.r.git.isAncestor(v.PushedCommit.Commit, t.tip):
-			case tk.State == store.InReview && (v.Commit == "" || !f.inBaseOf(t.r, v.Commit)):
+			case tk.State == domain.InReview && (v.Commit == "" || !f.inBaseOf(t.r, v.Commit)):
 			default:
 				f.reportPushed(ctx, tk, policies, t.r, f.baseOf(t.r), t.tip)
 			}
