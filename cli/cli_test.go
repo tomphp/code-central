@@ -11,6 +11,7 @@ import (
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ops"
 )
 
 type result struct {
@@ -135,6 +136,24 @@ func TestUsageErrorsExitOne(t *testing.T) {
 	} {
 		if r := run(t, env, "", args...); r.code != 1 || r.stderr == "" {
 			t.Errorf("%v: exit %d, stderr %q", args, r.code, r.stderr)
+		}
+	}
+}
+
+func TestACommandsHelpIsItsUsageAndItsOperationsDocumentation(t *testing.T) {
+	t.Parallel()
+	env := map[string]string{"CODE_CENTRAL_URL": "http://127.0.0.1:1"}
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"approve", "--help"}, "usage: code-central approve <id> [--full]\n\n" + ops.Approve.Doc + "\n"},
+		{[]string{"comment", "3", "-h"}, "usage: code-central comment <id> [--body <md> | --file <path|->] [--full]\n\n" + ops.Comment.Doc + "\n"},
+		{[]string{"wait", "--help"}, "usage: code-central wait <id>  wait for the Ticket to leave Needs Answer: exit 0 when Answered, 3 when it left for another State\n"},
+	} {
+		r := run(t, env, "", tc.args...)
+		if r.code != 0 || r.stdout != tc.want || r.stderr != "" {
+			t.Errorf("%v: exit %d, stdout\n%s\nwant\n%s\nstderr %q", tc.args, r.code, r.stdout, tc.want, r.stderr)
 		}
 	}
 }

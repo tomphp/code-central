@@ -71,20 +71,6 @@ func dotted(f string) string {
 	return "." + f
 }
 
-func runPickUpAnswers(ctx context.Context, e Env, args []string) error {
-	fs := flagSet("pick-up-answers")
-	claim := fs.String("claim", "", "")
-	sc, ref, _, err := itemCommand(e, fs, args, 0, 0)
-	if err != nil {
-		return err
-	}
-	v, err := sc.client.PickUpAnswers(ctx, sc.project, core.PickUpAnswersInput{Ticket: ref, ClaimID: *claim})
-	if err != nil {
-		return err
-	}
-	return printJSON(e, v)
-}
-
 // waitAnswered is what wait prints when the Ticket is Answered.
 type waitAnswered struct {
 	Ticket   string       `json:"ticket"`

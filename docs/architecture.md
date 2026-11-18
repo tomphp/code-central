@@ -27,7 +27,7 @@ flowchart TB
     FD["server<br/>mux + Guard + UI"]
     API["httpapi<br/>REST /api"]
     MCP["mcp<br/>/p/key/mcp (agents)"]
-    CORE["core<br/>*Core: workflow, landing, CI, chat, views<br/>core.Operations = the one op list"]
+    CORE["core<br/>*Core: workflow, landing, CI, chat, views<br/>ops.All() = the one op list"]
     DOMAIN["domain<br/>records, enums, Landing Policy"]
     STORE["store<br/>YAML files in memory"]
     SUP["watchers.Supervise"]
@@ -94,7 +94,7 @@ Your list: core logic, factory, ci watcher, issue tracker, web api, frontend, st
 - agent runtime (chat, transcript, heartbeat, models, usage, stage guides)
 - read models (`*View` types, needs-me, attention)
 
-`core.Operations` is the single list of operations (name, audience, write or not); httpapi, mcp and the CLI build their routes, tools and commands from it.
+`ops.All()` is the single list of operations (name, audience, write or not), and `ops.Definitions()` each converted operation's one definition (ADR 0063); httpapi, mcp and the client derive their routes, handlers, tools, schemas and calls from the definitions, and the CLI builds its commands from the list.
 
 ## Dependency rules (as intended and as found)
 
@@ -105,7 +105,7 @@ Intended: `clients → client → HTTP → server → httpapi/mcp → core → s
 Good:
 
 - The HTTP/MCP boundary is sharp. The Factory and watchers hold a `Client` interface and talk only over HTTP.
-- `core.Operations` is a real contract, checked by the cross-door suite in `server/*_test.go` and the UI/Go contract cases.
+- `ops.All()` is a real contract, checked by the cross-door suite in `server/*_test.go` and the UI/Go contract cases.
 - `notify` depends on a four-method `Source` interface, not on `*Core`. A pattern worth copying.
 - `store.Store{View, Update}` is small, with a shared contract suite (`storetest`).
 - UI wire types are generated from Go (ADR 0042), and the UI's only `fetch` is in `web/src/api/http.ts`.
@@ -115,8 +115,8 @@ Anti-patterns and leaks found:
 
 1. ~~**`factory` imports `cli`** for `ResolveProject` and `ServiceURL`.~~ **Fixed:** both now live in `client`, and `factory/imports_test.go` guards against the import coming back.
 2. ~~**`httpapi` and `client` import `store`** for domain enums, though they should be HTTP-only (ADR 0002/0004).~~ **Fixed:** the domain model (`Ticket`, `State`, `Landing`…) now lives in `domain`, and `store` is persistence only.
-3. **`cli` is a god package** *(partly fixed)*: the `serve` composition (store, core, server, supervisor, notify) now lives in `app`, taking `cli` from 18 internal imports to 13. What remains is commands, service install and `init` scaffolding, plus the Watchers' subcommands, which import their watcher packages.
-4. **Per-operation wiring is duplicated** across `httpapi` (routes + handlers), `mcp` (tools), `client` and `cli`. Only tests catch drift. Ack-versus-full and `get_ticket` parts are handled per door.
+3. **`cli` is a god package** *(partly fixed)*: the `serve` composition (store, core, server, supervisor, notify) now lives in `app`, which took five internal imports out of `cli`; it has 15, `ops` and `fieldwalk` among them for the derived commands. What remains is commands, service install and `init` scaffolding, plus the Watchers' subcommands, which import their watcher packages.
+4. ~~**Per-operation wiring is duplicated** across `httpapi` (routes + handlers), `mcp` (tools), `client` and `cli`.~~ **Fixed:** each operation is defined once in `ops` (ADR 0063), and `httpapi` routes, `mcp` tools and schemas, `client` calls and most `cli` commands derive from it; the cross-door suite still checks each door against `ops.All()`.
 5. **`*core.Core` is a god object** and a concrete dependency of both transports, so they can't be tested against a fake.
 6. **Transport policy is split**: `mcp` records usage and forces the Actor; `server.Guard` sets the Actor for HTTP.
 7. **Provider knowledge in core** *(mostly resolved)*: remote-URL and repository-name parsing now lives in the leaf `codehost` (`Of`, `ValidGitHubRepository`, `ValidGitHubWorkflow`), and `core.CodeHost` stays the wire enum, converted from `codehost.Host`. What remains is `core` calling `azdourl` to validate Azure DevOps URLs, which stays a separate leaf.
@@ -133,12 +133,12 @@ Roughly in order of value for effort. Each would be its own Ticket.
 2. ~~Move `RateLimitError` and `FirstLine` out of `watchers` into a leaf package. Move `ciwatchertest` to a shared watcher test package.~~ *(done: `ratelimit` and `watchers/watchertest`)*
 3. ~~Split `store` into persistence and a domain-model package and re-home `LandingPolicy` and `Normalized` with it.~~ **Fixed:** see `domain`.
 4. ~~Move server composition from `cli/serve.go` into an `app`/`service` package.~~ **Fixed:** `app.Run` is the composition root; `cli/serve.go` keeps the flags, the local settings and the usage text. `world/` and `cmd/corewasm` still compose for themselves: `world`'s handler is one `server.Versioned(server.Handler(…))` line, and reusing `app` would pull the on-disk store, the Watchers and `notify` into the wasm build.
-5. Define each operation once (input type plus handler on `core.Operation`) and derive the httpapi route, MCP tool and schema from it. *(large, biggest drift win)*
+5. ~~Define each operation once (input type plus handler on `core.Operation`) and derive the httpapi route, MCP tool and schema from it.~~ **Fixed:** done in `ops` (ADR 0063).
 6. Give transports narrow interfaces over core (as `notify` does), and centralise usage/actor handling in one middleware. *(medium)*
 7. Have Go views carry derived flags (`editable`, stage progress, spec kind) and landing-method capabilities, so the UI's copies go away. *(done, ADR 0063: `editable`, `retroable`, Spec kind, need and claimed, the Stage strip and Landing capabilities)*
 8. Extract a `codehost` abstraction shared by `ciwatcher` and `pullrequestwatcher`, and decide whether `issuewatcher` needs a `Tracker` interface before a second tracker arrives. *(only if a second host/tracker is planned)*
 9. ~~Move provider URL parsing out of `core`.~~ Done: `codehost` holds the remote-URL and repository-name parsing; `azdourl` stays beside it. *(small)*
-10. ~~Split `factory/land.go`, `run.go` and `specbranch.go` into `landing` and `session`.~~ Done, as two unexported types in the one `factory` package: the session part (`*factory`) and the landing part (`lander`), over a shared repository registry (`repositories`). The lander gets two hooks from the session part (`landerHooks`: `stopped` and `turnRunningOn`) and offers it two calls (`poll`, once per poll, and `claimingHeld`); the `factory` package documentation states the interface. Make `core`'s mutable enum slices functions (done; only `Operations` and `Workflow` remain package-level lists). *(medium)*
+10. Split `factory/land.go`, `run.go` and `specbranch.go` into `landing` and `session`. Make `core`'s mutable enum slices functions (done; `core.Operations` is gone, replaced by `ops.All()`, and only `Workflow` remains a package-level list). *(medium)*
 11. Hygiene: CI check that `make wiretypes` leaves no diff, finish ADR 0044's migration off `waitFor`, split the biggest UI files and tests.
 
-Splitting `core` itself is the hardest item, because every file is a method on `*Core`. Items 5 and 6 shrink what depends on it and make a later split cheaper, so do them first.
+Splitting `core` itself is the hardest item, because every file is a method on `*Core`. Item 5 is done; only item 6 remains before a `core` split, and it shrinks what depends on `core` and makes the split cheaper, so do it first.

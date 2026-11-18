@@ -4,11 +4,12 @@ import (
 	"context"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ops"
 )
 
 // Submitting a Prototype.
 func init() {
-	commands["submit-prototype"] = command{op: "submit_prototype", usage: "submit-prototype <spec> [--text <md> | --file <path|->] [--full]  submit a Prototype on the Spec; its first line becomes the title", run: runSubmitPrototype}
+	commands["submit-prototype"] = handWritten(ops.SubmitPrototype, "submit-prototype <spec> [--text <md> | --file <path|->] [--full]  submit a Prototype on the Spec; its first line becomes the title", runSubmitPrototype)
 }
 
 func runSubmitPrototype(ctx context.Context, e Env, args []string) error {

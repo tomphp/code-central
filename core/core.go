@@ -416,43 +416,45 @@ type CreateProjectInput struct {
 
 // CreateSpecInput is create_spec's input.
 type CreateSpecInput struct {
-	Title string `json:"title"`
-	Body  string `json:"body"`
+	Title string `json:"title" desc:"The Spec's title." required:"true"`
+	Body  string `json:"body" desc:"The Spec in Markdown."`
 	// Full asks for the Spec in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
+	Full bool `json:"full,omitempty" desc:"Return the whole Spec instead of the acknowledgement."`
 }
 
 // CreateTicketInput is create_ticket's input. State defaults to Draft.
 type CreateTicketInput struct {
-	Spec        Ref          `json:"spec"`
-	Title       string       `json:"title"`
-	Description string       `json:"description,omitempty"`
-	State       domain.State `json:"state,omitempty"`
-	Labels      []string     `json:"labels,omitempty"`
-	BlockedBy   []Ref        `json:"blocked_by,omitempty"`
+	Spec        Ref          `json:"spec" desc:"The Spec it belongs to." required:"true"`
+	Title       string       `json:"title" desc:"The Ticket's title." required:"true"`
+	Description string       `json:"description,omitempty" desc:"What to build, in Markdown."`
+	State       domain.State `json:"state,omitempty" desc:"Draft (the default) or Ready." enum:"Draft,Ready"`
+	Labels      []string     `json:"labels,omitempty" desc:"Labels to add."`
+	BlockedBy   []Ref        `json:"blocked_by,omitempty" desc:"Tickets it waits on until they are Done. IDs: <key>-<n> or <n>."`
 	// Tags are the Ticket's Tags from the start, checked as set_tags checks them.
-	Tags map[string]string `json:"tags,omitempty"`
+	Tags map[string]string `json:"tags,omitempty" desc:"Tags to set on it, as {key: value}; checked as set_tags checks them, so effort must be a valid level."`
 	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
+	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
 }
 
 // FindTicketsInput is find_tickets' filters; every filter given must match.
 type FindTicketsInput struct {
-	State  []domain.State `json:"state,omitempty"`
-	Title  string         `json:"title,omitempty"`
-	Labels []string       `json:"labels,omitempty"`
-	// Tags must all be present with exactly these values.
-	Tags map[string]string `json:"tags,omitempty"`
-	Spec Ref               `json:"spec,omitempty"`
+	State  []domain.State `json:"state,omitempty" desc:"Only Tickets in one of these States."`
+	Title  string         `json:"title,omitempty" desc:"Only Tickets whose title contains this text."`
+	Labels []string       `json:"labels,omitempty" query:"label" desc:"Only Tickets with all of these Labels."`
+	// Tags must all be present with exactly these values. Over HTTP each
+	// is a tag=<key>=<value> parameter, which DecodeQuery reads.
+	Tags map[string]string `json:"tags,omitempty" query:"tag" desc:"Only Tickets with all of these Tags, as {key: value}."`
+	Spec Ref               `json:"spec,omitempty" desc:"Only Tickets in this Spec."`
 	// Claimable, when given, keeps only Tickets that are (or aren't) claimable.
-	Claimable *bool `json:"claimable,omitempty"`
+	Claimable *bool `json:"claimable,omitempty" desc:"Only Tickets that are (true) or aren't (false) claimable."`
 	// Full asks for full Ticket views, as get_ticket returns them, in
 	// place of rows; FindTicketViews answers it.
-	Full bool `json:"full,omitempty"`
+	Full bool `json:"full,omitempty" desc:"Return each Ticket as get_ticket does, in place of the row."`
 	// Parts are the parts the views carry, as get_ticket's: the default
-	// parts, brief, when none are named. Only the HTTP API and the CLI
-	// name them; an agent's MCP read takes the default.
-	Parts []string `json:"-"`
+	// parts, brief, when none are named. Only the HTTP API (as repeated
+	// part parameters) and the CLI name them; an agent's MCP read takes
+	// the default.
+	Parts []string `json:"-" query:"part"`
 	// WithModelChoice adds each Ticket's Model Choice and Auto-accept
 	// kind, as get_ticket's
 	// does for the UI's read over HTTP.

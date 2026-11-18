@@ -23,10 +23,10 @@ func asHuman(h http.Handler) http.Handler {
 }
 
 func TestOptionsRoutes(t *testing.T) {
-	if got := httpapi.Routes["get_options"]; got != "GET /api/options" {
+	if got := httpapi.Routes()["get_options"]; got != "GET /api/options" {
 		t.Errorf("get_options route %q", got)
 	}
-	if got := httpapi.Routes["set_options"]; got != "POST /api/set_options" {
+	if got := httpapi.Routes()["set_options"]; got != "POST /api/set_options" {
 		t.Errorf("set_options route %q", got)
 	}
 	h := asHuman(newHandler(t))

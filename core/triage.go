@@ -125,7 +125,7 @@ func (c *Core) KeepAsDraft(ctx context.Context, key string, in TicketInput) (Wri
 
 // ToRequirementInput is the human's to_requirement(ticket, context?).
 type ToRequirementInput struct {
-	Ticket  Ref    `json:"ticket"`
+	Ticket  Ref    `json:"ticket" path:"n"`
 	Context string `json:"context,omitempty"`
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
@@ -221,7 +221,7 @@ func (c *Core) triageCancel(ctx context.Context, key string, t *domain.Ticket, v
 
 // WontFixInput is the human's wont_fix(ticket, reason?).
 type WontFixInput struct {
-	Ticket Ref    `json:"ticket"`
+	Ticket Ref    `json:"ticket" path:"n"`
 	Reason string `json:"reason,omitempty"`
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`

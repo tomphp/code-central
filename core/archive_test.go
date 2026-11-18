@@ -9,6 +9,7 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/ops"
 )
 
 // finishedWork is Project acme with Spec acme-1, Done Ticket acme-2 and
@@ -488,7 +489,7 @@ var writesOnAcme = map[string]func(f fixture) error{
 func TestAnArchivedProjectRefusesEveryWrite(t *testing.T) {
 	// Writes that aren't on one existing Project can't be refused by one.
 	notOnAProject := []string{"create_project", "unarchive_project", "set_options"}
-	for _, op := range core.Operations {
+	for _, op := range ops.All() {
 		if _, ok := writesOnAcme[op.Name]; op.Write && !ok && !slices.Contains(notOnAProject, op.Name) {
 			t.Errorf("write %s has no case in writesOnAcme", op.Name)
 		}

@@ -1,0 +1,54 @@
+usage: code-central <command> [flags]
+
+Operation commands take --project <key> (else CODE_CENTRAL_PROJECT, else the key
+in the nearest .mcp.json) and talk to
+the service at CODE_CENTRAL_URL (default http://localhost:7733).
+
+Commands:
+  add-blocker <id> <blocker-id> [--full]  make <id> wait on <blocker-id> until it is Done
+  add-labels <id> <label>...
+  approve <id> [--full]
+  cancel <id> <replacement-id>... [--reason <text> | --file <path|->] [--full]
+  claim [--spec <id> | --ticket <id>] [--session <id>] [--working-dir <dir>] [--resume-command <command>]
+  comment <id> [--body <md> | --file <path|->] [--full]
+  create-spec --title <t> [--body <md> | --file <path|->] [--full]
+  create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--blocked-by <id>]... [--tag <key>=<value>]... [--description <md> | --file <path|->] [--full]
+  defer <id> [--reason <text> | --file <path|->] [--full]
+  edit-spec <id> [--title <t>] [--body <md> | --file <path|->] [--full]
+  edit-ticket <id> [--title <t>] [--description <md> | --file <path|->] [--full]
+  find-specs [--title <t>] [--label <l>]... [--tag <key>=<value>]... [--finished] [--requirements]
+  find-tickets [--state <s>]... [--title <t>] [--label <l>]... [--tag <key>=<value>]... [--spec <id>] [--claimable[=false]] [--full]
+  finish <id> --claim <claim-id> [--summary <md> | --file <path|->] [--branch <branch>] [--commit <sha>] [--repositories <json>] [--recommendation implement|split] [--full]  repositories as a JSON array of {name, branch, commit}
+  get-import-guide  print how to map a .scratch/ folder (same as import-guide)
+  get-spec <id> [--part body|tickets|edits]... [--section <heading>]...
+  get-stage-guide grilling|spec|tickets|implementation  print the Project's Stage Guide
+  get-ticket <id> [--part claims|failure_reports|comments|rounds|moves|edits]...
+  get-workflow  print the workflow (same as workflow)
+  give-up <id> --claim <claim-id> [--note <md> | --file <path|->] [--full]
+  hook session-id  PreToolUse hook: add session_id and client_version to the tool input
+  import [--dry-run] [--file <json-path|->]  import a .scratch/ payload {specs, tickets} from stdin or a file
+  import-guide  print how to map a .scratch/ folder into an import
+  init [--key <key>] [--local | --committed]  set this repository up as a Project (--local keeps init's files out of git)
+  land <id> --commit <sha> [--repository <name>] [--full]  the work is in the base of a Changed Repository, the Home Repository's unless named: records the commit that put it there, and once it has landed in every one, Accepted or In Review to Done
+  pick-up-answers <id> --claim <claim-id>
+  ping [--session <id>]  mark this session active (reads hook JSON on stdin); always exits 0
+  post-round <id> --claim <claim-id> [--session <id>] [--questions <json> | --file <path|->] [--full]  Questions as a JSON array of {title, body, recommended?}, on stdin by default
+  remove-blocker <id> <blocker-id> [--full]
+  remove-labels <id> <label>...
+  remove-tags <id> <key>...
+  report-failure <id> --claim <claim-id> --what-broke <md> --why <md> --what-to-fix <md> --where-work-stands <md> | --file <json-path|-> [--full]
+  repository list | add <name> [--clone-url <url>] [--base <branch>] [--local-path <path>] [--landing <landing>] [--push-remote <remote>] | edit <name> [--clone-url <url>] [--base <branch>] [--local-path <path>] [--landing <landing>] [--push-remote <remote>] | remove <name> | move <name> --before|--after <name>  [--project <key>]  manage the Project's Repositories, listed in landing order; each needs a Clone URL, a local path or both, and one with no Clone URL is local-only, never cloned or pushed; an empty --clone-url or --local-path clears it; --landing is default (the Project's Default Landing), merge, merge+push, branch, branch+push or pull-request, and an empty --push-remote uses the Project's; edit takes the Home Repository's --landing and --push-remote
+  send-back <id> [--note <md> | --file <path|->] [--full]  Accepted work that can't land (a merge conflict) back to Ready; the note is required
+  serve [--store <dir>] [--port <n>] [--bind <ip>] [--no-notify] [--log <file>]  run the service in the foreground; --port serves on that loopback port instead of 7733; --bind adds one address (such as the Docker bridge IP), never a LAN address; --log appends serve's output to a file
+  service install [--store <dir>] [--bind <ip>] | service restart  run serve as a login item (launchd on macOS, systemd user unit on Linux, a scheduled task on Windows); install again after an upgrade
+  set-session <id> --claim <claim-id> [--session <id>] [--working-dir <dir>] [--resume-command <command>] [--full]  (session defaults to $CLAUDE_CODE_SESSION_ID)
+  set-tags <id> <key>=<value>...
+  submit-map [--text <md> | --file <path|->] [--draft] [--full]  submit a Map; its first line becomes the Spec's title
+  submit-prototype <spec> [--text <md> | --file <path|->] [--full]  submit a Prototype on the Spec; its first line becomes the title
+  submit-requirement [--text <md> | --file <path|->] [--map <spec>] [--skip-grilling] [--draft] [--full]  submit a Requirement, from a finished Map with --map; its first line becomes the Spec's title
+  submit-retro <ticket|spec> [--note <md>] [--full]  start a Retro on a finished Ticket or Spec
+  submit-small-change [--text <md> | --file <path|->] [--draft] [--full]  submit a Small Change; its first line becomes the Ticket's title
+  wait <id>  wait for the Ticket to leave Needs Answer: exit 0 when Answered, 3 when it left for another State
+  workflow  print the workflow: States, actions and how to work a Ticket
+
+Help topics: code-central help sandboxes

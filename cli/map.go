@@ -4,11 +4,12 @@ import (
 	"context"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ops"
 )
 
 // Submitting a Map.
 func init() {
-	commands["submit-map"] = command{op: "submit_map", usage: "submit-map [--text <md> | --file <path|->] [--draft] [--full]  submit a Map; its first line becomes the Spec's title", run: runSubmitMap}
+	commands["submit-map"] = handWritten(ops.SubmitMap, "submit-map [--text <md> | --file <path|->] [--draft] [--full]  submit a Map; its first line becomes the Spec's title", runSubmitMap)
 }
 
 func runSubmitMap(ctx context.Context, e Env, args []string) error {

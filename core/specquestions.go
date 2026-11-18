@@ -23,6 +23,11 @@ type TicketQuestions struct {
 	Rounds []RoundView  `json:"rounds"`
 }
 
+// SpecInput names one Spec, for reads that need nothing else.
+type SpecInput struct {
+	Spec Ref `json:"spec" path:"n" desc:"The Spec." required:"true"`
+}
+
 // GetSpecQuestions is the human's get_spec_questions(spec), for the UI.
 func (c *Core) GetSpecQuestions(_ context.Context, key string, ref Ref) (SpecQuestions, error) {
 	var v SpecQuestions

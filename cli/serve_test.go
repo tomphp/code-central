@@ -165,3 +165,24 @@ func TestServeUsageWarnsAgainstALANAddress(t *testing.T) {
 		t.Fatalf("help: %s", r.stdout)
 	}
 }
+
+// --port is the scratch service's way to a spare loopback port, and it
+// wins over CODE_CENTRAL_LISTEN.
+func TestServePortListensOnThatLoopbackPort(t *testing.T) {
+	t.Parallel()
+	port := freePort(t)
+	env := map[string]string{"CODE_CENTRAL_LISTEN": "127.0.0.1:1"}
+	bound, _, failed := serveWith(t, env, nil, "--port", fmt.Sprint(port))
+	if failed != nil {
+		t.Fatalf("serve failed: exit %d, stderr %q", failed.code, failed.stderr)
+	}
+	want := fmt.Sprintf("127.0.0.1:%d", port)
+	if len(bound) == 0 || bound[0] != want {
+		t.Fatalf("bound %v, want %s first", bound, want)
+	}
+	for _, a := range bound {
+		if !strings.HasPrefix(a, "127.0.0.1:") && !strings.HasPrefix(a, "[::1]:") {
+			t.Fatalf("bound a non-loopback address %s", a)
+		}
+	}
+}

@@ -1,0 +1,1315 @@
+[
+  {
+    "name": "add_blocker",
+    "description": "Make a Ticket wait on another Ticket in this Project (any Spec) until that one is Done; a link that would form a cycle is rejected. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "blocker": {
+          "description": "The Ticket it waits on. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "full": {
+          "description": "Return the whole Ticket instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "ticket": {
+          "description": "The Ticket that waits. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "ticket",
+        "blocker"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "add_labels",
+    "description": "Add Labels to a Spec or Ticket, leaving its other Labels alone.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "labels": {
+          "description": "Labels to add.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "target": {
+          "description": "The Spec or Ticket. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "target",
+        "labels"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "approve",
+    "description": "Approve a Draft Ticket you have finished defining, moving it to Ready so it can be claimed. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "full": {
+          "description": "Return the whole Ticket instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "ticket": {
+          "description": "The Ticket. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "ticket"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "cancel",
+    "description": "Cancel a Draft or Ready Ticket by naming the Replacements that take over its work; anything it blocked then waits on them. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "full": {
+          "description": "Return the whole Ticket instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "reason": {
+          "description": "Why, stored as a comment.",
+          "type": "string"
+        },
+        "replacements": {
+          "description": "The Tickets taking over its work (at least one). IDs: <key>-<n> or <n>.",
+          "items": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "type": "array"
+        },
+        "ticket": {
+          "description": "The Ticket to cancel. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "ticket",
+        "replacements"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "claim",
+    "description": "Claim the next Ready Ticket (or the one named, or the next in a Spec); returns a Claim ID and the Ticket, or ticket null when none. Claiming a Ticket this session already holds, with its session_id, returns the same Claim.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "resume_command": {
+          "description": "The command that resumes your session from working_dir, shown to the human as is. Without one the human is shown claude --resume <session_id>.",
+          "type": "string"
+        },
+        "session_id": {
+          "description": "Your session ID, shown to the human for resuming you.",
+          "type": "string"
+        },
+        "spec": {
+          "description": "Claim the next Ticket in this Spec. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "ticket": {
+          "description": "Claim this Ticket. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "working_dir": {
+          "description": "The directory you work in, where the human runs the resume command. A hook usually fills it in for you.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  {
+    "name": "comment",
+    "description": "Comment on any Ticket, even one another agent holds; no Claim ID is needed. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "description": "The comment in Markdown.",
+          "type": "string"
+        },
+        "full": {
+          "description": "Return the whole Ticket instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "ticket": {
+          "description": "The Ticket. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "ticket",
+        "body"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "create_spec",
+    "description": "Create a Spec, the description of a piece of work delivered through one or more Tickets; returns an acknowledgement with its ID, or the Spec with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "description": "The Spec in Markdown.",
+          "type": "string"
+        },
+        "full": {
+          "description": "Return the whole Spec instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "title": {
+          "description": "The Spec's title.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "create_ticket",
+    "description": "Create a Ticket in a Spec, as Draft (the default) or Ready. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "blocked_by": {
+          "description": "Tickets it waits on until they are Done. IDs: <key>-<n> or <n>.",
+          "items": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          },
+          "type": "array"
+        },
+        "description": {
+          "description": "What to build, in Markdown.",
+          "type": "string"
+        },
+        "full": {
+          "description": "Return the whole Ticket instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "labels": {
+          "description": "Labels to add.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "spec": {
+          "description": "The Spec it belongs to. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "state": {
+          "description": "Draft (the default) or Ready.",
+          "enum": [
+            "Draft",
+            "Ready"
+          ],
+          "type": "string"
+        },
+        "tags": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Tags to set on it, as {key: value}; checked as set_tags checks them, so effort must be a valid level.",
+          "type": "object"
+        },
+        "title": {
+          "description": "The Ticket's title.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "spec",
+        "title"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "defer",
+    "description": "Defer a Ready Ticket that isn't ready back to Draft, with the reason stored as a comment. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "full": {
+          "description": "Return the whole Ticket instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "reason": {
+          "description": "Why it isn't ready.",
+          "type": "string"
+        },
+        "ticket": {
+          "description": "The Ticket. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "ticket",
+        "reason"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "edit_spec",
+    "description": "Edit a Spec's title or body; a body given replaces the old one whole, and the old text is kept in its edit history. Returns an acknowledgement naming the changed fields, or the Spec with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "description": "The new body in Markdown, replacing the old one whole.",
+          "type": "string"
+        },
+        "full": {
+          "description": "Return the whole Spec instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "spec": {
+          "description": "The Spec. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "title": {
+          "description": "The new title.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "spec"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "edit_ticket",
+    "description": "Edit a Ticket's title or description; the old text is kept in its edit history. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "description": "The new description in Markdown, replacing the old one whole.",
+          "type": "string"
+        },
+        "full": {
+          "description": "Return the whole Ticket instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "ticket": {
+          "description": "The Ticket. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "title": {
+          "description": "The new title.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ticket"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "find_specs",
+    "description": "Find this Project's Specs with their State summaries; finished Specs are left out unless finished is true.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "finished": {
+          "description": "Include finished Specs.",
+          "type": "boolean"
+        },
+        "labels": {
+          "description": "Only Specs with all of these Labels.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "requirements": {
+          "description": "Only Requirements: Specs with Stage Tickets.",
+          "type": "boolean"
+        },
+        "tags": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Only Specs with all of these Tags, as {key: value}.",
+          "type": "object"
+        },
+        "title": {
+          "description": "Only Specs whose title contains this text.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  {
+    "name": "find_tickets",
+    "description": "Find this Project's Tickets in claim order; every filter given must match. Each row carries needs_me_reason when the Ticket waits on the human, the same as get_ticket. With full, each is the whole Ticket as get_ticket returns it (the default parts, brief), in place of the row.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "claimable": {
+          "description": "Only Tickets that are (true) or aren't (false) claimable.",
+          "type": "boolean"
+        },
+        "full": {
+          "description": "Return each Ticket as get_ticket does, in place of the row.",
+          "type": "boolean"
+        },
+        "labels": {
+          "description": "Only Tickets with all of these Labels.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "spec": {
+          "description": "Only Tickets in this Spec. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "state": {
+          "description": "Only Tickets in one of these States.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tags": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Only Tickets with all of these Tags, as {key: value}.",
+          "type": "object"
+        },
+        "title": {
+          "description": "Only Tickets whose title contains this text.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  {
+    "name": "finish",
+    "description": "Finish a claimed Ticket into In Review with a summary: what was done, where (branch or commit; with several Repositories, the others' in repositories), and what to check. Returns an acknowledgement with the next step, or the Ticket with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "description": "The branch the work is on, if any. Accepting work on a branch moves it to Accepted, to land once merged.",
+          "type": "string"
+        },
+        "claim_id": {
+          "description": "The Claim ID claim returned.",
+          "type": "string"
+        },
+        "commit": {
+          "description": "The branch's head commit, if any.",
+          "type": "string"
+        },
+        "full": {
+          "description": "Return the whole Ticket instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "recommendation": {
+          "description": "Required on a spec Stage only: implement or split.",
+          "enum": [
+            "implement",
+            "split"
+          ],
+          "type": "string"
+        },
+        "repositories": {
+          "description": "With several Repositories: each other Repository you committed in. branch and commit stay the Home Repository's.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "branch": {
+                "description": "The branch the work is on there.",
+                "type": "string"
+              },
+              "commit": {
+                "description": "The branch's head commit there.",
+                "type": "string"
+              },
+              "name": {
+                "description": "The Repository Name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "branch",
+              "commit"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "summary": {
+          "description": "What was done, where, and what the reviewer should check, in Markdown.",
+          "type": "string"
+        },
+        "ticket": {
+          "description": "The Ticket. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "ticket",
+        "claim_id",
+        "summary"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_import_guide",
+    "description": "Get how to map a repository's .scratch/ folder into one import payload, and how to present the plan to the human.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_spec",
+    "description": "Get a Spec with its body, a count of its Tickets per State, and its Tickets as find_tickets rows; parts (body, tickets, edits, outline) and sections (heading texts) read less and add the body's outline, each heading with its Section's size in bytes; parts [\"outline\"] alone is the cheapest read; sections alone return only the body.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "parts": {
+          "description": "Only these parts, any of body, tickets, edits and outline; all three when left out, or only body with sections.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "sections": {
+          "description": "Only the body's Sections under these headings, matched case-insensitively at any level.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "spec": {
+          "description": "The Spec. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "spec"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_stage_guide",
+    "description": "Get a Stage Guide again (claim returns it): what a Ticket of that Stage produces and how to finish it.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "stage": {
+          "description": "The guide's name: the Ticket's Stage Label without stage:, map-<type> for a Wayfinder Label wayfinder:<type>, prototype, retro, or implementation when it has none of these.",
+          "enum": [
+            "grilling",
+            "spec",
+            "tickets",
+            "map-chart",
+            "map-grilling",
+            "map-research",
+            "map-task",
+            "prototype",
+            "retro",
+            "implementation"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "stage"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_ticket",
+    "description": "Get one Ticket: its description, State, Blockers, past Claims and how each ended, every Failure Report and every comment; left_out counts what it leaves out, and parts (claims, failure_reports, comments, rounds, moves, edits) asks for exactly those.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "parts": {
+          "description": "Only these parts, any of claims, failure_reports, comments, rounds, moves and edits; claims, failure_reports and comments when left out.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ticket": {
+          "description": "The Ticket. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "ticket"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "get_workflow",
+    "description": "Get the whole workflow (every State, action, who may take it, what it requires) and how to work a Ticket; call it before working one.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    }
+  },
+  {
+    "name": "give_up",
+    "description": "Give a claimed Ticket back to Ready when nothing is wrong but you can't finish it, with a note on how far you got. Ends your Claim; then stop working this Ticket. Returns an acknowledgement with the next step, or the Ticket with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "description": "The Claim ID claim returned.",
+          "type": "string"
+        },
+        "full": {
+          "description": "Return the whole Ticket instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "note": {
+          "description": "How far you got and why you are stopping, in Markdown.",
+          "type": "string"
+        },
+        "ticket": {
+          "description": "The Ticket. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "ticket",
+        "claim_id",
+        "note"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "import",
+    "description": "Import a whole .scratch/ folder mapped as get_import_guide says; run with dry_run first and wait for the human's go-ahead.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "dry_run": {
+          "description": "Check everything and return the plan, writing nothing.",
+          "type": "boolean"
+        },
+        "payload": {
+          "additionalProperties": false,
+          "properties": {
+            "specs": {
+              "description": "One Spec per feature folder.",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "body": {
+                    "description": "The Spec's body, in Markdown.",
+                    "type": "string"
+                  },
+                  "labels": {
+                    "description": "Labels.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "source": {
+                    "description": "The spec.md, map.md or folder path from the repository root.",
+                    "type": "string"
+                  },
+                  "tags": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Tags as {key: value}; source is set from source.",
+                    "type": "object"
+                  },
+                  "title": {
+                    "description": "The Spec's title.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "title"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "tickets": {
+              "description": "Every Ticket, in folder then file-number order.",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "blocked_by": {
+                    "description": "Sources of the Tickets it waits on, in this payload.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "comment": {
+                    "description": "A reason to keep as a comment (wontfix, Deferred).",
+                    "type": "string"
+                  },
+                  "description": {
+                    "description": "The description, in Markdown, without the header lines that became State, Blockers, Labels or Tags.",
+                    "type": "string"
+                  },
+                  "labels": {
+                    "description": "Labels.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "replacements": {
+                    "description": "For a Cancelled Ticket, sources of the Tickets that take over its work.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "source": {
+                    "description": "The file's path from the repository root.",
+                    "type": "string"
+                  },
+                  "spec": {
+                    "description": "Its Spec's source.",
+                    "type": "string"
+                  },
+                  "state": {
+                    "description": "Defaults to Draft.",
+                    "enum": [
+                      "Draft",
+                      "Ready",
+                      "Done",
+                      "Cancelled"
+                    ],
+                    "type": "string"
+                  },
+                  "tags": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Tags as {key: value}; source is set from source.",
+                    "type": "object"
+                  },
+                  "title": {
+                    "description": "The Ticket's title.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source",
+                  "spec",
+                  "title"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "specs"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "payload"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "land",
+    "description": "Land a Ticket: once its work is merged into the base of one of its Changed Repositories, record the commit that put it there; once it has landed in every one, it moves from Accepted (or In Review) to Done. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "description": "The commit that put the work into the base, such as the merge commit.",
+          "type": "string"
+        },
+        "full": {
+          "description": "Return the whole Ticket instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "repository": {
+          "description": "The Repository Name whose base it landed in; the Home Repository when left out.",
+          "type": "string"
+        },
+        "ticket": {
+          "description": "The Ticket. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "ticket",
+        "commit"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "pick_up_answers",
+    "description": "Pick up the answers to your latest Round on an Answered Ticket you hold, moving it back to In Progress; returns the Round and comments since.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "description": "The Claim ID claim returned.",
+          "type": "string"
+        },
+        "ticket": {
+          "description": "The Ticket. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "ticket",
+        "claim_id"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "post_round",
+    "description": "Ask the human a Round of Questions on a Ticket you hold, in one write; it moves to Needs Answer and you keep the Claim. Returns an acknowledgement with the Round number and the next step, or only those with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "description": "The Claim ID claim returned.",
+          "type": "string"
+        },
+        "full": {
+          "description": "Return only the Round number and the next step instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "questions": {
+          "description": "The Questions, each with a title, a body and an optional recommended answer.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "body": {
+                "description": "The Question in Markdown, with any choices as prose.",
+                "type": "string"
+              },
+              "recommended": {
+                "description": "Your recommended answer, if you have one.",
+                "type": "string"
+              },
+              "title": {
+                "description": "A short title.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "body"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "session_id": {
+          "description": "Your session ID, shown to the human for resuming you.",
+          "type": "string"
+        },
+        "ticket": {
+          "description": "The Ticket. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "ticket",
+        "claim_id",
+        "questions"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "remove_blocker",
+    "description": "Remove a Blocker from a Ticket. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "blocker": {
+          "description": "The Blocker to remove. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "full": {
+          "description": "Return the whole Ticket instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "ticket": {
+          "description": "The Ticket that waits. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "ticket",
+        "blocker"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "remove_labels",
+    "description": "Remove Labels from a Spec or Ticket, leaving its other Labels alone.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "labels": {
+          "description": "Labels to remove.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "target": {
+          "description": "The Spec or Ticket. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "target",
+        "labels"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "remove_tags",
+    "description": "Remove Tags from a Spec or Ticket by key.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "keys": {
+          "description": "Tag keys to remove.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "target": {
+          "description": "The Spec or Ticket. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "target",
+        "keys"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "report_failure",
+    "description": "Report a failure when nothing the human can answer will unblock you: what broke, why, what to fix and where the work stands. Ends your Claim; then stop working this Ticket. Returns an acknowledgement with the next step, or the Ticket with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "description": "The Claim ID claim returned.",
+          "type": "string"
+        },
+        "full": {
+          "description": "Return the whole Ticket instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "ticket": {
+          "description": "The Ticket. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "what_broke": {
+          "description": "A headline plus the symptom, in Markdown.",
+          "type": "string"
+        },
+        "what_to_fix": {
+          "description": "What has to change before this Ticket can go on, in Markdown.",
+          "type": "string"
+        },
+        "where_work_stands": {
+          "description": "Where the work stands: branch, commits, what is done, in Markdown.",
+          "type": "string"
+        },
+        "why": {
+          "description": "Why it broke, in Markdown.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ticket",
+        "claim_id",
+        "what_broke",
+        "why",
+        "what_to_fix",
+        "where_work_stands"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "send_back",
+    "description": "Send an Accepted Ticket back to Ready when its branch can't land, such as on a merge conflict, with a note naming the base commit and the conflicting files. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "full": {
+          "description": "Return the whole Ticket instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "note": {
+          "description": "Why it can't land: the base commit and the conflicting files, in Markdown.",
+          "type": "string"
+        },
+        "ticket": {
+          "description": "The Ticket. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "ticket",
+        "note"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "set_session",
+    "description": "Record the session now working your Claim, and how to get back into it, so the human can resume it. A hook usually fills session_id in for you. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "description": "The Claim ID claim returned.",
+          "type": "string"
+        },
+        "full": {
+          "description": "Return the whole Ticket instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "resume_command": {
+          "description": "The command that resumes your session from working_dir. Left out, the recorded one stays.",
+          "type": "string"
+        },
+        "session_id": {
+          "description": "Your session ID.",
+          "type": "string"
+        },
+        "ticket": {
+          "description": "The Ticket. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "working_dir": {
+          "description": "The directory you work in now. Left out, the recorded one stays.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ticket",
+        "claim_id",
+        "session_id"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "set_tags",
+    "description": "Set Tags on a Spec or Ticket, overwriting only the keys named; keys are lowercase [a-z0-9._-], values one non-empty line.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "tags": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Tags to set, as {key: value}.",
+          "type": "object"
+        },
+        "target": {
+          "description": "The Spec or Ticket. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "target",
+        "tags"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "submit_map",
+    "description": "Submit a Map: its text becomes a Spec labelled wayfinder:map (titled with the first line, with the Map's empty sections) and one Ready Charting Ticket for a Factory to work; returns their acknowledgements, or the Spec and Ticket with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "draft": {
+          "description": "Save the Charting Ticket as Draft instead of Ready, so nothing is claimed until the human moves it to Ready.",
+          "type": "boolean"
+        },
+        "full": {
+          "description": "Return the whole Spec and Charting Ticket instead of their acknowledgements.",
+          "type": "boolean"
+        },
+        "text": {
+          "description": "The Map's text, in Markdown; its first line becomes the Spec's title.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "submit_prototype",
+    "description": "Submit a Prototype on any Spec: a Ready Ticket labelled prototype, titled \"Prototype: <first line>\" with the text as its description, for a Factory to build on a local branch that never lands; returns its acknowledgement, or the Ticket with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "full": {
+          "description": "Return the whole Ticket instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "spec": {
+          "description": "The Spec the Prototype is on. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "text": {
+          "description": "What to prototype and the question it answers, in Markdown; its first line becomes the title.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "spec",
+        "text"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "submit_requirement",
+    "description": "Submit a Requirement: its text becomes a Spec (titled with the first line) with three Ready Stage Tickets, grilling, then spec, then tickets, for a Factory to work; with map, a finished Map's Decisions replace the grilling Stage. Returns their acknowledgements, or the Spec and Tickets with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "draft": {
+          "description": "Save the Spec's Tickets as Draft instead of Ready, so nothing is claimed until the human moves them to Ready; not with map.",
+          "type": "boolean"
+        },
+        "full": {
+          "description": "Return the whole Spec and Stage Tickets instead of their acknowledgements.",
+          "type": "boolean"
+        },
+        "map": {
+          "description": "A Map with no unfinished Tickets to write the Spec from: the Requirement gets only the spec and tickets Stages, and a map Tag naming the Map. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "skip_grilling": {
+          "description": "Straight to Spec: create no grilling Stage, so the spec Stage is written from the text alone. Can't be given with map.",
+          "type": "boolean"
+        },
+        "text": {
+          "description": "The Requirement's text, in Markdown; its first line becomes the Spec's title.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "submit_retro",
+    "description": "Start a Retro on finished work, a Done or Cancelled Ticket or a Finished Spec: a Ready Ticket labelled retro on the Project's Retros Spec, titled \"Retro: <target title>\", whose description lists every Claim on the work to read; returns its acknowledgement, or the Ticket with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "full": {
+          "description": "Return the whole Ticket instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "note": {
+          "description": "What the human wants the Retro to look at, in Markdown; optional.",
+          "type": "string"
+        },
+        "target": {
+          "description": "The finished Ticket or Spec the Retro looks back on. An ID: <key>-<n> or <n>.",
+          "type": [
+            "string",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "name": "submit_small_change",
+    "description": "Submit a Small Change: a Ready implementation Ticket on the Project's Small Changes Spec, titled with the text's first line and carrying the text as its description, which a Factory builds and lands on its own; returns its acknowledgement, or the Ticket with full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "draft": {
+          "description": "Save the Ticket as Draft instead of Ready, so nothing is claimed until the human moves it to Ready.",
+          "type": "boolean"
+        },
+        "full": {
+          "description": "Return the whole Ticket instead of the acknowledgement.",
+          "type": "boolean"
+        },
+        "text": {
+          "description": "The change to make, in Markdown; its first line becomes the Ticket's title.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    }
+  }
+]

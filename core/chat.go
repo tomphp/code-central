@@ -221,8 +221,8 @@ type StopChatReplyInput struct{}
 // NextChatWorkInput is the Factory's next_chat_work(factory, host), named
 // as its Heartbeat names it.
 type NextChatWorkInput struct {
-	Factory string
-	Host    string
+	Factory string `json:"-" query:"factory"`
+	Host    string `json:"-" query:"host"`
 }
 
 // PostChatEventsInput is POST /api/p/{key}/chat/events: the Factory
@@ -240,8 +240,11 @@ type PostChatEventsInput struct {
 	Error         string         `json:"error"`
 }
 
+// GetChatInput is the human's get_chat(), which takes nothing.
+type GetChatInput struct{}
+
 // GetChat is the human's get_chat: the Project's current Conversation.
-func (c *Core) GetChat(_ context.Context, key string) (ConversationView, error) {
+func (c *Core) GetChat(_ context.Context, key string, _ GetChatInput) (ConversationView, error) {
 	if err := c.store.View(func(r store.Reader) error {
 		if _, ok := r.Project(key); !ok {
 			return unknownProject(key)

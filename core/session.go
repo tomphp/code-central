@@ -12,13 +12,13 @@ import (
 // one that isn't given (nil) leaves the stored value alone, and one given
 // empty clears it.
 type SetSessionInput struct {
-	Ticket        Ref     `json:"ticket"`
-	ClaimID       string  `json:"claim_id"`
-	SessionID     string  `json:"session_id"`
-	WorkingDir    *string `json:"working_dir,omitempty"`
-	ResumeCommand *string `json:"resume_command,omitempty"`
+	Ticket        Ref     `json:"ticket" path:"n" desc:"The Ticket." required:"true"`
+	ClaimID       string  `json:"claim_id" desc:"The Claim ID claim returned." required:"true"`
+	SessionID     string  `json:"session_id" desc:"Your session ID." required:"true"`
+	WorkingDir    *string `json:"working_dir,omitempty" desc:"The directory you work in now. Left out, the recorded one stays."`
+	ResumeCommand *string `json:"resume_command,omitempty" desc:"The command that resumes your session from working_dir. Left out, the recorded one stays."`
 	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
+	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
 }
 
 // SetSession is set_session(ticket, claim_id, session_id, working_dir?,
@@ -51,7 +51,7 @@ func setResume(cl *domain.Claim, workingDir, resumeCommand *string) {
 
 // ReleaseInput is release's input; the note is optional.
 type ReleaseInput struct {
-	Ticket Ref    `json:"ticket"`
+	Ticket Ref    `json:"ticket" path:"n"`
 	Note   string `json:"note,omitempty"`
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
