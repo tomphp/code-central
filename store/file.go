@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/tomoram/code-central/home"
+	"github.com/tomoram/code-central/usage"
 )
 
 // ErrLocked means another process already holds the store's lock.
@@ -107,6 +108,7 @@ func open(dir string, format int, steps []MigrationStep) (*FileStore, error) {
 		return nil, err
 	}
 	s := &FileStore{index: newIndex(), dir: dir, lock: lock, format: format, steps: steps}
+	s.usage = usage.NewFiles(dir)
 	if err := s.recoverImports(); err != nil {
 		s.Close()
 		return nil, err

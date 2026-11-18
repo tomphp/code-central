@@ -1,51 +1,97 @@
-// The recorder's files in memory, beside the in-memory store: NewMemory's
-// backing.
+// The in-memory fake's form of usage, beside the in-memory store.
 
 package usage
 
 import (
-	"bytes"
-	"io"
-	"io/fs"
 	"maps"
 	"slices"
+	"sync"
 )
 
-// inMemory keeps each Project's files by day, each file the bytes of its
-// lines. The Recorder's mu guards it.
-type inMemory map[string]map[string][]byte
+// Memory keeps usage in memory, as the in-memory store keeps its records.
+type Memory struct {
+	// mu is the usage's own lock, as Files's.
+	mu       sync.RWMutex
+	projects map[string]map[string]*memoryDay
+	// failWith is what each Project's Appends return instead of adding.
+	failWith map[string]error
+}
 
-func (m inMemory) append(project, d string, line []byte) error {
-	if m[project] == nil {
-		m[project] = map[string][]byte{}
+// memoryDay is one Project's records for one day.
+type memoryDay struct {
+	calls     []Call
+	responses []Response
+}
+
+// NewMemoryStore returns empty usage kept in memory.
+func NewMemoryStore() *Memory { return &Memory{projects: map[string]map[string]*memoryDay{}} }
+
+// FailAppends makes every later Append to project return err, as a full
+// disk does the File Store's, until it is called with nil.
+func (m *Memory) FailAppends(project string, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err == nil {
+		delete(m.failWith, project)
+		return
 	}
-	m[project][d] = append(m[project][d], line...)
+	if m.failWith == nil {
+		m.failWith = map[string]error{}
+	}
+	m.failWith[project] = err
+}
+
+func (m *Memory) Append(project, day string, r Record) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err := m.failWith[project]; err != nil {
+		return errAppend(project, day, err)
+	}
+	if m.projects[project] == nil {
+		m.projects[project] = map[string]*memoryDay{}
+	}
+	if m.projects[project][day] == nil {
+		m.projects[project][day] = &memoryDay{}
+	}
+	d := m.projects[project][day]
+	switch {
+	case r.Call != nil:
+		d.calls = append(d.calls, *r.Call)
+	case r.Response != nil:
+		d.responses = append(d.responses, *r.Response)
+	}
 	return nil
 }
 
-func (m inMemory) open(project, d string) (io.ReadCloser, error) {
-	lines, ok := m[project][d]
-	if !ok {
-		return nil, fs.ErrNotExist
+func (m *Memory) Read(project string, days []string) (Records, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	projects := []string{project}
+	if project == "" {
+		projects = slices.Sorted(maps.Keys(m.projects))
 	}
-	return io.NopCloser(bytes.NewReader(lines)), nil
+	var out Records
+	for _, day := range days {
+		for _, p := range projects {
+			d := m.projects[p][day]
+			if d == nil {
+				continue
+			}
+			out.Calls = append(out.Calls, d.calls...)
+			for _, resp := range d.responses {
+				resp.Project, resp.Day = p, day
+				out.Responses = append(out.Responses, resp)
+			}
+		}
+	}
+	return out, nil
 }
 
-func (m inMemory) days(project string) ([]string, error) {
-	return slices.Collect(maps.Keys(m[project])), nil
-}
-
-func (m inMemory) remove(project, d string) error {
-	delete(m[project], d)
+func (m *Memory) Prune(before string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, days := range m.projects {
+		maps.DeleteFunc(days, func(day string, _ *memoryDay) bool { return day < before })
+	}
 	return nil
-}
-
-func (m inMemory) projects() []string { return slices.Sorted(maps.Keys(m)) }
-
-// name has no path to give, so the log names the file in words.
-func (m inMemory) name(project, d string) string {
-	if d == "" {
-		return project + "'s usage"
-	}
-	return project + "'s usage for " + d
 }

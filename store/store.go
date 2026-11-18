@@ -10,6 +10,7 @@ package store
 import (
 	"errors"
 	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/usage"
 	"iter"
 	"maps"
 	"slices"
@@ -112,6 +113,10 @@ type Store interface {
 	// Update runs fn under the write lock. fn may write at most one
 	// record; a second write fails with ErrSecondWrite.
 	Update(fn func(Writer) error) error
+	// Usage is the Store's Usage (ADR 0066): what agents consume, kept
+	// the way the Store Kind keeps it, and appended to, read and pruned on
+	// its own, outside any View or Update.
+	Usage() usage.Store
 }
 
 var (

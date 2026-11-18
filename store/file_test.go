@@ -15,6 +15,7 @@ import (
 	"github.com/tomoram/code-central/home"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/store/storetest"
+	"github.com/tomoram/code-central/usage"
 )
 
 func openFile(t *testing.T, dir string) *store.FileStore {
@@ -36,6 +37,10 @@ func TestFileStoreContract(t *testing.T) {
 				t.Fatalf("close: %v", err)
 			}
 			return openFile(t, fsx.Dir())
+		},
+		// A file where the Project's usage folder goes: no append can make it.
+		BreakUsage: func(t *testing.T, s store.Store, project string) {
+			writeFile(t, filepath.Join(s.(*store.FileStore).Dir(), "projects", project, "usage"), "in the way")
 		},
 	})
 }
@@ -605,5 +610,78 @@ func TestUsageFoldersDoNotAffectLoading(t *testing.T) {
 	})
 	if !slices.Equal(keys, []string{"acme"}) {
 		t.Fatalf("projects %v, want acme", keys)
+	}
+}
+
+// ADR 0016's layout is unchanged by Usage being part of the Store: one
+// JSON Lines file per Project per local day, a "type" first on each line.
+func TestFileStoreKeepsUsageInADR0016sLayout(t *testing.T) {
+	dir := t.TempDir()
+	s := openFile(t, dir)
+	call := usage.Call{Time: t0, Op: "find_tickets", ID: "acme-1", RequestBytes: 10, ResponseBytes: 20}
+	if err := s.Usage().Append("acme", "2026-11-07", usage.Record{Call: &call}); err != nil {
+		t.Fatal(err)
+	}
+	resp := usage.Response{Time: t0, Ticket: "acme-1", Claim: 2, SessionID: "s1", Kind: "turn", Model: "claude-opus-5-5",
+		Tokens: usage.Tokens{InputTokens: 3, CacheWriteTokens: 4, CacheReadTokens: 5, OutputTokens: 6}}
+	if err := s.Usage().Append("acme", "2026-11-07", usage.Record{Response: &resp}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(dir, "projects", "acme", "usage", "2026-11-07.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"type":"mcp_call","time":"2026-11-07T09:30:00Z","op":"find_tickets","id":"acme-1","request_bytes":10,"response_bytes":20}
+{"type":"model_response","time":"2026-11-07T09:30:00Z","ticket":"acme-1","claim":2,"session_id":"s1","kind":"turn","model":"claude-opus-5-5","input_tokens":3,"cache_write_tokens":4,"cache_read_tokens":5,"output_tokens":6}
+`
+	if string(got) != want {
+		t.Errorf("the file is\n%s\nwant\n%s", got, want)
+	}
+}
+
+// A file written by hand, or by an older or newer build, reads back with
+// the lines it can't use skipped and counted, and only a dated .jsonl name
+// is ever pruned.
+func TestFileStoreReadsAndPrunesUsageFilesAsADR0016Describes(t *testing.T) {
+	dir := t.TempDir()
+	s := openFile(t, dir)
+	mustUpdate(t, s, func(w store.Writer) error {
+		return w.PutProject(domain.Project{Key: "acme", DisplayName: "Acme", Created: t0, Mode: "committed"})
+	})
+	folder := filepath.Join(dir, "projects", "acme", "usage")
+	writeFile(t, filepath.Join(folder, "2026-11-07.jsonl"),
+		"{\"type\":\"mcp_call\",\"time\":\"2026-11-07T09:30:00Z\",\"op\":\"get_ticket\"}\n"+
+			"not json\n"+
+			"{\"type\":\"from_a_newer_build\"}\n"+
+			"{\"type\":\"mcp_call\",\"time\":\"2026-11-07T09:31:00Z\",\"op\":\"find_tickets\"}\n")
+	writeFile(t, filepath.Join(folder, "2026-01-01.jsonl"), "")
+	writeFile(t, filepath.Join(folder, "notes.txt"), "keep me")
+	writeFile(t, filepath.Join(folder, "old.jsonl"), "keep me")
+
+	got, err := s.Usage().Read("acme", []string{"2026-11-07"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Calls) != 2 || got.Calls[0].Op != "get_ticket" || got.Calls[1].Op != "find_tickets" {
+		t.Errorf("calls %+v, want get_ticket then find_tickets", got.Calls)
+	}
+	if len(got.Skipped) != 1 || got.Skipped[0].Lines != 1 || !strings.HasSuffix(got.Skipped[0].Where, "2026-11-07.jsonl") {
+		t.Errorf("skipped %+v, want the one unreadable line", got.Skipped)
+	}
+
+	if err := s.Usage().Prune("2026-11-01"); err != nil {
+		t.Fatal(err)
+	}
+	var left []string
+	entries, err := os.ReadDir(folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		left = append(left, e.Name())
+	}
+	if want := []string{"2026-11-07.jsonl", "notes.txt", "old.jsonl"}; !slices.Equal(left, want) {
+		t.Errorf("after pruning: %v, want %v", left, want)
 	}
 }
