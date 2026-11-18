@@ -10,5 +10,8 @@ import (
 func TestMemoryStoreContract(t *testing.T) {
 	storetest.Run(t, storetest.Factory{
 		New: func(t *testing.T) store.Store { return store.NewMemory() },
+		BreakUsage: func(t *testing.T, s store.Store, project string) {
+			store.FailUsageAppends(s, project)
+		},
 	})
 }

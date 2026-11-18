@@ -18,6 +18,11 @@ import (
 type Factory struct {
 	New    func(t *testing.T) store.Store
 	Reopen func(t *testing.T, s store.Store) store.Store
+	// BreakUsage, when non-nil, makes every later append to the Project's
+	// Usage in s fail, as a full disk would, leaving other Projects'
+	// appends alone. A Kind with no way to fail leaves it nil and the
+	// failing-append case is skipped.
+	BreakUsage func(t *testing.T, s store.Store, project string)
 }
 
 var t0 = time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC)
@@ -310,6 +315,7 @@ func Run(t *testing.T, f Factory) {
 	runAzureBoards(t, f)
 	runAwaitingTriage(t, f)
 	runCIRuns(t, f)
+	runUsage(t, f)
 }
 
 func seedProject(t *testing.T, s store.Store) {
