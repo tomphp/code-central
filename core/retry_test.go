@@ -106,7 +106,7 @@ type retryOutcome struct {
 	Ticket    string
 }
 
-// run sets up a fresh retryFixture with setup, each Update once, and then
+// runAttempts sets up a fresh retryFixture with setup, each Update once, and then
 // runs op with its Updates run as a.
 func runAttempts(t *testing.T, a attempts, setup func(t *testing.T, f fixture), op func(f fixture) (any, error)) (retryOutcome, error) {
 	t.Helper()
