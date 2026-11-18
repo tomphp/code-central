@@ -25,7 +25,7 @@ import { ErrorBanner } from "../controls/ErrorBanner";
 import { SpecPaneHeader } from "../controls/SpecPaneHeader";
 import { TicketName } from "../ticket/TicketLine";
 import { Button } from "../controls/Button";
-import { StateChip } from "../controls/StateChip";
+import { StateChip, stateSlug } from "../controls/StateChip";
 
 export interface MapPaneProps {
   spec: SpecDetail & { map: MapView };
@@ -126,8 +126,9 @@ export function MapBody({ spec, archived, now, ticket, select, specLink, written
               const progress = nodeProgress(t, reason);
               return (
                 <foreignObject key={t.id} role="listitem" data-id={t.id} data-progress={progress} x={at.x} y={at.y} width={NODE.width} height={NODE.height}>
+                  <div className="map-node-slot">
                   <div
-                    className={["map-node", `progress-${progress}`, reason && `reason-${reason}`, t.state === "Cancelled" && "cancelled"].filter(Boolean).join(" ")}
+                    className={["map-node", `st-${stateSlug(t.state)}`, `progress-${progress}`, reason && `reason-${reason}`, t.state === "Cancelled" && "cancelled"].filter(Boolean).join(" ")}
                   >
                     <span className="map-node-top">
                       <span className="map-node-type">{t.node_type ?? "ticket"}</span>
@@ -141,6 +142,7 @@ export function MapBody({ spec, archived, now, ticket, select, specLink, written
                         Start
                       </Button>
                     )}
+                  </div>
                   </div>
                 </foreignObject>
               );
