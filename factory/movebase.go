@@ -32,7 +32,7 @@ func (l *lander) moveBase(ctx context.Context, repo *repository, remote, local, 
 	if err != nil {
 		cant = err.Error()
 	} else {
-		r, cant = l.rebuildOnto(repo, theirs, local, heads)
+		r, _, cant = l.rebuildOnto(repo, theirs, local, heads)
 	}
 	if cant != "" {
 		if !s.diverged {
@@ -74,48 +74,49 @@ type rebuilt struct {
 // one of heads is remade as a merge of the new tip and that same second
 // parent, keeping its message, and any other non-merge commit is replayed
 // as a cherry-pick. Nothing is moved: the commits are only made. It
-// returns why it can't, or "": a conflict, or a merge that isn't the
-// Factory's.
-func (l *lander) rebuildOnto(repo *repository, onto, from string, heads map[string]bool) (rebuilt, string) {
+// returns why it can't, or "": a conflict, with the files it conflicts
+// in, or a merge that isn't the Factory's. The base move and a Spec
+// Branch's rebase onto the base under Rebase (rebaseSpecBranch) both
+// rebuild this way.
+func (l *lander) rebuildOnto(repo *repository, onto, from string, heads map[string]bool) (r rebuilt, conflicts []string, why string) {
 	g := repo.git
 	chain, err := g.firstParents(from, onto)
 	if err != nil {
-		return rebuilt{}, err.Error()
+		return rebuilt{}, nil, err.Error()
 	}
-	r := rebuilt{tip: onto, rewritten: map[string]string{}}
+	r = rebuilt{tip: onto, rewritten: map[string]string{}}
 	for _, c := range chain {
 		parents, err := g.parentsOf(c)
 		if err != nil {
-			return rebuilt{}, err.Error()
+			return rebuilt{}, nil, err.Error()
 		}
 		var tree string
-		var conflicts []string
 		switch len(parents) {
 		case 1:
 			tree, conflicts, err = g.replayTree(r.tip, c)
 		case 2:
 			if !heads[parents[1]] {
-				return rebuilt{}, fmt.Sprintf("%s is a merge the Factory didn't make, so it can't be rebuilt safely", short(c))
+				return rebuilt{}, nil, fmt.Sprintf("%s is a merge the Factory didn't make, so it can't be rebuilt safely", short(c))
 			}
 			tree, conflicts, err = g.mergeTree(r.tip, parents[1])
 		default:
-			return rebuilt{}, fmt.Sprintf("%s has %d parents, so it can't be rebuilt safely", short(c), len(parents))
+			return rebuilt{}, nil, fmt.Sprintf("%s has %d parents, so it can't be rebuilt safely", short(c), len(parents))
 		}
 		if err != nil {
-			return rebuilt{}, err.Error()
+			return rebuilt{}, nil, err.Error()
 		}
 		if len(conflicts) > 0 {
-			return rebuilt{}, fmt.Sprintf("%s conflicts in %s", short(c), strings.Join(conflicts, ", "))
+			return rebuilt{}, conflicts, fmt.Sprintf("%s conflicts in %s", short(c), strings.Join(conflicts, ", "))
 		}
 		made, err := g.commitTreeLike(tree, c, append([]string{r.tip}, parents[1:]...)...)
 		if err != nil {
-			return rebuilt{}, err.Error()
+			return rebuilt{}, nil, err.Error()
 		}
 		r.rewritten[c] = made
 		r.tip = made
 		r.count++
 	}
-	return r, ""
+	return r, nil, ""
 }
 
 // mergeHeads is the commits a merge the Factory made into repo's base can

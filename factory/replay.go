@@ -223,3 +223,33 @@ func (rp *replay) move(r *repository) error {
 	}
 	return nil
 }
+
+// rebaseSpecBranch rebuilds a Spec Branch in r, at tip, onto the base's
+// tip, onto, for landing it under Rebase (rebuildOnto): the non-merge
+// commits on its first-parent line that onto doesn't reach are replayed,
+// and each merge there, a `Merge <id>` made before Rebase was on, is
+// remade as a merge of the new tip and the same second parent. Nothing is
+// moved. It returns the rebuilt tip, or the files the first commit that
+// doesn't apply cleanly conflicts in, or why it can't rebuild it.
+func (l *lander) rebaseSpecBranch(r *repository, onto, tip string) (rebased string, conflicts []string, why string) {
+	line, err := r.git.firstParents(tip, onto)
+	if err != nil {
+		return "", nil, err.Error()
+	}
+	// The Spec Branch's own merges are the Factory's, made into it.
+	heads := map[string]bool{}
+	for _, c := range line {
+		parents, err := r.git.parentsOf(c)
+		if err != nil {
+			return "", nil, err.Error()
+		}
+		if len(parents) == 2 {
+			heads[parents[1]] = true
+		}
+	}
+	made, conflicts, why := l.rebuildOnto(r, onto, tip, heads)
+	if why != "" {
+		return "", conflicts, why
+	}
+	return made.tip, nil, ""
+}
