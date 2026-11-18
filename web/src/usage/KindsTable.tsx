@@ -6,6 +6,8 @@ import { Tokens } from "./TokenCount";
 
 export function KindsTable({ kinds }: { kinds: UsageKind[] }) {
   return (
+    <>
+    <h3 className="usage-subhead">Context Size by kind</h3>
     <table aria-label="Context Size by kind" className="data-table data-table-mono">
       <thead>
         <tr>
@@ -26,5 +28,6 @@ export function KindsTable({ kinds }: { kinds: UsageKind[] }) {
         ))}
       </tbody>
     </table>
+    </>
   );
 }
