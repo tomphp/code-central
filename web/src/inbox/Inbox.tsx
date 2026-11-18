@@ -19,7 +19,7 @@ import { REASON_LABEL, projectItemOf, ticketOf } from "../format";
 import type { InboxData, ProjectSpec } from "../live";
 import { useNeedsMe } from "../needsme/context";
 import { useProjectScope } from "../projectScope";
-import { isStage, progress } from "../requirement/progress";
+import { isStage } from "../requirement/progress";
 import { InboxDetail } from "./InboxDetail";
 import { OptionsLink } from "../options/OptionsLink";
 import { UsageLink } from "../usage/UsageLink";
@@ -84,11 +84,9 @@ export function Inbox({
   const requirements = requirementList(needsMe.requirements(scope));
   // The Requirements view lists Maps among the Requirements.
   const listed = requirementList(byCreation([...requirements, ...needsMe.maps(scope)]));
-  const progressOf = (s: ProjectSpec) =>
-    progress(s.requirement!, needsMe.ticketsOf(s.id), needsMe.reasonOf);
   // In flight: unfinished, and nothing of it waits on the human.
   const inFlight = requirements.filter(
-    (s) => !s.finished && !progressOf(s).needs.length,
+    (s) => !s.finished && !s.requirement?.needs.length,
   );
   const drafts = tickets.filter((t) => t.state === "Draft");
   const shownCount = needsMe.count(scope);

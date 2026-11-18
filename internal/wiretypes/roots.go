@@ -68,6 +68,8 @@ var enums = []Enum{
 	enumOf("CIFailureOptions", core.CIFailureOptions()),
 	enumOf("CIUnavailableCauses", core.CIUnavailableCauses()),
 	enumOf("Stages", core.Stages()),
+	enumOf("SegmentStages", core.SegmentStages()),
+	enumOf("SegmentProgresses", core.SegmentProgresses()),
 	enumOf("NodeTypes", core.NodeTypes),
 	enumOf("SpecKinds", core.SpecKinds()),
 	enumOf("Recommendations", store.Recommendations),
