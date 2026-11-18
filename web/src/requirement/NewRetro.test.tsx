@@ -159,7 +159,7 @@ describe("Retro on a Spec", () => {
 
     const pane = specRetro("Spec");
     const retro = within(pane).getByRole("button", { name: "Retro" });
-    expect(within(pane).getByRole("button", { name: "New Prototype" }).nextElementSibling).toBe(retro);
+    expect(within(pane).getByRole("button", { name: "New Ticket" }).nextElementSibling).toBe(retro);
     await click(w, retro);
     const modal = screen.getByRole("dialog", { name: "Retro" });
     await type(w, within(modal).getByRole("textbox", { name: "Note" }), "Was the split right?");

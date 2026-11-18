@@ -193,6 +193,33 @@ describe("the Board's Spec popup", () => {
     expect(chevron()).toHaveAttribute("aria-expanded", "true");
   });
 
+  it("offers New Ticket through the pane's ticketable flag, and submits Ready and Draft", async () => {
+    const fake = await world();
+    expect((await fake.w.api.getSpec("acme", fake.ids.spec)).ticketable).toBe(true);
+
+    for (const [text, button, state] of [["Rename Start", "Submit ticket", "Ready"], ["Maybe later", "Save as Draft", "Draft"]] as const) {
+      // A submitted Ticket is selected, which turns the popup into its Ticket popup.
+      const { unmount } = await renderApp(fake, `${bySpec}&popup=${fake.ids.spec}`);
+      loaded();
+      await click(within(popup()).getByRole("button", { name: "New Ticket" }));
+      const modal = screen.getByRole("dialog", { name: "New Ticket" });
+      fireEvent.change(within(modal).getByRole("textbox", { name: "Ticket" }), { target: { value: text } });
+      await click(within(modal).getByRole("button", { name: button }));
+      const made = (await fake.w.api.findTickets("acme")).find((t) => t.title === text)!;
+      expect(made.state).toBe(state);
+      unmount();
+    }
+  });
+
+  it("offers no New Ticket for a Long-lived Spec", async () => {
+    const fake = await world();
+    const longLived = await fake.s.spec("acme", { title: "Chores", labels: ["long-lived"] });
+    await renderApp(fake, `/?view=board&project=acme&group=spec&popup=${longLived}`);
+    loaded();
+    expect(within(popup()).getByRole("region", { name: "Spec" })).toBeInTheDocument();
+    expect(within(popup()).queryByRole("button", { name: "New Ticket" })).toBeNull();
+  });
+
   it("leaves a modified click on a Lane header to the browser", async () => {
     const fake = await world();
     await renderApp(fake, bySpec);
