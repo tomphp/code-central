@@ -220,7 +220,7 @@ func (rs *repositories) inBaseOf(r *repository, commit string) bool {
 // clone, and reports every clone to Code Central. A Project with the
 // Home Repository alone has nothing to clone or report, once a report
 // has cleared any from when it had more.
-func (f *factory) syncRepositories(ctx context.Context, p core.ProjectView) {
+func (l *lander) syncRepositories(ctx context.Context, p core.ProjectView) {
 	next := map[string]*repository{}
 	var inOrder []*repository
 	var report []core.RepositoryReport
@@ -229,27 +229,27 @@ func (f *factory) syncRepositories(ctx context.Context, p core.ProjectView) {
 	taken := map[string]string{}
 	for _, v := range p.Repositories {
 		if v.Home {
-			taken[f.repos.home.dir] = v.Name
+			taken[l.repos.home.dir] = v.Name
 		}
 	}
 	for _, v := range p.Repositories {
-		r := f.repos.home
+		r := l.repos.home
 		if v.Home {
 			r.listedAs(v)
 		} else {
-			r = f.cloneOf(ctx, v, taken)
+			r = l.cloneOf(ctx, v, taken)
 			if ctx.Err() != nil {
 				// A stop cut the clone off: it isn't missing.
 				return
 			}
-			was := f.repos.named(v.Name)
-			f.sayClone(r, was)
+			was := l.repos.named(v.Name)
+			l.sayClone(r, was)
 			if r.problem == "" && (was == nil || was.problem != "") {
 				// As the Home Repository's are at start.
-				f.repos.prune(r)
+				l.repos.prune(r)
 			}
 		}
-		f.sayLocalOnlyUnderPullRequest(r)
+		l.sayLocalOnlyUnderPullRequest(r)
 		next[v.Name] = r
 		inOrder = append(inOrder, r)
 		state := core.CloneReady
@@ -258,21 +258,21 @@ func (f *factory) syncRepositories(ctx context.Context, p core.ProjectView) {
 		}
 		report = append(report, core.RepositoryReport{Name: v.Name, Path: r.dir, State: state, Problem: r.problem})
 	}
-	f.repos.replace(next, inOrder)
+	l.repos.replace(next, inOrder)
 	// Back to the Home Repository alone, one more report clears the last.
 	several := len(p.Repositories) > 1
-	if !several && !f.reportedSeveral {
+	if !several && !l.reportedSeveral {
 		return
 	}
-	f.reportedSeveral = several
-	if _, err := f.client.ReportRepositories(ctx, f.project, core.ReportRepositoriesInput{Repositories: report}); err != nil && ctx.Err() == nil {
-		if !f.reportRepositoriesFailing {
-			f.printf("warning: can't report the Repositories' clones to Code Central: %v", err)
+	l.reportedSeveral = several
+	if _, err := l.client.ReportRepositories(ctx, l.project, core.ReportRepositoriesInput{Repositories: report}); err != nil && ctx.Err() == nil {
+		if !l.reportRepositoriesFailing {
+			l.printf("warning: can't report the Repositories' clones to Code Central: %v", err)
 		}
-		f.reportRepositoriesFailing = true
+		l.reportRepositoriesFailing = true
 		return
 	}
-	f.reportRepositoriesFailing = false
+	l.reportRepositoriesFailing = false
 }
 
 // cloneOf is the Repository v with its clone: cloned under its Push
@@ -282,12 +282,12 @@ func (f *factory) syncRepositories(ctx context.Context, p core.ProjectView) {
 // never cloned: whatever git repository of its own is at its path is
 // adopted with no remote check (Spec code-central-879). A path in taken
 // is another Repository's, so missing too; v's path is added to it.
-func (f *factory) cloneOf(ctx context.Context, v core.RepositoryView, taken map[string]string) *repository {
+func (l *lander) cloneOf(ctx context.Context, v core.RepositoryView, taken map[string]string) *repository {
 	dir := v.LocalPath
 	if dir == "" {
-		dir = filepath.Join(filepath.Dir(f.repos.home.dir), v.Name)
+		dir = filepath.Join(filepath.Dir(l.repos.home.dir), v.Name)
 	}
-	r := f.repos.newRepository(v.Name, dir)
+	r := l.repos.newRepository(v.Name, dir)
 	r.cloneURL, r.base = v.CloneURL, v.Base
 	r.listedAs(v)
 	remote := r.remote
@@ -308,7 +308,7 @@ func (f *factory) cloneOf(ctx context.Context, v core.RepositoryView, taken map[
 	case errors.Is(err, fs.ErrNotExist) && v.CloneURL == "":
 		return missing("nothing at %s", dir)
 	case errors.Is(err, fs.ErrNotExist):
-		if out, err := cloneRepository(ctx, f.repos.git, f.repos.environ, remote, v.CloneURL, dir); err != nil {
+		if out, err := cloneRepository(ctx, l.repos.git, l.repos.environ, remote, v.CloneURL, dir); err != nil {
 			if out == "" {
 				out = err.Error()
 			}
@@ -341,16 +341,16 @@ func (f *factory) cloneOf(ctx context.Context, v core.RepositoryView, taken map[
 
 // sayClone says what became of r's clone since was, the registry's entry
 // before this poll: cloned, adopted, or newly missing.
-func (f *factory) sayClone(r, was *repository) {
+func (l *lander) sayClone(r, was *repository) {
 	switch {
 	case r.problem != "":
 		if was == nil || was.problem != r.problem {
-			f.printf("warning: Repository %s is missing: %s: no new Claim starts until it has a clone", r.name, r.problem)
+			l.printf("warning: Repository %s is missing: %s: no new Claim starts until it has a clone", r.name, r.problem)
 		}
 	case r.cloned:
-		f.printf("repository %s: cloned %s to %s", r.name, r.cloneURL, r.dir)
+		l.printf("repository %s: cloned %s to %s", r.name, r.cloneURL, r.dir)
 	case was == nil || was.problem != "" || was.dir != r.dir:
-		f.printf("repository %s: adopted the clone at %s", r.name, r.dir)
+		l.printf("repository %s: adopted the clone at %s", r.name, r.dir)
 	}
 }
 
@@ -358,16 +358,16 @@ func (f *factory) sayClone(r, was *repository) {
 // remote, as only it can be, is local-only under Pull Request, which
 // holds back the Tickets landing in it (held), and says so again should
 // it be once more after it was put right.
-func (f *factory) sayLocalOnlyUnderPullRequest(r *repository) {
+func (l *lander) sayLocalOnlyUnderPullRequest(r *repository) {
 	if !r.localOnlyUnderPullRequest {
-		delete(f.saidLocalOnly, r.name)
+		delete(l.saidLocalOnly, r.name)
 		return
 	}
-	if f.saidLocalOnly[r.name] {
+	if l.saidLocalOnly[r.name] {
 		return
 	}
-	f.saidLocalOnly[r.name] = true
-	f.printf("warning: Repository %s is local-only under Pull Request: nothing lands in it until you give it another Landing in Project Options, or add its Push remote, %s, to its clone and restart the Factory", r.name, r.remote)
+	l.saidLocalOnly[r.name] = true
+	l.printf("warning: Repository %s is local-only under Pull Request: nothing lands in it until you give it another Landing in Project Options, or add its Push remote, %s, to its clone and restart the Factory", r.name, r.remote)
 }
 
 // samePath reports whether a and b name one folder, through any

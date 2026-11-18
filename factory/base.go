@@ -2,6 +2,8 @@ package factory
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/tomoram/code-central/core"
 )
@@ -36,11 +38,11 @@ func (s *baseState) changedBase() { s.diverged, s.current = false, false }
 // stateOf is what the Factory knows of r's base. A Repository other than
 // the Home Repository whose Base has changed starts afresh, but for its
 // merges.
-func (f *factory) stateOf(r *repository) *baseState {
-	s := f.bases[r.name]
+func (l *lander) stateOf(r *repository) *baseState {
+	s := l.bases[r.name]
 	if s == nil {
 		s = &baseState{mergedOn: map[string]mergeOn{}}
-		f.bases[r.name] = s
+		l.bases[r.name] = s
 	}
 	if !r.home && s.branch != r.base {
 		s.changedBase()
@@ -53,24 +55,24 @@ func (f *factory) stateOf(r *repository) *baseState {
 // Project's Repositories': it is local-only under Pull Request, its base
 // is missing, or under r's Merge + Push isn't level with the remote's. It
 // is "" when r's base is ready.
-func (f *factory) held(r *repository, policies core.LandingPolicies) string {
-	s := f.stateOf(r)
+func (l *lander) held(r *repository, policies core.LandingPolicies) string {
+	s := l.stateOf(r)
 	switch {
 	case r.localOnlyUnderPullRequest:
 		return "it is local-only under Pull Request"
 	case s.missing:
-		return "its base, " + f.repos.baseOf(r) + ", is missing"
+		return "its base, " + l.repos.baseOf(r) + ", is missing"
 	case r.policy(policies).PushesBase() && !s.current:
-		return "its base, " + f.repos.baseOf(r) + ", isn't level with the remote's"
+		return "its base, " + l.repos.baseOf(r) + ", isn't level with the remote's"
 	}
 	return ""
 }
 
 // anyBaseHeld reports whether any Repository's base is missing or has
 // diverged, as the last poll found, so no Claim starts.
-func (f *factory) anyBaseHeld() bool {
-	for _, r := range f.repos.ready() {
-		if s := f.bases[r.name]; s != nil && (s.missing || s.diverged) {
+func (l *lander) anyBaseHeld() bool {
+	for _, r := range l.repos.ready() {
+		if s := l.bases[r.name]; s != nil && (s.missing || s.diverged) {
 			return true
 		}
 	}
@@ -79,9 +81,9 @@ func (f *factory) anyBaseHeld() bool {
 
 // locateBases finds every Repository's base, Home first, as locateBase
 // does each.
-func (f *factory) locateBases(ctx context.Context, p core.ProjectView) {
-	for _, r := range f.repos.ready() {
-		f.locateBase(ctx, p, r)
+func (l *lander) locateBases(ctx context.Context, p core.ProjectView) {
+	for _, r := range l.repos.ready() {
+		l.locateBase(ctx, p, r)
 	}
 }
 
@@ -95,22 +97,22 @@ func (f *factory) locateBases(ctx context.Context, p core.ProjectView) {
 // found for the first time or changed. Nothing touching r lands while its
 // base is missing. A held .mcp.json doesn't stop landing; it only stops
 // claims.
-func (f *factory) locateBase(ctx context.Context, p core.ProjectView, r *repository) {
-	s := f.stateOf(r)
-	base := f.repos.baseOf(r)
+func (l *lander) locateBase(ctx context.Context, p core.ProjectView, r *repository) {
+	s := l.stateOf(r)
+	base := l.repos.baseOf(r)
 	ref := "refs/heads/" + base
 	localOnly, remote := r.localOnly, r.remote
 	tip, err := r.git.commit(ref)
 	if err != nil && !localOnly && r.git.hasRemote(remote) {
 		if out, ferr := r.git.fetch(ctx, remote); ferr != nil {
 			if ctx.Err() == nil {
-				f.printf("warning: can't fetch %s to look for the base, %s%s: %s", remote, base, r.where(), firstLine(out))
+				l.printf("warning: can't fetch %s to look for the base, %s%s: %s", remote, base, r.where(), firstLine(out))
 			}
 		} else if theirs, rerr := r.git.commit("refs/remotes/" + remote + "/" + base); rerr == nil {
-			if _, berr := f.gitOut(r.dir, "branch", "--no-track", base, theirs); berr != nil {
-				f.printf("warning: can't create the base, %s, from %s/%s%s: %v", base, remote, base, r.where(), berr)
+			if _, berr := l.repos.gitOut(r.dir, "branch", "--no-track", base, theirs); berr != nil {
+				l.printf("warning: can't create the base, %s, from %s/%s%s: %v", base, remote, base, r.where(), berr)
 			} else {
-				f.printf("base: created %s at %s from %s/%s%s", base, short(theirs), remote, base, r.where())
+				l.printf("base: created %s at %s from %s/%s%s", base, short(theirs), remote, base, r.where())
 				tip, err = theirs, nil
 			}
 		}
@@ -119,28 +121,28 @@ func (f *factory) locateBase(ctx context.Context, p core.ProjectView, r *reposit
 		if !s.missing {
 			switch {
 			case r.home && localOnly:
-				f.printf("warning: the base, %s, doesn't exist here, and this repository is local-only: nothing lands and no branch is cut until you create it or change the Base branch in Project Options", base)
+				l.printf("warning: the base, %s, doesn't exist here, and this repository is local-only: nothing lands and no branch is cut until you create it or change the Base branch in Project Options", base)
 			case r.home:
-				f.printf("warning: the base, %s, exists neither here nor on %s: nothing lands and no branch is cut until you create it or change the Base branch in Project Options", base, remote)
+				l.printf("warning: the base, %s, exists neither here nor on %s: nothing lands and no branch is cut until you create it or change the Base branch in Project Options", base, remote)
 			case localOnly:
-				f.printf("warning: the base, %s, doesn't exist in Repository %s, which is local-only: nothing touching it lands and no branch is cut until you create it or change its Base in Project Options", base, r.name)
+				l.printf("warning: the base, %s, doesn't exist in Repository %s, which is local-only: nothing touching it lands and no branch is cut until you create it or change its Base in Project Options", base, r.name)
 			default:
-				f.printf("warning: the base, %s, exists neither in Repository %s nor on its %s: nothing touching it lands and no branch is cut until you create it or change its Base in Project Options", base, r.name, remote)
+				l.printf("warning: the base, %s, exists neither in Repository %s nor on its %s: nothing touching it lands and no branch is cut until you create it or change its Base in Project Options", base, r.name, remote)
 			}
 		}
 		s.missing = true
 		if r.home {
-			f.mcpBase = ""
+			l.mcpBase = ""
 		}
-		f.reportBaseState(ctx, r, core.ReportBaseInput{State: core.BaseMissing})
+		l.reportBaseState(ctx, r, core.ReportBaseInput{State: core.BaseMissing})
 		return
 	}
 	if s.missing {
-		f.printf("base: found %s again%s", base, r.where())
+		l.printf("base: found %s again%s", base, r.where())
 	}
 	s.missing = false
 	if r.home {
-		f.checkMCP(base)
+		l.checkMCP(base)
 	}
 	if localOnly || !r.policy(p.LandingPolicies()).KeepsBaseLevel() {
 		// Where the Factory keeps the base level, syncing it reports it.
@@ -151,26 +153,64 @@ func (f *factory) locateBase(ctx context.Context, p core.ProjectView, r *reposit
 		if t, rerr := r.git.commit("refs/remotes/" + remote + "/" + base); rerr == nil && !localOnly {
 			theirs = t
 		}
-		f.reportBaseState(ctx, r, core.ReportBaseInput{State: core.BaseCurrent, Local: tip, Remote: theirs})
+		l.reportBaseState(ctx, r, core.ReportBaseInput{State: core.BaseCurrent, Local: tip, Remote: theirs})
 	}
 }
 
 // checkMCP holds new branches and worktrees while .mcp.json isn't
 // committed on the base, and checks again each poll until it is. A base
 // already found to have it isn't checked again.
-func (f *factory) checkMCP(base string) {
-	if f.mcpBase == base && !f.mcpHeld {
+func (l *lander) checkMCP(base string) {
+	if l.mcpBase == base && !l.mcpHeld {
 		return
 	}
-	if f.mcpCommitted() {
-		if f.mcpHeld {
-			f.printf(".mcp.json is committed on %s: cutting branches again", base)
+	if l.mcpCommitted() {
+		if l.mcpHeld {
+			l.printf(".mcp.json is committed on %s: cutting branches again", base)
 		}
-		f.mcpBase, f.mcpHeld = base, false
+		l.mcpBase, l.mcpHeld = base, false
 		return
 	}
-	if !f.mcpHeld || f.mcpBase != base {
-		f.printf("warning: %s: no new branch is cut until it is", f.mcpMessage())
+	if !l.mcpHeld || l.mcpBase != base {
+		l.printf("warning: %s: no new branch is cut until it is", l.mcpMessage())
 	}
-	f.mcpBase, f.mcpHeld = base, true
+	l.mcpBase, l.mcpHeld = base, true
+}
+
+// checkMCPAtStart is start's check of the base it has set: a base the
+// Home Repository has must have .mcp.json committed, or the Factory
+// doesn't start. One it hasn't yet is left to checkMCP on each poll.
+func (l *lander) checkMCPAtStart() error {
+	base := l.repos.baseBranch()
+	if _, err := l.repos.gitOut(l.repos.home.dir, "rev-parse", "--verify", "-q", base+"^{commit}"); err != nil {
+		return nil
+	}
+	if !l.mcpCommitted() {
+		return errors.New(l.mcpMessage())
+	}
+	l.mcpBase = base
+	return nil
+}
+
+// mcpCommitted is whether .mcp.json is committed on the base.
+func (l *lander) mcpCommitted() bool {
+	_, err := l.repos.gitOut(l.repos.home.dir, "cat-file", "-e", l.repos.baseBranch()+":.mcp.json")
+	return err == nil
+}
+
+// mcpMessage says that .mcp.json isn't committed on the base, and why it
+// must be.
+func (l *lander) mcpMessage() string {
+	b := l.repos.baseBranch()
+	return fmt.Sprintf(".mcp.json isn't committed on %s: every worktree starts from %s, so its sessions need it; commit it first", b, b)
+}
+
+// setBase takes the base the Project names this poll into the registry.
+// A change of base says so and forgets what was known of the old one.
+func (l *lander) setBase(base string) {
+	if old := l.repos.setBase(base); old != base {
+		l.printf("base: %s, was %s", base, old)
+		l.stateOf(l.repos.home).changedBase()
+		l.oldBases = append(l.oldBases, old)
+	}
 }

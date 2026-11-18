@@ -2,6 +2,8 @@ package factory
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -14,23 +16,24 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/client"
-	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/store"
 )
 
-// These tests drive a poll's landing step (landAndSweep) against a fake
-// repo and a real in-process Code Central, so each Landing Method's
-// decisions run without git or a claude. What only real git shows (a
-// merge-tree conflict, a push to a bare remote, a remote that is ahead
-// or gone, a dirty base checkout) is tested through factorytest.
+// These tests drive a poll's landing step (the lander's poll) against a
+// fake repo and a real in-process Code Central, so each Landing Method's
+// decisions run without git, a claude or the session part. What only
+// real git shows (a merge-tree conflict, a push to a bare remote, a
+// remote that is ahead or gone, a dirty base checkout) is tested through
+// factorytest.
 
-// landWorld is a factory with a fake repo, ready to land, and the Code
-// Central it lands in.
+// landWorld is the landing part with a fake repo, ready to land, and the
+// Code Central it lands in. Its hooks are stubs, saying the Factory never
+// stops and runs no turn, which a test may change.
 type landWorld struct {
 	t     *testing.T
-	f     *factory
+	l     *lander
 	repo  *fakeRepo
 	srv   *codecentraltest.Server
 	human *client.Client
@@ -38,7 +41,7 @@ type landWorld struct {
 	spec  string
 }
 
-// lineBuffer is the factory's stdout.
+// lineBuffer is the lander's output.
 type lineBuffer struct {
 	mu sync.Mutex
 	b  strings.Builder
@@ -67,18 +70,23 @@ func newLandWorld(t *testing.T) *landWorld {
 	human := client.New(srv.URL)
 	human.Actor = core.Human
 	out := &lineBuffer{}
+	printf := func(format string, args ...any) { fmt.Fprintf(out, format+"\n", args...) }
 	repo := newFakeRepo(fakeTop)
-	f := newFactory(Env{Stdout: out, Clock: clock.System{}}, options{parallel: 1})
-	f.project, f.client = "acme", srv.Client
-	f.repos.setBase("main")
+	repos := newRepositories(nil, printf)
+	repos.setBase("main")
 	// As start builds it: with the OS's separators.
-	f.repos.home = &repository{name: "acme", home: true, dir: fakeTop, git: repo, worktrees: filepath.FromSlash(fakeTop + ".worktrees")}
-	f.repos.byName = map[string]*repository{"acme": f.repos.home}
-	return &landWorld{t: t, f: f, repo: repo, srv: srv, human: human, out: out}
+	repos.home = &repository{name: "acme", home: true, dir: fakeTop, git: repo, worktrees: filepath.FromSlash(fakeTop + ".worktrees")}
+	repos.byName = map[string]*repository{"acme": repos.home}
+	hooks := landerHooks{
+		stopped:       func(context.Context) bool { return false },
+		turnRunningOn: func(string) bool { return false },
+	}
+	l := newLander(repos, srv.Client, "acme", work{}, printf, hooks)
+	return &landWorld{t: t, l: l, repo: repo, srv: srv, human: human, out: out}
 }
 
 // poll runs a poll's landing step.
-func (w *landWorld) poll() { w.f.landAndSweep(context.Background()) }
+func (w *landWorld) poll() { w.l.poll(context.Background()) }
 
 // setLanding sets the Project's Landing Method as the human.
 func (w *landWorld) setLanding(method store.LandingMethod, push bool, remote string) {
@@ -309,11 +317,20 @@ func TestATicketMergedWhileInAnotherStateGetsOnlyAWarningLine(t *testing.T) {
 	}
 }
 
+// hookedToSession gives w's lander the hooks of a session part with no
+// turn running, and returns it, for a test to pause or drain.
+func (w *landWorld) hookedToSession() *factory {
+	f := newFactory(Env{Stdout: io.Discard}, options{parallel: 1})
+	w.l.hooks = f.hooks()
+	return f
+}
+
 func TestAPausedFactoryDoesNotLand(t *testing.T) {
 	t.Parallel()
 	w := newLandWorld(t)
 	id, _ := w.accepted("Add a feature")
-	w.f.pause = &pause{reason: "rate_limit"}
+	f := w.hookedToSession()
+	f.pause = &pause{reason: "rate_limit"}
 
 	w.poll()
 	if s := w.ticket(id).State; s != store.Accepted {
@@ -325,11 +342,30 @@ func TestADrainingFactoryDoesNotLand(t *testing.T) {
 	t.Parallel()
 	w := newLandWorld(t)
 	id, _ := w.accepted("Add a feature")
-	close(w.f.drainCh)
+	f := w.hookedToSession()
+	close(f.drainCh)
 
 	w.poll()
 	if s := w.ticket(id).State; s != store.Accepted {
 		t.Errorf("%s is %s; nothing lands while draining", id, s)
+	}
+}
+
+func TestAFactoryThatStopsMidPollLandsNothingMore(t *testing.T) {
+	t.Parallel()
+	w := newLandWorld(t)
+	first, _ := w.accepted("Accepted first")
+	w.srv.Clock.Advance(time.Minute)
+	second, _ := w.accepted("Accepted second")
+	// Halted, draining or paused once the first has landed.
+	w.l.hooks.stopped = func(context.Context) bool { return w.ticket(first).State == store.Done }
+
+	w.poll()
+	if s := w.ticket(first).State; s != store.Done {
+		t.Fatalf("%s is %s; want it landed before the stop", first, s)
+	}
+	if s := w.ticket(second).State; s != store.Accepted {
+		t.Errorf("%s is %s; nothing more lands once the Factory stops mid-poll", second, s)
 	}
 }
 
@@ -353,7 +389,7 @@ func TestUnderMergeAnAcceptedTicketsWorktreeIsKeptUntilItLands(t *testing.T) {
 	t.Parallel()
 	w := newLandWorld(t)
 	id, _ := w.accepted("Add a feature")
-	wt := w.f.repos.worktree(id)
+	wt := w.l.repos.worktree(id)
 	w.repo.addWorktree(wt, id)
 	// Uncommitted changes in the base checkout hold the merge, so the
 	// Ticket is still Accepted when the sweep runs.
@@ -439,7 +475,7 @@ func TestUnderBranchADirtyWorktreeOfAnAcceptedTicketIsWarnedAboutAndLeft(t *test
 	w := newLandWorld(t)
 	w.setLanding(store.LandingBranch, false, "")
 	id, _ := w.accepted("Add a feature")
-	wt := w.f.repos.worktree(id)
+	wt := w.l.repos.worktree(id)
 	w.repo.addWorktree(wt, id)
 	w.repo.setDirty(wt, "?? notes.txt")
 
@@ -725,7 +761,7 @@ func TestTheSweepRemovesOnlyCleanWorktreesOfFinishedTickets(t *testing.T) {
 	landed, _ := w.accepted("Landed")
 	review, _ := w.reviewed("Still in review")
 	for _, id := range []string{landed, review} {
-		w.repo.addWorktree(w.f.repos.worktree(id), id)
+		w.repo.addWorktree(w.l.repos.worktree(id), id)
 	}
 	stray := filepath.Join(fakeTop+".worktrees", "acme-999")
 	w.repo.addWorktree(stray, "acme-999")
@@ -733,10 +769,10 @@ func TestTheSweepRemovesOnlyCleanWorktreesOfFinishedTickets(t *testing.T) {
 	w.repo.addWorktree(elsewhere, "other")
 
 	w.poll()
-	if w.repo.hasWorktree(w.f.repos.worktree(landed)) {
+	if w.repo.hasWorktree(w.l.repos.worktree(landed)) {
 		t.Errorf("the clean worktree of the landed %s is still there", landed)
 	}
-	for _, kept := range []string{w.f.repos.worktree(review), stray, elsewhere} {
+	for _, kept := range []string{w.l.repos.worktree(review), stray, elsewhere} {
 		if !w.repo.hasWorktree(kept) {
 			t.Errorf("the worktree %s was removed", kept)
 		}
@@ -772,7 +808,7 @@ func TestAPushedCommitWhoseReportFailedIsReportedAsItsOwnNotALaterTicketsPush(t 
 		rp.ServeHTTP(rw, r)
 	}))
 	t.Cleanup(proxy.Close)
-	w.f.client = client.New(proxy.URL)
+	w.l.client = client.New(proxy.URL)
 
 	w.poll()
 	w.repo.mu.Lock()
@@ -813,11 +849,11 @@ func TestASpecWhoseLastTicketIsAcceptedMidPollWaitsForItsMergeIntoTheSpecBranch(
 	// Accepted after the poll read its Accepted Tickets, as the human can
 	// at any moment: the Spec is ready, but the Spec Branch lacks it.
 	w.accept(second)
-	p, ok := w.f.landing(context.Background())
+	p, ok := w.l.landing(context.Background())
 	if !ok {
 		t.Fatal("can't read the Project")
 	}
-	w.f.landSpecs(context.Background(), p)
+	w.l.landSpecs(context.Background(), p)
 	if got := w.repo.tip("refs/heads/main"); got != base {
 		t.Fatalf("the Spec landed at %s without %s's work", got, second)
 	}

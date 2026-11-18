@@ -325,23 +325,23 @@ func (rs *repositories) prune(r *repository) {
 // when the Ticket never used it (sweepsBranch, sweepUnusedBranch); with
 // the Home Repository alone, branches are never deleted. Anything else is
 // kept, the Chat worktrees among it.
-func (f *factory) sweep(ctx context.Context, policies core.LandingPolicies) {
+func (l *lander) sweep(ctx context.Context, policies core.LandingPolicies) {
 	tickets := map[string]*core.TicketView{}
-	for _, r := range f.repos.ready() {
+	for _, r := range l.repos.ready() {
 		if ctx.Err() != nil {
 			return
 		}
-		f.sweepIn(ctx, r, policies, tickets)
+		l.sweepIn(ctx, r, policies, tickets)
 	}
 }
 
 // sweepIn is sweep's work in r. tickets holds each Ticket the sweep has
 // read, by ID, nil for one it couldn't, so each is read once.
-func (f *factory) sweepIn(ctx context.Context, r *repository, policies core.LandingPolicies, tickets map[string]*core.TicketView) {
+func (l *lander) sweepIn(ctx context.Context, r *repository, policies core.LandingPolicies, tickets map[string]*core.TicketView) {
 	policy := r.policy(policies)
 	list, err := r.git.worktrees()
 	if err != nil {
-		f.printf("warning: can't list the worktrees%s: %v", r.where(), err)
+		l.printf("warning: can't list the worktrees%s: %v", r.where(), err)
 		return
 	}
 	for _, w := range list {
@@ -354,12 +354,12 @@ func (f *factory) sweepIn(ctx context.Context, r *repository, policies core.Land
 		id := filepath.Base(w.path)
 		// The Chat worktree is no Ticket's, and stays so that a copied
 		// Resume Command keeps working.
-		if id == chatWorktreeName || f.turnRunningOn(id) {
+		if id == chatWorktreeName || l.hooks.turnRunningOn(id) {
 			continue
 		}
 		tk, ok := tickets[id]
 		if !ok {
-			tk = f.sweptTicket(ctx, id)
+			tk = l.sweptTicket(ctx, id)
 			tickets[id] = tk
 		}
 		if tk == nil || !doneWithWorktree(*tk, policy) {
@@ -367,24 +367,24 @@ func (f *factory) sweepIn(ctx context.Context, r *repository, policies core.Land
 		}
 		status, err := r.git.status(w.path)
 		if err != nil {
-			f.printf("warning: %s: can't read the worktree %s: %v", id, w.path, err)
+			l.printf("warning: %s: can't read the worktree %s: %v", id, w.path, err)
 			continue
 		}
 		if status != "" {
-			if !f.warned[w.path] {
-				f.warned[w.path] = true
-				f.printf("warning: %s is %s but its worktree %s has uncommitted changes: left in place", id, tk.State, w.path)
+			if !l.warned[w.path] {
+				l.warned[w.path] = true
+				l.printf("warning: %s is %s but its worktree %s has uncommitted changes: left in place", id, tk.State, w.path)
 			}
 			continue
 		}
 		if err := r.git.removeWorktree(w.path); err != nil {
-			f.printf("warning: %s: can't remove the worktree %s: %v", id, w.path, err)
+			l.printf("warning: %s: can't remove the worktree %s: %v", id, w.path, err)
 			continue
 		}
-		delete(f.warned, w.path)
-		f.printf("%s: %s: removed its worktree %s", id, tk.State, w.path)
-		if f.sweepsBranch(r, *tk, w.branch) {
-			f.sweepUnusedBranch(r, *tk, w.branch)
+		delete(l.warned, w.path)
+		l.printf("%s: %s: removed its worktree %s", id, tk.State, w.path)
+		if l.sweepsBranch(r, *tk, w.branch) {
+			l.sweepUnusedBranch(r, *tk, w.branch)
 		}
 	}
 }
@@ -396,11 +396,11 @@ func (f *factory) sweepIn(ctx context.Context, r *repository, policies core.Land
 // Repositories, as a Project with the Home Repository alone never has,
 // and only once tk is Done or Cancelled or names another branch, since
 // landing reads the branch a Ticket names.
-func (f *factory) sweepsBranch(r *repository, tk core.TicketView, branch string) bool {
+func (l *lander) sweepsBranch(r *repository, tk core.TicketView, branch string) bool {
 	switch {
 	case !r.home:
 		return true
-	case !f.repos.several():
+	case !l.repos.several():
 		return false
 	}
 	return tk.State == store.Done || tk.State == store.Cancelled || tk.Branch != branch
@@ -408,12 +408,12 @@ func (f *factory) sweepsBranch(r *repository, tk core.TicketView, branch string)
 
 // sweptTicket is the Ticket id for the sweep, or nil when it can't be
 // read: a worktree named like no Ticket is no Ticket's.
-func (f *factory) sweptTicket(ctx context.Context, id string) *core.TicketView {
-	tk, err := f.client.GetTicket(ctx, f.project, core.Ref(id))
+func (l *lander) sweptTicket(ctx context.Context, id string) *core.TicketView {
+	tk, err := l.client.GetTicket(ctx, l.project, core.Ref(id))
 	if err != nil {
 		var ce *core.Error
 		if ctx.Err() == nil && !(errors.As(err, &ce) && ce.Code == core.NotFound) {
-			f.printf("%s: get_ticket: %v", id, err)
+			l.printf("%s: get_ticket: %v", id, err)
 		}
 		return nil
 	}
@@ -424,7 +424,7 @@ func (f *factory) sweptTicket(ctx context.Context, id string) *core.TicketView {
 // tip is still on the first-parent line of r's Base, or of the Spec
 // Branch of tk's Spec, where it was cut, rather than merged into either or
 // beyond them. A branch with work of its own is kept.
-func (f *factory) sweepUnusedBranch(r *repository, tk core.TicketView, branch string) {
+func (l *lander) sweepUnusedBranch(r *repository, tk core.TicketView, branch string) {
 	if branch == "" {
 		return
 	}
@@ -433,14 +433,14 @@ func (f *factory) sweepUnusedBranch(r *repository, tk core.TicketView, branch st
 	if err != nil {
 		return
 	}
-	if !onFirstParentLine(r.git, tip, "refs/heads/"+f.repos.baseOf(r)) && !onFirstParentLine(r.git, tip, "refs/heads/"+specBranch(tk.Spec.ID)) {
+	if !onFirstParentLine(r.git, tip, "refs/heads/"+l.repos.baseOf(r)) && !onFirstParentLine(r.git, tip, "refs/heads/"+specBranch(tk.Spec.ID)) {
 		return
 	}
 	if err := r.git.deleteRef(ref, tip); err != nil {
-		f.printf("warning: %s: can't delete its unused branch %s%s: %v", tk.ID, branch, r.where(), err)
+		l.printf("warning: %s: can't delete its unused branch %s%s: %v", tk.ID, branch, r.where(), err)
 		return
 	}
-	f.printf("%s: deleted its unused branch %s%s", tk.ID, branch, r.where())
+	l.printf("%s: deleted its unused branch %s%s", tk.ID, branch, r.where())
 }
 
 // onFirstParentLine reports whether commit is rev's tip or one of the
@@ -475,18 +475,6 @@ func doneWithWorktree(tk core.TicketView, policy core.LandingPolicy) bool {
 		// Under Land per Spec its work is safe in the Spec Branch once
 		// the merge is recorded.
 		return !policy.KeepsAcceptedWorktree() || tk.SpecLanded && tk.SpecMerge != nil && tk.SpecMerge.Counts
-	}
-	return false
-}
-
-// turnRunningOn reports whether a turn is running on ticket.
-func (f *factory) turnRunningOn(ticket string) bool {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for _, t := range f.turns {
-		if t.claim.Ticket == ticket {
-			return true
-		}
 	}
 	return false
 }

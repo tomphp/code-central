@@ -45,7 +45,7 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, out turnOutcome) store
 			f.commentDenials(ctx, t, denials)
 		}
 		if checksFinish(by, tk.State) {
-			if _, failed := f.checkFinish(ctx, tk); failed {
+			if _, failed := checkFinish(ctx, f.repos, f.client, f.project, tk); failed {
 				return store.Failed
 			}
 		}
