@@ -73,6 +73,22 @@ type Writer interface {
 	PutOptions(domain.Options) error
 	// PutCIRuns replaces the project's CI Runs whole.
 	PutCIRuns(project string, runs []domain.CIRun) error
+	// Announce tells the other services sharing the Store of the update's
+	// write, once it commits. A Store no other service shares ignores it.
+	Announce(Change)
+}
+
+// Change is the notice of a write one service committed, as another
+// service sharing the Store hears of it: the Project, the record as an
+// event type and ID, and whether it wakes the Project's Factories.
+type Change struct {
+	Project string
+	// Type is the record's event type, such as "ticket.changed".
+	Type string
+	// ID is the display ID of the Ticket or Spec, empty for the others.
+	ID string
+	// Wakes says the write is one the Factory's poll acts on.
+	Wakes bool
 }
 
 // Import is a batch of new Specs and Tickets written all or nothing.
@@ -110,11 +126,20 @@ func (im Import) clone() Import {
 type Store interface {
 	View(fn func(Reader) error) error
 	// Update runs fn under the write lock. fn may write at most one
-	// record; a second write fails with ErrSecondWrite.
+	// record; a second write fails with ErrSecondWrite. A Store that
+	// retries on conflict runs fn again from the start, discarding the
+	// earlier attempt's write, so fn must be safe to run more than once;
+	// when its attempts run out, Update fails with ErrConflict.
 	Update(fn func(Writer) error) error
+	// Changes makes deliver hear of the Changes other services sharing the
+	// Store commit. A Store no other service shares never calls it.
+	Changes(deliver func(Change))
 }
 
 var (
+	// ErrConflict means an Update kept conflicting with other services'
+	// writes until its attempts ran out; trying again may succeed.
+	ErrConflict = errors.New("store: another service changed this at the same moment")
 	// ErrSecondWrite means an Update tried to write more than one record.
 	ErrSecondWrite = errors.New("store: an update may write only one record")
 	// ErrUnknownProject means a Spec or Ticket was written to a project

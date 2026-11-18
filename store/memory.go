@@ -44,6 +44,9 @@ func (x *index) Update(fn func(Writer) error) error {
 	return fn(&writer{reader: reader{x}})
 }
 
+// Changes never delivers: no other service shares the store.
+func (x *index) Changes(func(Change)) {}
+
 type reader struct{ x *index }
 
 func (r reader) Project(key string) (domain.Project, bool) {
@@ -242,6 +245,9 @@ func (w *writer) PutOptions(o domain.Options) error {
 	w.x.options = o
 	return nil
 }
+
+// Announce is ignored: no other service shares the store.
+func (w *writer) Announce(Change) {}
 
 func (w *writer) PutCIRuns(project string, runs []domain.CIRun) error {
 	rs := cloneCIRuns(domain.CIRuns{Runs: runs})

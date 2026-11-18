@@ -96,6 +96,9 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 		return ClaimResult{}, invalid("ticket", "pass spec or ticket, not both")
 	}
 	var res ClaimResult
+	// Made once, and kept by a retried Update, so the ID committed is the
+	// one returned; claiming again takes none.
+	var id string
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -125,7 +128,9 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 		if err := transition(ctx, &t, key, "claim", "", now); err != nil {
 			return err
 		}
-		id := c.ids.ClaimID()
+		if id == "" {
+			id = c.ids.ClaimID()
+		}
 		t.Claims[len(t.Claims)-1].ID = id
 		if err := whole.put(w, key, &t); err != nil {
 			return err

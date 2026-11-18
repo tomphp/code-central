@@ -522,6 +522,7 @@ func (c *Core) ReportPullRequest(_ context.Context, key string, in ReportPullReq
 	for _, n := range covered {
 		moved := false
 		err := c.store.Update(func(w store.Writer) error {
+			moved = false
 			// The pull request is on the head: no History is written.
 			t, ok := w.Ticket(key, n)
 			if !ok || !setPullRequest(&t, pr) {

@@ -222,19 +222,22 @@ func (c *Core) SetCITracking(ctx context.Context, key string, in SetCITrackingIn
 	if err := c.checkCI(ctx, p, next, opts); err != nil {
 		return Written[ProjectView]{}, err
 	}
-	return c.updateCIIn(key, in.Full, func(p domain.Project, ci *domain.CI) error {
+	var resetWatcher bool
+	written, err := c.updateCIIn(key, in.Full, func(p domain.Project, ci *domain.CI) error {
 		next := p
 		next.CI = *ci
 		if err := change(p, &next.CI); err != nil {
 			return err
 		}
 		// What the CI Watcher said was about the old settings.
-		if !next.CI.Tracking || watchesAnother(p, next) {
-			c.watchers.reset(watcherKey{WatcherCI, key})
-		}
+		resetWatcher = !next.CI.Tracking || watchesAnother(p, next)
 		*ci = next.CI
 		return nil
 	})
+	if err == nil && resetWatcher {
+		c.watchers.reset(watcherKey{WatcherCI, key})
+	}
+	return written, err
 }
 
 // olderClientsHomeCI is the Home Repository's CI entry, key's, as an
@@ -383,15 +386,20 @@ type ReportPushRemoteInput struct {
 // A URL makes it pushed again, and leaves its CI entry as it was.
 func (c *Core) ReportPushRemote(_ context.Context, key string, in ReportPushRemoteInput) (Written[ProjectView], error) {
 	url := strings.TrimSpace(in.URL)
-	return c.updateCI(key, in.Full, func(p *domain.CI) error {
-		if url == "" && !p.NoPushRemote {
+	var resetWatcher bool
+	written, err := c.updateCI(key, in.Full, func(p *domain.CI) error {
+		// What the CI Watcher said may have been about the Home.
+		resetWatcher = url == "" && !p.NoPushRemote
+		if resetWatcher {
 			p.Repositories = withCIEntry(p.Repositories, domain.CIRepository{Name: key, NotWatched: true})
-			// What the CI Watcher said may have been about the Home.
-			c.watchers.reset(watcherKey{WatcherCI, key})
 		}
 		p.PushRemoteURL, p.NoPushRemote = withoutLogin(url), url == ""
 		return nil
 	})
+	if err == nil && resetWatcher {
+		c.watchers.reset(watcherKey{WatcherCI, key})
+	}
+	return written, err
 }
 
 // withoutLogin is an HTTP(S) remote URL without the login it may carry,
@@ -532,10 +540,12 @@ func (c *Core) EditCIRule(ctx context.Context, key string, in CIRuleInput) (Writ
 			return err
 		}
 		old = ci.Rules[i]
-		if in.State == "" {
-			in.State = old.State
+		// A copy, so a retry still sees whether in named a State.
+		edit := in
+		if edit.State == "" {
+			edit.State = old.State
 		}
-		if r, err = checkCIRule(ciProviders(p), in); err != nil {
+		if r, err = checkCIRule(ciProviders(p), edit); err != nil {
 			return err
 		}
 		if err := ruleIsNew(key, ci.Rules, r, n); err != nil {

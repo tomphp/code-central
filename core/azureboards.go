@@ -115,7 +115,10 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in SetAzureBoards
 	}
 	var was domain.AzureBoards
 	var before, after ProjectView
+	var resetWatcher bool
+	given := a
 	err := c.store.Update(func(w store.Writer) error {
+		a, resetWatcher = given, false
 		if err := writable(w, key); err != nil {
 			return err
 		}
@@ -133,12 +136,15 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in SetAzureBoards
 		}
 		// What the Work Item Watcher said was about the old settings.
 		if !a.On || azureBoardsCheckInput(p.CI, a) != azureBoardsCheckInput(p.CI, was) {
-			c.watchers.reset(watcherKey{WatcherWorkItems, key})
+			resetWatcher = true
 		}
 		return w.PutProject(p)
 	})
 	if err != nil {
 		return Written[ProjectView]{}, err
+	}
+	if resetWatcher {
+		c.watchers.reset(watcherKey{WatcherWorkItems, key})
 	}
 	if title := azureBoardsSpecTitle(a); was.Spec != 0 && title != "" && title != azureBoardsSpecTitle(was) {
 		if err := c.retitleIntegrationSpec(ctx, key, was.Spec, givenAzureBoardsSpecTitle, title); err != nil {

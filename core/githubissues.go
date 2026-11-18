@@ -100,7 +100,9 @@ func (c *Core) SetGitHubIssues(ctx context.Context, key string, in SetGitHubIssu
 	}
 	var was domain.GitHubIssues
 	var before, after ProjectView
+	var resetWatcher bool
 	err := c.store.Update(func(w store.Writer) error {
+		resetWatcher = false
 		if err := writable(w, key); err != nil {
 			return err
 		}
@@ -114,12 +116,15 @@ func (c *Core) SetGitHubIssues(ctx context.Context, key string, in SetGitHubIssu
 		}
 		// What the Issue Watcher said was about the old settings.
 		if !g.On || !slices.Equal(g.Repositories, was.Repositories) {
-			c.watchers.reset(watcherKey{WatcherIssues, key})
+			resetWatcher = true
 		}
 		return w.PutProject(p)
 	})
 	if err != nil {
 		return Written[ProjectView]{}, err
+	}
+	if resetWatcher {
+		c.watchers.reset(watcherKey{WatcherIssues, key})
 	}
 	if was.Spec != 0 && len(g.Repositories) > 0 && !slices.Equal(was.Repositories, g.Repositories) {
 		if err := c.retitleIntegrationSpec(ctx, key, was.Spec, givenIssuesSpecTitle, issuesSpecTitle(g.Repositories)); err != nil {
@@ -143,6 +148,7 @@ func sameGitHubIssues(a, b domain.GitHubIssues) bool {
 func (c *Core) createIntegrationSpec(key string, specOf func(domain.Project) int, spec domain.Spec) (int, error) {
 	n := 0
 	err := c.store.Update(func(w store.Writer) error {
+		n = 0
 		if err := writable(w, key); err != nil {
 			return err
 		}

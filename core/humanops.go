@@ -129,7 +129,9 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 	}
 	var v ProjectView
 	var accepted, left []int
+	var resetWatcher bool
 	err := c.store.Update(func(w store.Writer) error {
+		accepted, left, resetWatcher = nil, nil, false
 		if err := writable(w, key); err != nil {
 			return err
 		}
@@ -173,7 +175,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		}
 		if was.RunsPullRequestWatcher() && !next.RunsPullRequestWatcher() {
 			// What the Pull Request Watcher said was about the old method.
-			c.watchers.reset(watcherKey{WatcherPullRequests, key})
+			resetWatcher = true
 			for _, t := range acceptedTickets {
 				if slices.ContainsFunc(t.PullRequests, pullRequestOpen) {
 					left = append(left, t.Number)
@@ -186,6 +188,9 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 	})
 	if err != nil {
 		return v, err
+	}
+	if resetWatcher {
+		c.watchers.reset(watcherKey{WatcherPullRequests, key})
 	}
 	// The pull requests stay on the host, so each Ticket says to close its own.
 	for _, n := range left {
