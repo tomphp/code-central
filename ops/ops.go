@@ -295,33 +295,33 @@ var all = []entry{
 	legacy(Op{Name: "set_options", Audience: HumanOnly, Write: true}),
 
 	// CI Tracking (Spec code-central-247).
-	legacy(Op{Name: "set_ci_tracking", Audience: HumanOnly, Write: true}),
+	defined(SetCITracking),
 	// A Repository's CI entry (Spec code-central-848).
-	legacy(Op{Name: "set_repository_ci", Audience: HumanOnly, Write: true}),
-	legacy(Op{Name: "report_push_remote", Audience: FactoryOnly, Write: true}),
-	legacy(Op{Name: "add_ci_rule", Audience: HumanOnly, Write: true}),
-	legacy(Op{Name: "edit_ci_rule", Audience: HumanOnly, Write: true}),
-	legacy(Op{Name: "remove_ci_rule", Audience: HumanOnly, Write: true}),
+	defined(SetRepositoryCI),
+	defined(ReportPushRemote),
+	defined(AddCIRule),
+	defined(EditCIRule),
+	defined(RemoveCIRule),
 	// The CI Watcher's own (code-central-253).
-	legacy(Op{Name: "get_ci_watch", Audience: FactoryOnly}),
-	legacy(Op{Name: "report_ci_watcher_status", Audience: FactoryOnly, Write: true}),
+	defined(GetCIWatch),
+	defined(ReportCIWatcherStatus),
 	// Tracking a pushed Ticket's CI Runs (code-central-256).
-	legacy(Op{Name: "report_pushed_commit", Audience: FactoryOnly, Write: true}),
+	defined(ReportPushedCommit),
 	// The Pull Request Watcher's own (code-central-388).
-	legacy(Op{Name: "get_pull_request_watch", Audience: FactoryOnly}),
-	legacy(Op{Name: "report_pull_request", Audience: FactoryOnly, Write: true}),
-	legacy(Op{Name: "report_pull_request_watcher_status", Audience: FactoryOnly, Write: true}),
-	legacy(Op{Name: "report_ci_runs", Audience: FactoryOnly, Write: true}),
+	defined(GetPullRequestWatch),
+	defined(ReportPullRequest),
+	defined(ReportPullRequestWatcherStatus),
+	defined(ReportCIRuns),
 	// Land per Spec (code-central-371).
-	legacy(Op{Name: "report_spec_merge", Audience: FactoryOnly, Write: true}),
+	defined(ReportSpecMerge),
 	// Spec merge Tickets (code-central-542).
 	legacy(Op{Name: "open_spec_merge", Audience: FactoryOnly, Write: true}),
 	// CI failed and its failure options (code-central-261).
-	legacy(Op{Name: "land_anyway", Audience: HumanOnly, Write: true}),
+	defined(LandAnyway),
 	// Re-run failed jobs (code-central-265).
-	legacy(Op{Name: "rerun_ci", Audience: HumanOnly, Write: true}),
+	defined(RerunCI),
 	// Send back to fix and New fix Ticket (code-central-264).
-	legacy(Op{Name: "new_fix_ticket", Audience: HumanOnly, Write: true}),
+	defined(NewFixTicket),
 
 	// GitHub Issues (Spec code-central-279).
 	legacy(Op{Name: "set_github_issues", Audience: HumanOnly, Write: true}),

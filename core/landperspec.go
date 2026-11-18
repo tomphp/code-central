@@ -133,7 +133,7 @@ func landPerSpecView(r store.Reader, key string, s store.Spec, tickets []store.T
 // ReportSpecMergeInput is the Factory's report_spec_merge(ticket, commit,
 // full?).
 type ReportSpecMergeInput struct {
-	Ticket Ref    `json:"ticket"`
+	Ticket Ref    `json:"ticket" path:"n"`
 	Commit string `json:"commit"`
 	// Repository is the Repository Name of the Spec Branch the commit is
 	// on; left out, the Home Repository.
