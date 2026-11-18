@@ -20,14 +20,10 @@ type Reader interface {
 	Project(key string) (domain.Project, bool)
 	Projects() []domain.Project
 	Spec(project string, n int) (domain.Spec, bool)
-	Specs(project string) []domain.Spec
 	// Ticket reads Ticket n with the History parts named: the parts it
 	// doesn't name come back empty, and its head's derived fields are
 	// always there.
 	Ticket(project string, n int, parts ...Part) (domain.Ticket, bool)
-	// Tickets returns the project's Tickets in number order, each with
-	// the History parts named, as Ticket does.
-	Tickets(project string, parts ...Part) []domain.Ticket
 	// FindTickets returns the project's Tickets f picks, each with the
 	// History parts f names, in f's Order.
 	FindTickets(project string, f TicketFilter) []domain.Ticket

@@ -179,10 +179,8 @@ type RetroView struct {
 // or nil when there are none.
 func retrosOf(r store.Reader, key, target string) []RetroView {
 	var out []RetroView
-	for _, t := range r.Tickets(key) {
-		if t.Tags[RetroOfTag] == target && slices.Contains(t.Labels, RetroLabel) {
-			out = append(out, RetroView{ID: DisplayID(key, t.Number), Title: t.Title, State: t.State})
-		}
+	for _, t := range r.FindTickets(key, store.TicketFilter{Label: RetroLabel, Tag: &store.TagFilter{Key: RetroOfTag, Values: []string{target}}}) {
+		out = append(out, RetroView{ID: DisplayID(key, t.Number), Title: t.Title, State: t.State})
 	}
 	return out
 }

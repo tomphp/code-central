@@ -91,7 +91,7 @@ func Run(t *testing.T, f Factory) {
 				if !ok || gt.Title != "Form" || gt.State != domain.Ready || gt.Spec != 1 || gt.Description != ticket.Description || !gt.Updated.Equal(ticket.Updated) || gt.Labels[0] != "ui" {
 					t.Fatalf("ticket: got %+v", gt)
 				}
-				if len(r.Specs("acme")) != 1 || len(r.Tickets("acme")) != 1 {
+				if len(r.FindSpecs("acme", store.SpecFilter{})) != 1 || len(r.FindTickets("acme", store.TicketFilter{})) != 1 {
 					t.Fatal("wrong list lengths")
 				}
 				if _, ok := r.Ticket("acme", 1); ok {

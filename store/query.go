@@ -265,12 +265,12 @@ type Record struct {
 
 func (r reader) Records(project string) iter.Seq[Record] {
 	return func(yield func(Record) bool) {
-		for _, s := range r.Specs(project) {
+		for _, s := range r.FindSpecs(project, SpecFilter{}) {
 			if !yield(Record{Spec: &s}) {
 				return
 			}
 		}
-		for _, t := range r.Tickets(project, History...) {
+		for _, t := range r.FindTickets(project, TicketFilter{Parts: History}) {
 			if !yield(Record{Ticket: &t}) {
 				return
 			}
