@@ -138,11 +138,11 @@ func (f *factory) conflictFiles(r *repository, stage string, tk core.TicketView)
 		if !tk.SpecLanded || tk.Title != core.SpecMergeTitle(tk.Spec.ID) {
 			return nil
 		}
-		if head, err = f.specBranchTip(r, tk.Spec.ID); err != nil {
+		if head, err = f.repos.specBranchTip(r, tk.Spec.ID); err != nil {
 			return nil
 		}
 	}
-	base := f.baseOf(r)
+	base := f.repos.baseOf(r)
 	baseTip, err := r.git.commit("refs/heads/" + base)
 	if err != nil {
 		return nil

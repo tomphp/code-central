@@ -23,8 +23,8 @@ func (w *landWorld) withAPI() *fakeRepo {
 	}
 	repo := newFakeRepo("/work/api")
 	api := &repository{name: "api", dir: "/work/api", git: repo, base: "main", worktrees: "/work/api.worktrees"}
-	w.f.repositories["api"] = api
-	w.f.inOrder = []*repository{w.f.home, api}
+	w.l.repos.byName["api"] = api
+	w.l.repos.inOrder = []*repository{w.l.repos.home, api}
 	return repo
 }
 
@@ -34,17 +34,17 @@ func (w *landWorld) withAPI() *fakeRepo {
 func (w *landWorld) pollRepositories() {
 	w.t.Helper()
 	ctx := context.Background()
-	p, ok := w.f.landing(ctx)
+	p, ok := w.l.landing(ctx)
 	if !ok {
 		w.t.Fatal("the landing step can't read the Project")
 	}
 	for _, v := range p.Repositories {
-		if r := w.f.repositories[v.Name]; r != nil {
+		if r := w.l.repos.named(v.Name); r != nil {
 			r.listedAs(v)
 		}
 	}
-	w.f.locateBases(ctx, p)
-	w.f.land(ctx, p)
+	w.l.locateBases(ctx, p)
+	w.l.land(ctx, p)
 }
 
 // acceptedInTwo makes an Accepted Ticket with a commit on its branch in
@@ -115,7 +115,7 @@ func TestARepositoryTheTicketHasLandedInHoldsNothingBackWithoutItsClone(t *testi
 	if _, err := w.srv.Client.Land(context.Background(), "acme", core.LandInput{Ticket: core.Ref(id), Commit: apiWork, Repository: "api"}); err != nil {
 		t.Fatal(err)
 	}
-	w.f.repositories["api"].problem, w.f.repositories["api"].git = "it isn't a git repository", nil
+	w.l.repos.byName["api"].problem, w.l.repos.byName["api"].git = "it isn't a git repository", nil
 
 	w.pollRepositories()
 
@@ -288,7 +288,7 @@ func TestUnderPullRequestASpecTouchingARepositoryWithNoCloneIsPushedNowhere(t *t
 		t.Fatalf("not merged into the Spec Branch:\n%s", w.out)
 	}
 	// api's clone has gone since.
-	w.f.repositories["api"].problem, w.f.repositories["api"].git = "it isn't a git repository", nil
+	w.l.repos.byName["api"].problem, w.l.repos.byName["api"].git = "it isn't a git repository", nil
 	release()
 
 	w.pollRepositories()

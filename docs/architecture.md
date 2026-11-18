@@ -59,7 +59,7 @@ Your list: core logic, factory, ci watcher, issue tracker, web api, frontend, st
 | Your term | Actual module(s) | Notes |
 |---|---|---|
 | core logic | `core` | One package, but really ~5 sub-domains (below). |
-| factory | `factory`, `cmd/code-central-factory` | A separate-process HTTP client. |
+| factory | `factory`, `cmd/code-central-factory` | A separate-process HTTP client. A session part (`*factory`) and a landing part (`lander`) over a shared repository registry (`repositories`). |
 | ci watcher | `ciwatcher` (+ `gh`, `azdo`, `azdourl`) | Provider split: GitHub Actions, Azure Pipelines. |
 | issue tracker | **Specs/Tickets live in `core`**; GitHub Issues inbound is `issuewatcher` | There is no separate tracker module. Say which you mean. |
 | web api | `httpapi` (+ `mcp` sibling, assembled by `server`) | MCP is not layered on httpapi; both call `*core.Core`. |
@@ -131,7 +131,7 @@ Roughly in order of value for effort. Each would be its own Ticket.
 7. Have Go views carry derived flags (`editable`, stage progress, spec kind) and landing-method capabilities, so the UI's copies go away. *(done, ADR 0063: `editable`, `retroable`, Spec kind, need and claimed, the Stage strip and Landing capabilities)*
 8. Extract a `codehost` abstraction shared by `ciwatcher` and `pullrequestwatcher`, and decide whether `issuewatcher` needs a `Tracker` interface before a second tracker arrives. *(only if a second host/tracker is planned)*
 9. ~~Move provider URL parsing out of `core`.~~ Done: `codehost` holds the remote-URL and repository-name parsing; `azdourl` stays beside it. *(small)*
-10. Split `factory/land.go`, `run.go` and `specbranch.go` into `landing` and `session`. Make `core`'s mutable enum slices functions (done; only `Operations` and `Workflow` remain package-level lists). *(medium)*
+10. ~~Split `factory/land.go`, `run.go` and `specbranch.go` into `landing` and `session`.~~ Done, as two unexported types in the one `factory` package: the session part (`*factory`) and the landing part (`lander`), over a shared repository registry (`repositories`). The lander gets two hooks from the session part (`landerHooks`: `stopped` and `turnRunningOn`) and offers it two calls (`poll`, once per poll, and `claimingHeld`); the `factory` package documentation states the interface. Make `core`'s mutable enum slices functions (done; only `Operations` and `Workflow` remain package-level lists). *(medium)*
 11. Hygiene: CI check that `make wiretypes` leaves no diff, finish ADR 0044's migration off `waitFor`, split the biggest UI files and tests.
 
 Splitting `core` itself is the hardest item, because every file is a method on `*Core`. Items 5 and 6 shrink what depends on it and make a later split cheaper, so do them first.
