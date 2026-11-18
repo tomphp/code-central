@@ -8,7 +8,6 @@ import { RepositoryChips } from "../controls/RepositoryChips";
 import { useApi } from "../live";
 import { BodySection } from "../edit/BodySection";
 import { SpecPaneHeader } from "../controls/SpecPaneHeader";
-import { specRetroable } from "../edit/editable";
 import { NewPrototype, NewRetro } from "../requirement/NewRequirement";
 import { CISums } from "../ticket/CIBadge";
 import { LinkBadge } from "../ticket/LinkBadge";
@@ -20,7 +19,9 @@ import { TicketList } from "./TicketList";
 
 export interface SpecPaneProps {
   spec: SpecDetail;
-  // archived is whether the Spec's Project is Archived, which takes no edits.
+  // archived is whether the Spec's Project is Archived, which its header
+  // and Auto-accept switch show. The Spec's editable and retroable already
+  // count it.
   archived?: boolean;
   now: Date;
   // ticket is the selected Ticket.
@@ -37,7 +38,7 @@ export function SpecPane({ spec, archived, now, ticket, select }: SpecPaneProps)
       <RepositoryChips names={spec.repositories} />
       <div className="spec-actions">
         <NewPrototype spec={spec.id} onSubmitted={(t) => select(t.id)} />
-        {specRetroable(spec, !!archived) && <NewRetro target={spec.id} onSubmitted={(t) => select(t.id)} />}
+        {spec.retroable && <NewRetro target={spec.id} onSubmitted={(t) => select(t.id)} />}
         {spec.link && <LinkBadge link={spec.link} />}
         <OpenExternal link={spec.link} />
         <div className="spec-actions-end">
@@ -45,7 +46,7 @@ export function SpecPane({ spec, archived, now, ticket, select }: SpecPaneProps)
         </div>
       </div>
       <LandPerSpec status={spec.land_per_spec} />
-      <BodySection api={api} spec={spec} heading="Body" archived={archived} />
+      <BodySection api={api} spec={spec} heading="Body" />
       <CISums tickets={tickets} />
       {tickets.length === 0 ? (
         <p className="muted">No Tickets yet.</p>

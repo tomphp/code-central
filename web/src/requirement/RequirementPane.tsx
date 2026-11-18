@@ -9,7 +9,6 @@ import { RepositoryChips } from "../controls/RepositoryChips";
 import { useApi } from "../live";
 import { useNeedsMe } from "../needsme/context";
 import { BodySection } from "../edit/BodySection";
-import { specRetroable } from "../edit/editable";
 import { LandPerSpec } from "../spec/LandPerSpec";
 import { SpecAutoAccept } from "../spec/SpecAutoAccept";
 import { RetroList } from "../spec/RetroList";
@@ -25,7 +24,9 @@ import { SpecPaneHeader } from "../controls/SpecPaneHeader";
 
 export interface RequirementPaneProps {
   spec: SpecDetail & { requirement: NonNullable<SpecDetail["requirement"]> };
-  // archived is whether the Requirement's Project is Archived, which takes no edits.
+  // archived is whether the Requirement's Project is Archived, whose
+  // Auto-accept switch is shown off. The Spec's editable and retroable
+  // already count it.
   archived?: boolean;
   now: Date;
   // ticket is the selected Ticket.
@@ -47,7 +48,7 @@ export function RequirementPane({ spec, archived, now, ticket, select, specLink 
       <RepositoryChips names={spec.repositories} />
       <div className="spec-actions">
         <NewPrototype spec={spec.id} onSubmitted={(t) => select(t.id)} />
-        {specRetroable(spec, !!archived) && <NewRetro target={spec.id} onSubmitted={(t) => select(t.id)} />}
+        {spec.retroable && <NewRetro target={spec.id} onSubmitted={(t) => select(t.id)} />}
         {spec.link && <LinkBadge link={spec.link} />}
         <OpenExternal link={spec.link} />
       </div>
@@ -64,7 +65,7 @@ export function RequirementPane({ spec, archived, now, ticket, select, specLink 
       <SpecAutoAccept spec={spec} archived={archived} />
       <LandPerSpec status={spec.land_per_spec} />
       {/* The text is the Requirement's until its spec Stage has written the Spec. */}
-      <BodySection api={api} spec={spec} heading={specDone ? "Spec" : "Requirement's text"} archived={archived} />
+      <BodySection api={api} spec={spec} heading={specDone ? "Spec" : "Requirement's text"} />
       <CISums tickets={p.build} />
       {p.build.length > 0 && <TicketList label="Build" tickets={p.build} now={now} ticket={ticket} select={select} />}
       <RetroList retros={spec.retros} select={select} />

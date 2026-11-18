@@ -279,6 +279,16 @@ export const NODE_TYPES = [
 ] as const;
 export type NodeType = (typeof NODE_TYPES)[number];
 
+// SpecKind is a Spec's kind (the glossary's Spec kind), which its badge
+// shows.
+export const SPEC_KINDS = [
+  "requirement",
+  "map",
+  "long_lived",
+  "spec",
+] as const;
+export type SpecKind = (typeof SPEC_KINDS)[number];
+
 // Recommendation is a spec Stage's Spec recommendation: how its agent
 // recommends the human accepts it.
 export const RECOMMENDATIONS = [
@@ -396,6 +406,8 @@ export const TICKET_FIELDS = [
   "left_out",
   "blocked",
   "claimable",
+  "editable",
+  "retroable",
   "silent_since",
   "needs_me_reason",
   "link",
@@ -581,6 +593,11 @@ export interface TicketView {
   left_out?: Record<string, number>;
   blocked: boolean;
   claimable: boolean;
+  // Editable says the UI offers Edit on the Ticket, and Retroable its
+  // Retro button, as ticketEditable and ticketRetroable decide them.
+  // Every read sets them. Computed on read.
+  editable: boolean;
+  retroable: boolean;
   // SilentSince is set while the Ticket is a Silent Claim: In Progress
   // with no activity for 30 minutes. It is the time of the last
   // activity, so the quiet time is now minus it. Computed, never stored.
@@ -676,6 +693,15 @@ export interface SpecDetail {
   outline?: Heading[];
   state_summary: Partial<Record<State, number>>;
   finished: boolean;
+  // Kind, Need and Claimed are as on SpecRow.
+  kind: SpecKind;
+  need?: NeedsMeReason;
+  claimed: boolean;
+  // Editable says the UI offers Edit on the Spec, and Retroable its
+  // Retro button, as specEditable and specRetroable decide them. Every
+  // read sets them.
+  editable: boolean;
+  retroable: boolean;
   // Repositories are the Spec's Changed Repositories, the union of its
   // Tickets', by Name in landing order; left out while the Project has
   // the Home Repository alone.
@@ -704,6 +730,14 @@ export interface SpecRow {
   finished: boolean;
   updated: string;
   link?: LinkView;
+  // Kind is the Spec's kind, for its badge.
+  kind: SpecKind;
+  // Need is the reason of the first of its Tickets, in claim order,
+  // that waits on the human, as Needs Me reads it; left out when none
+  // does. Claimed says any of its Tickets holds a live Claim. A plain
+  // Spec's headline says them. Computed at read time.
+  need?: NeedsMeReason;
+  claimed: boolean;
   // Requirement is set only when the Spec is a Requirement.
   requirement?: RequirementView;
   // Map is set only when the Spec is a Map.
