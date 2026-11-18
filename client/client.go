@@ -50,14 +50,12 @@ func New(baseURL string) *Client {
 
 // CreateProject is create_project.
 func (c *Client) CreateProject(ctx context.Context, in core.CreateProjectInput) (core.ProjectView, error) {
-	var out core.ProjectView
-	return out, c.do(ctx, "POST", "/api/projects/create_project", in, &out)
+	return call(ctx, c, ops.CreateProject, "", in)
 }
 
 // GetProject is get_project.
 func (c *Client) GetProject(ctx context.Context, key string) (core.ProjectView, error) {
-	var out core.ProjectView
-	return out, c.do(ctx, "GET", "/api/projects/"+url.PathEscape(key), nil, &out)
+	return call(ctx, c, ops.GetProject, key, struct{}{})
 }
 
 // CreateSpec is create_spec.

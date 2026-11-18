@@ -10,27 +10,11 @@ import (
 // own, so its route takes the Project key.
 func init() {
 	legacyRoutes["get_stage_guide"] = "GET /api/p/{key}/stage-guides/{stage}"
-	legacyRoutes["set_subagent_exploration"] = "POST /api/p/{key}/set_subagent_exploration"
-	legacyRoutes["set_model_assignment"] = "POST /api/p/{key}/set_model_assignment"
 
 	handlers["get_stage_guide"] = func(c *core.Core, r *http.Request) (any, error) {
 		if err := onlyParams(r.URL.Query()); err != nil {
 			return nil, err
 		}
 		return c.GetStageGuide(r.Context(), r.PathValue("key"), core.StageGuideInput{Stage: r.PathValue("stage")})
-	}
-	handlers["set_subagent_exploration"] = func(c *core.Core, r *http.Request) (any, error) {
-		var in core.SetSubagentExplorationInput
-		if err := decodeBody(r, &in); err != nil {
-			return nil, err
-		}
-		return c.SetSubagentExploration(r.Context(), r.PathValue("key"), in)
-	}
-	handlers["set_model_assignment"] = func(c *core.Core, r *http.Request) (any, error) {
-		var in core.SetModelAssignmentInput
-		if err := decodeBody(r, &in); err != nil {
-			return nil, err
-		}
-		return c.SetModelAssignment(r.Context(), r.PathValue("key"), in)
 	}
 }

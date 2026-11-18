@@ -62,8 +62,8 @@ func TestEveryDefinitionIsListedWithItsOp(t *testing.T) {
 			t.Errorf("%s: pattern %s binds %v", op.Name, pattern, bound)
 		}
 	}
-	if _, ok := ops.DefinitionOf("get_workflow"); ok {
-		t.Error("get_workflow has no definition yet")
+	if _, ok := ops.DefinitionOf("get_workflow"); !ok {
+		t.Error("get_workflow has a definition")
 	}
 }
 

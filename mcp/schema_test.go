@@ -174,8 +174,8 @@ func asJSON(t *testing.T, v any) string {
 }
 
 // A derived tool on an operation whose path has no {key} checks the
-// Project itself, as get_workflow's hand-written tool does, so that every
-// tool on an unknown key answers unknown_project.
+// Project itself, so that every tool on an unknown key answers
+// unknown_project: get_workflow has no check of its own.
 func TestADerivedToolOnAPathWithoutAKeyChecksTheProject(t *testing.T) {
 	c := core.New(store.NewMemory(), clock.NewFake(time.Date(2026, 11, 18, 9, 0, 0, 0, time.UTC)), &ids.Sequence{})
 	ctx := context.Background()
@@ -198,6 +198,7 @@ func TestADerivedToolOnAPathWithoutAKeyChecksTheProject(t *testing.T) {
 		want core.Code
 	}{
 		{"no {key}, unknown Project", pathless, "nowhere", core.UnknownProject},
+		{"get_workflow, unknown Project", ops.GetWorkflow, "nowhere", core.UnknownProject},
 		{"no {key}, known Project", pathless, "acme", ""},
 		{"{key}, unknown Project: the Core answers", keyed, "nowhere", ""},
 	} {

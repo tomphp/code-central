@@ -184,8 +184,8 @@ func DefinitionOf(name string) (Operation, bool) {
 
 // all is the list. Add a new operation here first, by its definition.
 var all = []entry{
-	legacy(Op{Name: "create_project", Audience: HumanOnly, Write: true}),
-	legacy(Op{Name: "get_project", Audience: HumanOnly}),
+	defined(CreateProject),
+	defined(GetProject),
 	defined(CreateSpec),
 	defined(CreateTicket),
 	defined(GetTicket),
@@ -226,10 +226,10 @@ var all = []entry{
 	defined(ToDraft),
 
 	// init's teaching files and modes (ticket 41).
-	legacy(Op{Name: "set_project_mode", Audience: HumanOnly, Write: true}),
+	defined(SetProjectMode),
 
 	// The published workflow (ticket 26).
-	legacy(Op{Name: "get_workflow", Audience: AgentAndHuman}),
+	defined(GetWorkflow),
 
 	// Rounds and Questions (ticket 29).
 	defined(PostRound),
@@ -241,19 +241,19 @@ var all = []entry{
 	defined(GetSpecQuestions),
 
 	// Needs Me, moving by hand and Projects (ticket 32).
-	legacy(Op{Name: "needs_me", Audience: HumanOnly}),
-	legacy(Op{Name: "list_projects", Audience: HumanOnly}),
-	legacy(Op{Name: "move", Audience: HumanOnly, Write: true}),
-	legacy(Op{Name: "rename_project", Audience: HumanOnly, Write: true}),
+	defined(NeedsMe),
+	defined(ListProjects),
+	defined(Move),
+	defined(RenameProject),
 	// The Landing Method (code-central-173).
 	defined(SetLandingMethod),
 	// Subagent Exploration (code-central-441).
-	legacy(Op{Name: "set_subagent_exploration", Audience: HumanOnly, Write: true}),
-	legacy(Op{Name: "set_model_assignment", Audience: HumanOnly, Write: true}),
+	defined(SetSubagentExploration),
+	defined(SetModelAssignment),
 	// Auto-accept (code-central-536): the human's alone, over HTTP only.
-	legacy(Op{Name: "set_auto_accept", Audience: HumanOnly, Write: true}),
+	defined(SetAutoAccept),
 	// Focus Kinds (Spec code-central-550).
-	legacy(Op{Name: "set_focus_kinds", Audience: HumanOnly, Write: true}),
+	defined(SetFocusKinds),
 	// Repositories (Spec code-central-848): the human's alone, over HTTP
 	// and the CLI's repository command, never MCP.
 	defined(AddRepository),
@@ -275,8 +275,8 @@ var all = []entry{
 	legacy(Op{Name: "import", Audience: AgentAndHuman, Write: true}),
 
 	// Finished work and Archived Projects (ticket 39).
-	legacy(Op{Name: "archive_project", Audience: HumanOnly, Write: true}),
-	legacy(Op{Name: "unarchive_project", Audience: HumanOnly, Write: true}),
+	defined(ArchiveProject),
+	defined(UnarchiveProject),
 
 	// Requirements and the local Factory (Spec 66).
 	legacy(Op{Name: "submit_requirement", Audience: AgentAndHuman, Write: true}),
@@ -292,8 +292,8 @@ var all = []entry{
 
 	// Options, the human's global preferences (Spec code-central-160).
 	// HTTP only: no MCP tool and no CLI command.
-	legacy(Op{Name: "get_options", Audience: HumanOnly}),
-	legacy(Op{Name: "set_options", Audience: HumanOnly, Write: true}),
+	defined(GetOptions),
+	defined(SetOptions),
 
 	// CI Tracking (Spec code-central-247).
 	defined(SetCITracking),

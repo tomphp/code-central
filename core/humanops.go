@@ -15,7 +15,7 @@ import (
 
 // MoveInput is the human's move(ticket, to_state).
 type MoveInput struct {
-	Ticket  Ref         `json:"ticket"`
+	Ticket  Ref         `json:"ticket" path:"n"`
 	ToState store.State `json:"to_state"`
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
