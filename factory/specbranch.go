@@ -396,13 +396,13 @@ type specPlan struct {
 // conflict anywhere each Spec Branch is moved to its rebase first
 // (moveRebasedSpecBranches). Then, in landing order, it makes the same
 // "Merge spec" commit in each, advances the base, pushes and lands, or
-// pushes the Spec Branch, and stops at a
-// Repository it can't land in yet, to go on from there next poll. With
-// several Repositories, one with a broken base or no clone holds the
-// whole Spec back, as it can't be checked. It reports whether the Tickets
-// are handled this poll: false means every Spec Branch is already in its
-// base or one can't be read, and the Tickets land through the plain path,
-// as their work is in the base.
+// pushes the Spec Branch, and stops at a Repository it can't land in yet,
+// to go on from there next poll. With several Repositories, one with a
+// broken base or no clone holds the whole Spec back, as it can't be
+// checked. It reports whether the Tickets are handled this poll: false
+// means every Spec Branch and the Tickets' work in it is already in its
+// base (landsHere), or one can't be read, and the Tickets land through
+// the plain path, as their work is in the base.
 func (l *lander) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets []core.TicketView, p core.ProjectView, mergesThere func(domain.LandingPolicy) bool, pushes bool) (handled bool) {
 	sort.SliceStable(tickets, func(i, j int) bool { return acceptedAt(tickets[i]).Before(acceptedAt(tickets[j])) })
 	policies := p.LandingPolicies()
@@ -439,12 +439,9 @@ func (l *lander) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets []
 		}
 		plans = append(plans, pl)
 	}
-	inBase := !slices.ContainsFunc(plans, func(pl specPlan) bool { return pl.push || !pl.inBase })
-	if inBase && (len(plans) == 0 || !slices.ContainsFunc(tickets, func(tk core.TicketView) bool { return !l.workInEveryBase(tk) })) {
+	if !slices.ContainsFunc(plans, l.landsHere) {
 		// Merged on an earlier poll whose landing then failed: those Tickets
-		// land through the plain path, as their work is in every base. Work
-		// replayed under Rebase, its Spec Branch since rebased onto the
-		// base, isn't, so it lands here at the Spec's merge.
+		// land through the plain path, as their work is in every base.
 		return false
 	}
 	if len(conflicts) > 0 {
@@ -510,6 +507,21 @@ func (l *lander) planSpec(id string, r *repository, tickets []core.TicketView, r
 		return pl, true, false
 	}
 	return pl, true, true
+}
+
+// landsHere reports whether mergeSpec lands pl's Tickets, rather than the
+// plain path: pl pushes the Spec Branch, or the base doesn't hold it, or
+// it does but not a Ticket's work there, as when the work was replayed
+// onto the Spec Branch under Rebase and the Spec Branch since rebased
+// onto the base.
+func (l *lander) landsHere(pl specPlan) bool {
+	if pl.push || !pl.inBase {
+		return true
+	}
+	return slices.ContainsFunc(pl.tickets, func(tk core.TicketView) bool {
+		head, _, err := l.workIn(pl.r, tk)
+		return err == nil && !l.repos.inBaseOf(pl.r, head)
+	})
 }
 
 // moveRebasedSpecBranches moves the Spec id's Spec Branch in each of

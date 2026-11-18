@@ -15,7 +15,7 @@ All landing code is methods of `*lander` (Spec code-central-934). The session co
 | `specbranch.go` | Land per Spec: `specBranch` (`spec/<id>`), merging Tickets into it (`mergeIntoSpecBranch`), pushing it, `landSpecs`/`landSpec`/`mergeSpec`, Spec conflicts, and sweeping finished Spec Branches. |
 | `replay.go` | Rebase (ADR 0067): replaying a Ticket onto its Spec Branch (`planReplay`, `replay.apply`), how a replayed branch is told (`replayedTip`), rebasing a Spec Branch onto the base at landing (`rebaseSpecBranch`, through `movebase.go`'s `rebuildOnto`; `specbranch.go`'s `planSpec` and `moveRebasedSpecBranches` call and apply it), and the fork refs, `refs/code-central/fork/<id>` (`forkPoint`, `setForkPoint`, `moveForkPoint`, `deleteForkPoint`). |
 | `base.go` | Per-Repository base state (`baseState`): `locateBases`, `held` (a diverged or missing base holds claims), and the MCP check. |
-| `movebase.go` | Merge + Push when the local and remote bases each hold commits the other lacks: `moveBase`, `rebuildOnto`. |
+| `movebase.go` | Merge + Push when the local and remote bases each hold commits the other lacks: `moveBase`, `rebuildOnto` (which also rebases a Spec Branch onto the base under Rebase). |
 | `repositories.go` | The `repository` and `repositories` types, `syncRepositories` and `cloneOf` (clone or adopt each Repository), `baseOf`, `inBaseOf`. |
 | `changedrepositories.go` | The Repositories a Ticket changed (`changedIn`, `changedHead`) and the finish check on them. |
 | `repo.go` | `gitRepo`: thin git wrappers (`mergeTree`, `commitTree`, `fastForward`, `push`, `fetch`, `worktrees`, ...). |
