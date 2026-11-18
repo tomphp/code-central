@@ -1,8 +1,9 @@
 package core
 
 import (
-	"regexp"
 	"strings"
+
+	"github.com/tomoram/code-central/codehost"
 )
 
 // The Code Host a Pull Request lands through (code-central-387): worked
@@ -24,43 +25,11 @@ const (
 // CodeHosts are the Code Hosts, then none.
 func CodeHosts() []CodeHost { return []CodeHost{CodeHostGitHub, CodeHostAzureRepos, CodeHostNone} }
 
-var (
-	githubRemote = regexp.MustCompile(`^(?:(?:https?|ssh|git)://(?:[^@/]+@)?github\.com(?::\d+)?/|[^@/\s]+@github\.com:)([A-Za-z0-9-]+)/([A-Za-z0-9._-]+?)(?:\.git)?/?$`)
-	// azureSSH is ssh.dev.azure.com's and vs-ssh.visualstudio.com's
-	// v3/<organization>/<project>/<repository>.
-	azureSSH = regexp.MustCompile(`^[^@/\s]+@(?:ssh\.dev\.azure\.com|vs-ssh\.visualstudio\.com):v3/([^/\s]+)/([^/\s]+)/([^/\s]+?)/?$`)
-	// azureHTTP is https://[login@]host/<path>/_git/<repository>.
-	azureHTTP = regexp.MustCompile(`^https?://(?:[^@/\s]+@)?([^/@\s]+)(/.+?)/_git/([^/\s]+?)/?$`)
-)
-
 // codeHostOf works out the Code Host and repository a Push remote URL
-// names, or "" when it is none Code Central supports. An Azure Repos
-// repository reads <organization>/<project>/<repository>.
-func codeHostOf(url string) (host CodeHost, repository string) {
-	url = strings.TrimSpace(url)
-	if m := githubRemote.FindStringSubmatch(url); m != nil {
-		return CodeHostGitHub, m[1] + "/" + m[2]
-	}
-	if m := azureSSH.FindStringSubmatch(url); m != nil {
-		return CodeHostAzureRepos, m[1] + "/" + m[2] + "/" + m[3]
-	}
-	m := azureHTTP.FindStringSubmatch(url)
-	if m == nil {
-		return "", ""
-	}
-	hostname, segs := strings.ToLower(m[1]), strings.Split(strings.Trim(m[2], "/"), "/")
-	switch {
-	case hostname == "dev.azure.com" && len(segs) == 2:
-		return CodeHostAzureRepos, segs[0] + "/" + segs[1] + "/" + m[3]
-	case strings.HasSuffix(hostname, ".visualstudio.com"):
-		if len(segs) == 2 && strings.EqualFold(segs[0], "DefaultCollection") {
-			segs = segs[1:]
-		}
-		if len(segs) == 1 {
-			return CodeHostAzureRepos, strings.TrimSuffix(hostname, ".visualstudio.com") + "/" + segs[0] + "/" + m[3]
-		}
-	}
-	return "", ""
+// names, or "" when it is none Code Central supports.
+func codeHostOf(url string) (CodeHost, string) {
+	host, repository := codehost.Of(url)
+	return CodeHost(host), repository
 }
 
 // checkPullRequestHost refuses turning Pull Request on while no Push

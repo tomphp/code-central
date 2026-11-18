@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/codehost"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -74,7 +75,7 @@ func (c *Core) SetGitHubIssues(ctx context.Context, key string, in SetGitHubIssu
 		switch {
 		case repository == "":
 			continue
-		case !repositoryPattern.MatchString(repository):
+		case !codehost.ValidGitHubRepository(repository):
 			return Written[ProjectView]{}, invalid("repositories", "%q isn't a GitHub repository as owner/name, such as acme/web", repository)
 		case slices.ContainsFunc(g.Repositories, func(r string) bool { return strings.EqualFold(r, repository) }):
 			return Written[ProjectView]{}, invalid("repositories", "%s is listed twice: list each repository once", repository)
@@ -188,7 +189,7 @@ const issuesSpecName = "GitHub Issues"
 // Issues Spec, for some repositories.
 func givenIssuesSpecTitle(title string) bool {
 	named, given := strings.CutPrefix(title, issuesSpecName+": ")
-	return title == issuesSpecName || given && repositoryPattern.MatchString(named)
+	return title == issuesSpecName || given && codehost.ValidGitHubRepository(named)
 }
 
 // issuesSpecBody is the Issues Spec's body. It names no repository, which
