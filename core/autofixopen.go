@@ -63,7 +63,9 @@ func (c *Core) lockAutoFix(key string) func() {
 // autoFixPlan is what the sweep does for one Auto-fix ready item: open a
 // fix Ticket for failed, the first Ticket it lists, in the Repository
 // name with body and mark, or, when an auto fix Ticket marked for its
-// commit already exists, record that one.
+// commit already exists, record that one. Its body is written only when
+// the sweep opens the fix Ticket (autoFixBody), and a stopped item's mark
+// has the attempt past the limit.
 type autoFixPlan struct {
 	failed   domain.Ticket
 	name     string
@@ -72,6 +74,21 @@ type autoFixPlan struct {
 	mark     domain.AutoFixMark
 	existing int
 }
+
+// autoFixStatus is what Auto-fix makes of a CI item.
+type autoFixStatus int
+
+const (
+	// autoFixLeaves leaves the item to the human: Auto-fix doesn't act on
+	// it.
+	autoFixLeaves autoFixStatus = iota
+	// autoFixReady is an Auto-fix ready item, which the sweep acts on.
+	autoFixReady
+	// autoFixStopped is an item that would be Auto-fix ready but that its
+	// next attempt is past the limit: it stays in Needs Me, with the
+	// "Auto-fix stopped" line.
+	autoFixStopped
+)
 
 // itemKey names one CI item: its Repository Name and pushed commit.
 type itemKey struct{ name, commit string }
@@ -89,7 +106,7 @@ func (c *Core) sweepAutoFix(ctx context.Context, key string) error {
 		}
 		e := c.evaluate(r, p)
 		for _, it := range e.evaluated().ciItems {
-			if _, ok := e.planAutoFix(it); ok {
+			if _, status := e.planAutoFix(it); status == autoFixReady {
 				ready = append(ready, itemKey{it.repository, it.commit})
 			}
 		}
@@ -115,21 +132,20 @@ func (c *Core) sweepAutoFix(ctx context.Context, key string) error {
 // longer Auto-fix ready.
 func (c *Core) autoFixItem(ctx context.Context, key string, k itemKey) error {
 	var plan autoFixPlan
-	ready := false
+	status := autoFixLeaves
 	err := c.store.View(func(r store.Reader) error {
 		p, _ := r.Project(key)
-		if !autoFixActs(p) {
-			return nil
-		}
 		e := c.evaluate(r, p)
 		for _, it := range e.evaluated().ciItems {
 			if it.repository == k.name && it.commit == k.commit {
-				plan, ready = e.planAutoFix(it)
+				if plan, status = e.planAutoFix(it); status == autoFixReady && plan.existing == 0 {
+					plan.body = e.autoFixBody(it, plan.mark)
+				}
 			}
 		}
 		return nil
 	})
-	if err != nil || !ready {
+	if err != nil || status != autoFixReady {
 		return err
 	}
 	if plan.existing != 0 {
@@ -145,29 +161,39 @@ func autoFixActs(p domain.Project) bool {
 	return p.CI.AutoFix.On && ciTrackingOn(p.CI)
 }
 
-// planAutoFix is it's plan while it is Auto-fix ready: CI failed and
-// offering New fix Ticket, in a Repository not under Pull Request, whose
-// CI failures stay the human's (Spec code-central-1022, User Story 29),
-// with no Land anyway, its commit's response naming no fix Ticket (a
-// manual, Done or Cancelled one leaves the commit to the human), and its
-// next attempt within the limit. An auto fix Ticket already marked for
-// its commit, left unrecorded by a crash between the two writes, is
-// recorded whatever the limit.
-func (e *evaluation) planAutoFix(it ciItem) (autoFixPlan, bool) {
+// planAutoFix is what Auto-fix makes of it, with its plan, but for the
+// body, unless it leaves it. It is Auto-fix ready while Auto-fix acts and
+// it is CI failed and offering New fix Ticket, in a Repository not under
+// Pull Request, whose CI failures stay the human's (Spec
+// code-central-1022, User Story 29), with no Land anyway, its commit's
+// response naming no fix Ticket (a manual, Done or Cancelled one leaves
+// the commit to the human), the commit carrying no failure a Cancelled
+// auto fix Ticket was opened for, which hands back the Tickets it covered
+// too, and its next attempt within the limit; past the limit it is
+// stopped. An open auto fix Ticket covering it keeps it out of the
+// evaluation's items, so the sweep never reaches it. An auto fix Ticket
+// already marked for its commit, left unrecorded by a crash between the
+// two writes, is recorded whatever the limit.
+func (e *evaluation) planAutoFix(it ciItem) (autoFixPlan, autoFixStatus) {
 	p := e.p
-	if it.reason != ReasonCIFailed || !slices.Contains(ciItemOptions(e.r, p, it), OptionNewFixTicket) || landingPolicyIn(p, it.repository).LandsByPullRequest() {
-		return autoFixPlan{}, false
+	if !autoFixActs(p) || it.reason != ReasonCIFailed || !slices.Contains(ciItemOptions(e.r, p, it), OptionNewFixTicket) || landingPolicyIn(p, it.repository).LandsByPullRequest() {
+		return autoFixPlan{}, autoFixLeaves
 	}
 	record := recordName(p.Key, it.repository)
 	if res := responseOf(p, record, it.commit); !res.LandAnyway.IsZero() || res.FixTicket != 0 {
-		return autoFixPlan{}, false
+		return autoFixPlan{}, autoFixLeaves
 	}
 	plan := autoFixPlan{failed: it.tickets[0], name: it.repository, where: inRepository(p, it.repository)}
+	handedBack := false
 	for _, t := range e.tickets() {
 		if m := t.AutoFix; m != nil && m.Repository == record && m.Commit == it.commit {
 			plan.existing = t.Number
-			return plan, true
+			return plan, autoFixReady
 		}
+		handedBack = handedBack || t.State == domain.Cancelled && e.ci.carriesFailureOf(t, it.repository, it.commit)
+	}
+	if handedBack {
+		return autoFixPlan{}, autoFixLeaves
 	}
 	mark := domain.AutoFixMark{Attempt: 1, Repository: record, Commit: it.commit}
 	for _, t := range it.tickets {
@@ -177,11 +203,16 @@ func (e *evaluation) planAutoFix(it ciItem) (autoFixPlan, bool) {
 			mark.Attempt, mark.Previous = t.AutoFix.Attempt+1, t.Number
 		}
 	}
-	limit := p.CI.AutoFix.AttemptLimit()
-	if mark.Attempt > limit {
-		return autoFixPlan{}, false
-	}
 	plan.mark = mark
-	plan.body = e.newFixNote(it) + fmt.Sprintf("\n\nAuto-fix attempt %d of %d.", mark.Attempt, limit)
-	return plan, true
+	if mark.Attempt > p.CI.AutoFix.AttemptLimit() {
+		return plan, autoFixStopped
+	}
+	return plan, autoFixReady
+}
+
+// autoFixBody is the body of the fix Ticket Auto-fix opens for it with
+// mark: the Run summary, the Fix instructions and its attempt of the
+// limit.
+func (e *evaluation) autoFixBody(it ciItem, mark domain.AutoFixMark) string {
+	return e.newFixNote(it) + fmt.Sprintf("\n\nAuto-fix attempt %d of %d.", mark.Attempt, e.p.CI.AutoFix.AttemptLimit())
 }

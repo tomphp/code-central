@@ -300,6 +300,11 @@ type TicketView struct {
 	// there (code-central-261), on this Ticket or on another sharing the
 	// commit (code-central-432).
 	LandAnyway bool `json:"land_anyway,omitempty"`
+	// CIAutoFix is what Auto-fix does about the Ticket's CI failure in the
+	// Home Repository: the auto fix Ticket fixing it, the one covering it,
+	// or the chain it stopped at the limit; left out while it does
+	// nothing. Each Repository's own is in Repositories. Computed on read.
+	CIAutoFix *CIAutoFixView `json:"ci_auto_fix,omitempty"`
 	// SpecLanded says Land per Spec covers the Ticket, and WaitingForSpec
 	// that it is Accepted and waits for its Spec to land (code-central-371).
 	// Computed on read.
@@ -868,6 +873,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t domain.Ticket) Tick
 			if t.State == domain.Accepted && rv.Landed == nil {
 				v.Repositories[i].NotLanded = c.notLandedReason(pr, t, rv.Name, e.ci)
 			}
+			v.Repositories[i].CIAutoFix = e.ciAutoFix(t, rv.Name)
 		}
 		for _, it := range e.itemsOf(t) {
 			v.CIItems = append(v.CIItems, *e.ciItemView(it))
@@ -881,6 +887,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t domain.Ticket) Tick
 		}
 	}
 	v.LandAnyway = e.ci.landAnyway(e.ci.ticket(t).in(key))
+	v.CIAutoFix = e.ciAutoFix(t, key)
 	v.Claimable = t.State == domain.Ready && !v.Blocked
 	v.SilentSince = c.silentSince(t)
 	v.NeedsMeReason, _ = e.reason(t)
