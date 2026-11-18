@@ -57,16 +57,26 @@ type Field struct {
 	// Index addresses the field from the walked struct, through any
 	// embedded structs, for reflect.Value.FieldByIndex.
 	Index []int
+	// Hidden is set on an exported json:"-" field, which only AllFields
+	// lists; its Name is then the Go name.
+	Hidden bool
 }
 
 // Fields are struct type t's JSON-visible fields in declaration order,
 // with each embedded struct's fields in its place. A pointer to a struct
 // is walked as the struct; any other type has no fields.
 func Fields(t reflect.Type) []Field {
-	return fields(t, nil)
+	return fields(t, nil, false)
 }
 
-func fields(t reflect.Type, prefix []int) []Field {
+// AllFields are Fields with the exported json:"-" fields too, marked
+// Hidden, for a reader whose shape other tags carry, such as a query
+// string's.
+func AllFields(t reflect.Type) []Field {
+	return fields(t, nil, true)
+}
+
+func fields(t reflect.Type, prefix []int, hidden bool) []Field {
 	for t != nil && t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
@@ -78,9 +88,11 @@ func fields(t reflect.Type, prefix []int) []Field {
 		info := Of(f)
 		index := append(slices.Clone(prefix), f.Index...)
 		switch {
+		case info.Skipped && hidden && f.IsExported():
+			out = append(out, Field{StructField: f, Name: f.Name, Index: index, Hidden: true})
 		case info.Skipped:
 		case info.Flattened:
-			out = append(out, fields(f.Type, index)...)
+			out = append(out, fields(f.Type, index, hidden)...)
 		default:
 			out = append(out, Field{StructField: f, Name: info.Name, OmitEmpty: info.OmitEmpty, Index: index})
 		}

@@ -9,12 +9,12 @@ import (
 // CI Tracking (Spec code-central-247): the human's CI settings and CI
 // Rules, and the Factory's report of its Push remote.
 func init() {
-	Routes["set_ci_tracking"] = "POST /api/p/{key}/set_ci_tracking"
-	Routes["set_repository_ci"] = "POST /api/p/{key}/set_repository_ci"
-	Routes["report_push_remote"] = "POST /api/p/{key}/report_push_remote"
-	Routes["add_ci_rule"] = "POST /api/p/{key}/add_ci_rule"
-	Routes["edit_ci_rule"] = "POST /api/p/{key}/edit_ci_rule"
-	Routes["remove_ci_rule"] = "POST /api/p/{key}/remove_ci_rule"
+	legacyRoutes["set_ci_tracking"] = "POST /api/p/{key}/set_ci_tracking"
+	legacyRoutes["set_repository_ci"] = "POST /api/p/{key}/set_repository_ci"
+	legacyRoutes["report_push_remote"] = "POST /api/p/{key}/report_push_remote"
+	legacyRoutes["add_ci_rule"] = "POST /api/p/{key}/add_ci_rule"
+	legacyRoutes["edit_ci_rule"] = "POST /api/p/{key}/edit_ci_rule"
+	legacyRoutes["remove_ci_rule"] = "POST /api/p/{key}/remove_ci_rule"
 
 	handlers["set_ci_tracking"] = func(c *core.Core, r *http.Request) (any, error) {
 		var in core.SetCITrackingInput
@@ -63,8 +63,8 @@ func init() {
 // The CI Watcher's own (code-central-253): the read it polls and its
 // status.
 func init() {
-	Routes["get_ci_watch"] = "GET /api/p/{key}/ci-watch"
-	Routes["report_ci_watcher_status"] = "POST /api/p/{key}/report_ci_watcher_status"
+	legacyRoutes["get_ci_watch"] = "GET /api/p/{key}/ci-watch"
+	legacyRoutes["report_ci_watcher_status"] = "POST /api/p/{key}/report_ci_watcher_status"
 
 	handlers["get_ci_watch"] = func(c *core.Core, r *http.Request) (any, error) {
 		return c.GetCIWatch(r.Context(), r.PathValue("key"))
@@ -81,9 +81,9 @@ func init() {
 // Tracking a pushed Ticket's CI Runs (code-central-256): the Factory's
 // pushed commits and the CI Watcher's runs.
 func init() {
-	Routes["report_pushed_commit"] = "POST /api/p/{key}/tickets/{n}/report_pushed_commit"
-	Routes["report_spec_merge"] = "POST /api/p/{key}/tickets/{n}/report_spec_merge"
-	Routes["report_ci_runs"] = "POST /api/p/{key}/report_ci_runs"
+	legacyRoutes["report_pushed_commit"] = "POST /api/p/{key}/tickets/{n}/report_pushed_commit"
+	legacyRoutes["report_spec_merge"] = "POST /api/p/{key}/tickets/{n}/report_spec_merge"
+	legacyRoutes["report_ci_runs"] = "POST /api/p/{key}/report_ci_runs"
 
 	handlers["report_pushed_commit"] = func(c *core.Core, r *http.Request) (any, error) {
 		var in core.ReportPushedCommitInput
@@ -113,8 +113,8 @@ func init() {
 // CI failed's failure options (code-central-261, code-central-264,
 // code-central-265): the human's.
 func init() {
-	Routes["land_anyway"] = "POST /api/p/{key}/tickets/{n}/land_anyway"
-	Routes["rerun_ci"] = "POST /api/p/{key}/tickets/{n}/rerun_ci"
+	legacyRoutes["land_anyway"] = "POST /api/p/{key}/tickets/{n}/land_anyway"
+	legacyRoutes["rerun_ci"] = "POST /api/p/{key}/tickets/{n}/rerun_ci"
 
 	handlers["land_anyway"] = func(c *core.Core, r *http.Request) (any, error) {
 		var in core.CIResponseInput
@@ -133,7 +133,7 @@ func init() {
 		return c.RerunCI(r.Context(), r.PathValue("key"), in)
 	}
 
-	Routes["new_fix_ticket"] = "POST /api/p/{key}/tickets/{n}/new_fix_ticket"
+	legacyRoutes["new_fix_ticket"] = "POST /api/p/{key}/tickets/{n}/new_fix_ticket"
 
 	handlers["new_fix_ticket"] = func(c *core.Core, r *http.Request) (any, error) {
 		in, err := pathBody(r, func(in *core.NewFixTicketInput) *core.Ref { return &in.Ticket })
@@ -167,10 +167,10 @@ func ciOverviewRead(c *core.Core, r *http.Request) (any, error) {
 // The Pull Request Watcher's own (code-central-388): the read it polls
 // and the pull request it reports.
 func init() {
-	Routes["get_pull_request_watch"] = "GET /api/p/{key}/pull-request-watch"
-	Routes["report_pull_request"] = "POST /api/p/{key}/report_pull_request"
+	legacyRoutes["get_pull_request_watch"] = "GET /api/p/{key}/pull-request-watch"
+	legacyRoutes["report_pull_request"] = "POST /api/p/{key}/report_pull_request"
 
-	Routes["report_pull_request_watcher_status"] = "POST /api/p/{key}/report_pull_request_watcher_status"
+	legacyRoutes["report_pull_request_watcher_status"] = "POST /api/p/{key}/report_pull_request_watcher_status"
 
 	handlers["report_pull_request_watcher_status"] = func(c *core.Core, r *http.Request) (any, error) {
 		var in core.ReportWatcherStatusInput

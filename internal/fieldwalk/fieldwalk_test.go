@@ -65,3 +65,20 @@ func TestOfReadsOneField(t *testing.T) {
 		}
 	}
 }
+
+func TestAllFieldsListTheHiddenExportedFieldsToo(t *testing.T) {
+	var names []string
+	var hidden []string
+	for _, f := range AllFields(reflect.TypeFor[row]()) {
+		names = append(names, f.Name)
+		if f.Hidden {
+			hidden = append(hidden, f.Name)
+		}
+	}
+	if want := []string{"id", "count", "Secret", "Untagged", "zeroed"}; !slices.Equal(names, want) {
+		t.Fatalf("AllFields %v, want %v", names, want)
+	}
+	if want := []string{"Secret"}; !slices.Equal(hidden, want) {
+		t.Fatalf("hidden %v, want %v: an unexported field is never listed", hidden, want)
+	}
+}

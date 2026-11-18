@@ -80,7 +80,7 @@ func (e usageError) Error() string { return e.msg }
 func usagef(format string, args ...any) error { return usageError{fmt.Sprintf(format, args...)} }
 
 // command is one subcommand. Operation commands carry the core operation
-// they expose; the cross-door suite checks them against core.Operations.
+// they expose; the cross-door suite checks them against ops.All().
 type command struct {
 	op    string // core operation name, "" for CLI-only commands
 	usage string

@@ -9,10 +9,10 @@ import (
 // GitHub Issues (Spec code-central-279): the human's GitHub Issues
 // settings and triage actions.
 func init() {
-	Routes["set_github_issues"] = "POST /api/p/{key}/set_github_issues"
-	Routes["keep_as_draft"] = "POST /api/p/{key}/tickets/{n}/keep_as_draft"
-	Routes["to_requirement"] = "POST /api/p/{key}/tickets/{n}/to_requirement"
-	Routes["wont_fix"] = "POST /api/p/{key}/tickets/{n}/wont_fix"
+	legacyRoutes["set_github_issues"] = "POST /api/p/{key}/set_github_issues"
+	legacyRoutes["keep_as_draft"] = "POST /api/p/{key}/tickets/{n}/keep_as_draft"
+	legacyRoutes["to_requirement"] = "POST /api/p/{key}/tickets/{n}/to_requirement"
+	legacyRoutes["wont_fix"] = "POST /api/p/{key}/tickets/{n}/wont_fix"
 
 	handlers["set_github_issues"] = func(c *core.Core, r *http.Request) (any, error) {
 		var in core.SetGitHubIssuesInput
@@ -50,9 +50,9 @@ func init() {
 // The Issue Watcher's own (code-central-285): the read it polls, its
 // status, and each comment it writes to an issue.
 func init() {
-	Routes["get_issue_watch"] = "GET /api/p/{key}/integration/issue-watch"
-	Routes["report_issue_watcher_status"] = "POST /api/p/{key}/integration/report_issue_watcher_status"
-	Routes["report_issue_written"] = "POST /api/p/{key}/integration/report_issue_written"
+	legacyRoutes["get_issue_watch"] = "GET /api/p/{key}/integration/issue-watch"
+	legacyRoutes["report_issue_watcher_status"] = "POST /api/p/{key}/integration/report_issue_watcher_status"
+	legacyRoutes["report_issue_written"] = "POST /api/p/{key}/integration/report_issue_written"
 
 	handlers["get_issue_watch"] = func(c *core.Core, r *http.Request) (any, error) {
 		return c.GetIssueWatch(r.Context(), r.PathValue("key"))

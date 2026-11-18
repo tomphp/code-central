@@ -56,12 +56,12 @@ type SpecDetail struct {
 // GetSpecInput is get_spec's input. With neither Parts nor Sections, the
 // read is the full Spec; with Sections and no Parts, it is only the body.
 type GetSpecInput struct {
-	Spec Ref `json:"spec"`
+	Spec Ref `json:"spec" path:"n" desc:"The Spec." required:"true"`
 	// Parts are any of body, tickets, edits and outline; all three when empty, or
 	// only body when Sections are given.
-	Parts []string `json:"parts,omitempty"`
+	Parts []string `json:"parts,omitempty" query:"part" desc:"Only these parts, any of body, tickets, edits and outline; all three when left out, or only body with sections."`
 	// Sections are heading texts: the body returned is only those Sections.
-	Sections []string `json:"sections,omitempty"`
+	Sections []string `json:"sections,omitempty" query:"section" desc:"Only the body's Sections under these headings, matched case-insensitively at any level."`
 }
 
 // The parts of a Spec a lighter get_spec can ask for. A Ticket has edits
@@ -95,13 +95,15 @@ type SpecRow struct {
 
 // FindSpecsInput is find_specs' filters; every filter given must match.
 type FindSpecsInput struct {
-	Title  string            `json:"title,omitempty"`
-	Labels []string          `json:"labels,omitempty"`
-	Tags   map[string]string `json:"tags,omitempty"`
+	Title  string   `json:"title,omitempty" desc:"Only Specs whose title contains this text."`
+	Labels []string `json:"labels,omitempty" query:"label" desc:"Only Specs with all of these Labels."`
+	// Tags must all be present with exactly these values. Over HTTP each
+	// is a tag=<key>=<value> parameter, which DecodeQuery reads.
+	Tags map[string]string `json:"tags,omitempty" query:"tag" desc:"Only Specs with all of these Tags, as {key: value}."`
 	// Finished includes finished Specs, which are otherwise left out.
-	Finished bool `json:"finished,omitempty"`
+	Finished bool `json:"finished,omitempty" desc:"Include finished Specs."`
 	// Requirements keeps only Specs that are Requirements.
-	Requirements bool `json:"requirements,omitempty"`
+	Requirements bool `json:"requirements,omitempty" desc:"Only Requirements: Specs with Stage Tickets."`
 }
 
 // GetSpec is get_spec(spec, parts?, sections?).

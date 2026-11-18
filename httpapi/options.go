@@ -13,8 +13,8 @@ import (
 // belong to no Project, so their routes sit outside /api/p/{key}.
 // set_options takes a JSON object of the Options to change.
 func init() {
-	Routes["get_options"] = "GET /api/options"
-	Routes["set_options"] = "POST /api/set_options"
+	legacyRoutes["get_options"] = "GET /api/options"
+	legacyRoutes["set_options"] = "POST /api/set_options"
 
 	handlers["get_options"] = func(c *core.Core, r *http.Request) (any, error) {
 		if err := onlyParams(r.URL.Query()); err != nil {

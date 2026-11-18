@@ -10,10 +10,10 @@ import (
 // the human's alone, so its one door is HTTP under the Project key, which
 // the CLI's repository command calls through the client.
 func init() {
-	Routes["add_repository"] = "POST /api/p/{key}/add_repository"
-	Routes["edit_repository"] = "POST /api/p/{key}/edit_repository"
-	Routes["remove_repository"] = "POST /api/p/{key}/remove_repository"
-	Routes["set_landing_order"] = "POST /api/p/{key}/set_landing_order"
+	legacyRoutes["add_repository"] = "POST /api/p/{key}/add_repository"
+	legacyRoutes["edit_repository"] = "POST /api/p/{key}/edit_repository"
+	legacyRoutes["remove_repository"] = "POST /api/p/{key}/remove_repository"
+	legacyRoutes["set_landing_order"] = "POST /api/p/{key}/set_landing_order"
 
 	handlers["add_repository"] = func(c *core.Core, r *http.Request) (any, error) {
 		var in core.AddRepositoryInput
@@ -47,7 +47,7 @@ func init() {
 
 // The Factory's clones of the Repositories (Spec code-central-848).
 func init() {
-	Routes["report_repositories"] = "POST /api/p/{key}/report_repositories"
+	legacyRoutes["report_repositories"] = "POST /api/p/{key}/report_repositories"
 
 	handlers["report_repositories"] = func(c *core.Core, r *http.Request) (any, error) {
 		var in core.ReportRepositoriesInput

@@ -9,9 +9,9 @@ import (
 // Stage Guides (ticket 73; code-central-441). A guide is the Project's
 // own, so its route takes the Project key.
 func init() {
-	Routes["get_stage_guide"] = "GET /api/p/{key}/stage-guides/{stage}"
-	Routes["set_subagent_exploration"] = "POST /api/p/{key}/set_subagent_exploration"
-	Routes["set_model_assignment"] = "POST /api/p/{key}/set_model_assignment"
+	legacyRoutes["get_stage_guide"] = "GET /api/p/{key}/stage-guides/{stage}"
+	legacyRoutes["set_subagent_exploration"] = "POST /api/p/{key}/set_subagent_exploration"
+	legacyRoutes["set_model_assignment"] = "POST /api/p/{key}/set_model_assignment"
 
 	handlers["get_stage_guide"] = func(c *core.Core, r *http.Request) (any, error) {
 		if err := onlyParams(r.URL.Query()); err != nil {

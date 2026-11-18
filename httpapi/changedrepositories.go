@@ -10,8 +10,8 @@ import (
 // reports them live while it holds the Ticket, and fails a finish its
 // finish check finds wrong.
 func init() {
-	Routes["report_changed_repositories"] = "POST /api/p/{key}/tickets/{n}/report_changed_repositories"
-	Routes["fail_finish"] = "POST /api/p/{key}/tickets/{n}/fail_finish"
+	legacyRoutes["report_changed_repositories"] = "POST /api/p/{key}/tickets/{n}/report_changed_repositories"
+	legacyRoutes["fail_finish"] = "POST /api/p/{key}/tickets/{n}/fail_finish"
 
 	handlers["report_changed_repositories"] = func(c *core.Core, r *http.Request) (any, error) {
 		in, err := pathBody(r, func(in *core.ReportChangedRepositoriesInput) *core.Ref { return &in.Ticket })

@@ -10,13 +10,13 @@ import (
 // operations sit under /api/p/{key}/integration/; the human's unlink
 // names its target (a Spec or a Ticket) in the body, like add_labels.
 func init() {
-	Routes["create_linked_spec"] = "POST /api/p/{key}/integration/create_linked_spec"
-	Routes["create_linked_ticket"] = "POST /api/p/{key}/integration/create_linked_ticket"
-	Routes["update_linked_spec"] = "POST /api/p/{key}/integration/specs/{n}/update_linked_spec"
-	Routes["update_linked_ticket"] = "POST /api/p/{key}/integration/tickets/{n}/update_linked_ticket"
-	Routes["set_external_state"] = "POST /api/p/{key}/integration/set_external_state"
-	Routes["find_linked"] = "GET /api/p/{key}/integration/linked"
-	Routes["unlink"] = "POST /api/p/{key}/unlink"
+	legacyRoutes["create_linked_spec"] = "POST /api/p/{key}/integration/create_linked_spec"
+	legacyRoutes["create_linked_ticket"] = "POST /api/p/{key}/integration/create_linked_ticket"
+	legacyRoutes["update_linked_spec"] = "POST /api/p/{key}/integration/specs/{n}/update_linked_spec"
+	legacyRoutes["update_linked_ticket"] = "POST /api/p/{key}/integration/tickets/{n}/update_linked_ticket"
+	legacyRoutes["set_external_state"] = "POST /api/p/{key}/integration/set_external_state"
+	legacyRoutes["find_linked"] = "GET /api/p/{key}/integration/linked"
+	legacyRoutes["unlink"] = "POST /api/p/{key}/unlink"
 
 	handlers["create_linked_spec"] = func(c *core.Core, r *http.Request) (any, error) {
 		var in core.CreateLinkedSpecInput

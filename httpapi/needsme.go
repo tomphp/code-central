@@ -8,11 +8,11 @@ import (
 
 // Needs Me, moving by hand and Projects (ticket 32).
 func init() {
-	Routes["needs_me"] = "GET /api/needs-me"
-	Routes["list_projects"] = "GET /api/projects"
-	Routes["move"] = "POST /api/p/{key}/tickets/{n}/move"
-	Routes["rename_project"] = "POST /api/p/{key}/rename_project"
-	Routes["set_landing_method"] = "POST /api/p/{key}/set_landing_method"
+	legacyRoutes["needs_me"] = "GET /api/needs-me"
+	legacyRoutes["list_projects"] = "GET /api/projects"
+	legacyRoutes["move"] = "POST /api/p/{key}/tickets/{n}/move"
+	legacyRoutes["rename_project"] = "POST /api/p/{key}/rename_project"
+	legacyRoutes["set_landing_method"] = "POST /api/p/{key}/set_landing_method"
 
 	handlers["needs_me"] = func(c *core.Core, r *http.Request) (any, error) {
 		if err := onlyParams(r.URL.Query()); err != nil {

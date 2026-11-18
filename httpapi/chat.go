@@ -12,11 +12,11 @@ import (
 // Chat (Spec code-central-633): the human's Conversation, and the
 // Factory's long-poll for its turns and stops.
 func init() {
-	Routes["get_chat"] = "GET /api/p/{key}/chat"
-	Routes["start_conversation"] = "POST /api/p/{key}/start_conversation"
-	Routes["send_chat_message"] = "POST /api/p/{key}/send_chat_message"
-	Routes["stop_chat_reply"] = "POST /api/p/{key}/stop_chat_reply"
-	Routes["next_chat_work"] = "GET /api/p/{key}/chat/next-work"
+	legacyRoutes["get_chat"] = "GET /api/p/{key}/chat"
+	legacyRoutes["start_conversation"] = "POST /api/p/{key}/start_conversation"
+	legacyRoutes["send_chat_message"] = "POST /api/p/{key}/send_chat_message"
+	legacyRoutes["stop_chat_reply"] = "POST /api/p/{key}/stop_chat_reply"
+	legacyRoutes["next_chat_work"] = "GET /api/p/{key}/chat/next-work"
 
 	handlers["get_chat"] = func(c *core.Core, r *http.Request) (any, error) {
 		if err := onlyParams(r.URL.Query()); err != nil {

@@ -8,7 +8,7 @@ import (
 
 // A Factory's Heartbeat (Spec code-central-305).
 func init() {
-	Routes["report_heartbeat"] = "POST /api/p/{key}/report_heartbeat"
+	legacyRoutes["report_heartbeat"] = "POST /api/p/{key}/report_heartbeat"
 
 	handlers["report_heartbeat"] = func(c *core.Core, r *http.Request) (any, error) {
 		var in core.ReportHeartbeatInput
@@ -21,7 +21,7 @@ func init() {
 
 // The base a Factory reports under Pull Request (code-central-394).
 func init() {
-	Routes["report_base"] = "POST /api/p/{key}/report_base"
+	legacyRoutes["report_base"] = "POST /api/p/{key}/report_base"
 
 	handlers["report_base"] = func(c *core.Core, r *http.Request) (any, error) {
 		var in core.ReportBaseInput

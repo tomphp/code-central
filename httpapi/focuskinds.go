@@ -9,7 +9,7 @@ import (
 // Focus Kinds (Spec code-central-550): the human's choice of which Needs
 // Me reasons are Focus Items for a Project.
 func init() {
-	Routes["set_focus_kinds"] = "POST /api/p/{key}/set_focus_kinds"
+	legacyRoutes["set_focus_kinds"] = "POST /api/p/{key}/set_focus_kinds"
 
 	handlers["set_focus_kinds"] = func(c *core.Core, r *http.Request) (any, error) {
 		var in core.SetFocusKindsInput

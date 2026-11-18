@@ -9,7 +9,7 @@ import (
 // Starting a Retro. It writes as human whatever Actor the request names;
 // core sees to that.
 func init() {
-	Routes["submit_retro"] = "POST /api/p/{key}/submit_retro"
+	legacyRoutes["submit_retro"] = "POST /api/p/{key}/submit_retro"
 
 	handlers["submit_retro"] = func(c *core.Core, r *http.Request) (any, error) {
 		var in core.SubmitRetroInput

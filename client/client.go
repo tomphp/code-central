@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ops"
 )
 
 // DefaultURL is used when CODE_CENTRAL_URL is unset.
@@ -61,31 +62,25 @@ func (c *Client) GetProject(ctx context.Context, key string) (core.ProjectView, 
 
 // CreateSpec is create_spec.
 func (c *Client) CreateSpec(ctx context.Context, key string, in core.CreateSpecInput) (core.Written[core.SpecView], error) {
-	return write[core.SpecView](ctx, c, scoped(key, "create_spec"), in, in.Full)
+	return written(ctx, c, ops.CreateSpec, key, in, in.Full)
 }
 
 // CreateTicket is create_ticket.
 func (c *Client) CreateTicket(ctx context.Context, key string, in core.CreateTicketInput) (core.Written[core.TicketView], error) {
-	return write[core.TicketView](ctx, c, scoped(key, "create_ticket"), in, in.Full)
+	return written(ctx, c, ops.CreateTicket, key, in, in.Full)
 }
 
 // GetTicket is get_ticket with the parts named, or the whole Ticket with
 // none, as the HTTP API returns it.
 func (c *Client) GetTicket(ctx context.Context, key string, ref core.Ref, parts ...string) (core.TicketView, error) {
-	q := url.Values{"part": parts}
-	path := scoped(key, "tickets/"+url.PathEscape(string(ref)))
-	if enc := q.Encode(); enc != "" {
-		path += "?" + enc
-	}
-	var out core.TicketView
-	return out, c.do(ctx, "GET", path, nil, &out)
+	return call(ctx, c, ops.GetTicket, key, core.GetTicketInput{Ticket: ref, Parts: parts})
 }
 
 // FindTickets is find_tickets.
 func (c *Client) FindTickets(ctx context.Context, key string, in core.FindTicketsInput) ([]core.TicketRow, error) {
 	in.Full, in.Parts = false, nil
 	var out []core.TicketRow
-	return out, c.do(ctx, "GET", findPath(key, in), nil, &out)
+	return out, request(ctx, c, ops.FindTickets, key, in, &out)
 }
 
 // FindTicketViews is find_tickets with full: each Ticket as GetTicket
@@ -93,40 +88,7 @@ func (c *Client) FindTickets(ctx context.Context, key string, in core.FindTicket
 func (c *Client) FindTicketViews(ctx context.Context, key string, in core.FindTicketsInput, parts ...string) ([]core.TicketView, error) {
 	in.Full, in.Parts = true, parts
 	var out []core.TicketView
-	return out, c.do(ctx, "GET", findPath(key, in), nil, &out)
-}
-
-// findPath is find_tickets' path with in's filters, and full and its
-// parts when asked.
-func findPath(key string, in core.FindTicketsInput) string {
-	q := url.Values{}
-	if in.Full {
-		q.Set("full", "true")
-	}
-	for _, p := range in.Parts {
-		q.Add("part", p)
-	}
-	for _, s := range in.State {
-		q.Add("state", string(s))
-	}
-	for _, l := range in.Labels {
-		q.Add("label", l)
-	}
-	if in.Title != "" {
-		q.Set("title", in.Title)
-	}
-	if in.Spec != "" {
-		q.Set("spec", string(in.Spec))
-	}
-	addTags(q, in.Tags)
-	if in.Claimable != nil {
-		q.Set("claimable", strconv.FormatBool(*in.Claimable))
-	}
-	path := scoped(key, "tickets")
-	if len(q) > 0 {
-		path += "?" + q.Encode()
-	}
-	return path
+	return out, request(ctx, c, ops.FindTickets, key, in, &out)
 }
 
 // Claim is claim.
@@ -217,7 +179,7 @@ func (c *Client) Transcript(ctx context.Context, key string, ticket core.Ref, cl
 
 // EditSpec is edit_spec.
 func (c *Client) EditSpec(ctx context.Context, key string, in core.EditSpecInput) (core.Written[core.SpecView], error) {
-	return write[core.SpecView](ctx, c, item(key, "specs", in.Spec, "edit_spec"), in, in.Full)
+	return written(ctx, c, ops.EditSpec, key, in, in.Full)
 }
 
 // write POSTs an acknowledging write and decodes its result.
@@ -242,46 +204,42 @@ func decodeWritten[V any](raw json.RawMessage, full bool) (core.Written[V], erro
 
 // EditTicket is edit_ticket.
 func (c *Client) EditTicket(ctx context.Context, key string, in core.EditTicketInput) (core.Written[core.TicketView], error) {
-	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "edit_ticket"), in, in.Full)
+	return written(ctx, c, ops.EditTicket, key, in, in.Full)
 }
 
 // AddLabels is add_labels.
 func (c *Client) AddLabels(ctx context.Context, key string, in core.LabelsInput) (core.TargetView, error) {
-	var out core.TargetView
-	return out, c.do(ctx, "POST", scoped(key, "add_labels"), in, &out)
+	return call(ctx, c, ops.AddLabels, key, in)
 }
 
 // RemoveLabels is remove_labels.
 func (c *Client) RemoveLabels(ctx context.Context, key string, in core.LabelsInput) (core.TargetView, error) {
-	var out core.TargetView
-	return out, c.do(ctx, "POST", scoped(key, "remove_labels"), in, &out)
+	return call(ctx, c, ops.RemoveLabels, key, in)
 }
 
 // SetTags is set_tags.
 func (c *Client) SetTags(ctx context.Context, key string, in core.SetTagsInput) (core.TargetView, error) {
-	var out core.TargetView
-	return out, c.do(ctx, "POST", scoped(key, "set_tags"), in, &out)
+	return call(ctx, c, ops.SetTags, key, in)
 }
 
 // RemoveTags is remove_tags.
 func (c *Client) RemoveTags(ctx context.Context, key string, in core.RemoveTagsInput) (core.TargetView, error) {
-	var out core.TargetView
-	return out, c.do(ctx, "POST", scoped(key, "remove_tags"), in, &out)
+	return call(ctx, c, ops.RemoveTags, key, in)
 }
 
 // Comment is comment.
 func (c *Client) Comment(ctx context.Context, key string, in core.CommentInput) (core.Written[core.TicketView], error) {
-	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "comment"), in, in.Full)
+	return written(ctx, c, ops.Comment, key, in, in.Full)
 }
 
 // Approve is approve.
 func (c *Client) Approve(ctx context.Context, key string, in core.TicketInput) (core.Written[core.TicketView], error) {
-	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "approve"), in, in.Full)
+	return written(ctx, c, ops.Approve, key, in, in.Full)
 }
 
 // Defer is defer.
 func (c *Client) Defer(ctx context.Context, key string, in core.DeferInput) (core.Written[core.TicketView], error) {
-	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "defer"), in, in.Full)
+	return written(ctx, c, ops.Defer, key, in, in.Full)
 }
 
 // GetWorkflow is get_workflow.

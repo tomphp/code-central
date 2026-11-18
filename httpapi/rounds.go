@@ -56,7 +56,7 @@ func init() {
 			return c.GetSpecQuestions(r.Context(), r.PathValue("key"), core.Ref(r.PathValue("n")))
 		}},
 	} {
-		Routes[name], handlers[name] = r.pattern, r.h
+		legacyRoutes[name], handlers[name] = r.pattern, r.h
 	}
 }
 

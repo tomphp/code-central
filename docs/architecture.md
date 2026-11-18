@@ -26,7 +26,7 @@ flowchart TB
     FD["server<br/>mux + Guard + UI"]
     API["httpapi<br/>REST /api"]
     MCP["mcp<br/>/p/key/mcp (agents)"]
-    CORE["core<br/>*Core: workflow, landing, CI, chat, views<br/>core.Operations = the one op list"]
+    CORE["core<br/>*Core: workflow, landing, CI, chat, views<br/>ops.All() = the one op list"]
     STORE["store<br/>YAML files in memory"]
     SUP["watchers.Supervise"]
     SIDE["clock · events · ids · home · usage · notify"]
@@ -87,7 +87,7 @@ Your list: core logic, factory, ci watcher, issue tracker, web api, frontend, st
 - agent runtime (chat, transcript, heartbeat, models, usage, stage guides)
 - read models (`*View` types, needs-me, attention)
 
-`core.Operations` is the single list of operations (name, audience, write or not); httpapi, mcp and the CLI build their routes, tools and commands from it.
+`ops.All()` is the single list of operations (name, audience, write or not), and `ops.Definitions()` each converted operation's one definition (ADR 0063); httpapi, mcp and the client derive their routes, handlers, tools, schemas and calls from the definitions, and the CLI builds its commands from the list.
 
 ## Dependency rules (as intended and as found)
 
@@ -98,7 +98,7 @@ Intended: `clients → client → HTTP → server → httpapi/mcp → core → s
 Good:
 
 - The HTTP/MCP boundary is sharp. The Factory and watchers hold a `Client` interface and talk only over HTTP.
-- `core.Operations` is a real contract, checked by the cross-door suite in `server/*_test.go` and the UI/Go contract cases.
+- `ops.All()` is a real contract, checked by the cross-door suite in `server/*_test.go` and the UI/Go contract cases.
 - `notify` depends on a four-method `Source` interface, not on `*Core`. A pattern worth copying.
 - `store.Store{View, Update}` is small, with a shared contract suite (`storetest`).
 - UI wire types are generated from Go (ADR 0042), and the UI's only `fetch` is in `web/src/api/http.ts`.

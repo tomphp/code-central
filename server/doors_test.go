@@ -22,6 +22,7 @@ import (
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
+	"github.com/tomoram/code-central/ops"
 	"github.com/tomoram/code-central/server"
 )
 
@@ -499,8 +500,8 @@ func must(t *testing.T, f func() error) {
 
 func agentOps() []string {
 	var out []string
-	for _, op := range core.Operations {
-		if op.Audience == core.AgentAndHuman {
+	for _, op := range ops.All() {
+		if op.Audience == ops.AgentAndHuman {
 			out = append(out, op.Name)
 		}
 	}
@@ -509,13 +510,13 @@ func agentOps() []string {
 }
 
 func TestEveryOperationHasACase(t *testing.T) {
-	for _, op := range core.Operations {
+	for _, op := range ops.All() {
 		c, ok := cases[op.Name]
 		if !ok {
 			t.Errorf("operation %s has no cross-door case", op.Name)
 			continue
 		}
-		agent := op.Audience == core.AgentAndHuman
+		agent := op.Audience == ops.AgentAndHuman
 		for _, cl := range []call{c.ok, c.bad} {
 			if cl.http.path == "" || agent != (cl.mcp != nil) || agent != (cl.cli != nil) {
 				t.Errorf("operation %s: a call does not cover exactly its doors", op.Name)
@@ -564,10 +565,10 @@ func TestCLIExposesExactlyTheAgentOperations(t *testing.T) {
 
 func TestHTTPExposesEveryOperation(t *testing.T) {
 	var routes, all []string
-	for name := range httpapi.Routes {
+	for name := range httpapi.Routes() {
 		routes = append(routes, name)
 	}
-	for _, op := range core.Operations {
+	for _, op := range ops.All() {
 		all = append(all, op.Name)
 	}
 	sort.Strings(routes)
@@ -578,14 +579,14 @@ func TestHTTPExposesEveryOperation(t *testing.T) {
 }
 
 func TestEveryDoorTranslatesEveryOperation(t *testing.T) {
-	for _, op := range core.Operations {
+	for _, op := range ops.All() {
 		c := cases[op.Name]
 		t.Run(op.Name+"/http", func(t *testing.T) {
 			srv := newServer(t, c.setup)
 			c.check(t, httpOK(t, srv, c.ok.http))
 			httpRejected(t, srv, c.bad.http, c.code)
 		})
-		if op.Audience != core.AgentAndHuman {
+		if op.Audience != ops.AgentAndHuman {
 			continue
 		}
 		t.Run(op.Name+"/mcp", func(t *testing.T) {

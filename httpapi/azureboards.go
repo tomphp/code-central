@@ -8,7 +8,7 @@ import (
 
 // Azure Boards (Spec code-central-894): the human's Azure Boards settings.
 func init() {
-	Routes["set_azure_boards"] = "POST /api/p/{key}/set_azure_boards"
+	legacyRoutes["set_azure_boards"] = "POST /api/p/{key}/set_azure_boards"
 
 	handlers["set_azure_boards"] = func(c *core.Core, r *http.Request) (any, error) {
 		var in core.SetAzureBoardsInput
@@ -23,8 +23,8 @@ func init() {
 // reports each comment it writes to a work item with
 // report_issue_written.
 func init() {
-	Routes["get_work_item_watch"] = "GET /api/p/{key}/integration/work-item-watch"
-	Routes["report_work_item_watcher_status"] = "POST /api/p/{key}/integration/report_work_item_watcher_status"
+	legacyRoutes["get_work_item_watch"] = "GET /api/p/{key}/integration/work-item-watch"
+	legacyRoutes["report_work_item_watcher_status"] = "POST /api/p/{key}/integration/report_work_item_watcher_status"
 
 	handlers["get_work_item_watch"] = func(c *core.Core, r *http.Request) (any, error) {
 		return c.GetWorkItemWatch(r.Context(), r.PathValue("key"))
