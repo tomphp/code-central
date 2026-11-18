@@ -180,6 +180,13 @@ func (r reader) StateCounts(project string) map[domain.State]int {
 	return out
 }
 
+func (r reader) SpecCount(project string) int {
+	if p, ok := r.x.projects[project]; ok {
+		return len(p.specs)
+	}
+	return 0
+}
+
 // SessionClaim is a Claim ClaimBySession found, with the Project and the
 // number of the Ticket it is on.
 type SessionClaim struct {

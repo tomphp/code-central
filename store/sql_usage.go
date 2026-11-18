@@ -103,6 +103,26 @@ func (u *sqlUsage) readDay(project, day string, out *usage.Records) error {
 	return nil
 }
 
+func (u *sqlUsage) Days(project string) ([]string, error) {
+	rows, err := u.db.QueryContext(context.Background(), u.d.rebind(`SELECT DISTINCT day FROM usage_records WHERE project = ? ORDER BY day`), project)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read %s's usage days: %w", project, err)
+	}
+	defer rows.Close()
+	var days []string
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err != nil {
+			return nil, fmt.Errorf("stopped reading %s's usage days: %w", project, err)
+		}
+		days = append(days, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("stopped reading %s's usage days: %w", project, err)
+	}
+	return days, nil
+}
+
 func (u *sqlUsage) Prune(before string) error {
 	_, err := u.db.ExecContext(context.Background(), u.d.rebind(`DELETE FROM usage_records WHERE day < ?`), before)
 	if err != nil {

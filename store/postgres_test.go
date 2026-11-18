@@ -134,18 +134,25 @@ func TestTwoServicesOpeningAFreshPostgresStoreTakeTurns(t *testing.T) {
 // Where a Postgres Store is shows as its host, port and database, never
 // the credential its URL holds.
 func TestAPostgresLocationShowsNoCredential(t *testing.T) {
-	for url, want := range map[string]string{
-		"postgres://alice:s3cret@db.example.com:5433/central?sslmode=require": "db.example.com:5433/central",
-		"postgres://alice:s3cret@db.example.com/central":                      "db.example.com:5432/central",
+	type address struct {
+		path, host string
+		port       int
+		database   string
+	}
+	for url, want := range map[string]address{
+		"postgres://alice:s3cret@db.example.com:5433/central?sslmode=require": {"db.example.com:5433/central", "db.example.com", 5433, "central"},
+		"postgres://alice:s3cret@db.example.com/central":                      {"db.example.com:5432/central", "db.example.com", 5432, "central"},
+		// With no database named, Postgres's is the user's.
+		"postgres://central:s3cret@db.example.com": {"db.example.com:5432/central", "db.example.com", 5432, "central"},
 	} {
 		l, err := store.PostgresLocation(url)
 		if err != nil {
 			t.Fatalf("%s: %v", url, err)
 		}
-		if l.Kind != store.Postgres || l.Path != want {
-			t.Fatalf("%s: kind %s at %q, want postgres at %q", url, l.Kind, l.Path, want)
+		if got := (address{l.Path, l.Host, l.Port, l.Database}); l.Kind != store.Postgres || got != want {
+			t.Fatalf("%s: kind %s at %+v, want postgres at %+v", url, l.Kind, got, want)
 		}
-		if got := l.String(); got != "postgres at "+want {
+		if got := l.String(); got != "postgres at "+want.path {
 			t.Fatalf("shown as %q", got)
 		}
 		for _, shown := range []string{fmt.Sprint(l), fmt.Sprintf("%v", l), fmt.Sprintf("%+v", l), fmt.Sprintf("%#v", l)} {
@@ -153,6 +160,20 @@ func TestAPostgresLocationShowsNoCredential(t *testing.T) {
 				t.Fatalf("the credential shows in %q", shown)
 			}
 		}
+	}
+}
+
+// An open Postgres Store is where its URL names, and its Location keeps
+// the URL's credential unshown, as PostgresLocation's does.
+func TestAnOpenPostgresStoreIsAtItsURLsAddress(t *testing.T) {
+	url := storetest.FreshPostgres(t)
+	want, err := store.PostgresLocation(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := openPostgres(t, url)
+	if got := s.Location(); got != want {
+		t.Fatalf("location %v (%s:%d/%s), want %v", got, got.Host, got.Port, got.Database, want)
 	}
 }
 

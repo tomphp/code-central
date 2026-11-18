@@ -431,6 +431,12 @@ func (r sqlReader) StateCounts(project string) map[domain.State]int {
 	return out
 }
 
+func (r sqlReader) SpecCount(project string) int {
+	var n int
+	r.fail(r.row(`SELECT COUNT(*) FROM specs WHERE project = ?`, project).Scan(&n))
+	return n
+}
+
 func (r sqlReader) ClaimBySession(sessionID string) (SessionClaim, bool) {
 	if sessionID == "" {
 		return SessionClaim{}, false

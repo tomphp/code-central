@@ -34,6 +34,8 @@ type Reader interface {
 	// StateCounts is how many of the project's Tickets are in each State;
 	// a State no Ticket is in is left out.
 	StateCounts(project string) map[domain.State]int
+	// SpecCount is how many Specs the project has.
+	SpecCount(project string) int
 	// ClaimBySession is the most recently started Claim with the session
 	// ID, live or ended, in any Project; on a tie, the first in Project,
 	// Ticket and Claim order. An empty session ID finds none.
@@ -145,6 +147,13 @@ type Store interface {
 	// Services is the Store's record of the services running on it (ADR
 	// 0068), read and written on its own, outside any View or Update.
 	Services() Services
+	// Location is where the Store is kept, with no credential: the
+	// Storage tab shows it.
+	Location() Location
+	// Size is how many bytes the Store takes where it is kept, Usage
+	// included, as the Store Kind can tell: a File Store's folder, a
+	// SQLite database file and its WAL, a Postgres database.
+	Size() (int64, error)
 }
 
 var (

@@ -160,21 +160,14 @@ func (f *Files) Prune(before string) error {
 	defer f.mu.Unlock()
 	var errs []error
 	for _, p := range f.projects() {
-		entries, err := os.ReadDir(f.folder(p))
-		if errors.Is(err, fs.ErrNotExist) {
-			continue
-		}
+		days, err := f.days(p)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("cannot read %s: %w", f.folder(p), err))
+			errs = append(errs, err)
 			continue
 		}
-		for _, e := range entries {
-			d, ok := strings.CutSuffix(e.Name(), ".jsonl")
-			if !ok {
-				continue
-			}
-			if _, err := time.Parse(time.DateOnly, d); err != nil || d >= before {
-				continue
+		for _, d := range days {
+			if d >= before {
+				break
 			}
 			if err := os.Remove(f.name(p, d)); err != nil {
 				errs = append(errs, fmt.Errorf("cannot delete %s: %w", f.name(p, d), err))
@@ -182,6 +175,35 @@ func (f *Files) Prune(before string) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+func (f *Files) Days(project string) ([]string, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.days(project)
+}
+
+// days are the days project has a file for, oldest first. A name that
+// isn't a day is passed over.
+func (f *Files) days(project string) ([]string, error) {
+	entries, err := os.ReadDir(f.folder(project))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("cannot read %s: %w", f.folder(project), err)
+	}
+	var days []string
+	for _, e := range entries {
+		d, ok := strings.CutSuffix(e.Name(), ".jsonl")
+		if !ok {
+			continue
+		}
+		if _, err := time.Parse(time.DateOnly, d); err == nil {
+			days = append(days, d)
+		}
+	}
+	return days, nil
 }
 
 // projects is every Project with a folder, sorted.

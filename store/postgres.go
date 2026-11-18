@@ -30,6 +30,7 @@ import (
 // deadlock, with no process-wide lock, since other services write the
 // Store too.
 var postgres = dialect{
+	size:   postgresSize,
 	json:   "JSONB",
 	serial: "BIGSERIAL PRIMARY KEY",
 	rebind: numberPlaceholders,
@@ -64,10 +65,11 @@ func OpenPostgres(url string) (*SQLStore, error) { return openPostgres(url, Form
 // openPostgres is OpenPostgres as a build whose format is format and
 // whose migration chain is steps: Format and migrations, except in tests.
 func openPostgres(url string, format int, steps []MigrationStep) (*SQLStore, error) {
-	cfg, addr, err := parsePostgres(url)
+	cfg, location, err := parsePostgres(url)
 	if err != nil {
 		return nil, err
 	}
+	addr := location.Path
 	if cfg.ConnectTimeout == 0 {
 		cfg.ConnectTimeout = connectTimeout
 	}
@@ -76,7 +78,7 @@ func openPostgres(url string, format int, steps []MigrationStep) (*SQLStore, err
 	// appends beside them.
 	db.SetMaxOpenConns(8)
 	db.SetMaxIdleConns(4)
-	s := &SQLStore{db: db, d: postgres, path: addr, url: url, format: format, service: newServiceID()}
+	s := &SQLStore{db: db, d: postgres, path: addr, url: url, location: location, format: format, service: newServiceID()}
 	s.usage = &sqlUsage{db: db, d: postgres}
 	older, err := prepare(context.Background(), db, postgres, format, addr)
 	if err == nil && older > 0 {
@@ -98,25 +100,30 @@ func openPostgres(url string, format int, steps []MigrationStep) (*SQLStore, err
 // shows the Store's address (host:port/database) and keeps the URL, with
 // its credential, for OpenAt alone.
 func PostgresLocation(url string) (Location, error) {
-	_, addr, err := parsePostgres(url)
-	if err != nil {
-		return Location{}, err
-	}
-	return Location{Kind: Postgres, Path: addr, url: url}, nil
+	_, l, err := parsePostgres(url)
+	return l, err
 }
 
-// parsePostgres reads url as pgx does and names the Store's address. The
-// error repeats no password: pgx masks it.
-func parsePostgres(url string) (*pgx.ConnConfig, string, error) {
+// postgresSize is the database's size, as Postgres counts it.
+func postgresSize(s *SQLStore) (int64, error) {
+	var size int64
+	err := s.db.QueryRowContext(context.Background(), `SELECT pg_database_size(current_database())`).Scan(&size)
+	return size, err
+}
+
+// parsePostgres reads url as pgx does and gives the Store's Location,
+// which names its address. The error repeats no password: pgx masks it.
+func parsePostgres(url string) (*pgx.ConnConfig, Location, error) {
 	cfg, err := pgx.ParseConfig(url)
 	if err != nil {
-		return nil, "", fmt.Errorf("postgres: %w", err)
+		return nil, Location{}, fmt.Errorf("postgres: %w", err)
 	}
 	db := cfg.Database
 	if db == "" {
 		db = cfg.User // Postgres's default database is the user's.
 	}
-	return cfg, fmt.Sprintf("%s:%d/%s", cfg.Host, cfg.Port, db), nil
+	return cfg, Location{Kind: Postgres, Path: fmt.Sprintf("%s:%d/%s", cfg.Host, cfg.Port, db),
+		Host: cfg.Host, Port: int(cfg.Port), Database: db, url: url}, nil
 }
 
 // numberPlaceholders is q with its ? placeholders numbered $1, $2 and so

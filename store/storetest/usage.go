@@ -118,6 +118,29 @@ func runUsage(t *testing.T, f Factory) {
 		}
 	})
 
+	t.Run("a project's usage days are the days it has records for, oldest first", func(t *testing.T) {
+		s := f.New(t)
+		appendUsage(t, s, "acme", "2026-01-06", usageCall("find_tickets"))
+		appendUsage(t, s, "acme", "2026-01-04", usageResponse("acme-1"))
+		appendUsage(t, s, "acme", "2026-01-06", usageCall("get_ticket"))
+		appendUsage(t, s, "beta", "2026-01-05", usageCall("get_ticket"))
+		for project, want := range map[string][]string{"acme": {"2026-01-04", "2026-01-06"}, "beta": {"2026-01-05"}, "gamma": nil} {
+			got, err := s.Usage().Days(project)
+			if err != nil {
+				t.Fatalf("%s's days: %v", project, err)
+			}
+			if !slices.Equal(got, want) {
+				t.Errorf("%s's days %v, want %v", project, got, want)
+			}
+		}
+		if err := s.Usage().Prune("2026-01-05"); err != nil {
+			t.Fatalf("prune: %v", err)
+		}
+		if got, _ := s.Usage().Days("acme"); !slices.Equal(got, []string{"2026-01-06"}) {
+			t.Errorf("acme's days after pruning %v, want [2026-01-06]", got)
+		}
+	})
+
 	t.Run("pruning an empty store is not an error", func(t *testing.T) {
 		if err := f.New(t).Usage().Prune("2026-01-05"); err != nil {
 			t.Fatalf("prune: %v", err)

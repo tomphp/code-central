@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/tomoram/code-central/home"
 	"github.com/tomoram/code-central/usage"
@@ -74,10 +75,19 @@ type FileStore struct {
 	// stopImportAfter, set only by tests, stops an Import dead after a
 	// step, as a crash would.
 	stopImportAfter func(step int) bool
+	// size is the folder's size, as Size last measured it.
+	size folderSize
 }
 
 // Dir is the store's directory.
 func (s *FileStore) Dir() string { return s.dir }
+
+// Location is the File Store's folder.
+func (s *FileStore) Location() Location { return Location{Kind: Files, Path: s.dir} }
+
+// Size is the bytes of every file in the store's folder, Usage's
+// included, measured at most once a minute.
+func (s *FileStore) Size() (int64, error) { return s.size.of(s.dir, time.Now()) }
 
 // Close releases the store's lock.
 func (s *FileStore) Close() error {
