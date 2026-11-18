@@ -366,15 +366,15 @@ func requirementView(e *evaluation, s store.Spec, tickets []store.Ticket) *Requi
 		return t.State == store.Ready && !e.rule.blocked(t) && reason == ""
 	}
 	v := &RequirementView{Stages: []StageView{}}
-	if StageOf(stages[0].Labels) != "grilling" {
+	if StageOf(stages[0].Labels) != StageGrilling {
 		v.Map = s.Tags[MapTag]
 	}
-	current := -1
+	firstOpen := -1
 	for i, t := range stages {
 		reason, _ := e.reason(t)
 		v.Stages = append(v.Stages, StageView{Name: StageOf(t.Labels), Ticket: DisplayID(e.p.Key, t.Number), State: t.State, NeedsMeReason: reason})
-		if current < 0 && t.State != store.Done && t.State != store.Cancelled {
-			current = i
+		if firstOpen < 0 && !finished(t.State) {
+			firstOpen = i
 		}
 	}
 	anyClaimable := false
@@ -388,23 +388,23 @@ func requirementView(e *evaluation, s store.Spec, tickets []store.Ticket) *Requi
 		}
 		anyClaimable = anyClaimable || claimable(t)
 	}
-	if current >= 0 {
-		v.WaitingForFactory = claimable(stages[current])
+	if firstOpen >= 0 {
+		v.WaitingForFactory = claimable(stages[firstOpen])
 	} else {
 		v.WaitingForFactory = anyClaimable && !slices.ContainsFunc(tickets, func(t store.Ticket) bool {
 			_, held := liveClaim(t)
 			return held
 		})
 	}
-	v.strip(e, stages, build, current)
+	v.setStrip(e, stages, build, firstOpen)
 	return v
 }
 
-// strip sets v's Stage strip, its current segment, needs and default
+// setStrip sets v's Stage strip, its current segment, needs and default
 // Ticket from its Stage Tickets (in Stage order) and Build Tickets (in
-// claim order), current being the index of the first open Stage or -1,
+// claim order), firstOpen being the index of the first open Stage or -1,
 // and v's Map, Build and WaitingForFactory already set.
-func (v *RequirementView) strip(e *evaluation, stages, build []store.Ticket, current int) {
+func (v *RequirementView) setStrip(e *evaluation, stages, build []store.Ticket, firstOpen int) {
 	id := func(t store.Ticket) string { return DisplayID(e.p.Key, t.Number) }
 	v.Segments, v.Needs = []Segment{}, []RequirementNeed{}
 	// A Requirement made from a Map has no grilling Stage: the Map did that.
@@ -424,7 +424,7 @@ func (v *RequirementView) strip(e *evaluation, stages, build []store.Ticket, cur
 			seg.Progress = ProgressSkipped
 		case reason != "":
 			seg.Progress = ProgressNeeds
-		case i == current && v.WaitingForFactory:
+		case i == firstOpen && v.WaitingForFactory:
 			seg.Progress = ProgressQueued
 		case t.State == store.Ready || t.State == store.Draft:
 			seg.Progress = ProgressWaiting
@@ -444,7 +444,7 @@ func (v *RequirementView) strip(e *evaluation, stages, build []store.Ticket, cur
 	}
 	buildNeeds := v.Needs[stageNeeds:]
 	seg := Segment{Stage: SegmentBuild}
-	inBuild := current < 0
+	inBuild := firstOpen < 0
 	switch {
 	case v.Build.Total > 0 && v.Build.Done == v.Build.Total && len(buildNeeds) == 0:
 		seg.Progress = ProgressDone
@@ -464,16 +464,16 @@ func (v *RequirementView) strip(e *evaluation, stages, build []store.Ticket, cur
 		at = len(v.Segments) - 1
 	}
 	v.Current = v.Segments[at].Stage
-	v.DefaultTicket = defaultTicket(v.Needs, v.Segments, v.Segments[at], build, id)
+	v.DefaultTicket = v.defaultTicket(v.Segments[at], build, id)
 }
 
-// defaultTicket is the Ticket a Requirement opens on: the first of needs,
-// else the current segment's, else the first unfinished of its Build
-// Tickets, else the last of them, else the last segment's with one; ""
-// when there is none.
-func defaultTicket(needs []RequirementNeed, segments []Segment, current Segment, build []store.Ticket, id func(store.Ticket) string) string {
-	if len(needs) > 0 {
-		return needs[0].Ticket
+// defaultTicket is the Ticket the Requirement opens on, given its current
+// segment and its Build Tickets: the first of its needs, else the current
+// segment's, else the first unfinished Build Ticket, else the last of
+// them, else the last segment's with one; "" when there is none.
+func (v *RequirementView) defaultTicket(current Segment, build []store.Ticket, id func(store.Ticket) string) string {
+	if len(v.Needs) > 0 {
+		return v.Needs[0].Ticket
 	}
 	if current.Ticket != "" {
 		return current.Ticket
@@ -484,7 +484,7 @@ func defaultTicket(needs []RequirementNeed, segments []Segment, current Segment,
 	if len(build) > 0 {
 		return id(build[len(build)-1])
 	}
-	for _, s := range slices.Backward(segments) {
+	for _, s := range slices.Backward(v.Segments) {
 		if s.Ticket != "" {
 			return s.Ticket
 		}
