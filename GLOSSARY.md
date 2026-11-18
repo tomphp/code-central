@@ -526,7 +526,7 @@ The Board view's popup for a Lane header's Spec. It shows the Spec's pane as the
 _Avoid_: lane popup
 
 **To merge**:
-The Needs Me reason of an Accepted Ticket under the Branch or Pull Request Landing Method, shown at once: the human merges its branch into the base, and the Factory lands it when it sees the merge. Under Pull Request it links the pull request and says conflicting while the Code Host reports so.
+The Needs Me reason of an Accepted Ticket under the Branch or Pull Request Landing Method, shown at once: the human merges its branch into the base, and the Factory lands it when it sees the merge. Under Pull Request it links the pull request and says conflicting while the Code Host reports so. Under Branch, and under Pull Request without Land per Spec, the human may send the Ticket back to fix with a note. For a Spec's pull request under Land per Spec, they may open a New fix Ticket.
 _Avoid_: Ready to merge, awaiting merge
 
 **CI cancelled**:
@@ -550,11 +550,11 @@ What Re-run failed jobs records for a pushed commit: the failed and cancelled CI
 _Avoid_: Rerun job, retry
 
 **Send back to fix**:
-The failure option by which the human sends a CI failed Ticket back to Ready with a note naming the failed run and jobs and their Repository, so the next Claim fixes it on the same branch; its re-accept's newer pushed commit in that Repository has its own CI result, and its other Repositories keep theirs. Offered under Merge + Push and Branch + Push, only when the item lists exactly one Ticket and that Ticket isn't Spec-landed.
+The failure option by which the human sends a CI failed Ticket back to Ready with a note naming the failed run and jobs and their Repository, so the next Claim fixes it on the same branch; its re-accept's newer pushed commit in that Repository has its own CI result, and its other Repositories keep theirs. Offered under Merge + Push and Branch + Push, only when the item lists exactly one Ticket and that Ticket isn't Spec-landed. It is also a To merge option, not only a failure option: there the note says what to change.
 _Avoid_: Revert, reject
 
 **New fix Ticket**:
-The failure option by which the human opens a Ready Ticket on the Project's CI Fixes Spec, carrying the note, which starts from the run summary and the Fix instructions, and stores it once on the commit's response. It doesn't accept the failed CI result: every Ticket the item lists stays Accepted, and lands in that commit's Repository when a later commit there containing the work passes CI, such as the fix's push. Its other Repositories keep their own CI result. Offered under Merge + Push and Branch + Push.
+The failure option by which the human opens a Ready Ticket on the Project's CI Fixes Spec, carrying the note, which starts from the run summary and the Fix instructions, and stores it once on the commit's response. It doesn't accept the failed CI result: every Ticket the item lists stays Accepted, and lands in that commit's Repository when a later commit there containing the work passes CI, such as the fix's push. Its other Repositories keep their own CI result. Offered under Merge + Push and Branch + Push. It is also the To merge option on a Spec's lead Ticket under Pull Request + Land per Spec, its pull request open or closed: there it opens a Ready Ticket on the Spec itself, carrying the note, and the Ticket's accept is pushed to the Spec's pull request.
 _Avoid_: Follow-up ticket, hotfix
 
 **CI Fixes Spec**:
