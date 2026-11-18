@@ -75,13 +75,15 @@ func (c *Core) RenameProject(ctx context.Context, key string, in RenameProjectIn
 }
 
 // SetLandingMethodInput is the human's set_landing_method(method, push,
-// remote, land_per_spec).
+// remote, land_per_spec, rebase).
 type SetLandingMethodInput struct {
 	Method domain.LandingMethod `json:"method"`
 	Push   bool                 `json:"push"`
 	Remote string               `json:"remote"`
 	// LandPerSpec, when left out, keeps the stored value.
 	LandPerSpec *bool `json:"land_per_spec,omitempty"`
+	// Rebase, when left out, keeps the stored value.
+	Rebase *bool `json:"rebase,omitempty"`
 	// PATEnv names the environment variable holding the Azure Repos PAT
 	// under Pull Request; left out, it keeps the stored name.
 	PATEnv string `json:"pat_env,omitempty"`
@@ -135,6 +137,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		}
 		p, _ := w.Project(key)
 		l.LandPerSpec = p.Landing.LandPerSpec
+		l.Rebase = p.Landing.Rebase
 		l.PATEnv = p.Landing.PATEnv
 		l.Base = p.Landing.Base
 		if in.Base != nil {
@@ -145,6 +148,9 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		}
 		if in.LandPerSpec != nil {
 			l.LandPerSpec = *in.LandPerSpec
+		}
+		if in.Rebase != nil {
+			l.Rebase = *in.Rebase
 		}
 		nextP := p
 		nextP.Landing = l

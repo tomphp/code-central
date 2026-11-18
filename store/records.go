@@ -211,6 +211,8 @@ type landingFile struct {
 	// LandPerSpec is a pointer so a file without it, which reads as on,
 	// differs from false.
 	LandPerSpec *bool `yaml:"land_per_spec,omitempty"`
+	// Rebase is left out while it is off.
+	Rebase bool `yaml:"rebase,omitempty"`
 	// PATEnv is left out while it is unset.
 	PATEnv string `yaml:"pat_env,omitempty"`
 	// Base is left out while it is unset.
@@ -888,7 +890,7 @@ func encodeLanding(l domain.Landing) *landingFile {
 	if l = landingOrDefault(l); l == domain.DefaultLanding() {
 		return nil
 	}
-	f := &landingFile{Method: string(l.Method), Push: l.Push, Remote: l.Remote, PATEnv: l.PATEnv, Base: l.Base}
+	f := &landingFile{Method: string(l.Method), Push: l.Push, Remote: l.Remote, Rebase: l.Rebase, PATEnv: l.PATEnv, Base: l.Base}
 	if !l.LandPerSpec {
 		f.LandPerSpec = &l.LandPerSpec
 	}
