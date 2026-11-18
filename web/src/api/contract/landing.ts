@@ -30,6 +30,35 @@ export function landingContract(driver: () => Driver) {
     expect(t.moves!.at(-1)).toMatchObject({ from: "Accepted", to: "Done", actor: "human", via: "merge", commit: "def456" });
   });
 
+  // ---- To merge options (Spec code-central-1067) ----
+
+  it("offers To merge options as send_back and new_fix_ticket accept them", async () => {
+    await d.createProject("acme", "Acme");
+    const id = await d.createTicket("acme", "Login page", "Ready");
+    await d.finish("acme", id, "Added the login page", { branch: "impl-7", commit: "abc123" });
+    await d.api.act("acme", id, "accept", {});
+    expect(await d.api.getTicket("acme", id)).not.toHaveProperty("to_merge_options");
+
+    await d.api.setLandingMethod("acme", { method: "branch", push: false, remote: "origin" });
+    expect((await d.api.getTicket("acme", id)).to_merge_options).toEqual(["send_back"]);
+
+    await d.reportPushRemote("acme", "git@github.com:acme/web.git");
+    await d.letGHWrite("acme/web");
+    await d.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "origin", land_per_spec: false });
+    await d.reportPushedCommit("acme", id, "abc123", "impl-7");
+    expect((await d.api.getTicket("acme", id)).to_merge_options).toEqual(["send_back"]);
+
+    // Under Land per Spec the Ticket is its Spec's pull-request lead.
+    await d.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "origin", land_per_spec: true });
+    expect((await d.api.getTicket("acme", id)).to_merge_options).toEqual(["new_fix_ticket"]);
+    const back = await d.api.act("acme", id, "send_back", { note: "rename it" }).catch((e) => e);
+    expect(back).toMatchObject({ status: 409, code: "action_not_allowed" });
+    const fix = await d.api.act("acme", id, "new_fix_ticket", { note: "reviewers asked for a rename" });
+    const opened = await d.api.getTicket("acme", fix.id);
+    expect(opened).toMatchObject({ state: "Ready", spec: { id: (await d.api.getTicket("acme", id)).spec.id } });
+    expect(opened).not.toHaveProperty("to_merge_options");
+  });
+
   // ---- Changed Repositories (Spec code-central-848) ----
 
   it("records the work in every Repository a finish names, and accepts work in another Repository into Accepted", async () => {

@@ -252,6 +252,14 @@ export const CI_FAILURE_OPTIONS = [
 ] as const;
 export type CIFailureOption = (typeof CI_FAILURE_OPTIONS)[number];
 
+// ToMergeOption is an option the human may choose on an Accepted Ticket
+// they merge, as the Accepted panel offers it: an operation's name.
+export const TO_MERGE_OPTIONS = [
+  "send_back",
+  "new_fix_ticket",
+] as const;
+export type ToMergeOption = (typeof TO_MERGE_OPTIONS)[number];
+
 // CIUnavailableCause is why a Ticket is CI unavailable.
 export const CI_UNAVAILABLE_CAUSES = [
   "ci_watcher_not_watching",
@@ -418,6 +426,7 @@ export const TICKET_FIELDS = [
   "ci_items",
   "waiting_for_spec",
   "ci_failure_options",
+  "to_merge_options",
   "claims",
   "rounds",
   "failure_reports",
@@ -609,6 +618,12 @@ export interface TicketView {
   // or CI cancelled, acting on every Ticket it lists; left out
   // otherwise, and empty when none applies. Computed on read.
   ci_failure_options?: CIFailureOption[];
+  // ToMergeOptions are the options, each an operation's name, the human
+  // may choose on the Ticket while it is Accepted under a Landing Method
+  // they merge (Branch or Pull Request), as send_back and new_fix_ticket
+  // would accept them; left out otherwise, and empty when none applies.
+  // Computed on read.
+  to_merge_options?: ToMergeOption[];
   claims?: ClaimView[];
   rounds?: RoundView[];
   failure_reports?: FailureReportView[];
