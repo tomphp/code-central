@@ -7,7 +7,6 @@
 package core
 
 import (
-	"cmp"
 	"context"
 	"maps"
 	"regexp"
@@ -777,13 +776,6 @@ func (c *Core) ticketRow(r store.Reader, e *evaluation, t domain.Ticket, onMap b
 	}
 	row.PartlyLanded = partlyLanded(key, t)
 	return row
-}
-
-func claimOrder(a, b domain.Ticket) int {
-	if c := a.Created.Compare(b.Created); c != 0 {
-		return c
-	}
-	return cmp.Compare(a.Number, b.Number)
 }
 
 func finished(s domain.State) bool { return s == domain.Done || s == domain.Cancelled }
