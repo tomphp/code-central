@@ -278,6 +278,7 @@ a.filter { text-decoration: none; }
 .project-options-field input { min-width: 16rem; }
 .project-options-field + .project-options-hint { margin-left: 0; }
 .project-options-actions { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.stage-guide-row + .stage-guide-row { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
 .project-options-models-hint { margin-left: 0; }
 .project-options-models { border-collapse: collapse; margin-top: 12px; width: 100%; }
 .project-options-models th, .project-options-models td { text-align: left; padding: 4px 8px 4px 0; font-size: 14px; }
