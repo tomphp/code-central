@@ -56,6 +56,7 @@ export function FocusBody({ now, data, session, dashboard, loc, project: scoped,
     <OneProject.Provider value={!!scope}>
     <main aria-label="Focus Mode" className="focus">
       <ViewHeader
+        title="Focus"
         left={
           <>
             {scope && (
@@ -82,11 +83,13 @@ export function FocusBody({ now, data, session, dashboard, loc, project: scoped,
           </>
         }
       />
-      {session.note && (
-        <p role="status" className="focus-note">
-          {session.note}
-        </p>
-      )}
+      <div className="focus-note-slot">
+        {session.note && (
+          <p role="status" className="focus-note">
+            {session.note}
+          </p>
+        )}
+      </div>
       {!data ? (
         <Loading />
       ) : session.clear && dashboard ? (
@@ -114,6 +117,7 @@ export function FocusBody({ now, data, session, dashboard, loc, project: scoped,
           navigate={navigate}
           skip={session.skip}
           inbox={inboxOf(item.row, loc.project)}
+          inOneProject={!!scope}
         />
       ) : (
         <Loading />

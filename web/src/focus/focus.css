@@ -53,6 +53,10 @@
 .focus-clear .btn { margin-top: 20px; }
 /* A brief note, under the header: the item on screen was dealt with
    elsewhere, or a Requirement or Map was added. */
+/* In Focus Mode the note floats over the top of the 760px column in a
+   zero-height slot, so the item doesn't shift when it shows. */
+.focus-note-slot { position: relative; width: 100%; max-width: 760px; height: 0; margin: 0 auto; padding: 0 24px; box-sizing: border-box; z-index: 1; }
+.focus-note-slot .focus-note { position: absolute; left: 24px; right: 24px; top: 8px; box-sizing: border-box; margin: 0; }
 .focus-note { margin: 16px auto 0; padding: 6px 14px; border-radius: 6px; background: var(--border); color: var(--muted); font-size: 16px; }
 /* The Activity Dashboard, in place of All clear: two State blocks side by
    side, each with its number in big type, and the In Progress Tickets
