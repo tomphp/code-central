@@ -29,5 +29,8 @@ func Descriptions() map[string]string {
 	for name, t := range tools {
 		out[name] = t.description
 	}
+	for name, t := range derived {
+		out[name] = t.description
+	}
 	return out
 }

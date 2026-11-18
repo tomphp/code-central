@@ -10,6 +10,7 @@ import (
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/ids"
+	"github.com/tomoram/code-central/ops"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -299,34 +300,34 @@ func TestFindTickets(t *testing.T) {
 }
 
 func TestOperationList(t *testing.T) {
-	want := map[string]core.Audience{
-		"create_project": core.HumanOnly,
-		"get_project":    core.HumanOnly,
-		"create_spec":    core.AgentAndHuman,
-		"create_ticket":  core.AgentAndHuman,
-		"get_ticket":     core.AgentAndHuman,
-		"find_tickets":   core.AgentAndHuman,
-		"edit_spec":      core.AgentAndHuman,
-		"edit_ticket":    core.AgentAndHuman,
-		"add_labels":     core.AgentAndHuman,
-		"remove_labels":  core.AgentAndHuman,
-		"set_tags":       core.AgentAndHuman,
-		"remove_tags":    core.AgentAndHuman,
-		"comment":        core.AgentAndHuman,
-		"approve":        core.AgentAndHuman,
-		"defer":          core.AgentAndHuman,
-		"claim":          core.AgentAndHuman,
-		"finish":         core.AgentAndHuman,
-		"accept":         core.HumanOnly,
-		"reject":         core.HumanOnly,
-		"add_blocker":    core.AgentAndHuman,
-		"remove_blocker": core.AgentAndHuman,
-		"cancel":         core.AgentAndHuman,
-		"get_spec":       core.AgentAndHuman,
-		"find_specs":     core.AgentAndHuman,
+	want := map[string]ops.Audience{
+		"create_project": ops.HumanOnly,
+		"get_project":    ops.HumanOnly,
+		"create_spec":    ops.AgentAndHuman,
+		"create_ticket":  ops.AgentAndHuman,
+		"get_ticket":     ops.AgentAndHuman,
+		"find_tickets":   ops.AgentAndHuman,
+		"edit_spec":      ops.AgentAndHuman,
+		"edit_ticket":    ops.AgentAndHuman,
+		"add_labels":     ops.AgentAndHuman,
+		"remove_labels":  ops.AgentAndHuman,
+		"set_tags":       ops.AgentAndHuman,
+		"remove_tags":    ops.AgentAndHuman,
+		"comment":        ops.AgentAndHuman,
+		"approve":        ops.AgentAndHuman,
+		"defer":          ops.AgentAndHuman,
+		"claim":          ops.AgentAndHuman,
+		"finish":         ops.AgentAndHuman,
+		"accept":         ops.HumanOnly,
+		"reject":         ops.HumanOnly,
+		"add_blocker":    ops.AgentAndHuman,
+		"remove_blocker": ops.AgentAndHuman,
+		"cancel":         ops.AgentAndHuman,
+		"get_spec":       ops.AgentAndHuman,
+		"find_specs":     ops.AgentAndHuman,
 	}
 	for name, aud := range want {
-		op, ok := core.Operation(name)
+		op, ok := ops.Lookup(name)
 		if !ok || op.Audience != aud {
 			t.Errorf("operation %s: %+v, %v", name, op, ok)
 		}

@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"reflect"
 	"slices"
-	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/internal/fieldwalk"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -137,20 +137,8 @@ func topLevel(v any) (map[string]json.RawMessage, error) {
 // JSONNames are the JSON field names of struct type t, in field order,
 // with embedded structs' fields in their place: for a record's view, the
 // names its writes' changed can list, in that order. The UI's generated
-// field lists (internal/wiretypes) are made with it.
+// field lists (internal/wiretypes) and the MCP door's schemas read them
+// the same way, through internal/fieldwalk.
 func JSONNames(t reflect.Type) []string {
-	var out []string
-	for f := range t.Fields() {
-		name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
-		switch {
-		case name == "-" || !f.IsExported() && !f.Anonymous:
-		case f.Anonymous && name == "" && f.Type.Kind() == reflect.Struct:
-			out = append(out, JSONNames(f.Type)...)
-		case name == "":
-			out = append(out, f.Name)
-		default:
-			out = append(out, name)
-		}
-	}
-	return out
+	return fieldwalk.Names(t)
 }

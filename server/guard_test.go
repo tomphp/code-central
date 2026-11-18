@@ -11,6 +11,7 @@ import (
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
+	"github.com/tomoram/code-central/ops"
 	"github.com/tomoram/code-central/server"
 )
 
@@ -127,9 +128,10 @@ func TestGETNeverWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	paths := []string{"/p/acme/mcp"}
-	for _, op := range core.Operations {
+	routes := httpapi.Routes()
+	for _, op := range ops.All() {
 		if op.Write {
-			_, pattern, _ := strings.Cut(httpapi.Routes[op.Name], " ")
+			_, pattern, _ := strings.Cut(routes[op.Name], " ")
 			paths = append(paths, strings.ReplaceAll(pattern, "{key}", "acme"))
 		}
 	}

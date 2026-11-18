@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+
+	"github.com/tomoram/code-central/internal/fieldwalk"
 )
 
 var unknownField = regexp.MustCompile(`unknown field "([^"]+)"`)
@@ -108,27 +110,7 @@ func acceptedFields(v any, unknown string) string {
 // jsonFields lists the JSON names of the struct t (or what it points to),
 // in declaration order, including those of embedded structs.
 func jsonFields(t reflect.Type) []string {
-	for t != nil && t.Kind() == reflect.Pointer {
-		t = t.Elem()
-	}
-	if t == nil || t.Kind() != reflect.Struct {
-		return nil
-	}
-	var names []string
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
-		switch {
-		case name == "-":
-		case name != "":
-			names = append(names, name)
-		case f.Anonymous:
-			names = append(names, jsonFields(f.Type)...)
-		case f.IsExported():
-			names = append(names, f.Name)
-		}
-	}
-	return names
+	return fieldwalk.Names(t)
 }
 
 // likelyMatch is the name closest to unknown: one that contains it or is

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ops"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -308,16 +309,16 @@ func TestLookupsByLinkFindDetachedLinksToo(t *testing.T) {
 }
 
 func TestTheLinkOperationsAreHTTPOnly(t *testing.T) {
-	for name, aud := range map[string]core.Audience{
-		"create_linked_spec":   core.IntegrationOnly,
-		"create_linked_ticket": core.IntegrationOnly,
-		"update_linked_spec":   core.IntegrationOnly,
-		"update_linked_ticket": core.IntegrationOnly,
-		"set_external_state":   core.IntegrationOnly,
-		"find_linked":          core.IntegrationOnly,
-		"unlink":               core.HumanOnly,
+	for name, aud := range map[string]ops.Audience{
+		"create_linked_spec":   ops.IntegrationOnly,
+		"create_linked_ticket": ops.IntegrationOnly,
+		"update_linked_spec":   ops.IntegrationOnly,
+		"update_linked_ticket": ops.IntegrationOnly,
+		"set_external_state":   ops.IntegrationOnly,
+		"find_linked":          ops.IntegrationOnly,
+		"unlink":               ops.HumanOnly,
 	} {
-		if op, ok := core.Operation(name); !ok || op.Audience != aud {
+		if op, ok := ops.Lookup(name); !ok || op.Audience != aud {
 			t.Errorf("operation %s: %+v, %v", name, op, ok)
 		}
 	}

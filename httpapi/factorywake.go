@@ -8,7 +8,7 @@ import (
 
 // The Factory's wake (Spec code-central-743).
 func init() {
-	Routes["next_factory_wake"] = "GET /api/p/{key}/factory/next-wake"
+	legacyRoutes["next_factory_wake"] = "GET /api/p/{key}/factory/next-wake"
 
 	// next_factory_wake holds for up to core.WaitTimeout, as wait does.
 	handlers["next_factory_wake"] = func(c *core.Core, r *http.Request) (any, error) {

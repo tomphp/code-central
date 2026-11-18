@@ -9,8 +9,8 @@ import (
 // Finished work and Archived Projects (ticket 39). Both take an empty
 // JSON body.
 func init() {
-	Routes["archive_project"] = "POST /api/p/{key}/archive_project"
-	Routes["unarchive_project"] = "POST /api/p/{key}/unarchive_project"
+	legacyRoutes["archive_project"] = "POST /api/p/{key}/archive_project"
+	legacyRoutes["unarchive_project"] = "POST /api/p/{key}/unarchive_project"
 
 	handlers["archive_project"] = func(c *core.Core, r *http.Request) (any, error) {
 		var in struct{}

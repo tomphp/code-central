@@ -109,14 +109,15 @@ func TestMCPToolsListSnapshot(t *testing.T) {
 }
 
 func TestHTTPRouteTableSnapshot(t *testing.T) {
-	names := make([]string, 0, len(httpapi.Routes))
-	for name := range httpapi.Routes {
+	routes := httpapi.Routes()
+	names := make([]string, 0, len(routes))
+	for name := range routes {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	var b strings.Builder
 	for _, name := range names {
-		method, pattern, _ := strings.Cut(httpapi.Routes[name], " ")
+		method, pattern, _ := strings.Cut(routes[name], " ")
 		fmt.Fprintf(&b, "%s\t%s\t%s\n", name, method, pattern)
 	}
 	matchesGolden(t, "http-routes.txt", b.String())

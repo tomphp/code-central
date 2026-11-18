@@ -19,6 +19,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ops"
 	"github.com/tomoram/code-central/usage"
 )
 
@@ -30,76 +31,11 @@ type tool struct {
 	call        func(ctx context.Context, c *core.Core, key string, args []byte) (any, error)
 }
 
-// tools maps each agent operation in core.Operations to its tool. The
-// cross-door suite checks the served list against core.Operations.
+// tools maps each agent operation not yet defined in ops to its
+// hand-written tool; derived (schema.go) holds the rest. The cross-door
+// suite checks the served list against ops.All(), and a migration guard
+// that no operation is in both.
 var tools = map[string]tool{
-	"create_spec": {
-		description: "Create a Spec, the description of a piece of work delivered through one or more Tickets; returns an acknowledgement with its ID, or the Spec with full.",
-		schema: object(map[string]any{
-			"title": text("The Spec's title."),
-			"body":  text("The Spec in Markdown."),
-			"full":  flag("Return the whole Spec instead of the acknowledgement."),
-		}, "title"),
-		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
-			var in core.CreateSpecInput
-			if err := core.Decode(ctx, args, &in); err != nil {
-				return nil, err
-			}
-			return c.CreateSpec(ctx, key, in)
-		},
-	},
-	"create_ticket": {
-		description: "Create a Ticket in a Spec, as Draft (the default) or Ready. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
-		schema: object(map[string]any{
-			"spec":        ref("The Spec it belongs to."),
-			"title":       text("The Ticket's title."),
-			"description": text("What to build, in Markdown."),
-			"state":       map[string]any{"type": "string", "enum": []string{"Draft", "Ready"}, "description": "Draft (the default) or Ready."},
-			"labels":      list("Labels to add."),
-			"blocked_by":  map[string]any{"type": "array", "items": map[string]any{"type": []string{"string", "integer"}}, "description": "Tickets it waits on until they are Done. IDs: <key>-<n> or <n>."},
-			"tags":        map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}, "description": "Tags to set on it, as {key: value}; checked as set_tags checks them, so effort must be a valid level."},
-			"full":        flag("Return the whole Ticket instead of the acknowledgement."),
-		}, "spec", "title"),
-		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
-			var in core.CreateTicketInput
-			if err := core.Decode(ctx, args, &in); err != nil {
-				return nil, err
-			}
-			return c.CreateTicket(ctx, key, in)
-		},
-	},
-	"get_ticket": {
-		description: "Get one Ticket: its description, State, Blockers, past Claims and how each ended, every Failure Report and every comment; left_out counts what it leaves out, and parts (claims, failure_reports, comments, rounds, moves, edits) asks for exactly those.",
-		schema: object(map[string]any{
-			"ticket": ref("The Ticket."),
-			"parts":  list("Only these parts, any of claims, failure_reports, comments, rounds, moves and edits; claims, failure_reports and comments when left out."),
-		}, "ticket"),
-		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.GetTicketInput) (any, error) {
-			return c.GetTicket(ctx, key, in)
-		}),
-	},
-	"find_tickets": {
-		description: "Find this Project's Tickets in claim order; every filter given must match. Each row carries needs_me_reason when the Ticket waits on the human, the same as get_ticket. With full, each is the whole Ticket as get_ticket returns it (the default parts, brief), in place of the row.",
-		schema: object(map[string]any{
-			"state":     list("Only Tickets in one of these States."),
-			"title":     text("Only Tickets whose title contains this text."),
-			"labels":    list("Only Tickets with all of these Labels."),
-			"tags":      tagFilter("Only Tickets with all of these Tags, as {key: value}."),
-			"spec":      ref("Only Tickets in this Spec."),
-			"claimable": flag("Only Tickets that are (true) or aren't (false) claimable."),
-			"full":      flag("Return each Ticket as get_ticket does, in place of the row."),
-		}),
-		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
-			var in core.FindTicketsInput
-			if err := core.Decode(ctx, args, &in); err != nil {
-				return nil, err
-			}
-			if in.Full {
-				return c.FindTicketViews(ctx, key, in)
-			}
-			return c.FindTickets(ctx, key, in)
-		},
-	},
 	"claim": {
 		description: "Claim the next Ready Ticket (or the one named, or the next in a Spec); returns a Claim ID and the Ticket, or ticket null when none. Claiming a Ticket this session already holds, with its session_id, returns the same Claim.",
 		schema: object(map[string]any{
@@ -148,9 +84,6 @@ var tools = map[string]tool{
 }
 
 func init() {
-	for name, t := range definingTools {
-		tools[name] = t
-	}
 	for name, t := range sessionTools {
 		tools[name] = t
 	}
@@ -175,86 +108,6 @@ var sessionTools = map[string]tool{
 			}
 			return c.SetSession(ctx, key, in)
 		},
-	},
-}
-
-// definingTools shape work after it is created (ticket 27).
-var definingTools = map[string]tool{
-	"edit_spec": {
-		description: "Edit a Spec's title or body; a body given replaces the old one whole, and the old text is kept in its edit history. Returns an acknowledgement naming the changed fields, or the Spec with full.",
-		schema: object(map[string]any{
-			"spec":  ref("The Spec."),
-			"title": text("The new title."),
-			"body":  text("The new body in Markdown, replacing the old one whole."),
-			"full":  flag("Return the whole Spec instead of the acknowledgement."),
-		}, "spec"),
-		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.EditSpecInput) (any, error) {
-			return c.EditSpec(ctx, key, in)
-		}),
-	},
-	"edit_ticket": {
-		description: "Edit a Ticket's title or description; the old text is kept in its edit history. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
-		schema: object(map[string]any{
-			"ticket":      ref("The Ticket."),
-			"title":       text("The new title."),
-			"description": text("The new description in Markdown, replacing the old one whole."),
-			"full":        flag("Return the whole Ticket instead of the acknowledgement."),
-		}, "ticket"),
-		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.EditTicketInput) (any, error) {
-			return c.EditTicket(ctx, key, in)
-		}),
-	},
-	"add_labels": {
-		description: "Add Labels to a Spec or Ticket, leaving its other Labels alone.",
-		schema:      object(map[string]any{"target": ref("The Spec or Ticket."), "labels": list("Labels to add.")}, "target", "labels"),
-		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.LabelsInput) (any, error) {
-			return c.AddLabels(ctx, key, in)
-		}),
-	},
-	"remove_labels": {
-		description: "Remove Labels from a Spec or Ticket, leaving its other Labels alone.",
-		schema:      object(map[string]any{"target": ref("The Spec or Ticket."), "labels": list("Labels to remove.")}, "target", "labels"),
-		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.LabelsInput) (any, error) {
-			return c.RemoveLabels(ctx, key, in)
-		}),
-	},
-	"set_tags": {
-		description: "Set Tags on a Spec or Ticket, overwriting only the keys named; keys are lowercase [a-z0-9._-], values one non-empty line.",
-		schema: object(map[string]any{
-			"target": ref("The Spec or Ticket."),
-			"tags":   map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}, "description": "Tags to set, as {key: value}."},
-		}, "target", "tags"),
-		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.SetTagsInput) (any, error) {
-			return c.SetTags(ctx, key, in)
-		}),
-	},
-	"remove_tags": {
-		description: "Remove Tags from a Spec or Ticket by key.",
-		schema:      object(map[string]any{"target": ref("The Spec or Ticket."), "keys": list("Tag keys to remove.")}, "target", "keys"),
-		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.RemoveTagsInput) (any, error) {
-			return c.RemoveTags(ctx, key, in)
-		}),
-	},
-	"comment": {
-		description: "Comment on any Ticket, even one another agent holds; no Claim ID is needed. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
-		schema:      object(map[string]any{"ticket": ref("The Ticket."), "body": text("The comment in Markdown."), "full": flag("Return the whole Ticket instead of the acknowledgement.")}, "ticket", "body"),
-		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.CommentInput) (any, error) {
-			return c.Comment(ctx, key, in)
-		}),
-	},
-	"approve": {
-		description: "Approve a Draft Ticket you have finished defining, moving it to Ready so it can be claimed. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
-		schema:      object(map[string]any{"ticket": ref("The Ticket."), "full": flag("Return the whole Ticket instead of the acknowledgement.")}, "ticket"),
-		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.TicketInput) (any, error) {
-			return c.Approve(ctx, key, in)
-		}),
-	},
-	"defer": {
-		description: "Defer a Ready Ticket that isn't ready back to Draft, with the reason stored as a comment. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
-		schema:      object(map[string]any{"ticket": ref("The Ticket."), "reason": text("Why it isn't ready."), "full": flag("Return the whole Ticket instead of the acknowledgement.")}, "ticket", "reason"),
-		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.DeferInput) (any, error) {
-			return c.Defer(ctx, key, in)
-		}),
 	},
 }
 
@@ -310,9 +163,12 @@ func Register(mux *http.ServeMux, c *core.Core, log io.Writer) {
 
 func newServer(c *core.Core, key string, log io.Writer) *sdk.Server {
 	s := sdk.NewServer(&sdk.Implementation{Name: "code-central", Version: "v1"}, &sdk.ServerOptions{Instructions: core.Instructions})
-	for _, op := range core.Operations {
-		t, ok := tools[op.Name]
-		if !ok || op.Audience != core.AgentAndHuman {
+	for _, op := range ops.All() {
+		t, ok := derived[op.Name]
+		if !ok {
+			t, ok = tools[op.Name]
+		}
+		if !ok || op.Audience != ops.AgentAndHuman {
 			continue
 		}
 		s.AddTool(&sdk.Tool{Name: op.Name, Description: t.description, InputSchema: t.schema},

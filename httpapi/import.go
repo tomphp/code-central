@@ -9,8 +9,8 @@ import (
 // Scratch Import (ticket 40). Import writes as agent whatever Actor the
 // request names; core sees to that.
 func init() {
-	Routes["get_import_guide"] = "GET /api/p/{key}/import-guide"
-	Routes["import"] = "POST /api/p/{key}/import"
+	legacyRoutes["get_import_guide"] = "GET /api/p/{key}/import-guide"
+	legacyRoutes["import"] = "POST /api/p/{key}/import"
 
 	handlers["get_import_guide"] = func(c *core.Core, r *http.Request) (any, error) {
 		if err := onlyParams(r.URL.Query()); err != nil {

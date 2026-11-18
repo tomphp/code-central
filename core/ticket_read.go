@@ -11,10 +11,10 @@ import (
 // GetTicketInput is get_ticket's input. With no Parts, the read is the
 // default: DefaultTicketParts, brief (ADR 0015, code-central-320).
 type GetTicketInput struct {
-	Ticket Ref `json:"ticket"`
+	Ticket Ref `json:"ticket" path:"n" desc:"The Ticket." required:"true"`
 	// Parts are any of TicketParts: the read returns the Ticket's other
 	// fields and only these parts.
-	Parts []string `json:"parts,omitempty"`
+	Parts []string `json:"parts,omitempty" query:"part" desc:"Only these parts, any of claims, failure_reports, comments, rounds, moves and edits; claims, failure_reports and comments when left out."`
 	// WithModelChoice adds the Ticket's Model Choice and Auto-accept
 	// kind, for the UI's read
 	// over HTTP. Agents' MCP get_ticket can't ask for it, to keep their
