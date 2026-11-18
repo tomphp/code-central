@@ -95,7 +95,7 @@ func runHistory(t *testing.T, f Factory) {
 				}
 				listed := r.FindTickets("acme", store.TicketFilter{Parts: []store.Part{store.Moves}})
 				if len(listed) != 1 || !maps.Equal(partsOf(listed[0]), only(store.Moves, whole[store.Moves])) {
-					t.Errorf("Tickets naming moves: got %+v", listed)
+					t.Errorf("FindTickets naming moves: got %+v", listed)
 				}
 				all, _ := r.Ticket("acme", 1, store.History...)
 				if got := partsOf(all); !maps.Equal(got, whole) {
@@ -253,7 +253,7 @@ func checkHead(t *testing.T, f Factory, s store.Store, when string, want domain.
 				t.Errorf("%s: head %s, want %s", when, showHead(got.Head), showHead(want))
 			}
 			if listed := r.FindTickets("acme", store.TicketFilter{}); len(listed) != 1 || !headEqual(listed[0].Head, want) {
-				t.Errorf("%s: Tickets' head differs from Ticket's", when)
+				t.Errorf("%s: FindTickets' head differs from Ticket's", when)
 			}
 		})
 	}
