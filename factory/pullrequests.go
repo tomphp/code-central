@@ -31,7 +31,7 @@ func hasMerged(pr *core.PullRequestView) bool { return pr != nil && pr.State == 
 
 // repositoryNamed is the Repository name with a clone, or nil.
 func (f *factory) repositoryNamed(name string) *repository {
-	for _, r := range f.readyRepositories() {
+	for _, r := range f.repos.ready() {
 		if r.name == name {
 			return r
 		}
@@ -43,7 +43,7 @@ func (f *factory) repositoryNamed(name string) *repository {
 // poll, holds commit; for the Home Repository, a base it named earlier
 // in this run may hold it instead.
 func (f *factory) baseHolds(r *repository, commit string) bool {
-	return f.stateOf(r).current && (f.inBaseOf(r, commit) || r.home && f.inOldBase(commit))
+	return f.stateOf(r).current && (f.repos.inBaseOf(r, commit) || r.home && f.inOldBase(commit))
 }
 
 // landPullRequestIn sees to an Accepted Ticket whose work spans
@@ -74,7 +74,7 @@ func (f *factory) landPullRequestIn(ctx context.Context, tk core.TicketView, pol
 		return
 	}
 	if rec.PullRequest == nil && !f.pushedAlreadyIn(r, branch) && f.baseHolds(r, head) {
-		f.printf("%s: nothing to merge into %s%s", tk.ID, f.baseOf(r), r.where())
+		f.printf("%s: nothing to merge into %s%s", tk.ID, f.repos.baseOf(r), r.where())
 		f.landIn(ctx, tk, r, head)
 		return
 	}
@@ -97,7 +97,7 @@ func (f *factory) landMergedIn(ctx context.Context, tk core.TicketView, r *repos
 		key := tk.ID + "@" + pr.MergeCommit
 		if !f.leftOnBranch[key] {
 			f.leftOnBranch[key] = true
-			f.printf("%s: its pull request%s is merged at %s, which %s doesn't hold yet: waiting for it", tk.ID, r.where(), short(pr.MergeCommit), f.baseOf(r))
+			f.printf("%s: its pull request%s is merged at %s, which %s doesn't hold yet: waiting for it", tk.ID, r.where(), short(pr.MergeCommit), f.repos.baseOf(r))
 		}
 		return
 	}
@@ -116,7 +116,7 @@ func (f *factory) landIn(ctx context.Context, tk core.TicketView, r *repository,
 		}
 		return
 	}
-	f.printf("%s: landed on %s%s at %s", tk.ID, f.baseOf(r), r.where(), short(commit))
+	f.printf("%s: landed on %s%s at %s", tk.ID, f.repos.baseOf(r), r.where(), short(commit))
 }
 
 // pushedAlreadyIn reports whether branch is on r's Push remote, as far
@@ -139,62 +139,4 @@ func (f *factory) detectMergedPullRequestsIn(ctx context.Context, tk core.Ticket
 			f.landMergedIn(ctx, tk, r, rec.PullRequest)
 		}
 	}
-}
-
-// moveLandedBranch moves branch in r, where tk's work has landed, to r's
-// Base tip at a Claim's start, before the session starts, so that only
-// new work there opens a new pull request: as when tk was sent back after
-// its pull request there merged (ADR 0050). It moves it only when its
-// worktree, if any, is clean and the branch holds nothing the base
-// doesn't besides the work that landed; otherwise it leaves it as it is.
-func (f *factory) moveLandedBranch(r *repository, tk core.TicketView, branch, wt string) {
-	i := slices.IndexFunc(tk.Repositories, func(v core.ChangedRepositoryView) bool { return v.Name == r.name })
-	if i < 0 || tk.Repositories[i].Landed == nil {
-		return
-	}
-	rec := tk.Repositories[i]
-	head, err := r.git.commit("refs/heads/" + branch)
-	if err != nil || rec.Commit != "" && head != rec.Commit {
-		// Gone, or holding work beyond what landed: nothing to move.
-		return
-	}
-	tip := f.baseTipOf(r)
-	if tip == "" || head == tip {
-		return
-	}
-	list, err := r.git.worktrees()
-	if err != nil {
-		return
-	}
-	if w, ok := find(list, wt); ok && w.branch == branch {
-		if status, err := r.git.status(wt); err != nil || status != "" {
-			return
-		}
-		if _, err := r.git.reset(wt, tip, head); err != nil {
-			f.printf("warning: can't move %s%s to %s's tip: %v", branch, r.where(), f.baseOf(r), err)
-			return
-		}
-	} else if slices.ContainsFunc(list, func(w gitWorktree) bool { return w.branch == branch }) {
-		return
-	} else if err := r.git.updateRef("refs/heads/"+branch, tip, head); err != nil {
-		f.printf("warning: can't move %s%s to %s's tip: %v", branch, r.where(), f.baseOf(r), err)
-		return
-	}
-	f.printf("%s: its work%s landed, so %s moved to %s's tip, %s", tk.ID, r.where(), branch, f.baseOf(r), short(tip))
-}
-
-// baseTipOf is r's Base tip: its Push remote's, as last fetched, when it
-// holds the local base, else the local base's; "" when there is neither.
-// A local-only Repository's is always the local base's.
-func (f *factory) baseTipOf(r *repository) string {
-	local, lerr := r.git.commit("refs/heads/" + f.baseOf(r))
-	if r.remote != "" && !r.localOnly {
-		if theirs, err := r.git.commit("refs/remotes/" + r.remote + "/" + f.baseOf(r)); err == nil && (lerr != nil || r.git.isAncestor(local, theirs)) {
-			return theirs
-		}
-	}
-	if lerr != nil {
-		return ""
-	}
-	return local
 }

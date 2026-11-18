@@ -192,14 +192,14 @@ func Run(ctx context.Context, args []string, e Env) int {
 	}
 	f.polling.end = startingUp
 	defer f.lock.Close()
-	f.printf("base: %s", f.baseBranch())
+	f.printf("base: %s", f.repos.baseBranch())
 	if len(o.claudeArgs) > 0 {
 		f.printf("passing to every claude turn: %s", joinArgs(o.claudeArgs))
 	}
 	if o.bypass {
 		f.printf("warning: --bypass-permissions: every session runs in bypassPermissions mode, with no permission checks")
 	}
-	f.prune(f.home)
+	f.repos.prune(f.repos.home)
 	ctx, f.stop = context.WithCancel(ctx)
 	defer f.stop()
 	go f.watchSignals(ctx, f.starting("the signal watch"))
@@ -291,20 +291,12 @@ type factory struct {
 	o      options
 	git    string
 	claude string
-	// home is the Home Repository: the git top level the Factory starts
-	// in, its repo as landing and the sweep use it, and its worktree
-	// folder, <repo-parent>/<repo-dir>.worktrees.
-	home *repository
-	// repositories is the registry of the Project's Repositories by
-	// Repository Name, home among them, rebuilt from the Project on every
-	// poll, and inOrder the same in landing order; the poll writes them
-	// under reposMu, which the Chat loop's reads take (readyRepositories).
-	// reportedSeveral is whether the last report of their clones was of
-	// several, and reportRepositoriesFailing whether it failed, so a
-	// failure warns once.
-	reposMu                   sync.Mutex
-	repositories              map[string]*repository
-	inOrder                   []*repository
+	// repos is the registry of the Home Repository, the Project's
+	// Repositories and its base, and of their worktrees.
+	repos *repositories
+	// reportedSeveral is whether the last report of the Repositories'
+	// clones was of several, and reportRepositoriesFailing whether it
+	// failed, so a failure warns once.
 	reportedSeveral           bool
 	reportRepositoriesFailing bool
 	project                   string
@@ -352,10 +344,6 @@ type factory struct {
 	// with the remote's this poll, and the merges made into it that
 	// haven't landed yet. They are the poll's own.
 	bases map[string]*baseState
-	// base is the Project's base as the last read of it said; baseMu
-	// guards it, because turns read it from their own goroutines.
-	baseMu sync.Mutex
-	base   string
 	// mcpBase is the base whose .mcp.json was last found committed, and
 	// mcpHeld whether the file is missing from the base, so no branch or
 	// worktree is cut. Both are the poll's own.
@@ -440,7 +428,9 @@ type factory struct {
 // rest.
 func newFactory(e Env, o options) *factory {
 	w := work{e.Work}
-	return &factory{e: e, o: o, drainCh: make(chan struct{}), wakeCh: make(chan func(), 1), work: w, polling: stint{w: w}, drainWork: newHandoff(), stopWork: newHandoff(), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, backInReady: map[string]time.Time{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, saidHeld: map[string]bool{}, reportedChanged: map[string]string{}, bases: map[string]*baseState{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, saidLocalOnly: map[string]bool{}}
+	f := &factory{e: e, o: o, drainCh: make(chan struct{}), wakeCh: make(chan func(), 1), work: w, polling: stint{w: w}, drainWork: newHandoff(), stopWork: newHandoff(), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, backInReady: map[string]time.Time{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, saidHeld: map[string]bool{}, reportedChanged: map[string]string{}, bases: map[string]*baseState{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, saidLocalOnly: map[string]bool{}}
+	f.repos = newRepositories(e.Environ, f.printf)
+	return f
 }
 
 // start makes every start-up check, refusing with the reason.
@@ -450,14 +440,15 @@ func start(e Env, o options) (*factory, error) {
 	if !ok {
 		return nil, errors.New("git isn't on PATH")
 	}
-	f.git = git
+	f.git, f.repos.git = git, git
 	top, err := f.gitOut(e.Dir, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return nil, fmt.Errorf("not in a git repository (%s)", e.Dir)
 	}
 	// git writes C:/... on Windows; the Factory's paths are C:\...
-	f.home = f.newRepository("", filepath.FromSlash(top))
-	f.home.home = true
+	home := f.repos.newRepository("", filepath.FromSlash(top))
+	home.home = true
+	f.repos.home = home
 	if err := f.checkGitVersion(); err != nil {
 		return nil, err
 	}
@@ -470,16 +461,16 @@ func start(e Env, o options) (*factory, error) {
 	}
 	f.project = project
 	// The Home Repository is named by the Project Key.
-	f.home.name = project
-	f.repositories, f.inOrder = map[string]*repository{project: f.home}, []*repository{f.home}
+	home.name = project
+	f.repos.replace(map[string]*repository{project: home}, []*repository{home})
 	if f.claude, ok = e.lookPath("claude"); !ok {
 		return nil, errors.New("claude isn't on PATH")
 	}
 	if err := refuseClaudeShim(f.claude); err != nil {
 		return nil, err
 	}
-	if err := writable(f.home.worktrees); err != nil {
-		return nil, fmt.Errorf("can't use the worktree folder %s: %v", f.home.worktrees, err)
+	if err := writable(home.worktrees); err != nil {
+		return nil, fmt.Errorf("can't use the worktree folder %s: %v", home.worktrees, err)
 	}
 	f.client = client.New(client.ServiceURL(e.getenv))
 	every := e.EventBatchEvery
@@ -498,15 +489,16 @@ func start(e Env, o options) (*factory, error) {
 	p, readErr := f.client.GetProject(context.Background(), project)
 	// The base is the Project's, read again on every poll; until it can be
 	// read, it is the default.
-	f.base = store.DefaultBase
+	base := store.DefaultBase
 	if readErr == nil {
-		f.base = p.Landing.Base
+		base = p.Landing.Base
 	}
-	if _, err := f.gitOut(top, "rev-parse", "--verify", "-q", f.base+"^{commit}"); err == nil {
+	f.repos.setBase(base)
+	if _, err := f.gitOut(top, "rev-parse", "--verify", "-q", base+"^{commit}"); err == nil {
 		if !f.mcpCommitted() {
 			return nil, errors.New(f.mcpMessage())
 		}
-		f.mcpBase = f.base
+		f.mcpBase = base
 	}
 	f.accepts = f.readClaudeHelp()
 	if err := f.checkEffortFlag(); err != nil {
@@ -543,7 +535,7 @@ func start(e Env, o options) (*factory, error) {
 var minGit = [2]int{2, 38}
 
 func (f *factory) checkGitVersion() error {
-	out, err := f.gitOut(f.home.dir, "version")
+	out, err := f.gitOut(f.repos.home.dir, "version")
 	if err != nil {
 		return err
 	}
@@ -588,34 +580,23 @@ func (f *factory) gitOut(dir string, args ...string) (string, error) {
 	return gitOut(f.git, f.e.Environ, dir, args...)
 }
 
-// baseBranch is the Project's base as of the last poll's read.
-func (f *factory) baseBranch() string {
-	f.baseMu.Lock()
-	defer f.baseMu.Unlock()
-	return f.base
-}
-
-// setBase takes the base the Project names this poll. A change of base
-// says so and forgets what was known of the old one.
+// setBase takes the base the Project names this poll into the registry.
+// A change of base says so and forgets what was known of the old one.
 func (f *factory) setBase(base string) {
-	f.baseMu.Lock()
-	old := f.base
-	f.base = base
-	f.baseMu.Unlock()
-	if old != base {
+	if old := f.repos.setBase(base); old != base {
 		f.printf("base: %s, was %s", base, old)
-		f.stateOf(f.home).changedBase()
+		f.stateOf(f.repos.home).changedBase()
 		f.oldBases = append(f.oldBases, old)
 	}
 }
 
 // mcpCommitted is whether .mcp.json is committed on the base.
 func (f *factory) mcpCommitted() bool {
-	_, err := f.gitOut(f.home.dir, "cat-file", "-e", f.baseBranch()+":.mcp.json")
+	_, err := f.gitOut(f.repos.home.dir, "cat-file", "-e", f.repos.baseBranch()+":.mcp.json")
 	return err == nil
 }
 
 func (f *factory) mcpMessage() string {
-	b := f.baseBranch()
+	b := f.repos.baseBranch()
 	return fmt.Sprintf(".mcp.json isn't committed on %s: every worktree starts from %s, so its sessions need it; commit it first", b, b)
 }

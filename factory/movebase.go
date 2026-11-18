@@ -25,7 +25,7 @@ import (
 // base as it was and reports it diverged; uncommitted changes in the way
 // of the move leave it for the next poll.
 func (f *factory) moveBase(ctx context.Context, repo *repository, remote, local, theirs string, merged []core.TicketView) bool {
-	base, s := f.baseOf(repo), f.stateOf(repo)
+	base, s := f.repos.baseOf(repo), f.stateOf(repo)
 	heads, err := f.mergeHeads(repo, theirs, merged)
 	cant := ""
 	var r rebuilt

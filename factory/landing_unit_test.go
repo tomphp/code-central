@@ -69,10 +69,11 @@ func newLandWorld(t *testing.T) *landWorld {
 	out := &lineBuffer{}
 	repo := newFakeRepo(fakeTop)
 	f := newFactory(Env{Stdout: out, Clock: clock.System{}}, options{parallel: 1})
-	f.project, f.base, f.client = "acme", "main", srv.Client
+	f.project, f.client = "acme", srv.Client
+	f.repos.setBase("main")
 	// As start builds it: with the OS's separators.
-	f.home = &repository{name: "acme", home: true, dir: fakeTop, git: repo, worktrees: filepath.FromSlash(fakeTop + ".worktrees")}
-	f.repositories = map[string]*repository{"acme": f.home}
+	f.repos.home = &repository{name: "acme", home: true, dir: fakeTop, git: repo, worktrees: filepath.FromSlash(fakeTop + ".worktrees")}
+	f.repos.byName = map[string]*repository{"acme": f.repos.home}
 	return &landWorld{t: t, f: f, repo: repo, srv: srv, human: human, out: out}
 }
 
@@ -352,7 +353,7 @@ func TestUnderMergeAnAcceptedTicketsWorktreeIsKeptUntilItLands(t *testing.T) {
 	t.Parallel()
 	w := newLandWorld(t)
 	id, _ := w.accepted("Add a feature")
-	wt := w.f.worktree(id)
+	wt := w.f.repos.worktree(id)
 	w.repo.addWorktree(wt, id)
 	// Uncommitted changes in the base checkout hold the merge, so the
 	// Ticket is still Accepted when the sweep runs.
@@ -438,7 +439,7 @@ func TestUnderBranchADirtyWorktreeOfAnAcceptedTicketIsWarnedAboutAndLeft(t *test
 	w := newLandWorld(t)
 	w.setLanding(store.LandingBranch, false, "")
 	id, _ := w.accepted("Add a feature")
-	wt := w.f.worktree(id)
+	wt := w.f.repos.worktree(id)
 	w.repo.addWorktree(wt, id)
 	w.repo.setDirty(wt, "?? notes.txt")
 
@@ -724,7 +725,7 @@ func TestTheSweepRemovesOnlyCleanWorktreesOfFinishedTickets(t *testing.T) {
 	landed, _ := w.accepted("Landed")
 	review, _ := w.reviewed("Still in review")
 	for _, id := range []string{landed, review} {
-		w.repo.addWorktree(w.f.worktree(id), id)
+		w.repo.addWorktree(w.f.repos.worktree(id), id)
 	}
 	stray := filepath.Join(fakeTop+".worktrees", "acme-999")
 	w.repo.addWorktree(stray, "acme-999")
@@ -732,10 +733,10 @@ func TestTheSweepRemovesOnlyCleanWorktreesOfFinishedTickets(t *testing.T) {
 	w.repo.addWorktree(elsewhere, "other")
 
 	w.poll()
-	if w.repo.hasWorktree(w.f.worktree(landed)) {
+	if w.repo.hasWorktree(w.f.repos.worktree(landed)) {
 		t.Errorf("the clean worktree of the landed %s is still there", landed)
 	}
-	for _, kept := range []string{w.f.worktree(review), stray, elsewhere} {
+	for _, kept := range []string{w.f.repos.worktree(review), stray, elsewhere} {
 		if !w.repo.hasWorktree(kept) {
 			t.Errorf("the worktree %s was removed", kept)
 		}

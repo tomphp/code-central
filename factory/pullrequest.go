@@ -29,7 +29,7 @@ import (
 // Repository's base is synced apart, in r, with remote the name of its
 // own remote.
 func (f *factory) syncBase(ctx context.Context, r *repository, remote string, pushesBase bool, merged []core.TicketView) bool {
-	base := f.baseOf(r)
+	base := f.repos.baseOf(r)
 	if out, err := r.git.fetch(ctx, remote); err != nil {
 		if ctx.Err() == nil {
 			if r.home {
@@ -76,7 +76,7 @@ func (f *factory) syncBase(ctx context.Context, r *repository, remote string, pu
 // Heartbeat: a failed fetch reaches none, so it leaves the last report.
 func (f *factory) noteBase(ctx context.Context, r *repository, diverged bool, local, remote string) {
 	defer f.reportBase(ctx, r, diverged, local, remote)
-	s, base := f.stateOf(r), f.baseOf(r)
+	s, base := f.stateOf(r), f.repos.baseOf(r)
 	if diverged && !s.diverged {
 		if r.home {
 			f.printf("warning: the base, %s, has diverged from the remote's: it is at %s and the remote's at %s. Nothing lands and no branch is cut until you reconcile them by hand", base, short(local), short(remote))
@@ -126,11 +126,11 @@ func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, p cor
 		f.landMerged(ctx, tk)
 		return
 	}
-	remote := f.home.remote
+	remote := f.repos.home.remote
 	head, _, err := f.workOf(tk)
-	if err == nil && tk.PullRequest == nil && !f.pushedAlreadyIn(f.home, tk.Branch) && f.stateOf(f.home).current && f.inBase(head) {
-		f.printf("%s: nothing to merge into %s", tk.ID, f.baseBranch())
-		f.landAt(ctx, tk, f.home, head)
+	if err == nil && tk.PullRequest == nil && !f.pushedAlreadyIn(f.repos.home, tk.Branch) && f.stateOf(f.repos.home).current && f.inBase(head) {
+		f.printf("%s: nothing to merge into %s", tk.ID, f.repos.baseBranch())
+		f.landAt(ctx, tk, f.repos.home, head)
 		return
 	}
 	if err != nil {
@@ -140,7 +140,7 @@ func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, p cor
 	if tk.Branch == "" {
 		return
 	}
-	pushed, why := f.push(ctx, f.home, remote, tk.Branch, head)
+	pushed, why := f.push(ctx, f.repos.home, remote, tk.Branch, head)
 	if why != "" {
 		f.cantPushYet(ctx, tk, why)
 		return
@@ -148,7 +148,7 @@ func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, p cor
 	if pushed {
 		f.printf("%s: pushed %s to %s", tk.ID, tk.Branch, remote)
 	}
-	f.reportPushed(ctx, tk, p.LandingPolicies(), f.home, tk.Branch, f.remoteTip(f.home, remote, tk.Branch, head))
+	f.reportPushed(ctx, tk, p.LandingPolicies(), f.repos.home, tk.Branch, f.remoteTip(f.repos.home, remote, tk.Branch, head))
 }
 
 // inOldBase reports whether the Home's fetched Push remote holds commit
@@ -156,7 +156,7 @@ func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, p cor
 // keeps its target when the base changes, so it merges there.
 func (f *factory) inOldBase(commit string) bool {
 	for _, b := range f.oldBases {
-		if f.home.git.isAncestor(commit, "refs/remotes/"+f.home.remote+"/"+b) {
+		if f.repos.home.git.isAncestor(commit, "refs/remotes/"+f.repos.home.remote+"/"+b) {
 			return true
 		}
 	}
@@ -168,16 +168,16 @@ func (f *factory) inOldBase(commit string) bool {
 // poll.
 func (f *factory) landMerged(ctx context.Context, tk core.TicketView) {
 	merge := tk.PullRequest.MergeCommit
-	if !f.stateOf(f.home).current || !f.inBase(merge) && !f.inOldBase(merge) {
+	if !f.stateOf(f.repos.home).current || !f.inBase(merge) && !f.inOldBase(merge) {
 		key := tk.ID + "@" + merge
 		if !f.leftOnBranch[key] {
 			f.leftOnBranch[key] = true
-			f.printf("%s: its pull request is merged at %s, which %s doesn't hold yet: waiting for it", tk.ID, short(merge), f.baseBranch())
+			f.printf("%s: its pull request is merged at %s, which %s doesn't hold yet: waiting for it", tk.ID, short(merge), f.repos.baseBranch())
 		}
 		return
 	}
 	f.printf("%s: pull request %d merged", tk.ID, tk.PullRequest.Number)
-	f.landAt(ctx, tk, f.home, merge)
+	f.landAt(ctx, tk, f.repos.home, merge)
 }
 
 // detectMergedPullRequests lands tk, In Review, in each of its Changed
@@ -186,11 +186,11 @@ func (f *factory) landMerged(ctx context.Context, tk core.TicketView) {
 // its own broken base. A Ticket in any other State whose pull request in
 // the Home Repository is merged gets a warning line and a comment, once.
 func (f *factory) detectMergedPullRequests(ctx context.Context, tk core.TicketView, policies core.LandingPolicies) {
-	if tk.State == store.InReview && changedElsewhere(f.home.name, tk) {
+	if tk.State == store.InReview && changedElsewhere(f.repos.home.name, tk) {
 		f.detectMergedPullRequestsIn(ctx, tk, policies)
 		return
 	}
-	if !f.home.policy(policies).LandsByPullRequest() || f.held(f.home, policies) != "" || !hasMerged(tk.PullRequest) {
+	if !f.repos.home.policy(policies).LandsByPullRequest() || f.held(f.repos.home, policies) != "" || !hasMerged(tk.PullRequest) {
 		return
 	}
 	if tk.State == store.InReview {

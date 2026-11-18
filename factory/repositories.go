@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/tomoram/code-central/core"
 )
@@ -76,19 +77,6 @@ func (r *repository) policy(policies core.LandingPolicies) core.LandingPolicy {
 	return policies.In(r.name)
 }
 
-// baseOf is r's Base: the Project's for the Home Repository.
-func (f *factory) baseOf(r *repository) string {
-	if r.home {
-		return f.baseBranch()
-	}
-	return r.base
-}
-
-// inBaseOf reports whether commit is in r's base.
-func (f *factory) inBaseOf(r *repository, commit string) bool {
-	return r.git.isAncestor(commit, "refs/heads/"+f.baseOf(r))
-}
-
 // where ends a line about something in r, saying where it is: " in
 // Repository <name>", or nothing for the Home Repository, as the lines
 // of a Project with the Home Repository alone have always said.
@@ -99,24 +87,84 @@ func (r *repository) where() string {
 	return " in Repository " + r.name
 }
 
+// repositories is the registry the landing and the sessions share: the
+// Home Repository, the Project's Repositories by Repository Name and in
+// landing order, the Project's base, and how a Ticket's or the Chat's
+// worktrees are named and set up in them (worktree.go). Only the poll's
+// landing step writes it (replace, setBase); turns and the Chat loop read
+// it from their own goroutines, under its mutexes.
+type repositories struct {
+	// git is the git binary and environ the environment every git call in
+	// a clone runs with; printf writes the Factory's lines.
+	git     string
+	environ []string
+	printf  func(format string, args ...any)
+	// home is the Home Repository: the git top level the Factory starts
+	// in, its repo as landing and the sweep use it, and its worktree
+	// folder, <repo-parent>/<repo-dir>.worktrees. start sets it, and
+	// nothing changes it after.
+	home *repository
+	// byName is the Project's Repositories by Repository Name, home among
+	// them, rebuilt from the Project on every poll, and inOrder the same
+	// in landing order; mu guards both.
+	mu      sync.Mutex
+	byName  map[string]*repository
+	inOrder []*repository
+	// base is the Project's base as the last read of it said; baseMu
+	// guards it, because turns read it from their own goroutines.
+	baseMu sync.Mutex
+	base   string
+}
+
+// newRepositories is a registry with no Repository yet, whose git calls
+// run with environ and whose lines go to printf: start sets the rest.
+func newRepositories(environ []string, printf func(format string, args ...any)) *repositories {
+	return &repositories{environ: environ, printf: printf, byName: map[string]*repository{}}
+}
+
+// gitOut runs git in dir and returns its trimmed output.
+func (rs *repositories) gitOut(dir string, args ...string) (string, error) {
+	return gitOut(rs.git, rs.environ, dir, args...)
+}
+
+// newRepository is the Repository name whose clone is at dir.
+func (rs *repositories) newRepository(name, dir string) *repository {
+	return &repository{name: name, dir: dir, git: gitRepo{git: rs.git, dir: dir, environ: rs.environ}, worktrees: filepath.Join(filepath.Dir(dir), filepath.Base(dir)+".worktrees")}
+}
+
+// replace makes byName and inOrder the Repositories, as a sync found
+// them.
+func (rs *repositories) replace(byName map[string]*repository, inOrder []*repository) {
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
+	rs.byName, rs.inOrder = byName, inOrder
+}
+
+// named is the Repository called name, as the last poll found it; nil
+// when the Project has none.
+func (rs *repositories) named(name string) *repository {
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
+	return rs.byName[name]
+}
+
 // several reports whether the Project has more than one Repository, as
 // the last poll found. A turn's end reads it too (the finish check), from
 // its own goroutine.
-func (f *factory) several() bool {
-	f.reposMu.Lock()
-	defer f.reposMu.Unlock()
-	return len(f.inOrder) > 1
+func (rs *repositories) several() bool {
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
+	return len(rs.inOrder) > 1
 }
 
-// readyRepositories is the Project's Repositories with a clone, in
-// landing order, as the last poll found them: the Home Repository alone
-// before the first. The Chat loop reads them too, from its own
-// goroutine.
-func (f *factory) readyRepositories() []*repository {
-	f.reposMu.Lock()
-	defer f.reposMu.Unlock()
+// ready is the Project's Repositories with a clone, in landing order, as
+// the last poll found them: the Home Repository alone before the first.
+// The Chat loop reads them too, from its own goroutine.
+func (rs *repositories) ready() []*repository {
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
 	var out []*repository
-	for _, r := range f.inOrder {
+	for _, r := range rs.inOrder {
 		if r.problem == "" {
 			out = append(out, r)
 		}
@@ -124,9 +172,46 @@ func (f *factory) readyRepositories() []*repository {
 	return out
 }
 
-// newRepository is the Repository name whose clone is at dir.
-func (f *factory) newRepository(name, dir string) *repository {
-	return &repository{name: name, dir: dir, git: gitRepo{git: f.git, dir: dir, environ: f.e.Environ}, worktrees: filepath.Join(filepath.Dir(dir), filepath.Base(dir)+".worktrees")}
+// anyMissing reports whether any Repository is missing, as the last poll
+// found.
+func (rs *repositories) anyMissing() bool {
+	rs.mu.Lock()
+	defer rs.mu.Unlock()
+	for _, r := range rs.byName {
+		if r.problem != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// baseBranch is the Project's base as of the last poll's read: the Home
+// Repository's Base.
+func (rs *repositories) baseBranch() string {
+	rs.baseMu.Lock()
+	defer rs.baseMu.Unlock()
+	return rs.base
+}
+
+// setBase takes the base the Project names, returning the one before.
+func (rs *repositories) setBase(base string) (old string) {
+	rs.baseMu.Lock()
+	defer rs.baseMu.Unlock()
+	old, rs.base = rs.base, base
+	return old
+}
+
+// baseOf is r's Base: the Project's for the Home Repository.
+func (rs *repositories) baseOf(r *repository) string {
+	if r.home {
+		return rs.baseBranch()
+	}
+	return r.base
+}
+
+// inBaseOf reports whether commit is in r's base.
+func (rs *repositories) inBaseOf(r *repository, commit string) bool {
+	return r.git.isAncestor(commit, "refs/heads/"+rs.baseOf(r))
 }
 
 // syncRepositories rebuilds the registry from p's Repositories: it
@@ -143,11 +228,11 @@ func (f *factory) syncRepositories(ctx context.Context, p core.ProjectView) {
 	taken := map[string]string{}
 	for _, v := range p.Repositories {
 		if v.Home {
-			taken[f.home.dir] = v.Name
+			taken[f.repos.home.dir] = v.Name
 		}
 	}
 	for _, v := range p.Repositories {
-		r := f.home
+		r := f.repos.home
 		if v.Home {
 			r.listedAs(v)
 		} else {
@@ -156,11 +241,11 @@ func (f *factory) syncRepositories(ctx context.Context, p core.ProjectView) {
 				// A stop cut the clone off: it isn't missing.
 				return
 			}
-			was := f.repositories[v.Name]
+			was := f.repos.named(v.Name)
 			f.sayClone(r, was)
 			if r.problem == "" && (was == nil || was.problem != "") {
 				// As the Home Repository's are at start.
-				f.prune(r)
+				f.repos.prune(r)
 			}
 		}
 		f.sayLocalOnlyUnderPullRequest(r)
@@ -172,9 +257,7 @@ func (f *factory) syncRepositories(ctx context.Context, p core.ProjectView) {
 		}
 		report = append(report, core.RepositoryReport{Name: v.Name, Path: r.dir, State: state, Problem: r.problem})
 	}
-	f.reposMu.Lock()
-	f.repositories, f.inOrder = next, inOrder
-	f.reposMu.Unlock()
+	f.repos.replace(next, inOrder)
 	// Back to the Home Repository alone, one more report clears the last.
 	several := len(p.Repositories) > 1
 	if !several && !f.reportedSeveral {
@@ -201,9 +284,9 @@ func (f *factory) syncRepositories(ctx context.Context, p core.ProjectView) {
 func (f *factory) cloneOf(ctx context.Context, v core.RepositoryView, taken map[string]string) *repository {
 	dir := v.LocalPath
 	if dir == "" {
-		dir = filepath.Join(filepath.Dir(f.home.dir), v.Name)
+		dir = filepath.Join(filepath.Dir(f.repos.home.dir), v.Name)
 	}
-	r := f.newRepository(v.Name, dir)
+	r := f.repos.newRepository(v.Name, dir)
 	r.cloneURL, r.base = v.CloneURL, v.Base
 	r.listedAs(v)
 	remote := r.remote
@@ -284,17 +367,6 @@ func (f *factory) sayLocalOnlyUnderPullRequest(r *repository) {
 	}
 	f.saidLocalOnly[r.name] = true
 	f.printf("warning: Repository %s is local-only under Pull Request: nothing lands in it until you give it another Landing in Project Options, or add its Push remote, %s, to its clone and restart the Factory", r.name, r.remote)
-}
-
-// repositoryMissing reports whether any Repository is missing, as the
-// last poll found.
-func (f *factory) repositoryMissing() bool {
-	for _, r := range f.repositories {
-		if r.problem != "" {
-			return true
-		}
-	}
-	return false
 }
 
 // samePath reports whether a and b name one folder, through any

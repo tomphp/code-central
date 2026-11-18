@@ -6,14 +6,21 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/store"
 )
 
+// chatWorktreeName is the folder of each Repository's Chat worktree,
+// beside its Ticket worktrees: a Ticket ID is never chat.
+const chatWorktreeName = "chat"
+
 // worktree is ticket's Home worktree, where its sessions run.
-func (f *factory) worktree(ticket string) string { return filepath.Join(f.home.worktrees, ticket) }
+func (rs *repositories) worktree(ticket string) string {
+	return filepath.Join(rs.home.worktrees, ticket)
+}
 
 // repositoryWorktree is a Claim's or a Conversation's worktree in one
 // Repository (ADR 0048): its path, beside the Repository's clone, and the
@@ -42,10 +49,10 @@ type worktreeSet []repositoryWorktree
 
 // worktreesNamed is the worktree folder named name (a Ticket ID, or the
 // Chat worktree's) on branch in every Repository with a clone.
-func (f *factory) worktreesNamed(name, branch string) worktreeSet {
+func (rs *repositories) worktreesNamed(name, branch string) worktreeSet {
 	var ws worktreeSet
-	for _, r := range f.readyRepositories() {
-		ws = append(ws, repositoryWorktree{r: r, path: filepath.Join(r.worktrees, name), base: f.baseOf(r), branch: branch})
+	for _, r := range rs.ready() {
+		ws = append(ws, repositoryWorktree{r: r, path: filepath.Join(r.worktrees, name), base: rs.baseOf(r), branch: branch})
 	}
 	return ws
 }
@@ -91,26 +98,101 @@ func (ws worktreeSet) about(w repositoryWorktree, what string) string {
 // to the Base's tip first. The first that fails is the Claim's failure,
 // naming its Repository when there are several; those set up before it
 // stay.
-func (f *factory) setUpWorktrees(tk core.TicketView, ws worktreeSet) *failure {
+func (rs *repositories) setUpWorktrees(tk core.TicketView, ws worktreeSet) *failure {
 	for _, w := range ws {
 		var err error
 		if w.branch != "" {
-			f.moveLandedBranch(w.r, tk, w.branch, w.path)
-			err = f.cutBranchWorktree(w.r, tk, w.branch, w.path)
+			rs.moveLandedBranch(w.r, tk, w.branch, w.path)
+			err = rs.cutBranchWorktree(w.r, tk, w.branch, w.path)
 		} else {
-			err = f.stageWorktree(w.r, w.path)
+			err = rs.stageWorktree(w.r, w.path)
 		}
 		if err == nil {
 			continue
 		}
 		fl := (*failure)(nil)
 		if !errors.As(err, &fl) {
-			fl = f.setUpFailed(w.path, err)
+			fl = setUpFailed(w.path, err)
 		}
 		fl.report.WhatBroke = ws.about(w, fl.report.WhatBroke)
 		return fl
 	}
 	return nil
+}
+
+// moveLandedBranch moves branch in r, where tk's work has landed, to r's
+// Base tip at a Claim's start, before the session starts, so that only
+// new work there opens a new pull request: as when tk was sent back after
+// its pull request there merged (ADR 0050). It moves it only when its
+// worktree, if any, is clean and the branch holds nothing the base
+// doesn't besides the work that landed; otherwise it leaves it as it is.
+func (rs *repositories) moveLandedBranch(r *repository, tk core.TicketView, branch, wt string) {
+	i := slices.IndexFunc(tk.Repositories, func(v core.ChangedRepositoryView) bool { return v.Name == r.name })
+	if i < 0 || tk.Repositories[i].Landed == nil {
+		return
+	}
+	rec := tk.Repositories[i]
+	head, err := r.git.commit("refs/heads/" + branch)
+	if err != nil || rec.Commit != "" && head != rec.Commit {
+		// Gone, or holding work beyond what landed: nothing to move.
+		return
+	}
+	tip := rs.baseTipOf(r)
+	if tip == "" || head == tip {
+		return
+	}
+	list, err := r.git.worktrees()
+	if err != nil {
+		return
+	}
+	if w, ok := find(list, wt); ok && w.branch == branch {
+		if status, err := r.git.status(wt); err != nil || status != "" {
+			return
+		}
+		if _, err := r.git.reset(wt, tip, head); err != nil {
+			rs.printf("warning: can't move %s%s to %s's tip: %v", branch, r.where(), rs.baseOf(r), err)
+			return
+		}
+	} else if slices.ContainsFunc(list, func(w gitWorktree) bool { return w.branch == branch }) {
+		return
+	} else if err := r.git.updateRef("refs/heads/"+branch, tip, head); err != nil {
+		rs.printf("warning: can't move %s%s to %s's tip: %v", branch, r.where(), rs.baseOf(r), err)
+		return
+	}
+	rs.printf("%s: its work%s landed, so %s moved to %s's tip, %s", tk.ID, r.where(), branch, rs.baseOf(r), short(tip))
+}
+
+// baseTipOf is r's Base tip: its Push remote's, as last fetched, when it
+// holds the local base, else the local base's; "" when there is neither.
+// A local-only Repository's is always the local base's.
+func (rs *repositories) baseTipOf(r *repository) string {
+	local, lerr := r.git.commit("refs/heads/" + rs.baseOf(r))
+	if r.remote != "" && !r.localOnly {
+		if theirs, err := r.git.commit("refs/remotes/" + r.remote + "/" + rs.baseOf(r)); err == nil && (lerr != nil || r.git.isAncestor(local, theirs)) {
+			return theirs
+		}
+	}
+	if lerr != nil {
+		return ""
+	}
+	return local
+}
+
+// cutBranchWorktree gives a claimed Ticket its worktree in r on branch. A
+// new branch is cut from r's base's tip, or for a Spec-landed Ticket from
+// its Spec Branch's tip in r; an existing branch is reused as it is.
+func (rs *repositories) cutBranchWorktree(r *repository, tk core.TicketView, branch, wt string) error {
+	from := rs.baseOf(r)
+	if tk.SpecLanded {
+		if _, err := r.git.commit("refs/heads/" + branch); err != nil {
+			tip, err := rs.specBranchTip(r, tk.Spec.ID)
+			if err != nil {
+				return specBranchFailed(wt, err)
+			}
+			from = tip
+		}
+	}
+	return rs.branchWorktree(r, branch, wt, from)
 }
 
 // gitWorktree is one entry of `git worktree list`.
@@ -135,7 +217,7 @@ func find(list []gitWorktree, path string) (gitWorktree, bool) {
 // Branch's. Anything else at wt,
 // or branch checked out elsewhere, is a failure, and nothing is
 // touched.
-func (f *factory) branchWorktree(r *repository, branch, wt, from string) error {
+func (rs *repositories) branchWorktree(r *repository, branch, wt, from string) error {
 	list, err := r.git.worktrees()
 	if err != nil {
 		return err
@@ -144,21 +226,21 @@ func (f *factory) branchWorktree(r *repository, branch, wt, from string) error {
 		if w.branch == branch {
 			return nil
 		}
-		return f.wrongWorktree(wt, w, "on branch "+branch)
+		return wrongWorktree(wt, w, "on branch "+branch)
 	}
 	if _, err := os.Stat(wt); err == nil {
-		return f.strayDirectory(r, wt)
+		return strayDirectory(r, wt)
 	}
 	if _, err := r.git.commit("refs/heads/" + branch); err == nil {
 		for _, w := range list {
 			if w.branch == branch {
-				return f.branchElsewhere(branch, wt, w.path)
+				return branchElsewhere(branch, wt, w.path)
 			}
 		}
-		_, err := f.gitOut(r.dir, "worktree", "add", "-q", wt, branch)
+		_, err := rs.gitOut(r.dir, "worktree", "add", "-q", wt, branch)
 		return err
 	}
-	_, err = f.gitOut(r.dir, "worktree", "add", "-q", "-b", branch, wt, from)
+	_, err = rs.gitOut(r.dir, "worktree", "add", "-q", "-b", branch, wt, from)
 	return err
 }
 
@@ -167,20 +249,20 @@ func (f *factory) branchWorktree(r *repository, branch, wt, from string) error {
 // when it is. A dirty one is left as it is, as a failure: the Stage wrote
 // files it shouldn't have. Anything at wt but a detached worktree is a
 // failure too, and nothing is touched.
-func (f *factory) stageWorktree(r *repository, wt string) error {
-	left, err := f.detachAtBase(r, wt)
+func (rs *repositories) stageWorktree(r *repository, wt string) error {
+	left, err := rs.detachAtBase(r, wt)
 	switch {
 	case err != nil || left == nil:
 		return err
 	case left.stray:
-		return f.strayDirectory(r, wt)
+		return strayDirectory(r, wt)
 	case left.branch != "":
-		return f.wrongWorktree(wt, gitWorktree{wt, left.branch}, "detached")
+		return wrongWorktree(wt, gitWorktree{wt, left.branch}, "detached")
 	}
-	head, _ := f.gitOut(wt, "rev-parse", "--short", "HEAD")
+	head, _ := rs.gitOut(wt, "rev-parse", "--short", "HEAD")
 	return &failure{core.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("The Stage's worktree is dirty, so the Factory can't start the Stage. Changed files:\n\n%s", left.dirty),
-		Why:             fmt.Sprintf("A Stage writes nothing to the repository, but %s has uncommitted changes, most likely written by an earlier Claim's session. The Factory moves a Stage's worktree to %s's tip at each new Claim only when it is clean.", wt, f.baseOf(r)),
+		Why:             fmt.Sprintf("A Stage writes nothing to the repository, but %s has uncommitted changes, most likely written by an earlier Claim's session. The Factory moves a Stage's worktree to %s's tip at each new Claim only when it is clean.", wt, rs.baseOf(r)),
 		WhatToFix:       fmt.Sprintf("Look at the changes in %s and keep anything worth keeping elsewhere (a Stage's output belongs in Code Central). Then clean the worktree and send the Ticket back.", wt),
 		WhereWorkStands: fmt.Sprintf("No session ran under this Claim. The worktree %s is detached at %s, with the changes above left as they were.", wt, head),
 	}}
@@ -198,7 +280,7 @@ type leftAsItWas struct {
 // detachAtBase makes wt a worktree of r detached at its base's tip: added
 // when it isn't there, and moved to the current tip when it is a clean
 // detached one. Anything else is left as it was, and returned saying why.
-func (f *factory) detachAtBase(r *repository, wt string) (*leftAsItWas, error) {
+func (rs *repositories) detachAtBase(r *repository, wt string) (*leftAsItWas, error) {
 	list, err := r.git.worktrees()
 	if err != nil {
 		return nil, err
@@ -208,7 +290,7 @@ func (f *factory) detachAtBase(r *repository, wt string) (*leftAsItWas, error) {
 		if _, err := os.Stat(wt); err == nil {
 			return &leftAsItWas{stray: true}, nil
 		}
-		_, err := f.gitOut(r.dir, "worktree", "add", "-q", "--detach", wt, f.baseOf(r))
+		_, err := rs.gitOut(r.dir, "worktree", "add", "-q", "--detach", wt, rs.baseOf(r))
 		return nil, err
 	}
 	if w.branch != "" {
@@ -221,15 +303,15 @@ func (f *factory) detachAtBase(r *repository, wt string) (*leftAsItWas, error) {
 	if status != "" {
 		return &leftAsItWas{dirty: status}, nil
 	}
-	_, err = f.gitOut(wt, "checkout", "-q", "--detach", f.baseOf(r))
+	_, err = rs.gitOut(wt, "checkout", "-q", "--detach", rs.baseOf(r))
 	return nil, err
 }
 
 // prune runs `git worktree prune` in r, dropping worktrees whose folders
 // are gone.
-func (f *factory) prune(r *repository) {
-	if _, err := f.gitOut(r.dir, "worktree", "prune"); err != nil {
-		f.printf("warning: %v", err)
+func (rs *repositories) prune(r *repository) {
+	if _, err := rs.gitOut(r.dir, "worktree", "prune"); err != nil {
+		rs.printf("warning: %v", err)
 	}
 }
 
@@ -245,7 +327,7 @@ func (f *factory) prune(r *repository) {
 // kept, the Chat worktrees among it.
 func (f *factory) sweep(ctx context.Context, policies core.LandingPolicies) {
 	tickets := map[string]*core.TicketView{}
-	for _, r := range f.readyRepositories() {
+	for _, r := range f.repos.ready() {
 		if ctx.Err() != nil {
 			return
 		}
@@ -318,7 +400,7 @@ func (f *factory) sweepsBranch(r *repository, tk core.TicketView, branch string)
 	switch {
 	case !r.home:
 		return true
-	case !f.several():
+	case !f.repos.several():
 		return false
 	}
 	return tk.State == store.Done || tk.State == store.Cancelled || tk.Branch != branch
@@ -351,7 +433,7 @@ func (f *factory) sweepUnusedBranch(r *repository, tk core.TicketView, branch st
 	if err != nil {
 		return
 	}
-	if !onFirstParentLine(r.git, tip, "refs/heads/"+f.baseOf(r)) && !onFirstParentLine(r.git, tip, "refs/heads/"+specBranch(tk.Spec.ID)) {
+	if !onFirstParentLine(r.git, tip, "refs/heads/"+f.repos.baseOf(r)) && !onFirstParentLine(r.git, tip, "refs/heads/"+specBranch(tk.Spec.ID)) {
 		return
 	}
 	if err := r.git.deleteRef(ref, tip); err != nil {
@@ -411,7 +493,7 @@ func (f *factory) turnRunningOn(ticket string) bool {
 
 // setUpFailed is the failure for an error setting up the worktree at wt
 // that isn't already one, such as a git command failing.
-func (f *factory) setUpFailed(wt string, err error) *failure {
+func setUpFailed(wt string, err error) *failure {
 	return &failure{core.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("The Factory couldn't set up this Ticket's worktree at %s: %v", wt, err),
 		Why:             "A git command the Factory runs to set up the worktree failed, so no session could start.",
@@ -420,7 +502,7 @@ func (f *factory) setUpFailed(wt string, err error) *failure {
 	}}
 }
 
-func (f *factory) strayDirectory(r *repository, wt string) error {
+func strayDirectory(r *repository, wt string) error {
 	return &failure{core.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("Something that isn't a git worktree is at this Ticket's worktree path, %s, so the Factory can't set up the worktree.", wt),
 		Why:             fmt.Sprintf("Each Ticket's worktree is at %s/<ticket-id>. %s exists but `git worktree list` doesn't list it, and the Factory never deletes or overwrites what it doesn't recognise.", r.worktrees, wt),
@@ -429,7 +511,7 @@ func (f *factory) strayDirectory(r *repository, wt string) error {
 	}}
 }
 
-func (f *factory) wrongWorktree(wt string, w gitWorktree, want string) error {
+func wrongWorktree(wt string, w gitWorktree, want string) error {
 	on := "detached"
 	if w.branch != "" {
 		on = "on branch " + w.branch
@@ -442,7 +524,7 @@ func (f *factory) wrongWorktree(wt string, w gitWorktree, want string) error {
 	}}
 }
 
-func (f *factory) branchElsewhere(branch, wt, elsewhere string) error {
+func branchElsewhere(branch, wt, elsewhere string) error {
 	return &failure{core.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("Branch %s is checked out at %s, so the Factory can't add this Ticket's worktree at %s on it.", branch, elsewhere, wt),
 		Why:             "git checks a branch out in one worktree at a time, and the Factory never switches a worktree it doesn't own.",
