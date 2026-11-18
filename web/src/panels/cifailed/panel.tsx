@@ -26,7 +26,7 @@ export function CIFailedPanel(props: PanelProps) {
   const items = ticket.ci_items ?? (ticket.ci_item ? [ticket.ci_item] : []);
   return (
     <>
-      <section aria-label={title} className="panel">
+      <section aria-label={title} className="panel ci-failed-panel">
         <h3>{title}</h3>
         <p className="small">
           {reason === "ci_unavailable"
@@ -34,7 +34,7 @@ export function CIFailedPanel(props: PanelProps) {
             : `Its pushed commit's CI ${reason === "ci_cancelled" ? "was cancelled" : "failed"}, so it waits Accepted until you choose what to do.`}
         </p>
         {items.map((item) => (
-          <CIItemTickets key={`${item.repository ?? ""}@${item.commit}`} item={item} self={ticket.id} title={itemTitle(item.reason)} />
+          <CIItemTickets key={`${item.repository ?? ""}@${item.commit}`} item={item} self={ticket.id} />
         ))}
         <CISection project={project} ticket={ticket} />
       </section>
@@ -45,12 +45,12 @@ export function CIFailedPanel(props: PanelProps) {
 
 // CIItemTickets names the commit's Needs Me item and links the other
 // Tickets it lists: one item per commit, whose options act on all of them.
-function CIItemTickets({ item, self, title }: { item: CIItem; self: string; title: string }) {
+function CIItemTickets({ item, self }: { item: CIItem; self: string }) {
   const others = item.tickets.filter((t) => t.id !== self);
   const at = item.repository ? `${item.repository}@${shortCommit(item.commit)}` : shortCommit(item.commit);
   return (
     <p className="small ci-item">
-      {title} at <code>{at}</code> is one Needs Me item
+      At <code>{at}</code>
       {others.length === 0 ? (
         <>, listing this Ticket alone.</>
       ) : (

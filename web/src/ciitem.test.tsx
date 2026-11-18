@@ -62,7 +62,7 @@ describe("a CI item in Needs Me", () => {
     expect(within(focusItem).getByRole("heading", { level: 2 })).toHaveTextContent("CI failed at abc1234");
     expect(within(focusItem).getByText("Focus: CI failed")).toBeInTheDocument();
     const panel = within(focusItem).getByRole("region", { name: "CI failed" });
-    expect(within(panel).getByText(/is one Needs Me item, listing 2 Tickets/)).toHaveTextContent(`Also waiting: ${basket}`);
+    expect(within(panel).getByText(/listing 2 Tickets/)).toHaveTextContent(`Also waiting: ${basket}`);
     expect(within(panel).getByRole("link", { name: basket })).toHaveAttribute("href", expect.stringContaining(`ticket=${basket}`));
     const options = within(panel).getByRole("group", { name: "Failure options" });
     expect(within(options).queryByRole("button", { name: /Send back to fix/ })).toBeNull();
@@ -81,8 +81,8 @@ describe("a CI item in Needs Me", () => {
     const pane = screen.getByRole("complementary", { name: "Ticket" });
     expect(within(pane).getByText("CI failed", { selector: ".reason" })).toBeInTheDocument();
     const panel = within(pane).getByRole("region", { name: "CI failed" });
-    expect(within(panel).getByText(/is one Needs Me item/, { selector: ".ci-item" })).toHaveTextContent(
-      `CI failed at abc1234 is one Needs Me item, listing 2 Tickets waiting on the commit. Your choice acts on all of them. Also waiting: ${login}.`,
+    expect(within(panel).getByText(/listing 2 Tickets/, { selector: ".ci-item" })).toHaveTextContent(
+      `At abc1234, listing 2 Tickets waiting on the commit. Your choice acts on all of them. Also waiting: ${login}.`,
     );
     expect(within(panel).getByRole("link", { name: login })).toHaveAttribute("href", expect.stringContaining(`ticket=${login}`));
     expect(within(within(panel).getByRole("region", { name: "CI" })).getByRole("heading", { level: 3 })).toHaveTextContent("CI failed abc1234");
@@ -115,7 +115,7 @@ describe("a CI item in Needs Me", () => {
     await renderApp(w);
     const focusItem = within(focus()).getByRole("article", { name: "Focus Item" });
     const panel = within(focusItem).getByRole("region", { name: "CI unavailable" });
-    expect(within(panel).getByText(/is one Needs Me item, listing 2 Tickets/)).toHaveTextContent(`Also waiting: ${basket}`);
+    expect(within(panel).getByText(/listing 2 Tickets/)).toHaveTextContent(`Also waiting: ${basket}`);
     expect(within(panel).queryByRole("group", { name: "Failure options" })).toBeNull();
   });
 });

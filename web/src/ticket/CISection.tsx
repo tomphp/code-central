@@ -173,6 +173,14 @@ function fixNote(ci: RepositoryCI): string {
 // Send back to fix and New fix Ticket, which fix forward with
 // the note. Once the human accepted the failed result (Land anyway or
 // New fix Ticket, whose comment names the fix Ticket) it says so.
+// fitToContent grows a textarea to hold all its lines: on mount, and on
+// each edit.
+function fitToContent(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = `${el.scrollHeight}px`;
+}
+
 function CIFailureOptions({ project, ticket: t, ci }: { project: string; ticket: TicketView; ci: RepositoryCI }) {
   const api = useApi();
   const { busy, error, run } = useAct();
@@ -235,7 +243,12 @@ function CIFailureOptions({ project, ticket: t, ci }: { project: string; ticket:
           </p>
           <label className="ci-fix-note">
             <span className="small muted">Note for the fix (required)</span>
-            <textarea rows={5} value={note} onChange={(e) => setNote(e.target.value)} />
+            <textarea rows={2} value={note} onChange={(e) => {
+                setNote(e.target.value);
+                fitToContent(e.target);
+              }}
+              ref={fitToContent}
+            />
           </label>
           <p className="ci-fixes">
             {options.includes("send_back") && (

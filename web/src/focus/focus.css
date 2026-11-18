@@ -42,11 +42,21 @@
 .focus-question-body { line-height: 1.5; }
 .focus-question textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; min-height: 6em; padding: 10px; }
 .focus-question .draft-note { font-size: 15px; }
-.focus-question .btn { font-size: 17px; padding: 8px 18px; }
+/* The answer buttons are scaled as the panels' are. */
+.focus-question .question-actions { zoom: 1.3; }
 /* The panels keep their own stylesheets, sized for the Inbox's side pane;
    inside Focus Mode they are scaled up whole, so their type, spacing and
    buttons all read larger together. */
 .focus .panel { zoom: 1.3; }
+/* One body size per panel: the panels' own small type steps up to it, and
+   the first and last lines sit at the panel's padding, with or without a
+   heading. */
+.focus .panel .small { font-size: inherit; }
+.focus .panel > :first-child { margin-top: 0; }
+.focus .panel > :last-child { margin-bottom: 0; }
+/* The Triage buttons sit apart; inline chips centre on the line's text. */
+.focus .panel .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.focus .panel .label { vertical-align: middle; }
 /* Skip sits under a Ticket's panel, in line with its scaled-up buttons. */
 .focus-skip { margin: 12px 0 0; }
 .focus-skip .btn, .focus-clear .btn { font-size: 17px; padding: 8px 18px; }

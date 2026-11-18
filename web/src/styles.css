@@ -366,6 +366,10 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .ci-section h3, .repos-section h3 { font-size: 13px; margin: 14px 0 6px; }
 .ci-options { margin-top: 8px; }
 .ci-fix-note { display: grid; gap: 4px; margin-top: 8px; }
+/* The fix note is raw text with a link line: mono, so it reads as typed. */
+.ci-fix-note textarea { font: 13px/1.4 var(--mono); resize: vertical; }
+/* The CI-failed panel's heading is the Failed and Accepted panels' h3. */
+.ci-failed-panel h3 { font-size: 14px; color: color-mix(in srgb, var(--r-failed) 55%, var(--text)); margin-bottom: 8px; }
 .ci-fixes { display: flex; gap: 8px; flex-wrap: wrap; }
 .ci-result, .ci-status { font-size: 11px; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--border); }
 .ci-passed, .ci-partially-succeeded { color: color-mix(in srgb, var(--r-review) 55%, var(--text)); border-color: var(--r-review); }
