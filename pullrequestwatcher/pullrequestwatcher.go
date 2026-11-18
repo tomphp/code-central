@@ -7,6 +7,9 @@
 // itself (ADR 0002, ADR 0004), so it runs the Pull Request Watcher once in
 // its check mode before Pull Request is turned on (Check, and Checker on the
 // service's side). The check never creates a pull request.
+//
+// Everything one Code Host knows sits behind the Host interface, in
+// github.go and azure.go.
 package pullrequestwatcher
 
 import (
@@ -79,7 +82,7 @@ func Check(ctx context.Context, in core.PullRequestCheckInput, env gh.Env) core.
 
 // checkOne is Check for in's one repository.
 func checkOne(ctx context.Context, in core.PullRequestCheckInput, env gh.Env) core.WatcherCheckResult {
-	_, r, err := Config{Env: env}.access(ctx, in, true)
+	_, r, err := access(ctx, in, "", env, true)
 	var limit *ratelimit.Error
 	if errors.As(err, &limit) {
 		r = limit.CheckResult(time.Now())
@@ -87,62 +90,62 @@ func checkOne(ctx context.Context, in core.PullRequestCheckInput, env gh.Env) co
 	return r
 }
 
-// access is Check, as each poll runs it too, with the Code Host's pull
-// requests it can reach, for a base: the Code Host's rate-limiting a call
-// is a *ratelimit.Error, not a problem. Only a full check asks
-// whether an Azure Repos PAT can contribute to pull requests, which costs a
-// refused write; each poll reads the repository only.
-func (cfg Config) access(ctx context.Context, in core.PullRequestCheckInput, full bool) (func(base string) host, core.WatcherCheckResult, error) {
+// Host is a Code Host: everything the Pull Request Watcher knows about one
+// sits behind it, for one repository and one base. How it is reached is
+// shared with the other Watchers (packages gh and azdo); its pull requests
+// are this watcher's alone.
+type Host interface {
+	// CheckAccess checks the Pull Request Watcher can open and follow the
+	// repository's pull requests: a result with no Problem when it can,
+	// else what is wrong and its fix. Only a full check asks whether an
+	// Azure Repos PAT can contribute to pull requests, which costs a
+	// refused write; each poll reads the repository only. The Code Host
+	// rate-limiting it is a *ratelimit.Error, as from every method: not a
+	// problem, just a wait. The pull requests are reachable once it passes.
+	CheckAccess(ctx context.Context, full bool) (core.WatcherCheckResult, error)
+	pullRequests
+}
+
+// pullRequests is the repository's pull requests into the base.
+type pullRequests interface {
+	// list is every pull request from branch into the base, newest first.
+	list(ctx context.Context, branch string) ([]*pullRequest, error)
+	// refresh is an open pull request read singly, for what a list leaves
+	// out; a host that lists it all returns p.
+	refresh(ctx context.Context, p *pullRequest) (*pullRequest, error)
+	// open opens a pull request ready for review, with title and body.
+	open(ctx context.Context, branch, title, body string) (*pullRequest, error)
+	// sameBody reports whether a listed pull request's body is body as
+	// the host keeps it.
+	sameBody(listed, body string) bool
+	// edit sets an open pull request's body.
+	edit(ctx context.Context, p *pullRequest, body string) error
+	// close closes pull request number without merging it.
+	close(ctx context.Context, number int) (*pullRequest, error)
+}
+
+// NewHost is the Code Host for in's repository and its pull requests into
+// base, chosen by in's Code Host. It reaches nothing until CheckAccess:
+// GitHub then finds gh with in's gh path Option, and Azure Repos reads the
+// PAT from env by in's PAT environment variable.
+func NewHost(in core.PullRequestCheckInput, base string, env gh.Env) (Host, error) {
 	switch in.CodeHost {
 	case core.CodeHostGitHub:
-		return checkGitHub(ctx, in, cfg.Env)
+		return &github{ghPath: in.GHPath, env: env, repository: in.Repository, base: base}, nil
 	case core.CodeHostAzureRepos:
-		return checkAzureRepos(ctx, in, cfg.Env, full)
+		return &azureRepos{in: in, env: env, base: base}, nil
 	}
-	return nil, core.WatcherCheckResult{Problem: core.ProblemCheckFailed,
-		Reason: fmt.Sprintf("this Pull Request Watcher can't open pull requests on %q: it works with GitHub and Azure Repos", in.CodeHost),
-		Fix:    "Use Merge or Branch as the Landing Method."}, nil
+	return nil, fmt.Errorf("this Pull Request Watcher can't open pull requests on %q: it works with GitHub and Azure Repos", in.CodeHost)
 }
 
-func checkGitHub(ctx context.Context, in core.PullRequestCheckInput, env gh.Env) (func(string) host, core.WatcherCheckResult, error) {
-	prog, r, err := checkGHAccess(ctx, in, env)
-	if r.Problem != "" || err != nil {
-		return nil, r, err
-	}
-	return func(base string) host { return github{prog: prog, env: env, repository: in.Repository, base: base} }, r, nil
-}
-
-// checkGHAccess is the GitHub check, with the gh it found.
-func checkGHAccess(ctx context.Context, in core.PullRequestCheckInput, env gh.Env) (prog string, r core.WatcherCheckResult, err error) {
-	prog, missing := gh.Find(in.GHPath, env)
-	if missing != nil {
-		return "", *missing, nil
-	}
-	r, err = gh.CheckLogin(ctx, env, prog)
-	if r.Problem != "" || err != nil {
-		return prog, r, err
-	}
-	body, msg, err := gh.API(ctx, env, prog, "repos/"+in.Repository)
+// access is Check, as each poll runs it too, with the Code Host it
+// checked, for base: the Code Host's rate-limiting a call is a
+// *ratelimit.Error, not a problem.
+func access(ctx context.Context, in core.PullRequestCheckInput, base string, env gh.Env, full bool) (Host, core.WatcherCheckResult, error) {
+	h, err := NewHost(in, base, env)
 	if err != nil {
-		var limit *ratelimit.Error
-		if errors.As(err, &limit) {
-			return prog, core.WatcherCheckResult{}, limit
-		}
-		if r, ran := gh.DidntRun(prog, err); !ran {
-			return prog, r, nil
-		}
-		return prog, core.WatcherCheckResult{Problem: core.ProblemRepositoryUnreadable, Reason: fmt.Sprintf("gh can't read the repository %s: %s", in.Repository, msg),
-			Fix: "Check the repository is the owner/name GitHub shows, and that the account gh is logged in as can see it."}, nil
+		return nil, core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: err.Error(), Fix: "Use Merge or Branch as the Landing Method."}, nil
 	}
-	var repo struct {
-		Permissions struct {
-			Push bool `json:"push"`
-		} `json:"permissions"`
-	}
-	if err := json.Unmarshal(body, &repo); err != nil || !repo.Permissions.Push {
-		return prog, core.WatcherCheckResult{Problem: core.ProblemNoWrite,
-			Reason: fmt.Sprintf("the account gh is logged in as can't write to %s, which opening a pull request needs", in.Repository),
-			Fix:    "Log gh in as an account with write access to the repository: `gh auth login`, or ask for write access."}, nil
-	}
-	return prog, core.WatcherCheckResult{}, nil
+	r, err := h.CheckAccess(ctx, full)
+	return h, r, err
 }

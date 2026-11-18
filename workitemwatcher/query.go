@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"runtime"
 	"strings"
 
 	"github.com/tomoram/code-central/azdo"
@@ -27,6 +26,12 @@ const MaxWorkItems = 1000
 // scope is the PAT scope the Work Item Watcher needs, as Azure DevOps
 // names it.
 const scope = "Work Items: Read & write"
+
+// access is how the Work Item Watcher reaches Azure DevOps with in's PAT
+// from environ, which only Ready reads: wording a problem passes nil.
+func access(environ []string, in core.AzureBoardsCheckInput) azdo.Access {
+	return azdo.Access{Environ: environ, PATEnv: in.PATEnv, Watcher: "Work Item Watcher", Scope: scope}
+}
 
 // wiqlQuery is the whole WIQL query a WIQL filter's WHERE clause runs as.
 func wiqlQuery(where string) string { return "SELECT [System.Id] FROM workitems WHERE " + where }
@@ -52,14 +57,12 @@ func runQuery(ctx context.Context, env gh.Env, in core.AzureBoardsCheckInput) (q
 				Fix: "Paste the saved query's URL from the browser, with the query open, in the Azure Boards settings."}, nil
 		}
 	}
-	c, err := azdo.New(env.Environ, in.PATEnv, projectURL, nil)
+	c, r, err := access(env.Environ, in).Ready(projectURL)
 	switch {
-	case errors.Is(err, azdo.ErrNoPAT):
-		return queryRun{}, core.WatcherCheckResult{Problem: core.ProblemPATMissing,
-			Reason: fmt.Sprintf("The environment variable %s is not set, or is empty, in the Work Item Watcher's environment.", in.PATEnv),
-			Fix:    azdo.PATMissingFix(runtime.GOOS, in.PATEnv, scope)}, nil
 	case err != nil:
 		return queryRun{}, projectUnreadable(projectURL, err), nil
+	case r.Problem != "":
+		return queryRun{}, r, nil
 	}
 	var res azdo.QueryResult
 	if id != "" {
@@ -103,12 +106,10 @@ func problemOf(in core.AzureBoardsCheckInput, projectURL string, err error) core
 	saved := in.Mode != domain.AzureBoardsWIQL
 	switch {
 	case errors.Is(err, azdo.ErrPATRejected):
-		return core.WatcherCheckResult{Problem: core.ProblemPATRejected,
-			Reason: fmt.Sprintf("Azure DevOps rejected the PAT in %s: it may have expired or been revoked.", in.PATEnv),
-			Fix:    fmt.Sprintf("Make a new PAT with %s, and set it in %s for the service.", scope, in.PATEnv)}
+		return access(nil, in).Rejected()
 	case errors.Is(err, azdo.ErrMissingScope):
 		return core.WatcherCheckResult{Problem: core.ProblemPATScope,
-			Reason: fmt.Sprintf("The PAT in %s can't read work items in %s.", in.PATEnv, projectURL),
+			Reason: fmt.Sprintf("The PAT in %s can't read work items in %s.", access(nil, in).PATVariable(), projectURL),
 			Fix:    fmt.Sprintf("The PAT needs %s. Make a new PAT with that scope, and set it for the service.", scope)}
 	case errors.Is(err, azdo.ErrNotFound) && saved:
 		return core.WatcherCheckResult{Problem: core.ProblemQueryUnusable,

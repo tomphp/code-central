@@ -1,7 +1,8 @@
 // Package gh is how every Watcher reaches GitHub: through gh, the GitHub
 // CLI, and its own login, so Code Central stores no GitHub token. It finds
-// gh, checks its login, calls GitHub's REST API through gh api, and
-// recognises GitHub refusing a call for its rate limit.
+// gh, checks its login (Ready does both for a Watcher's check), calls
+// GitHub's REST API through gh api, and recognises GitHub refusing a call
+// for its rate limit.
 package gh
 
 import (
@@ -131,6 +132,20 @@ func CheckLogin(ctx context.Context, env Env, prog string) (core.WatcherCheckRes
 	}
 	return core.WatcherCheckResult{Problem: core.ProblemLoggedOut, Reason: "gh isn't logged in to GitHub: " + ratelimit.FirstLine(out),
 		Fix: "Run `gh auth login` as the user the service runs as."}, nil
+}
+
+// Ready is the one way a Watcher's check gets a gh to run: it finds gh
+// with ghPath, the gh path Option, and checks its login. It returns the gh
+// it found, which is ready when the result has no Problem and err is nil;
+// GitHub rate-limiting the login check is a *ratelimit.Error, not a
+// problem.
+func Ready(ctx context.Context, env Env, ghPath string) (prog string, r core.WatcherCheckResult, err error) {
+	prog, missing := Find(ghPath, env)
+	if missing != nil {
+		return "", *missing, nil
+	}
+	r, err = CheckLogin(ctx, env, prog)
+	return prog, r, err
 }
 
 // command is prog, gh, run with args in env, never prompting, writing

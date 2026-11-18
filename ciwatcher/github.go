@@ -1,4 +1,4 @@
-// GitHub Actions, the only CI Provider: the CI Watcher reaches GitHub
+// GitHub Actions: the CI Watcher reaches GitHub
 // through gh, the GitHub CLI, and its own login (package gh), so Code
 // Central stores no GitHub token.
 
@@ -34,11 +34,8 @@ type GitHubActions struct {
 // the repository. GitHub rate-limiting the read is a *ratelimit.Error,
 // not a problem.
 func (g *GitHubActions) CheckAccess(ctx context.Context) (core.WatcherCheckResult, error) {
-	prog, missing := gh.Find(g.GHPath, g.Env)
-	if missing != nil {
-		return *missing, nil
-	}
-	if r, err := gh.CheckLogin(ctx, g.Env, prog); r.Problem != "" || err != nil {
+	prog, r, err := gh.Ready(ctx, g.Env, g.GHPath)
+	if r.Problem != "" || err != nil {
 		return r, err
 	}
 	if _, msg, err := gh.API(ctx, g.Env, prog, "repos/"+g.Repository, "--jq", ".full_name"); err != nil {
@@ -152,9 +149,9 @@ func (g *GitHubActions) Jobs(ctx context.Context, id int64, attempt int) ([]core
 // RerunFailedJobs asks GitHub to re-run the failed jobs of a run, which
 // starts its next attempt.
 func (g *GitHubActions) RerunFailedJobs(ctx context.Context, id int64) error {
-	prog, missing := gh.Find(g.GHPath, g.Env)
-	if missing != nil {
-		return errors.New(missing.Reason)
+	prog, err := g.program()
+	if err != nil {
+		return err
 	}
 	path := fmt.Sprintf("repos/%s/actions/runs/%d/rerun-failed-jobs", g.Repository, id)
 	if _, msg, err := gh.API(ctx, g.Env, prog, path, "--method", "POST"); err != nil {
@@ -165,9 +162,9 @@ func (g *GitHubActions) RerunFailedJobs(ctx context.Context, id int64) error {
 
 // api reads path from GitHub's REST API through gh into out.
 func (g *GitHubActions) api(ctx context.Context, path string, out any) error {
-	prog, missing := gh.Find(g.GHPath, g.Env)
-	if missing != nil {
-		return errors.New(missing.Reason)
+	prog, err := g.program()
+	if err != nil {
+		return err
 	}
 	body, msg, err := gh.API(ctx, g.Env, prog, path)
 	if err != nil {
@@ -177,6 +174,15 @@ func (g *GitHubActions) api(ctx context.Context, path string, out any) error {
 		return fmt.Errorf("gh api %s: %v", path, err)
 	}
 	return nil
+}
+
+// program finds gh for a call after the check; not finding it is an error.
+func (g *GitHubActions) program() (string, error) {
+	prog, missing := gh.Find(g.GHPath, g.Env)
+	if missing != nil {
+		return "", errors.New(missing.Reason)
+	}
+	return prog, nil
 }
 
 // workflowName is a workflow's file base name from the run's workflow
