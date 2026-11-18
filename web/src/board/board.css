@@ -48,12 +48,12 @@
 .board-lane { margin-top: 10px; }
 .board-lane.collapsed { margin-top: 0; }
 .lane-header { background: var(--surface); border-top: 1px solid var(--border); }
-.lane-header.needs { background: color-mix(in srgb, var(--r-answer) 9%, var(--surface)); }
+.lane-header.needs { background: color-mix(in srgb, var(--r-answer) 10%, var(--surface)); }
 .lane-header-line { position: sticky; left: 0; max-width: calc(100vw - 48px); display: flex; align-items: center; }
 .lane-header .chev { margin: 0 0 0 6px; }
 .lane-header-link { flex: 1; min-width: 0; display: flex; gap: 8px; align-items: center; padding: 8px 10px 8px 6px; border-left: 3px solid transparent; color: var(--text); text-decoration: none; }
 .lane-header-link .short-id { flex: none; }
-.lane-header-title { flex: 0 1 auto; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lane-header-title { flex: 0 100 auto; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lane-header-link:hover .lane-header-title { text-decoration: underline; }
 .lane-header-headline { flex: 0 1 auto; min-width: 0; margin-left: 8px; color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lane-header-count { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; flex: none; }
