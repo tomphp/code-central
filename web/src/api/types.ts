@@ -77,9 +77,10 @@ export type ChatItem = HeldSessionEvent;
 // ---- Landing ----
 
 // What setLandingMethod takes: the Code Host and repository are derived, and
-// leaving land_per_spec, pat_env or base out keeps the stored value.
+// leaving land_per_spec, rebase, pat_env or base out keeps the stored value.
 export type LandingInput = Pick<Landing, "method" | "push" | "remote"> & {
   land_per_spec?: boolean;
+  rebase?: boolean;
   pat_env?: string;
   base?: string;
 };

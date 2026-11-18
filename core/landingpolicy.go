@@ -93,16 +93,17 @@ func effectiveLanding(p domain.Project, r domain.Repository) (RepositoryLanding,
 }
 
 // repositoryLandingPolicies is the policies of repositories, given the
-// Default Landing's method and Push and the Project's Land per Spec and CI
-// Tracking. It and domain.NewLandingPolicy are the only places that turn
-// settings fields into a policy: a Repository's policy is the Landing
-// Policy's "its Own Landing, or else the Default Landing, with Push off
-// when the Repository is local-only".
-func repositoryLandingPolicies(repositories []RepositoryView, method domain.LandingMethod, push, landPerSpec, ciTracking bool) LandingPolicies {
-	ps := LandingPolicies{byName: map[string]domain.LandingPolicy{}, fallback: domain.NewLandingPolicy(method, push, landPerSpec, ciTracking)}
+// Default Landing's method and Push and the Project's Land per Spec,
+// Rebase and CI Tracking. It and domain.NewLandingPolicy are the only
+// places that turn settings fields into a policy: a Repository's policy
+// is the Landing Policy's "its Own Landing, or else the Default Landing,
+// with Push off when the Repository is local-only". Land per Spec and
+// Rebase are Project-wide: an Own Landing is method and Push alone.
+func repositoryLandingPolicies(repositories []RepositoryView, method domain.LandingMethod, push, landPerSpec, rebase, ciTracking bool) LandingPolicies {
+	ps := LandingPolicies{byName: map[string]domain.LandingPolicy{}, fallback: domain.NewLandingPolicy(method, push, landPerSpec, rebase, ciTracking)}
 	for _, r := range repositories {
 		m, p := r.Landing.methodAndPush()
-		ps.byName[r.Name] = domain.NewLandingPolicy(m, p && !r.LocalOnly, landPerSpec, ciTracking)
+		ps.byName[r.Name] = domain.NewLandingPolicy(m, p && !r.LocalOnly, landPerSpec, rebase, ciTracking)
 		ps.names = append(ps.names, r.Name)
 	}
 	return ps
@@ -112,7 +113,7 @@ func repositoryLandingPolicies(repositories []RepositoryView, method domain.Land
 // views, that is local-only with a policy that needs a Clone URL: only a
 // Home that lost its remote can be, and it keeps its Landing.
 func markLocalOnlyUnderPullRequest(p domain.Project, vs []RepositoryView) {
-	ps := repositoryLandingPolicies(vs, p.Landing.Method, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
+	ps := repositoryLandingPolicies(vs, p.Landing.Method, p.Landing.Push, p.Landing.LandPerSpec, p.Landing.Rebase, p.CI.Tracking)
 	for i, v := range vs {
 		vs[i].LocalOnlyUnderPullRequest = v.LocalOnly && ps.In(v.Name).NeedsCloneURL()
 	}
@@ -120,12 +121,12 @@ func markLocalOnlyUnderPullRequest(p domain.Project, vs []RepositoryView) {
 
 // landingPolicies is the policies of p's Repositories.
 func landingPolicies(p domain.Project) LandingPolicies {
-	return repositoryLandingPolicies(repositoriesView(p), p.Landing.Method, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
+	return repositoryLandingPolicies(repositoriesView(p), p.Landing.Method, p.Landing.Push, p.Landing.LandPerSpec, p.Landing.Rebase, p.CI.Tracking)
 }
 
 // LandingPolicies is the policies of the view's Repositories.
 func (p ProjectView) LandingPolicies() LandingPolicies {
-	return repositoryLandingPolicies(p.Repositories, p.Landing.Method, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
+	return repositoryLandingPolicies(p.Repositories, p.Landing.Method, p.Landing.Push, p.Landing.LandPerSpec, p.Landing.Rebase, p.CI.Tracking)
 }
 
 // landingPolicyIn is the Landing Policy of p's Repository name, which
@@ -202,6 +203,12 @@ func (ps LandingPolicies) LandPerSpecInForce() bool {
 	return ps.Any(domain.LandingPolicy.LandPerSpecInForce)
 }
 
+// RebaseInForce answers whether Rebase covers any of the Project's
+// landings: in force in any Repository's policy.
+func (ps LandingPolicies) RebaseInForce() bool {
+	return ps.Any(domain.LandingPolicy.RebaseInForce)
+}
+
 // LandingMethodCapabilities is what the Options form offers with one
 // Landing Method drafted as the Default Landing: its Landing
 // capabilities.
@@ -210,6 +217,8 @@ type LandingMethodCapabilities struct {
 	OffersPush bool `json:"offers_push"`
 	// OffersLandPerSpec is whether Land per Spec can be changed.
 	OffersLandPerSpec bool `json:"offers_land_per_spec"`
+	// OffersRebase is whether Rebase can be changed.
+	OffersRebase bool `json:"offers_rebase"`
 	// ShowsCodeHost is whether the Code Host worked out from the Push
 	// remote URL is shown.
 	ShowsCodeHost bool `json:"shows_code_host"`
@@ -235,9 +244,9 @@ func landingCapabilities(p domain.Project, azureRepos []string) LandingMethodsCa
 	capabilitiesOf := func(m domain.LandingMethod) LandingMethodCapabilities {
 		drafted := p
 		drafted.Landing.Method = m
-		lp := domain.NewLandingPolicy(m, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
+		lp := domain.NewLandingPolicy(m, p.Landing.Push, p.Landing.LandPerSpec, p.Landing.Rebase, p.CI.Tracking)
 		return LandingMethodCapabilities{OffersPush: lp.OffersPush(), OffersLandPerSpec: lp.OffersLandPerSpec(),
-			ShowsCodeHost: lp.LandsByPullRequest(), UsesAzureReposPAT: landingPolicies(drafted).UsesAzureReposPAT(azureRepos)}
+			OffersRebase: lp.OffersRebase(), ShowsCodeHost: lp.LandsByPullRequest(), UsesAzureReposPAT: landingPolicies(drafted).UsesAzureReposPAT(azureRepos)}
 	}
 	return LandingMethodsCapabilities{Merge: capabilitiesOf(domain.LandingMerge), Branch: capabilitiesOf(domain.LandingBranch),
 		PullRequest: capabilitiesOf(domain.LandingPullRequest)}
@@ -255,7 +264,7 @@ func pushesNothing(p domain.Project) bool {
 			return false
 		}
 		m, push := r.Landing.methodAndPush()
-		needsRemote = needsRemote || domain.NewLandingPolicy(m, push, p.Landing.LandPerSpec, p.CI.Tracking).NeedsPushRemote()
+		needsRemote = needsRemote || domain.NewLandingPolicy(m, push, p.Landing.LandPerSpec, p.Landing.Rebase, p.CI.Tracking).NeedsPushRemote()
 	}
 	return needsRemote
 }

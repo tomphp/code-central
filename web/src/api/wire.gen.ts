@@ -908,6 +908,10 @@ export interface LandingView {
   // LandPerSpec is the Merge option to land a Spec's work together,
   // shown whatever the method.
   land_per_spec: boolean;
+  // Rebase is the Merge and Pull Request option to replay a Ticket's
+  // commits onto its target instead of merging its branch, shown
+  // whatever the method.
+  rebase: boolean;
   // CodeHost is the Code Host the reported Push remote URL names,
   // github or azure_repos, empty while none is reported or it is
   // unsupported. Repository is the host's name for the repository.
@@ -1967,6 +1971,8 @@ export interface LandingMethodCapabilities {
   offers_push: boolean;
   // OffersLandPerSpec is whether Land per Spec can be changed.
   offers_land_per_spec: boolean;
+  // OffersRebase is whether Rebase can be changed.
+  offers_rebase: boolean;
   // ShowsCodeHost is whether the Code Host worked out from the Push
   // remote URL is shown.
   shows_code_host: boolean;

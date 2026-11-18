@@ -3,20 +3,22 @@ package domain
 import "fmt"
 
 // LandingPolicy is how one Repository's Landing Method and Push, and the
-// Project's Land per Spec and CI Tracking, combine into the landing rules
-// there. It is a pure value: it is built from the normalised Landing, so
-// Pull Request with Push on reads as Push off and can't reach any rule.
+// Project's Land per Spec, Rebase and CI Tracking, combine into the
+// landing rules there. It is a pure value: it is built from the
+// normalised Landing, so Pull Request with Push on reads as Push off and
+// can't reach any rule.
 type LandingPolicy struct {
 	method      LandingMethod
 	push        bool
 	landPerSpec bool
+	rebase      bool
 	tracking    bool
 }
 
-// NewLandingPolicy is the policy of a Repository with these four inputs.
-func NewLandingPolicy(method LandingMethod, push, landPerSpec, ciTracking bool) LandingPolicy {
+// NewLandingPolicy is the policy of a Repository with these five inputs.
+func NewLandingPolicy(method LandingMethod, push, landPerSpec, rebase, ciTracking bool) LandingPolicy {
 	l := Landing{Method: method, Push: push}.Normalized()
-	return LandingPolicy{method: l.Method, push: l.Push, landPerSpec: landPerSpec, tracking: ciTracking}
+	return LandingPolicy{method: l.Method, push: l.Push, landPerSpec: landPerSpec, rebase: rebase, tracking: ciTracking}
 }
 
 // OffersPush answers Push's "Under Pull Request, Push is implied", so the
@@ -45,6 +47,19 @@ func (lp LandingPolicy) NeedsCloneURL() bool {
 // Land per Spec on.
 func (lp LandingPolicy) LandPerSpecInForce() bool {
 	return (lp.method == LandingMerge || lp.method == LandingPullRequest) && lp.landPerSpec
+}
+
+// OffersRebase answers "Rebase applies under Merge and Pull Request":
+// Merge or Pull Request, whatever the Rebase setting, unlike
+// RebaseInForce.
+func (lp LandingPolicy) OffersRebase() bool {
+	return lp.method == LandingMerge || lp.method == LandingPullRequest
+}
+
+// RebaseInForce answers whether the Factory replays a Ticket's commits
+// onto its target instead of merging its branch: Rebase offered, and on.
+func (lp LandingPolicy) RebaseInForce() bool {
+	return lp.OffersRebase() && lp.rebase
 }
 
 // CIGateHolds answers "Under Merge + Push with CI Tracking on, a Ticket

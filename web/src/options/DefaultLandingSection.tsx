@@ -31,24 +31,24 @@ const METHODS: { method: LandingMethod; label: string; hint: string }[] = [
 const CODE_HOST_NAMES = { github: "GitHub", azure_repos: "Azure Repos" };
 
 // SETTINGS are the Default Landing's fields the human edits and saves.
-const SETTINGS = ["method", "push", "remote", "land_per_spec", "pat_env", "base"] as const;
+const SETTINGS = ["method", "push", "remote", "land_per_spec", "rebase", "pat_env", "base"] as const;
 
 // DefaultLandingSection is the Project's Default Landing (Spec
 // code-central-890): how accepted work lands in every Repository with no
-// Own Landing, and the Project-wide Land per Spec, PAT variable and
-// Base. It follows the Project as read, so a change from another tab
+// Own Landing, and the Project-wide Land per Spec, Rebase, PAT variable
+// and Base. It follows the Project as read, so a change from another tab
 // shows here too. What it offers for the drafted method is the Landing
 // capabilities the service says for it (ADR 0063).
 export function DefaultLandingSection({ project }: { project: ProjectRow }) {
   const api = useApi();
-  const { method, push, remote, land_per_spec, pat_env, base, code_host, repository } = project.landing;
+  const { method, push, remote, land_per_spec, rebase, pat_env, base, code_host, repository } = project.landing;
   const [draft, setDraft] = useState<Landing>(project.landing);
   const [error, setError] = useState<ApiError>();
   const [saved, setSaved] = useState(false);
   const id = useId();
   useEffect(
-    () => setDraft((d) => ({ ...d, method, push, remote, land_per_spec, pat_env, base })),
-    [method, push, remote, land_per_spec, pat_env, base],
+    () => setDraft((d) => ({ ...d, method, push, remote, land_per_spec, rebase, pat_env, base })),
+    [method, push, remote, land_per_spec, rebase, pat_env, base],
   );
 
   const edit = (patch: Partial<Landing>) => {
@@ -60,8 +60,8 @@ export function DefaultLandingSection({ project }: { project: ProjectRow }) {
     e.preventDefault();
     setError(undefined);
     // The draft becomes what was stored: the service may tidy it into no change.
-    const { method, push, remote, land_per_spec, pat_env, base } = draft;
-    api.setLandingMethod(project.key, { method, push, remote, land_per_spec, pat_env, base }).then(
+    const { method, push, remote, land_per_spec, rebase, pat_env, base } = draft;
+    api.setLandingMethod(project.key, { method, push, remote, land_per_spec, rebase, pat_env, base }).then(
       (v) => {
         setDraft(v.landing);
         setSaved(true);
@@ -147,6 +147,25 @@ export function DefaultLandingSection({ project }: { project: ProjectRow }) {
             base, with Push and CI Tracking, once every Ticket on it is accepted,
             instead of Ticket by Ticket. Under Pull Request the Spec gets one pull
             request. It has no effect under Leave as a branch.
+          </p>
+        </div>
+        <div className="project-options-choice">
+          <label>
+            <input
+              type="checkbox"
+              checked={draft.rebase}
+              disabled={!offers.offers_rebase}
+              onChange={(e) => edit({ rebase: e.target.checked })}
+              aria-describedby={`${id}-rebase`}
+            />{" "}
+            Rebase instead of merging
+          </label>
+          <p className="project-options-hint" id={`${id}-rebase`}>
+            Under Merge and Pull Request, a Ticket's commits are replayed onto its
+            Spec Branch, or onto the base, instead of its branch being merged, so
+            the history stays linear with one merge commit per landing. The
+            Factory force-pushes only its own branches, never the base. It has no
+            effect under Leave as a branch.
           </p>
         </div>
         <label className="project-options-remote">
