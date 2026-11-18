@@ -38,7 +38,7 @@ To measure what agents load into context, compare the sessions since a change ag
 
 ## Docs
 
-The guides in `docs/` and the README show real commands and output. When a change affects what they show (`init`, the CLI, the Factory, the UI or the Stages' skills), update them in the same change.
+The guides in `docs/` and the README show real commands and output. When a change affects what they show (`init`, the CLI, the Factory, the UI or the Stages' skills), update them in the same change, unless the Ticket or its Spec gives the docs to another Ticket: then leave them to that Ticket.
 
 ## Commits
 
