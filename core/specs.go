@@ -293,7 +293,7 @@ func (c *Core) FindSpecs(_ context.Context, key string, in FindSpecsInput) ([]Sp
 		}
 		// One evaluation for every Spec.
 		e := c.evaluate(r, p)
-		for _, s := range r.Specs(key) {
+		for _, s := range r.FindSpecs(key, store.SpecFilter{}) {
 			if in.Title != "" && !strings.Contains(strings.ToLower(s.Title), strings.ToLower(in.Title)) {
 				continue
 			}
@@ -327,9 +327,7 @@ func (c *Core) FindSpecs(_ context.Context, key string, in FindSpecsInput) ([]Sp
 // specTickets are Spec n's Tickets in claim order, with the History parts
 // named.
 func specTickets(r store.Reader, key string, n int, parts ...store.Part) []domain.Ticket {
-	tickets := slices.DeleteFunc(r.Tickets(key, parts...), func(t domain.Ticket) bool { return t.Spec != n })
-	slices.SortStableFunc(tickets, claimOrder)
-	return tickets
+	return r.FindTickets(key, store.TicketFilter{Spec: []int{n}, Parts: parts, Order: store.ByClaim})
 }
 
 // summarise derives a Spec's State summary and whether it is finished.

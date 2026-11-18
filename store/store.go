@@ -27,6 +27,14 @@ type Reader interface {
 	// Tickets returns the project's Tickets in number order, each with
 	// the History parts named, as Ticket does.
 	Tickets(project string, parts ...Part) []domain.Ticket
+	// FindTickets returns the project's Tickets f picks, each with the
+	// History parts f names, in f's Order.
+	FindTickets(project string, f TicketFilter) []domain.Ticket
+	// FindSpecs returns the project's Specs f picks, in number order.
+	FindSpecs(project string, f SpecFilter) []domain.Spec
+	// StateCounts is how many of the project's Tickets are in each State;
+	// a State no Ticket is in is left out.
+	StateCounts(project string) map[domain.State]int
 	// NextNumber is the highest Spec or Ticket number in the project plus
 	// one. It is derived, never stored, so numbers are never reused.
 	NextNumber(project string) int

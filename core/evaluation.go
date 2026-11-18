@@ -84,7 +84,8 @@ func (e *evaluation) evaluated() *evaluation {
 		return e
 	}
 	e.done = true
-	e.list = e.r.Tickets(e.p.Key)
+	// Every Ticket's head: the evaluation reads no History.
+	e.list = e.r.FindTickets(e.p.Key, store.TicketFilter{})
 	if n := e.given.Number; n != 0 {
 		i, found := slices.BinarySearchFunc(e.list, n, func(t domain.Ticket, n int) int { return cmp.Compare(t.Number, n) })
 		if found {

@@ -165,18 +165,17 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 			v = c.projectView(p)
 			return nil
 		}
+		acceptedTickets := w.FindTickets(key, store.TicketFilter{States: []domain.State{domain.Accepted}})
 		if p.Landing.Method != l.Method {
-			for _, t := range w.Tickets(key) {
-				if t.State == domain.Accepted {
-					accepted = append(accepted, t.Number)
-				}
+			for _, t := range acceptedTickets {
+				accepted = append(accepted, t.Number)
 			}
 		}
 		if was.RunsPullRequestWatcher() && !next.RunsPullRequestWatcher() {
 			// What the Pull Request Watcher said was about the old method.
 			c.watchers.reset(watcherKey{WatcherPullRequests, key})
-			for _, t := range w.Tickets(key) {
-				if t.State == domain.Accepted && slices.ContainsFunc(t.PullRequests, pullRequestOpen) {
+			for _, t := range acceptedTickets {
+				if slices.ContainsFunc(t.PullRequests, pullRequestOpen) {
 					left = append(left, t.Number)
 				}
 			}
@@ -252,8 +251,10 @@ func (c *Core) ListProjects(context.Context) ([]ProjectRow, error) {
 				if reason, _ := e.reason(t); reason != "" {
 					row.NeedsMe++
 				}
-				if !finished(t.State) {
-					row.Unfinished++
+			}
+			for state, n := range r.StateCounts(p.Key) {
+				if !finished(state) {
+					row.Unfinished += n
 				}
 			}
 			out = append(out, row)

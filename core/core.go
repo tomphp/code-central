@@ -7,7 +7,6 @@
 package core
 
 import (
-	"cmp"
 	"context"
 	"maps"
 	"regexp"
@@ -697,7 +696,10 @@ func (c *Core) findIn(r store.Reader, key string, in FindTicketsInput) (*evaluat
 	if !ok {
 		return nil, nil, unknownProject(key)
 	}
-	specN := 0
+	f := store.TicketFilter{States: in.State, Order: store.ByClaim}
+	if len(f.States) == 0 {
+		f.States = unfinished
+	}
 	if in.Spec != "" {
 		n, err := in.Spec.number(key, "spec")
 		if err != nil {
@@ -708,14 +710,13 @@ func (c *Core) findIn(r store.Reader, key string, in FindTicketsInput) (*evaluat
 		if err := ticketNotSpec(r, key, "find_tickets", "spec", n); err != nil {
 			return nil, nil, err
 		}
-		specN = n
+		f.Spec = []int{n}
 	}
-	tickets := r.Tickets(key)
-	slices.SortStableFunc(tickets, claimOrder)
+	tickets := r.FindTickets(key, f)
 	e := c.evaluate(r, p)
 	found := tickets[:0]
 	for _, t := range tickets {
-		if !matches(t, in, specN) {
+		if !matches(t, in) {
 			continue
 		}
 		if in.Claimable != nil && *in.Claimable != (t.State == domain.Ready && !e.rule.blocked(t)) {
@@ -726,21 +727,13 @@ func (c *Core) findIn(r store.Reader, key string, in FindTicketsInput) (*evaluat
 	return e, found, nil
 }
 
-func matches(t domain.Ticket, in FindTicketsInput, specN int) bool {
-	if len(in.State) > 0 {
-		if !slices.Contains(in.State, t.State) {
-			return false
-		}
-	} else if finished(t.State) {
-		return false
-	}
+// matches reports whether t matches in's filters that the Store's query
+// leaves to core: its title, Labels and Tags.
+func matches(t domain.Ticket, in FindTicketsInput) bool {
 	if in.Title != "" && !strings.Contains(strings.ToLower(t.Title), strings.ToLower(in.Title)) {
 		return false
 	}
-	if !hasAll(t.Labels, t.Tags, in.Labels, in.Tags) {
-		return false
-	}
-	return specN == 0 || t.Spec == specN
+	return hasAll(t.Labels, t.Tags, in.Labels, in.Tags)
 }
 
 // hasAll reports whether every wanted Label is present and every wanted
@@ -783,13 +776,6 @@ func (c *Core) ticketRow(r store.Reader, e *evaluation, t domain.Ticket, onMap b
 	}
 	row.PartlyLanded = partlyLanded(key, t)
 	return row
-}
-
-func claimOrder(a, b domain.Ticket) int {
-	if c := a.Created.Compare(b.Created); c != 0 {
-		return c
-	}
-	return cmp.Compare(a.Number, b.Number)
 }
 
 func finished(s domain.State) bool { return s == domain.Done || s == domain.Cancelled }

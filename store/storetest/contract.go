@@ -296,6 +296,7 @@ func Run(t *testing.T, f Factory) {
 	})
 
 	runHistory(t, f)
+	runQueries(t, f)
 	runReplacements(t, f)
 	runImport(t, f)
 	runLinks(t, f)
