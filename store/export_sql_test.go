@@ -40,3 +40,22 @@ func setFormat(t testing.TB, driver, dsn string, d dialect, format int) {
 // PostgresURLOf is the URL s was opened with, for a test to open the same
 // schema again.
 func PostgresURLOf(s *SQLStore) string { return s.url }
+
+// DropPostgresChanges ends the connection s listens for Changes on, from
+// the database's side, as a restart or a network failure would.
+func DropPostgresChanges(t testing.TB, s *SQLStore) {
+	t.Helper()
+	db, err := sql.Open("pgx", s.url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var dropped int
+	q := `SELECT count(pg_terminate_backend(pid)) FROM pg_stat_activity WHERE application_name = $1`
+	if err := db.QueryRowContext(context.Background(), q, changesApplication(s.service)).Scan(&dropped); err != nil {
+		t.Fatal(err)
+	}
+	if dropped == 0 {
+		t.Fatal("no connection listening for Changes")
+	}
+}

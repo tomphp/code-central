@@ -13,6 +13,8 @@ import (
 type sqlWriter struct {
 	sqlReader
 	wrote bool
+	// service is the Store handle's ID, sent with what it announces.
+	service string
 }
 
 // exec runs a statement with the dialect's placeholders.
@@ -261,9 +263,14 @@ func (w *sqlWriter) PutOptions(o domain.Options) error {
 	return nil
 }
 
-// Announce is ignored: no other service shares a SQLite Store, and a
-// Postgres Store's notices come with Ticket code-central-1048.
-func (w *sqlWriter) Announce(Change) {}
+// Announce sends ch to the other services sharing a Postgres Store once
+// the Update commits (postgres_changes.go). It is ignored on SQLite: no
+// other service shares it.
+func (w *sqlWriter) Announce(ch Change) {
+	if w.d.shared {
+		w.announce(ch)
+	}
+}
 
 func (w *sqlWriter) PutCIRuns(project string, runs []domain.CIRun) error {
 	if err := w.begin(project, true); err != nil {

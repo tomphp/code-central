@@ -6,7 +6,7 @@
 // serializable transaction the engine orders against the others', run
 // again when two collide; a service's place in the Store is the Service
 // Registration of Ticket code-central-1049, and its notices to the
-// others come with code-central-1048.
+// others go over LISTEN and NOTIFY (postgres_changes.go).
 
 package store
 
@@ -71,7 +71,7 @@ func OpenPostgres(url string) (*SQLStore, error) {
 	// appends beside them.
 	db.SetMaxOpenConns(8)
 	db.SetMaxIdleConns(4)
-	s := &SQLStore{db: db, d: postgres, path: addr, url: url}
+	s := &SQLStore{db: db, d: postgres, path: addr, url: url, service: newServiceID()}
 	s.usage = &sqlUsage{db: db, d: postgres}
 	older, err := prepare(context.Background(), db, postgres, Format, addr)
 	if err == nil && older > 0 {

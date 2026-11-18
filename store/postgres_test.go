@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/store/storetest"
 )
@@ -148,5 +151,54 @@ func TestOpenAtRefusesAPostgresLocationWithoutItsURL(t *testing.T) {
 	_, err := store.OpenAt(store.Location{Kind: store.Postgres, Path: "db.example.com:5432/central"})
 	if err == nil || !strings.Contains(err.Error(), "PostgresLocation") {
 		t.Fatalf("open: %v, want it to say the Location must come from PostgresLocation", err)
+	}
+}
+
+// A service whose LISTEN connection drops may have missed Changes while
+// it was down: once it listens again it hears one project-wide Change
+// per Project, which wakes the Factories, so every waiter refetches. Then
+// it hears the other services' Changes again.
+func TestAPostgresStoreHearsEveryProjectChangedAfterItsListenConnectionDrops(t *testing.T) {
+	url := storetest.FreshPostgres(t)
+	a, b := openPostgres(t, url), openPostgres(t, url)
+	for _, key := range []string{"acme", "beta"} {
+		if err := a.Update(func(w store.Writer) error {
+			return w.PutProject(domain.Project{Key: key, DisplayName: key, Mode: "committed"})
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	heard := make(chan store.Change, 16)
+	b.Changes(func(c store.Change) { heard <- c })
+	next := func() store.Change {
+		t.Helper()
+		select {
+		case c := <-heard:
+			return c
+		case <-time.After(15 * time.Second):
+			t.Fatal("no Change heard")
+			return store.Change{}
+		}
+	}
+	store.DropPostgresChanges(t, b)
+	got := map[string]store.Change{}
+	for range 2 {
+		c := next()
+		got[c.Project] = c
+	}
+	for _, key := range []string{"acme", "beta"} {
+		if want := (store.Change{Project: key, Type: events.ProjectChanged, Wakes: true}); got[key] != want {
+			t.Fatalf("after the drop, heard %+v for %s, want %+v", got[key], key, want)
+		}
+	}
+	announced := store.Change{Project: "acme", Type: events.ProjectChanged}
+	if err := a.Update(func(w store.Writer) error {
+		w.Announce(announced)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if c := next(); c != announced {
+		t.Fatalf("after reconnecting, heard %+v, want %+v", c, announced)
 	}
 }
