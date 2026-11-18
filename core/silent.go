@@ -144,7 +144,7 @@ func (c *Core) longSince(t domain.Ticket) *time.Time {
 // or Factory: only the time since the accept counts. Under Branch,
 // Accepted work is To merge at once instead.
 func (c *Core) notLandedSince(p domain.Project, t domain.Ticket) *time.Time {
-	if t.State != domain.Accepted || !ticketLandingPolicies(p, t).Any(LandingPolicy.FlagsNotLanded) {
+	if t.State != domain.Accepted || !ticketLandingPolicies(p, t).Any(domain.LandingPolicy.FlagsNotLanded) {
 		return nil
 	}
 	accepted := entered(t)

@@ -16,10 +16,10 @@ import (
 	"testing"
 )
 
-// The guard holds ADR 0039's line: no code in core or the Factory reads a
-// landing setting to decide, outside the policy and the code that saves
-// and shows the settings. It type-checks the packages' non-test files and
-// flags every read of a guarded field on a guarded type.
+// The guard holds ADR 0039's line: no code in domain, core or the Factory
+// reads a landing setting to decide, outside the policy and the code that
+// saves and shows the settings. It type-checks the packages' non-test
+// files and flags every read of a guarded field on a guarded type.
 
 // guardedFields are the four landing inputs, and a Repository's
 // effective Landing on its view.
@@ -44,7 +44,12 @@ type guardAllow struct {
 }
 
 var landingGuardAllowlist = []guardAllow{
-	{file: "core/landingpolicy.go", why: "the policy and its builders, including ProjectView.LandingPolicies(), and a Repository's Landing"},
+	{file: "domain/landingpolicy.go", why: "the policy and its rules"},
+	{file: "domain/landing.go", fn: "Normalized", why: "normalises the Default Landing as it is stored"},
+	{file: "domain/domain.go", fn: "Set", why: "reports whether an Own Landing is set"},
+	{file: "domain/domain.go", fn: "Normalized", why: "normalises an Own Landing as it is stored"},
+	{file: "domain/domain.go", fn: "Equal", why: "compares the CI settings"},
+	{file: "core/landingpolicy.go", why: "the policy's builders, including ProjectView.LandingPolicies(), and a Repository's Landing"},
 	{file: "core/repositories.go", fn: "repositoryView", why: "builds the RepositoryView"},
 	{file: "core/humanops.go", fn: "SetLandingMethod", why: "saves the Landing settings"},
 	{file: "core/core.go", fn: "landingViewWith", why: "builds the LandingView"},
@@ -245,13 +250,14 @@ func guardFailure(allow []guardAllow, reads []landingRead) string {
 
 func TestNoLandingSettingIsReadOutsideThePolicy(t *testing.T) {
 	l := newGuardLoader(t)
+	domain := l.check(t, "github.com/tomoram/code-central/domain", l.parse(t, "domain"))
 	core := l.check(t, "github.com/tomoram/code-central/core", l.parse(t, "core"))
 	factory := l.check(t, "github.com/tomoram/code-central/factory", l.parse(t, "factory"))
 
-	if stale := staleEntries(landingGuardAllowlist, core, factory); len(stale) > 0 {
+	if stale := staleEntries(landingGuardAllowlist, domain, core, factory); len(stale) > 0 {
 		t.Errorf("the allowlist names what isn't there:\n\t%s", strings.Join(stale, "\n\t"))
 	}
-	if msg := guardFailure(landingGuardAllowlist, append(landingReads(core), landingReads(factory)...)); msg != "" {
+	if msg := guardFailure(landingGuardAllowlist, slices.Concat(landingReads(domain), landingReads(core), landingReads(factory))); msg != "" {
 		t.Error(msg)
 	}
 }

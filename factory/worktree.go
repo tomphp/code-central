@@ -385,7 +385,7 @@ func onFirstParentLine(g repo, commit, rev string) bool {
 
 // doneWithWorktree reports whether the Factory is done with the worktree
 // of tk, under the Landing Policy of the worktree's Repository.
-func doneWithWorktree(tk core.TicketView, policy core.LandingPolicy) bool {
+func doneWithWorktree(tk core.TicketView, policy domain.LandingPolicy) bool {
 	switch tk.State {
 	case domain.Done, domain.Cancelled:
 		return true

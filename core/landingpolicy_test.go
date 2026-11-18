@@ -6,47 +6,6 @@ import (
 	"github.com/tomoram/code-central/domain"
 )
 
-func TestLandingPolicyMatrix(t *testing.T) {
-	for _, m := range []domain.LandingMethod{domain.LandingMerge, domain.LandingBranch, domain.LandingPullRequest} {
-		for _, push := range []bool{false, true} {
-			for _, lps := range []bool{false, true} {
-				for _, ci := range []bool{false, true} {
-					pr, merge, branch := m == domain.LandingPullRequest, m == domain.LandingMerge, m == domain.LandingBranch
-					// Pull Request with Push on reads as Push off.
-					effPush := push && !pr
-					want := map[string][2]bool{
-						"LandPerSpecInForce":  {NewLandingPolicy(m, push, lps, ci).LandPerSpecInForce(), (merge || pr) && lps},
-						"CIGateHolds":         {NewLandingPolicy(m, push, lps, ci).CIGateHolds(), merge && effPush && ci},
-						"RecordsPushedCommit": {NewLandingPolicy(m, push, lps, ci).RecordsPushedCommit(), pr || (effPush && ci)},
-						"TracksCIResults":     {NewLandingPolicy(m, push, lps, ci).TracksCIResults(), !(pr && !ci)},
-						"NeedsPushRemote":     {NewLandingPolicy(m, push, lps, ci).NeedsPushRemote(), effPush || pr},
-						"PushesBase":          {NewLandingPolicy(m, push, lps, ci).PushesBase(), merge && effPush},
-						"KeepsBaseLevel":      {NewLandingPolicy(m, push, lps, ci).KeepsBaseLevel(), pr || (merge && effPush)},
-						"LandsOnHumanMerge":   {NewLandingPolicy(m, push, lps, ci).LandsOnHumanMerge(), branch || pr},
-						// Today's code offers it under Merge without Push too;
-						// the glossary's false holds there.
-						"OffersLandAnyway":           {NewLandingPolicy(m, push, lps, ci).OffersLandAnyway(), merge && effPush},
-						"FlagsNotLanded":             {NewLandingPolicy(m, push, lps, ci).FlagsNotLanded(), merge},
-						"LandsByPullRequest":         {NewLandingPolicy(m, push, lps, ci).LandsByPullRequest(), pr},
-						"RunsCIWatcher":              {NewLandingPolicy(m, push, lps, ci).RunsCIWatcher(), ci},
-						"MergesSpecBranches":         {NewLandingPolicy(m, push, lps, ci).MergesSpecBranches(), merge && lps},
-						"PushesSpecBranches":         {NewLandingPolicy(m, push, lps, ci).PushesSpecBranches(), pr && lps},
-						"MergesLeftoverSpecBranches": {NewLandingPolicy(m, push, lps, ci).MergesLeftoverSpecBranches(), merge},
-						"PushesAcceptedBranch":       {NewLandingPolicy(m, push, lps, ci).PushesAcceptedBranch(), branch && effPush},
-						"KeepsAcceptedWorktree":      {NewLandingPolicy(m, push, lps, ci).KeepsAcceptedWorktree(), !branch},
-						"NeedsCloneURL":              {NewLandingPolicy(m, push, lps, ci).NeedsCloneURL(), pr},
-					}
-					for name, v := range want {
-						if v[0] != v[1] {
-							t.Errorf("%s(method %s, push %v, land per spec %v, ci %v) = %v, want %v", name, m, push, lps, ci, v[0], v[1])
-						}
-					}
-				}
-			}
-		}
-	}
-}
-
 // TestARepositorysLandingPolicy checks that a Repository's policy is its
 // Own Landing, else the Default Landing, with Push off when it is
 // local-only, so Merge + Push reads as Merge and Branch + Push as Branch
@@ -71,7 +30,7 @@ func TestARepositorysLandingPolicy(t *testing.T) {
 						}
 						ps := landingPolicies(p)
 						for name, localOnly := range map[string]bool{"acme": false, "web": false, "notes": true} {
-							if got, want := ps.In(name), NewLandingPolicy(em, ep && !localOnly, lps, ci); got != want {
+							if got, want := ps.In(name), domain.NewLandingPolicy(em, ep && !localOnly, lps, ci); got != want {
 								t.Errorf("%s's policy under (default %s, push %v, own %+v, land per spec %v, ci %v) = %+v, want %+v", name, m, push, own, lps, ci, got, want)
 							}
 						}
@@ -99,37 +58,5 @@ func TestARepositorysLandingPolicy(t *testing.T) {
 	p.SetRepositories([]domain.Repository{{Name: "acme", Home: true}, {Name: "web", CloneURL: "git@github.com:acme/web.git", Base: "main", OwnLanding: domain.OwnLanding{Method: domain.LandingPullRequest}}})
 	if ps := landingPolicies(p); !ps.RunsPullRequestWatcher() || ps.In("acme").LandsByPullRequest() {
 		t.Errorf("one Repository under Pull Request: watcher %v, the Home by Pull Request %v; want the watcher on and the Home on Merge", ps.RunsPullRequestWatcher(), ps.In("acme").LandsByPullRequest())
-	}
-}
-
-// TestLandingPolicyRoute checks Route against the if/else chain the
-// Factory's land takes today, where onSpecBranch is what waitsOnSpecBranch
-// reports and prMerged is whether the Ticket's pull request is merged.
-func TestLandingPolicyRoute(t *testing.T) {
-	today := func(m domain.LandingMethod, onSpecBranch, prMerged bool) LandingRoute {
-		if m == domain.LandingBranch {
-			return RouteBranch
-		} else if m == domain.LandingPullRequest && (prMerged || !onSpecBranch) {
-			return RoutePullRequest
-		} else if onSpecBranch {
-			return RouteSpecBranch
-		}
-		return RouteMerge
-	}
-	for _, m := range []domain.LandingMethod{domain.LandingMerge, domain.LandingBranch, domain.LandingPullRequest} {
-		for _, push := range []bool{false, true} {
-			for _, lps := range []bool{false, true} {
-				for _, ci := range []bool{false, true} {
-					for _, onSpecBranch := range []bool{false, true} {
-						for _, prMerged := range []bool{false, true} {
-							got := NewLandingPolicy(m, push, lps, ci).Route(onSpecBranch, prMerged)
-							if want := today(m, onSpecBranch, prMerged); got != want {
-								t.Errorf("Route(%v, %v) under (method %s, push %v, land per spec %v, ci %v) = %v, want %v", onSpecBranch, prMerged, m, push, lps, ci, got, want)
-							}
-						}
-					}
-				}
-			}
-		}
 	}
 }
