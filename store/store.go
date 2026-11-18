@@ -10,6 +10,7 @@ package store
 import (
 	"errors"
 	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/usage"
 	"iter"
 	"maps"
 	"slices"
@@ -134,6 +135,10 @@ type Store interface {
 	// Changes makes deliver hear of the Changes other services sharing the
 	// Store commit. A Store no other service shares never calls it.
 	Changes(deliver func(Change))
+	// Usage is the Store's Usage (ADR 0066): what agents consume, kept
+	// the way the Store Kind keeps it, and appended to, read and pruned on
+	// its own, outside any View or Update.
+	Usage() usage.Store
 }
 
 var (

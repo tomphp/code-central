@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/usage"
 	"slices"
 	"sync"
 )
@@ -16,7 +17,14 @@ type index struct {
 	options  domain.Options
 	// persist, when set, makes a record durable before memory changes.
 	persist func(record any, project string) error
+	// usage is where the Store keeps Usage: in memory here, the File
+	// Store's files in the file-backed store.
+	usage usage.Store
 }
+
+// Usage is the Store's Usage (ADR 0066): appended to, read and pruned
+// outside any Update, under its own lock.
+func (x *index) Usage() usage.Store { return x.usage }
 
 type projectData struct {
 	project domain.Project
@@ -26,7 +34,7 @@ type projectData struct {
 }
 
 func newIndex() *index {
-	return &index{projects: map[string]*projectData{}, options: domain.DefaultOptions()}
+	return &index{projects: map[string]*projectData{}, options: domain.DefaultOptions(), usage: usage.NewMemoryStore()}
 }
 
 // NewMemory returns the in-memory fake store.

@@ -81,7 +81,7 @@ Your list: core logic, factory, ci watcher, issue tracker, web api, frontend, st
 - **`app`**: the service's composition root. `app.Run` opens the store, builds the Core with its Watcher check modes and usage, serves `server`'s handler, supervises the Watchers and starts `notify`.
 - **`cli` and `cmd/*`**: the command surface. `serve` reads its flags and the local settings and calls `app.Run`.
 - **`watchers`**: generic supervision (restart with backoff).
-- **Support leaves**: `clock`, `events` (in-memory change bus), `ids`, `home` (XDG paths), `usage` (JSONL usage records), `notify` (OS notifications).
+- **Support leaves**: `clock`, `events` (in-memory change bus), `ids`, `home` (XDG paths), `usage` (usage records and the Recorder; the Store keeps them, ADR 0066), `notify` (OS notifications).
 - **Test and wasm tooling**: `world`, `cmd/corewasm`, `internal/*`, `codecentraltest`, `e2e`.
 
 ### What `core` contains
@@ -107,7 +107,7 @@ Good:
 - The HTTP/MCP boundary is sharp. The Factory and watchers hold a `Client` interface and talk only over HTTP.
 - `ops.All()` is a real contract, checked by the cross-door suite in `server/*_test.go` and the UI/Go contract cases.
 - `notify` depends on a four-method `Source` interface, not on `*Core`, and the transports now do the same through `ops.Dispatcher` and `ops.Service`.
-- `store.Store{View, Update, Changes}` is small, with a shared contract suite (`storetest`).
+- `store.Store{View, Update, Changes, Usage}` is small, with a shared contract suite (`storetest`).
 - UI wire types are generated from Go (ADR 0042), and the UI's only `fetch` is in `web/src/api/http.ts`.
 - `clock`, `ids`, `events`, `home` are small and injectable.
 
