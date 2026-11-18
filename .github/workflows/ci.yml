@@ -77,6 +77,17 @@ jobs:
         working-directory: web
         run: npm ci
 
+      # gofmt -l exits zero whatever it finds, so fail on any output.
+      - name: gofmt
+        shell: bash
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files aren't gofmt'd:"
+            echo "$unformatted"
+            exit 1
+          fi
+
       # Against the committed placeholder page, so no Vite build is needed.
       # -v so the log lists every skipped test with its reason.
       - name: go test

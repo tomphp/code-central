@@ -317,3 +317,17 @@ func TestRerunGoRerunsOnlyLoadFailures(t *testing.T) {
 		t.Errorf("a real failure was rerun: %q", args)
 	}
 }
+
+func TestAJobThatFailsOnOutputFailsWhenItPrintsAndPassesWhenItDoesNot(t *testing.T) {
+	bad := fakeJob(t, "gofmt", "print", "core/x.go")
+	bad.FailOnOutput = true
+	ok, out := runSuite(time.Minute, bad)
+	if ok || !strings.Contains(out, "core/x.go") || !strings.Contains(out, "gofmt: 1") {
+		t.Errorf("ok = %v, output:\n%s", ok, out)
+	}
+	good := fakeJob(t, "gofmt")
+	good.FailOnOutput = true
+	if ok, out := runSuite(time.Minute, good); !ok {
+		t.Errorf("a silent job failed:\n%s", out)
+	}
+}
