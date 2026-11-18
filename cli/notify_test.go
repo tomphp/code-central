@@ -91,7 +91,7 @@ func serveNotifying(t *testing.T, storeDir string, env map[string]string, args .
 
 // What the service sends is app's to test; serve decides whether it
 // sends any.
-func TestServeNoNotifyTurnsNotificationsOffForOneRun(t *testing.T) {
+func TestServeNotifiesByDefaultAndNoNotifyTurnsThatOffForOneRun(t *testing.T) {
 	t.Parallel()
 	sent, r := serveNotifying(t, storeInReview(t), nil)
 	if r.code != 0 || len(sent) != 1 {

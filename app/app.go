@@ -44,12 +44,13 @@ type Options struct {
 	// have (no IPv6 loopback) is skipped; one that is taken stops Run.
 	Addrs []string
 	// Bind is one extra address to listen on (serve's --bind), whose host
-	// the Guard also accepts; "" for none.
+	// the Guard also accepts; "" for none. The caller has checked it names
+	// one specific IP, never 0.0.0.0 or :: (serve's parseBind).
 	Bind string
 	// Version is the service's version, sent on every response.
 	Version string
 	// Stdout gets the line saying where the service listens; Stderr
-	// everything else it logs.
+	// everything else it logs. nil discards it.
 	Stdout, Stderr io.Writer
 	// Notifier shows OS Notifications; nil sends none.
 	Notifier notify.Sender
@@ -63,6 +64,12 @@ type Options struct {
 // until ctx ends, and shut down. It returns once every Watcher it
 // supervises has stopped.
 func Run(ctx context.Context, o Options) error {
+	if o.Stdout == nil {
+		o.Stdout = io.Discard
+	}
+	if o.Stderr == nil {
+		o.Stderr = io.Discard
+	}
 	st, err := openStore(o)
 	if err != nil {
 		return err
