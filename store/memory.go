@@ -187,35 +187,10 @@ func (w *writer) PutImport(project string, im Import) error {
 		im.Rewritten[i] = withHead(t)
 	}
 	if p, ok := w.x.projects[project]; ok {
-		seen := map[int]bool{}
-		taken := func(n int) bool {
-			_, s := p.specs[n]
-			_, t := p.tickets[n]
-			dup := seen[n]
-			seen[n] = true
-			return s || t || dup
-		}
-		for _, s := range im.Specs {
-			if taken(s.Number) {
-				return fmt.Errorf("%w: %s-%d", ErrExists, project, s.Number)
-			}
-		}
-		for _, t := range im.Tickets {
-			if taken(t.Number) {
-				return fmt.Errorf("%w: %s-%d", ErrExists, project, t.Number)
-			}
-		}
-		for _, t := range im.Rewritten {
-			if _, ok := p.tickets[t.Number]; !ok || seen[t.Number] {
-				return fmt.Errorf("%w: %s-%d", ErrNotExists, project, t.Number)
-			}
-			seen[t.Number] = true
-		}
-		for _, sp := range im.RewrittenSpecs {
-			if _, ok := p.specs[sp.Number]; !ok || seen[sp.Number] {
-				return fmt.Errorf("%w: %s-%d", ErrNotExists, project, sp.Number)
-			}
-			seen[sp.Number] = true
+		hasSpec := func(n int) bool { _, ok := p.specs[n]; return ok }
+		hasTicket := func(n int) bool { _, ok := p.tickets[n]; return ok }
+		if err := checkImport(project, im, hasSpec, hasTicket); err != nil {
+			return err
 		}
 	}
 	if err := w.begin(im, project); err != nil {
@@ -237,7 +212,44 @@ func (w *writer) PutImport(project string, im Import) error {
 	return nil
 }
 
-func (w *writer) PutOptions(o domain.Options) error {
+// checkImport is the Import's numbering rule, which every Kind keeps:
+// a new Spec or Ticket takes a number no record has (ErrExists), and a
+// rewritten one the number of a record of its kind (ErrNotExists), each
+// number once in the Import.
+func checkImport(project string, im Import, hasSpec, hasTicket func(int) bool) error {
+	seen := map[int]bool{}
+	taken := func(n int) bool {
+		dup := seen[n]
+		seen[n] = true
+		return hasSpec(n) || hasTicket(n) || dup
+	}
+	for _, s := range im.Specs {
+		if taken(s.Number) {
+			return fmt.Errorf("%w: %s-%d", ErrExists, project, s.Number)
+		}
+	}
+	for _, t := range im.Tickets {
+		if taken(t.Number) {
+			return fmt.Errorf("%w: %s-%d", ErrExists, project, t.Number)
+		}
+	}
+	for _, t := range im.Rewritten {
+		if !hasTicket(t.Number) || seen[t.Number] {
+			return fmt.Errorf("%w: %s-%d", ErrNotExists, project, t.Number)
+		}
+		seen[t.Number] = true
+	}
+	for _, sp := range im.RewrittenSpecs {
+		if !hasSpec(sp.Number) || seen[sp.Number] {
+			return fmt.Errorf("%w: %s-%d", ErrNotExists, project, sp.Number)
+		}
+		seen[sp.Number] = true
+	}
+	return nil
+}
+
+// checkOptions refuses an Option set to a value it can't take.
+func checkOptions(o domain.Options) error {
 	if !o.FocusClear.Valid() {
 		return fmt.Errorf("%w: focus_clear %q", ErrInvalidOption, o.FocusClear)
 	}
@@ -246,6 +258,13 @@ func (w *writer) PutOptions(o domain.Options) error {
 	}
 	if !o.FocusPopup.Valid() {
 		return fmt.Errorf("%w: focus_popup %q", ErrInvalidOption, o.FocusPopup)
+	}
+	return nil
+}
+
+func (w *writer) PutOptions(o domain.Options) error {
+	if err := checkOptions(o); err != nil {
+		return err
 	}
 	if err := w.begin(o, ""); err != nil {
 		return err

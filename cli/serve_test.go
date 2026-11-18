@@ -186,3 +186,102 @@ func TestServePortListensOnThatLoopbackPort(t *testing.T) {
 		}
 	}
 }
+
+// serveAt runs serve with exactly args: no --store, so the store comes
+// from CODE_CENTRAL_STORE, the settings or the data folder.
+func serveAt(t *testing.T, env map[string]string, args ...string) (bound []string, failed *result) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	listening := make(chan []string, 1)
+	done := make(chan result, 1)
+	go func() {
+		var out, errOut bytes.Buffer
+		code := cli.Run(ctx, append([]string{"serve"}, args...), cli.Env{
+			Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errOut,
+			Getenv:      func(k string) string { return env[k] },
+			UserHomeDir: userHomeDir(env),
+			ServeAddrs:  []string{"127.0.0.1:0"},
+			OnListening: func(a []string) { listening <- a },
+		})
+		done <- result{code, out.String(), errOut.String()}
+	}()
+	select {
+	case a := <-listening:
+		t.Cleanup(func() { cancel(); <-done })
+		return a, nil
+	case r := <-done:
+		cancel()
+		return nil, &r
+	case <-time.After(5 * time.Second):
+		cancel()
+		t.Fatal("serve neither listened nor exited")
+		return nil, nil
+	}
+}
+
+func TestTheStoreSettingOpensASQLiteStore(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	db := filepath.Join(t.TempDir(), "data", "code-central.db")
+	writeHomeSettings(t, home, "store:\n  kind: sqlite\n  path: "+db+"\n")
+	bound, failed := serveAt(t, map[string]string{"HOME": home})
+	if failed != nil {
+		t.Fatalf("serve: %+v", *failed)
+	}
+	if _, err := os.Stat(db); err != nil {
+		t.Fatalf("the database wasn't made: %v", err)
+	}
+	r := run(t, map[string]string{"CODE_CENTRAL_URL": "http://" + bound[0]}, "", "get-workflow")
+	if r.code != 0 {
+		t.Fatalf("a call to the service failed: %+v", r)
+	}
+}
+
+func TestTheStoreFlagOverridesTheStoreSetting(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	db := filepath.Join(t.TempDir(), "code-central.db")
+	dir := t.TempDir()
+	writeHomeSettings(t, home, "store:\n  kind: sqlite\n  path: "+db+"\n")
+	if _, failed := serveAt(t, map[string]string{"HOME": home}, "--store", dir); failed != nil {
+		t.Fatalf("serve: %+v", *failed)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "store.yaml")); err != nil {
+		t.Fatalf("the File Store wasn't made at --store: %v", err)
+	}
+	if _, err := os.Stat(db); err == nil {
+		t.Fatal("the database was made as well")
+	}
+}
+
+func TestWithNoStoreSettingTheStoreIsFilesInTheDataFolder(t *testing.T) {
+	t.Parallel()
+	home, data := t.TempDir(), t.TempDir()
+	writeHomeSettings(t, home, "notifications: off\n")
+	if _, failed := serveAt(t, map[string]string{"HOME": home, "XDG_DATA_HOME": data}); failed != nil {
+		t.Fatalf("serve: %+v", *failed)
+	}
+	if _, err := os.Stat(filepath.Join(data, "code-central", "store.yaml")); err != nil {
+		t.Fatalf("the File Store wasn't made in the data folder: %v", err)
+	}
+}
+
+func TestABadStoreSettingRefusesToStartNamingTheField(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ name, text, field string }{
+		{"an unknown kind", "store:\n  kind: mysql\n", "store.kind"},
+		{"no kind", "store:\n  path: /tmp/x\n", "store.kind"},
+		{"url_env on a sqlite store", "store:\n  kind: sqlite\n  url_env: DB\n", "store.url_env"},
+		{"an unknown key", "store:\n  kind: files\n  colour: red\n", "colour"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			home := t.TempDir()
+			writeHomeSettings(t, home, c.text)
+			_, failed := serveAt(t, map[string]string{"HOME": home})
+			if failed == nil || failed.code != 1 || !strings.Contains(failed.stderr, c.field) || !strings.Contains(failed.stderr, "settings.yaml") {
+				t.Fatalf("serve didn't refuse naming %s: %+v", c.field, failed)
+			}
+		})
+	}
+}

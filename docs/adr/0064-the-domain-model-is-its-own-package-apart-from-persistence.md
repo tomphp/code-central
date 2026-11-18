@@ -5,7 +5,7 @@ The records Code Central keeps (Projects, Specs, Tickets, CI Runs, Options and t
 So the domain model is its own package, `domain`, at the module root, importing nothing of Code Central. It holds the records, the enumerations with their value lists, name functions and `Valid()` methods, the constants and defaults, and the invariants that belong to the records (`Landing.Normalized` and the `Link` predicates). `store` keeps persistence: the `Store`, `Reader` and `Writer` interfaces, `Import`, `FileStore`, `NewMemory`, the migrations, `Schema`, and the hand-written file structs with their encode and decode, which now read into and write from `domain`'s records. Helpers only persistence uses, such as deep copies, stay unexported in `store`.
 
 - Clients of the service import `domain` and never `store`.
-- Only `core` and the composition roots (`app`, `world`, `codecentraltest`) import `store`, plus `cli/serve.go` and `cli/service.go` for `store.Dir`, the store directory's default.
+- Only `core` and the composition roots (`app`, `world`, `codecentraltest`) import `store`, plus `cli/serve.go` and `cli/service.go` for `store.Dir`, the store directory's default, and `store.Location`, the Store the settings name (ADR 0067).
 - The Landing Policy value belongs in `domain` beside `Landing.Normalized`, and `core` keeps the builders that make it from a `store.Project` or a view. It moves there in the Spec's last step; until then it stays in `core`.
 
 The package is named `domain` because the Glossary's "Model" already means a Claude model; ADR 0003 already calls these the domain struct and the domain shape.

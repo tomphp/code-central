@@ -12,6 +12,7 @@ import "os"
 type storeLock struct{}
 
 func lockStore(dir string) (*storeLock, error)         { return &storeLock{}, nil }
+func lockFile(path, what string) (*storeLock, error)   { return &storeLock{}, nil }
 func lockStaged(stage, dir string) (*storeLock, error) { return &storeLock{}, nil }
 func (l *storeLock) release() error                    { return nil }
 

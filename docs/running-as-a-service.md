@@ -38,7 +38,7 @@ code-central service install
 - **Linux:** writes the systemd user unit `~/.config/systemd/user/code-central.service` (or under `$XDG_CONFIG_HOME`), enables it and starts it. Logs: `journalctl --user -u code-central`.
 - **Windows:** writes the scheduled task `~\.local\state\code-central\code-central-task.xml`, registers it for your account as the task `Code Central` (no admin rights needed) and starts it. The task runs `serve --log`, which appends to `~\.local\state\code-central\code-central.log`. See [ADR 0011](adr/0011-service-install-on-windows-is-a-per-user-scheduled-task-not-a-windows-service.md) for why it isn't a Windows Service. It also writes the Start-menu shortcut `Code Central.lnk` (under `%APPDATA%\Microsoft\Windows\Start Menu\Programs`), which makes Notifications show as "Code Central", with their own entry in Settings > Notifications. Without it, as when you run `serve` by hand, they still appear, shown as Windows PowerShell.
 
-The service starts at login and restarts after a crash. The unit records the binary's absolute path as you invoked it, without resolving symlinks, so a symlinked install keeps working when the target is replaced. It also records the store folder, resolved when you install.
+The service starts at login and restarts after a crash. The unit records the binary's absolute path as you invoked it, without resolving symlinks, so a symlinked install keeps working when the target is replaced. It also records the store folder, resolved when you install, unless a `store:` block in your settings names the store (see [Choosing the store](#choosing-the-store)).
 
 `service install` is safe to run again: it rewrites the unit (and on Windows the shortcut) and restarts the service. Run it again whenever you want to change `--store` or `--bind`.
 
@@ -142,6 +142,25 @@ The port is 7733, and every repository's `.mcp.json` says `${CODE_CENTRAL_URL:-h
 3. `code-central service restart`.
 
 Unknown keys or a bad value in `settings.yaml` stop the service and name the file.
+
+## Choosing the store
+
+The service keeps its records in one **Store**, of one **Store Kind**. The default is **Files**: YAML and Markdown files under `~/.local/share/code-central` (or `$XDG_DATA_HOME/code-central`), which you can read, grep and, with the service stopped, edit by hand. The other Kind this release opens is **SQLite**: one database file, on this machine's disk, which keeps the same records as document rows. Choose it with a `store:` block in the same `settings.yaml` as the port:
+
+```yaml
+store:
+  kind: sqlite                                   # files (the default) or sqlite
+  path: /home/me/.local/share/code-central/code-central.db   # optional: code-central.db in the data folder
+```
+
+Then `code-central service restart` (or `service install` again). The store starts empty: moving the records of an existing File Store into it is a later release's Store Move. The service's startup line names what it opened, such as `(store: sqlite at /home/me/.local/share/code-central/code-central.db)`, and the log does too.
+
+- `kind` is `files` or `sqlite`. Anything else stops the service: `settings.yaml: field store.kind: must be files or sqlite, not "mysql"`. `url_env` is reserved for a Postgres Store in a later release and is refused for these Kinds, naming `store.url_env`.
+- `path` is the File Store's folder or the SQLite database file. Left out, it is the data folder, or `code-central.db` in it.
+- No `store:` block means Files in the data folder, exactly as before.
+- `--store <dir>` and `CODE_CENTRAL_STORE` still mean a File Store at that folder, and override the block, so an existing unit or script runs as it did. `service install --store <dir>` writes `--store` into the unit; without it, and with a `store:` block, the unit names no store and the service reads the block at startup.
+
+A SQLite Store is one file plus its write-ahead log (`code-central.db-wal`), and the service holds an exclusive lock file beside it (`code-central.db.lock`) while it runs, so a second service refuses to open it, naming the file. **Don't put it on a network share** (NFS, SMB, a synced folder): SQLite's locking doesn't hold there and the database can be corrupted. A store with a newer format than the binary knows is refused by name (`unknown format`), as a File Store is.
 
 ## Options
 

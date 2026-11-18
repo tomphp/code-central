@@ -234,24 +234,31 @@ func (r reader) TicketCommits(project string) []TicketCommit {
 		return out
 	}
 	for _, n := range slices.Sorted(maps.Keys(p.tickets)) {
-		t := p.tickets[n]
-		row := func(repository, commit string, kind CommitKind) {
-			out = append(out, TicketCommit{Ticket: n, Spec: t.Spec, Repository: repository, Commit: commit, Kind: kind})
+		out = append(out, ticketCommitsOf(project, p.tickets[n])...)
+	}
+	return out
+}
+
+// ticketCommitsOf is the TicketCommits of t, which holds its Moves: its
+// pushed commits, then the commits it landed at.
+func ticketCommitsOf(project string, t domain.Ticket) []TicketCommit {
+	var out []TicketCommit
+	row := func(repository, commit string, kind CommitKind) {
+		out = append(out, TicketCommit{Ticket: t.Number, Spec: t.Spec, Repository: repository, Commit: commit, Kind: kind})
+	}
+	for _, pc := range t.PushedCommits {
+		row(pc.Repository, pc.Commit, CommitPushed)
+	}
+	// The Home Repository landed at its Moves' commits, so its entry
+	// among the Repositories, named by the Project Key, is left out.
+	for _, m := range t.Moves {
+		if m.Commit != "" {
+			row("", m.Commit, CommitLanded)
 		}
-		for _, pc := range t.PushedCommits {
-			row(pc.Repository, pc.Commit, CommitPushed)
-		}
-		// The Home Repository landed at its Moves' commits, so its entry
-		// among the Repositories, named by the Project Key, is left out.
-		for _, m := range t.Moves {
-			if m.Commit != "" {
-				row("", m.Commit, CommitLanded)
-			}
-		}
-		for _, cr := range t.Repositories {
-			if cr.Landed != nil && cr.Name != project {
-				row(cr.Name, cr.Landed.Commit, CommitLanded)
-			}
+	}
+	for _, cr := range t.Repositories {
+		if cr.Landed != nil && cr.Name != project {
+			row(cr.Name, cr.Landed.Commit, CommitLanded)
 		}
 	}
 	return out

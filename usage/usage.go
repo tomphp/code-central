@@ -152,7 +152,7 @@ func (r *Recorder) RecordCall(project string, c Call) {
 		return
 	}
 	if err := r.append(project, c.Time, Record{Call: &c}); err != nil {
-		fmt.Fprintf(r.log, "code-central serve: usage: dropped an %s record for %s: %v\n", typeCall, project, err)
+		fmt.Fprintf(r.log, "code-central serve: usage: dropped an %s record for %s: %v\n", TypeCall, project, err)
 	}
 }
 
@@ -164,7 +164,7 @@ func (r *Recorder) RecordResponses(project string, rs []Response) {
 	}
 	for _, resp := range rs {
 		if err := r.append(project, resp.Time, Record{Response: &resp}); err != nil {
-			fmt.Fprintf(r.log, "code-central serve: usage: dropped a %s record for %s: %v\n", typeResponse, project, err)
+			fmt.Fprintf(r.log, "code-central serve: usage: dropped a %s record for %s: %v\n", TypeResponse, project, err)
 		}
 	}
 }

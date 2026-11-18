@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 
 	"github.com/tomoram/code-central/app"
 	"github.com/tomoram/code-central/home"
@@ -25,7 +26,27 @@ type settings struct {
 	Port int `yaml:"port"`
 	// Notifications is on (the default) or off.
 	Notifications string `yaml:"notifications"`
+	// Store names the Store Kind and where it is (ADR 0067); nil, the
+	// default, is a File Store in the data folder. The --store flag and
+	// CODE_CENTRAL_STORE override it with a File Store at their folder.
+	Store *storeSettings `yaml:"store"`
 }
+
+// storeSettings is the store: block.
+type storeSettings struct {
+	// Kind is files or sqlite.
+	Kind string `yaml:"kind"`
+	// Path is the File Store's folder or the SQLite database file; empty
+	// means the data folder, or code-central.db in it.
+	Path string `yaml:"path"`
+	// URLEnv is the environment variable a postgres store reads its URL
+	// from, which no Kind this build opens has.
+	URLEnv string `yaml:"url_env"`
+}
+
+// storeKinds are the Kinds the store: block accepts; serve.go maps them
+// to the store's.
+var storeKinds = []string{"files", "sqlite"}
 
 func loadSettings(h home.Lookup) (settings, error) {
 	s := settings{Port: app.Port, Notifications: "on"}
@@ -51,6 +72,14 @@ func loadSettings(h home.Lookup) (settings, error) {
 	}
 	if s.Notifications != "on" && s.Notifications != "off" {
 		return s, fmt.Errorf("%s: field notifications: must be on or off, not %q", path, s.Notifications)
+	}
+	if st := s.Store; st != nil {
+		if !slices.Contains(storeKinds, st.Kind) {
+			return s, fmt.Errorf("%s: field store.kind: must be files or sqlite, not %q", path, st.Kind)
+		}
+		if st.URLEnv != "" {
+			return s, fmt.Errorf("%s: field store.url_env: only a postgres store reads its URL from the environment; a %s store has a path", path, st.Kind)
+		}
 	}
 	return s, nil
 }

@@ -30,14 +30,17 @@ type running struct {
 	done           chan error
 }
 
+// filesAt is the File Store at dir, as the service opens it.
+func filesAt(dir string) store.Location { return store.Location{Kind: store.Files, Path: dir} }
+
 // start runs the service with o, filling in a test store, a test-chosen
 // address (never 7733) and output buffers where o leaves them out, and
 // waits until it listens. It returns Run's error instead if Run stops
 // first.
 func start(t *testing.T, o app.Options) (*running, error) {
 	t.Helper()
-	if o.StoreDir == "" {
-		o.StoreDir = t.TempDir()
+	if o.Store == (store.Location{}) {
+		o.Store = filesAt(t.TempDir())
 	}
 	if o.Addrs == nil {
 		o.Addrs = []string{"127.0.0.1:0"}
@@ -85,7 +88,7 @@ func (r *running) url() string { return "http://" + r.bound[0] }
 func TestRunServesTheAPIAndSaysWhereItListens(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	r, err := start(t, app.Options{StoreDir: dir, Version: "v9.9.9"})
+	r, err := start(t, app.Options{Store: filesAt(dir), Version: "v9.9.9"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +100,7 @@ func TestRunServesTheAPIAndSaysWhereItListens(t *testing.T) {
 	if resp.StatusCode != 200 || resp.Header.Get("X-Code-Central-Version") != "v9.9.9" {
 		t.Fatalf("got %d, version %q", resp.StatusCode, resp.Header.Get("X-Code-Central-Version"))
 	}
-	want := fmt.Sprintf("Code Central v9.9.9 listening on %v (store: %s)\n", r.bound, dir)
+	want := fmt.Sprintf("Code Central v9.9.9 listening on %v (store: files at %s)\n", r.bound, dir)
 	if r.stdout.String() != want {
 		t.Fatalf("stdout %q, want %q", r.stdout, want)
 	}
@@ -109,7 +112,7 @@ func TestATicketSurvivesARestart(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	dir := t.TempDir()
-	r, err := start(t, app.Options{StoreDir: dir})
+	r, err := start(t, app.Options{Store: filesAt(dir)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +134,7 @@ func TestATicketSurvivesARestart(t *testing.T) {
 		}
 	}
 
-	r2, err := start(t, app.Options{StoreDir: dir})
+	r2, err := start(t, app.Options{Store: filesAt(dir)})
 	if err != nil {
 		t.Fatalf("restart: %v", err)
 	}
@@ -180,7 +183,7 @@ func TestRunStopsBeforeListeningWhenItCannotOpenTheStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer held.Close()
-	_, err = start(t, app.Options{StoreDir: dir})
+	_, err = start(t, app.Options{Store: filesAt(dir)})
 	if err == nil {
 		t.Fatal("the service listened on a store it could not open")
 	}
@@ -249,7 +252,7 @@ func storeInReview(t *testing.T) string {
 func TestRunSendsTheStartupSummaryWhenNeedsMeIsNotEmpty(t *testing.T) {
 	t.Parallel()
 	rec := recorder{sent: make(chan notify.Notification, 8)}
-	r, err := start(t, app.Options{StoreDir: storeInReview(t), Notifier: rec})
+	r, err := start(t, app.Options{Store: filesAt(storeInReview(t)), Notifier: rec})
 	if err != nil {
 		t.Fatal(err)
 	}

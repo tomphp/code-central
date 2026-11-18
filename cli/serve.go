@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strconv"
 	"strings"
 
 	"github.com/tomoram/code-central/app"
+	"github.com/tomoram/code-central/home"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -103,7 +105,7 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 			return err
 		}
 	}
-	dir, err := store.Dir(o.store, e.home())
+	loc, err := storeLocation(o.store, local, e.home())
 	if err != nil {
 		return err
 	}
@@ -123,9 +125,39 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 		notifier = nil
 	}
 	return app.Run(ctx, app.Options{
-		StoreDir: dir, Addrs: addrs, Bind: bind, Version: e.version(),
+		Store: loc, Addrs: addrs, Bind: bind, Version: e.version(),
 		Stdout: e.Stdout, Stderr: e.Stderr, Notifier: notifier, OnListening: e.OnListening,
 	})
+}
+
+// storeIsAFolder is whether the Store is the File Store store.Dir names,
+// from the --store flag, CODE_CENTRAL_STORE or the data folder, rather
+// than the settings' store: block.
+func storeIsAFolder(flag string, local settings, h home.Lookup) bool {
+	return flag != "" || h.Getenv("CODE_CENTRAL_STORE") != "" || local.Store == nil
+}
+
+// storeLocation resolves the Store serve opens: the --store flag or
+// CODE_CENTRAL_STORE name a File Store at their folder, else the
+// settings' store: block names the Kind and place, else it is a File
+// Store in the data folder.
+func storeLocation(flag string, local settings, h home.Lookup) (store.Location, error) {
+	if storeIsAFolder(flag, local, h) {
+		dir, err := store.Dir(flag, h)
+		return store.Location{Kind: store.Files, Path: dir}, err
+	}
+	l := store.Location{Kind: store.Kind(local.Store.Kind), Path: local.Store.Path}
+	if l.Path == "" {
+		dir, err := store.Dir("", h)
+		if err != nil {
+			return l, err
+		}
+		l.Path = dir
+		if l.Kind == store.SQLite {
+			l.Path = filepath.Join(dir, "code-central.db")
+		}
+	}
+	return l, nil
 }
 
 // parseBind checks --bind: one specific IP address, with an optional port

@@ -38,8 +38,9 @@ const Port = 7733
 // Options are what the service is run with. The serve command fills them
 // from its flags, the local settings and its environment.
 type Options struct {
-	// StoreDir is the store directory, already resolved (store.Dir).
-	StoreDir string
+	// Store is the Store to open: its Kind and where it is, already
+	// resolved from serve's flags and the local settings.
+	Store store.Location
 	// Addrs are the addresses to listen on. One this machine doesn't
 	// have (no IPv6 loopback) is skipped; one that is taken stops Run.
 	Addrs []string
@@ -113,16 +114,17 @@ func Run(ctx context.Context, o Options) error {
 			// Before OnListening, so the startup summary has been sent by then.
 			startNotifying(ctx, c, clk, o, bound[0])
 		}
-		fmt.Fprintf(o.Stdout, "Code Central %s listening on %v (store: %s)\n", o.Version, bound, o.StoreDir)
+		fmt.Fprintf(o.Stdout, "Code Central %s listening on %v (store: %s)\n", o.Version, bound, o.Store)
 		if o.OnListening != nil {
 			o.OnListening(bound)
 		}
 	})
 }
 
-// openStore locks and loads the store, saying so when it migrated it.
-func openStore(o Options) (*store.FileStore, error) {
-	st, err := store.Open(o.StoreDir)
+// openStore locks and opens the Store, whatever its Kind, saying so
+// when it migrated it.
+func openStore(o Options) (store.OpenedStore, error) {
+	st, err := store.OpenAt(o.Store)
 	if err != nil {
 		return nil, fmt.Errorf("cannot open the store: %w", err)
 	}
