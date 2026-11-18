@@ -65,7 +65,7 @@ func (a *AzurePipelines) refused(err error) (core.WatcherCheckResult, error) {
 		return a.access().Rejected(), nil
 	case errors.Is(err, azdo.ErrMissingScope):
 		return core.WatcherCheckResult{Problem: core.ProblemPATScope,
-			Reason: fmt.Sprintf("The PAT in %s can't read builds in %s.", a.PATEnv, a.ProjectURL),
+			Reason: fmt.Sprintf("The PAT in %s can't read builds in %s.", a.access().PATVariable(), a.ProjectURL),
 			Fix:    "The PAT needs " + buildScope + ". Make a new PAT with that scope, and set it for the service."}, nil
 	}
 	return unreadable(a.ProjectURL, err), nil

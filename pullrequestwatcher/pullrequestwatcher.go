@@ -125,8 +125,9 @@ type pullRequests interface {
 }
 
 // NewHost is the Code Host for in's repository and its pull requests into
-// base, chosen by in's Code Host: GitHub finds gh with in's gh path Option,
-// and Azure Repos reads the PAT from env by in's PAT environment variable.
+// base, chosen by in's Code Host. It reaches nothing until CheckAccess:
+// GitHub then finds gh with in's gh path Option, and Azure Repos reads the
+// PAT from env by in's PAT environment variable.
 func NewHost(in core.PullRequestCheckInput, base string, env gh.Env) (Host, error) {
 	switch in.CodeHost {
 	case core.CodeHostGitHub:

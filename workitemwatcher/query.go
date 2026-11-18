@@ -28,7 +28,7 @@ const MaxWorkItems = 1000
 const scope = "Work Items: Read & write"
 
 // access is how the Work Item Watcher reaches Azure DevOps with in's PAT
-// from environ.
+// from environ, which only Ready reads: wording a problem passes nil.
 func access(environ []string, in core.AzureBoardsCheckInput) azdo.Access {
 	return azdo.Access{Environ: environ, PATEnv: in.PATEnv, Watcher: "Work Item Watcher", Scope: scope}
 }
@@ -109,7 +109,7 @@ func problemOf(in core.AzureBoardsCheckInput, projectURL string, err error) core
 		return access(nil, in).Rejected()
 	case errors.Is(err, azdo.ErrMissingScope):
 		return core.WatcherCheckResult{Problem: core.ProblemPATScope,
-			Reason: fmt.Sprintf("The PAT in %s can't read work items in %s.", in.PATEnv, projectURL),
+			Reason: fmt.Sprintf("The PAT in %s can't read work items in %s.", access(nil, in).PATVariable(), projectURL),
 			Fix:    fmt.Sprintf("The PAT needs %s. Make a new PAT with that scope, and set it for the service.", scope)}
 	case errors.Is(err, azdo.ErrNotFound) && saved:
 		return core.WatcherCheckResult{Problem: core.ProblemQueryUnusable,

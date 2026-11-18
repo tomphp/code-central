@@ -68,7 +68,7 @@ func writeProblem(in core.AzureBoardsCheckInput, err error) core.WatcherCheckRes
 		return access(nil, in).Rejected()
 	case errors.Is(err, azdo.ErrMissingScope):
 		return core.WatcherCheckResult{Problem: core.ProblemPATScope,
-			Reason: fmt.Sprintf("The PAT in %s can read work items but not write them, which Code Central needs to comment on them and tag them.", in.PATEnv),
+			Reason: fmt.Sprintf("The PAT in %s can read work items but not write them, which Code Central needs to comment on them and tag them.", access(nil, in).PATVariable()),
 			Fix:    fmt.Sprintf("The PAT needs %s. Make a new PAT with that scope, and set it for the service.", scope)}
 	case errors.As(err, &refusal):
 		return core.WatcherCheckResult{Problem: core.ProblemCheckFailed,
