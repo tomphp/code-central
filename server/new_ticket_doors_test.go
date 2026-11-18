@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/codecentraltest"
@@ -47,8 +48,8 @@ func TestASpecReadSaysWhetherNewTicketIsAllowed(t *testing.T) {
 	boolField(t, httpOK(t, srv, httpCall{"GET", "/api/p/acme/specs/4", ""}), "ticketable", true)
 	boolField(t, httpOK(t, srv, httpCall{"GET", "/api/p/acme/specs/1", ""}), "ticketable", false)
 	e := httpRejected(t, srv, newTicket(`{"spec":"acme-1","text":"More"}`), core.ActionNotAllowed)
-	if e.Message == "" {
-		t.Fatal("new_ticket on a Long-lived Spec refused without saying why")
+	if !strings.Contains(e.Message, "Long-lived") {
+		t.Fatalf("new_ticket on a Long-lived Spec refused with %q, want it to say why", e.Message)
 	}
 	httpRejected(t, srv, newTicket(`{"spec":"acme-4","text":"  "}`), core.Invalid)
 }

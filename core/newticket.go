@@ -84,15 +84,15 @@ func whyNotNewTicket(p domain.Project, s domain.Spec, tickets []domain.Ticket) s
 	if !slices.ContainsFunc(tickets, func(t domain.Ticket) bool { return StageOf(t.Labels) != "" }) {
 		return ""
 	}
-	if !slices.ContainsFunc(tickets, stagesFinishedBy) {
+	if !slices.ContainsFunc(tickets, finishesStages) {
 		return id + " is a Requirement whose Stages aren't finished, so it takes no New Ticket until its tickets Stage is Done or Implement replaces it"
 	}
 	return ""
 }
 
-// stagesFinishedBy reports whether t is a Requirement's tickets Stage that
+// finishesStages reports whether t is a Requirement's tickets Stage that
 // finishes its Stages: Done, or Cancelled by Implement.
-func stagesFinishedBy(t domain.Ticket) bool {
+func finishesStages(t domain.Ticket) bool {
 	if StageOf(t.Labels) != StageTickets {
 		return false
 	}
