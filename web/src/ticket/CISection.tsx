@@ -16,6 +16,7 @@ import { projectOf } from "../api/api";
 import type { CIFailureOption, CIItemView, CIResult, CIRunView, TicketView } from "../api/types";
 import { CIRunEntry } from "../ci/CIRunEntry";
 import { shortCommit } from "../format";
+import { hrefFor } from "../url";
 import { useAct } from "./useAct";
 import { Button } from "../controls/Button";
 import { useApi } from "../live";
@@ -25,6 +26,8 @@ export interface CISectionProps {
   // project, when given, lets the human choose a failure option.
   project?: string;
 }
+
+type CIAutoFixView = NonNullable<TicketView["ci_auto_fix"]>;
 
 // RepositoryCI is the CI of a Ticket in one Repository, or with the Home
 // Repository alone, the Ticket's: its result, latest pushed commit, runs,
@@ -40,6 +43,8 @@ interface RepositoryCI {
   // item is its CI item, which carries the prefilled fix notes.
   item?: CIItemView;
   landAnyway?: boolean;
+  // autoFix is what Auto-fix does about its failure, which Go derives.
+  autoFix?: CIAutoFixView;
 }
 
 // repositoriesCI is t's CI per Repository, in landing order, those with
@@ -47,7 +52,7 @@ interface RepositoryCI {
 function repositoriesCI(t: TicketView): RepositoryCI[] {
   const runs = t.ci_runs ?? [];
   if (!t.repositories?.length) {
-    return [{ result: t.ci_result, latest: t.pushed_commit?.commit, runs, options: t.ci_failure_options, item: t.ci_item, landAnyway: t.land_anyway }];
+    return [{ result: t.ci_result, latest: t.pushed_commit?.commit, runs, options: t.ci_failure_options, item: t.ci_item, landAnyway: t.land_anyway, autoFix: t.ci_auto_fix }];
   }
   // A run names its Repository, and leaves the Home Repository's out.
   const home = projectOf(t.id);
@@ -64,6 +69,7 @@ function repositoriesCI(t: TicketView): RepositoryCI[] {
         options: item && item.reason !== "ci_unavailable" ? item.options : undefined,
         item,
         landAnyway: r.land_anyway,
+        autoFix: r.ci_auto_fix,
       };
     });
 }
@@ -81,6 +87,7 @@ export function CISection({ ticket: t, project }: CISectionProps) {
           CI <Result ci={ci} />
         </h3>
         <CIRepositoryRuns ci={ci} />
+        <AutoFixLine autoFix={ci.autoFix} />
         {project && <CIFailureOptions project={project} ticket={t} ci={ci} />}
       </section>
     );
@@ -96,6 +103,7 @@ export function CISection({ ticket: t, project }: CISectionProps) {
             {ci.repository} <Result ci={ci} />
           </h4>
           <CIRepositoryRuns ci={ci} />
+          <AutoFixLine autoFix={ci.autoFix} />
           {project && <CIFailureOptions project={project} ticket={t} ci={ci} />}
         </section>
       ))}
@@ -110,6 +118,49 @@ function Result({ ci }: { ci: RepositoryCI }) {
       {ci.result && <span className={`ci-result ci-${ci.result}`}>{ci.result}</span>} {ci.latest && <code>{shortCommit(ci.latest)}</code>}
     </>
   );
+}
+
+// FixTicketLink links an auto fix Ticket.
+function FixTicketLink({ id }: { id: string }) {
+  return <a href={hrefFor({ view: "inbox", ticket: id })}>{id}</a>;
+}
+
+// AutoFixLine is what Auto-fix does about a CI failure, as Go derived it
+// (ADR 0063): the auto fix Ticket fixing it, the one covering it with the
+// commit it was opened for, or the attempts it stopped after.
+function AutoFixLine({ autoFix }: { autoFix?: CIAutoFixView }) {
+  if (!autoFix) return null;
+  const { fixing, covering, stopped } = autoFix;
+  if (fixing) {
+    return (
+      <p className="small ci-auto-fix">
+        Auto-fix is fixing it: <FixTicketLink id={fixing.fix_ticket} /> (attempt {fixing.attempt} of {fixing.limit}).
+      </p>
+    );
+  }
+  if (covering) {
+    return (
+      <p className="small ci-auto-fix">
+        Auto-fix covers it: <FixTicketLink id={covering.fix_ticket} />, opened for <code>{shortCommit(covering.commit)}</code>.
+      </p>
+    );
+  }
+  if (stopped) {
+    const n = stopped.attempts.length;
+    return (
+      <p className="small ci-auto-fix">
+        Auto-fix stopped after {n === 1 ? "1 attempt" : `${n} attempts`}:{" "}
+        {stopped.attempts.map((id, i) => (
+          <span key={id}>
+            {i > 0 && ", "}
+            <FixTicketLink id={id} />
+          </span>
+        ))}
+        .
+      </p>
+    );
+  }
+  return null;
 }
 
 // CIRepositoryRuns are ci's runs: its latest pushed commit's, then the
