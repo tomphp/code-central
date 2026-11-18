@@ -2,9 +2,8 @@
 
 // The SQLite Store Kind: one database file on modernc.org/sqlite (pure
 // Go), in WAL mode, with an exclusive lock file beside it, as the File
-// Store has. It isn't for a network share: SQLite's locking doesn't hold
-// there, and the lock file is beside the database, not on the share's
-// terms.
+// Store has. It isn't for a network share: neither SQLite's locking nor
+// the lock file's holds there.
 
 package store
 
@@ -25,6 +24,7 @@ var sqlite = dialect{
 	json:   "TEXT",
 	serial: "INTEGER PRIMARY KEY AUTOINCREMENT",
 	rebind: func(q string) string { return q },
+	begin:  "BEGIN IMMEDIATE",
 }
 
 // OpenSQLite locks and opens the SQLite Store at path, creating the

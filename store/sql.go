@@ -32,6 +32,9 @@ type dialect struct {
 	serial string
 	// rebind turns a statement's ? placeholders into the engine's.
 	rebind func(string) string
+	// begin opens an Update's transaction, taking the engine's write lock
+	// at once.
+	begin string
 }
 
 // querier runs statements: a connection, a transaction or the pool.
@@ -84,6 +87,8 @@ func (s *SQLStore) Usage() usage.Store { return s.usage }
 // Changes never delivers: no other service shares a SQLite Store.
 func (s *SQLStore) Changes(func(Change)) {}
 
+// View runs fn over a Reader on one of the pool's connections. A read
+// that failed inside fn, which the Reader can't report, is its error.
 func (s *SQLStore) View(fn func(Reader) error) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -100,6 +105,9 @@ func (s *SQLStore) View(fn func(Reader) error) error {
 	return failed
 }
 
+// Update runs fn over a Writer in one transaction under the store-wide
+// lock: its write and side-table rows land together, or, when fn fails
+// or panics, not at all.
 func (s *SQLStore) Update(fn func(Writer) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -109,9 +117,17 @@ func (s *SQLStore) Update(fn func(Writer) error) error {
 		return err
 	}
 	defer conn.Close()
-	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+	if _, err := conn.ExecContext(ctx, s.d.begin); err != nil {
 		return err
 	}
+	committed := false
+	defer func() {
+		if !committed {
+			// Rolled back before the connection goes back to the pool,
+			// whatever fn did, so no later Update finds it mid-transaction.
+			conn.ExecContext(ctx, "ROLLBACK")
+		}
+	}()
 	var failed error
 	w := &sqlWriter{sqlReader: sqlReader{q: conn, d: s.d, err: &failed}}
 	err = fn(w)
@@ -119,13 +135,12 @@ func (s *SQLStore) Update(fn func(Writer) error) error {
 		err = failed
 	}
 	if err != nil {
-		conn.ExecContext(ctx, "ROLLBACK")
 		return err
 	}
 	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
-		conn.ExecContext(ctx, "ROLLBACK")
 		return err
 	}
+	committed = true
 	return nil
 }
 

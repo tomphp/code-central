@@ -59,10 +59,16 @@ func (w *sqlWriter) PutSpec(project string, s domain.Spec) error {
 	return nil
 }
 
+// writeSpec writes s whole, refusing one its document couldn't give
+// back: a File Store would refuse the same record at its next open, and
+// a row no read can decode would fail every later read.
 func (w *sqlWriter) writeSpec(project string, s domain.Spec) error {
 	doc, err := specDoc(s)
 	if err != nil {
 		return err
+	}
+	if _, err := specFromDoc(doc, s.Number); err != nil {
+		return fmt.Errorf("%s-%d: %w", project, s.Number, err)
 	}
 	if err := w.exec(`INSERT INTO specs (project, number, created, updated, link_integration, link_id, doc) VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (project, number) DO UPDATE SET created = excluded.created, updated = excluded.updated,
@@ -110,30 +116,34 @@ func (w *sqlWriter) PutTicket(project string, t domain.Ticket, parts ...Part) er
 }
 
 // writeTicket writes t whole, History and derived head included, and
-// its side-table rows.
+// its side-table rows. It refuses a Ticket its documents couldn't give
+// back, as writeSpec does.
 func (w *sqlWriter) writeTicket(project string, t domain.Ticket) error {
 	node, err := docNode(ticketFileOf(t))
 	if err != nil {
 		return err
 	}
-	parts := make([]any, 0, len(History))
+	row := ticketRow{parts: make([][]byte, 0, len(History))}
 	for _, p := range History {
-		pn := takeKey(node, string(p))
-		doc, err := jsonOf(pn)
+		doc, err := jsonOf(takeKey(node, string(p)))
 		if err != nil {
 			return err
 		}
-		parts = append(parts, string(doc))
+		row.parts = append(row.parts, doc)
 	}
-	doc, err := jsonOf(node)
-	if err != nil {
+	if row.doc, err = jsonOf(node); err != nil {
 		return err
 	}
-	head, err := jsonDoc(headFileOf(t.Head))
-	if err != nil {
+	if row.head, err = jsonDoc(headFileOf(t.Head)); err != nil {
 		return err
 	}
-	args := append([]any{project, t.Number, string(t.State), t.Spec, unixNanos(t.Created), unixNanos(t.Updated), t.Link.Integration, t.Link.ID, string(doc), string(head)}, parts...)
+	if _, err := row.ticket(t.Number, History); err != nil {
+		return fmt.Errorf("%s-%d: %w", project, t.Number, err)
+	}
+	args := []any{project, t.Number, string(t.State), t.Spec, unixNanos(t.Created), unixNanos(t.Updated), t.Link.Integration, t.Link.ID, string(row.doc), string(row.head)}
+	for _, p := range row.parts {
+		args = append(args, string(p))
+	}
 	if err := w.exec(`INSERT INTO tickets (project, number, state, spec, created, updated, link_integration, link_id, doc, head, claims, rounds, comments, moves, edits, failure_reports)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (project, number) DO UPDATE SET state = excluded.state, spec = excluded.spec, created = excluded.created, updated = excluded.updated,
@@ -173,44 +183,17 @@ func (w *sqlWriter) writeTicket(project string, t domain.Ticket) error {
 }
 
 func (w *sqlWriter) PutImport(project string, im Import) error {
-	if w.wrote {
-		return ErrSecondWrite
+	if err := w.begin(project, true); err != nil {
+		return err
 	}
-	if w.hasProject(project) {
-		specs, tickets := w.numbers(project)
-		seen := map[int]bool{}
-		taken := func(n int) bool {
-			dup := seen[n]
-			seen[n] = true
-			return specs[n] || tickets[n] || dup
-		}
-		for _, s := range im.Specs {
-			if taken(s.Number) {
-				return fmt.Errorf("%w: %s-%d", ErrExists, project, s.Number)
-			}
-		}
-		for _, t := range im.Tickets {
-			if taken(t.Number) {
-				return fmt.Errorf("%w: %s-%d", ErrExists, project, t.Number)
-			}
-		}
-		for _, t := range im.Rewritten {
-			if !tickets[t.Number] || seen[t.Number] {
-				return fmt.Errorf("%w: %s-%d", ErrNotExists, project, t.Number)
-			}
-			seen[t.Number] = true
-		}
-		for _, sp := range im.RewrittenSpecs {
-			if !specs[sp.Number] || seen[sp.Number] {
-				return fmt.Errorf("%w: %s-%d", ErrNotExists, project, sp.Number)
-			}
-			seen[sp.Number] = true
-		}
-	} else {
-		return ErrUnknownProject
-	}
+	specs, tickets := w.numbers(project)
 	if w.err != nil && *w.err != nil {
 		return *w.err
+	}
+	hasSpec := func(n int) bool { return specs[n] }
+	hasTicket := func(n int) bool { return tickets[n] }
+	if err := checkImport(project, im, hasSpec, hasTicket); err != nil {
+		return err
 	}
 	for _, s := range im.Specs {
 		if err := w.writeSpec(project, s); err != nil {
@@ -261,14 +244,8 @@ func (w *sqlWriter) numbers(project string) (specs, tickets map[int]bool) {
 }
 
 func (w *sqlWriter) PutOptions(o domain.Options) error {
-	if !o.FocusClear.Valid() {
-		return fmt.Errorf("%w: focus_clear %q", ErrInvalidOption, o.FocusClear)
-	}
-	if !o.LimitsPopup.Valid() {
-		return fmt.Errorf("%w: limits_popup %q", ErrInvalidOption, o.LimitsPopup)
-	}
-	if !o.FocusPopup.Valid() {
-		return fmt.Errorf("%w: focus_popup %q", ErrInvalidOption, o.FocusPopup)
+	if err := checkOptions(o); err != nil {
+		return err
 	}
 	if err := w.begin("", false); err != nil {
 		return err

@@ -13,7 +13,6 @@ import (
 // file does, keys and all, so both Store Kinds hold one record shape.
 func TestAJSONDocumentReadsBackAsItsFileDoes(t *testing.T) {
 	at := time.Date(2026, 11, 7, 9, 30, 0, 123456789, time.UTC)
-	yes := false
 	tk := domain.Ticket{
 		Number: 3, Title: "Add \"quotes\"\nand lines", State: domain.InProgress, Spec: 1, Labels: []string{"a", "b"}, Tags: map[string]string{"k": "v"},
 		BlockedBy: []int{2}, Created: at, Updated: at, Description: "## Body\n\n- one\n", Branch: "acme-3",
@@ -29,10 +28,7 @@ func TestAJSONDocumentReadsBackAsItsFileDoes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{`"title":"Add \"quotes\"\nand lines"`, `"spec":1`, `"land_per_spec"`, `"claims":[{"number":1`} {
-		if key == `"land_per_spec"` {
-			continue
-		}
+	for _, key := range []string{`"title":"Add \"quotes\"\nand lines"`, `"spec":1`, `"claims":[{"number":1`} {
 		if !strings.Contains(string(doc), key) {
 			t.Errorf("document lacks %s:\n%s", key, doc)
 		}
@@ -54,7 +50,8 @@ func TestAJSONDocumentReadsBackAsItsFileDoes(t *testing.T) {
 		t.Fatalf("JSON read back\n%+v\nYAML read back\n%+v", got, want)
 	}
 
-	p := domain.Project{Key: "acme", DisplayName: "Acme", Created: at, Mode: "committed", Landing: domain.Landing{Method: domain.LandingMerge, Remote: "origin", LandPerSpec: yes}}
+	// A false left in the file, as land_per_spec is, must come back false.
+	p := domain.Project{Key: "acme", DisplayName: "Acme", Created: at, Mode: "committed", Landing: domain.Landing{Method: domain.LandingMerge, Remote: "origin", LandPerSpec: false}}
 	doc, err = jsonDoc(projectFileOf(p))
 	if err != nil {
 		t.Fatal(err)

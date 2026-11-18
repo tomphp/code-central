@@ -57,16 +57,32 @@ func (r sqlReader) scanDoc(q string, args ...any) (doc []byte, found bool) {
 	return doc, true
 }
 
-// The records' documents, each decoded strictly as its file is.
+// The records' documents, each decoded strictly as its file is, and a
+// failure a LoadError naming the document where a file's names the file.
+
+// loadDoc decodes doc, the document named what, into the file struct
+// out points to.
+func loadDoc(what string, doc []byte, out any) error {
+	if field, err := fromJSONDoc(doc, out); err != nil {
+		return &LoadError{File: what, Field: field, Msg: err.Error()}
+	}
+	return nil
+}
+
+// inDoc names the document lerr came from.
+func inDoc(what string, lerr *LoadError) error {
+	lerr.File = what
+	return lerr
+}
 
 func projectFromDoc(doc []byte) (domain.Project, error) {
 	var f projectFile
-	if field, err := fromJSONDoc(doc, &f); err != nil {
-		return domain.Project{}, fmt.Errorf("project document: field %s: %w", field, err)
+	if err := loadDoc("project document", doc, &f); err != nil {
+		return domain.Project{}, err
 	}
 	p, lerr := projectOf(f)
 	if lerr != nil {
-		return domain.Project{}, fmt.Errorf("project document: %w", lerr)
+		return domain.Project{}, inDoc("project document", lerr)
 	}
 	p.Landing = landingOrDefault(p.Landing)
 	return p, nil
@@ -89,15 +105,15 @@ func specFromDoc(doc []byte, n int) (domain.Spec, error) {
 	}
 	body := takeKey(node, "body")
 	if body == nil {
-		return domain.Spec{}, errors.New("spec document: field body: missing")
+		return domain.Spec{}, &LoadError{File: "spec document", Field: "body", Msg: "required"}
 	}
 	var f specFront
 	if field, err := decodeDocNode(node, &f); err != nil {
-		return domain.Spec{}, fmt.Errorf("spec document: field %s: %w", field, err)
+		return domain.Spec{}, &LoadError{File: "spec document", Field: field, Msg: err.Error()}
 	}
 	s, lerr := specOf(f, body.Value, n)
 	if lerr != nil {
-		return domain.Spec{}, fmt.Errorf("spec document: %w", lerr)
+		return domain.Spec{}, inDoc("spec document", lerr)
 	}
 	return s, nil
 }
@@ -156,18 +172,18 @@ func (tr ticketRow) ticket(n int, parts []Part) (domain.Ticket, error) {
 	}
 	var f ticketFile
 	if field, err := decodeDocNode(node, &f); err != nil {
-		return domain.Ticket{}, fmt.Errorf("ticket document: field %s: %w", field, err)
+		return domain.Ticket{}, &LoadError{File: "ticket document", Field: field, Msg: err.Error()}
 	}
 	t, lerr := ticketOf(f, n)
 	if lerr != nil {
-		return domain.Ticket{}, fmt.Errorf("ticket document: %w", lerr)
+		return domain.Ticket{}, inDoc("ticket document", lerr)
 	}
 	var hf headFile
-	if field, err := fromJSONDoc(tr.head, &hf); err != nil {
-		return domain.Ticket{}, fmt.Errorf("ticket head document: field %s: %w", field, err)
+	if err := loadDoc("ticket head document", tr.head, &hf); err != nil {
+		return domain.Ticket{}, err
 	}
 	if t.Head, lerr = headOf(hf); lerr != nil {
-		return domain.Ticket{}, fmt.Errorf("ticket head document: %w", lerr)
+		return domain.Ticket{}, inDoc("ticket head document", lerr)
 	}
 	return t, nil
 }
@@ -475,13 +491,13 @@ func (r sqlReader) Options() domain.Options {
 		return domain.DefaultOptions()
 	}
 	var f optionsFile
-	if field, err := fromJSONDoc(doc, &f); err != nil {
-		r.fail(fmt.Errorf("options document: field %s: %w", field, err))
+	if err := loadDoc("options document", doc, &f); err != nil {
+		r.fail(err)
 		return domain.DefaultOptions()
 	}
 	o, lerr := optionsOf(f)
 	if lerr != nil {
-		r.fail(fmt.Errorf("options document: %w", lerr))
+		r.fail(inDoc("options document", lerr))
 		return domain.DefaultOptions()
 	}
 	return o
@@ -496,13 +512,13 @@ func (r sqlReader) CIRuns(project string) []domain.CIRun {
 		return nil
 	}
 	var f ciRunsFile
-	if field, err := fromJSONDoc(doc, &f); err != nil {
-		r.fail(fmt.Errorf("ci runs document: field %s: %w", field, err))
+	if err := loadDoc("ci runs document", doc, &f); err != nil {
+		r.fail(err)
 		return nil
 	}
 	runs, lerr := ciRunsOf(f)
 	if lerr != nil {
-		r.fail(fmt.Errorf("ci runs document: %w", lerr))
+		r.fail(inDoc("ci runs document", lerr))
 		return nil
 	}
 	if runs == nil {

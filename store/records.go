@@ -520,8 +520,8 @@ func ticketOf(f ticketFile, n int) (domain.Ticket, *LoadError) {
 	if t.Claims, lerr = decodeClaims(f.Claims); lerr != nil {
 		return domain.Ticket{}, lerr
 	}
-	if t.Rounds, err = decodeRounds(f.Rounds); err != nil {
-		return domain.Ticket{}, err.(*LoadError)
+	if t.Rounds, lerr = decodeRounds(f.Rounds); lerr != nil {
+		return domain.Ticket{}, lerr
 	}
 	if t.FailureReports, lerr = decodeFailureReports(f.FailureReports); lerr != nil {
 		return domain.Ticket{}, lerr
@@ -719,7 +719,7 @@ func checkRepositoryName(field, name string) *LoadError {
 	return nil
 }
 
-func decodeRounds(rs []roundFile) ([]domain.Round, error) {
+func decodeRounds(rs []roundFile) ([]domain.Round, *LoadError) {
 	var out []domain.Round
 	for i, r := range rs {
 		field := fmt.Sprintf("rounds[%d]", i)

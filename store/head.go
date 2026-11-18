@@ -16,6 +16,7 @@ type headFile struct {
 	ExternalStateChanged string             `yaml:"external_state_changed,omitempty"`
 }
 
+// headFileOf is h as its document, each part in its file shape.
 func headFileOf(h domain.TicketHead) headFile {
 	f := headFile{Entered: formatOptionalTime(h.Entered), BackToReady: formatOptionalTime(h.BackToReady), ExternalStateChanged: formatOptionalTime(h.ExternalStateChanged)}
 	if h.LiveClaim != nil {
@@ -57,9 +58,8 @@ func headOf(f headFile) (domain.TicketHead, *LoadError) {
 		h.LiveClaim = &cs[0]
 	}
 	if f.LatestRound != nil {
-		rs, err := decodeRounds([]roundFile{*f.LatestRound})
-		if err != nil {
-			lerr := err.(*LoadError)
+		rs, lerr := decodeRounds([]roundFile{*f.LatestRound})
+		if lerr != nil {
 			return h, &LoadError{Field: "latest_round." + lerr.Field, Msg: lerr.Msg}
 		}
 		h.LatestRound = &rs[0]

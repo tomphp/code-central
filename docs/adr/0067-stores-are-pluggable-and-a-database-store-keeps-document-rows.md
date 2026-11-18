@@ -14,7 +14,7 @@ ADR 0003 made the store YAML files under one folder, loaded whole into memory, a
 
 - **A sub-package per Kind.** Rejected: the file structs, their strict decoders and the derived-head rules are the record shape, and a Kind that re-declared them would be a second shape to keep in step. Every Kind lives in `store`, and the database ones are left out of the WebAssembly build (`!js`), which only runs the in-memory fake.
 - **Columns per field, rather than a document.** Rejected: the record would be declared a third time, in SQL, and every format bump would be a schema migration as well as a file migration. A document row keeps one shape and one migration chain, with indexed columns only for what a query touches.
-- **Relaxing a Link's external state on read.** A record with a Link and no external state cannot be read back by any Kind that persists it, and the File Store in memory never noticed. The contract suite's fixtures now write valid Links; the strictness stays.
+- **Relaxing a Link's external state on read.** A record with a Link and no external state cannot be read back by any Kind that persists it, and the File Store in memory never noticed. The contract suite's fixtures now write valid Links, the strictness stays, and a database Store decodes each document back before it stores it, so such a record is refused at the write rather than failing every later read.
 - **Keeping `--store` as a Kind picker.** Rejected: `--store <dir>` has always meant a File Store at that folder, in every unit `service install` wrote. The block is for what a flag can't say.
 
 ## Consequences

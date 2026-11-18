@@ -63,7 +63,7 @@ func takeKey(n *yaml.Node, key string) *yaml.Node {
 
 // putKey adds key with the value v to the mapping n.
 func putKey(n *yaml.Node, key string, v *yaml.Node) {
-	n.Content = append(n.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Style: yaml.DoubleQuotedStyle, Value: key}, v)
+	n.Content = append(n.Content, stringNode(key), v)
 }
 
 // stringNode is s as a scalar node.
@@ -131,8 +131,7 @@ func fromJSONDoc(data []byte, out any) (string, error) {
 	if err != nil {
 		return "file", fmt.Errorf("not valid JSON: %v", err)
 	}
-	field, err := decodeNode(n, reflect.ValueOf(out).Elem())
-	return orFile(field), err
+	return decodeDocNode(n, out)
 }
 
 // jsonNode parses the JSON document data into the node tree the strict
@@ -150,6 +149,10 @@ func jsonNode(data []byte) (*yaml.Node, error) {
 	return n, nil
 }
 
+// readJSONValue reads one JSON value from dec as the node the strict
+// decoder reads: an object as a mapping in key order, an array as a
+// sequence, and each scalar with the tag its JSON type gives it, so a
+// string is never taken for a number or a bool.
 func readJSONValue(dec *json.Decoder) (*yaml.Node, error) {
 	tok, err := dec.Token()
 	if err != nil {
@@ -173,7 +176,7 @@ func readJSONValue(dec *json.Decoder) (*yaml.Node, error) {
 				if err != nil {
 					return nil, err
 				}
-				n.Content = append(n.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Style: yaml.DoubleQuotedStyle, Value: k}, val)
+				n.Content = append(n.Content, stringNode(k), val)
 			}
 			if _, err := dec.Token(); err != nil { // the closing brace
 				return nil, err
@@ -195,7 +198,7 @@ func readJSONValue(dec *json.Decoder) (*yaml.Node, error) {
 		}
 		return nil, fmt.Errorf("unexpected %v", v)
 	case string:
-		return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Style: yaml.DoubleQuotedStyle, Value: v}, nil
+		return stringNode(v), nil
 	case json.Number:
 		tag := "!!int"
 		if _, err := strconv.ParseInt(v.String(), 10, 64); err != nil {

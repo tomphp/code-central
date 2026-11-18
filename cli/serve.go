@@ -130,12 +130,19 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 	})
 }
 
+// storeIsAFolder is whether the Store is the File Store store.Dir names,
+// from the --store flag, CODE_CENTRAL_STORE or the data folder, rather
+// than the settings' store: block.
+func storeIsAFolder(flag string, local settings, h home.Lookup) bool {
+	return flag != "" || h.Getenv("CODE_CENTRAL_STORE") != "" || local.Store == nil
+}
+
 // storeLocation resolves the Store serve opens: the --store flag or
 // CODE_CENTRAL_STORE name a File Store at their folder, else the
 // settings' store: block names the Kind and place, else it is a File
 // Store in the data folder.
 func storeLocation(flag string, local settings, h home.Lookup) (store.Location, error) {
-	if flag != "" || h.Getenv("CODE_CENTRAL_STORE") != "" || local.Store == nil {
+	if storeIsAFolder(flag, local, h) {
 		dir, err := store.Dir(flag, h)
 		return store.Location{Kind: store.Files, Path: dir}, err
 	}

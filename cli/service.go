@@ -86,7 +86,7 @@ func serviceInstall(ctx context.Context, e Env, m serviceManager, args []string)
 	// The unit names the File Store's folder, so the service needn't find
 	// the data folder itself; a store: block in the settings it reads at
 	// startup, like the port.
-	if *storeFlag != "" || e.Getenv("CODE_CENTRAL_STORE") != "" || local.Store == nil {
+	if storeIsAFolder(*storeFlag, local, e.home()) {
 		dir, err := store.Dir(*storeFlag, e.home())
 		if err != nil {
 			return err
