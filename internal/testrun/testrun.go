@@ -1,5 +1,5 @@
 // Command testrun runs the fast suite for `make test`: `go test ./...`,
-// `vitest run`, the TypeScript type check and ESLint, in parallel. It is quiet
+// `gofmt -l`, `vitest run`, the TypeScript type check and ESLint, in parallel. It is quiet
 // by default: a job that passes prints one line, and a job that fails
 // prints its output without the packages that passed. With -v every
 // job's whole output is printed. When a job fails, every job's whole output
@@ -52,6 +52,9 @@ type job struct {
 	Dir   string
 	Args  []string
 	Rerun func(output []byte) (args, items []string)
+	// FailOnOutput fails the job when it prints anything, for a tool like
+	// gofmt -l that lists what is wrong and still exits zero.
+	FailOnOutput bool
 }
 
 // loadAverage and cores are variables so tests can fake them.
@@ -137,6 +140,7 @@ func rerunGo(output []byte) (args, items []string) {
 // rather than node_modules/.bin, whose shims differ by OS.
 var suite = []job{
 	{Name: "go test", Args: []string{"go", "test", "./..."}, Rerun: rerunGo},
+	{Name: "gofmt", Args: []string{"gofmt", "-l", "."}, FailOnOutput: true},
 	{Name: "vitest", Dir: "web", Args: []string{"node", "node_modules/vitest/vitest.mjs", "run"}, Rerun: rerunVitest},
 	{Name: "tsc", Dir: "web", Args: []string{"node", "node_modules/typescript/bin/tsc", "--noEmit"}},
 	{Name: "eslint", Dir: "web", Args: []string{"node", "node_modules/eslint/bin/eslint.js", "."}},
@@ -188,7 +192,13 @@ func run(jobs []job, budget time.Duration, verbose bool, log string, out io.Writ
 	codes := make([]int, len(jobs))
 	var wg sync.WaitGroup
 	for i, j := range jobs {
-		wg.Go(func() { codes[i] = runJob(j, j.Args, &outputs[i]) })
+		wg.Go(func() {
+			codes[i] = runJob(j, j.Args, &outputs[i])
+			if codes[i] == 0 && j.FailOnOutput && outputs[i].Len() > 0 {
+				fmt.Fprintln(&outputs[i], "^ these files aren't gofmt'd: run gofmt -w on them")
+				codes[i] = 1
+			}
+		})
 	}
 	wg.Wait()
 
