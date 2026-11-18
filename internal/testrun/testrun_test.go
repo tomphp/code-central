@@ -331,3 +331,37 @@ func TestAJobThatFailsOnOutputFailsWhenItPrintsAndPassesWhenItDoesNot(t *testing
 		t.Errorf("a silent job failed:\n%s", out)
 	}
 }
+
+func TestAFailedRunEndsWithOneFailLinePerFailureBeforeTheLogPath(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "test.log")
+	goJob := fakeJob(t, "go test", "print", "--- FAIL: TestA (0.00s)", "print", "--- FAIL: TestB (0.00s)", "print", "FAIL\tcode-central/pkg/x\t0.1s", "exit", "1")
+	goJob.Failures = failuresGo
+	viJob := fakeJob(t, "vitest", "print", "\x1b[31m FAIL \x1b[39m src/a.test.ts > does it \x1b[2m[1ms]\x1b[22m", "print", " FAIL  src/b.test.tsx", "exit", "1")
+	viJob.Failures = failuresVitest
+	tscJob := fakeJob(t, "tsc", "print", "src/c.ts(3,4): error TS2322: nope", "exit", "2")
+	tscJob.Failures = failuresTsc
+	bare := fakeJob(t, "hooks", "print", "boom", "exit", "1")
+	var out strings.Builder
+	if run([]job{goJob, viJob, tscJob, bare}, 10*time.Second, false, log, &out) {
+		t.Fatal("the suite passed")
+	}
+	lines := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
+	tail := lines[len(lines)-7 : len(lines)-1]
+	want := []string{
+		"FAIL go test code-central/pkg/x TestA",
+		"FAIL go test code-central/pkg/x TestB",
+		"FAIL vitest src/a.test.ts",
+		"FAIL vitest src/b.test.tsx",
+		"FAIL tsc src/c.ts",
+	}
+	// the bare job has no extractor: just its suite name
+	want = append(want, "FAIL hooks")
+	for i, w := range want {
+		if tail[i] != w {
+			t.Fatalf("line %d = %q, want %q:\n%s", i, tail[i], w, out.String())
+		}
+	}
+	if !strings.HasSuffix(lines[len(lines)-1], log) {
+		t.Errorf("the log path isn't last:\n%s", out.String())
+	}
+}

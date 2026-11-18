@@ -5,7 +5,8 @@
 // job's whole output is printed. When a job fails, every job's whole output
 // (as -v would print it) is also written to a file in the temporary folder,
 // $TMPDIR/code-central-test-<worktree>-<hash>.log, and its path is the last
-// line printed, so a failure that was piped through tail can still be read
+// line printed, after one "FAIL <suite> <file or test>" line per failure
+// (ANSI codes stripped), so a failure that was piped through tail can still be read
 // without rerunning. The output is printed when all jobs are
 // done, so they don't interleave. It fails if any job fails, or if the
 // suite takes longer than the budget of wall-clock time, unless the load
@@ -55,6 +56,9 @@ type job struct {
 	// FailOnOutput fails the job when it prints anything, for a tool like
 	// gofmt -l that lists what is wrong and still exits zero.
 	FailOnOutput bool
+	// Failures, when set, is given the ANSI-stripped output of a failed run
+	// and returns what failed (files, tests or packages), for the FAIL lines.
+	Failures func(output []byte) []string
 }
 
 // loadAverage and cores are variables so tests can fake them.
@@ -136,13 +140,80 @@ func rerunGo(output []byte) (args, items []string) {
 	return append([]string{"go", "test", "-p", "1", "-count=1"}, items...), items
 }
 
+var ansi = regexp.MustCompile("\x1b\\[[0-9;]*[A-Za-z]")
+
+// failuresVitest names each failed test file once.
+func failuresVitest(output []byte) []string {
+	var items []string
+	seen := map[string]bool{}
+	for _, m := range vitestFail.FindAllSubmatch(output, -1) {
+		if f := string(m[1]); !seen[f] {
+			seen[f] = true
+			items = append(items, f)
+		}
+	}
+	return items
+}
+
+var goTestFail = regexp.MustCompile(`^\s*--- FAIL: (\S+)`)
+
+// failuresGo names each failed test as "<package> <test>", or the package
+// alone when it failed without a failing test (a build failure, a panic).
+func failuresGo(output []byte) []string {
+	var items, tests []string
+	for _, line := range strings.Split(string(output), "\n") {
+		if m := goTestFail.FindStringSubmatch(line); m != nil {
+			if !strings.Contains(m[1], "/") {
+				tests = append(tests, m[1])
+			}
+			continue
+		}
+		if fields := strings.Fields(line); strings.HasPrefix(line, "FAIL\t") && len(fields) >= 2 {
+			if len(tests) == 0 {
+				items = append(items, fields[1])
+			}
+			for _, t := range tests {
+				items = append(items, fields[1]+" "+t)
+			}
+			tests = nil
+		}
+	}
+	return items
+}
+
+var tscError = regexp.MustCompile(`(?m)^(\S+?)\(\d+,\d+\): error`)
+
+// failuresTsc names each file with a type error once.
+func failuresTsc(output []byte) []string {
+	var items []string
+	seen := map[string]bool{}
+	for _, m := range tscError.FindAllSubmatch(output, -1) {
+		if f := string(m[1]); !seen[f] {
+			seen[f] = true
+			items = append(items, f)
+		}
+	}
+	return items
+}
+
+// failuresLines names each non-empty line, for gofmt -l's file list.
+func failuresLines(output []byte) []string {
+	var items []string
+	for _, l := range strings.Split(string(output), "\n") {
+		if l = strings.TrimSpace(l); l != "" && !strings.HasPrefix(l, "^ ") {
+			items = append(items, l)
+		}
+	}
+	return items
+}
+
 // suite is the fast suite. The web jobs run their tools through node
 // rather than node_modules/.bin, whose shims differ by OS.
 var suite = []job{
-	{Name: "go test", Args: []string{"go", "test", "./..."}, Rerun: rerunGo},
-	{Name: "gofmt", Args: []string{"gofmt", "-l", "."}, FailOnOutput: true},
-	{Name: "vitest", Dir: "web", Args: []string{"node", "node_modules/vitest/vitest.mjs", "run"}, Rerun: rerunVitest},
-	{Name: "tsc", Dir: "web", Args: []string{"node", "node_modules/typescript/bin/tsc", "--noEmit"}},
+	{Name: "go test", Args: []string{"go", "test", "./..."}, Rerun: rerunGo, Failures: failuresGo},
+	{Name: "gofmt", Args: []string{"gofmt", "-l", "."}, FailOnOutput: true, Failures: failuresLines},
+	{Name: "vitest", Dir: "web", Args: []string{"node", "node_modules/vitest/vitest.mjs", "run"}, Rerun: rerunVitest, Failures: failuresVitest},
+	{Name: "tsc", Dir: "web", Args: []string{"node", "node_modules/typescript/bin/tsc", "--noEmit"}, Failures: failuresTsc},
 	{Name: "eslint", Dir: "web", Args: []string{"node", "node_modules/eslint/bin/eslint.js", "."}},
 	{Name: "hooks", Args: []string{"python3", "-I", ".claude/hooks/prefer-edit_test.py"}},
 }
@@ -253,6 +324,21 @@ func run(jobs []job, budget time.Duration, verbose bool, log string, out io.Writ
 			fmt.Fprintf(out, ", load %s on %d cores", loadText, cores())
 		}
 		fmt.Fprintln(out)
+		for i, j := range jobs {
+			if codes[i] == 0 {
+				continue
+			}
+			var items []string
+			if j.Failures != nil {
+				items = j.Failures(ansi.ReplaceAll(outputs[i].Bytes(), nil))
+			}
+			if len(items) == 0 {
+				fmt.Fprintf(out, "FAIL %s\n", j.Name)
+			}
+			for _, item := range items {
+				fmt.Fprintf(out, "FAIL %s %s\n", j.Name, item)
+			}
+		}
 		if log != "" {
 			var all bytes.Buffer
 			for i, j := range jobs {
