@@ -245,7 +245,7 @@ var all = []entry{
 	legacy(Op{Name: "move", Audience: HumanOnly, Write: true}),
 	legacy(Op{Name: "rename_project", Audience: HumanOnly, Write: true}),
 	// The Landing Method (code-central-173).
-	legacy(Op{Name: "set_landing_method", Audience: HumanOnly, Write: true}),
+	defined(SetLandingMethod),
 	// Subagent Exploration (code-central-441).
 	legacy(Op{Name: "set_subagent_exploration", Audience: HumanOnly, Write: true}),
 	legacy(Op{Name: "set_model_assignment", Audience: HumanOnly, Write: true}),
@@ -255,10 +255,10 @@ var all = []entry{
 	legacy(Op{Name: "set_focus_kinds", Audience: HumanOnly, Write: true}),
 	// Repositories (Spec code-central-848): the human's alone, over HTTP
 	// and the CLI's repository command, never MCP.
-	legacy(Op{Name: "add_repository", Audience: HumanOnly, Write: true}),
-	legacy(Op{Name: "edit_repository", Audience: HumanOnly, Write: true}),
-	legacy(Op{Name: "remove_repository", Audience: HumanOnly, Write: true}),
-	legacy(Op{Name: "set_landing_order", Audience: HumanOnly, Write: true}),
+	defined(AddRepository),
+	defined(EditRepository),
+	defined(RemoveRepository),
+	defined(SetLandingOrder),
 
 	// The Integration contract (ticket 42).
 	legacy(Op{Name: "create_linked_spec", Audience: IntegrationOnly, Write: true}),
@@ -279,7 +279,7 @@ var all = []entry{
 
 	// Requirements and the local Factory (Spec 66).
 	legacy(Op{Name: "submit_requirement", Audience: AgentAndHuman, Write: true}),
-	legacy(Op{Name: "land", Audience: AgentAndHuman, Write: true}),
+	defined(Land),
 	legacy(Op{Name: "get_stage_guide", Audience: AgentAndHuman}),
 
 	// Maps and Prototypes (Spec code-central-213).
@@ -352,11 +352,11 @@ var all = []entry{
 	// The Factory's base under Pull Request (code-central-394).
 	legacy(Op{Name: "report_base", Audience: FactoryOnly, Write: true}),
 	// The Factory's clones of the Repositories (Spec code-central-848).
-	legacy(Op{Name: "report_repositories", Audience: FactoryOnly, Write: true}),
+	defined(ReportRepositories),
 	// A Ticket's Changed Repositories, live, and the Factory's finish
 	// check (Spec code-central-848).
-	legacy(Op{Name: "report_changed_repositories", Audience: FactoryOnly, Write: true}),
-	legacy(Op{Name: "fail_finish", Audience: FactoryOnly, Write: true}),
+	defined(ReportChangedRepositories),
+	defined(FailFinish),
 
 	// Chat (Spec code-central-633): the human's Conversation and the
 	// Factory's long-poll for its turns. Chat writes change only memory.

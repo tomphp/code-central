@@ -12,7 +12,6 @@ func init() {
 	legacyRoutes["list_projects"] = "GET /api/projects"
 	legacyRoutes["move"] = "POST /api/p/{key}/tickets/{n}/move"
 	legacyRoutes["rename_project"] = "POST /api/p/{key}/rename_project"
-	legacyRoutes["set_landing_method"] = "POST /api/p/{key}/set_landing_method"
 
 	handlers["needs_me"] = func(c *core.Core, r *http.Request) (any, error) {
 		if err := onlyParams(r.URL.Query()); err != nil {
@@ -39,12 +38,5 @@ func init() {
 			return nil, err
 		}
 		return c.RenameProject(r.Context(), r.PathValue("key"), in)
-	}
-	handlers["set_landing_method"] = func(c *core.Core, r *http.Request) (any, error) {
-		var in core.SetLandingMethodInput
-		if err := decodeBody(r, &in); err != nil {
-			return nil, err
-		}
-		return c.SetLandingMethod(r.Context(), r.PathValue("key"), in)
 	}
 }
