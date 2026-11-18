@@ -343,15 +343,15 @@ var all = []entry{
 	legacy(Op{Name: "get_work_item_watch", Audience: IntegrationOnly}),
 	legacy(Op{Name: "report_work_item_watcher_status", Audience: IntegrationOnly, Write: true}),
 	// The Model Choice (Spec code-central-301).
-	legacy(Op{Name: "get_model_choice", Audience: FactoryOnly}),
-	legacy(Op{Name: "report_model_choice", Audience: FactoryOnly, Write: true}),
+	defined(GetModelChoice),
+	defined(ReportModelChoice),
 	// The Models section of Project Options (Spec code-central-301).
 	legacy(Op{Name: "set_models", Audience: HumanOnly, Write: true}),
 	// The Reported Models (code-central-311).
-	legacy(Op{Name: "report_models", Audience: FactoryOnly, Write: true}),
-	legacy(Op{Name: "report_heartbeat", Audience: FactoryOnly, Write: true}),
+	defined(ReportModels),
+	defined(ReportHeartbeat),
 	// The Factory's base under Pull Request (code-central-394).
-	legacy(Op{Name: "report_base", Audience: FactoryOnly, Write: true}),
+	defined(ReportBase),
 	// The Factory's clones of the Repositories (Spec code-central-848).
 	defined(ReportRepositories),
 	// A Ticket's Changed Repositories, live, and the Factory's finish
@@ -361,13 +361,13 @@ var all = []entry{
 
 	// Chat (Spec code-central-633): the human's Conversation and the
 	// Factory's long-poll for its turns. Chat writes change only memory.
-	legacy(Op{Name: "get_chat", Audience: HumanOnly}),
-	legacy(Op{Name: "start_conversation", Audience: HumanOnly, Write: true}),
-	legacy(Op{Name: "send_chat_message", Audience: HumanOnly, Write: true}),
-	legacy(Op{Name: "stop_chat_reply", Audience: HumanOnly, Write: true}),
-	legacy(Op{Name: "next_chat_work", Audience: FactoryOnly}),
+	defined(GetChat),
+	defined(StartConversation),
+	defined(SendChatMessage),
+	defined(StopChatReply),
+	defined(NextChatWork),
 
 	// The Factory's wake (Spec code-central-743): a long-poll that ends
 	// when a write its poll acts on reaches the Project.
-	legacy(Op{Name: "next_factory_wake", Audience: FactoryOnly}),
+	defined(NextFactoryWake),
 }
