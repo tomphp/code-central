@@ -28,6 +28,7 @@ import { ReasonBadge } from "../controls/ReasonBadge";
 import { Select } from "../controls/Select";
 import { StateChip } from "../controls/StateChip";
 import { useApi, useSpec } from "../live";
+import { REASON_LABEL } from "../format";
 import { isCIItemReason } from "../needsme/model";
 import { AutoAcceptSwitch } from "./AutoAcceptSwitch";
 import { AUTO_ACCEPT_LABEL, canAutoAccept, moveText, wouldAutoAccept } from "./autoAccept";
@@ -38,6 +39,9 @@ export interface TicketDetailProps {
   // shows error, the read's error.
   ticket?: TicketView;
   error?: string;
+  // back, when given, is the link back from the read-error banner to where
+  // the Ticket was chosen from.
+  back?(): void;
   // specLabels are the Labels of the Ticket's Spec once read, which the
   // Auto-accept switch waits for.
   specLabels?: string[];
@@ -78,9 +82,24 @@ export function TicketDetail(props: TicketDetailProps) {
   const t = props.ticket;
   if (!t) {
     return props.error ? (
-      <p role="alert" className="warning">
-        {props.error}
-      </p>
+      <>
+        <p role="alert" className="warning">
+          {props.error}
+        </p>
+        {props.back && (
+          <p>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                props.back?.();
+              }}
+            >
+              Back
+            </a>
+          </p>
+        )}
+      </>
     ) : (
       <p className="empty">Loading…</p>
     );
@@ -91,8 +110,8 @@ export function TicketDetail(props: TicketDetailProps) {
         <ShortId id={t.id} /> <StateChip state={t.state} />
         <WaitingBadge waiting={t.waiting_for_spec} />
         <PartlyLandedBadge partly={t.partly_landed} />
-        {/* The In Review reason only repeats the State chip. */}
-        {t.needs_me_reason && t.needs_me_reason !== "in_review" && <ReasonBadge reason={t.needs_me_reason} />}
+        {/* A reason that says what the State chip does isn't repeated. */}
+        {t.needs_me_reason && REASON_LABEL[t.needs_me_reason] !== t.state && <ReasonBadge reason={t.needs_me_reason} />}
         {editing ? (
           <EditForm
             title={t.title}
@@ -118,12 +137,16 @@ export function TicketDetail(props: TicketDetailProps) {
         )}
       </header>
       <ActionPanel project={props.project} ticket={t} now={props.now} />
+      {/* A Ticket in a CI item has the CI section in its action panel,
+          with the failure options; any other has it here, under the
+          header, so its CI never waits below the controls. */}
+      {!isCIItemReason(t.needs_me_reason) && <CISection ticket={t} project={props.project} />}
       <TicketBody {...props} ticket={t} editing={editing} />
     </>
   );
 }
 
-type TicketBodyProps = Omit<TicketDetailProps, "ticket" | "error"> & {
+type TicketBodyProps = Omit<TicketDetailProps, "ticket" | "error" | "back"> & {
   ticket: TicketView;
   // editing is whether the pane's edit form is open, which holds the
   // description.
@@ -187,11 +210,6 @@ function TicketBody({ project, ticket: t, specLabels, now, reported, openSpec, o
         <MoveControl key={`${t.id} ${t.state}`} project={project} ticket={t} onMoved={onMoved} />
       </section>
       <TicketRepositories ticket={t} />
-      {/* A Ticket in a CI item has the CI section in its action panel,
-          with the failure options, so it isn't shown here too. */}
-      {!isCIItemReason(t.needs_me_reason) && (
-        <CISection ticket={t} project={project} />
-      )}
       {claims.length > 0 && (
         <ul aria-label="Claims" className="claims muted small">
           {claims.map((c) => (

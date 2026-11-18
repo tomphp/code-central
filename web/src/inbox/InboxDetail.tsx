@@ -91,6 +91,7 @@ export function InboxDetail({
           project={projectOf(loc.ticket ?? "")}
           ticket={ticketError ? undefined : shown}
           error={ticketError}
+          back={() => navigate({ ticket: undefined })}
           now={now}
           archived={!!loc.ticket && isArchived(loc.ticket)}
           reported={
