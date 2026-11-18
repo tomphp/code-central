@@ -11,7 +11,10 @@ import type {
 // so it changes as the Watcher reports. The CI section shows the CI
 // Watcher's, and the GitHub Issues section the Issue Watcher's
 // (code-central-285). In error over some of a Project's Repositories, it
-// lists each with its own problem and fix.
+// lists each with its own problem and fix. On a Store several services
+// share (ADR 0068), it names the host whose service holds the Project's
+// Watcher Lease, and so runs its Watchers: another one's Watcher reports
+// there, and with none holding it, none runs.
 export function WatcherStatus({
   name,
   repository,
@@ -49,6 +52,16 @@ export function WatcherStatus({
       )}
       {watcher.state === "not_reported" && (
         <p className="muted">{name}: Starting; it hasn&apos;t reported yet.</p>
+      )}
+      {watcher.state === "elsewhere" && (
+        <p className="muted">
+          {name}: Runs on {watcher.host}, whose service holds this Project&apos;s Watchers; its status shows there.
+        </p>
+      )}
+      {watcher.state === "waiting" && (
+        <p className="muted">
+          {name}: {watcher.message}
+        </p>
       )}
       {watcher.state === "error" && repositories.length === 0 && (
         <p className="warning">
@@ -91,6 +104,9 @@ export function WatcherStatus({
             </ul>
           )}
         </div>
+      )}
+      {watcher.host && watcher.state !== "elsewhere" && watcher.state !== "waiting" && (
+        <p className="muted">It runs on {watcher.host}.</p>
       )}
     </section>
   );

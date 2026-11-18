@@ -116,6 +116,8 @@ export const WATCHER_STATES = [
   "not_reported",
   "watching",
   "error",
+  "elsewhere",
+  "waiting",
 ] as const;
 export type WatcherState = (typeof WATCHER_STATES)[number];
 
@@ -1647,6 +1649,9 @@ export interface WatcherView {
   // Since is when the Watcher went into this state; nil until it
   // reports.
   since?: string;
+  // Host is the machine whose service holds the Project's Watcher
+  // Lease, and so runs the Watcher, once a Lease is known.
+  host?: string;
 }
 
 // OpenPullRequest is a pull request left open for an Accepted Ticket.
