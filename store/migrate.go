@@ -219,21 +219,9 @@ func (s *FileStore) migrate() error {
 	if err != nil || !ok || from >= s.format {
 		return err // a newer format is refused by load
 	}
-	if from < 1 {
-		return fmt.Errorf("store.yaml: unknown format %d (this code-central understands format %d)", from, s.format)
-	}
-	var chain []MigrationStep
-	for v := from; v < s.format; v++ {
-		i := -1
-		for j, st := range s.steps {
-			if st.From == v {
-				i = j
-			}
-		}
-		if i < 0 {
-			return fmt.Errorf("store.yaml: format %d: this code-central has no migration from format %d", from, v)
-		}
-		chain = append(chain, s.steps[i])
+	chain, err := migrationChain(from, s.format, s.steps)
+	if err != nil {
+		return fmt.Errorf("store.yaml: %w", err)
 	}
 	bak := backupFor(s.dir, from)
 	if _, err := os.Lstat(bak); !errors.Is(err, fs.ErrNotExist) {
@@ -288,6 +276,28 @@ func (s *FileStore) migrate() error {
 	}
 	s.migrated = &Migration{From: from, To: s.format, Backup: bak}
 	return nil
+}
+
+// migrationChain is the steps, in order, that take a Store of any Kind
+// from format from up to format.
+func migrationChain(from, format int, steps []MigrationStep) ([]MigrationStep, error) {
+	if from < 1 {
+		return nil, fmt.Errorf("unknown format %d (this code-central understands format %d)", from, format)
+	}
+	var chain []MigrationStep
+	for v := from; v < format; v++ {
+		i := -1
+		for j, st := range steps {
+			if st.From == v {
+				i = j
+			}
+		}
+		if i < 0 {
+			return nil, fmt.Errorf("format %d: this code-central has no migration from format %d", from, v)
+		}
+		chain = append(chain, steps[i])
+	}
+	return chain, nil
 }
 
 // readFormat reads store.yaml's format; ok is false when there is none.

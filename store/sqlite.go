@@ -29,8 +29,13 @@ var sqlite = dialect{
 
 // OpenSQLite locks and opens the SQLite Store at path, creating the
 // database, its folder and its lock file (<path>.lock) if needed. A
-// database at another format is refused by name.
-func OpenSQLite(path string) (*SQLStore, error) {
+// database at an older format is migrated (sqlite_migrate.go), and one at
+// a newer format is refused by name.
+func OpenSQLite(path string) (*SQLStore, error) { return openSQLite(path, Format, migrations) }
+
+// openSQLite is OpenSQLite as a build whose format is format and whose
+// migration chain is steps: Format and migrations, except in tests.
+func openSQLite(path string, format int, steps []MigrationStep) (*SQLStore, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
 	}
@@ -38,22 +43,35 @@ func OpenSQLite(path string) (*SQLStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", sqliteDSN(path))
+	s := &SQLStore{d: sqlite, path: path, lock: lock}
+	err = s.connect()
+	var older int
+	if err == nil {
+		older, err = prepare(context.Background(), s.db, sqlite, format, path)
+	}
+	if err == nil && older > 0 {
+		err = s.migrate(older, format, steps)
+	}
 	if err != nil {
-		lock.release()
+		s.Close()
 		return nil, err
+	}
+	return s, nil
+}
+
+// connect opens the database at s.path.
+func (s *SQLStore) connect() error {
+	db, err := sql.Open("sqlite", sqliteDSN(s.path))
+	if err != nil {
+		return err
 	}
 	// Every connection has the same page cache; a handful serves the
 	// readers while one Update runs.
 	db.SetMaxOpenConns(8)
 	db.SetMaxIdleConns(8)
-	s := &SQLStore{db: db, d: sqlite, path: path, lock: lock}
+	s.db = db
 	s.usage = &sqlUsage{db: db, d: sqlite}
-	if err := prepare(context.Background(), db, sqlite, Format, path); err != nil {
-		s.Close()
-		return nil, err
-	}
-	return s, nil
+	return nil
 }
 
 // sqliteDSN is the file: URI that opens path in WAL mode, waiting up to
