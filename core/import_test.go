@@ -85,7 +85,7 @@ func TestADryRunReturnsThePlanAndWritesNothing(t *testing.T) {
 		t.Fatalf("next step %q", plan.NextStep)
 	}
 	f.store.View(func(r store.Reader) error {
-		if len(r.Tickets("acme")) != 0 || len(r.Specs("acme")) != 1 {
+		if len(r.FindTickets("acme", store.TicketFilter{})) != 0 || len(r.FindSpecs("acme", store.SpecFilter{})) != 1 {
 			t.Fatal("a dry run wrote something")
 		}
 		return nil
@@ -219,7 +219,7 @@ func TestAnInvalidPayloadNamesTheFieldAndWritesNothing(t *testing.T) {
 			_, err := f.core.Import(ctx, "acme", core.ImportInput{Payload: p})
 			wantCode(t, err, core.Invalid, c.field)
 			f.store.View(func(r store.Reader) error {
-				if len(r.Tickets("acme")) != 0 || len(r.Specs("acme")) != 1 {
+				if len(r.FindTickets("acme", store.TicketFilter{})) != 0 || len(r.FindSpecs("acme", store.SpecFilter{})) != 1 {
 					t.Fatal("an invalid import wrote something")
 				}
 				return nil

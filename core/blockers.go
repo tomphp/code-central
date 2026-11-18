@@ -194,6 +194,31 @@ func waitsOn(r store.Reader, key string, n int) []int {
 	return out
 }
 
+// waitingOn is the Tickets that wait on Ticket n, in number order. It
+// finds the Cancelled Tickets whose Replacements lead to n by repeating
+// the ReplacedBy query, then the Tickets any of them, or n, blocks; of
+// those, waitsOn keeps the ones whose waits do reach n.
+func waitingOn(r store.Reader, key string, n int) []int {
+	through, seen := []int{n}, map[int]bool{n: true}
+	for i := 0; i < len(through); i++ {
+		for _, c := range r.FindTickets(key, store.TicketFilter{ReplacedBy: through[i], States: []domain.State{domain.Cancelled}}) {
+			if !seen[c.Number] {
+				through, seen[c.Number] = append(through, c.Number), true
+			}
+		}
+	}
+	var out []int
+	for _, b := range through {
+		for _, d := range r.FindTickets(key, store.TicketFilter{BlockedBy: b}) {
+			if !slices.Contains(out, d.Number) && slices.Contains(waitsOn(r, key, d.Number), n) {
+				out = append(out, d.Number)
+			}
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 // waitPath finds a chain of waits from one of from to a Ticket for which
 // target is true, or nil.
 func waitPath(r store.Reader, key string, from []int, target func(int) bool) []int {

@@ -272,16 +272,23 @@ func singleLine(s string) bool { return strings.TrimSpace(s) != "" && !strings.C
 // alreadyImported refuses an Import if any Spec or Ticket in the Project
 // already has a source Tag in the payload, listing every match.
 func alreadyImported(r store.Reader, key string, p ImportPayload) error {
-	existing := map[string]int{}
-	for _, s := range r.Specs(key) {
-		if src, ok := s.Tags["source"]; ok {
-			existing[src] = s.Number
-		}
+	var sources []string
+	for _, s := range p.Specs {
+		sources = append(sources, s.Source)
 	}
-	for _, t := range r.Tickets(key) {
-		if src, ok := t.Tags["source"]; ok {
-			existing[src] = t.Number
-		}
+	for _, t := range p.Tickets {
+		sources = append(sources, t.Source)
+	}
+	if len(sources) == 0 {
+		return nil
+	}
+	tag := &store.TagFilter{Key: "source", Values: sources}
+	existing := map[string]int{}
+	for _, s := range r.FindSpecs(key, store.SpecFilter{Tag: tag}) {
+		existing[s.Tags["source"]] = s.Number
+	}
+	for _, t := range r.FindTickets(key, store.TicketFilter{Tag: tag}) {
+		existing[t.Tags["source"]] = t.Number
 	}
 	var field string
 	var matches []string

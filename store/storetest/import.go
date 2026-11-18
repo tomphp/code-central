@@ -19,10 +19,10 @@ func runImport(t *testing.T, f Factory) {
 		put(t, s, func(w store.Writer) error { return w.PutImport("acme", ImportBatch()) })
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
-				if n := len(r.Specs("acme")); n != 3 {
+				if n := len(r.FindSpecs("acme", store.SpecFilter{})); n != 3 {
 					t.Fatalf("%d specs, want 3", n)
 				}
-				if n := len(r.Tickets("acme")); n != 3 {
+				if n := len(r.FindTickets("acme", store.TicketFilter{})); n != 3 {
 					t.Fatalf("%d tickets, want 3", n)
 				}
 				sp, _ := r.Spec("acme", 2)
@@ -60,7 +60,7 @@ func runImport(t *testing.T, f Factory) {
 			t.Fatal("an import after another write in one update was allowed")
 		}
 		read(t, s, func(r store.Reader) {
-			if len(r.Tickets("acme")) != 0 {
+			if len(r.FindTickets("acme", store.TicketFilter{})) != 0 {
 				t.Fatal("the refused import wrote tickets")
 			}
 		})
@@ -77,8 +77,8 @@ func runImport(t *testing.T, f Factory) {
 		}
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
-				if len(r.Specs("acme")) != 0 || len(r.Tickets("acme")) != 1 {
-					t.Fatalf("partial import: %d specs, %d tickets", len(r.Specs("acme")), len(r.Tickets("acme")))
+				if len(r.FindSpecs("acme", store.SpecFilter{})) != 0 || len(r.FindTickets("acme", store.TicketFilter{})) != 1 {
+					t.Fatalf("partial import: %d specs, %d tickets", len(r.FindSpecs("acme", store.SpecFilter{})), len(r.FindTickets("acme", store.TicketFilter{})))
 				}
 				if tk, _ := r.Ticket("acme", 4); tk.Title != "Old" {
 					t.Fatalf("existing ticket overwritten: %+v", tk)
@@ -105,7 +105,7 @@ func runImport(t *testing.T, f Factory) {
 				if tk, _ := r.Ticket("acme", 1); tk.State != domain.Cancelled || len(tk.Replacements) != 1 {
 					t.Fatalf("ticket 1: %+v, want it rewritten", tk)
 				}
-				if n := len(r.Tickets("acme")); n != 4 {
+				if n := len(r.FindTickets("acme", store.TicketFilter{})); n != 4 {
 					t.Fatalf("%d tickets, want 4", n)
 				}
 			})
@@ -125,7 +125,7 @@ func runImport(t *testing.T, f Factory) {
 			t.Fatal("an import rewriting a missing Ticket was allowed")
 		}
 		read(t, s, func(r store.Reader) {
-			if len(r.Specs("acme")) != 0 || len(r.Tickets("acme")) != 0 {
+			if len(r.FindSpecs("acme", store.SpecFilter{})) != 0 || len(r.FindTickets("acme", store.TicketFilter{})) != 0 {
 				t.Fatal("the refused import wrote records")
 			}
 		})
@@ -145,7 +145,7 @@ func runImport(t *testing.T, f Factory) {
 				if sp, _ := r.Spec("acme", 1); len(sp.Labels) != 1 {
 					t.Fatalf("spec 1: %+v, want it rewritten", sp)
 				}
-				if n := len(r.Specs("acme")); n != 3 {
+				if n := len(r.FindSpecs("acme", store.SpecFilter{})); n != 3 {
 					t.Fatalf("%d specs, want 3", n)
 				}
 			})
@@ -165,7 +165,7 @@ func runImport(t *testing.T, f Factory) {
 			t.Fatal("an import rewriting a missing Spec was allowed")
 		}
 		read(t, s, func(r store.Reader) {
-			if len(r.Specs("acme")) != 0 || len(r.Tickets("acme")) != 0 {
+			if len(r.FindSpecs("acme", store.SpecFilter{})) != 0 || len(r.FindTickets("acme", store.TicketFilter{})) != 0 {
 				t.Fatal("the refused import wrote records")
 			}
 		})

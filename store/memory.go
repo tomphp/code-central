@@ -72,19 +72,6 @@ func (r reader) Spec(project string, n int) (domain.Spec, bool) {
 	return cloneSpec(s), ok
 }
 
-func (r reader) Specs(project string) []domain.Spec {
-	p, ok := r.x.projects[project]
-	if !ok {
-		return nil
-	}
-	out := make([]domain.Spec, 0, len(p.specs))
-	for _, s := range p.specs {
-		out = append(out, cloneSpec(s))
-	}
-	slices.SortFunc(out, func(a, b domain.Spec) int { return cmp.Compare(a.Number, b.Number) })
-	return out
-}
-
 // readOf is a copy of the stored Ticket t with only the History parts
 // named, as every Store Kind reads one.
 func readOf(t domain.Ticket, parts []Part) domain.Ticket {
@@ -98,19 +85,6 @@ func (r reader) Ticket(project string, n int, parts ...Part) (domain.Ticket, boo
 	}
 	t, ok := p.tickets[n]
 	return readOf(t, parts), ok
-}
-
-func (r reader) Tickets(project string, parts ...Part) []domain.Ticket {
-	p, ok := r.x.projects[project]
-	if !ok {
-		return nil
-	}
-	out := make([]domain.Ticket, 0, len(p.tickets))
-	for _, t := range p.tickets {
-		out = append(out, readOf(t, parts))
-	}
-	slices.SortFunc(out, func(a, b domain.Ticket) int { return cmp.Compare(a.Number, b.Number) })
-	return out
 }
 
 func (r reader) NextNumber(project string) int {

@@ -640,8 +640,8 @@ func (c *Core) FindTickets(_ context.Context, key string, in FindTicketsInput) (
 			return err
 		}
 		maps := map[int]bool{}
-		for _, s := range r.Specs(key) {
-			maps[s.Number] = isMap(s.Labels)
+		for _, s := range r.FindSpecs(key, store.SpecFilter{Label: MapLabel}) {
+			maps[s.Number] = true
 		}
 		for _, t := range tickets {
 			rows = append(rows, c.ticketRow(r, e, t, maps[t.Spec]))
