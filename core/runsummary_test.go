@@ -62,7 +62,7 @@ func TestTheRunSummaryOfACancelledItemNamesItsCancelledRunsAndHasNoNewFixNote(t 
 	f.moveTo(t, 8, domain.Done)
 	f.jobsRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICancelled, core.CIJobView{Name: "test", Conclusion: domain.CICancelled})
 	it := f.theItem(t, core.ReasonCICancelled).CIItem
-	want := "CI cancelled at abc123:\n\n- [CI](https://github.com/acme/web/actions/runs/1) (ci.yml): failed jobs test\n\n" +
+	want := "CI cancelled at abc123:\n\n- [CI](https://github.com/acme/web/actions/runs/1) (ci.yml): cancelled jobs test\n\n" +
 		"Read the failed jobs' logs with `gh run view 1 --log-failed`."
 	if it.SendBackNote != want || it.NewFixNote != "" {
 		t.Fatalf("notes %q and %q, want the Run summary %q and no New fix Ticket note", it.SendBackNote, it.NewFixNote, want)

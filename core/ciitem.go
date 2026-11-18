@@ -70,7 +70,8 @@ func (it ciItem) label(p domain.Project) string {
 	return shortCommit(it.commit)
 }
 
-// ciItemView is it as the views carry it.
+// ciItemView is it as the views carry it, with the two fix notes while
+// their options are offered.
 func (e *evaluation) ciItemView(it ciItem) *CIItemView {
 	p := e.p
 	v := &CIItemView{Reason: it.reason, Commit: it.commit, Tickets: []CIItemTicket{}, Options: ciItemOptions(e.r, p, it)}

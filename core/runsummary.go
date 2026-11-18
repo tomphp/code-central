@@ -31,6 +31,10 @@ func (e *evaluation) runSummary(it ciItem) string {
 	if cancelled {
 		bad = func(c domain.CIConclusion) bool { return c.Cancelled() }
 	}
+	verb := "failed"
+	if cancelled {
+		verb = "cancelled"
+	}
 	var badRuns []domain.CIRun
 	for _, run := range countedRuns(it.commit, runs) {
 		if run.Status == domain.CICompleted && bad(run.Conclusion) {
@@ -51,33 +55,29 @@ func (e *evaluation) runSummary(it ciItem) string {
 		slices.Sort(jobs)
 		line := fmt.Sprintf("- [%s](%s) (%s)", cmp.Or(run.Name, run.Workflow), run.URL, run.Workflow)
 		if len(jobs) > 0 {
-			line += ": failed jobs " + strings.Join(jobs, ", ")
+			line += fmt.Sprintf(": %s jobs %s", verb, strings.Join(jobs, ", "))
 		}
 		lines = append(lines, line)
 		logs = append(logs, fmt.Sprintf("`gh run view %d --log-failed`", run.ID))
-	}
-	verb := "failed"
-	if cancelled {
-		verb = "cancelled"
 	}
 	parts := []string{fmt.Sprintf("CI %s at %s:", verb, it.label(e.p)), strings.Join(lines, "\n")}
 	if len(logs) > 0 {
 		parts = append(parts, fmt.Sprintf("Read the failed jobs' logs with %s.", strings.Join(logs, ", ")))
 	}
-	if last := e.lastPassedCommit(record, runs); last != "" {
+	if last := e.lastPassedCommit(it.repository, runs); last != "" {
 		parts = append(parts, fmt.Sprintf("The last commit that passed CI in this Repository is `%s`.", shortCommit(last)))
 	}
 	return strings.Join(parts, "\n\n")
 }
 
-// lastPassedCommit is the latest pushed commit in the Repository record
-// names, across the Project's Tickets, whose CI result is passed among
-// runs, "" when there is none.
-func (e *evaluation) lastPassedCommit(record string, runs []domain.CIRun) string {
+// lastPassedCommit is the latest pushed commit in the Repository name,
+// across the Project's Tickets, whose CI result is passed among runs, ""
+// when there is none.
+func (e *evaluation) lastPassedCommit(name string, runs []domain.CIRun) string {
 	var last domain.PushedCommit
 	for _, t := range e.evaluated().list {
 		for _, pc := range t.PushedCommits {
-			if pc.Repository != record || !pc.Pushed.After(last.Pushed) {
+			if recordRepository(e.p.Key, pc.Repository) != name || pc.Pushed.Before(last.Pushed) {
 				continue
 			}
 			if ciResultOf(pc.Commit, runs) == CIPassed {
