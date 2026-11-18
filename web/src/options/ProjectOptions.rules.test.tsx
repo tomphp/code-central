@@ -216,5 +216,4 @@ describe("Project Options", () => {
       ).toBeDisabled();
     });
   });
-
 });

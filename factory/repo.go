@@ -15,7 +15,7 @@ import (
 // that lets their decisions be tested against a fake, with real git
 // tested on its own (gitRepo).
 //
-// Landing's helpers (inBase, inOldBase, pushedBase, pushedAlready,
+// Landing's helpers (inBase, inOldBase, pushedBase, pushedAlreadyIn,
 // remoteTip, mergedOnOldBase) each wrap this seam with a different ref,
 // or with a Ticket's or the Factory's own record, not a different git
 // question, so they stay separate rather than being gathered into a

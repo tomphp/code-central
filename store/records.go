@@ -66,13 +66,24 @@ type projectFile struct {
 }
 
 // repositoryFile is one of a Project's Repositories, in landing order.
-// The Home Repository's holds only its name.
+// The Home Repository's holds only its name, Own Landing and Push remote.
 type repositoryFile struct {
 	Name      string `yaml:"name"`
 	Home      bool   `yaml:"home,omitempty"`
 	CloneURL  string `yaml:"clone_url,omitempty"`
 	Base      string `yaml:"base,omitempty"`
 	LocalPath string `yaml:"local_path,omitempty"`
+	// Landing is the Own Landing, left out while it follows the Default
+	// Landing.
+	Landing *ownLandingFile `yaml:"landing,omitempty"`
+	// PushRemote is left out while it uses the Project's.
+	PushRemote string `yaml:"push_remote,omitempty"`
+}
+
+// ownLandingFile is a Repository's Own Landing.
+type ownLandingFile struct {
+	Method string `yaml:"method"`
+	Push   bool   `yaml:"push,omitempty"`
 }
 
 // stageGuidesFile is a Project's Stage Guides settings.
@@ -142,26 +153,30 @@ type azureBoardsFile struct {
 }
 
 type ciFile struct {
-	Tracking         bool         `yaml:"tracking"`
-	Provider         string       `yaml:"provider"`
+	Tracking bool `yaml:"tracking"`
+	// Provider, Repository and ProjectURL are the Home Repository's CI
+	// before it became a CI entry like the others' (Spec
+	// code-central-890). They are read as the Home's entry, so a file
+	// that still holds them loads, and never written.
+	Provider         string       `yaml:"provider,omitempty"`
 	Repository       string       `yaml:"repository,omitempty"`
 	ProjectURL       string       `yaml:"project_url,omitempty"`
 	PATEnv           string       `yaml:"pat_env,omitempty"`
 	IgnoredWorkflows []string     `yaml:"ignored_workflows,omitempty"`
 	PushRemoteURL    string       `yaml:"push_remote_url,omitempty"`
+	NoPushRemote     bool         `yaml:"no_push_remote,omitempty"`
 	PushRemoteBase   string       `yaml:"push_remote_base,omitempty"`
 	Rules            []ciRuleFile `yaml:"rules,omitempty"`
 	// UnblockOnPush is the removed Unblock on push option (ADR 0023,
 	// superseded by ADR 0032). It is read so a file that still holds it loads, and
 	// never kept or written.
 	UnblockOnPush bool `yaml:"unblock_on_push,omitempty"`
-	// Repositories is left out while no Repository but the Home has an
-	// entry.
+	// Repositories is left out while no Repository has an entry.
 	Repositories []ciRepositoryFile `yaml:"repositories,omitempty"`
 }
 
-// ciRepositoryFile is the CI entry of one Repository other than the
-// Home.
+// ciRepositoryFile is the CI entry of one Repository, the Home's
+// included.
 type ciRepositoryFile struct {
 	Name       string `yaml:"name"`
 	NotWatched bool   `yaml:"not_watched,omitempty"`
@@ -844,11 +859,11 @@ func encodeLanding(l Landing) *landingFile {
 // encodeCI leaves the default CI out of project.yaml, so a Project that
 // never had CI settings keeps the file it always had.
 func encodeCI(c CI) *ciFile {
-	if c = c.orDefault(); c.Equal(DefaultCI()) {
+	if c.Equal(DefaultCI()) {
 		return nil
 	}
-	f := &ciFile{Tracking: c.Tracking, Provider: string(c.Provider), Repository: c.Repository, ProjectURL: c.ProjectURL, PATEnv: c.PATEnv,
-		IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, PushRemoteBase: c.PushRemoteBase}
+	f := &ciFile{Tracking: c.Tracking, PATEnv: c.PATEnv,
+		IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, NoPushRemote: c.NoPushRemote, PushRemoteBase: c.PushRemoteBase}
 	for _, r := range c.Rules {
 		f.Rules = append(f.Rules, ciRuleFile{Spec: r.Spec, Workflow: r.Workflow, Branch: r.Branch, State: string(r.State), Created: formatTime(r.Created)})
 	}
@@ -876,6 +891,26 @@ func decodeCIRepositories(fs []ciRepositoryFile) ([]CIRepository, string, error)
 		out = append(out, r)
 	}
 	return out, "", nil
+}
+
+// withLegacyHomeCI is es with the Home Repository's CI entry, named key,
+// read from f's older provider, repository and project URL (Spec
+// code-central-890) when they name what to watch and es has no entry for
+// the Home. Without them the Home's entry is filled in from its Clone
+// URL, as any Repository's is.
+func withLegacyHomeCI(key string, es []CIRepository, f ciFile) []CIRepository {
+	e := CIRepository{Name: key, Provider: CIProvider(f.Provider), Repository: f.Repository, ProjectURL: f.ProjectURL}
+	if e.Provider == "" {
+		e.Provider = CIGitHubActions
+	}
+	named := e.Repository != ""
+	if e.Provider == CIAzurePipelines {
+		named = e.ProjectURL != ""
+	}
+	if !named || slices.ContainsFunc(es, func(o CIRepository) bool { return o.Name == key }) {
+		return es
+	}
+	return append([]CIRepository{e}, es...)
 }
 
 // encodeGitHubIssues leaves GitHub Issues out of project.yaml while it is
@@ -909,23 +944,28 @@ func encodeAutoAccept(kinds []AutoAcceptKind) []string {
 }
 
 // encodeRepositories is the Repositories as project.yaml holds them, the
-// Home Repository's with its name alone.
+// Home Repository's with its name, Own Landing and Push remote alone.
 func encodeRepositories(rs []Repository) []repositoryFile {
 	var out []repositoryFile
 	for _, r := range rs {
-		if r.Home {
-			out = append(out, repositoryFile{Name: r.Name, Home: true})
-			continue
+		f := repositoryFile{Name: r.Name, Home: r.Home, PushRemote: r.PushRemote}
+		if !r.Home {
+			f.CloneURL, f.Base, f.LocalPath = r.CloneURL, r.Base, r.LocalPath
 		}
-		out = append(out, repositoryFile{Name: r.Name, CloneURL: r.CloneURL, Base: r.Base, LocalPath: r.LocalPath})
+		if o := r.OwnLanding.Normalized(); o.Set() {
+			f.Landing = &ownLandingFile{Method: string(o.Method), Push: o.Push}
+		}
+		out = append(out, f)
 	}
 	return out
 }
 
 // decodeRepositories checks a Project's Repositories as load does: each
 // Name is unique, the Home Repository, named key, is listed once with
-// nothing more, and every other keeps the Repository Name rules and has a
-// Clone URL and a Base. The Home Repository's name is the Project Key,
+// nothing more than an Own Landing and a Push remote, every other keeps
+// the Repository Name rules and has a Clone URL or a local path and a
+// Base, and each Own Landing names a Landing Method, with Pull Request's
+// Push normalised away. The Home Repository's name is the Project Key,
 // which keeps the key's own rules. It returns the offending field,
 // relative to repositories, with the error.
 func decodeRepositories(key string, fs []repositoryFile) ([]Repository, string, error) {
@@ -942,15 +982,21 @@ func decodeRepositories(key string, fs []repositoryFile) ([]Repository, string, 
 		if slices.ContainsFunc(out, func(r Repository) bool { return r.Name == f.Name }) {
 			return nil, field + ".name", fmt.Errorf("%q a second time", f.Name)
 		}
+		var own OwnLanding
+		if l := f.Landing; l != nil {
+			if own = (OwnLanding{Method: LandingMethod(l.Method), Push: l.Push}).Normalized(); !own.Method.Valid() {
+				return nil, field + ".landing.method", fmt.Errorf("unknown landing method %q (%s)", l.Method, strings.Join(landingMethodNames(), " or "))
+			}
+		}
 		if f.Home {
 			homes++
 			if f.Name != key {
 				return nil, field + ".name", fmt.Errorf("the Home Repository is named by the Project Key %q, not %q", key, f.Name)
 			}
 			if f.CloneURL != "" || f.Base != "" || f.LocalPath != "" {
-				return nil, field, errors.New("the Home Repository holds only its name: its Clone URL is reported and its Base is the Project's")
+				return nil, field, errors.New("the Home Repository holds only its name, Own Landing and Push remote: its Clone URL is reported and its Base is the Project's")
 			}
-			out = append(out, Repository{Name: f.Name, Home: true})
+			out = append(out, Repository{Name: f.Name, Home: true, OwnLanding: own, PushRemote: f.PushRemote})
 			continue
 		}
 		if f.CloneURL == "" && f.LocalPath == "" {
@@ -959,7 +1005,7 @@ func decodeRepositories(key string, fs []repositoryFile) ([]Repository, string, 
 		if f.Base == "" {
 			return nil, field + ".base", errors.New("missing")
 		}
-		out = append(out, Repository{Name: f.Name, CloneURL: f.CloneURL, Base: f.Base, LocalPath: f.LocalPath})
+		out = append(out, Repository{Name: f.Name, CloneURL: f.CloneURL, Base: f.Base, LocalPath: f.LocalPath, OwnLanding: own, PushRemote: f.PushRemote})
 	}
 	if homes != 1 {
 		return nil, "", fmt.Errorf("lists the Home Repository %d times, want once", homes)

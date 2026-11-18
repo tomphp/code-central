@@ -1,7 +1,8 @@
-// Project Options: the Landing Method and its Pull Request settings.
+// Project Options: the Default Landing and its Pull Request settings.
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
+import { defaultLanding } from "../api/scenario";
 import { renderApp, settle } from "../worldTesting";
 import { acme, nav, page, landing, ci } from "./ProjectOptions.testutil";
 
@@ -133,6 +134,52 @@ describe("Project Options", () => {
     expect((await w.api.listProjects())[0].landing.watcher).toEqual({ state: "not_reported" });
   });
 
+  it("shows the PAT variable while any Azure Repos Repository is under Pull Request, by its Own Landing or the default", async () => {
+    const { w, s } = await acme();
+    await s.reportPushRemote("acme", "git@github.com:acme/web.git");
+    await w.api.addRepository("acme", { name: "infra", clone_url: "https://dev.azure.com/acme/ops/_git/infra" });
+    await renderApp(w, "/?view=project-options&project=acme");
+    const pat = () => within(landing()).queryByRole("textbox", { name: "PAT variable" });
+    expect(pat()).toBeNull();
+
+    // The default as drafted puts infra under Pull Request.
+    await userEvent.click(within(landing()).getByRole("radio", { name: "Pull Request" }));
+    expect(pat()).toHaveValue("ADO_PAT");
+    await userEvent.click(within(landing()).getByRole("radio", { name: "Merge" }));
+    expect(pat()).toBeNull();
+
+    // So does its Own Landing, under a Default Landing of Merge.
+    await w.api.editRepository("acme", "infra", { landing: "pull_request" });
+    await settle(w);
+    expect(pat()).toHaveValue("ADO_PAT");
+  });
+
+  it("shows the Pull Request Watcher while any Repository is under Pull Request, its Own Landing included", async () => {
+    const { w } = await acme();
+    await w.api.addRepository("acme", { name: "web", clone_url: "git@github.com:acme/web.git" });
+    await renderApp(w, "/?view=project-options&project=acme");
+    expect(within(landing()).queryByRole("region", { name: "Pull Request Watcher" })).toBeNull();
+
+    await w.api.editRepository("acme", "web", { landing: "pull_request" });
+    await settle(w);
+    expect(within(landing()).getByRole("region", { name: "Pull Request Watcher" })).toBeInTheDocument();
+  });
+
+  it("refuses a Default Landing of Pull Request while a local-only Repository follows it, with a fix naming it", async () => {
+    const { w, s } = await acme();
+    await s.reportPushRemote("acme", "git@github.com:acme/web.git");
+    await w.api.addRepository("acme", { name: "docs", local_path: "/src/docs" });
+    await renderApp(w, "/?view=project-options&project=acme");
+
+    await userEvent.click(within(landing()).getByRole("radio", { name: "Pull Request" }));
+    await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    await settle(w);
+    const alert = within(landing()).getByRole("alert");
+    expect(alert).toHaveTextContent("docs");
+    expect(alert).toHaveTextContent("give docs an Own Landing such as Merge");
+    expect((await w.api.listProjects())[0].landing.method).toBe("merge");
+  });
+
   it("shows Land per Spec on under Merge, disabled but kept under Branch, and saves it", async () => {
     const { w } = await acme();
     await renderApp(w, "/?view=project-options&project=acme");
@@ -153,7 +200,7 @@ describe("Project Options", () => {
     expect(box).not.toBeChecked();
   });
 
-  it("shows the current setting, with Remote enabled only under Push", async () => {
+  it("shows the current setting, with the Push remote enabled without Push, for the Repositories with Own Landings", async () => {
     const { w } = await acme();
     await w.api.setLandingMethod("acme", {
       method: "branch",
@@ -176,16 +223,14 @@ describe("Project Options", () => {
     );
 
     const push = within(landing()).getByRole("checkbox", { name: "Push" });
-    const remote = within(landing()).getByRole("textbox", { name: "Remote" });
+    const remote = within(landing()).getByRole("textbox", { name: "Push remote" });
     expect(push).not.toBeChecked();
     expect(remote).toHaveValue("upstream");
-    expect(remote).toBeDisabled();
+    expect(remote).toBeEnabled();
+    expect(remote).toHaveAccessibleDescription(/each Repository with no Push remote of its own/);
     expect(push).toHaveAccessibleDescription(
       /checks the remote exists, never force-pushes, and under Merge pushes the whole base/,
     );
-
-    await userEvent.click(push);
-    expect(remote).toBeEnabled();
   });
 
   it("shows the Base branch above the radios, sends it on every save, and shows its error", async () => {
@@ -230,7 +275,7 @@ describe("Project Options", () => {
       within(landing()).getByRole("radio", { name: "Merge" }),
     ).toBeChecked();
     expect(
-      within(landing()).getByRole("textbox", { name: "Remote" }),
+      within(landing()).getByRole("textbox", { name: "Push remote" }),
     ).toHaveValue("origin");
     expect(save).toBeDisabled();
 
@@ -240,7 +285,7 @@ describe("Project Options", () => {
     await userEvent.click(
       within(landing()).getByRole("checkbox", { name: "Push" }),
     );
-    const remote = within(landing()).getByRole("textbox", { name: "Remote" });
+    const remote = within(landing()).getByRole("textbox", { name: "Push remote" });
     await userEvent.clear(remote);
     await userEvent.click(save);
     await settle(w);
@@ -249,36 +294,14 @@ describe("Project Options", () => {
     );
     expect(remote).toHaveAccessibleDescription(/Push needs a git remote/);
     expect(remote).toHaveAttribute("aria-invalid", "true");
-    expect((await w.api.listProjects())[0].landing).toEqual({
-      method: "merge",
-      push: false,
-      remote: "origin",
-      land_per_spec: true,
-      code_host: "",
-      repository: "",
-      pat_env: "ADO_PAT",
-      base: "main",
-      watcher: { state: "not_reported" },
-      open_pull_requests: [],
-    });
+    expect((await w.api.listProjects())[0].landing).toEqual(defaultLanding());
 
     await userEvent.type(remote, "upstream");
     expect(within(landing()).queryByRole("alert")).toBeNull();
     await userEvent.click(save);
     await settle(w);
     expect(within(landing()).getByRole("status")).toHaveTextContent("Saved");
-    expect((await w.api.listProjects())[0].landing).toEqual({
-      method: "branch",
-      push: true,
-      remote: "upstream",
-      land_per_spec: true,
-      code_host: "",
-      repository: "",
-      pat_env: "ADO_PAT",
-      base: "main",
-      watcher: { state: "not_reported" },
-      open_pull_requests: [],
-    });
+    expect((await w.api.listProjects())[0].landing).toEqual(defaultLanding({ method: "branch", push: true, remote: "upstream" }));
     expect(save).toBeDisabled();
   });
 
@@ -291,7 +314,7 @@ describe("Project Options", () => {
     });
     await renderApp(w, "/?view=project-options&project=acme");
 
-    const remote = within(landing()).getByRole("textbox", { name: "Remote" });
+    const remote = within(landing()).getByRole("textbox", { name: "Push remote" });
     await userEvent.type(remote, " ");
     await userEvent.click(
       within(landing()).getByRole("button", { name: "Save" }),
@@ -324,7 +347,7 @@ describe("Project Options", () => {
       within(landing()).getByRole("checkbox", { name: "Push" }),
     ).toBeChecked();
     expect(
-      within(landing()).getByRole("textbox", { name: "Remote" }),
+      within(landing()).getByRole("textbox", { name: "Push remote" }),
     ).toHaveValue("upstream");
   });
 
@@ -367,7 +390,7 @@ describe("Project Options", () => {
       within(ci()).getByRole("checkbox", { name: "CI Tracking" }),
     ).toBeDisabled();
     expect(
-      within(ci()).getByRole("textbox", { name: "GitHub repository" }),
+      within(ci()).getByRole("textbox", { name: "Ignored workflows" }),
     ).toBeDisabled();
     expect(within(ci()).getByRole("button", { name: "Save" })).toBeDisabled();
   });
@@ -403,5 +426,4 @@ describe("Project Options", () => {
       "https://github.com/acme/web/pull/7",
     );
   });
-
 });

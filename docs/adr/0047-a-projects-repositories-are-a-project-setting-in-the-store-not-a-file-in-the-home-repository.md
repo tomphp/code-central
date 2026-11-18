@@ -12,6 +12,6 @@ So the list is a Project setting in Code Central's store. The Home Repository is
 ## Consequences
 
 - The Factory reads the list on every poll, so a new Repository is cloned without a restart.
-- Landing stays Project-wide: no per-Repository Landing Method or Push remote.
+- Landing stays Project-wide: no per-Repository Landing Method or Push remote. (Reversed by [ADR 0054](0054-landing-has-a-project-default-and-each-repository-may-have-its-own-landing-and-push-remote.md): Landing has a Project default, and a Repository may have its own.)
 - Clones go at `<parent>/<Repository Name>` beside the Home Repository by default, with an optional local path. The Factory clones a missing Repository itself, adopts a clone whose URL matches (after normalising ssh/https and a trailing `.git`), and never touches anything else, raising Repository missing instead.
 - Moving the list into a file later would need a migration.

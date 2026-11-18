@@ -3,11 +3,11 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { renderApp, settle } from "../worldTesting";
-import { acme, ci } from "./ProjectOptions.testutil";
+import { acme, ci, page } from "./ProjectOptions.testutil";
 
 describe("Project Options", () => {
   describe("the CI section", () => {
-    it("shows CI Tracking off by default, on GitHub Actions, with nothing named", async () => {
+    it("holds only CI Tracking, off by default, the Ignored workflows and the CI Rules: each Repository's CI is in its row", async () => {
       const { w } = await acme();
       await renderApp(w, "/?view=project-options&project=acme");
 
@@ -17,20 +17,12 @@ describe("Project Options", () => {
       });
       expect(tracking).not.toBeChecked();
       expect(tracking).toHaveAccessibleDescription(
-        /watches the CI of what the Factory pushes/,
+        /watches the CI of what the Factory pushes.*set in its row under Repositories/,
       );
-      const provider = within(group).getByRole("combobox", {
-        name: "CI Provider",
-      });
-      expect(provider).toHaveValue("github_actions");
-      expect(
-        within(provider)
-          .getAllByRole("option")
-          .map((o) => o.textContent),
-      ).toEqual(["GitHub Actions", "Azure Pipelines"]);
-      expect(
-        within(group).getByRole("textbox", { name: "GitHub repository" }),
-      ).toHaveValue("");
+      expect(within(group).queryByRole("combobox", { name: "CI Provider" })).toBeNull();
+      expect(within(group).queryByRole("textbox", { name: "GitHub repository" })).toBeNull();
+      expect(within(group).queryByRole("textbox", { name: "PAT environment variable" })).toBeNull();
+      expect(within(group).queryByRole("region", { name: "CI per Repository" })).toBeNull();
       const ignored = within(group).getByRole("textbox", {
         name: "Ignored workflows",
       });
@@ -46,232 +38,90 @@ describe("Project Options", () => {
       ).toBeDisabled();
     });
 
-    it("prefills the repository from a GitHub Push remote the Factory reported, and lets the human change it", async () => {
+    it("shows the Home's CI in its row, filled in from the Push remote: GitHub Actions, Azure Pipelines, or Not watched on another host", async () => {
+      const { w, s } = await acme();
+      await s.project("beta", "Beta");
+      await s.project("gamma", "Gamma");
+      await s.reportPushRemote("acme", "git@github.com:acme/web.git");
+      await s.reportPushRemote("beta", "git@ssh.dev.azure.com:v3/beta/web/app");
+      await s.reportPushRemote("gamma", "git@gitlab.com:gamma/web.git");
+      const homeCI = () =>
+        within(within(page()).getByRole("listitem", { name: /^(acme|beta|gamma)$/ })).getByText("CI", { selector: "dt" }).nextElementSibling;
+
+      const { unmount } = await renderApp(w, "/?view=project-options&project=acme");
+      expect(homeCI()).toHaveTextContent("GitHub Actions on acme/web");
+      unmount();
+      const beta = await renderApp(w, "/?view=project-options&project=beta");
+      expect(homeCI()).toHaveTextContent("Azure Pipelines on https://dev.azure.com/beta/web");
+      beta.unmount();
+      await renderApp(w, "/?view=project-options&project=gamma");
+      expect(homeCI()).toHaveTextContent("Not watched");
+    });
+
+    // homeCIForm opens the Home Repository acme's CI choice in its row.
+    const homeCIForm = async () => {
+      const home = within(page()).getByRole("listitem", { name: "acme" });
+      await userEvent.click(within(home).getByRole("button", { name: "Edit acme's CI" }));
+      return within(home).getByRole("form", { name: "acme's CI" });
+    };
+
+    it("shows the PAT environment variable and pipeline names once a Repository's CI is Azure Pipelines, keeping each provider's values in its row", async () => {
       const { w, s } = await acme();
       await s.reportPushRemote("acme", "git@github.com:acme/web.git");
       await renderApp(w, "/?view=project-options&project=acme");
+      const group = ci();
+      expect(within(group).queryByRole("textbox", { name: "PAT environment variable" })).toBeNull();
 
-      const repository = within(ci()).getByRole("textbox", {
-        name: "GitHub repository",
-      });
-      expect(repository).toHaveValue("acme/web");
-      expect(repository).toHaveAccessibleDescription(
-        /From the Push remote git@github\.com:acme\/web\.git/,
-      );
-      // A prefill alone is no change to save.
-      expect(within(ci()).getByRole("button", { name: "Save" })).toBeDisabled();
-
-      await userEvent.click(
-        within(ci()).getByRole("checkbox", { name: "CI Tracking" }),
-      );
-      await userEvent.clear(repository);
-      await userEvent.type(repository, "acme/website");
-      await userEvent.click(within(ci()).getByRole("button", { name: "Save" }));
+      let form = await homeCIForm();
+      await userEvent.selectOptions(within(form).getByRole("combobox", { name: "CI" }), "Azure Pipelines");
+      expect(within(form).queryByRole("textbox", { name: "GitHub repository" })).toBeNull();
+      await userEvent.type(within(form).getByRole("textbox", { name: "Azure DevOps project URL" }), "https://dev.azure.com/acme/web/_build");
+      await userEvent.selectOptions(within(form).getByRole("combobox", { name: "CI" }), "GitHub Actions");
+      expect(within(form).getByRole("textbox", { name: "GitHub repository" })).toHaveValue("acme/web");
+      await userEvent.selectOptions(within(form).getByRole("combobox", { name: "CI" }), "Azure Pipelines");
+      await userEvent.click(within(form).getByRole("button", { name: "Save" }));
       await settle(w);
-      expect(within(ci()).getByRole("status")).toHaveTextContent("Saved");
-      expect((await w.api.listProjects())[0].ci).toMatchObject({
-        tracking: true,
-        repository: "acme/website",
-      });
-    });
 
-    it("prefills nothing from a Push remote that isn't GitHub's, and keeps a repository already set", async () => {
-      const { w, s } = await acme();
-      await s.project("beta", "Beta");
-      await s.reportPushRemote("acme", "git@gitlab.com:acme/web.git");
-      await s.reportPushRemote("beta", "https://github.com/beta/app.git");
-      await w.api.setCITracking("beta", {
-        tracking: false,
-        provider: "github_actions",
-        repository: "beta/fork",
-        ignored_workflows: [],
-      });
-      const { unmount } = await renderApp(
-        w,
-        "/?view=project-options&project=acme",
-      );
-
-      const repository = within(ci()).getByRole("textbox", {
-        name: "GitHub repository",
-      });
-      expect(repository).toHaveValue("");
-      expect(repository).not.toHaveAccessibleDescription(/Push remote/);
-      unmount();
-
-      await renderApp(w, "/?view=project-options&project=beta");
-      expect(
-        within(ci()).getByRole("textbox", { name: "GitHub repository" }),
-      ).toHaveValue("beta/fork");
-    });
-
-    it("shows each provider's fields, keeping the other's values when switching", async () => {
-      const { w } = await acme();
-      await renderApp(w, "/?view=project-options&project=acme");
-      const group = screen.getByRole("group", { name: "CI" });
-      expect(
-        within(group).queryByRole("textbox", {
-          name: "Azure DevOps project URL",
-        }),
-      ).toBeNull();
-      expect(
-        within(group).queryByRole("textbox", {
-          name: "PAT environment variable",
-        }),
-      ).toBeNull();
-
-      await userEvent.type(
-        within(group).getByRole("textbox", { name: "GitHub repository" }),
-        "acme/web",
-      );
-      await userEvent.selectOptions(
-        within(group).getByRole("combobox", { name: "CI Provider" }),
-        "azure_pipelines",
-      );
-      expect(
-        within(group).queryByRole("textbox", { name: "GitHub repository" }),
-      ).toBeNull();
-      const url = within(group).getByRole("textbox", {
-        name: "Azure DevOps project URL",
-      });
-      const pat = within(group).getByRole("textbox", {
-        name: "PAT environment variable",
-      });
-      expect(url).toHaveValue("");
-      expect(url).toHaveAccessibleDescription(
-        /The Azure DevOps project to watch, as its URL, such as https:\/\/dev\.azure\.com\/acme\/web; CI Tracking needs one\./,
-      );
+      const pat = within(group).getByRole("textbox", { name: "PAT environment variable" });
       expect(pat).toHaveValue("ADO_PAT");
       expect(pat).toHaveAccessibleDescription(
         /Build: Read & execute, in the service's environment\. Code Central keeps the name, never the PAT\./,
       );
-      expect(
-        within(group).getByRole("textbox", { name: "Ignored workflows" }),
-      ).toHaveAccessibleDescription(/Pipeline names/);
-
-      await userEvent.type(url, "https://dev.azure.com/acme/web/_build");
+      expect(within(group).getByRole("textbox", { name: "Ignored workflows" })).toHaveAccessibleDescription(/^Pipeline names/);
       await userEvent.clear(pat);
       await userEvent.type(pat, "ACME_PAT");
-      await userEvent.click(
-        within(group).getByRole("button", { name: "Save" }),
-      );
+      await userEvent.click(within(group).getByRole("button", { name: "Save" }));
       await settle(w);
       expect(within(group).getByRole("status")).toHaveTextContent("Saved");
-      expect((await w.api.listProjects())[0].ci).toMatchObject({
-        provider: "azure_pipelines",
-        repository: "acme/web",
-        project_url: "https://dev.azure.com/acme/web",
-        pat_env: "ACME_PAT",
-      });
+      const p = (await w.api.listProjects())[0];
+      expect(p.ci.pat_env).toBe("ACME_PAT");
+      expect(p.repositories[0].ci).toMatchObject({ name: "acme", not_watched: false, provider: "azure_pipelines", project_url: "https://dev.azure.com/acme/web" });
 
-      await userEvent.selectOptions(
-        within(group).getByRole("combobox", { name: "CI Provider" }),
-        "github_actions",
-      );
-      expect(
-        within(group).getByRole("textbox", { name: "GitHub repository" }),
-      ).toHaveValue("acme/web");
+      form = await homeCIForm();
+      expect(within(form).getByRole("combobox", { name: "CI" })).toHaveValue("azure_pipelines");
     });
 
-    it("prefills the project URL from an Azure Repos Push remote, only for Azure Pipelines with none stored", async () => {
-      const { w, s } = await acme();
-      await s.project("beta", "Beta");
-      await s.reportPushRemote(
-        "acme",
-        "git@ssh.dev.azure.com:v3/acme/web/app",
-      );
-      await s.reportPushRemote(
-        "beta",
-        "https://dev.azure.com/beta/app/_git/app",
-      );
-      await w.api.setCITracking("beta", {
-        tracking: false,
-        provider: "azure_pipelines",
-        repository: "",
-        project_url: "https://dev.azure.com/beta/other",
-        ignored_workflows: [],
-      });
-      const { unmount } = await renderApp(
-        w,
-        "/?view=project-options&project=acme",
-      );
-
-      const group = screen.getByRole("group", { name: "CI" });
-      // GitHub Actions: nothing to prefill.
-      await userEvent.selectOptions(
-        within(group).getByRole("combobox", { name: "CI Provider" }),
-        "azure_pipelines",
-      );
-      const url = within(group).getByRole("textbox", {
-        name: "Azure DevOps project URL",
-      });
-      expect(url).toHaveValue("https://dev.azure.com/acme/web");
-      expect(url).toHaveAccessibleDescription(
-        /From the Push remote git@ssh\.dev\.azure\.com:v3\/acme\/web\/app\. The Azure DevOps project to watch/,
-      );
-      unmount();
-
-      await renderApp(w, "/?view=project-options&project=beta");
-      const stored = within(ci()).getByRole("textbox", {
-        name: "Azure DevOps project URL",
-      });
-      expect(stored).toHaveValue("https://dev.azure.com/beta/other");
-      expect(stored).not.toHaveAccessibleDescription(/Push remote/);
-    });
-
-    it("prefills nothing from a Server SSH Push remote", async () => {
-      const { w, s } = await acme();
-      await s.reportPushRemote(
-        "acme",
-        "ssh://git@tfs.example.com:22/tfs/DefaultCollection/web/_git/app",
-      );
-      await renderApp(w, "/?view=project-options&project=acme");
-      const group = screen.getByRole("group", { name: "CI" });
-      await userEvent.selectOptions(
-        within(group).getByRole("combobox", { name: "CI Provider" }),
-        "azure_pipelines",
-      );
-      const url = within(group).getByRole("textbox", {
-        name: "Azure DevOps project URL",
-      });
-      expect(url).toHaveValue("");
-      expect(url).not.toHaveAccessibleDescription(/Push remote/);
-    });
-
-    it("shows field errors on the project URL and the PAT environment variable", async () => {
+    it("shows field errors on the project URL in the row and on the PAT environment variable", async () => {
       const { w } = await acme();
       await renderApp(w, "/?view=project-options&project=acme");
-      const group = screen.getByRole("group", { name: "CI" });
-      await userEvent.selectOptions(
-        within(group).getByRole("combobox", { name: "CI Provider" }),
-        "azure_pipelines",
-      );
-      await userEvent.click(
-        within(group).getByRole("checkbox", { name: "CI Tracking" }),
-      );
-      await userEvent.click(
-        within(group).getByRole("button", { name: "Save" }),
-      );
+      const form = await homeCIForm();
+      await userEvent.selectOptions(within(form).getByRole("combobox", { name: "CI" }), "Azure Pipelines");
+      await userEvent.click(within(form).getByRole("button", { name: "Save" }));
       await settle(w);
-      const url = within(group).getByRole("textbox", {
-        name: "Azure DevOps project URL",
-      });
+      const url = within(form).getByRole("textbox", { name: "Azure DevOps project URL" });
       expect(url).toBeInvalid();
-      expect(within(group).getByRole("alert")).toHaveTextContent(
-        "CI Tracking needs the Azure DevOps project to watch, as its URL",
-      );
+      expect(within(form).getByRole("alert")).toHaveTextContent("CI Tracking needs the Azure DevOps project to watch, as its URL");
 
       await userEvent.type(url, "https://dev.azure.com/acme/web");
-      const pat = within(group).getByRole("textbox", {
-        name: "PAT environment variable",
-      });
+      await userEvent.click(within(form).getByRole("button", { name: "Save" }));
+      await settle(w);
+      const pat = within(ci()).getByRole("textbox", { name: "PAT environment variable" });
       await userEvent.clear(pat);
       await userEvent.type(pat, "MY-PAT");
-      await userEvent.click(
-        within(group).getByRole("button", { name: "Save" }),
-      );
+      await userEvent.click(within(ci()).getByRole("button", { name: "Save" }));
       await settle(w);
       expect(pat).toBeInvalid();
-      expect(url).not.toBeInvalid();
+      expect(within(ci()).getByRole("alert")).toHaveTextContent("isn't an environment variable name");
     });
 
     it("shows Watching the project URL for Azure Pipelines", async () => {
@@ -291,7 +141,7 @@ describe("Project Options", () => {
       );
     });
 
-    it("turns CI Tracking on with a prefilled repository and Ignored workflows", async () => {
+    it("turns CI Tracking on with Ignored workflows, watching the Home as its row names it", async () => {
       const { w, s } = await acme();
       await s.reportPushRemote("acme", "https://github.com/acme/web.git");
       await renderApp(w, "/?view=project-options&project=acme");
@@ -307,17 +157,14 @@ describe("Project Options", () => {
       await userEvent.click(within(ci()).getByRole("button", { name: "Save" }));
       await settle(w);
       expect(within(ci()).getByRole("status")).toHaveTextContent("Saved");
-      expect((await w.api.listProjects())[0].ci).toEqual({
+      const p = (await w.api.listProjects())[0];
+      expect(p.ci).toMatchObject({
         tracking: true,
-        provider: "github_actions",
-        project_url: "",
         pat_env: "ADO_PAT",
-        repository: "acme/web",
         ignored_workflows: ["nightly.yml", "preview.yml"],
-        push_remote_url: "https://github.com/acme/web.git",
-        rules: [],
-        watcher: { state: "not_reported" },
       });
+      expect(p.repositories[0].ci).toEqual({ name: "acme", not_watched: false, provider: "github_actions", repository: "acme/web" });
+      expect(within(ci()).getByRole("region", { name: "CI Watcher" })).toHaveTextContent("CI Watcher: Starting");
       expect(
         within(ci()).getByRole("textbox", { name: "Ignored workflows" }),
       ).toHaveValue("nightly.yml, preview.yml");
@@ -327,7 +174,7 @@ describe("Project Options", () => {
       await userEvent.click(within(ci()).getByRole("button", { name: "Save" }));
       await settle(w);
       expect((await w.api.listProjects())[0].ci.tracking).toBe(false);
-      expect((await w.api.listProjects())[0].ci.repository).toBe("acme/web");
+      expect((await w.api.listProjects())[0].repositories[0].ci.repository).toBe("acme/web");
     });
 
     it("shows the CI Watcher's status while CI Tracking is on, live", async () => {
@@ -426,28 +273,13 @@ describe("Project Options", () => {
     });
 
     it("shows the service's refusal on its field", async () => {
-      const { w } = await acme();
+      const { w, s } = await acme();
+      await s.reportPushRemote("acme", "git@github.com:acme/web.git");
       await renderApp(w, "/?view=project-options&project=acme");
 
       await userEvent.click(
         within(ci()).getByRole("checkbox", { name: "CI Tracking" }),
       );
-      await userEvent.click(within(ci()).getByRole("button", { name: "Save" }));
-      await settle(w);
-      const repository = within(ci()).getByRole("textbox", {
-        name: "GitHub repository",
-      });
-      expect(within(ci()).getByRole("alert")).toHaveTextContent(
-        "CI Tracking needs the GitHub repository to watch, as owner/name",
-      );
-      expect(repository).toHaveAttribute("aria-invalid", "true");
-      expect(repository).toHaveAccessibleDescription(
-        /needs the GitHub repository/,
-      );
-      expect((await w.api.listProjects())[0].ci.tracking).toBe(false);
-
-      await userEvent.type(repository, "acme/web");
-      expect(within(ci()).queryByRole("alert")).toBeNull();
       const ignored = within(ci()).getByRole("textbox", {
         name: "Ignored workflows",
       });
@@ -458,10 +290,13 @@ describe("Project Options", () => {
         "isn't a workflow file name, such as ci.yml",
       );
       expect(ignored).toHaveAttribute("aria-invalid", "true");
+      expect(ignored).toHaveAccessibleDescription(/isn't a workflow file name/);
+      expect((await w.api.listProjects())[0].ci.tracking).toBe(false);
     });
 
     it("shows a refused turn-on's reason and its fix", async () => {
-      const { w } = await acme();
+      const { w, s } = await acme();
+      await s.reportPushRemote("acme", "git@github.com:acme/web.git");
       w.setCICheck({
         problem: "logged_out",
         reason: "gh isn't logged in to GitHub.",
@@ -471,10 +306,6 @@ describe("Project Options", () => {
 
       await userEvent.click(
         within(ci()).getByRole("checkbox", { name: "CI Tracking" }),
-      );
-      await userEvent.type(
-        within(ci()).getByRole("textbox", { name: "GitHub repository" }),
-        "acme/web",
       );
       await userEvent.click(within(ci()).getByRole("button", { name: "Save" }));
       await settle(w);
@@ -514,12 +345,11 @@ describe("Project Options", () => {
         within(ci()).getByRole("checkbox", { name: "CI Tracking" }),
       ).toBeChecked();
       expect(
-        within(ci()).getByRole("textbox", { name: "GitHub repository" }),
-      ).toHaveValue("acme/web");
+        within(page()).getByRole("listitem", { name: "acme" }),
+      ).toHaveTextContent("GitHub Actions on acme/web");
       expect(
         within(ci()).getByRole("textbox", { name: "Ignored workflows" }),
       ).toHaveValue("nightly.yml");
     });
   });
-
 });

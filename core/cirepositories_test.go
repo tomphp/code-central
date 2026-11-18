@@ -136,7 +136,7 @@ func TestAProjectWithTheHomeRepositoryAloneHasNoCIEntries(t *testing.T) {
 	}
 }
 
-func TestSetRepositoryCIEditsARepositorysEntryButNeverTheHomes(t *testing.T) {
+func TestSetRepositoryCIEditsARepositorysEntry(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git"})
@@ -148,8 +148,6 @@ func TestSetRepositoryCIEditsARepositorysEntryButNeverTheHomes(t *testing.T) {
 	if got := w.Record.CI.Repositories; len(got) != 1 || got[0].Provider != store.CIAzurePipelines || got[0].ProjectURL != "https://dev.azure.com/acme/web" {
 		t.Fatalf("CI entries %+v, want web on Azure Pipelines", got)
 	}
-	_, err = f.core.SetRepositoryCI(human, "acme", core.SetRepositoryCIInput{Name: "acme", RepositoryCI: core.RepositoryCI{NotWatched: true}})
-	wantFix(t, err, core.Invalid, "name")
 	_, err = f.core.SetRepositoryCI(human, "acme", core.SetRepositoryCIInput{Name: "nope", RepositoryCI: core.RepositoryCI{NotWatched: true}})
 	wantCode(t, err, core.Invalid, "name")
 	_, err = f.core.SetRepositoryCI(human, "acme", core.SetRepositoryCIInput{Name: "web", RepositoryCI: core.RepositoryCI{Repository: "web"}})

@@ -279,7 +279,7 @@ func changedRepositoryViews(p store.Project, t store.Ticket, s *ciState) []Chang
 		}
 		if rc := ci.in(r.Name); rc != nil {
 			rv.CIResult, rv.CICommit, rv.LandAnyway = rc.result, rc.commit, s.landAnyway(rc)
-		} else if landingPolicyOf(p).RunsCIWatcher() && !watchesCI(p, r.Name) {
+		} else if landingPolicies(p).RunsCIWatcher() && !watchesCI(p, r.Name) {
 			rv.CINotWatched = true
 		}
 		if r.Name == p.Key {

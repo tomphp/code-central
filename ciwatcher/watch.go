@@ -177,10 +177,14 @@ type target struct {
 	reruns     []core.CIRerun
 }
 
-// targets are watch's watched Repositories, the Home Repository first.
+// targets are watch's watched Repositories, the Home Repository first
+// unless it is Not watched.
 func targets(watch core.CIWatch) []target {
-	out := []target{{name: watch.Project, waiting: watch.Waiting, reruns: watch.Reruns,
-		in: core.CICheckInput{Provider: watch.Provider, Repository: watch.Repository, ProjectURL: watch.ProjectURL, PATEnv: watch.PATEnv, GHPath: watch.GHPath}}}
+	var out []target
+	if !watch.NotWatched {
+		out = append(out, target{name: watch.Project, waiting: watch.Waiting, reruns: watch.Reruns,
+			in: core.CICheckInput{Provider: watch.Provider, Repository: watch.Repository, ProjectURL: watch.ProjectURL, PATEnv: watch.PATEnv, GHPath: watch.GHPath}})
+	}
 	for _, r := range watch.Repositories {
 		out = append(out, target{repo: r.Name, name: r.Name, waiting: r.Waiting, reruns: r.Reruns,
 			in: core.CICheckInput{Provider: r.Provider, Repository: r.Repository, ProjectURL: r.ProjectURL, PATEnv: watch.PATEnv, GHPath: watch.GHPath}})

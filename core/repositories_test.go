@@ -407,21 +407,21 @@ func TestUnderPullRequestAddingOrEditingALocalOnlyRepositoryIsRefusedBeforeTheCo
 		checked++
 		return core.WatcherCheckResult{}
 	})
-	wantNeedsCloneURL := func(t *testing.T, err error) {
+	wantNeedsCloneURL := func(t *testing.T, err error, name string) {
 		t.Helper()
 		wantFix(t, err, core.Invalid, "clone_url")
-		if e := (*core.Error)(nil); errors.As(err, &e) && (e.Message != "Pull Request needs a Clone URL in every Repository" || e.Fix != "give its Clone URL, or land by Merge or Branch") {
-			t.Fatalf("refusal = %q, fix %q, want Pull Request's need for a Clone URL", e.Message, e.Fix)
+		if e := (*core.Error)(nil); errors.As(err, &e) && (e.Message != name+" is local-only, with no Clone URL, so it can't land by Pull Request" || e.Fix != "give "+name+" an Own Landing such as Merge, or a Clone URL") {
+			t.Fatalf("refusal = %q, fix %q, want Pull Request's need for a Clone URL in %s", e.Message, e.Fix, name)
 		}
 	}
 
 	_, err := f.core.AddRepository(human, "acme", core.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes")})
-	wantNeedsCloneURL(t, err)
+	wantNeedsCloneURL(t, err, "notes")
 
 	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git", LocalPath: srcPath("web")})
 	empty := ""
 	_, err = f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "web", CloneURL: &empty})
-	wantNeedsCloneURL(t, err)
+	wantNeedsCloneURL(t, err, "web")
 	if checked != 1 {
 		t.Errorf("the Pull Request check ran %d times, want once, for web's add alone", checked)
 	}

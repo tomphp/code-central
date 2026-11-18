@@ -13,7 +13,7 @@ export async function acme() {
 export const nav = () => screen.getByRole("navigation", { name: "Filters" });
 export const page = () => screen.getByRole("main", { name: "Project Options" });
 export const landing = () =>
-  within(page()).getByRole("group", { name: "Landing Method" });
+  within(page()).getByRole("group", { name: "Default Landing" });
 export const ci = () => within(page()).getByRole("group", { name: "CI" });
 export const rules = () => within(page()).getByRole("group", { name: "CI Rules" });
 export const addForm = () =>

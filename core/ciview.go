@@ -75,7 +75,7 @@ func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, er
 			projects = []store.Project{p}
 		} else {
 			for _, p := range r.Projects() {
-				if landingPolicyOf(p).RunsCIWatcher() && p.Archived.IsZero() {
+				if landingPolicies(p).RunsCIWatcher() && p.Archived.IsZero() {
 					projects = append(projects, p)
 				}
 			}

@@ -14,7 +14,7 @@ describe("Project Options", () => {
     const links = within(menu).getAllByRole("link");
     expect(links.map((l) => l.textContent)).toEqual([
       "Repositories",
-      "Landing Method",
+      "Default Landing",
       "CI",
       "GitHub Issues",
       "Azure Boards",
@@ -40,5 +40,4 @@ describe("Project Options", () => {
     }
     expect(window.location.search).toBe("?view=project-options&project=acme");
   });
-
 });

@@ -41,7 +41,7 @@ func TestChangingTheBaseMergesAnAcceptedTicketNotYetMergedIntoTheNewBase(t *test
 	setBase(h, "ghost")
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	r := h.Start()
-	r.WantOutput("the base, ghost, exists neither here nor on")
+	r.WantOutput("the base, ghost, doesn't exist here, and this repository is local-only")
 
 	setBase(h, "release")
 	r.Poll()
@@ -65,7 +65,7 @@ func TestChangingTheBaseSendsBackABranchThatConflictsWithTheNewBase(t *testing.T
 	setBase(h, "ghost")
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	r := h.Start()
-	r.WantOutput("the base, ghost, exists neither here nor on")
+	r.WantOutput("the base, ghost, doesn't exist here, and this repository is local-only")
 	h.Script(id, factorytest.Wait())
 
 	setBase(h, "release")
@@ -135,7 +135,7 @@ func TestChangingTheBaseMergesAWaitingSpecBranchIntoTheNewBase(t *testing.T) {
 	setBase(h, "ghost")
 	a, b := twoAccepted(t, h)
 	r := h.Start()
-	r.WantOutput("the base, ghost, exists neither here nor on")
+	r.WantOutput("the base, ghost, doesn't exist here, and this repository is local-only")
 
 	setBase(h, "release")
 	r.Poll()
