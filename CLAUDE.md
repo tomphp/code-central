@@ -18,7 +18,7 @@ Never run `serve`, `init`, `service install/uninstall`, `pkill`, a restart or a 
 
 ## Finding your way
 
-Adding or changing an operation, or a store file: see `docs/agents/recipes.md`.
+Adding or changing an operation, or a store file, or renaming Go code across files: see `docs/agents/recipes.md`.
 
 To run the UI and look at a change: see `docs/agents/running-the-ui.md`.
 
