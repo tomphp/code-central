@@ -91,7 +91,7 @@ func stageGuidesView(g store.StageGuides) StageGuidesView {
 
 // StageGuideInput is get_stage_guide's input.
 type StageGuideInput struct {
-	Stage string `json:"stage"`
+	Stage string `json:"stage" path:"stage" desc:"The guide's name: the Ticket's Stage Label without stage:, map-<type> for a Wayfinder Label wayfinder:<type>, prototype, retro, or implementation when it has none of these." required:"true"`
 }
 
 // StageGuideView is one Stage Guide: get_stage_guide's result, and the

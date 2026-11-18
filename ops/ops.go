@@ -53,7 +53,8 @@ type Op struct {
 //	required:"true" the MCP schema lists the field in required, in field order
 //	enum:"A,B"      an explicit enum in the MCP schema
 //	minItems:"n"    a list's minItems in the MCP schema
-//	path:"n"        the field the HTTP path's {n} binds to; the path wins
+//	path:"n"        the field the HTTP path's {n} binds to; the path wins;
+//	                any other name, such as "stage", binds that {name}
 //	query:"name"    a GET's query parameter where it differs from the JSON name
 //	mcp:"-"         left out of the MCP schema
 //	cli:"…"         the field's place on a derived CLI command: a positional
@@ -74,6 +75,9 @@ type Definition[In, Out any] struct {
 	// Descriptions overrides a field's desc tag by JSON name, for an input
 	// type shared by operations whose wording differs.
 	Descriptions map[string]string
+	// Enums gives a string field's enum in the MCP schema by JSON name,
+	// where the values aren't known until run time.
+	Enums map[string][]string
 	// Call serves the operation: usually the Core method as a method
 	// expression, such as (*core.Core).CreateSpec.
 	Call func(c *core.Core, ctx context.Context, key string, in In) (Out, error)
@@ -97,6 +101,8 @@ type Operation interface {
 	NewInput() any
 	// FieldDescription is the field's description override, by JSON name.
 	FieldDescription(name string) (string, bool)
+	// FieldEnum is the field's enum values, by JSON name.
+	FieldEnum(name string) ([]string, bool)
 	// ApplyHTTPDefaults applies the HTTP defaults to in, a *In.
 	ApplyHTTPDefaults(in any)
 	// Invoke calls the operation with in, a *In.
@@ -119,6 +125,11 @@ func (d *Definition[In, Out]) NewInput() any { return new(In) }
 func (d *Definition[In, Out]) FieldDescription(name string) (string, bool) {
 	desc, ok := d.Descriptions[name]
 	return desc, ok
+}
+
+func (d *Definition[In, Out]) FieldEnum(name string) ([]string, bool) {
+	values, ok := d.Enums[name]
+	return values, ok
 }
 
 func (d *Definition[In, Out]) ApplyHTTPDefaults(in any) {
@@ -272,24 +283,24 @@ var all = []entry{
 	defined(Unlink),
 
 	// Scratch Import (ticket 40).
-	legacy(Op{Name: "get_import_guide", Audience: AgentAndHuman}),
-	legacy(Op{Name: "import", Audience: AgentAndHuman, Write: true}),
+	defined(GetImportGuide),
+	defined(Import),
 
 	// Finished work and Archived Projects (ticket 39).
 	defined(ArchiveProject),
 	defined(UnarchiveProject),
 
 	// Requirements and the local Factory (Spec 66).
-	legacy(Op{Name: "submit_requirement", Audience: AgentAndHuman, Write: true}),
+	defined(SubmitRequirement),
 	defined(Land),
-	legacy(Op{Name: "get_stage_guide", Audience: AgentAndHuman}),
+	defined(GetStageGuide),
 
 	// Maps and Prototypes (Spec code-central-213).
-	legacy(Op{Name: "submit_map", Audience: AgentAndHuman, Write: true}),
-	legacy(Op{Name: "submit_prototype", Audience: AgentAndHuman, Write: true}),
-	legacy(Op{Name: "submit_small_change", Audience: AgentAndHuman, Write: true}),
+	defined(SubmitMap),
+	defined(SubmitPrototype),
+	defined(SubmitSmallChange),
 	// Retros (Spec code-central-646).
-	legacy(Op{Name: "submit_retro", Audience: AgentAndHuman, Write: true}),
+	defined(SubmitRetro),
 
 	// Options, the human's global preferences (Spec code-central-160).
 	// HTTP only: no MCP tool and no CLI command.
@@ -317,7 +328,7 @@ var all = []entry{
 	// Land per Spec (code-central-371).
 	defined(ReportSpecMerge),
 	// Spec merge Tickets (code-central-542).
-	legacy(Op{Name: "open_spec_merge", Audience: FactoryOnly, Write: true}),
+	defined(OpenSpecMerge),
 	// CI failed and its failure options (code-central-261).
 	defined(LandAnyway),
 	// Re-run failed jobs (code-central-265).
@@ -326,19 +337,19 @@ var all = []entry{
 	defined(NewFixTicket),
 
 	// GitHub Issues (Spec code-central-279).
-	legacy(Op{Name: "set_github_issues", Audience: HumanOnly, Write: true}),
+	defined(SetGitHubIssues),
 	// The Issue Watcher's own (code-central-285).
 	defined(GetIssueWatch),
 	defined(ReportIssueWatcherStatus),
 	// New issue and the triage actions (code-central-287).
-	legacy(Op{Name: "keep_as_draft", Audience: HumanOnly, Write: true}),
+	defined(KeepAsDraft),
 	// Write-backs and Won't fix (code-central-289).
 	defined(ReportIssueWritten),
-	legacy(Op{Name: "wont_fix", Audience: HumanOnly, Write: true}),
+	defined(WontFix),
 	// To Requirement and the outbound Link (code-central-290).
-	legacy(Op{Name: "to_requirement", Audience: HumanOnly, Write: true}),
+	defined(ToRequirement),
 	// Azure Boards (Spec code-central-894).
-	legacy(Op{Name: "set_azure_boards", Audience: HumanOnly, Write: true}),
+	defined(SetAzureBoards),
 	// The Work Item Watcher's own; it reports each comment written with
 	// report_issue_written.
 	defined(GetWorkItemWatch),
@@ -347,7 +358,7 @@ var all = []entry{
 	defined(GetModelChoice),
 	defined(ReportModelChoice),
 	// The Models section of Project Options (Spec code-central-301).
-	legacy(Op{Name: "set_models", Audience: HumanOnly, Write: true}),
+	defined(SetModels),
 	// The Reported Models (code-central-311).
 	defined(ReportModels),
 	defined(ReportHeartbeat),

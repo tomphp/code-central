@@ -100,35 +100,53 @@ func handle(op ops.Operation) (handlerFunc, error) {
 			return nil, err
 		}
 		if path != nil {
-			reflect.ValueOf(in).Elem().FieldByIndex(path.Index).SetString(r.PathValue("n"))
+			reflect.ValueOf(in).Elem().FieldByIndex(path.Index).SetString(r.PathValue(path.Tag.Get("path")))
 		}
 		op.ApplyHTTPDefaults(in)
 		return op.Invoke(r.Context(), c, r.PathValue("key"), in)
 	}, nil
 }
 
-// pathField is the field of t that pattern's {n} binds to, tagged
-// path:"n", or nil when the pattern has no {n}.
+// pathField is the field of t that the pattern's one placeholder besides
+// {key} binds to, tagged with its name, as path:"n" for {n}; nil when the
+// pattern has none.
 func pathField(t reflect.Type, pattern string) (*fieldwalk.Field, error) {
 	var found *fieldwalk.Field
 	for _, f := range fieldwalk.Fields(t) {
 		tag := f.Tag.Get("path")
 		switch {
 		case tag == "":
-		case tag != "n":
-			return nil, fmt.Errorf("field %s binds {%s}, but a path binds only {n}", f.Name, tag)
 		case found != nil:
-			return nil, fmt.Errorf("fields %s and %s both bind {n}", found.Name, f.Name)
+			return nil, fmt.Errorf("fields %s and %s both bind {%s}", found.Name, f.Name, tag)
 		case f.Type.Kind() != reflect.String:
-			return nil, fmt.Errorf("field %s binds {n} but is a %s, not a string", f.Name, f.Type)
+			return nil, fmt.Errorf("field %s binds {%s} but is a %s, not a string", f.Name, tag, f.Type)
 		default:
 			found = &f
 		}
 	}
-	if (found != nil) != strings.Contains(pattern, "{n}") {
-		return nil, fmt.Errorf("pattern %s and the path tags disagree on {n}", pattern)
+	placeholders := strings.Count(pattern, "{") - strings.Count(pattern, "{key}")
+	switch {
+	case found == nil && placeholders > 0:
+		return nil, fmt.Errorf("pattern %s and the path tags disagree on %s: no field binds it", pattern, placeholderBesidesKey(pattern))
+	case found != nil && (placeholders != 1 || !strings.Contains(pattern, "{"+found.Tag.Get("path")+"}")):
+		return nil, fmt.Errorf("pattern %s and the path tags disagree on {%s}", pattern, found.Tag.Get("path"))
 	}
 	return found, nil
+}
+
+// placeholderBesidesKey is the first {placeholder} of pattern but {key}.
+func placeholderBesidesKey(pattern string) string {
+	for rest := pattern; ; {
+		start := strings.Index(rest, "{")
+		if start < 0 {
+			return ""
+		}
+		end := strings.Index(rest[start:], "}")
+		if name := rest[start : start+end+1]; name != "{key}" {
+			return name
+		}
+		rest = rest[start+end+1:]
+	}
 }
 
 // queryShape is how a GET's input type decodes from its query: each

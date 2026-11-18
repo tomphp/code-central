@@ -19,10 +19,10 @@ const RetroOfTag = "retro-of"
 // SubmitRetroInput is submit_retro's input: the finished work, a Ticket or
 // a Spec, and the human's optional note.
 type SubmitRetroInput struct {
-	Target Ref    `json:"target"`
-	Note   string `json:"note,omitempty"`
+	Target Ref    `json:"target" desc:"The finished Ticket or Spec the Retro looks back on." required:"true" cli:"<ticket|spec>"`
+	Note   string `json:"note,omitempty" desc:"What the human wants the Retro to look at, in Markdown; optional." cli:"--note <md>"`
 	// Full asks for the Ticket in place of its Acknowledgement.
-	Full bool `json:"full,omitempty"`
+	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
 }
 
 // SubmitRetro is submit_retro(target, note?). It writes, as human whoever

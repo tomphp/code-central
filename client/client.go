@@ -178,15 +178,6 @@ func (c *Client) EditSpec(ctx context.Context, key string, in core.EditSpecInput
 	return written(ctx, c, ops.EditSpec, key, in, in.Full)
 }
 
-// write POSTs an acknowledging write and decodes its result.
-func write[V any](ctx context.Context, c *Client, path string, in any, full bool) (core.Written[V], error) {
-	var raw json.RawMessage
-	if err := c.do(ctx, "POST", path, in, &raw); err != nil {
-		return core.Written[V]{}, err
-	}
-	return decodeWritten[V](raw, full)
-}
-
 // decodeWritten decodes an acknowledging write's result into the Record
 // when full was asked for, else into the Acknowledgement.
 func decodeWritten[V any](raw json.RawMessage, full bool) (core.Written[V], error) {

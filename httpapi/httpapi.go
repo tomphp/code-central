@@ -110,18 +110,6 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
-// pathBody decodes a per-item action's body strictly, then sets the
-// item's ref (its Ticket or Spec) from the path's {n}, which wins over
-// any ref in the body. Every per-item route binds its path this way.
-func pathBody[In any](r *http.Request, item func(*In) *core.Ref) (In, error) {
-	var in In
-	if err := decodeBody(r, &in); err != nil {
-		return in, err
-	}
-	*item(&in) = core.Ref(r.PathValue("n"))
-	return in, nil
-}
-
 // decodeBody decodes a JSON body strictly: unknown fields are invalid.
 func decodeBody(r *http.Request, v any) error {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 8<<20))

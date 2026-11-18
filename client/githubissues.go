@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"net/url"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/ops"
@@ -12,7 +11,7 @@ import (
 
 // SetGitHubIssues is the human's set_github_issues; set Actor to human.
 func (c *Client) SetGitHubIssues(ctx context.Context, key string, in core.SetGitHubIssuesInput) (core.Written[core.ProjectView], error) {
-	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/set_github_issues", in, in.Full)
+	return written(ctx, c, ops.SetGitHubIssues, key, in, in.Full)
 }
 
 // GetIssueWatch is the Issue Watcher's get_issue_watch.

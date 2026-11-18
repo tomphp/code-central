@@ -4,11 +4,12 @@ import (
 	"context"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ops"
 )
 
 // Submitting a Requirement.
 func init() {
-	commands["submit-requirement"] = command{op: "submit_requirement", usage: "submit-requirement [--text <md> | --file <path|->] [--map <spec>] [--skip-grilling] [--draft] [--full]  submit a Requirement, from a finished Map with --map; its first line becomes the Spec's title", run: runSubmitRequirement}
+	commands["submit-requirement"] = handWritten(ops.SubmitRequirement, "submit-requirement [--text <md> | --file <path|->] [--map <spec>] [--skip-grilling] [--draft] [--full]  submit a Requirement, from a finished Map with --map; its first line becomes the Spec's title", runSubmitRequirement)
 }
 
 func runSubmitRequirement(ctx context.Context, e Env, args []string) error {
