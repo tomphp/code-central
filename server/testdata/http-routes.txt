@@ -84,6 +84,7 @@ rerun_ci	POST	/api/p/{key}/tickets/{n}/rerun_ci
 send_back	POST	/api/p/{key}/tickets/{n}/send_back
 send_chat_message	POST	/api/p/{key}/send_chat_message
 set_auto_accept	POST	/api/p/{key}/set_auto_accept
+set_auto_fix	POST	/api/p/{key}/set_auto_fix
 set_azure_boards	POST	/api/p/{key}/set_azure_boards
 set_ci_tracking	POST	/api/p/{key}/set_ci_tracking
 set_external_state	POST	/api/p/{key}/integration/set_external_state

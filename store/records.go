@@ -174,6 +174,16 @@ type ciFile struct {
 	UnblockOnPush bool `yaml:"unblock_on_push,omitempty"`
 	// Repositories is left out while no Repository has an entry.
 	Repositories []ciRepositoryFile `yaml:"repositories,omitempty"`
+	// AutoFix is left out while it is never set.
+	AutoFix *autoFixFile `yaml:"auto_fix,omitempty"`
+}
+
+// autoFixFile is the Auto-fix setting; instructions and limit are left
+// out while never set.
+type autoFixFile struct {
+	On           bool   `yaml:"on,omitempty"`
+	Instructions string `yaml:"instructions,omitempty"`
+	Limit        int    `yaml:"limit,omitempty"`
 }
 
 // ciRepositoryFile is the CI entry of one Repository, the Home's
@@ -867,6 +877,9 @@ func encodeCI(c domain.CI) *ciFile {
 		IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, NoPushRemote: c.NoPushRemote, PushRemoteBase: c.PushRemoteBase}
 	for _, r := range c.Rules {
 		f.Rules = append(f.Rules, ciRuleFile{Spec: r.Spec, Workflow: r.Workflow, Branch: r.Branch, State: string(r.State), Created: formatTime(r.Created)})
+	}
+	if c.AutoFix != (domain.AutoFix{}) {
+		f.AutoFix = &autoFixFile{On: c.AutoFix.On, Instructions: c.AutoFix.Instructions, Limit: c.AutoFix.Limit}
 	}
 	for _, r := range c.Repositories {
 		f.Repositories = append(f.Repositories, ciRepositoryFile{Name: r.Name, NotWatched: r.NotWatched, Provider: string(r.Provider), Repository: r.Repository, ProjectURL: r.ProjectURL})

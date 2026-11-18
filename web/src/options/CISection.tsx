@@ -3,6 +3,7 @@ import { useApi } from "../live";
 import type { ApiError, CISettings, ProjectRow, RepositoryView } from "../api/types";
 import { Button } from "../controls/Button";
 import { Field } from "../controls/Field";
+import { AutoFixBlock } from "./AutoFixBlock";
 import { CIRules } from "./CIRules";
 import { Refusal } from "./Refusal";
 import { WatcherStatus } from "./WatcherStatus";
@@ -168,6 +169,7 @@ export function CISection({ project }: { project: ProjectRow }) {
           )}
         </div>
       </form>
+      {project.ci.tracking && <AutoFixBlock project={project} />}
       {project.ci.tracking && (
         <WatcherStatus name="CI Watcher" repository={watching(project.repositories)} watcher={project.ci.watcher} />
       )}

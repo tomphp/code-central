@@ -230,7 +230,7 @@ func projectWakesTheFactory(r store.Reader, p domain.Project) bool {
 		return false
 	}
 	ci := func(c domain.CI) domain.CI {
-		c.PushRemoteURL, c.NoPushRemote = "", false
+		c.PushRemoteURL, c.NoPushRemote, c.AutoFix = "", false, domain.AutoFix{}
 		return c
 	}
 	return was.Base() != p.Base() || was.Landing != p.Landing || !ci(was.CI).Equal(ci(p.CI)) ||

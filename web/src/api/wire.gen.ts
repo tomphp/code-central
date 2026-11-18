@@ -967,6 +967,8 @@ export interface CIView {
   // workflows and CI Rules are every Repository's. Left out while the
   // Project has the Home Repository alone.
   repositories?: CIRepositoryView[];
+  // AutoFix is the Auto-fix setting, kept while CI Tracking is off.
+  auto_fix: AutoFixView;
 }
 
 // GitHubIssuesView is a Project's GitHub Issues settings as every Project
@@ -1621,6 +1623,20 @@ export interface CIRepositoryView {
   provider?: CIProvider;
   repository?: string;
   project_url?: string;
+}
+
+// AutoFixView is a Project's Auto-fix setting as every Project read
+// returns it: the defaults while the human never set them.
+export interface AutoFixView {
+  on: boolean;
+  // FixInstructions are appended to every fix Ticket's description.
+  fix_instructions: string;
+  // DefaultFixInstructions is the text FixInstructions starts from, for
+  // the UI's way back to it.
+  default_fix_instructions: string;
+  // Limit is the Auto-fix limit: the most Auto-fix attempts per failure
+  // chain, 1 to 10.
+  limit: number;
 }
 
 // ModelRowView is one Models row's model and effort, each empty when the

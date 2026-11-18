@@ -11,6 +11,7 @@ import type {
   FindTicketsFilter,
   HeldSessionEvent,
   CIRuleChange,
+  AutoFixChange,
   CITrackingChange,
   RepositoryCIChange,
   LandingInput,
@@ -159,6 +160,10 @@ export interface Api {
   // and repeats dropped. Turning CI Tracking on checks each watched
   // Repository's CI entry.
   setCITracking(project: string, ci: CITrackingChange): Promise<ProjectView>;
+  // setAutoFix sets the Project's Auto-fix: on or off, the Fix instructions
+  // and the limit (1 to 10). It can't be turned on while CI Tracking is
+  // off, and the Fix instructions can't be empty.
+  setAutoFix(project: string, autoFix: AutoFixChange): Promise<ProjectView>;
   // setRepositoryCI sets a Repository's CI entry, the Home's included:
   // Not watched, or its CI Provider and what it watches, which, while CI
   // Tracking is on, must pass the CI Watcher's check.

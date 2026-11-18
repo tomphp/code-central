@@ -54,6 +54,8 @@ type CIView struct {
 	// workflows and CI Rules are every Repository's. Left out while the
 	// Project has the Home Repository alone.
 	Repositories []CIRepositoryView `json:"repositories,omitempty"`
+	// AutoFix is the Auto-fix setting, kept while CI Tracking is off.
+	AutoFix AutoFixView `json:"auto_fix"`
 }
 
 // CIRuleView is one CI Rule: when Workflow fails on Branch, open a Ticket
@@ -80,7 +82,7 @@ type CIRepositoryView struct {
 func ciView(p domain.Project, watcher WatcherView) CIView {
 	key, c := p.Key, p.CI
 	v := CIView{Tracking: c.Tracking, PATEnv: patEnvOf(c),
-		IgnoredWorkflows: orEmpty(c.IgnoredWorkflows), PushRemoteURL: c.PushRemoteURL, Rules: []CIRuleView{}, Watcher: watcher}
+		IgnoredWorkflows: orEmpty(c.IgnoredWorkflows), PushRemoteURL: c.PushRemoteURL, Rules: []CIRuleView{}, Watcher: watcher, AutoFix: autoFixView(c.AutoFix)}
 	for _, r := range c.Rules {
 		v.Rules = append(v.Rules, CIRuleView{Spec: DisplayID(key, r.Spec), Workflow: r.Workflow, Branch: r.Branch, State: r.State, Created: r.Created})
 	}
@@ -93,6 +95,9 @@ func ciView(p domain.Project, watcher WatcherView) CIView {
 	}
 	return v
 }
+
+// ciTrackingOn is whether c has CI Tracking on.
+func ciTrackingOn(c domain.CI) bool { return c.Tracking }
 
 // providerOrDefault is p, or GitHub Actions for none.
 func providerOrDefault(p domain.CIProvider) domain.CIProvider {
