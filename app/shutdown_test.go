@@ -1,4 +1,4 @@
-package cli_test
+package app_test
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/cli"
+	"github.com/tomoram/code-central/app"
 )
 
 // On shutdown the service lets an in-flight write finish and answers held
@@ -34,7 +34,7 @@ func TestShutdownFinishesInFlightWritesAndClosesLongPolls(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	stopped := make(chan error, 1)
-	go func() { stopped <- cli.ServeOn(ctx, []net.Listener{l}, handler, nil) }()
+	go func() { stopped <- app.ServeOn(ctx, []net.Listener{l}, handler, nil) }()
 
 	type reply struct {
 		body string

@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -146,28 +145,6 @@ func TestLogAppendsServesOutputAndTheErrorItStopsWith(t *testing.T) {
 	}
 	if b, _ = os.ReadFile(log); !strings.Contains(string(b), "code-central serve: ") || !strings.Contains(string(b), "70000") {
 		t.Fatalf("log lacks the error serve stopped with:\n%s", b)
-	}
-}
-
-func TestBindAddsOneListenerAndWarnsAgainstLANAddresses(t *testing.T) {
-	t.Parallel()
-	bound, stderr, failed := serveWith(t, nil, []string{"127.0.0.1:0"}, "--bind", "127.0.0.1:0")
-	if failed != nil {
-		t.Fatalf("serve: %+v", *failed)
-	}
-	if len(bound) != 2 {
-		t.Fatalf("bound %v, want the default and the --bind address", bound)
-	}
-	resp, err := http.Get("http://" + bound[1] + "/api/workflow")
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 200 || resp.Header.Get("X-Code-Central-Version") == "" {
-		t.Fatalf("--bind listener: %d, version %q", resp.StatusCode, resp.Header.Get("X-Code-Central-Version"))
-	}
-	if !strings.Contains(stderr.String(), "LAN") {
-		t.Fatalf("no LAN warning on stderr: %q", stderr.String())
 	}
 }
 

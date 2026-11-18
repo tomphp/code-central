@@ -54,7 +54,7 @@ func storeInReview(t *testing.T) string {
 // serveNotifying runs serve with a recording Sender and env, waits until
 // it listens (by when the startup summary has been sent), stops it, and
 // returns what it sent plus serve's result.
-func serveNotifying(t *testing.T, storeDir string, env map[string]string, args ...string) ([]notify.Notification, result, []string) {
+func serveNotifying(t *testing.T, storeDir string, env map[string]string, args ...string) ([]notify.Notification, result) {
 	t.Helper()
 	rec := recorder{sent: make(chan notify.Notification, 8)}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -72,14 +72,13 @@ func serveNotifying(t *testing.T, storeDir string, env map[string]string, args .
 		})
 		done <- result{code, out.String(), errOut.String()}
 	}()
-	var bound []string
 	select {
-	case bound = <-listening:
+	case <-listening:
 		cancel()
 	case <-time.After(5 * time.Second):
 		t.Fatal("serve neither listened nor exited")
 	case r := <-done:
-		return nil, r, nil
+		return nil, r
 	}
 	r := <-done
 	close(rec.sent)
@@ -87,25 +86,18 @@ func serveNotifying(t *testing.T, storeDir string, env map[string]string, args .
 	for n := range rec.sent {
 		sent = append(sent, n)
 	}
-	return sent, r, bound
+	return sent, r
 }
 
-func TestServeSendsTheStartupSummaryWhenNeedsMeIsNotEmpty(t *testing.T) {
-	t.Parallel()
-	sent, r, bound := serveNotifying(t, storeInReview(t), nil)
-	if r.code != 0 {
-		t.Fatalf("serve exited %d: %s", r.code, r.stderr)
-	}
-	port := bound[0][strings.LastIndex(bound[0], ":")+1:]
-	want := notify.Notification{Title: "Code Central", Body: "1 Ticket needs you in acme", URL: "http://localhost:" + port + "/?view=inbox"}
-	if len(sent) != 1 || sent[0] != want {
-		t.Fatalf("sent %+v, want %+v", sent, want)
-	}
-}
-
+// What the service sends is app's to test; serve decides whether it
+// sends any.
 func TestServeNoNotifyTurnsNotificationsOffForOneRun(t *testing.T) {
 	t.Parallel()
-	sent, r, _ := serveNotifying(t, storeInReview(t), nil, "--no-notify")
+	sent, r := serveNotifying(t, storeInReview(t), nil)
+	if r.code != 0 || len(sent) != 1 {
+		t.Fatalf("by default: exit %d, sent %+v: %s", r.code, sent, r.stderr)
+	}
+	sent, r = serveNotifying(t, storeInReview(t), nil, "--no-notify")
 	if r.code != 0 || len(sent) != 0 {
 		t.Fatalf("exit %d, sent %+v: %s", r.code, sent, r.stderr)
 	}
@@ -129,13 +121,13 @@ func writeSettings(t *testing.T, body string) (map[string]string, string) {
 func TestTheNotificationsSettingTurnsThemOff(t *testing.T) {
 	t.Parallel()
 	env, _ := writeSettings(t, "notifications: off\n")
-	sent, r, _ := serveNotifying(t, storeInReview(t), env)
+	sent, r := serveNotifying(t, storeInReview(t), env)
 	if r.code != 0 || len(sent) != 0 {
 		t.Fatalf("exit %d, sent %+v: %s", r.code, sent, r.stderr)
 	}
 
 	env, _ = writeSettings(t, "notifications: on\n")
-	if sent, r, _ := serveNotifying(t, storeInReview(t), env); r.code != 0 || len(sent) != 1 {
+	if sent, r := serveNotifying(t, storeInReview(t), env); r.code != 0 || len(sent) != 1 {
 		t.Fatalf("on: exit %d, sent %+v: %s", r.code, sent, r.stderr)
 	}
 }
@@ -143,7 +135,7 @@ func TestTheNotificationsSettingTurnsThemOff(t *testing.T) {
 func TestServeRefusesABadSettingNamingTheFile(t *testing.T) {
 	t.Parallel()
 	env, path := writeSettings(t, "notifications: sometimes\n")
-	_, r, _ := serveNotifying(t, t.TempDir(), env)
+	_, r := serveNotifying(t, t.TempDir(), env)
 	if r.code != 1 || !strings.Contains(r.stderr, path) || !strings.Contains(r.stderr, "notifications") {
 		t.Fatalf("exit %d: %s", r.code, r.stderr)
 	}
