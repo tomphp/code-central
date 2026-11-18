@@ -2,7 +2,10 @@ package core
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/tomoram/code-central/store"
@@ -33,6 +36,16 @@ type SetOptionsInput struct {
 	LimitsPopup *store.LimitsPopup `json:"limits_popup,omitempty"`
 	// GHPath is an absolute path, or "" to clear it.
 	GHPath *string `json:"gh_path,omitempty"`
+}
+
+// DescribeDecodeError names the Options there are when the body has a key
+// that is not one; the HTTP door calls it on a body that fails to decode.
+func (*SetOptionsInput) DescribeDecodeError(err error) error {
+	var e *Error
+	if errors.As(err, &e) && e.Field != "" && !slices.Contains(OptionNames(), e.Field) {
+		e.Message += fmt.Sprintf("; %q is not an Option (the Options are: %s)", e.Field, strings.Join(OptionNames(), ", "))
+	}
+	return err
 }
 
 // GetOptions is get_options: the Options as they stand.

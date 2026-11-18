@@ -20,32 +20,11 @@ import (
 // method and path pattern (net/http ServeMux syntax), with its handler in
 // handlers. Routes merges them with the definitions'; a migration guard
 // checks that no operation is in both.
-var legacyRoutes = map[string]string{
-	"create_project": "POST /api/projects/create_project",
-	"get_project":    "GET /api/projects/{key}",
-	"get_workflow":   "GET /api/workflow",
-}
+var legacyRoutes = map[string]string{}
 
 type handlerFunc func(c *core.Core, r *http.Request) (any, error)
 
-var handlers = map[string]handlerFunc{
-	"create_project": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.CreateProjectInput
-		if err := decodeBody(r, &in); err != nil {
-			return nil, err
-		}
-		return c.CreateProject(r.Context(), in)
-	},
-	"get_project": func(c *core.Core, r *http.Request) (any, error) {
-		return c.GetProject(r.Context(), r.PathValue("key"))
-	},
-	"get_workflow": func(c *core.Core, r *http.Request) (any, error) {
-		if err := onlyParams(r.URL.Query()); err != nil {
-			return nil, err
-		}
-		return c.GetWorkflow(r.Context())
-	},
-}
+var handlers = map[string]handlerFunc{}
 
 // Register adds the HTTP API under /api/ to the service's one mux. The
 // request's Actor is already in its context (server.Guard reads the

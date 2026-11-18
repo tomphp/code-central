@@ -28,6 +28,12 @@ type QueryDecoder interface {
 	DecodeQuery(q url.Values) error
 }
 
+// BodyErrorDescriber is an input type that adds to the error of a body
+// that fails to decode, such as naming the fields it accepts.
+type BodyErrorDescriber interface {
+	DescribeDecodeError(err error) error
+}
+
 // derived are the handlers derived from the definitions, by operation
 // name. A definition whose input the handler can't decode fails here, at
 // start-up, naming the operation and the field.
@@ -88,6 +94,9 @@ func handle(op ops.Operation) (handlerFunc, error) {
 				return nil, err
 			}
 		} else if err := decodeBody(r, in); err != nil {
+			if d, ok := in.(BodyErrorDescriber); ok {
+				err = d.DescribeDecodeError(err)
+			}
 			return nil, err
 		}
 		if path != nil {

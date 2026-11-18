@@ -36,6 +36,19 @@ func init() {
 	}
 }
 
+// Descriptions maps each tool to its description, for core's context
+// budget test.
+func Descriptions() map[string]string {
+	out := map[string]string{}
+	for name, t := range tools {
+		out[name] = t.description
+	}
+	for name, t := range derived {
+		out[name] = t.description
+	}
+	return out
+}
+
 // LegacyTools names the agent operations the hand-written tools still
 // serve, for the migration guard.
 func LegacyTools() []string {

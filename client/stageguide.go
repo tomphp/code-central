@@ -5,6 +5,7 @@ import (
 	"net/url"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ops"
 )
 
 // GetStageGuide is get_stage_guide: the named Project's guide.
@@ -16,5 +17,5 @@ func (c *Client) GetStageGuide(ctx context.Context, key string, in core.StageGui
 // SetSubagentExploration is the human's set_subagent_exploration; set
 // Actor to human.
 func (c *Client) SetSubagentExploration(ctx context.Context, key string, in core.SetSubagentExplorationInput) (core.Written[core.ProjectView], error) {
-	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/set_subagent_exploration", in, in.Full)
+	return written(ctx, c, ops.SetSubagentExploration, key, in, in.Full)
 }
