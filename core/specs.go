@@ -45,6 +45,10 @@ type SpecDetail struct {
 	// read sets them.
 	Editable  bool `json:"editable"`
 	Retroable bool `json:"retroable"`
+	// Ticketable says the UI offers New Ticket on the Spec, as
+	// whyNotNewTicket decides it, the rule new_ticket refuses by. Every
+	// read sets it.
+	Ticketable bool `json:"ticketable"`
 	// Repositories are the Spec's Changed Repositories, the union of its
 	// Tickets', by Name in landing order; left out while the Project has
 	// the Home Repository alone.
@@ -206,6 +210,7 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 		v.Requirement = requirementView(e, s, tickets)
 		v.Kind, v.Need, v.Claimed = specKind(s, v.Requirement), specNeed(e, tickets), specClaimed(tickets)
 		v.Editable, v.Retroable = specEditable(p, s, v.Finished), specRetroable(p, s, v.Finished)
+		v.Ticketable = whyNotNewTicket(p, s, tickets) == ""
 		v.LandPerSpec = landPerSpecView(r, key, s, tickets)
 		v.Map = mapView(e, s, tickets)
 		v.Retros = retrosOf(r, key, DisplayID(key, n))

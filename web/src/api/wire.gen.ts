@@ -732,6 +732,10 @@ export interface SpecDetail {
   // read sets them.
   editable: boolean;
   retroable: boolean;
+  // Ticketable says the UI offers New Ticket on the Spec, as
+  // whyNotNewTicket decides it, the rule new_ticket refuses by. Every
+  // read sets it.
+  ticketable: boolean;
   // Repositories are the Spec's Changed Repositories, the union of its
   // Tickets', by Name in landing order; left out while the Project has
   // the Home Repository alone.

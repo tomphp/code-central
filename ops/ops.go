@@ -292,6 +292,8 @@ var all = []entry{
 	defined(SubmitMap),
 	defined(SubmitPrototype),
 	defined(SubmitSmallChange),
+	// New Ticket (Spec code-central-1067).
+	defined(NewTicket),
 	// Retros (Spec code-central-646).
 	defined(SubmitRetro),
 

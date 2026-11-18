@@ -128,7 +128,7 @@ The human's action on a finished Map (every Ticket Done or Cancelled) that creat
 _Avoid_: Promote, convert the Map
 
 **Spec view**:
-The UI's view of a plain Spec, one that is neither a Requirement nor a Map: its title, **New Prototype**, its body, collapsed, with **Edit** until it is Finished, and its Tickets with their States. It opens from the Spec's name in the Ticket panel.
+The UI's view of a plain Spec, one that is neither a Requirement nor a Map: its title, **New Prototype**, **New Ticket** where the Spec takes one, its body, collapsed, with **Edit** until it is Finished, and its Tickets with their States. It opens from the Spec's name in the Ticket panel.
 _Avoid_: Spec page, Spec board
 
 **Edit**:
@@ -166,6 +166,10 @@ _Avoid_: Quick change, task, hotfix
 **Small Changes Spec**:
 The Long-lived Spec, one per Project, that Small Changes open their Ticket on. Code Central creates it on first use, titled `Small Changes` and labelled `long-lived`, as it does the CI Fixes Spec, and finds it by its stored number, so retitling it breaks nothing.
 _Avoid_: Changes Spec, Tasks Spec
+
+**New Ticket**:
+The human's action on a Spec view, Requirement view or Spec popup, and also `new_ticket`. It opens one implementation Ticket on that Spec from free text: the first line is the title and the whole text the description. It opens Ready, or Draft when saved as Draft, with no Stages. It is offered on any Spec but a Map or a Long-lived Spec, on a Requirement only once its Stages are finished, and on a Finished Spec too. Under Land per Spec its Ticket is cut from the Spec Branch and joins the Spec's pending batch, or a second batch if the Spec has landed.
+_Avoid_: Add Ticket, follow-up Ticket, Request changes
 
 **Straight to Spec**:
 The human's choice, when submitting a Requirement, to have it start at the spec Stage, which works from the Requirement's text alone, with no grilling Stage. A Requirement with no grilling Stage that was not written from a Map shows its grilling Stage as skipped.

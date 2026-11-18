@@ -423,6 +423,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.SubmitSmallChange(ctx, "acme", core.SubmitSmallChangeInput{Text: "Fix the typo"})
 		return err
 	},
+	"new_ticket": func(f fixture) error {
+		_, err := f.core.NewTicket(human, "acme", core.NewTicketInput{Spec: "acme-1", Text: "Rename the toggle"})
+		return err
+	},
 	"submit_retro": func(f fixture) error {
 		_, err := f.core.SubmitRetro(ctx, "acme", core.SubmitRetroInput{Target: "acme-2"})
 		return err
