@@ -24,27 +24,27 @@ import (
 // Factory's. A merge that isn't the Factory's, or a conflict, leaves the
 // base as it was and reports it diverged; uncommitted changes in the way
 // of the move leave it for the next poll.
-func (f *factory) moveBase(ctx context.Context, repo *repository, remote, local, theirs string, merged []core.TicketView) bool {
-	base, s := f.repos.baseOf(repo), f.stateOf(repo)
-	heads, err := f.mergeHeads(repo, theirs, merged)
+func (l *lander) moveBase(ctx context.Context, repo *repository, remote, local, theirs string, merged []core.TicketView) bool {
+	base, s := l.repos.baseOf(repo), l.stateOf(repo)
+	heads, err := l.mergeHeads(repo, theirs, merged)
 	cant := ""
 	var r rebuilt
 	if err != nil {
 		cant = err.Error()
 	} else {
-		r, cant = f.rebuildOnto(repo, theirs, local, heads)
+		r, cant = l.rebuildOnto(repo, theirs, local, heads)
 	}
 	if cant != "" {
 		if !s.diverged {
-			f.printf("warning: can't move %s onto %s/%s%s: %s", base, remote, base, repo.where(), cant)
+			l.printf("warning: can't move %s onto %s/%s%s: %s", base, remote, base, repo.where(), cant)
 		}
-		f.noteBase(ctx, repo, true, local, theirs)
+		l.noteBase(ctx, repo, true, local, theirs)
 		return false
 	}
 	reset := func(dir, commit string) (string, error) { return repo.git.reset(dir, commit, local) }
-	if why := f.setBaseTo(repo, local, r.tip, reset); why != "" {
-		f.noteBase(ctx, repo, false, local, theirs)
-		f.printf("warning: can't move %s onto %s/%s%s yet: %s", base, remote, base, repo.where(), firstLine(why))
+	if why := l.setBaseTo(repo, local, r.tip, reset); why != "" {
+		l.noteBase(ctx, repo, false, local, theirs)
+		l.printf("warning: can't move %s onto %s/%s%s yet: %s", base, remote, base, repo.where(), firstLine(why))
 		return false
 	}
 	for id, m := range s.mergedOn {
@@ -52,12 +52,12 @@ func (f *factory) moveBase(ctx context.Context, repo *repository, remote, local,
 			s.mergedOn[id] = mergeOn{m.base, made}
 		}
 	}
-	f.noteBase(ctx, repo, false, r.tip, theirs)
+	l.noteBase(ctx, repo, false, r.tip, theirs)
 	commits := "commits"
 	if r.count == 1 {
 		commits = "commit"
 	}
-	f.printf("%s: moved %d unpushed %s onto %s/%s, now at %s%s", base, r.count, commits, remote, base, short(r.tip), repo.where())
+	l.printf("%s: moved %d unpushed %s onto %s/%s, now at %s%s", base, r.count, commits, remote, base, short(r.tip), repo.where())
 	return true
 }
 
@@ -76,7 +76,7 @@ type rebuilt struct {
 // as a cherry-pick. Nothing is moved: the commits are only made. It
 // returns why it can't, or "": a conflict, or a merge that isn't the
 // Factory's.
-func (f *factory) rebuildOnto(repo *repository, onto, from string, heads map[string]bool) (rebuilt, string) {
+func (l *lander) rebuildOnto(repo *repository, onto, from string, heads map[string]bool) (rebuilt, string) {
 	g := repo.git
 	chain, err := g.firstParents(from, onto)
 	if err != nil {
@@ -124,10 +124,10 @@ func (f *factory) rebuildOnto(repo *repository, onto, from string, heads map[str
 // base at theirs doesn't hold, since a Spec Branch merged into the base
 // may have gone on since. A Ticket whose work isn't in the repository has
 // no merge to find.
-func (f *factory) mergeHeads(repo *repository, theirs string, merged []core.TicketView) (map[string]bool, error) {
+func (l *lander) mergeHeads(repo *repository, theirs string, merged []core.TicketView) (map[string]bool, error) {
 	heads := map[string]bool{}
 	for _, tk := range merged {
-		if head, _, err := f.workIn(repo, tk); err == nil {
+		if head, _, err := l.workIn(repo, tk); err == nil {
 			heads[head] = true
 		}
 	}

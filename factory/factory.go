@@ -293,19 +293,17 @@ type factory struct {
 	// repos is the registry of the Home Repository, the Project's
 	// Repositories and its base, and of their worktrees.
 	repos *repositories
-	// reportedSeveral is whether the last report of the Repositories'
-	// clones was of several, and reportRepositoriesFailing whether it
-	// failed, so a failure warns once.
-	reportedSeveral           bool
-	reportRepositoriesFailing bool
-	project                   string
-	host                      string // the machine, as the Heartbeats name it
-	client                    *client.Client
-	events                    *sender[core.SessionEvent]  // posts Session Events
-	usage                     *sender[core.UsageResponse] // posts model responses' token usage
-	planLimits                latestPlanLimits            // the latest Plan Limits, sent on each Heartbeat
-	state                     *stateFile
-	lock                      *os.File // held for the Factory's whole life
+	// lander is the landing part, which the poll calls once per poll and
+	// asks whether claiming is held; start builds it.
+	lander     *lander
+	project    string
+	host       string // the machine, as the Heartbeats name it
+	client     *client.Client
+	events     *sender[core.SessionEvent]  // posts Session Events
+	usage      *sender[core.UsageResponse] // posts model responses' token usage
+	planLimits latestPlanLimits            // the latest Plan Limits, sent on each Heartbeat
+	state      *stateFile
+	lock       *os.File // held for the Factory's whole life
 
 	outMu sync.Mutex
 	mu    sync.Mutex           // guards turns, ended, info and backInReady
@@ -317,59 +315,12 @@ type factory struct {
 	// until the next timed poll, so the wake at its turn's end doesn't
 	// claim it again at once, and again, without end.
 	backInReady map[string]time.Time
-	warned      map[string]bool // dirty finished worktrees already warned of; the poll's own
 	turnsDone   sync.WaitGroup
 
-	// warnedMerged is "<ticket>@<commit>" of Tickets merged in a State
-	// that can't land, already warned of; the poll's own.
-	warnedMerged map[string]bool
-
-	// leftOnBranch is "<ticket>@<commit>" of Accepted Tickets left for the
-	// human to merge under the Branch Landing Method, already said; the
-	// poll's own.
-	leftOnBranch map[string]bool
-	// saidHeld is "<ticket>@<why>" of Accepted Tickets a broken base or a
-	// missing clone holds back from landing, already said; the poll's own.
-	saidHeld map[string]bool
 	// reportedChanged is the Changed Repositories last reported for each
 	// held Claim, by Claim ID, so a report goes only when they change;
 	// the poll's own.
 	reportedChanged map[string]string
-	// oldBases are the bases the Project named earlier in this run.
-	oldBases []string
-
-	// bases is what the Factory knows of each Repository's base, by
-	// Repository Name: whether it is missing, has diverged or was level
-	// with the remote's this poll, and the merges made into it that
-	// haven't landed yet. They are the poll's own.
-	bases map[string]*baseState
-	// mcpBase is the base whose .mcp.json was last found committed, and
-	// mcpHeld whether the file is missing from the base, so no branch or
-	// worktree is cut. Both are the poll's own.
-	mcpBase string
-	mcpHeld bool
-	// reportBaseFailing is whether the last report_base failed, so a
-	// failure warns once.
-	reportBaseFailing bool
-	// reportedRemote is the Home's Push remote name whose URL, or its
-	// absence, was last reported to Code Central, and remoteReported
-	// whether one was; reportRemoteFailing is whether the last report
-	// failed, so a failure warns once. They are the poll's own, once
-	// started.
-	reportedRemote      string
-	remoteReported      bool
-	reportRemoteFailing bool
-	// saidLocalOnly is the Repositories said to be local-only under Pull
-	// Request, and not put right since; the poll's own.
-	saidLocalOnly map[string]bool
-	// saidOnCI is "<ticket>@<pushed commit>@<CI result>" of Tickets the
-	// CI gate holds, already said; the poll's own.
-	saidOnCI map[string]bool
-	// unreported is, by "<ticket>@<Repository Name>", the commit a push
-	// under Merge + Push left that Repository's remote base holding, whose
-	// report as the Ticket's pushed commit there failed, to report next
-	// poll; the poll's own.
-	unreported map[string]string
 	// accepts is what claude --help said claude accepts, read at startup.
 	accepts claudeAccepts
 	// runner runs the claude Turns, built at startup once accepts is read.
@@ -427,9 +378,20 @@ type factory struct {
 // rest.
 func newFactory(e Env, o options) *factory {
 	w := work{e.Work}
-	f := &factory{e: e, o: o, drainCh: make(chan struct{}), wakeCh: make(chan func(), 1), work: w, polling: stint{w: w}, drainWork: newHandoff(), stopWork: newHandoff(), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, backInReady: map[string]time.Time{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, saidHeld: map[string]bool{}, reportedChanged: map[string]string{}, bases: map[string]*baseState{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, saidLocalOnly: map[string]bool{}}
+	f := &factory{e: e, o: o, drainCh: make(chan struct{}), wakeCh: make(chan func(), 1), work: w, polling: stint{w: w}, drainWork: newHandoff(), stopWork: newHandoff(), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, backInReady: map[string]time.Time{}, reportedChanged: map[string]string{}}
 	f.repos = newRepositories(e.Environ, f.printf)
 	return f
+}
+
+// hooks is what the landing part asks of the sessions: whether the
+// Factory is halted, draining or paused, so nothing more lands this poll,
+// and whether a turn is running on a Ticket, whose worktrees the sweep
+// keeps.
+func (f *factory) hooks() landerHooks {
+	return landerHooks{
+		stopped:       func(ctx context.Context) bool { return f.halted(ctx) || f.paused() },
+		turnRunningOn: f.turnRunningOn,
+	}
 }
 
 // start makes every start-up check, refusing with the reason.
@@ -484,6 +446,7 @@ func start(e Env, o options) (*factory, error) {
 	}
 	f.events = newSender(f.client.PostSessionEvents, e.Clock, every, timeout, f.work, "Session Events")
 	f.usage = newSender(f.client.PostUsage, e.Clock, every, timeout, f.work, "token usage")
+	f.lander = newLander(f.repos, f.client, project, f.work, f.printf, f.hooks())
 	// A Project that can't be read yet is checked on every poll instead.
 	p, readErr := f.client.GetProject(context.Background(), project)
 	// The base is the Project's, read again on every poll; until it can be
@@ -494,10 +457,10 @@ func start(e Env, o options) (*factory, error) {
 	}
 	f.repos.setBase(base)
 	if _, err := f.gitOut(top, "rev-parse", "--verify", "-q", base+"^{commit}"); err == nil {
-		if !f.mcpCommitted() {
-			return nil, errors.New(f.mcpMessage())
+		if !f.lander.mcpCommitted() {
+			return nil, errors.New(f.lander.mcpMessage())
 		}
-		f.mcpBase = base
+		f.lander.mcpBase = base
 	}
 	f.accepts = f.readClaudeHelp()
 	if err := f.checkEffortFlag(); err != nil {
@@ -508,7 +471,7 @@ func start(e Env, o options) (*factory, error) {
 		return nil, err
 	}
 	if readErr == nil {
-		f.reportPushRemote(context.Background(), p)
+		f.lander.reportPushRemote(context.Background(), p)
 		f.modelsReported = f.reportModels(context.Background())
 	}
 	statePath, err := e.home().State("code-central-factory", project+".json")
@@ -577,25 +540,4 @@ func writable(dir string) error {
 // gitOut runs git in dir and returns its trimmed output.
 func (f *factory) gitOut(dir string, args ...string) (string, error) {
 	return f.repos.gitOut(dir, args...)
-}
-
-// setBase takes the base the Project names this poll into the registry.
-// A change of base says so and forgets what was known of the old one.
-func (f *factory) setBase(base string) {
-	if old := f.repos.setBase(base); old != base {
-		f.printf("base: %s, was %s", base, old)
-		f.stateOf(f.repos.home).changedBase()
-		f.oldBases = append(f.oldBases, old)
-	}
-}
-
-// mcpCommitted is whether .mcp.json is committed on the base.
-func (f *factory) mcpCommitted() bool {
-	_, err := f.gitOut(f.repos.home.dir, "cat-file", "-e", f.repos.baseBranch()+":.mcp.json")
-	return err == nil
-}
-
-func (f *factory) mcpMessage() string {
-	b := f.repos.baseBranch()
-	return fmt.Sprintf(".mcp.json isn't committed on %s: every worktree starts from %s, so its sessions need it; commit it first", b, b)
 }
