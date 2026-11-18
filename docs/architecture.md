@@ -106,7 +106,7 @@ Good:
 
 Anti-patterns and leaks found:
 
-1. **`factory` imports `cli`** (`factory/factory.go:18`) for `ResolveProject` and `ServiceURL`. The Factory depends on the whole command shell.
+1. ~~**`factory` imports `cli`** for `ResolveProject` and `ServiceURL`.~~ **Fixed:** both now live in `client`, and `factory/imports_test.go` guards against the import coming back.
 2. **`httpapi` and `client` import `store`** for domain enums (`httpapi/httpapi.go`, `httpapi/rounds.go`, `client/rounds.go`), though they should be HTTP-only (ADR 0002/0004). Root cause: `store` holds the domain model (`Ticket`, `State`, `Landing`…) as well as persistence, and 69 `core` files import it.
 3. **`cli` is a god package** (~16 internal imports): commands, `serve` composition (store, core, server, supervisor), service install, `init` scaffolding.
 4. **Per-operation wiring is duplicated** across `httpapi` (routes + handlers), `mcp` (tools), `client` and `cli`. Only tests catch drift. Ack-versus-full and `get_ticket` parts are handled per door.
@@ -122,7 +122,7 @@ Anti-patterns and leaks found:
 
 Roughly in order of value for effort. Each would be its own Ticket.
 
-1. Move `ResolveProject` and `ServiceURL` out of `cli` into `home` or `client`, so `factory` stops importing `cli`. *(small)*
+1. ~~Move `ResolveProject` and `ServiceURL` out of `cli` into `client`, so `factory` stops importing `cli`.~~ **Fixed.**
 2. ~~Move `RateLimitError` and `FirstLine` out of `watchers` into a leaf package. Move `ciwatchertest` to a shared watcher test package.~~ *(done: `ratelimit` and `watchers/watchertest`)*
 3. Split `store` into persistence and a domain-model package (`model`/`domain`) and re-home `LandingPolicy` and `Normalized` with it, so `httpapi`, `client` and `cli` no longer link persistence. *(medium, mechanical)*
 4. Move server composition from `cli/serve.go` into an `app`/`service` package. *(medium)*
