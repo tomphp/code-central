@@ -20,7 +20,7 @@ func TestTheRealChainMigratesAFormat1StoreToTheLinkFormat(t *testing.T) {
 		t.Fatalf("store.yaml = %q", got)
 	}
 	s.View(func(r store.Reader) error {
-		tk, ok := r.Ticket("acme", 2)
+		tk, ok := r.Ticket("acme", 2, store.History...)
 		if !ok || tk.Title != "Form" || tk.Link.Linked() {
 			t.Fatalf("ticket 2 after migrating: %+v, %v", tk, ok)
 		}

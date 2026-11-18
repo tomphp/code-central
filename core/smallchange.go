@@ -46,7 +46,7 @@ func (c *Core) SubmitSmallChange(_ context.Context, key string, in SubmitSmallCh
 			Created: now, Updated: now, Description: in.Text,
 			Moves: submitMoves(in.Draft, now, "submit_small_change"),
 		}
-		if err := w.PutTicket(key, t); err != nil {
+		if err := whole.put(w, key, &t); err != nil {
 			return err
 		}
 		v, err = acknowledgeCreate(c.ticketView(w, key, domain.Ticket{}), c.ticketView(w, key, t), in.Full)

@@ -78,7 +78,7 @@ func (c *Core) SubmitMap(_ context.Context, key string, in SubmitMapInput) (Subm
 		if res.Spec, err = acknowledgeCreate(specView(key, domain.Spec{}), specView(key, s), in.Full); err != nil {
 			return err
 		}
-		t, _ := r.Ticket(key, specN+1)
+		t, _ := r.Ticket(key, specN+1, whole...)
 		res.Charting, err = acknowledgeCreate(c.ticketView(r, key, domain.Ticket{}), c.ticketView(r, key, t), in.Full)
 		return err
 	})

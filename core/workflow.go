@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/store"
 )
 
 // Who says which Actor may take an Action.
@@ -180,8 +181,15 @@ func check(name string, state, to domain.State, actor Actor, ticketID string) (A
 	return Action{}, &Error{Code: ActionNotAllowed, Message: msg, AllowedActions: allowed}
 }
 
-// liveClaim returns the Ticket's live Claim, if any.
+// liveClaim returns the Ticket's live Claim, if any, from its head: a
+// copy, for reading.
 func liveClaim(t domain.Ticket) (*domain.Claim, bool) {
+	return t.Head.LiveClaim, t.Head.LiveClaim != nil
+}
+
+// claimToWrite returns the Ticket's live Claim, if any, from its Claims,
+// which it was read with for a write that may change the Claim.
+func claimToWrite(t *domain.Ticket) (*domain.Claim, bool) {
 	for i := range t.Claims {
 		if t.Claims[i].Live() {
 			return &t.Claims[i], true
@@ -190,9 +198,9 @@ func liveClaim(t domain.Ticket) (*domain.Claim, bool) {
 	return nil, false
 }
 
-// holder checks that claimID is the Ticket's live Claim.
+// holder checks that claimID is the Ticket's live Claim, for a write.
 func holder(t *domain.Ticket, key, claimID string) (*domain.Claim, error) {
-	if c, ok := liveClaim(*t); ok && claimID != "" && c.ID == claimID {
+	if c, ok := claimToWrite(t); ok && claimID != "" && c.ID == claimID {
 		return c, nil
 	}
 	return nil, &Error{Code: StaleClaim, Message: fmt.Sprintf(
@@ -243,7 +251,7 @@ func transitionTo(ctx context.Context, t *domain.Ticket, key, name, claimID stri
 		dismissOpen(t, now)
 	}
 	m := domain.Move{From: from, To: to, Actor: string(actor), Time: now}
-	if c, ok := liveClaim(*t); ok {
+	if c, ok := claimToWrite(t); ok {
 		m.Claim = c.Number
 		if slices.Contains(claimStates, from) && !slices.Contains(claimStates, to) {
 			c.Ended, c.EndedBy = now, name
@@ -251,6 +259,7 @@ func transitionTo(ctx context.Context, t *domain.Ticket, key, name, claimID stri
 	}
 	t.State, t.Updated = to, now
 	t.Moves = append(t.Moves, m)
+	t.Head = store.HeadOf(*t)
 	return nil
 }
 

@@ -180,7 +180,7 @@ func (c *Core) requirementResult(r store.Reader, key string, specN int, stageNs 
 		return res, err
 	}
 	for _, n := range stageNs {
-		t, _ := r.Ticket(key, n)
+		t, _ := r.Ticket(key, n, whole...)
 		stage, err := acknowledgeCreate(c.ticketView(r, key, domain.Ticket{}), c.ticketView(r, key, t), full)
 		if err != nil {
 			return res, err
@@ -393,8 +393,8 @@ func requirementView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *Req
 		v.WaitingForFactory = claimable(stages[firstOpen])
 	} else {
 		v.WaitingForFactory = anyClaimable && !slices.ContainsFunc(tickets, func(t domain.Ticket) bool {
-			_, held := liveClaim(t)
-			return held
+			_, claimed := liveClaim(t)
+			return claimed
 		})
 	}
 	v.setStrip(e, stages, build, firstOpen)

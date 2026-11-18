@@ -20,9 +20,13 @@ type Reader interface {
 	Projects() []domain.Project
 	Spec(project string, n int) (domain.Spec, bool)
 	Specs(project string) []domain.Spec
-	Ticket(project string, n int) (domain.Ticket, bool)
-	// Tickets returns the project's Tickets in number order.
-	Tickets(project string) []domain.Ticket
+	// Ticket reads Ticket n with the History parts named: the parts it
+	// doesn't name come back empty, and its head's derived fields are
+	// always there.
+	Ticket(project string, n int, parts ...Part) (domain.Ticket, bool)
+	// Tickets returns the project's Tickets in number order, each with
+	// the History parts named, as Ticket does.
+	Tickets(project string, parts ...Part) []domain.Ticket
 	// NextNumber is the highest Spec or Ticket number in the project plus
 	// one. It is derived, never stored, so numbers are never reused.
 	NextNumber(project string) int
@@ -37,10 +41,14 @@ type Writer interface {
 	Reader
 	PutProject(domain.Project) error
 	PutSpec(project string, s domain.Spec) error
-	PutTicket(project string, t domain.Ticket) error
+	// PutTicket writes t's head and the History parts named. The parts it
+	// doesn't name stay as stored: none, for a new Ticket. The Store works
+	// out the head's derived fields from the History it then holds.
+	PutTicket(project string, t domain.Ticket, parts ...Part) error
 	// PutImport is the one bulk write: every Spec and Ticket in im is new,
 	// but for the existing ones it rewrites, and they all land together
-	// or none does. It counts as the update's one write.
+	// or none does. It counts as the update's one write. Each Ticket is
+	// written whole, every History part with it.
 	PutImport(project string, im Import) error
 	// PutOptions replaces the Options whole. It touches no Project.
 	PutOptions(domain.Options) error
@@ -138,6 +146,7 @@ func cloneTicket(t domain.Ticket) domain.Ticket {
 	t.Moves = slices.Clone(t.Moves)
 	t.Edits = cloneEdits(t.Edits)
 	t.Link.Written = slices.Clone(t.Link.Written)
+	t.Head = cloneHead(t.Head)
 	return t
 }
 

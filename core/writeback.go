@@ -170,6 +170,7 @@ func (c *Core) integrationWrites(r store.Reader, key, integration string) []Issu
 		if t.Spec != in.spec || t.Link.Integration != integration {
 			continue
 		}
+		t, _ = r.Ticket(key, t.Number, store.Moves, store.Comments)
 		if w, ok := c.ticketIssueWrites(key, t); ok {
 			byNumber[t.Number] = w
 		}
@@ -221,7 +222,7 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec) (w Iss
 		}
 	}
 	due(CommentContext, requirementContext(r, key, s.Link))
-	tickets := specTickets(r, key, s.Number)
+	tickets := specTickets(r, key, s.Number, store.Moves, store.Comments)
 	stages, stagesDone := map[StageName]domain.Ticket{}, true
 	var landed []domain.Ticket
 	for _, t := range tickets {
@@ -376,6 +377,7 @@ func requirementContext(r store.Reader, key string, l domain.Link) string {
 		if t.Link.Integration != l.Integration || t.Link.ID != l.ID {
 			continue
 		}
+		t, _ = r.Ticket(key, t.Number, store.Moves, store.Comments)
 		if extra, _, ok := triageComment(t, OptionToRequirement); ok {
 			return extra
 		}

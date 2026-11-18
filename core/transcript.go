@@ -155,7 +155,7 @@ func (c *Core) newestClaim(sessionID string) (markKey, time.Time, bool) {
 	found := false
 	c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
-			for _, t := range r.Tickets(p.Key) {
+			for _, t := range r.Tickets(p.Key, store.Claims) {
 				for _, cl := range t.Claims {
 					if cl.SessionID == sessionID && (!found || cl.Started.After(started)) {
 						k, started, found = markKey{p.Key, t.Number, cl.Number}, cl.Started, true
@@ -213,7 +213,7 @@ func (c *Core) claimKey(key, op string, ticket Ref, claim int) (markKey, error) 
 		if err != nil {
 			return notFound("there is no Ticket %s", ticket)
 		}
-		t, err := ticketNumbered(r, key, op, "ticket", n)
+		t, err := ticketNumbered(r, key, op, "ticket", n, store.Claims)
 		if err != nil {
 			return err
 		}

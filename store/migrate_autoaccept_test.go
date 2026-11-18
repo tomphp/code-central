@@ -39,7 +39,7 @@ func TestTheRealChainMigratesAFormat34StoreToTheAutoAcceptFormat(t *testing.T) {
 				t.Errorf("auto-accept %s is on after migrating, want every kind off", k)
 			}
 		}
-		tk, _ := r.Ticket("acme", 4)
+		tk, _ := r.Ticket("acme", 4, store.History...)
 		if len(tk.Moves) != 1 || tk.Moves[0].Cause != "" {
 			t.Errorf("moves after migrating = %+v, want one with no cause", tk.Moves)
 		}
@@ -59,9 +59,9 @@ func TestTheRealChainMigratesAFormat34StoreToTheAutoAcceptFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := s.Update(func(w store.Writer) error {
-		tk, _ := w.Ticket("acme", 4)
+		tk, _ := w.Ticket("acme", 4, store.History...)
 		tk.Moves[0].Cause = domain.CauseProject
-		return w.PutTicket("acme", tk)
+		return w.PutTicket("acme", tk, store.History...)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestTheRealChainMigratesAFormat34StoreToTheAutoAcceptFormat(t *testing.T) {
 		if !p.AutoAccepts(domain.AutoAcceptGrilling) || !p.AutoAccepts(domain.AutoAcceptMerge) || p.AutoAccepts(domain.AutoAcceptSpec) {
 			t.Errorf("auto-accept = %v, want grilling and merge on", p.AutoAccept)
 		}
-		if tk, _ := r.Ticket("acme", 4); tk.Moves[0].Cause != domain.CauseProject {
+		if tk, _ := r.Ticket("acme", 4, store.History...); tk.Moves[0].Cause != domain.CauseProject {
 			t.Errorf("cause = %q, want project", tk.Moves[0].Cause)
 		}
 		return nil

@@ -269,6 +269,8 @@ func pushedWork(r store.Reader, key string) []PushedWorkView {
 		if !watchesPullRequest(t) {
 			continue
 		}
+		// The pull request's body is its finish summary.
+		t, _ = r.Ticket(key, t.Number, store.Moves, store.Comments)
 		for _, name := range pushedRepositories(key, t) {
 			branch := branchIn(key, t, name)
 			if branch == "" {
@@ -524,6 +526,7 @@ func (c *Core) ReportPullRequest(_ context.Context, key string, in ReportPullReq
 	for _, n := range covered {
 		moved := false
 		err := c.store.Update(func(w store.Writer) error {
+			// The pull request is on the head: no History is written.
 			t, ok := w.Ticket(key, n)
 			if !ok || !setPullRequest(&t, pr) {
 				return nil

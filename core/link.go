@@ -210,7 +210,7 @@ func (c *Core) CreateLinkedTicket(ctx context.Context, key string, in CreateLink
 		now := c.now()
 		t := domain.Ticket{Number: w.NextNumber(key), Title: in.Title, State: state, Spec: specN, Link: l, Created: now, Updated: now, Description: in.Description,
 			AwaitingTriage: awaitsTriage(w, key, specN)}
-		if err := w.PutTicket(key, t); err != nil {
+		if err := whole.put(w, key, &t); err != nil {
 			return err
 		}
 		v, err = acknowledgeCreate(c.ticketView(w, key, domain.Ticket{}), c.ticketView(w, key, t), in.Full)
@@ -437,7 +437,8 @@ func (c *Core) updateLink(ctx context.Context, key string, ref Ref, fn func(l *d
 			row = specLinkedRow(key, s)
 			return nil
 		}
-		if t, ok := w.Ticket(key, n); ok {
+		h := held{store.Edits}
+		if t, ok := w.Ticket(key, n, h...); ok {
 			if !t.Link.Linked() {
 				return notLinked
 			}
@@ -448,7 +449,7 @@ func (c *Core) updateLink(ctx context.Context, key string, ref Ref, fn func(l *d
 			if prev != nil {
 				c.recordEdit(ctx, &t.Edits, prev)
 				t.Updated = c.now()
-				if err := w.PutTicket(key, t); err != nil {
+				if err := h.put(w, key, &t); err != nil {
 					return err
 				}
 			}
@@ -523,10 +524,8 @@ func closedExternally(t domain.Ticket) (time.Time, bool) {
 	if !t.Link.Owned() || t.Link.ExternalState == domain.ExternalOpen || finished(t.State) {
 		return time.Time{}, false
 	}
-	for i := len(t.Edits) - 1; i >= 0; i-- {
-		if _, ok := t.Edits[i].Previous["external_state"]; ok {
-			return t.Edits[i].Time, true
-		}
+	if !t.Head.ExternalStateChanged.IsZero() {
+		return t.Head.ExternalStateChanged, true
 	}
 	return t.Created, true
 }

@@ -133,7 +133,7 @@ func TestFilesAreWrittenInFixedFieldOrder(t *testing.T) {
 				WhatBroke: "It broke.\nBadly.\n", Why: "Because.", WhatToFix: "Fix it.", WhereWorkStands: "Pushed."}},
 			Comments: []domain.Comment{{Number: 1, Actor: "agent", Time: t0.Add(time.Minute), Claim: 1, Body: "Done.\nCheck it.\n"}},
 			Edits:    []domain.Edit{{Number: 1, Actor: "agent", Time: t0, Previous: map[string]string{"description": "Old.\n"}}},
-		})
+		}, store.History...)
 	})
 
 	want := map[string]string{

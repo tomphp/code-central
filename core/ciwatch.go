@@ -179,7 +179,7 @@ func ciRulesLastRuns(runs []domain.CIRun) map[int]time.Time {
 // Ticket landed at, each in its Repository, in Ticket order.
 func ciTicketCommits(r store.Reader, key string) (pushed, landed []CITicketCommit) {
 	pushed, landed = []CITicketCommit{}, []CITicketCommit{}
-	for _, t := range r.Tickets(key) {
+	for _, t := range r.Tickets(key, store.Moves) {
 		id, spec := DisplayID(key, t.Number), DisplayID(key, t.Spec)
 		for _, p := range t.PushedCommits {
 			pushed = append(pushed, CITicketCommit{Ticket: id, Spec: spec, Repository: recordName(key, p.Repository), Commit: p.Commit})

@@ -265,7 +265,7 @@ func (c *Core) newSpecFixTicket(ctx context.Context, key string, in NewFixTicket
 			Created: now, Updated: now,
 			Description: fmt.Sprintf("Fix %s on the Spec Branch: its work waits on one pull request, and accepting this pushes the Spec Branch again.\n\n%s", what, in.Note),
 		}
-		if err := w.PutTicket(key, f); err != nil {
+		if err := whole.put(w, key, &f); err != nil {
 			return err
 		}
 		v, err = acknowledgeCreate(c.ticketView(w, key, domain.Ticket{}), c.ticketView(w, key, f), in.Full)

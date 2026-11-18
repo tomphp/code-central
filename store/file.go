@@ -353,7 +353,7 @@ func (s *FileStore) loadProject(key string) error {
 			if kind == "specs" {
 				s.projects[key].specs[f.n] = f.spec
 			} else {
-				s.projects[key].tickets[f.n] = f.ticket
+				s.projects[key].tickets[f.n] = withHead(f.ticket)
 			}
 		}
 	}

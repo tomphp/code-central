@@ -191,7 +191,8 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 	// The pull requests stay on the host, so each Ticket says to close its own.
 	for _, n := range left {
 		if err := c.store.Update(func(w store.Writer) error {
-			t, ok := w.Ticket(key, n)
+			h := held{store.Comments}
+			t, ok := w.Ticket(key, n, h...)
 			var links []string
 			for _, pr := range t.PullRequests {
 				if pullRequestOpen(pr) {
@@ -207,7 +208,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 			}
 			addComment(&t, Human, c.now(), 0, body)
 			t.Updated = c.now()
-			return w.PutTicket(key, t)
+			return h.put(w, key, &t)
 		}); err != nil {
 			return v, err
 		}
