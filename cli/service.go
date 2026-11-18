@@ -15,6 +15,7 @@ import (
 	"strings"
 	"unicode/utf16"
 
+	"github.com/tomoram/code-central/app"
 	"github.com/tomoram/code-central/notify"
 	"github.com/tomoram/code-central/store"
 )
@@ -86,7 +87,7 @@ func serviceInstall(ctx context.Context, e Env, m serviceManager, args []string)
 	}
 	serveArgs := []string{bin, "serve", "--store", dir}
 	if isSet(fs, "bind") {
-		if _, _, err := parseBind(*bind, Port); err != nil {
+		if _, err := parseBind(*bind, app.Port); err != nil {
 			return err
 		}
 		serveArgs = append(serveArgs, "--bind", *bind)

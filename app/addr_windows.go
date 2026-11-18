@@ -1,7 +1,7 @@
 // The listen errors serve tells apart, on Windows, where Winsock's codes
 // aren't syscall's EADDRINUSE and EADDRNOTAVAIL.
 
-package cli
+package app
 
 import (
 	"errors"

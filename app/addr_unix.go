@@ -2,7 +2,7 @@
 
 // The listen errors serve tells apart, on Unix.
 
-package cli
+package app
 
 import (
 	"errors"

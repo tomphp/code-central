@@ -1,7 +1,9 @@
 // Package cli is the code-central command. Operation commands are the
 // kebab-case names of core's agent operations; each reaches the service
 // through the client package and prints JSON. Errors go to stderr as the
-// one error JSON shape with exit code 2; usage errors exit 1.
+// one error JSON shape with exit code 2; usage errors exit 1. The package
+// is commands only: serve reads its flags and the local settings and runs
+// the assembled service, app.Run.
 package cli
 
 import (

@@ -1,23 +1,17 @@
 package cli_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"net"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/ops"
-	"github.com/tomoram/code-central/store"
 )
 
 type result struct {
@@ -193,129 +187,4 @@ func freeAddr(t *testing.T) string {
 	addr := l.Addr().String()
 	l.Close()
 	return addr
-}
-
-// serving is a `code-central serve` running in-process.
-type serving struct {
-	url    string
-	cancel context.CancelFunc
-	done   chan result
-}
-
-// startServe runs serve on a test-chosen address (never 7733) and waits
-// until it listens, or returns its result if it exits first.
-func startServe(t *testing.T, storeDir string, addrs ...string) (*serving, *result) {
-	t.Helper()
-	if len(addrs) == 0 {
-		addrs = []string{"127.0.0.1:0"}
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	listening := make(chan []string, 1)
-	done := make(chan result, 1)
-	go func() {
-		var out, errOut bytes.Buffer
-		code := cli.Run(ctx, []string{"serve", "--store", storeDir}, cli.Env{
-			Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errOut,
-			Getenv:      func(string) string { return "" },
-			ServeAddrs:  addrs,
-			OnListening: func(a []string) { listening <- a },
-		})
-		done <- result{code, out.String(), errOut.String()}
-	}()
-	select {
-	case a := <-listening:
-		s := &serving{url: "http://" + a[0], cancel: cancel, done: done}
-		t.Cleanup(func() { s.stop(t) })
-		return s, nil
-	case r := <-done:
-		cancel()
-		return nil, &r
-	case <-time.After(5 * time.Second):
-		cancel()
-		t.Fatal("serve neither listened nor exited")
-		return nil, nil
-	}
-}
-
-func (s *serving) stop(t *testing.T) {
-	if s.cancel == nil {
-		return
-	}
-	s.cancel()
-	s.cancel = nil
-	if r := <-s.done; r.code != 0 {
-		t.Errorf("serve exited %d: %s", r.code, r.stderr)
-	}
-}
-
-func TestATicketSurvivesARestart(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	s, failed := startServe(t, dir)
-	if failed != nil {
-		t.Fatalf("serve: %+v", *failed)
-	}
-	if _, err := client.New(s.url).CreateProject(context.Background(), core.CreateProjectInput{Key: "acme", DisplayName: "Acme"}); err != nil {
-		t.Fatal(err)
-	}
-	env := map[string]string{"CODE_CENTRAL_URL": s.url, "CODE_CENTRAL_PROJECT": "acme"}
-	decode[core.SpecView](t, run(t, env, "", "create-spec", "--title", "Login"))
-	decode[core.TicketView](t, run(t, env, "", "create-ticket", "--spec", "1", "--title", "Form", "--state", "Ready"))
-	s.stop(t)
-
-	for _, f := range []string{"store.yaml", "projects/acme/project.yaml", "projects/acme/specs/1.md", "projects/acme/tickets/2.yaml"} {
-		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
-			t.Errorf("missing %s: %v", f, err)
-		}
-	}
-
-	s2, failed := startServe(t, dir)
-	if failed != nil {
-		t.Fatalf("restart: %+v", *failed)
-	}
-	env["CODE_CENTRAL_URL"] = s2.url
-	got := decode[core.TicketView](t, run(t, env, "", "get-ticket", "acme-2"))
-	if got.Title != "Form" || got.State != "Ready" {
-		t.Fatalf("after restart: %+v", got)
-	}
-	// the counter is derived again at startup
-	if next := decode[core.SpecView](t, run(t, env, "", "create-spec", "--title", "Next")); next.ID != "acme-3" {
-		t.Fatalf("after restart, next ID %s", next.ID)
-	}
-}
-
-func TestServeRefusesATakenPort(t *testing.T) {
-	t.Parallel()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer l.Close()
-	_, failed := startServe(t, t.TempDir(), l.Addr().String())
-	if failed == nil {
-		t.Fatal("serve started on a taken port")
-	}
-	if failed.code != 1 || !strings.Contains(failed.stderr, l.Addr().String()) || !strings.Contains(failed.stderr, "in use") {
-		t.Fatalf("exit %d, stderr %q", failed.code, failed.stderr)
-	}
-}
-
-// serve opens the store before it binds: a store it can't open (here,
-// one already open elsewhere) stops it with exit 1 before it listens.
-// Why a store can't be opened is the store's to test.
-func TestServeStopsBeforeListeningWhenItCannotOpenTheStore(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	held, err := store.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer held.Close()
-	_, failed := startServe(t, dir)
-	if failed == nil {
-		t.Fatal("serve listened on a store it could not open")
-	}
-	if failed.code != 1 || !strings.Contains(failed.stderr, "cannot open the store") {
-		t.Fatalf("exit %d, stderr %q", failed.code, failed.stderr)
-	}
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/tomoram/code-central/app"
 	"github.com/tomoram/code-central/home"
 	"gopkg.in/yaml.v3"
 )
@@ -27,7 +28,7 @@ type settings struct {
 }
 
 func loadSettings(h home.Lookup) (settings, error) {
-	s := settings{Port: Port, Notifications: "on"}
+	s := settings{Port: app.Port, Notifications: "on"}
 	// With no home at all there are no settings, only the defaults.
 	path, err := h.Config("code-central", "settings.yaml")
 	if err != nil {
