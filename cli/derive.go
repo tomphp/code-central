@@ -175,9 +175,11 @@ func cliType(t reflect.Type) bool {
 	return false
 }
 
-// derivedArgs parses args and resolves the scope. A command with
-// positional arguments is an item command, with the Spec or Ticket ID
-// first; one without takes none.
+// derivedArgs parses args, resolves the scope and returns the positional
+// arguments in fields' order, for the run to take one per positional
+// field and the rest for a list. A command with positional arguments is
+// an item command, with the Spec or Ticket ID first; one without takes
+// none.
 func derivedArgs(e Env, fs *flag.FlagSet, fields []cliField, args []string) (scope, []string, error) {
 	rest, variadic := -1, false
 	for _, f := range fields {
