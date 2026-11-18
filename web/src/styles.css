@@ -601,7 +601,7 @@ a.link-badge:hover { text-decoration: underline; }
 .kind-map { --kc: var(--r-answered); color: color-mix(in srgb, var(--r-answered) 55%, var(--text)); }
 .kind-spec { color: var(--muted); }
 .kind-long-lived { --kc: var(--r-landing); color: color-mix(in srgb, var(--r-landing) 55%, var(--text)); }
-.stage-badge { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; padding: 0 5px; border-radius: 4px; background: var(--surface-2); color: var(--muted); flex: none; }
+.stage-badge { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; padding: 0 5px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); flex: none; }
 .state-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; }
 /* A State chip: a station ring and the State's name, on a wash of its line. */
 .state-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 1px 8px 1px 5px; border-radius: 999px; color: var(--text); background: color-mix(in srgb, var(--st) 12%, transparent); border: 1px solid color-mix(in srgb, var(--st) 35%, transparent); white-space: nowrap; flex: none; }
