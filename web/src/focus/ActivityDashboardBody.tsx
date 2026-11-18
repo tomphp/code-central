@@ -80,7 +80,7 @@ export function ActivityDashboardBody({ now, data, changes, ciRuns, loc, project
         <StateCount state="Ready" count={inState("Ready").length} />
         <StateCount state="In Progress" count={inProgress.length} />
         {/* Keyed on whether the count is known yet, so the first read doesn't pulse. */}
-        {ciRuns && <CIRunningCount key={String(ciRunningCount === undefined)} count={ciRunningCount} loc={loc} navigate={navigate} />}
+        {ciRuns && <CIRunningCount key={String(ciRunningCount === undefined)} count={ciRunningCount} failed={!!ciRuns.error} loc={loc} navigate={navigate} />}
       </div>
       {inProgress.length ? (
         <ul aria-label="In Progress" className="dashboard-list">
@@ -123,15 +123,16 @@ function StateCount({ state, count }: { state: State; count: number }) {
 }
 
 // CIRunningCount is the CI Running block: the count of running CI Runs in
-// big type, a dash until the first read, and its name under it. It opens
-// the CI view in the body's scope, with Back to where it was, and pulses
-// when the count differs from the one it last showed.
-function CIRunningCount({ count, loc, navigate }: { count?: number } & Pick<EntryProps, "loc" | "navigate">) {
+// big type, an ellipsis until the first read, a "!" when the read failed,
+// and its name under it. It opens the CI view in the body's scope, with
+// Back to where it was, and pulses when the count differs from the one it
+// last showed.
+function CIRunningCount({ count, failed, loc, navigate }: { count?: number; failed?: boolean } & Pick<EntryProps, "loc" | "navigate">) {
   const pulse = usePulse("dashboard-block ci-running", count);
   return (
     <div role="group" aria-label="CI Running" {...pulse}>
       <CILink loc={loc} navigate={navigate} className="dashboard-block-link">
-        <Count n={count} big />
+        <Count n={count} failed={failed} big />
         <span className="dashboard-state">CI Running</span>
       </CILink>
     </div>
@@ -150,7 +151,7 @@ function CIRunningList({ now, data, runs, loc, project, navigate }: CIRunningLis
   const first = useRef<Set<string>>(undefined);
   if (runs.data && !first.current) first.current = new Set(runs.data.runs.map(runKey));
   if (runs.error) {
-    return <ErrorBanner>{runs.error.message}</ErrorBanner>;
+    return <ErrorBanner className="dashboard-error">{runs.error.message}</ErrorBanner>;
   }
   const overview = runs.data;
   if (!overview) return null;

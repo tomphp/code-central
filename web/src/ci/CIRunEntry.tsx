@@ -147,7 +147,7 @@ function RunCard({ run, provider, now, joined = false, projectName, to, navigate
           {projectName !== undefined && <span className="muted">{projectName}</span>}
         </span>
         <span className="dashboard-entry-detail">
-          {run.branch} · <code>{shortCommit(run.commit)}</code> · <RunStatusBadge status={runStatus(run)} />
+          {run.branch !== run.ticket && `${run.branch} · `}<code>{shortCommit(run.commit)}</code> · <RunStatusBadge status={runStatus(run)} />
           {run.started && ` · ${runDuration(run, now)}`}
         </span>
       </a>

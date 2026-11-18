@@ -85,9 +85,9 @@ describe("the Activity Dashboard body's CI Running", () => {
     expect(within(dashboard()).queryByRole("list", { name: "CI Running" })).toBeNull();
   });
 
-  it("shows a dash and no list until the first read", () => {
+  it("shows an ellipsis and no list until the first read", () => {
     renderBody({ ciRuns: {} });
-    expect(count("CI Running")).toBe("–");
+    expect(count("CI Running")).toBe("…");
     expect(within(dashboard()).queryByRole("list", { name: "CI Running" })).toBeNull();
   });
 
@@ -132,6 +132,7 @@ describe("the Activity Dashboard body's CI Running", () => {
   it("shows a failed read's error in place of the runs", () => {
     renderBody({ ciRuns: { error: new ApiError(500, "internal", "CI is down") } });
     expect(within(dashboard()).getByRole("alert")).toHaveTextContent("CI is down");
+    expect(count("CI Running")).toBe("!");
   });
 });
 
