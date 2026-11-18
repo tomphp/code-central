@@ -239,6 +239,7 @@ type ticketFile struct {
 	Link            *linkFile           `yaml:"link,omitempty"`
 	AwaitingTriage  bool                `yaml:"awaiting_triage,omitempty"`
 	SpecMergeTicket bool                `yaml:"spec_merge_ticket,omitempty"`
+	AutoFix         *autoFixMarkFile    `yaml:"auto_fix,omitempty"`
 	Created         string              `yaml:"created"`
 	Updated         string              `yaml:"updated"`
 	Description     string              `yaml:"description"`
@@ -256,6 +257,15 @@ type ticketFile struct {
 	Comments        []commentFile       `yaml:"comments"`
 	Moves           []moveFile          `yaml:"moves"`
 	Edits           []editFile          `yaml:"edits"`
+}
+
+// autoFixMarkFile is an auto fix Ticket's Auto-fix mark.
+type autoFixMarkFile struct {
+	Attempt    int    `yaml:"attempt"`
+	Repository string `yaml:"repository,omitempty"`
+	Commit     string `yaml:"commit"`
+	Covers     []int  `yaml:"covers"`
+	Previous   int    `yaml:"previous,omitempty"`
 }
 
 // changedRepoFile is one of a Ticket's Changed Repositories.
@@ -476,6 +486,18 @@ func decodeTicket(data []byte, n int) (domain.Ticket, *LoadError) {
 	}
 	if t.Repositories, lerr = decodeChangedRepositories(f.Repositories); lerr != nil {
 		return domain.Ticket{}, lerr
+	}
+	if a := f.AutoFix; a != nil {
+		if a.Attempt < 1 {
+			return domain.Ticket{}, &LoadError{Field: "auto_fix.attempt", Msg: fmt.Sprintf("an Auto-fix attempt is 1 or more, not %d", a.Attempt)}
+		}
+		if lerr := checkRepositoryName("auto_fix.repository", a.Repository); lerr != nil {
+			return domain.Ticket{}, lerr
+		}
+		if a.Commit == "" {
+			return domain.Ticket{}, &LoadError{Field: "auto_fix.commit", Msg: "required"}
+		}
+		t.AutoFix = &domain.AutoFixMark{Attempt: a.Attempt, Repository: a.Repository, Commit: a.Commit, Covers: a.Covers, Previous: a.Previous}
 	}
 	for i, pc := range f.PushedCommits {
 		p := domain.PushedCommit{Repository: pc.Repository, Commit: pc.Commit, Branch: pc.Branch}
@@ -764,6 +786,12 @@ func encode(record any, project string) (string, []byte, error) {
 			Branch: r.Branch, Commit: r.Commit, Recommendation: string(r.Recommendation),
 			Claims: []claimFile{}, Rounds: []roundFile{}, FailureReports: []failureReportFile{},
 			Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),
+		}
+		if a := r.AutoFix; a != nil {
+			f.AutoFix = &autoFixMarkFile{Attempt: a.Attempt, Repository: a.Repository, Commit: a.Commit, Covers: a.Covers, Previous: a.Previous}
+			if f.AutoFix.Covers == nil {
+				f.AutoFix.Covers = []int{}
+			}
 		}
 		for _, cr := range r.Repositories {
 			cf := changedRepoFile{Name: cr.Name, Branch: cr.Branch, Commit: cr.Commit}

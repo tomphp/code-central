@@ -433,6 +433,7 @@ export const TICKET_FIELDS = [
   "link",
   "awaiting_triage",
   "spec_merge_ticket",
+  "auto_fix",
   "triage_actions",
   "triage_notes",
   "model_choice",
@@ -632,6 +633,9 @@ export interface TicketView {
   // SpecMergeTicket marks a Spec merge Ticket, one open_spec_merge
   // opened; left out on any other Ticket.
   spec_merge_ticket?: boolean;
+  // AutoFix is an auto fix Ticket's Auto-fix mark; left out on any
+  // other Ticket, a manual fix Ticket too.
+  auto_fix?: AutoFixMarkView;
   // TriageActions are the triage actions, each an operation's name, the
   // human may take on an Incoming Issue; left out on any other Ticket.
   // Computed on read.
@@ -1357,6 +1361,23 @@ export interface EditView {
   actor: string;
   time: string;
   previous: Record<string, string>;
+}
+
+// AutoFixMarkView is an auto fix Ticket's Auto-fix mark as its view
+// carries it.
+export interface AutoFixMarkView {
+  // Attempt is its Auto-fix attempt, 1 for the first in its chain.
+  attempt: number;
+  // Repository is the Repository Name of the commit it was opened for,
+  // left out while the Project has the Home Repository alone.
+  repository?: string;
+  commit: string;
+  // Covers are the Tickets its CI failed item listed when it was
+  // opened.
+  covers: string[];
+  // Previous is the previous attempt's fix Ticket, left out for attempt
+  // 1.
+  previous?: string;
 }
 
 // ModelChoice is the model and effort a Ticket's next turn runs with, as

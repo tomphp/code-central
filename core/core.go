@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tomoram/code-central/clock"
@@ -61,6 +62,9 @@ type Core struct {
 	// uiURL is the UI's address, which a comment written to an issue
 	// links back to; empty links relative to the UI.
 	uiURL string
+	// autoFixLocks holds each Project's Auto-fix lock, a *sync.Mutex by
+	// Project key (lockAutoFix).
+	autoFixLocks sync.Map
 }
 
 // New returns a Core persisting through s, telling time with clk and
@@ -345,6 +349,9 @@ type TicketView struct {
 	// SpecMergeTicket marks a Spec merge Ticket, one open_spec_merge
 	// opened; left out on any other Ticket.
 	SpecMergeTicket bool `json:"spec_merge_ticket,omitempty"`
+	// AutoFix is an auto fix Ticket's Auto-fix mark; left out on any
+	// other Ticket, a manual fix Ticket too.
+	AutoFix *AutoFixMarkView `json:"auto_fix,omitempty"`
 	// TriageActions are the triage actions, each an operation's name, the
 	// human may take on an Incoming Issue; left out on any other Ticket.
 	// Computed on read.
@@ -882,6 +889,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t domain.Ticket) Tick
 		v.TriageNotes = triageNotes(t)
 	}
 	v.SpecMergeTicket = t.SpecMergeTicket
+	v.AutoFix = autoFixMarkView(pr, t.AutoFix)
 	return v
 }
 
