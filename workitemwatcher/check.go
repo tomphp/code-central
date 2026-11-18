@@ -10,9 +10,9 @@ import (
 
 	"github.com/tomoram/code-central/azdo"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
-	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/watchers"
 )
 
@@ -22,7 +22,7 @@ import (
 // points at.
 func CheckArgs(in core.AzureBoardsCheckInput) []string {
 	args := []string{Command, "--check", "--mode", string(in.Mode), "--pat-env", in.PATEnv}
-	if in.Mode == store.AzureBoardsWIQL {
+	if in.Mode == domain.AzureBoardsWIQL {
 		return append(args, "--project-url", in.ProjectURL, "--where", in.Where)
 	}
 	return append(args, "--query-url", in.QueryURL)

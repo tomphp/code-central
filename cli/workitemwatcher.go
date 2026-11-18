@@ -7,8 +7,8 @@ import (
 
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
-	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/workitemwatcher"
 )
 
@@ -31,11 +31,11 @@ func runWorkItemWatcher(ctx context.Context, e Env, args []string) error {
 	check := fs.Bool("check", false, "check access once and exit")
 	project := fs.String("project", "", "the Project to watch")
 	var in core.AzureBoardsCheckInput
-	mode := fs.String("mode", string(store.AzureBoardsSavedQuery), "how the query is picked: saved_query or wiql")
+	mode := fs.String("mode", string(domain.AzureBoardsSavedQuery), "how the query is picked: saved_query or wiql")
 	fs.StringVar(&in.QueryURL, "query-url", "", "the Saved query's URL")
 	fs.StringVar(&in.ProjectURL, "project-url", "", "the Azure DevOps project URL a WIQL filter runs in")
 	fs.StringVar(&in.Where, "where", "", "the WIQL filter's WHERE clause")
-	fs.StringVar(&in.PATEnv, "pat-env", store.DefaultPATEnv, "the environment variable holding the Azure DevOps PAT")
+	fs.StringVar(&in.PATEnv, "pat-env", domain.DefaultPATEnv, "the environment variable holding the Azure DevOps PAT")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -46,13 +46,13 @@ func runWorkItemWatcher(ctx context.Context, e Env, args []string) error {
 	case !*check && *project == "":
 		return usagef("the Work Item Watcher needs --project, or --check")
 	case *check:
-		in.Mode = store.AzureBoardsMode(*mode)
+		in.Mode = domain.AzureBoardsMode(*mode)
 		switch {
 		case !in.Mode.Valid():
-			return usagef("--mode must be %s or %s", store.AzureBoardsSavedQuery, store.AzureBoardsWIQL)
-		case in.Mode == store.AzureBoardsWIQL && (in.ProjectURL == "" || in.Where == ""):
+			return usagef("--mode must be %s or %s", domain.AzureBoardsSavedQuery, domain.AzureBoardsWIQL)
+		case in.Mode == domain.AzureBoardsWIQL && (in.ProjectURL == "" || in.Where == ""):
 			return usagef("--check with --mode wiql needs --project-url and --where")
-		case in.Mode == store.AzureBoardsSavedQuery && in.QueryURL == "":
+		case in.Mode == domain.AzureBoardsSavedQuery && in.QueryURL == "":
 			return usagef("--check needs --query-url")
 		}
 		r := workitemwatcher.Check(ctx, in, gh.Env{Environ: os.Environ()})

@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // A Ticket's Changed Repositories (Spec code-central-848, ADR 0046): the
@@ -58,7 +58,7 @@ func (f *factory) changedHead(r *repository, tk core.TicketView, branch string) 
 // Progress under c, when the set or a head has changed since the last
 // report for c.
 func (f *factory) reportChanged(ctx context.Context, c claim, tk core.TicketView) {
-	if !f.several() || tk.State != store.InProgress {
+	if !f.several() || tk.State != domain.InProgress {
 		return
 	}
 	work := f.changedIn(tk)
@@ -169,6 +169,6 @@ func (f *factory) recordProblem(r *repository, tk core.TicketView, rec core.Chan
 
 // checksFinish reports whether a turn that left tk in state, its Claim
 // ended by by, finished it and left it where its finish can still fail.
-func checksFinish(by string, state store.State) bool {
-	return by == "finish" && (state == store.InReview || state == store.Accepted)
+func checksFinish(by string, state domain.State) bool {
+	return by == "finish" && (state == domain.InReview || state == domain.Accepted)
 }

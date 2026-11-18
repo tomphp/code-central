@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // specBranch is the name of a Spec's Spec Branch, where its Spec-landed
@@ -212,7 +212,7 @@ func (f *factory) landSpecs(ctx context.Context, p core.ProjectView) {
 	}
 	waiting := map[string]bool{}
 	var specs []string
-	for _, tk := range f.landable(ctx, store.Accepted) {
+	for _, tk := range f.landable(ctx, domain.Accepted) {
 		if tk.SpecLanded && !waiting[tk.Spec.ID] {
 			waiting[tk.Spec.ID] = true
 			specs = append(specs, tk.Spec.ID)
@@ -619,7 +619,7 @@ func (f *factory) openSpecConflict(ctx context.Context, spec core.SpecDetail, co
 // nothing the base lacks, even after a squash merge.
 func (f *factory) specLanded(spec core.SpecDetail) bool {
 	for _, r := range spec.Tickets {
-		if r.State == store.Done {
+		if r.State == domain.Done {
 			return true
 		}
 	}
@@ -662,7 +662,7 @@ func (f *factory) finishedSpec(ctx context.Context, id string) *core.SpecDetail 
 		return nil
 	}
 	for _, r := range spec.Tickets {
-		if r.State != store.Done && r.State != store.Cancelled {
+		if r.State != domain.Done && r.State != domain.Cancelled {
 			return nil
 		}
 	}

@@ -14,9 +14,9 @@ import (
 	"github.com/tomoram/code-central/azdo"
 	"github.com/tomoram/code-central/azdourl"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
-	"github.com/tomoram/code-central/store"
 )
 
 // MaxWorkItems is the most work items a query may match: more is an
@@ -45,7 +45,7 @@ type queryRun struct {
 // *ratelimit.Error, and not a problem.
 func runQuery(ctx context.Context, env gh.Env, in core.AzureBoardsCheckInput) (queryRun, core.WatcherCheckResult, error) {
 	projectURL, id := in.ProjectURL, ""
-	if in.Mode != store.AzureBoardsWIQL {
+	if in.Mode != domain.AzureBoardsWIQL {
 		var err error
 		if projectURL, id, err = azdo.SplitQueryURL(in.QueryURL); err != nil {
 			return queryRun{}, core.WatcherCheckResult{Problem: core.ProblemQueryUnusable, Reason: err.Error(),
@@ -100,7 +100,7 @@ func queryTypeName(queryType string) string {
 // problemOf is the problem err, from running in's query in projectURL, is.
 func problemOf(in core.AzureBoardsCheckInput, projectURL string, err error) core.WatcherCheckResult {
 	var refusal *azdo.RefusedError
-	saved := in.Mode != store.AzureBoardsWIQL
+	saved := in.Mode != domain.AzureBoardsWIQL
 	switch {
 	case errors.Is(err, azdo.ErrPATRejected):
 		return core.WatcherCheckResult{Problem: core.ProblemPATRejected,

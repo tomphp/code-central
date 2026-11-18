@@ -81,8 +81,8 @@ import (
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/factory"
-	"github.com/tomoram/code-central/store"
 )
 
 // fakeEnv names the harness's data folder to a test binary run as a
@@ -804,7 +804,7 @@ func (h *Harness) MakePlainSpec() {
 
 func (h *Harness) readyTicket(title string, labels ...string) string {
 	h.t.Helper()
-	return h.NewTicket(core.CreateTicketInput{Title: title, State: store.Ready, Labels: labels})
+	return h.NewTicket(core.CreateTicketInput{Title: title, State: domain.Ready, Labels: labels})
 }
 
 // NewTicket creates the Ticket in describes, such as a Draft one or one
@@ -825,7 +825,7 @@ func (h *Harness) MakeRequirement() {
 	ctx := context.Background()
 	c := h.Server.Client
 	h.MakePlainSpec()
-	_, err := c.CreateTicket(ctx, h.Project, core.CreateTicketInput{Spec: core.Ref(h.spec), Title: "Stage", State: store.Draft, Labels: []string{core.StageLabel("grilling")}})
+	_, err := c.CreateTicket(ctx, h.Project, core.CreateTicketInput{Spec: core.Ref(h.spec), Title: "Stage", State: domain.Draft, Labels: []string{core.StageLabel("grilling")}})
 	must(h.t, err)
 }
 
@@ -914,7 +914,7 @@ func (h *Harness) Answer(ticket, text string) {
 	h.t.Helper()
 	for _, r := range h.Ticket(ticket).Rounds {
 		for _, q := range r.Questions {
-			if q.Status == store.QuestionOpen {
+			if q.Status == domain.QuestionOpen {
 				_, err := h.Human().Answer(context.Background(), h.Project, core.AnswerInput{Ticket: core.Ref(ticket), Question: q.Number, Text: text})
 				must(h.t, err)
 			}
@@ -947,7 +947,7 @@ func (h *Harness) WaitForDescribed(what func() string, cond func() bool) {
 // WantState reads the Ticket and fails the test unless it is in state,
 // with its latest Failure Report if it has one. A test settles the
 // Factory first.
-func (h *Harness) WantState(id string, state store.State) core.TicketView {
+func (h *Harness) WantState(id string, state domain.State) core.TicketView {
 	h.t.Helper()
 	tk := h.Ticket(id)
 	if tk.State != state {

@@ -14,9 +14,9 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
-	"github.com/tomoram/code-central/store"
 )
 
 // follow has each of watch's Incoming Issues from repository follow its
@@ -69,9 +69,9 @@ func (cfg Config) follow(ctx context.Context, watch core.IssueWatch, repository 
 
 // issueOf is issue n and its external state: open when it is among open,
 // the repository's open issues, and as readIssue reads it otherwise.
-func (cfg Config) issueOf(ctx context.Context, a access, label string, open map[int]ghIssue, n int) (*ghIssue, store.ExternalState, error) {
+func (cfg Config) issueOf(ctx context.Context, a access, label string, open map[int]ghIssue, n int) (*ghIssue, domain.ExternalState, error) {
 	if i, ok := open[n]; ok {
-		return &i, store.ExternalOpen, nil
+		return &i, domain.ExternalOpen, nil
 	}
 	return readIssue(ctx, cfg.Env, a, label, n)
 }
@@ -115,7 +115,7 @@ func issueNumber(repository, id string) (int, bool) {
 // isn't taken for a transfer. The issue is nil once it is deleted or
 // transferred, as its text is no longer the repository's. GitHub
 // rate-limiting the read is a *ratelimit.Error.
-func readIssue(ctx context.Context, env gh.Env, a access, label string, n int) (*ghIssue, store.ExternalState, error) {
+func readIssue(ctx context.Context, env gh.Env, a access, label string, n int) (*ghIssue, domain.ExternalState, error) {
 	repository := a.repository
 	body, msg, err := gh.API(ctx, env, a.prog, fmt.Sprintf("repos/%s/issues/%d", repository, n))
 	if err != nil {
@@ -123,9 +123,9 @@ func readIssue(ctx context.Context, env gh.Env, a access, label string, n int) (
 		if errors.As(err, &status) {
 			switch status.Status {
 			case http.StatusGone:
-				return nil, store.ExternalDeleted, nil
+				return nil, domain.ExternalDeleted, nil
 			case http.StatusNotFound:
-				return nil, store.ExternalOutOfScope, nil
+				return nil, domain.ExternalOutOfScope, nil
 			}
 		}
 		if msg != "" {
@@ -138,15 +138,15 @@ func readIssue(ctx context.Context, env gh.Env, a access, label string, n int) (
 		return nil, "", fmt.Errorf("GitHub's issue %s can't be read: %w", LinkID(repository, n), err)
 	}
 	if !strings.EqualFold(repositoryOf(i.RepositoryURL), repository) {
-		return nil, store.ExternalOutOfScope, nil
+		return nil, domain.ExternalOutOfScope, nil
 	}
 	switch {
 	case i.State == "closed":
-		return &i, store.ExternalClosed, nil
+		return &i, domain.ExternalClosed, nil
 	case label != "" && !i.hasLabel(label):
-		return &i, store.ExternalOutOfScope, nil
+		return &i, domain.ExternalOutOfScope, nil
 	}
-	return &i, store.ExternalOpen, nil
+	return &i, domain.ExternalOpen, nil
 }
 
 // hasLabel reports whether i has label, whatever its case, as GitHub's

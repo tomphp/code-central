@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // Under the Pull Request Landing Method the Factory pushes each accepted
@@ -186,14 +186,14 @@ func (f *factory) landMerged(ctx context.Context, tk core.TicketView) {
 // its own broken base. A Ticket in any other State whose pull request in
 // the Home Repository is merged gets a warning line and a comment, once.
 func (f *factory) detectMergedPullRequests(ctx context.Context, tk core.TicketView, policies core.LandingPolicies) {
-	if tk.State == store.InReview && changedElsewhere(f.home.name, tk) {
+	if tk.State == domain.InReview && changedElsewhere(f.home.name, tk) {
 		f.detectMergedPullRequestsIn(ctx, tk, policies)
 		return
 	}
 	if !f.home.policy(policies).LandsByPullRequest() || f.held(f.home, policies) != "" || !hasMerged(tk.PullRequest) {
 		return
 	}
-	if tk.State == store.InReview {
+	if tk.State == domain.InReview {
 		f.landMerged(ctx, tk)
 		return
 	}

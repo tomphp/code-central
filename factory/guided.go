@@ -9,7 +9,7 @@ import (
 	"context"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // startGuidedMaps approves the first frontier Ticket, in created order,
@@ -55,12 +55,12 @@ func (f *factory) startGuidedMaps(ctx context.Context) {
 // waits on the human or an agent, so it holds the Map.
 func nextDecision(rows []core.TicketRow) (next core.TicketRow, ok bool) {
 	for _, r := range rows {
-		if r.State != store.Draft && r.NodeType != "research" {
+		if r.State != domain.Draft && r.NodeType != "research" {
 			return core.TicketRow{}, false
 		}
 	}
 	for _, r := range rows {
-		if r.State == store.Draft && !r.Blocked {
+		if r.State == domain.Draft && !r.Blocked {
 			return r, true
 		}
 	}
