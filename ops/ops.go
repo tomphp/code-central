@@ -201,19 +201,19 @@ var all = []entry{
 	defined(Defer),
 
 	// The delivery loop (ticket 25).
-	legacy(Op{Name: "claim", Audience: AgentAndHuman, Write: true}),
-	legacy(Op{Name: "finish", Audience: AgentAndHuman, Write: true}),
-	legacy(Op{Name: "accept", Audience: HumanOnly, Write: true}),
-	legacy(Op{Name: "implement", Audience: HumanOnly, Write: true}),
-	legacy(Op{Name: "reject", Audience: HumanOnly, Write: true}),
+	defined(Claim),
+	defined(Finish),
+	defined(Accept),
+	defined(Implement),
+	defined(Reject),
 
 	// Silent Claims and sessions (ticket 31).
-	legacy(Op{Name: "set_session", Audience: AgentAndHuman, Write: true}),
-	legacy(Op{Name: "release", Audience: HumanOnly, Write: true}),
+	defined(SetSession),
+	defined(Release),
 	// Blockers, Replacements and finding work (ticket 28).
-	legacy(Op{Name: "add_blocker", Audience: AgentAndHuman, Write: true}),
-	legacy(Op{Name: "remove_blocker", Audience: AgentAndHuman, Write: true}),
-	legacy(Op{Name: "cancel", Audience: AgentAndHuman, Write: true}),
+	defined(AddBlocker),
+	defined(RemoveBlocker),
+	defined(Cancel),
 	defined(GetSpec),
 	defined(FindSpecs),
 

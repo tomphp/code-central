@@ -20,10 +20,10 @@ import (
 // BlockerInput is add_blocker's and remove_blocker's input: ticket waits
 // on blocker.
 type BlockerInput struct {
-	Ticket  Ref `json:"ticket"`
-	Blocker Ref `json:"blocker"`
+	Ticket  Ref `json:"ticket" path:"n" desc:"The Ticket that waits." required:"true"`
+	Blocker Ref `json:"blocker" desc:"The Ticket it waits on." required:"true"`
 	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
+	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
 }
 
 // BlockerView is one Blocker as get_ticket shows it, after following

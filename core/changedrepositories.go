@@ -24,9 +24,9 @@ import (
 // RepositoryWork is a Ticket's branch and its head commit in one
 // Repository, as finish and report_changed_repositories take them.
 type RepositoryWork struct {
-	Name   string `json:"name"`
-	Branch string `json:"branch"`
-	Commit string `json:"commit"`
+	Name   string `json:"name" desc:"The Repository Name." required:"true"`
+	Branch string `json:"branch" desc:"The branch the work is on there." required:"true"`
+	Commit string `json:"commit" desc:"The branch's head commit there." required:"true"`
 }
 
 // ChangedRepositoryView is one of a Ticket's Changed Repositories as

@@ -12,13 +12,13 @@ import (
 
 // ClaimInput is claim's input: narrow to a Spec or name a Ticket, not both.
 type ClaimInput struct {
-	Spec      Ref    `json:"spec,omitempty"`
-	Ticket    Ref    `json:"ticket,omitempty"`
-	SessionID string `json:"session_id,omitempty"`
+	Spec      Ref    `json:"spec,omitempty" desc:"Claim the next Ticket in this Spec."`
+	Ticket    Ref    `json:"ticket,omitempty" desc:"Claim this Ticket."`
+	SessionID string `json:"session_id,omitempty" desc:"Your session ID, shown to the human for resuming you."`
 	// WorkingDir and ResumeCommand are free-form and never parsed; nil
 	// leaves them unset.
-	WorkingDir    *string `json:"working_dir,omitempty"`
-	ResumeCommand *string `json:"resume_command,omitempty"`
+	WorkingDir    *string `json:"working_dir,omitempty" desc:"The directory you work in, where the human runs the resume command. A hook usually fills it in for you."`
+	ResumeCommand *string `json:"resume_command,omitempty" desc:"The command that resumes your session from working_dir, shown to the human as is. Without one the human is shown claude --resume <session_id>."`
 }
 
 // ClaimResult is claim's result: the Claim ID with the full Ticket view
@@ -35,26 +35,26 @@ type ClaimResult struct {
 
 // FinishInput is finish's input.
 type FinishInput struct {
-	Ticket  Ref    `json:"ticket"`
-	ClaimID string `json:"claim_id"`
-	Summary string `json:"summary"`
+	Ticket  Ref    `json:"ticket" path:"n" desc:"The Ticket." required:"true"`
+	ClaimID string `json:"claim_id" desc:"The Claim ID claim returned." required:"true"`
+	Summary string `json:"summary" desc:"What was done, where, and what the reviewer should check, in Markdown." required:"true"`
 	// Branch and Commit name the work's branch and its head commit in the
 	// Home Repository. Both are optional and free-form; one left out keeps
 	// the stored value. A Ticket with a branch is Accepted, not Done, when
 	// the human accepts it.
-	Branch string `json:"branch,omitempty"`
-	Commit string `json:"commit,omitempty"`
+	Branch string `json:"branch,omitempty" desc:"The branch the work is on, if any. Accepting work on a branch moves it to Accepted, to land once merged."`
+	Commit string `json:"commit,omitempty" desc:"The branch's head commit, if any."`
 	// Repositories are the branch and head commit in each other
 	// Repository the work changed (Spec code-central-848); the Home
 	// Repository may be given here instead of in Branch and Commit, not
 	// in both. The finish replaces the Ticket's Changed Repositories.
-	Repositories []RepositoryWork `json:"repositories,omitempty"`
+	Repositories []RepositoryWork `json:"repositories,omitempty" desc:"With several Repositories: each other Repository you committed in. branch and commit stay the Home Repository's."`
 	// Recommendation is the Spec recommendation, implement or split:
 	// required on a spec Stage and refused on any other Ticket. It
 	// replaces the one an earlier finish gave.
-	Recommendation store.Recommendation `json:"recommendation,omitempty"`
+	Recommendation store.Recommendation `json:"recommendation,omitempty" desc:"Required on a spec Stage only: implement or split." enum:"implement,split"`
 	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
+	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
 }
 
 // FinishResult is finish's result: the Acknowledgement and the next step,
@@ -76,7 +76,7 @@ func stopResult(v Written[TicketView], name string) StopResult {
 
 // RejectInput is reject's input.
 type RejectInput struct {
-	Ticket  Ref    `json:"ticket"`
+	Ticket  Ref    `json:"ticket" path:"n"`
 	Comment string `json:"comment"`
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
