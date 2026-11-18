@@ -32,6 +32,7 @@ export function ModelsSection({ project }: { project: ProjectRow }) {
   // or "kinds.<kind>".
   const edit = (field: string, patch: Partial<ModelRow>) => {
     setDraft((d) =>
+      // landing: a Models row's field prefix, not a Landing
       field === "default" || field === "chat"
         ? { ...d, [field]: { ...d[field], ...patch } }
         : {

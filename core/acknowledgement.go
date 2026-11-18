@@ -7,8 +7,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/internal/fieldwalk"
-	"github.com/tomoram/code-central/store"
 )
 
 // A write that used to echo the whole record returns an Acknowledgement
@@ -27,7 +27,7 @@ type Acknowledgement struct {
 	// Edit is the number of the edit the write recorded, if it recorded one.
 	Edit int `json:"edit,omitempty"`
 	// State is a Ticket's State after the write; a Spec has none.
-	State store.State `json:"state,omitempty"`
+	State domain.State `json:"state,omitempty"`
 }
 
 // Written is an acknowledging write's result: its Acknowledgement, or
@@ -71,15 +71,22 @@ func acknowledgeProject(before, after ProjectView, full bool, at time.Time) (Wri
 	return w, err
 }
 
+// offers are a Ticket view's fields that say what the UI offers the
+// human, which follow from what a write changed but aren't written by it,
+// so no Acknowledgement lists them.
+var offers = []string{"editable", "retroable"}
+
 // written derives the Acknowledgement from the views' JSON, listing in
-// changed every top-level field that differs except those unlisted. It
-// reads the record's id and updated, the number of the last of its edits
-// when they changed, and a Ticket's state, by those JSON names, which the
-// Spec and Ticket views share (a Spec view has no state).
+// changed every top-level field that differs except those unlisted and
+// the offers. It reads the record's id and updated, the number of the
+// last of its edits when they changed, and a Ticket's state, by those
+// JSON names, which the Spec and Ticket views share (a Spec view has no
+// state).
 func written[V any](before, after V, full bool, unlisted ...string) (Written[V], error) {
 	if full {
 		return Written[V]{Record: &after}, nil
 	}
+	unlisted = append(unlisted, offers...)
 	b, err := topLevel(before)
 	if err != nil {
 		return Written[V]{}, err

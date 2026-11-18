@@ -90,9 +90,13 @@ function SessionRow({ s, here, projectName, navigate, open, onToggle }: SessionR
   return (
     <tr className={className || undefined}>
       <th scope="row">
-        <a href={hrefFor({ view: "inbox", ...to })} onClick={clickTo(navigate, to)}>
-          {s.ticket}
-        </a>
+        {s.agent ? (
+          <span className="usage-parent-ticket">{s.ticket}</span>
+        ) : (
+          <a href={hrefFor({ view: "inbox", ...to })} onClick={clickTo(navigate, to)}>
+            {s.ticket}
+          </a>
+        )}
       </th>
       <td>{projectName(s.project)}</td>
       <td className="num">{s.claim}</td>
@@ -112,7 +116,10 @@ function SessionRow({ s, here, projectName, navigate, open, onToggle }: SessionR
       <Tokens n={s.peak} />
       {n ? (
         <td className="num">
-          <TokenCount n={s.tokens} /> (<TokenCount n={s.total_tokens ?? s.tokens} /> with subagents)
+          <TokenCount n={s.tokens} />{" "}
+          <span className="usage-subline">
+            <TokenCount n={s.total_tokens ?? s.tokens} /> with subagents
+          </span>
         </td>
       ) : (
         <Tokens n={s.tokens} />

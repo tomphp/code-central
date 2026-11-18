@@ -56,7 +56,7 @@ describe("a red build in one of several Repositories", () => {
     const { w, ticket } = await world();
     await renderApp(w, `/?view=inbox&ticket=${ticket}`);
     const panel = within(ticketPane()).getByRole("region", { name: "CI failed" });
-    expect(panel).toHaveTextContent("CI failed at api@1234567 is one Needs Me item");
+    expect(panel).toHaveTextContent("At api@1234567");
     const home = within(panel).getByRole("region", { name: "CI in acme" });
     expect(within(home).getByRole("heading", { level: 4 })).toHaveTextContent("acme passed 9a8b7c6");
     expect(within(home).queryByRole("group", { name: /Failure options/ })).toBeNull();

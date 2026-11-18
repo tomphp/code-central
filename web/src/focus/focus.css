@@ -42,11 +42,21 @@
 .focus-question-body { line-height: 1.5; }
 .focus-question textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; min-height: 6em; padding: 10px; }
 .focus-question .draft-note { font-size: 15px; }
-.focus-question .btn { font-size: 17px; padding: 8px 18px; }
+/* The answer buttons are scaled as the panels' are. */
+.focus-question .question-actions { zoom: 1.3; }
 /* The panels keep their own stylesheets, sized for the Inbox's side pane;
    inside Focus Mode they are scaled up whole, so their type, spacing and
    buttons all read larger together. */
 .focus .panel { zoom: 1.3; }
+/* One body size per panel: the panels' own small type steps up to it, and
+   the first and last lines sit at the panel's padding, with or without a
+   heading. */
+.focus .panel .small { font-size: inherit; }
+.focus .panel > :first-child { margin-top: 0; }
+.focus .panel > :last-child { margin-bottom: 0; }
+/* The Triage buttons sit apart; inline chips centre on the line's text. */
+.focus .panel .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.focus .panel .label { vertical-align: middle; }
 /* Skip sits under a Ticket's panel, in line with its scaled-up buttons. */
 .focus-skip { margin: 12px 0 0; }
 .focus-skip .btn, .focus-clear .btn { font-size: 17px; padding: 8px 18px; }
@@ -62,11 +72,13 @@
    side, each with its number in big type, and the In Progress Tickets
    below them, filling the body. */
 .dashboard-blocks { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 24px; }
-.dashboard-block { --sc: var(--s-ready); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 16px; border-radius: 16px; background: var(--sc); color: var(--on-line); min-height: 30vh; }
+.dashboard-block { --sc: var(--s-ready); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 16px; border-radius: 16px; background: var(--sc); color: var(--on-line); min-height: 120px; }
 .dashboard-block.state-in-progress { --sc: var(--s-in-progress); }
 /* In Progress Cobalt, as the .ci-running badge (styles.css); the block keeps the other blocks' text colour. */
 .dashboard-block.ci-running { --sc: var(--s-in-progress); color: var(--on-line); border-color: transparent; padding: 0; }
 .dashboard-block-link { flex: 1; align-self: stretch; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 16px; border-radius: inherit; color: inherit; text-decoration: none; }
+/* The error banner lines up with the entry rows' 16px padding. */
+.dashboard-error { margin: 0; padding: 6px 16px; }
 .dashboard-state { margin-top: 8px; font-size: 24px; font-weight: 600; }
 .dashboard-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .dashboard-entry a { display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); text-decoration: none; }
@@ -78,10 +90,12 @@
 .dashboard-entry-title { font-weight: 600; flex: 1; min-width: 0; }
 .dashboard-entry-detail { font-size: 15px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* A CI Running entry: its Ticket link fills the card, and the run's GitHub
-   link sits beside it, at the right. */
-.dashboard-ci-entry { --sc: var(--s-in-progress); display: flex; align-items: flex-start; gap: 12px; padding-right: 16px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); }
+   link sits at the bottom right, so the Project's name on the title line
+   right-aligns as the other entries' does. */
+.dashboard-ci-entry { --sc: var(--s-in-progress); position: relative; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); }
 .dashboard-ci-entry:hover { border-color: var(--muted); }
 .dashboard-ci-entry > a:first-child { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; color: var(--text); text-decoration: none; }
 .dashboard-ci-entry { font-variant-numeric: tabular-nums; }
-.dashboard-ci-github { font-size: 15px; white-space: nowrap; padding-top: 12px; }
+.dashboard-ci-entry .dashboard-entry-detail { padding-right: 150px; }
+.dashboard-ci-github { position: absolute; right: 16px; bottom: 12px; font-size: 15px; white-space: nowrap; }
 .dashboard-entry { --sc: var(--s-in-progress); border-radius: 10px; }

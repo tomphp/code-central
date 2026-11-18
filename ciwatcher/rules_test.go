@@ -8,6 +8,7 @@ package ciwatcher_test
 import (
 	"context"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"net/url"
 	"strings"
 	"testing"
@@ -17,11 +18,10 @@ import (
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
-	"github.com/tomoram/code-central/store"
 )
 
 // rule adds a CI Rule as the human and returns its Spec's ID.
-func (w *watching) rule(workflow, branch string, state store.State) string {
+func (w *watching) rule(workflow, branch string, state domain.State) string {
 	w.t.Helper()
 	out, err := w.srv.Core.AddCIRule(core.WithActor(context.Background(), core.Human), "acme",
 		core.CIRuleInput{Workflow: workflow, Branch: branch, State: state, Full: true})
@@ -115,7 +115,7 @@ func at(minutes int) time.Time {
 
 func TestAFailureARuleMatchesOpensAFixTicketOnItsSpec(t *testing.T) {
 	w := newWatching(t)
-	spec := w.rule("ci.yml", "main", store.Ready)
+	spec := w.rule("ci.yml", "main", domain.Ready)
 	w.branchAnswer("main", branchRun{id: 21, workflow: "ci.yml", branch: "main", commit: "fff111", conclude: "failure", finished: 5})
 	w.jobsAnswer(21, 1, [2]string{"test", "failure"}, [2]string{"lint", "success"}, [2]string{"e2e", "timed_out"})
 	w.start(w.h.Bin)
@@ -126,7 +126,7 @@ func TestAFailureARuleMatchesOpensAFixTicketOnItsSpec(t *testing.T) {
 		t.Fatalf("Tickets on %s = %d, want one fix Ticket", spec, len(tks))
 	}
 	tk := tks[0]
-	if tk.State != store.Ready || len(tk.Labels) != 0 {
+	if tk.State != domain.Ready || len(tk.Labels) != 0 {
 		t.Fatalf("fix Ticket is %s with labels %v, want Ready, the rule's State, with no Stage Label", tk.State, tk.Labels)
 	}
 	if !strings.Contains(tk.Title, "ci.yml") || !strings.Contains(tk.Title, "main") {
@@ -154,7 +154,7 @@ func TestAFailureARuleMatchesOpensAFixTicketOnItsSpec(t *testing.T) {
 
 func TestAPassingRunOrAnotherWorkflowOrBranchDoesntFireARule(t *testing.T) {
 	w := newWatching(t)
-	spec := w.rule("ci.yml", "main", store.Draft)
+	spec := w.rule("ci.yml", "main", domain.Draft)
 	w.branchAnswer("main",
 		branchRun{id: 21, workflow: "ci.yml", branch: "main", commit: "fff111", conclude: "success", finished: 5},
 		branchRun{id: 22, workflow: "lint.yml", branch: "main", commit: "fff111", conclude: "failure", finished: 5},
@@ -177,7 +177,7 @@ func TestAFailingLandCommitLinksItsTicketAndSpec(t *testing.T) {
 		return err
 	})
 	must(t, func() error {
-		_, err := w.srv.Core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form", State: store.Ready})
+		_, err := w.srv.Core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form", State: domain.Ready})
 		return err
 	})
 	res, err := w.srv.Core.Claim(ctx, "acme", core.ClaimInput{Ticket: "2"})
@@ -192,7 +192,7 @@ func TestAFailingLandCommitLinksItsTicketAndSpec(t *testing.T) {
 		_, err := w.srv.Client.Land(ctx, "acme", core.LandInput{Ticket: "acme-2", Commit: "land99"})
 		return err
 	})
-	spec := w.rule("any", "main", store.Ready)
+	spec := w.rule("any", "main", domain.Ready)
 	w.branchAnswer("main", branchRun{id: 21, workflow: "ci.yml", branch: "main", commit: "land99", conclude: "failure", finished: 5})
 	w.jobsAnswer(21, 1, [2]string{"test", "failure"})
 	w.start(w.h.Bin)
@@ -211,7 +211,7 @@ func TestAFailingLandCommitLinksItsTicketAndSpec(t *testing.T) {
 
 func TestACancelledRunFiresNoRuleAndOpensNoFixTicket(t *testing.T) {
 	w := newWatching(t)
-	spec := w.rule("ci.yml", "main", store.Ready)
+	spec := w.rule("ci.yml", "main", domain.Ready)
 	w.branchAnswer("main", branchRun{id: 21, workflow: "ci.yml", branch: "main", commit: "fff111", conclude: "cancelled", finished: 5})
 	w.start(w.h.Bin)
 	w.rulePoll()
@@ -225,7 +225,7 @@ func TestACancelledRunFiresNoRuleAndOpensNoFixTicket(t *testing.T) {
 
 func TestACancelledJobIsLeftOutOfTheFailedJobs(t *testing.T) {
 	w := newWatching(t)
-	spec := w.rule("ci.yml", "main", store.Ready)
+	spec := w.rule("ci.yml", "main", domain.Ready)
 	w.branchAnswer("main", branchRun{id: 21, workflow: "ci.yml", branch: "main", commit: "fff111", conclude: "failure", finished: 5})
 	w.jobsAnswer(21, 1, [2]string{"test", "failure"}, [2]string{"slow", "cancelled"})
 	w.start(w.h.Bin)
@@ -241,7 +241,7 @@ func TestACancelledJobIsLeftOutOfTheFailedJobs(t *testing.T) {
 
 func TestAFurtherFailureCommentsOnTheRulesUnfinishedTicket(t *testing.T) {
 	w := newWatching(t)
-	spec := w.rule("ci.yml", "main", store.Ready)
+	spec := w.rule("ci.yml", "main", domain.Ready)
 	first := branchRun{id: 21, workflow: "ci.yml", branch: "main", commit: "fff111", conclude: "failure", finished: 5}
 	w.branchAnswer("main", first)
 	w.jobsAnswer(21, 1, [2]string{"test", "failure"})
@@ -286,7 +286,7 @@ func TestAFurtherFailureCommentsOnTheRulesUnfinishedTicket(t *testing.T) {
 func TestARunOnAPushedCommitNeverFiresARule(t *testing.T) {
 	w := newWatching(t)
 	w.pushed("abc123")
-	spec := w.rule("any", "main", store.Ready)
+	spec := w.rule("any", "main", domain.Ready)
 	w.runsAnswer("abc123", listedRun{id: 21, attempt: 1, workflow: "ci.yml", status: "completed", conclude: "failure", updated: "2026-01-05T09:05:00Z"})
 	w.branchAnswer("main", branchRun{id: 21, workflow: "ci.yml", branch: "main", commit: "abc123", conclude: "failure", finished: 5})
 	w.jobsAnswer(21, 1, [2]string{"test", "failure"})
@@ -304,7 +304,7 @@ func TestARunOnAPushedCommitNeverFiresARule(t *testing.T) {
 func TestRunsFinishingBeforeTheRuleExistedDontFireIt(t *testing.T) {
 	w := newWatching(t)
 	w.srv.Clock.Advance(10 * time.Minute)
-	spec := w.rule("ci.yml", "main", store.Ready)
+	spec := w.rule("ci.yml", "main", domain.Ready)
 	w.branchAnswer("main", branchRun{id: 21, workflow: "ci.yml", branch: "main", commit: "fff111", conclude: "failure", finished: 9})
 	w.jobsAnswer(21, 1, [2]string{"test", "failure"})
 	w.start(w.h.Bin)
@@ -321,8 +321,8 @@ func TestAnIgnoredWorkflowFiresOnlyARuleNamingIt(t *testing.T) {
 			core.SetCITrackingInput{Tracking: true, Repository: "acme/web", IgnoredWorkflows: []string{"nightly.yml"}})
 		return err
 	})
-	anyRule := w.rule("any", "main", store.Ready)
-	nightlyRule := w.rule("nightly.yml", "main", store.Draft)
+	anyRule := w.rule("any", "main", domain.Ready)
+	nightlyRule := w.rule("nightly.yml", "main", domain.Draft)
 	w.branchAnswer("main", branchRun{id: 21, workflow: "nightly.yml", branch: "main", commit: "fff111", conclude: "failure", finished: 5})
 	w.jobsAnswer(21, 1, [2]string{"soak", "failure"})
 	w.start(w.h.Bin)
@@ -331,14 +331,14 @@ func TestAnIgnoredWorkflowFiresOnlyARuleNamingIt(t *testing.T) {
 		t.Fatalf("Tickets on %s = %d, want none: any workflow leaves out Ignored workflows", anyRule, len(tks))
 	}
 	tks := w.fixTickets(nightlyRule)
-	if len(tks) != 1 || tks[0].State != store.Draft {
+	if len(tks) != 1 || tks[0].State != domain.Draft {
 		t.Fatalf("Tickets on %s = %+v, want one Draft fix Ticket", nightlyRule, tks)
 	}
 }
 
 func TestARestartedCIWatcherDoesntFireOnARunAgain(t *testing.T) {
 	w := newWatching(t)
-	spec := w.rule("ci.yml", "main", store.Ready)
+	spec := w.rule("ci.yml", "main", domain.Ready)
 	w.branchAnswer("main", branchRun{id: 21, workflow: "ci.yml", branch: "main", commit: "fff111", conclude: "failure", finished: 5})
 	w.jobsAnswer(21, 1, [2]string{"test", "failure"})
 	w.start(w.h.Bin)

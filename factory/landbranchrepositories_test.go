@@ -1,11 +1,11 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // The Branch Landing Method across Repositories (Spec code-central-848,
@@ -20,17 +20,17 @@ func TestUnderBranchHandMergingInBothRepositoriesLandsTheTicket(t *testing.T) {
 	api := h.AddRepository("api")
 	id := inTwo(h, "Add an endpoint")
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	h.Accept(id)
 	r.Poll()
-	h.WantState(id, store.Accepted)
+	h.WantState(id, domain.Accepted)
 	r.WantOutput(id + ": Accepted under the Branch Landing Method: merge " + id + " into main in Repository api and the Factory lands it")
 
 	// Merged in api alone: Partly landed.
 	h.GitIn(api.Path, "merge", "-q", "--no-ff", "-m", "Merge "+id, id)
 	r.Poll()
 
-	tk := h.WantState(id, store.Accepted)
+	tk := h.WantState(id, domain.Accepted)
 	apiWork := h.GitIn(api.Path, "rev-parse", "refs/heads/"+id)
 	if !tk.PartlyLanded || landedIn(tk, "api") != apiWork || landedIn(tk, h.Project) != "" {
 		t.Fatalf("partly landed %v %+v, want it landed in api alone, at its work %s", tk.PartlyLanded, tk.Repositories, apiWork)
@@ -41,7 +41,7 @@ func TestUnderBranchHandMergingInBothRepositoriesLandsTheTicket(t *testing.T) {
 	h.Git("merge", "-q", "--no-ff", "-m", "Merge "+id, id)
 	r.Poll()
 
-	tk = h.WantState(id, store.Done)
+	tk = h.WantState(id, domain.Done)
 	if landedIn(tk, h.Project) != h.Git("rev-parse", "refs/heads/"+id) {
 		t.Fatalf("Changed Repositories %+v, want the Home Repository landed at its work", tk.Repositories)
 	}
@@ -52,10 +52,10 @@ func TestUnderBranchAndPushAcceptPushesTheBranchInEachChangedRepository(t *testi
 	h := factorytest.New(t)
 	home := h.AddRemote("origin")
 	api := h.AddRepository("api")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingBranch, Push: true, Remote: "origin"})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 	id := inTwo(h, "Add an endpoint")
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	h.Accept(id)
 	r.Poll()
@@ -70,5 +70,5 @@ func TestUnderBranchAndPushAcceptPushesTheBranchInEachChangedRepository(t *testi
 		t.Errorf("api's base was pushed under Branch: its remote's main is at %s", out)
 	}
 	r.WantOutput(id + ": pushed " + id + " to origin in Repository api")
-	h.WantState(id, store.Accepted)
+	h.WantState(id, domain.Accepted)
 }

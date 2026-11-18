@@ -8,7 +8,8 @@ describe("bytes", () => {
   it("counts bytes under 1 KB, then KB, then MB, to one decimal place", () => {
     expect(bytes(300)).toBe("300 B");
     expect(bytes(1_023)).toBe("1023 B");
-    expect(bytes(1_024)).toBe("1 KB");
+    expect(bytes(1_024)).toBe("1.0 KB");
+    expect(bytes(2_048)).toBe("2.0 KB");
     expect(bytes(23_986)).toBe("23.4 KB");
     expect(bytes(6_000_000)).toBe("5.7 MB");
   });

@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
-	"github.com/tomoram/code-central/store"
 )
 
 // Provider is a CI Provider: everything the CI Watcher knows about one
@@ -59,12 +59,12 @@ type Run struct {
 // reads the PAT from env by in's PAT environment variable.
 func NewProvider(in core.CICheckInput, env gh.Env) (Provider, error) {
 	switch in.Provider {
-	case store.CIGitHubActions:
+	case domain.CIGitHubActions:
 		return &GitHubActions{Repository: in.Repository, GHPath: in.GHPath, Env: env}, nil
-	case store.CIAzurePipelines:
+	case domain.CIAzurePipelines:
 		return &AzurePipelines{ProjectURL: in.ProjectURL, PATEnv: in.PATEnv, Env: env}, nil
 	default:
-		return nil, fmt.Errorf("CI Provider %q isn't one this CI Watcher can watch; they are %q and %q", in.Provider, store.CIGitHubActions, store.CIAzurePipelines)
+		return nil, fmt.Errorf("CI Provider %q isn't one this CI Watcher can watch; they are %q and %q", in.Provider, domain.CIGitHubActions, domain.CIAzurePipelines)
 	}
 }
 

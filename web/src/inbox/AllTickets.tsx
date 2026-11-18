@@ -8,7 +8,7 @@ import { ListCIBadge } from "../ticket/CIBadge";
 import { TicketLine, type InboxRowLinkFactory } from "../ticket/TicketLine";
 import { groupBySpec } from "./groupBySpec";
 import { ShortId } from "./ShortId";
-import { specKindOf } from "./describeSpec";
+import { kindText } from "./describeSpec";
 import { SpecRow, stagesFirst, type SpecRowProps } from "./SpecRow";
 import { KindBadge } from "../controls/KindBadge";
 
@@ -68,7 +68,7 @@ export function AllTicketsByTicket({
             chip
             detail={
               <>
-                <KindBadge kind={specKindOf(spec)} /> <ShortId id={t.spec} /> {spec?.title ?? ""}
+                <KindBadge kind={kindText(spec)} /> <ShortId id={t.spec} /> {spec?.title ?? ""}
               </>
             }
           >

@@ -87,7 +87,7 @@ describe("Context Size", () => {
     // Each response's tokens are its context and 50 output.
     expect(sessions.map(cells)).toEqual([
       ["Beta", "1", "sess-spec", "spec", "claude-opus-4-7", expect.any(String), "80,000", "80,050", "1"],
-      ["Acme", "1", "sess-impl", "implementation", "claude-sonnet-4-6, claude-opus-4-7", expect.any(String), "123,456", "163,556 (184,606 with subagents)", "2"],
+      ["Acme", "1", "sess-impl", "implementation", "claude-sonnet-4-6, claude-opus-4-7", expect.any(String), "123,456", "163,556 184,606 with subagents", "2"],
     ]);
     expect(within(sessions[1]).getByText("123,456")).toHaveAttribute("title", "123,456 tokens");
     expect(within(sessions[1]).getByText("163,556")).toHaveAttribute("title", "163,556 tokens");
@@ -121,10 +121,12 @@ describe("Context Size", () => {
     await userEvent.click(disclosure);
     expect(disclosure).toHaveAttribute("aria-expanded", "true");
     const rows = sessionRows();
-    expect(rows.map((r) => within(within(r).getByRole("rowheader")).getByRole("link").textContent)).toEqual([spec, impl, impl, impl, impl, impl]);
+    // A Subagent's row repeats its parent's Ticket as dimmed text, not a link.
+    expect(rows.map((r) => within(r).getByRole("rowheader").textContent)).toEqual([spec, impl, impl, impl, impl, impl]);
+    expect(rows.map((r) => within(within(r).getByRole("rowheader")).queryAllByRole("link").length)).toEqual([1, 1, 0, 0, 0, 0]);
     expect(rows.map(cells)).toEqual([
       ["Beta", "1", "sess-spec", "spec", "—", expect.any(String), "80,000", "80,050", "1"],
-      ["Acme", "1", "sess-impl", "implementation", "—", expect.any(String), "40,000", "40,050 (86,250 with subagents)", "1"],
+      ["Acme", "1", "sess-impl", "implementation", "—", expect.any(String), "40,000", "40,050 86,250 with subagents", "1"],
       ["Acme", "1", "Explore · Map Usage sessions", "subagent", "claude-haiku-4-5", expect.any(String), "10,000", "10,050", "1"],
       ["Acme", "1", "toolu_old", "subagent", "—", expect.any(String), "11,000", "11,050", "1"],
       ["Acme", "1", "Review the diff", "review", "—", expect.any(String), "12,000", "12,050", "1"],
@@ -167,7 +169,7 @@ describe("Context Size", () => {
     await openTab("Context Size");
     await settle(world);
     expect(sessionsTable()).toBeInTheDocument();
-    expect(sessionRows().map(cells)).toEqual([["Acme", "1", "sess-impl", "—", "—", expect.any(String), "0", "0 (10,050 with subagents)", "0"]]);
+    expect(sessionRows().map(cells)).toEqual([["Acme", "1", "sess-impl", "—", "—", expect.any(String), "0", "0 10,050 with subagents", "0"]]);
   });
 
   it("opens a session's Ticket from its link", async () => {

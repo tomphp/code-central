@@ -182,7 +182,7 @@ export function ago(now: Date, at: string): string {
 }
 
 // bytes is a size in readable units: bytes under 1 KB, then KB, then MB,
-// to one decimal place (1 KB is 1024 bytes).
+// always to one decimal place, "1.0 KB" (1 KB is 1024 bytes).
 export function bytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${oneDecimal(n / 1024)} KB`;
@@ -195,7 +195,7 @@ export function count(n: number): string {
 }
 
 function oneDecimal(x: number): string {
-  return String(Math.round(x * 10) / 10);
+  return (Math.round(x * 10) / 10).toFixed(1);
 }
 
 // CLAUDE_CODE_DEFAULT stands for a model or effort left unset, so the

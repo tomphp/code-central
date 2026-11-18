@@ -2,6 +2,7 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"strings"
 	"testing"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // setTags sets tags on ticket, as the human.
@@ -53,7 +53,7 @@ func TestATicketsTagsSetTheFirstTurnsModelAndEffortOverTheFactorysFlags(t *testi
 	id := h.ReadyTicket("Hard work")
 	setTags(t, h, id, map[string]string{"model": "opus", "effort": "max"})
 	h.Start("--model", "sonnet", "--effort", "low")
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	ranWith(t, h, id, h.Calls()[0], "opus", "max")
 }
 
@@ -65,8 +65,8 @@ func TestTheFactorysFlagsFillWhatATicketsTagsLeaveUnset(t *testing.T) {
 	setTags(t, h, effortOnly, map[string]string{"effort": "high"})
 	setTags(t, h, modelOnly, map[string]string{"model": "fable"})
 	h.Start("--model", "sonnet", "--effort", "low")
-	h.WantState(effortOnly, store.InReview)
-	h.WantState(modelOnly, store.InReview)
+	h.WantState(effortOnly, domain.InReview)
+	h.WantState(modelOnly, domain.InReview)
 	ranWith(t, h, effortOnly, callsFor(h, effortOnly)[0], "sonnet", "high")
 	ranWith(t, h, modelOnly, callsFor(h, modelOnly)[0], "fable", "low")
 }
@@ -78,7 +78,7 @@ func TestAKindsModelsRowReachesClaudeOverTheProjectDefaultAndTheFactorysFlags(t 
 	setModels(t, h, core.SetModelsInput{Default: core.ModelRowView{Model: "opus", Effort: "medium"},
 		Kinds: []core.KindModelsView{{Kind: core.ImplementationStage, ModelRowView: core.ModelRowView{Effort: "xhigh"}}}})
 	h.Start("--model", "sonnet", "--effort", "low")
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	ranWith(t, h, id, h.Calls()[0], "opus", "xhigh")
 }
 
@@ -87,7 +87,7 @@ func TestWithNothingSetNoModelOrEffortIsPassed(t *testing.T) {
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Work")
 	h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	ranWith(t, h, id, h.Calls()[0], "", "")
 }
 
@@ -99,7 +99,7 @@ func TestATagChangedWhileATicketWaitsOnARoundAppliesWhenItResumes(t *testing.T) 
 	setTags(t, h, id, map[string]string{"model": "opus"})
 
 	r.Poll()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	ranWith(t, h, id, h.Calls()[1], "opus", "low")
 }
 
@@ -111,13 +111,13 @@ func TestAnAnsweredResumeWaitsAPollWhenItsModelChoiceCantBeRead(t *testing.T) {
 
 	r.Poll()
 	r.WantOutput(id + ": get_model_choice: ")
-	if s := h.Ticket(id).State; s != store.Answered || len(h.Calls()) != 1 {
+	if s := h.Ticket(id).State; s != domain.Answered || len(h.Calls()) != 1 {
 		t.Fatalf("%s is %s after %d runs; want it left Answered, its answers not picked up", id, s, len(h.Calls()))
 	}
 
 	h.SetFailing("")
 	r.Poll()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 }
 
 func TestACutOffTurnResumesWithTheModelChoiceReadAfresh(t *testing.T) {
@@ -142,7 +142,7 @@ func TestACutOffTurnResumesWithTheModelChoiceReadAfresh(t *testing.T) {
 
 	h.SetFailing("")
 	r.Poll()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	c := h.Calls()[1]
 	if !strings.Contains(c.Prompt, "Your last turn was cut off") {
 		t.Fatalf("prompt %q, want the cut-off resume", c.Prompt)
@@ -164,6 +164,6 @@ func TestAClaimResumedAfterARestartTakesItsModelChoiceAfresh(t *testing.T) {
 	setTags(t, h, id, map[string]string{"model": "opus", "effort": "medium"})
 	h.Script(id, factorytest.Finish("Done."), factorytest.Result("success"))
 	h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	ranWith(t, h, id, h.Calls()[1], "opus", "medium")
 }

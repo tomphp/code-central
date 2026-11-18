@@ -5,12 +5,13 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
 func TestSetSessionUpdatesTheLiveClaimsSessionID(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{SessionID: "old"})
 
 	v, err := record(f.core.SetSession(ctx, "acme", core.SetSessionInput{Ticket: "acme-2", ClaimID: "claim-1", SessionID: "new", Full: true}))
@@ -33,7 +34,7 @@ func TestSetSessionUpdatesTheLiveClaimsSessionID(t *testing.T) {
 
 func TestSetSessionNeedsTheLiveClaimID(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready)
+	f.work(t, domain.Ready, domain.Ready)
 	f.claim(t, core.ClaimInput{Ticket: "2"})
 	_, err := f.core.SetSession(ctx, "acme", core.SetSessionInput{Ticket: "2", ClaimID: "claim-9", SessionID: "s"})
 	wantCode(t, err, core.StaleClaim, "")
@@ -43,7 +44,7 @@ func TestSetSessionNeedsTheLiveClaimID(t *testing.T) {
 
 func TestTheHumanReleasesAClaimBackToReady(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready)
+	f.work(t, domain.Ready, domain.Ready)
 	f.claim(t, core.ClaimInput{Ticket: "2"})
 	f.clock.Advance(time.Hour)
 	released := f.clock.Now()
@@ -52,7 +53,7 @@ func TestTheHumanReleasesAClaimBackToReady(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.State != store.Ready || v.SilentSince != nil {
+	if v.State != domain.Ready || v.SilentSince != nil {
 		t.Fatalf("state %s silent %v, want Ready and not Silent", v.State, v.SilentSince)
 	}
 	c := v.Claims[0]
@@ -76,7 +77,7 @@ func TestTheHumanReleasesAClaimBackToReady(t *testing.T) {
 
 func TestReleaseIsHumanOnlyFromInProgressOrAnswered(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready)
+	f.work(t, domain.Ready, domain.Ready)
 	f.claim(t, core.ClaimInput{Ticket: "2"})
 	_, err := f.core.Release(ctx, "acme", core.ReleaseInput{Ticket: "2"})
 	wantCode(t, err, core.ActionNotAllowed, "")
@@ -86,10 +87,10 @@ func TestReleaseIsHumanOnlyFromInProgressOrAnswered(t *testing.T) {
 	f.claim(t, core.ClaimInput{Ticket: "3"})
 	f.store.Update(func(w store.Writer) error { // Answered arrives with ticket 29
 		tk, _ := w.Ticket("acme", 3)
-		tk.State = store.Answered
+		tk.State = domain.Answered
 		return w.PutTicket("acme", tk)
 	})
-	if v, err := record(f.core.Release(human, "acme", core.ReleaseInput{Ticket: "3", Full: true})); err != nil || v.State != store.Ready {
+	if v, err := record(f.core.Release(human, "acme", core.ReleaseInput{Ticket: "3", Full: true})); err != nil || v.State != domain.Ready {
 		t.Fatalf("release from Answered: %+v, %v", v.State, err)
 	}
 }

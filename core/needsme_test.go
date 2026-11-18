@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 func wantReason(t *testing.T, v core.TicketView, want core.NeedsMeReason) {
@@ -27,7 +27,7 @@ func TestATicketWaitingOnARoundNeedsMe(t *testing.T) {
 
 func TestASilentClaimNeedsMeOnlyOnceItIsSilent(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{})
 	wantReason(t, f.get(t, "2"), "")
 	f.clock.Advance(core.SilentAfter)
@@ -46,8 +46,8 @@ func TestFailedAndInReviewNeedMe(t *testing.T) {
 
 func TestWorkThatIsNotWaitingOnTheHumanDoesNotNeedMe(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Draft, store.Ready, store.Ready, store.Ready)
-	f.setState(t, 4, store.Done)
+	f.work(t, domain.Draft, domain.Ready, domain.Ready, domain.Ready)
+	f.setState(t, 4, domain.Done)
 	f.cancel(t, core.CancelInput{Ticket: "5"}, core.Human)
 	for _, ref := range []core.Ref{"2", "3", "4", "5"} {
 		wantReason(t, f.get(t, ref), "")
@@ -56,7 +56,7 @@ func TestWorkThatIsNotWaitingOnTheHumanDoesNotNeedMe(t *testing.T) {
 
 func TestBlockedByACancelledTicketWithNoReplacementsNeedsMe(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Draft, store.Ready, store.Ready) // acme-2..acme-5
+	f.work(t, domain.Ready, domain.Draft, domain.Ready, domain.Ready) // acme-2..acme-5
 	f.addBlocker(t, "2", "3")
 	f.addBlocker(t, "4", "5")
 	wantReason(t, f.get(t, "2"), "") // an open, live Blocker is just waiting
@@ -74,7 +74,7 @@ func TestBlockedByACancelledTicketWithNoReplacementsNeedsMe(t *testing.T) {
 func TestTheEarliestGroupWinsWhenTwoReasonsApply(t *testing.T) {
 	f := newFixture(t)
 	f.inReview(t)
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Gone", State: store.Ready})
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Gone", State: domain.Ready})
 	f.addBlocker(t, "2", "3")
 	f.cancel(t, core.CancelInput{Ticket: "3"}, core.Human)
 	wantReason(t, f.get(t, "2"), core.ReasonInReview)
@@ -96,10 +96,10 @@ func needsMeWorld(t *testing.T) fixture {
 		f.spec(t, key, "Login")
 	}
 	for range 6 { // acme-2..acme-7
-		f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "A", State: store.Ready})
+		f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "A", State: domain.Ready})
 	}
 	for range 2 { // web-2, web-3
-		f.ticket(t, "web", core.CreateTicketInput{Spec: "1", Title: "W", State: store.Ready})
+		f.ticket(t, "web", core.CreateTicketInput{Spec: "1", Title: "W", State: domain.Ready})
 	}
 	f.addBlocker(t, "6", "7")
 	claims := map[string]string{}
@@ -174,7 +174,7 @@ func TestEachNeedsMeRowCarriesItsOneLineDetail(t *testing.T) {
 			rows[r.ID] = r
 		}
 	}
-	if r := rows["web-2"]; r.Project != "web" || r.Title != "W" || r.State != store.NeedsAnswer ||
+	if r := rows["web-2"]; r.Project != "web" || r.Title != "W" || r.State != domain.NeedsAnswer ||
 		r.Round == nil || *r.Round != (core.RoundSummary{Number: 1, Open: 1, Questions: 2}) {
 		t.Fatalf("web-2 %+v round %+v", r, r.Round)
 	}
@@ -184,7 +184,7 @@ func TestEachNeedsMeRowCarriesItsOneLineDetail(t *testing.T) {
 	if r := rows["acme-3"]; r.Summary != "Built the form." {
 		t.Fatalf("acme-3 summary %q", r.Summary)
 	}
-	if r := rows["acme-6"]; r.Blocker == nil || r.Blocker.ID != "acme-7" || r.Blocker.State != store.Cancelled {
+	if r := rows["acme-6"]; r.Blocker == nil || r.Blocker.ID != "acme-7" || r.Blocker.State != domain.Cancelled {
 		t.Fatalf("acme-6 blocker %+v", r.Blocker)
 	}
 	// Rows without that reason carry none of the others' detail.
@@ -195,7 +195,7 @@ func TestEachNeedsMeRowCarriesItsOneLineDetail(t *testing.T) {
 
 func TestNeedsMeIsEmptyWhenNothingWaits(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	v, err := f.core.NeedsMe(human)
 	if err != nil || v.Count != 0 || v.Groups == nil || len(v.Groups) != 0 {
 		t.Fatalf("got %+v, %v", v, err)

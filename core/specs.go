@@ -7,13 +7,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
 // A Spec's State is never stored: its StateSummary is derived as a count
 // per State of its Tickets, or {Draft: 0} when it has no Tickets. A Spec
 // is finished when it has Tickets and all of them are finished.
-type StateSummary map[store.State]int
+type StateSummary map[domain.State]int
 
 // SpecDetail is get_spec's result: the Spec, its State summary and its
 // Tickets as find_tickets rows (finished ones too), in claim order. Its
@@ -35,6 +36,15 @@ type SpecDetail struct {
 	Outline      []Heading    `json:"outline,omitzero"`
 	StateSummary StateSummary `json:"state_summary"`
 	Finished     bool         `json:"finished"`
+	// Kind, Need and Claimed are as on SpecRow.
+	Kind    SpecKind      `json:"kind"`
+	Need    NeedsMeReason `json:"need,omitempty"`
+	Claimed bool          `json:"claimed"`
+	// Editable says the UI offers Edit on the Spec, and Retroable its
+	// Retro button, as specEditable and specRetroable decide them. Every
+	// read sets them.
+	Editable  bool `json:"editable"`
+	Retroable bool `json:"retroable"`
 	// Repositories are the Spec's Changed Repositories, the union of its
 	// Tickets', by Name in landing order; left out while the Project has
 	// the Home Repository alone.
@@ -87,10 +97,69 @@ type SpecRow struct {
 	Finished     bool              `json:"finished"`
 	Updated      time.Time         `json:"updated"`
 	Link         *LinkView         `json:"link,omitempty"`
+	// Kind is the Spec's kind, for its badge.
+	Kind SpecKind `json:"kind"`
+	// Need is the reason of the first of its Tickets, in claim order,
+	// that waits on the human, as Needs Me reads it; left out when none
+	// does. Claimed says any of its Tickets holds a live Claim. A plain
+	// Spec's headline says them. Computed at read time.
+	Need    NeedsMeReason `json:"need,omitempty"`
+	Claimed bool          `json:"claimed"`
 	// Requirement is set only when the Spec is a Requirement.
 	Requirement *RequirementView `json:"requirement,omitempty"`
 	// Map is set only when the Spec is a Map.
 	Map *MapView `json:"map,omitempty"`
+}
+
+// SpecKind is a Spec's kind (the glossary's Spec kind), which its badge
+// shows.
+type SpecKind string
+
+// The Spec kinds, in the order a Spec is read as one, so a Spec that is a
+// Requirement and Long-lived is a Requirement.
+const (
+	SpecKindRequirement SpecKind = "requirement"
+	SpecKindMap         SpecKind = "map"
+	SpecKindLongLived   SpecKind = "long_lived"
+	SpecKindSpec        SpecKind = "spec"
+)
+
+// SpecKinds are the Spec kinds, in precedence order.
+func SpecKinds() []SpecKind {
+	return []SpecKind{SpecKindRequirement, SpecKindMap, SpecKindLongLived, SpecKindSpec}
+}
+
+// specKind is s's kind, given its Requirement view: a Requirement, else a
+// Map, else Long-lived, else a Spec.
+func specKind(s domain.Spec, req *RequirementView) SpecKind {
+	switch {
+	case req != nil:
+		return SpecKindRequirement
+	case isMap(s.Labels):
+		return SpecKindMap
+	case slices.Contains(s.Labels, LongLivedLabel):
+		return SpecKindLongLived
+	}
+	return SpecKindSpec
+}
+
+// specNeed is the reason of the first of tickets, in claim order, that
+// waits on the human, read from e as Needs Me reads it; "" when none does.
+func specNeed(e *evaluation, tickets []domain.Ticket) NeedsMeReason {
+	for _, t := range tickets {
+		if r, _ := e.reason(t); r != "" {
+			return r
+		}
+	}
+	return ""
+}
+
+// specClaimed reports whether any of tickets holds a live Claim.
+func specClaimed(tickets []domain.Ticket) bool {
+	return slices.ContainsFunc(tickets, func(t domain.Ticket) bool {
+		_, ok := liveClaim(t)
+		return ok
+	})
 }
 
 // FindSpecsInput is find_specs' filters; every filter given must match.
@@ -133,9 +202,10 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 		if severalRepositories(p) {
 			v.Repositories = specRepositories(p, tickets)
 		}
-		// The evaluation is worked out only if a block below reads it.
 		e := c.evaluate(r, p)
 		v.Requirement = requirementView(e, s, tickets)
+		v.Kind, v.Need, v.Claimed = specKind(s, v.Requirement), specNeed(e, tickets), specClaimed(tickets)
+		v.Editable, v.Retroable = specEditable(p, s, v.Finished), specRetroable(p, s, v.Finished)
 		v.LandPerSpec = landPerSpecView(r, key, s, tickets)
 		v.Map = mapView(e, s, tickets)
 		v.Retros = retrosOf(r, key, DisplayID(key, n))
@@ -221,8 +291,7 @@ func (c *Core) FindSpecs(_ context.Context, key string, in FindSpecsInput) ([]Sp
 		if !ok {
 			return unknownProject(key)
 		}
-		// One evaluation for every Spec, worked out only if a Requirement
-		// or Map reads it.
+		// One evaluation for every Spec.
 		e := c.evaluate(r, p)
 		for _, s := range r.Specs(key) {
 			if in.Title != "" && !strings.Contains(strings.ToLower(s.Title), strings.ToLower(in.Title)) {
@@ -243,6 +312,7 @@ func (c *Core) FindSpecs(_ context.Context, key string, in FindSpecsInput) ([]Sp
 			rows = append(rows, SpecRow{
 				ID: DisplayID(key, s.Number), Title: s.Title, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags),
 				StateSummary: summary, Finished: done, Updated: s.Updated, Link: linkView(s.Link),
+				Kind: specKind(s, req), Need: specNeed(e, tickets), Claimed: specClaimed(tickets),
 				Requirement: req, Map: mapView(e, s, tickets),
 			})
 		}
@@ -255,16 +325,16 @@ func (c *Core) FindSpecs(_ context.Context, key string, in FindSpecsInput) ([]Sp
 }
 
 // specTickets are Spec n's Tickets in claim order.
-func specTickets(r store.Reader, key string, n int) []store.Ticket {
-	tickets := slices.DeleteFunc(r.Tickets(key), func(t store.Ticket) bool { return t.Spec != n })
+func specTickets(r store.Reader, key string, n int) []domain.Ticket {
+	tickets := slices.DeleteFunc(r.Tickets(key), func(t domain.Ticket) bool { return t.Spec != n })
 	slices.SortStableFunc(tickets, claimOrder)
 	return tickets
 }
 
 // summarise derives a Spec's State summary and whether it is finished.
-func summarise(tickets []store.Ticket) (StateSummary, bool) {
+func summarise(tickets []domain.Ticket) (StateSummary, bool) {
 	if len(tickets) == 0 {
-		return StateSummary{store.Draft: 0}, false
+		return StateSummary{domain.Draft: 0}, false
 	}
 	out, done := StateSummary{}, true
 	for _, t := range tickets {

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -33,7 +34,7 @@ type ReportedModelsView struct {
 	Reported *time.Time `json:"reported,omitempty"`
 }
 
-func reportedModelsView(r store.ReportedModels) ReportedModelsView {
+func reportedModelsView(r domain.ReportedModels) ReportedModelsView {
 	v := ReportedModelsView{EffortLevels: validLevels(r), Aliases: orEmpty(r.Aliases), ModelIDs: orEmpty(r.ModelIDs), ModelFlag: r.ModelFlag, EffortFlag: r.EffortFlag}
 	if !r.Reported.IsZero() {
 		at := r.Reported
@@ -44,7 +45,7 @@ func reportedModelsView(r store.ReportedModels) ReportedModelsView {
 
 // validLevels are the valid effort levels given r: its levels, or the
 // seeded ones while it has none.
-func validLevels(r store.ReportedModels) []string {
+func validLevels(r domain.ReportedModels) []string {
 	if len(r.EffortLevels) == 0 {
 		return seededEffortLevels
 	}

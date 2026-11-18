@@ -4,13 +4,13 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // wrongKind is Spec acme-1 with Ticket acme-2 on it, and nothing as acme-3.
 func (f fixture) wrongKind(t *testing.T) {
 	t.Helper()
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 }
 
 // wantNotFound checks err is not_found, with no field, saying msg.
@@ -116,7 +116,7 @@ func ticketOps(f fixture) map[string]func(core.Ref) error {
 			return err
 		},
 		"move": func(r core.Ref) error {
-			_, err := c.Move(human, "acme", core.MoveInput{Ticket: r, ToState: store.Done})
+			_, err := c.Move(human, "acme", core.MoveInput{Ticket: r, ToState: domain.Done})
 			return err
 		},
 		"land": func(r core.Ref) error {

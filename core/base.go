@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
 )
@@ -99,8 +100,8 @@ func (c *Core) ReportBase(_ context.Context, key string, in ReportBaseInput) (Wr
 		return Written[ProjectView]{}, invalid("remote", "remote is required: the remote base commit")
 	}
 	var before ProjectView
-	var project store.Project
-	var repository store.Repository
+	var project domain.Project
+	var repository domain.Repository
 	if err := c.store.View(func(r store.Reader) error {
 		if err := writable(r, key); err != nil {
 			return err
@@ -133,21 +134,21 @@ func (c *Core) ReportBase(_ context.Context, key string, in ReportBaseInput) (Wr
 // repositoryField is the Repository of p that an operation's optional
 // repository field names: name, or the Home Repository for none. It
 // refuses a name p hasn't, as invalid in that field.
-func repositoryField(p store.Project, name string) (store.Repository, error) {
+func repositoryField(p domain.Project, name string) (domain.Repository, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		name = p.Key
 	}
 	rs := p.RepositoryList()
-	i := slices.IndexFunc(rs, func(r store.Repository) bool { return r.Name == name })
+	i := slices.IndexFunc(rs, func(r domain.Repository) bool { return r.Name == name })
 	if i < 0 {
-		return store.Repository{}, invalid("repository", "%q is not one of this Project's Repositories, which are %s", name, strings.Join(repositoryNames(rs), ", "))
+		return domain.Repository{}, invalid("repository", "%q is not one of this Project's Repositories, which are %s", name, strings.Join(repositoryNames(rs), ", "))
 	}
 	return rs[i], nil
 }
 
 // baseOfRepository is r's Base: the Project's for the Home Repository.
-func baseOfRepository(p store.Project, r store.Repository) string {
+func baseOfRepository(p domain.Project, r domain.Repository) string {
 	if r.Home {
 		return p.Base()
 	}
@@ -178,7 +179,7 @@ func (hs *heartbeats) reporting(project string, now time.Time) bool {
 
 // reportedBase is the reported base of p's Repository r while it is in
 // state and p isn't archived.
-func (c *Core) reportedBase(p store.Project, r store.Repository, state BaseState) (BaseView, bool) {
+func (c *Core) reportedBase(p domain.Project, r domain.Repository, state BaseState) (BaseView, bool) {
 	if !p.Archived.IsZero() {
 		return BaseView{}, false
 	}
@@ -195,7 +196,7 @@ func (c *Core) reportedBase(p store.Project, r store.Repository, state BaseState
 // divergedBase is the reported base of p's Repository r while it is
 // diverged and r's Landing Policy is Pull Request or Merge + Push: never
 // in a local-only Repository.
-func (c *Core) divergedBase(p store.Project, r store.Repository) (BaseView, bool) {
+func (c *Core) divergedBase(p domain.Project, r domain.Repository) (BaseView, bool) {
 	if !landingPolicyIn(p, r.Name).KeepsBaseLevel() {
 		return BaseView{}, false
 	}
@@ -204,7 +205,7 @@ func (c *Core) divergedBase(p store.Project, r store.Repository) (BaseView, bool
 
 // baseDivergedRows are p's Base diverged items: one per Repository whose
 // base has diverged, in landing order, each with no Ticket.
-func (c *Core) baseDivergedRows(p store.Project) []NeedsMeRow {
+func (c *Core) baseDivergedRows(p domain.Project) []NeedsMeRow {
 	var out []NeedsMeRow
 	for _, r := range p.RepositoryList() {
 		if b, ok := c.divergedBase(p, r); ok {
@@ -220,7 +221,7 @@ func (c *Core) baseDivergedRows(p store.Project) []NeedsMeRow {
 // baseMissingRows are p's Base missing items: one per Repository whose
 // base is missing, under any Landing Method, in landing order, each with
 // no Ticket.
-func (c *Core) baseMissingRows(p store.Project) []NeedsMeRow {
+func (c *Core) baseMissingRows(p domain.Project) []NeedsMeRow {
 	var out []NeedsMeRow
 	for _, r := range p.RepositoryList() {
 		b, ok := c.reportedBase(p, r, BaseMissing)
@@ -242,7 +243,7 @@ func (c *Core) baseMissingRows(p store.Project) []NeedsMeRow {
 
 // baseRepository is the Repository a Base item of p's names: r, while p
 // has several, as only then do reads name Repositories; "" otherwise.
-func baseRepository(p store.Project, r store.Repository) string {
+func baseRepository(p domain.Project, r domain.Repository) string {
 	if !severalRepositories(p) {
 		return ""
 	}
@@ -251,7 +252,7 @@ func baseRepository(p store.Project, r store.Repository) string {
 
 // baseItemOf ends a Base item's title with its Repository, while p has
 // several.
-func baseItemOf(p store.Project, r store.Repository) string {
+func baseItemOf(p domain.Project, r domain.Repository) string {
 	if name := baseRepository(p, r); name != "" {
 		return ": " + name
 	}
@@ -261,7 +262,7 @@ func baseItemOf(p store.Project, r store.Repository) string {
 // brokenBase says why the base of p's Repository name holds back the
 // work touching it, while its Factory reports it missing or diverged; ""
 // otherwise.
-func (c *Core) brokenBase(p store.Project, name string) string {
+func (c *Core) brokenBase(p domain.Project, name string) string {
 	r, err := repositoryField(p, name)
 	if err != nil {
 		return ""

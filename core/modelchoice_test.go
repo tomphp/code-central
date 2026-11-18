@@ -7,13 +7,13 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // readyTicket is acme-2, a Ready implementation Ticket on Spec acme-1.
 func (f fixture) readyTicket(t *testing.T) core.TicketView {
 	t.Helper()
-	return f.work(t, store.Ready)[0]
+	return f.work(t, domain.Ready)[0]
 }
 
 func (f fixture) setTags(t *testing.T, target string, tags map[string]string) {
@@ -274,7 +274,7 @@ func TestTheUIsTicketReadCarriesTheAutoAcceptKindAndTheMCPReadDoesNot(t *testing
 	}
 	mapTicket := f.ticket(t, "acme", core.CreateTicketInput{Spec: core.Ref(m.Spec.ID), Title: "In the map"}).ID
 
-	for ticket, want := range map[string]store.AutoAcceptKind{
+	for ticket, want := range map[string]domain.AutoAcceptKind{
 		"acme-2": "implementation", "acme-3": "grilling", "acme-4": "spec", "acme-5": "tickets",
 		merge: "merge", "acme-6": "", "acme-7": "", mapTicket: "",
 	} {

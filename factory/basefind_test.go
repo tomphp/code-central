@@ -1,15 +1,15 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 func setBase(h *factorytest.Harness, base string) {
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, Base: &base})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Base: &base})
 }
 
 // baseMissingItem is the Project's Base missing item in Needs Me.
@@ -32,7 +32,7 @@ func TestABaseOnlyOnTheRemoteIsCreatedLocally(t *testing.T) {
 
 	r := h.Start()
 	r.WantOutput("base: created release at")
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	if got := h.Git("rev-parse", "refs/heads/release"); got != want {
 		t.Errorf("release is at %s, want the remote's %s", got, want)
 	}
@@ -53,18 +53,18 @@ func TestAMissingBaseHoldsClaimsAndLandingUntilItIsCreated(t *testing.T) {
 		t.Errorf("Needs Me has no Base missing item for release (found one: %v, its Base %+v)", ok, row.BaseMissing)
 	}
 	r.Poll()
-	if s := h.Ticket(ready).State; s != store.Ready {
+	if s := h.Ticket(ready).State; s != domain.Ready {
 		t.Errorf("%s is %s, want it not claimed", ready, s)
 	}
-	if s := h.Ticket(landing).State; s != store.Accepted {
+	if s := h.Ticket(landing).State; s != domain.Accepted {
 		t.Errorf("%s is %s, want it not landed", landing, s)
 	}
 
 	h.Git("branch", "release", "main")
 	r.Poll()
 	r.WantOutput("base: found release again")
-	h.WantState(ready, store.InReview)
-	h.WantState(landing, store.Done)
+	h.WantState(ready, domain.InReview)
+	h.WantState(landing, domain.Done)
 	if _, ok := baseMissingItem(t, h); ok {
 		t.Errorf("Needs Me still has the Base missing item once release exists")
 	}
@@ -82,11 +82,11 @@ func TestABaseWithoutMCPJSONHoldsNewBranchesUntilItIsCommitted(t *testing.T) {
 	r.Poll()
 	r.WantOutput(".mcp.json isn't committed on release")
 	r.Poll()
-	if s := h.Ticket(ready).State; s != store.Ready {
+	if s := h.Ticket(ready).State; s != domain.Ready {
 		t.Errorf("%s is %s, want it not claimed", ready, s)
 	}
 
 	h.Git("branch", "-f", "release", "main")
 	r.Poll()
-	h.WantState(ready, store.InReview)
+	h.WantState(ready, domain.InReview)
 }

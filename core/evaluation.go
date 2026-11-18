@@ -5,6 +5,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -29,7 +30,7 @@ import (
 type evaluation struct {
 	c    *Core
 	r    store.Reader
-	p    store.Project
+	p    domain.Project
 	rule blockRule
 	// ci is the Project's CI state, which the chain reads each Ticket's
 	// CI from.
@@ -37,11 +38,11 @@ type evaluation struct {
 	// given is read in place of the stored Ticket of its number: a
 	// write's view of a Ticket it hasn't stored yet. Its number is 0 when
 	// there is none.
-	given store.Ticket
+	given domain.Ticket
 
 	done bool
 	// list is the Project's Tickets in number order, given in place.
-	list []store.Ticket
+	list []domain.Ticket
 	// reasons are the reasons of the Tickets waiting on the human, by
 	// number.
 	reasons map[int]ticketReason
@@ -55,7 +56,7 @@ type evaluation struct {
 	requirements map[int]bool
 	// specWork is each Spec's pull-request work under Pull Request (see
 	// specWork), by Spec number, read once.
-	specWork map[int][]store.Ticket
+	specWork map[int][]domain.Ticket
 }
 
 // ticketReason is why a Ticket waits on the human, and since when.
@@ -65,13 +66,13 @@ type ticketReason struct {
 }
 
 // evaluate is p's evaluation as r has it now.
-func (c *Core) evaluate(r store.Reader, p store.Project) *evaluation {
+func (c *Core) evaluate(r store.Reader, p domain.Project) *evaluation {
 	return &evaluation{c: c, r: r, p: p, rule: c.blockRule(r, p.Key), ci: c.ciStateOf(r, p)}
 }
 
 // evaluateWith is p's evaluation with t read in place of the stored
 // Ticket of its number, as a write sees t before storing it.
-func (c *Core) evaluateWith(r store.Reader, p store.Project, t store.Ticket) *evaluation {
+func (c *Core) evaluateWith(r store.Reader, p domain.Project, t domain.Ticket) *evaluation {
 	e := c.evaluate(r, p)
 	e.given = t
 	return e
@@ -85,15 +86,15 @@ func (e *evaluation) evaluated() *evaluation {
 	e.done = true
 	e.list = e.r.Tickets(e.p.Key)
 	if n := e.given.Number; n != 0 {
-		i, found := slices.BinarySearchFunc(e.list, n, func(t store.Ticket, n int) int { return cmp.Compare(t.Number, n) })
+		i, found := slices.BinarySearchFunc(e.list, n, func(t domain.Ticket, n int) int { return cmp.Compare(t.Number, n) })
 		if found {
 			e.list[i] = e.given
 		} else {
 			e.list = slices.Insert(e.list, i, e.given)
 		}
 	}
-	e.reasons, e.listedBy, e.requirements, e.specWork = map[int]ticketReason{}, map[int][]int{}, map[int]bool{}, map[int][]store.Ticket{}
-	var listed []store.Ticket
+	e.reasons, e.listedBy, e.requirements, e.specWork = map[int]ticketReason{}, map[int][]int{}, map[int]bool{}, map[int][]domain.Ticket{}
+	var listed []domain.Ticket
 	for _, t := range e.list {
 		if StageOf(t.Labels) != "" {
 			e.requirements[t.Spec] = true
@@ -122,14 +123,14 @@ func (e *evaluation) evaluated() *evaluation {
 // while Accepted. Any other Ticket, or one of those with none of its
 // reasons, waits for Blocked by a Cancelled Ticket, else Closed
 // externally, else New issue.
-func (e *evaluation) chain(t store.Ticket) (NeedsMeReason, time.Time) {
+func (e *evaluation) chain(t domain.Ticket) (NeedsMeReason, time.Time) {
 	c, p, key := e.c, e.p, e.p.Key
 	switch t.State {
-	case store.NeedsAnswer:
+	case domain.NeedsAnswer:
 		return ReasonNeedsAnswer, entered(t)
-	case store.Answered:
+	case domain.Answered:
 		return ReasonAnswered, entered(t)
-	case store.InProgress, store.Accepted:
+	case domain.InProgress, domain.Accepted:
 		a := e.ci.ticket(t)
 		if a.failed {
 			return ReasonCIFailed, a.since
@@ -141,10 +142,10 @@ func (e *evaluation) chain(t store.Ticket) (NeedsMeReason, time.Time) {
 			return "", time.Time{}
 		}
 		lp := ticketLandingPolicies(p, t)
-		if t.State == store.Accepted && lp.Any(LandingPolicy.LandsByPullRequest) && anyPullRequest(t, store.PRClosed) {
+		if t.State == domain.Accepted && lp.Any(domain.LandingPolicy.LandsByPullRequest) && anyPullRequest(t, domain.PRClosed) {
 			return ReasonPullRequestClosed, entered(t)
 		}
-		if t.State == store.Accepted && lp.Any(LandingPolicy.LandsOnHumanMerge) {
+		if t.State == domain.Accepted && lp.Any(domain.LandingPolicy.LandsOnHumanMerge) {
 			return ReasonToMerge, entered(t)
 		}
 		if s := c.silentSince(t); s != nil {
@@ -162,9 +163,9 @@ func (e *evaluation) chain(t store.Ticket) (NeedsMeReason, time.Time) {
 		if s := c.notLandedSince(p, t); s != nil && !waitsOnCIAlone(p, t, a) && !waitingForSpec(e.r, p, t) {
 			return ReasonAcceptedNotLanded, *s
 		}
-	case store.Failed:
+	case domain.Failed:
 		return ReasonFailed, entered(t)
-	case store.InReview:
+	case domain.InReview:
 		return ReasonInReview, entered(t)
 	}
 	if b, ok := cancelledBlocker(e.rule, t); ok {
@@ -184,8 +185,8 @@ func (e *evaluation) chain(t store.Ticket) (NeedsMeReason, time.Time) {
 // commit and reason, listing its Tickets accepted earliest first, waiting
 // since the earliest of theirs. A Ticket is listed on an item for each
 // Repository where it is CI failed, CI cancelled or CI unavailable.
-func (e *evaluation) group(tickets []store.Ticket) {
-	slices.SortFunc(tickets, func(a, b store.Ticket) int {
+func (e *evaluation) group(tickets []domain.Ticket) {
+	slices.SortFunc(tickets, func(a, b domain.Ticket) int {
 		return cmp.Or(entered(a).Compare(entered(b)), cmp.Compare(a.Number, b.Number))
 	})
 	for _, t := range tickets {
@@ -230,7 +231,7 @@ func (rc *repoCI) itemReason() (NeedsMeReason, time.Time) {
 
 // specPullRequestLead is specPullRequestLead(t) reading the work of t's
 // Spec from the evaluated Tickets, once per Spec.
-func (e *evaluation) specPullRequestLead(t store.Ticket) (lead, waiting bool) {
+func (e *evaluation) specPullRequestLead(t domain.Ticket) (lead, waiting bool) {
 	if !inSpecWork(e.r, e.p, t) {
 		return false, false
 	}
@@ -243,18 +244,18 @@ func (e *evaluation) specPullRequestLead(t store.Ticket) (lead, waiting bool) {
 }
 
 // tickets are the Project's Tickets as evaluated, in number order.
-func (e *evaluation) tickets() []store.Ticket { return e.evaluated().list }
+func (e *evaluation) tickets() []domain.Ticket { return e.evaluated().list }
 
 // reason is t's reason and since, or "" when it doesn't wait on the
 // human. A Ticket a CI item lists has the item's reason.
-func (e *evaluation) reason(t store.Ticket) (NeedsMeReason, time.Time) {
+func (e *evaluation) reason(t domain.Ticket) (NeedsMeReason, time.Time) {
 	tr := e.evaluated().reasons[t.Number]
 	return tr.reason, tr.since
 }
 
 // itemOf is t's first CI item, if one lists it: the first in landing
 // order whose reason is t's own.
-func (e *evaluation) itemOf(t store.Ticket) (ciItem, bool) {
+func (e *evaluation) itemOf(t domain.Ticket) (ciItem, bool) {
 	items := e.itemsOf(t)
 	if len(items) == 0 {
 		return ciItem{}, false
@@ -268,7 +269,7 @@ func (e *evaluation) itemOf(t store.Ticket) (ciItem, bool) {
 
 // itemsOf are the CI items listing t, one per Repository, in landing
 // order.
-func (e *evaluation) itemsOf(t store.Ticket) []ciItem {
+func (e *evaluation) itemsOf(t domain.Ticket) []ciItem {
 	var out []ciItem
 	for _, i := range e.evaluated().listedBy[t.Number] {
 		out = append(out, e.ciItems[i])
@@ -277,7 +278,7 @@ func (e *evaluation) itemsOf(t store.Ticket) []ciItem {
 }
 
 // itemIn is the CI item listing t in the Repository name, if one does.
-func (e *evaluation) itemIn(t store.Ticket, name string) (ciItem, bool) {
+func (e *evaluation) itemIn(t domain.Ticket, name string) (ciItem, bool) {
 	items := e.itemsOf(t)
 	if i := slices.IndexFunc(items, func(it ciItem) bool { return it.repository == name }); i >= 0 {
 		return items[i], true

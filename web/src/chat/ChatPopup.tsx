@@ -75,14 +75,19 @@ export function ChatPopup(p: ChatPopupProps) {
       <header className="chat-header">
         <h2>Chat</h2>
         {exists && (
-          <span className="muted small chat-model">
+          <span className="muted small chat-model" title={`${c.model}${c.effort ? `, ${c.effort} effort` : ""}`}>
             {c.model}
             {c.effort ? `, ${c.effort} effort` : ""}
           </span>
         )}
         <span className="chat-header-actions">
           {exists && (
-            <Button type="button" disabled={!c.resume_command} onClick={copyResume}>
+            <Button
+              type="button"
+              disabled={!c.resume_command}
+              title={c.resume_command ? undefined : "Available once the Conversation has a session, after its first reply"}
+              onClick={copyResume}
+            >
               {copied ? "Copied" : "Copy resume command"}
             </Button>
           )}
@@ -111,11 +116,16 @@ export function ChatPopup(p: ChatPopupProps) {
           {reason}
         </p>
       )}
-      {c ? <ChatMessages conversation={c} /> : <p className="muted small chat-note">Loading the Conversation…</p>}
+      {c ? <ChatMessages conversation={c} /> : <p className="muted small chat-note chat-loading">Loading the Conversation…</p>}
+      {running && c?.messages.at(-1)?.from === "human" && (
+        <p role="status" className="muted small chat-note">
+          Working…
+        </p>
+      )}
       {exists && c.messages.length === 0 && !picking && <p className="muted small chat-note">Ask Claude about {p.project}.</p>}
       {!exists && c && !picking && <p className="muted small chat-note">Ask Claude about {p.project}: your first message starts a Conversation.</p>}
       {p.error && (
-        <p role="alert" className="chat-refusal">
+        <p role="alert" className="banner chat-refusal">
           {p.error.message}
         </p>
       )}

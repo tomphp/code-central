@@ -2,6 +2,7 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"strconv"
 	"strings"
 	"testing"
@@ -45,7 +46,7 @@ func decision(t *testing.T, h *factorytest.Harness, m, label, title string) stri
 
 // putState puts Ticket id in state directly in the store, with no Claim,
 // as if it had got there on its own.
-func putState(t *testing.T, h *factorytest.Harness, id string, state store.State) {
+func putState(t *testing.T, h *factorytest.Harness, id string, state domain.State) {
 	t.Helper()
 	n, err := strconv.Atoi(strings.TrimPrefix(id, h.Project+"-"))
 	mustNot(t, err)
@@ -66,7 +67,7 @@ func mustNot(t *testing.T, err error) {
 }
 
 // wantState checks Ticket id is in want, saying why it should be.
-func wantState(t *testing.T, h *factorytest.Harness, id string, want store.State, why string) {
+func wantState(t *testing.T, h *factorytest.Harness, id string, want domain.State, why string) {
 	t.Helper()
 	if got := h.Ticket(id).State; got != want {
 		t.Errorf("%s is %s, want %s: %s", id, got, want, why)
@@ -87,31 +88,31 @@ func TestTheFactoryStartsOneDecisionPerIdleGuidedMapInCreatedOrder(t *testing.T)
 	h.Script(first, factorytest.Wait(), factorytest.Finish("Legal says yes."), factorytest.Result("success"))
 
 	r := h.Start()
-	h.WantState(first, store.InProgress)
+	h.WantState(first, domain.InProgress)
 	r.WantOutput(first + ` approved (guided Map ` + m + `): "Ask legal"`)
-	wantState(t, h, second, store.Draft, "one Ticket per Map per poll")
-	if s := h.Ticket(unblocked).State; s == store.Draft {
+	wantState(t, h, second, domain.Draft, "one Ticket per Map per poll")
+	if s := h.Ticket(unblocked).State; s == domain.Draft {
 		t.Errorf("%s is still Draft: each idle Map starts its first frontier Ticket", unblocked)
 	}
-	wantState(t, h, blocked, store.Draft, "a blocked Ticket isn't on the frontier")
+	wantState(t, h, blocked, domain.Draft, "a blocked Ticket isn't on the frontier")
 
 	h.Continue(first)
 	r.Settle()
-	h.WantState(first, store.InReview)
+	h.WantState(first, domain.InReview)
 	r.Poll()
-	wantState(t, h, second, store.Draft, "a Ticket In Review holds its Map")
+	wantState(t, h, second, domain.Draft, "a Ticket In Review holds its Map")
 
 	h.Accept(first)
-	wantState(t, h, first, store.Done, "a Map Ticket finished with no branch is Done when accepted")
+	wantState(t, h, first, domain.Done, "a Map Ticket finished with no branch is Done when accepted")
 	r.Poll()
-	if s := h.Ticket(second).State; s == store.Draft {
+	if s := h.Ticket(second).State; s == domain.Draft {
 		t.Errorf("%s is still Draft once its Map is idle again", second)
 	}
 }
 
 func TestAGuidedMapIsHeldByAnyNonResearchTicketThatWaitsOnTheHumanOrAnAgent(t *testing.T) {
 	t.Parallel()
-	for _, state := range []store.State{store.Ready, store.InProgress, store.NeedsAnswer, store.Answered, store.Failed, store.InReview, store.Accepted} {
+	for _, state := range []domain.State{domain.Ready, domain.InProgress, domain.NeedsAnswer, domain.Answered, domain.Failed, domain.InReview, domain.Accepted} {
 		t.Run(string(state), func(t *testing.T) {
 			t.Parallel()
 			h := factorytest.New(t)
@@ -123,7 +124,7 @@ func TestAGuidedMapIsHeldByAnyNonResearchTicketThatWaitsOnTheHumanOrAnAgent(t *t
 
 			r := h.Start()
 			r.Poll()
-			wantState(t, h, next, store.Draft, "a "+string(state)+" Ticket holds its Map")
+			wantState(t, h, next, domain.Draft, "a "+string(state)+" Ticket holds its Map")
 		})
 	}
 }
@@ -134,11 +135,11 @@ func TestAGuidedMapIsNotHeldByResearch(t *testing.T) {
 	m := guidedMap(t, h, "Offline mode")
 	research := decision(t, h, m, "wayfinder:research", "Sync libraries")
 	next := decision(t, h, m, "wayfinder:grilling", "Which store")
-	putState(t, h, research, store.InProgress)
+	putState(t, h, research, domain.InProgress)
 	h.Script(next, factorytest.Wait())
 
 	h.Start()
-	h.WantState(next, store.InProgress)
+	h.WantState(next, domain.InProgress)
 }
 
 func TestAMapIsGuidedOnlyWhenItsGuidedTagIsOn(t *testing.T) {
@@ -153,7 +154,7 @@ func TestAMapIsGuidedOnlyWhenItsGuidedTagIsOn(t *testing.T) {
 	r := h.Start()
 	r.Poll()
 	for _, id := range drafts {
-		wantState(t, h, id, store.Draft, "a Map is guided only by guided: on")
+		wantState(t, h, id, domain.Draft, "a Map is guided only by guided: on")
 	}
 }
 
@@ -168,5 +169,5 @@ func TestAPausedFactoryStartsNoDecision(t *testing.T) {
 	m := guidedMap(t, h, "Offline mode")
 	next := decision(t, h, m, "wayfinder:task", "Ask legal")
 	r.Poll()
-	wantState(t, h, next, store.Draft, "nothing is started during an outage")
+	wantState(t, h, next, domain.Draft, "nothing is started during an outage")
 }

@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -62,7 +63,7 @@ type ModelChoice struct {
 // tier first: t's Tag, p's Models row for t's kind of work, then p's
 // default row. It is worked out afresh for every turn, never kept per
 // Claim.
-func modelChoice(p store.Project, t store.Ticket) ModelChoice {
+func modelChoice(p domain.Project, t domain.Ticket) ModelChoice {
 	name := GuideName(t.Labels)
 	kind := p.Models.Kind(name)
 	return ModelChoice{
@@ -147,7 +148,7 @@ func (c *Core) ReportModelChoice(_ context.Context, key string, in ReportModelCh
 			return Written[TicketView]{}, invalid(field, "a %s is single-line", field)
 		}
 	}
-	return c.updateTicket(key, "report_model_choice", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, "report_model_choice", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		cl, err := holder(t, key, in.ClaimID)
 		if err != nil {
 			return false, err

@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -110,7 +111,7 @@ func (c *Core) OpenSpecMerge(ctx context.Context, key string, in OpenSpecMergeIn
 		now := c.now()
 		if t, ok := openSpecMergeTicket(tickets, title); ok {
 			res.Ticket = DisplayID(key, t.Number)
-			if t.Description == body || slices.ContainsFunc(t.Comments, func(cm store.Comment) bool { return cm.Body == body }) {
+			if t.Description == body || slices.ContainsFunc(t.Comments, func(cm domain.Comment) bool { return cm.Body == body }) {
 				res.Outcome = SpecMergeUnchanged
 				return nil
 			}
@@ -119,8 +120,8 @@ func (c *Core) OpenSpecMerge(ctx context.Context, key string, in OpenSpecMergeIn
 			res.Outcome = SpecMergeCommented
 			return w.PutTicket(key, t)
 		}
-		t := store.Ticket{
-			Number: w.NextNumber(key), Title: title, State: store.Ready, Spec: sp.Number,
+		t := domain.Ticket{
+			Number: w.NextNumber(key), Title: title, State: domain.Ready, Spec: sp.Number,
 			SpecMergeTicket: true, Created: now, Updated: now, Description: body,
 		}
 		res = OpenSpecMergeResult{Ticket: DisplayID(key, t.Number), Outcome: SpecMergeOpened}
@@ -131,7 +132,7 @@ func (c *Core) OpenSpecMerge(ctx context.Context, key string, in OpenSpecMergeIn
 
 // whyNoSpecMerge is why spec, with its tickets, takes no Spec merge
 // Ticket, or "" when it does.
-func whyNoSpecMerge(spec store.Spec, tickets []store.Ticket) string {
+func whyNoSpecMerge(spec domain.Spec, tickets []domain.Ticket) string {
 	switch {
 	case slices.Contains(spec.Labels, LongLivedLabel):
 		return "is Long-lived: its Tickets land one by one, with no Spec Branch"
@@ -147,8 +148,8 @@ func whyNoSpecMerge(spec store.Spec, tickets []store.Ticket) string {
 // openSpecMergeTicket is the open Ticket among a Spec's tickets that
 // takes its Spec merge comments: the first open marked one, else the
 // first open unmarked one titled title.
-func openSpecMergeTicket(tickets []store.Ticket, title string) (store.Ticket, bool) {
-	var legacy *store.Ticket
+func openSpecMergeTicket(tickets []domain.Ticket, title string) (domain.Ticket, bool) {
+	var legacy *domain.Ticket
 	for i, t := range tickets {
 		if finished(t.State) {
 			continue
@@ -163,7 +164,7 @@ func openSpecMergeTicket(tickets []store.Ticket, title string) (store.Ticket, bo
 	if legacy != nil {
 		return *legacy, true
 	}
-	return store.Ticket{}, false
+	return domain.Ticket{}, false
 }
 
 // specMergeBody is a Spec merge Ticket's description, and each comment it
@@ -204,7 +205,7 @@ func checkSpecMergeConflict(at string, conflicts []string, baseTip, specTip stri
 // Repository's. It refuses a name that isn't one of p's Repositories, a
 // name given twice, an entry without its files or either tip, and the
 // Home Repository given in both forms.
-func specMergeConflicts(p store.Project, in OpenSpecMergeInput) ([]SpecMergeConflict, error) {
+func specMergeConflicts(p domain.Project, in OpenSpecMergeInput) ([]SpecMergeConflict, error) {
 	var out []SpecMergeConflict
 	if in.homeGiven() {
 		out = append(out, SpecMergeConflict{Name: p.Key, Conflicts: in.Conflicts, BaseTip: in.BaseTip, SpecBranchTip: in.SpecBranchTip})
@@ -240,7 +241,7 @@ func (in OpenSpecMergeInput) homeGiven() bool {
 // conflicting in each of cs's Repositories, p's: one Spec merge Ticket
 // names each, with its base, both tips and its files (ADR 0049). Each of
 // cs names one of p's Repositories, as specMergeConflicts checked.
-func specMergeBodyPerRepository(p store.Project, spec string, cs []SpecMergeConflict) string {
+func specMergeBodyPerRepository(p domain.Project, spec string, cs []SpecMergeConflict) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "The Spec Branch spec/%s conflicts with the base in these Repositories:\n\n", spec)
 	for _, c := range cs {

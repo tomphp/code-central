@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
 )
@@ -15,8 +16,8 @@ import (
 
 // MoveInput is the human's move(ticket, to_state).
 type MoveInput struct {
-	Ticket  Ref         `json:"ticket" path:"n"`
-	ToState store.State `json:"to_state"`
+	Ticket  Ref          `json:"ticket" path:"n"`
+	ToState domain.State `json:"to_state"`
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
@@ -25,7 +26,7 @@ type MoveInput struct {
 // own, Needs Answer and Failed. Leaving a Claim State ends the Claim;
 // leaving Needs Answer also dismisses its open Questions.
 func (c *Core) Move(ctx context.Context, key string, in MoveInput) (Written[TicketView], error) {
-	return c.updateTicket(key, "move", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, "move", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		to := in.ToState
 		row := Workflow[slices.IndexFunc(Workflow, func(a Action) bool { return a.Name == "move" })]
 		switch {
@@ -76,9 +77,9 @@ func (c *Core) RenameProject(ctx context.Context, key string, in RenameProjectIn
 // SetLandingMethodInput is the human's set_landing_method(method, push,
 // remote, land_per_spec).
 type SetLandingMethodInput struct {
-	Method store.LandingMethod `json:"method"`
-	Push   bool                `json:"push"`
-	Remote string              `json:"remote"`
+	Method domain.LandingMethod `json:"method"`
+	Push   bool                 `json:"push"`
+	Remote string               `json:"remote"`
 	// LandPerSpec, when left out, keeps the stored value.
 	LandPerSpec *bool `json:"land_per_spec,omitempty"`
 	// PATEnv names the environment variable holding the Azure Repos PAT
@@ -97,26 +98,26 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		return ProjectView{}, err
 	}
 	if !in.Method.Valid() {
-		return ProjectView{}, invalid("method", "Landing Method %q is not %q, %q or %q", in.Method, store.LandingMerge, store.LandingBranch, store.LandingPullRequest)
+		return ProjectView{}, invalid("method", "Landing Method %q is not %q, %q or %q", in.Method, domain.LandingMerge, domain.LandingBranch, domain.LandingPullRequest)
 	}
 	// Push is implied under Pull Request, so the flag is ignored and not stored.
-	l := store.Landing{Method: in.Method, Push: in.Push, Remote: strings.TrimSpace(in.Remote)}.Normalized()
+	l := domain.Landing{Method: in.Method, Push: in.Push, Remote: strings.TrimSpace(in.Remote)}.Normalized()
 	if l.Remote == "" {
 		if l.Push {
-			return ProjectView{}, invalid("remote", "Push needs a git remote to push to, such as %q", store.DefaultLandingRemote)
+			return ProjectView{}, invalid("remote", "Push needs a git remote to push to, such as %q", domain.DefaultLandingRemote)
 		}
-		l.Remote = store.DefaultLandingRemote
+		l.Remote = domain.DefaultLandingRemote
 	}
 	patEnv := strings.TrimSpace(in.PATEnv)
 	if patEnv != "" && !patEnvPattern.MatchString(patEnv) {
-		return ProjectView{}, invalid("pat_env", "%q is not an environment variable's name, such as %s", patEnv, store.DefaultPATEnv)
+		return ProjectView{}, invalid("pat_env", "%q is not an environment variable's name, such as %s", patEnv, domain.DefaultPATEnv)
 	}
 	if in.Base != nil {
 		if err := checkBranchName(strings.TrimSpace(*in.Base)); err != nil {
 			return ProjectView{}, invalid("base", "%s", err)
 		}
 	}
-	withLanding := func(p store.Project) store.Project {
+	withLanding := func(p domain.Project) domain.Project {
 		p.Landing.Method, p.Landing.Push = l.Method, l.Push
 		if patEnv != "" {
 			p.Landing.PATEnv = patEnv
@@ -166,7 +167,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		}
 		if p.Landing.Method != l.Method {
 			for _, t := range w.Tickets(key) {
-				if t.State == store.Accepted {
+				if t.State == domain.Accepted {
 					accepted = append(accepted, t.Number)
 				}
 			}
@@ -175,7 +176,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 			// What the Pull Request Watcher said was about the old method.
 			c.watchers.reset(watcherKey{WatcherPullRequests, key})
 			for _, t := range w.Tickets(key) {
-				if t.State == store.Accepted && slices.ContainsFunc(t.PullRequests, pullRequestOpen) {
+				if t.State == domain.Accepted && slices.ContainsFunc(t.PullRequests, pullRequestOpen) {
 					left = append(left, t.Number)
 				}
 			}

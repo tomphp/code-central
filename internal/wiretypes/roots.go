@@ -4,7 +4,7 @@ import (
 	"reflect"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // roots are the response types the UI reads, each written with every
@@ -42,39 +42,42 @@ var fields = []Fields{
 // enums are the value lists of the typed strings the roots reach, each
 // written as a union with its value array, in the list's order.
 var enums = []Enum{
-	enumOf("States", store.States),
+	enumOf("States", domain.States),
 	enumOf("NeedsMeReasons", core.NeedsMeReasons),
 	enumOf("TriageActions", core.TriageActions()),
-	enumOf("Modes", store.Modes),
-	enumOf("LandingMethods", store.LandingMethods),
+	enumOf("Modes", domain.Modes),
+	enumOf("LandingMethods", domain.LandingMethods),
 	enumOf("RepositoryLandings", core.RepositoryLandings()),
 	enumOf("CodeHosts", core.CodeHosts()),
 	enumOf("CloneStates", core.CloneStates()),
-	enumOf("CIProviders", store.CIProviders),
-	enumOf("AzureBoardsModes", store.AzureBoardsModes),
+	enumOf("CIProviders", domain.CIProviders),
+	enumOf("AzureBoardsModes", domain.AzureBoardsModes),
 	enumOf("WatcherStates", core.WatcherStates()),
 	enumOf("WatcherProblems", core.WatcherProblems()),
-	enumOf("AutoAcceptKinds", store.AutoAcceptKinds),
-	enumOf("AutoAcceptCauses", store.AutoAcceptCauses),
+	enumOf("AutoAcceptKinds", domain.AutoAcceptKinds),
+	enumOf("AutoAcceptCauses", domain.AutoAcceptCauses),
 	enumOf("ChoiceSources", core.ChoiceSources()),
 	enumOf("CIResults", core.CIResults()),
-	enumOf("CIRunStatuses", store.CIRunStatuses),
-	enumOf("CIConclusions", store.CIConclusions),
-	enumOf("PullRequestStates", store.PullRequestStates),
+	enumOf("CIRunStatuses", domain.CIRunStatuses),
+	enumOf("CIConclusions", domain.CIConclusions),
+	enumOf("PullRequestStates", domain.PullRequestStates),
 	enumOf("FactoryStatusNames", core.FactoryStatusNames()),
 	enumOf("BaseStates", core.BaseStates()),
 	enumOf("RecordKinds", core.RecordKinds()),
-	enumOf("ExternalStates", store.ExternalStates),
+	enumOf("ExternalStates", domain.ExternalStates),
 	enumOf("CIFailureOptions", core.CIFailureOptions()),
 	enumOf("CIUnavailableCauses", core.CIUnavailableCauses()),
 	enumOf("Stages", core.Stages()),
+	enumOf("SegmentStages", core.SegmentStages()),
+	enumOf("SegmentProgresses", core.SegmentProgresses()),
 	enumOf("NodeTypes", core.NodeTypes),
-	enumOf("Recommendations", store.Recommendations),
-	enumOf("QuestionStatuses", store.QuestionStatuses),
+	enumOf("SpecKinds", core.SpecKinds()),
+	enumOf("Recommendations", domain.Recommendations),
+	enumOf("QuestionStatuses", domain.QuestionStatuses),
 	enumOf("SessionEventKinds", core.SessionEventKinds()),
-	enumOf("FocusClears", store.FocusClears),
-	enumOf("FocusPopups", store.FocusPopups),
-	enumOf("LimitsPopups", store.LimitsPopups),
+	enumOf("FocusClears", domain.FocusClears),
+	enumOf("FocusPopups", domain.FocusPopups),
+	enumOf("LimitsPopups", domain.LimitsPopups),
 	enumOf("ChatAvailabilities", core.ChatAvailabilities()),
 	enumOf("ChatAuthors", core.ChatAuthors()),
 	enumOf("ChatOutcomes", core.ChatOutcomes()),

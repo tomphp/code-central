@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
 )
@@ -20,15 +21,15 @@ func scratch() core.ImportPayload {
 			{Source: ".scratch/billing/", Title: "billing"},
 		},
 		Tickets: []core.ImportTicket{
-			{Source: ".scratch/login/issues/01-form.md", Spec: ".scratch/login/spec.md", Title: "Form", State: store.Done,
+			{Source: ".scratch/login/issues/01-form.md", Spec: ".scratch/login/spec.md", Title: "Form", State: domain.Done,
 				Description: "Build the form.\n", Tags: map[string]string{"scratch.status": "resolved"}},
-			{Source: ".scratch/login/issues/02-api.md", Spec: ".scratch/login/spec.md", Title: "API", State: store.Ready,
+			{Source: ".scratch/login/issues/02-api.md", Spec: ".scratch/login/spec.md", Title: "API", State: domain.Ready,
 				Labels: []string{"backend"}, BlockedBy: []string{".scratch/login/issues/01-form.md"}},
-			{Source: ".scratch/billing/issues/01-invoices.md", Spec: ".scratch/billing/", Title: "Invoices", State: store.Cancelled,
+			{Source: ".scratch/billing/issues/01-invoices.md", Spec: ".scratch/billing/", Title: "Invoices", State: domain.Cancelled,
 				Replacements: []string{".scratch/billing/issues/02-pdf.md"}, Tags: map[string]string{"scratch.status": "Superseded by 02"}},
 			{Source: ".scratch/billing/issues/02-pdf.md", Spec: ".scratch/billing/", Title: "PDF invoices",
 				BlockedBy: []string{".scratch/login/issues/02-api.md"}},
-			{Source: ".scratch/billing/issues/03-tax.md", Spec: ".scratch/billing/", Title: "Tax", State: store.Cancelled,
+			{Source: ".scratch/billing/issues/03-tax.md", Spec: ".scratch/billing/", Title: "Tax", State: domain.Cancelled,
 				Comment: "wontfix: out of scope\n"},
 		},
 	}
@@ -66,17 +67,17 @@ func TestADryRunReturnsThePlanAndWritesNothing(t *testing.T) {
 		t.Fatalf("billing %s, ticket IDs %v", billing.ID, ids)
 	}
 	api := login.Tickets[1]
-	if api.Source != ".scratch/login/issues/02-api.md" || api.Title != "API" || api.State != store.Ready ||
+	if api.Source != ".scratch/login/issues/02-api.md" || api.Title != "API" || api.State != domain.Ready ||
 		!slices.Equal(api.Labels, []string{"backend"}) || api.Tags["source"] != api.Source || !slices.Equal(api.BlockedBy, []string{"acme-3"}) {
 		t.Fatalf("api ticket: %+v", api)
 	}
 	if inv := billing.Tickets[0]; !slices.Equal(inv.Replacements, []string{"acme-7"}) {
 		t.Fatalf("invoices: %+v", inv)
 	}
-	if pdf := billing.Tickets[1]; pdf.State != store.Draft {
+	if pdf := billing.Tickets[1]; pdf.State != domain.Draft {
 		t.Fatalf("a Ticket with no State is Draft: %+v", pdf)
 	}
-	want := map[store.State]int{store.Draft: 1, store.Ready: 1, store.Done: 1, store.Cancelled: 2}
+	want := map[domain.State]int{domain.Draft: 1, domain.Ready: 1, domain.Done: 1, domain.Cancelled: 2}
 	if !maps.Equal(plan.StateCounts, want) {
 		t.Fatalf("state counts %v, want %v", plan.StateCounts, want)
 	}
@@ -106,11 +107,11 @@ func TestAnImportWritesEverySpecAndTicket(t *testing.T) {
 		t.Fatalf("spec: %+v, %v", sp, err)
 	}
 	form, _ := f.core.GetTicket(ctx, "acme", whole("acme-3"))
-	if form.State != store.Done || form.Description != "Build the form.\n" || form.Spec.ID != "acme-2" || len(form.Claims) != 0 {
+	if form.State != domain.Done || form.Description != "Build the form.\n" || form.Spec.ID != "acme-2" || len(form.Claims) != 0 {
 		t.Fatalf("form: %+v", form)
 	}
 	// One move, with no from, written as agent whoever calls.
-	if len(form.Moves) != 1 || form.Moves[0] != (core.MoveView{To: store.Done, Actor: "agent", Time: t0, Via: "import"}) {
+	if len(form.Moves) != 1 || form.Moves[0] != (core.MoveView{To: domain.Done, Actor: "agent", Time: t0, Via: "import"}) {
 		t.Fatalf("moves: %+v", form.Moves)
 	}
 	if api, _ := f.core.GetTicket(ctx, "acme", whole("acme-4")); api.Blocked || !api.Claimable {
@@ -121,7 +122,7 @@ func TestAnImportWritesEverySpecAndTicket(t *testing.T) {
 		t.Fatalf("pdf: %+v", pdf)
 	}
 	tax, _ := f.core.GetTicket(ctx, "acme", whole("acme-8"))
-	if tax.State != store.Cancelled || len(tax.Comments) != 1 || tax.Comments[0].Body != "wontfix: out of scope\n" || tax.Comments[0].Actor != "agent" {
+	if tax.State != domain.Cancelled || len(tax.Comments) != 1 || tax.Comments[0].Body != "wontfix: out of scope\n" || tax.Comments[0].Actor != "agent" {
 		t.Fatalf("tax: %+v", tax)
 	}
 	if spec := f.spec(t, "acme", "After"); spec.ID != "acme-9" {
@@ -201,7 +202,7 @@ func TestAnInvalidPayloadNamesTheFieldAndWritesNothing(t *testing.T) {
 		{"duplicate source", func(p *core.ImportPayload) { p.Tickets[3].Source = p.Tickets[1].Source }, "tickets[3].source"},
 		{"ticket without title", func(p *core.ImportPayload) { p.Tickets[1].Title = "" }, "tickets[1].title"},
 		{"unknown spec", func(p *core.ImportPayload) { p.Tickets[1].Spec = ".scratch/nope/" }, "tickets[1].spec"},
-		{"in progress", func(p *core.ImportPayload) { p.Tickets[1].State = store.InProgress }, "tickets[1].state"},
+		{"in progress", func(p *core.ImportPayload) { p.Tickets[1].State = domain.InProgress }, "tickets[1].state"},
 		{"unknown state", func(p *core.ImportPayload) { p.Tickets[1].State = "Doing" }, "tickets[1].state"},
 		{"unknown blocker", func(p *core.ImportPayload) { p.Tickets[3].BlockedBy = []string{"x", ".scratch/nope.md"} }, "tickets[3].blocked_by[0]"},
 		{"spec as blocker", func(p *core.ImportPayload) { p.Tickets[3].BlockedBy = []string{".scratch/billing/"} }, "tickets[3].blocked_by[0]"},

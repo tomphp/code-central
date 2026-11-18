@@ -3,6 +3,7 @@ package server_test
 import (
 	"context"
 	"encoding/json"
+	"github.com/tomoram/code-central/domain"
 	"net/http"
 	"slices"
 	"strconv"
@@ -41,15 +42,15 @@ func after(d time.Duration) *time.Time {
 // started is a run of workflow tracked against acme-3, started at
 // started and still in progress.
 func started(id int64, workflow string, started time.Duration) core.CIRunView {
-	run := ciRun(id, workflow, "abc123", store.CIInProgress, "")
+	run := ciRun(id, workflow, "abc123", domain.CIInProgress, "")
 	run.Started = after(started)
 	return run
 }
 
 // finished is a run of workflow tracked against acme-3 that ran from
 // started to finished and ended with conclusion.
-func finished(id int64, workflow string, started, finished time.Duration, conclusion store.CIConclusion) core.CIRunView {
-	run := ciRun(id, workflow, "abc123", store.CICompleted, conclusion)
+func finished(id int64, workflow string, started, finished time.Duration, conclusion domain.CIConclusion) core.CIRunView {
+	run := ciRun(id, workflow, "abc123", domain.CICompleted, conclusion)
 	run.Started, run.Finished = after(started), after(finished)
 	return run
 }
@@ -66,14 +67,14 @@ func runKeys(v core.CIOverview) []string {
 func TestTheCIViewListsInProgressRunsFirstThenTheLastSevenDaysFinished(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
 	reportRuns(t, srv,
-		finished(1, "old.yml", 0, time.Hour, store.CISuccess),
-		finished(2, "lint.yml", 0, 2*24*time.Hour, store.CIFailure),
-		finished(3, "ci.yml", 0, 3*24*time.Hour, store.CISuccess),
+		finished(1, "old.yml", 0, time.Hour, domain.CISuccess),
+		finished(2, "lint.yml", 0, 2*24*time.Hour, domain.CIFailure),
+		finished(3, "ci.yml", 0, 3*24*time.Hour, domain.CISuccess),
 		started(4, "deploy.yml", 7*24*time.Hour),
 		started(5, "e2e.yml", 7*24*time.Hour+time.Hour),
 	)
 	// A re-run is the run's next attempt: only the latest is listed.
-	rerun := finished(2, "lint.yml", 0, 7*24*time.Hour+2*time.Hour, store.CISuccess)
+	rerun := finished(2, "lint.yml", 0, 7*24*time.Hour+2*time.Hour, domain.CISuccess)
 	rerun.Attempt = 2
 	reportRuns(t, srv, rerun)
 	srv.Clock.Advance(7*24*time.Hour + 3*time.Hour)
@@ -83,7 +84,7 @@ func TestTheCIViewListsInProgressRunsFirstThenTheLastSevenDaysFinished(t *testin
 	if got := runKeys(v); !slices.Equal(got, want) {
 		t.Fatalf("runs %v, want %v: in progress newest first, then finished in the last 7 days newest first", got, want)
 	}
-	if r := v.Runs[2]; r.Ticket != "acme-3" || r.Conclusion != store.CISuccess || r.Commit != "abc123" || r.URL == "" {
+	if r := v.Runs[2]; r.Ticket != "acme-3" || r.Conclusion != domain.CISuccess || r.Commit != "abc123" || r.URL == "" {
 		t.Fatalf("row %+v, want everything the CI Watcher reported of it", r)
 	}
 	if len(v.Projects) != 1 || v.Projects[0].Project != "acme" || !v.Projects[0].Tracking || v.Projects[0].Repository != "acme/web" ||
@@ -95,9 +96,9 @@ func TestTheCIViewListsInProgressRunsFirstThenTheLastSevenDaysFinished(t *testin
 func TestTheCIViewMarksIgnoredRunsAndRunsTrackedAgainstACIRule(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
 	httpOK(t, srv, addCIRule(`{"workflow":"ci.yml","branch":"main"}`))
-	ruled := finished(2, "ci.yml", 0, time.Minute, store.CIFailure)
+	ruled := finished(2, "ci.yml", 0, time.Minute, domain.CIFailure)
 	ruled.Ticket, ruled.Rule, ruled.Commit = "", "acme-4", "fff999"
-	reportRuns(t, srv, finished(1, "nightly.yml", 0, 2*time.Minute, store.CISuccess), ruled)
+	reportRuns(t, srv, finished(1, "nightly.yml", 0, 2*time.Minute, domain.CISuccess), ruled)
 
 	v := readCI(t, srv, "?project=acme")
 	if len(v.Runs) != 2 || !v.Runs[0].Ignored || v.Runs[0].Workflow != "nightly.yml" {
@@ -170,7 +171,7 @@ func TestTheCIViewRefusesAnUnknownProjectOrParameter(t *testing.T) {
 
 func TestCIRunsFinishedMoreThanThirtyDaysAgoArePruned(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
-	reportRuns(t, srv, finished(1, "ci.yml", 0, time.Hour, store.CISuccess), started(2, "slow.yml", 0))
+	reportRuns(t, srv, finished(1, "ci.yml", 0, time.Hour, domain.CISuccess), started(2, "slow.yml", 0))
 
 	srv.Clock.Advance(30*24*time.Hour + 30*time.Minute)
 	if tk := ticket3(t, srv); len(tk.CIRuns) != 2 {
@@ -184,7 +185,7 @@ func TestCIRunsFinishedMoreThanThirtyDaysAgoArePruned(t *testing.T) {
 		t.Fatalf("runs %+v, want only the unfinished one", tk.CIRuns)
 	}
 	reportRuns(t, srv, started(3, "next.yml", 31*24*time.Hour))
-	var stored []store.CIRun
+	var stored []domain.CIRun
 	must(t, func() error {
 		return srv.Store.View(func(r store.Reader) error { stored = r.CIRuns("acme"); return nil })
 	})
@@ -198,7 +199,7 @@ func TestCIRunsFinishedMoreThanThirtyDaysAgoArePruned(t *testing.T) {
 
 func TestATicketWhoseRunsWerePrunedHasNoCIResult(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
-	reportRuns(t, srv, finished(1, "ci.yml", 0, time.Hour, store.CISuccess))
+	reportRuns(t, srv, finished(1, "ci.yml", 0, time.Hour, domain.CISuccess))
 	srv.Clock.Advance(31 * 24 * time.Hour)
 	tk := ticket3(t, srv)
 	if tk.PushedCommit == nil || tk.CIResult != "" || tk.CIRuns != nil {
@@ -241,19 +242,19 @@ func TestTheRunningReadHasTheUnfinishedRunsCountingTowardsATicketsCIResult(t *te
 	srv := newServer(t, pushedAccepted)
 	httpOK(t, srv, addCIRule(`{"workflow":"ci.yml","branch":"main"}`))
 	queued := started(2, "queued.yml", 2*time.Minute)
-	queued.Status = store.CIQueued
+	queued.Status = domain.CIQueued
 	ruled := started(5, "ci.yml", 5*time.Minute)
 	ruled.Ticket, ruled.Rule = "", "acme-4"
 	// A re-run's latest attempt replaces its earlier ones: one still
 	// going, the other finished.
 	rerunGoing := started(6, "rerun.yml", 6*time.Minute)
 	rerunGoing.Attempt = 2
-	rerunDone := finished(7, "redone.yml", 7*time.Minute, 8*time.Minute, store.CISuccess)
+	rerunDone := finished(7, "redone.yml", 7*time.Minute, 8*time.Minute, domain.CISuccess)
 	rerunDone.Attempt = 2
 	reportRuns(t, srv,
 		started(1, "ci.yml", time.Minute),
 		queued,
-		finished(3, "lint.yml", 3*time.Minute, 4*time.Minute, store.CISuccess),
+		finished(3, "lint.yml", 3*time.Minute, 4*time.Minute, domain.CISuccess),
 		started(4, "nightly.yml", 4*time.Minute),
 		ruled,
 		started(6, "rerun.yml", 0),
@@ -282,13 +283,13 @@ func TestTheRunningReadHasTheUnfinishedRunsCountingTowardsATicketsCIResult(t *te
 // Ticket (code-central-430), so its running run still counts.
 func TestUnderTheCIGateTheRunningReadKeepsRunsOnATicketsEarlierPushedCommit(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
-	reportRuns(t, srv, started(1, "ci.yml", 0), ciRun(2, "old.yml", "fff999", store.CIInProgress, ""))
+	reportRuns(t, srv, started(1, "ci.yml", 0), ciRun(2, "old.yml", "fff999", domain.CIInProgress, ""))
 	if got := runKeys(readCI(t, srv, "?running=true")); !slices.Equal(got, []string{"acme/ci.yml#1"}) {
 		t.Fatalf("runs %v, want only abc123's run: fff999 isn't acme-3's pushed commit", got)
 	}
 
 	pushCommit(t, srv, "def456")
-	reportRuns(t, srv, ciRun(3, "e2e.yml", "def456", store.CIQueued, ""))
+	reportRuns(t, srv, ciRun(3, "e2e.yml", "def456", domain.CIQueued, ""))
 	if got := runKeys(readCI(t, srv, "?running=true")); !slices.Equal(slices.Sorted(slices.Values(got)), []string{"acme/ci.yml#1", "acme/e2e.yml#1"}) {
 		t.Fatalf("runs %v, want abc123's run and def456's", got)
 	}
@@ -297,7 +298,7 @@ func TestUnderTheCIGateTheRunningReadKeepsRunsOnATicketsEarlierPushedCommit(t *t
 func TestOutsideTheCIGateTheRunningReadLeavesOutRunsOnATicketsEarlierPushedCommit(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
 	must(t, func() error {
-		_, err := srv.Core.SetLandingMethod(core.WithActor(context.Background(), core.Human), "acme", core.SetLandingMethodInput{Method: store.LandingBranch, Push: true, Remote: "origin"})
+		_, err := srv.Core.SetLandingMethod(core.WithActor(context.Background(), core.Human), "acme", core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 		return err
 	})
 	reportRuns(t, srv, started(1, "ci.yml", 0))
@@ -305,7 +306,7 @@ func TestOutsideTheCIGateTheRunningReadLeavesOutRunsOnATicketsEarlierPushedCommi
 	if got := runKeys(readCI(t, srv, "?running=true")); len(got) != 0 {
 		t.Fatalf("runs %v, want abc123's run dropped once def456 is pushed", got)
 	}
-	reportRuns(t, srv, ciRun(3, "ci.yml", "def456", store.CIQueued, ""))
+	reportRuns(t, srv, ciRun(3, "ci.yml", "def456", domain.CIQueued, ""))
 	if got := runKeys(readCI(t, srv, "?running=true")); !slices.Equal(got, []string{"acme/ci.yml#1"}) || readCI(t, srv, "?running=true").Runs[0].ID != 3 {
 		t.Fatalf("runs %v, want def456's run", got)
 	}
@@ -322,7 +323,7 @@ func TestTheRunningReadLeavesOutRunsOfATicketWithNoPushedCommit(t *testing.T) {
 func TestTheRunningReadForAllProjectsHasEveryActiveProjectWithCITrackingOn(t *testing.T) {
 	srv := newServer(t, pushedAccepted, pushedInOther)
 	reportRuns(t, srv, started(1, "ci.yml", 0))
-	going := ciRun(2, "e2e.yml", "fed321", store.CIInProgress, "")
+	going := ciRun(2, "e2e.yml", "fed321", domain.CIInProgress, "")
 	going.Ticket, going.Started = "other-2", after(time.Minute)
 	must(t, func() error {
 		_, err := srv.Client.ReportCIRuns(context.Background(), "other", core.ReportCIRunsInput{Runs: []core.CIRunView{going}})
@@ -373,7 +374,7 @@ func pushedInOther(t *testing.T, srv *codecentraltest.Server) {
 	human := core.WithActor(ctx, core.Human)
 	httpOK(t, srv, httpCall{"POST", "/api/p/other/set_ci_tracking", `{"tracking":true,"repository":"acme/other"}`})
 	must(t, func() error {
-		_, err := srv.Core.SetLandingMethod(human, "other", core.SetLandingMethodInput{Method: store.LandingMerge, Push: true, Remote: "origin"})
+		_, err := srv.Core.SetLandingMethod(human, "other", core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"})
 		return err
 	})
 	must(t, func() error {

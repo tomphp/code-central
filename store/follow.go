@@ -1,5 +1,7 @@
 package store
 
+import "github.com/tomoram/code-central/domain"
+
 import "slices"
 
 // Follow returns the Tickets standing in for Ticket n as a Blocker: n
@@ -21,7 +23,7 @@ func follow(r Reader, project string, n int, seen map[int]bool) []int {
 	seen[n] = true // on the current path only, so two routes to one Ticket both reach it
 	defer delete(seen, n)
 	t, ok := r.Ticket(project, n)
-	if !ok || t.State != Cancelled || len(t.Replacements) == 0 {
+	if !ok || t.State != domain.Cancelled || len(t.Replacements) == 0 {
 		return []int{n}
 	}
 	var out []int

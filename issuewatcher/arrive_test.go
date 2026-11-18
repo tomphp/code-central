@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"net/url"
 	"slices"
 	"strconv"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
-	"github.com/tomoram/code-central/store"
 )
 
 // issue is an item in GitHub's list of a repository's issues; a pull
@@ -173,7 +173,7 @@ func TestOpenIssuesArriveAsDraftIncomingIssuesButPullRequestsDont(t *testing.T) 
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.Link == nil || got.State != store.Draft || got.Spec.ID != watch.Spec || got.Link.ExternalState != store.ExternalOpen {
+		if got.Link == nil || got.State != domain.Draft || got.Spec.ID != watch.Spec || got.Link.ExternalState != domain.ExternalOpen {
 			t.Fatalf("%s is %s on %s, %s, want Draft on the Issues Spec %s, open", i.Ticket, got.State, got.Spec.ID, got.Link.ExternalState, watch.Spec)
 		}
 	}

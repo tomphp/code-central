@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -15,10 +16,10 @@ import (
 
 // ciResultWorld is acme under landing with CI Tracking on, and acme-2
 // Accepted.
-func ciResultWorld(t *testing.T, landing store.Landing) fixture {
+func ciResultWorld(t *testing.T, landing domain.Landing) fixture {
 	t.Helper()
 	f := newFixture(t)
-	f.work(t, store.Ready) // acme-2
+	f.work(t, domain.Ready) // acme-2
 	err := f.store.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
 		p.Landing = landing
@@ -28,12 +29,12 @@ func ciResultWorld(t *testing.T, landing store.Landing) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.moveTo(t, 2, store.Accepted)
+	f.moveTo(t, 2, domain.Accepted)
 	return f
 }
 
 // gate is Merge + Push, under which the CI gate holds.
-var gate = store.Landing{Method: store.LandingMerge, Push: true, Remote: "origin"}
+var gate = domain.Landing{Method: domain.LandingMerge, Push: true, Remote: "origin"}
 
 // pushed reports, as the Factory, commit as ticket's pushed commit, a
 // minute after the last report.
@@ -48,17 +49,17 @@ func (f fixture) pushed(t *testing.T, ticket, commit string) {
 // ciRun reports, as the CI Watcher, attempt 1 of run id of workflow on
 // commit tracked against ticket: one shared run per commit, as the real
 // CI Watcher reports.
-func (f fixture) ciRun(t *testing.T, id int64, workflow, commit, ticket string, status store.CIRunStatus, conclusion store.CIConclusion) {
+func (f fixture) ciRun(t *testing.T, id int64, workflow, commit, ticket string, status domain.CIRunStatus, conclusion domain.CIConclusion) {
 	t.Helper()
 	f.ciAttempt(t, id, 1, workflow, commit, ticket, status, conclusion)
 }
 
-func (f fixture) ciAttempt(t *testing.T, id int64, attempt int, workflow, commit, ticket string, status store.CIRunStatus, conclusion store.CIConclusion) {
+func (f fixture) ciAttempt(t *testing.T, id int64, attempt int, workflow, commit, ticket string, status domain.CIRunStatus, conclusion domain.CIConclusion) {
 	t.Helper()
 	started := f.clock.Now()
 	run := core.CIRunView{ID: id, Attempt: attempt, Workflow: workflow, Name: workflow, Branch: "main", Commit: commit,
 		Status: status, Conclusion: conclusion, Started: &started, URL: "https://github.com/acme/web/actions/runs/1", Ticket: ticket}
-	if status == store.CICompleted {
+	if status == domain.CICompleted {
 		run.Finished = &started
 	}
 	if _, err := f.core.ReportCIRuns(ctx, "acme", core.ReportCIRunsInput{Runs: []core.CIRunView{run}}); err != nil {
@@ -79,15 +80,15 @@ func (f fixture) wantCI(t *testing.T, ticket string, result core.CIResult, commi
 func TestUnderTheCIGateALaterPushedCommitThatPassedMakesTheCIResultPassed(t *testing.T) {
 	f := ciResultWorld(t, gate)
 	f.pushed(t, "acme-2", "aaa111")
-	f.ciRun(t, 1, "ci.yml", "aaa111", "acme-2", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "aaa111", "acme-2", domain.CICompleted, domain.CIFailure)
 	f.pushed(t, "acme-2", "bbb222")
 	f.wantCI(t, "acme-2", core.CIRunning, "bbb222")
 
-	f.ciRun(t, 2, "ci.yml", "bbb222", "acme-2", store.CICompleted, store.CISuccess)
+	f.ciRun(t, 2, "ci.yml", "bbb222", "acme-2", domain.CICompleted, domain.CISuccess)
 	if v := f.wantCI(t, "acme-2", core.CIPassed, "bbb222"); v.NeedsMeReason != "" || v.CIFailureOptions != nil {
 		t.Fatalf("reason %q, options %v, want nothing waiting on the human", v.NeedsMeReason, v.CIFailureOptions)
 	}
-	rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: []store.State{store.Accepted}})
+	rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: []domain.State{domain.Accepted}})
 	if err != nil || len(rows) != 1 || rows[0].CIResult != core.CIPassed {
 		t.Fatalf("rows %+v (%v), want acme-2's row passed", rows, err)
 	}
@@ -96,14 +97,14 @@ func TestUnderTheCIGateALaterPushedCommitThatPassedMakesTheCIResultPassed(t *tes
 func TestUnderTheCIGateAnEarlierPushedCommitThatPassesAfterALaterOneFailedMakesItPassed(t *testing.T) {
 	f := ciResultWorld(t, gate)
 	f.pushed(t, "acme-2", "aaa111")
-	f.ciRun(t, 1, "ci.yml", "aaa111", "acme-2", store.CIInProgress, "")
+	f.ciRun(t, 1, "ci.yml", "aaa111", "acme-2", domain.CIInProgress, "")
 	f.pushed(t, "acme-2", "bbb222")
-	f.ciRun(t, 2, "ci.yml", "bbb222", "acme-2", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 2, "ci.yml", "bbb222", "acme-2", domain.CICompleted, domain.CIFailure)
 	if v := f.wantCI(t, "acme-2", core.CIFailed, "bbb222"); v.NeedsMeReason != core.ReasonCIFailed {
 		t.Fatalf("reason %q, want CI failed", v.NeedsMeReason)
 	}
 
-	f.ciRun(t, 1, "ci.yml", "aaa111", "acme-2", store.CICompleted, store.CISuccess)
+	f.ciRun(t, 1, "ci.yml", "aaa111", "acme-2", domain.CICompleted, domain.CISuccess)
 	if v := f.wantCI(t, "acme-2", core.CIPassed, "aaa111"); v.NeedsMeReason != "" {
 		t.Fatalf("reason %q, want none once a pushed commit passed", v.NeedsMeReason)
 	}
@@ -112,39 +113,39 @@ func TestUnderTheCIGateAnEarlierPushedCommitThatPassesAfterALaterOneFailedMakesI
 func TestUnderTheCIGateACommitPushedBeforeTheLastSendBackNeverCounts(t *testing.T) {
 	f := ciResultWorld(t, gate)
 	f.pushed(t, "acme-2", "aaa111")
-	f.ciRun(t, 1, "ci.yml", "aaa111", "acme-2", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "aaa111", "acme-2", domain.CICompleted, domain.CIFailure)
 	f.clock.Advance(time.Minute)
 	if _, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "acme-2", Note: "Fix CI."}); err != nil {
 		t.Fatal(err)
 	}
 	f.clock.Advance(time.Minute)
-	f.moveTo(t, 2, store.Accepted)
+	f.moveTo(t, 2, domain.Accepted)
 	f.pushed(t, "acme-2", "bbb222")
-	f.ciRun(t, 2, "ci.yml", "bbb222", "acme-2", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 2, "ci.yml", "bbb222", "acme-2", domain.CICompleted, domain.CIFailure)
 
-	f.ciAttempt(t, 1, 2, "ci.yml", "aaa111", "acme-2", store.CICompleted, store.CISuccess)
+	f.ciAttempt(t, 1, 2, "ci.yml", "aaa111", "acme-2", domain.CICompleted, domain.CISuccess)
 	f.wantCI(t, "acme-2", core.CIFailed, "bbb222")
 }
 
 func TestUnderTheCIGateAPassingRunDoesNotPassACommitWhoseOtherWorkflowFailedOrRuns(t *testing.T) {
 	for _, c := range []struct {
-		status     store.CIRunStatus
-		conclusion store.CIConclusion
+		status     domain.CIRunStatus
+		conclusion domain.CIConclusion
 		want       core.CIResult
 	}{
-		{store.CICompleted, store.CIFailure, core.CIFailed},
-		{store.CIInProgress, "", core.CIRunning},
+		{domain.CICompleted, domain.CIFailure, core.CIFailed},
+		{domain.CIInProgress, "", core.CIRunning},
 	} {
 		t.Run(string(c.want), func(t *testing.T) {
 			f := ciResultWorld(t, gate)
 			f.pushed(t, "acme-2", "aaa111")
-			f.ciRun(t, 1, "ci.yml", "aaa111", "acme-2", store.CICompleted, store.CISuccess)
+			f.ciRun(t, 1, "ci.yml", "aaa111", "acme-2", domain.CICompleted, domain.CISuccess)
 			f.ciRun(t, 2, "lint.yml", "aaa111", "acme-2", c.status, c.conclusion)
 			f.pushed(t, "acme-2", "bbb222")
-			f.ciRun(t, 3, "ci.yml", "bbb222", "acme-2", store.CICompleted, store.CIFailure)
+			f.ciRun(t, 3, "ci.yml", "bbb222", "acme-2", domain.CICompleted, domain.CIFailure)
 			f.wantCI(t, "acme-2", core.CIFailed, "bbb222")
 
-			f.ciAttempt(t, 3, 2, "ci.yml", "bbb222", "acme-2", store.CICompleted, store.CISuccess)
+			f.ciAttempt(t, 3, 2, "ci.yml", "bbb222", "acme-2", domain.CICompleted, domain.CISuccess)
 			f.ciRun(t, 4, "lint.yml", "bbb222", "acme-2", c.status, c.conclusion)
 			f.wantCI(t, "acme-2", c.want, "bbb222")
 		})
@@ -152,17 +153,17 @@ func TestUnderTheCIGateAPassingRunDoesNotPassACommitWhoseOtherWorkflowFailedOrRu
 }
 
 func TestOutsideTheCIGateTheCIResultIsTheLatestPushedCommits(t *testing.T) {
-	for name, landing := range map[string]store.Landing{
-		"branch and push": {Method: store.LandingBranch, Push: true, Remote: "origin"},
-		"pull request":    {Method: store.LandingPullRequest, Remote: "origin"},
+	for name, landing := range map[string]domain.Landing{
+		"branch and push": {Method: domain.LandingBranch, Push: true, Remote: "origin"},
+		"pull request":    {Method: domain.LandingPullRequest, Remote: "origin"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := ciResultWorld(t, landing)
 			f.pushed(t, "acme-2", "aaa111")
-			f.ciRun(t, 1, "ci.yml", "aaa111", "acme-2", store.CIInProgress, "")
+			f.ciRun(t, 1, "ci.yml", "aaa111", "acme-2", domain.CIInProgress, "")
 			f.pushed(t, "acme-2", "bbb222")
-			f.ciRun(t, 2, "ci.yml", "bbb222", "acme-2", store.CICompleted, store.CIFailure)
-			f.ciRun(t, 1, "ci.yml", "aaa111", "acme-2", store.CICompleted, store.CISuccess)
+			f.ciRun(t, 2, "ci.yml", "bbb222", "acme-2", domain.CICompleted, domain.CIFailure)
+			f.ciRun(t, 1, "ci.yml", "aaa111", "acme-2", domain.CICompleted, domain.CISuccess)
 			f.wantCI(t, "acme-2", core.CIFailed, "bbb222")
 		})
 	}
@@ -185,20 +186,20 @@ func (f fixture) waiting(t *testing.T) []string {
 func TestUnderTheCIGateTheCIWatcherWaitsOnEveryRunningPushedCommitOnce(t *testing.T) {
 	f := ciResultWorld(t, gate)
 	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Tb"}) // acme-3
-	f.moveTo(t, 3, store.Accepted)
+	f.moveTo(t, 3, domain.Accepted)
 	f.pushed(t, "acme-2", "old000")
-	f.ciRun(t, 1, "ci.yml", "old000", "acme-2", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "old000", "acme-2", domain.CICompleted, domain.CIFailure)
 	f.clock.Advance(time.Minute)
 	if _, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "acme-2", Note: "Fix CI."}); err != nil {
 		t.Fatal(err)
 	}
-	f.ciAttempt(t, 1, 2, "ci.yml", "old000", "acme-2", store.CIInProgress, "")
-	f.moveTo(t, 2, store.Accepted)
+	f.ciAttempt(t, 1, 2, "ci.yml", "old000", "acme-2", domain.CIInProgress, "")
+	f.moveTo(t, 2, domain.Accepted)
 	f.pushed(t, "acme-2", "aaa111")
 	f.pushed(t, "acme-2", "bbb222")
 	f.pushed(t, "acme-3", "bbb222")
 	f.pushed(t, "acme-2", "ccc333")
-	f.ciRun(t, 2, "ci.yml", "ccc333", "acme-2", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 2, "ci.yml", "ccc333", "acme-2", domain.CICompleted, domain.CIFailure)
 	f.clock.Advance(10 * time.Minute)
 
 	if got, want := f.waiting(t), []string{"acme-2@aaa111", "acme-2@bbb222"}; !slices.Equal(got, want) {
@@ -207,7 +208,7 @@ func TestUnderTheCIGateTheCIWatcherWaitsOnEveryRunningPushedCommitOnce(t *testin
 }
 
 func TestOutsideTheCIGateTheCIWatcherWaitsOnTheLatestPushedCommitOnly(t *testing.T) {
-	f := ciResultWorld(t, store.Landing{Method: store.LandingBranch, Push: true, Remote: "origin"})
+	f := ciResultWorld(t, domain.Landing{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 	f.pushed(t, "acme-2", "aaa111")
 	f.pushed(t, "acme-2", "bbb222")
 	f.clock.Advance(10 * time.Minute)
@@ -219,7 +220,7 @@ func TestOutsideTheCIGateTheCIWatcherWaitsOnTheLatestPushedCommitOnly(t *testing
 func TestUnderTheCIGateARunOnAnEarlierPushedCommitCountsAsRunning(t *testing.T) {
 	f := ciResultWorld(t, gate)
 	f.pushed(t, "acme-2", "aaa111")
-	f.ciRun(t, 1, "ci.yml", "aaa111", "acme-2", store.CIInProgress, "")
+	f.ciRun(t, 1, "ci.yml", "aaa111", "acme-2", domain.CIInProgress, "")
 	f.pushed(t, "acme-2", "bbb222")
 	v, err := f.core.CIOverview(ctx, core.CIOverviewInput{Project: "acme", Running: true})
 	if err != nil {

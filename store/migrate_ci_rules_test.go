@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"testing"
 
@@ -34,7 +35,7 @@ func TestTheRealChainMigratesAFormat8StoreToTheCIRulesFormat(t *testing.T) {
 	}
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
-		if want := (store.CI{Tracking: true, Repositories: []store.CIRepository{{Name: "acme", Provider: store.CIGitHubActions, Repository: "acme/web"}}}); !p.CI.Equal(want) {
+		if want := (domain.CI{Tracking: true, Repositories: []domain.CIRepository{{Name: "acme", Provider: domain.CIGitHubActions, Repository: "acme/web"}}}); !p.CI.Equal(want) {
 			t.Errorf("ci after migrating = %+v, want %+v", p.CI, want)
 		}
 		return nil

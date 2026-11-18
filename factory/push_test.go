@@ -1,16 +1,16 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // mergeAndPush sets the Merge Landing Method with Push to remote.
 func mergeAndPush(h *factorytest.Harness, remote string) {
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, Push: true, Remote: remote})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: remote})
 }
 
 func TestUnderMergeAndPushTheBaseIsPushedBeforeTheTicketLands(t *testing.T) {
@@ -21,7 +21,7 @@ func TestUnderMergeAndPushTheBaseIsPushedBeforeTheTicketLands(t *testing.T) {
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	r := h.Start()
-	tk := h.WantState(id, store.Done)
+	tk := h.WantState(id, domain.Done)
 	r.WantOutput(id + ": pushed main to origin")
 	merge := h.Git("rev-parse", "main")
 	if got := remote.Git("rev-parse", "main"); got != merge {
@@ -41,7 +41,7 @@ func TestAFactoryWhosePushNamesAMissingRemoteStartsWithTheHomeLocalOnlyAndClaims
 	h.Script(ready, factorytest.Wait())
 
 	h.Start()
-	h.WantState(ready, store.InProgress)
+	h.WantState(ready, domain.InProgress)
 	if home := repositoryView(t, h, h.Project); !home.LocalOnly {
 		t.Fatalf("Home %+v, want it local-only: its clone has no remote upstream", home)
 	}
@@ -51,7 +51,7 @@ func TestUnderBranchAndPushAnAcceptedTicketsBranchReachesABareRemote(t *testing.
 	t.Parallel()
 	h := factorytest.New(t)
 	remote := h.AddRemote("origin")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingBranch, Push: true, Remote: "origin"})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	r := h.Start()

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -70,11 +71,11 @@ type FailureReportView struct {
 // Failure Report, which moves In Progress to Failed and ends the Claim.
 // It and the Factory's fail_finish are the only ways into Failed.
 func (c *Core) ReportFailure(ctx context.Context, key string, in ReportFailureInput) (StopResult, error) {
-	parts := store.FailureReport{WhatBroke: in.WhatBroke, Why: in.Why, WhatToFix: in.WhatToFix, WhereWorkStands: in.WhereWorkStands}
+	parts := domain.FailureReport{WhatBroke: in.WhatBroke, Why: in.Why, WhatToFix: in.WhatToFix, WhereWorkStands: in.WhereWorkStands}
 	if err := checkFailureReport(parts); err != nil {
 		return StopResult{}, err
 	}
-	v, err := c.updateTicket(key, "report_failure", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
+	v, err := c.updateTicket(key, "report_failure", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		now := c.now()
 		live, _ := liveClaim(*t)
 		if err := transition(ctx, t, key, "report_failure", in.ClaimID, now); err != nil {
@@ -112,16 +113,16 @@ const failFinish = "fail_finish"
 // the finishing Claim, which has already ended, and moves the Ticket from
 // In Review, or from Accepted while it has landed nowhere, to Failed.
 func (c *Core) FailFinish(ctx context.Context, key string, in FailFinishInput) (Written[TicketView], error) {
-	parts := store.FailureReport{WhatBroke: in.WhatBroke, Why: in.Why, WhatToFix: in.WhatToFix, WhereWorkStands: in.WhereWorkStands}
+	parts := domain.FailureReport{WhatBroke: in.WhatBroke, Why: in.Why, WhatToFix: in.WhatToFix, WhereWorkStands: in.WhereWorkStands}
 	if err := checkFailureReport(parts); err != nil {
 		return Written[TicketView]{}, err
 	}
-	return c.updateTicket(key, failFinish, in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
-		if t.State == store.Accepted && landedSomewhere(key, *t) {
+	return c.updateTicket(key, failFinish, in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
+		if t.State == domain.Accepted && landedSomewhere(key, *t) {
 			return false, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s has landed in some of its Changed Repositories, so its finish can't fail: land the rest, or send it back", DisplayID(key, t.Number))}
 		}
 		// The Claim the finish ended; none for a Ticket moved there by hand.
-		var finishing store.Claim
+		var finishing domain.Claim
 		for _, cl := range t.Claims {
 			if cl.EndedBy == "finish" {
 				finishing = cl
@@ -138,7 +139,7 @@ func (c *Core) FailFinish(ctx context.Context, key string, in FailFinishInput) (
 
 // checkFailureReport refuses parts, a Failure Report's, missing any of
 // its four.
-func checkFailureReport(parts store.FailureReport) error {
+func checkFailureReport(parts domain.FailureReport) error {
 	for _, f := range []struct{ name, value, hint string }{
 		{"what_broke", parts.WhatBroke, "a headline plus the symptom"},
 		{"why", parts.Why, "why it broke"},
@@ -155,7 +156,7 @@ func checkFailureReport(parts store.FailureReport) error {
 // addFailureReport adds parts, a Failure Report's four, to t as its next
 // Failure Report, made by actor at now on Claim cl, with copies of its
 // session, working directory and Resume Command.
-func addFailureReport(t *store.Ticket, cl store.Claim, actor Actor, now time.Time, parts store.FailureReport) {
+func addFailureReport(t *domain.Ticket, cl domain.Claim, actor Actor, now time.Time, parts domain.FailureReport) {
 	parts.Number, parts.Claim = len(t.FailureReports)+1, cl.Number
 	parts.SessionID, parts.WorkingDir, parts.ResumeCommand = cl.SessionID, cl.WorkingDir, cl.ResumeCommand
 	parts.Actor, parts.Time = string(actor), now
@@ -200,8 +201,8 @@ func (c *Core) SendBack(ctx context.Context, key string, in SendBackInput) (Writ
 		}
 		return nil // the send-back itself reports what is wrong
 	})
-	return c.actThen(ctx, key, in.Ticket, in.Full, "send_back", "", in.Note, func(t *store.Ticket) error {
-		if from := t.Moves[len(t.Moves)-1].From; from == store.Accepted && strings.TrimSpace(in.Note) == "" {
+	return c.actThen(ctx, key, in.Ticket, in.Full, "send_back", "", in.Note, func(t *domain.Ticket) error {
+		if from := t.Moves[len(t.Moves)-1].From; from == domain.Accepted && strings.TrimSpace(in.Note) == "" {
 			return invalid("note", "sending back Accepted work needs a note saying why: the base commit and the conflicting files of a merge conflict, or the failed CI run's link and its failed jobs")
 		}
 		if !shared {
@@ -220,7 +221,7 @@ func (c *Core) SendBack(ctx context.Context, key string, in SendBackInput) (Writ
 func (c *Core) refuseSendBackOfShared(key string, ref Ref) error {
 	return c.store.View(func(r store.Reader) error {
 		t, err := resolveTicket(r, key, "send_back", "ticket", ref)
-		if err != nil || t.State != store.Accepted || len(t.PushedCommits) == 0 {
+		if err != nil || t.State != domain.Accepted || len(t.PushedCommits) == 0 {
 			return nil // the send-back itself reports what is wrong
 		}
 		p, _ := r.Project(key)
@@ -246,7 +247,7 @@ func (c *Core) ToDraft(ctx context.Context, key string, in TicketInput) (Written
 	return c.act(ctx, key, in.Ticket, in.Full, "to_draft", "", "")
 }
 
-func failureReportViews(rs []store.FailureReport) []FailureReportView {
+func failureReportViews(rs []domain.FailureReport) []FailureReportView {
 	out := []FailureReportView{}
 	for _, r := range rs {
 		out = append(out, FailureReportView{
@@ -263,7 +264,7 @@ func failureReportViews(rs []store.FailureReport) []FailureReportView {
 // non-human comment or edit made while the Claim was live. Writes by the
 // human (a comment, a release) are not the agent's activity. Pings are
 // memory-only and are added on top by the Silent Claim check.
-func lastActivity(t store.Ticket, cl store.Claim) time.Time {
+func lastActivity(t domain.Ticket, cl domain.Claim) time.Time {
 	last := cl.Started
 	during := func(actor string, at time.Time) bool {
 		return actor != string(Human) && !at.Before(cl.Started) && (cl.Live() || !at.After(cl.Ended))

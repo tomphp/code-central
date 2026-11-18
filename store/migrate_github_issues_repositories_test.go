@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -39,7 +40,7 @@ func TestTheRealChainMigratesAFormat46StoreToTheGitHubIssuesRepositoriesFormat(t
 	}
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
-		want := store.GitHubIssues{On: true, Repositories: []string{"acme/web"}, Label: "good first issue", NewIssuesNeedMe: true, Spec: 4}
+		want := domain.GitHubIssues{On: true, Repositories: []string{"acme/web"}, Label: "good first issue", NewIssuesNeedMe: true, Spec: 4}
 		if !reflect.DeepEqual(p.GitHubIssues, want) {
 			t.Errorf("acme's github issues after migrating = %+v, want %+v", p.GitHubIssues, want)
 		}

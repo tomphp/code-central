@@ -1,6 +1,7 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"reflect"
 	"slices"
 	"strings"
@@ -8,7 +9,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // usageSession is a Usage session without its times, for comparing.
@@ -100,7 +100,7 @@ func TestEachModelResponsesTokenUsageIsPostedOnceUnderItsKind(t *testing.T) {
 		factorytest.Result("success"),
 	)
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	session := h.Ticket(id).Claims[0].SessionID
 
 	u := wantUsage(t, h, r, 5)
@@ -138,7 +138,7 @@ func TestEachSubagentsResponsesCarryItsAgentTypeAndDescriptionAndTheMainSessions
 		factorytest.Result("success"),
 	)
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	wantUsage(t, h, r, 6)
 	session := h.Ticket(id).Claims[0].SessionID
 
@@ -179,7 +179,7 @@ func TestEachUsageSessionListsTheModelsOfItsResponsesInOrderOfFirstUse(t *testin
 		factorytest.Result("success"),
 	)
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	u := wantUsage(t, h, r, 4)
 	want := []usageSession{
@@ -204,7 +204,7 @@ func TestASyntheticResponseIsPostedWithItsTokensButNoModel(t *testing.T) {
 		factorytest.Result("success"),
 	)
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	u := wantUsage(t, h, r, 4)
 	want := []usageSession{
@@ -225,7 +225,7 @@ func TestAResumedSessionAddsToTheSameUsageSession(t *testing.T) {
 		factorytest.Result("success"),
 	)
 	r := h.Start()
-	h.WantState(id, store.NeedsAnswer)
+	h.WantState(id, domain.NeedsAnswer)
 	r.WantOutput(id + " turn ended")
 	wantUsage(t, h, r, 1)
 
@@ -236,7 +236,7 @@ func TestAResumedSessionAddsToTheSameUsageSession(t *testing.T) {
 	)
 	h.Answer(id, "Green")
 	r.Poll()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	u := wantUsage(t, h, r, 2)
 	want := []usageSession{{Ticket: id, Kind: "implementation", Claim: 1, Peak: 300, Responses: 2, Models: []string{}}}
@@ -260,7 +260,7 @@ func TestWithCodeCentralDownMidTurnTheTurnStillFinishesAndDroppedUsageHoldsNothi
 	h.SetDown(false)
 	h.Continue(id)
 	r.Settle()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	r.WantOutput(id + " turn ended")
 
 	// The batch posted while down is dropped, never retried.

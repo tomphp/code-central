@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
 )
@@ -68,12 +69,12 @@ type RepositoryView struct {
 }
 
 // localOnlyIn reports whether p's Repository name is local-only.
-func localOnlyIn(p store.Project, name string) bool {
+func localOnlyIn(p domain.Project, name string) bool {
 	return slices.ContainsFunc(repositoriesView(p), func(r RepositoryView) bool { return r.Name == name && r.LocalOnly })
 }
 
 // repositoriesView is p's Repositories in landing order.
-func repositoriesView(p store.Project) []RepositoryView {
+func repositoriesView(p domain.Project) []RepositoryView {
 	var out []RepositoryView
 	for _, r := range p.RepositoryList() {
 		out = append(out, repositoryView(p, r))
@@ -83,7 +84,7 @@ func repositoriesView(p store.Project) []RepositoryView {
 }
 
 // repositoryView is p's Repository r as every Project read returns it.
-func repositoryView(p store.Project, r store.Repository) RepositoryView {
+func repositoryView(p domain.Project, r domain.Repository) RepositoryView {
 	v := RepositoryView{Name: r.Name, Home: r.Home, CloneURL: r.CloneURL, Base: r.Base, LocalPath: r.LocalPath, ChangedBy: []string{},
 		PushRemote: r.PushRemote, OwnPushRemote: r.PushRemote != "", LocalOnly: r.CloneURL == ""}
 	if r.Home {
@@ -119,7 +120,7 @@ func changedBy(r store.Reader, key, name string) []string {
 }
 
 // repositoryNames is rs's Repository Names, in order.
-func repositoryNames(rs []store.Repository) []string {
+func repositoryNames(rs []domain.Repository) []string {
 	var names []string
 	for _, r := range rs {
 		names = append(names, r.Name)
@@ -198,13 +199,13 @@ func (c *Core) AddRepository(ctx context.Context, key string, in AddRepositoryIn
 	if err := humanOnly(ctx, "add_repository"); err != nil {
 		return Written[ProjectView]{}, err
 	}
-	r := store.Repository{Name: strings.TrimSpace(in.Name), CloneURL: strings.TrimSpace(in.CloneURL), Base: strings.TrimSpace(in.Base), LocalPath: strings.TrimSpace(in.LocalPath)}
+	r := domain.Repository{Name: strings.TrimSpace(in.Name), CloneURL: strings.TrimSpace(in.CloneURL), Base: strings.TrimSpace(in.Base), LocalPath: strings.TrimSpace(in.LocalPath)}
 	if r.Base == "" {
-		r.Base = store.DefaultRepositoryBase
+		r.Base = domain.DefaultRepositoryBase
 	}
-	if !store.ValidRepositoryName(r.Name) {
+	if !domain.ValidRepositoryName(r.Name) {
 		return Written[ProjectView]{}, &Error{Code: Invalid, Field: "name", Message: fmt.Sprintf("%s isn't a Repository Name", quote(r.Name)),
-			Fix: fmt.Sprintf("name it with lowercase letters, digits, -, _ and ., starting with a letter or digit, in at most %d characters, such as web", store.MaxRepositoryName)}
+			Fix: fmt.Sprintf("name it with lowercase letters, digits, -, _ and ., starting with a letter or digit, in at most %d characters, such as web", domain.MaxRepositoryName)}
 	}
 	if err := checkRepositoryFields(r); err != nil {
 		return Written[ProjectView]{}, err
@@ -223,8 +224,8 @@ func (c *Core) AddRepository(ctx context.Context, key string, in AddRepositoryIn
 			return Written[ProjectView]{}, err
 		}
 	}
-	add := func(rs []store.Repository) ([]store.Repository, error) {
-		if i := slices.IndexFunc(rs, func(o store.Repository) bool { return o.Name == r.Name }); i >= 0 {
+	add := func(rs []domain.Repository) ([]domain.Repository, error) {
+		if i := slices.IndexFunc(rs, func(o domain.Repository) bool { return o.Name == r.Name }); i >= 0 {
 			what := "a Repository"
 			if rs[i].Home {
 				what = "the Home Repository"
@@ -246,7 +247,7 @@ func (c *Core) EditRepository(ctx context.Context, key string, in EditRepository
 		return Written[ProjectView]{}, err
 	}
 	name := strings.TrimSpace(in.Name)
-	var r store.Repository
+	var r domain.Repository
 	err := c.store.View(func(rd store.Reader) error {
 		if err := writable(rd, key); err != nil {
 			return err
@@ -283,7 +284,7 @@ func (c *Core) EditRepository(ctx context.Context, key string, in EditRepository
 	if err := setRepositoryLanding(&r, in.Landing, in.PushRemote); err != nil {
 		return Written[ProjectView]{}, err
 	}
-	edit := func(rs []store.Repository) ([]store.Repository, error) {
+	edit := func(rs []domain.Repository) ([]domain.Repository, error) {
 		i, err := repositoryNamed(key, rs, name)
 		if err != nil {
 			return nil, err
@@ -309,7 +310,7 @@ func (c *Core) publishAccepted(key string) {
 	var accepted []int
 	c.store.View(func(r store.Reader) error {
 		for _, t := range r.Tickets(key) {
-			if t.State == store.Accepted {
+			if t.State == domain.Accepted {
 				accepted = append(accepted, t.Number)
 			}
 		}
@@ -344,7 +345,7 @@ func (c *Core) RemoveRepository(ctx context.Context, key string, in RemoveReposi
 		return Written[ProjectView]{}, err
 	}
 	name := strings.TrimSpace(in.Name)
-	return c.changeRepositories(key, in.Full, nil, func(r store.Reader, p store.Project) ([]store.Repository, error) {
+	return c.changeRepositories(key, in.Full, nil, func(r store.Reader, p domain.Project) ([]domain.Repository, error) {
 		rs := p.RepositoryList()
 		i, err := repositoryNamed(key, rs, name)
 		if err != nil {
@@ -368,17 +369,17 @@ func (c *Core) SetLandingOrder(ctx context.Context, key string, in SetLandingOrd
 	if err := humanOnly(ctx, "set_landing_order"); err != nil {
 		return Written[ProjectView]{}, err
 	}
-	return c.changeRepositories(key, in.Full, nil, func(_ store.Reader, p store.Project) ([]store.Repository, error) {
+	return c.changeRepositories(key, in.Full, nil, func(_ store.Reader, p domain.Project) ([]domain.Repository, error) {
 		rs := p.RepositoryList()
 		names := repositoryNames(rs)
-		var out []store.Repository
+		var out []domain.Repository
 		var problems []string
 		for _, n := range in.Names {
 			i := slices.Index(names, n)
 			switch {
 			case i < 0:
 				problems = append(problems, fmt.Sprintf("there is no Repository %s", n))
-			case slices.ContainsFunc(out, func(r store.Repository) bool { return r.Name == n }):
+			case slices.ContainsFunc(out, func(r domain.Repository) bool { return r.Name == n }):
 				problems = append(problems, fmt.Sprintf("%s is named twice", n))
 			default:
 				out = append(out, rs[i])
@@ -401,7 +402,7 @@ func (c *Core) SetLandingOrder(ctx context.Context, key string, in SetLandingOrd
 // its Push remote from pushRemote, when given, refusing a Landing that
 // isn't one or a remote name git wouldn't take, with how to put it right.
 // Empty leaves the Push remote to the Project's.
-func setRepositoryLanding(r *store.Repository, landing *RepositoryLanding, pushRemote *string) error {
+func setRepositoryLanding(r *domain.Repository, landing *RepositoryLanding, pushRemote *string) error {
 	if landing != nil {
 		l := RepositoryLanding(strings.TrimSpace(string(*landing)))
 		if !l.Valid() {
@@ -418,7 +419,7 @@ func setRepositoryLanding(r *store.Repository, landing *RepositoryLanding, pushR
 		name := strings.TrimSpace(*pushRemote)
 		if err := checkBranchName(name); err != nil {
 			return &Error{Code: Invalid, Field: "push_remote", Message: fmt.Sprintf("%s isn't a git remote's name", quote(name)),
-				Fix: "name a remote of its clone, such as " + store.DefaultLandingRemote + ", or leave it empty for the Project's"}
+				Fix: "name a remote of its clone, such as " + domain.DefaultLandingRemote + ", or leave it empty for the Project's"}
 		}
 		r.PushRemote = name
 	}
@@ -428,7 +429,7 @@ func setRepositoryLanding(r *store.Repository, landing *RepositoryLanding, pushR
 // checkRepositoryFields refuses a Repository whose Clone URL, Base or
 // local path can't be one, with how to put it right. It needs a Clone
 // URL, a local path or both: with no Clone URL it is local-only.
-func checkRepositoryFields(r store.Repository) error {
+func checkRepositoryFields(r domain.Repository) error {
 	switch {
 	case r.CloneURL == "" && r.LocalPath == "":
 		return &Error{Code: Invalid, Field: "clone_url", Message: "a Repository needs a Clone URL to clone from, or the local path of a clone it already has",
@@ -438,10 +439,10 @@ func checkRepositoryFields(r store.Repository) error {
 			Fix: "give the URL you'd pass to git clone, such as git@github.com:acme/web.git"}
 	case r.Base == "":
 		return &Error{Code: Invalid, Field: "base", Message: "a Repository needs a Base, the branch its work is cut from and lands on",
-			Fix: "name its Base, such as " + store.DefaultRepositoryBase}
+			Fix: "name its Base, such as " + domain.DefaultRepositoryBase}
 	}
 	if err := checkBranchName(r.Base); err != nil {
-		return &Error{Code: Invalid, Field: "base", Message: err.Error(), Fix: "name a branch git accepts, such as " + store.DefaultRepositoryBase}
+		return &Error{Code: Invalid, Field: "base", Message: err.Error(), Fix: "name a branch git accepts, such as " + domain.DefaultRepositoryBase}
 	}
 	if r.LocalPath != "" && !filepath.IsAbs(r.LocalPath) {
 		return &Error{Code: Invalid, Field: "local_path", Message: fmt.Sprintf("the local path %s isn't absolute", quote(r.LocalPath)),
@@ -461,7 +462,7 @@ func checkRepositoryFields(r store.Repository) error {
 // the Factory last reported, empty without one. Without it, only
 // explicit local paths are compared, and the Home Repository's clone
 // holds none.
-func refuseListed(p store.Project, r store.Repository, home string) error {
+func refuseListed(p domain.Project, r domain.Repository, home string) error {
 	mine := resolvedClonePath(r, home)
 	for _, o := range p.RepositoryList() {
 		if o.Name == r.Name {
@@ -498,7 +499,7 @@ func refuseListed(p store.Project, r store.Repository, home string) error {
 
 // resolvedClonePath is where r's clone is: its local path, else beside
 // the Home Repository's clone at home, or empty when home is unknown.
-func resolvedClonePath(r store.Repository, home string) string {
+func resolvedClonePath(r domain.Repository, home string) string {
 	switch {
 	case r.LocalPath != "":
 		return filepath.Clean(r.LocalPath)
@@ -511,7 +512,7 @@ func resolvedClonePath(r store.Repository, home string) string {
 // reportedHomeClone is the path of p's Home Repository's clone as the
 // Factory's latest Repositories report says, empty while no Factory is
 // reporting or none has.
-func (c *Core) reportedHomeClone(p store.Project) string {
+func (c *Core) reportedHomeClone(p domain.Project) string {
 	hs := c.heartbeats
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
@@ -526,8 +527,8 @@ func (c *Core) reportedHomeClone(p store.Project) string {
 }
 
 // repositoryNamed is the index of the Repository named name in rs.
-func repositoryNamed(key string, rs []store.Repository, name string) (int, error) {
-	i := slices.IndexFunc(rs, func(r store.Repository) bool { return r.Name == name })
+func repositoryNamed(key string, rs []domain.Repository, name string) (int, error) {
+	i := slices.IndexFunc(rs, func(r domain.Repository) bool { return r.Name == name })
 	if i < 0 {
 		return 0, &Error{Code: NotFound, Field: "name", Message: fmt.Sprintf("Project %s has no Repository %s", key, quote(name)),
 			Fix: "name one of its Repositories: " + strings.Join(repositoryNames(rs), ", ")}
@@ -551,8 +552,8 @@ type repositoryChange struct {
 // is on, it passes the CI Watcher's check. The checks call the Code Host,
 // so they run outside the store's lock, between a read that refuses what
 // the store alone can and the write, which checks again.
-func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r store.Repository, changed repositoryChange, ci *store.CIRepository, change func([]store.Repository) ([]store.Repository, error)) (Written[ProjectView], error) {
-	apply := func(p store.Project) ([]store.Repository, error) {
+func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r domain.Repository, changed repositoryChange, ci *domain.CIRepository, change func([]domain.Repository) ([]domain.Repository, error)) (Written[ProjectView], error) {
+	apply := func(p domain.Project) ([]domain.Repository, error) {
 		rs, err := change(p.RepositoryList())
 		if err != nil {
 			return nil, err
@@ -585,7 +586,7 @@ func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r 
 		next.SetRepositories(rs)
 		underPR, wasUnderPR := landingPolicyIn(next, r.Name).LandsByPullRequest(), landingPolicyIn(p, r.Name).LandsByPullRequest()
 		if underPR && (changed.newCloneURL || !wasUnderPR) {
-			check = &PullRequestCheckInput{GHPath: rd.Options().GHPath, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv})}
+			check = &PullRequestCheckInput{GHPath: rd.Options().GHPath, PATEnv: patEnvOf(domain.CI{PATEnv: p.Landing.PATEnv})}
 			url = repositoryView(next, r).CloneURL
 		}
 		if opts := rd.Options(); ci != nil && landingPolicies(p).RunsCIWatcher() {
@@ -612,7 +613,7 @@ func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r 
 			return Written[ProjectView]{}, err
 		}
 	}
-	return c.changeRepositories(key, full, ci, func(_ store.Reader, p store.Project) ([]store.Repository, error) { return apply(p) })
+	return c.changeRepositories(key, full, ci, func(_ store.Reader, p domain.Project) ([]domain.Repository, error) { return apply(p) })
 }
 
 // checkRepositoryPullRequests refuses a Repository whose Clone URL names
@@ -641,7 +642,7 @@ func (c *Core) checkRepositoryPullRequests(ctx context.Context, name, url string
 // Project's, with ci, when given, as the CI entry of its Repository,
 // acknowledging the Project. A Repository no longer listed loses its CI
 // entry.
-func (c *Core) changeRepositories(key string, full bool, ci *store.CIRepository, change func(store.Reader, store.Project) ([]store.Repository, error)) (Written[ProjectView], error) {
+func (c *Core) changeRepositories(key string, full bool, ci *domain.CIRepository, change func(store.Reader, domain.Project) ([]domain.Repository, error)) (Written[ProjectView], error) {
 	var before, after ProjectView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
@@ -656,7 +657,7 @@ func (c *Core) changeRepositories(key string, full bool, ci *store.CIRepository,
 		was, wasCI := p.Repositories, p.CI
 		p.SetRepositories(rs)
 		names := repositoryNames(p.RepositoryList())
-		p.CI.Repositories = slices.DeleteFunc(slices.Clone(p.CI.Repositories), func(e store.CIRepository) bool { return !slices.Contains(names, e.Name) })
+		p.CI.Repositories = slices.DeleteFunc(slices.Clone(p.CI.Repositories), func(e domain.CIRepository) bool { return !slices.Contains(names, e.Name) })
 		if ci != nil {
 			p.CI.Repositories = withCIEntry(p.CI.Repositories, *ci)
 		}

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -85,7 +86,7 @@ type StageGuidesView struct {
 	ModelAssignment bool `json:"model_assignment"`
 }
 
-func stageGuidesView(g store.StageGuides) StageGuidesView {
+func stageGuidesView(g domain.StageGuides) StageGuidesView {
 	return StageGuidesView{SubagentExploration: !g.SubagentExplorationOff, ModelAssignment: g.ModelAssignmentOn}
 }
 
@@ -115,8 +116,8 @@ func (c *Core) GetStageGuide(_ context.Context, key string, in StageGuideInput) 
 }
 
 // projectOf is the stored Project named key, or not_found.
-func (c *Core) projectOf(key string) (store.Project, error) {
-	var p store.Project
+func (c *Core) projectOf(key string) (domain.Project, error) {
+	var p domain.Project
 	err := c.store.View(func(r store.Reader) error {
 		var ok bool
 		if p, ok = r.Project(key); !ok {
@@ -129,7 +130,7 @@ func (c *Core) projectOf(key string) (store.Project, error) {
 
 // stageGuide is the named Stage's guide for Project p, ending with the
 // trouble rules; the name must be one of GuideNames.
-func stageGuide(stage string, p store.Project) StageGuideView {
+func stageGuide(stage string, p domain.Project) StageGuideView {
 	g := p.StageGuides
 	b, err := stageGuides.ReadFile("stageguides/" + stage + ".md")
 	if err != nil {
@@ -157,7 +158,7 @@ func stageGuide(stage string, p store.Project) StageGuideView {
 // severalRepositoriesText is what replaces the several-repositories
 // placeholder line: nothing while p has the Home Repository alone, else
 // the fragment as a paragraph of its own.
-func severalRepositoriesText(p store.Project) string {
+func severalRepositoriesText(p domain.Project) string {
 	if len(p.RepositoryList()) < 2 {
 		return ""
 	}
@@ -171,7 +172,7 @@ func severalRepositoriesText(p store.Project) string {
 // modelAssignmentText is what replaces the model-assignment placeholder
 // line: nothing while Model Assignment is off, else the fragment filled
 // from p's Reported Models.
-func modelAssignmentText(p store.Project) string {
+func modelAssignmentText(p domain.Project) string {
 	if !p.StageGuides.ModelAssignmentOn {
 		return ""
 	}

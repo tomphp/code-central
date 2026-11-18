@@ -1,11 +1,11 @@
 package server_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"testing"
 
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
 )
 
 // linkedItems adds linked Spec acme-4 and, under it, linked Ticket acme-5,
@@ -21,7 +21,7 @@ func linkedItems(t *testing.T, srv *codecentraltest.Server) {
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.SetExternalState(as, "acme", core.SetExternalStateInput{Target: "5", ExternalState: store.ExternalClosed})
+		_, err := srv.Core.SetExternalState(as, "acme", core.SetExternalStateInput{Target: "5", ExternalState: domain.ExternalClosed})
 		return err
 	})
 }

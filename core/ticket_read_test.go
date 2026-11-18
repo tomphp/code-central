@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // get_ticket's smaller default and its parts (ticket 192, ADR 0015).
@@ -58,7 +58,7 @@ func asJSON(t *testing.T, v any) map[string]any {
 
 // scalars is every key a read returns whatever parts it asks for (on
 // acme-2, which has no branch, link or silence).
-var scalars = []string{"blocked", "blocked_by", "blockers", "claimable", "created", "description", "id", "labels", "needs_me_reason", "replacements", "spec", "state", "tags", "title", "updated"}
+var scalars = []string{"blocked", "blocked_by", "blockers", "claimable", "created", "description", "editable", "id", "labels", "needs_me_reason", "replacements", "retroable", "spec", "state", "tags", "title", "updated"}
 
 // redoneCounts is how many of each part redone leaves on acme-2.
 var redoneCounts = map[string]int{"claims": 2, "failure_reports": 1, "comments": 1, "rounds": 1, "moves": 5, "edits": 1}
@@ -141,7 +141,7 @@ func TestGetTicketWithEveryPartIsTheWholeTicket(t *testing.T) {
 
 func TestGetTicketLeavesOutOnlyPartsThatHaveSomething(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	// A new Ticket has nothing in any part; a part asked for that is empty
 	// is still there, as [].
 	v := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2", Parts: []string{"rounds"}})
@@ -151,8 +151,8 @@ func TestGetTicketLeavesOutOnlyPartsThatHaveSomething(t *testing.T) {
 	if _, ok := v["left_out"]; ok {
 		t.Fatalf("left_out %v, want none: nothing else has anything", v["left_out"])
 	}
-	f.move(t, "2", store.Draft)
-	f.move(t, "2", store.Ready)
+	f.move(t, "2", domain.Draft)
+	f.move(t, "2", domain.Ready)
 	v = f.readTicket(t, core.GetTicketInput{Ticket: "acme-2", Parts: []string{"rounds"}})
 	if want := map[string]any{"moves": float64(2)}; !reflect.DeepEqual(v["left_out"], want) {
 		t.Fatalf("left_out %v, want %v", v["left_out"], want)
@@ -161,7 +161,7 @@ func TestGetTicketLeavesOutOnlyPartsThatHaveSomething(t *testing.T) {
 
 func TestGetTicketRejectsAnUnknownPart(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	_, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "2", Parts: []string{"rounds", "history"}})
 	wantCode(t, err, core.Invalid, "parts")
 	if want := `unknown part "history" (the parts are claims, failure_reports, comments, rounds, moves, edits)`; err.(*core.Error).Message != want {
@@ -278,8 +278,8 @@ func TestTheSpecStageReadsTheGrillingTicketsAnswersAndResolution(t *testing.T) {
 // its Claim by s1 with a working dir, a resume command and a Session Event.
 func (f fixture) claimedThenBlocked(t *testing.T) {
 	t.Helper()
-	f.work(t, store.Ready, store.Ready, store.Ready)
-	f.move(t, "3", store.Done)
+	f.work(t, domain.Ready, domain.Ready, domain.Ready)
+	f.move(t, "3", domain.Done)
 	if _, err := f.core.Claim(ctx, "acme", core.ClaimInput{Ticket: "acme-2", SessionID: "s1", WorkingDir: str("/work/acme-2"), ResumeCommand: str("claude --resume s1")}); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
@@ -306,10 +306,10 @@ func TestGetTicketByDefaultShowsADoneBlockerAsItsIDAndStateOnly(t *testing.T) {
 
 func TestGetTicketByDefaultShowsADoneReplacementBlockerAsItsIDAndStateOnly(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready, store.Ready) // acme-2..acme-4
+	f.work(t, domain.Ready, domain.Ready, domain.Ready) // acme-2..acme-4
 	f.addBlocker(t, "acme-2", "acme-3")
 	f.cancel(t, core.CancelInput{Ticket: "acme-3", Replacements: []core.Ref{"acme-4"}})
-	f.setState(t, 4, store.Done)
+	f.setState(t, 4, domain.Done)
 	v := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2"})
 	if want := []any{map[string]any{"id": "acme-4", "state": "Done"}}; !reflect.DeepEqual(v["blockers"], want) {
 		t.Fatalf("blockers %v, want %v", v["blockers"], want)
@@ -362,8 +362,8 @@ func TestGetTicketWithTheClaimsPartReturnsThemInFull(t *testing.T) {
 func TestFindTicketViewsGivesEachTicketAsGetTicketDoes(t *testing.T) {
 	f := newFixture(t)
 	f.redone(t)
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Logout", State: store.Ready})
-	in := core.FindTicketsInput{State: store.States, Full: true}
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Logout", State: domain.Ready})
+	in := core.FindTicketsInput{State: domain.States, Full: true}
 	for _, parts := range [][]string{nil, core.TicketParts()} {
 		in.Parts = parts
 		views, err := f.core.FindTicketViews(ctx, "acme", in)
@@ -391,8 +391,8 @@ func TestFindTicketViewsGivesEachTicketAsGetTicketDoes(t *testing.T) {
 
 func TestFindTicketViewsAreFilteredAsTheRowsAre(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Draft)
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Logout", State: store.Ready})
+	f.work(t, domain.Ready, domain.Draft)
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Logout", State: domain.Ready})
 	claimable := true
 	views, err := f.core.FindTicketViews(ctx, "acme", core.FindTicketsInput{Full: true, Claimable: &claimable, Title: "logout"})
 	if err != nil {
@@ -401,7 +401,7 @@ func TestFindTicketViewsAreFilteredAsTheRowsAre(t *testing.T) {
 	if len(views) != 1 || views[0].Title != "Logout" {
 		t.Fatalf("views %+v, want only the claimable Logout", views)
 	}
-	if _, err := f.core.FindTicketViews(ctx, "acme", core.FindTicketsInput{Full: true, State: []store.State{"Nope"}}); err == nil {
+	if _, err := f.core.FindTicketViews(ctx, "acme", core.FindTicketsInput{Full: true, State: []domain.State{"Nope"}}); err == nil {
 		t.Error("an unknown State was accepted")
 	}
 	if _, err := f.core.FindTicketViews(ctx, "acme", core.FindTicketsInput{Full: true, Parts: []string{"nope"}}); err == nil {

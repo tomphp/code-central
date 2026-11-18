@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -90,7 +91,7 @@ func TestOpenSpecMergeRefusesABadRepositoryConflict(t *testing.T) {
 func TestASpecLandedTicketPushedInSomeOfItsRepositoriesStillWaitsForItsSpec(t *testing.T) {
 	f := landWorld(t, true)
 	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
-	f.landing(t, store.Landing{Method: store.LandingMerge, Push: true, Remote: "origin", LandPerSpec: true})
+	f.landing(t, domain.Landing{Method: domain.LandingMerge, Push: true, Remote: "origin", LandPerSpec: true})
 	err := f.store.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
 		p.CI.Tracking = true
@@ -99,9 +100,9 @@ func TestASpecLandedTicketPushedInSomeOfItsRepositoriesStillWaitsForItsSpec(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.moveTo(t, 6, store.Cancelled)
+	f.moveTo(t, 6, domain.Cancelled)
 	f.changes(t, 5, "acme", "api")
-	f.moveTo(t, 5, store.Accepted)
+	f.moveTo(t, 5, domain.Accepted)
 	f.specMerge(t, "acme-5", "abc123")
 	// The Spec's merge was pushed in the Home Repository, and its merge
 	// in api is still to make.
@@ -127,9 +128,9 @@ func TestASpecLandedTicketWaitsForItsSpecOnlyInRepositoriesWhereLandPerSpecIsInF
 	// there once the human merges it (Spec code-central-890).
 	f.editLanding(t, "api", core.RepositoryLandingBranch)
 	f.changes(t, 5, "api")
-	f.moveTo(t, 5, store.Accepted)
+	f.moveTo(t, 5, domain.Accepted)
 	f.changes(t, 6, "acme", "api")
-	f.moveTo(t, 6, store.Accepted)
+	f.moveTo(t, 6, domain.Accepted)
 
 	if tk := f.getTicket(t, "acme-5"); !tk.SpecLanded || tk.WaitingForSpec {
 		t.Fatalf("acme-5 Spec-landed %v, waiting for its Spec %v; want it Spec-landed, as Land per Spec is in force in the Home, but not waiting: it changed api alone", tk.SpecLanded, tk.WaitingForSpec)
@@ -157,7 +158,7 @@ func TestASpecLandedTicketLandedInItsRepositoryUnderPullRequestNoLongerWaitsForI
 	f.editLanding(t, "api", core.RepositoryLandingPullRequest)
 	f.editLanding(t, "web", core.RepositoryLandingBranch)
 	f.changes(t, 5, "api", "web")
-	f.moveTo(t, 5, store.Accepted)
+	f.moveTo(t, 5, domain.Accepted)
 	if !f.getTicket(t, "acme-5").WaitingForSpec {
 		t.Fatal("acme-5 isn't waiting for its Spec, though it is to land with the Spec's pull request in api")
 	}
@@ -184,11 +185,11 @@ func TestASpecLandedTicketPushedInARepositoryUnderBranchCanBeSentBackToFixItsCI(
 		t.Fatal(err)
 	}
 	f.changes(t, 5, "api")
-	f.moveTo(t, 5, store.Accepted)
+	f.moveTo(t, 5, domain.Accepted)
 	// Its own branch in api, pushed: under Branch Land per Spec has no
 	// effect there, so its work isn't shared with its Spec's.
 	f.pushedFor(t, "api", "acme-5", "abc123")
-	f.ciRunIn(t, "api", 7, "abc123", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRunIn(t, "api", 7, "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 
 	if tk := f.getTicket(t, "acme-5"); !tk.SpecLanded || !slices.Contains(tk.CIFailureOptions, core.OptionSendBack) {
 		t.Fatalf("acme-5 Spec-landed %v with CI failure options %v; want Send back to fix offered", tk.SpecLanded, tk.CIFailureOptions)
@@ -201,7 +202,7 @@ func TestASpecLandedTicketPushedInARepositoryUnderBranchCanBeSentBackToFixItsCI(
 func TestReportSpecMergeRecordsTheRepositoryItNames(t *testing.T) {
 	f := landWorld(t, true)
 	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
-	f.moveTo(t, 5, store.Accepted)
+	f.moveTo(t, 5, domain.Accepted)
 
 	if _, err := f.core.ReportSpecMerge(ctx, "acme", core.ReportSpecMergeInput{Ticket: "acme-5", Commit: "abc123", Repository: "api"}); err != nil {
 		t.Fatalf("report_spec_merge: %v", err)

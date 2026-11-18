@@ -2,6 +2,7 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // Land per Spec across Repositories (Spec code-central-848, ADR 0049): a
@@ -38,12 +38,12 @@ func TestATwoRepositorySpecLandsWithTheSameMergeSpecCommitInEachInTheLandingOrde
 	mergeAndPush(h, "origin")
 	setLandingOrder(t, h, "api", h.Project)
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	h.Accept(id)
 	r.Poll()
 
-	tk := h.WantState(id, store.Done)
+	tk := h.WantState(id, domain.Done)
 	homeMerge, apiMerge := h.Git("rev-parse", "main"), h.GitIn(api.Path, "rev-parse", "main")
 	want := "Merge spec " + h.SpecID() + ": Work"
 	if got := subject(h, h.Repo, homeMerge); got != want {
@@ -75,7 +75,7 @@ func TestASpecConflictInAnyRepositoryOpensOneSpecMergeTicketNamingEachAndNothing
 	fix := "acme-5"
 	h.Script(fix, factorytest.Wait())
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	h.Accept(id)
 	r.Poll()
 	r.WantOutput(id + ": merged into spec/" + h.SpecID() + " at ")
@@ -86,7 +86,7 @@ func TestASpecConflictInAnyRepositoryOpensOneSpecMergeTicketNamingEachAndNothing
 	release()
 	r.Poll()
 
-	h.WantState(id, store.Accepted)
+	h.WantState(id, domain.Accepted)
 	if h.Git("rev-parse", "main") != homeBase || h.GitIn(api.Path, "rev-parse", "main") != apiBase {
 		t.Fatal("a base moved: nothing lands while any Repository's Spec Branch conflicts")
 	}
@@ -119,8 +119,8 @@ func TestATicketConflictingWithItsSpecBranchInOneRepositoryIsMergedIntoNeither(t
 		factorytest.WriteFile("other.go", "package acme\n"), factorytest.Git("add", "other.go"), factorytest.Git("commit", "-q", "-m", "Other"),
 		factorytest.FinishIn("Done.", true, "api"), factorytest.Result("success"))...)
 	r := h.Start()
-	h.WantState(first, store.InReview)
-	h.WantState(second, store.InReview)
+	h.WantState(first, domain.InReview)
+	h.WantState(second, domain.InReview)
 	h.Accept(first)
 	r.Poll()
 	spec := "spec/" + h.SpecID()
@@ -132,7 +132,7 @@ func TestATicketConflictingWithItsSpecBranchInOneRepositoryIsMergedIntoNeither(t
 	r.Poll()
 
 	tk := h.Ticket(second)
-	if !movedTo(tk, store.Accepted, store.Ready) {
+	if !movedTo(tk, domain.Accepted, domain.Ready) {
 		t.Fatalf("%s wasn't sent back: %+v", second, tk.Moves)
 	}
 	if h.Git("rev-parse", spec) != homeTip || h.GitIn(api.Path, "rev-parse", spec) != apiTip {
@@ -151,14 +151,14 @@ func TestARefusedPushLeavesASpecsTicketPartlyLandedAndIsTriedAgain(t *testing.T)
 	api, id := specInTwo(h)
 	mergeAndPush(h, "origin")
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	remote := api.Remote("origin")
 	remote.RefusePushes()
 
 	h.Accept(id)
 	r.Poll()
 
-	tk := h.WantState(id, store.Accepted)
+	tk := h.WantState(id, domain.Accepted)
 	if !tk.PartlyLanded || landedIn(tk, h.Project) == "" || landedIn(tk, "api") != "" {
 		t.Fatalf("partly landed %v %+v, want it landed in the Home Repository alone", tk.PartlyLanded, tk.Repositories)
 	}
@@ -173,7 +173,7 @@ func TestARefusedPushLeavesASpecsTicketPartlyLandedAndIsTriedAgain(t *testing.T)
 
 	// Its work is in api's base, so it lands there through the plain path,
 	// as with the Home Repository alone, without merging again.
-	tk = h.WantState(id, store.Done)
+	tk = h.WantState(id, domain.Done)
 	if landedIn(tk, "api") == "" || remote.Git("rev-parse", "main") != merge || h.Git("rev-parse", "main") != homeMain {
 		t.Fatalf("Changed Repositories %+v, want api landed and its Spec's merge %s pushed, and the Home Repository left as it was", tk.Repositories, merge)
 	}
@@ -191,21 +191,21 @@ func TestOnceTheSpecMergeTicketIsAcceptedATwoRepositorySpecLands(t *testing.T) {
 	fix := "acme-5"
 	h.Script(fix, factorytest.InRepository("api", factorytest.Git("merge", "-q", "-X", "theirs", "main")), factorytest.FinishIn("Merged the base.", false, "api"), factorytest.Result("success"))
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	h.Accept(id)
 	r.Poll()
 	api.CommitOn("main", "endpoint.go", "package other\n")
 
 	release()
 	r.Poll()
-	h.WantState(fix, store.InReview)
+	h.WantState(fix, domain.InReview)
 	if _, err := h.Human().Accept(context.Background(), h.Project, core.TicketInput{Ticket: core.Ref(fix)}); err != nil {
 		t.Fatal(err)
 	}
 	r.Poll()
 
-	h.WantState(id, store.Done)
-	h.WantState(fix, store.Done)
+	h.WantState(id, domain.Done)
+	h.WantState(fix, domain.Done)
 }
 
 func TestUnderTheCIGateASpecStuckInOneRepositoryLandsThereOnceUnstuck(t *testing.T) {
@@ -217,7 +217,7 @@ func TestUnderTheCIGateASpecStuckInOneRepositoryLandsThereOnceUnstuck(t *testing
 	trackCI(t, h)
 	watchCIIn(t, h, "api", "acme/api")
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	// An untracked file in api's clone is in the way of its base's move.
 	inTheWay := filepath.Join(api.Path, "endpoint.go")
 	if err := os.WriteFile(inTheWay, []byte("package mine\n"), 0o644); err != nil {
@@ -227,7 +227,7 @@ func TestUnderTheCIGateASpecStuckInOneRepositoryLandsThereOnceUnstuck(t *testing
 	h.Accept(id)
 	r.Poll()
 
-	tk := h.WantState(id, store.Accepted)
+	tk := h.WantState(id, domain.Accepted)
 	if pushedIn(tk, h.Project) == "" || pushedIn(tk, "api") != "" || !tk.WaitingForSpec {
 		t.Fatalf("waiting for its Spec %v, %+v: want the Spec's merge pushed in the Home Repository alone, and the Ticket still waiting for its Spec in api", tk.WaitingForSpec, tk.Repositories)
 	}
@@ -240,16 +240,16 @@ func TestUnderTheCIGateASpecStuckInOneRepositoryLandsThereOnceUnstuck(t *testing
 	}
 	r.Poll()
 
-	tk = h.WantState(id, store.Accepted)
+	tk = h.WantState(id, domain.Accepted)
 	apiPushed := pushedIn(tk, "api")
 	if apiPushed == "" || subject(h, api.Path, apiPushed) != "Merge spec "+h.SpecID()+": Work" {
 		t.Fatalf("api's pushed commit %q, want the Spec's merge there", apiPushed)
 	}
-	reportRunIn(t, h, "api", 7, id, apiPushed, store.CICompleted, store.CISuccess)
-	reportRun(t, h, 1, id, pushedIn(tk, h.Project), store.CICompleted, store.CISuccess)
+	reportRunIn(t, h, "api", 7, id, apiPushed, domain.CICompleted, domain.CISuccess)
+	reportRun(t, h, 1, id, pushedIn(tk, h.Project), domain.CICompleted, domain.CISuccess)
 	r.Poll()
 
-	tk = h.WantState(id, store.Done)
+	tk = h.WantState(id, domain.Done)
 	if landedIn(tk, "api") != apiPushed {
 		t.Fatalf("Changed Repositories %+v, want api landed at its pushed merge that passed, %s", tk.Repositories, apiPushed)
 	}
@@ -263,7 +263,7 @@ func TestUnderPullRequestATwoRepositorySpecBranchIsPushedInEachAndLandsAsEachMer
 	pullRequestOn(h, "origin")
 	branch := "spec/" + h.SpecID()
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	h.Accept(id)
 	r.Poll()
@@ -285,7 +285,7 @@ func TestUnderPullRequestATwoRepositorySpecBranchIsPushedInEachAndLandsAsEachMer
 	reportPullRequestIn(t, h, "api", branch, 4, apiTip)
 	r.Poll()
 
-	tk := h.WantState(id, store.Accepted)
+	tk := h.WantState(id, domain.Accepted)
 	if !tk.PartlyLanded || landedIn(tk, "api") != apiTip || landedIn(tk, h.Project) != "" {
 		t.Fatalf("partly landed %v %+v, want it landed in api alone, at its merge", tk.PartlyLanded, tk.Repositories)
 	}
@@ -295,7 +295,7 @@ func TestUnderPullRequestATwoRepositorySpecBranchIsPushedInEachAndLandsAsEachMer
 	reportPullRequestIn(t, h, "", branch, 7, homeTip)
 	r.Poll()
 
-	tk = h.WantState(id, store.Done)
+	tk = h.WantState(id, domain.Done)
 	if landedIn(tk, h.Project) != homeTip {
 		t.Fatalf("Changed Repositories %+v, want the Home Repository landed at its merge %s", tk.Repositories, homeTip)
 	}
@@ -309,7 +309,7 @@ func TestADivergedBaseInOneRepositoryHoldsBackASpecTouchingIt(t *testing.T) {
 	mergeAndPush(h, "origin")
 	release := holdTicketsStage(t, h)
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	h.Accept(id)
 	r.Poll()
 	r.WantOutput(id + ": merged into spec/" + h.SpecID() + " at ")
@@ -322,7 +322,7 @@ func TestADivergedBaseInOneRepositoryHoldsBackASpecTouchingIt(t *testing.T) {
 	release()
 	r.Poll()
 
-	tk := h.WantState(id, store.Accepted)
+	tk := h.WantState(id, domain.Accepted)
 	if got := h.Git("rev-parse", "main"); got != homeMain || tk.PartlyLanded {
 		t.Fatalf("the Home Repository's main is at %s, partly landed %v: a Spec touching a diverged base lands nowhere", got, tk.PartlyLanded)
 	}
@@ -341,7 +341,7 @@ func TestUnderPullRequestASpecConflictInOneRepositoryPushesNoSpecBranch(t *testi
 	fix := "acme-5"
 	h.Script(fix, factorytest.Wait())
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	h.Accept(id)
 	r.Poll()
 	r.WantOutput(id + ": merged into spec/" + h.SpecID() + " at ")

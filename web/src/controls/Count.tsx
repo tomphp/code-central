@@ -2,16 +2,18 @@
 // one when something in it needs the human. of names what it counts, after
 // the number ("2 left"). big is a count block's number, in big type in the
 // block's own colour; the tests find it by its test ID. n is undefined
-// until the count is known, and shows as a dash.
+// until the count is known, and shows as an ellipsis; failed shows a "!"
+// in its place, for a count that could not be read.
 export interface CountProps {
   n?: number;
   loud?: boolean;
   of?: string;
   big?: boolean;
+  failed?: boolean;
 }
 
-export function Count({ n, loud, of, big }: CountProps) {
-  const shown = n === undefined ? "–" : n;
+export function Count({ n, loud, of, big, failed }: CountProps) {
+  const shown = failed ? "!" : n === undefined ? "…" : n;
   return (
     <span className={big ? "count big" : loud ? "count loud" : "count"} data-testid={big ? "count" : undefined}>
       {of ? `${shown} ${of}` : shown}

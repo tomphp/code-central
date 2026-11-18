@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -37,7 +38,7 @@ func TestSubmittingAMapCreatesItsSpecAndOneReadyChartingTicket(t *testing.T) {
 		t.Fatalf("spec %q %q %v", sp.Title, *sp.Body, sp.Labels)
 	}
 	tk := f.get(t, "acme-3")
-	if tk.Title != "Charting: Offline mode" || tk.State != store.Ready || tk.Spec.ID != "acme-2" ||
+	if tk.Title != "Charting: Offline mode" || tk.State != domain.Ready || tk.Spec.ID != "acme-2" ||
 		!slices.Equal(tk.Labels, []string{"wayfinder:chart"}) || !tk.Claimable {
 		t.Fatalf("charting %+v", tk)
 	}
@@ -94,7 +95,7 @@ func TestSubmittingAMapAcknowledgesItsSpecAndChartingTicket(t *testing.T) {
 		t.Fatalf("submit_map: %v", err)
 	}
 	wantAcknowledgement(t, res.Spec, "acme-1", t0, []string{"title", "labels", "body"}, 0)
-	wantTicketAcknowledgement(t, res.Charting, "acme-2", t0, store.Ready,
+	wantTicketAcknowledgement(t, res.Charting, "acme-2", t0, domain.Ready,
 		[]string{"title", "state", "spec", "labels", "description", "moves", "claimable"}, 0)
 
 	full, err := f.core.SubmitMap(ctx, "acme", core.SubmitMapInput{Text: offlineMode, Full: true})
@@ -157,11 +158,11 @@ func TestTheMapBlockCountsItsDecisionsAndWhatNeedsTheHuman(t *testing.T) {
 		core.CreateTicketInput{Title: "Try a cache", Labels: []string{"prototype"}},             // acme-7
 		core.CreateTicketInput{Title: "Unlabelled"},                                             // acme-8
 	)
-	f.setState(t, 2, store.Done)
-	f.setState(t, 3, store.Done)
-	f.setState(t, 4, store.InReview)
-	f.setState(t, 6, store.Cancelled)
-	f.setState(t, 7, store.InReview)
+	f.setState(t, 2, domain.Done)
+	f.setState(t, 3, domain.Done)
+	f.setState(t, 4, domain.InReview)
+	f.setState(t, 6, domain.Cancelled)
+	f.setState(t, 7, domain.InReview)
 	m := f.mapOf(t, "acme-1")
 	// decided: chart and grilling Done; total: the four Wayfinder Tickets
 	// not Cancelled; needs_you: research and the Prototype In Review.
@@ -169,7 +170,7 @@ func TestTheMapBlockCountsItsDecisionsAndWhatNeedsTheHuman(t *testing.T) {
 		t.Fatalf("map %+v", m)
 	}
 	for _, n := range []int{4, 5, 7, 8} {
-		f.setState(t, n, store.Done)
+		f.setState(t, n, domain.Done)
 	}
 	if m := f.mapOf(t, "acme-1"); !reflect.DeepEqual(*m, core.MapView{Decided: 4, Total: 4, NeedsYou: 0, CanWriteSpec: true, Requirements: []string{}}) {
 		t.Fatalf("a Map with nothing unfinished can write its Spec: %+v", m)
@@ -233,7 +234,7 @@ func TestTheFrontierFollowsDoneAndCancelledBlockersThroughBlocked(t *testing.T) 
 		}
 		var out []string
 		for _, row := range sp.Tickets {
-			if row.State == store.Draft && !row.Blocked {
+			if row.State == domain.Draft && !row.Blocked {
 				out = append(out, row.ID)
 			}
 		}
@@ -242,8 +243,8 @@ func TestTheFrontierFollowsDoneAndCancelledBlockersThroughBlocked(t *testing.T) 
 	if got := frontier(); !slices.Equal(got, []string{"acme-3", "acme-5"}) {
 		t.Fatalf("frontier %q", got)
 	}
-	f.setState(t, 3, store.Done)
-	f.setState(t, 5, store.Cancelled)
+	f.setState(t, 3, domain.Done)
+	f.setState(t, 5, domain.Cancelled)
 	if got := frontier(); !slices.Equal(got, []string{"acme-4"}) {
 		t.Fatalf("a Done Blocker clears and a Cancelled one doesn't: frontier %q", got)
 	}
@@ -294,7 +295,7 @@ func TestEachTicketRowOnAMapCarriesItsBlockers(t *testing.T) {
 func TestWritingTheSpecFromAMapCreatesARequirementWithOnlyTheSpecAndTicketsStages(t *testing.T) {
 	f := newFixture(t)
 	f.mapWith(t) // Charting is acme-2
-	f.setState(t, 2, store.Done)
+	f.setState(t, 2, domain.Done)
 	res, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode, Map: "acme-1"})
 	if err != nil {
 		t.Fatalf("submit_requirement with map: %v", err)
@@ -357,7 +358,7 @@ func TestARequirementNotMadeFromAMapNamesNoMap(t *testing.T) {
 func TestWritingTheSpecIsRefusedForASpecThatIsNotAFinishedMap(t *testing.T) {
 	f := newFixture(t)
 	f.mapWith(t, core.CreateTicketInput{Title: "Which store", Labels: []string{"wayfinder:grilling"}}) // acme-3
-	f.setState(t, 2, store.Done)
+	f.setState(t, 2, domain.Done)
 	f.spec(t, "acme", "Login") // acme-4, a plain Spec
 
 	_, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode, Map: "acme-4"})
@@ -375,7 +376,7 @@ func TestWritingTheSpecIsRefusedForASpecThatIsNotAFinishedMap(t *testing.T) {
 		return nil
 	})
 	// A Cancelled Ticket is finished too.
-	f.setState(t, 3, store.Cancelled)
+	f.setState(t, 3, domain.Cancelled)
 	if _, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode, Map: "acme-1"}); err != nil {
 		t.Fatalf("a finished Map writes its Spec: %v", err)
 	}
@@ -422,7 +423,7 @@ func TestADraftMapsChargingTicketIsDraftAndItsSpecStillExists(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tk := f.get(t, core.Ref(res.Charting.ID)); tk.State != store.Draft || tk.Claimable {
+	if tk := f.get(t, core.Ref(res.Charting.ID)); tk.State != domain.Draft || tk.Claimable {
 		t.Fatalf("charting %+v", tk)
 	}
 	if _, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: core.Ref(res.Spec.ID)}); err != nil {

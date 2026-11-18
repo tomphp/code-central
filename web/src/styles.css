@@ -244,11 +244,20 @@ a.filter { text-decoration: none; }
   .project-options-layout { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: 24px; align-items: start; }
   .project-options-menu { display: block; position: sticky; top: 16px; }
 }
-.project-options-section { border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px 16px; margin: 0; }
+.project-options-section { border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px 16px; margin: 0; }
 .project-options-section legend { font-weight: 600; padding: 0 4px; }
 .project-options-choice { margin: 8px 0; }
-.project-options-hint, .field-hint { margin: 2px 0 0 1.6rem; font-size: 13px; color: var(--muted); }
-.project-options-remote { display: block; margin: 8px 0 0 1.6rem; }
+/* Intros and hints sit at the section's edge; only a hint under a checkbox or radio is indented. */
+.project-options-hint, .field-hint { margin: 4px 0 0; max-width: 70ch; font-size: 12.5px; color: var(--muted); }
+.project-options-choice > .project-options-hint { margin-left: 1.6rem; }
+.project-options-subhead { font-weight: 600; font-size: 14px; }
+.project-options-note { margin: 0 0 8px; padding: 6px 10px; max-width: 70ch; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--muted); font-size: 12.5px; }
+.project-options input[type="checkbox"], .project-options input[type="radio"] { accent-color: var(--accent); }
+.project-options input:disabled:checked { opacity: 1; }
+/* One label column, so every input's left edge lines up. */
+.project-options-remote, .field { display: grid; grid-template-columns: 11rem minmax(0, 24rem); column-gap: 12px; align-items: center; }
+.project-options-remote { margin: 8px 0 0; }
+.project-options-watcher, .project-options-section .muted, .project-options-repository-details { font-size: 12.5px; }
 .project-options-focus { border-collapse: collapse; margin: 8px 0; }
 .project-options-focus th { text-align: left; font-weight: 500; }
 .project-options-focus thead th { font-size: 12.5px; color: var(--muted); }
@@ -258,11 +267,13 @@ a.filter { text-decoration: none; }
 .project-options-remote input[aria-invalid="true"], .field input[aria-invalid="true"] { border-color: var(--danger); }
 .project-options form + form, .project-options form + fieldset { margin-top: 16px; }
 .project-options-rules-section { border: 0; border-top: 1px solid var(--border); padding: 12px 0 0; margin: 16px 0 0; }
-.project-options-rules-section legend { font-weight: 600; padding: 0 4px 0 0; }
-.project-options-rules-section > .project-options-hint { margin-left: 0; }
+.project-options-rules-section legend { font-weight: 600; font-size: 14px; padding: 0 4px 0 0; }
 .project-options-rules { list-style: none; margin: 12px 0 0; padding: 0; }
-.project-options-rules > li { padding: 8px 0; border-bottom: 1px solid var(--border); }
-.project-options-rules .btn { margin-left: 4px; }
+.project-options-rules > li { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.project-options-rules > li > .warning { grid-column: 1 / -1; }
+.project-options-rules strong { font-family: var(--mono); font-size: 12.5px; }
+.project-options-row-actions { display: flex; gap: 4px; justify-content: flex-end; }
+.project-options-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .project-options-rules-section > .project-options-rule { margin-top: 12px; }
 .project-options-repositories { margin: 12px 0 0; padding: 0 0 0 20px; }
 .project-options-repositories > li { padding: 8px 0; border-bottom: 1px solid var(--border); }
@@ -273,12 +284,12 @@ a.filter { text-decoration: none; }
 .project-options-repository-details dd { margin: 0; overflow-wrap: anywhere; }
 .project-options-clone-missing { color: var(--danger); }
 .project-options-repository-form { margin-top: 12px; }
-.field { display: block; margin: 12px 0 0; }
-.field input { min-width: 16rem; }
-.field + .project-options-hint, .field + .field-hint { margin-left: 0; }
+.field { margin: 12px 0 0; }
+.field input { min-width: 0; }
+.project-options-add { display: flex; align-items: flex-end; gap: 10px; }
+.project-options-repositories > li > .warning { margin: 6px 0; }
 .project-options-actions { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 .stage-guide-row + .stage-guide-row { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
-.project-options-models-hint { margin-left: 0; }
 .project-options-models { border-collapse: collapse; margin-top: 12px; width: 100%; }
 .project-options-models th, .project-options-models td { text-align: left; padding: 4px 8px 4px 0; font-size: 14px; }
 .project-options-models thead th { font-weight: 600; font-size: 13px; color: var(--muted); }
@@ -360,6 +371,10 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .ci-section h3, .repos-section h3 { font-size: 13px; margin: 14px 0 6px; }
 .ci-options { margin-top: 8px; }
 .ci-fix-note { display: grid; gap: 4px; margin-top: 8px; }
+/* The fix note is raw text with a link line: mono, so it reads as typed. */
+.ci-fix-note textarea { font: 13px/1.4 var(--mono); resize: vertical; }
+/* The CI-failed panel's heading is the Failed and Accepted panels' h3. */
+.ci-failed-panel h3 { font-size: 14px; color: color-mix(in srgb, var(--r-failed) 55%, var(--text)); margin-bottom: 8px; }
 .ci-fixes { display: flex; gap: 8px; flex-wrap: wrap; }
 .ci-result, .ci-status { font-size: 11px; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--border); }
 .ci-passed, .ci-partially-succeeded { color: color-mix(in srgb, var(--r-review) 55%, var(--text)); border-color: var(--r-review); }
@@ -377,6 +392,10 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .ci-run .label { margin-left: 6px; }
 /* Any CIRunEntry of an ignored workflow is greyed, in every layout. */
 .ci-entry.ignored, .ci-entry.ignored a, .ci-entry.ignored .ci-status { color: var(--muted); border-color: var(--border); }
+/* The ignored row's commit chip and duration stay at full ink: they are how the run is found. */
+.ci-row.ignored code, .ci-row.ignored .num { color: var(--text); }
+/* The CI view's empty and loading notes share one height. */
+.ci .empty { min-height: 128px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
 .ci-jobs { list-style: none; padding-left: 14px; margin: 2px 0; }
 /* A Claim's Live section: its Transcript, following the newest event (ticket 111). */
 .ticket-body .live > summary { margin: 4px 0; }
@@ -479,7 +498,7 @@ a.link-badge:hover { text-decoration: underline; }
    Stage. Each segment's top border is its stretch of line, coloured by its
    progress, and its ::before is the station at the stretch's start. */
 .strip { list-style: none; display: flex; gap: 0; padding: 0 0 0 7px; margin: 10px 0 4px; }
-.seg { flex: 1; min-width: 0; --line: var(--border); --stn: var(--border); }
+.seg { flex: 1; min-width: 0; --line: var(--border); --stn: color-mix(in srgb, var(--muted) 55%, var(--border)); }
 .seg > button, .seg > span { position: relative; width: 100%; border: 0; border-top: 5px solid var(--line); background: transparent; color: var(--muted); font: 600 11px var(--font); letter-spacing: .02em; padding: 12px 8px 2px 0; margin-left: -7px; text-align: left; display: flex; gap: 4px; justify-content: space-between; white-space: nowrap; border-radius: 0; }
 .seg > button::before, .seg > span::before { content: ""; position: absolute; left: 0; top: -10px; width: 15px; height: 15px; border-radius: 50%; box-sizing: border-box; background: var(--surface); border: 4px solid var(--stn); }
 /* The route ends at its last station. */
@@ -504,11 +523,19 @@ a.link-badge:hover { text-decoration: underline; }
 .seg-n { font-variant-numeric: tabular-nums; }
 .req-head { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
 .req-head h2 { font-size: 19px; margin: 6px 0 4px; }
-.req-head .spec-actions { display: flex; gap: 6px; margin: 4px 0 6px; }
+.req-head .spec-actions { display: flex; align-items: center; gap: 6px; margin: 14px 0; }
+.spec-actions-end { margin-left: auto; }
+.spec-pane-note { min-height: 24rem; }
 .req-head .strip button { font-size: 12px; padding-top: 5px; }
 .req-head .waiting { font-size: 13px; }
-.impl-list { list-style: none; padding: 0; margin: 6px 0; font-size: 12.5px; }
-.impl-list li { padding: 2px 0; }
+.impl-list { list-style: none; padding: 0; margin: 6px 0; font-size: 12.5px; display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; }
+.impl-list li { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--border); }
+.impl-list li:last-child { border-bottom: 0; }
+.impl-list li > button.link { display: grid; grid-template-columns: subgrid; grid-column: 1 / 3; column-gap: 8px; align-items: baseline; }
+.impl-list .impl-title { min-width: 0; }
+.impl-list .impl-marks { grid-column: 3; display: inline-flex; align-items: center; gap: 6px; margin-left: 12px; }
+.impl-list .impl-marks > * { margin-left: 0; }
+.impl-list li > .latest-event { grid-column: 1 / -1; }
 .impl-list .latest-event { display: block; padding-left: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .impl-list button.link { font-size: 12.5px; color: var(--text); text-align: left; }
 .impl-list button.link[aria-current="true"] { font-weight: 600; }
@@ -523,25 +550,25 @@ a.link-badge:hover { text-decoration: underline; }
 .map-graph svg { display: block; }
 .map-edge { fill: none; stroke: var(--muted); stroke-width: 1.2; }
 .map-arrow { fill: var(--muted); }
-.map-node { box-sizing: border-box; height: 100%; display: flex; flex-direction: column; gap: 3px; padding: 5px 8px; background: var(--surface); border: 1.5px solid var(--mn); border-radius: 6px; font-size: 12px; overflow: hidden; }
+.map-node-slot { height: 100%; display: flex; align-items: center; }
+.map-node { box-sizing: border-box; width: 100%; display: flex; flex-direction: column; gap: 3px; padding: 5px 8px; background: var(--surface); border: 1.5px solid var(--mn); border-radius: 6px; font-size: 12px; overflow: hidden; }
 /* A Map's Tickets are stations on its network: each node is ringed, and
    its type carries a station, in its progress colour. */
-.map-node { --mn: var(--border); }
+.map-node { --mn: var(--st, var(--border)); }
 .map-node-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
 .map-node-type { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .map-node-type::before { content: ""; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; border: 3px solid var(--mn); background: var(--surface); flex: none; }
 .map-node .map-node-title { color: var(--text); text-align: left; font-size: 12px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .map-node .map-node-title[aria-current="true"] { font-weight: 600; }
-.map-node.progress-done { --mn: var(--r-review); }
-.map-node.progress-running { --mn: var(--accent); }
-.map-node.progress-queued { --mn: var(--accent); border-style: dashed; }
-.map-node.progress-needs { --mn: var(--rc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--rc) 22%, transparent); }
+.map-node.progress-queued { border-style: dashed; }
+.map-node.progress-needs { box-shadow: 0 0 0 3px color-mix(in srgb, var(--rc, var(--st)) 28%, transparent); }
 .map-node.progress-waiting { color: var(--muted); }
 .map-node.cancelled { opacity: .55; }
 .map-node.cancelled .map-node-title { text-decoration: line-through; }
 .map-start { align-self: flex-start; padding: 1px 10px; font-size: 11.5px; margin-top: auto; }
-.map-fog { box-sizing: border-box; width: 100%; height: 100%; border: 1px dashed var(--border); border-radius: 22px; background: var(--surface-2); color: var(--muted); font: 12px system-ui; cursor: pointer; opacity: .7; }
-.map-fog:hover, .map-fog[aria-expanded="true"] { opacity: 1; }
+.map-fog { box-sizing: border-box; width: 100%; height: 100%; border: 1px dashed var(--border); border-radius: 6px; background: var(--surface-2); color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.map-fog { border-color: color-mix(in srgb, var(--border) 70%, transparent); }
+.map-fog:hover, .map-fog[aria-expanded="true"] { border-color: var(--muted); }
 .map-side { flex: 1 1 12rem; font-size: 12.5px; }
 .map-details { margin: 0 0 8px; }
 .map-details summary { cursor: pointer; font-weight: 600; }
@@ -566,9 +593,9 @@ a.link-badge:hover { text-decoration: underline; }
 .edit-form { display: flex; flex-direction: column; gap: 8px; margin: 6px 0; }
 .edit-form input { font: inherit; font-size: 16px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
 .edit-form .edit-preview { border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; min-height: 120px; }
-.spec-body { margin: 4px 0 8px; }
+.spec-body { margin: 14px 0; }
 .spec-body-head { display: flex; align-items: center; gap: 8px; }
-.spec-body-head .link { font-weight: 600; }
+.spec-body-head .link { font-size: 14px; font-weight: 600; color: var(--muted); }
 
 /* The State chips' colours, and the State lists' By Ticket | By Spec toggle. */
 .st-draft { --st: var(--st-draft); }

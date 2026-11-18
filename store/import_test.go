@@ -3,6 +3,7 @@ package store_test
 import (
 	"errors"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"slices"
@@ -23,7 +24,7 @@ func seedAcme(t *testing.T, dir string) *store.FileStore {
 	t.Helper()
 	s := openFile(t, dir)
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutProject(store.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed"})
+		return w.PutProject(domain.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed"})
 	})
 	return s
 }

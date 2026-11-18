@@ -1,6 +1,7 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"runtime"
 	"slices"
@@ -8,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 func TestTheFirstCtrlCDrainsWaitingForRunningTurnsAndClaimingNoMore(t *testing.T) {
@@ -30,11 +30,11 @@ func TestTheFirstCtrlCDrainsWaitingForRunningTurnsAndClaimingNoMore(t *testing.T
 	if code := r.Exited(); code != 0 {
 		t.Errorf("exit code %d, want 0", code)
 	}
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	if got := h.Signals(id); len(got) != 0 {
 		t.Errorf("the draining turn got %q, want no signals", got)
 	}
-	if s := h.Ticket(later).State; s != store.Ready || len(h.Calls()) != 1 {
+	if s := h.Ticket(later).State; s != domain.Ready || len(h.Calls()) != 1 {
 		t.Errorf("%s is %s after %d runs; a draining Factory claims nothing", later, s, len(h.Calls()))
 	}
 }
@@ -79,7 +79,7 @@ func killed(t *testing.T, h *factorytest.Harness, r *factorytest.Running, id str
 	}
 	wantStopped(t, h, id)
 	tk := h.Ticket(id)
-	if tk.State != store.InProgress || len(tk.Claims) != 1 || tk.Claims[0].Ended != nil || len(tk.FailureReports) != 0 {
+	if tk.State != domain.InProgress || len(tk.Claims) != 1 || tk.Claims[0].Ended != nil || len(tk.FailureReports) != 0 {
 		t.Errorf("%s is %s with Claims %+v and %d Failure Reports; want its one Claim kept, In Progress, never failed", id, tk.State, tk.Claims, len(tk.FailureReports))
 	}
 	if got := stateClaims(t, h); !slices.Equal(got, []string{h.Calls()[0].Claim}) {

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -19,23 +20,23 @@ func (f fixture) finishedSpec(t *testing.T) {
 	t.Helper()
 	f.project(t, "acme")
 	f.spec(t, "acme", "Login")
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Grill it", State: store.Ready, Labels: []string{"stage:grilling"}})
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Prototype: theme", State: store.Ready, Labels: []string{core.PrototypeLabel}})
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Build it", State: store.Ready})
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Grill it", State: domain.Ready, Labels: []string{"stage:grilling"}})
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Prototype: theme", State: domain.Ready, Labels: []string{core.PrototypeLabel}})
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Build it", State: domain.Ready})
 
 	grill := f.claim(t, core.ClaimInput{Ticket: "2", SessionID: "sess-1", WorkingDir: ptr("/w/one")})
 	if _, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: grill.ClaimID, Summary: "Grilled."}); err != nil {
 		t.Fatalf("finish: %v", err)
 	}
-	f.move(t, "2", store.Done)
+	f.move(t, "2", domain.Done)
 	f.claim(t, core.ClaimInput{Ticket: "3", WorkingDir: ptr("/w/two")})
-	f.move(t, "3", store.Cancelled)
+	f.move(t, "3", domain.Cancelled)
 	f.claim(t, core.ClaimInput{Ticket: "4", SessionID: "sess-2"})
 	if _, err := f.core.Release(human, "acme", core.ReleaseInput{Ticket: "4"}); err != nil {
 		t.Fatalf("release: %v", err)
 	}
 	f.claim(t, core.ClaimInput{Ticket: "4", SessionID: "sess-3", WorkingDir: ptr("/w/three")})
-	f.move(t, "4", store.Done)
+	f.move(t, "4", domain.Done)
 }
 
 func (f fixture) submitRetro(t *testing.T, in core.SubmitRetroInput) core.TicketView {
@@ -52,11 +53,11 @@ func (f fixture) submitRetro(t *testing.T, in core.SubmitRetroInput) core.Ticket
 // title, with one move to Ready and description.
 func wantRetro(t *testing.T, tk core.TicketView, spec, title, target, description string) {
 	t.Helper()
-	if tk.Title != title || tk.State != store.Ready || tk.Spec.ID != spec || !tk.Claimable ||
+	if tk.Title != title || tk.State != domain.Ready || tk.Spec.ID != spec || !tk.Claimable ||
 		!slices.Equal(tk.Labels, []string{core.RetroLabel}) || !maps.Equal(tk.Tags, map[string]string{"retro-of": target}) {
 		t.Fatalf("Retro %+v", tk)
 	}
-	if len(tk.Moves) != 1 || tk.Moves[0].Actor != "human" || tk.Moves[0].To != store.Ready || tk.Moves[0].Via != "submit_retro" {
+	if len(tk.Moves) != 1 || tk.Moves[0].Actor != "human" || tk.Moves[0].To != domain.Ready || tk.Moves[0].Via != "submit_retro" {
 		t.Fatalf("moves %+v", tk.Moves)
 	}
 	if tk.Description != description {
@@ -115,7 +116,7 @@ func TestTheFirstRetroCreatesTheRetrosSpecAndALaterOneReusesItAfterARetitle(t *t
 	if sp.ID != "acme-5" || sp.Title != "Retros" || !slices.Equal(sp.Labels, []string{core.LongLivedLabel}) || sp.Body == nil || *sp.Body == "" {
 		t.Fatalf("Retros Spec %+v", sp)
 	}
-	var p store.Project
+	var p domain.Project
 	f.store.View(func(r store.Reader) error { p, _ = r.Project("acme"); return nil })
 	if p.RetrosSpec != 5 {
 		t.Fatalf("the Project names Retros Spec %d", p.RetrosSpec)
@@ -136,7 +137,7 @@ func TestARetroCanTargetARetroAndSeveralCanTargetTheSameWork(t *testing.T) {
 	if first.ID == second.ID || second.Tags["retro-of"] != "acme-2" {
 		t.Fatalf("Retros %s and %+v", first.ID, second)
 	}
-	f.move(t, core.Ref(first.ID), store.Done)
+	f.move(t, core.Ref(first.ID), domain.Done)
 	onRetro := f.submitRetro(t, core.SubmitRetroInput{Target: core.Ref(first.ID)})
 	if onRetro.Title != "Retro: Retro: Grill it" || onRetro.Tags["retro-of"] != first.ID || onRetro.Spec.ID != "acme-5" {
 		t.Fatalf("Retro on a Retro %+v", onRetro)
@@ -150,7 +151,7 @@ func TestSubmittingARetroAcknowledgesItsTicket(t *testing.T) {
 	if err != nil {
 		t.Fatalf("submit_retro: %v", err)
 	}
-	wantTicketAcknowledgement(t, res, "acme-6", t0, store.Ready,
+	wantTicketAcknowledgement(t, res, "acme-6", t0, domain.Ready,
 		[]string{"title", "state", "spec", "labels", "tags", "description", "moves", "claimable"}, 0)
 }
 
@@ -166,11 +167,11 @@ func TestARetroIsRefusedOnWorkThatIsMissingUnfinishedOrLongLived(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFixture(t)
-			f.work(t, store.Draft) // Long-lived acme-1, finished: acme-2 Done
-			f.move(t, "2", store.Done)
+			f.work(t, domain.Draft) // Long-lived acme-1, finished: acme-2 Done
+			f.move(t, "2", domain.Done)
 			f.spec(t, "acme", "Signup") // acme-3, unfinished: acme-4 In Review
 			f.ticket(t, "acme", core.CreateTicketInput{Spec: "3", Title: "Form"})
-			f.move(t, "4", store.InReview)
+			f.move(t, "4", domain.InReview)
 			_, err := f.core.SubmitRetro(ctx, "acme", core.SubmitRetroInput{Target: target})
 			wantCode(t, err, core.Invalid, "target")
 			if specs, _ := f.core.FindSpecs(ctx, "acme", core.FindSpecsInput{Finished: true}); len(specs) != 2 {
@@ -198,15 +199,15 @@ func TestTicketAndSpecReadsListTheirRetrosOldestFirstAndLeaveThemOutWhenThereAre
 	first := f.submitRetro(t, core.SubmitRetroInput{Target: "acme-2"})
 	second := f.submitRetro(t, core.SubmitRetroInput{Target: "acme-2"})
 	onSpec := f.submitRetro(t, core.SubmitRetroInput{Target: "acme-1"})
-	f.move(t, core.Ref(second.ID), store.Done)
+	f.move(t, core.Ref(second.ID), domain.Done)
 
 	tk, err = f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "acme-2"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []core.RetroView{
-		{ID: first.ID, Title: "Retro: Grill it", State: store.Ready},
-		{ID: second.ID, Title: "Retro: Grill it", State: store.Done},
+		{ID: first.ID, Title: "Retro: Grill it", State: domain.Ready},
+		{ID: second.ID, Title: "Retro: Grill it", State: domain.Done},
 	}
 	if !slices.Equal(tk.Retros, want) {
 		t.Fatalf("Ticket Retros %+v, want %+v", tk.Retros, want)
@@ -215,7 +216,7 @@ func TestTicketAndSpecReadsListTheirRetrosOldestFirstAndLeaveThemOutWhenThereAre
 	if err != nil {
 		t.Fatal(err)
 	}
-	if wantSpec := []core.RetroView{{ID: onSpec.ID, Title: "Retro: Login", State: store.Ready}}; !slices.Equal(sp.Retros, wantSpec) {
+	if wantSpec := []core.RetroView{{ID: onSpec.ID, Title: "Retro: Login", State: domain.Ready}}; !slices.Equal(sp.Retros, wantSpec) {
 		t.Fatalf("Spec Retros %+v, want %+v", sp.Retros, wantSpec)
 	}
 	other, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "acme-4"})

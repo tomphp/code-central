@@ -3,6 +3,7 @@ package factory_test
 import (
 	"context"
 	"encoding/json"
+	"github.com/tomoram/code-central/domain"
 	"slices"
 	"strings"
 	"testing"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 func TestATurnThatExitsWithItsClaimInProgressBecomesAFailureReport(t *testing.T) {
@@ -27,7 +27,7 @@ func TestATurnThatExitsWithItsClaimInProgressBecomesAFailureReport(t *testing.T)
 	r := h.Start()
 	r.WantOutput(id + ` turn ended (implementation): "Too big": exit 3, error_max_turns (max_turns); now Failed; ran `)
 
-	tk := h.WantState(id, store.Failed)
+	tk := h.WantState(id, domain.Failed)
 	if len(tk.FailureReports) != 1 {
 		t.Fatalf("%d Failure Reports, want 1", len(tk.FailureReports))
 	}
@@ -54,7 +54,7 @@ func TestATurnThatEndsWithDenialsAndNoExitGetsARoundOfOneQuestionPerDistinctCall
 		factorytest.Denied("npm install")))
 	r := h.Start()
 
-	tk := h.WantState(id, store.NeedsAnswer)
+	tk := h.WantState(id, domain.NeedsAnswer)
 	r.WantOutput(id + " turn ended")
 	if len(tk.Rounds) != 1 {
 		t.Fatalf("%d Rounds, want 1", len(tk.Rounds))
@@ -88,7 +88,7 @@ func TestWhatTheHumanAllowsIsPassedAsAllowedToolsOnThatClaimsLaterRunsOnly(t *te
 		factorytest.Denied("rm -rf ~/.cache"),
 		factorytest.Denied("curl https://example.com")))
 	r := h.Start()
-	tk := h.WantState(id, store.NeedsAnswer)
+	tk := h.WantState(id, domain.NeedsAnswer)
 	r.WantOutput(id + " turn ended")
 
 	// The resume waits so the state file is read while its Claim is held:
@@ -114,11 +114,11 @@ func TestWhatTheHumanAllowsIsPassedAsAllowedToolsOnThatClaimsLaterRunsOnly(t *te
 	}
 	h.Continue(id)
 	r.Settle()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	other := h.ReadyTicket("Other work")
 	r.Poll()
-	h.WantState(other, store.InReview)
+	h.WantState(other, domain.InReview)
 	if c := callsFor(h, other)[0]; c.Has("--allowedTools") {
 		t.Errorf("another Claim's run got --allowedTools: %q", c.Args)
 	}
@@ -132,7 +132,7 @@ func TestDenialsOnATurnThatFinishedAreListedInAComment(t *testing.T) {
 		factorytest.Denied("golangci-lint run"),
 		factorytest.Denied("golangci-lint run")))
 	r := h.Start()
-	tk := h.WantState(id, store.InReview)
+	tk := h.WantState(id, domain.InReview)
 	r.WantOutput(id + " turn ended")
 
 	var body string
@@ -165,11 +165,11 @@ func TestAnOutagePausesClaimingAndResumingAndSaysWhatItIsWaitingOn(t *testing.T)
 
 	next := h.ReadyTicket("Next")
 	r.Poll()
-	if s := h.Ticket(next).State; s != store.Ready || len(h.Calls()) != 1 {
+	if s := h.Ticket(next).State; s != domain.Ready || len(h.Calls()) != 1 {
 		t.Errorf("%s is %s after %d runs; want nothing claimed or resumed during an outage", next, s, len(h.Calls()))
 	}
 	tk := h.Ticket(cut)
-	if tk.State != store.InProgress || len(tk.FailureReports) != 0 {
+	if tk.State != domain.InProgress || len(tk.FailureReports) != 0 {
 		t.Errorf("%s is %s with %d Failure Reports; a cut-off turn is never failed", cut, tk.State, len(tk.FailureReports))
 	}
 	r.WantOutput("waiting on rate_limit")
@@ -189,7 +189,7 @@ func TestAPauseWithNothingLeftCutOffEndsAndClaimingCarriesOn(t *testing.T) {
 	}
 	next := h.ReadyTicket("Next")
 	r.Poll()
-	h.WantState(next, store.InReview)
+	h.WantState(next, domain.InReview)
 	r.WantOutput("nothing is cut off any more: carrying on")
 }
 
@@ -235,16 +235,16 @@ func TestACutOffTurnIsResumedWithBackoffUntilTheOutageIsOver(t *testing.T) {
 			t.Errorf("prompt %q: want it told its last turn was cut off", c.Prompt)
 		}
 	}
-	if s := h.Ticket(next).State; s != store.Ready {
+	if s := h.Ticket(next).State; s != domain.Ready {
 		t.Errorf("%s is %s; nothing is claimed until a turn gets through", next, s)
 	}
 
 	h.Continue(cut)
 	r.Settle()
-	tk := h.WantState(cut, store.InReview)
+	tk := h.WantState(cut, domain.InReview)
 	r.WantOutput("the outage is over")
 	r.Poll()
-	h.WantState(next, store.InReview)
+	h.WantState(next, domain.InReview)
 	if len(tk.FailureReports) != 0 {
 		t.Errorf("a cut-off turn is never failed: %+v", tk.FailureReports)
 	}
@@ -269,7 +269,7 @@ func TestAnExpiredLoginStopsTheFactory(t *testing.T) {
 	}
 	wantStopped(t, h, busy)
 	for _, id := range []string{busy, expired} {
-		if tk := h.Ticket(id); tk.State != store.InProgress || len(tk.FailureReports) != 0 {
+		if tk := h.Ticket(id); tk.State != domain.InProgress || len(tk.FailureReports) != 0 {
 			t.Errorf("%s is %s with %d Failure Reports; want its Claim kept", id, tk.State, len(tk.FailureReports))
 		}
 	}

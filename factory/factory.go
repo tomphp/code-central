@@ -1,6 +1,62 @@
 // Package factory is the local Factory, code-central-factory (ADR 0005):
 // plain code that claims a Project's Ready Tickets through the HTTP API
 // and runs one `claude -p` session per Claim in the Ticket's worktree.
+//
+// # Parts
+//
+// The Factory is two parts over one shared registry (Spec
+// code-central-934), all unexported types in this package:
+//
+//   - repositories (repositories.go) is the registry: the Home
+//     Repository, the Project's Repositories and its base, and the
+//     worktree set-up. Both parts read it; only the lander writes it
+//     (replace after a sync, setBase on a Project read).
+//   - lander (lander.go) is the landing part: each poll it reads the
+//     Project and its Landing Policy, keeps the clones and bases current,
+//     lands Accepted work, detects hand merges and merged pull requests,
+//     and sweeps the worktrees and Spec Branches it is done with. It owns
+//     every "already said" map and all base state, and starts no session.
+//   - *factory is the session part: the poll loop, slots and turns,
+//     Claims, Chat, Heartbeats, outages, Stage set-up, and the Changed
+//     Repositories report and finish check. It holds the registry and the
+//     lander as fields.
+//
+// # The interface between the parts
+//
+// The session part gives the lander landerHooks, the only things landing
+// asks of sessions:
+//
+//   - stopped: the Factory is halted, draining or paused, so nothing more
+//     lands this poll. The landing loops ask it between steps.
+//   - turnRunningOn: a turn is running on the Ticket, so the sweep keeps
+//     its worktrees.
+//
+// newLander builds the lander once, in start, over the registry, the
+// Client, the Project Key, the shared work hook, the shared output (the
+// factory's printf, under its one output mutex) and the hooks. The
+// session part then calls only two methods on it:
+//
+//   - poll, once per poll, after reconciling and before claiming. It
+//     returns the Project and whether it was read; when it was, the
+//     session part makes the report of what claude accepts (reportModels)
+//     until Code Central takes it. Landing never makes that report.
+//   - claimingHeld, wherever claiming is gated: a base is missing or has
+//     diverged, .mcp.json is missing from the base, or a Repository is
+//     missing.
+//
+// The rules that keep the split from changing behaviour:
+//
+//   - One call to poll per poll, in the place the landing step ran
+//     before the split.
+//   - Both parts write lines through the same output and report work in
+//     flight through the same work value, so a test that settles on
+//     Env.Work (ADR 0045) hears landing's git and post steps too. The
+//     lander has no timer of its own and takes no clock; every wait stays
+//     on Env.Clock in the session part.
+//   - The base name is written into the registry by the lander on a
+//     Project read, and read by turns there under the registry's mutex.
+//   - ADR 0005 is untouched: the Factory is plain code that starts one
+//     session per Claim, and the lander starts none.
 package factory
 
 import (
@@ -18,8 +74,8 @@ import (
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/home"
-	"github.com/tomoram/code-central/store"
 )
 
 // Env is everything the Factory touches outside itself, so tests can run
@@ -192,14 +248,14 @@ func Run(ctx context.Context, args []string, e Env) int {
 	}
 	f.polling.end = startingUp
 	defer f.lock.Close()
-	f.printf("base: %s", f.baseBranch())
+	f.printf("base: %s", f.repos.baseBranch())
 	if len(o.claudeArgs) > 0 {
 		f.printf("passing to every claude turn: %s", joinArgs(o.claudeArgs))
 	}
 	if o.bypass {
 		f.printf("warning: --bypass-permissions: every session runs in bypassPermissions mode, with no permission checks")
 	}
-	f.prune(f.home)
+	f.repos.prune(f.repos.home)
 	ctx, f.stop = context.WithCancel(ctx)
 	defer f.stop()
 	go f.watchSignals(ctx, f.starting("the signal watch"))
@@ -289,32 +345,21 @@ func (f *factory) printf(format string, args ...any) {
 type factory struct {
 	e      Env
 	o      options
-	git    string
 	claude string
-	// home is the Home Repository: the git top level the Factory starts
-	// in, its repo as landing and the sweep use it, and its worktree
-	// folder, <repo-parent>/<repo-dir>.worktrees.
-	home *repository
-	// repositories is the registry of the Project's Repositories by
-	// Repository Name, home among them, rebuilt from the Project on every
-	// poll, and inOrder the same in landing order; the poll writes them
-	// under reposMu, which the Chat loop's reads take (readyRepositories).
-	// reportedSeveral is whether the last report of their clones was of
-	// several, and reportRepositoriesFailing whether it failed, so a
-	// failure warns once.
-	reposMu                   sync.Mutex
-	repositories              map[string]*repository
-	inOrder                   []*repository
-	reportedSeveral           bool
-	reportRepositoriesFailing bool
-	project                   string
-	host                      string // the machine, as the Heartbeats name it
-	client                    *client.Client
-	events                    *sender[core.SessionEvent]  // posts Session Events
-	usage                     *sender[core.UsageResponse] // posts model responses' token usage
-	planLimits                latestPlanLimits            // the latest Plan Limits, sent on each Heartbeat
-	state                     *stateFile
-	lock                      *os.File // held for the Factory's whole life
+	// repos is the registry of the Home Repository, the Project's
+	// Repositories and its base, and of their worktrees.
+	repos *repositories
+	// lander is the landing part, which the poll calls once per poll and
+	// asks whether claiming is held; start builds it.
+	lander     *lander
+	project    string
+	host       string // the machine, as the Heartbeats name it
+	client     *client.Client
+	events     *sender[core.SessionEvent]  // posts Session Events
+	usage      *sender[core.UsageResponse] // posts model responses' token usage
+	planLimits latestPlanLimits            // the latest Plan Limits, sent on each Heartbeat
+	state      *stateFile
+	lock       *os.File // held for the Factory's whole life
 
 	outMu sync.Mutex
 	mu    sync.Mutex           // guards turns, ended, info and backInReady
@@ -326,63 +371,12 @@ type factory struct {
 	// until the next timed poll, so the wake at its turn's end doesn't
 	// claim it again at once, and again, without end.
 	backInReady map[string]time.Time
-	warned      map[string]bool // dirty finished worktrees already warned of; the poll's own
 	turnsDone   sync.WaitGroup
 
-	// warnedMerged is "<ticket>@<commit>" of Tickets merged in a State
-	// that can't land, already warned of; the poll's own.
-	warnedMerged map[string]bool
-
-	// leftOnBranch is "<ticket>@<commit>" of Accepted Tickets left for the
-	// human to merge under the Branch Landing Method, already said; the
-	// poll's own.
-	leftOnBranch map[string]bool
-	// saidHeld is "<ticket>@<why>" of Accepted Tickets a broken base or a
-	// missing clone holds back from landing, already said; the poll's own.
-	saidHeld map[string]bool
 	// reportedChanged is the Changed Repositories last reported for each
 	// held Claim, by Claim ID, so a report goes only when they change;
 	// the poll's own.
 	reportedChanged map[string]string
-	// oldBases are the bases the Project named earlier in this run.
-	oldBases []string
-
-	// bases is what the Factory knows of each Repository's base, by
-	// Repository Name: whether it is missing, has diverged or was level
-	// with the remote's this poll, and the merges made into it that
-	// haven't landed yet. They are the poll's own.
-	bases map[string]*baseState
-	// base is the Project's base as the last read of it said; baseMu
-	// guards it, because turns read it from their own goroutines.
-	baseMu sync.Mutex
-	base   string
-	// mcpBase is the base whose .mcp.json was last found committed, and
-	// mcpHeld whether the file is missing from the base, so no branch or
-	// worktree is cut. Both are the poll's own.
-	mcpBase string
-	mcpHeld bool
-	// reportBaseFailing is whether the last report_base failed, so a
-	// failure warns once.
-	reportBaseFailing bool
-	// reportedRemote is the Home's Push remote name whose URL, or its
-	// absence, was last reported to Code Central, and remoteReported
-	// whether one was; reportRemoteFailing is whether the last report
-	// failed, so a failure warns once. They are the poll's own, once
-	// started.
-	reportedRemote      string
-	remoteReported      bool
-	reportRemoteFailing bool
-	// saidLocalOnly is the Repositories said to be local-only under Pull
-	// Request, and not put right since; the poll's own.
-	saidLocalOnly map[string]bool
-	// saidOnCI is "<ticket>@<pushed commit>@<CI result>" of Tickets the
-	// CI gate holds, already said; the poll's own.
-	saidOnCI map[string]bool
-	// unreported is, by "<ticket>@<Repository Name>", the commit a push
-	// under Merge + Push left that Repository's remote base holding, whose
-	// report as the Ticket's pushed commit there failed, to report next
-	// poll; the poll's own.
-	unreported map[string]string
 	// accepts is what claude --help said claude accepts, read at startup.
 	accepts claudeAccepts
 	// runner runs the claude Turns, built at startup once accepts is read.
@@ -440,7 +434,20 @@ type factory struct {
 // rest.
 func newFactory(e Env, o options) *factory {
 	w := work{e.Work}
-	return &factory{e: e, o: o, drainCh: make(chan struct{}), wakeCh: make(chan func(), 1), work: w, polling: stint{w: w}, drainWork: newHandoff(), stopWork: newHandoff(), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, backInReady: map[string]time.Time{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, saidHeld: map[string]bool{}, reportedChanged: map[string]string{}, bases: map[string]*baseState{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, saidLocalOnly: map[string]bool{}}
+	f := &factory{e: e, o: o, drainCh: make(chan struct{}), wakeCh: make(chan func(), 1), work: w, polling: stint{w: w}, drainWork: newHandoff(), stopWork: newHandoff(), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, backInReady: map[string]time.Time{}, reportedChanged: map[string]string{}}
+	f.repos = newRepositories(e.Environ, f.printf)
+	return f
+}
+
+// hooks is what the landing part asks of the sessions: whether the
+// Factory is halted, draining or paused, so nothing more lands this poll,
+// and whether a turn is running on a Ticket, whose worktrees the sweep
+// keeps.
+func (f *factory) hooks() landerHooks {
+	return landerHooks{
+		stopped:       func(ctx context.Context) bool { return f.halted(ctx) || f.paused() },
+		turnRunningOn: f.turnRunningOn,
+	}
 }
 
 // start makes every start-up check, refusing with the reason.
@@ -450,14 +457,15 @@ func start(e Env, o options) (*factory, error) {
 	if !ok {
 		return nil, errors.New("git isn't on PATH")
 	}
-	f.git = git
+	f.repos.git = git
 	top, err := f.gitOut(e.Dir, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return nil, fmt.Errorf("not in a git repository (%s)", e.Dir)
 	}
 	// git writes C:/... on Windows; the Factory's paths are C:\...
-	f.home = f.newRepository("", filepath.FromSlash(top))
-	f.home.home = true
+	home := f.repos.newRepository("", filepath.FromSlash(top))
+	home.home = true
+	f.repos.home = home
 	if err := f.checkGitVersion(); err != nil {
 		return nil, err
 	}
@@ -470,16 +478,16 @@ func start(e Env, o options) (*factory, error) {
 	}
 	f.project = project
 	// The Home Repository is named by the Project Key.
-	f.home.name = project
-	f.repositories, f.inOrder = map[string]*repository{project: f.home}, []*repository{f.home}
+	home.name = project
+	f.repos.replace(map[string]*repository{project: home}, []*repository{home})
 	if f.claude, ok = e.lookPath("claude"); !ok {
 		return nil, errors.New("claude isn't on PATH")
 	}
 	if err := refuseClaudeShim(f.claude); err != nil {
 		return nil, err
 	}
-	if err := writable(f.home.worktrees); err != nil {
-		return nil, fmt.Errorf("can't use the worktree folder %s: %v", f.home.worktrees, err)
+	if err := writable(home.worktrees); err != nil {
+		return nil, fmt.Errorf("can't use the worktree folder %s: %v", home.worktrees, err)
 	}
 	f.client = client.New(client.ServiceURL(e.getenv))
 	every := e.EventBatchEvery
@@ -494,19 +502,18 @@ func start(e Env, o options) (*factory, error) {
 	}
 	f.events = newSender(f.client.PostSessionEvents, e.Clock, every, timeout, f.work, "Session Events")
 	f.usage = newSender(f.client.PostUsage, e.Clock, every, timeout, f.work, "token usage")
+	f.lander = newLander(f.repos, f.client, project, f.work, f.printf, f.hooks())
 	// A Project that can't be read yet is checked on every poll instead.
 	p, readErr := f.client.GetProject(context.Background(), project)
 	// The base is the Project's, read again on every poll; until it can be
 	// read, it is the default.
-	f.base = store.DefaultBase
+	base := domain.DefaultBase
 	if readErr == nil {
-		f.base = p.Landing.Base
+		base = p.Landing.Base
 	}
-	if _, err := f.gitOut(top, "rev-parse", "--verify", "-q", f.base+"^{commit}"); err == nil {
-		if !f.mcpCommitted() {
-			return nil, errors.New(f.mcpMessage())
-		}
-		f.mcpBase = f.base
+	f.repos.setBase(base)
+	if err := f.lander.checkMCPAtStart(); err != nil {
+		return nil, err
 	}
 	f.accepts = f.readClaudeHelp()
 	if err := f.checkEffortFlag(); err != nil {
@@ -517,7 +524,7 @@ func start(e Env, o options) (*factory, error) {
 		return nil, err
 	}
 	if readErr == nil {
-		f.reportPushRemote(context.Background(), p)
+		f.lander.reportPushRemote(context.Background(), p)
 		f.modelsReported = f.reportModels(context.Background())
 	}
 	statePath, err := e.home().State("code-central-factory", project+".json")
@@ -543,7 +550,7 @@ func start(e Env, o options) (*factory, error) {
 var minGit = [2]int{2, 38}
 
 func (f *factory) checkGitVersion() error {
-	out, err := f.gitOut(f.home.dir, "version")
+	out, err := f.gitOut(f.repos.home.dir, "version")
 	if err != nil {
 		return err
 	}
@@ -585,37 +592,5 @@ func writable(dir string) error {
 
 // gitOut runs git in dir and returns its trimmed output.
 func (f *factory) gitOut(dir string, args ...string) (string, error) {
-	return gitOut(f.git, f.e.Environ, dir, args...)
-}
-
-// baseBranch is the Project's base as of the last poll's read.
-func (f *factory) baseBranch() string {
-	f.baseMu.Lock()
-	defer f.baseMu.Unlock()
-	return f.base
-}
-
-// setBase takes the base the Project names this poll. A change of base
-// says so and forgets what was known of the old one.
-func (f *factory) setBase(base string) {
-	f.baseMu.Lock()
-	old := f.base
-	f.base = base
-	f.baseMu.Unlock()
-	if old != base {
-		f.printf("base: %s, was %s", base, old)
-		f.stateOf(f.home).changedBase()
-		f.oldBases = append(f.oldBases, old)
-	}
-}
-
-// mcpCommitted is whether .mcp.json is committed on the base.
-func (f *factory) mcpCommitted() bool {
-	_, err := f.gitOut(f.home.dir, "cat-file", "-e", f.baseBranch()+":.mcp.json")
-	return err == nil
-}
-
-func (f *factory) mcpMessage() string {
-	b := f.baseBranch()
-	return fmt.Sprintf(".mcp.json isn't committed on %s: every worktree starts from %s, so its sessions need it; commit it first", b, b)
+	return f.repos.gitOut(dir, args...)
 }

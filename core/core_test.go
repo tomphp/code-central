@@ -9,6 +9,7 @@ import (
 
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/ops"
 	"github.com/tomoram/code-central/store"
@@ -169,7 +170,7 @@ func TestCreateTicket(t *testing.T) {
 	f.clock.Advance(time.Minute)
 
 	draft := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Form", Description: "Build it.\n", Labels: []string{"ui"}})
-	if draft.State != store.Draft {
+	if draft.State != domain.Draft {
 		t.Fatalf("default State = %s, want Draft", draft.State)
 	}
 	if draft.Spec.ID != "acme-1" || draft.Spec.Title != "Login" {
@@ -182,8 +183,8 @@ func TestCreateTicket(t *testing.T) {
 		t.Fatalf("a Draft is not claimable: %+v", draft)
 	}
 
-	ready := f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "API", State: store.Ready})
-	if ready.State != store.Ready || !ready.Claimable {
+	ready := f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "API", State: domain.Ready})
+	if ready.State != domain.Ready || !ready.Claimable {
 		t.Fatalf("ready: %+v", ready)
 	}
 
@@ -211,7 +212,7 @@ func TestCreateTicketRejects(t *testing.T) {
 		{"unknown spec", core.CreateTicketInput{Spec: "9", Title: "T"}, "spec"},
 		{"spec is a ticket", core.CreateTicketInput{Spec: "2", Title: "T"}, "spec"},
 		{"spec from another project", core.CreateTicketInput{Spec: "web-1", Title: "T"}, "spec"},
-		{"state other than Draft or Ready", core.CreateTicketInput{Spec: "1", Title: "T", State: store.InProgress}, "state"},
+		{"state other than Draft or Ready", core.CreateTicketInput{Spec: "1", Title: "T", State: domain.InProgress}, "state"},
 		{"unknown state", core.CreateTicketInput{Spec: "1", Title: "T", State: "Doing"}, "state"},
 	}
 	for _, c := range cases {
@@ -249,12 +250,12 @@ func TestFindTickets(t *testing.T) {
 	f.clock.Set(t0.Add(2 * time.Minute))
 	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form", Labels: []string{"ui", "auth"}}) // 3
 	f.clock.Set(t0.Add(1 * time.Minute))
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "2", Title: "Search API", State: store.Ready}) // 4, created earlier
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Login API", State: store.Ready, Labels: []string{"auth"}})
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "2", Title: "Search API", State: domain.Ready}) // 4, created earlier
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Login API", State: domain.Ready, Labels: []string{"auth"}})
 	// A finished Ticket, written straight to the store since no operation
 	// reaches Done yet.
 	f.store.Update(func(w store.Writer) error {
-		return w.PutTicket("acme", store.Ticket{Number: 6, Title: "Old login", State: store.Done, Spec: 1, Created: t0, Updated: t0})
+		return w.PutTicket("acme", domain.Ticket{Number: 6, Title: "Old login", State: domain.Done, Spec: 1, Created: t0, Updated: t0})
 	})
 
 	ids := func(rows []core.TicketRow) []string {
@@ -270,12 +271,12 @@ func TestFindTickets(t *testing.T) {
 		want []string
 	}{
 		{"all unfinished, in claim order", core.FindTicketsInput{}, []string{"acme-4", "acme-5", "acme-3"}},
-		{"by state", core.FindTicketsInput{State: []store.State{store.Ready}}, []string{"acme-4", "acme-5"}},
-		{"finished only when named", core.FindTicketsInput{State: []store.State{store.Done}}, []string{"acme-6"}},
+		{"by state", core.FindTicketsInput{State: []domain.State{domain.Ready}}, []string{"acme-4", "acme-5"}},
+		{"finished only when named", core.FindTicketsInput{State: []domain.State{domain.Done}}, []string{"acme-6"}},
 		{"title, case-insensitive substring", core.FindTicketsInput{Title: "LOGIN"}, []string{"acme-5", "acme-3"}},
 		{"labels all present", core.FindTicketsInput{Labels: []string{"auth", "ui"}}, []string{"acme-3"}},
 		{"by spec", core.FindTicketsInput{Spec: "acme-2"}, []string{"acme-4"}},
-		{"filters combine", core.FindTicketsInput{Title: "login", State: []store.State{store.Ready}}, []string{"acme-5"}},
+		{"filters combine", core.FindTicketsInput{Title: "login", State: []domain.State{domain.Ready}}, []string{"acme-5"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -291,11 +292,11 @@ func TestFindTickets(t *testing.T) {
 
 	rows, _ := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{Labels: []string{"ui"}})
 	r := rows[0]
-	if r.Title != "Login form" || r.State != store.Draft || r.Spec != "acme-1" || !slices.Equal(r.Labels, []string{"ui", "auth"}) || r.Blocked || !r.Created.Equal(t0.Add(2*time.Minute)) || !r.Updated.Equal(t0.Add(2*time.Minute)) {
+	if r.Title != "Login form" || r.State != domain.Draft || r.Spec != "acme-1" || !slices.Equal(r.Labels, []string{"ui", "auth"}) || r.Blocked || !r.Created.Equal(t0.Add(2*time.Minute)) || !r.Updated.Equal(t0.Add(2*time.Minute)) {
 		t.Fatalf("row: %+v", r)
 	}
 
-	_, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: []store.State{"Doing"}})
+	_, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: []domain.State{"Doing"}})
 	wantCode(t, err, core.Invalid, "state")
 }
 

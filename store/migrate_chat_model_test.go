@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"testing"
 
@@ -35,7 +36,7 @@ func TestTheRealChainMigratesAFormat39StoreToTheChatRowFormat(t *testing.T) {
 	}
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
-		if p.Models.Chat != (store.ModelRow{}) || p.Models.Default.Model != "opus" {
+		if p.Models.Chat != (domain.ModelRow{}) || p.Models.Default.Model != "opus" {
 			t.Errorf("models = %+v, want the default kept and an empty Chat row", p.Models)
 		}
 		return nil
@@ -43,14 +44,14 @@ func TestTheRealChainMigratesAFormat39StoreToTheChatRowFormat(t *testing.T) {
 
 	if err := s.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
-		p.Models.Chat = store.ModelRow{Model: "sonnet", Effort: "low"}
+		p.Models.Chat = domain.ModelRow{Model: "sonnet", Effort: "low"}
 		return w.PutProject(p)
 	}); err != nil {
 		t.Fatal(err)
 	}
 	s = reopen(t, s)
 	s.View(func(r store.Reader) error {
-		if p, _ := r.Project("acme"); p.Models.Chat != (store.ModelRow{Model: "sonnet", Effort: "low"}) {
+		if p, _ := r.Project("acme"); p.Models.Chat != (domain.ModelRow{Model: "sonnet", Effort: "low"}) {
 			t.Errorf("chat row = %+v, want sonnet at low", p.Models.Chat)
 		}
 		return nil

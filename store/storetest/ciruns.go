@@ -4,6 +4,7 @@
 package storetest
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"reflect"
 	"testing"
 	"time"
@@ -17,9 +18,9 @@ func runCIRuns(t *testing.T, f Factory) {
 	t.Run("a ticket's pushed commits read back after they are written", func(t *testing.T) {
 		s := f.New(t)
 		seedProject(t, s)
-		want := []store.PushedCommit{{Commit: "abc123", Branch: "main", Pushed: t0}, {Commit: "def456", Pushed: t0.Add(time.Hour)}}
+		want := []domain.PushedCommit{{Commit: "abc123", Branch: "main", Pushed: t0}, {Commit: "def456", Pushed: t0.Add(time.Hour)}}
 		put(t, s, func(w store.Writer) error {
-			return w.PutTicket("acme", store.Ticket{Number: 2, Title: "Pushed", State: store.Accepted, Spec: 1, Created: t0, Updated: t0, PushedCommits: want})
+			return w.PutTicket("acme", domain.Ticket{Number: 2, Title: "Pushed", State: domain.Accepted, Spec: 1, Created: t0, Updated: t0, PushedCommits: want})
 		})
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
@@ -37,8 +38,8 @@ func runCIRuns(t *testing.T, f Factory) {
 	t.Run("a project's ci responses read back after they are written, one per pushed commit", func(t *testing.T) {
 		s := f.New(t)
 		seedProject(t, s)
-		want := []store.CIResponse{{Commit: "abc123", LandAnyway: t0.Add(time.Minute)}, {Commit: "def456",
-			Rerun: t0.Add(2 * time.Hour), Reruns: []store.CIRunAttempt{{ID: 9001, Attempt: 1}, {ID: 9003, Attempt: 2}}}}
+		want := []domain.CIResponse{{Commit: "abc123", LandAnyway: t0.Add(time.Minute)}, {Commit: "def456",
+			Rerun: t0.Add(2 * time.Hour), Reruns: []domain.CIRunAttempt{{ID: 9001, Attempt: 1}, {ID: 9003, Attempt: 2}}}}
 		put(t, s, func(w store.Writer) error {
 			p, _ := w.Project("acme")
 			p.CIResponses = want
@@ -65,12 +66,12 @@ func runCIRuns(t *testing.T, f Factory) {
 				t.Fatalf("ci runs = %+v, want none before any are written", got)
 			}
 		})
-		want := []store.CIRun{
-			{ID: 9001, Attempt: 2, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: "abc123", Status: store.CICompleted,
-				Conclusion: store.CIFailure, Started: t0, Finished: t0.Add(5 * time.Minute), URL: "https://github.com/acme/web/actions/runs/9001",
-				Jobs:   []store.CIJob{{Name: "test", Conclusion: store.CIFailure, URL: "https://github.com/acme/web/actions/runs/9001/job/1"}, {Name: "lint", URL: "https://github.com/acme/web/actions/runs/9001/job/2"}},
+		want := []domain.CIRun{
+			{ID: 9001, Attempt: 2, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: "abc123", Status: domain.CICompleted,
+				Conclusion: domain.CIFailure, Started: t0, Finished: t0.Add(5 * time.Minute), URL: "https://github.com/acme/web/actions/runs/9001",
+				Jobs:   []domain.CIJob{{Name: "test", Conclusion: domain.CIFailure, URL: "https://github.com/acme/web/actions/runs/9001/job/1"}, {Name: "lint", URL: "https://github.com/acme/web/actions/runs/9001/job/2"}},
 				Ticket: 2},
-			{ID: 9002, Attempt: 1, Workflow: "nightly.yml", Name: "Nightly", Branch: "main", Commit: "abc123", Status: store.CIQueued,
+			{ID: 9002, Attempt: 1, Workflow: "nightly.yml", Name: "Nightly", Branch: "main", Commit: "abc123", Status: domain.CIQueued,
 				URL: "https://github.com/acme/web/actions/runs/9002", Rule: 4, Ignored: true},
 		}
 		put(t, s, func(w store.Writer) error { return w.PutCIRuns("acme", want) })

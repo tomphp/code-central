@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 func boolPtr(b bool) *bool { return &b }
@@ -21,7 +21,7 @@ func rowIDs(rows []core.TicketRow) []string {
 
 func TestFindTicketsByTagsAndClaimable(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready, store.Draft) // acme-2, acme-3, acme-4
+	f.work(t, domain.Ready, domain.Ready, domain.Draft) // acme-2, acme-3, acme-4
 	f.addBlocker(t, "acme-3", "acme-4")
 	for _, in := range []core.SetTagsInput{
 		{Target: "acme-2", Tags: map[string]string{"area": "web", "size": "s"}},
@@ -61,8 +61,8 @@ func TestFindTicketsByTagsAndClaimable(t *testing.T) {
 
 func TestGetSpecShowsItsProgress(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready, store.Draft) // Spec acme-1; acme-2, acme-3, acme-4
-	f.setState(t, 3, store.Done)
+	f.work(t, domain.Ready, domain.Ready, domain.Draft) // Spec acme-1; acme-2, acme-3, acme-4
+	f.setState(t, 3, domain.Done)
 	empty := f.spec(t, "acme", "Later") // acme-5
 
 	v, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-1"})
@@ -72,7 +72,7 @@ func TestGetSpecShowsItsProgress(t *testing.T) {
 	if v.ID != "acme-1" || v.Title != "Login" || *v.Body != "body\n" {
 		t.Fatalf("spec %+v", v)
 	}
-	want := map[store.State]int{store.Ready: 1, store.Done: 1, store.Draft: 1}
+	want := map[domain.State]int{domain.Ready: 1, domain.Done: 1, domain.Draft: 1}
 	if !maps.Equal(v.StateSummary, want) || v.Finished {
 		t.Fatalf("summary %v finished %v, want %v", v.StateSummary, v.Finished, want)
 	}
@@ -85,7 +85,7 @@ func TestGetSpecShowsItsProgress(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !maps.Equal(v.StateSummary, map[store.State]int{store.Draft: 0}) || v.Finished || len(v.Tickets) != 0 || v.Tickets == nil {
+	if !maps.Equal(v.StateSummary, map[domain.State]int{domain.Draft: 0}) || v.Finished || len(v.Tickets) != 0 || v.Tickets == nil {
 		t.Fatalf("a Spec with no Tickets: summary %v finished %v tickets %v", v.StateSummary, v.Finished, v.Tickets)
 	}
 
@@ -95,11 +95,11 @@ func TestGetSpecShowsItsProgress(t *testing.T) {
 
 func TestFindSpecsHidesFinishedSpecsUnlessAsked(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)                                                                    // Spec acme-1 "Login", acme-2
-	f.spec(t, "acme", "Search")                                                               // acme-3, no Tickets: not finished
-	f.spec(t, "acme", "Old login")                                                            // acme-4
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "4", Title: "Gone", State: store.Ready}) // acme-5
-	f.setState(t, 5, store.Cancelled)
+	f.work(t, domain.Ready)                                                                    // Spec acme-1 "Login", acme-2
+	f.spec(t, "acme", "Search")                                                                // acme-3, no Tickets: not finished
+	f.spec(t, "acme", "Old login")                                                             // acme-4
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "4", Title: "Gone", State: domain.Ready}) // acme-5
+	f.setState(t, 5, domain.Cancelled)
 	if _, err := f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: "acme-1", Labels: []string{"auth"}}); err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestFindSpecsHidesFinishedSpecsUnlessAsked(t *testing.T) {
 	}
 	rows, _ := f.core.FindSpecs(ctx, "acme", core.FindSpecsInput{Finished: true})
 	old := rows[2]
-	if old.Title != "Old login" || !old.Finished || !maps.Equal(old.StateSummary, map[store.State]int{store.Cancelled: 1}) {
+	if old.Title != "Old login" || !old.Finished || !maps.Equal(old.StateSummary, map[domain.State]int{domain.Cancelled: 1}) {
 		t.Fatalf("row %+v", old)
 	}
 }

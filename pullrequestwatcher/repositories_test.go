@@ -2,6 +2,7 @@ package pullrequestwatcher_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"io"
 	"slices"
 	"strings"
@@ -14,7 +15,6 @@ import (
 	"github.com/tomoram/code-central/internal/fakeazdo"
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/pullrequestwatcher"
-	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/watchers/watchertest"
 )
 
@@ -56,7 +56,7 @@ func newSeveralWatching(t *testing.T, azure ...fakeazdo.Answer) *severalWatching
 		return err
 	})
 	must(t, func() error {
-		_, err := c.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest})
+		_, err := c.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest})
 		return err
 	})
 	must(t, func() error { _, err := c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"}); return err })
@@ -65,7 +65,7 @@ func newSeveralWatching(t *testing.T, azure ...fakeazdo.Answer) *severalWatching
 		return err
 	})
 	must(t, func() error {
-		_, err := c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form", State: store.Ready})
+		_, err := c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form", State: domain.Ready})
 		return err
 	})
 	res, err := c.Claim(ctx, "acme", core.ClaimInput{Ticket: "2"})
@@ -108,7 +108,7 @@ func (w *severalWatching) start(environ ...string) {
 
 // pullRequestIn waits for acme-2's pull request in repository to be in
 // state.
-func (w *severalWatching) pullRequestIn(repository string, state store.PullRequestState) core.PullRequestView {
+func (w *severalWatching) pullRequestIn(repository string, state domain.PullRequestState) core.PullRequestView {
 	w.t.Helper()
 	var got *core.PullRequestView
 	codecentraltest.Eventually(w.t, func() bool {
@@ -157,8 +157,8 @@ func TestTwoRepositoriesOnMixedCodeHostsGetTwoPullRequestsThatReferenceEachOther
 	w.h.Answer(fakegh.Answer{Args: []string{"api", repoPath + "/pulls", "--method", "POST"}, Stdout: pr(7, "open", "")})
 	w.start("ADO_PAT=" + secretPAT)
 
-	home := w.pullRequestIn("acme", store.PROpen)
-	api := w.pullRequestIn("api", store.PROpen)
+	home := w.pullRequestIn("acme", domain.PROpen)
+	api := w.pullRequestIn("api", domain.PROpen)
 	if home.Number != 7 || api.Number != 4 || !strings.HasSuffix(api.Link, apiLink) {
 		t.Fatalf("pull requests acme %+v, api %+v", home, api)
 	}
@@ -200,14 +200,14 @@ func TestEachPullRequestMergesOnItsOwnHostAndIsRecordedInItsRepository(t *testin
 	w.start("ADO_PAT=" + secretPAT)
 
 	// api merges first, while the Home Repository's stays open.
-	if got := w.pullRequestIn("api", store.PRMerged); got.MergeCommit != "m-api" {
+	if got := w.pullRequestIn("api", domain.PRMerged); got.MergeCommit != "m-api" {
 		t.Fatalf("api merged at %q, want m-api", got.MergeCommit)
 	}
-	w.pullRequestIn("acme", store.PROpen)
+	w.pullRequestIn("acme", domain.PROpen)
 	w.h.Answer(fakegh.Answer{Args: []string{"api", listPath}, Stdout: "[" + pr(7, "closed", `"merged_at":"2099-01-02T03:04:05Z","closed_at":"2099-01-02T03:04:05Z","merge_commit_sha":"m-web"`) + "]"})
 	w.srv.Clock.BlockUntil(1)
 	w.srv.Clock.Advance(pullrequestwatcher.Interval)
-	if got := w.pullRequestIn("acme", store.PRMerged); got.MergeCommit != "m-web" {
+	if got := w.pullRequestIn("acme", domain.PRMerged); got.MergeCommit != "m-web" {
 		t.Fatalf("acme merged at %q, want m-web", got.MergeCommit)
 	}
 }
@@ -219,8 +219,8 @@ func TestSendingBackClosesEachOpenPullRequestOnItsHost(t *testing.T) {
 	w.h.Answer(fakegh.Answer{Args: []string{"api", listPath}, Stdout: "[" + pr(7, "open", "") + "]"})
 	w.h.Answer(fakegh.Answer{Args: []string{"api", repoPath + "/pulls/7", "--method", "PATCH", "-f", "state=closed"}, Stdout: pr(7, "closed", "")})
 	w.start("ADO_PAT=" + secretPAT)
-	w.pullRequestIn("acme", store.PROpen)
-	w.pullRequestIn("api", store.PROpen)
+	w.pullRequestIn("acme", domain.PROpen)
+	w.pullRequestIn("api", domain.PROpen)
 
 	must(t, func() error {
 		_, err := w.srv.Core.SendBack(human, "acme", core.SendBackInput{Ticket: "2", Note: "Redo it."})
@@ -228,8 +228,8 @@ func TestSendingBackClosesEachOpenPullRequestOnItsHost(t *testing.T) {
 	})
 	w.srv.Clock.BlockUntil(1)
 	w.srv.Clock.Advance(pullrequestwatcher.Interval)
-	w.pullRequestIn("acme", store.PRClosed)
-	w.pullRequestIn("api", store.PRClosed)
+	w.pullRequestIn("acme", domain.PRClosed)
+	w.pullRequestIn("api", domain.PRClosed)
 	abandoned := slices.ContainsFunc(w.azureCalls("PATCH", apiPRsPath+"/4"), func(r fakeazdo.Request) bool { return strings.Contains(r.Body, `"status":"abandoned"`) })
 	if !abandoned || len(w.ghCalls("api", repoPath+"/pulls/7", "--method", "PATCH", "-f", "state=closed")) != 1 {
 		t.Errorf("want api's pull request abandoned and acme's closed")
@@ -246,7 +246,7 @@ func TestAFailingRepositoryIsNamedAndTheOthersAreStillWatched(t *testing.T) {
 	w.h.Answer(fakegh.Answer{Args: []string{"api", repoPath + "/pulls", "--method", "POST"}, Stdout: pr(7, "open", "")})
 	w.start() // no PAT: api can't be watched
 
-	w.pullRequestIn("acme", store.PROpen)
+	w.pullRequestIn("acme", domain.PROpen)
 	var got core.WatcherView
 	codecentraltest.Eventually(t, func() bool {
 		p, err := w.srv.Client.GetProject(ctx, "acme")
@@ -282,7 +282,7 @@ func TestTurningPullRequestOnChecksEachRepositoryNamingTheOneThatFails(t *testin
 	if strings.Contains(e.Message, "acme: ") {
 		t.Errorf("refusal %q names the Home Repository, which passed", e.Message)
 	}
-	if got := method(t, srv); got == store.LandingPullRequest {
+	if got := method(t, srv); got == domain.LandingPullRequest {
 		t.Fatal("Pull Request turned on")
 	}
 

@@ -6,12 +6,12 @@ package ciwatcher_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"slices"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
-	"github.com/tomoram/code-central/store"
 )
 
 // rerunCalls are the fake gh's calls to re-run run 11's failed jobs.
@@ -27,7 +27,7 @@ func (w *watching) rerunCalls() []fakegh.Call {
 
 // attempt waits for ticket's latest pushed commit's run 11 to be reported
 // at attempt with status, and returns the Ticket.
-func (w *watching) attempt(ticket string, attempt int, status store.CIRunStatus) core.TicketView {
+func (w *watching) attempt(ticket string, attempt int, status domain.CIRunStatus) core.TicketView {
 	w.t.Helper()
 	var tk core.TicketView
 	w.waitFor("run 11's attempt reported", func() bool {
@@ -56,7 +56,7 @@ func TestTheCIWatcherRerunsTheFailedJobsAndReportsTheNewAttempt(t *testing.T) {
 	w.runsAnswer("abc123", listedRun{id: 11, attempt: 2, workflow: "ci.yml", status: "in_progress", updated: "2026-01-05T09:07:00Z"})
 	w.jobsAnswer(11, 2, [2]string{"test", ""})
 	w.waitingPoll()
-	tk := w.attempt(id, 2, store.CIInProgress)
+	tk := w.attempt(id, 2, domain.CIInProgress)
 	if tk.CIResult != core.CIRunning {
 		t.Fatalf("ci result %q, want running while attempt 2 runs", tk.CIResult)
 	}
@@ -75,7 +75,7 @@ func TestTheCIWatcherRerunsTheFailedJobsAndReportsTheNewAttempt(t *testing.T) {
 	w.runsAnswer("abc123", listedRun{id: 11, attempt: 2, workflow: "ci.yml", status: "completed", conclude: "success", updated: "2026-01-05T09:09:00Z"})
 	w.jobsAnswer(11, 2, [2]string{"test", "success"})
 	w.waitingPoll()
-	w.attempt(id, 2, store.CICompleted)
+	w.attempt(id, 2, domain.CICompleted)
 	if tk := w.ciResult(id, core.CIPassed); tk.NeedsMeReason == core.ReasonCIFailed {
 		t.Fatalf("reason %q, want acme-2 out of CI failed", tk.NeedsMeReason)
 	}
@@ -127,7 +127,7 @@ func TestTheCIWatcherRerunsACancelledRun(t *testing.T) {
 	w.runsAnswer("abc123", listedRun{id: 11, attempt: 2, workflow: "ci.yml", status: "completed", conclude: "success", updated: "2026-01-05T09:09:00Z"})
 	w.jobsAnswer(11, 2, [2]string{"test", "success"})
 	w.waitingPoll()
-	w.attempt(id, 2, store.CICompleted)
+	w.attempt(id, 2, domain.CICompleted)
 	w.ciResult(id, core.CIPassed)
 	if n := len(w.rerunCalls()); n != 1 {
 		t.Fatalf("%d re-run calls, want one", n)

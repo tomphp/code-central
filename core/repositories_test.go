@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // srcPath is a clone's absolute path on this OS: "/src/<name>" isn't
@@ -78,7 +78,7 @@ func TestAProjectListsItsHomeRepositoryNamedByItsKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := "trunk"
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingMerge, Base: &base}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Base: &base}); err != nil {
 		t.Fatal(err)
 	}
 	home := f.projectView(t, "acme").Repositories[0]
@@ -354,7 +354,7 @@ func TestAddRepositoryUnderPullRequestRunsTheWatchersCheckForIt(t *testing.T) {
 	if _, err := f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/acme.git"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest}); err != nil {
 		t.Fatal(err)
 	}
 	var checked []core.PullRequestCheckInput
@@ -376,7 +376,7 @@ func TestAddRepositoryUnderPullRequestRunsTheWatchersCheckForIt(t *testing.T) {
 	}
 
 	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "https://dev.azure.com/acme/shop/_git/web"})
-	if last := checked[len(checked)-1]; last.CodeHost != core.CodeHostAzureRepos || last.Repository != "acme/shop/web" || last.PATEnv != store.DefaultPATEnv {
+	if last := checked[len(checked)-1]; last.CodeHost != core.CodeHostAzureRepos || last.Repository != "acme/shop/web" || last.PATEnv != domain.DefaultPATEnv {
 		t.Fatalf("checked %+v, want Azure Repos acme/shop/web with the PAT variable", last)
 	}
 
@@ -399,7 +399,7 @@ func TestUnderPullRequestAddingOrEditingALocalOnlyRepositoryIsRefusedBeforeTheCo
 	if _, err := f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/acme.git"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest}); err != nil {
 		t.Fatal(err)
 	}
 	checked := 0

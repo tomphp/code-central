@@ -9,7 +9,7 @@ import { useNeedsMe } from "../needsme/context";
 import { CIBadge } from "../ticket/CIBadge";
 import { PullRequestBadge } from "../ticket/PullRequestBadge";
 import { WaitingBadge } from "../ticket/WaitingBadge";
-import { TicketName } from "../ticket/TicketLine";
+import { ShortId } from "../inbox/ShortId";
 
 export interface TicketListProps {
   // label names the list.
@@ -30,18 +30,20 @@ export function TicketList({ label, tickets, now, ticket, select }: TicketListPr
         return (
           <li key={t.id}>
             <button className="link" aria-current={t.id === ticket ? "true" : undefined} onClick={() => select(t.id)}>
-              <TicketName t={t} />
+              <ShortId id={t.id} /> <span className="impl-title">{t.title}</span>
             </button>{" "}
-            <StateChip state={t.state} />
-            {reason && (
-              <>
-                {" "}
-                <ReasonBadge reason={reason} />
-              </>
-            )}
-            <WaitingBadge waiting={t.waiting_for_spec} />
-            <CIBadge result={t.ci_result} />
-            <PullRequestBadge pr={t.pull_request} />
+            <span className="impl-marks">
+              <StateChip state={t.state} />
+              {reason && (
+                <>
+                  {" "}
+                  <ReasonBadge reason={reason} />
+                </>
+              )}
+              <WaitingBadge waiting={t.waiting_for_spec} />
+              <CIBadge result={t.ci_result} />
+              <PullRequestBadge pr={t.pull_request} />
+            </span>
             <RowLatestEvent row={t} now={now} />
           </li>
         );

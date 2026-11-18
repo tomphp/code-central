@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -34,16 +35,16 @@ func TestTheRealChainMigratesAFormat48StoreToTheAzureBoardsFormat(t *testing.T) 
 	}
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
-		if !reflect.DeepEqual(p.AzureBoards, store.AzureBoards{}) {
+		if !reflect.DeepEqual(p.AzureBoards, domain.AzureBoards{}) {
 			t.Errorf("azure boards after migrating = %+v, want off with nothing set", p.AzureBoards)
 		}
-		if want := (store.GitHubIssues{On: true, Repositories: []string{"acme/web"}, Spec: 4}); !reflect.DeepEqual(p.GitHubIssues, want) {
+		if want := (domain.GitHubIssues{On: true, Repositories: []string{"acme/web"}, Spec: 4}); !reflect.DeepEqual(p.GitHubIssues, want) {
 			t.Errorf("github issues after migrating = %+v, want %+v", p.GitHubIssues, want)
 		}
 		return nil
 	})
 
-	want := store.AzureBoards{On: true, Mode: store.AzureBoardsWIQL, QueryURL: "https://dev.azure.com/contoso/web/_queries/query/6b4a0c1e-9f1d-4a51-8f43-2a7d3c1b9e10",
+	want := domain.AzureBoards{On: true, Mode: domain.AzureBoardsWIQL, QueryURL: "https://dev.azure.com/contoso/web/_queries/query/6b4a0c1e-9f1d-4a51-8f43-2a7d3c1b9e10",
 		ProjectURL: "https://dev.azure.com/contoso/web", Where: "[System.State] = 'Approved'\nAND [System.AssignedTo] = @Me", PATEnv: "BOARDS_PAT", NewIssuesNeedMe: true, Spec: 5}
 	if err := s.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")

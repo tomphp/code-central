@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -36,7 +37,7 @@ func (f fixture) addBlocker(t *testing.T, ticket, blocker core.Ref) core.TicketV
 
 // setState writes a Ticket's State straight to the store, for States the
 // test reaches only by a long walk through the workflow.
-func (f fixture) setState(t *testing.T, n int, s store.State) {
+func (f fixture) setState(t *testing.T, n int, s domain.State) {
 	t.Helper()
 	err := f.store.Update(func(w store.Writer) error {
 		tk, _ := w.Ticket("acme", n)
@@ -58,11 +59,11 @@ func blockerIDs(v core.TicketView) []string {
 
 func TestABlockedReadyTicketStaysReadyButIsNotClaimable(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready) // acme-2, acme-3
+	f.work(t, domain.Ready, domain.Ready) // acme-2, acme-3
 	f.addBlocker(t, "acme-2", "acme-3")
 
 	v := f.get(t, "acme-2")
-	if v.State != store.Ready || !v.Blocked || v.Claimable || !slices.Equal(v.BlockedBy, []string{"acme-3"}) {
+	if v.State != domain.Ready || !v.Blocked || v.Claimable || !slices.Equal(v.BlockedBy, []string{"acme-3"}) {
 		t.Fatalf("got state %s blocked %v claimable %v blocked_by %v", v.State, v.Blocked, v.Claimable, v.BlockedBy)
 	}
 	if got := blockerIDs(v); !slices.Equal(got, []string{"acme-3 Ready"}) {
@@ -79,7 +80,7 @@ func TestABlockedReadyTicketStaysReadyButIsNotClaimable(t *testing.T) {
 
 func TestClaimingANamedBlockedTicketIsRejectedWithItsBlockers(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready, store.Draft) // acme-2, acme-3, acme-4
+	f.work(t, domain.Ready, domain.Ready, domain.Draft) // acme-2, acme-3, acme-4
 	f.addBlocker(t, "acme-2", "acme-3")
 	f.addBlocker(t, "acme-2", "acme-4")
 
@@ -98,15 +99,15 @@ func TestClaimingANamedBlockedTicketIsRejectedWithItsBlockers(t *testing.T) {
 
 func TestOnlyDoneClearsABlocker(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready) // acme-2, acme-3
+	f.work(t, domain.Ready, domain.Ready) // acme-2, acme-3
 	f.addBlocker(t, "acme-2", "acme-3")
-	for _, s := range []store.State{store.InProgress, store.InReview, store.Accepted, store.Failed, store.Cancelled} {
+	for _, s := range []domain.State{domain.InProgress, domain.InReview, domain.Accepted, domain.Failed, domain.Cancelled} {
 		f.setState(t, 3, s)
 		if v := f.get(t, "acme-2"); !v.Blocked {
 			t.Fatalf("a %s Blocker cleared the block", s)
 		}
 	}
-	f.setState(t, 3, store.Done)
+	f.setState(t, 3, domain.Done)
 	if v := f.get(t, "acme-2"); v.Blocked || !v.Claimable || !slices.Equal(blockerIDs(v), []string{"acme-3 Done"}) {
 		t.Fatalf("blocked %v claimable %v blockers %v after Done", v.Blocked, v.Claimable, blockerIDs(v))
 	}
@@ -114,8 +115,8 @@ func TestOnlyDoneClearsABlocker(t *testing.T) {
 
 func TestCreateTicketTakesBlockers(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready) // acme-2
-	v := f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Next", State: store.Ready, BlockedBy: []core.Ref{"acme-2", "2"}})
+	f.work(t, domain.Ready) // acme-2
+	v := f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Next", State: domain.Ready, BlockedBy: []core.Ref{"acme-2", "2"}})
 	if !slices.Equal(v.BlockedBy, []string{"acme-2"}) || !v.Blocked {
 		t.Fatalf("blocked_by %v blocked %v", v.BlockedBy, v.Blocked)
 	}
@@ -127,7 +128,7 @@ func TestCreateTicketTakesBlockers(t *testing.T) {
 
 func TestBlockersLinkAcrossSpecsWithinOneProject(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)                                                 // Spec acme-1, acme-2
+	f.work(t, domain.Ready)                                                // Spec acme-1, acme-2
 	f.spec(t, "acme", "Search")                                            // acme-3
 	f.ticket(t, "acme", core.CreateTicketInput{Spec: "3", Title: "Index"}) // acme-4
 	v := f.addBlocker(t, "acme-2", "acme-4")
@@ -145,7 +146,7 @@ func TestBlockersLinkAcrossSpecsWithinOneProject(t *testing.T) {
 
 func TestAddingABlockerTwiceWritesNothing(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready)
+	f.work(t, domain.Ready, domain.Ready)
 	first := f.addBlocker(t, "acme-2", "acme-3")
 	f.clock.Advance(time.Hour)
 	again := f.addBlocker(t, "acme-2", "3")
@@ -156,7 +157,7 @@ func TestAddingABlockerTwiceWritesNothing(t *testing.T) {
 
 func TestABlockerThatWouldFormACycleIsRejected(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready, store.Ready) // acme-2, acme-3, acme-4
+	f.work(t, domain.Ready, domain.Ready, domain.Ready) // acme-2, acme-3, acme-4
 	f.addBlocker(t, "acme-2", "acme-3")
 	f.addBlocker(t, "acme-3", "acme-4")
 
@@ -174,7 +175,7 @@ func TestABlockerThatWouldFormACycleIsRejected(t *testing.T) {
 
 func TestRemoveBlocker(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready)
+	f.work(t, domain.Ready, domain.Ready)
 	f.addBlocker(t, "acme-2", "acme-3")
 	v, err := record(f.core.RemoveBlocker(ctx, "acme", core.BlockerInput{Ticket: "acme-2", Blocker: "acme-3", Full: true}))
 	if err != nil {

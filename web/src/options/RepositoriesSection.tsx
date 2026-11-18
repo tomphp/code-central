@@ -2,7 +2,6 @@ import { useId, useState, type FormEvent, type MouseEvent } from "react";
 import { useApi } from "../live";
 import type {
   ApiError,
-  Landing,
   ProjectRow,
   RepositoryAdd,
   RepositoryLanding,
@@ -45,11 +44,6 @@ const jumpToLanding = (e: MouseEvent<HTMLAnchorElement>) => {
   document.getElementById(DEFAULT_LANDING_ID)?.scrollIntoView?.();
 };
 
-// defaultLandingOf is the Project's Default Landing as a Repository's
-// Landing names it.
-const defaultLandingOf = ({ method, push }: Landing): RepositoryLanding =>
-  method === "pull_request" ? method : push ? `${method}_push` : method;
-
 // fieldsOf is r's fields as its edit form starts them: its Landing and
 // Push remote as its own, or default and empty while it follows the
 // Project's.
@@ -76,10 +70,7 @@ export function RepositoriesSection({ project }: { project: ProjectRow }) {
   const [editing, setEditing] = useState<string>();
   const repositories = project.repositories;
   const names = repositories.map((r) => r.name);
-  const defaults = { landing: defaultLandingOf(project.landing), remote: project.landing.remote };
-  // pushesNothing is Push on in some Landing while every Repository is
-  // local-only, which is allowed: a Repository may have a remote later.
-  const pushesNothing = repositories.every((r) => r.local_only) && repositories.some((r) => r.landing.endsWith("_push"));
+  const defaults = { landing: project.landing.repository_landing, remote: project.landing.remote };
 
   // move swaps the Repository at i with its neighbour by, -1 for up.
   const move = (i: number, by: -1 | 1) => {
@@ -100,7 +91,7 @@ export function RepositoriesSection({ project }: { project: ProjectRow }) {
         accepted work lands in each in this order. The Home Repository is the
         one the Factory runs in, set up by <code>code-central init</code>.
       </p>
-      {pushesNothing && (
+      {project.landing.pushes_nothing && (
         <p className="project-options-hint" role="note">
           No Repository has a Clone URL, so Push pushes nothing. It stays on,
           and so can CI Tracking, for when a Repository has one.
@@ -200,7 +191,7 @@ function RepositoryRow({
   return (
     <li aria-label={r.name}>
       <div className="project-options-repository">
-        <strong>{r.name}</strong>
+        <strong className="project-options-subhead">{r.name}</strong>
         {r.home && <span className="project-options-home-badge">Home</span>}
       </div>
       <dl className="project-options-repository-details">
@@ -426,6 +417,7 @@ function RepositoryForm(props: {
         <Select
           value={draft.landing}
           options={LANDINGS.map((l) =>
+            // landing: names the Project default option after the Default Landing
             l.value === "default" ? { ...l, label: `Project default (${LANDING_LABEL[defaults.landing]})` } : l,
           )}
           onChange={(v) => edit({ landing: v || "default" })}

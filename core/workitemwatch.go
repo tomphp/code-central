@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -19,7 +20,7 @@ type WorkItemWatch struct {
 	Project string `json:"project"`
 	On      bool   `json:"on"`
 	// Mode is how it picks its work items: saved_query or wiql.
-	Mode store.AzureBoardsMode `json:"mode"`
+	Mode domain.AzureBoardsMode `json:"mode"`
 	// QueryURL is the Saved query's URL.
 	QueryURL string `json:"query_url"`
 	// ProjectURL is the Azure DevOps project a WIQL filter runs in, and

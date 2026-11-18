@@ -1,15 +1,19 @@
 // The Stage strip: Grilling · Spec · Tickets · Build n/m, one segment per
-// Stage and one for Build. A queued segment (waiting for a Factory) is
-// dashed. With onPick its segments are buttons that select the segment's
-// Ticket; without, it is a picture only (inside a row link). A Requirement
-// made from a Map has a done Map segment in place of Grilling, a link to
-// the Map with mapLink. One with neither a Grilling Stage nor a Map
-// (Straight to Spec) has a skipped Grilling segment, a picture only.
+// Stage and one for Build, as the service's requirement block gives them.
+// A queued segment (waiting for a Factory) is dashed. With onPick its
+// segments are buttons that select the segment's Ticket; without, it is a
+// picture only (inside a row link). A Requirement made from a Map has a
+// done Map segment in place of Grilling, a link to the Map with mapLink.
+// One with neither a Grilling Stage nor a Map (Straight to Spec) has a
+// skipped Grilling segment, a picture only.
+import type { RequirementView, Segment } from "../api/types";
 import type { Link } from "../url";
-import type { Progress, Segment } from "./progress";
+import { segmentName } from "./progress";
 
 export interface StripProps {
-  p: Progress;
+  requirement: RequirementView;
+  // build is the Requirement's Build Tickets, for onPick and current.
+  build?: { id: string }[];
   onPick?(s: Segment): void;
   // current is the selected Ticket, marking the segment it belongs to.
   current?: string;
@@ -17,18 +21,20 @@ export interface StripProps {
   mapLink?(map: string): Link;
 }
 
-export function Strip({ p, onPick, current, mapLink }: StripProps) {
-  const inBuild = !!current && p.build.some((t) => t.id === current);
+export function Strip({ requirement, build = [], onPick, current, mapLink }: StripProps) {
+  const inBuild = !!current && build.some((t) => t.id === current);
+  const { done, total } = requirement.build;
   return (
     <ol className="strip" aria-label="Stages">
-      {p.segments.map((s) => {
+      {requirement.segments.map((s) => {
+        const name = segmentName(s);
         const label = (
           <>
-            {s.name}
-            {s.stage === "build" && p.total > 0 && (
+            {name}
+            {s.stage === "build" && total > 0 && (
               <span className="seg-n">
                 {" "}
-                {p.done}/{p.total}
+                {done}/{total}
               </span>
             )}
           </>
@@ -42,11 +48,11 @@ export function Strip({ p, onPick, current, mapLink }: StripProps) {
             aria-current={selected ? "step" : undefined}
           >
             {s.map && mapLink ? (
-              <a {...mapLink(s.map)} title={`${s.name} ${s.map}: ${PROGRESS_TITLE[s.progress]}`}>
+              <a {...mapLink(s.map)} title={`${name} ${s.map}: ${PROGRESS_TITLE[s.progress]}`}>
                 {label}
               </a>
             ) : onPick && !s.map && (s.ticket || s.stage === "build") ? (
-              <button type="button" disabled={!s.ticket && !p.build.length} onClick={() => onPick(s)} title={segmentTitle(s)}>
+              <button type="button" disabled={!s.ticket && !build.length} onClick={() => onPick(s)} title={segmentTitle(s)}>
                 {label}
               </button>
             ) : (
@@ -62,5 +68,5 @@ export function Strip({ p, onPick, current, mapLink }: StripProps) {
 const PROGRESS_TITLE = { done: "Done", skipped: "skipped", needs: "Needs you", queued: "Waiting for a Factory", running: "A Factory is on it", waiting: "Not started" };
 
 function segmentTitle(s: Segment) {
-  return `${s.name}: ${PROGRESS_TITLE[s.progress]}`;
+  return `${segmentName(s)}: ${PROGRESS_TITLE[s.progress]}`;
 }

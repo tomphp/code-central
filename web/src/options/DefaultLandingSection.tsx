@@ -5,7 +5,6 @@ import type {
   Landing,
   LandingMethod,
   ProjectRow,
-  RepositoryView,
 } from "../api/types";
 import { Button } from "../controls/Button";
 import { Refusal } from "./Refusal";
@@ -31,20 +30,15 @@ const METHODS: { method: LandingMethod; label: string; hint: string }[] = [
 
 const CODE_HOST_NAMES = { github: "GitHub", azure_repos: "Azure Repos" };
 
-// usesAzureReposPAT reports whether the PAT variable is used with the
-// Default Landing's method as drafted: while any Azure Repos Repository
-// is under Pull Request, by its Own Landing or by following the default.
-function usesAzureReposPAT(repositories: RepositoryView[], method: LandingMethod) {
-  return repositories.some(
-    (r) => r.code_host === "azure_repos" && (r.own_landing ? r.landing : method) === "pull_request",
-  );
-}
+// SETTINGS are the Default Landing's fields the human edits and saves.
+const SETTINGS = ["method", "push", "remote", "land_per_spec", "pat_env", "base"] as const;
 
 // DefaultLandingSection is the Project's Default Landing (Spec
 // code-central-890): how accepted work lands in every Repository with no
 // Own Landing, and the Project-wide Land per Spec, PAT variable and
 // Base. It follows the Project as read, so a change from another tab
-// shows here too.
+// shows here too. What it offers for the drafted method is the Landing
+// capabilities the service says for it (ADR 0063).
 export function DefaultLandingSection({ project }: { project: ProjectRow }) {
   const api = useApi();
   const { method, push, remote, land_per_spec, pat_env, base, code_host, repository } = project.landing;
@@ -75,16 +69,10 @@ export function DefaultLandingSection({ project }: { project: ProjectRow }) {
       (e: ApiError) => setError(e),
     );
   };
-  const changed =
-    draft.method !== method ||
-    draft.push !== push ||
-    draft.remote !== remote ||
-    draft.land_per_spec !== land_per_spec ||
-    draft.pat_env !== pat_env ||
-    draft.base !== base;
+  const changed = SETTINGS.some((k) => draft[k] !== project.landing[k]);
   const remoteError = error?.field === "remote";
   const baseError = error?.field === "base";
-  const pullRequest = draft.method === "pull_request";
+  const offers = project.landing.methods[draft.method];
   const pushRemoteURL = project.ci.push_remote_url;
 
   return (
@@ -92,7 +80,7 @@ export function DefaultLandingSection({ project }: { project: ProjectRow }) {
       <fieldset id="project-options-default-landing" className="project-options-section" disabled={project.archived}>
         <legend>Default Landing</legend>
         {project.archived && (
-          <p className="muted">
+          <p className="project-options-note" role="note">
             The Project is archived: unarchive it to change its options.
           </p>
         )}
@@ -112,6 +100,7 @@ export function DefaultLandingSection({ project }: { project: ProjectRow }) {
               <input
                 type="radio"
                 name={`${id}-method`}
+                // landing: shows the chosen method
                 checked={draft.method === m.method}
                 onChange={() => edit({ method: m.method })}
                 aria-describedby={`${id}-${m.method}`}
@@ -123,7 +112,7 @@ export function DefaultLandingSection({ project }: { project: ProjectRow }) {
             </p>
           </div>
         ))}
-        {!pullRequest && (
+        {offers.offers_push && (
           <div className="project-options-choice">
             <label>
               <input
@@ -147,7 +136,7 @@ export function DefaultLandingSection({ project }: { project: ProjectRow }) {
             <input
               type="checkbox"
               checked={draft.land_per_spec}
-              disabled={draft.method === "branch"}
+              disabled={!offers.offers_land_per_spec}
               onChange={(e) => edit({ land_per_spec: e.target.checked })}
               aria-describedby={`${id}-land-per-spec`}
             />{" "}
@@ -173,7 +162,7 @@ export function DefaultLandingSection({ project }: { project: ProjectRow }) {
           The git remote each Repository with no Push remote of its own is
           pushed to and fetched from.
         </p>
-        {pullRequest && (
+        {offers.shows_code_host && (
           <p className="project-options-hint" role="status" aria-label="Code Host">
             {code_host
               ? `Code Host: ${CODE_HOST_NAMES[code_host]}, repository ${repository}.`
@@ -182,7 +171,7 @@ export function DefaultLandingSection({ project }: { project: ProjectRow }) {
                 : "No Push remote URL is reported yet: start the Factory once so it reports it, and the Code Host is worked out from it."}
           </p>
         )}
-        {usesAzureReposPAT(project.repositories, draft.method) && (
+        {offers.uses_azure_repos_pat && (
           <label className="project-options-remote">
             PAT variable{" "}
             <input
@@ -221,7 +210,7 @@ export function DefaultLandingSection({ project }: { project: ProjectRow }) {
             </ul>
           </div>
         )}
-        {project.repositories.some((r) => r.landing === "pull_request") && (
+        {project.landing.runs_pull_request_watcher && (
           <WatcherStatus
             name="Pull Request Watcher"
             repository={

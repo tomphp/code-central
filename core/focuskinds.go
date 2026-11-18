@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -23,7 +24,7 @@ type FocusKindsView struct {
 
 // focusItem reports whether an item waiting for reason is a Focus Item
 // in Project p: whether p's Focus Kinds leave reason on.
-func focusItem(p store.Project, reason NeedsMeReason) bool {
+func focusItem(p domain.Project, reason NeedsMeReason) bool {
 	return !slices.Contains(p.FocusKindsOff, string(reason))
 }
 

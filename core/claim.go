@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -52,7 +53,7 @@ type FinishInput struct {
 	// Recommendation is the Spec recommendation, implement or split:
 	// required on a spec Stage and refused on any other Ticket. It
 	// replaces the one an earlier finish gave.
-	Recommendation store.Recommendation `json:"recommendation,omitempty" desc:"Required on a spec Stage only: implement or split." enum:"implement,split"`
+	Recommendation domain.Recommendation `json:"recommendation,omitempty" desc:"Required on a spec Stage only: implement or split." enum:"implement,split"`
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
 }
@@ -113,11 +114,11 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 			res = c.claimResult(w, key, t, live.ID)
 			return nil
 		}
-		if t.State == store.Ready && rule.blocked(t) {
+		if t.State == domain.Ready && rule.blocked(t) {
 			return rule.blockedError(t, ActorOf(ctx))
 		}
 		now := c.now()
-		cl := store.Claim{Number: len(t.Claims) + 1, SessionID: in.SessionID, Started: now}
+		cl := domain.Claim{Number: len(t.Claims) + 1, SessionID: in.SessionID, Started: now}
 		setResume(&cl, in.WorkingDir, in.ResumeCommand)
 		t.Claims = append(t.Claims, cl)
 		if err := transition(ctx, &t, key, "claim", "", now); err != nil {
@@ -135,7 +136,7 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 }
 
 // claimResult is claim's result for Claim id on t.
-func (c *Core) claimResult(r store.Reader, key string, t store.Ticket, id string) ClaimResult {
+func (c *Core) claimResult(r store.Reader, key string, t domain.Ticket, id string) ClaimResult {
 	v := defaultView(c.ticketView(r, key, t))
 	p, _ := r.Project(key)
 	g := stageGuide(GuideName(t.Labels), p)
@@ -145,7 +146,7 @@ func (c *Core) claimResult(r store.Reader, key string, t store.Ticket, id string
 
 // heldError is claim's action_not_allowed on a named Ticket whose live
 // Claim isn't the caller's, saying who holds it and what to do.
-func heldError(key string, t store.Ticket, live *store.Claim, sessionID string, actor Actor) error {
+func heldError(key string, t domain.Ticket, live *domain.Claim, sessionID string, actor Actor) error {
 	msg := fmt.Sprintf("%s is held by Claim %d of another session; claim another Ticket, or ask the human to release it",
 		DisplayID(key, t.Number), live.Number)
 	if sessionID == "" {
@@ -156,7 +157,7 @@ func heldError(key string, t store.Ticket, live *store.Claim, sessionID string, 
 
 // claimTarget is the named Ticket, or the first claimable one (in the
 // Spec, if given) in claim order. found is false when nothing is claimable.
-func claimTarget(rule blockRule, in ClaimInput) (t store.Ticket, found bool, err error) {
+func claimTarget(rule blockRule, in ClaimInput) (t domain.Ticket, found bool, err error) {
 	r, key := rule.r, rule.p.Key
 	if in.Ticket != "" {
 		t, err := resolveTicket(r, key, "claim", "ticket", in.Ticket)
@@ -178,7 +179,7 @@ func claimTarget(rule blockRule, in ClaimInput) (t store.Ticket, found bool, err
 	tickets := r.Tickets(key)
 	slices.SortStableFunc(tickets, claimOrder)
 	for _, t := range tickets {
-		if t.State == store.Ready && !rule.blocked(t) && (specN == 0 || t.Spec == specN) {
+		if t.State == domain.Ready && !rule.blocked(t) && (specN == 0 || t.Spec == specN) {
 			return t, true, nil
 		}
 	}
@@ -195,9 +196,9 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 	if strings.TrimSpace(in.Summary) == "" {
 		return FinishResult{}, invalid("summary", "finish needs a summary: what was done, where (branch or commit) and what the reviewer should check")
 	}
-	rec := store.Recommendation(strings.TrimSpace(string(in.Recommendation)))
+	rec := domain.Recommendation(strings.TrimSpace(string(in.Recommendation)))
 	if rec != "" && !rec.Valid() {
-		return FinishResult{}, invalid("recommendation", "recommendation %q is neither %q nor %q", in.Recommendation, store.RecommendImplement, store.RecommendSplit)
+		return FinishResult{}, invalid("recommendation", "recommendation %q is neither %q nor %q", in.Recommendation, domain.RecommendImplement, domain.RecommendSplit)
 	}
 	var v Written[TicketView]
 	err := c.store.Update(func(w store.Writer) error {
@@ -252,7 +253,7 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 // work's finish named a branch, so it waits to land (ADR 0006), and to
 // Done otherwise.
 func (c *Core) Accept(ctx context.Context, key string, in TicketInput) (Written[TicketView], error) {
-	return c.updateTicket(key, "accept", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, "accept", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		return true, acceptStep(ctx, t, key, "", c.now())
 	})
 }
@@ -261,10 +262,10 @@ func (c *Core) Accept(ctx context.Context, key string, in TicketInput) (Written[
 // and an auto-accept share: In Review to Accepted when the work's finish
 // named a branch in any of its Changed Repositories, and to Done
 // otherwise. The Move records cause, empty for the human's own accept.
-func acceptStep(ctx context.Context, t *store.Ticket, key string, cause store.AutoAcceptCause, now time.Time) error {
-	to := store.Done
+func acceptStep(ctx context.Context, t *domain.Ticket, key string, cause domain.AutoAcceptCause, now time.Time) error {
+	to := domain.Done
 	if hasBranchToLand(key, *t) {
-		to = store.Accepted
+		to = domain.Accepted
 	}
 	if err := transitionTo(ctx, t, key, "accept", "", to, now); err != nil {
 		return err
@@ -297,14 +298,14 @@ func (c *Core) Land(ctx context.Context, key string, in LandInput) (Written[Tick
 	if commit == "" {
 		return Written[TicketView]{}, invalid("commit", "land needs the commit that put the work into the base")
 	}
-	return c.updateTicketIn(key, "land", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
+	return c.updateTicketIn(key, "land", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
 		p, _ := r.Project(key)
 		name, err := landingRepository(p, *t, in.Repository)
 		if err != nil {
 			return false, err
 		}
 		now := c.now()
-		i := slices.IndexFunc(t.Repositories, func(cr store.ChangedRepository) bool { return cr.Name == name })
+		i := slices.IndexFunc(t.Repositories, func(cr domain.ChangedRepository) bool { return cr.Name == name })
 		if !landsLast(changedRepositories(key, *t), name) {
 			if _, err := check("land", t.State, "", ActorOf(ctx), DisplayID(key, t.Number)); err != nil {
 				return false, err
@@ -312,7 +313,7 @@ func (c *Core) Land(ctx context.Context, key string, in LandInput) (Written[Tick
 			if l := t.Repositories[i].Landed; l != nil && l.Commit == commit {
 				return false, nil
 			}
-			t.Repositories[i].Landed = &store.Landed{Commit: commit, Time: now}
+			t.Repositories[i].Landed = &domain.Landed{Commit: commit, Time: now}
 			return true, nil
 		}
 		if err := c.actOn(ctx, t, key, "land", "", "", now); err != nil {
@@ -321,7 +322,7 @@ func (c *Core) Land(ctx context.Context, key string, in LandInput) (Written[Tick
 		m := &t.Moves[len(t.Moves)-1]
 		m.Via, m.Commit = "merge", commit
 		if i >= 0 {
-			t.Repositories[i].Landed = &store.Landed{Commit: commit, Time: now}
+			t.Repositories[i].Landed = &domain.Landed{Commit: commit, Time: now}
 		}
 		return true, nil
 	})
@@ -347,8 +348,8 @@ func (c *Core) act(ctx context.Context, key string, ref Ref, full bool, name, cl
 
 // actThen is act with then applied to the Ticket after the transition,
 // in the same write. An error from then abandons the write.
-func (c *Core) actThen(ctx context.Context, key string, ref Ref, full bool, name, claimID, note string, then func(*store.Ticket) error) (Written[TicketView], error) {
-	return c.updateTicket(key, name, ref, full, func(t *store.Ticket) (bool, error) {
+func (c *Core) actThen(ctx context.Context, key string, ref Ref, full bool, name, claimID, note string, then func(*domain.Ticket) error) (Written[TicketView], error) {
+	return c.updateTicket(key, name, ref, full, func(t *domain.Ticket) (bool, error) {
 		if err := c.actOn(ctx, t, key, name, claimID, note, c.now()); err != nil {
 			return false, err
 		}
@@ -364,7 +365,7 @@ func (c *Core) actThen(ctx context.Context, key string, ref Ref, full bool, name
 // actOn is one action from the workflow table on t at now: the
 // transition, then the action's note (if any) as a comment under the
 // Claim it was made on.
-func (c *Core) actOn(ctx context.Context, t *store.Ticket, key, name, claimID, note string, now time.Time) error {
+func (c *Core) actOn(ctx context.Context, t *domain.Ticket, key, name, claimID, note string, now time.Time) error {
 	claim := 0
 	if live, ok := liveClaim(*t); ok {
 		claim = live.Number

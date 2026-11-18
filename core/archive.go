@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -92,7 +93,7 @@ func (c *Core) UnarchiveProject(ctx context.Context, key string) (ProjectView, e
 // State, in number order.
 func unfinishedTickets(r store.Reader, key string) []string {
 	tickets := r.Tickets(key)
-	slices.SortFunc(tickets, func(a, b store.Ticket) int { return a.Number - b.Number })
+	slices.SortFunc(tickets, func(a, b domain.Ticket) int { return a.Number - b.Number })
 	var out []string
 	for _, t := range tickets {
 		if !finished(t.State) {
@@ -119,28 +120,28 @@ func (g archiveGuard) Update(fn func(store.Writer) error) error {
 
 type guardedWriter struct{ store.Writer }
 
-func (w guardedWriter) PutProject(p store.Project) error {
+func (w guardedWriter) PutProject(p domain.Project) error {
 	if old, ok := w.Project(p.Key); ok && !old.Archived.IsZero() && !p.Archived.IsZero() {
 		return archivedError(p.Key)
 	}
 	return w.Writer.PutProject(p)
 }
 
-func (w guardedWriter) PutSpec(key string, s store.Spec) error {
+func (w guardedWriter) PutSpec(key string, s domain.Spec) error {
 	if err := writable(w, key); err != nil {
 		return err
 	}
 	return w.Writer.PutSpec(key, s)
 }
 
-func (w guardedWriter) PutTicket(key string, t store.Ticket) error {
+func (w guardedWriter) PutTicket(key string, t domain.Ticket) error {
 	if err := writable(w, key); err != nil {
 		return err
 	}
 	return w.Writer.PutTicket(key, t)
 }
 
-func (w guardedWriter) PutCIRuns(key string, runs []store.CIRun) error {
+func (w guardedWriter) PutCIRuns(key string, runs []domain.CIRun) error {
 	if err := writable(w, key); err != nil {
 		return err
 	}

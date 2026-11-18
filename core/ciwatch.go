@@ -5,6 +5,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -23,10 +24,10 @@ type CIWatch struct {
 	// NotWatched is whether the Home Repository is Not watched (Spec
 	// code-central-890): the CI Watcher then leaves it alone. Provider,
 	// Repository and ProjectURL are the Home Repository's CI otherwise.
-	NotWatched bool             `json:"not_watched,omitempty"`
-	Provider   store.CIProvider `json:"provider"`
-	Repository string           `json:"repository"`
-	ProjectURL string           `json:"project_url"`
+	NotWatched bool              `json:"not_watched,omitempty"`
+	Provider   domain.CIProvider `json:"provider"`
+	Repository string            `json:"repository"`
+	ProjectURL string            `json:"project_url"`
 	// PATEnv is the name of the environment variable holding the Azure
 	// DevOps PAT, which the CI Watcher reads from its own environment.
 	PATEnv           string        `json:"pat_env"`
@@ -56,7 +57,7 @@ type CIWatch struct {
 // the CI Watcher watches it.
 type CIWatchRepository struct {
 	Name       string            `json:"name"`
-	Provider   store.CIProvider  `json:"provider"`
+	Provider   domain.CIProvider `json:"provider"`
 	Repository string            `json:"repository,omitempty"`
 	ProjectURL string            `json:"project_url,omitempty"`
 	Waiting    []CIWaitingCommit `json:"waiting"`
@@ -81,7 +82,7 @@ func ciReruns(ci *ciState, name string) []CIRerun {
 	out := []CIRerun{}
 	key := ci.p.Key
 	for _, t := range ci.r.Tickets(key) {
-		if len(t.PushedCommits) == 0 || t.State == store.Cancelled {
+		if len(t.PushedCommits) == 0 || t.State == domain.Cancelled {
 			continue
 		}
 		rc := ci.ticket(t).in(name)
@@ -164,7 +165,7 @@ func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
 
 // ciRulesLastRuns is when the latest finished run tracked against each
 // CI Rule finished, by the number of the rule's Spec.
-func ciRulesLastRuns(runs []store.CIRun) map[int]time.Time {
+func ciRulesLastRuns(runs []domain.CIRun) map[int]time.Time {
 	last := map[int]time.Time{}
 	for _, run := range runs {
 		if run.Rule != 0 && run.Finished.After(last[run.Rule]) {

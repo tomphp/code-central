@@ -2,11 +2,11 @@ package server_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"testing"
 
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
 )
 
 // Starting a Retro (code-central-667). acme-2 is Done, so the Retros Spec
@@ -14,7 +14,7 @@ import (
 func init() {
 	cases["submit_retro"] = opCase{
 		setup: func(t *testing.T, srv *codecentraltest.Server) {
-			_, err := srv.Core.Move(core.WithActor(context.Background(), core.Human), "acme", core.MoveInput{Ticket: "2", ToState: store.Done})
+			_, err := srv.Core.Move(core.WithActor(context.Background(), core.Human), "acme", core.MoveInput{Ticket: "2", ToState: domain.Done})
 			if err != nil {
 				t.Fatal(err)
 			}

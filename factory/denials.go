@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // denial is one call a turn had denied, from its result's
@@ -141,7 +141,7 @@ func (f *factory) takeDenialAnswers(c claim, res core.PickUpAnswersResult) (clai
 		verb, rest, _ := strings.Cut(strings.TrimSpace(q.Answer), " ")
 		rest = strings.TrimSpace(rest)
 		switch {
-		case q.Status != store.QuestionAnswered:
+		case q.Status != domain.QuestionAnswered:
 			fmt.Fprintf(&b, "\n- `%s`: not allowed (no answer).", def)
 		case strings.EqualFold(verb, "allow") && rest == "":
 			allowed = append(allowed, def)

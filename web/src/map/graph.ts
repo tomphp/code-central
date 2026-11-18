@@ -2,8 +2,7 @@
 // frontier, and a left-to-right layered layout of the Tickets, laid out
 // by dagre with Blockers as edges, and the fog node at the right edge.
 import dagre, { type EdgeLabel, type GraphLabel, type NodeLabel } from "@dagrejs/dagre";
-import type { NeedsMeReason, TicketRow } from "../api/types";
-import type { SegmentProgress } from "../requirement/progress";
+import type { NeedsMeReason, SegmentProgress, TicketRow } from "../api/types";
 
 export const NODE = { width: 196, height: 92 };
 export const FOG = { width: 150, height: 44 };

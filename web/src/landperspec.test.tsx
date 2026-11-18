@@ -70,7 +70,7 @@ describe("the CI item of a Spec-landed Ticket", () => {
     await renderApp(w, `/?view=inbox&ticket=${exporter}`);
     const pane = screen.getByRole("complementary", { name: "Ticket" });
     const panel = within(pane).getByRole("region", { name: "CI failed" });
-    expect(within(panel).getByText(/is one Needs Me item, listing 3 Tickets/)).toHaveTextContent(`Also waiting: ${button}, ${docs}`);
+    expect(within(panel).getByText(/listing 3 Tickets/)).toHaveTextContent(`Also waiting: ${button}, ${docs}`);
     const group = within(panel).getByRole("group", { name: "Failure options" });
     expect(within(group).getByRole("button", { name: "Re-run failed jobs" })).toBeInTheDocument();
     expect(within(group).getByRole("button", { name: "Land anyway" })).toBeInTheDocument();

@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 func TestPathOfFillsAndEscapesTheHoles(t *testing.T) {
@@ -20,7 +20,7 @@ func TestPathOfFillsAndEscapesTheHoles(t *testing.T) {
 func TestQueryOfEncodesByTheSameTagsTheHandlerDecodesWith(t *testing.T) {
 	yes := true
 	in := core.FindTicketsInput{
-		State: []store.State{"Ready", "Draft"}, Title: "A", Labels: []string{"x"},
+		State: []domain.State{"Ready", "Draft"}, Title: "A", Labels: []string{"x"},
 		Tags: map[string]string{"model": "fable", "effort": "high"}, Spec: "3", Claimable: &yes,
 		Full: true, Parts: []string{"claims"},
 	}
