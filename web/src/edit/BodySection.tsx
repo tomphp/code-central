@@ -48,7 +48,7 @@ export function BodySection({ api, spec, heading, archived = false }: BodySectio
           close={() => setEditing(false)}
         />
       ) : (
-        open && (spec.body ? <Markdown>{spec.body}</Markdown> : <p className="muted">No body.</p>)
+        (open || !spec.body) && (spec.body ? <Markdown>{spec.body}</Markdown> : <p className="muted">No body.</p>)
       )}
     </section>
   );

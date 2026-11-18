@@ -40,8 +40,10 @@ export function SpecPane({ spec, archived, now, ticket, select }: SpecPaneProps)
         {specRetroable(spec, !!archived) && <NewRetro target={spec.id} onSubmitted={(t) => select(t.id)} />}
         {spec.link && <LinkBadge link={spec.link} />}
         <OpenExternal link={spec.link} />
+        <div className="spec-actions-end">
+          <SpecAutoAccept spec={spec} archived={archived} />
+        </div>
       </div>
-      <SpecAutoAccept spec={spec} archived={archived} />
       <LandPerSpec status={spec.land_per_spec} />
       <BodySection api={api} spec={spec} heading="Body" archived={archived} />
       <CISums tickets={tickets} />

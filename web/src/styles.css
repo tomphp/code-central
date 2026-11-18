@@ -479,7 +479,7 @@ a.link-badge:hover { text-decoration: underline; }
    Stage. Each segment's top border is its stretch of line, coloured by its
    progress, and its ::before is the station at the stretch's start. */
 .strip { list-style: none; display: flex; gap: 0; padding: 0 0 0 7px; margin: 10px 0 4px; }
-.seg { flex: 1; min-width: 0; --line: var(--border); --stn: var(--border); }
+.seg { flex: 1; min-width: 0; --line: var(--border); --stn: color-mix(in srgb, var(--muted) 55%, var(--border)); }
 .seg > button, .seg > span { position: relative; width: 100%; border: 0; border-top: 5px solid var(--line); background: transparent; color: var(--muted); font: 600 11px var(--font); letter-spacing: .02em; padding: 12px 8px 2px 0; margin-left: -7px; text-align: left; display: flex; gap: 4px; justify-content: space-between; white-space: nowrap; border-radius: 0; }
 .seg > button::before, .seg > span::before { content: ""; position: absolute; left: 0; top: -10px; width: 15px; height: 15px; border-radius: 50%; box-sizing: border-box; background: var(--surface); border: 4px solid var(--stn); }
 /* The route ends at its last station. */
@@ -504,7 +504,9 @@ a.link-badge:hover { text-decoration: underline; }
 .seg-n { font-variant-numeric: tabular-nums; }
 .req-head { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
 .req-head h2 { font-size: 19px; margin: 6px 0 4px; }
-.req-head .spec-actions { display: flex; gap: 6px; margin: 4px 0 6px; }
+.req-head .spec-actions { display: flex; align-items: center; gap: 6px; margin: 4px 0 6px; }
+.spec-actions-end { margin-left: auto; }
+.spec-pane-note { min-height: 24rem; }
 .req-head .strip button { font-size: 12px; padding-top: 5px; }
 .req-head .waiting { font-size: 13px; }
 .impl-list { list-style: none; padding: 0; margin: 6px 0; font-size: 12.5px; }
@@ -568,7 +570,7 @@ a.link-badge:hover { text-decoration: underline; }
 .edit-form .edit-preview { border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; min-height: 120px; }
 .spec-body { margin: 4px 0 8px; }
 .spec-body-head { display: flex; align-items: center; gap: 8px; }
-.spec-body-head .link { font-weight: 600; }
+.spec-body-head .link { font-size: 14px; font-weight: 600; }
 
 /* The State chips' colours, and the State lists' By Ticket | By Spec toggle. */
 .st-draft { --st: var(--st-draft); }
