@@ -345,7 +345,7 @@ func specRepositories(p store.Project, tickets []store.Ticket) []string {
 // Repositories whose branch holds the Ticket's work so far, each with its
 // branch and head commit.
 type ReportChangedRepositoriesInput struct {
-	Ticket       Ref              `json:"ticket"`
+	Ticket       Ref              `json:"ticket" path:"n"`
 	ClaimID      string           `json:"claim_id"`
 	Repositories []RepositoryWork `json:"repositories"`
 	// Full asks for the Ticket in place of the Acknowledgement.

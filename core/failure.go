@@ -94,7 +94,7 @@ func (c *Core) ReportFailure(ctx context.Context, key string, in ReportFailureIn
 // what_to_fix, where_work_stands, full?): a Failure Report on a finish
 // the finish check found wrong. Every field is required.
 type FailFinishInput struct {
-	Ticket          Ref    `json:"ticket"`
+	Ticket          Ref    `json:"ticket" path:"n"`
 	WhatBroke       string `json:"what_broke"`
 	Why             string `json:"why"`
 	WhatToFix       string `json:"what_to_fix"`

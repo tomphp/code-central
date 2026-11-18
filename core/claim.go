@@ -276,13 +276,13 @@ func acceptStep(ctx context.Context, t *store.Ticket, key string, cause store.Au
 // LandInput is land's input: the commit that put the work into the base
 // of one of the Ticket's Changed Repositories.
 type LandInput struct {
-	Ticket Ref    `json:"ticket"`
-	Commit string `json:"commit"`
+	Ticket Ref    `json:"ticket" path:"n" desc:"The Ticket." required:"true"`
+	Commit string `json:"commit" desc:"The commit that put the work into the base, such as the merge commit." required:"true"`
 	// Repository is the Repository Name of the base the work landed in;
 	// blank for the Home Repository.
-	Repository string `json:"repository,omitempty"`
+	Repository string `json:"repository,omitempty" desc:"The Repository Name whose base it landed in; the Home Repository when left out."`
 	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
+	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
 }
 
 // Land is land(ticket, commit, repository?): human or agent, once the
