@@ -23,6 +23,8 @@ func SetPostgresFormat(t testing.TB, url string, format int) {
 	setFormat(t, "pgx", url, postgres, format)
 }
 
+// setFormat writes format into the meta row of the database at dsn,
+// opened with driver, in dialect d's placeholders.
 func setFormat(t testing.TB, driver, dsn string, d dialect, format int) {
 	t.Helper()
 	db, err := sql.Open(driver, dsn)

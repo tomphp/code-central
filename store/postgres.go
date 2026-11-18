@@ -34,11 +34,13 @@ var postgres = dialect{
 	rebind: numberPlaceholders,
 	begin:  "BEGIN ISOLATION LEVEL SERIALIZABLE",
 	view:   "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
-	// One key for the whole schema: two services creating it at once take
-	// turns, and the second finds it made.
-	lockSchema: "SELECT pg_advisory_xact_lock(" + strconv.Itoa(schemaLockKey) + ")",
-	shared:     true,
-	retryable:  isSerializationFailure,
+	// Read committed whatever the role's default, so a service that waited
+	// at the lock sees the schema the other committed; and one key for the
+	// whole schema, so two services creating it at once take turns.
+	schemaBegin: "BEGIN ISOLATION LEVEL READ COMMITTED",
+	lockSchema:  "SELECT pg_advisory_xact_lock(" + strconv.Itoa(schemaLockKey) + ")",
+	shared:      true,
+	retryable:   isSerializationFailure,
 }
 
 // schemaLockKey is the advisory lock's key, code-central's own in the

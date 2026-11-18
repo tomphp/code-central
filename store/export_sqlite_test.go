@@ -16,9 +16,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// SetSQLiteFormat, which writes a format into a closed SQLite Store, is
-// in export_sql_test.go beside its Postgres twin.
-
 // OpenSQLiteFormat opens path as a build whose format is format and whose
 // migration chain is steps, so tests can migrate to a test-only format.
 func OpenSQLiteFormat(path string, format int, steps []MigrationStep) (*SQLStore, error) {

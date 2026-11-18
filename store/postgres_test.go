@@ -69,6 +69,29 @@ func TestPostgresRefusesAnOlderFormatUntilItMigrates(t *testing.T) {
 	openPostgres(t, url) // the refusal changed nothing
 }
 
+// Two services opening a fresh database at the same moment create its
+// schema in turn, behind the advisory lock: both open, and the second
+// finds the first's format row rather than inserting its own.
+func TestTwoServicesOpeningAFreshPostgresStoreTakeTurns(t *testing.T) {
+	url := storetest.FreshPostgres(t)
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() {
+			s, err := store.OpenPostgres(url)
+			if err == nil {
+				err = s.Close()
+			}
+			errs <- err
+		}()
+	}
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Fatalf("open: %v", err)
+		}
+	}
+	openPostgres(t, url) // and it is at this build's format
+}
+
 // Where a Postgres Store is shows as its host, port and database, never
 // the credential its URL holds.
 func TestAPostgresLocationShowsNoCredential(t *testing.T) {

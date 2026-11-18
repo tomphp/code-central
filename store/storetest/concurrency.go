@@ -1,4 +1,4 @@
-// The shared-Store cases (Spec code-central-1032): two services' Updates
+// The Shared Store cases (Spec code-central-1032): two services' Updates
 // on one Store at the same moment, each in a transaction of its own, as
 // two machines on one Postgres Store run them. The Store orders them: one
 // Claim wins, two creates take different numbers, and an Update that
@@ -144,6 +144,36 @@ func runConcurrency(t *testing.T, f Factory) {
 			if got := r.FindTickets("acme", store.TicketFilter{}); len(got) != 2 {
 				t.Fatalf("%d tickets, want 2", len(got))
 			}
+			if n := r.NextNumber("acme"); n != 3 {
+				t.Fatalf("NextNumber = %d, want 3", n)
+			}
+		})
+	})
+
+	t.Run("two services creating a spec and a ticket at the same moment take different numbers", func(t *testing.T) {
+		// Numbers are one sequence across Specs and Tickets, so these two
+		// collide on no key: only the Store's ordering keeps them apart.
+		a, b := twoServices(t)
+		var numbers [2]int
+		errs := race(a, b, func(w store.Writer, i int, meet func() error) error {
+			numbers[i] = w.NextNumber("acme")
+			if err := meet(); err != nil {
+				return err
+			}
+			if i == 0 {
+				return w.PutSpec("acme", domain.Spec{Number: numbers[i], Title: "by 0", Created: t0, Updated: t0})
+			}
+			return w.PutTicket("acme", domain.Ticket{Number: numbers[i], Title: "by 1", State: domain.Draft, Spec: 1, Created: t0, Updated: t0})
+		})
+		for i, err := range errs {
+			if err != nil {
+				t.Fatalf("service %d: %v", i, err)
+			}
+		}
+		if numbers[0] == numbers[1] {
+			t.Fatalf("both took number %d", numbers[0])
+		}
+		read(t, a, func(r store.Reader) {
 			if n := r.NextNumber("acme"); n != 3 {
 				t.Fatalf("NextNumber = %d, want 3", n)
 			}

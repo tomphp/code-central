@@ -129,11 +129,11 @@ func (im Import) clone() Import {
 type Store interface {
 	View(fn func(Reader) error) error
 	// Update runs fn under the write lock, or in a transaction of its
-	// own. fn may write at most one
-	// record; a second write fails with ErrSecondWrite. A Store that
-	// retries on conflict runs fn again from the start, discarding the
-	// earlier attempt's write, so fn must be safe to run more than once;
-	// when its attempts run out, Update fails with ErrConflict.
+	// own. fn may write at most one record; a second write fails with
+	// ErrSecondWrite. A Store that retries on conflict runs fn again from
+	// the start, discarding the earlier attempt's write, so fn must be
+	// safe to run more than once; when its attempts run out, Update fails
+	// with ErrConflict.
 	Update(fn func(Writer) error) error
 	// Changes makes deliver hear of the Changes other services sharing the
 	// Store commit. A Store no other service shares never calls it.

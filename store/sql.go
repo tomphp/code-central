@@ -41,8 +41,12 @@ type dialect struct {
 	// view opens a View's transaction, one read-only snapshot for all its
 	// reads; empty runs them outside one, under the process-wide lock.
 	view string
-	// lockSchema is run first when the schema is created, so two services
-	// opening a fresh Store at once create it in turn; empty for none.
+	// schemaBegin opens prepare's transaction, the one that creates the
+	// schema and checks the format: at the isolation that reads what
+	// another service commits while this one waits for lockSchema.
+	schemaBegin string
+	// lockSchema is run first in that transaction, so two services opening
+	// a fresh Store at once create it in turn; empty for none.
 	lockSchema string
 	// shared says other services write the Store too, so an Update runs
 	// without the process-wide lock and is tried again when retryable says
@@ -116,7 +120,7 @@ func (s *SQLStore) Changes(func(Change)) {}
 // View runs fn over a Reader on one of the pool's connections, in the
 // dialect's read-only transaction when it has one, so every read sees
 // the same moment. A read that failed inside fn, which the Reader can't
-// report, is its error.
+// report, is its error, whatever fn returned, as in Update.
 func (s *SQLStore) View(fn func(Reader) error) error {
 	if !s.d.shared {
 		s.mu.RLock()
@@ -137,13 +141,14 @@ func (s *SQLStore) View(fn func(Reader) error) error {
 		defer conn.ExecContext(ctx, "ROLLBACK")
 	}
 	var failed error
-	if err := fn(sqlReader{q: conn, d: s.d, err: &failed}); err != nil {
-		return err
+	err = fn(sqlReader{q: conn, d: s.d, err: &failed})
+	if failed != nil {
+		return failed
 	}
-	return failed
+	return err
 }
 
-// How a shared Store retries an Update whose attempt collided with another
+// How a Shared Store retries an Update whose attempt collided with another
 // service's: conflictAttempts in all, with conflictBackoff before the
 // second, doubled before each later one and jittered, so two services
 // retrying at once don't collide again at the same moment.
@@ -154,7 +159,7 @@ const (
 
 // Update runs fn over a Writer in one transaction: its write and
 // side-table rows land together, or, when fn fails or panics, not at
-// all. Under the store-wide lock on SQLite; on a shared Store, in the
+// all. Under the store-wide lock on SQLite; on a Shared Store, in the
 // engine's serializable transaction, run again from the start when it
 // collides with another service's, until the attempts run out and it
 // fails with ErrConflict.
@@ -216,9 +221,9 @@ func (s *SQLStore) attempt(fn func(Writer) error) error {
 	return nil
 }
 
-// schema is the tables and indexes, in the dialect's types. Every
-// statement is idempotent, so opening an existing database runs them
-// harmlessly.
+// schema is the tables and indexes, in the dialect's types, each created
+// only if it doesn't exist. meta comes first: every format has it, and
+// prepare reads the format from it before deciding on the rest.
 func (d dialect) schema() []string {
 	return []string{
 		`CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
@@ -263,18 +268,19 @@ func (d dialect) schema() []string {
 
 // prepare checks the database's format and creates its schema, in one
 // transaction on one connection, behind the dialect's schema lock. A
-// fresh database takes format, and one at format is ready. One at an
-// older format is left as it is, and its format returned as older for its
-// Migration to start from; one at a newer or unknown format refuses to
-// open, naming both. The transaction reads what is committed as it goes,
-// so a service that waited for another's to create the schema sees it.
+// fresh database takes the schema and format, and one at format is ready
+// as it is. One at an older format is left as it is, and its format
+// returned as older for its Migration to start from; one at a newer or
+// unknown format refuses to open, naming both. The transaction reads
+// what is committed as it goes, so a service that waited for another's
+// to create the schema sees it.
 func prepare(ctx context.Context, db *sql.DB, d dialect, format int, what string) (older int, err error) {
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("%s: %w", what, err)
 	}
 	defer conn.Close()
-	if _, err := conn.ExecContext(ctx, "BEGIN"); err != nil {
+	if _, err := conn.ExecContext(ctx, d.schemaBegin); err != nil {
 		return 0, fmt.Errorf("%s: %w", what, err)
 	}
 	committed := false
@@ -307,22 +313,21 @@ func prepare(ctx context.Context, db *sql.DB, d dialect, format int, what string
 	}
 	if !fresh {
 		f, err := strconv.Atoi(stored)
-		if err == nil && f >= 1 && f < format {
-			return f, commit()
-		}
-		if err != nil || f != format {
+		if err != nil || f < 1 || f > format {
 			return 0, fmt.Errorf("%s: unknown format %s (this code-central understands format %d)", what, stored, format)
 		}
+		if f < format {
+			return f, commit()
+		}
+		return 0, commit()
 	}
 	for _, stmt := range schema[1:] {
 		if _, err := conn.ExecContext(ctx, stmt); err != nil {
 			return 0, fmt.Errorf("%s: %w", what, err)
 		}
 	}
-	if fresh {
-		if _, err := conn.ExecContext(ctx, d.rebind(`INSERT INTO meta (key, value) VALUES ('format', ?)`), strconv.Itoa(format)); err != nil {
-			return 0, fmt.Errorf("%s: %w", what, err)
-		}
+	if _, err := conn.ExecContext(ctx, d.rebind(`INSERT INTO meta (key, value) VALUES ('format', ?)`), strconv.Itoa(format)); err != nil {
+		return 0, fmt.Errorf("%s: %w", what, err)
 	}
 	return 0, commit()
 }

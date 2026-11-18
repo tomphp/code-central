@@ -4,7 +4,8 @@
 # gets its own log). Every step runs under bash, so the
 # commands are identical on every OS and a red run on one OS is a real
 # platform difference. A separate job checks the commit messages since
-# the latest tag.
+# the latest tag, and another runs the store and cli tests again on Linux
+# against a Postgres service container, which no other runner can give.
 name: CI
 
 on:
@@ -42,8 +43,8 @@ jobs:
           check-latest-tag-only: true
 
   # The store's contract suite and serve's store: block on a real Postgres,
-  # which only a Linux runner can give as a service container. The matrix
-  # above runs the same tests without one and skips those cases, naming
+  # which only a Linux runner can give as a service container. The test
+  # jobs below run the same tests without one and skip those cases, naming
   # CODE_CENTRAL_TEST_POSTGRES_URL, as make test does locally.
   test-postgres:
     name: test (postgres)

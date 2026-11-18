@@ -25,7 +25,7 @@ type Factory struct {
 	BreakUsage func(t *testing.T, s store.Store, project string)
 	// Second, when non-nil, opens another handle on the Store s holds, as
 	// a second service sharing it would, closed when t ends. A Kind one
-	// service holds alone leaves it nil, and the shared-Store cases (two
+	// service holds alone leaves it nil, and the Shared Store cases (two
 	// services' Updates at the same moment) are skipped.
 	Second func(t *testing.T, s store.Store) store.Store
 }
