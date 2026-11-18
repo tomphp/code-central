@@ -12,11 +12,11 @@ export interface FieldProps {
 export function Field({ label, hint, hintId, children }: FieldProps) {
   return (
     <>
-      <label className="project-options-field">
+      <label className="field">
         {label} {children}
       </label>
       {hint !== undefined && (
-        <p className="project-options-hint" id={hintId}>
+        <p className="field-hint" id={hintId}>
           {hint}
         </p>
       )}

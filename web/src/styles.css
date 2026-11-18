@@ -6,6 +6,8 @@
    Dark mode keeps the same lines on a night-blue surface; its tokens are
    repeated for the system setting and for data-theme="dark". */
 :root {
+  --control-h: 32px;
+  --control-px: 10px;
   --font: "Hanken Grotesk Variable", system-ui, -apple-system, sans-serif;
   --mono: "Red Hat Mono Variable", ui-monospace, Menlo, monospace;
   --rail: #12224a;
@@ -147,7 +149,7 @@ a { color: var(--accent); text-underline-offset: 2px; }
 .label { font-size: 11px; line-height: 14px; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--border); }
 
 /* Shared by panels (tickets 34-37). */
-.btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 6px; padding: 5px 12px; font: inherit; font-weight: 600; cursor: pointer; transition: border-color 120ms ease-out, background-color 120ms ease-out; }
+.btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 6px; box-sizing: border-box; min-height: var(--control-h); padding: 0 var(--control-px); display: inline-flex; align-items: center; justify-content: center; font: inherit; font-weight: 600; cursor: pointer; transition: border-color 120ms ease-out, background-color 120ms ease-out; }
 .btn:hover { border-color: var(--muted); }
 /* One disabled look for every button: the hairline border stays, the text drops to about 55%, and a primary keeps its fill at reduced opacity. */
 .btn:disabled { color: color-mix(in srgb, var(--text) 55%, transparent); background: var(--surface); border-color: var(--border); cursor: default; }
@@ -157,6 +159,7 @@ a { color: var(--accent); text-underline-offset: 2px; }
 .btn.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--primary) 86%, var(--accent)); }
 .btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
 textarea, select, input:not([type=checkbox], [type=radio], [type=range], [type=file], [type=color]) { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
+select, input:not([type=checkbox], [type=radio], [type=range], [type=file], [type=color]) { box-sizing: border-box; min-height: var(--control-h); padding: 0 var(--control-px); }
 textarea { width: 100%; resize: vertical; }
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin: 12px 0; }
 .warning { font-size: 12.5px; padding: 6px 10px; border-radius: 6px; background: color-mix(in srgb, var(--danger) 12%, transparent); color: color-mix(in srgb, var(--danger) 55%, var(--text)); }
@@ -244,15 +247,15 @@ a.filter { text-decoration: none; }
 .project-options-section { border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px 16px; margin: 0; }
 .project-options-section legend { font-weight: 600; padding: 0 4px; }
 .project-options-choice { margin: 8px 0; }
-.project-options-hint { margin: 2px 0 0 1.6rem; font-size: 13px; color: var(--muted); }
+.project-options-hint, .field-hint { margin: 2px 0 0 1.6rem; font-size: 13px; color: var(--muted); }
 .project-options-remote { display: block; margin: 8px 0 0 1.6rem; }
 .project-options-focus { border-collapse: collapse; margin: 8px 0; }
 .project-options-focus th { text-align: left; font-weight: 500; }
 .project-options-focus thead th { font-size: 12.5px; color: var(--muted); }
 .project-options-focus th, .project-options-focus td { padding: 6px 16px 6px 0; border-bottom: 1px solid var(--border); }
 .project-options-focus tbody tr:last-child > * { border-bottom: 0; }
-.project-options-remote input, .project-options-field input, .project-options-field select { font: inherit; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
-.project-options-remote input[aria-invalid="true"], .project-options-field input[aria-invalid="true"] { border-color: var(--danger); }
+.project-options-remote input, .field input, .field select { font: inherit; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+.project-options-remote input[aria-invalid="true"], .field input[aria-invalid="true"] { border-color: var(--danger); }
 .project-options form + form, .project-options form + fieldset { margin-top: 16px; }
 .project-options-rules-section { border: 0; border-top: 1px solid var(--border); padding: 12px 0 0; margin: 16px 0 0; }
 .project-options-rules-section legend { font-weight: 600; padding: 0 4px 0 0; }
@@ -270,9 +273,9 @@ a.filter { text-decoration: none; }
 .project-options-repository-details dd { margin: 0; overflow-wrap: anywhere; }
 .project-options-clone-missing { color: var(--danger); }
 .project-options-repository-form { margin-top: 12px; }
-.project-options-field { display: block; margin: 12px 0 0; }
-.project-options-field input { min-width: 16rem; }
-.project-options-field + .project-options-hint { margin-left: 0; }
+.field { display: block; margin: 12px 0 0; }
+.field input { min-width: 16rem; }
+.field + .project-options-hint, .field + .field-hint { margin-left: 0; }
 .project-options-actions { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 .stage-guide-row + .stage-guide-row { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
 .project-options-models-hint { margin-left: 0; }
@@ -280,7 +283,7 @@ a.filter { text-decoration: none; }
 .project-options-models th, .project-options-models td { text-align: left; padding: 4px 8px 4px 0; font-size: 14px; }
 .project-options-models thead th { font-weight: 600; font-size: 13px; color: var(--muted); }
 .project-options-models tbody th { font-weight: 500; white-space: nowrap; }
-.project-options-models input, .project-options-models select { font: inherit; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); width: 100%; box-sizing: border-box; }
+.project-options-models input, .project-options-models select { font: inherit; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); width: 100%; box-sizing: border-box; }
 .project-options-models [aria-invalid="true"] { border-color: var(--danger); }
 .project-rename { flex-basis: 100%; display: flex; gap: 4px; margin: 2px 0 4px; }
 .project-rename input { flex: 1; min-width: 0; font: inherit; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
@@ -411,7 +414,7 @@ a.link-badge:hover { text-decoration: underline; }
 .link-badge.detached { opacity: 0.6; }
 .linked-note { margin: 6px 0; }
 /* A Ticket's model and effort with their Tag pickers (code-central-313). */
-.model-choice input, .model-choice select { font: inherit; padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+.model-choice input, .model-choice select { font: inherit; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
 
 /* The Prototype badge on a Needs Me row and a Focus Item (Spec 213). */
 .prototype-badge, .retro-badge { color: var(--accent); border-color: var(--accent); white-space: nowrap; }
@@ -632,7 +635,7 @@ a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
 .view-picker-label, .view-head > .muted, .view-head .focus-left, .view-head .btn .muted, .view-head .focus-project .muted, .view-head > .count { color: var(--rail-muted); }
 .view-head a.btn { text-decoration: none; }
 .view-head .btn, .view-head select { background: transparent; color: var(--rail-text); border: 1px solid color-mix(in srgb, var(--rail-text) 30%, transparent); }
-.view-head select { border-radius: 6px; padding: 5px 8px; }
+.view-head select { border-radius: 6px; }
 .view-head select option { color: var(--text); background: var(--surface); }
 .view-head .btn:hover, .view-head select:hover { border-color: var(--rail-text); }
 .view-head .btn.primary { background: #f4f2ec; border-color: #f4f2ec; color: #12224a; }
