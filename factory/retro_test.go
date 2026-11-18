@@ -1,12 +1,12 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // sessionLogsRule opens what a Retro's system prompt says about where
@@ -21,7 +21,7 @@ func TestARetroStartsTheRetroSkillReadOnlyInADetachedWorktreeAtTheBasesTip(t *te
 	mainTip := h.Git("rev-parse", "main")
 
 	h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	c := h.Calls()[0]
 	if want := "/retro " + id; c.Prompt != want {
@@ -69,7 +69,7 @@ func TestOnlyARetrosSystemPromptSaysWhereSessionLogsAre(t *testing.T) {
 
 	h.Start()
 	for _, id := range ids {
-		h.WantState(id, store.InReview)
+		h.WantState(id, domain.InReview)
 	}
 
 	for _, c := range h.Calls() {

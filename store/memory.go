@@ -3,6 +3,7 @@ package store
 import (
 	"cmp"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"slices"
 	"sync"
 )
@@ -12,20 +13,20 @@ import (
 type index struct {
 	mu       sync.RWMutex
 	projects map[string]*projectData
-	options  Options
+	options  domain.Options
 	// persist, when set, makes a record durable before memory changes.
 	persist func(record any, project string) error
 }
 
 type projectData struct {
-	project Project
-	specs   map[int]Spec
-	tickets map[int]Ticket
-	ciRuns  CIRuns
+	project domain.Project
+	specs   map[int]domain.Spec
+	tickets map[int]domain.Ticket
+	ciRuns  domain.CIRuns
 }
 
 func newIndex() *index {
-	return &index{projects: map[string]*projectData{}, options: DefaultOptions()}
+	return &index{projects: map[string]*projectData{}, options: domain.DefaultOptions()}
 }
 
 // NewMemory returns the in-memory fake store.
@@ -45,64 +46,64 @@ func (x *index) Update(fn func(Writer) error) error {
 
 type reader struct{ x *index }
 
-func (r reader) Project(key string) (Project, bool) {
+func (r reader) Project(key string) (domain.Project, bool) {
 	p, ok := r.x.projects[key]
 	if !ok {
-		return Project{}, false
+		return domain.Project{}, false
 	}
 	return p.project, true
 }
 
-func (r reader) Projects() []Project {
-	out := make([]Project, 0, len(r.x.projects))
+func (r reader) Projects() []domain.Project {
+	out := make([]domain.Project, 0, len(r.x.projects))
 	for _, p := range r.x.projects {
 		out = append(out, p.project)
 	}
-	slices.SortFunc(out, func(a, b Project) int { return cmp.Compare(a.Key, b.Key) })
+	slices.SortFunc(out, func(a, b domain.Project) int { return cmp.Compare(a.Key, b.Key) })
 	return out
 }
 
-func (r reader) Spec(project string, n int) (Spec, bool) {
+func (r reader) Spec(project string, n int) (domain.Spec, bool) {
 	p, ok := r.x.projects[project]
 	if !ok {
-		return Spec{}, false
+		return domain.Spec{}, false
 	}
 	s, ok := p.specs[n]
 	return cloneSpec(s), ok
 }
 
-func (r reader) Specs(project string) []Spec {
+func (r reader) Specs(project string) []domain.Spec {
 	p, ok := r.x.projects[project]
 	if !ok {
 		return nil
 	}
-	out := make([]Spec, 0, len(p.specs))
+	out := make([]domain.Spec, 0, len(p.specs))
 	for _, s := range p.specs {
 		out = append(out, cloneSpec(s))
 	}
-	slices.SortFunc(out, func(a, b Spec) int { return cmp.Compare(a.Number, b.Number) })
+	slices.SortFunc(out, func(a, b domain.Spec) int { return cmp.Compare(a.Number, b.Number) })
 	return out
 }
 
-func (r reader) Ticket(project string, n int) (Ticket, bool) {
+func (r reader) Ticket(project string, n int) (domain.Ticket, bool) {
 	p, ok := r.x.projects[project]
 	if !ok {
-		return Ticket{}, false
+		return domain.Ticket{}, false
 	}
 	t, ok := p.tickets[n]
 	return cloneTicket(t), ok
 }
 
-func (r reader) Tickets(project string) []Ticket {
+func (r reader) Tickets(project string) []domain.Ticket {
 	p, ok := r.x.projects[project]
 	if !ok {
 		return nil
 	}
-	out := make([]Ticket, 0, len(p.tickets))
+	out := make([]domain.Ticket, 0, len(p.tickets))
 	for _, t := range p.tickets {
 		out = append(out, cloneTicket(t))
 	}
-	slices.SortFunc(out, func(a, b Ticket) int { return cmp.Compare(a.Number, b.Number) })
+	slices.SortFunc(out, func(a, b domain.Ticket) int { return cmp.Compare(a.Number, b.Number) })
 	return out
 }
 
@@ -121,9 +122,9 @@ func (r reader) NextNumber(project string) int {
 	return high + 1
 }
 
-func (r reader) Options() Options { return r.x.options }
+func (r reader) Options() domain.Options { return r.x.options }
 
-func (r reader) CIRuns(project string) []CIRun {
+func (r reader) CIRuns(project string) []domain.CIRun {
 	p, ok := r.x.projects[project]
 	if !ok {
 		return nil
@@ -141,7 +142,7 @@ func (w *writer) begin(record any, project string) error {
 		return ErrSecondWrite
 	}
 	switch record.(type) {
-	case Project, Options:
+	case domain.Project, domain.Options:
 	default:
 		if _, ok := w.x.projects[project]; !ok {
 			return ErrUnknownProject
@@ -156,7 +157,7 @@ func (w *writer) begin(record any, project string) error {
 	return nil
 }
 
-func (w *writer) PutProject(p Project) error {
+func (w *writer) PutProject(p domain.Project) error {
 	if err := w.begin(p, p.Key); err != nil {
 		return err
 	}
@@ -164,7 +165,7 @@ func (w *writer) PutProject(p Project) error {
 	return nil
 }
 
-func (w *writer) PutSpec(project string, s Spec) error {
+func (w *writer) PutSpec(project string, s domain.Spec) error {
 	s = cloneSpec(s)
 	if err := w.begin(s, project); err != nil {
 		return err
@@ -173,7 +174,7 @@ func (w *writer) PutSpec(project string, s Spec) error {
 	return nil
 }
 
-func (w *writer) PutTicket(project string, t Ticket) error {
+func (w *writer) PutTicket(project string, t domain.Ticket) error {
 	t = cloneTicket(t)
 	if err := w.begin(t, project); err != nil {
 		return err
@@ -235,7 +236,7 @@ func (w *writer) PutImport(project string, im Import) error {
 	return nil
 }
 
-func (w *writer) PutOptions(o Options) error {
+func (w *writer) PutOptions(o domain.Options) error {
 	if !o.FocusClear.Valid() {
 		return fmt.Errorf("%w: focus_clear %q", ErrInvalidOption, o.FocusClear)
 	}
@@ -252,8 +253,8 @@ func (w *writer) PutOptions(o Options) error {
 	return nil
 }
 
-func (w *writer) PutCIRuns(project string, runs []CIRun) error {
-	rs := cloneCIRuns(CIRuns{Runs: runs})
+func (w *writer) PutCIRuns(project string, runs []domain.CIRun) error {
+	rs := cloneCIRuns(domain.CIRuns{Runs: runs})
 	if err := w.begin(rs, project); err != nil {
 		return err
 	}
@@ -261,11 +262,11 @@ func (w *writer) PutCIRuns(project string, runs []CIRun) error {
 	return nil
 }
 
-func (x *index) setProject(p Project) {
+func (x *index) setProject(p domain.Project) {
 	p.Landing = landingOrDefault(p.Landing)
 	if d, ok := x.projects[p.Key]; ok {
 		d.project = p
 		return
 	}
-	x.projects[p.Key] = &projectData{project: p, specs: map[int]Spec{}, tickets: map[int]Ticket{}}
+	x.projects[p.Key] = &projectData{project: p, specs: map[int]domain.Spec{}, tickets: map[int]domain.Ticket{}}
 }

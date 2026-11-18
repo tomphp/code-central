@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -29,7 +30,7 @@ func TestTheRealChainMigratesAFormat41StoreToTheRepositoriesFormat(t *testing.T)
 			t.Errorf("%s changed:\n%s", rel, after[rel])
 		}
 	}
-	home := []store.Repository{{Name: "acme", Home: true}}
+	home := []domain.Repository{{Name: "acme", Home: true}}
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
 		if got := p.RepositoryList(); !reflect.DeepEqual(got, home) {
@@ -40,12 +41,12 @@ func TestTheRealChainMigratesAFormat41StoreToTheRepositoriesFormat(t *testing.T)
 
 	// Repositories added after migrating read back in their order, and
 	// the Home Repository alone is stored as none.
-	added := []store.Repository{
+	added := []domain.Repository{
 		{Name: "web", CloneURL: "git@github.com:acme/web.git", Base: "main", LocalPath: "/src/web"},
 		{Name: "acme", Home: true},
 		{Name: "api", CloneURL: "https://github.com/acme/api", Base: "develop"},
 	}
-	put := func(rs []store.Repository) {
+	put := func(rs []domain.Repository) {
 		t.Helper()
 		if err := s.Update(func(w store.Writer) error {
 			p, _ := w.Project("acme")
@@ -73,7 +74,7 @@ func TestTheRealChainMigratesAFormat41StoreToTheRepositoriesFormat(t *testing.T)
 func TestLoadRefusesAProjectsRepositoriesThatBreakTheirRules(t *testing.T) {
 	// A Project Key may be longer than a Repository Name, and still names
 	// its Home Repository.
-	long := strings.Repeat("a", store.MaxRepositoryName+1)
+	long := strings.Repeat("a", domain.MaxRepositoryName+1)
 	dir := filepath.Join(t.TempDir(), "code-central")
 	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 42\n")
 	writeFile(t, filepath.Join(dir, "projects/"+long+"/project.yaml"),
@@ -113,9 +114,9 @@ func TestRepositoryNamesKeepTheirRules(t *testing.T) {
 	for name, want := range map[string]bool{
 		"web": true, "web-app": true, "api_2": true, "acme.io": true, "9lives": true,
 		"": false, "Web": false, "-web": false, ".web": false, "_web": false, "web app": false, "web/app": false,
-		strings.Repeat("a", store.MaxRepositoryName): true, strings.Repeat("a", store.MaxRepositoryName+1): false,
+		strings.Repeat("a", domain.MaxRepositoryName): true, strings.Repeat("a", domain.MaxRepositoryName+1): false,
 	} {
-		if got := store.ValidRepositoryName(name); got != want {
+		if got := domain.ValidRepositoryName(name); got != want {
 			t.Errorf("ValidRepositoryName(%q) = %v, want %v", name, got, want)
 		}
 	}

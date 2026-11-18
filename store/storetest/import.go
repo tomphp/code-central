@@ -1,6 +1,7 @@
 package storetest
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"testing"
 
 	"github.com/tomoram/code-central/store"
@@ -13,7 +14,7 @@ func runImport(t *testing.T, f Factory) {
 		s := f.New(t)
 		seedProject(t, s)
 		put(t, s, func(w store.Writer) error {
-			return w.PutSpec("acme", store.Spec{Number: 1, Title: "Existing", Created: t0, Updated: t0})
+			return w.PutSpec("acme", domain.Spec{Number: 1, Title: "Existing", Created: t0, Updated: t0})
 		})
 		put(t, s, func(w store.Writer) error { return w.PutImport("acme", ImportBatch()) })
 		check := func(s store.Store) {
@@ -29,7 +30,7 @@ func runImport(t *testing.T, f Factory) {
 					t.Fatalf("spec: %+v", sp)
 				}
 				tk, _ := r.Ticket("acme", 3)
-				if tk.State != store.Done || len(tk.Moves) != 1 || tk.Moves[0] != ImportBatch().Tickets[0].Moves[0] {
+				if tk.State != domain.Done || len(tk.Moves) != 1 || tk.Moves[0] != ImportBatch().Tickets[0].Moves[0] {
 					t.Fatalf("ticket 3: %+v", tk)
 				}
 				if tk, _ := r.Ticket("acme", 6); len(tk.Comments) != 1 || len(tk.Replacements) != 1 || tk.Replacements[0] != 4 {
@@ -50,7 +51,7 @@ func runImport(t *testing.T, f Factory) {
 		s := f.New(t)
 		seedProject(t, s)
 		err := s.Update(func(w store.Writer) error {
-			if err := w.PutSpec("acme", store.Spec{Number: 1, Title: "S", Created: t0, Updated: t0}); err != nil {
+			if err := w.PutSpec("acme", domain.Spec{Number: 1, Title: "S", Created: t0, Updated: t0}); err != nil {
 				return err
 			}
 			return w.PutImport("acme", ImportBatch())
@@ -69,7 +70,7 @@ func runImport(t *testing.T, f Factory) {
 		s := f.New(t)
 		seedProject(t, s)
 		put(t, s, func(w store.Writer) error {
-			return w.PutTicket("acme", store.Ticket{Number: 4, Title: "Old", State: store.Draft, Spec: 1, Created: t0, Updated: t0})
+			return w.PutTicket("acme", domain.Ticket{Number: 4, Title: "Old", State: domain.Draft, Spec: 1, Created: t0, Updated: t0})
 		})
 		if err := s.Update(func(w store.Writer) error { return w.PutImport("acme", ImportBatch()) }); err == nil {
 			t.Fatal("an import over an existing number was allowed")
@@ -94,14 +95,14 @@ func runImport(t *testing.T, f Factory) {
 		s := f.New(t)
 		seedProject(t, s)
 		put(t, s, func(w store.Writer) error {
-			return w.PutTicket("acme", store.Ticket{Number: 1, Title: "Old", State: store.Draft, Spec: 9, Created: t0, Updated: t0})
+			return w.PutTicket("acme", domain.Ticket{Number: 1, Title: "Old", State: domain.Draft, Spec: 9, Created: t0, Updated: t0})
 		})
 		im := ImportBatch()
-		im.Rewritten = []store.Ticket{{Number: 1, Title: "Old", State: store.Cancelled, Spec: 9, Replacements: []int{3}, Created: t0, Updated: t0}}
+		im.Rewritten = []domain.Ticket{{Number: 1, Title: "Old", State: domain.Cancelled, Spec: 9, Replacements: []int{3}, Created: t0, Updated: t0}}
 		put(t, s, func(w store.Writer) error { return w.PutImport("acme", im) })
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
-				if tk, _ := r.Ticket("acme", 1); tk.State != store.Cancelled || len(tk.Replacements) != 1 {
+				if tk, _ := r.Ticket("acme", 1); tk.State != domain.Cancelled || len(tk.Replacements) != 1 {
 					t.Fatalf("ticket 1: %+v, want it rewritten", tk)
 				}
 				if n := len(r.Tickets("acme")); n != 4 {
@@ -119,7 +120,7 @@ func runImport(t *testing.T, f Factory) {
 		s := f.New(t)
 		seedProject(t, s)
 		im := ImportBatch()
-		im.Rewritten = []store.Ticket{{Number: 1, Title: "Missing", State: store.Draft, Spec: 9, Created: t0, Updated: t0}}
+		im.Rewritten = []domain.Ticket{{Number: 1, Title: "Missing", State: domain.Draft, Spec: 9, Created: t0, Updated: t0}}
 		if err := s.Update(func(w store.Writer) error { return w.PutImport("acme", im) }); err == nil {
 			t.Fatal("an import rewriting a missing Ticket was allowed")
 		}
@@ -134,10 +135,10 @@ func runImport(t *testing.T, f Factory) {
 		s := f.New(t)
 		seedProject(t, s)
 		put(t, s, func(w store.Writer) error {
-			return w.PutSpec("acme", store.Spec{Number: 1, Title: "Old", Created: t0, Updated: t0})
+			return w.PutSpec("acme", domain.Spec{Number: 1, Title: "Old", Created: t0, Updated: t0})
 		})
 		im := ImportBatch()
-		im.RewrittenSpecs = []store.Spec{{Number: 1, Title: "Old", Labels: []string{"auto-accept"}, Created: t0, Updated: t0}}
+		im.RewrittenSpecs = []domain.Spec{{Number: 1, Title: "Old", Labels: []string{"auto-accept"}, Created: t0, Updated: t0}}
 		put(t, s, func(w store.Writer) error { return w.PutImport("acme", im) })
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
@@ -159,7 +160,7 @@ func runImport(t *testing.T, f Factory) {
 		s := f.New(t)
 		seedProject(t, s)
 		im := ImportBatch()
-		im.RewrittenSpecs = []store.Spec{{Number: 1, Title: "Missing", Created: t0, Updated: t0}}
+		im.RewrittenSpecs = []domain.Spec{{Number: 1, Title: "Missing", Created: t0, Updated: t0}}
 		if err := s.Update(func(w store.Writer) error { return w.PutImport("acme", im) }); err == nil {
 			t.Fatal("an import rewriting a missing Spec was allowed")
 		}
@@ -183,17 +184,17 @@ func runImport(t *testing.T, f Factory) {
 // Tickets 3 to 6 across them. The file store's crash tests use it too.
 func ImportBatch() store.Import {
 	return store.Import{
-		Specs: []store.Spec{
+		Specs: []domain.Spec{
 			{Number: 2, Title: "Login", Tags: map[string]string{"source": ".scratch/login/spec.md"}, Created: t0, Updated: t0, Body: "Users log in.\n"},
 			{Number: 5, Title: "Billing", Created: t0, Updated: t0},
 		},
-		Tickets: []store.Ticket{
-			{Number: 3, Title: "Form", State: store.Done, Spec: 2, Created: t0, Updated: t0,
-				Moves: []store.Move{{To: store.Done, Actor: "agent", Time: t0, Via: "import"}}},
-			{Number: 4, Title: "API", State: store.Ready, Spec: 2, BlockedBy: []int{3}, Created: t0, Updated: t0,
-				Moves: []store.Move{{To: store.Ready, Actor: "agent", Time: t0, Via: "import"}}},
-			{Number: 6, Title: "Invoices", State: store.Cancelled, Spec: 5, Replacements: []int{4}, Created: t0, Updated: t0,
-				Comments: []store.Comment{{Number: 1, Actor: "agent", Time: t0, Body: "wontfix\n"}}},
+		Tickets: []domain.Ticket{
+			{Number: 3, Title: "Form", State: domain.Done, Spec: 2, Created: t0, Updated: t0,
+				Moves: []domain.Move{{To: domain.Done, Actor: "agent", Time: t0, Via: "import"}}},
+			{Number: 4, Title: "API", State: domain.Ready, Spec: 2, BlockedBy: []int{3}, Created: t0, Updated: t0,
+				Moves: []domain.Move{{To: domain.Ready, Actor: "agent", Time: t0, Via: "import"}}},
+			{Number: 6, Title: "Invoices", State: domain.Cancelled, Spec: 5, Replacements: []int{4}, Created: t0, Updated: t0,
+				Comments: []domain.Comment{{Number: 1, Actor: "agent", Time: t0, Body: "wontfix\n"}}},
 		},
 	}
 }

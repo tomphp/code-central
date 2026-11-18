@@ -3,13 +3,13 @@ package server_test
 import (
 	"context"
 	"encoding/json"
+	"github.com/tomoram/code-central/domain"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
 )
 
 // Send back to fix and New fix Ticket (code-central-264): the failure
@@ -64,7 +64,7 @@ func TestTheHumanSendsACIFailedTicketBackToFix(t *testing.T) {
 	ticketAcknowledgement("acme-3", "Ready", "state", "ci_item", "ci_failure_options", "comments", "moves", "claimable", "needs_me_reason")(t, out)
 
 	tk := ticket3(t, srv)
-	if m := tk.Moves[len(tk.Moves)-1]; m.From != store.Accepted || m.To != store.Ready || m.Actor != string(core.Human) {
+	if m := tk.Moves[len(tk.Moves)-1]; m.From != domain.Accepted || m.To != domain.Ready || m.Actor != string(core.Human) {
 		t.Fatalf("move %+v, want the human's Accepted to Ready", m)
 	}
 	if c := tk.Comments[len(tk.Comments)-1]; c.Body != fixNote || c.Actor != string(core.Human) {
@@ -83,7 +83,7 @@ func TestTheHumanSendsACIFailedTicketBackToFix(t *testing.T) {
 func TestTheHumansSendBackFromAcceptedNeedsANote(t *testing.T) {
 	srv := newServer(t, failedCI)
 	httpRejected(t, srv, sendBack("3", " "), core.Invalid)
-	if s := ticket3(t, srv).State; s != store.Accepted {
+	if s := ticket3(t, srv).State; s != domain.Accepted {
 		t.Fatalf("%s, want it left Accepted", s)
 	}
 }
@@ -95,7 +95,7 @@ func TestTheWorkflowHasTheHumansSendBackFromAccepted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var human, agent [][]store.State
+	var human, agent [][]domain.State
 	for _, a := range w.Actions {
 		if a.Name != "send_back" {
 			continue
@@ -110,10 +110,10 @@ func TestTheWorkflowHasTheHumansSendBackFromAccepted(t *testing.T) {
 			}
 		}
 	}
-	if !slices.ContainsFunc(human, func(f []store.State) bool { return slices.Equal(f, []store.State{store.Accepted}) }) {
+	if !slices.ContainsFunc(human, func(f []domain.State) bool { return slices.Equal(f, []domain.State{domain.Accepted}) }) {
 		t.Errorf("human rows from %v, want one from Accepted", human)
 	}
-	if len(agent) != 1 || !slices.Equal(agent[0], []store.State{store.Accepted}) {
+	if len(agent) != 1 || !slices.Equal(agent[0], []domain.State{domain.Accepted}) {
 		t.Errorf("agent rows from %v, want only the conflict row from Accepted", agent)
 	}
 }
@@ -126,7 +126,7 @@ func TestNewFixTicketOpensAReadyTicketOnTheCIFixesSpecAndLeavesTheFailedOneWaiti
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fix.State != store.Ready || fix.Spec.ID != "acme-4" || fix.Spec.Title != "CI Fixes" || !strings.Contains(fix.Description, fixNote) || !strings.Contains(fix.Description, "acme-3") {
+	if fix.State != domain.Ready || fix.Spec.ID != "acme-4" || fix.Spec.Title != "CI Fixes" || !strings.Contains(fix.Description, fixNote) || !strings.Contains(fix.Description, "acme-3") {
 		t.Fatalf("fix Ticket %s on %s %q with description %q, want Ready on the CI Fixes Spec acme-4 carrying the note and naming acme-3", fix.State, fix.Spec.ID, fix.Spec.Title, fix.Description)
 	}
 	if !strings.Contains(fix.Title, "acme-3") {
@@ -134,7 +134,7 @@ func TestNewFixTicketOpensAReadyTicketOnTheCIFixesSpecAndLeavesTheFailedOneWaiti
 	}
 
 	tk := ticket3(t, srv)
-	if tk.State != store.Accepted || tk.LandAnyway || tk.CIFailureOptions != nil {
+	if tk.State != domain.Accepted || tk.LandAnyway || tk.CIFailureOptions != nil {
 		t.Fatalf("%s, land anyway %v, options %v: want it Accepted, not landing anyway, with no options while the fix Ticket is open", tk.State, tk.LandAnyway, tk.CIFailureOptions)
 	}
 	if c := tk.Comments[len(tk.Comments)-1]; !strings.Contains(c.Body, "acme-5") {

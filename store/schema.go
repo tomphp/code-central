@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"reflect"
 	"strings"
 )
@@ -31,35 +32,35 @@ func Schema() string {
 	}
 	b.WriteString("values\n")
 	var states []string
-	for _, s := range States {
+	for _, s := range domain.States {
 		states = append(states, string(s))
 	}
-	values(fmt.Sprintf("  options focus_clear (default %s)", DefaultOptions().FocusClear), FocusClearNames())
-	values(fmt.Sprintf("  options focus_popup (default %s)", DefaultOptions().FocusPopup), FocusPopupNames())
-	values(fmt.Sprintf("  options limits_popup (default %s)", DefaultOptions().LimitsPopup), LimitsPopupNames())
-	values("  project landing.method (no landing: merge, push false, remote origin)", LandingMethodNames())
-	values("  project ci.provider (no ci: tracking off, github_actions)", CIProviderNames())
-	values("  project azure_boards.mode (optional)", AzureBoardsModeNames())
-	values("  project models.kinds[].kind", ModelKinds)
-	values("  project focus_kinds_off[]", NeedsMeReasons)
+	values(fmt.Sprintf("  options focus_clear (default %s)", domain.DefaultOptions().FocusClear), domain.FocusClearNames())
+	values(fmt.Sprintf("  options focus_popup (default %s)", domain.DefaultOptions().FocusPopup), domain.FocusPopupNames())
+	values(fmt.Sprintf("  options limits_popup (default %s)", domain.DefaultOptions().LimitsPopup), domain.LimitsPopupNames())
+	values("  project landing.method (no landing: merge, push false, remote origin)", domain.LandingMethodNames())
+	values("  project ci.provider (no ci: tracking off, github_actions)", domain.CIProviderNames())
+	values("  project azure_boards.mode (optional)", domain.AzureBoardsModeNames())
+	values("  project models.kinds[].kind", domain.ModelKinds)
+	values("  project focus_kinds_off[]", domain.NeedsMeReasons)
 	values("  ticket state, moves[].from, moves[].to", states)
 	var recommendations []string
-	for _, r := range Recommendations {
+	for _, r := range domain.Recommendations {
 		recommendations = append(recommendations, string(r))
 	}
 	values("  ticket recommendation (optional)", recommendations)
 	var statuses, conclusions []string
-	for _, s := range CIRunStatuses {
+	for _, s := range domain.CIRunStatuses {
 		statuses = append(statuses, string(s))
 	}
-	for _, c := range CIConclusions {
+	for _, c := range domain.CIConclusions {
 		conclusions = append(conclusions, string(c))
 	}
 	values("  ci run status", statuses)
 	values("  ci run conclusion, jobs[].conclusion (optional)", conclusions)
-	values("  rounds[].questions[].status", []string{string(QuestionOpen), string(QuestionAnswered), string(QuestionDismissed)})
+	values("  rounds[].questions[].status", []string{string(domain.QuestionOpen), string(domain.QuestionAnswered), string(domain.QuestionDismissed)})
 	var external []string
-	for _, x := range ExternalStates {
+	for _, x := range domain.ExternalStates {
 		external = append(external, string(x))
 	}
 	values("  link.external_state", external)

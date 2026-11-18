@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"testing"
 
@@ -24,7 +25,7 @@ func TestTheRealChainMigratesAFormat23StoreToThePullRequestFormat(t *testing.T) 
 			t.Errorf("pull requests of a plain Ticket = %+v, want none", tk.PullRequests)
 		}
 		tk, _ := r.Ticket("acme", 3)
-		want := store.PullRequest{Number: 7, Link: "https://github.com/a/b/pull/7", State: store.PRMerged, MergeCommit: "abc123"}
+		want := domain.PullRequest{Number: 7, Link: "https://github.com/a/b/pull/7", State: domain.PRMerged, MergeCommit: "abc123"}
 		if len(tk.PullRequests) != 1 || tk.PullRequests[0] != want {
 			t.Errorf("pull requests = %+v, want %+v", tk.PullRequests, want)
 		}

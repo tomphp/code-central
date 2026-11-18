@@ -2,13 +2,13 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // A Ticket's Changed Repositories (Spec code-central-848, ADR 0046): with
@@ -38,8 +38,8 @@ func TestTheFactoryReportsTheChangedRepositoriesLiveThenTheFinishSettlesThem(t *
 
 	apiHead := h.GitIn(api.Path, "rev-parse", id)
 	r.PollUntil("api's work to be reported live", func() bool { return slices.Equal(changed(h.Ticket(id)), []string{"api@" + apiHead}) })
-	tk := h.WantState(id, store.InProgress)
-	rows, err := h.Server.Client.FindTickets(context.Background(), h.Project, core.FindTicketsInput{State: []store.State{store.InProgress}})
+	tk := h.WantState(id, domain.InProgress)
+	rows, err := h.Server.Client.FindTickets(context.Background(), h.Project, core.FindTicketsInput{State: []domain.State{domain.InProgress}})
 	if err != nil || len(rows) != 1 || !slices.Equal(rows[0].Repositories, []string{"api"}) {
 		t.Errorf("rows %+v (%v), want the card naming api", rows, err)
 	}
@@ -49,7 +49,7 @@ func TestTheFactoryReportsTheChangedRepositoriesLiveThenTheFinishSettlesThem(t *
 
 	h.Continue(id)
 	r.Settle()
-	tk = h.WantState(id, store.InReview)
+	tk = h.WantState(id, domain.InReview)
 	homeHead := h.GitIn(h.Repo, "rev-parse", id)
 	if got := changed(tk); !slices.Equal(got, []string{"acme@" + homeHead, "api@" + apiHead}) {
 		t.Fatalf("settled Changed Repositories %v, want the Home Repository's and api's heads", got)
@@ -65,7 +65,7 @@ func TestAFinishThatLeavesOutARepositoryWithWorkFailsWithAFailureReport(t *testi
 		factorytest.Finish("Done."), factorytest.Result("success"))...)
 	r := h.Start()
 
-	tk := h.WantState(id, store.Failed)
+	tk := h.WantState(id, domain.Failed)
 	if len(tk.FailureReports) != 1 {
 		t.Fatalf("Failure Reports %+v, want one", tk.FailureReports)
 	}
@@ -88,7 +88,7 @@ func TestAFinishNamingACommitThatIsntItsBranchsHeadFails(t *testing.T) {
 		append(factorytest.CommitIn("api", "late.go", "package api\n"), factorytest.Result("success"))...)...)
 	h.Start()
 
-	tk := h.WantState(id, store.Failed)
+	tk := h.WantState(id, domain.Failed)
 	if fr := tk.FailureReports[0]; !strings.Contains(fr.WhatBroke, "isn't its branch "+id+"'s head") {
 		t.Fatalf("Failure Report %+v, want it to say api's commit isn't its branch's head", fr)
 	}
@@ -109,7 +109,7 @@ func TestTheFinishCheckRunsAgainBeforeLanding(t *testing.T) {
 
 	r.Poll()
 
-	tk := h.WantState(id, store.Failed)
+	tk := h.WantState(id, domain.Failed)
 	if !strings.Contains(tk.FailureReports[0].WhatBroke, "api is left out") {
 		t.Fatalf("Failure Report %+v, want it to name api", tk.FailureReports[0])
 	}
@@ -131,7 +131,7 @@ func TestAnInReviewTicketMergedByHandIsCheckedBeforeItLands(t *testing.T) {
 
 	r.Poll()
 
-	h.WantState(id, store.Failed)
+	h.WantState(id, domain.Failed)
 	if strings.Contains(r.Stdout(), "merged into main by hand") {
 		t.Fatalf("stdout %q, want it failed, not landed", r.Stdout())
 	}
@@ -146,7 +146,7 @@ func TestAFinishMergedByHandPassesTheCheckOnceItsBranchIsGone(t *testing.T) {
 		factorytest.WriteFile("client.go", "package acme\n"), factorytest.Git("add", "client.go"), factorytest.Git("commit", "-q", "-m", "Call it"),
 		factorytest.FinishIn("Done.", true, "api"), factorytest.Result("success"))...)
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	// The human merges the work by hand, and deletes api's branch.
 	h.GitIn(h.Repo, "merge", "-q", "--no-ff", "-m", "Merge "+id, id)
 	h.GitIn(api.Path, "merge", "-q", "--no-ff", "-m", "Merge "+id, id)
@@ -155,7 +155,7 @@ func TestAFinishMergedByHandPassesTheCheckOnceItsBranchIsGone(t *testing.T) {
 
 	r.Poll()
 
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 	r.WantOutput(id + ": merged into main by hand\n")
 }
 
@@ -167,7 +167,7 @@ func TestWithTheHomeRepositoryAloneAFinishIsNotChecked(t *testing.T) {
 		factorytest.Finish("Done."), factorytest.Result("success"))
 	h.Start()
 
-	tk := h.WantState(id, store.InReview)
+	tk := h.WantState(id, domain.InReview)
 	if len(tk.FailureReports) != 0 || tk.Repositories != nil {
 		t.Fatalf("ticket %+v, want no Failure Report and no Repositories shown", tk)
 	}

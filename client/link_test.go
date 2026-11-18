@@ -1,12 +1,12 @@
 package client_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"testing"
 
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
 )
 
 // An Integration's loop over the client: pull items in, keep them up to
@@ -24,7 +24,7 @@ func TestAnIntegrationRoundTrip(t *testing.T) {
 		t.Fatalf("create_linked_spec: %+v, %v", sp, err)
 	}
 	tk, err := gh.CreateLinkedTicket(ctx, "acme", core.CreateLinkedTicketInput{Spec: core.Ref(sp.Record.ID), Title: "Issue", Link: core.LinkInput{Integration: "github", ID: "2"}})
-	if err != nil || tk.State != store.Draft {
+	if err != nil || tk.State != domain.Draft {
 		t.Fatalf("create_linked_ticket: %+v, %v", tk, err)
 	}
 	title := "Epic, renamed"
@@ -34,7 +34,7 @@ func TestAnIntegrationRoundTrip(t *testing.T) {
 	if v, err := gh.UpdateLinkedTicket(ctx, "acme", core.UpdateLinkedTicketInput{Ticket: core.Ref(tk.ID), Title: &title, Full: true}); err != nil || v.Record.Edits[0].Actor != "integration" {
 		t.Fatalf("update_linked_ticket: %+v, %v", v, err)
 	}
-	if row, err := gh.SetExternalState(ctx, "acme", core.SetExternalStateInput{Target: core.Ref(tk.ID), ExternalState: store.ExternalDeleted}); err != nil || row.Link.ExternalState != store.ExternalDeleted {
+	if row, err := gh.SetExternalState(ctx, "acme", core.SetExternalStateInput{Target: core.Ref(tk.ID), ExternalState: domain.ExternalDeleted}); err != nil || row.Link.ExternalState != domain.ExternalDeleted {
 		t.Fatalf("set_external_state: %+v, %v", row, err)
 	}
 	human := client.New(srv.URL)

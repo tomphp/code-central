@@ -2,13 +2,13 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // builtPrototype scripts Prototype id to commit a file on its branch and
@@ -30,7 +30,7 @@ func TestAPrototypeStartsThePrototypeSkillInItsOwnWorktreeOnALocalPrototypeBranc
 	mainTip := h.Git("rev-parse", "main")
 
 	h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	c := h.Calls()[0]
 	branch := "prototype/" + id
@@ -78,7 +78,7 @@ func TestAPrototypeIsReusedOnItsBranchAtARedo(t *testing.T) {
 	h.Script(id, factorytest.NeedFile("picker.html"), factorytest.Finish("Again."), factorytest.Result("success"))
 
 	h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	if got := h.GitIn(h.Worktree(id), "rev-parse", "HEAD"); got != commit {
 		t.Errorf("the worktree is at %s, want %s's earlier commit %s", got, branch, commit)
@@ -88,10 +88,10 @@ func TestAPrototypeIsReusedOnItsBranchAtARedo(t *testing.T) {
 func TestAnAcceptedPrototypeIsDoneWithNothingPushedOrLandedUnderEveryLandingMethod(t *testing.T) {
 	t.Parallel()
 	for name, landing := range map[string]core.SetLandingMethodInput{
-		"Merge":           {Method: store.LandingMerge},
-		"Merge and Push":  {Method: store.LandingMerge, Push: true, Remote: "origin"},
-		"Branch":          {Method: store.LandingBranch},
-		"Branch and Push": {Method: store.LandingBranch, Push: true, Remote: "origin"},
+		"Merge":           {Method: domain.LandingMerge},
+		"Merge and Push":  {Method: domain.LandingMerge, Push: true, Remote: "origin"},
+		"Branch":          {Method: domain.LandingBranch},
+		"Branch and Push": {Method: domain.LandingBranch, Push: true, Remote: "origin"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -103,11 +103,11 @@ func TestAnAcceptedPrototypeIsDoneWithNothingPushedOrLandedUnderEveryLandingMeth
 			mainTip := h.Git("rev-parse", "main")
 
 			r := h.Start()
-			h.WantState(id, store.InReview)
+			h.WantState(id, domain.InReview)
 			commit := h.Git("rev-parse", "prototype/"+id)
 			h.Accept(id)
 			tk := h.Ticket(id)
-			if tk.State != store.Done {
+			if tk.State != domain.Done {
 				t.Fatalf("%s is %s once accepted, want Done straight away", id, tk.State)
 			}
 			r.Poll()
@@ -146,7 +146,7 @@ func TestAPrototypesWorktreeIsKeptWhileTheHumanTriesItAndSweptOnceDone(t *testin
 		factorytest.Result("success"))
 
 	r := h.Start()
-	h.WantState(id, store.NeedsAnswer)
+	h.WantState(id, domain.NeedsAnswer)
 	r.Poll()
 	r.Poll()
 	if _, err := os.Stat(h.Worktree(id)); err != nil {
@@ -156,7 +156,7 @@ func TestAPrototypesWorktreeIsKeptWhileTheHumanTriesItAndSweptOnceDone(t *testin
 	h.Script(id, factorytest.Finish("Learned that a picker beats a toggle."), factorytest.Result("success"))
 	h.Answer(id, "Tried it: the picker is better.")
 	r.Poll()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	r.Poll()
 	r.Poll()
 	if _, err := os.Stat(h.Worktree(id)); err != nil {
@@ -182,7 +182,7 @@ func TestACancelledPrototypesWorktreeIsSweptAndItsBranchKept(t *testing.T) {
 	builtPrototype(h, id)
 
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	commit := h.Git("rev-parse", "prototype/"+id)
 	if _, err := h.Human().Cancel(context.Background(), h.Project, core.CancelInput{Ticket: core.Ref(id)}); err != nil {
 		t.Fatal(err)

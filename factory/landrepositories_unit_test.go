@@ -2,11 +2,11 @@ package factory
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
 )
 
 // The landing step with a second Repository (Spec code-central-848, ADR
@@ -78,7 +78,7 @@ func TestEveryRepositorysMergeIsCheckedBeforeAnyBaseMoves(t *testing.T) {
 	w.pollRepositories()
 
 	tk := w.ticket(id)
-	if tk.State != store.Ready || commentsSaying(tk, "- api: merging", "  - endpoint.go") != 1 {
+	if tk.State != domain.Ready || commentsSaying(tk, "- api: merging", "  - endpoint.go") != 1 {
 		t.Fatalf("%s %s %+v, want it sent back naming api's conflict", id, tk.State, tk.Comments)
 	}
 	if w.repo.tip("refs/heads/main") != homeMain || api.tip("refs/heads/main") != apiMain {
@@ -96,7 +96,7 @@ func TestEachRepositoryLandsInTheLandingOrder(t *testing.T) {
 
 	w.pollRepositories()
 
-	if tk := w.ticket(id); tk.State != store.Done {
+	if tk := w.ticket(id); tk.State != domain.Done {
 		t.Fatalf("%s %s, want Done once it has landed in both", id, tk.State)
 	}
 	out := w.out.String()
@@ -119,7 +119,7 @@ func TestARepositoryTheTicketHasLandedInHoldsNothingBackWithoutItsClone(t *testi
 
 	w.pollRepositories()
 
-	if tk := w.ticket(id); tk.State != store.Done {
+	if tk := w.ticket(id); tk.State != domain.Done {
 		t.Fatalf("%s %s, want Done once it lands in the Home Repository", id, tk.State)
 	}
 }
@@ -137,7 +137,7 @@ func (w *landWorld) holdSpec() (release func()) {
 		w.t.Fatal(err)
 	}
 	w.spec = s.ID
-	stage, err := w.srv.Client.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: core.Ref(s.ID), Title: "Tickets", State: store.Draft, Labels: []string{core.StageLabel("tickets")}})
+	stage, err := w.srv.Client.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: core.Ref(s.ID), Title: "Tickets", State: domain.Draft, Labels: []string{core.StageLabel("tickets")}})
 	if err != nil {
 		w.t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestEveryRepositorysSpecBranchIsCheckedBeforeAnyBaseMoves(t *testing.T) {
 	if w.repo.tip("refs/heads/main") != homeMain || api.tip("refs/heads/main") != apiMain {
 		t.Fatal("a base moved: nothing lands while any Repository's Spec Branch conflicts")
 	}
-	if tk := w.ticket(id); tk.State != store.Accepted {
+	if tk := w.ticket(id); tk.State != domain.Accepted {
 		t.Fatalf("%s is %s, want it still Accepted", id, tk.State)
 	}
 	rows, err := w.srv.Client.FindTickets(context.Background(), "acme", core.FindTicketsInput{Title: core.SpecMergeTitle(w.spec)})
@@ -193,7 +193,7 @@ func TestASpecLandsWithTheSameMergeSpecCommitInEachRepository(t *testing.T) {
 	tk := w.ticket(id)
 	homeMerge, apiMerge := w.repo.tip("refs/heads/main"), api.tip("refs/heads/main")
 	want := "Merge spec " + w.spec + ": Work"
-	if tk.State != store.Done || w.repo.messageOf(homeMerge) != want || api.messageOf(apiMerge) != want || !api.isAncestor(apiWork, apiMerge) {
+	if tk.State != domain.Done || w.repo.messageOf(homeMerge) != want || api.messageOf(apiMerge) != want || !api.isAncestor(apiWork, apiMerge) {
 		t.Fatalf("%s is %s; main is at %q and %q, want it Done, landed by the Spec's merge in each", id, tk.State, w.repo.messageOf(homeMerge), api.messageOf(apiMerge))
 	}
 }
@@ -209,7 +209,7 @@ func TestATicketIsMergedIntoItsSpecBranchInEveryRepositoryOrNone(t *testing.T) {
 	w.pollRepositories()
 
 	tk := w.ticket(id)
-	if tk.State != store.Ready || commentsSaying(tk, "merging it into the Spec Branch conflicts", "- api: merging", "  - endpoint.go") != 1 {
+	if tk.State != domain.Ready || commentsSaying(tk, "merging it into the Spec Branch conflicts", "- api: merging", "  - endpoint.go") != 1 {
 		t.Fatalf("%s %s %+v, want it sent back naming api's conflict with its Spec Branch", id, tk.State, tk.Comments)
 	}
 	if spec := w.repo.tip("refs/heads/" + specBranch(w.spec)); w.repo.isAncestor(home, spec) {
@@ -219,7 +219,7 @@ func TestATicketIsMergedIntoItsSpecBranchInEveryRepositoryOrNone(t *testing.T) {
 
 func TestUnderBranchATicketLandsInEachRepositoryOnceMergedThereByHand(t *testing.T) {
 	w := newLandWorld(t)
-	w.setLanding(store.LandingBranch, false, "")
+	w.setLanding(domain.LandingBranch, false, "")
 	api := w.withAPI()
 	id, _ := w.acceptedInTwo(api, "Add an endpoint")
 
@@ -227,14 +227,14 @@ func TestUnderBranchATicketLandsInEachRepositoryOnceMergedThereByHand(t *testing
 	w.pollRepositories()
 
 	tk := w.ticket(id)
-	if tk.State != store.Accepted || !tk.PartlyLanded {
+	if tk.State != domain.Accepted || !tk.PartlyLanded {
 		t.Fatalf("%s is %s, partly landed %v, want it Partly landed once merged in api alone", id, tk.State, tk.PartlyLanded)
 	}
 
 	w.repo.mergeByHand(id)
 	w.pollRepositories()
 
-	if tk := w.ticket(id); tk.State != store.Done {
+	if tk := w.ticket(id); tk.State != domain.Done {
 		t.Fatalf("%s is %s, want Done once merged in both", id, tk.State)
 	}
 }
@@ -244,7 +244,7 @@ func TestARefusedPushIsTriedAgainThoughAnotherRepositorysSpecBranchNowConflicts(
 	api := w.withAPI()
 	w.repo.addRemote("origin")
 	api.addRemote("origin")
-	w.setLanding(store.LandingMerge, true, "origin")
+	w.setLanding(domain.LandingMerge, true, "origin")
 	release := w.holdSpec()
 	id, _ := w.acceptedInTwo(api, "Add an endpoint")
 	w.pollRepositories()
@@ -280,7 +280,7 @@ func TestUnderPullRequestASpecTouchingARepositoryWithNoCloneIsPushedNowhere(t *t
 	if _, err := w.srv.Client.ReportPushRemote(context.Background(), "acme", core.ReportPushRemoteInput{URL: "https://github.com/acme/app.git", Base: "main"}); err != nil {
 		t.Fatal(err)
 	}
-	w.setLanding(store.LandingPullRequest, false, "origin")
+	w.setLanding(domain.LandingPullRequest, false, "origin")
 	release := w.holdSpec()
 	w.acceptedInTwo(api, "Add an endpoint")
 	w.pollRepositories()

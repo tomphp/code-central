@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -63,19 +64,19 @@ func TestTheRealChainMigratesAFormat36StoreMovingPushedCommitResponsesOntoThePro
 		}
 		return v
 	}
-	want := []store.CIResponse{
+	want := []domain.CIResponse{
 		// Only in CIResponses: kept as it was.
 		{Commit: "inproject", LandAnyway: at("2026-01-02T04:00:00Z")},
 		// On both: Land anyway stays, the pushed commit's as reads took it.
 		{Commit: "both", LandAnyway: at("2026-01-02T03:08:05Z")},
 		// The Project's Re-run is the later: it and its attempts win.
-		{Commit: "projectlater", Rerun: at("2026-01-02T06:00:00Z"), Reruns: []store.CIRunAttempt{{ID: 21, Attempt: 2}}},
+		{Commit: "projectlater", Rerun: at("2026-01-02T06:00:00Z"), Reruns: []domain.CIRunAttempt{{ID: 21, Attempt: 2}}},
 		// The pushed commit's Re-run is the later: it and its attempts
 		// win, and the fix Ticket stays.
-		{Commit: "pushedlater", Rerun: at("2026-01-02T06:00:00Z"), Reruns: []store.CIRunAttempt{{ID: 30, Attempt: 1}, {ID: 32, Attempt: 3}}, FixTicket: 9},
+		{Commit: "pushedlater", Rerun: at("2026-01-02T06:00:00Z"), Reruns: []domain.CIRunAttempt{{ID: 30, Attempt: 1}, {ID: 32, Attempt: 3}}, FixTicket: 9},
 		// Asked at the same time on each side: the pushed commit's wins,
 		// as reads took it.
-		{Commit: "tie", Rerun: at("2026-01-02T05:00:00Z"), Reruns: []store.CIRunAttempt{{ID: 40, Attempt: 1}}},
+		{Commit: "tie", Rerun: at("2026-01-02T05:00:00Z"), Reruns: []domain.CIRunAttempt{{ID: 40, Attempt: 1}}},
 		// Only on the pushed commit: added.
 		{Commit: "onpushed", LandAnyway: at("2026-01-02T03:05:05Z")},
 	}
@@ -84,7 +85,7 @@ func TestTheRealChainMigratesAFormat36StoreMovingPushedCommitResponsesOntoThePro
 			t.Errorf("CI responses after migrating =\n%+v\nwant\n%+v", p.CIResponses, want)
 		}
 		tk, _ := r.Ticket("acme", 2)
-		wantPushed := []store.PushedCommit{
+		wantPushed := []domain.PushedCommit{
 			{Commit: "onpushed", Branch: "main", Pushed: at("2026-01-02T03:04:05Z")},
 			{Commit: "inproject", Pushed: at("2026-01-02T03:06:05Z")},
 			{Commit: "both", Pushed: at("2026-01-02T03:07:05Z")},
@@ -115,7 +116,7 @@ func TestTheLegacyCIResponsesMigrationAddsCIResponsesToAProjectWithNone(t *testi
 	}
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
-		want := []store.CIResponse{{Commit: "abc123", Rerun: time.Date(2026, 1, 2, 3, 5, 5, 0, time.UTC), Reruns: []store.CIRunAttempt{{ID: 1, Attempt: 1}}}}
+		want := []domain.CIResponse{{Commit: "abc123", Rerun: time.Date(2026, 1, 2, 3, 5, 5, 0, time.UTC), Reruns: []domain.CIRunAttempt{{ID: 1, Attempt: 1}}}}
 		if !reflect.DeepEqual(p.CIResponses, want) {
 			t.Errorf("CI responses after migrating = %+v, want %+v", p.CIResponses, want)
 		}

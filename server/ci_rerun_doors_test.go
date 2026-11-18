@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"slices"
 	"testing"
 	"time"
@@ -9,7 +10,6 @@ import (
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
-	"github.com/tomoram/code-central/store"
 )
 
 // Re-run failed jobs (code-central-265): the human's rerun_ci records a
@@ -68,7 +68,7 @@ func TestRerunCIPutsACIFailedTicketBackToWaiting(t *testing.T) {
 func TestReportingTheRunsNewAttemptClearsTheRerunRequest(t *testing.T) {
 	srv := newServer(t, failedCI)
 	httpOK(t, srv, rerunCI("3"))
-	again := ciRun(1, "ci.yml", "abc123", store.CIQueued, "")
+	again := ciRun(1, "ci.yml", "abc123", domain.CIQueued, "")
 	again.Attempt = 2
 	reportRuns(t, srv, again)
 	if w := ciWatch(t, srv); len(w.Reruns) != 0 {
@@ -77,7 +77,7 @@ func TestReportingTheRunsNewAttemptClearsTheRerunRequest(t *testing.T) {
 	if tk := ticket3(t, srv); tk.CIResult != core.CIRunning {
 		t.Fatalf("ci result %q, want running while attempt 2 runs", tk.CIResult)
 	}
-	again.Status, again.Conclusion = store.CICompleted, store.CISuccess
+	again.Status, again.Conclusion = domain.CICompleted, domain.CISuccess
 	reportRuns(t, srv, again)
 	if tk := ticket3(t, srv); tk.CIResult != core.CIPassed {
 		t.Fatalf("ci result %q, want passed once attempt 2 passed", tk.CIResult)
@@ -89,7 +89,7 @@ func TestReportingTheRunsNewAttemptClearsTheRerunRequest(t *testing.T) {
 func TestReportingTheFailedAttemptAgainKeepsTheRerunRequest(t *testing.T) {
 	srv := newServer(t, failedCI)
 	httpOK(t, srv, rerunCI("3"))
-	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", store.CICompleted, store.CIFailure))
+	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", domain.CICompleted, domain.CIFailure))
 	if w := ciWatch(t, srv); len(w.Reruns) != 1 {
 		t.Fatalf("reruns = %+v, want run 1's still waiting", w.Reruns)
 	}
@@ -126,11 +126,11 @@ func TestAnUnansweredRerunRequestLapsesBackToCIFailed(t *testing.T) {
 // attempt; runs that passed or are ignored aren't.
 func TestRerunCIAsksForEachFailedRun(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
-	second := ciRun(5, "e2e.yml", "abc123", store.CICompleted, store.CIFailure)
+	second := ciRun(5, "e2e.yml", "abc123", domain.CICompleted, domain.CIFailure)
 	second.Attempt = 2
-	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", store.CICompleted, store.CICancelled), second,
-		ciRun(2, "lint.yml", "abc123", store.CICompleted, store.CISuccess),
-		ciRun(3, "nightly.yml", "abc123", store.CICompleted, store.CIFailure))
+	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", domain.CICompleted, domain.CICancelled), second,
+		ciRun(2, "lint.yml", "abc123", domain.CICompleted, domain.CISuccess),
+		ciRun(3, "nightly.yml", "abc123", domain.CICompleted, domain.CIFailure))
 	httpOK(t, srv, rerunCI("3"))
 	at := codecentraltest.Start
 	want := []core.CIRerun{{Ticket: "acme-3", Commit: "abc123", ID: 1, Attempt: 1, Requested: at}, {Ticket: "acme-3", Commit: "abc123", ID: 5, Attempt: 2, Requested: at}}
@@ -161,7 +161,7 @@ func TestRerunCINeedsAFailedCIResult(t *testing.T) {
 		"running":      pushedAccepted,
 		"passed": func(t *testing.T, srv *codecentraltest.Server) {
 			pushedAccepted(t, srv)
-			reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", store.CICompleted, store.CISuccess))
+			reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", domain.CICompleted, domain.CISuccess))
 		},
 		"not Accepted": func(t *testing.T, srv *codecentraltest.Server) {
 			ciTrackingOn(t, srv)

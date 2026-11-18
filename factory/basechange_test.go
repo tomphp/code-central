@@ -2,18 +2,18 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // setMergeBase sets Merge with Push to origin and the base, which is what
 // the Project's Options save together.
 func setMergeBase(h *factorytest.Harness, base string) {
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, Push: true, Remote: "origin", Base: &base})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin", Base: &base})
 }
 
 // pullRequestBase changes the base under Pull Request. The Factory
@@ -24,7 +24,7 @@ func pullRequestBase(h *factorytest.Harness, base string) {
 	if _, err := h.Server.Client.ReportPushRemote(context.Background(), h.Project, core.ReportPushRemoteInput{URL: "https://github.com/acme/app.git"}); err != nil {
 		panic(err)
 	}
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingPullRequest, Remote: "origin", Base: &base})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin", Base: &base})
 }
 
 func contains(h *factorytest.Harness, branch, commit string) bool {
@@ -45,7 +45,7 @@ func TestChangingTheBaseMergesAnAcceptedTicketNotYetMergedIntoTheNewBase(t *test
 
 	setBase(h, "release")
 	r.Poll()
-	tk := h.WantState(id, store.Done)
+	tk := h.WantState(id, domain.Done)
 	r.WantOutput("base: release, was ghost")
 	if !contains(h, "release", commit) {
 		t.Errorf("release doesn't hold %s", commit)
@@ -91,7 +91,7 @@ func TestChangingTheBaseAfterTheMergeButBeforeThePushFinishesOnTheOldBase(t *tes
 	setMergeBase(h, "release")
 	remote.AcceptPushes()
 	r.Poll()
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 	r.WantOutput(id + ": pushed main to origin")
 	r.WantOutput(id + ": landed on main at ")
 	if got, want := remote.Git("rev-parse", "main"), h.Git("rev-parse", "main"); got != want {
@@ -117,8 +117,8 @@ func TestChangingTheBaseAfterASpecIsMergedButBeforeThePushFinishesOnTheOldBase(t
 	setMergeBase(h, "release")
 	remote.AcceptPushes()
 	r.Poll()
-	h.WantState(a, store.Done)
-	h.WantState(b, store.Done)
+	h.WantState(a, domain.Done)
+	h.WantState(b, domain.Done)
 	if got, want := remote.Git("rev-parse", "main"), h.Git("rev-parse", "main"); got != want {
 		t.Errorf("the remote's main is at %s, want %s", got, want)
 	}
@@ -139,8 +139,8 @@ func TestChangingTheBaseMergesAWaitingSpecBranchIntoTheNewBase(t *testing.T) {
 
 	setBase(h, "release")
 	r.Poll()
-	h.WantState(a, store.Done)
-	h.WantState(b, store.Done)
+	h.WantState(a, domain.Done)
+	h.WantState(b, domain.Done)
 	if got := h.Git("rev-parse", "main"); got != oldMain {
 		t.Errorf("main moved to %s, want it left at %s", got, oldMain)
 	}
@@ -151,7 +151,7 @@ func TestUnderBranchAWaitingTicketIsWatchedOnTheNewBase(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	h.Git("branch", "release", "main")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingBranch})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch})
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	r := h.Start()
 	r.WantOutput(id + ": Accepted under the Branch Landing Method: merge " + id + " into main")
@@ -161,14 +161,14 @@ func TestUnderBranchAWaitingTicketIsWatchedOnTheNewBase(t *testing.T) {
 	h.Git("merge", "-q", "--no-ff", "-m", "Merge "+id, id)
 	h.Git("checkout", "-q", "main")
 	r.Poll()
-	if s := h.Ticket(id).State; s != store.Accepted {
+	if s := h.Ticket(id).State; s != domain.Accepted {
 		t.Fatalf("%s is %s, want it still waiting on main", id, s)
 	}
 
 	base := "release"
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingBranch, Base: &base})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch, Base: &base})
 	r.Poll()
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 	r.WantOutput(id + ": merged into release by hand")
 }
 
@@ -198,7 +198,7 @@ func TestUnderPullRequestAnOpenPullRequestKeepsItsTargetAndNewOnesUseTheNewBase(
 	h.Git("push", "-q", remote.Path, "theirs:refs/heads/main")
 	reportPullRequest(t, h, id, merge)
 	r.Poll()
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 	r.WantOutput(id + ": pull request 7 merged")
 }
 
@@ -233,15 +233,15 @@ func TestLandingByMergeWithoutPushResetsBaseDiverged(t *testing.T) {
 	h.Script(ready, factorytest.Wait())
 	r := h.Start()
 	r.WantOutput("has diverged from the remote's")
-	if tk := h.Ticket(ready); tk.State != store.Ready {
+	if tk := h.Ticket(ready); tk.State != domain.Ready {
 		t.Fatalf("%s is %s, want it not claimed while the base has diverged", ready, tk.State)
 	}
 
 	// Merge without Push never keeps the base level with the remote's.
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge})
 	r.Poll()
 
-	h.WantState(ready, store.InProgress)
+	h.WantState(ready, domain.InProgress)
 	if _, ok := baseDivergedItem(t, h); ok {
 		t.Error("Base diverged is still raised, want it cleared under Merge without Push")
 	}

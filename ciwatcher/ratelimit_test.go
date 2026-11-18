@@ -8,13 +8,13 @@ package ciwatcher_test
 import (
 	"context"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"testing"
 	"time"
 
 	"github.com/tomoram/code-central/ciwatcher"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
-	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/watchers"
 )
 
@@ -153,7 +153,7 @@ func TestARateLimitOnCheckingTheLoginIsntAnError(t *testing.T) {
 // GitHub answers.
 func TestARateLimitOnListingARulesBranchBacksOff(t *testing.T) {
 	w := newWatching(t)
-	spec := w.rule("ci.yml", "main", store.Ready)
+	spec := w.rule("ci.yml", "main", domain.Ready)
 	reset := w.srv.Clock.Now().Add(5 * time.Minute)
 	branch := []string{"api", "repos/acme/web/actions/runs?branch=main&status=completed&per_page=100"}
 	w.rateLimited(branch, "X-Ratelimit-Remaining: 0", fmt.Sprintf("X-Ratelimit-Reset: %d", reset.Unix()))

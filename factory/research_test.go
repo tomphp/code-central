@@ -2,13 +2,13 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // researched scripts research Ticket id to commit its findings on its
@@ -30,7 +30,7 @@ func TestAMapResearchTicketStartsTheResearchSkillInItsOwnWorktreeOnALocalResearc
 	mainTip := h.Git("rev-parse", "main")
 
 	h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	c := h.Calls()[0]
 	branch := "research/" + id
@@ -71,10 +71,10 @@ func TestAMapResearchTicketStartsTheResearchSkillInItsOwnWorktreeOnALocalResearc
 func TestAnAcceptedMapResearchTicketIsDoneWithNothingPushedOrLandedUnderEveryLandingMethod(t *testing.T) {
 	t.Parallel()
 	for name, landing := range map[string]core.SetLandingMethodInput{
-		"Merge":           {Method: store.LandingMerge},
-		"Merge and Push":  {Method: store.LandingMerge, Push: true, Remote: "origin"},
-		"Branch":          {Method: store.LandingBranch},
-		"Branch and Push": {Method: store.LandingBranch, Push: true, Remote: "origin"},
+		"Merge":           {Method: domain.LandingMerge},
+		"Merge and Push":  {Method: domain.LandingMerge, Push: true, Remote: "origin"},
+		"Branch":          {Method: domain.LandingBranch},
+		"Branch and Push": {Method: domain.LandingBranch, Push: true, Remote: "origin"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -86,10 +86,10 @@ func TestAnAcceptedMapResearchTicketIsDoneWithNothingPushedOrLandedUnderEveryLan
 			mainTip := h.Git("rev-parse", "main")
 
 			r := h.Start()
-			h.WantState(id, store.InReview)
+			h.WantState(id, domain.InReview)
 			commit := h.Git("rev-parse", "research/"+id)
 			h.Accept(id)
-			if tk := h.Ticket(id); tk.State != store.Done {
+			if tk := h.Ticket(id); tk.State != domain.Done {
 				t.Fatalf("%s is %s once accepted, want Done straight away", id, tk.State)
 			}
 			r.Poll()
@@ -118,7 +118,7 @@ func TestAMapResearchTicketsWorktreeIsKeptInReviewAndSweptOnceDone(t *testing.T)
 	researched(h, id)
 
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	r.Poll()
 	r.Poll()
 	if _, err := os.Stat(h.Worktree(id)); err != nil {
@@ -144,7 +144,7 @@ func TestACancelledMapResearchTicketsWorktreeIsSweptAndItsBranchKept(t *testing.
 	researched(h, id)
 
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	commit := h.Git("rev-parse", "research/"+id)
 	if _, err := h.Human().Cancel(context.Background(), h.Project, core.CancelInput{Ticket: core.Ref(id)}); err != nil {
 		t.Fatal(err)

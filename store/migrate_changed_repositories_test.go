@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -55,16 +56,16 @@ func TestTheRealChainMigratesAFormat43StoreToTheChangedRepositoriesFormat(t *tes
 	// Changed Repositories and Repository Names written after migrating
 	// read back as written.
 	at := time.Date(2026, 1, 3, 4, 5, 6, 0, time.UTC)
-	changed := []store.ChangedRepository{
-		{Name: "acme", Branch: "acme-2", Commit: "abc123", Landed: &store.Landed{Commit: "def456", Time: at}},
+	changed := []domain.ChangedRepository{
+		{Name: "acme", Branch: "acme-2", Commit: "abc123", Landed: &domain.Landed{Commit: "def456", Time: at}},
 		{Name: "api", Branch: "acme-2", Commit: "fed789"},
 	}
 	if err := s.Update(func(w store.Writer) error {
 		tk, _ := w.Ticket("acme", 2)
 		tk.Repositories = changed
-		tk.PushedCommits = append(tk.PushedCommits, store.PushedCommit{Repository: "api", Commit: "fed789", Pushed: at})
+		tk.PushedCommits = append(tk.PushedCommits, domain.PushedCommit{Repository: "api", Commit: "fed789", Pushed: at})
 		tk.PullRequests[0].Repository = "api"
-		tk.SpecMerge = &store.SpecMerge{Repository: "api", Commit: "aaa111", Merged: at}
+		tk.SpecMerge = &domain.SpecMerge{Repository: "api", Commit: "aaa111", Merged: at}
 		return w.PutTicket("acme", tk)
 	}); err != nil {
 		t.Fatal(err)

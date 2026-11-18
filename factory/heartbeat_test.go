@@ -2,6 +2,7 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"strings"
 	"syscall"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // factories is the Project's Factory Status, read as the human.
@@ -52,7 +52,7 @@ func TestEachPollSendsAnOnlineHeartbeatWithTheTurnsRunning(t *testing.T) {
 	}
 	h.Continue(id)
 	r.Settle()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	r.Poll()
 	wantFactory(t, h, core.FactoryOnline, "0 of 2 turns running")
 }
@@ -162,7 +162,7 @@ func TestARefusedHeartbeatIsWarnedOnceAndNeverStopsThePoll(t *testing.T) {
 	id := h.ReadyTicket("Still claimed")
 	h.Script(id, factorytest.Finish("Done."), factorytest.Result("success"))
 	r.Poll()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	r.WantOutput("warning: can't send a Heartbeat")
 	if n := strings.Count(r.Stdout(), "warning: can't send a Heartbeat"); n != 1 {
 		t.Errorf("warned %d times, want once: %s", n, r.Stdout())

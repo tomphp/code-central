@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -51,22 +52,22 @@ func TestTheRealChainMigratesAFormat45StoreToTheCIRepositoriesFormat(t *testing.
 	// CI entries and Repository Names written after migrating read back
 	// as written.
 	at := time.Date(2026, 1, 3, 4, 5, 6, 0, time.UTC)
-	entries := []store.CIRepository{
-		{Name: "api", Provider: store.CIGitHubActions, Repository: "acme/api"},
+	entries := []domain.CIRepository{
+		{Name: "api", Provider: domain.CIGitHubActions, Repository: "acme/api"},
 		{Name: "docs", NotWatched: true},
-		{Name: "infra", Provider: store.CIAzurePipelines, ProjectURL: "https://dev.azure.com/acme/infra"},
+		{Name: "infra", Provider: domain.CIAzurePipelines, ProjectURL: "https://dev.azure.com/acme/infra"},
 	}
 	if err := s.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
 		p.CI.Repositories = entries
-		p.CIResponses = append(p.CIResponses, store.CIResponse{Repository: "api", Commit: "fed789", Rerun: at})
+		p.CIResponses = append(p.CIResponses, domain.CIResponse{Repository: "api", Commit: "fed789", Rerun: at})
 		return w.PutProject(p)
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Update(func(w store.Writer) error {
 		runs := w.CIRuns("acme")
-		runs = append(runs, store.CIRun{Repository: "api", ID: 7, Attempt: 1, Workflow: "ci.yml", Name: "CI", Commit: "fed789", Status: store.CIQueued, URL: "https://example.com/api/7"})
+		runs = append(runs, domain.CIRun{Repository: "api", ID: 7, Attempt: 1, Workflow: "ci.yml", Name: "CI", Commit: "fed789", Status: domain.CIQueued, URL: "https://example.com/api/7"})
 		return w.PutCIRuns("acme", runs)
 	}); err != nil {
 		t.Fatal(err)

@@ -2,6 +2,7 @@ package factory
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -17,7 +18,6 @@ import (
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
 )
 
 // These tests drive a poll's landing step (landAndSweep) against a fake
@@ -80,7 +80,7 @@ func newLandWorld(t *testing.T) *landWorld {
 func (w *landWorld) poll() { w.f.landAndSweep(context.Background()) }
 
 // setLanding sets the Project's Landing Method as the human.
-func (w *landWorld) setLanding(method store.LandingMethod, push bool, remote string) {
+func (w *landWorld) setLanding(method domain.LandingMethod, push bool, remote string) {
 	w.t.Helper()
 	if _, err := w.human.SetLandingMethod(context.Background(), "acme", core.SetLandingMethodInput{Method: method, Push: push, Remote: remote}); err != nil {
 		w.t.Fatal(err)
@@ -102,7 +102,7 @@ func (w *landWorld) ready(title string) string {
 			w.t.Fatal(err)
 		}
 	}
-	tk, err := w.srv.Client.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: core.Ref(w.spec), Title: title, State: store.Ready})
+	tk, err := w.srv.Client.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: core.Ref(w.spec), Title: title, State: domain.Ready})
 	if err != nil {
 		w.t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func commentsSaying(tk core.TicketView, parts ...string) int {
 // lastMove is tk's latest move.
 func lastMove(tk core.TicketView) core.MoveView { return tk.Moves[len(tk.Moves)-1] }
 
-func movedTo(tk core.TicketView, from, to store.State) bool {
+func movedTo(tk core.TicketView, from, to domain.State) bool {
 	for _, m := range tk.Moves {
 		if m.From == from && m.To == to {
 			return true
@@ -203,7 +203,7 @@ func TestAnAcceptedTicketAlreadyInTheBaseIsSimplyLanded(t *testing.T) {
 
 	w.poll()
 	tk := w.ticket(id)
-	if tk.State != store.Done || lastMove(tk).Commit != commit {
+	if tk.State != domain.Done || lastMove(tk).Commit != commit {
 		t.Errorf("%s is %s with move %+v; want it landed at the finish commit %s", id, tk.State, lastMove(tk), commit)
 	}
 	if w.repo.tip("refs/heads/main") != base {
@@ -222,7 +222,7 @@ func TestACleanMergeBlockedByUncommittedChangesStaysAcceptedAndIsRetriedEachPoll
 	w.poll()
 	w.poll()
 	tk := w.ticket(id)
-	if tk.State != store.Accepted || w.repo.tip("refs/heads/main") != base {
+	if tk.State != domain.Accepted || w.repo.tip("refs/heads/main") != base {
 		t.Fatalf("%s is %s and main at %s; want it left Accepted with main unmoved", id, tk.State, w.repo.tip("refs/heads/main"))
 	}
 	if n := commentsSaying(tk, cantLandYet, "uncommitted changes in "+fakeTop, "feature.txt", "It stays Accepted"); n != 1 || commentsSaying(tk, cantLandYet) != 1 {
@@ -233,7 +233,7 @@ func TestACleanMergeBlockedByUncommittedChangesStaysAcceptedAndIsRetriedEachPoll
 	w.poll()
 	tk = w.ticket(id)
 	merge := w.repo.tip("refs/heads/main")
-	if tk.State != store.Done || lastMove(tk).Commit != merge {
+	if tk.State != domain.Done || lastMove(tk).Commit != merge {
 		t.Fatalf("%s is %s with move %+v; want it landed at the merge %s", id, tk.State, lastMove(tk), merge)
 	}
 	if !w.repo.isAncestor(commit, merge) || !w.repo.isAncestor(base, merge) {
@@ -249,7 +249,7 @@ func TestABaseThatIsNotCheckedOutIsMovedByRef(t *testing.T) {
 
 	w.poll()
 	merge := w.repo.tip("refs/heads/main")
-	if tk := w.ticket(id); tk.State != store.Done || lastMove(tk).Commit != merge {
+	if tk := w.ticket(id); tk.State != domain.Done || lastMove(tk).Commit != merge {
 		t.Fatalf("%s is %s; want it landed at main's new tip %s", id, tk.State, merge)
 	}
 	if !w.repo.isAncestor(commit, merge) {
@@ -265,10 +265,10 @@ func TestAnInReviewTicketMergedByHandIsLanded(t *testing.T) {
 
 	w.poll()
 	tk := w.ticket(id)
-	if m := lastMove(tk); tk.State != store.Done || m.From != store.InReview || m.Commit != commit {
+	if m := lastMove(tk); tk.State != domain.Done || m.From != domain.InReview || m.Commit != commit {
 		t.Errorf("%s is %s with move %+v; want it landed from In Review with the finish commit %s", id, tk.State, m, commit)
 	}
-	if movedTo(tk, store.InReview, store.Accepted) {
+	if movedTo(tk, domain.InReview, domain.Accepted) {
 		t.Error("the Factory accepted the Ticket")
 	}
 }
@@ -280,7 +280,7 @@ func TestAnInReviewTicketNotMergedIsLeftForTheHuman(t *testing.T) {
 	base := w.repo.tip("refs/heads/main")
 
 	w.poll()
-	if s := w.ticket(id).State; s != store.InReview {
+	if s := w.ticket(id).State; s != domain.InReview {
 		t.Errorf("%s is %s, want it left In Review", id, s)
 	}
 	if w.repo.tip("refs/heads/main") != base {
@@ -303,7 +303,7 @@ func TestATicketMergedWhileInAnotherStateGetsOnlyAWarningLine(t *testing.T) {
 	if got := w.lines("warning: " + id + " is " + string(tk.State) + " but its finish commit " + short(commit) + " is already in main"); got != 1 {
 		t.Errorf("want one warning line over two polls, got %d in %q", got, w.out)
 	}
-	if tk.State == store.Done {
+	if tk.State == domain.Done {
 		t.Errorf("%s was landed from a State that can't land", id)
 	}
 }
@@ -315,7 +315,7 @@ func TestAPausedFactoryDoesNotLand(t *testing.T) {
 	w.f.pause = &pause{reason: "rate_limit"}
 
 	w.poll()
-	if s := w.ticket(id).State; s != store.Accepted {
+	if s := w.ticket(id).State; s != domain.Accepted {
 		t.Errorf("%s is %s; nothing lands during an outage", id, s)
 	}
 }
@@ -327,7 +327,7 @@ func TestADrainingFactoryDoesNotLand(t *testing.T) {
 	close(w.f.drainCh)
 
 	w.poll()
-	if s := w.ticket(id).State; s != store.Accepted {
+	if s := w.ticket(id).State; s != domain.Accepted {
 		t.Errorf("%s is %s; nothing lands while draining", id, s)
 	}
 }
@@ -359,7 +359,7 @@ func TestUnderMergeAnAcceptedTicketsWorktreeIsKeptUntilItLands(t *testing.T) {
 	w.repo.setDirty(fakeTop, " M feature.txt")
 
 	w.poll()
-	if s := w.ticket(id).State; s != store.Accepted {
+	if s := w.ticket(id).State; s != domain.Accepted {
 		t.Fatalf("%s is %s, want it held Accepted", id, s)
 	}
 	if !w.repo.hasWorktree(wt) {
@@ -368,7 +368,7 @@ func TestUnderMergeAnAcceptedTicketsWorktreeIsKeptUntilItLands(t *testing.T) {
 
 	w.repo.setDirty(fakeTop, "")
 	w.poll()
-	if s := w.ticket(id).State; s != store.Done {
+	if s := w.ticket(id).State; s != domain.Done {
 		t.Fatalf("%s is %s, want it landed", id, s)
 	}
 	if w.repo.hasWorktree(wt) {
@@ -381,7 +381,7 @@ func TestUnderMergeAnAcceptedTicketsWorktreeIsKeptUntilItLands(t *testing.T) {
 func TestUnderBranchATicketFinishedWithoutACommitLandsAtItsBranchTip(t *testing.T) {
 	t.Parallel()
 	w := newLandWorld(t)
-	w.setLanding(store.LandingBranch, false, "")
+	w.setLanding(domain.LandingBranch, false, "")
 	id := w.ready("No commit given")
 	tip := w.repo.commitOn(id, "Work")
 	w.finished(id, id, "")
@@ -389,7 +389,7 @@ func TestUnderBranchATicketFinishedWithoutACommitLandsAtItsBranchTip(t *testing.
 	w.repo.mergeByHand(id)
 
 	w.poll()
-	if tk := w.ticket(id); tk.State != store.Done || lastMove(tk).Commit != tip {
+	if tk := w.ticket(id); tk.State != domain.Done || lastMove(tk).Commit != tip {
 		t.Errorf("%s is %s with move %+v; want it landed at the branch tip %s", id, tk.State, lastMove(tk), tip)
 	}
 }
@@ -397,7 +397,7 @@ func TestUnderBranchATicketFinishedWithoutACommitLandsAtItsBranchTip(t *testing.
 func TestUnderBranchATicketWhoseWorkIsNotInTheRepositoryIsWarnedAboutOnce(t *testing.T) {
 	t.Parallel()
 	w := newLandWorld(t)
-	w.setLanding(store.LandingBranch, false, "")
+	w.setLanding(domain.LandingBranch, false, "")
 	id := w.ready("Branch gone")
 	w.finished(id, "gone", "")
 	w.accept(id)
@@ -407,7 +407,7 @@ func TestUnderBranchATicketWhoseWorkIsNotInTheRepositoryIsWarnedAboutOnce(t *tes
 	if got := w.lines("warning: " + id + " is Accepted under the Branch Landing Method, but its branch gone isn't in this repository"); got != 1 {
 		t.Errorf("want one warning over two polls, got %d in %q", got, w.out)
 	}
-	if s := w.ticket(id).State; s != store.Accepted {
+	if s := w.ticket(id).State; s != domain.Accepted {
 		t.Errorf("%s is %s, want it left Accepted", id, s)
 	}
 }
@@ -415,14 +415,14 @@ func TestUnderBranchATicketWhoseWorkIsNotInTheRepositoryIsWarnedAboutOnce(t *tes
 func TestUnderBranchAConflictingBranchIsNeverSentBack(t *testing.T) {
 	t.Parallel()
 	w := newLandWorld(t)
-	w.setLanding(store.LandingBranch, false, "")
+	w.setLanding(domain.LandingBranch, false, "")
 	id, commit := w.accepted("Change the readme")
 	w.repo.conflicts[commit] = []string{"README"}
 	base := w.repo.tip("refs/heads/main")
 
 	w.poll()
 	tk := w.ticket(id)
-	if tk.State != store.Accepted || movedTo(tk, store.Accepted, store.Ready) {
+	if tk.State != domain.Accepted || movedTo(tk, domain.Accepted, domain.Ready) {
 		t.Errorf("%s is %s with moves %+v; want it left Accepted, never sent back", id, tk.State, tk.Moves)
 	}
 	if w.repo.tip("refs/heads/main") != base {
@@ -436,7 +436,7 @@ func TestUnderBranchAConflictingBranchIsNeverSentBack(t *testing.T) {
 func TestUnderBranchADirtyWorktreeOfAnAcceptedTicketIsWarnedAboutAndLeft(t *testing.T) {
 	t.Parallel()
 	w := newLandWorld(t)
-	w.setLanding(store.LandingBranch, false, "")
+	w.setLanding(domain.LandingBranch, false, "")
 	id, _ := w.accepted("Add a feature")
 	wt := w.f.worktree(id)
 	w.repo.addWorktree(wt, id)
@@ -462,13 +462,13 @@ func TestUnderBranchADirtyWorktreeOfAnAcceptedTicketIsWarnedAboutAndLeft(t *test
 func TestAChangeOfLandingMethodAppliesFromTheNextPoll(t *testing.T) {
 	t.Parallel()
 	w := newLandWorld(t)
-	w.setLanding(store.LandingBranch, false, "")
+	w.setLanding(domain.LandingBranch, false, "")
 	first, _ := w.accepted("Left as a branch")
 	base := w.repo.tip("refs/heads/main")
 
 	w.poll()
 	w.poll()
-	if s := w.ticket(first).State; s != store.Accepted || w.repo.tip("refs/heads/main") != base {
+	if s := w.ticket(first).State; s != domain.Accepted || w.repo.tip("refs/heads/main") != base {
 		t.Fatalf("%s is %s and main moved; want it left under Branch", first, s)
 	}
 	if got := w.lines(first + ": Accepted under the Branch Landing Method: merge " + first + " into main and the Factory lands it"); got != 1 {
@@ -476,9 +476,9 @@ func TestAChangeOfLandingMethodAppliesFromTheNextPoll(t *testing.T) {
 	}
 
 	// Branch to Merge: the Accepted Ticket not merged by hand is merged.
-	w.setLanding(store.LandingMerge, false, "")
+	w.setLanding(domain.LandingMerge, false, "")
 	w.poll()
-	if s := w.ticket(first).State; s != store.Done {
+	if s := w.ticket(first).State; s != domain.Done {
 		t.Fatalf("%s is %s, want it merged and landed under Merge", first, s)
 	}
 	if got := w.repo.messageOf(w.repo.tip("refs/heads/main")); got != "Merge "+first+": Left as a branch" {
@@ -486,12 +486,12 @@ func TestAChangeOfLandingMethodAppliesFromTheNextPoll(t *testing.T) {
 	}
 
 	// Merge to Branch: the next accept is left alone.
-	w.setLanding(store.LandingBranch, false, "")
+	w.setLanding(domain.LandingBranch, false, "")
 	second, _ := w.accepted("Left as a branch too")
 	base = w.repo.tip("refs/heads/main")
 	w.poll()
 	w.poll()
-	if s := w.ticket(second).State; s != store.Accepted || w.repo.tip("refs/heads/main") != base {
+	if s := w.ticket(second).State; s != domain.Accepted || w.repo.tip("refs/heads/main") != base {
 		t.Errorf("%s is %s and main moved; want it left under Branch", second, s)
 	}
 }
@@ -503,13 +503,13 @@ func TestUnderMergeAndPushAFailedPushIsCommentedOnceAndRetried(t *testing.T) {
 	w := newLandWorld(t)
 	w.repo.addRemote("origin")
 	w.repo.setBroken("origin", true)
-	w.setLanding(store.LandingMerge, true, "origin")
+	w.setLanding(domain.LandingMerge, true, "origin")
 	id, _ := w.accepted("Add a feature")
 
 	w.poll()
 	w.poll()
 	tk := w.ticket(id)
-	if tk.State != store.Accepted {
+	if tk.State != domain.Accepted {
 		t.Fatalf("%s is %s, want it held Accepted until the push succeeds", id, tk.State)
 	}
 	merge := w.repo.tip("refs/heads/main")
@@ -526,7 +526,7 @@ func TestUnderMergeAndPushAFailedPushIsCommentedOnceAndRetried(t *testing.T) {
 	w.repo.setBroken("origin", false)
 	w.poll()
 	tk = w.ticket(id)
-	if tk.State != store.Done {
+	if tk.State != domain.Done {
 		t.Fatalf("%s is %s, want it landed once the push succeeds", id, tk.State)
 	}
 	if got := w.repo.remoteTip("origin", "main"); got != merge {
@@ -541,7 +541,7 @@ func TestUnderMergeAndPushTheBaseIsNotPushedAgainOnceTheRemoteHasIt(t *testing.T
 	t.Parallel()
 	w := newLandWorld(t)
 	w.repo.addRemote("origin")
-	w.setLanding(store.LandingMerge, true, "origin")
+	w.setLanding(domain.LandingMerge, true, "origin")
 	id, _ := w.reviewed("Merged and pushed by hand")
 	w.repo.mergeByHand(id)
 	if _, err := w.repo.push(context.Background(), "origin", "main"); err != nil {
@@ -549,7 +549,7 @@ func TestUnderMergeAndPushTheBaseIsNotPushedAgainOnceTheRemoteHasIt(t *testing.T
 	}
 
 	w.poll()
-	if s := w.ticket(id).State; s != store.Done {
+	if s := w.ticket(id).State; s != domain.Done {
 		t.Fatalf("%s is %s, want it landed", id, s)
 	}
 	if w.repo.pushes != 1 || w.lines("pushed main") != 0 {
@@ -562,13 +562,13 @@ func TestUnderMergeAndPushAnInReviewTicketMergedByHandLandsOnceTheBaseIsPushed(t
 	w := newLandWorld(t)
 	w.repo.addRemote("origin")
 	w.repo.setBroken("origin", true)
-	w.setLanding(store.LandingMerge, true, "origin")
+	w.setLanding(domain.LandingMerge, true, "origin")
 	id, commit := w.reviewed("Merged by hand")
 	w.repo.mergeByHand(id)
 
 	w.poll()
 	tk := w.ticket(id)
-	if tk.State != store.InReview {
+	if tk.State != domain.InReview {
 		t.Fatalf("%s is %s, want it held In Review until the base is pushed", id, tk.State)
 	}
 	if commentsSaying(tk, "couldn't push main to origin", "It stays In Review") != 1 {
@@ -578,7 +578,7 @@ func TestUnderMergeAndPushAnInReviewTicketMergedByHandLandsOnceTheBaseIsPushed(t
 	w.repo.setBroken("origin", false)
 	w.poll()
 	tk = w.ticket(id)
-	if m := lastMove(tk); tk.State != store.Done || m.From != store.InReview || m.Commit != commit {
+	if m := lastMove(tk); tk.State != domain.Done || m.From != domain.InReview || m.Commit != commit {
 		t.Errorf("%s is %s with move %+v; want it landed from In Review with the finish commit %s", id, tk.State, m, commit)
 	}
 	if got, want := w.repo.remoteTip("origin", "main"), w.repo.tip("refs/heads/main"); got != want {
@@ -603,7 +603,7 @@ func TestAMissingHomePushRemoteIsReportedAsLocalOnlyAndStopsNothing(t *testing.T
 	t.Parallel()
 	w := newLandWorld(t)
 	origin := w.repo.addRemote("origin")
-	w.setLanding(store.LandingMerge, true, "nowhere")
+	w.setLanding(domain.LandingMerge, true, "nowhere")
 	id, _ := w.accepted("Add a feature")
 	reviewed, _ := w.reviewed("Merged by hand")
 	w.repo.mergeByHand(reviewed)
@@ -614,7 +614,7 @@ func TestAMissingHomePushRemoteIsReportedAsLocalOnlyAndStopsNothing(t *testing.T
 		t.Fatal("the Home isn't local-only, though its clone has no remote nowhere")
 	}
 	for _, tk := range []string{id, reviewed} {
-		if s := w.ticket(tk).State; s != store.Done {
+		if s := w.ticket(tk).State; s != domain.Done {
 			t.Errorf("%s is %s, want it landed on merge, with nothing pushed", tk, s)
 		}
 	}
@@ -623,13 +623,13 @@ func TestAMissingHomePushRemoteIsReportedAsLocalOnlyAndStopsNothing(t *testing.T
 	}
 
 	// Renamed to one its clone has: reported, and pushed again.
-	w.setLanding(store.LandingMerge, true, "origin")
+	w.setLanding(domain.LandingMerge, true, "origin")
 	again, _ := w.accepted("Add another feature")
 	w.poll()
 	if w.homeLocalOnly() {
 		t.Fatal("the Home is local-only, though its clone has origin")
 	}
-	if s := w.ticket(again).State; s != store.Done || w.repo.remoteTip("origin", "main") != w.repo.tip("refs/heads/main") {
+	if s := w.ticket(again).State; s != domain.Done || w.repo.remoteTip("origin", "main") != w.repo.tip("refs/heads/main") {
 		t.Errorf("%s is %s and origin's main at %q, want it landed with main pushed", again, s, w.repo.remoteTip("origin", "main"))
 	}
 
@@ -645,7 +645,7 @@ func TestUnderBranchAndPushTheBranchReachesTheRemoteOnAcceptAndNotWhileInReview(
 	t.Parallel()
 	w := newLandWorld(t)
 	w.repo.addRemote("origin")
-	w.setLanding(store.LandingBranch, true, "origin")
+	w.setLanding(domain.LandingBranch, true, "origin")
 	id, commit := w.reviewed("Add a feature")
 	base := w.repo.tip("refs/heads/main")
 
@@ -659,7 +659,7 @@ func TestUnderBranchAndPushTheBranchReachesTheRemoteOnAcceptAndNotWhileInReview(
 	if got := w.repo.remoteTip("origin", id); got != commit {
 		t.Errorf("the remote's %s is at %q, want the finish commit %s", id, got, commit)
 	}
-	if s := w.ticket(id).State; s != store.Accepted {
+	if s := w.ticket(id).State; s != domain.Accepted {
 		t.Errorf("%s is %s, want it left Accepted", id, s)
 	}
 	if w.repo.tip("refs/heads/main") != base {
@@ -676,7 +676,7 @@ func TestUnderBranchAndPushTheBranchReachesTheRemoteOnAcceptAndNotWhileInReview(
 
 	w.repo.mergeByHand(id)
 	w.poll()
-	if s := w.ticket(id).State; s != store.Done {
+	if s := w.ticket(id).State; s != domain.Done {
 		t.Errorf("%s is %s, want it landed once merged by hand", id, s)
 	}
 }
@@ -686,13 +686,13 @@ func TestUnderBranchAndPushAFailedPushIsCommentedOnceAndRetried(t *testing.T) {
 	w := newLandWorld(t)
 	w.repo.addRemote("origin")
 	w.repo.setBroken("origin", true)
-	w.setLanding(store.LandingBranch, true, "origin")
+	w.setLanding(domain.LandingBranch, true, "origin")
 	id, commit := w.accepted("Add a feature")
 
 	w.poll()
 	w.poll()
 	tk := w.ticket(id)
-	if tk.State != store.Accepted {
+	if tk.State != domain.Accepted {
 		t.Fatalf("%s is %s, want it left Accepted", id, tk.State)
 	}
 	if n := commentsSaying(tk, cantPushYet); n != 1 || commentsSaying(tk, "couldn't push "+id+" to origin", "It stays Accepted") != 1 {
@@ -708,7 +708,7 @@ func TestUnderBranchAndPushAFailedPushIsCommentedOnceAndRetried(t *testing.T) {
 		t.Errorf("the remote's %s is at %q, want the finish commit %s", id, got, commit)
 	}
 	tk = w.ticket(id)
-	if tk.State != store.Accepted || commentsSaying(tk, cantPushYet) != 1 {
+	if tk.State != domain.Accepted || commentsSaying(tk, cantPushYet) != 1 {
 		t.Errorf("%s is %s with comments %+v; want it Accepted with still one comment", id, tk.State, tk.Comments)
 	}
 	if got := w.lines(id + ": pushed " + id + " to origin"); got != 1 {
@@ -749,7 +749,7 @@ func TestAPushedCommitWhoseReportFailedIsReportedAsItsOwnNotALaterTicketsPush(t 
 	t.Parallel()
 	w := newLandWorld(t)
 	w.repo.addRemote("origin")
-	w.setLanding(store.LandingMerge, true, "origin")
+	w.setLanding(domain.LandingMerge, true, "origin")
 	if _, err := w.human.SetCITracking(context.Background(), "acme", core.SetCITrackingInput{Tracking: true, Repository: "acme/web"}); err != nil {
 		t.Fatal(err)
 	}
@@ -777,7 +777,7 @@ func TestAPushedCommitWhoseReportFailedIsReportedAsItsOwnNotALaterTicketsPush(t 
 	w.repo.mu.Lock()
 	firstMerge := w.repo.parents[w.repo.refs["refs/heads/main"]][0]
 	w.repo.mu.Unlock()
-	if tk := w.ticket(first); tk.State != store.Accepted || tk.PushedCommit != nil {
+	if tk := w.ticket(first); tk.State != domain.Accepted || tk.PushedCommit != nil {
 		t.Fatalf("%s is %s with pushed commit %+v, want it Accepted with its report refused", first, tk.State, tk.PushedCommit)
 	}
 	if tk := w.ticket(second); tk.PushedCommit == nil || tk.PushedCommit.Commit != w.repo.remoteTip("origin", "main") {
@@ -786,7 +786,7 @@ func TestAPushedCommitWhoseReportFailedIsReportedAsItsOwnNotALaterTicketsPush(t 
 
 	refusing.Store(false)
 	w.poll()
-	if tk := w.ticket(first); tk.State != store.Accepted || tk.PushedCommit == nil || tk.PushedCommit.Commit != firstMerge {
+	if tk := w.ticket(first); tk.State != domain.Accepted || tk.PushedCommit == nil || tk.PushedCommit.Commit != firstMerge {
 		t.Fatalf("%s is %s with pushed commit %+v, want it Accepted with its own merge %s, not the later push", first, tk.State, tk.PushedCommit, firstMerge)
 	}
 }
@@ -827,7 +827,7 @@ func TestASpecWhoseLastTicketIsAcceptedMidPollWaitsForItsMergeIntoTheSpecBranch(
 		t.Errorf("main's tip %s doesn't hold %s's work %s", merge, second, commit)
 	}
 	for _, id := range []string{first, second} {
-		if tk := w.ticket(id); tk.State != store.Done || lastMove(tk).Commit != merge {
+		if tk := w.ticket(id); tk.State != domain.Done || lastMove(tk).Commit != merge {
 			t.Errorf("%s is %s with move %+v; want it landed at the Spec's merge %s", id, tk.State, lastMove(tk), merge)
 		}
 	}

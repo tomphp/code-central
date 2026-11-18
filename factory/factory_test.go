@@ -1,6 +1,7 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -8,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 func TestMain(m *testing.M) { factorytest.Main(m) }
@@ -89,7 +89,7 @@ func TestTheFactoryStartsOnADetachedHead(t *testing.T) {
 	h.Git("checkout", "-q", "--detach")
 	r := h.Start()
 	r.WantOutput("base: main")
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 }
 
 func TestTheFactoryRefusesTheBaseFlagAndPointsToProjectOptions(t *testing.T) {

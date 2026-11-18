@@ -2,6 +2,7 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // chatCalls are the runs of the fake claude for Chat turns, oldest
@@ -302,10 +302,10 @@ func TestAChatReplyCutOffByAnOutageEndsFailedAndTheFactoryGoesOn(t *testing.T) {
 	id := h.ReadyTicket("After the Outage")
 	h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
 	r.Poll()
-	h.WantState(id, store.InProgress)
+	h.WantState(id, domain.InProgress)
 	h.Continue(id)
 	r.Settle()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 }
 
 func TestAChatReplyWithAnExpiredLoginEndsFailedAndTheFactoryKeepsRunning(t *testing.T) {
@@ -451,12 +451,12 @@ func TestAChatTurnRunsWhileEveryClaimSlotIsFull(t *testing.T) {
 		t.Errorf("reply ended %q (%q), want done while the slot is full", r.Outcome, r.Error)
 	}
 	run.Settle()
-	if tk := h.Ticket(id); tk.State != store.InProgress {
+	if tk := h.Ticket(id); tk.State != domain.InProgress {
 		t.Errorf("%s is %s, want its turn still running", id, tk.State)
 	}
 	h.Continue(id)
 	run.Settle()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 }
 
 func TestAChatTurnsUsageIsPostedWithKindChat(t *testing.T) {

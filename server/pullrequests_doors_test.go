@@ -2,12 +2,12 @@ package server_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
 )
 
 // Pull requests per Repository (Spec code-central-848): land's
@@ -26,7 +26,7 @@ func acceptedInAPI(t *testing.T, srv *codecentraltest.Server) {
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest, Remote: "origin"})
+		_, err := srv.Core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin"})
 		return err
 	})
 	acceptInTwo(t, srv)

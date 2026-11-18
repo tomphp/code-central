@@ -3,6 +3,7 @@ package server_test
 import (
 	"context"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"reflect"
 	"slices"
 	"strings"
@@ -257,11 +258,11 @@ func TestTheSameAzureBoardsSettingsWriteNothing(t *testing.T) {
 	if out := httpOK(t, srv, setAzureBoards(`{"on":false}`)); len(toStrings(out["changed"])) != 0 {
 		t.Fatalf("the default settings changed %v", out["changed"])
 	}
-	var stored store.AzureBoards
+	var stored domain.AzureBoards
 	must(t, func() error {
 		return srv.Store.View(func(r store.Reader) error { p, _ := r.Project("acme"); stored = p.AzureBoards; return nil })
 	})
-	if stored != (store.AzureBoards{}) {
+	if stored != (domain.AzureBoards{}) {
 		t.Fatalf("the default settings were stored as %+v, want nothing set", stored)
 	}
 	body := `{"on":true,"query_url":"` + webQuery + `"}`
@@ -302,12 +303,12 @@ func TestTurningAzureBoardsOnRunsTheCheckOnTheChosenModesSettings(t *testing.T) 
 	srv := newBoardsCheckServer(t, checks)
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/set_ci_tracking", `{"tracking":false,"provider":"azure_pipelines","pat_env":"PIPELINES_PAT"}`})
 	httpOK(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`","project_url":"https://dev.azure.com/contoso/api","where":"[System.Id] > 0"}`))
-	want := []core.AzureBoardsCheckInput{{Mode: store.AzureBoardsSavedQuery, QueryURL: webQuery, PATEnv: "PIPELINES_PAT"}}
+	want := []core.AzureBoardsCheckInput{{Mode: domain.AzureBoardsSavedQuery, QueryURL: webQuery, PATEnv: "PIPELINES_PAT"}}
 	if got := checks.ran(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("checks = %+v, want %+v", got, want)
 	}
 	httpOK(t, srv, setAzureBoards(`{"on":true,"mode":"wiql","query_url":"`+webQuery+`","project_url":"https://dev.azure.com/contoso/api","where":"[System.Id] > 0","pat_env":"BOARDS_PAT"}`))
-	want = append(want, core.AzureBoardsCheckInput{Mode: store.AzureBoardsWIQL, ProjectURL: "https://dev.azure.com/contoso/api", Where: "[System.Id] > 0", PATEnv: "BOARDS_PAT"})
+	want = append(want, core.AzureBoardsCheckInput{Mode: domain.AzureBoardsWIQL, ProjectURL: "https://dev.azure.com/contoso/api", Where: "[System.Id] > 0", PATEnv: "BOARDS_PAT"})
 	if got := checks.ran(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("checks = %+v, want %+v", got, want)
 	}

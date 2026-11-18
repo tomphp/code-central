@@ -1,13 +1,13 @@
 package server_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
 )
 
 // Azure Pipelines settings (code-central-364), through set_ci_tracking and
@@ -92,7 +92,7 @@ func TestTheCheckRunsAgainWhenTheProviderProjectURLOrPATVariableChangesWhileOn(t
 		httpOK(t, srv, setCITracking(`{"tracking":true,"provider":"azure_pipelines","project_url":"https://dev.azure.com/acme/web"`+extra+`}`))
 	}
 	on(``)
-	want := core.CICheckInput{Provider: store.CIAzurePipelines, ProjectURL: "https://dev.azure.com/acme/web", PATEnv: "ADO_PAT"}
+	want := core.CICheckInput{Provider: domain.CIAzurePipelines, ProjectURL: "https://dev.azure.com/acme/web", PATEnv: "ADO_PAT"}
 	if got := checks.ran(); !slices.Equal(got, []core.CICheckInput{want}) {
 		t.Fatalf("checks = %+v, want %+v", got, want)
 	}
@@ -104,7 +104,7 @@ func TestTheCheckRunsAgainWhenTheProviderProjectURLOrPATVariableChangesWhileOn(t
 	httpOK(t, srv, setCITracking(`{"tracking":true,"provider":"azure_pipelines","project_url":"https://dev.azure.com/acme/site","pat_env":"ACME_PAT"}`))
 	httpOK(t, srv, setCITracking(`{"tracking":true,"provider":"github_actions","repository":"acme/web","project_url":"https://dev.azure.com/acme/site","pat_env":"ACME_PAT"}`))
 	got := checks.ran()
-	if len(got) != 4 || got[1].PATEnv != "ACME_PAT" || got[2].ProjectURL != "https://dev.azure.com/acme/site" || got[3].Provider != store.CIGitHubActions || got[3].Repository != "acme/web" {
+	if len(got) != 4 || got[1].PATEnv != "ACME_PAT" || got[2].ProjectURL != "https://dev.azure.com/acme/site" || got[3].Provider != domain.CIGitHubActions || got[3].Repository != "acme/web" {
 		t.Fatalf("checks = %+v, want one per change", got)
 	}
 }
@@ -181,13 +181,13 @@ func TestIgnoredWorkflowsAndCIRulesAreValidatedByTheProjectsProvider(t *testing.
 func TestAPartiallySucceededRunCountsAsPassedAndIsKeptAsPartiallySucceeded(t *testing.T) {
 	srv := newServer(t, func(t *testing.T, srv *codecentraltest.Server) {
 		pushedAccepted(t, srv)
-		reportRuns(t, srv, ciRun(1, "Build", "abc123", store.CICompleted, store.CIPartiallySucceeded))
+		reportRuns(t, srv, ciRun(1, "Build", "abc123", domain.CICompleted, domain.CIPartiallySucceeded))
 	})
 	if tk := ticket3(t, srv); tk.CIResult != core.CIPassed {
 		t.Fatalf("ci result %q, want passed", tk.CIResult)
 	}
 	runs, err := srv.Client.GetTicket(t.Context(), "acme", "acme-3")
-	if err != nil || len(runs.CIRuns) != 1 || runs.CIRuns[0].Conclusion != store.CIPartiallySucceeded {
+	if err != nil || len(runs.CIRuns) != 1 || runs.CIRuns[0].Conclusion != domain.CIPartiallySucceeded {
 		t.Fatalf("runs = %+v, err %v, want the run kept as partially succeeded", runs.CIRuns, err)
 	}
 }
@@ -196,7 +196,7 @@ func TestGetCIWatchCarriesTheProjectURLAndThePATVariable(t *testing.T) {
 	srv := newServer(t)
 	httpOK(t, srv, setCITracking(`{"tracking":true,"provider":"azure_pipelines","project_url":"https://dev.azure.com/acme/web"}`))
 	w, err := srv.Client.GetCIWatch(t.Context(), "acme")
-	if err != nil || w.Provider != store.CIAzurePipelines || w.ProjectURL != "https://dev.azure.com/acme/web" || w.PATEnv != "ADO_PAT" {
+	if err != nil || w.Provider != domain.CIAzurePipelines || w.ProjectURL != "https://dev.azure.com/acme/web" || w.PATEnv != "ADO_PAT" {
 		t.Fatalf("watch = %+v, err %v, want the project URL and ADO_PAT", w, err)
 	}
 }

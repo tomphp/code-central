@@ -1,12 +1,12 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"testing"
 	"time"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // Plan Limits (Spec code-central-861): the Factory reads them from each
@@ -58,7 +58,7 @@ func TestATurnsRateLimitEventReachesTheNextHeartbeat(t *testing.T) {
 		"seven_day_opus": {Utilization: 0.9, ResetsAt: resets(h, 50)},
 	}), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	pl := planLimits(t, h, r)
 	if pl == nil {
@@ -105,7 +105,7 @@ func TestAMissingWindowIsntReported(t *testing.T) {
 		"seven_day_opus": {Utilization: 0.9, ResetsAt: resets(h, 50)},
 	}), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	pl := planLimits(t, h, r)
 	if pl == nil {
@@ -126,7 +126,7 @@ func TestTheLatestRateLimitEventWinsAndStaysAfterTheTurn(t *testing.T) {
 		"seven_day": {Utilization: 0.2, ResetsAt: resets(h, 100)},
 	}), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start()
-	h.WantState(first, store.InReview)
+	h.WantState(first, domain.InReview)
 
 	// An event with neither window changes nothing; the next replaces
 	// the figures whole.
@@ -138,7 +138,7 @@ func TestTheLatestRateLimitEventWinsAndStaysAfterTheTurn(t *testing.T) {
 		factorytest.RateLimitEvent(map[string]factorytest.RateLimitWindow{}),
 		factorytest.Finish("Done."), factorytest.Result("success"))
 	r.Poll()
-	h.WantState(second, store.InReview)
+	h.WantState(second, domain.InReview)
 
 	for range 3 {
 		pl := planLimits(t, h, r)
@@ -183,7 +183,7 @@ func TestUtilizationAboveOneIsSentAsAHundredPercent(t *testing.T) {
 		"five_hour": {Utilization: 1.3, ResetsAt: fiveHour},
 	}), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 
 	pl := planLimits(t, h, r)
 	if pl == nil {

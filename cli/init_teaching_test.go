@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,7 +11,6 @@ import (
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
 )
 
 // init's teaching files, --local and the Project's mode (ticket 41).
@@ -42,7 +42,7 @@ func exists(dir, rel string) bool {
 	return err == nil
 }
 
-func wantMode(t *testing.T, srv *codecentraltest.Server, key string, mode store.Mode) {
+func wantMode(t *testing.T, srv *codecentraltest.Server, key string, mode domain.Mode) {
 	t.Helper()
 	p, err := srv.Core.GetProject(context.Background(), key)
 	if err != nil || p.Mode != mode {

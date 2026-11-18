@@ -2,6 +2,7 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // Land per Spec under Pull Request (code-central-395): the Spec Branch is
@@ -35,7 +35,7 @@ func TestUnderPullRequestAReadySpecBranchIsPushedAndReportedForEveryTicket(t *te
 	}
 	wantPushed(t, h, branch, tip)
 	for _, id := range []string{a, b} {
-		if tk := h.Ticket(id); tk.State != store.Accepted {
+		if tk := h.Ticket(id); tk.State != domain.Accepted {
 			t.Errorf("%s is %s, want it waiting Accepted", id, tk.State)
 		}
 	}
@@ -58,7 +58,7 @@ func TestUnderPullRequestTheSpecsTicketsLandAtItsMergeCommit(t *testing.T) {
 	wantPushed(t, h, branch, "")
 	reportPullRequest(t, h, branch, "")
 	r.Poll()
-	if h.Ticket(a).State != store.Accepted || h.Ticket(b).State != store.Accepted {
+	if h.Ticket(a).State != domain.Accepted || h.Ticket(b).State != domain.Accepted {
 		t.Fatal("a Ticket landed before its pull request merged")
 	}
 
@@ -69,7 +69,7 @@ func TestUnderPullRequestTheSpecsTicketsLandAtItsMergeCommit(t *testing.T) {
 	r.Poll()
 
 	for _, id := range []string{a, b} {
-		tk := h.WantState(id, store.Done)
+		tk := h.WantState(id, domain.Done)
 		if m := tk.Moves[len(tk.Moves)-1]; m.Commit != squash {
 			t.Errorf("%s landed at %q, want the merge commit %s", id, m.Commit, squash)
 		}
@@ -105,7 +105,7 @@ func TestUnderPullRequestASpecBranchThatConflictsWithTheBaseOpensTheConflictTick
 	if out := remote.Git("branch", "--list", branch); strings.TrimSpace(out) != "" {
 		t.Fatalf("the conflicting Spec Branch was pushed: %q", out)
 	}
-	h.WantState(fix, store.InReview)
+	h.WantState(fix, domain.InReview)
 
 	h.Accept(fix)
 	r.Poll()
@@ -124,7 +124,7 @@ func TestUnderPullRequestATicketOutsideLandPerSpecStillGetsItsOwnPullRequest(t *
 	h := factorytest.New(t)
 	h.AddRemote("origin")
 	off := false
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingBranch, LandPerSpec: &off})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch, LandPerSpec: &off})
 	pullRequestOn(h, "origin")
 	h.MakeRequirement()
 	id, commit := accepted(h, "Plain", "plain.txt", "plain\n")

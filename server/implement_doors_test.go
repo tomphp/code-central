@@ -2,11 +2,11 @@ package server_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"testing"
 
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
 )
 
 const implementNextStep = "The spec Stage is Done and the tickets Stage is Cancelled, and acme-8 now builds the whole Spec."
@@ -38,7 +38,7 @@ func specStageInReview(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	submittedRequirement(t, srv)
 	must(t, func() error {
-		_, err := srv.Core.Move(core.WithActor(context.Background(), core.Human), "acme", core.MoveInput{Ticket: "6", ToState: store.InReview})
+		_, err := srv.Core.Move(core.WithActor(context.Background(), core.Human), "acme", core.MoveInput{Ticket: "6", ToState: domain.InReview})
 		return err
 	})
 }

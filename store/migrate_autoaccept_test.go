@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"testing"
 
@@ -33,7 +34,7 @@ func TestTheRealChainMigratesAFormat34StoreToTheAutoAcceptFormat(t *testing.T) {
 	}
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
-		for _, k := range store.AutoAcceptKinds {
+		for _, k := range domain.AutoAcceptKinds {
 			if p.AutoAccepts(k) {
 				t.Errorf("auto-accept %s is on after migrating, want every kind off", k)
 			}
@@ -51,15 +52,15 @@ func TestTheRealChainMigratesAFormat34StoreToTheAutoAcceptFormat(t *testing.T) {
 	// Kinds turned on and a cause recorded after migrating read back.
 	if err := s.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
-		p.SetAutoAccept(store.AutoAcceptMerge, true)
-		p.SetAutoAccept(store.AutoAcceptGrilling, true)
+		p.SetAutoAccept(domain.AutoAcceptMerge, true)
+		p.SetAutoAccept(domain.AutoAcceptGrilling, true)
 		return w.PutProject(p)
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Update(func(w store.Writer) error {
 		tk, _ := w.Ticket("acme", 4)
-		tk.Moves[0].Cause = store.CauseProject
+		tk.Moves[0].Cause = domain.CauseProject
 		return w.PutTicket("acme", tk)
 	}); err != nil {
 		t.Fatal(err)
@@ -67,10 +68,10 @@ func TestTheRealChainMigratesAFormat34StoreToTheAutoAcceptFormat(t *testing.T) {
 	s = reopen(t, s)
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
-		if !p.AutoAccepts(store.AutoAcceptGrilling) || !p.AutoAccepts(store.AutoAcceptMerge) || p.AutoAccepts(store.AutoAcceptSpec) {
+		if !p.AutoAccepts(domain.AutoAcceptGrilling) || !p.AutoAccepts(domain.AutoAcceptMerge) || p.AutoAccepts(domain.AutoAcceptSpec) {
 			t.Errorf("auto-accept = %v, want grilling and merge on", p.AutoAccept)
 		}
-		if tk, _ := r.Ticket("acme", 4); tk.Moves[0].Cause != store.CauseProject {
+		if tk, _ := r.Ticket("acme", 4); tk.Moves[0].Cause != domain.CauseProject {
 			t.Errorf("cause = %q, want project", tk.Moves[0].Cause)
 		}
 		return nil

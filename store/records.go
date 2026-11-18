@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -397,85 +398,85 @@ var (
 	ticketEditFields = []string{"title", "description", "spec", "external_state", "detached"}
 )
 
-func decodeSpec(data []byte, n int) (Spec, *LoadError) {
+func decodeSpec(data []byte, n int) (domain.Spec, *LoadError) {
 	front, body, ok := splitFrontmatter(data)
 	if !ok {
-		return Spec{}, &LoadError{Field: "frontmatter", Msg: "a Spec must start with YAML frontmatter between --- lines"}
+		return domain.Spec{}, &LoadError{Field: "frontmatter", Msg: "a Spec must start with YAML frontmatter between --- lines"}
 	}
 	var f specFront
 	if field, err := decodeStrict(front, &f); err != nil {
-		return Spec{}, &LoadError{Field: field, Msg: err.Error()}
+		return domain.Spec{}, &LoadError{Field: field, Msg: err.Error()}
 	}
 	if f.ID != n {
-		return Spec{}, &LoadError{Field: "id", Msg: fmt.Sprintf("id %d does not match the file name", f.ID)}
+		return domain.Spec{}, &LoadError{Field: "id", Msg: fmt.Sprintf("id %d does not match the file name", f.ID)}
 	}
 	if f.Title == "" {
-		return Spec{}, &LoadError{Field: "title", Msg: "required"}
+		return domain.Spec{}, &LoadError{Field: "title", Msg: "required"}
 	}
-	sp := Spec{Number: n, Title: f.Title, Labels: f.Labels, Tags: f.Tags, Body: string(body)}
+	sp := domain.Spec{Number: n, Title: f.Title, Labels: f.Labels, Tags: f.Tags, Body: string(body)}
 	var lerr *LoadError
 	if sp.Link, lerr = decodeLink(f.Link); lerr != nil {
-		return Spec{}, lerr
+		return domain.Spec{}, lerr
 	}
 	var err error
 	if sp.Created, err = parseTime(f.Created); err != nil {
-		return Spec{}, &LoadError{Field: "created", Msg: err.Error()}
+		return domain.Spec{}, &LoadError{Field: "created", Msg: err.Error()}
 	}
 	if sp.Updated, err = parseTime(f.Updated); err != nil {
-		return Spec{}, &LoadError{Field: "updated", Msg: err.Error()}
+		return domain.Spec{}, &LoadError{Field: "updated", Msg: err.Error()}
 	}
 	if sp.Edits, err = decodeEdits(f.Edits, specEditFields...); err != nil {
-		return Spec{}, err.(*LoadError)
+		return domain.Spec{}, err.(*LoadError)
 	}
 	return sp, nil
 }
 
-func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
+func decodeTicket(data []byte, n int) (domain.Ticket, *LoadError) {
 	var f ticketFile
 	if field, err := decodeStrict(data, &f); err != nil {
-		return Ticket{}, &LoadError{Field: field, Msg: err.Error()}
+		return domain.Ticket{}, &LoadError{Field: field, Msg: err.Error()}
 	}
-	t := Ticket{
-		Number: n, Title: f.Title, State: State(f.State), Spec: f.Spec, Labels: f.Labels, Tags: f.Tags,
+	t := domain.Ticket{
+		Number: n, Title: f.Title, State: domain.State(f.State), Spec: f.Spec, Labels: f.Labels, Tags: f.Tags,
 		BlockedBy: f.BlockedBy, Replacements: f.Replacements, AwaitingTriage: f.AwaitingTriage, SpecMergeTicket: f.SpecMergeTicket, Description: f.Description,
-		Branch: f.Branch, Commit: f.Commit, Recommendation: Recommendation(f.Recommendation),
+		Branch: f.Branch, Commit: f.Commit, Recommendation: domain.Recommendation(f.Recommendation),
 	}
 	if t.Title == "" {
-		return Ticket{}, &LoadError{Field: "title", Msg: "required"}
+		return domain.Ticket{}, &LoadError{Field: "title", Msg: "required"}
 	}
 	if !t.State.Valid() {
-		return Ticket{}, &LoadError{Field: "state", Msg: fmt.Sprintf("unknown State %q", f.State)}
+		return domain.Ticket{}, &LoadError{Field: "state", Msg: fmt.Sprintf("unknown State %q", f.State)}
 	}
 	if t.Spec < 1 {
-		return Ticket{}, &LoadError{Field: "spec", Msg: "required"}
+		return domain.Ticket{}, &LoadError{Field: "spec", Msg: "required"}
 	}
 	if t.Recommendation != "" && !t.Recommendation.Valid() {
-		return Ticket{}, &LoadError{Field: "recommendation", Msg: fmt.Sprintf("unknown Spec recommendation %q", f.Recommendation)}
+		return domain.Ticket{}, &LoadError{Field: "recommendation", Msg: fmt.Sprintf("unknown Spec recommendation %q", f.Recommendation)}
 	}
 	var lerr *LoadError
 	if t.Link, lerr = decodeLink(f.Link); lerr != nil {
-		return Ticket{}, lerr
+		return domain.Ticket{}, lerr
 	}
 	var err error
 	if t.Created, err = parseTime(f.Created); err != nil {
-		return Ticket{}, &LoadError{Field: "created", Msg: err.Error()}
+		return domain.Ticket{}, &LoadError{Field: "created", Msg: err.Error()}
 	}
 	if t.Updated, err = parseTime(f.Updated); err != nil {
-		return Ticket{}, &LoadError{Field: "updated", Msg: err.Error()}
+		return domain.Ticket{}, &LoadError{Field: "updated", Msg: err.Error()}
 	}
 	if t.Repositories, lerr = decodeChangedRepositories(f.Repositories); lerr != nil {
-		return Ticket{}, lerr
+		return domain.Ticket{}, lerr
 	}
 	for i, pc := range f.PushedCommits {
-		p := PushedCommit{Repository: pc.Repository, Commit: pc.Commit, Branch: pc.Branch}
+		p := domain.PushedCommit{Repository: pc.Repository, Commit: pc.Commit, Branch: pc.Branch}
 		if lerr := checkRepositoryName(fmt.Sprintf("pushed_commits[%d].repository", i), p.Repository); lerr != nil {
-			return Ticket{}, lerr
+			return domain.Ticket{}, lerr
 		}
 		if p.Commit == "" {
-			return Ticket{}, &LoadError{Field: fmt.Sprintf("pushed_commits[%d].commit", i), Msg: "required"}
+			return domain.Ticket{}, &LoadError{Field: fmt.Sprintf("pushed_commits[%d].commit", i), Msg: "required"}
 		}
 		if p.Pushed, err = parseTime(pc.Pushed); err != nil {
-			return Ticket{}, &LoadError{Field: fmt.Sprintf("pushed_commits[%d].pushed", i), Msg: err.Error()}
+			return domain.Ticket{}, &LoadError{Field: fmt.Sprintf("pushed_commits[%d].pushed", i), Msg: err.Error()}
 		}
 		t.PushedCommits = append(t.PushedCommits, p)
 	}
@@ -483,98 +484,98 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 	// was, and the other Repositories' are pull_requests.
 	if f.PullRequest != nil {
 		if lerr := decodePullRequest(&t, "pull_request", *f.PullRequest); lerr != nil {
-			return Ticket{}, lerr
+			return domain.Ticket{}, lerr
 		}
 	}
 	for i, pf := range f.PullRequests {
 		if lerr := decodePullRequest(&t, fmt.Sprintf("pull_requests[%d]", i), pf); lerr != nil {
-			return Ticket{}, lerr
+			return domain.Ticket{}, lerr
 		}
 	}
 	if f.SpecMerge != nil {
-		sm := &SpecMerge{Repository: f.SpecMerge.Repository, Commit: f.SpecMerge.Commit}
+		sm := &domain.SpecMerge{Repository: f.SpecMerge.Repository, Commit: f.SpecMerge.Commit}
 		if lerr := checkRepositoryName("spec_merge.repository", sm.Repository); lerr != nil {
-			return Ticket{}, lerr
+			return domain.Ticket{}, lerr
 		}
 		if sm.Commit == "" {
-			return Ticket{}, &LoadError{Field: "spec_merge.commit", Msg: "required"}
+			return domain.Ticket{}, &LoadError{Field: "spec_merge.commit", Msg: "required"}
 		}
 		if sm.Merged, err = parseTime(f.SpecMerge.Merged); err != nil {
-			return Ticket{}, &LoadError{Field: "spec_merge.merged", Msg: err.Error()}
+			return domain.Ticket{}, &LoadError{Field: "spec_merge.merged", Msg: err.Error()}
 		}
 		t.SpecMerge = sm
 	}
 	for i, c := range f.Claims {
-		cl := Claim{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, Model: c.Model, Effort: c.Effort, EndedBy: c.EndedBy}
+		cl := domain.Claim{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, Model: c.Model, Effort: c.Effort, EndedBy: c.EndedBy}
 		field := fmt.Sprintf("claims[%d]", i)
 		if cl.ID == "" {
-			return Ticket{}, &LoadError{Field: field + ".id", Msg: "required"}
+			return domain.Ticket{}, &LoadError{Field: field + ".id", Msg: "required"}
 		}
 		if cl.Started, err = parseTime(c.Started); err != nil {
-			return Ticket{}, &LoadError{Field: field + ".started", Msg: err.Error()}
+			return domain.Ticket{}, &LoadError{Field: field + ".started", Msg: err.Error()}
 		}
 		if c.Ended != "" {
 			if cl.Ended, err = parseTime(c.Ended); err != nil {
-				return Ticket{}, &LoadError{Field: field + ".ended", Msg: err.Error()}
+				return domain.Ticket{}, &LoadError{Field: field + ".ended", Msg: err.Error()}
 			}
 		}
 		t.Claims = append(t.Claims, cl)
 	}
 	if t.Rounds, err = decodeRounds(f.Rounds); err != nil {
-		return Ticket{}, err.(*LoadError)
+		return domain.Ticket{}, err.(*LoadError)
 	}
 	for i, r := range f.FailureReports {
-		fr := FailureReport{
+		fr := domain.FailureReport{
 			Number: r.Number, Claim: r.Claim, SessionID: r.SessionID, WorkingDir: r.WorkingDir, ResumeCommand: r.ResumeCommand, Actor: r.Actor,
 			WhatBroke: r.WhatBroke, Why: r.Why, WhatToFix: r.WhatToFix, WhereWorkStands: r.WhereWorkStands,
 		}
 		if fr.Time, err = parseTime(r.Time); err != nil {
-			return Ticket{}, &LoadError{Field: fmt.Sprintf("failure_reports[%d].time", i), Msg: err.Error()}
+			return domain.Ticket{}, &LoadError{Field: fmt.Sprintf("failure_reports[%d].time", i), Msg: err.Error()}
 		}
 		t.FailureReports = append(t.FailureReports, fr)
 	}
 	for i, c := range f.Comments {
-		cm := Comment{Number: c.Number, Actor: c.Actor, Claim: c.Claim, Body: c.Body}
+		cm := domain.Comment{Number: c.Number, Actor: c.Actor, Claim: c.Claim, Body: c.Body}
 		if cm.Time, err = parseTime(c.Time); err != nil {
-			return Ticket{}, &LoadError{Field: fmt.Sprintf("comments[%d].time", i), Msg: err.Error()}
+			return domain.Ticket{}, &LoadError{Field: fmt.Sprintf("comments[%d].time", i), Msg: err.Error()}
 		}
 		t.Comments = append(t.Comments, cm)
 	}
 	for i, m := range f.Moves {
-		mv := Move{From: State(m.From), To: State(m.To), Actor: m.Actor, Claim: m.Claim, Via: m.Via, Commit: m.Commit, Cause: AutoAcceptCause(m.Cause)}
+		mv := domain.Move{From: domain.State(m.From), To: domain.State(m.To), Actor: m.Actor, Claim: m.Claim, Via: m.Via, Commit: m.Commit, Cause: domain.AutoAcceptCause(m.Cause)}
 		if mv.Cause != "" && !mv.Cause.Valid() {
-			return Ticket{}, &LoadError{Field: fmt.Sprintf("moves[%d].cause", i), Msg: fmt.Sprintf("unknown auto-accept cause %q", m.Cause)}
+			return domain.Ticket{}, &LoadError{Field: fmt.Sprintf("moves[%d].cause", i), Msg: fmt.Sprintf("unknown auto-accept cause %q", m.Cause)}
 		}
 		field := fmt.Sprintf("moves[%d]", i)
 		if m.From != "" && !mv.From.Valid() {
-			return Ticket{}, &LoadError{Field: field + ".from", Msg: fmt.Sprintf("unknown State %q", m.From)}
+			return domain.Ticket{}, &LoadError{Field: field + ".from", Msg: fmt.Sprintf("unknown State %q", m.From)}
 		}
 		if !mv.To.Valid() {
-			return Ticket{}, &LoadError{Field: field + ".to", Msg: fmt.Sprintf("unknown State %q", m.To)}
+			return domain.Ticket{}, &LoadError{Field: field + ".to", Msg: fmt.Sprintf("unknown State %q", m.To)}
 		}
 		if mv.Time, err = parseTime(m.Time); err != nil {
-			return Ticket{}, &LoadError{Field: field + ".time", Msg: err.Error()}
+			return domain.Ticket{}, &LoadError{Field: field + ".time", Msg: err.Error()}
 		}
 		t.Moves = append(t.Moves, mv)
 	}
 	if t.Edits, err = decodeEdits(f.Edits, ticketEditFields...); err != nil {
-		return Ticket{}, err.(*LoadError)
+		return domain.Ticket{}, err.(*LoadError)
 	}
 	return t, nil
 }
 
 // decodeCIRuns decodes ci-runs.yaml, checking each run's status and
 // conclusions.
-func decodeCIRuns(data []byte) ([]CIRun, *LoadError) {
+func decodeCIRuns(data []byte) ([]domain.CIRun, *LoadError) {
 	var f ciRunsFile
 	if field, err := decodeStrict(data, &f); err != nil {
 		return nil, &LoadError{Field: field, Msg: err.Error()}
 	}
-	var out []CIRun
+	var out []domain.CIRun
 	for i, rf := range f.Runs {
 		field := fmt.Sprintf("runs[%d]", i)
-		r := CIRun{Repository: rf.Repository, ID: rf.ID, Attempt: rf.Attempt, Workflow: rf.Workflow, Name: rf.Name, Branch: rf.Branch, Commit: rf.Commit,
-			Status: CIRunStatus(rf.Status), Conclusion: CIConclusion(rf.Conclusion), URL: rf.URL, Ticket: rf.Ticket, Rule: rf.Rule, Ignored: rf.Ignored}
+		r := domain.CIRun{Repository: rf.Repository, ID: rf.ID, Attempt: rf.Attempt, Workflow: rf.Workflow, Name: rf.Name, Branch: rf.Branch, Commit: rf.Commit,
+			Status: domain.CIRunStatus(rf.Status), Conclusion: domain.CIConclusion(rf.Conclusion), URL: rf.URL, Ticket: rf.Ticket, Rule: rf.Rule, Ignored: rf.Ignored}
 		if !r.Status.Valid() {
 			return nil, &LoadError{Field: field + ".status", Msg: fmt.Sprintf("unknown CI Run status %q", rf.Status)}
 		}
@@ -593,7 +594,7 @@ func decodeCIRuns(data []byte) ([]CIRun, *LoadError) {
 			}
 		}
 		for j, jf := range rf.Jobs {
-			job := CIJob{Name: jf.Name, Conclusion: CIConclusion(jf.Conclusion), URL: jf.URL}
+			job := domain.CIJob{Name: jf.Name, Conclusion: domain.CIConclusion(jf.Conclusion), URL: jf.URL}
 			if !job.Conclusion.Valid() {
 				return nil, &LoadError{Field: fmt.Sprintf("%s.jobs[%d].conclusion", field, j), Msg: fmt.Sprintf("unknown CI conclusion %q", jf.Conclusion)}
 			}
@@ -606,8 +607,8 @@ func decodeCIRuns(data []byte) ([]CIRun, *LoadError) {
 
 // decodeChangedRepositories is a Ticket's Changed Repositories, each
 // named by a valid Repository Name, once.
-func decodeChangedRepositories(fs []changedRepoFile) ([]ChangedRepository, *LoadError) {
-	var out []ChangedRepository
+func decodeChangedRepositories(fs []changedRepoFile) ([]domain.ChangedRepository, *LoadError) {
+	var out []domain.ChangedRepository
 	for i, f := range fs {
 		field := fmt.Sprintf("repositories[%d]", i)
 		if f.Name == "" {
@@ -616,12 +617,12 @@ func decodeChangedRepositories(fs []changedRepoFile) ([]ChangedRepository, *Load
 		if lerr := checkRepositoryName(field+".name", f.Name); lerr != nil {
 			return nil, lerr
 		}
-		if slices.ContainsFunc(out, func(r ChangedRepository) bool { return r.Name == f.Name }) {
+		if slices.ContainsFunc(out, func(r domain.ChangedRepository) bool { return r.Name == f.Name }) {
 			return nil, &LoadError{Field: field + ".name", Msg: fmt.Sprintf("%q is listed twice", f.Name)}
 		}
-		r := ChangedRepository{Name: f.Name, Branch: f.Branch, Commit: f.Commit}
+		r := domain.ChangedRepository{Name: f.Name, Branch: f.Branch, Commit: f.Commit}
 		if f.Landed != nil {
-			l := &Landed{Commit: f.Landed.Commit}
+			l := &domain.Landed{Commit: f.Landed.Commit}
 			if l.Commit == "" {
 				return nil, &LoadError{Field: field + ".landed.commit", Msg: "required"}
 			}
@@ -638,15 +639,15 @@ func decodeChangedRepositories(fs []changedRepoFile) ([]ChangedRepository, *Load
 
 // decodePullRequest adds f, a pull request stored at field, to t's,
 // refusing a bad state and a second pull request in one Repository.
-func decodePullRequest(t *Ticket, field string, f pullRequestFile) *LoadError {
-	pr := PullRequest{Repository: f.Repository, Number: f.Number, Link: f.Link, State: PullRequestState(f.State), MergeCommit: f.MergeCommit, Close: f.Close}
+func decodePullRequest(t *domain.Ticket, field string, f pullRequestFile) *LoadError {
+	pr := domain.PullRequest{Repository: f.Repository, Number: f.Number, Link: f.Link, State: domain.PullRequestState(f.State), MergeCommit: f.MergeCommit, Close: f.Close}
 	if lerr := checkRepositoryName(field+".repository", pr.Repository); lerr != nil {
 		return lerr
 	}
-	if !slices.Contains(PullRequestStates, pr.State) {
-		return &LoadError{Field: field + ".state", Msg: fmt.Sprintf("%q is not one of %v", pr.State, PullRequestStates)}
+	if !slices.Contains(domain.PullRequestStates, pr.State) {
+		return &LoadError{Field: field + ".state", Msg: fmt.Sprintf("%q is not one of %v", pr.State, domain.PullRequestStates)}
 	}
-	if slices.ContainsFunc(t.PullRequests, func(o PullRequest) bool { return o.Repository == pr.Repository }) {
+	if slices.ContainsFunc(t.PullRequests, func(o domain.PullRequest) bool { return o.Repository == pr.Repository }) {
 		return &LoadError{Field: field + ".repository", Msg: fmt.Sprintf("a second pull request in %q", pr.Repository)}
 	}
 	t.PullRequests = append(t.PullRequests, pr)
@@ -656,26 +657,26 @@ func decodePullRequest(t *Ticket, field string, f pullRequestFile) *LoadError {
 // checkRepositoryName refuses a Repository Name that breaks the rules;
 // an empty one, the Home Repository's, passes.
 func checkRepositoryName(field, name string) *LoadError {
-	if name != "" && !ValidRepositoryName(name) {
+	if name != "" && !domain.ValidRepositoryName(name) {
 		return &LoadError{Field: field, Msg: fmt.Sprintf("%q is not a Repository Name", name)}
 	}
 	return nil
 }
 
-func decodeRounds(rs []roundFile) ([]Round, error) {
-	var out []Round
+func decodeRounds(rs []roundFile) ([]domain.Round, error) {
+	var out []domain.Round
 	for i, r := range rs {
 		field := fmt.Sprintf("rounds[%d]", i)
-		rd := Round{Number: r.Number, Claim: r.Claim, SessionID: r.SessionID}
+		rd := domain.Round{Number: r.Number, Claim: r.Claim, SessionID: r.SessionID}
 		var err error
 		if rd.Posted, err = parseTime(r.Posted); err != nil {
 			return nil, &LoadError{Field: field + ".posted", Msg: err.Error()}
 		}
 		for j, q := range r.Questions {
 			qf := fmt.Sprintf("%s.questions[%d]", field, j)
-			qu := Question{Number: q.Number, Title: q.Title, Body: q.Body, Recommended: q.Recommended, Status: QuestionStatus(q.Status), Answer: q.Answer}
+			qu := domain.Question{Number: q.Number, Title: q.Title, Body: q.Body, Recommended: q.Recommended, Status: domain.QuestionStatus(q.Status), Answer: q.Answer}
 			switch qu.Status {
-			case QuestionOpen, QuestionAnswered, QuestionDismissed:
+			case domain.QuestionOpen, domain.QuestionAnswered, domain.QuestionDismissed:
 			default:
 				return nil, &LoadError{Field: qf + ".status", Msg: fmt.Sprintf("unknown status %q (open, answered or dismissed)", q.Status)}
 			}
@@ -693,10 +694,10 @@ func decodeRounds(rs []roundFile) ([]Round, error) {
 
 // decodeEdits checks an edits list, whose previous values may name only
 // the given fields.
-func decodeEdits(fs []editFile, fields ...string) ([]Edit, error) {
-	var out []Edit
+func decodeEdits(fs []editFile, fields ...string) ([]domain.Edit, error) {
+	var out []domain.Edit
 	for i, e := range fs {
-		ed := Edit{Number: e.Number, Actor: e.Actor, Previous: e.Previous}
+		ed := domain.Edit{Number: e.Number, Actor: e.Actor, Previous: e.Previous}
 		var err error
 		if ed.Time, err = parseTime(e.Time); err != nil {
 			return nil, &LoadError{Field: fmt.Sprintf("edits[%d].time", i), Msg: err.Error()}
@@ -711,7 +712,7 @@ func decodeEdits(fs []editFile, fields ...string) ([]Edit, error) {
 	return out, nil
 }
 
-func encodeEdits(es []Edit) []editFile {
+func encodeEdits(es []domain.Edit) []editFile {
 	out := []editFile{}
 	for _, e := range es {
 		out = append(out, editFile{Number: e.Number, Actor: e.Actor, Time: formatTime(e.Time), Previous: e.Previous})
@@ -726,25 +727,25 @@ func encode(record any, project string) (string, []byte, error) {
 	var data []byte
 	var err error
 	switch r := record.(type) {
-	case Project:
+	case domain.Project:
 		rel = filepath.Join("projects", r.Key, "project.yaml")
 		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI),
 			GitHubIssues: encodeGitHubIssues(r.GitHubIssues), AzureBoards: encodeAzureBoards(r.AzureBoards), Models: encodeModels(r.Models),
 			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), FocusKindsOff: r.FocusKindsOff, CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec, SmallChangesSpec: r.SmallChangesSpec, RetrosSpec: r.RetrosSpec, AutoAccept: encodeAutoAccept(r.AutoAccept),
 			Repositories: encodeRepositories(r.Repositories)})
-	case Options:
+	case domain.Options:
 		rel = "options.yaml"
 		f := optionsFile{FocusClear: string(r.FocusClear), FocusPopup: string(r.FocusPopup), GHPath: r.GHPath}
-		if r.LimitsPopup != DefaultOptions().LimitsPopup {
+		if r.LimitsPopup != domain.DefaultOptions().LimitsPopup {
 			f.LimitsPopup = string(r.LimitsPopup)
 		}
 		data, err = encodeYAML(f)
-	case Spec:
+	case domain.Spec:
 		rel = filepath.Join("projects", project, "specs", strconv.Itoa(r.Number)+".md")
 		var front []byte
 		front, err = encodeYAML(specFront{ID: r.Number, Title: r.Title, Labels: r.Labels, Tags: r.Tags, Link: encodeLink(r.Link), Created: formatTime(r.Created), Updated: formatTime(r.Updated), Edits: encodeEdits(r.Edits)})
 		data = append(append(append([]byte("---\n"), front...), "---\n"...), r.Body...)
-	case Ticket:
+	case domain.Ticket:
 		rel = filepath.Join("projects", project, "tickets", strconv.Itoa(r.Number)+".yaml")
 		f := ticketFile{
 			Title: r.Title, State: string(r.State), Spec: r.Spec, Labels: r.Labels, Tags: r.Tags,
@@ -807,7 +808,7 @@ func encode(record any, project string) (string, []byte, error) {
 			f.Moves = append(f.Moves, moveFile{From: string(m.From), To: string(m.To), Actor: m.Actor, Time: formatTime(m.Time), Claim: m.Claim, Via: m.Via, Commit: m.Commit, Cause: string(m.Cause)})
 		}
 		data, err = encodeYAML(f)
-	case CIRuns:
+	case domain.CIRuns:
 		rel = filepath.Join("projects", project, ciRunsName)
 		f := ciRunsFile{Runs: []ciRunFile{}}
 		for _, run := range r.Runs {
@@ -845,8 +846,8 @@ func formatTime(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
 
 // encodeLanding leaves the default Landing out of project.yaml, so a
 // Project that never had one set keeps the file it always had.
-func encodeLanding(l Landing) *landingFile {
-	if l = landingOrDefault(l); l == DefaultLanding() {
+func encodeLanding(l domain.Landing) *landingFile {
+	if l = landingOrDefault(l); l == domain.DefaultLanding() {
 		return nil
 	}
 	f := &landingFile{Method: string(l.Method), Push: l.Push, Remote: l.Remote, PATEnv: l.PATEnv, Base: l.Base}
@@ -858,8 +859,8 @@ func encodeLanding(l Landing) *landingFile {
 
 // encodeCI leaves the default CI out of project.yaml, so a Project that
 // never had CI settings keeps the file it always had.
-func encodeCI(c CI) *ciFile {
-	if c.Equal(DefaultCI()) {
+func encodeCI(c domain.CI) *ciFile {
+	if c.Equal(domain.DefaultCI()) {
 		return nil
 	}
 	f := &ciFile{Tracking: c.Tracking, PATEnv: c.PATEnv,
@@ -876,17 +877,17 @@ func encodeCI(c CI) *ciFile {
 // decodeCIRepositories checks a Project's CI entries as load does: each
 // names a Repository once, with a CI Provider unless it is Not watched.
 // It returns the field, relative to ci.repositories, with the error.
-func decodeCIRepositories(fs []ciRepositoryFile) ([]CIRepository, string, error) {
-	var out []CIRepository
+func decodeCIRepositories(fs []ciRepositoryFile) ([]domain.CIRepository, string, error) {
+	var out []domain.CIRepository
 	for i, f := range fs {
-		r := CIRepository{Name: f.Name, NotWatched: f.NotWatched, Provider: CIProvider(f.Provider), Repository: f.Repository, ProjectURL: f.ProjectURL}
+		r := domain.CIRepository{Name: f.Name, NotWatched: f.NotWatched, Provider: domain.CIProvider(f.Provider), Repository: f.Repository, ProjectURL: f.ProjectURL}
 		switch {
-		case !ValidRepositoryName(r.Name):
+		case !domain.ValidRepositoryName(r.Name):
 			return nil, fmt.Sprintf("[%d].name", i), fmt.Errorf("%q isn't a Repository Name", r.Name)
-		case slices.ContainsFunc(out, func(o CIRepository) bool { return o.Name == r.Name }):
+		case slices.ContainsFunc(out, func(o domain.CIRepository) bool { return o.Name == r.Name }):
 			return nil, fmt.Sprintf("[%d].name", i), fmt.Errorf("%s has two CI entries", r.Name)
 		case r.Provider != "" && !r.Provider.Valid(), r.Provider == "" && !r.NotWatched:
-			return nil, fmt.Sprintf("[%d].provider", i), fmt.Errorf("unknown CI provider %q (%s)", f.Provider, strings.Join(CIProviderNames(), " or "))
+			return nil, fmt.Sprintf("[%d].provider", i), fmt.Errorf("unknown CI provider %q (%s)", f.Provider, strings.Join(domain.CIProviderNames(), " or "))
 		}
 		out = append(out, r)
 	}
@@ -898,25 +899,25 @@ func decodeCIRepositories(fs []ciRepositoryFile) ([]CIRepository, string, error)
 // code-central-890) when they name what to watch and es has no entry for
 // the Home. Without them the Home's entry is filled in from its Clone
 // URL, as any Repository's is.
-func withLegacyHomeCI(key string, es []CIRepository, f ciFile) []CIRepository {
-	e := CIRepository{Name: key, Provider: CIProvider(f.Provider), Repository: f.Repository, ProjectURL: f.ProjectURL}
+func withLegacyHomeCI(key string, es []domain.CIRepository, f ciFile) []domain.CIRepository {
+	e := domain.CIRepository{Name: key, Provider: domain.CIProvider(f.Provider), Repository: f.Repository, ProjectURL: f.ProjectURL}
 	if e.Provider == "" {
-		e.Provider = CIGitHubActions
+		e.Provider = domain.CIGitHubActions
 	}
 	named := e.Repository != ""
-	if e.Provider == CIAzurePipelines {
+	if e.Provider == domain.CIAzurePipelines {
 		named = e.ProjectURL != ""
 	}
-	if !named || slices.ContainsFunc(es, func(o CIRepository) bool { return o.Name == key }) {
+	if !named || slices.ContainsFunc(es, func(o domain.CIRepository) bool { return o.Name == key }) {
 		return es
 	}
-	return append([]CIRepository{e}, es...)
+	return append([]domain.CIRepository{e}, es...)
 }
 
 // encodeGitHubIssues leaves GitHub Issues out of project.yaml while it is
 // off with nothing set, so a Project that never had it keeps the file it
 // always had.
-func encodeGitHubIssues(g GitHubIssues) *githubIssuesFile {
+func encodeGitHubIssues(g domain.GitHubIssues) *githubIssuesFile {
 	if !g.On && len(g.Repositories) == 0 && g.Label == "" && !g.NewIssuesNeedMe && g.Spec == 0 {
 		return nil
 	}
@@ -926,8 +927,8 @@ func encodeGitHubIssues(g GitHubIssues) *githubIssuesFile {
 // encodeAzureBoards leaves Azure Boards out of project.yaml while it is
 // off with nothing set, so a Project that never had it keeps the file it
 // always had.
-func encodeAzureBoards(a AzureBoards) *azureBoardsFile {
-	if a == (AzureBoards{}) {
+func encodeAzureBoards(a domain.AzureBoards) *azureBoardsFile {
+	if a == (domain.AzureBoards{}) {
 		return nil
 	}
 	return &azureBoardsFile{On: a.On, Mode: string(a.Mode), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
@@ -935,7 +936,7 @@ func encodeAzureBoards(a AzureBoards) *azureBoardsFile {
 }
 
 // encodeAutoAccept is the on kinds as project.yaml holds them.
-func encodeAutoAccept(kinds []AutoAcceptKind) []string {
+func encodeAutoAccept(kinds []domain.AutoAcceptKind) []string {
 	var out []string
 	for _, k := range kinds {
 		out = append(out, string(k))
@@ -945,7 +946,7 @@ func encodeAutoAccept(kinds []AutoAcceptKind) []string {
 
 // encodeRepositories is the Repositories as project.yaml holds them, the
 // Home Repository's with its name, Own Landing and Push remote alone.
-func encodeRepositories(rs []Repository) []repositoryFile {
+func encodeRepositories(rs []domain.Repository) []repositoryFile {
 	var out []repositoryFile
 	for _, r := range rs {
 		f := repositoryFile{Name: r.Name, Home: r.Home, PushRemote: r.PushRemote}
@@ -968,24 +969,24 @@ func encodeRepositories(rs []Repository) []repositoryFile {
 // Push normalised away. The Home Repository's name is the Project Key,
 // which keeps the key's own rules. It returns the offending field,
 // relative to repositories, with the error.
-func decodeRepositories(key string, fs []repositoryFile) ([]Repository, string, error) {
+func decodeRepositories(key string, fs []repositoryFile) ([]domain.Repository, string, error) {
 	if len(fs) == 0 {
 		return nil, "", nil
 	}
-	var out []Repository
+	var out []domain.Repository
 	homes := 0
 	for i, f := range fs {
 		field := fmt.Sprintf("[%d]", i)
-		if !f.Home && !ValidRepositoryName(f.Name) {
-			return nil, field + ".name", fmt.Errorf("%q isn't a Repository Name: lowercase letters, digits, -, _ and ., starting with a letter or digit, at most %d characters", f.Name, MaxRepositoryName)
+		if !f.Home && !domain.ValidRepositoryName(f.Name) {
+			return nil, field + ".name", fmt.Errorf("%q isn't a Repository Name: lowercase letters, digits, -, _ and ., starting with a letter or digit, at most %d characters", f.Name, domain.MaxRepositoryName)
 		}
-		if slices.ContainsFunc(out, func(r Repository) bool { return r.Name == f.Name }) {
+		if slices.ContainsFunc(out, func(r domain.Repository) bool { return r.Name == f.Name }) {
 			return nil, field + ".name", fmt.Errorf("%q a second time", f.Name)
 		}
-		var own OwnLanding
+		var own domain.OwnLanding
 		if l := f.Landing; l != nil {
-			if own = (OwnLanding{Method: LandingMethod(l.Method), Push: l.Push}).Normalized(); !own.Method.Valid() {
-				return nil, field + ".landing.method", fmt.Errorf("unknown landing method %q (%s)", l.Method, strings.Join(LandingMethodNames(), " or "))
+			if own = (domain.OwnLanding{Method: domain.LandingMethod(l.Method), Push: l.Push}).Normalized(); !own.Method.Valid() {
+				return nil, field + ".landing.method", fmt.Errorf("unknown landing method %q (%s)", l.Method, strings.Join(domain.LandingMethodNames(), " or "))
 			}
 		}
 		if f.Home {
@@ -996,7 +997,7 @@ func decodeRepositories(key string, fs []repositoryFile) ([]Repository, string, 
 			if f.CloneURL != "" || f.Base != "" || f.LocalPath != "" {
 				return nil, field, errors.New("the Home Repository holds only its name, Own Landing and Push remote: its Clone URL is reported and its Base is the Project's")
 			}
-			out = append(out, Repository{Name: f.Name, Home: true, OwnLanding: own, PushRemote: f.PushRemote})
+			out = append(out, domain.Repository{Name: f.Name, Home: true, OwnLanding: own, PushRemote: f.PushRemote})
 			continue
 		}
 		if f.CloneURL == "" && f.LocalPath == "" {
@@ -1005,7 +1006,7 @@ func decodeRepositories(key string, fs []repositoryFile) ([]Repository, string, 
 		if f.Base == "" {
 			return nil, field + ".base", errors.New("missing")
 		}
-		out = append(out, Repository{Name: f.Name, CloneURL: f.CloneURL, Base: f.Base, LocalPath: f.LocalPath, OwnLanding: own, PushRemote: f.PushRemote})
+		out = append(out, domain.Repository{Name: f.Name, CloneURL: f.CloneURL, Base: f.Base, LocalPath: f.LocalPath, OwnLanding: own, PushRemote: f.PushRemote})
 	}
 	if homes != 1 {
 		return nil, "", fmt.Errorf("lists the Home Repository %d times, want once", homes)
@@ -1015,8 +1016,8 @@ func decodeRepositories(key string, fs []repositoryFile) ([]Repository, string, 
 
 // encodeStageGuides leaves the Stage Guides settings out of project.yaml
 // while every optional line is on.
-func encodeStageGuides(g StageGuides) *stageGuidesFile {
-	if g == (StageGuides{}) {
+func encodeStageGuides(g domain.StageGuides) *stageGuidesFile {
+	if g == (domain.StageGuides{}) {
 		return nil
 	}
 	return &stageGuidesFile{SubagentExplorationOff: g.SubagentExplorationOff, ModelAssignmentOn: g.ModelAssignmentOn}
@@ -1029,8 +1030,8 @@ func decodeFocusKindsOff(off []string) ([]string, string, error) {
 	var out []string
 	for i, r := range off {
 		field := fmt.Sprintf("[%d]", i)
-		if !slices.Contains(NeedsMeReasons, r) {
-			return nil, field, fmt.Errorf("unknown Needs Me reason %q (%s)", r, strings.Join(NeedsMeReasons, ", "))
+		if !slices.Contains(domain.NeedsMeReasons, r) {
+			return nil, field, fmt.Errorf("unknown Needs Me reason %q (%s)", r, strings.Join(domain.NeedsMeReasons, ", "))
 		}
 		if slices.Contains(out, r) {
 			return nil, field, fmt.Errorf("%q a second time", r)
@@ -1038,22 +1039,22 @@ func decodeFocusKindsOff(off []string) ([]string, string, error) {
 		out = append(out, r)
 	}
 	slices.SortFunc(out, func(a, b string) int {
-		return slices.Index(NeedsMeReasons, a) - slices.Index(NeedsMeReasons, b)
+		return slices.Index(domain.NeedsMeReasons, a) - slices.Index(domain.NeedsMeReasons, b)
 	})
 	return out, "", nil
 }
 
 // encodeModels leaves Models out of project.yaml while it sets nothing,
 // and each row that sets nothing out of Models.
-func encodeModels(m Models) *modelsFile {
+func encodeModels(m domain.Models) *modelsFile {
 	if m.IsZero() {
 		return nil
 	}
 	f := &modelsFile{}
-	if m.Default != (ModelRow{}) {
+	if m.Default != (domain.ModelRow{}) {
 		f.Default = &modelRowFile{Model: m.Default.Model, Effort: m.Default.Effort}
 	}
-	if m.Chat != (ModelRow{}) {
+	if m.Chat != (domain.ModelRow{}) {
 		f.Chat = &modelRowFile{Model: m.Chat.Model, Effort: m.Chat.Effort}
 	}
 	for _, k := range m.Kinds {
@@ -1065,12 +1066,12 @@ func encodeModels(m Models) *modelsFile {
 // decodeModels checks f's rows as load does: each names a kind of work
 // once, sets something, and holds single-line values. It returns the
 // offending field, relative to models, with the error.
-func decodeModels(f modelsFile) (Models, string, error) {
-	var m Models
-	row := func(field, model, effort string) (ModelRow, string, error) {
-		r := ModelRow{Model: model, Effort: effort}
+func decodeModels(f modelsFile) (domain.Models, string, error) {
+	var m domain.Models
+	row := func(field, model, effort string) (domain.ModelRow, string, error) {
+		r := domain.ModelRow{Model: model, Effort: effort}
 		switch {
-		case r == ModelRow{}:
+		case r == domain.ModelRow{}:
 			return r, field, errors.New("a Models row sets a model or an effort; leave out one that sets neither")
 		case !singleLine(model):
 			return r, field + ".model", errors.New("a model is one line, not blank")
@@ -1082,39 +1083,39 @@ func decodeModels(f modelsFile) (Models, string, error) {
 	if d := f.Default; d != nil {
 		r, field, err := row("default", d.Model, d.Effort)
 		if err != nil {
-			return Models{}, field, err
+			return domain.Models{}, field, err
 		}
 		m.Default = r
 	}
 	if c := f.Chat; c != nil {
 		r, field, err := row("chat", c.Model, c.Effort)
 		if err != nil {
-			return Models{}, field, err
+			return domain.Models{}, field, err
 		}
 		m.Chat = r
 	}
 	for i, k := range f.Kinds {
 		field := fmt.Sprintf("kinds[%d]", i)
-		if !slices.Contains(ModelKinds, k.Kind) {
-			return Models{}, field + ".kind", fmt.Errorf("unknown kind of work %q (%s)", k.Kind, strings.Join(ModelKinds, ", "))
+		if !slices.Contains(domain.ModelKinds, k.Kind) {
+			return domain.Models{}, field + ".kind", fmt.Errorf("unknown kind of work %q (%s)", k.Kind, strings.Join(domain.ModelKinds, ", "))
 		}
-		if m.Kind(k.Kind) != (ModelRow{}) {
-			return Models{}, field + ".kind", fmt.Errorf("a second row for %q", k.Kind)
+		if m.Kind(k.Kind) != (domain.ModelRow{}) {
+			return domain.Models{}, field + ".kind", fmt.Errorf("a second row for %q", k.Kind)
 		}
 		r, bad, err := row(field, k.Model, k.Effort)
 		if err != nil {
-			return Models{}, bad, err
+			return domain.Models{}, bad, err
 		}
-		m.Kinds = append(m.Kinds, KindModels{Kind: k.Kind, ModelRow: r})
+		m.Kinds = append(m.Kinds, domain.KindModels{Kind: k.Kind, ModelRow: r})
 	}
-	slices.SortStableFunc(m.Kinds, func(a, b KindModels) int {
-		return slices.Index(ModelKinds, a.Kind) - slices.Index(ModelKinds, b.Kind)
+	slices.SortStableFunc(m.Kinds, func(a, b domain.KindModels) int {
+		return slices.Index(domain.ModelKinds, a.Kind) - slices.Index(domain.ModelKinds, b.Kind)
 	})
 	return m, "", nil
 }
 
 // encodeCIResponses is p's CI responses as project.yaml holds them.
-func encodeCIResponses(rs []CIResponse) []ciResponseFile {
+func encodeCIResponses(rs []domain.CIResponse) []ciResponseFile {
 	var out []ciResponseFile
 	for _, r := range rs {
 		f := ciResponseFile{Repository: r.Repository, Commit: r.Commit, LandAnyway: formatOptionalTime(r.LandAnyway), Rerun: formatOptionalTime(r.Rerun), FixTicket: r.FixTicket}
@@ -1128,10 +1129,10 @@ func encodeCIResponses(rs []CIResponse) []ciResponseFile {
 
 // decodeCIResponses checks fs as load does, returning the field, relative
 // to ci_responses, with the error.
-func decodeCIResponses(fs []ciResponseFile) ([]CIResponse, string, error) {
-	var out []CIResponse
+func decodeCIResponses(fs []ciResponseFile) ([]domain.CIResponse, string, error) {
+	var out []domain.CIResponse
 	for i, f := range fs {
-		r := CIResponse{Repository: f.Repository, Commit: f.Commit, FixTicket: f.FixTicket}
+		r := domain.CIResponse{Repository: f.Repository, Commit: f.Commit, FixTicket: f.FixTicket}
 		if r.Commit == "" {
 			return nil, fmt.Sprintf("[%d].commit", i), errors.New("required")
 		}
@@ -1147,7 +1148,7 @@ func decodeCIResponses(fs []ciResponseFile) ([]CIResponse, string, error) {
 			}
 		}
 		for _, ra := range f.Reruns {
-			r.Reruns = append(r.Reruns, CIRunAttempt{ID: ra.ID, Attempt: ra.Attempt})
+			r.Reruns = append(r.Reruns, domain.CIRunAttempt{ID: ra.ID, Attempt: ra.Attempt})
 		}
 		out = append(out, r)
 	}
@@ -1156,7 +1157,7 @@ func decodeCIResponses(fs []ciResponseFile) ([]CIResponse, string, error) {
 
 // encodeReportedModels leaves the Reported Models out of project.yaml
 // while they hold nothing.
-func encodeReportedModels(r ReportedModels) *reportedModelsFile {
+func encodeReportedModels(r domain.ReportedModels) *reportedModelsFile {
 	if r.IsZero() {
 		return nil
 	}
@@ -1167,8 +1168,8 @@ func encodeReportedModels(r ReportedModels) *reportedModelsFile {
 // decodeReportedModels checks f as load does: every value is one line,
 // not blank, and reported a timestamp. It returns the offending field,
 // relative to reported_models, with the error.
-func decodeReportedModels(f reportedModelsFile) (ReportedModels, string, error) {
-	r := ReportedModels{EffortLevels: f.EffortLevels, Aliases: f.Aliases, ModelIDs: f.ModelIDs, ModelFlag: f.ModelFlag, EffortFlag: f.EffortFlag}
+func decodeReportedModels(f reportedModelsFile) (domain.ReportedModels, string, error) {
+	r := domain.ReportedModels{EffortLevels: f.EffortLevels, Aliases: f.Aliases, ModelIDs: f.ModelIDs, ModelFlag: f.ModelFlag, EffortFlag: f.EffortFlag}
 	lists := []struct {
 		field  string
 		values []string
@@ -1176,20 +1177,20 @@ func decodeReportedModels(f reportedModelsFile) (ReportedModels, string, error) 
 	for _, l := range lists {
 		for i, v := range l.values {
 			if v == "" || !singleLine(v) {
-				return ReportedModels{}, fmt.Sprintf("%s[%d]", l.field, i), errors.New("each is one line, not blank")
+				return domain.ReportedModels{}, fmt.Sprintf("%s[%d]", l.field, i), errors.New("each is one line, not blank")
 			}
 		}
 	}
 	switch {
 	case !singleLine(f.ModelFlag):
-		return ReportedModels{}, "model_flag", errors.New("a flag is empty, or one line that isn't blank")
+		return domain.ReportedModels{}, "model_flag", errors.New("a flag is empty, or one line that isn't blank")
 	case !singleLine(f.EffortFlag):
-		return ReportedModels{}, "effort_flag", errors.New("a flag is empty, or one line that isn't blank")
+		return domain.ReportedModels{}, "effort_flag", errors.New("a flag is empty, or one line that isn't blank")
 	}
 	if f.Reported != "" {
 		t, err := parseTime(f.Reported)
 		if err != nil {
-			return ReportedModels{}, "reported", err
+			return domain.ReportedModels{}, "reported", err
 		}
 		r.Reported = t
 	}

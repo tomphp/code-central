@@ -2,6 +2,7 @@ package notify_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"testing"
 	"time"
 
@@ -55,7 +56,7 @@ func (f *fixture) project(key string, n int) {
 	must(f.t)(f.core.CreateProject(ctx, core.CreateProjectInput{Key: key}))
 	must(f.t)(f.core.CreateSpec(ctx, key, core.CreateSpecInput{Title: "Login", Body: "body\n"}))
 	for i := range n {
-		must(f.t)(f.core.CreateTicket(ctx, key, core.CreateTicketInput{Spec: "1", Title: "Task " + string(rune('A'+i)), State: store.Ready}))
+		must(f.t)(f.core.CreateTicket(ctx, key, core.CreateTicketInput{Spec: "1", Title: "Task " + string(rune('A'+i)), State: domain.Ready}))
 	}
 }
 
@@ -226,7 +227,7 @@ func TestAcceptedButNotLandedNeverNotifies(t *testing.T) {
 func TestToMergeNeverNotifies(t *testing.T) {
 	f := newFixture(t)
 	f.project("acme", 2)
-	must(t)(f.core.SetLandingMethod(core.WithActor(ctx, core.Human), "acme", core.SetLandingMethodInput{Method: store.LandingBranch}))
+	must(t)(f.core.SetLandingMethod(core.WithActor(ctx, core.Human), "acme", core.SetLandingMethodInput{Method: domain.LandingBranch}))
 	f.start()
 	f.accepted("acme", "2")
 	f.clock.BlockUntil(1)
@@ -439,14 +440,14 @@ func (f *fixture) pushed(project, ticket, commit string) {
 	human := core.WithActor(ctx, core.Human)
 	if p := must(f.t)(f.core.GetProject(ctx, project)).(core.ProjectView); !p.CI.Tracking {
 		must(f.t)(f.core.SetCITracking(human, project, core.SetCITrackingInput{Tracking: true, Repository: "acme/web"}))
-		must(f.t)(f.core.SetLandingMethod(human, project, core.SetLandingMethodInput{Method: store.LandingMerge, Push: true, Remote: "origin"}))
+		must(f.t)(f.core.SetLandingMethod(human, project, core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"}))
 	}
 	must(f.t)(f.core.ReportPushedCommit(ctx, project, core.ReportPushedCommitInput{Ticket: core.Ref(ticket), Commit: commit}))
 }
 
 // ciRun reports one run of ci.yml on commit, tracked against ticket, as
 // the CI Watcher.
-func (f *fixture) ciRun(project, ticket, commit string, id int64, status store.CIRunStatus, conclusion store.CIConclusion) {
+func (f *fixture) ciRun(project, ticket, commit string, id int64, status domain.CIRunStatus, conclusion domain.CIConclusion) {
 	f.t.Helper()
 	must(f.t)(f.core.ReportCIRuns(ctx, project, core.ReportCIRunsInput{Runs: []core.CIRunView{{ID: id, Attempt: 1, Workflow: "ci.yml",
 		Commit: commit, Status: status, Conclusion: conclusion, Ticket: project + "-" + ticket}}}))
@@ -458,10 +459,10 @@ func TestATicketGoingToCIFailedNotifiesOnce(t *testing.T) {
 	f.accepted("acme", "2")
 	f.pushed("acme", "2", "abc123")
 	f.start()
-	f.ciRun("acme", "2", "abc123", 1, store.CIInProgress, "")
-	f.ciRun("acme", "2", "abc123", 1, store.CICompleted, store.CIFailure)
+	f.ciRun("acme", "2", "abc123", 1, domain.CIInProgress, "")
+	f.ciRun("acme", "2", "abc123", 1, domain.CICompleted, domain.CIFailure)
 	// Another failed run on the same commit is the same CI failed.
-	f.ciRun("acme", "2", "abc123", 2, store.CICompleted, store.CIFailure)
+	f.ciRun("acme", "2", "abc123", 2, domain.CICompleted, domain.CIFailure)
 	f.closeWindow()
 	f.want(notify.Notification{Title: "acme-2's CI failed", Body: "Task A", URL: base + "/?view=inbox&ticket=acme-2"})
 
@@ -480,7 +481,7 @@ func TestATicketAlreadyCIFailedAtStartupIsInTheStartupSummary(t *testing.T) {
 	f.project("acme", 2)
 	f.accepted("acme", "2")
 	f.pushed("acme", "2", "abc123")
-	f.ciRun("acme", "2", "abc123", 1, store.CICompleted, store.CIFailure)
+	f.ciRun("acme", "2", "abc123", 1, domain.CICompleted, domain.CIFailure)
 	f.start()
 	f.want(notify.Notification{Title: "Code Central", Body: "1 Ticket needs you in acme", URL: base + "/?view=inbox"})
 	f.clock.BlockUntil(1)
@@ -499,7 +500,7 @@ func TestATicketGoingToCICancelledSendsNoCIFailedAlert(t *testing.T) {
 	f.accepted("acme", "2")
 	f.pushed("acme", "2", "abc123")
 	f.start()
-	f.ciRun("acme", "2", "abc123", 1, store.CICompleted, store.CICancelled)
+	f.ciRun("acme", "2", "abc123", 1, domain.CICompleted, domain.CICancelled)
 	f.round("acme", "3")
 	f.closeWindow()
 	f.want(notify.Notification{Title: "acme-3 has a new Round", Body: "Task B", URL: base + "/?view=inbox&ticket=acme-3"})
@@ -511,7 +512,7 @@ func TestATicketAlreadyCICancelledAtStartupIsInTheStartupSummary(t *testing.T) {
 	f.project("acme", 2)
 	f.accepted("acme", "2")
 	f.pushed("acme", "2", "abc123")
-	f.ciRun("acme", "2", "abc123", 1, store.CICompleted, store.CICancelled)
+	f.ciRun("acme", "2", "abc123", 1, domain.CICompleted, domain.CICancelled)
 	f.start()
 	f.want(notify.Notification{Title: "Code Central", Body: "1 Ticket needs you in acme", URL: base + "/?view=inbox"})
 }
@@ -526,7 +527,7 @@ func TestTicketsSharingAPushedCommitNotifyItsCIFailureOnce(t *testing.T) {
 	f.pushed("acme", "2", "abc123")
 	f.pushed("acme", "3", "abc123")
 	f.start()
-	f.ciRun("acme", "2", "abc123", 1, store.CICompleted, store.CIFailure)
+	f.ciRun("acme", "2", "abc123", 1, domain.CICompleted, domain.CIFailure)
 	f.closeWindow()
 	f.want(notify.Notification{Title: "acme-2's CI failed", Body: "Task A", URL: base + "/?view=inbox&ticket=acme-2"})
 	f.wantNothing()

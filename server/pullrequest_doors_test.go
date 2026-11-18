@@ -2,11 +2,11 @@ package server_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"testing"
 
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
 )
 
 // The Pull Request Watcher's own (code-central-388, -389): get_pull_request_watch
@@ -72,7 +72,7 @@ func pushedAcceptedForPullRequest(t *testing.T, srv *codecentraltest.Server) {
 	})
 	must(t, func() error {
 		_, err := srv.Core.SetLandingMethod(core.WithActor(context.Background(), core.Human), "acme",
-			core.SetLandingMethodInput{Method: store.LandingPullRequest, Remote: "origin"})
+			core.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin"})
 		return err
 	})
 	acceptedTicket(t, srv)

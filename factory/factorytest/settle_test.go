@@ -1,6 +1,7 @@
 package factorytest
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"net/http"
 	"slices"
 	"strings"
@@ -8,8 +9,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/tomoram/code-central/store"
 )
 
 // requestHold has the proxy hold the requests whose path ends in a
@@ -80,7 +79,7 @@ func TestSettleReturnsWhileATurnIsParkedInAWaitStep(t *testing.T) {
 	if _, parked := h.parked(id); !parked {
 		t.Error("Settle returned with the turn not in its Wait step")
 	}
-	if s := h.Ticket(id).State; s != store.InProgress {
+	if s := h.Ticket(id).State; s != domain.InProgress {
 		t.Errorf("%s is %s, want In Progress while its turn runs", id, s)
 	}
 }
@@ -172,7 +171,7 @@ func TestTickFiresADueClaimRetryBeforeThePoll(t *testing.T) {
 		t.Errorf("the clock moved %v, want the claim retry pause and the poll, %v", got, want)
 	}
 	r.Settle()
-	if tk := h.Ticket(id); len(tk.Claims) != 1 || tk.State != store.InReview {
+	if tk := h.Ticket(id); len(tk.Claims) != 1 || tk.State != domain.InReview {
 		t.Errorf("%s is %s with %d Claims, want In Review with the one Claim the retry got back", id, tk.State, len(tk.Claims))
 	}
 	if n := len(h.Calls()); n != 1 {
