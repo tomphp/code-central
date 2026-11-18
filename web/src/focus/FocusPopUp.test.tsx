@@ -258,11 +258,11 @@ describe("Focus Pop-up", () => {
     expect(window.history.length).toBe(length);
   });
 
-  it("lands on the Focus Item's Ticket in the Inbox from Open in Inbox, and stays closed there", async () => {
+  it("lands on the Focus Item's Ticket in the Inbox from its title, and stays closed there", async () => {
     const { w, flaky } = await popupOn();
     await renderApp(w, "/?view=ci");
     const item = within(popup());
-    await userEvent.click(item.getByRole("link", { name: "Open in Inbox" }));
+    await userEvent.click(item.getByRole("link", { name: "Flaky build" }));
     await settle(w);
     expect(window.location.search).toBe(`?view=inbox&ticket=${flaky}`);
     const detail = screen.getByRole("complementary", { name: "Ticket" });

@@ -6,11 +6,11 @@
 // It has no + New ▾. It has two modes:
 //
 //   - Ticket mode is the Board's popup for a Ticket that needs the human,
-//     scoped to the one Ticket, Focus Item or not, with no Skip, N left or
-//     Open in Inbox. It closes by itself once Needs Me has no row left for
+//     scoped to the one Ticket, Focus Item or not, with no Skip or N left.
+//     Its title's link drops popup from the address. It closes by itself once Needs Me has no row left for
 //     the Ticket.
 //   - Queue mode is scoped to a Project, or All Projects, over every Focus
-//     Item in Needs Me, with Skip, N left and Open in Inbox. It keeps its
+//     Item in Needs Me, with Skip and N left. It keeps its
 //     own skip list, and closes by itself once the queue is clear or only
 //     skipped Focus Items are left.
 //
@@ -20,13 +20,13 @@ import { useEffect, useRef } from "react";
 import { IdLinksContext, NO_ID_LINKS, useIdLinks } from "../idLinks";
 import { useApi, useVersion, type InboxData } from "../live";
 import type { UiLocation } from "../url";
-import { FocusItemView, inboxOf } from "../focus/FocusItemView";
+import { FocusItemView, ticketLinkOf } from "../focus/FocusItemView";
 import { useFocusSession, type FocusKey } from "../focus/session";
 import { PopupShell } from "../controls/PopupShell";
 
 // FocusPopupClose is why the popup closed and the keys of the Focus Items
 // in scope then: "dismissed" by ×, Escape, a click outside or leaving
-// through a link in it such as Open in Inbox; "cleared" once nothing is
+// through a link in it such as the title's; "cleared" once nothing is
 // left in scope; "only_skipped" once only skipped Focus Items are.
 export interface FocusPopupClose {
   why: "dismissed" | "cleared" | "only_skipped";
@@ -46,6 +46,9 @@ export type FocusPopupProps = {
       mode: "ticket";
       // id is the Ticket the popup is scoped to.
       id: string;
+      // project is the Board's Project, the one in scope for the title's
+      // link; none means All Projects.
+      project?: string;
     }
   | {
       mode: "queue";
@@ -59,10 +62,10 @@ export function FocusPopup(props: FocusPopupProps) {
   const api = useApi();
   useVersion();
   const queue = props.mode === "queue";
-  const project = queue ? props.project : undefined;
+  const project = props.project;
   // The session lives for the popup's life; Ticket mode has no Skip, so
   // its skip list stays empty.
-  const session = useFocusSession({ api, project, scope: queue ? undefined : props.id });
+  const session = useFocusSession({ api, project: queue ? project : undefined, scope: queue ? undefined : props.id });
   const { item } = session;
   const close = (why: FocusPopupClose["why"]) => onClose({ why, keys: session.keys });
   const gone = useRef(() => props.onGone?.(session.keys));
@@ -76,7 +79,7 @@ export function FocusPopup(props: FocusPopupProps) {
     if (done) close(done);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- close is a new function each render; the popup closes once, as done changes
   }, [done]);
-  // Leaving through a link in a Queue mode item, Open in Inbox or Base
+  // Leaving through a link in a Queue mode item, the title or Base
   // missing's Project Options, dismisses the popup on the way.
   const leave = (patch: Partial<UiLocation>) => {
     close("dismissed");
@@ -113,7 +116,7 @@ export function FocusPopup(props: FocusPopupProps) {
           ticket={session.ticket}
           navigate={queue ? leave : navigate}
           skip={queue ? session.skip : undefined}
-          inbox={queue ? inboxOf(item.row, project) : undefined}
+          ticketLink={ticketLinkOf(item.row, project, queue ? undefined : { popup: undefined })}
         />
       ) : (
         <p className="empty">Loading…</p>

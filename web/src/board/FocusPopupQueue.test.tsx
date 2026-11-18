@@ -128,13 +128,14 @@ const skip = async ({ w }: Fake) => {
 const noPopup = () => expect(screen.queryByRole("dialog", { name: "Focus popup" })).toBeNull();
 
 describe("the Focus popup's Queue mode", () => {
-  it("shows Needs Me's first Focus Item on All Projects, with N left, Skip and Open in Inbox, and no + New ▾", async () => {
+  it("shows Needs Me's first Focus Item on All Projects, with N left, Skip and its title linking to the Ticket, and no + New ▾", async () => {
     const fake = await tickets();
     await renderQueue(fake);
     expect(heading("Flaky build")).toBeInTheDocument();
     expect(within(popup()).getByText("3 left")).toBeInTheDocument();
     expect(within(popup()).getByRole("button", { name: "Skip" })).toBeInTheDocument();
-    expect(within(popup()).getByRole("link", { name: "Open in Inbox" })).toHaveAttribute("href", `?view=inbox&ticket=${fake.flaky}`);
+    expect(within(popup()).getByRole("link", { name: "Flaky build" })).toHaveAttribute("href", `?view=inbox&ticket=${fake.flaky}`);
+    expect(within(popup()).queryByRole("link", { name: "Open in Inbox" })).toBeNull();
     expect(within(popup()).getByRole("button", { name: "Close" })).toBeInTheDocument();
     expect(within(popup()).queryByRole("button", { name: /New/ })).toBeNull();
     expect(within(popup()).getAllByRole("article", { name: "Focus Item" })).toHaveLength(1);
@@ -240,11 +241,11 @@ describe("the Focus popup's Queue mode", () => {
     expect(window.history.length).toBe(length);
   });
 
-  it("opens the Focus Item's Ticket in the Inbox from Open in Inbox, closing as a dismissal", async () => {
+  it("opens the Focus Item's Ticket in the Inbox from its title, closing as a dismissal", async () => {
     const fake = await tickets();
     const closed = await renderQueue(fake);
     heading("Flaky build");
-    await userEvent.click(within(item()).getByRole("link", { name: "Open in Inbox" }));
+    await userEvent.click(within(item()).getByRole("link", { name: "Flaky build" }));
     await settle(fake.w);
     noPopup();
     expect(window.location.search).toBe(`?view=inbox&ticket=${fake.flaky}`);

@@ -2,10 +2,10 @@
 // and the Focus popup. Where it's from, why it waits, then its Question
 // with the answer form, or its reason's panel, and the Base diverged and
 // Base missing fixes. What differs by host is passed in: the Api to act
-// through, and the optional Skip and Open in Inbox.
+// through, and the optional Skip and the title's link to its Ticket.
 import type { Api } from "../api/api";
 import type { NeedsMeRow, TicketView } from "../api/types";
-import { duration, shortCommit, ticketOf } from "../format";
+import { duration, shortCommit } from "../format";
 import { FocusBadge } from "./FocusBadge";
 import { ShortId } from "../inbox/ShortId";
 import { WithApi, type InboxData } from "../live";
@@ -31,25 +31,27 @@ export interface FocusItemViewProps {
   navigate(patch: Partial<UiLocation>): void;
   // skip sends the item to the back of the queue; no Skip shows without it.
   skip?(): void;
-  // inbox is where Open in Inbox goes; no link shows without it, or for an
-  // item with no Ticket.
-  inbox?: UiLocation;
+  // ticketLink is where the title links to, its Ticket in the Inbox; the
+  // title is plain text without it.
+  ticketLink?: UiLocation;
   // inOneProject drops the Project name above the item, when the host's
   // header already names the one Project in scope.
   inOneProject?: boolean;
 }
 
-// inboxOf is where Open in Inbox goes for a row, if it has a Ticket, on
-// the Project in scope: a Stage Ticket opens in its Requirement, with it
-// selected; a CI item opens on the first Ticket it lists.
-export function inboxOf(row: NeedsMeRow, project?: string): UiLocation | undefined {
-  const ticket = ticketOf(row);
-  if (!ticket) return undefined;
+// ticketLinkOf is where a Focus Item's title links to, if the row is one
+// Ticket's, on the Project in scope: a Stage Ticket opens in its
+// Requirement, with it selected. A CI item and an item with no Ticket have
+// no link. extra is added to the target, such as popup: undefined to drop
+// the Board's popup.
+export function ticketLinkOf(row: NeedsMeRow, project?: string, extra?: Partial<UiLocation>): UiLocation | undefined {
+  if (!row.id) return undefined;
   return {
     view: "inbox" as const,
     project,
     requirement: row.requirement?.stage && row.requirement.spec,
-    ticket,
+    ticket: row.id,
+    ...extra,
   };
 }
 
@@ -64,13 +66,13 @@ export function FocusItemView({
   ticket,
   navigate,
   skip,
-  inbox,
+  ticketLink,
   inOneProject,
 }: FocusItemViewProps) {
   const project = data.projects.find((p) => p.key === row.project);
   const Panel = panelFor(row.reason, ticket?.state)?.Component;
   const waited = duration(now, row.since);
-  const open = inbox && clickTo(navigate, inbox);
+  const open = ticketLink && clickTo(navigate, ticketLink);
   const skipButton = skip && (
     <Button type="button"  onClick={skip}>
       Skip
@@ -112,7 +114,15 @@ export function FocusItemView({
           </p>
         )
       )}
-      <h2>{row.title}</h2>
+      <h2>
+        {ticketLink && open ? (
+          <a href={hrefFor(ticketLink)} onClick={open}>
+            {row.title}
+          </a>
+        ) : (
+          row.title
+        )}
+      </h2>
       {row.requirement && (
         <p className="focus-requirement">
           {row.requirement.stage
@@ -177,13 +187,6 @@ export function FocusItemView({
               before its Questions are known. */}
           {ticket && skipButton && <p className="focus-skip">{skipButton}</p>}
         </>
-      )}
-      {inbox && open && (
-        <p className="focus-open">
-          <a href={hrefFor(inbox)} onClick={open}>
-            Open in Inbox
-          </a>
-        </p>
       )}
     </article>
     </WithApi>

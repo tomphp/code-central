@@ -32,7 +32,6 @@
 .focus-repository-missing { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; }
 .focus-repository-missing dt { color: var(--muted); }
 .focus-repository-missing dd { margin: 0; overflow-wrap: anywhere; }
-.focus-open { margin: 24px 0 0; }
 /* A Question Focus Item: the Question reads largest, its Ticket's title
    steps down to make room. The shared answer form's own rules are sized
    for the Round panel, so its box and note are set here. */

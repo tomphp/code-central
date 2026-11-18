@@ -191,7 +191,7 @@ describe("the Board's Focus popup", () => {
     return { ...fake, pick };
   }
 
-  it("opens from a card that needs the human, with its Focus Item and no Skip, N left or Open in Inbox", async () => {
+  it("opens from a card that needs the human, with its Focus Item and no Skip or N left, and its title linking to the Ticket", async () => {
     const fake = await asking();
     await renderApp(fake, "/?view=board&project=acme");
     loaded();
@@ -206,6 +206,26 @@ describe("the Board's Focus popup", () => {
     expect(popup()).not.toHaveTextContent(/\d+ left/);
     // Only the one Ticket's work: not Sign-up page's In Review.
     expect(popup()).not.toHaveTextContent("Sign-up page");
+    expect(within(item()).getByRole("link", { name: "Pick a colour" })).toHaveAttribute(
+      "href",
+      `?view=inbox&project=acme&ticket=${fake.pick}`,
+    );
+  });
+
+  it("leaves for the Ticket in the Inbox from its title, closing the popup, and Back returns to it", async () => {
+    const fake = await asking();
+    await renderApp(fake, "/?view=board&project=acme");
+    loaded();
+    await click(within(card("Pick a colour")).getByText("Pick a colour"));
+    await click(within(item()).getByRole("link", { name: "Pick a colour" }));
+    await settled();
+    expect(screen.queryByRole("dialog", { name: "Focus popup" })).toBeNull();
+    expect(window.location.search).toBe(`?view=inbox&project=acme&ticket=${fake.pick}`);
+    expect(screen.getByRole("complementary", { name: "Ticket" })).toBeInTheDocument();
+    window.history.back();
+    await settled();
+    expect(window.location.search).toBe(`?view=board&project=acme&popup=${fake.pick}`);
+    expect(popup()).toBeInTheDocument();
   });
 
   it("shows Loading… until the Round is read", async () => {
@@ -307,6 +327,8 @@ describe("the Board's Focus popup", () => {
     await renderApp(fake, `/?view=board&project=acme&popup=${checkout}`);
     const ciItem = item();
     expect(within(ciItem).getByRole("heading", { level: 2 })).toHaveTextContent("CI failed at abc1234");
+    // Its title is plain text: no one Ticket to go to.
+    expect(within(within(ciItem).getByRole("heading", { level: 2 })).queryByRole("link")).toBeNull();
     const panel = within(ciItem).getByRole("region", { name: "CI failed" });
     await click(within(within(panel).getByRole("group", { name: "Failure options" })).getByRole("button", { name: "Land anyway" }));
     for (const id of [basket, checkout]) expect((await fake.w.api.getTicket("acme", id)).land_anyway).toBe(true);
