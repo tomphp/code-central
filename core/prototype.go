@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -40,15 +41,15 @@ func (c *Core) SubmitPrototype(_ context.Context, key string, in SubmitPrototype
 			return err
 		}
 		now := c.now()
-		t := store.Ticket{
-			Number: w.NextNumber(key), Title: "Prototype: " + title, State: store.Ready, Spec: sp.Number,
+		t := domain.Ticket{
+			Number: w.NextNumber(key), Title: "Prototype: " + title, State: domain.Ready, Spec: sp.Number,
 			Labels: []string{PrototypeLabel}, Created: now, Updated: now, Description: in.Text,
-			Moves: []store.Move{{To: store.Ready, Actor: string(Human), Time: now, Via: "submit_prototype"}},
+			Moves: []domain.Move{{To: domain.Ready, Actor: string(Human), Time: now, Via: "submit_prototype"}},
 		}
 		if err := w.PutTicket(key, t); err != nil {
 			return err
 		}
-		v, err = acknowledgeCreate(c.ticketView(w, key, store.Ticket{}), c.ticketView(w, key, t), in.Full)
+		v, err = acknowledgeCreate(c.ticketView(w, key, domain.Ticket{}), c.ticketView(w, key, t), in.Full)
 		return err
 	})
 	return v, err

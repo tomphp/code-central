@@ -6,7 +6,7 @@ import (
 	"maps"
 	"strings"
 
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // The published workflow: what an agent session is taught by the server
@@ -42,17 +42,17 @@ var troubleRules string
 var workflowProse = strings.Replace(workflowSource, "<!-- trouble.md -->\n", troubleRules, 1)
 
 // stateMeanings are the ten States' meanings, in workflow order.
-var stateMeanings = map[store.State]string{
-	store.Draft:       "Still being defined, so no agent should pick it up",
-	store.Ready:       "An agent can claim it",
-	store.InProgress:  "An agent has claimed it and is working",
-	store.NeedsAnswer: "The agent is stopped on an unanswered Question",
-	store.Answered:    "Every Question is answered and the asking session has not yet picked the work up",
-	store.Failed:      "The agent stopped because something broke",
-	store.InReview:    "The work is finished and waiting for the human to accept it",
-	store.Accepted:    "The human has accepted the work and it is waiting to land in the base",
-	store.Done:        "Finished",
-	store.Cancelled:   "Abandoned",
+var stateMeanings = map[domain.State]string{
+	domain.Draft:       "Still being defined, so no agent should pick it up",
+	domain.Ready:       "An agent can claim it",
+	domain.InProgress:  "An agent has claimed it and is working",
+	domain.NeedsAnswer: "The agent is stopped on an unanswered Question",
+	domain.Answered:    "Every Question is answered and the asking session has not yet picked the work up",
+	domain.Failed:      "The agent stopped because something broke",
+	domain.InReview:    "The work is finished and waiting for the human to accept it",
+	domain.Accepted:    "The human has accepted the work and it is waiting to land in the base",
+	domain.Done:        "Finished",
+	domain.Cancelled:   "Abandoned",
 }
 
 // WorkflowView is get_workflow's result: the table core enforces, as
@@ -73,29 +73,29 @@ type NeedsMeReasonView struct {
 
 // StateView is one State and what it means.
 type StateView struct {
-	Name    store.State `json:"name"`
-	Meaning string      `json:"meaning"`
+	Name    domain.State `json:"name"`
+	Meaning string       `json:"meaning"`
 }
 
 // ActionView is one row of the action table. To is empty when the Actor
 // chooses it (move), among every State outside Except. ClaimID says the
 // action must send the live Claim ID.
 type ActionView struct {
-	Name     string        `json:"name"`
-	From     []store.State `json:"from"`
-	To       store.State   `json:"to,omitempty"`
-	Except   []store.State `json:"except,omitempty"`
-	Who      Who           `json:"who"`
-	ClaimID  bool          `json:"claim_id"`
-	Requires string        `json:"requires,omitempty"`
-	NextStep string        `json:"next_step,omitempty"`
+	Name     string         `json:"name"`
+	From     []domain.State `json:"from"`
+	To       domain.State   `json:"to,omitempty"`
+	Except   []domain.State `json:"except,omitempty"`
+	Who      Who            `json:"who"`
+	ClaimID  bool           `json:"claim_id"`
+	Requires string         `json:"requires,omitempty"`
+	NextStep string         `json:"next_step,omitempty"`
 }
 
 // GetWorkflow is get_workflow: the whole workflow, generated from the
 // same table every move is checked against, so the two can't drift.
 func (c *Core) GetWorkflow(context.Context) (WorkflowView, error) {
 	w := WorkflowView{NeedsMe: needsMeReasons, Prose: workflowProse}
-	for _, s := range store.States {
+	for _, s := range domain.States {
 		w.States = append(w.States, StateView{Name: s, Meaning: stateMeanings[s]})
 	}
 	for _, a := range Workflow {

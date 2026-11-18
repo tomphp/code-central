@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // Resume Command and working directory on a Claim (ticket 69).
@@ -20,21 +20,21 @@ func wantResume(t *testing.T, c core.ClaimView, dir, command string) {
 
 func TestClaimRecordsTheWorkingDirAndResumeCommandAsGiven(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{SessionID: "s1", WorkingDir: str("/work/acme-2"), ResumeCommand: str("codex resume s1 --yolo")})
 	wantResume(t, f.get(t, "2").Claims[0], "/work/acme-2", "codex resume s1 --yolo")
 }
 
 func TestAClaimWithoutThemReadsBothEmptyNeverADefault(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	res := f.claim(t, core.ClaimInput{SessionID: "s1"})
 	wantResume(t, res.Ticket.Claims[0], "", "")
 }
 
 func TestSetSessionsLastWriteWinsAndAMissingFieldLeavesTheStoredOneAlone(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{SessionID: "s1", WorkingDir: str("/a"), ResumeCommand: str("claude --resume s1")})
 
 	v, err := record(f.core.SetSession(ctx, "acme", core.SetSessionInput{Ticket: "2", ClaimID: "claim-1", SessionID: "s2", ResumeCommand: str("claude --resume s2"), Full: true}))
@@ -59,7 +59,7 @@ func TestSetSessionsLastWriteWinsAndAMissingFieldLeavesTheStoredOneAlone(t *test
 
 func TestANewClaimStartsWithNoWorkingDirOrResumeCommand(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{WorkingDir: str("/a"), ResumeCommand: str("run it")})
 	if _, err := f.core.GiveUp(ctx, "acme", core.GiveUpInput{Ticket: "2", ClaimID: "claim-1", Note: "stuck"}); err != nil {
 		t.Fatal(err)
@@ -72,7 +72,7 @@ func TestANewClaimStartsWithNoWorkingDirOrResumeCommand(t *testing.T) {
 
 func TestAFailureReportCopiesTheSessionWorkingDirAndResumeCommand(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{SessionID: "s1", WorkingDir: str("/a"), ResumeCommand: str("claude --resume s1")})
 	res, err := f.core.ReportFailure(ctx, "acme", fullReport("2", "claim-1"))
 	if err != nil {

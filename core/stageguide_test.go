@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
-	"github.com/tomoram/code-central/store"
 )
 
 // Stage Guides (ticket 73).
@@ -227,7 +227,7 @@ func TestClaimCarriesTheRetroGuideForATicketLabelledRetro(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Retros")
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Look back", State: store.Ready, Labels: []string{"retro"}})
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Look back", State: domain.Ready, Labels: []string{"retro"}})
 	res, err := f.core.Claim(ctx, "acme", core.ClaimInput{})
 	if err != nil {
 		t.Fatal(err)
@@ -244,7 +244,7 @@ func TestClaimCarriesTheImplementationGuideForATicketWithNoStage(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Search")
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Index", State: store.Ready, Labels: []string{"backend"}})
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Index", State: domain.Ready, Labels: []string{"backend"}})
 	res, err := f.core.Claim(ctx, "acme", core.ClaimInput{})
 	if err != nil {
 		t.Fatal(err)
@@ -413,7 +413,7 @@ func TestClaimBuildsTheGuideFromTheTicketsProject(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Search")
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Index", State: store.Ready})
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Index", State: domain.Ready})
 	f.setSubagentExploration(t, false)
 	res, err := f.core.Claim(ctx, "acme", core.ClaimInput{})
 	if err != nil {

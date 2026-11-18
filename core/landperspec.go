@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -22,7 +23,7 @@ import (
 // Ticket), and its Spec is neither a Map nor Long-lived (it doesn't carry
 // the long-lived Label). A Long-lived Spec's Tickets land Ticket by
 // Ticket.
-func specLanded(r store.Reader, p store.Project, t store.Ticket) bool {
+func specLanded(r store.Reader, p domain.Project, t domain.Ticket) bool {
 	if !landingPolicies(p).LandPerSpecInForce() {
 		return false
 	}
@@ -37,13 +38,13 @@ func specLanded(r store.Reader, p store.Project, t store.Ticket) bool {
 // its Spec's, so a commit pushed for it there is the Spec's: t is
 // Spec-landed and Land per Spec is in force there. Under Branch it has no
 // effect, and t's own branch is pushed there (Spec code-central-890).
-func landsWithSpecIn(r store.Reader, p store.Project, t store.Ticket, name string) bool {
+func landsWithSpecIn(r store.Reader, p domain.Project, t domain.Ticket, name string) bool {
 	return specLanded(r, p, t) && landingPolicyIn(p, name).LandPerSpecInForce()
 }
 
 // specMergeCounts is whether t has a Spec merge that counts: one after
 // t's last move back to Ready, the way a pushed commit counts.
-func specMergeCounts(t store.Ticket) bool {
+func specMergeCounts(t domain.Ticket) bool {
 	return t.SpecMerge != nil && t.SpecMerge.Merged.After(backToReady(t))
 }
 
@@ -56,20 +57,20 @@ func specMergeCounts(t store.Ticket) bool {
 // (Spec code-central-848). It waits only on its Changed Repositories
 // where Land per Spec is in force: under Branch it lands once the human
 // merges it (Spec code-central-890).
-func waitingForSpec(r store.Reader, p store.Project, t store.Ticket) bool {
-	if t.State != store.Accepted || !specLanded(r, p, t) {
+func waitingForSpec(r store.Reader, p domain.Project, t domain.Ticket) bool {
+	if t.State != domain.Accepted || !specLanded(r, p, t) {
 		return false
 	}
 	ps := ticketLandingPolicies(p, t)
 	rs := changedRepositories(p.Key, t)
-	if slices.ContainsFunc(rs, func(cr store.ChangedRepository) bool { return cr.Landed == nil && ps.In(cr.Name).LandsByPullRequest() }) {
+	if slices.ContainsFunc(rs, func(cr domain.ChangedRepository) bool { return cr.Landed == nil && ps.In(cr.Name).LandsByPullRequest() }) {
 		// The Spec Branch is pushed and waits on its pull request there.
 		return true
 	}
 	if len(rs) < 2 {
 		return ps.LandPerSpecInForce() && (len(t.PushedCommits) == 0 || !latestPushed(t).Pushed.After(backToReady(t)))
 	}
-	return slices.ContainsFunc(rs, func(cr store.ChangedRepository) bool {
+	return slices.ContainsFunc(rs, func(cr domain.ChangedRepository) bool {
 		pc, ok := latestPushedTo(p.Key, t, cr.Name)
 		return cr.Landed == nil && ps.In(cr.Name).LandPerSpecInForce() && (!ok || !pc.Pushed.After(backToReady(t)))
 	})
@@ -100,7 +101,7 @@ type LandPerSpecView struct {
 // landPerSpecView is the Land per Spec status of Spec s with these
 // Tickets, or nil when the option doesn't apply: it isn't in force, or s is
 // a Long-lived Spec.
-func landPerSpecView(r store.Reader, key string, s store.Spec, tickets []store.Ticket) *LandPerSpecView {
+func landPerSpecView(r store.Reader, key string, s domain.Spec, tickets []domain.Ticket) *LandPerSpecView {
 	p, _ := r.Project(key)
 	if !landingPolicies(p).LandPerSpecInForce() || slices.Contains(s.Labels, LongLivedLabel) {
 		return nil
@@ -116,8 +117,8 @@ func landPerSpecView(r store.Reader, key string, s store.Spec, tickets []store.T
 			continue
 		}
 		switch t.State {
-		case store.Done, store.Cancelled:
-		case store.Accepted:
+		case domain.Done, domain.Cancelled:
+		case domain.Accepted:
 			if waitingForSpec(r, p, t) {
 				v.Waiting = append(v.Waiting, DisplayID(key, t.Number))
 				merged = merged || specMergeCounts(t)
@@ -153,9 +154,9 @@ func (c *Core) ReportSpecMerge(_ context.Context, key string, in ReportSpecMerge
 	if commit == "" {
 		return Written[TicketView]{}, invalid("commit", "report_spec_merge needs the Spec Branch commit the Factory merged into")
 	}
-	return c.updateTicketIn(key, "report_spec_merge", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
+	return c.updateTicketIn(key, "report_spec_merge", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
 		p, _ := r.Project(key)
-		if t.State != store.Accepted || !specLanded(r, p, *t) {
+		if t.State != domain.Accepted || !specLanded(r, p, *t) {
 			return false, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is %s: only an Accepted Spec-landed Ticket is merged into its Spec Branch", DisplayID(key, t.Number), t.State)}
 		}
 		name, err := repositoryOf(p, "repository", in.Repository)
@@ -165,7 +166,7 @@ func (c *Core) ReportSpecMerge(_ context.Context, key string, in ReportSpecMerge
 		if t.SpecMerge != nil && t.SpecMerge.Commit == commit && recordRepository(key, t.SpecMerge.Repository) == name && specMergeCounts(*t) {
 			return false, nil
 		}
-		t.SpecMerge = &store.SpecMerge{Repository: recordName(key, name), Commit: commit, Merged: c.now()}
+		t.SpecMerge = &domain.SpecMerge{Repository: recordName(key, name), Commit: commit, Merged: c.now()}
 		return true, nil
 	})
 }
@@ -173,7 +174,7 @@ func (c *Core) ReportSpecMerge(_ context.Context, key string, in ReportSpecMerge
 // specWork is the Tickets waiting on t's Spec's one pull request under
 // Pull Request, the lead (accepted earliest) first: the Accepted
 // Spec-landed Tickets of t's Spec. It is nil when t isn't one of them.
-func specWork(r store.Reader, key string, t store.Ticket) []store.Ticket {
+func specWork(r store.Reader, key string, t domain.Ticket) []domain.Ticket {
 	p, _ := r.Project(key)
 	if !inSpecWork(r, p, t) {
 		return nil
@@ -184,20 +185,20 @@ func specWork(r store.Reader, key string, t store.Ticket) []store.Ticket {
 // inSpecWork reports whether t waits on its Spec's one pull request in
 // Project p: one of its Changed Repositories is under Pull Request, and t
 // is Accepted and Spec-landed.
-func inSpecWork(r store.Reader, p store.Project, t store.Ticket) bool {
-	return t.State == store.Accepted && ticketLandingPolicies(p, t).Any(LandingPolicy.LandsByPullRequest) && specLanded(r, p, t)
+func inSpecWork(r store.Reader, p domain.Project, t domain.Ticket) bool {
+	return t.State == domain.Accepted && ticketLandingPolicies(p, t).Any(LandingPolicy.LandsByPullRequest) && specLanded(r, p, t)
 }
 
 // specWorkOf is the work of Spec spec among tickets, Project p's: the
 // Tickets waiting on its one pull request, the lead first.
-func specWorkOf(r store.Reader, p store.Project, tickets []store.Ticket, spec int) []store.Ticket {
-	var group []store.Ticket
+func specWorkOf(r store.Reader, p domain.Project, tickets []domain.Ticket, spec int) []domain.Ticket {
+	var group []domain.Ticket
 	for _, o := range tickets {
 		if o.Spec == spec && inSpecWork(r, p, o) {
 			group = append(group, o)
 		}
 	}
-	slices.SortFunc(group, func(a, b store.Ticket) int {
+	slices.SortFunc(group, func(a, b domain.Ticket) int {
 		if c := entered(a).Compare(entered(b)); c != 0 {
 			return c
 		}
@@ -210,12 +211,12 @@ func specWorkOf(r store.Reader, p store.Project, tickets []store.Ticket, spec in
 // Pull Request and has its Spec Branch pushed, so that its To merge or
 // Pull request closed item stands for the Spec; and whether t is a
 // Spec-waiting Ticket at all, which carries no item of its own.
-func specPullRequestLead(r store.Reader, key string, t store.Ticket) (lead, waiting bool) {
+func specPullRequestLead(r store.Reader, key string, t domain.Ticket) (lead, waiting bool) {
 	return leadOf(specWork(r, key, t), t)
 }
 
 // leadOf is specPullRequestLead for t from g, the work of t's Spec.
-func leadOf(g []store.Ticket, t store.Ticket) (lead, waiting bool) {
+func leadOf(g []domain.Ticket, t domain.Ticket) (lead, waiting bool) {
 	if len(g) == 0 {
 		return false, false
 	}
@@ -230,7 +231,7 @@ func leadOf(g []store.Ticket, t store.Ticket) (lead, waiting bool) {
 // Nothing lands and no Ticket is accepted. handled is false when t isn't
 // such a lead, and the CI failure path decides instead.
 func (c *Core) newSpecFixTicket(ctx context.Context, key string, in NewFixTicketInput) (v Written[TicketView], handled bool, err error) {
-	var lead store.Ticket
+	var lead domain.Ticket
 	var closed bool
 	err = c.store.View(func(r store.Reader) error {
 		t, err := resolveTicket(r, key, "new_fix_ticket", "ticket", in.Ticket)
@@ -241,7 +242,7 @@ func (c *Core) newSpecFixTicket(ctx context.Context, key string, in NewFixTicket
 			return nil
 		}
 		lead, handled = t, true
-		closed = anyPullRequest(t, store.PRClosed)
+		closed = anyPullRequest(t, domain.PRClosed)
 		return nil
 	})
 	if err != nil || !handled {
@@ -259,21 +260,21 @@ func (c *Core) newSpecFixTicket(ctx context.Context, key string, in NewFixTicket
 			return err
 		}
 		now := c.now()
-		f := store.Ticket{
-			Number: w.NextNumber(key), Title: fmt.Sprintf("Fix %s: %s", DisplayID(key, lead.Spec), lead.Title), State: store.Ready, Spec: lead.Spec,
+		f := domain.Ticket{
+			Number: w.NextNumber(key), Title: fmt.Sprintf("Fix %s: %s", DisplayID(key, lead.Spec), lead.Title), State: domain.Ready, Spec: lead.Spec,
 			Created: now, Updated: now,
 			Description: fmt.Sprintf("Fix %s on the Spec Branch: its work waits on one pull request, and accepting this pushes the Spec Branch again.\n\n%s", what, in.Note),
 		}
 		if err := w.PutTicket(key, f); err != nil {
 			return err
 		}
-		v, err = acknowledgeCreate(c.ticketView(w, key, store.Ticket{}), c.ticketView(w, key, f), in.Full)
+		v, err = acknowledgeCreate(c.ticketView(w, key, domain.Ticket{}), c.ticketView(w, key, f), in.Full)
 		return err
 	})
 	if err != nil {
 		return Written[TicketView]{}, true, err
 	}
-	_, err = c.updateTicketIn(key, "new_fix_ticket", in.Ticket, true, func(_ store.Reader, t *store.Ticket) (bool, error) {
+	_, err = c.updateTicketIn(key, "new_fix_ticket", in.Ticket, true, func(_ store.Reader, t *domain.Ticket) (bool, error) {
 		addComment(t, ActorOf(ctx), c.now(), 0, fmt.Sprintf("New fix Ticket: a fix Ticket on %s takes %s; this Spec still waits on its pull request.", DisplayID(key, lead.Spec), what))
 		return true, nil
 	})

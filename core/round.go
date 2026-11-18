@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // QuestionInput is one Question of a Round being posted.
@@ -86,13 +86,13 @@ type RoundView struct {
 
 // QuestionView is one Question: open, answered or dismissed.
 type QuestionView struct {
-	Number      int                  `json:"number"`
-	Title       string               `json:"title"`
-	Body        string               `json:"body"`
-	Recommended string               `json:"recommended,omitempty"`
-	Status      store.QuestionStatus `json:"status"`
-	Answer      string               `json:"answer,omitempty"`
-	Closed      *time.Time           `json:"closed,omitempty"`
+	Number      int                   `json:"number"`
+	Title       string                `json:"title"`
+	Body        string                `json:"body"`
+	Recommended string                `json:"recommended,omitempty"`
+	Status      domain.QuestionStatus `json:"status"`
+	Answer      string                `json:"answer,omitempty"`
+	Closed      *time.Time            `json:"closed,omitempty"`
 }
 
 // postRoundNextStep is post_round's next step (its row in Workflow);
@@ -115,7 +115,7 @@ func (c *Core) PostRound(ctx context.Context, key string, in PostRoundInput) (Po
 		}
 	}
 	var res PostRoundResult
-	v, err := c.updateTicket(key, "post_round", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
+	v, err := c.updateTicket(key, "post_round", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		claim, _ := liveClaim(*t)
 		now := c.now()
 		if err := transition(ctx, t, key, "post_round", in.ClaimID, now); err != nil {
@@ -127,11 +127,11 @@ func (c *Core) PostRound(ctx context.Context, key string, in PostRoundInput) (Po
 			claim.SessionID = in.SessionID
 		}
 		session := claim.SessionID
-		r := store.Round{Number: len(t.Rounds) + 1, Claim: claim.Number, SessionID: session, Posted: now}
+		r := domain.Round{Number: len(t.Rounds) + 1, Claim: claim.Number, SessionID: session, Posted: now}
 		n := questionCount(*t)
 		for _, q := range in.Questions {
 			n++
-			r.Questions = append(r.Questions, store.Question{Number: n, Title: q.Title, Body: q.Body, Recommended: q.Recommended, Status: store.QuestionOpen})
+			r.Questions = append(r.Questions, domain.Question{Number: n, Title: q.Title, Body: q.Body, Recommended: q.Recommended, Status: domain.QuestionOpen})
 		}
 		t.Rounds = append(t.Rounds, r)
 		res = PostRoundResult{Round: r.Number, NextStep: strings.ReplaceAll(nextStep("post_round"), "<id>", DisplayID(key, t.Number))}
@@ -151,7 +151,7 @@ func (c *Core) PostRound(ctx context.Context, key string, in PostRoundInput) (Po
 func (c *Core) PickUpAnswers(ctx context.Context, key string, in PickUpAnswersInput) (PickUpAnswersResult, error) {
 	var res PickUpAnswersResult
 	// With full, as the Ticket isn't returned: no before view is built.
-	_, err := c.updateTicket(key, "pick_up_answers", in.Ticket, true, func(t *store.Ticket) (bool, error) {
+	_, err := c.updateTicket(key, "pick_up_answers", in.Ticket, true, func(t *domain.Ticket) (bool, error) {
 		if err := transition(ctx, t, key, "pick_up_answers", in.ClaimID, c.now()); err != nil {
 			return false, err
 		}
@@ -174,33 +174,33 @@ func (c *Core) Answer(ctx context.Context, key string, in AnswerInput) (Written[
 	if strings.TrimSpace(in.Text) == "" {
 		return Written[TicketView]{}, invalid("text", "an answer needs text; to decline a Question, dismiss it")
 	}
-	return c.onQuestion(ctx, key, in.Ticket, in.Full, "answer", in.Question, func(q *store.Question, now time.Time) {
-		q.Status, q.Answer, q.Closed = store.QuestionAnswered, in.Text, now
+	return c.onQuestion(ctx, key, in.Ticket, in.Full, "answer", in.Question, func(q *domain.Question, now time.Time) {
+		q.Status, q.Answer, q.Closed = domain.QuestionAnswered, in.Text, now
 	})
 }
 
 // DismissQuestion is the human's dismiss_question(question): one Question
 // declined without moving the Ticket, unless it was the last open one.
 func (c *Core) DismissQuestion(ctx context.Context, key string, in DismissQuestionInput) (Written[TicketView], error) {
-	return c.onQuestion(ctx, key, in.Ticket, in.Full, "dismiss_question", in.Question, func(q *store.Question, now time.Time) {
-		q.Status, q.Answer, q.Closed = store.QuestionDismissed, "", now
+	return c.onQuestion(ctx, key, in.Ticket, in.Full, "dismiss_question", in.Question, func(q *domain.Question, now time.Time) {
+		q.Status, q.Answer, q.Closed = domain.QuestionDismissed, "", now
 	})
 }
 
 // AcceptRecommended is the human's accept_recommended(round): every open
 // Question with a recommendation is answered with it.
 func (c *Core) AcceptRecommended(ctx context.Context, key string, in AcceptRecommendedInput) (Written[TicketView], error) {
-	find := func(t *store.Ticket) (*store.Round, error) {
+	find := func(t *domain.Ticket) (*domain.Round, error) {
 		if in.Round < 1 || in.Round > len(t.Rounds) {
 			return nil, notFound("there is no Round %d on %s", in.Round, DisplayID(key, t.Number))
 		}
 		return &t.Rounds[in.Round-1], nil
 	}
-	return c.onRound(ctx, key, in.Ticket, in.Full, "accept_recommended", find, func(r *store.Round, now time.Time) bool {
+	return c.onRound(ctx, key, in.Ticket, in.Full, "accept_recommended", find, func(r *domain.Round, now time.Time) bool {
 		changed := false
 		for i := range r.Questions {
-			if q := &r.Questions[i]; q.Status == store.QuestionOpen && q.Recommended != "" {
-				q.Status, q.Answer, q.Closed = store.QuestionAnswered, q.Recommended, now
+			if q := &r.Questions[i]; q.Status == domain.QuestionOpen && q.Recommended != "" {
+				q.Status, q.Answer, q.Closed = domain.QuestionAnswered, q.Recommended, now
 				changed = true
 			}
 		}
@@ -209,9 +209,9 @@ func (c *Core) AcceptRecommended(ctx context.Context, key string, in AcceptRecom
 }
 
 // onQuestion runs a Round action on Question n of the Ticket.
-func (c *Core) onQuestion(ctx context.Context, key string, ref Ref, full bool, name string, n int, apply func(*store.Question, time.Time)) (Written[TicketView], error) {
+func (c *Core) onQuestion(ctx context.Context, key string, ref Ref, full bool, name string, n int, apply func(*domain.Question, time.Time)) (Written[TicketView], error) {
 	var target int
-	find := func(t *store.Ticket) (*store.Round, error) {
+	find := func(t *domain.Ticket) (*domain.Round, error) {
 		for i := range t.Rounds {
 			for j, q := range t.Rounds[i].Questions {
 				if q.Number == n {
@@ -222,7 +222,7 @@ func (c *Core) onQuestion(ctx context.Context, key string, ref Ref, full bool, n
 		}
 		return nil, notFound("there is no Question %d on %s", n, DisplayID(key, t.Number))
 	}
-	return c.onRound(ctx, key, ref, full, name, find, func(r *store.Round, now time.Time) bool {
+	return c.onRound(ctx, key, ref, full, name, find, func(r *domain.Round, now time.Time) bool {
 		apply(&r.Questions[target], now)
 		return true
 	})
@@ -232,8 +232,8 @@ func (c *Core) onQuestion(ctx context.Context, key string, ref Ref, full bool, n
 // it, only on a Round that is not yet complete, and when it leaves no
 // open Question the Ticket moves to Answered in the same write.
 func (c *Core) onRound(ctx context.Context, key string, ref Ref, full bool, name string,
-	find func(*store.Ticket) (*store.Round, error), apply func(*store.Round, time.Time) bool) (Written[TicketView], error) {
-	return c.updateTicket(key, name, ref, full, func(t *store.Ticket) (bool, error) {
+	find func(*domain.Ticket) (*domain.Round, error), apply func(*domain.Round, time.Time) bool) (Written[TicketView], error) {
+	return c.updateTicket(key, name, ref, full, func(t *domain.Ticket) (bool, error) {
 		if actor := ActorOf(ctx); actor != Human {
 			return false, &Error{Code: ActionNotAllowed, AllowedActions: allowedActions(t.State, actor),
 				Message: fmt.Sprintf("%s is a human action; this request is made as %s", name, actor)}
@@ -260,9 +260,9 @@ func (c *Core) onRound(ctx context.Context, key string, ref Ref, full bool, name
 }
 
 // complete reports whether no Question in r is open.
-func complete(r store.Round) bool {
+func complete(r domain.Round) bool {
 	for _, q := range r.Questions {
-		if q.Status == store.QuestionOpen {
+		if q.Status == domain.QuestionOpen {
 			return false
 		}
 	}
@@ -270,17 +270,17 @@ func complete(r store.Round) bool {
 }
 
 // dismissOpen dismisses every open Question on t.
-func dismissOpen(t *store.Ticket, now time.Time) {
+func dismissOpen(t *domain.Ticket, now time.Time) {
 	for i := range t.Rounds {
 		for j := range t.Rounds[i].Questions {
-			if q := &t.Rounds[i].Questions[j]; q.Status == store.QuestionOpen {
-				q.Status, q.Closed = store.QuestionDismissed, now
+			if q := &t.Rounds[i].Questions[j]; q.Status == domain.QuestionOpen {
+				q.Status, q.Closed = domain.QuestionDismissed, now
 			}
 		}
 	}
 }
 
-func questionCount(t store.Ticket) int {
+func questionCount(t domain.Ticket) int {
 	n := 0
 	for _, r := range t.Rounds {
 		n += len(r.Questions)
@@ -288,7 +288,7 @@ func questionCount(t store.Ticket) int {
 	return n
 }
 
-func roundViews(rs []store.Round) []RoundView {
+func roundViews(rs []domain.Round) []RoundView {
 	out := []RoundView{}
 	for _, r := range rs {
 		out = append(out, roundView(r))
@@ -296,7 +296,7 @@ func roundViews(rs []store.Round) []RoundView {
 	return out
 }
 
-func roundView(r store.Round) RoundView {
+func roundView(r domain.Round) RoundView {
 	v := RoundView{Number: r.Number, Claim: r.Claim, SessionID: r.SessionID, Posted: r.Posted, Questions: []QuestionView{}}
 	for _, q := range r.Questions {
 		qv := QuestionView{Number: q.Number, Title: q.Title, Body: q.Body, Recommended: q.Recommended, Status: q.Status, Answer: q.Answer}

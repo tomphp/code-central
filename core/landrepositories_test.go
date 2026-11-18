@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // Landing across Repositories (Spec code-central-848, ADR 0049): land
@@ -53,13 +53,13 @@ func TestLandingInOneRepositoryLeavesTheTicketPartlyLandedUntilEveryOneHas(t *te
 	f.acceptedInTwo(t)
 
 	tk := f.landIn(t, core.LandInput{Repository: "api", Commit: "eee"})
-	if tk.State != store.Accepted || !tk.PartlyLanded || landedAt(tk, "api") != "eee" || landedAt(tk, "acme") != "" {
+	if tk.State != domain.Accepted || !tk.PartlyLanded || landedAt(tk, "api") != "eee" || landedAt(tk, "acme") != "" {
 		t.Fatalf("acme-2 %s partly landed %v %+v, want it Accepted and Partly landed, landed in api alone", tk.State, tk.PartlyLanded, tk.Repositories)
 	}
 
 	// Without a Repository, land means the Home Repository.
 	tk = f.landIn(t, core.LandInput{Commit: "fff"})
-	if tk.State != store.Done || tk.PartlyLanded || landedAt(tk, "acme") != "fff" || landedAt(tk, "api") != "eee" {
+	if tk.State != domain.Done || tk.PartlyLanded || landedAt(tk, "acme") != "fff" || landedAt(tk, "api") != "eee" {
 		t.Fatalf("acme-2 %s partly landed %v %+v, want it Done, landed in both", tk.State, tk.PartlyLanded, tk.Repositories)
 	}
 	if m := tk.Moves[len(tk.Moves)-1]; m.Via != "merge" || m.Commit != "fff" {
@@ -74,7 +74,7 @@ func TestLandRefusesARepositoryTheTicketDidntChangeOrTheProjectHasnt(t *testing.
 			f.acceptedInTwo(t)
 			_, err := f.core.Land(ctx, "acme", core.LandInput{Ticket: "2", Repository: repository, Commit: "eee"})
 			wantCode(t, err, core.Invalid, "repository")
-			if tk := f.get(t, "2"); tk.State != store.Accepted || landedAt(tk, repository) != "" {
+			if tk := f.get(t, "2"); tk.State != domain.Accepted || landedAt(tk, repository) != "" {
 				t.Fatalf("acme-2 %s %+v, want it as it was", tk.State, tk.Repositories)
 			}
 		})
@@ -91,7 +91,7 @@ func TestWorkInAnotherRepositoryAloneLandsByItsName(t *testing.T) {
 
 	_, err := f.core.Land(ctx, "acme", core.LandInput{Ticket: "2", Commit: "eee"})
 	wantCode(t, err, core.Invalid, "repository")
-	if tk := f.landIn(t, core.LandInput{Repository: "api", Commit: "eee"}); tk.State != store.Done {
+	if tk := f.landIn(t, core.LandInput{Repository: "api", Commit: "eee"}); tk.State != domain.Done {
 		t.Fatalf("acme-2 %s, want Done once api, its one Changed Repository, has landed", tk.State)
 	}
 }
@@ -106,7 +106,7 @@ func TestAPartlyLandedTicketCantBeCancelled(t *testing.T) {
 	if !strings.Contains(err.Error(), "Partly landed") {
 		t.Fatalf("refusal %q, want it to say the Ticket is Partly landed", err)
 	}
-	if tk := f.get(t, "2"); tk.State != store.Accepted {
+	if tk := f.get(t, "2"); tk.State != domain.Accepted {
 		t.Fatalf("acme-2 %s, want it still Accepted", tk.State)
 	}
 }
@@ -162,7 +162,7 @@ func (f fixture) basesProject(t *testing.T) {
 	f.project(t, "acme")
 	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git", Base: "develop"})
 	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git"})
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingMerge, Push: true, Remote: "origin"}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"}); err != nil {
 		t.Fatal(err)
 	}
 	beat(f, t, "cc", "box", core.HeartbeatOnline, 10)
@@ -241,7 +241,7 @@ func TestAcceptedButNotLandedNamesTheRepositoriesLandedAndNotLandedWithWhy(t *te
 	f.acceptedInTwo(t)
 	f.landIn(t, core.LandInput{Repository: "api", Commit: "eee"})
 	why := "couldn't push main to origin:\n\n```\nrejected\n```"
-	if _, err := f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: core.CantLandComment("acme", why, store.Accepted)}); err != nil {
+	if _, err := f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: core.CantLandComment("acme", why, domain.Accepted)}); err != nil {
 		t.Fatal(err)
 	}
 	f.clock.Advance(core.NotLandedAfter + time.Second)
@@ -275,7 +275,7 @@ func TestABrokenBaseIsWhyARepositoryHasntLanded(t *testing.T) {
 func TestAReasonFromBeforeTheTicketWasLastAcceptedIsntShown(t *testing.T) {
 	f := newFixture(t)
 	f.acceptedInTwo(t)
-	if _, err := f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: core.CantLandComment("api", "an old reason", store.Accepted)}); err != nil {
+	if _, err := f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: core.CantLandComment("api", "an old reason", domain.Accepted)}); err != nil {
 		t.Fatal(err)
 	}
 	f.clock.Advance(time.Minute)
@@ -294,7 +294,7 @@ func TestAHomeRepositoryAloneLandsAsItAlwaysHas(t *testing.T) {
 		t.Fatalf("row %+v, want Accepted but not landed naming no Repository", row)
 	}
 	tk := f.landIn(t, core.LandInput{Commit: "fff"})
-	if tk.State != store.Done || tk.Repositories != nil || tk.PartlyLanded {
+	if tk.State != domain.Done || tk.Repositories != nil || tk.PartlyLanded {
 		t.Fatalf("acme-2 %s %+v, want it Done with no Repositories shown", tk.State, tk.Repositories)
 	}
 }
@@ -303,14 +303,14 @@ func TestUnderTheCIGateARepositoryWaitingOnItsCISaysSoAsWhyItHasntLanded(t *test
 	f := twoRepoWorld(t)
 	f.changes(t, 5, "acme", "api")
 	f.pushedFor(t, "api", "acme-5", "def456")
-	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CIInProgress, "")
+	f.ciRunIn(t, "api", 1, "def456", "acme-5", domain.CIInProgress, "")
 
 	v := f.getTicket(t, "acme-5")
 	if home, api := changedIn(t, v, "acme"), changedIn(t, v, "api"); home.NotLanded != "waiting on CI at abc123" || api.NotLanded != "waiting on CI at def456" {
 		t.Fatalf("Home %+v, api %+v: want each waiting on its own CI", home, api)
 	}
 
-	f.ciRunIn(t, "api", 1, "def456", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRunIn(t, "api", 1, "def456", "acme-5", domain.CICompleted, domain.CIFailure)
 	if api := changedIn(t, f.getTicket(t, "acme-5"), "api"); api.NotLanded != "CI failed at def456" {
 		t.Fatalf("api %+v, want its red build as why it hasn't landed", api)
 	}
@@ -319,7 +319,7 @@ func TestUnderTheCIGateARepositoryWaitingOnItsCISaysSoAsWhyItHasntLanded(t *test
 func TestAnOpenPullRequestIsWhyARepositoryHasntLanded(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestsAcross(t)
-	f.reportIn(t, "api", 4, store.PROpen, "")
+	f.reportIn(t, "api", 4, domain.PROpen, "")
 
 	tk := f.get(t, "2")
 	if home, api := changedIn(t, tk, "acme"), changedIn(t, tk, "api"); api.NotLanded != "its pull request 4 is open" || home.NotLanded != "" {
@@ -330,14 +330,14 @@ func TestAnOpenPullRequestIsWhyARepositoryHasntLanded(t *testing.T) {
 func TestARepositoryStuckWhileAnotherWaitsOnCIIsAcceptedButNotLanded(t *testing.T) {
 	f := twoRepoWorld(t)
 	f.changes(t, 5, "acme", "api")
-	if _, err := f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "acme-5", Body: core.CantLandComment("api", "couldn't push main to origin", store.Accepted)}); err != nil {
+	if _, err := f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "acme-5", Body: core.CantLandComment("api", "couldn't push main to origin", domain.Accepted)}); err != nil {
 		t.Fatal(err)
 	}
 	f.clock.Advance(core.NotLandedAfter + time.Second)
 	// The Home Repository's latest pushed commit waits on its CI, but that
 	// isn't all the landing waits on: api's push was refused.
 	f.pushedFor(t, "", "acme-5", "abc124")
-	f.ciRun(t, 1, "ci.yml", "abc124", "acme-5", store.CIInProgress, "")
+	f.ciRun(t, 1, "ci.yml", "abc124", "acme-5", domain.CIInProgress, "")
 	if v := f.getTicket(t, "acme-5"); changedIn(t, v, "acme").CIResult != core.CIRunning {
 		t.Fatalf("Home %+v, want it waiting on its running CI", changedIn(t, v, "acme"))
 	}

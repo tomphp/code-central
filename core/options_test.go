@@ -6,6 +6,7 @@ import (
 
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/store"
@@ -26,7 +27,7 @@ type countingWriter struct {
 	writes *int
 }
 
-func (w countingWriter) PutOptions(o store.Options) error {
+func (w countingWriter) PutOptions(o domain.Options) error {
 	*w.writes++
 	return w.Writer.PutOptions(o)
 }
@@ -42,7 +43,7 @@ func countingCore(t *testing.T) (*core.Core, *int, <-chan events.Event) {
 	return c, writes, notices
 }
 
-func focus(f store.FocusClear) *store.FocusClear { return &f }
+func focus(f domain.FocusClear) *domain.FocusClear { return &f }
 
 // noNotice fails if a notice is waiting.
 func noNotice(t *testing.T, notices <-chan events.Event) {
@@ -58,7 +59,7 @@ func TestGetOptionsIsEveryActorsAndStartsAtTheDefaults(t *testing.T) {
 	f := newFixture(t)
 	for _, a := range []core.Actor{core.Human, core.Agent, core.Integration} {
 		o, err := f.core.GetOptions(core.WithActor(ctx, a))
-		if err != nil || o.FocusClear != store.FocusActivityDashboard {
+		if err != nil || o.FocusClear != domain.FocusActivityDashboard {
 			t.Fatalf("get_options as %s: %+v, %v", a, o, err)
 		}
 	}
@@ -67,10 +68,10 @@ func TestGetOptionsIsEveryActorsAndStartsAtTheDefaults(t *testing.T) {
 func TestSetOptionsIsTheHumans(t *testing.T) {
 	f := newFixture(t)
 	for _, a := range []core.Actor{core.Agent, core.Integration} {
-		_, err := f.core.SetOptions(core.WithActor(ctx, a), core.SetOptionsInput{FocusClear: focus(store.FocusAllClear)})
+		_, err := f.core.SetOptions(core.WithActor(ctx, a), core.SetOptionsInput{FocusClear: focus(domain.FocusAllClear)})
 		wantCode(t, err, core.ActionNotAllowed, "")
 	}
-	if o, _ := f.core.GetOptions(ctx); o.FocusClear != store.FocusActivityDashboard {
+	if o, _ := f.core.GetOptions(ctx); o.FocusClear != domain.FocusActivityDashboard {
 		t.Fatalf("a refused set_options changed the Options: %+v", o)
 	}
 }
@@ -79,7 +80,7 @@ func TestSetOptionsChangesAndPublishesOneNotice(t *testing.T) {
 	c, writes, notices := countingCore(t)
 
 	// The default on a fresh store changes nothing.
-	if got, err := c.SetOptions(human, core.SetOptionsInput{FocusClear: focus(store.FocusActivityDashboard)}); err != nil || got.FocusClear != store.FocusActivityDashboard {
+	if got, err := c.SetOptions(human, core.SetOptionsInput{FocusClear: focus(domain.FocusActivityDashboard)}); err != nil || got.FocusClear != domain.FocusActivityDashboard {
 		t.Fatalf("set_options to the default: %+v, %v", got, err)
 	}
 	noNotice(t, notices)
@@ -87,8 +88,8 @@ func TestSetOptionsChangesAndPublishesOneNotice(t *testing.T) {
 		t.Fatalf("setting the default wrote: %d writes", *writes)
 	}
 
-	o, err := c.SetOptions(human, core.SetOptionsInput{FocusClear: focus(store.FocusAllClear)})
-	if err != nil || o.FocusClear != store.FocusAllClear {
+	o, err := c.SetOptions(human, core.SetOptionsInput{FocusClear: focus(domain.FocusAllClear)})
+	if err != nil || o.FocusClear != domain.FocusAllClear {
 		t.Fatalf("set_options: %+v, %v", o, err)
 	}
 	if got := <-notices; got != (events.Event{Type: events.OptionsChanged}) {
@@ -103,7 +104,7 @@ func TestSetOptionsChangesAndPublishesOneNotice(t *testing.T) {
 	}
 
 	// The same value again, or nothing at all, changes nothing.
-	for _, in := range []core.SetOptionsInput{{FocusClear: focus(store.FocusAllClear)}, {}} {
+	for _, in := range []core.SetOptionsInput{{FocusClear: focus(domain.FocusAllClear)}, {}} {
 		if got, err := c.SetOptions(human, in); err != nil || got != o {
 			t.Fatalf("a no-op set_options: %+v, %v", got, err)
 		}
@@ -132,9 +133,9 @@ func TestSetOptionsValidatesBeforeWriting(t *testing.T) {
 
 func TestSetOptionsRecordsNothingOnAnyTicket(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	before, _ := f.core.GetTicket(ctx, "acme", whole("2"))
-	if _, err := f.core.SetOptions(human, core.SetOptionsInput{FocusClear: focus(store.FocusAllClear)}); err != nil {
+	if _, err := f.core.SetOptions(human, core.SetOptionsInput{FocusClear: focus(domain.FocusAllClear)}); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := f.core.GetTicket(ctx, "acme", whole("2"))

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -30,14 +31,14 @@ func landWorldOn(t *testing.T, f fixture, landPerSpec bool) fixture {
 	}
 	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "First"})
 	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Second", BlockedBy: []core.Ref{"acme-5"}})
-	f.landing(t, store.Landing{Method: store.LandingMerge, Remote: "origin", LandPerSpec: landPerSpec})
+	f.landing(t, domain.Landing{Method: domain.LandingMerge, Remote: "origin", LandPerSpec: landPerSpec})
 	for n := 2; n <= 4; n++ {
-		f.moveTo(t, n, store.Done)
+		f.moveTo(t, n, domain.Done)
 	}
 	return f
 }
 
-func (f fixture) landing(t *testing.T, l store.Landing) {
+func (f fixture) landing(t *testing.T, l domain.Landing) {
 	t.Helper()
 	err := f.store.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
@@ -51,11 +52,11 @@ func (f fixture) landing(t *testing.T, l store.Landing) {
 
 // setState puts Ticket n in state, moving it there now when it is
 // Accepted, as the human's accept does.
-func (f fixture) moveTo(t *testing.T, n int, state store.State) {
+func (f fixture) moveTo(t *testing.T, n int, state domain.State) {
 	t.Helper()
 	err := f.store.Update(func(w store.Writer) error {
 		tk, _ := w.Ticket("acme", n)
-		tk.Moves = append(tk.Moves, store.Move{From: tk.State, To: state, Time: f.clock.Now()})
+		tk.Moves = append(tk.Moves, domain.Move{From: tk.State, To: state, Time: f.clock.Now()})
 		tk.State = state
 		return w.PutTicket("acme", tk)
 	})
@@ -113,7 +114,7 @@ func TestNoTicketIsSpecLandedWithLandPerSpecOffOrUnderBranch(t *testing.T) {
 	if f.getTicket(t, "acme-5").SpecLanded {
 		t.Error("acme-5 is Spec-landed with the option off")
 	}
-	f.landing(t, store.Landing{Method: store.LandingBranch, LandPerSpec: true})
+	f.landing(t, domain.Landing{Method: domain.LandingBranch, LandPerSpec: true})
 	if f.getTicket(t, "acme-5").SpecLanded {
 		t.Error("acme-5 is Spec-landed under Branch")
 	}
@@ -152,7 +153,7 @@ func TestATicketWithNoSpecMergeReadsAsNotMerged(t *testing.T) {
 
 func TestReportSpecMergeRecordsTheCommitOfAnAcceptedSpecLandedTicket(t *testing.T) {
 	f := landWorld(t, true)
-	f.moveTo(t, 5, store.Accepted)
+	f.moveTo(t, 5, domain.Accepted)
 	f.clock.Advance(time.Minute)
 	f.specMerge(t, "acme-5", "def456")
 	sm := f.getTicket(t, "acme-5").SpecMerge
@@ -165,18 +166,18 @@ func TestReportSpecMergeIsRejectedForATicketNotAcceptedOrNotSpecLanded(t *testin
 	f := landWorld(t, true)
 	_, err := f.core.ReportSpecMerge(ctx, "acme", core.ReportSpecMergeInput{Ticket: "acme-5", Commit: "def456"})
 	wantCode(t, err, core.ActionNotAllowed, "")
-	f.landing(t, store.Landing{Method: store.LandingMerge, LandPerSpec: false})
-	f.moveTo(t, 5, store.Accepted)
+	f.landing(t, domain.Landing{Method: domain.LandingMerge, LandPerSpec: false})
+	f.moveTo(t, 5, domain.Accepted)
 	_, err = f.core.ReportSpecMerge(ctx, "acme", core.ReportSpecMergeInput{Ticket: "acme-5", Commit: "def456"})
 	wantCode(t, err, core.ActionNotAllowed, "")
 }
 
 func TestASpecMergeNoLaterThanTheLastMoveBackToReadyDoesNotCount(t *testing.T) {
 	f := landWorld(t, true)
-	f.moveTo(t, 5, store.Accepted)
+	f.moveTo(t, 5, domain.Accepted)
 	f.specMerge(t, "acme-5", "def456")
-	f.moveTo(t, 5, store.Ready) // sent back at the same second
-	f.moveTo(t, 5, store.Accepted)
+	f.moveTo(t, 5, domain.Ready) // sent back at the same second
+	f.moveTo(t, 5, domain.Accepted)
 	if sm := f.getTicket(t, "acme-5").SpecMerge; sm == nil || sm.Counts {
 		t.Errorf("spec merge after a send-back = %+v, want one that doesn't count", sm)
 	}
@@ -192,12 +193,12 @@ func TestASpecMergeNoLaterThanTheLastMoveBackToReadyDoesNotCount(t *testing.T) {
 
 func TestASameSpecBlockerClearsOnceItsSpecMergeIsReported(t *testing.T) {
 	f := landWorld(t, true)
-	f.moveTo(t, 6, store.Ready)
-	f.moveTo(t, 5, store.InReview)
+	f.moveTo(t, 6, domain.Ready)
+	f.moveTo(t, 5, domain.InReview)
 	if !f.getTicket(t, "acme-6").Blocked {
 		t.Fatal("acme-6 isn't blocked by an In Review Blocker")
 	}
-	f.moveTo(t, 5, store.Accepted)
+	f.moveTo(t, 5, domain.Accepted)
 	if !f.getTicket(t, "acme-6").Blocked {
 		t.Fatal("acme-6 isn't blocked by an Accepted Blocker with no Spec merge")
 	}
@@ -215,7 +216,7 @@ func TestABlockerOnAnotherSpecDoesNotClearOnASpecMerge(t *testing.T) {
 	other := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-7", Title: "Other work"})
 	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-7", Title: "Stage", Labels: []string{core.StageLabel("grilling")}})
 	dependant := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Dependant", BlockedBy: []core.Ref{core.Ref(other.ID)}})
-	f.moveTo(t, 8, store.Accepted)
+	f.moveTo(t, 8, domain.Accepted)
 	f.specMerge(t, other.ID, "def456")
 	if v := f.getTicket(t, dependant.ID); !v.Blocked || *v.Blockers[0].Cleared {
 		t.Errorf("dependant = blocked %v, blockers %+v; want blocked by the other Spec's Blocker", v.Blocked, v.Blockers)
@@ -224,8 +225,8 @@ func TestABlockerOnAnotherSpecDoesNotClearOnASpecMerge(t *testing.T) {
 
 func TestALongLivedSpecsBlockerDoesNotClearOnASpecMerge(t *testing.T) {
 	f := landWorld(t, true)
-	f.moveTo(t, 5, store.Accepted)
-	f.landing(t, store.Landing{Method: store.LandingMerge, LandPerSpec: false})
+	f.moveTo(t, 5, domain.Accepted)
+	f.landing(t, domain.Landing{Method: domain.LandingMerge, LandPerSpec: false})
 	if !f.getTicket(t, "acme-6").Blocked {
 		t.Error("acme-6 isn't blocked with the option off")
 	}
@@ -236,12 +237,12 @@ func TestTheLandPerSpecStatusIsReadyOnceAllTicketsAreAcceptedAndOneIsMerged(t *t
 	if st := f.landStatus(t); st == nil || st.Ready || len(st.Waiting) != 0 {
 		t.Fatalf("status with nothing accepted = %+v", st)
 	}
-	f.moveTo(t, 5, store.Accepted)
+	f.moveTo(t, 5, domain.Accepted)
 	f.specMerge(t, "acme-5", "def456")
 	if st := f.landStatus(t); st.Ready || !slices.Equal(st.Waiting, []string{"acme-5"}) {
 		t.Fatalf("status with acme-6 Ready = %+v, want acme-5 waiting, not ready", st)
 	}
-	f.moveTo(t, 6, store.Accepted)
+	f.moveTo(t, 6, domain.Accepted)
 	if st := f.landStatus(t); !st.Ready || !slices.Equal(st.Waiting, []string{"acme-5", "acme-6"}) {
 		t.Fatalf("status with both Accepted = %+v, want ready", st)
 	}
@@ -249,9 +250,9 @@ func TestTheLandPerSpecStatusIsReadyOnceAllTicketsAreAcceptedAndOneIsMerged(t *t
 
 func TestACancelledTicketDoesNotHoldASpecBackButATicketAddedLaterDoes(t *testing.T) {
 	f := landWorld(t, true)
-	f.moveTo(t, 5, store.Accepted)
+	f.moveTo(t, 5, domain.Accepted)
 	f.specMerge(t, "acme-5", "def456")
-	f.moveTo(t, 6, store.Cancelled)
+	f.moveTo(t, 6, domain.Cancelled)
 	if st := f.landStatus(t); !st.Ready {
 		t.Fatalf("status = %+v, want ready", st)
 	}
@@ -266,12 +267,12 @@ func TestAPlainSpecIsReadyOnceEveryTicketIsFinishedAndOneIsMergedAndADraftHoldsI
 	f.spec(t, "acme", "Plain") // acme-7
 	a := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-7", Title: "A"})
 	b := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-7", Title: "B"})
-	f.moveTo(t, 8, store.Accepted)
+	f.moveTo(t, 8, domain.Accepted)
 	f.specMerge(t, a.ID, "def456")
 	if st := f.specStatus(t, "acme-7"); st == nil || st.Ready || !slices.Equal(st.Waiting, []string{a.ID}) {
 		t.Fatalf("status with %s still a Draft = %+v, want %s waiting, not ready", b.ID, st, a.ID)
 	}
-	f.moveTo(t, 9, store.Cancelled)
+	f.moveTo(t, 9, domain.Cancelled)
 	if st := f.specStatus(t, "acme-7"); !st.Ready {
 		t.Fatalf("status with every Ticket finished = %+v, want ready", st)
 	}
@@ -283,14 +284,14 @@ func TestAPlainSpecIsReadyOnceEveryTicketIsFinishedAndOneIsMergedAndADraftHoldsI
 
 func TestASpecIsNotReadyWhileItsTicketsStageIsNotFinished(t *testing.T) {
 	f := landWorld(t, true)
-	f.moveTo(t, 5, store.Accepted)
-	f.moveTo(t, 6, store.Accepted)
+	f.moveTo(t, 5, domain.Accepted)
+	f.moveTo(t, 6, domain.Accepted)
 	f.specMerge(t, "acme-5", "def456")
-	f.moveTo(t, 4, store.InProgress)
+	f.moveTo(t, 4, domain.InProgress)
 	if st := f.landStatus(t); st.Ready {
 		t.Errorf("status = %+v, want not ready", st)
 	}
-	f.moveTo(t, 4, store.Cancelled) // Implement cancels the tickets Stage
+	f.moveTo(t, 4, domain.Cancelled) // Implement cancels the tickets Stage
 	if st := f.landStatus(t); !st.Ready {
 		t.Errorf("status = %+v, want ready", st)
 	}
@@ -298,8 +299,8 @@ func TestASpecIsNotReadyWhileItsTicketsStageIsNotFinished(t *testing.T) {
 
 func TestASpecWithNothingMergedIsNotReady(t *testing.T) {
 	f := landWorld(t, true)
-	f.moveTo(t, 5, store.Accepted)
-	f.moveTo(t, 6, store.Accepted)
+	f.moveTo(t, 5, domain.Accepted)
+	f.moveTo(t, 6, domain.Accepted)
 	if st := f.landStatus(t); st.Ready {
 		t.Errorf("status = %+v, want not ready", st)
 	}
@@ -307,7 +308,7 @@ func TestASpecWithNothingMergedIsNotReady(t *testing.T) {
 
 func TestAWaitingTicketIsFlaggedAndLeftOutOfAcceptedButNotLanded(t *testing.T) {
 	f := landWorld(t, true)
-	f.moveTo(t, 5, store.Accepted)
+	f.moveTo(t, 5, domain.Accepted)
 	f.clock.Advance(core.NotLandedAfter + time.Minute)
 	if !f.getTicket(t, "acme-5").WaitingForSpec {
 		t.Error("acme-5 isn't waiting for the Spec")
@@ -315,7 +316,7 @@ func TestAWaitingTicketIsFlaggedAndLeftOutOfAcceptedButNotLanded(t *testing.T) {
 	if r := f.getTicket(t, "acme-5").NeedsMeReason; r != "" {
 		t.Errorf("reason = %q, want none", r)
 	}
-	rows, _ := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: []store.State{store.Accepted}})
+	rows, _ := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: []domain.State{domain.Accepted}})
 	if len(rows) != 1 || !rows[0].WaitingForSpec {
 		t.Errorf("find_tickets rows = %+v, want acme-5 waiting for the Spec", rows)
 	}
@@ -324,7 +325,7 @@ func TestAWaitingTicketIsFlaggedAndLeftOutOfAcceptedButNotLanded(t *testing.T) {
 		t.Errorf("needs me = %+v, want nothing", v)
 	}
 	// Turned off, the same Ticket is plain Accepted but not landed.
-	f.landing(t, store.Landing{Method: store.LandingMerge, LandPerSpec: false})
+	f.landing(t, domain.Landing{Method: domain.LandingMerge, LandPerSpec: false})
 	tk := f.getTicket(t, "acme-5")
 	if tk.WaitingForSpec || tk.NeedsMeReason != core.ReasonAcceptedNotLanded {
 		t.Errorf("acme-5 with the option off = waiting %v, reason %q", tk.WaitingForSpec, tk.NeedsMeReason)

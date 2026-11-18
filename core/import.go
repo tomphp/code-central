@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -44,7 +45,7 @@ type ImportTicket struct {
 	Source       string            `json:"source"`
 	Spec         string            `json:"spec"`
 	Title        string            `json:"title"`
-	State        store.State       `json:"state,omitempty"`
+	State        domain.State      `json:"state,omitempty"`
 	Description  string            `json:"description,omitempty"`
 	Labels       []string          `json:"labels,omitempty"`
 	Tags         map[string]string `json:"tags,omitempty"`
@@ -56,10 +57,10 @@ type ImportTicket struct {
 // ImportResult is the plan (on a dry run, with provisional IDs) or what
 // was created, grouped by Spec, with a count per State.
 type ImportResult struct {
-	DryRun      bool                `json:"dry_run"`
-	Specs       []ImportedSpec      `json:"specs"`
-	StateCounts map[store.State]int `json:"state_counts"`
-	NextStep    string              `json:"next_step"`
+	DryRun      bool                 `json:"dry_run"`
+	Specs       []ImportedSpec       `json:"specs"`
+	StateCounts map[domain.State]int `json:"state_counts"`
+	NextStep    string               `json:"next_step"`
 }
 
 // ImportedSpec is one Spec of an Import's plan or result.
@@ -77,7 +78,7 @@ type ImportedTicket struct {
 	Source       string            `json:"source"`
 	ID           string            `json:"id"`
 	Title        string            `json:"title"`
-	State        store.State       `json:"state"`
+	State        domain.State      `json:"state"`
 	Labels       []string          `json:"labels"`
 	Tags         map[string]string `json:"tags"`
 	BlockedBy    []string          `json:"blocked_by"`
@@ -108,7 +109,7 @@ func (c *Core) GetImportGuide(ctx context.Context, key string) (ImportGuideView,
 
 // importStates are the States an Import may create a Ticket in. Only
 // Import can create one straight into Done or Cancelled.
-var importStates = []store.State{store.Draft, store.Ready, store.Done, store.Cancelled}
+var importStates = []domain.State{domain.Draft, domain.Ready, domain.Done, domain.Cancelled}
 
 // Import is import(payload, dry_run?). It writes as agent whoever calls,
 // never creates a Project, and writes everything or nothing.
@@ -209,7 +210,7 @@ func checkImport(ctx context.Context, p ImportPayload) error {
 				return invalid(fmt.Sprintf("%s.blocked_by[%d]", at, j), "%q is not the source of a Ticket in this payload; drop the link and list it as a doubt", b)
 			}
 		}
-		if len(t.Replacements) > 0 && t.State != store.Cancelled {
+		if len(t.Replacements) > 0 && t.State != domain.Cancelled {
 			return invalid(at+".replacements", "only a Cancelled Ticket has Replacements")
 		}
 		for j, r := range t.Replacements {
@@ -341,10 +342,10 @@ func (c *Core) buildImport(r store.Reader, key string, p ImportPayload) (store.I
 	}
 
 	var im store.Import
-	res := ImportResult{StateCounts: map[store.State]int{}}
+	res := ImportResult{StateCounts: map[domain.State]int{}}
 	bySpec := map[int]int{} // Spec number → index in res.Specs
 	for _, s := range p.Specs {
-		sp := store.Spec{Number: numbers[s.Source], Title: s.Title, Labels: s.Labels, Tags: withSource(s.Tags, s.Source),
+		sp := domain.Spec{Number: numbers[s.Source], Title: s.Title, Labels: s.Labels, Tags: withSource(s.Tags, s.Source),
 			Created: now, Updated: now, Body: s.Body}
 		im.Specs = append(im.Specs, sp)
 		bySpec[sp.Number] = len(res.Specs)
@@ -355,13 +356,13 @@ func (c *Core) buildImport(r store.Reader, key string, p ImportPayload) (store.I
 		t := p.Tickets[i]
 		state := t.State
 		if state == "" {
-			state = store.Draft
+			state = domain.Draft
 		}
-		tk := store.Ticket{
+		tk := domain.Ticket{
 			Number: numbers[t.Source], Title: t.Title, State: state, Spec: numbers[t.Spec],
 			Labels: t.Labels, Tags: withSource(t.Tags, t.Source), BlockedBy: refs(t.BlockedBy), Replacements: refs(t.Replacements),
 			Created: now, Updated: now, Description: t.Description,
-			Moves: []store.Move{{To: state, Actor: string(Agent), Time: now, Via: "import"}},
+			Moves: []domain.Move{{To: state, Actor: string(Agent), Time: now, Via: "import"}},
 		}
 		if t.Comment != "" {
 			addComment(&tk, Agent, now, 0, t.Comment)
@@ -382,7 +383,7 @@ func (c *Core) buildImport(r store.Reader, key string, p ImportPayload) (store.I
 // through Blockers or the Replacements of Cancelled ones, or whose
 // Replacements lead back to the Ticket they replace.
 func importCycles(r store.Reader, key string, im store.Import) error {
-	ov := importOverlay{Reader: r, key: key, tickets: map[int]store.Ticket{}}
+	ov := importOverlay{Reader: r, key: key, tickets: map[int]domain.Ticket{}}
 	for _, t := range im.Tickets {
 		ov.tickets[t.Number] = t
 	}
@@ -409,7 +410,7 @@ func replacementPath(r store.Reader, key string, reps []int, target int, seen ma
 			continue
 		}
 		seen[n] = true
-		if t, ok := r.Ticket(key, n); ok && t.State == store.Cancelled {
+		if t, ok := r.Ticket(key, n); ok && t.State == domain.Cancelled {
 			if p := replacementPath(r, key, t.Replacements, target, seen); p != nil {
 				return append([]int{n}, p...)
 			}
@@ -422,10 +423,10 @@ func replacementPath(r store.Reader, key string, reps []int, target int, seen ma
 type importOverlay struct {
 	store.Reader
 	key     string
-	tickets map[int]store.Ticket
+	tickets map[int]domain.Ticket
 }
 
-func (o importOverlay) Ticket(project string, n int) (store.Ticket, bool) {
+func (o importOverlay) Ticket(project string, n int) (domain.Ticket, bool) {
 	if t, ok := o.tickets[n]; ok && project == o.key {
 		return t, true
 	}

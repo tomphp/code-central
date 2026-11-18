@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -32,13 +33,13 @@ func TestTheBaseReadsMainWhenNothingIsStoredOrReported(t *testing.T) {
 func TestSetLandingMethodStoresTheBaseAndKeepsItWhenLeftOut(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingMerge, Base: strp("release/1.0")}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Base: strp("release/1.0")}); err != nil {
 		t.Fatal(err)
 	}
 	if got := f.landingBase(t); got != "release/1.0" {
 		t.Fatalf("base = %q, want release/1.0", got)
 	}
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingBranch}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingBranch}); err != nil {
 		t.Fatal(err)
 	}
 	if got := f.landingBase(t); got != "release/1.0" {
@@ -50,7 +51,7 @@ func TestSetLandingMethodRejectsAnInvalidBase(t *testing.T) {
 	for _, bad := range []string{"a b", "-x", "a..b", "x.lock", "a/.b", "a//b", "/a", "a/", "a.", "@", "a@{b", "a~b", "a^b", "a:b", "a?b", "a*b", "a[b", "a\\b"} {
 		f := newFixture(t)
 		f.project(t, "acme")
-		_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingMerge, Base: strp(bad)})
+		_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Base: strp(bad)})
 		if err == nil {
 			t.Errorf("base %q was accepted", bad)
 			continue
@@ -82,7 +83,7 @@ func TestTheBaseFallsBackToTheFrozenPushRemoteBaseAndReportPushRemoteLeavesItAlo
 	if got := f.landingBase(t); got != "trunk" {
 		t.Fatalf("report_push_remote changed the base to %q", got)
 	}
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingMerge, Base: strp("release")}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Base: strp("release")}); err != nil {
 		t.Fatal(err)
 	}
 	if got := f.landingBase(t); got != "release" {

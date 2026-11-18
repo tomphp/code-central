@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -23,10 +24,10 @@ func TestSubmittingAPrototypeCreatesAReadyPrototypeTicketOnTheSpec(t *testing.T)
 		t.Fatalf("get_ticket: %v", err)
 	}
 	if res.ID != "acme-2" || tk.Title != "Prototype: A theme picker in the header" || tk.Description != themePicker ||
-		tk.State != store.Ready || tk.Spec.ID != "acme-1" || !slices.Equal(tk.Labels, []string{"prototype"}) {
+		tk.State != domain.Ready || tk.Spec.ID != "acme-1" || !slices.Equal(tk.Labels, []string{"prototype"}) {
 		t.Fatalf("prototype %+v (result %+v)", tk, res)
 	}
-	if len(tk.Moves) != 1 || tk.Moves[0].Actor != "human" || tk.Moves[0].To != store.Ready || tk.Moves[0].Via != "submit_prototype" {
+	if len(tk.Moves) != 1 || tk.Moves[0].Actor != "human" || tk.Moves[0].To != domain.Ready || tk.Moves[0].Via != "submit_prototype" {
 		t.Fatalf("moves %+v", tk.Moves)
 	}
 	if !tk.Claimable {
@@ -57,7 +58,7 @@ func TestSubmittingAPrototypeAcknowledgesItsTicket(t *testing.T) {
 	if err != nil {
 		t.Fatalf("submit_prototype: %v", err)
 	}
-	wantTicketAcknowledgement(t, res, "acme-2", t0, store.Ready,
+	wantTicketAcknowledgement(t, res, "acme-2", t0, domain.Ready,
 		[]string{"title", "state", "spec", "labels", "description", "moves", "claimable"}, 0)
 }
 

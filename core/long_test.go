@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // keepActive pings the Claim's session every 20 minutes for d, so it
@@ -35,7 +35,7 @@ func longRow(t *testing.T, f fixture, id string) (core.NeedsMeRow, bool) {
 
 func TestAnActiveClaimTurnsLongAfterSixtyMinutesWithoutAMove(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	claimed := f.clock.Now()
 	f.claim(t, core.ClaimInput{SessionID: "s1"})
 
@@ -52,7 +52,7 @@ func TestAnActiveClaimTurnsLongAfterSixtyMinutesWithoutAMove(t *testing.T) {
 
 func TestOnlyAMoveRestartsALongClaimsClock(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{SessionID: "s1"})
 	f.keepActive(40 * time.Minute)
 	if _, err := f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: "still going"}); err != nil {
@@ -86,7 +86,7 @@ func TestPickingUpAnswersRestartsALongClaimsClock(t *testing.T) {
 
 func TestTheWatchSendsTicketChangedWhenAClaimTurnsLongOrSilentTurnsLong(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{SessionID: "s1"})
 
 	tick := watch(t, f)
@@ -108,7 +108,7 @@ func TestTheWatchSendsTicketChangedWhenAClaimTurnsLongOrSilentTurnsLong(t *testi
 
 func TestSilentTakesPrecedenceOverLong(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{SessionID: "s1"})
 	f.clock.Advance(core.LongAfter + time.Minute) // quiet the whole time
 	wantReason(t, f.get(t, "2"), core.ReasonSilentClaim)

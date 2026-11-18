@@ -3,7 +3,7 @@ package core
 import (
 	"context"
 
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // SetSessionInput is set_session's input. The session ID is never
@@ -26,7 +26,7 @@ type SetSessionInput struct {
 // in any State the Claim spans, and how to get back into it. Pings from
 // that session then count as the Claim's activity. The last write wins.
 func (c *Core) SetSession(_ context.Context, key string, in SetSessionInput) (Written[TicketView], error) {
-	return c.updateTicket(key, "set_session", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, "set_session", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		cl, err := holder(t, key, in.ClaimID)
 		if err != nil {
 			return false, err
@@ -40,7 +40,7 @@ func (c *Core) SetSession(_ context.Context, key string, in SetSessionInput) (Wr
 
 // setResume writes each of the working directory and Resume Command that
 // is given, leaving the others as they are.
-func setResume(cl *store.Claim, workingDir, resumeCommand *string) {
+func setResume(cl *domain.Claim, workingDir, resumeCommand *string) {
 	if workingDir != nil {
 		cl.WorkingDir = *workingDir
 	}

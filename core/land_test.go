@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // Accepted and land (ticket 71, ADR 0006).
@@ -14,7 +14,7 @@ import (
 // branch acme-2 at commit abc123, at t0+1h.
 func (f fixture) inReviewOnBranch(t *testing.T) core.FinishResult {
 	t.Helper()
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{})
 	f.clock.Set(t0.Add(time.Hour))
 	res, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: "Done on acme-2.", Branch: "acme-2", Commit: "abc123", Full: true})
@@ -43,22 +43,22 @@ func TestAcceptingWorkOnABranchMovesItToAcceptedNotDone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := core.MoveView{From: store.InReview, To: store.Accepted, Actor: "human", Time: t0.Add(2 * time.Hour)}
-	if v.State != store.Accepted || v.Moves[len(v.Moves)-1] != want {
+	want := core.MoveView{From: domain.InReview, To: domain.Accepted, Actor: "human", Time: t0.Add(2 * time.Hour)}
+	if v.State != domain.Accepted || v.Moves[len(v.Moves)-1] != want {
 		t.Fatalf("state %s, last move %+v; want %+v", v.State, v.Moves[len(v.Moves)-1], want)
 	}
 }
 
 func TestAcceptingWorkWithNoBranchStillGoesStraightToDone(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{})
 	// A commit alone is not a branch to land.
 	if _, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: "S", Commit: "abc123"}); err != nil {
 		t.Fatal(err)
 	}
 	v, err := record(f.core.Accept(human, "acme", core.TicketInput{Ticket: "2", Full: true}))
-	if err != nil || v.State != store.Done {
+	if err != nil || v.State != domain.Done {
 		t.Fatalf("state %s, err %v; want Done", v.State, err)
 	}
 }
@@ -81,8 +81,8 @@ func TestLandMovesAcceptedWorkToDoneRecordingTheMergeCommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := core.MoveView{From: store.Accepted, To: store.Done, Actor: "agent", Time: t0.Add(3 * time.Hour), Via: "merge", Commit: "def456"}
-	if v.State != store.Done || v.Moves[len(v.Moves)-1] != want {
+	want := core.MoveView{From: domain.Accepted, To: domain.Done, Actor: "agent", Time: t0.Add(3 * time.Hour), Via: "merge", Commit: "def456"}
+	if v.State != domain.Done || v.Moves[len(v.Moves)-1] != want {
 		t.Fatalf("state %s, last move %+v; want %+v", v.State, v.Moves[len(v.Moves)-1], want)
 	}
 }
@@ -94,7 +94,7 @@ func TestTheHumanCanLandWorkStillInReview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m := v.Moves[len(v.Moves)-1]; v.State != store.Done || m.From != store.InReview || m.Actor != "human" || m.Commit != "abc123" {
+	if m := v.Moves[len(v.Moves)-1]; v.State != domain.Done || m.From != domain.InReview || m.Actor != "human" || m.Commit != "abc123" {
 		t.Fatalf("state %s, last move %+v", v.State, m)
 	}
 }
@@ -104,14 +104,14 @@ func TestLandNeedsTheCommit(t *testing.T) {
 	f.accepted(t)
 	_, err := f.core.Land(ctx, "acme", core.LandInput{Ticket: "2", Commit: " "})
 	wantCode(t, err, core.Invalid, "commit")
-	if v := f.get(t, "2"); v.State != store.Accepted {
+	if v := f.get(t, "2"); v.State != domain.Accepted {
 		t.Fatalf("state %s, want still Accepted", v.State)
 	}
 }
 
 func TestLandIsOnlyFromAcceptedOrInReview(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	_, err := f.core.Land(human, "acme", core.LandInput{Ticket: "2", Commit: "abc123"})
 	wantCode(t, err, core.ActionNotAllowed, "")
 }
@@ -119,7 +119,7 @@ func TestLandIsOnlyFromAcceptedOrInReview(t *testing.T) {
 func TestAcceptedWorkStillBlocksUntilItLands(t *testing.T) {
 	f := newFixture(t)
 	f.accepted(t)
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Next", State: store.Ready, BlockedBy: []core.Ref{"acme-2"}}) // acme-3
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Next", State: domain.Ready, BlockedBy: []core.Ref{"acme-2"}}) // acme-3
 	if v := f.get(t, "3"); !v.Blocked {
 		t.Fatal("an Accepted Blocker cleared the block")
 	}
@@ -138,11 +138,11 @@ func TestFromAcceptedTheHumanCancelsOrMovesButCannotReject(t *testing.T) {
 	wantCode(t, err, core.ActionNotAllowed, "")
 	_, err = f.core.Accept(human, "acme", core.TicketInput{Ticket: "2"})
 	wantCode(t, err, core.ActionNotAllowed, "")
-	if v := f.cancel(t, core.CancelInput{Ticket: "2"}, core.Human); v.State != store.Cancelled {
+	if v := f.cancel(t, core.CancelInput{Ticket: "2"}, core.Human); v.State != domain.Cancelled {
 		t.Fatalf("state %s, want Cancelled", v.State)
 	}
-	f.move(t, "2", store.Accepted)
-	if v := f.move(t, "2", store.InReview); v.State != store.InReview {
+	f.move(t, "2", domain.Accepted)
+	if v := f.move(t, "2", domain.InReview); v.State != domain.InReview {
 		t.Fatalf("state %s, want In Review", v.State)
 	}
 }

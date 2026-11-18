@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -43,7 +44,7 @@ func awaitsTriage(r store.Reader, key string, spec int) bool {
 }
 
 // whyNotIncoming says why t isn't an Incoming Issue, "" when it is.
-func whyNotIncoming(r store.Reader, key string, t store.Ticket) string {
+func whyNotIncoming(r store.Reader, key string, t domain.Ticket) string {
 	id := DisplayID(key, t.Number)
 	_, onInbox := inboxOn(r, key, t.Spec)
 	switch {
@@ -51,7 +52,7 @@ func whyNotIncoming(r store.Reader, key string, t store.Ticket) string {
 		return fmt.Sprintf("%s is not an Incoming Issue: only a linked Ticket on the Project's Issues Spec or Azure Boards Spec is triaged", id)
 	case t.Link.Detached:
 		return fmt.Sprintf("%s was unlinked from %s %s, so it is no longer an Incoming Issue to triage", id, t.Link.Integration, t.Link.ID)
-	case t.State != store.Draft && t.State != store.Ready:
+	case t.State != domain.Draft && t.State != domain.Ready:
 		return fmt.Sprintf("%s is %s: only a Draft or Ready Incoming Issue is triaged", id, t.State)
 	}
 	return ""
@@ -59,7 +60,7 @@ func whyNotIncoming(r store.Reader, key string, t store.Ticket) string {
 
 // ticketTriageActions are the triage actions offered on t: every one on
 // an Incoming Issue, none otherwise.
-func ticketTriageActions(r store.Reader, key string, t store.Ticket) []TriageAction {
+func ticketTriageActions(r store.Reader, key string, t domain.Ticket) []TriageAction {
 	if whyNotIncoming(r, key, t) != "" {
 		return nil
 	}
@@ -70,7 +71,7 @@ func ticketTriageActions(r store.Reader, key string, t store.Ticket) []TriageAct
 // as the UI shows it before the human confirms: what is written back
 // depends on the Integration t is linked through, and Won't fix never
 // changes a work item's State.
-func triageNotes(t store.Ticket) map[TriageAction]string {
+func triageNotes(t domain.Ticket) map[TriageAction]string {
 	leaves := "leaves it here as it is"
 	if t.AwaitingTriage {
 		leaves += ", out of Needs Me,"
@@ -92,7 +93,7 @@ func triageNotes(t store.Ticket) map[TriageAction]string {
 
 // newIssue is when t became a New issue, if it is one: an Incoming Issue
 // awaiting triage that isn't closed externally. Its time is its creation.
-func newIssue(r store.Reader, key string, t store.Ticket) (time.Time, bool) {
+func newIssue(r store.Reader, key string, t domain.Ticket) (time.Time, bool) {
 	if !t.AwaitingTriage || whyNotIncoming(r, key, t) != "" {
 		return time.Time{}, false
 	}
@@ -110,7 +111,7 @@ func (c *Core) KeepAsDraft(ctx context.Context, key string, in TicketInput) (Wri
 	if err := humanOnly(ctx, string(OptionKeepAsDraft)); err != nil {
 		return Written[TicketView]{}, err
 	}
-	return c.updateTicketIn(key, string(OptionKeepAsDraft), in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
+	return c.updateTicketIn(key, string(OptionKeepAsDraft), in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
 		if why := whyNotIncoming(r, key, *t); why != "" {
 			return false, &Error{Code: ActionNotAllowed, Message: why}
 		}
@@ -137,7 +138,7 @@ const contextHeading = "## Context"
 // requirementText is the text of the Requirement To Requirement makes of
 // t: its title as a heading, then its description, then the context, if
 // given, under its own heading.
-func requirementText(t store.Ticket, extra string) string {
+func requirementText(t domain.Ticket, extra string) string {
 	parts := []string{"# " + t.Title}
 	if d := strings.TrimSpace(t.Description); d != "" {
 		parts = append(parts, d)
@@ -182,7 +183,7 @@ func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementIn
 		extra := strings.TrimSpace(in.Context)
 		link := t.Link
 		link.Outbound, link.Written = true, slices.Clone(t.Link.Written)
-		im, _, stageNs := c.requirementImport(w, key, store.Spec{Title: t.Title, Body: requirementText(t, extra), Link: link}, Stages(), "", false)
+		im, _, stageNs := c.requirementImport(w, key, domain.Spec{Title: t.Title, Body: requirementText(t, extra), Link: link}, Stages(), "", false)
 
 		// The grilling Stage is new and waits on nothing, so as the
 		// Replacement it can't make a cycle.
@@ -192,7 +193,7 @@ func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementIn
 		t.Replacements = stageNs[:1]
 		t.Link.Detached = true
 		t.Updated = c.now()
-		im.Rewritten = []store.Ticket{t}
+		im.Rewritten = []domain.Ticket{t}
 		if err := w.PutImport(key, im); err != nil {
 			return err
 		}
@@ -205,7 +206,7 @@ func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementIn
 // triageCancel Cancels t, an Incoming Issue, via the triage action via,
 // with comment, if any, as the human's comment, and clears its awaiting
 // triage.
-func (c *Core) triageCancel(ctx context.Context, key string, t *store.Ticket, via TriageAction, comment string) error {
+func (c *Core) triageCancel(ctx context.Context, key string, t *domain.Ticket, via TriageAction, comment string) error {
 	now := c.now()
 	if err := transition(ctx, t, key, "cancel", "", now); err != nil {
 		return err
@@ -237,7 +238,7 @@ func (c *Core) WontFix(ctx context.Context, key string, in WontFixInput) (Writte
 	if err := humanOnly(ctx, string(OptionWontFix)); err != nil {
 		return Written[TicketView]{}, err
 	}
-	return c.updateTicketIn(key, string(OptionWontFix), in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
+	return c.updateTicketIn(key, string(OptionWontFix), in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
 		if why := whyNotIncoming(r, key, *t); why != "" {
 			return false, &Error{Code: ActionNotAllowed, Message: why}
 		}
