@@ -297,6 +297,9 @@ func Run(t *testing.T, f Factory) {
 
 	runHistory(t, f)
 	runQueries(t, f)
+	runClaimBySession(t, f)
+	runTicketCommits(t, f)
+	runRecords(t, f)
 	runReplacements(t, f)
 	runImport(t, f)
 	runLinks(t, f)
