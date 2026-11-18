@@ -2,7 +2,8 @@
 // ADR 0042): the TypeScript the UI reads the HTTP API's responses as,
 // generated from the Core's Go view types for `make wiretypes`. Shapes
 // come from reflection over the root types in roots.go and every type
-// they reach, with JSON names as the Core's JSONNames reads them; doc
+// they reach, with JSON names as internal/fieldwalk reads them, the same
+// way the Core's JSONNames and the MCP door's schemas do; doc
 // comments come from the Go source. Each typed string the roots reach
 // is a union with its value array, from the Go value list registered
 // beside the roots. Each record view registered there for a field list,
@@ -27,7 +28,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/internal/fieldwalk"
 )
 
 func main() {
@@ -238,7 +239,7 @@ func fieldList(f Fields) string {
 	fmt.Fprintf(&b, "// %s are %s's JSON names in field order, the order\n", array, f.Type.Name())
 	b.WriteString("// a write's Acknowledgement lists them in changed.\n")
 	fmt.Fprintf(&b, "export const %s = [\n", array)
-	for _, name := range core.JSONNames(f.Type) {
+	for _, name := range fieldwalk.Names(f.Type) {
 		fmt.Fprintf(&b, "  %s,\n", quote(name))
 	}
 	b.WriteString("] as const;\n")
@@ -259,12 +260,11 @@ func (g *generator) iface(t reflect.Type) string {
 	var body strings.Builder
 	for f := range t.Fields() {
 		at := t.Name() + "." + f.Name
-		name, rest, _ := strings.Cut(f.Tag.Get("json"), ",")
-		opts := strings.Split(rest, ",")
+		info := fieldwalk.Of(f)
 		switch {
-		case name == "-" || !f.IsExported() && !f.Anonymous:
+		case info.Skipped:
 			continue
-		case f.Anonymous && name == "" && f.Type.Kind() == reflect.Struct:
+		case info.Flattened:
 			if g.ownJSON(f.Type, at) {
 				continue
 			}
@@ -275,25 +275,22 @@ func (g *generator) iface(t reflect.Type) string {
 			g.reach(f.Type)
 			extends = append(extends, f.Type.Name())
 			continue
-		case f.Anonymous && name == "" && f.Type.Kind() == reflect.Pointer:
+		case f.Anonymous && f.Tag.Get("json") == "" && f.Type.Kind() == reflect.Pointer:
 			g.fail("%s embeds a pointer, which the Core's JSONNames doesn't read", at)
 			continue
-		case name == "":
-			name = f.Name
 		}
-		if slices.Contains(opts, "string") {
+		if slices.Contains(info.Options, "string") {
 			g.fail("%s has the string option, which changes its JSON type", at)
 			continue
 		}
-		optional := f.Type.Kind() == reflect.Pointer ||
-			slices.Contains(opts, "omitempty") || slices.Contains(opts, "omitzero")
+		optional := f.Type.Kind() == reflect.Pointer || info.OmitEmpty
 		typ := g.ts(f.Type, at)
 		body.WriteString(comment("  ", docs[f.Name]))
 		mark := ""
 		if optional {
 			mark = "?"
 		}
-		fmt.Fprintf(&body, "  %s%s: %s;\n", property(name), mark, typ)
+		fmt.Fprintf(&body, "  %s%s: %s;\n", property(info.Name), mark, typ)
 	}
 	var b strings.Builder
 	b.WriteString(comment("", src.typeDoc(t.Name())))
