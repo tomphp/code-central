@@ -180,7 +180,7 @@ func ciRulesLastRuns(runs []domain.CIRun) map[int]time.Time {
 func ciTicketCommits(r store.Reader, key string) (pushed, landed []CITicketCommit) {
 	pushed, landed = []CITicketCommit{}, []CITicketCommit{}
 	for _, tc := range r.TicketCommits(key) {
-		row := CITicketCommit{Ticket: DisplayID(key, tc.Ticket), Spec: DisplayID(key, tc.Spec), Repository: recordName(key, tc.Repository), Commit: tc.Commit}
+		row := CITicketCommit{Ticket: DisplayID(key, tc.Ticket), Spec: DisplayID(key, tc.Spec), Repository: tc.Repository, Commit: tc.Commit}
 		if tc.Kind == store.CommitLanded {
 			landed = append(landed, row)
 		} else {

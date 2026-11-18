@@ -241,13 +241,13 @@ func (r reader) TicketCommits(project string) []TicketCommit {
 		for _, pc := range t.PushedCommits {
 			row(pc.Repository, pc.Commit, CommitPushed)
 		}
+		// The Home Repository landed at its Moves' commits, so its entry
+		// among the Repositories, named by the Project Key, is left out.
 		for _, m := range t.Moves {
 			if m.Commit != "" {
 				row("", m.Commit, CommitLanded)
 			}
 		}
-		// The Home Repository, named by the Project Key, landed at its
-		// Moves' commits.
 		for _, cr := range t.Repositories {
 			if cr.Landed != nil && cr.Name != project {
 				row(cr.Name, cr.Landed.Commit, CommitLanded)

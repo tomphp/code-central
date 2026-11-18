@@ -275,8 +275,8 @@ func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushed
 			return false, nil
 		}
 		t.PushedCommits = append(t.PushedCommits, domain.PushedCommit{Repository: recordName(key, name), Commit: commit, Branch: strings.TrimSpace(in.Branch), Pushed: c.now()})
-		for _, o := range r.FindTickets(key, store.TicketFilter{PushedCommit: &store.PushedCommitFilter{Repository: recordName(key, name), Commit: commit}}) {
-			if pushed := pushedIn(key, o, name); o.Number != t.Number && pushed[len(pushed)-1].Commit == commit {
+		for _, o := range r.FindTickets(key, pushedCommit(key, name, commit)) {
+			if pushed := pushedIn(key, o, name); o.Number != t.Number && len(pushed) > 0 && pushed[len(pushed)-1].Commit == commit {
 				sharing = append(sharing, o.Number)
 			}
 		}
