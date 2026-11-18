@@ -16,6 +16,7 @@ import (
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/httpapi"
 	"github.com/tomoram/code-central/server"
 )
 
@@ -112,7 +113,7 @@ func TestHTTPUnknownFieldsNameTheVersionsSentAsTheHeader(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			req.Header.Set(server.ActorHeader, string(core.Human))
+			req.Header.Set(httpapi.ActorHeader, string(core.Human))
 			if tc.client != "" {
 				req.Header.Set(server.ClientVersionHeader, tc.client)
 			}

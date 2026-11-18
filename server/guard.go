@@ -1,35 +1,25 @@
 package server
 
 import (
-	"fmt"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
-
-	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/httpapi"
 )
-
-// ActorHeader names the Actor making an HTTP request: human, agent or
-// integration, defaulting to agent. Only the UI sends human. MCP writes
-// as agent whatever the header says.
-const ActorHeader = "X-Code-Central-Actor"
 
 // LocalHosts are the host names the service answers to: loopback and the
 // name a Docker container uses to reach its host.
 var LocalHosts = []string{"localhost", "127.0.0.1", "::1", "host.docker.internal"}
 
-// Guard is the one middleware in front of MCP and the HTTP API. It stops
-// DNS rebinding and cross-site browser requests:
+// Guard is the HTTP middleware in front of MCP, the HTTP API and the UI.
+// It stops DNS rebinding and cross-site browser requests:
 //   - the Host must be one of LocalHosts or an extra (--bind) address;
 //   - a missing Origin is allowed (non-browser clients send none), but a
 //     present one must name one of those hosts.
 //
 // Anything else gets 403. Guard never sends CORS headers, so a browser on
-// another origin cannot read a response either. It then reads the Actor
-// header into the request's context (see ActorHeader); an unknown Actor
-// gets 422 invalid naming the header.
+// another origin cannot read a response either. The Actor is not its
+// concern: Calls sets it on each operation.
 func Guard(next http.Handler, extraHosts ...string) http.Handler {
 	allowed := map[string]bool{}
 	for _, h := range append(append([]string{}, LocalHosts...), extraHosts...) {
@@ -48,25 +38,8 @@ func Guard(next http.Handler, extraHosts ...string) http.Handler {
 				return
 			}
 		}
-		a, err := actor(r)
-		if err != nil {
-			httpapi.WriteError(w, err)
-			return
-		}
-		next.ServeHTTP(w, r.WithContext(core.WithActor(r.Context(), a)))
+		next.ServeHTTP(w, r)
 	})
-}
-
-// actor is the request's Actor from its header, defaulting to agent.
-func actor(r *http.Request) (core.Actor, error) {
-	switch a := core.Actor(r.Header.Get(ActorHeader)); a {
-	case "":
-		return core.Agent, nil
-	case core.Human, core.Agent, core.Integration:
-		return a, nil
-	default:
-		return "", &core.Error{Code: core.Invalid, Field: ActorHeader, Message: fmt.Sprintf("unknown Actor %q: use human, agent or integration", a)}
-	}
 }
 
 // hostname strips an optional port and IPv6 brackets from a Host header.

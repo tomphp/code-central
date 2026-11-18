@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ops"
 )
 
 // ChatEventsPath is where the Factory holding a Conversation posts its
@@ -16,11 +17,11 @@ import (
 // on it.
 const ChatEventsPath = "POST /api/p/{key}/chat/events"
 
-func chatEvents(c *core.Core) http.HandlerFunc {
+func chatEvents(s ops.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var in core.PostChatEventsInput
 		if decodeBody(r, &in) == nil {
-			c.PostChatEvents(r.Context(), r.PathValue("key"), in)
+			s.PostChatEvents(r.Context(), r.PathValue("key"), in)
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
@@ -36,7 +37,7 @@ func chatEvents(c *core.Core) http.HandlerFunc {
 // Transcript stream it is outside core's operations and MCP.
 const ChatStreamPath = "GET /api/p/{key}/chat/stream"
 
-func chatStream(c *core.Core) http.HandlerFunc {
+func chatStream(s ops.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		flusher, ok := w.(http.Flusher)
 		if !ok {
@@ -49,7 +50,7 @@ func chatStream(c *core.Core) http.HandlerFunc {
 		}
 		// A Last-Event-ID that isn't a seq is no resume: send it all.
 		after, _ := strconv.Atoi(r.Header.Get("Last-Event-ID"))
-		feed, err := c.FollowChat(r.Context(), r.PathValue("key"), after)
+		feed, err := s.FollowChat(r.Context(), r.PathValue("key"), after)
 		if err != nil {
 			WriteError(w, err)
 			return

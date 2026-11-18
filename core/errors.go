@@ -1,6 +1,9 @@
 package core
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // Code names the kind of an Error. The set is fixed by the spec.
 type Code string
@@ -33,6 +36,16 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("%s (%s): %s", e.Code, e.Field, e.Message)
 	}
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
+}
+
+// ErrorOf is err in the one error shape: the *Error it is or wraps, or
+// else an internal one, as something broke inside the service.
+func ErrorOf(err error) *Error {
+	var e *Error
+	if !errors.As(err, &e) {
+		e = &Error{Code: "internal", Message: err.Error()}
+	}
+	return e
 }
 
 func invalid(field, format string, args ...any) *Error {

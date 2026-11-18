@@ -61,7 +61,8 @@ func Routes() map[string]string {
 
 // handle is op's handler. A POST decodes the body strictly; a GET decodes
 // the query. Then {n} is bound to the path-tagged field, winning over the
-// body, {key} is the Project key, and the HTTP defaults are applied.
+// body, {key} is the Project key, and the HTTP defaults are applied
+// before the call is dispatched with the Actor header.
 func handle(op ops.Operation) (handlerFunc, error) {
 	method, pattern := op.Route()
 	path, err := pathField(op.Input(), pattern)
@@ -74,7 +75,7 @@ func handle(op ops.Operation) (handlerFunc, error) {
 			return nil, err
 		}
 	}
-	return func(c *core.Core, r *http.Request) (any, error) {
+	return func(s ops.Service, r *http.Request) (any, error) {
 		in := op.NewInput()
 		if q != nil {
 			if err := q.decode(r.URL.Query(), in); err != nil {
@@ -90,7 +91,7 @@ func handle(op ops.Operation) (handlerFunc, error) {
 			reflect.ValueOf(in).Elem().FieldByIndex(path.Index).SetString(r.PathValue(path.Tag.Get("path")))
 		}
 		op.ApplyHTTPDefaults(in)
-		return op.Invoke(r.Context(), c, r.PathValue("key"), in)
+		return s.Dispatch(r.Context(), ops.Call{Op: op, Key: r.PathValue("key"), In: in, Actor: core.Actor(r.Header.Get(ActorHeader))})
 	}, nil
 }
 

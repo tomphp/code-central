@@ -2,9 +2,9 @@ package server_test
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -64,40 +64,35 @@ func TestGuardAllowsOnlyLocalHostsAndOrigins(t *testing.T) {
 	}
 }
 
-// The Guard reads the Actor header into the request's context, defaulting
-// to agent; an unknown Actor is refused before any door sees it.
-func TestGuardReadsTheActorHeaderDefaultingToAgent(t *testing.T) {
-	var got core.Actor
-	reached := false
-	h := server.Guard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reached, got = true, core.ActorOf(r.Context())
-	}))
-	for header, want := range map[string]core.Actor{"": core.Agent, "agent": core.Agent, "human": core.Human, "integration": core.Integration} {
-		t.Run("header "+header, func(t *testing.T) {
-			req := httptest.NewRequest("POST", "/api/p/acme/create_spec", strings.NewReader(`{}`))
-			req.Host = "localhost:7733"
-			if header != "" {
-				req.Header.Set(server.ActorHeader, header)
-			}
-			h.ServeHTTP(httptest.NewRecorder(), req)
-			if got != want {
-				t.Fatalf("Actor %q, want %q", got, want)
-			}
-		})
+// An HTTP operation acts as the Actor its header names, agent when it
+// names none; an unknown Actor is refused, naming the header, before the
+// operation runs.
+func TestTheHTTPAPIActsAsTheActorItsHeaderNames(t *testing.T) {
+	srv := newServer(t)
+	for _, actor := range []core.Actor{"", core.Agent, core.Human, core.Integration} {
+		status, b := httpDoAs(t, srv, actor, httpCall{method: "POST", path: "/api/p/acme/tickets/2/comment", body: `{"body":"Seen."}`})
+		if status != http.StatusOK {
+			t.Fatalf("Actor %q: status %d: %s", actor, status, b)
+		}
+	}
+	tk, err := srv.Client.GetTicket(context.Background(), "acme", "2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, c := range tk.Comments {
+		got = append(got, string(c.Actor))
+	}
+	if want := []string{"agent", "agent", "human", "integration"}; !slices.Equal(got, want) {
+		t.Fatalf("comments made as %v, want %v", got, want)
 	}
 
-	reached = false
-	req := httptest.NewRequest("POST", "/api/p/acme/create_spec", strings.NewReader(`{}`))
-	req.Host = "localhost:7733"
-	req.Header.Set(server.ActorHeader, "robot")
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if reached || rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("unknown Actor: reached %v, status %d", reached, rec.Code)
+	status, b := httpDoAs(t, srv, "robot", httpCall{method: "POST", path: "/api/p/acme/tickets/2/comment", body: `{"body":"Beep."}`})
+	if e := errorJSON(t, b, core.Invalid); status != http.StatusUnprocessableEntity || e.Field != httpapi.ActorHeader {
+		t.Fatalf("unknown Actor: status %d: %s", status, b)
 	}
-	var e core.Error
-	if err := json.Unmarshal(rec.Body.Bytes(), &e); err != nil || e.Code != core.Invalid || e.Field != server.ActorHeader {
-		t.Fatalf("unknown Actor: %s", rec.Body)
+	if tk, _ := srv.Client.GetTicket(context.Background(), "acme", "2"); len(tk.Comments) != len(got) {
+		t.Fatalf("unknown Actor: the comment was made")
 	}
 }
 

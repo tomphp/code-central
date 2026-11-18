@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ops"
 )
 
 // UsagePath reads Usage (Spec code-central-201):
@@ -13,7 +14,7 @@ import (
 // core's operations, so it sits outside Routes.
 const UsagePath = "GET /api/usage"
 
-func usageRead(c *core.Core, r *http.Request) (any, error) {
+func usageRead(s ops.Service, r *http.Request) (any, error) {
 	q := r.URL.Query()
 	if err := onlyParams(q, "project", "days"); err != nil {
 		return nil, err
@@ -26,7 +27,7 @@ func usageRead(c *core.Core, r *http.Request) (any, error) {
 		}
 		in.Days = n
 	}
-	return c.Usage(r.Context(), in)
+	return s.Usage(r.Context(), in)
 }
 
 // SessionUsagePath reads one session's responses, for its line chart
@@ -35,12 +36,12 @@ func usageRead(c *core.Core, r *http.Request) (any, error) {
 // left out for a main session.
 const SessionUsagePath = "GET /api/usage/session"
 
-func sessionUsageRead(c *core.Core, r *http.Request) (any, error) {
+func sessionUsageRead(s ops.Service, r *http.Request) (any, error) {
 	q := r.URL.Query()
 	if err := onlyParams(q, "project", "session", "agent"); err != nil {
 		return nil, err
 	}
-	return c.SessionUsage(r.Context(), core.SessionUsageInput{Project: q.Get("project"), Session: q.Get("session"), Agent: q.Get("agent")})
+	return s.SessionUsage(r.Context(), core.SessionUsageInput{Project: q.Get("project"), Session: q.Get("session"), Agent: q.Get("agent")})
 }
 
 // PostUsagePath is where a Factory posts its sessions' model responses'
@@ -49,14 +50,14 @@ func sessionUsageRead(c *core.Core, r *http.Request) (any, error) {
 // session or a body it can't read, so a Factory never fails on it.
 const PostUsagePath = "POST /api/usage"
 
-func postUsage(c *core.Core) http.HandlerFunc {
+func postUsage(s ops.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			SessionID string               `json:"session_id"`
 			Responses []core.UsageResponse `json:"responses"`
 		}
 		if decodeBody(r, &in) == nil {
-			c.PostUsage(r.Context(), in.SessionID, in.Responses)
+			s.PostUsage(r.Context(), in.SessionID, in.Responses)
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
