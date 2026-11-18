@@ -3,13 +3,13 @@ package cli
 import (
 	"context"
 	"flag"
-	"strings"
 
 	"github.com/tomoram/code-central/core"
 )
 
-// Commands for defining work: edits, Labels, Tags, comments, approve and
-// defer. Each takes the Spec or Ticket ID as its first argument.
+// Commands for defining work: edits, comments and defer. Each takes the
+// Spec or Ticket ID as its first argument. Labels, Tags and approve are
+// derived from their definitions.
 
 // itemCommand parses args for a command on one item, returning the scope,
 // the item's ref and the remaining positional arguments.
@@ -98,62 +98,6 @@ func runEditTicket(ctx context.Context, e Env, args []string) error {
 	return printJSON(e, v)
 }
 
-func runAddLabels(ctx context.Context, e Env, args []string) error {
-	sc, ref, labels, err := itemCommand(e, flagSet("add-labels"), args, 1, -1)
-	if err != nil {
-		return err
-	}
-	v, err := sc.client.AddLabels(ctx, sc.project, core.LabelsInput{Target: ref, Labels: labels})
-	if err != nil {
-		return err
-	}
-	return printJSON(e, v)
-}
-
-func runRemoveLabels(ctx context.Context, e Env, args []string) error {
-	sc, ref, labels, err := itemCommand(e, flagSet("remove-labels"), args, 1, -1)
-	if err != nil {
-		return err
-	}
-	v, err := sc.client.RemoveLabels(ctx, sc.project, core.LabelsInput{Target: ref, Labels: labels})
-	if err != nil {
-		return err
-	}
-	return printJSON(e, v)
-}
-
-func runSetTags(ctx context.Context, e Env, args []string) error {
-	sc, ref, pairs, err := itemCommand(e, flagSet("set-tags"), args, 1, -1)
-	if err != nil {
-		return err
-	}
-	tags := map[string]string{}
-	for _, p := range pairs {
-		k, v, ok := strings.Cut(p, "=")
-		if !ok {
-			return usagef("a Tag is <key>=<value>, not %q", p)
-		}
-		tags[k] = v
-	}
-	v, err := sc.client.SetTags(ctx, sc.project, core.SetTagsInput{Target: ref, Tags: tags})
-	if err != nil {
-		return err
-	}
-	return printJSON(e, v)
-}
-
-func runRemoveTags(ctx context.Context, e Env, args []string) error {
-	sc, ref, keys, err := itemCommand(e, flagSet("remove-tags"), args, 1, -1)
-	if err != nil {
-		return err
-	}
-	v, err := sc.client.RemoveTags(ctx, sc.project, core.RemoveTagsInput{Target: ref, Keys: keys})
-	if err != nil {
-		return err
-	}
-	return printJSON(e, v)
-}
-
 func runComment(ctx context.Context, e Env, args []string) error {
 	fs := flagSet("comment")
 	body := fs.String("body", "", "")
@@ -168,20 +112,6 @@ func runComment(ctx context.Context, e Env, args []string) error {
 		return err
 	}
 	v, err := sc.client.Comment(ctx, sc.project, core.CommentInput{Ticket: ref, Body: text, Full: *full})
-	if err != nil {
-		return err
-	}
-	return printJSON(e, v)
-}
-
-func runApprove(ctx context.Context, e Env, args []string) error {
-	fs := flagSet("approve")
-	full := fs.Bool("full", false, "")
-	sc, ref, _, err := itemCommand(e, fs, args, 0, 0)
-	if err != nil {
-		return err
-	}
-	v, err := sc.client.Approve(ctx, sc.project, core.TicketInput{Ticket: ref, Full: *full})
 	if err != nil {
 		return err
 	}

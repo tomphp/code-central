@@ -56,7 +56,8 @@ type Op struct {
 //	path:"n"        the field the HTTP path's {n} binds to; the path wins
 //	query:"name"    a GET's query parameter where it differs from the JSON name
 //	mcp:"-"         left out of the MCP schema
-//	cli:"…"         the CLI flag name where it differs, and the positional argument
+//	cli:"…"         the field's place on a derived CLI command: a positional
+//	                argument as "<id>" or "<label>...", a flag as "--commit <sha>"
 //
 // A json:"-" field is never on any door, except through a query tag, which
 // names a GET parameter the JSON body never carries.

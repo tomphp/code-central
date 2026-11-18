@@ -109,7 +109,7 @@ func change(prev map[string]string, name string, field *string, to *string) {
 
 // TicketInput names one Ticket, for actions that need nothing else.
 type TicketInput struct {
-	Ticket Ref `json:"ticket" path:"n" desc:"The Ticket." required:"true"`
+	Ticket Ref `json:"ticket" path:"n" desc:"The Ticket." required:"true" cli:"<id>"`
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
 }
@@ -203,9 +203,9 @@ type TargetView struct {
 // added or removed by name; the rest of the list is left alone, so two
 // writers don't overwrite each other.
 type LabelsInput struct {
-	Target Ref `json:"target" desc:"The Spec or Ticket." required:"true"`
+	Target Ref `json:"target" desc:"The Spec or Ticket." required:"true" cli:"<id>"`
 	// Labels to add or remove; the operation's definition words it.
-	Labels []string `json:"labels" required:"true"`
+	Labels []string `json:"labels" required:"true" cli:"<label>..."`
 }
 
 // AddLabels is add_labels(target, labels). A Label already present is
@@ -276,14 +276,14 @@ func checkLabels(labels []string) error {
 
 // SetTagsInput is set_tags' input.
 type SetTagsInput struct {
-	Target Ref               `json:"target" desc:"The Spec or Ticket." required:"true"`
-	Tags   map[string]string `json:"tags" desc:"Tags to set, as {key: value}." required:"true"`
+	Target Ref               `json:"target" desc:"The Spec or Ticket." required:"true" cli:"<id>"`
+	Tags   map[string]string `json:"tags" desc:"Tags to set, as {key: value}." required:"true" cli:"<key>=<value>..."`
 }
 
 // RemoveTagsInput is remove_tags' input.
 type RemoveTagsInput struct {
-	Target Ref      `json:"target" desc:"The Spec or Ticket." required:"true"`
-	Keys   []string `json:"keys" desc:"Tag keys to remove." required:"true"`
+	Target Ref      `json:"target" desc:"The Spec or Ticket." required:"true" cli:"<id>"`
+	Keys   []string `json:"keys" desc:"Tag keys to remove." required:"true" cli:"<key>..."`
 }
 
 var tagKey = regexp.MustCompile(`^[a-z0-9._-]+$`)

@@ -37,8 +37,8 @@ type PostRoundResult struct {
 
 // PickUpAnswersInput is pick_up_answers' input.
 type PickUpAnswersInput struct {
-	Ticket  Ref    `json:"ticket" path:"n" desc:"The Ticket." required:"true"`
-	ClaimID string `json:"claim_id" desc:"The Claim ID claim returned." required:"true"`
+	Ticket  Ref    `json:"ticket" path:"n" desc:"The Ticket." required:"true" cli:"<id>"`
+	ClaimID string `json:"claim_id" desc:"The Claim ID claim returned." required:"true" cli:"--claim <claim-id>"`
 }
 
 // PickUpAnswersResult is the latest Round with every answer and
