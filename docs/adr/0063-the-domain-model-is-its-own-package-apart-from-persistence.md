@@ -6,7 +6,7 @@ So the domain model is its own package, `domain`, at the module root, importing 
 
 - Clients of the service import `domain` and never `store`.
 - Only `core` and the composition roots (`cli/serve.go`, `cli/service.go`, `world`, `codecentraltest`) import `store`.
-- The Landing Policy value lives in `domain` beside `Landing.Normalized`, and `core` keeps the builders that make it from a `store.Project` or a view.
+- The Landing Policy value belongs in `domain` beside `Landing.Normalized`, and `core` keeps the builders that make it from a `store.Project` or a view. It moves there in the Spec's last step; until then it stays in `core`.
 
 The package is named `domain` because the Glossary's "Model" already means a Claude model; ADR 0003 already calls these the domain struct and the domain shape.
 

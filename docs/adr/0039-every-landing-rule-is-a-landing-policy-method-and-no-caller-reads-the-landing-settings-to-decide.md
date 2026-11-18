@@ -15,4 +15,4 @@ Moving the policy into core leaves [ADR 0003](0003-the-store-is-yaml-files-loade
 
 Adding or changing a landing rule is one method and one row of the matrix test.
 
-Amended by [ADR 0063](0063-the-domain-model-is-its-own-package-apart-from-persistence.md): the policy value lives in `domain` beside `Landing.Normalized`, and `core` keeps the builders; the rule stands.
+Amended by [ADR 0063](0063-the-domain-model-is-its-own-package-apart-from-persistence.md): the policy value belongs in `domain` beside `Landing.Normalized`, and `core` keeps the builders; the rule stands.
