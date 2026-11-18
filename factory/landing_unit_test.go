@@ -317,6 +317,14 @@ func TestATicketMergedWhileInAnotherStateGetsOnlyAWarningLine(t *testing.T) {
 	}
 }
 
+// hookedToSession gives w's lander the hooks of a session part with no
+// turn running, and returns it, for a test to pause or drain.
+func (w *landWorld) hookedToSession() *factory {
+	f := newFactory(Env{Stdout: io.Discard}, options{parallel: 1})
+	w.l.hooks = f.hooks()
+	return f
+}
+
 func TestAPausedFactoryDoesNotLand(t *testing.T) {
 	t.Parallel()
 	w := newLandWorld(t)
@@ -359,14 +367,6 @@ func TestAFactoryThatStopsMidPollLandsNothingMore(t *testing.T) {
 	if s := w.ticket(second).State; s != store.Accepted {
 		t.Errorf("%s is %s; nothing more lands once the Factory stops mid-poll", second, s)
 	}
-}
-
-// hookedToSession gives w's lander the hooks of a session part with no
-// turn running, and returns it, for a test to pause or drain.
-func (w *landWorld) hookedToSession() *factory {
-	f := newFactory(Env{Stdout: io.Discard}, options{parallel: 1})
-	w.l.hooks = f.hooks()
-	return f
 }
 
 func TestAcceptedTicketsLandOldestAcceptFirst(t *testing.T) {

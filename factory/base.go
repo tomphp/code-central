@@ -2,6 +2,7 @@ package factory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/tomoram/code-central/core"
@@ -176,12 +177,29 @@ func (l *lander) checkMCP(base string) {
 	l.mcpBase, l.mcpHeld = base, true
 }
 
+// checkMCPAtStart is start's check of the base it has set: a base the
+// Home Repository has must have .mcp.json committed, or the Factory
+// doesn't start. One it hasn't yet is left to checkMCP on each poll.
+func (l *lander) checkMCPAtStart() error {
+	base := l.repos.baseBranch()
+	if _, err := l.repos.gitOut(l.repos.home.dir, "rev-parse", "--verify", "-q", base+"^{commit}"); err != nil {
+		return nil
+	}
+	if !l.mcpCommitted() {
+		return errors.New(l.mcpMessage())
+	}
+	l.mcpBase = base
+	return nil
+}
+
 // mcpCommitted is whether .mcp.json is committed on the base.
 func (l *lander) mcpCommitted() bool {
 	_, err := l.repos.gitOut(l.repos.home.dir, "cat-file", "-e", l.repos.baseBranch()+":.mcp.json")
 	return err == nil
 }
 
+// mcpMessage says that .mcp.json isn't committed on the base, and why it
+// must be.
 func (l *lander) mcpMessage() string {
 	b := l.repos.baseBranch()
 	return fmt.Sprintf(".mcp.json isn't committed on %s: every worktree starts from %s, so its sessions need it; commit it first", b, b)

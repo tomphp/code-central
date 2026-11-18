@@ -456,11 +456,8 @@ func start(e Env, o options) (*factory, error) {
 		base = p.Landing.Base
 	}
 	f.repos.setBase(base)
-	if _, err := f.gitOut(top, "rev-parse", "--verify", "-q", base+"^{commit}"); err == nil {
-		if !f.lander.mcpCommitted() {
-			return nil, errors.New(f.lander.mcpMessage())
-		}
-		f.lander.mcpBase = base
+	if err := f.lander.checkMCPAtStart(); err != nil {
+		return nil, err
 	}
 	f.accepts = f.readClaudeHelp()
 	if err := f.checkEffortFlag(); err != nil {

@@ -30,8 +30,8 @@ type landerHooks struct {
 // has set it up, only poll and claimingHeld, both on the poll loop, read
 // or write it.
 type lander struct {
-	// repos is the registry the sessions share, which landing alone
-	// writes (replace, setBase); its git calls are landing's.
+	// repos is the registry the lander shares with the sessions: once
+	// start has set it up, only the lander writes it (replace, setBase).
 	repos   *repositories
 	client  *client.Client
 	project string
