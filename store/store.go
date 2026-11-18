@@ -1,10 +1,11 @@
 // Package store is the persistence interface core writes through.
 //
-// Two implementations exist: Open (YAML files on disk, loaded whole into
-// memory at startup) and NewMemory (an in-memory fake). Both pass the
-// contract suite in store/storetest. Every read comes from memory; every
-// Update writes at most one record, and memory changes only after that
-// record is durable.
+// Its Store Kinds (ADR 0067) are Open (YAML files on disk, loaded whole
+// into memory at startup), OpenSQLite (one database file), OpenPostgres
+// (a database several services share, ADR 0068) and NewMemory (an
+// in-memory fake). All pass the contract suite in store/storetest. Every
+// Update writes at most one record, and what a Reader sees changes only
+// after that record is durable.
 package store
 
 import (
@@ -121,12 +122,14 @@ func (im Import) clone() Import {
 	return out
 }
 
-// Store is the persistence interface. View and Update share one
-// store-wide read-write mutex, so a check and the write it guards are
-// atomic.
+// Store is the persistence interface. A check and the write it guards
+// are atomic: View and Update share one store-wide read-write mutex, or,
+// on a Shared Store, each Update is one transaction the database orders
+// against the other services' (ADR 0068).
 type Store interface {
 	View(fn func(Reader) error) error
-	// Update runs fn under the write lock. fn may write at most one
+	// Update runs fn under the write lock, or in a transaction of its
+	// own. fn may write at most one
 	// record; a second write fails with ErrSecondWrite. A Store that
 	// retries on conflict runs fn again from the start, discarding the
 	// earlier attempt's write, so fn must be safe to run more than once;

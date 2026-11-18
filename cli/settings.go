@@ -34,19 +34,25 @@ type settings struct {
 
 // storeSettings is the store: block.
 type storeSettings struct {
-	// Kind is files or sqlite.
+	// Kind is files, sqlite or postgres.
 	Kind string `yaml:"kind"`
 	// Path is the File Store's folder or the SQLite database file; empty
-	// means the data folder, or code-central.db in it.
+	// means the data folder, or code-central.db in it. A postgres store
+	// has none.
 	Path string `yaml:"path"`
 	// URLEnv is the environment variable a postgres store reads its URL
-	// from, which no Kind this build opens has.
+	// from, with its credential: defaultURLEnv when empty. The other
+	// Kinds have none.
 	URLEnv string `yaml:"url_env"`
 }
 
 // storeKinds are the Kinds the store: block accepts; serve.go maps them
 // to the store's.
-var storeKinds = []string{"files", "sqlite"}
+var storeKinds = []string{"files", "sqlite", "postgres"}
+
+// defaultURLEnv is the variable a postgres store reads its URL from when
+// url_env names none.
+const defaultURLEnv = "CODE_CENTRAL_DATABASE_URL"
 
 func loadSettings(h home.Lookup) (settings, error) {
 	s := settings{Port: app.Port, Notifications: "on"}
@@ -75,9 +81,12 @@ func loadSettings(h home.Lookup) (settings, error) {
 	}
 	if st := s.Store; st != nil {
 		if !slices.Contains(storeKinds, st.Kind) {
-			return s, fmt.Errorf("%s: field store.kind: must be files or sqlite, not %q", path, st.Kind)
+			return s, fmt.Errorf("%s: field store.kind: must be files, sqlite or postgres, not %q", path, st.Kind)
 		}
-		if st.URLEnv != "" {
+		if st.Kind == "postgres" && st.Path != "" {
+			return s, fmt.Errorf("%s: field store.path: a postgres store is where its URL says, in the environment variable url_env names; it has no path", path)
+		}
+		if st.Kind != "postgres" && st.URLEnv != "" {
 			return s, fmt.Errorf("%s: field store.url_env: only a postgres store reads its URL from the environment; a %s store has a path", path, st.Kind)
 		}
 	}

@@ -145,22 +145,43 @@ Unknown keys or a bad value in `settings.yaml` stop the service and name the fil
 
 ## Choosing the store
 
-The service keeps its records in one **Store**, of one **Store Kind**. The default is **Files**: YAML and Markdown files under `~/.local/share/code-central` (or `$XDG_DATA_HOME/code-central`), which you can read, grep and, with the service stopped, edit by hand. The other Kind this release opens is **SQLite**: one database file, on this machine's disk, which keeps the same records as document rows. Choose it with a `store:` block in the same `settings.yaml` as the port:
+The service keeps its records in one **Store**, of one **Store Kind**. The default is **Files**: YAML and Markdown files under `~/.local/share/code-central` (or `$XDG_DATA_HOME/code-central`), which you can read, grep and, with the service stopped, edit by hand. The other Kinds keep the same records as document rows in a database: **SQLite**, one database file on this machine's disk, and **Postgres**, a database several services may share. Choose one with a `store:` block in the same `settings.yaml` as the port:
 
 ```yaml
 store:
-  kind: sqlite                                   # files (the default) or sqlite
+  kind: sqlite                                   # files (the default), sqlite or postgres
   path: /home/me/.local/share/code-central/code-central.db   # optional: code-central.db in the data folder
 ```
 
 Then `code-central service restart` (or `service install` again). The store starts empty: moving the records of an existing File Store into it is a later release's Store Move. The service's startup line names what it opened, such as `(store: sqlite at /home/me/.local/share/code-central/code-central.db)`, and the log does too.
 
-- `kind` is `files` or `sqlite`. Anything else stops the service: `settings.yaml: field store.kind: must be files or sqlite, not "mysql"`. `url_env` is reserved for a Postgres Store in a later release and is refused for these Kinds, naming `store.url_env`.
-- `path` is the File Store's folder or the SQLite database file. Left out, it is the data folder, or `code-central.db` in it.
+- `kind` is `files`, `sqlite` or `postgres`. Anything else stops the service: `settings.yaml: field store.kind: must be files, sqlite or postgres, not "mysql"`.
+- `path` is the File Store's folder or the SQLite database file. Left out, it is the data folder, or `code-central.db` in it. A Postgres Store has none: giving it one stops the service, naming `store.path`.
+- `url_env` names the environment variable a Postgres Store reads its URL from; `CODE_CENTRAL_DATABASE_URL` when left out. The other Kinds refuse it, naming `store.url_env`.
 - No `store:` block means Files in the data folder, exactly as before.
 - `--store <dir>` and `CODE_CENTRAL_STORE` still mean a File Store at that folder, and override the block, so an existing unit or script runs as it did. `service install --store <dir>` writes `--store` into the unit; without it, and with a `store:` block, the unit names no store and the service reads the block at startup.
 
 A SQLite Store is one file plus its write-ahead log (`code-central.db-wal`), and the service holds an exclusive lock file beside it (`code-central.db.lock`) while it runs, so a second service refuses to open it, naming the file. **Don't put it on a network share** (NFS, SMB, a synced folder): SQLite's locking doesn't hold there and the database can be corrupted. A store with a newer format than the binary knows is refused by name (`unknown format`), as a File Store is.
+
+### A Postgres Store
+
+A **Postgres Store** keeps the records in a Postgres database, and several services, on several machines, may open it at once: it takes no lock, and the database orders their writes. (In this release they write safely but don't yet hear each other's changes or share a Project's Watchers; that comes with the rest of the Shared Store.) Give the service a database of its own, empty, and put its URL, with the user and password, in the environment of the service, never in `settings.yaml`:
+
+```yaml
+store:
+  kind: postgres
+  url_env: CODE_CENTRAL_DATABASE_URL             # optional: the variable holding the URL; this is the default
+```
+
+```sh
+export CODE_CENTRAL_DATABASE_URL='postgres://code_central:s3cret@db.example.com:5432/code_central?sslmode=require'
+```
+
+A systemd unit holds it in an `Environment=` line or an `EnvironmentFile=`; a launchd plist in `EnvironmentVariables`. The URL is anything the [pgx](https://github.com/jackc/pgx) driver reads: a `postgres://` URL, or `host=… dbname=… user=… password=…`. Without the variable the service stops: `code-central serve: the postgres store needs its URL in CODE_CENTRAL_DATABASE_URL, which is not set`. The service creates the tables on first start, and refuses a database at a newer format by name, as the other Kinds do.
+
+The startup line and the log show the store as its host, port and database, never the user or password: `(store: postgres at db.example.com:5432/code_central)`.
+
+When two services change the same record at the same moment, the database lets one through and the other tries again, up to five times, before it answers the caller with a `conflict` error, `another service changed this at the same moment, so nothing was written; try again`: an agent or the UI runs the command again and it goes through. Back the database up with Postgres's own tools: `pg_dump`, or your provider's backups and point-in-time recovery. The service's format migrations, when they come, run as one transaction, so a backup, or a point in time, is at one format or the other, never between.
 
 ## Options
 

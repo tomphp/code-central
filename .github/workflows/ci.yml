@@ -41,6 +41,43 @@ jobs:
         with:
           check-latest-tag-only: true
 
+  # The store's contract suite and serve's store: block on a real Postgres,
+  # which only a Linux runner can give as a service container. The matrix
+  # above runs the same tests without one and skips those cases, naming
+  # CODE_CENTRAL_TEST_POSTGRES_URL, as make test does locally.
+  test-postgres:
+    name: test (postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: code_central_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # -v so the log shows the Postgres cases run, not skipped.
+      - name: go test
+        env:
+          CODE_CENTRAL_TEST_POSTGRES_URL: postgres://postgres:postgres@localhost:5432/code_central_test?sslmode=disable
+        run: go test -v ./store/... ./cli/...
+
   test:
     name: test (${{ matrix.os }})
     strategy:
@@ -89,7 +126,8 @@ jobs:
           fi
 
       # Against the committed placeholder page, so no Vite build is needed.
-      # -v so the log lists every skipped test with its reason.
+      # -v so the log lists every skipped test with its reason: the
+      # Postgres cases among them, which the test-postgres job runs.
       - name: go test
         run: go test -v ./...
 
