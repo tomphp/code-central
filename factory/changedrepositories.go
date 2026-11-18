@@ -162,7 +162,7 @@ func (rs *repositories) recordProblem(r *repository, tk core.TicketView, rec cor
 		return ""
 	}
 	if err == nil && tk.SpecLanded {
-		if _, ok := replayedTip(r, tk.ID, branch, commit); ok {
+		if _, ok := replayedTip(r, tk.ID, branch); ok {
 			// Its work was replayed onto its Spec Branch under Rebase,
 			// and its branch moved to the replayed commits.
 			return ""

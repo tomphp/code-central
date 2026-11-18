@@ -222,8 +222,10 @@ func TestUnderRebaseABaseConflictSendsBackAndClaimsWithTheRebaseWording(t *testi
 	h.Script(id, factorytest.Wait())
 	h.Start()
 
-	if !commented(h.Ticket(id), "Rebase the branch onto main, resolve the conflicts, and finish again.") {
-		t.Errorf("comments %+v, want the send-back note to say to rebase onto main", h.Ticket(id).Comments)
+	// Not Spec-landed, it was merged into the base, not replayed, but is
+	// asked to rebase all the same.
+	if !commented(h.Ticket(id), "merging", "into main", "Rebase the branch onto main, resolve the conflicts, and finish again.") || commented(h.Ticket(id), "replaying") {
+		t.Errorf("comments %+v, want the send-back note to say the merge conflicted and to rebase onto main", h.Ticket(id).Comments)
 	}
 	c := callFor(t, h, id)
 	requireConflictClaim(t, c, "README")
@@ -335,7 +337,7 @@ func TestUnderRebaseATicketConflictingInOneRepositoryIsReplayedIntoNeither(t *te
 	if h.Git("rev-parse", second) != homeBranch {
 		t.Error("the Home Repository's branch moved: a Ticket conflicting in any Repository is replayed into none")
 	}
-	if !commented(tk, "- api: replaying", "onto "+spec+" at "+apiTip[:12], "  - endpoint.go", "In each, rebase the branch onto its Spec Branch") {
+	if !commented(tk, "replaying it onto the Spec Branch conflicts in these Repositories, so it replayed it onto none of them", "- api: replaying", "onto "+spec+" at "+apiTip[:12], "  - endpoint.go", "In each, rebase the branch onto its Spec Branch") {
 		t.Fatalf("comments %+v, want the send-back note to name api's Spec Branch and file and say to rebase", tk.Comments)
 	}
 }
@@ -374,5 +376,50 @@ func TestUnderRebaseADirtyWorktreeHoldsTheReplayAndIsLeftAlone(t *testing.T) {
 	tip := h.Git("rev-parse", "spec/"+h.SpecID())
 	if got := h.Git("rev-parse", id); got != tip || got == commits[1] {
 		t.Errorf("the branch is at %s, want it moved from %s to the Spec Branch's tip %s", got, commits[1], tip)
+	}
+}
+
+func TestUnderRebaseACommitAlreadyOnTheSpecBranchIsDroppedNotReplayedEmpty(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	h.MakeRequirement()
+	setRebase(h, true)
+	first, _ := accepted(h, "First", "one.txt", "1\n")
+	second := h.ReadyTicket("Second")
+	commitAs(t, h, h.Repo, second, "one.txt", "1\n", "Ada Lovelace <ada@example.com>", "2001-02-03T04:05:06+00:00", "Make the same change")
+	head := commitAs(t, h, h.Repo, second, "two.txt", "2\n", "Ada Lovelace <ada@example.com>", "2001-02-03T04:05:07+00:00", "Add two")
+	h.Finished(second, second, head)
+	h.Accept(second)
+	holdTicketsStage(t, h)
+
+	r := h.Start()
+	r.WantOutput(first + ": replayed onto spec/" + h.SpecID())
+	r.WantOutput(second + ": replayed onto spec/" + h.SpecID())
+	commits, merges := onSpecBranch(h, h.Repo)
+	var subjects []string
+	for _, c := range commits {
+		subjects = append(subjects, subject(h, h.Repo, c))
+	}
+	if len(merges) > 0 || strings.Join(subjects, ", ") != "Change one.txt, Add two" {
+		t.Fatalf("the Spec Branch holds %q with merges %v, want the change already on it dropped, as git rebase drops it", subjects, merges)
+	}
+}
+
+func TestUnderRebaseABranchMovedOnFromItsFinishCommitIsHeldNotMerged(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	h.MakeRequirement()
+	setRebase(h, true)
+	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
+	h.CommitOn(id, "later.txt", "later\n")
+	holdTicketsStage(t, h)
+
+	r := h.Start()
+	r.WantOutput(id + ": can't land yet")
+	if !commented(h.Ticket(id), "isn't at its finish commit", "finish again at the branch's head") {
+		t.Errorf("comments %+v, want a can't-land note on the moved branch", h.Ticket(id).Comments)
+	}
+	if commits, merges := onSpecBranch(h, h.Repo); len(commits) != 0 || len(merges) != 0 {
+		t.Errorf("the Spec Branch holds %v, merges %v: want nothing, and no Merge commit under Rebase", commits, merges)
 	}
 }

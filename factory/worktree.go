@@ -434,10 +434,10 @@ func (l *lander) sweptTicket(ctx context.Context, id string) *core.TicketView {
 // sweepUnusedBranch deletes branch, tk's in r, when tk never used it: its
 // tip is still on the first-parent line of r's Base, or of the Spec
 // Branch of tk's Spec, where it was cut, rather than merged into either or
-// beyond them. A branch with work of its own is kept, as is one replayed
-// onto its Spec Branch under Rebase, whose commits are on that line but
-// beyond its fork point, until tk is Done or Cancelled: landing reads it
-// till then. Its fork ref goes with it.
+// beyond them. A branch with work of its own is kept, as is one holding
+// its work replayed onto its Spec Branch under Rebase (replayedTip), on
+// that line too, until tk is Done or Cancelled: landing reads it till
+// then. Its fork ref goes with it.
 func (l *lander) sweepUnusedBranch(r *repository, tk core.TicketView, branch string) {
 	if branch == "" {
 		return
@@ -450,8 +450,7 @@ func (l *lander) sweepUnusedBranch(r *repository, tk core.TicketView, branch str
 	if !onFirstParentLine(r.git, tip, "refs/heads/"+l.repos.baseOf(r)) && !onFirstParentLine(r.git, tip, "refs/heads/"+specBranch(tk.Spec.ID)) {
 		return
 	}
-	live := tk.State != domain.Done && tk.State != domain.Cancelled
-	if fork, err := r.git.commit(forkRef(tk.ID)); live && err == nil && fork != tip && r.git.isAncestor(fork, tip) {
+	if _, replayed := replayedTip(r, tk.ID, branch); replayed && tk.State != domain.Done && tk.State != domain.Cancelled {
 		return
 	}
 	if err := r.git.deleteRef(ref, tip); err != nil {

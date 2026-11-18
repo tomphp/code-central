@@ -279,7 +279,7 @@ func (l *lander) replayedWorkIn(r *repository, tk core.TicketView) (commit strin
 	if err != nil || !tk.SpecLanded {
 		return commit, false, what, err
 	}
-	if tip, ok := replayedTip(r, tk.ID, branchIn(tk, r), commit); ok {
+	if tip, ok := replayedTip(r, tk.ID, branchIn(tk, r)); ok {
 		return tip, true, what, nil
 	}
 	return commit, false, what, nil
@@ -861,19 +861,20 @@ func (l *lander) sendBack(ctx context.Context, tk core.TicketView, c landConflic
 }
 
 // landConflict is how merging a Ticket's work in r, head, into the
-// branch into at tip conflicts, or under Rebase (rebase) replaying it
-// onto into: in files.
+// branch into at tip conflicts, or replaying it onto into: in files.
 type landConflict struct {
 	r               *repository
 	head, into, tip string
 	files           []string
-	rebase          bool
+	// rebase is whether Rebase is in force, so the Ticket is asked to
+	// rebase its branch, and replaying whether the Factory replayed it.
+	rebase, replaying bool
 }
 
 // what is what the Factory tried that conflicts: merging head into into,
-// or replaying it onto into under Rebase.
+// or replaying it onto into.
 func (c landConflict) what() string {
-	if c.rebase {
+	if c.replaying {
 		return fmt.Sprintf("replaying %s onto %s", short(c.head), c.into)
 	}
 	return fmt.Sprintf("merging %s into %s", short(c.head), c.into)
@@ -893,7 +894,11 @@ func (l *lander) sendBackConflicts(ctx context.Context, tk core.TicketView, onto
 	var b strings.Builder
 	var names []string
 	rebase := slices.ContainsFunc(conflicts, func(c landConflict) bool { return c.rebase })
-	fmt.Fprintf(&b, "The Factory couldn't land this: merging it into the %s conflicts in these Repositories, so it merged it into none of them:\n\n", onto)
+	if slices.ContainsFunc(conflicts, func(c landConflict) bool { return c.replaying }) {
+		fmt.Fprintf(&b, "The Factory couldn't land this: replaying it onto the %s conflicts in these Repositories, so it replayed it onto none of them:\n\n", onto)
+	} else {
+		fmt.Fprintf(&b, "The Factory couldn't land this: merging it into the %s conflicts in these Repositories, so it merged it into none of them:\n\n", onto)
+	}
 	for _, c := range conflicts {
 		names = append(names, c.r.name)
 		fmt.Fprintf(&b, "- %s: %s at %s conflicts in these files:\n", c.r.name, c.what(), short(c.tip))

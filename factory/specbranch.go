@@ -102,14 +102,12 @@ func (l *lander) mergeIntoSpecBranch(ctx context.Context, tk core.TicketView, po
 			l.cantLandIn(ctx, tk, r, err.Error()+".")
 			return false
 		}
-		// Replayed work counts as merged once its Spec merge is reported,
-		// though a rewrite of the Spec Branch left it off: a replay onto
-		// the commit the work was cut from makes the same commits, which
-		// leaves the branch where it was, so it is told by the report.
-		rebase := r.policy(policies).RebaseInForce()
-		m := specBranchMerge{r: r, head: head, tip: tip, replayed: replayed, merged: r.git.isAncestor(head, ref) || reported && (replayed || rebase)}
+		// Replayed work, once reported, is merged though a rewrite of the
+		// Spec Branch left it off.
+		m := specBranchMerge{r: r, head: head, tip: tip, replayed: replayed, merged: r.git.isAncestor(head, ref) || (replayed && reported)}
 		if !m.merged {
 			var files []string
+			rebase := r.policy(policies).RebaseInForce()
 			if rebase {
 				var why string
 				if m.replay, files, why, err = l.planReplay(r, tk.ID, branchIn(tk, r), head, tip); err != nil {
@@ -120,15 +118,12 @@ func (l *lander) mergeIntoSpecBranch(ctx context.Context, tk core.TicketView, po
 					l.cantLandIn(ctx, tk, r, why)
 					return false
 				}
-			}
-			if m.replay == nil && len(files) == 0 {
-				if m.tree, files, err = r.git.mergeTree(tip, head); err != nil {
-					l.printf("warning: %s: can't merge%s: %v", tk.ID, r.where(), err)
-					return false
-				}
+			} else if m.tree, files, err = r.git.mergeTree(tip, head); err != nil {
+				l.printf("warning: %s: can't merge%s: %v", tk.ID, r.where(), err)
+				return false
 			}
 			if len(files) > 0 {
-				conflicts = append(conflicts, landConflict{r: r, head: head, into: branch, tip: tip, files: files, rebase: rebase})
+				conflicts = append(conflicts, landConflict{r: r, head: head, into: branch, tip: tip, files: files, rebase: rebase, replaying: rebase})
 				continue
 			}
 		}

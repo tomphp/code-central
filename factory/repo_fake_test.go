@@ -244,6 +244,10 @@ func (r *fakeRepo) commitTreeLike(tree, like string, parents ...string) (string,
 	return r.newCommit(r.message[like], parents...), nil
 }
 
+func (r *fakeRepo) treeOf(commit string) (string, error) {
+	return "tree-of-" + commit, nil
+}
+
 func (r *fakeRepo) replayTree(base, commit string) (string, []string, error) {
 	return r.mergeTree(base, commit)
 }

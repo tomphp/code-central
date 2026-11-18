@@ -24,6 +24,8 @@ type repo interface {
 	// commit resolves rev to a commit, failing when it isn't one in the
 	// repository.
 	commit(rev string) (string, error)
+	// treeOf is commit's tree.
+	treeOf(commit string) (string, error)
 	// isAncestor reports whether commit is reachable from rev.
 	isAncestor(commit, rev string) bool
 	// mergeBase is a best common ancestor of a and b, failing when they
@@ -111,6 +113,10 @@ func (g gitRepo) out(args ...string) (string, error) { return gitOut(g.git, g.en
 
 func (g gitRepo) commit(rev string) (string, error) {
 	return g.out("rev-parse", "--verify", "-q", rev+"^{commit}")
+}
+
+func (g gitRepo) treeOf(commit string) (string, error) {
+	return g.out("rev-parse", "--verify", "-q", commit+"^{tree}")
 }
 
 func (g gitRepo) isAncestor(commit, rev string) bool {
