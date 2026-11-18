@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/tomoram/code-central/core"
@@ -80,7 +81,8 @@ var refType = reflect.TypeFor[core.Ref]()
 // fields as properties and additionalProperties false. A field's
 // description is its desc tag, unless describe overrides it by JSON name;
 // required:"true" lists it in required, in field order; enum:"A,B" gives a
-// string an explicit enum; mcp:"-" leaves it out. Embedded structs are
+// string an explicit enum; minItems:"n" gives a list its minItems; mcp:"-"
+// leaves it out. Embedded structs are
 // flattened. A field with no description, or a shape the derivation can't
 // express, is an error naming the field.
 func schema(t reflect.Type, describe func(name string) (string, bool)) (map[string]any, error) {
@@ -100,7 +102,7 @@ func schema(t reflect.Type, describe func(name string) (string, bool)) (map[stri
 		if desc == "" {
 			return nil, fmt.Errorf("field %s has no desc tag or description override", f.Name)
 		}
-		p, err := property(f.Type, desc, f.Tag.Get("enum"))
+		p, err := property(f.Type, desc, f.Tag.Get("enum"), f.Tag.Get("minItems"))
 		if err != nil {
 			return nil, fmt.Errorf("field %s: %w", f.Name, err)
 		}
@@ -113,7 +115,7 @@ func schema(t reflect.Type, describe func(name string) (string, bool)) (map[stri
 }
 
 // property is the schema of a field of type t with description desc.
-func property(t reflect.Type, desc, enum string) (map[string]any, error) {
+func property(t reflect.Type, desc, enum, minItems string) (map[string]any, error) {
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
@@ -136,7 +138,15 @@ func property(t reflect.Type, desc, enum string) (map[string]any, error) {
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"type": "array", "items": items, "description": desc}, nil
+		p := map[string]any{"type": "array", "items": items, "description": desc}
+		if minItems != "" {
+			n, err := strconv.Atoi(minItems)
+			if err != nil {
+				return nil, fmt.Errorf("minItems %q is not a number", minItems)
+			}
+			p["minItems"] = n
+		}
+		return p, nil
 	case t.Kind() == reflect.Map && t.Key().Kind() == reflect.String && t.Elem().Kind() == reflect.String:
 		return tagFilter(desc), nil
 	}

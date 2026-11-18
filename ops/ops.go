@@ -52,6 +52,7 @@ type Op struct {
 //	desc:"…"        the MCP schema description of the field
 //	required:"true" the MCP schema lists the field in required, in field order
 //	enum:"A,B"      an explicit enum in the MCP schema
+//	minItems:"n"    a list's minItems in the MCP schema
 //	path:"n"        the field the HTTP path's {n} binds to; the path wins
 //	query:"name"    a GET's query parameter where it differs from the JSON name
 //	mcp:"-"         left out of the MCP schema
@@ -218,11 +219,11 @@ var all = []entry{
 	defined(FindSpecs),
 
 	// Failure Reports and giving up (ticket 30).
-	legacy(Op{Name: "report_failure", Audience: AgentAndHuman, Write: true}),
-	legacy(Op{Name: "give_up", Audience: AgentAndHuman, Write: true}),
+	defined(ReportFailure),
+	defined(GiveUp),
 	// The agent sends Accepted work back on a conflict (ticket 72).
-	legacy(Op{Name: "send_back", Audience: AgentAndHuman, Write: true}),
-	legacy(Op{Name: "to_draft", Audience: HumanOnly, Write: true}),
+	defined(SendBack),
+	defined(ToDraft),
 
 	// init's teaching files and modes (ticket 41).
 	legacy(Op{Name: "set_project_mode", Audience: HumanOnly, Write: true}),
@@ -231,13 +232,13 @@ var all = []entry{
 	legacy(Op{Name: "get_workflow", Audience: AgentAndHuman}),
 
 	// Rounds and Questions (ticket 29).
-	legacy(Op{Name: "post_round", Audience: AgentAndHuman, Write: true}),
-	legacy(Op{Name: "pick_up_answers", Audience: AgentAndHuman, Write: true}),
-	legacy(Op{Name: "answer", Audience: HumanOnly, Write: true}),
-	legacy(Op{Name: "accept_recommended", Audience: HumanOnly, Write: true}),
-	legacy(Op{Name: "dismiss_question", Audience: HumanOnly, Write: true}),
+	defined(PostRound),
+	defined(PickUpAnswers),
+	defined(Answer),
+	defined(AcceptRecommended),
+	defined(DismissQuestion),
 	// The roll-up of a Spec's Questions is HTTP-only, for the UI.
-	legacy(Op{Name: "get_spec_questions", Audience: HumanOnly}),
+	defined(GetSpecQuestions),
 
 	// Needs Me, moving by hand and Projects (ticket 32).
 	legacy(Op{Name: "needs_me", Audience: HumanOnly}),
