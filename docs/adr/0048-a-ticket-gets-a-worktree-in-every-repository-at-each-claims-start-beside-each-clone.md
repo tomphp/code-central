@@ -6,7 +6,7 @@ So at each Claim's start the Factory makes or reuses the Ticket's worktree in ev
 
 A Repository added mid-session waits for the next Claim. Unchanged Repositories' branches and worktrees are swept with the rest once the Ticket is done.
 
-This amends [ADR 0032](0032-the-base-is-a-project-setting-not-the-factorys.md)'s single base only as far as [ADR 0047](0047-a-projects-repositories-are-a-project-setting-in-the-store-not-a-file-in-the-home-repository.md) already does: each Repository has its own Base.
+This amends [ADR 0058](0058-the-base-is-a-project-setting-not-the-factorys.md)'s single base only as far as [ADR 0062](0062-a-projects-repositories-are-a-project-setting-in-the-store-not-a-file-in-the-home-repository.md) already does: each Repository has its own Base.
 
 ## Considered Options
 

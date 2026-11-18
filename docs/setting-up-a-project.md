@@ -589,7 +589,7 @@ curl -X POST localhost:7733/api/p/acme-api/set_model_assignment -d '{"on": true}
 
 A change applies from the next Claim and the next `get_stage_guide` call. A session already running, or one resumed after a Round, keeps the guide in the system prompt it started with, unlike Models, which apply from each Ticket's next turn. To read the guide your Project's agents get, `GET /api/p/{key}/stage-guides/{stage}` or `code-central get-stage-guide <stage>`, which prints the configured Project's guide (`--project` names another).
 
-Another optional line follows the same pattern: one named setting, whose zero value may keep the line in or leave it out, and one fragment in `core/stageguides/fragments/`, which a placeholder line in the guide (`<!-- subagent-exploration -->`, `<!-- model-assignment -->`) marks the place of. [ADR 0034](adr/0034-a-stage-guide-can-vary-by-project-only-through-named-project-settings-that-the-human-sets.md) records the decision.
+Another optional line follows the same pattern: one named setting, whose zero value may keep the line in or leave it out, and one fragment in `core/stageguides/fragments/`, which a placeholder line in the guide (`<!-- subagent-exploration -->`, `<!-- model-assignment -->`) marks the place of. [ADR 0059](adr/0059-a-stage-guide-can-vary-by-project-only-through-named-project-settings-that-the-human-sets.md) records the decision.
 
 ## Auto-accept
 

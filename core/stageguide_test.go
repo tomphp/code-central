@@ -311,7 +311,7 @@ func TestGetWorkflowsTroubleRulesAreTheStageGuidesText(t *testing.T) {
 	}
 }
 
-// Subagent Exploration (code-central-441, ADR 0034).
+// Subagent Exploration (code-central-441, ADR 0059).
 
 const subagentFragment = "ask an Explore subagent and keep its answer, not the files"
 
@@ -460,7 +460,7 @@ func TestGetStageGuideOnAnUnknownProjectIsRefused(t *testing.T) {
 	wantCode(t, err, core.UnknownProject, "")
 }
 
-// Model Assignment (code-central-471, ADR 0034).
+// Model Assignment (code-central-471, ADR 0059).
 func TestAProjectStoredWithoutTheSettingHasModelAssignmentOff(t *testing.T) {
 	f := newFixture(t)
 	if p := f.project(t, "acme"); p.StageGuides.ModelAssignment {
@@ -503,7 +503,7 @@ func TestAnAgentCannotSetModelAssignment(t *testing.T) {
 	wantCode(t, err, core.ActionNotAllowed, "")
 }
 
-// The Model Assignment fragment (code-central-472, ADR 0034).
+// The Model Assignment fragment (code-central-472, ADR 0059).
 func (f fixture) setModelAssignment(t *testing.T, on bool) {
 	t.Helper()
 	if _, err := f.core.SetModelAssignment(human, "acme", core.SetModelAssignmentInput{On: on}); err != nil {

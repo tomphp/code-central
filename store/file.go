@@ -38,7 +38,7 @@ func (e *LoadError) Error() string {
 // Dir resolves the store directory: the --store flag, then
 // CODE_CENTRAL_STORE, then $XDG_DATA_HOME/code-central, then
 // ~/.local/share/code-central, where ~ is HOME or else the profile folder
-// (ADR 0010).
+// (ADR 0056).
 func Dir(flag string, h home.Lookup) (string, error) {
 	if flag != "" {
 		return flag, nil

@@ -1,6 +1,6 @@
 # UI tests wait for the world to settle, not for DOM text
 
-The UI's tests run on the WASM Core ([ADR 0039](0039-the-uis-fake-is-the-real-core-built-to-webassembly.md)), but nothing told a test when the world had finished its work, so each test waited on some DOM text with `findBy*` or `waitFor`. Those waits hid races rather than removing them: a write made before a feed had opened missed its notice, and raised timeouts covered it up, so failing tests were slow to fail and slow machines flaked. So we decided that a test waits for the world to settle, and asserts synchronously once it has.
+The UI's tests run on the WASM Core ([ADR 0060](0060-the-uis-fake-is-the-real-core-built-to-webassembly.md)), but nothing told a test when the world had finished its work, so each test waited on some DOM text with `findBy*` or `waitFor`. Those waits hid races rather than removing them: a write made before a feed had opened missed its notice, and raised timeouts covered it up, so failing tests were slow to fail and slow machines flaked. So we decided that a test waits for the world to settle, and asserts synchronously once it has.
 
 A WASM Core world is **settled** when all three of these hold:
 
