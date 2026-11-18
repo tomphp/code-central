@@ -220,6 +220,78 @@ func (ps LandingPolicies) LandPerSpecInForce() bool {
 	return ps.Any(LandingPolicy.LandPerSpecInForce)
 }
 
+// LandingMethodCapabilities is what the Options form offers with one
+// Landing Method drafted as the Default Landing: its Landing
+// capabilities.
+type LandingMethodCapabilities struct {
+	// OffersPush is whether the Push checkbox is offered.
+	OffersPush bool `json:"offers_push"`
+	// OffersLandPerSpec is whether Land per Spec can be changed.
+	OffersLandPerSpec bool `json:"offers_land_per_spec"`
+	// ShowsCodeHost is whether the Code Host worked out from the Push
+	// remote URL is shown.
+	ShowsCodeHost bool `json:"shows_code_host"`
+	// UsesAzureReposPAT is whether the PAT variable is used.
+	UsesAzureReposPAT bool `json:"uses_azure_repos_pat"`
+}
+
+// LandingMethodsCapabilities is the Landing capabilities of every Landing
+// Method, each as if it were the Default Landing.
+type LandingMethodsCapabilities struct {
+	Merge       LandingMethodCapabilities `json:"merge"`
+	Branch      LandingMethodCapabilities `json:"branch"`
+	PullRequest LandingMethodCapabilities `json:"pull_request"`
+}
+
+// landingCapabilities is p's Landing capabilities for each Landing Method
+// as if it were the Default Landing, with p's other settings and every
+// Own Landing unchanged, given the Azure Repos Repositories' names.
+func landingCapabilities(p store.Project, azureRepos []string) LandingMethodsCapabilities {
+	of := func(m store.LandingMethod) LandingMethodCapabilities {
+		q := p
+		q.Landing.Method = m
+		lp := NewLandingPolicy(m, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
+		return LandingMethodCapabilities{OffersPush: lp.OffersPush(), OffersLandPerSpec: lp.OffersLandPerSpec(),
+			ShowsCodeHost: lp.LandsByPullRequest(), UsesAzureReposPAT: landingPolicies(q).UsesAzureReposPAT(azureRepos)}
+	}
+	return LandingMethodsCapabilities{Merge: of(store.LandingMerge), Branch: of(store.LandingBranch), PullRequest: of(store.LandingPullRequest)}
+}
+
+// defaultRepositoryLanding is p's Default Landing named as a Repository
+// Landing, as a Repository following it shows it.
+func defaultRepositoryLanding(p store.Project) RepositoryLanding {
+	return repositoryLandingOf(p.Landing.Method, p.Landing.Push)
+}
+
+// pushesNothing is whether Push pushes nothing in p: every Repository is
+// local-only, so has "Push off when the Repository is local-only", while
+// some Repository's Landing, as chosen, needs a push remote.
+func pushesNothing(p store.Project) bool {
+	vs := repositoriesView(p)
+	needs := false
+	for _, v := range vs {
+		if !v.LocalOnly {
+			return false
+		}
+		m, push := v.Landing.methodAndPush()
+		needs = needs || NewLandingPolicy(m, push, p.Landing.LandPerSpec, p.CI.Tracking).NeedsPushRemote()
+	}
+	return needs
+}
+
+// OffersPush answers Push's "Under Pull Request, Push is implied", so the
+// human chooses it only under Merge and Branch.
+func (lp LandingPolicy) OffersPush() bool {
+	return lp.method != store.LandingPullRequest
+}
+
+// OffersLandPerSpec answers "Land per Spec applies under Merge and Pull
+// Request, and has no effect under Branch": Merge or Pull Request,
+// whatever the Land per Spec setting, unlike LandPerSpecInForce.
+func (lp LandingPolicy) OffersLandPerSpec() bool {
+	return lp.method == store.LandingMerge || lp.method == store.LandingPullRequest
+}
+
 // NeedsCloneURL answers Pull Request's "it is refused as a local-only
 // Repository's Own Landing, and as the Default Landing while a local-only
 // Repository follows it": Pull Request, which can't land where there is

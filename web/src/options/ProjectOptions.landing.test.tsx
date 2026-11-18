@@ -165,6 +165,40 @@ describe("Project Options", () => {
     expect(within(landing()).getByRole("region", { name: "Pull Request Watcher" })).toBeInTheDocument();
   });
 
+  it("offers each drafted method's Push, Land per Spec, Code Host and PAT parts, and the Watcher as saved", async () => {
+    const { w, s } = await acme();
+    await s.reportPushRemote("acme", "https://dev.azure.com/acme/shop/_git/acme");
+    await w.api.addRepository("acme", { name: "web", clone_url: "git@github.com:acme/web.git", landing: "pull_request" });
+    await renderApp(w, "/?view=project-options&project=acme");
+    const parts = () => ({
+      push: within(landing()).queryByRole("checkbox", { name: "Push" }) !== null,
+      landPerSpec: within(landing()).getByRole("checkbox", { name: "Land per Spec" }).hasAttribute("disabled") ? "disabled" : "enabled",
+      codeHost: within(landing()).queryByRole("status", { name: "Code Host" })?.textContent ?? null,
+      pat: within(landing()).queryByRole("textbox", { name: "PAT variable" }) !== null,
+      watcher: within(landing()).queryByRole("region", { name: "Pull Request Watcher" }) !== null,
+    });
+    const draft = (name: string) => userEvent.click(within(landing()).getByRole("radio", { name }));
+
+    expect(parts()).toEqual({ push: true, landPerSpec: "enabled", codeHost: null, pat: false, watcher: true });
+    await draft("Leave as a branch");
+    expect(parts()).toEqual({ push: true, landPerSpec: "disabled", codeHost: null, pat: false, watcher: true });
+    await draft("Pull Request");
+    expect(parts()).toEqual({
+      push: false,
+      landPerSpec: "enabled",
+      codeHost: "Code Host: Azure Repos, repository acme/shop/acme.",
+      pat: true,
+      watcher: true,
+    });
+
+    // The Watcher follows what is saved, not the draft.
+    await w.api.editRepository("acme", "web", { landing: "default" });
+    await settle(w);
+    expect(parts()).toMatchObject({ push: false, pat: true, watcher: false });
+    await draft("Merge");
+    expect(parts()).toEqual({ push: true, landPerSpec: "enabled", codeHost: null, pat: false, watcher: false });
+  });
+
   it("refuses a Default Landing of Pull Request while a local-only Repository follows it, with a fix naming it", async () => {
     const { w, s } = await acme();
     await s.reportPushRemote("acme", "git@github.com:acme/web.git");
@@ -301,7 +335,9 @@ describe("Project Options", () => {
     await userEvent.click(save);
     await settle(w);
     expect(within(landing()).getByRole("status")).toHaveTextContent("Saved");
-    expect((await w.api.listProjects())[0].landing).toEqual(defaultLanding({ method: "branch", push: true, remote: "upstream" }));
+    expect((await w.api.listProjects())[0].landing).toEqual(
+      defaultLanding({ method: "branch", push: true, remote: "upstream", repository_landing: "branch_push" }),
+    );
     expect(save).toBeDisabled();
   });
 

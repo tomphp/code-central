@@ -892,6 +892,19 @@ export interface LandingView {
   // Base is the branch the Project's work is cut from and lands on: the
   // stored one, else the reported fallback, else main.
   base: string;
+  // Methods is the Landing capabilities of each Landing Method, as if
+  // it were the Default Landing: what the Options form offers while the
+  // human drafts it.
+  methods: LandingMethodsCapabilities;
+  // RunsPullRequestWatcher is whether the Pull Request Watcher runs, as
+  // saved: any Repository is under Pull Request.
+  runs_pull_request_watcher: boolean;
+  // RepositoryLanding is the Default Landing named as a Repository's
+  // Landing names it.
+  repository_landing: RepositoryLanding;
+  // PushesNothing is whether Push is on in some Landing while every
+  // Repository is local-only, so it pushes nothing.
+  pushes_nothing: boolean;
   // Watcher is the Pull Request Watcher's status, not_reported unless the
   // method is Pull Request.
   watcher: WatcherView;
@@ -1519,6 +1532,14 @@ export interface ChatMessageView {
   error?: string;
 }
 
+// LandingMethodsCapabilities is the Landing capabilities of every Landing
+// Method, each as if it were the Default Landing.
+export interface LandingMethodsCapabilities {
+  merge: LandingMethodCapabilities;
+  branch: LandingMethodCapabilities;
+  pull_request: LandingMethodCapabilities;
+}
+
 // WatcherView is a Project's Watcher's status, in its kind's settings.
 export interface WatcherView {
   state: WatcherState;
@@ -1786,6 +1807,21 @@ export interface Tokens {
   cache_write_tokens: number;
   cache_read_tokens: number;
   output_tokens: number;
+}
+
+// LandingMethodCapabilities is what the Options form offers with one
+// Landing Method drafted as the Default Landing: its Landing
+// capabilities.
+export interface LandingMethodCapabilities {
+  // OffersPush is whether the Push checkbox is offered.
+  offers_push: boolean;
+  // OffersLandPerSpec is whether Land per Spec can be changed.
+  offers_land_per_spec: boolean;
+  // ShowsCodeHost is whether the Code Host worked out from the Push
+  // remote URL is shown.
+  shows_code_host: boolean;
+  // UsesAzureReposPAT is whether the PAT variable is used.
+  uses_azure_repos_pat: boolean;
 }
 
 // RepositoryProblem is one Repository a Watcher can't watch, by
