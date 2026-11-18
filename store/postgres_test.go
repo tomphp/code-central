@@ -1,10 +1,12 @@
 package store_test
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/store/storetest"
 )
@@ -52,21 +54,44 @@ func TestPostgresRefusesAnUnknownFormat(t *testing.T) {
 	}
 }
 
-// A Postgres Store has no Migrations yet (Ticket code-central-1049): one
-// at an older format is refused by name, and left as it is.
-func TestPostgresRefusesAnOlderFormatUntilItMigrates(t *testing.T) {
+// A running service whose Store another service migrates past its
+// format hears of it on its next renewal, naming both formats, and every
+// Update it tries is refused before it writes, so it never writes records
+// of a format it doesn't know into the Store.
+func TestARunningPostgresServiceStopsWritingOnceAnotherMigratesPastIt(t *testing.T) {
 	url := storetest.FreshPostgres(t)
 	s := openPostgres(t, url)
-	if err := s.Close(); err != nil {
-		t.Fatal(err)
+	mustUpdate(t, s, func(w store.Writer) error {
+		return w.PutProject(domain.Project{Key: "acme", DisplayName: "Acme", Created: t0, Mode: "committed"})
+	})
+	store.SetPostgresFormat(t, url, store.Format+1)
+
+	err := s.Services().Register(store.Registration{ID: "a", Host: "laptop", Version: "v1", Format: store.Format, Renewed: t0})
+	var changed *store.FormatChangedError
+	if !errors.As(err, &changed) || changed.Stored != store.Format+1 || changed.Own != store.Format {
+		t.Fatalf("renewing: %v", err)
 	}
-	store.SetPostgresFormat(t, url, store.Format-1)
-	_, err := store.OpenPostgres(url)
-	if err == nil || !strings.Contains(err.Error(), "cannot yet migrate") || !strings.Contains(err.Error(), s.Path()) {
-		t.Fatalf("open at an older format: %v", err)
+	for _, f := range []int{store.Format, store.Format + 1} {
+		if !strings.Contains(err.Error(), fmt.Sprint(f)) {
+			t.Fatalf("%q doesn't name format %d", err, f)
+		}
+	}
+
+	err = s.Update(func(w store.Writer) error {
+		return w.PutProject(domain.Project{Key: "acme", DisplayName: "Renamed", Created: t0, Mode: "committed"})
+	})
+	if !errors.As(err, &changed) {
+		t.Fatalf("an update after the migration: %v", err)
 	}
 	store.SetPostgresFormat(t, url, store.Format)
-	openPostgres(t, url) // the refusal changed nothing
+	if err := s.View(func(r store.Reader) error {
+		if p, _ := r.Project("acme"); p.DisplayName != "Acme" {
+			t.Fatalf("the refused update wrote: %+v", p)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // Two services opening a fresh database at the same moment create its

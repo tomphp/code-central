@@ -40,3 +40,18 @@ func setFormat(t testing.TB, driver, dsn string, d dialect, format int) {
 // PostgresURLOf is the URL s was opened with, for a test to open the same
 // schema again.
 func PostgresURLOf(s *SQLStore) string { return s.url }
+
+// OpenPostgresFormat opens url as a build whose format is format and
+// whose migration chain is steps, so tests can migrate to a test-only
+// format.
+func OpenPostgresFormat(url string, format int, steps []MigrationStep) (*SQLStore, error) {
+	return openPostgres(url, format, steps)
+}
+
+// FailPostgresMigrationBeforeCommit makes the next Postgres Migrations
+// fail with err once they have rewritten the Store, just before they
+// commit.
+func FailPostgresMigrationBeforeCommit(t interface{ Cleanup(func()) }, err error) {
+	failPostgresMigrationBeforeCommit = err
+	t.Cleanup(func() { failPostgresMigrationBeforeCommit = nil })
+}

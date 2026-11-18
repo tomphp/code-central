@@ -107,7 +107,7 @@ func open(dir string, format int, steps []MigrationStep) (*FileStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &FileStore{index: newIndex(), dir: dir, lock: lock, format: format, steps: steps}
+	s := &FileStore{index: newIndex(format), dir: dir, lock: lock, format: format, steps: steps}
 	s.usage = usage.NewFiles(dir)
 	if err := s.recoverImports(); err != nil {
 		s.Close()

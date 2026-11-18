@@ -54,11 +54,15 @@ const connectTimeout = 10 * time.Second
 
 // OpenPostgres opens the Postgres Store at url: a postgres:// URL, or a
 // key=value string, as pgx reads them, holding the credential. It creates
-// the schema if needed, and refuses a database at another format by name:
-// a newer one as every Kind does, and an older one until a Postgres
-// Store's Migrations land (Ticket code-central-1049). It takes no lock:
-// the Store is shared by design.
-func OpenPostgres(url string) (*SQLStore, error) {
+// the schema if needed, migrates a database at an older format in one
+// transaction (postgres_migrate.go), while no other service is
+// registered on it, and refuses one at a newer format by name. It takes
+// no lock: the Store is shared by design.
+func OpenPostgres(url string) (*SQLStore, error) { return openPostgres(url, Format, migrations) }
+
+// openPostgres is OpenPostgres as a build whose format is format and
+// whose migration chain is steps: Format and migrations, except in tests.
+func openPostgres(url string, format int, steps []MigrationStep) (*SQLStore, error) {
 	cfg, addr, err := parsePostgres(url)
 	if err != nil {
 		return nil, err
@@ -71,11 +75,11 @@ func OpenPostgres(url string) (*SQLStore, error) {
 	// appends beside them.
 	db.SetMaxOpenConns(8)
 	db.SetMaxIdleConns(4)
-	s := &SQLStore{db: db, d: postgres, path: addr, url: url}
+	s := &SQLStore{db: db, d: postgres, path: addr, url: url, format: format}
 	s.usage = &sqlUsage{db: db, d: postgres}
-	older, err := prepare(context.Background(), db, postgres, Format, addr)
+	older, err := prepare(context.Background(), db, postgres, format, addr)
 	if err == nil && older > 0 {
-		err = fmt.Errorf("%s: format %d: this code-central cannot yet migrate a postgres store (it understands format %d)", addr, older, Format)
+		err = s.migrateShared(older, format, steps, time.Now())
 	}
 	if err != nil {
 		s.Close()

@@ -78,9 +78,12 @@ type SQLStore struct {
 	path string
 	// url is the Postgres Store's URL, with its credential, kept for
 	// reopening in tests and never shown.
-	url   string
-	lock  *storeLock
-	usage usage.Store
+	url string
+	// format is the store format this service reads and writes: Format,
+	// except in tests.
+	format int
+	lock   *storeLock
+	usage  usage.Store
 	// migrated is the Migration this open ran, if any.
 	migrated *Migration
 }
@@ -112,6 +115,10 @@ func (s *SQLStore) Close() error {
 // Usage is the Store's Usage (ADR 0069): a table written on its own
 // connection, outside any Update.
 func (s *SQLStore) Usage() usage.Store { return s.usage }
+
+// Services are the Store's Registrations and Watcher Leases, in tables of
+// their own, written on the pool's connections outside every Update.
+func (s *SQLStore) Services() Services { return sqlServices{s} }
 
 // Changes never delivers: no other service shares a SQLite Store, and a
 // Postgres Store's notices come with Ticket code-central-1048.
@@ -203,6 +210,19 @@ func (s *SQLStore) attempt(fn func(Writer) error) error {
 			conn.ExecContext(ctx, "ROLLBACK")
 		}
 	}()
+	if s.d.shared {
+		// Another service may have migrated the Store since this one
+		// opened it: its records are then of a format this one doesn't
+		// write. Read in the transaction, so a Migration committing
+		// beside it is one of the collisions the engine orders.
+		stored, err := storedFormat(ctx, conn, s.d)
+		if err != nil {
+			return err
+		}
+		if stored != s.format {
+			return &FormatChangedError{Where: s.path, Stored: stored, Own: s.format}
+		}
+	}
 	var failed error
 	w := &sqlWriter{sqlReader: sqlReader{q: conn, d: s.d, err: &failed}}
 	err = fn(w)
@@ -263,6 +283,9 @@ func (d dialect) schema() []string {
 		`CREATE INDEX IF NOT EXISTS claims_session ON claims (session_id, started)`,
 		`CREATE TABLE IF NOT EXISTS usage_records (id ` + d.serial + `, project TEXT NOT NULL, day TEXT NOT NULL, type TEXT NOT NULL, doc ` + d.json + ` NOT NULL)`,
 		`CREATE INDEX IF NOT EXISTS usage_records_day ON usage_records (day, project, id)`,
+		`CREATE TABLE IF NOT EXISTS registrations (id TEXT PRIMARY KEY, host TEXT NOT NULL, version TEXT NOT NULL, format INTEGER NOT NULL, renewed BIGINT NOT NULL)`,
+		`CREATE TABLE IF NOT EXISTS watcher_leases (project TEXT PRIMARY KEY, holder TEXT NOT NULL, expires BIGINT NOT NULL)`,
+		`CREATE INDEX IF NOT EXISTS watcher_leases_holder ON watcher_leases (holder)`,
 	}
 }
 
