@@ -53,6 +53,23 @@ describe("Focus Mode's body with a queue", () => {
     expect(header()).toHaveTextContent("Acme acme");
   });
 
+  it("titles its header Focus", async () => {
+    await renderBody();
+    expect(within(header()).getByRole("heading", { level: 1, name: "Focus" })).toBeInTheDocument();
+  });
+
+  it("names the Project once in one Project, in the header and not above the item", async () => {
+    await renderBody({ loc: { view: "focus", project: "acme" } });
+    const item = within(focus()).getByRole("article", { name: "Focus Item" });
+    expect(item).not.toHaveTextContent("Acme");
+  });
+
+  it("names the Project above the item in All Projects", async () => {
+    await renderBody();
+    const item = within(focus()).getByRole("article", { name: "Focus Item" });
+    expect(item).toHaveTextContent("Acme");
+  });
+
   it("shows the session's note", async () => {
     await renderBody({}, { note: "Requirement added" });
     expect(within(focus()).getByRole("status")).toHaveTextContent("Requirement added");

@@ -22,7 +22,7 @@ const (
 )
 
 // CodeHosts are the Code Hosts, then none.
-var CodeHosts = []CodeHost{CodeHostGitHub, CodeHostAzureRepos, CodeHostNone}
+func CodeHosts() []CodeHost { return []CodeHost{CodeHostGitHub, CodeHostAzureRepos, CodeHostNone} }
 
 var (
 	githubRemote = regexp.MustCompile(`^(?:(?:https?|ssh|git)://(?:[^@/]+@)?github\.com(?::\d+)?/|[^@/\s]+@github\.com:)([A-Za-z0-9-]+)/([A-Za-z0-9._-]+?)(?:\.git)?/?$`)

@@ -5,6 +5,14 @@ const meta = {
   title: "Inbox/FilterButton",
   component: FilterButton,
   args: { on: false, label: "Needs Me", count: 3, onClick: () => {} },
+  // The button is styled for the Inbox's rail.
+  decorators: [
+    (Story) => (
+      <nav className="inbox-nav">
+        <Story />
+      </nav>
+    ),
+  ],
 } satisfies Meta<typeof FilterButton>;
 export default meta;
 type Story = StoryObj<typeof meta>;

@@ -63,17 +63,19 @@ export function SessionPopupBody({ session, responses, subagent, error, here, na
         </p>
       )}
       {error && <ErrorBanner>{error}</ErrorBanner>}
-      {!responses && !error && <Loading />}
-      {responses && !responses.length && <p className="muted">No responses for this session in the {USAGE_KEPT_DAYS} days Usage keeps.</p>}
-      {responses && responses.length > 0 && (
-        <LineChart
-          label="Context Size per response"
-          xLabel="Response"
-          values={responses.map((r) => r.context_size)}
-          pointLabel={(i) => `Response ${i + 1}: ${count(responses[i].context_size)} tokens`}
-          tip={(i) => <ResponseFigures n={i + 1} r={responses[i]} />}
-        />
-      )}
+      <div className="session-popup-chart">
+        {!responses && !error && <Loading />}
+        {responses && !responses.length && <p className="muted">No responses for this session in the {USAGE_KEPT_DAYS} days Usage keeps.</p>}
+        {responses && responses.length > 0 && (
+          <LineChart
+            label="Context Size per response"
+            xLabel="Response"
+            values={responses.map((r) => r.context_size)}
+            pointLabel={(i) => `Response ${i + 1}: ${count(responses[i].context_size)} tokens`}
+            tip={(i) => <ResponseFigures n={i + 1} r={responses[i]} />}
+          />
+        )}
+      </div>
     </PopupShell>
   );
 }

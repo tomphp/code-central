@@ -406,7 +406,7 @@ func setRepositoryLanding(r *store.Repository, landing *RepositoryLanding, pushR
 		l := RepositoryLanding(strings.TrimSpace(string(*landing)))
 		if !l.Valid() {
 			var names []string
-			for _, v := range RepositoryLandings {
+			for _, v := range RepositoryLandings() {
 				names = append(names, string(v))
 			}
 			return &Error{Code: Invalid, Field: "landing", Message: fmt.Sprintf("%s isn't a Landing", quote(string(l))),

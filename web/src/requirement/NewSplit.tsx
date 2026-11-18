@@ -4,9 +4,9 @@
 // items outlives it. The ▾ and its menu follow the usual menu-button
 // keyboard pattern. The menu is placed against the nearest positioned
 // ancestor, which the caller provides.
-import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useId, useRef, useState } from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { Button } from "../controls/Button";
-import { Caret } from "../controls/Icon";
+import { Caret, MapMark, RequirementMark, StopMark } from "../controls/Icon";
 import type { SpecAcknowledgement, TicketAcknowledgement } from "../api/types";
 import { NewMap, NewRequirement, NewSmallChange, type NewRequirementProps } from "./NewRequirement";
 
@@ -122,17 +122,17 @@ export function NewSplit({ variant, onSubmitted, ...newProps }: NewSplitProps) {
         <NewRequirement
           {...newProps}
           onSubmitted={made("Requirement")}
-          trigger={(show) => <MenuItem icon="+" label="Requirement" hint="Grilled into a Spec and Tickets" onClick={pick(show)} />}
+          trigger={(show) => <MenuItem icon={<RequirementMark />} label="Requirement" hint="Grilled into a Spec and Tickets" onClick={pick(show)} />}
         />
         <NewMap
           {...newProps}
           onSubmitted={made("Map")}
-          trigger={(show) => <MenuItem icon="◇" label="Map" hint="Charts the decisions to get somewhere" onClick={pick(show)} />}
+          trigger={(show) => <MenuItem icon={<MapMark />} label="Map" hint="Charts the decisions to get somewhere" onClick={pick(show)} />}
         />
         <NewSmallChange
           {...newProps}
           onSubmitted={(ticket) => onSubmitted({ kind: "Small Change", ticket })}
-          trigger={(show) => <MenuItem icon="✓" label="Small Change" hint="One Ticket, built and landed as it is" onClick={pick(show)} />}
+          trigger={(show) => <MenuItem icon={<StopMark />} label="Small Change" hint="One Ticket, built and landed as it is" onClick={pick(show)} />}
         />
       </div>
     </>
@@ -140,7 +140,7 @@ export function NewSplit({ variant, onSubmitted, ...newProps }: NewSplitProps) {
 }
 
 // MenuItem is named by its label and described by its hint.
-function MenuItem({ icon, label, hint, onClick }: { icon: string; label: string; hint: string; onClick(): void }) {
+function MenuItem({ icon, label, hint, onClick }: { icon: ReactNode; label: string; hint: string; onClick(): void }) {
   const id = useId();
   return (
     <button role="menuitem" tabIndex={-1} className="new-menu-item" aria-labelledby={`${id}-label`} aria-describedby={`${id}-hint`} onClick={onClick}>

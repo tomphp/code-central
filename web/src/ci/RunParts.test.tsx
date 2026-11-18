@@ -20,9 +20,9 @@ describe("RunStatusBadge", () => {
     expect(screen.getByText("failed")).toBeInTheDocument();
   });
 
-  it("adds a warning mark to a partially succeeded run", () => {
-    const { container } = render(<RunStatusBadge status="Partially succeeded" />);
-    expect(container).toHaveTextContent("⚠ Partially succeeded");
+  it("shows a partially succeeded run in lowercase with no glyph", () => {
+    const { container } = render(<RunStatusBadge status="partially succeeded" />);
+    expect(container).toHaveTextContent(/^partially succeeded$/);
   });
 });
 

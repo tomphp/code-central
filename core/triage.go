@@ -30,7 +30,9 @@ const (
 )
 
 // TriageActions are the triage actions in the order they are offered.
-var TriageActions = []TriageAction{OptionKeepAsDraft, OptionToRequirement, OptionWontFix}
+func TriageActions() []TriageAction {
+	return []TriageAction{OptionKeepAsDraft, OptionToRequirement, OptionWontFix}
+}
 
 // awaitsTriage reports whether a Ticket created now on spec, in key, is
 // awaiting triage: it is on an Integration's inbox Spec while that
@@ -61,7 +63,7 @@ func ticketTriageActions(r store.Reader, key string, t store.Ticket) []TriageAct
 	if whyNotIncoming(r, key, t) != "" {
 		return nil
 	}
-	return TriageActions
+	return TriageActions()
 }
 
 // triageNotes says what each triage action does to t, an Incoming Issue,
@@ -180,7 +182,7 @@ func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementIn
 		extra := strings.TrimSpace(in.Context)
 		link := t.Link
 		link.Outbound, link.Written = true, slices.Clone(t.Link.Written)
-		im, _, stageNs := c.requirementImport(w, key, store.Spec{Title: t.Title, Body: requirementText(t, extra), Link: link}, Stages, "", false)
+		im, _, stageNs := c.requirementImport(w, key, store.Spec{Title: t.Title, Body: requirementText(t, extra), Link: link}, Stages(), "", false)
 
 		// The grilling Stage is new and waits on nothing, so as the
 		// Replacement it can't make a cycle.

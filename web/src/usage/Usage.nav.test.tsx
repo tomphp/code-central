@@ -219,7 +219,7 @@ describe("tabs", () => {
     expect(reads()).toBe(1);
   });
 
-  it("shows the loading and error banners above the tab strip", async () => {
+  it("shows the error banner below the tab strip", async () => {
     const w = await withUsage();
     const down: Api = {
       ...w.api,
@@ -230,7 +230,7 @@ describe("tabs", () => {
     await renderApp(w, "/?view=usage&tab=calls", down);
     const alert = within(usage()).getByRole("alert");
     expect(alert).toHaveTextContent("Usage is down");
-    expect(alert.compareDocumentPosition(within(usage()).getByRole("tablist")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(usage()).getByRole("tablist").compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(selected()).toHaveTextContent("Code Central calls");
   });
 });

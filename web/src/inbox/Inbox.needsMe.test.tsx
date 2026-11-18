@@ -187,10 +187,10 @@ describe("Requirements in Needs Me", () => {
   it("keeps implementation Tickets as ordinary rows naming their Requirement, several at once", async () => {
     await renderApp(await requirements());
     const failed = within(list()).getByRole("region", { name: "Failed" });
-    expect(within(failed).getByRole("link", { name: /acme-10/ })).toHaveTextContent("↳ Archive finished Projects");
-    expect(within(failed).getByRole("link", { name: /acme-16/ })).not.toHaveTextContent("↳");
+    expect(within(failed).getByRole("link", { name: /acme-10/ })).toHaveTextContent("Archive finished Projects");
+    expect(within(failed).getByRole("link", { name: /acme-16/ }).querySelector(".req-chip")).toBeNull();
     const review = within(list()).getByRole("region", { name: "In Review" });
-    expect(within(review).getByRole("link", { name: /acme-9/ })).toHaveTextContent("↳ Archive finished Projects");
+    expect(within(review).getByRole("link", { name: /acme-9/ })).toHaveTextContent("Archive finished Projects");
   });
 
   it("counts a Requirement row once in Needs Me, in place of its Stage Ticket", async () => {
@@ -305,11 +305,11 @@ describe("Map Tickets and Prototypes in Needs Me", () => {
     expect(rowIds()).toEqual(["acme-2", "acme-3", "acme-5"]);
     expect(groupHeads()).toEqual(["Questions 1", "In Review 2"]);
     const row = (id: string) => within(list()).getByRole("link", { name: new RegExp(id) });
-    expect(row("acme-2")).toHaveTextContent("↳ Map: Find the way");
+    expect(row("acme-2")).toHaveTextContent("Map: Find the way");
     expect(within(row("acme-2")).queryByText("Prototype")).toBeNull();
-    expect(row("acme-3")).toHaveTextContent("↳ Map: Find the way");
+    expect(row("acme-3")).toHaveTextContent("Map: Find the way");
     expect(within(row("acme-3")).getByText("Prototype")).toHaveClass("label", "prototype-badge");
-    expect(row("acme-5")).toHaveTextContent("↳ Login");
+    expect(row("acme-5")).toHaveTextContent("Login");
     expect(row("acme-5")).not.toHaveTextContent("Map:");
     expect(within(row("acme-5")).getByText("Prototype")).toHaveClass("prototype-badge");
   });

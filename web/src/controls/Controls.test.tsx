@@ -82,6 +82,14 @@ describe("SpecPaneHeader", () => {
     expect(screen.getByText(/^Map · submitted .+ ago$/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "acme-1" })).toBeInTheDocument();
   });
+
+  it("shows an Archived badge only when archived", () => {
+    const now = new Date("2026-01-02T00:00:00Z");
+    const { rerender } = render(<SpecPaneHeader id="acme-1" kind="Spec" title="T" now={now} created="2026-01-01T00:00:00Z" />);
+    expect(screen.queryByText("Archived")).not.toBeInTheDocument();
+    rerender(<SpecPaneHeader id="acme-1" kind="Spec" title="T" now={now} created="2026-01-01T00:00:00Z" archived />);
+    expect(screen.getByText("Archived")).toBeInTheDocument();
+  });
 });
 
 describe("ViewHeader", () => {

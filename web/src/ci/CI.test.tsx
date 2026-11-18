@@ -158,7 +158,7 @@ describe("the CI Watchers' statuses", () => {
       within(ci()).getByText("Acme: Watching acme/web."),
     ).toBeInTheDocument();
     expect(watchers()).toHaveTextContent(
-      "Beta: Error. gh isn't logged in.Run gh auth login.",
+      "Beta: gh isn't logged in.Run gh auth login.",
     );
   });
 
@@ -287,9 +287,8 @@ describe("the runs", () => {
     await fake.s.reportCIRuns("acme", [run(fake, 1, "Build", -5, { finished: -3, conclusion: "partially_succeeded" })]);
     await renderApp(fake,"/?view=ci&project=acme");
     const [row] = rows();
-    const status = within(row).getByText(/Partially succeeded/);
+    const status = within(row).getByText("partially succeeded");
     expect(status).toHaveClass("ci-partially-succeeded");
-    expect(status).toHaveTextContent("⚠ Partially succeeded");
     expect(within(row).getByRole("link", { name: "View on Azure DevOps" })).toBeInTheDocument();
   });
 

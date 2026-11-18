@@ -1,3 +1,4 @@
+import { Elbow } from "../controls/Icon";
 import { duration, rowDetail } from "../format";
 import type { NeedsMeRow } from "../api/types";
 import { CIBadge } from "../ticket/CIBadge";
@@ -50,11 +51,11 @@ export function NeedsMeLink({
       detail={
         <>
           {row.requirement && (
-            <span className="req-chip">↳ {row.requirement.title}</span>
+            <span className="req-chip"><Elbow /> {row.requirement.title}</span>
           )}
           {row.spec && (
             <span className="req-chip">
-              ↳ {row.spec.map ? `Map: ${row.spec.title}` : row.spec.title}
+              <Elbow /> {row.spec.map ? `Map: ${row.spec.title}` : row.spec.title}
             </span>
           )}{" "}
           {rowDetail(now, row)}
