@@ -201,3 +201,61 @@ func (ps LandingPolicies) UsesAzureReposPAT(azureRepos []string) bool {
 func (ps LandingPolicies) LandPerSpecInForce() bool {
 	return ps.Any(domain.LandingPolicy.LandPerSpecInForce)
 }
+
+// LandingMethodCapabilities is what the Options form offers with one
+// Landing Method drafted as the Default Landing: its Landing
+// capabilities.
+type LandingMethodCapabilities struct {
+	// OffersPush is whether the Push checkbox is offered.
+	OffersPush bool `json:"offers_push"`
+	// OffersLandPerSpec is whether Land per Spec can be changed.
+	OffersLandPerSpec bool `json:"offers_land_per_spec"`
+	// ShowsCodeHost is whether the Code Host worked out from the Push
+	// remote URL is shown.
+	ShowsCodeHost bool `json:"shows_code_host"`
+	// UsesAzureReposPAT is whether the PAT variable is used.
+	UsesAzureReposPAT bool `json:"uses_azure_repos_pat"`
+}
+
+// LandingMethodsCapabilities is the Landing capabilities of every Landing
+// Method, each as if it were the Default Landing.
+type LandingMethodsCapabilities struct {
+	// Merge is what the form offers with Merge drafted.
+	Merge LandingMethodCapabilities `json:"merge"`
+	// Branch is what the form offers with Leave as a branch drafted.
+	Branch LandingMethodCapabilities `json:"branch"`
+	// PullRequest is what the form offers with Pull Request drafted.
+	PullRequest LandingMethodCapabilities `json:"pull_request"`
+}
+
+// landingCapabilities is p's Landing capabilities for each Landing Method
+// as if it were the Default Landing, with p's other settings and every
+// Own Landing unchanged, given the Azure Repos Repositories' names.
+func landingCapabilities(p domain.Project, azureRepos []string) LandingMethodsCapabilities {
+	capabilitiesOf := func(m domain.LandingMethod) LandingMethodCapabilities {
+		drafted := p
+		drafted.Landing.Method = m
+		lp := domain.NewLandingPolicy(m, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
+		return LandingMethodCapabilities{OffersPush: lp.OffersPush(), OffersLandPerSpec: lp.OffersLandPerSpec(),
+			ShowsCodeHost: lp.LandsByPullRequest(), UsesAzureReposPAT: landingPolicies(drafted).UsesAzureReposPAT(azureRepos)}
+	}
+	return LandingMethodsCapabilities{Merge: capabilitiesOf(domain.LandingMerge), Branch: capabilitiesOf(domain.LandingBranch),
+		PullRequest: capabilitiesOf(domain.LandingPullRequest)}
+}
+
+// pushesNothing is whether Push pushes nothing in p: every Repository is
+// local-only while some Repository's Landing, as the human chose it, needs
+// a push remote. It asks the chosen Landing's policy, not the
+// Repository's: that has "Push off when the Repository is local-only", so
+// would never need one here.
+func pushesNothing(p domain.Project) bool {
+	needsRemote := false
+	for _, r := range repositoriesView(p) {
+		if !r.LocalOnly {
+			return false
+		}
+		m, push := r.Landing.methodAndPush()
+		needsRemote = needsRemote || domain.NewLandingPolicy(m, push, p.Landing.LandPerSpec, p.CI.Tracking).NeedsPushRemote()
+	}
+	return needsRemote
+}

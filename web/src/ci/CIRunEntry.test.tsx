@@ -32,6 +32,11 @@ describe("CIRunEntry's row", () => {
     expect(cells(screen.getByRole("row", { name: "CI" }))).toEqual(["CI ci.yml", "main", "1abcdef", "passed", "3m 12s", "CI Rule acme-r1", "View on GitHub"]);
   });
 
+  it("shows a muted dash when it is tracked against nothing", () => {
+    inTable(<CIRunEntry layout="row" run={finished("acme", 1)} now={NOW} navigate={() => {}} />);
+    expect(screen.getByText("–")).toHaveClass("muted");
+  });
+
   it("opens the Ticket it is tracked against", async () => {
     const navigate = vi.fn();
     inTable(<CIRunEntry layout="row" run={finished("acme", 1, { ticket: "acme-1" })} now={NOW} navigate={navigate} />);

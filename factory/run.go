@@ -175,7 +175,7 @@ func (f *factory) drain(ctx context.Context) {
 // them.
 func (f *factory) drainLostClaims(ctx context.Context) bool {
 	f.claimLostAgain(ctx)
-	if len(f.lostClaims) == 0 || f.claimingHeld() {
+	if len(f.lostClaims) == 0 || f.lander.claimingHeld() {
 		return ctx.Err() == nil
 	}
 	var names []string
@@ -186,7 +186,7 @@ func (f *factory) drainLostClaims(ctx context.Context) bool {
 	// may be none yet.
 	note := fmt.Sprintf("draining: claiming %s again", strings.Join(names, ", "))
 	f.printf("%s at each poll first: the answer was lost", note)
-	for len(f.lostClaims) > 0 && !f.claimingHeld() {
+	for len(f.lostClaims) > 0 && !f.lander.claimingHeld() {
 		poll := f.polling.pollWait(f.e.Clock, f.o.poll)
 		select {
 		case <-ctx.Done():
@@ -216,7 +216,11 @@ func (f *factory) poll(ctx context.Context) {
 		}
 	}()
 	answered := f.reconcile(ctx)
-	f.landAndSweep(ctx)
+	// A poll that reads the Project also makes the report of what claude
+	// accepts, until one is taken.
+	if _, ok := f.lander.poll(ctx); ok && !f.modelsReported {
+		f.modelsReported = f.reportModels(ctx)
+	}
 	if f.halted(ctx) {
 		return
 	}
@@ -297,6 +301,18 @@ func (f *factory) turnFor(claimID string) *turn {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.turns[claimID]
+}
+
+// turnRunningOn reports whether a turn is running on ticket.
+func (f *factory) turnRunningOn(ticket string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, t := range f.turns {
+		if t.claim.Ticket == ticket {
+			return true
+		}
+	}
+	return false
 }
 
 // reconcile reads every held Claim's Ticket. A Claim that has ended
@@ -475,7 +491,7 @@ func (f *factory) nextRunnable(ctx context.Context) (id core.Ref, ok bool) {
 // claimNext claims the Project's next claimable Ticket that it runs and
 // starts its turn. It reports whether it claimed one.
 func (f *factory) claimNext(ctx context.Context) bool {
-	if f.claimingHeld() {
+	if f.lander.claimingHeld() {
 		return false
 	}
 	next, ok := f.nextRunnable(ctx)
@@ -502,21 +518,12 @@ func (f *factory) claimNext(ctx context.Context) bool {
 	return f.startClaimed(ctx, in, res)
 }
 
-// claimingHeld reports whether nothing may be claimed, as every claim
-// cuts a branch or a worktree from each Repository's base: a base
-// disagrees with the host's or is missing, the Home Repository's lacks
-// .mcp.json, or a Repository is missing, so a Ticket would start without
-// a checkout of every Repository.
-func (f *factory) claimingHeld() bool {
-	return f.anyBaseHeld() || f.mcpHeld || f.repositoryMissing()
-}
-
 // claimLostAgain sends each claim whose answer was lost again, once, so
 // no poll is held up while Code Central is down. One Code Central
 // answers with a Claim starts its turn; one it refuses is dropped; one
 // still lost waits for the next poll, holding its slot.
 func (f *factory) claimLostAgain(ctx context.Context) {
-	if f.claimingHeld() {
+	if f.lander.claimingHeld() {
 		return
 	}
 	lost := f.lostClaims
@@ -549,7 +556,7 @@ func (f *factory) startClaimed(ctx context.Context, in core.ClaimInput, res core
 	}
 	id := res.Ticket.ID
 	stage := core.GuideName(res.Ticket.Labels)
-	ws := f.worktreesNamed(id, workBranch(stage, id))
+	ws := f.repos.worktreesNamed(id, workBranch(stage, id))
 	conflicts := f.conflictsIn(ws, stage, *res.Ticket)
 	var guide core.StageGuideView
 	if len(conflicts) == 0 {
@@ -565,7 +572,7 @@ func (f *factory) startClaimed(ctx context.Context, in core.ClaimInput, res core
 		if len(conflicts) > 0 {
 			files = conflicts[0].files
 		}
-		c.SystemPrompt, prompt = systemPrompt(c, stage, wt, guide, files), firstPrompt(c, stage, f.baseBranch(), files)
+		c.SystemPrompt, prompt = systemPrompt(c, stage, wt, guide, files), firstPrompt(c, stage, f.repos.baseBranch(), files)
 	}
 	// The Ticket's Resume Command adds the folders its turns do.
 	resume := *in.ResumeCommand + addDirFlags(c.AddDirs)
@@ -578,7 +585,7 @@ func (f *factory) startClaimed(ctx context.Context, in core.ClaimInput, res core
 	}
 	f.claimed(c, *res.Ticket, wt, resume)
 	settingUp := f.work.busy("setting up the worktree of ", id)
-	fl := f.setUpWorktrees(*res.Ticket, ws)
+	fl := f.repos.setUpWorktrees(*res.Ticket, ws)
 	settingUp()
 	if fl != nil {
 		f.reportFailure(ctx, c, fl)
@@ -670,7 +677,7 @@ func (f *factory) resumeAnswered(ctx context.Context, c claim) {
 	if decided != "" {
 		prompt += "\n" + decided + "\n"
 	}
-	f.startTurn(ctx, c, turnInput{Dir: f.worktree(c.Ticket), Resume: true, Choice: mc, Prompt: prompt})
+	f.startTurn(ctx, c, turnInput{Dir: f.repos.worktree(c.Ticket), Resume: true, Choice: mc, Prompt: prompt})
 }
 
 // sessionHolder looks through the process list for a process other than

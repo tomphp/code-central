@@ -11,7 +11,6 @@ import { OptionsView } from "./options/OptionsView";
 import { ProjectOptions } from "./options/ProjectOptions";
 import { NeedsMeProvider } from "./needsme/context";
 import { needsMeOf } from "./needsme/model";
-import { defaultTicket, progress } from "./requirement/progress";
 import { useNeedsMeTitle } from "./title";
 import { projectScopeOf, ProjectScopeContext } from "./projectScope";
 import { useUiLocation } from "./url";
@@ -53,8 +52,7 @@ function Views({ now }: { now: () => Date }) {
   // The Needs Me read model every view asks, built once per Inbox load.
   const needsMe = useMemo(() => needsMeOf(inbox.data), [inbox.data]);
   // Within a Requirement with no Ticket chosen, the pane opens on its default one.
-  const selected =
-    loc.ticket ?? (requirement ? defaultTicket(progress(requirement.requirement, requirement.tickets ?? [], needsMe.reasonOf)) : undefined);
+  const selected = loc.ticket ?? requirement?.requirement.default_ticket;
   const ticket = useTicket(selected && projectOf(selected), selected);
   useNeedsMeTitle(inbox.data && needsMe.count());
   // An ID Link asks the Inbox to open an ID whose kind isn't known; once it

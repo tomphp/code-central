@@ -1,50 +1,28 @@
-// A Requirement's progress as the UI shows it: one segment per Stage and one
-// for Build, worked out from the service's requirement block, the
-// Requirement's implementation Tickets and what Needs Me says needs the human.
+// A Requirement's progress as the UI words it. Its Stage strip's segments,
+// current segment, needs and default Ticket are Go's, on the service's
+// requirement block (ADR 0063); this names the segments and words the
+// headline and what it waits for.
 import { REASON_LABEL } from "../format";
-import { FINISHED, type NeedsMeReason, type RequirementView, type StageName, type TicketRow } from "../api/types";
+import type { RequirementView, Segment, SegmentStage, StageName } from "../api/types";
 
 // MAP_TITLE names the segment a Requirement made from a Map has in
 // place of its grilling Stage.
 export const MAP_TITLE = "Map";
 
-export const STAGE_TITLE: Record<StageName | "build", string> = {
+export const STAGE_TITLE: Record<SegmentStage, string> = {
   grilling: "Grilling",
   spec: "Spec",
   tickets: "Tickets",
   build: "Build",
 };
 
-// done: finished; needs: waiting on the human; queued: claimable, waiting
-// for a Factory (drawn dashed); running: a Factory is on it; waiting: not
-// started, behind an earlier segment; skipped: a Cancelled Stage (drawn
-// struck through), passed over as a done one is.
-export type SegmentProgress = "done" | "skipped" | "needs" | "queued" | "running" | "waiting";
+// segmentName is a segment's title: Map for the one a Map stands in for,
+// else its Stage's.
+export const segmentName = (s: Segment): string => (s.map ? MAP_TITLE : STAGE_TITLE[s.stage]);
 
-export interface Segment {
-  stage: StageName | "build";
-  name: string;
-  progress: SegmentProgress;
-  // ticket is the Stage Ticket; Build has none of its own.
-  ticket?: string;
-  // map is the Map a Requirement was made from, on the segment that stands
-  // in for its grilling Stage.
-  map?: string;
-  reason?: NeedsMeReason;
-}
-
-export interface Progress {
-  segments: Segment[]; // grilling (or its Map), spec, tickets, build
-  // current is the first segment not done or skipped, or Build once all are.
-  current: Segment;
-  // build is the implementation Tickets, Cancelled ones included.
-  build: TicketRow[];
-  done: number;
-  total: number;
-  waitingForFactory: boolean;
-  // needs is every Ticket of the Requirement waiting on the human, Stages first.
-  needs: { ticket: string; reason: NeedsMeReason; stage?: StageName }[];
-}
+// currentSegment is a Requirement's current segment, the first neither
+// done nor skipped, else Build.
+const currentSegment = (req: RequirementView): Segment => req.segments.find((s) => s.stage === req.current)!;
 
 const STAGES: StageName[] = ["grilling", "spec", "tickets"];
 
@@ -62,90 +40,26 @@ export const stageRank = (t: { labels: string[] }): number => {
   return s ? STAGES.indexOf(s) : STAGES.length;
 };
 
-// progress is a Requirement's progress, each Ticket's reason as reasonOf
-// (the Needs Me read model's) says.
-export function progress(req: RequirementView, tickets: TicketRow[], reasonOf: (id: string) => NeedsMeReason | undefined): Progress {
-  const build = tickets.filter((t) => !isStage(t));
-  const firstOpen = req.stages.findIndex((s) => s.state !== "Done" && s.state !== "Cancelled");
-  const segments: Segment[] = req.stages.map((s, i) => {
-    const reason = reasonOf(s.ticket);
-    const segProgress: SegmentProgress =
-      s.state === "Done"
-        ? "done"
-        : s.state === "Cancelled"
-          ? "skipped"
-          : reason
-          ? "needs"
-          : i === firstOpen && req.waiting_for_factory
-            ? "queued"
-            : s.state === "Ready" || s.state === "Draft"
-              ? "waiting"
-              : "running";
-    return { stage: s.name, name: STAGE_TITLE[s.name], progress: segProgress, ticket: s.ticket, ...(reason && { reason }) };
-  });
-  const buildNeeds = build.flatMap((t) => {
-    const reason = reasonOf(t.id);
-    return reason ? [{ ticket: t.id, reason }] : [];
-  });
-  const inBuild = firstOpen < 0;
-  const buildProgress: SegmentProgress =
-    req.build.total > 0 && req.build.done === req.build.total && !buildNeeds.length
-      ? "done"
-      : buildNeeds.length
-        ? "needs"
-        : inBuild && req.waiting_for_factory
-          ? "queued"
-          : inBuild && req.build.total > 0
-            ? "running"
-            : "waiting";
-  const buildSeg: Segment = { stage: "build", name: STAGE_TITLE.build, progress: buildProgress, ...(buildNeeds[0] && { reason: buildNeeds[0].reason }) };
-  segments.push(buildSeg);
-  // A Requirement made from a Map has no grilling Stage: the Map did that.
-  if (req.map) segments.unshift({ stage: "grilling", name: MAP_TITLE, progress: "done", map: req.map });
-  // One with neither was submitted Straight to Spec: its grilling was skipped.
-  else if (req.stages[0]?.name !== "grilling") segments.unshift({ stage: "grilling", name: STAGE_TITLE.grilling, progress: "skipped" });
-  const needs = [
-    ...segments.filter((s) => s.ticket && s.reason).map((s) => ({ ticket: s.ticket!, reason: s.reason!, stage: s.stage as StageName })),
-    ...buildNeeds,
-  ];
-  return {
-    segments,
-    current: segments.find((s) => s.progress !== "done" && s.progress !== "skipped") ?? buildSeg,
-    build,
-    done: req.build.done,
-    total: req.build.total,
-    waitingForFactory: req.waiting_for_factory,
-    needs,
-  };
-}
-
-// defaultTicket is the Ticket a Requirement opens on: the one that needs
-// the human, else the current Stage's, else the first unfinished Build
-// Ticket, else the last Build Ticket or Stage.
-export function defaultTicket(p: Progress): string | undefined {
-  if (p.needs[0]) return p.needs[0].ticket;
-  if (p.current.ticket) return p.current.ticket;
-  const open = p.build.find((t) => !FINISHED.includes(t.state));
-  return open?.id ?? p.build.at(-1)?.id ?? [...p.segments].reverse().find((s) => s.ticket)?.ticket;
-}
-
 // waitingNote says what a Requirement waiting for a Factory is waiting for.
-export function waitingNote(p: Progress): string | undefined {
-  if (!p.waitingForFactory) return undefined;
-  const what = p.current.ticket ? p.current.name : "a Build Ticket";
-  return `Waiting for a Factory to claim ${what}.${p.needs.length ? "" : " Nothing needs you yet."}`;
+export function waitingNote(req: RequirementView): string | undefined {
+  if (!req.waiting_for_factory) return undefined;
+  const current = currentSegment(req);
+  const what = current.ticket ? segmentName(current) : "a Build Ticket";
+  return `Waiting for a Factory to claim ${what}.${req.needs.length ? "" : " Nothing needs you yet."}`;
 }
 
 // headline is a Requirement's one line in its Spec row: what needs the
 // human, else what it is waiting for.
-export function headline(finished: boolean, p: Progress): string {
-  if (finished) return p.total ? `Finished · ${p.done} of ${p.total} Tickets Done` : "Finished";
-  const n = p.needs[0];
+export function headline(finished: boolean, req: RequirementView): string {
+  const { done, total } = req.build;
+  if (finished) return total ? `Finished · ${done} of ${total} Tickets Done` : "Finished";
+  const n = req.needs[0];
   if (n) {
-    const where = n.stage ? p.segments.find((s) => s.stage === n.stage)!.name : "Build";
-    return `${where}: ${REASON_LABEL[n.reason]}${p.needs.length > 1 ? ` · +${p.needs.length - 1} more` : ""}`;
+    const where = STAGE_TITLE[n.stage ?? "build"];
+    return `${where}: ${REASON_LABEL[n.reason]}${req.needs.length > 1 ? ` · +${req.needs.length - 1} more` : ""}`;
   }
-  if (p.waitingForFactory) return `${p.current.name}: waiting for a Factory`;
-  if (p.current.stage === "build") return p.total ? `Build: ${p.done} of ${p.total} Done` : "Build: no Tickets yet";
-  return `${p.current.name}: ${p.current.progress === "running" ? "a Factory is on it" : "not started"}`;
+  const current = currentSegment(req);
+  if (req.waiting_for_factory) return `${segmentName(current)}: waiting for a Factory`;
+  if (current.stage === "build") return total ? `Build: ${done} of ${total} Done` : "Build: no Tickets yet";
+  return `${segmentName(current)}: ${current.progress === "running" ? "a Factory is on it" : "not started"}`;
 }

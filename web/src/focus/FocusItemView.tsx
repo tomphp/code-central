@@ -105,7 +105,7 @@ export function FocusItemView({
           <p className="focus-ticket">
             {row.ci_item.tickets.map((t, i) => (
               <span key={t.id}>
-                {i > 0 && " "}
+                {i > 0 && ", "}
                 <ShortId id={t.id} />
               </span>
             ))}
@@ -141,9 +141,8 @@ export function FocusItemView({
             ticket={row.id}
             q={question.q}
             submitOnModEnter
-          >
-            {skipButton}
-          </QuestionAnswer>
+          />
+          {skipButton && <p className="focus-skip">{skipButton}</p>}
         </section>
       ) : row.base_diverged ? (
         <>
@@ -214,7 +213,7 @@ function BaseDivergedFix({ row }: { row: NeedsMeRow }) {
         Local <code>{shortCommit(b.local)}</code> · remote{" "}
         <code>{shortCommit(b.remote)}</code>
       </p>
-      <p className="small">
+      <p>
         Reconcile {base} with the remote by hand, for example by resetting or
         rebasing it. The Factory carries on by itself on its next poll.
       </p>
@@ -247,7 +246,7 @@ function BaseMissingFix({
           remote. Nothing lands and no new branch is cut until it does.
         </p>
       )}
-      <p className="small">
+      <p>
         Create the branch, or change the base in{" "}
         <a href={hrefFor(options)} onClick={clickTo(navigate, options)}>
           Project Options
@@ -270,6 +269,19 @@ function RepositoryMissingFix({
 }) {
   const m = row.repository_missing!;
   const options = { view: "project-options" as const, project: row.project };
+  // The fix names Project Options itself; that mention is the link, so the
+  // name isn't said twice.
+  const fix = m.fix.replace(/\.$/, "");
+  const named = fix.endsWith("Project Options");
+  const fixBefore = named ? fix.slice(0, -"Project Options".length) : `${fix} (`;
+  const link = (
+    <>
+      <a href={hrefFor(options)} onClick={clickTo(navigate, options)}>
+        Project Options
+      </a>
+      {!named && ")"}
+    </>
+  );
   return (
     <section aria-label="Repository missing" className="panel">
       <p>
@@ -292,12 +304,9 @@ function RepositoryMissingFix({
         <dt>Problem</dt>
         <dd>{m.problem}</dd>
       </dl>
-      <p className="small">
-        {m.fix} (
-        <a href={hrefFor(options)} onClick={clickTo(navigate, options)}>
-          Project Options
-        </a>
-        ). The Factory carries on by itself on its next poll.
+      <p>
+        {fixBefore}
+        {link}. The Factory carries on by itself on its next poll.
       </p>
     </section>
   );

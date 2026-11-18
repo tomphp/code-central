@@ -53,7 +53,9 @@ export function projectSettingsContract(driver: () => Driver) {
     await d.createProject("acme", "Acme");
     const v = await d.api.setLandingMethod("acme", { method: "branch", push: true, remote: " upstream " });
     expect(v).toMatchObject({ key: "acme", landing: { method: "branch", push: true, remote: "upstream" } });
-    expect((await d.api.listProjects())[0].landing).toEqual(defaultLanding({ method: "branch", push: true, remote: "upstream" }));
+    expect((await d.api.listProjects())[0].landing).toEqual(
+      defaultLanding({ method: "branch", push: true, remote: "upstream", repository_landing: "branch_push" }),
+    );
 
     // Without Push, an empty remote reads as origin.
     expect((await d.api.setLandingMethod("acme", { method: "merge", push: false, remote: "" })).landing).toEqual(defaultLanding());
