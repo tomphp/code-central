@@ -42,8 +42,8 @@ jobs:
         with:
           check-latest-tag-only: true
 
-  # The store's contract suite and serve's store: block on a real Postgres,
-  # which only a Linux runner can give as a service container. The test
+  # The store's contract suite, serve's store: block and a service's
+  # Registration on a real Postgres, which only a Linux runner can give as a service container. The test
   # jobs below run the same tests without one and skip those cases, naming
   # CODE_CENTRAL_TEST_POSTGRES_URL, as make test does locally.
   test-postgres:
@@ -77,7 +77,7 @@ jobs:
       - name: go test
         env:
           CODE_CENTRAL_TEST_POSTGRES_URL: postgres://postgres:postgres@localhost:5432/code_central_test?sslmode=disable
-        run: go test -v ./store/... ./cli/...
+        run: go test -v ./store/... ./cli/... ./app/...
 
   test:
     name: test (${{ matrix.os }})

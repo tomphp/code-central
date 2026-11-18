@@ -4,9 +4,10 @@
 // schema in a Postgres database that several services, on several
 // machines, open at once, on pgx. No service locks it. Each Update is a
 // serializable transaction the engine orders against the others', run
-// again when two collide; a service's place in the Store is the Service
-// Registration of Ticket code-central-1049, and its notices to the
-// others come with code-central-1048.
+// again when two collide. Each service registers itself in the Store,
+// and holds the Watcher Leases of the Projects whose Watchers it runs
+// (sql_services.go); its notices to the others come with
+// code-central-1048.
 
 package store
 

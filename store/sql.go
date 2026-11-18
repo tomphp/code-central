@@ -93,9 +93,8 @@ type SQLStore struct {
 func (s *SQLStore) Path() string { return s.path }
 
 // Migrated is the Migration the open ran, or nil if the database was
-// already at this build's format. A Postgres Store never migrates yet:
-// one at an older format is refused until its Migrations land (Ticket
-// code-central-1049).
+// already at this build's format. A Postgres Store's names no Backup: it
+// ran in one transaction, and the database's own backups are its backup.
 func (s *SQLStore) Migrated() *Migration { return s.migrated }
 
 // Close closes the database and releases the Store's lock.

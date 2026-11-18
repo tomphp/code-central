@@ -2,6 +2,7 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
+import { SERVICE_LIFE_MS, WORLD_HOST } from "../api/core/core";
 import { renderApp, settle } from "../worldTesting";
 import { acme, ci, page } from "./ProjectOptions.testutil";
 
@@ -270,6 +271,41 @@ describe("Project Options", () => {
       );
       expect(watcher).toHaveTextContent("Code Central restarts it by itself");
       expect(watcher).not.toHaveTextContent("tries again every 2 minutes");
+    });
+
+    it("shows the host whose service runs the CI Watcher, or that none does", async () => {
+      const { w } = await acme();
+      await w.api.setCITracking("acme", {
+        tracking: true,
+        provider: "github_actions",
+        repository: "acme/web",
+        ignored_workflows: [],
+      });
+      w.holdWatcherLease("acme", WORLD_HOST);
+      await renderApp(w, "/?view=project-options&project=acme");
+      const watcher = () => within(ci()).getByRole("region", { name: "CI Watcher" });
+      expect(watcher()).toHaveTextContent("CI Watcher: Starting; it hasn't reported yet.");
+      expect(watcher()).toHaveTextContent("It runs on laptop.");
+
+      w.advance(SERVICE_LIFE_MS);
+      w.holdWatcherLease("acme", "desktop");
+      await settle(w);
+      expect(watcher()).toHaveTextContent(
+        "CI Watcher: Runs on desktop, whose service holds this Project's Watchers; its status shows there.",
+      );
+
+      // No service renews it, so it lapses; the Project's next change
+      // shows that.
+      w.advance(SERVICE_LIFE_MS);
+      await w.api.setCITracking("acme", {
+        tracking: true,
+        provider: "github_actions",
+        repository: "acme/web",
+        ignored_workflows: ["deploy.yml"],
+      });
+      await settle(w);
+      expect(watcher()).toHaveTextContent("CI Watcher: Waiting for a service to take the Watchers.");
+      expect(watcher()).not.toHaveTextContent("laptop");
     });
 
     it("shows the service's refusal on its field", async () => {

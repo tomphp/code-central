@@ -172,11 +172,18 @@ const (
 	WatcherWatching WatcherState = "watching"
 	// WatcherError is a Watcher that can't, with the message and fix.
 	WatcherError WatcherState = "error"
+	// WatcherElsewhere is a Watcher another service runs, on the host
+	// holding the Project's Watcher Lease (ADR 0068), whose status this
+	// service doesn't know.
+	WatcherElsewhere WatcherState = "elsewhere"
+	// WatcherWaiting is a Watcher no service runs: the Project's Watcher
+	// Lease lapsed, and no live service has taken it yet.
+	WatcherWaiting WatcherState = "waiting"
 )
 
 // WatcherStates are the states a Watcher can be in.
 func WatcherStates() []WatcherState {
-	return []WatcherState{WatcherNotReported, WatcherWatching, WatcherError}
+	return []WatcherState{WatcherNotReported, WatcherWatching, WatcherError, WatcherElsewhere, WatcherWaiting}
 }
 
 // WatcherView is a Project's Watcher's status, in its kind's settings.
@@ -196,6 +203,9 @@ type WatcherView struct {
 	// Since is when the Watcher went into this state; nil until it
 	// reports.
 	Since *time.Time `json:"since,omitempty"`
+	// Host is the machine whose service holds the Project's Watcher
+	// Lease, and so runs the Watcher, once a Lease is known.
+	Host string `json:"host,omitempty"`
 }
 
 // equal reports whether v and w say the same, Since aside.
@@ -205,9 +215,10 @@ func (v WatcherView) equal(w WatcherView) bool {
 }
 
 // watches reports whether the Watcher watches the Repository name: it is
-// Watching, or in error only about other Repositories.
+// Watching, or in error only about other Repositories. One another
+// service runs is taken to watch it, as this service can't tell.
 func (v WatcherView) watches(name string) bool {
-	if v.State == WatcherWatching {
+	if v.State == WatcherWatching || v.State == WatcherElsewhere {
 		return true
 	}
 	return len(v.Repositories) > 0 && !slices.ContainsFunc(v.Repositories, func(p RepositoryProblem) bool { return p.Repository == name })
@@ -228,10 +239,15 @@ type watcherKey struct {
 	project string
 }
 
-// watchers is every Watcher's status, by kind and Project.
+// watchers is every Watcher's status, by kind and Project, and each
+// Project's Watcher Lease as this service last held or saw it.
 type watchers struct {
 	mu  sync.Mutex
 	all map[watcherKey]watcherStatus
+	// self is this service's ID, which holds the Leases it holds, and
+	// leases are the Leases by Project, once known.
+	self   string
+	leases map[string]store.Lease
 }
 
 // watcherStatus is one Watcher's status, with the errors notify counts.
@@ -249,14 +265,53 @@ type watcherStatus struct {
 	crashingUntil time.Time
 }
 
-// view is the status of k's Watcher.
-func (w *watchers) view(k watcherKey) WatcherView {
+// view is the status of k's Watcher at now: its own, while this service
+// holds the Project's Watcher Lease or none is known yet; else where it
+// runs, or that none does.
+func (w *watchers) view(k watcherKey, now time.Time) WatcherView {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if s, ok := w.all[k]; ok {
-		return s.view
+	l, leased := w.leases[k.project]
+	switch {
+	case leased && !now.Before(l.Expires):
+		return WatcherView{State: WatcherWaiting, Message: "Waiting for a service to take the Watchers."}
+	case leased && l.Holder != w.self:
+		return WatcherView{State: WatcherElsewhere, Host: l.Host}
 	}
-	return WatcherView{State: WatcherNotReported}
+	v := WatcherView{State: WatcherNotReported}
+	if s, ok := w.all[k]; ok {
+		v = s.view
+	}
+	v.Host = l.Host
+	return v
+}
+
+// hold records l as the Project's Watcher Lease and reports whether its
+// view changed: it is held by another service, or on another host, or it
+// had lapsed. One this service lost takes its Watchers' statuses with it,
+// so it doesn't show them as they were should it hold the Lease again.
+func (w *watchers) hold(l store.Lease, now time.Time) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	was, known := w.leases[l.Project]
+	w.leases[l.Project] = l
+	if known && was.Holder == w.self && l.Holder != w.self {
+		for k, s := range w.all {
+			if k.project == l.Project {
+				s.view, s.crashingUntil = WatcherView{State: WatcherNotReported}, time.Time{}
+				w.all[k] = s
+			}
+		}
+	}
+	return !known || was.Holder != l.Holder || was.Host != l.Host || !now.Before(was.Expires)
+}
+
+// lease is the Project key's Watcher Lease as last known.
+func (w *watchers) lease(key string) (store.Lease, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	l, ok := w.leases[key]
+	return l, ok
 }
 
 // reset makes k's status not reported, as when its setting is turned off
