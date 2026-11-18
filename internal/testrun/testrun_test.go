@@ -197,6 +197,7 @@ func TestTheSuiteFailsWhenAJobCannotStart(t *testing.T) {
 }
 
 func TestTheSuiteFailsWhenItTakesLongerThanTheBudget(t *testing.T) {
+	withLoad(t, 1, 8)
 	ok, out := runSuite(50*time.Millisecond,
 		fakeJob(t, "go test", "sleep", "200ms"),
 		fakeJob(t, "vitest"),
@@ -209,5 +210,110 @@ func TestTheSuiteFailsWhenItTakesLongerThanTheBudget(t *testing.T) {
 	}
 	if !strings.Contains(out, "rerun once before treating it as a failure") {
 		t.Errorf("output doesn't name the usual causes:\n%s", out)
+	}
+}
+
+// withLoad fakes the load average and the core count for the test.
+func withLoad(t *testing.T, load float64, cpus int) {
+	t.Helper()
+	oldLoad, oldCores := loadAverage, cores
+	t.Cleanup(func() { loadAverage, cores = oldLoad, oldCores })
+	loadAverage = func() float64 { return load }
+	cores = func() int { return cpus }
+}
+
+// rerunWith is a Rerun that reruns the fake job with these steps.
+func rerunWith(items []string, steps ...string) func([]byte) ([]string, []string) {
+	return func([]byte) ([]string, []string) {
+		return append([]string{os.Args[0]}, steps...), items
+	}
+}
+
+func TestAFailureThatPassesOnSerialRerunIsFlakyAndExitsZero(t *testing.T) {
+	withLoad(t, 12.5, 8)
+	j := fakeJob(t, "vitest", "print", "FAIL a.test.ts", "exit", "1")
+	j.Rerun = rerunWith([]string{"a.test.ts", "b.test.ts"}, "print", "2 passed")
+	ok, out := runSuite(10*time.Second, j)
+	if !ok {
+		t.Fatalf("the suite failed:\n%s", out)
+	}
+	want := "vitest: passed on serial rerun: flaky under load (load 12.5): a.test.ts, b.test.ts\n"
+	if !strings.Contains(out, want) {
+		t.Errorf("output lacks %q:\n%s", want, out)
+	}
+	if strings.Contains(out, "ok vitest") || strings.Contains(out, "FAIL a.test.ts") {
+		t.Errorf("a flaky job was reported as plain ok or its failure printed:\n%s", out)
+	}
+}
+
+func TestAFailureThatFailsAgainOnSerialRerunFailsWithTheLoad(t *testing.T) {
+	withLoad(t, 12.5, 8)
+	j := fakeJob(t, "vitest", "print", "FAIL a.test.ts", "exit", "1")
+	j.Rerun = rerunWith([]string{"a.test.ts"}, "print", "still broken", "exit", "1")
+	ok, out := runSuite(10*time.Second, j)
+	if ok {
+		t.Fatalf("the suite passed:\n%s", out)
+	}
+	for _, want := range []string{"still broken", "make test failed (vitest: 1)", "load 12.5 on 8 cores"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "flaky") {
+		t.Errorf("a failure was called flaky:\n%s", out)
+	}
+}
+
+func TestAFailureWithNothingToRerunIsNotRerun(t *testing.T) {
+	withLoad(t, 1, 8)
+	j := fakeJob(t, "go test", "print", "--- FAIL: TestC", "exit", "1")
+	j.Rerun = func([]byte) ([]string, []string) { return nil, nil }
+	ok, out := runSuite(10*time.Second, j)
+	if ok || strings.Contains(out, "flaky") {
+		t.Errorf("the suite passed or was called flaky:\n%s", out)
+	}
+}
+
+func TestOverTheBudgetUnderLoadIsOnlyAWarning(t *testing.T) {
+	withLoad(t, 20, 8)
+	ok, out := runSuite(50*time.Millisecond, fakeJob(t, "go test", "sleep", "200ms"))
+	if !ok {
+		t.Fatalf("the suite failed:\n%s", out)
+	}
+	if !strings.Contains(out, "warning: all suites passed, but took") || !strings.Contains(out, "load (20.0) is above the 8 cores") {
+		t.Errorf("output doesn't warn about the budget under load:\n%s", out)
+	}
+}
+
+func TestOverTheBudgetWithoutLoadStillFails(t *testing.T) {
+	withLoad(t, 2, 8)
+	if ok, out := runSuite(50*time.Millisecond, fakeJob(t, "go test", "sleep", "200ms")); ok {
+		t.Fatalf("the suite passed:\n%s", out)
+	}
+}
+
+func TestRerunVitestNamesTheFailedFilesOnce(t *testing.T) {
+	out := " FAIL  src/a.test.ts > a > works\n FAIL  src/a.test.ts > a > also\n FAIL  src/b.test.tsx [ timed out ]\n"
+	args, items := rerunVitest([]byte(out))
+	if strings.Join(items, " ") != "src/a.test.ts src/b.test.tsx" {
+		t.Errorf("items = %q", items)
+	}
+	if got := strings.Join(args[len(args)-3:], " "); got != "--no-file-parallelism src/a.test.ts src/b.test.tsx" {
+		t.Errorf("args = %q", args)
+	}
+	if args, _ := rerunVitest([]byte("tsc error\n")); args != nil {
+		t.Errorf("rerun without a failed file: %q", args)
+	}
+}
+
+func TestRerunGoRerunsOnlyLoadFailures(t *testing.T) {
+	killed := "ok  \tpkg/a\t0.1s\nsignal: killed\nFAIL\tpkg/b\t9.1s\n--- FAIL: TestX (0.00s)\n    didn't stop within the kill grace\nFAIL\tpkg/c\t1.0s\nFAIL\n"
+	args, items := rerunGo([]byte(killed))
+	if strings.Join(items, " ") != "pkg/b pkg/c" || args[len(args)-1] != "pkg/c" {
+		t.Errorf("args = %q, items = %q", args, items)
+	}
+	real := killed + "--- FAIL: TestReal\nFAIL\tpkg/d\t1.0s\n"
+	if args, _ := rerunGo([]byte(real)); args != nil {
+		t.Errorf("a real failure was rerun: %q", args)
 	}
 }
