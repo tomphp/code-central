@@ -14,6 +14,10 @@ An operation lives in `core`; the front doors (MCP, the HTTP API, the CLI) only 
 - a new HTTP route joins the shared handlers in `httpapi/httpapi.go` rather than getting its own decoding and error mapping;
 - the UI's tests run on the real Core, built to WebAssembly (the WASM Core), and the contract, `web/src/api/contract/` (a file per feature), pins `createHttpApi` against it and against `serve`. A UI test reaches its state through the scenario builder (`web/src/api/scenario.ts`), never by seeding one.
 
+## Docs follow the Ticket's assignment
+
+Before ruling that a change missed the docs (`CLAUDE.md`'s Docs rule), read the Ticket and its Spec: when either gives the docs to another Ticket, leaving them out is correct, not a breach.
+
 ## One helper per setup
 
 When a second test needs the same setup (a test server, an SSE opener, a world fixture, a link-click check), extract one shared helper and have both tests use it. Look for an existing helper in the package, or in `codecentraltest` / `factory/factorytest`, before writing one.
