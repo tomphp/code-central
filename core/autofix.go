@@ -56,7 +56,7 @@ func (c *Core) SetAutoFix(ctx context.Context, key string, in SetAutoFixInput) (
 	if strings.TrimSpace(in.FixInstructions) == "" {
 		return Written[ProjectView]{}, invalid("fix_instructions", "Fix instructions can't be empty; the default text is %q", domain.DefaultFixInstructions)
 	}
-	return c.updateCIIn(key, in.Full, func(p domain.Project, ci *domain.CI) error {
+	v, err := c.updateCIIn(key, in.Full, func(p domain.Project, ci *domain.CI) error {
 		if in.On && !ciTrackingOn(*ci) {
 			return invalid("on", "Auto-fix needs CI Tracking on; turn CI Tracking on first")
 		}
@@ -67,4 +67,12 @@ func (c *Core) SetAutoFix(ctx context.Context, key string, in SetAutoFixInput) (
 		ci.AutoFix = domain.AutoFix{On: in.On, Instructions: instructions, Limit: in.Limit}
 		return nil
 	})
+	if err != nil {
+		return v, err
+	}
+	// Level-triggered: turning it on acts on the items already waiting.
+	if err := c.sweepAutoFix(ctx, key); err != nil {
+		return Written[ProjectView]{}, err
+	}
+	return v, nil
 }

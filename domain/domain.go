@@ -790,9 +790,14 @@ type Ticket struct {
 	// with open_spec_merge to merge the base into a Spec Branch
 	// (code-central-542). Only that operation sets it; nothing clears it.
 	SpecMergeTicket bool
-	Created         time.Time
-	Updated         time.Time
-	Description     string
+	// AutoFix marks an auto fix Ticket: one Auto-fix opened for a CI
+	// failed item (Spec code-central-1022). Only Code Central sets it;
+	// nothing clears it. nil on every other Ticket, a manual fix Ticket
+	// too.
+	AutoFix     *AutoFixMark
+	Created     time.Time
+	Updated     time.Time
+	Description string
 	// Branch and Commit are what the last finish naming them gave: the
 	// work's branch and its head commit in the Home Repository.
 	// Free-form, never parsed.
@@ -864,6 +869,23 @@ type ChangedRepository struct {
 type Landed struct {
 	Commit string
 	Time   time.Time
+}
+
+// AutoFixMark is an auto fix Ticket's mark: its Auto-fix attempt, the
+// pushed commit it was opened for, the Tickets it covers and the attempt
+// before it.
+type AutoFixMark struct {
+	// Attempt is the Auto-fix attempt, 1 for the first in its chain.
+	Attempt int
+	// Repository is the Repository Name the commit was pushed in, empty
+	// for the Home Repository, and Commit the commit it was opened for.
+	Repository string
+	Commit     string
+	// Covers are the Tickets the CI failed item listed when it was
+	// opened.
+	Covers []int
+	// Previous is the previous attempt's fix Ticket, 0 for attempt 1.
+	Previous int
 }
 
 // SpecMerge is the Spec Branch commit a Ticket's work was merged into, and

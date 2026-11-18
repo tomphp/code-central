@@ -96,6 +96,7 @@ var migrations = []MigrationStep{
 	{From: 49, Name: "add a Repository's Own Landing and Push remote"},
 	{From: 50, Name: "move the Home Repository's CI into its own CI entry, and add the report that its clone has no Push remote"},
 	{From: 51, Name: "add a Project's Auto-fix setting"},
+	{From: 52, Name: "add an auto fix Ticket's Auto-fix mark"},
 }
 
 // githubIssuesRepositoryBecomesAList is format 46 to 47 (Spec
