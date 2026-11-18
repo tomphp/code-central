@@ -162,18 +162,21 @@ func autoFixActs(p domain.Project) bool {
 }
 
 // planAutoFix is what Auto-fix makes of it, with its plan, but for the
-// body, unless it leaves it. It is Auto-fix ready while Auto-fix acts and
-// it is CI failed and offering New fix Ticket, in a Repository not under
-// Pull Request, whose CI failures stay the human's (Spec
-// code-central-1022, User Story 29), with no Land anyway, its commit's
-// response naming no fix Ticket (a manual, Done or Cancelled one leaves
-// the commit to the human), the commit carrying no failure a Cancelled
-// auto fix Ticket was opened for, which hands back the Tickets it covered
-// too, and its next attempt within the limit; past the limit it is
-// stopped. An open auto fix Ticket covering it keeps it out of the
-// evaluation's items, so the sweep never reaches it. An auto fix Ticket
-// already marked for its commit, left unrecorded by a crash between the
-// two writes, is recorded whatever the limit.
+// body, unless it leaves it.
+//
+// It is Auto-fix ready while Auto-fix acts and it is CI failed and
+// offering New fix Ticket, in a Repository not under Pull Request, whose
+// CI failures stay the human's (Spec code-central-1022, User Story 29),
+// with no Land anyway, its commit's response naming no fix Ticket (a
+// manual, Done or Cancelled one leaves the commit to the human), and its
+// next attempt within the limit; past the limit it is stopped.
+//
+// A Cancelled auto fix Ticket hands its failure back, on any commit that
+// carries it, so the Tickets it covered don't start again at attempt 1.
+// An open one covering it keeps it out of the evaluation's items, so the
+// sweep never reaches it. One already marked for its commit, left
+// unrecorded by a crash between the two writes, is recorded whatever the
+// limit.
 func (e *evaluation) planAutoFix(it ciItem) (autoFixPlan, autoFixStatus) {
 	p := e.p
 	if !autoFixActs(p) || it.reason != ReasonCIFailed || !slices.Contains(ciItemOptions(e.r, p, it), OptionNewFixTicket) || landingPolicyIn(p, it.repository).LandsByPullRequest() {
@@ -184,15 +187,15 @@ func (e *evaluation) planAutoFix(it ciItem) (autoFixPlan, autoFixStatus) {
 		return autoFixPlan{}, autoFixLeaves
 	}
 	plan := autoFixPlan{failed: it.tickets[0], name: it.repository, where: inRepository(p, it.repository)}
-	handedBack := false
-	for _, t := range e.tickets() {
-		if m := t.AutoFix; m != nil && m.Repository == record && m.Commit == it.commit {
-			plan.existing = t.Number
-			return plan, autoFixReady
-		}
-		handedBack = handedBack || t.State == domain.Cancelled && e.ci.carriesFailureOf(t, it.repository, it.commit)
+	tickets := e.tickets()
+	if i := slices.IndexFunc(tickets, func(t domain.Ticket) bool {
+		return t.AutoFix != nil && t.AutoFix.Repository == record && t.AutoFix.Commit == it.commit
+	}); i >= 0 {
+		plan.existing = tickets[i].Number
+		return plan, autoFixReady
 	}
-	if handedBack {
+	k := itemKey{it.repository, it.commit}
+	if slices.ContainsFunc(tickets, func(t domain.Ticket) bool { return t.State == domain.Cancelled && e.ci.carriesFailureOf(t, k) }) {
 		return autoFixPlan{}, autoFixLeaves
 	}
 	mark := domain.AutoFixMark{Attempt: 1, Repository: record, Commit: it.commit}

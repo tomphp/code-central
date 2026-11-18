@@ -23,15 +23,22 @@ func (f fixture) rideOnto(t *testing.T, commit string, ids ...string) {
 	}
 }
 
-func TestALaterCommitCarryingCoveredTicketsOpensNoSecondFixTicketAndStaysOutOfNeedsMe(t *testing.T) {
+// coveredWorld is itemWorld with Auto-fix on at limit, abc123 failed and
+// acme-10 fixing it, and def456 failed carrying acme-5 and acme-8 with
+// acme-6, covered by acme-10.
+func coveredWorld(t *testing.T, limit int) fixture {
+	t.Helper()
 	f := itemWorld(t)
-	f.autoFixOn(t, 3)
+	f.autoFixOn(t, limit)
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
-	// acme-10 fixes abc123, covering acme-5 and acme-8, which ride onto
-	// def456 with acme-6.
 	f.moveTo(t, 6, domain.Accepted)
 	f.rideOnto(t, "def456", "acme-5", "acme-8", "acme-6")
 	f.ciRun(t, 2, "ci.yml", "def456", "acme-6", domain.CICompleted, domain.CIFailure)
+	return f
+}
+
+func TestALaterCommitCarryingCoveredTicketsOpensNoSecondFixTicketAndStaysOutOfNeedsMe(t *testing.T) {
+	f := coveredWorld(t, 3)
 
 	f.noTicket(t, "acme-11")
 	if rows := f.needsMe(t); len(rows) != 0 {
@@ -50,20 +57,6 @@ func TestALaterCommitCarryingCoveredTicketsOpensNoSecondFixTicketAndStaysOutOfNe
 			t.Errorf("%s: attention %+v, want no Notification", id, a)
 		}
 	}
-}
-
-// coveredWorld is itemWorld with Auto-fix on at limit, abc123 failed and
-// acme-10 fixing it, and def456 failed carrying acme-5 and acme-8 with
-// acme-6, covered by acme-10.
-func coveredWorld(t *testing.T, limit int) fixture {
-	t.Helper()
-	f := itemWorld(t)
-	f.autoFixOn(t, limit)
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
-	f.moveTo(t, 6, domain.Accepted)
-	f.rideOnto(t, "def456", "acme-5", "acme-8", "acme-6")
-	f.ciRun(t, 2, "ci.yml", "def456", "acme-6", domain.CICompleted, domain.CIFailure)
-	return f
 }
 
 // fixPushFails accepts the auto fix Ticket fix and pushes commit for it,
@@ -213,6 +206,33 @@ func TestEachFailureHasItsOwnAttemptBudget(t *testing.T) {
 	fix := f.getTicket(t, "acme-11")
 	if want := (&core.AutoFixMarkView{Attempt: 1, Commit: "fff000", Covers: []string{"acme-6"}}); !reflect.DeepEqual(fix.AutoFix, want) {
 		t.Fatalf("acme-11 mark %+v, want %+v", fix.AutoFix, want)
+	}
+}
+
+func TestEachTicketOnACommitTwoChainsCoverNamesTheAutoFixTicketCoveringIt(t *testing.T) {
+	f := itemWorld(t)
+	f.autoFixOn(t, 3)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
+	f.moveTo(t, 6, domain.Accepted)
+	f.pushed(t, "acme-6", "fff000")
+	f.ciRun(t, 2, "ci.yml", "fff000", "acme-6", domain.CICompleted, domain.CIFailure)
+	// acme-10 covers acme-5 and acme-8, acme-11 covers acme-6, and all
+	// three ride onto def456.
+	f.rideOnto(t, "def456", "acme-5", "acme-8", "acme-6")
+	f.ciRun(t, 3, "ci.yml", "def456", "acme-6", domain.CICompleted, domain.CIFailure)
+
+	f.noTicket(t, "acme-12")
+	if rows := f.needsMe(t); len(rows) != 0 {
+		t.Fatalf("needs me %+v, want def456 covered", rows)
+	}
+	for id, want := range map[string]core.AutoFixCoveringView{
+		"acme-5": {FixTicket: "acme-10", Commit: "abc123"},
+		"acme-8": {FixTicket: "acme-10", Commit: "abc123"},
+		"acme-6": {FixTicket: "acme-11", Commit: "fff000"},
+	} {
+		if got := f.getTicket(t, id).CIAutoFix; got == nil || got.Covering == nil || *got.Covering != want {
+			t.Errorf("%s: Auto-fix %+v, want covered by %+v", id, got, want)
+		}
 	}
 }
 

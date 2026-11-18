@@ -59,17 +59,17 @@ func (e *evaluation) ciAutoFix(t domain.Ticket, name string) *CIAutoFixView {
 		return &CIAutoFixView{Covering: &AutoFixCoveringView{FixTicket: DisplayID(e.p.Key, rc.covering.Number), Commit: rc.covering.AutoFix.Commit}}
 	}
 	if it, ok := e.itemIn(t, name); ok {
-		if stopped := e.autoFixStopped(it); stopped != nil {
+		if stopped := e.autoFixStoppedLine(it); stopped != nil {
 			return &CIAutoFixView{Stopped: stopped}
 		}
 	}
 	return nil
 }
 
-// autoFixStopped is it's "Auto-fix stopped" line while Auto-fix has
+// autoFixStoppedLine is it's "Auto-fix stopped" line while Auto-fix has
 // stopped at the limit on it, nil otherwise: each attempt, found by
 // following the chain back from the highest auto fix Ticket it lists.
-func (e *evaluation) autoFixStopped(it ciItem) *AutoFixStoppedView {
+func (e *evaluation) autoFixStoppedLine(it ciItem) *AutoFixStoppedView {
 	plan, status := e.planAutoFix(it)
 	if status != autoFixStopped {
 		return nil
@@ -88,36 +88,47 @@ func (e *evaluation) autoFixStopped(it ciItem) *AutoFixStoppedView {
 	return v
 }
 
-// covering is the open auto fix Ticket covering the CI failed item of
+// covering is the open auto fix Ticket covering t's CI failed item of
 // rc's latest pushed commit, if one does: the commit carries the failure
 // it was opened for, and the item doesn't list the fix Ticket itself.
-// The first in number order answers, worked out once per item.
-func (s *ciState) covering(rc *repoCI) (domain.Ticket, bool) {
-	commit := rc.latest.Commit
-	k := itemKey{rc.name, commit}
-	if fix, ok := s.covers[k]; ok {
-		return fix, fix.Number != 0
+// Where chains meet on one commit, t's answer is the one whose mark
+// covers t, else the first in number order.
+func (s *ciState) covering(t domain.Ticket, rc *repoCI) (domain.Ticket, bool) {
+	fixes := s.coveringFixes(itemKey{rc.name, rc.latest.Commit})
+	if len(fixes) == 0 {
+		return domain.Ticket{}, false
 	}
-	var found domain.Ticket
-	for _, fix := range s.openAutoFixes() {
-		if s.carriesFailureOf(fix, rc.name, commit) && !s.lists(fix, rc.name, commit) {
-			found = fix
-			break
-		}
+	if i := slices.IndexFunc(fixes, func(fix domain.Ticket) bool { return slices.Contains(fix.AutoFix.Covers, t.Number) }); i >= 0 {
+		return fixes[i], true
 	}
-	s.covers[k] = found
-	return found, found.Number != 0
+	return fixes[0], true
 }
 
-// carriesFailureOf reports whether commit, in the Repository name,
-// carries the failure the auto fix Ticket fix was opened for: a Ticket
-// it covers pushed commit there after the commit it was opened for. That
+// coveringFixes are the open auto fix Tickets covering k's CI failed
+// item, in number order, worked out once per item.
+func (s *ciState) coveringFixes(k itemKey) []domain.Ticket {
+	if fixes, ok := s.coveredBy[k]; ok {
+		return fixes
+	}
+	fixes := []domain.Ticket{}
+	for _, fix := range s.openAutoFixes() {
+		if s.carriesFailureOf(fix, k) && !s.listedOn(fix, k) {
+			fixes = append(fixes, fix)
+		}
+	}
+	s.coveredBy[k] = fixes
+	return fixes
+}
+
+// carriesFailureOf reports whether k's commit carries the failure the
+// auto fix Ticket fix was opened for: a Ticket it covers pushed that
+// commit in k's Repository after the commit it was opened for. That
 // Ticket may since have ridden on to a still later commit: the Factory
 // reports the Tickets riding onto a commit one at a time, and the commit
 // they leave still carries their work.
-func (s *ciState) carriesFailureOf(fix domain.Ticket, name, commit string) bool {
+func (s *ciState) carriesFailureOf(fix domain.Ticket, k itemKey) bool {
 	m := fix.AutoFix
-	if m == nil || m.Repository != recordName(s.p.Key, name) {
+	if m == nil || m.Repository != recordName(s.p.Key, k.name) {
 		return false
 	}
 	return slices.ContainsFunc(m.Covers, func(n int) bool {
@@ -125,21 +136,23 @@ func (s *ciState) carriesFailureOf(fix domain.Ticket, name, commit string) bool 
 		if !ok {
 			return false
 		}
-		pushed := pushedIn(s.p.Key, t, name)
+		pushed := pushedIn(s.p.Key, t, k.name)
 		i := slices.IndexFunc(pushed, func(pc domain.PushedCommit) bool { return pc.Commit == m.Commit })
-		return i >= 0 && slices.ContainsFunc(pushed[i+1:], func(pc domain.PushedCommit) bool { return pc.Commit == commit })
+		return i >= 0 && slices.ContainsFunc(pushed[i+1:], func(pc domain.PushedCommit) bool { return pc.Commit == k.commit })
 	})
 }
 
-// lists reports whether the CI failed item of commit, in the Repository
-// name, lists t: it is Accepted and not landed there, and its CI result
-// there is failed, from commit, its latest pushed commit there.
-func (s *ciState) lists(t domain.Ticket, name, commit string) bool {
-	pushed := pushedIn(s.p.Key, t, name)
-	if t.State != domain.Accepted || landedIn(t, name) || len(pushed) == 0 || pushed[len(pushed)-1].Commit != commit {
+// listedOn reports whether t is listed on k's CI failed item: it is
+// Accepted and not landed in k's Repository, and its CI result there is
+// failed, from k's commit, its latest pushed commit there. Only its CI
+// result is worked out, not whether the failure is handled, which would
+// ask again whose fix Ticket covers what.
+func (s *ciState) listedOn(t domain.Ticket, k itemKey) bool {
+	pushed := pushedIn(s.p.Key, t, k.name)
+	if t.State != domain.Accepted || landedIn(t, k.name) || len(pushed) == 0 || pushed[len(pushed)-1].Commit != k.commit {
 		return false
 	}
-	return s.resultIn(t, name).result == CIFailed
+	return s.repoResult(t, k.name).result == CIFailed
 }
 
 // openAutoFixes are the Project's auto fix Tickets that are neither Done

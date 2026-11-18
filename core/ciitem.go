@@ -91,7 +91,7 @@ func (e *evaluation) ciItemView(it ciItem) *CIItemView {
 	if slices.Contains(v.Options, OptionNewFixTicket) {
 		v.NewFixNote = e.newFixNote(it)
 	}
-	v.AutoFixStopped = e.autoFixStopped(it)
+	v.AutoFixStopped = e.autoFixStoppedLine(it)
 	return v
 }
 
