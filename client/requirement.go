@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ops"
 )
 
 // SubmitRequirement is submit_requirement: the Spec and each Stage are
@@ -14,7 +15,7 @@ func (c *Client) SubmitRequirement(ctx context.Context, key string, in core.Subm
 		Spec   json.RawMessage   `json:"spec"`
 		Stages []json.RawMessage `json:"stages"`
 	}
-	if err := c.do(ctx, "POST", scoped(key, "submit_requirement"), in, &raw); err != nil {
+	if err := request(ctx, c, ops.SubmitRequirement, key, in, &raw); err != nil {
 		return core.SubmitRequirementResult{}, err
 	}
 	spec, err := decodeWritten[core.SpecView](raw.Spec, in.Full)

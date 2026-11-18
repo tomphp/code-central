@@ -46,19 +46,19 @@ func checkStageLabels(field string, labels []string) error {
 // SubmitRequirementInput is submit_requirement's input: the Requirement's
 // free text, whose first line becomes the Spec's title.
 type SubmitRequirementInput struct {
-	Text string `json:"text"`
+	Text string `json:"text" desc:"The Requirement's text, in Markdown; its first line becomes the Spec's title." required:"true"`
 	// Map is the finished Map the Requirement is written from, if any
 	// (Write the Spec): its Decisions take the grilling Stage's place.
-	Map Ref `json:"map,omitempty"`
+	Map Ref `json:"map,omitempty" desc:"A Map with no unfinished Tickets to write the Spec from: the Requirement gets only the spec and tickets Stages, and a map Tag naming the Map."`
 	// SkipGrilling is Straight to Spec: no grilling Stage, so the spec
 	// Stage works from the text alone. It can't be given with Map.
-	SkipGrilling bool `json:"skip_grilling,omitempty"`
+	SkipGrilling bool `json:"skip_grilling,omitempty" desc:"Straight to Spec: create no grilling Stage, so the spec Stage is written from the text alone. Can't be given with map."`
 	// Full asks for the Spec and Stage Tickets in place of their
 	// Acknowledgements.
-	Full bool `json:"full,omitempty"`
+	Full bool `json:"full,omitempty" desc:"Return the whole Spec and Stage Tickets instead of their acknowledgements."`
 	// Draft saves every Ticket the submit writes as Draft, not Ready, so
 	// nothing is claimed until the human moves them to Ready.
-	Draft bool `json:"draft,omitempty"`
+	Draft bool `json:"draft,omitempty" desc:"Save the Spec's Tickets as Draft instead of Ready, so nothing is claimed until the human moves them to Ready; not with map."`
 }
 
 // SubmitRequirementResult is the new Requirement: its Spec and its Stage

@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"net/url"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/ops"
@@ -13,7 +12,7 @@ import (
 
 // SetModels is the human's set_models; set Actor to human.
 func (c *Client) SetModels(ctx context.Context, key string, in core.SetModelsInput) (core.Written[core.ProjectView], error) {
-	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/set_models", in, in.Full)
+	return written(ctx, c, ops.SetModels, key, in, in.Full)
 }
 
 // ReportModels is the Factory's report_models.

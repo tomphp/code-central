@@ -69,6 +69,12 @@ func derive(op ops.Operation) (tool, error) {
 		return tool{}, err
 	}
 	_, pattern := op.Route()
+	props := s["properties"].(map[string]any)
+	for name, p := range props {
+		if values, ok := op.FieldEnum(name); ok {
+			p.(map[string]any)["enum"] = values
+		}
+	}
 	checkProject := !strings.Contains(pattern, "{key}")
 	return tool{
 		description: op.Description(),
@@ -112,7 +118,7 @@ func schema(t reflect.Type, describe func(name string) (string, bool)) (map[stri
 		if !ok {
 			desc = f.Tag.Get("desc")
 		}
-		if desc == "" {
+		if desc == "" && !isStruct(f.Type) {
 			return nil, fmt.Errorf("field %s has no desc tag or description override", f.Name)
 		}
 		p, err := property(f.Type, desc, f.Tag.Get("enum"), f.Tag.Get("minItems"))
@@ -125,6 +131,15 @@ func schema(t reflect.Type, describe func(name string) (string, bool)) (map[stri
 		}
 	}
 	return object(props, required...), nil
+}
+
+// isStruct reports whether t, or what it points to, is a struct: a
+// nested object, which needs no description of its own.
+func isStruct(t reflect.Type) bool {
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	return t.Kind() == reflect.Struct
 }
 
 // property is the schema of a field of type t with description desc.
@@ -146,6 +161,15 @@ func property(t reflect.Type, desc, enum, minItems string) (map[string]any, erro
 		return p, nil
 	case t.Kind() == reflect.Bool:
 		return flag(desc), nil
+	case t.Kind() == reflect.Struct:
+		p, err := schema(t, nil)
+		if err != nil {
+			return nil, err
+		}
+		if desc != "" {
+			p["description"] = desc
+		}
+		return p, nil
 	case t.Kind() == reflect.Slice:
 		items, err := item(t.Elem())
 		if err != nil {

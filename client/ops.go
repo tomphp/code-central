@@ -74,13 +74,13 @@ func written[In, V any](ctx context.Context, c *Client, def *ops.Definition[In, 
 	return decodeWritten[V](raw, full)
 }
 
-// pathOf is pattern with {key} filled from key and {n} from in's
-// path-tagged field, both escaped.
+// pathOf is pattern with {key} filled from key and the placeholder a
+// field's path tag names, {n} or {stage}, from that field, both escaped.
 func pathOf(pattern, key string, in any) string {
 	v := reflect.ValueOf(in)
 	for _, f := range fieldwalk.Fields(v.Type()) {
-		if f.Tag.Get("path") == "n" {
-			pattern = strings.ReplaceAll(pattern, "{n}", url.PathEscape(v.FieldByIndex(f.Index).String()))
+		if name := f.Tag.Get("path"); name != "" {
+			pattern = strings.ReplaceAll(pattern, "{"+name+"}", url.PathEscape(v.FieldByIndex(f.Index).String()))
 		}
 	}
 	return strings.ReplaceAll(pattern, "{key}", url.PathEscape(key))

@@ -4,14 +4,15 @@ import (
 	"context"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ops"
 )
 
 // Scratch Import (ticket 40). `import-guide` is the spec's name for the
 // guide command; `get-import-guide` is the operation's kebab-case name.
 func init() {
-	commands["get-import-guide"] = command{op: "get_import_guide", usage: "get-import-guide  print how to map a .scratch/ folder (same as import-guide)", run: runImportGuide}
+	commands["get-import-guide"] = handWritten(ops.GetImportGuide, "get-import-guide  print how to map a .scratch/ folder (same as import-guide)", runImportGuide)
 	commands["import-guide"] = command{usage: "import-guide  print how to map a .scratch/ folder into an import", run: runImportGuide}
-	commands["import"] = command{op: "import", usage: "import [--dry-run] [--file <json-path|->]  import a .scratch/ payload {specs, tickets} from stdin or a file", run: runImport}
+	commands["import"] = handWritten(ops.Import, "import [--dry-run] [--file <json-path|->]  import a .scratch/ payload {specs, tickets} from stdin or a file", runImport)
 }
 
 func runImportGuide(ctx context.Context, e Env, args []string) error {

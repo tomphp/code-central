@@ -4,11 +4,12 @@ import (
 	"context"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/ops"
 )
 
 // Submitting a Small Change.
 func init() {
-	commands["submit-small-change"] = command{op: "submit_small_change", usage: "submit-small-change [--text <md> | --file <path|->] [--draft] [--full]  submit a Small Change; its first line becomes the Ticket's title", run: runSubmitSmallChange}
+	commands["submit-small-change"] = handWritten(ops.SubmitSmallChange, "submit-small-change [--text <md> | --file <path|->] [--draft] [--full]  submit a Small Change; its first line becomes the Ticket's title", runSubmitSmallChange)
 }
 
 func runSubmitSmallChange(ctx context.Context, e Env, args []string) error {

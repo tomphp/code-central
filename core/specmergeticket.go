@@ -21,7 +21,7 @@ import (
 // the same way, the Home Repository's too when it isn't given above
 // (Spec code-central-848).
 type OpenSpecMergeInput struct {
-	Spec          Ref                 `json:"spec"`
+	Spec          Ref                 `json:"spec" path:"n"`
 	Conflicts     []string            `json:"conflicts"`
 	BaseTip       string              `json:"base_tip"`
 	SpecBranchTip string              `json:"spec_branch_tip"`
