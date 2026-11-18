@@ -315,4 +315,36 @@ describe("the Requirements view", () => {
     expect(within(detail()).getByRole("heading", { name: "Archive in the Project menu" })).toBeInTheDocument();
     expect(row("acme-1")).toHaveAttribute("aria-current", "true");
   });
+
+  it("words each row's headline and draws each segment's progress from the service's strip", async () => {
+    const { w, s } = await acme();
+    const running = await w.api.submitRequirement("acme", "Running");
+    await s.claimFor("acme", running.stages[0].id);
+    const notStarted = await w.api.submitRequirement("acme", "Not started", undefined, false, true);
+    const twoNeeds = await w.api.submitRequirement("acme", "Two needs");
+    for (const t of twoNeeds.stages) await done(s, t.id);
+    await s.ticket("acme", { title: "One", state: "In Review", spec: twoNeeds.spec.id });
+    await s.ticket("acme", { title: "Two", state: "Failed", spec: twoNeeds.spec.id });
+    const inBuild = await w.api.submitRequirement("acme", "In Build");
+    for (const t of inBuild.stages) await done(s, t.id);
+    await s.ticket("acme", { title: "Being built", state: "In Progress", spec: inBuild.spec.id });
+    const noTickets = await w.api.submitRequirement("acme", "No Tickets");
+    for (const t of noTickets.stages) await done(s, t.id);
+    await renderApp(w, "/?view=inbox&list=requirements");
+
+    const list = screen.getByRole("main", { name: "Tickets" });
+    const row = (id: string) => list.querySelector<HTMLElement>(`a[data-id="${id}"]`)!;
+    const classes = (id: string) => [...within(row(id)).getByRole("list", { name: "Stages" }).querySelectorAll("li")].map((li) => li.className);
+    expect(row(running.spec.id)).toHaveTextContent("Grilling: a Factory is on it");
+    expect(classes(running.spec.id)).toEqual(["seg progress-running", "seg progress-waiting", "seg progress-waiting", "seg progress-waiting"]);
+    expect(row(notStarted.spec.id)).toHaveTextContent("Grilling: not started");
+    expect(classes(notStarted.spec.id)).toEqual(["seg progress-waiting", "seg progress-waiting", "seg progress-waiting", "seg progress-waiting"]);
+    expect(row(twoNeeds.spec.id)).toHaveTextContent("Build: In Review · +1 more");
+    expect(classes(twoNeeds.spec.id)).toEqual(["seg progress-done", "seg progress-done", "seg progress-done", "seg progress-needs reason-in_review"]);
+    expect(row(inBuild.spec.id)).toHaveTextContent("Build: 0 of 1 Done");
+    expect(classes(inBuild.spec.id).at(-1)).toBe("seg progress-running");
+    // Every Stage Done and no Build Ticket: Finished, Build still waiting.
+    expect(row(noTickets.spec.id)).toHaveTextContent("Finished");
+    expect(classes(noTickets.spec.id).at(-1)).toBe("seg progress-waiting");
+  });
 });

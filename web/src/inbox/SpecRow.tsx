@@ -57,7 +57,7 @@ export function SpecRow({ id, spec, all, shown, here, now, link, ticketLink, sel
   const title = spec?.title ?? id;
   const summary = spec?.state_summary ?? countStates(all);
   const total = STATES.reduce((n, s) => n + (summary[s] ?? 0), 0);
-  const { kind, progress: p, headline } = describeSpec(spec, all, summary, reasonOf);
+  const { kind, headline } = describeSpec(spec, summary);
   const needsYou = !!reasonOf(id);
   const quiet = quietWhenIdle && (spec?.finished || !needsYou);
 
@@ -74,8 +74,8 @@ export function SpecRow({ id, spec, all, shown, here, now, link, ticketLink, sel
             <span className="row-title">{title}</span>
             <NeedsYouDot id={id} />
           </span>
-          {p ? (
-            <Strip p={p} />
+          {spec?.requirement ? (
+            <Strip requirement={spec.requirement} />
           ) : (
             <span className="state-chips">
               {STATES.filter((s) => summary[s]).map((s) => (
