@@ -4,6 +4,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -27,10 +28,10 @@ import (
 type ciState struct {
 	c   *Core
 	r   store.Reader
-	p   store.Project
+	p   domain.Project
 	now time.Time
 	// runs are the Project's CI Runs kept at now, read on first use.
-	runs     []store.CIRun
+	runs     []domain.CIRun
 	runsRead bool
 	tickets  map[int]*ticketCI
 }
@@ -65,10 +66,10 @@ type repoCI struct {
 	name, record string
 	// pushed are the commits the Ticket pushed there, oldest first, and
 	// latest the last of them.
-	pushed []store.PushedCommit
-	latest store.PushedCommit
+	pushed []domain.PushedCommit
+	latest domain.PushedCommit
 	// runs are the Ticket-tracked runs of every commit it pushed there.
-	runs []store.CIRun
+	runs []domain.CIRun
 	// commit is the pushed commit its result comes from, "" while it has
 	// no result.
 	commit string
@@ -84,16 +85,16 @@ type repoCI struct {
 	unavailable *CIUnavailableView
 	// reruns are the Re-run requests for its latest pushed commit still
 	// waiting on the CI Watcher.
-	reruns []store.CIRunAttempt
+	reruns []domain.CIRunAttempt
 }
 
 // ciStateOf is p's CI state as r has it at now.
-func (c *Core) ciStateOf(r store.Reader, p store.Project) *ciState {
+func (c *Core) ciStateOf(r store.Reader, p domain.Project) *ciState {
 	return &ciState{c: c, r: r, p: p, now: c.now(), tickets: map[int]*ticketCI{}}
 }
 
 // keptRuns are the Project's CI Runs kept at now.
-func (s *ciState) keptRuns() []store.CIRun {
+func (s *ciState) keptRuns() []domain.CIRun {
 	if !s.runsRead {
 		s.runs, s.runsRead = keptCIRuns(s.r.CIRuns(s.p.Key), s.now), true
 	}
@@ -102,12 +103,12 @@ func (s *ciState) keptRuns() []store.CIRun {
 
 // response is the Project's response to commit in the Repository record
 // names, zero when it has none.
-func (s *ciState) response(record, commit string) store.CIResponse {
+func (s *ciState) response(record, commit string) domain.CIResponse {
 	return responseOf(s.p, record, commit)
 }
 
 // ticket is t's answers, worked out on the first ask.
-func (s *ciState) ticket(t store.Ticket) *ticketCI {
+func (s *ciState) ticket(t domain.Ticket) *ticketCI {
 	if a, ok := s.tickets[t.Number]; ok {
 		return a
 	}
@@ -128,7 +129,7 @@ func (s *ciState) ticket(t store.Ticket) *ticketCI {
 }
 
 // repo is t's answers in the watched Repository name, where it pushed.
-func (s *ciState) repo(t store.Ticket, name string) *repoCI {
+func (s *ciState) repo(t domain.Ticket, name string) *repoCI {
 	rc := &repoCI{name: name, record: recordName(s.p.Key, name), pushed: pushedIn(s.p.Key, t, name)}
 	rc.latest = rc.pushed[len(rc.pushed)-1]
 	rc.runs = runsIn(s.keptRuns(), rc.record, rc.pushed)
@@ -136,7 +137,7 @@ func (s *ciState) repo(t store.Ticket, name string) *repoCI {
 	rc.reruns = s.pendingReruns(rc.record, rc.latest.Commit, rc.runs)
 	// Work that has landed in the Repository stays landed: its CI no
 	// longer waits on anything.
-	if t.State != store.Accepted || landedIn(t, name) {
+	if t.State != domain.Accepted || landedIn(t, name) {
 		return rc
 	}
 	s.unhandled(rc)
@@ -194,14 +195,14 @@ func (a *ticketCI) in(name string) *repoCI {
 // (code-central-430); no commit while it has no CI result. A latest
 // pushed commit whose runs have all been pruned has no CI result: none is
 // running.
-func (s *ciState) result(t store.Ticket, rc *repoCI) (commit string, result CIResult) {
+func (s *ciState) result(t domain.Ticket, rc *repoCI) (commit string, result CIResult) {
 	for _, pc := range s.resultCommits(t, rc.name, rc.pushed) {
 		if s.commitResult(rc.record, pc.Commit, rc.runs) == CIPassed {
 			return pc.Commit, CIPassed
 		}
 	}
 	latest := rc.latest
-	if s.now.Sub(latest.Pushed) > ciKeep && !slices.ContainsFunc(rc.runs, func(run store.CIRun) bool { return run.Commit == latest.Commit }) {
+	if s.now.Sub(latest.Pushed) > ciKeep && !slices.ContainsFunc(rc.runs, func(run domain.CIRun) bool { return run.Commit == latest.Commit }) {
 		return "", ""
 	}
 	return latest.Commit, s.commitResult(rc.record, latest.Commit, rc.runs)
@@ -215,7 +216,7 @@ func (s *ciState) unhandled(rc *repoCI) {
 	if !s.response(rc.record, commit).LandAnyway.IsZero() {
 		return
 	}
-	var finished []store.CIRun
+	var finished []domain.CIRun
 	switch rc.result {
 	case CIFailed:
 		if fixTicketOpen(s.r, s.p, rc.record, commit) {
@@ -257,7 +258,7 @@ func (s *ciState) unavailable(rc *repoCI) *CIUnavailableView {
 		view.Cause, view.Message = CIWatcherNotWatching, w.messageFor(rc.name)
 		return view
 	}
-	if slices.ContainsFunc(rc.runs, func(run store.CIRun) bool { return countsFor(run, rc.latest.Commit) }) {
+	if slices.ContainsFunc(rc.runs, func(run domain.CIRun) bool { return countsFor(run, rc.latest.Commit) }) {
 		return nil
 	}
 	view.Cause = CINoRuns
@@ -269,8 +270,8 @@ func (s *ciState) unavailable(rc *repoCI) *CIUnavailableView {
 // under the CI gate there those pushed since it last moved back to Ready,
 // any of which passing passes it; otherwise, or when it has pushed none
 // since, its latest. pushed must hold one.
-func (s *ciState) resultCommits(t store.Ticket, name string, pushed []store.PushedCommit) []store.PushedCommit {
-	var out []store.PushedCommit
+func (s *ciState) resultCommits(t domain.Ticket, name string, pushed []domain.PushedCommit) []domain.PushedCommit {
+	var out []domain.PushedCommit
 	if landingPolicyIn(s.p, name).CIGateHolds() {
 		since := backToReady(t)
 		for _, pc := range slices.Backward(pushed) {
@@ -281,7 +282,7 @@ func (s *ciState) resultCommits(t store.Ticket, name string, pushed []store.Push
 		}
 	}
 	if len(out) == 0 {
-		out = []store.PushedCommit{pushed[len(pushed)-1]}
+		out = []domain.PushedCommit{pushed[len(pushed)-1]}
 	}
 	return out
 }
@@ -295,12 +296,12 @@ func (s *ciState) reads(record, commit string) bool { return len(s.ticketsReadin
 // Repository record names: those whose latest pushed commit there it is,
 // and under the CI gate those that pushed it there since they last moved
 // back to Ready.
-func (s *ciState) ticketsReading(record, commit string) []store.Ticket {
+func (s *ciState) ticketsReading(record, commit string) []domain.Ticket {
 	name := recordRepository(s.p.Key, record)
-	var out []store.Ticket
+	var out []domain.Ticket
 	for _, t := range s.r.Tickets(s.p.Key) {
 		pushed := pushedIn(s.p.Key, t, name)
-		if len(pushed) > 0 && slices.ContainsFunc(s.resultCommits(t, name, pushed), func(pc store.PushedCommit) bool { return pc.Commit == commit }) {
+		if len(pushed) > 0 && slices.ContainsFunc(s.resultCommits(t, name, pushed), func(pc domain.PushedCommit) bool { return pc.Commit == commit }) {
 			out = append(out, t)
 		}
 	}
@@ -310,7 +311,7 @@ func (s *ciState) ticketsReading(record, commit string) []store.Ticket {
 // commitResult is the CI result of commit, in the Repository record
 // names, from runs: running while a Re-run request waits on the CI
 // Watcher, else its runs'.
-func (s *ciState) commitResult(record, commit string, runs []store.CIRun) CIResult {
+func (s *ciState) commitResult(record, commit string, runs []domain.CIRun) CIResult {
 	if len(s.pendingReruns(record, commit, runs)) > 0 {
 		return CIRunning
 	}
@@ -321,12 +322,12 @@ func (s *ciState) commitResult(record, commit string, runs []store.CIRun) CIResu
 // Repository record names, still waiting on the CI Watcher: those whose
 // run has no later attempt in runs, until the request lapses. A request
 // whose run has been pruned waits on nothing.
-func (s *ciState) pendingReruns(record, commit string, runs []store.CIRun) []store.CIRunAttempt {
+func (s *ciState) pendingReruns(record, commit string, runs []domain.CIRun) []domain.CIRunAttempt {
 	res := s.response(record, commit)
 	if s.now.Sub(res.Rerun) >= ciRerunLapse {
 		return nil
 	}
-	var out []store.CIRunAttempt
+	var out []domain.CIRunAttempt
 	for _, a := range res.Reruns {
 		kept, answered := false, false
 		for _, run := range runs {
@@ -345,7 +346,7 @@ func (s *ciState) pendingReruns(record, commit string, runs []store.CIRun) []sto
 // watched reports whether the CI Watcher watches pc, one of rc's pushed
 // commits, from rc's runs: running, or newly pushed or asked to be
 // re-run, and within ciWaitLimit of either.
-func (s *ciState) watched(rc *repoCI, pc store.PushedCommit) bool {
+func (s *ciState) watched(rc *repoCI, pc domain.PushedCommit) bool {
 	// A Re-run request starts the wait again.
 	since := pc.Pushed
 	if rerun := s.response(rc.record, pc.Commit).Rerun; rerun.After(since) {
@@ -368,7 +369,7 @@ func (s *ciState) landAnyway(rc *repoCI) bool {
 // and every CI Run tracked against it, the Home Repository's first and
 // each newest pushed commit's first; all empty for a Ticket never pushed
 // while CI Tracking was on.
-func (s *ciState) view(t store.Ticket) (*PushedCommitView, CIResult, string, []CIRunView) {
+func (s *ciState) view(t domain.Ticket) (*PushedCommitView, CIResult, string, []CIRunView) {
 	a := s.ticket(t)
 	if len(a.repos) == 0 {
 		return nil, "", "", nil
@@ -390,9 +391,9 @@ func (s *ciState) view(t store.Ticket) (*PushedCommitView, CIResult, string, []C
 func (s *ciState) runViews(rc *repoCI) []CIRunView {
 	mine := slices.Clone(rc.runs)
 	order := func(commit string) int {
-		return len(rc.pushed) - 1 - slices.IndexFunc(rc.pushed, func(p store.PushedCommit) bool { return p.Commit == commit })
+		return len(rc.pushed) - 1 - slices.IndexFunc(rc.pushed, func(p domain.PushedCommit) bool { return p.Commit == commit })
 	}
-	slices.SortStableFunc(mine, func(x, y store.CIRun) int { return order(x.Commit) - order(y.Commit) })
+	slices.SortStableFunc(mine, func(x, y domain.CIRun) int { return order(x.Commit) - order(y.Commit) })
 	var out []CIRunView
 	for _, run := range mine {
 		out = append(out, ciRunView(s.p.Key, run))

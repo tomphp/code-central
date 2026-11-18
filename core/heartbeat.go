@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
 )
@@ -197,7 +198,7 @@ func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeat
 		note = strings.TrimSpace(string(r[:maxHeartbeatNote]))
 	}
 	var before ProjectView
-	var project store.Project
+	var project domain.Project
 	if err := c.store.View(func(r store.Reader) error {
 		if err := writable(r, key); err != nil {
 			return err

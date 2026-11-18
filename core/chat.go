@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/store"
@@ -266,7 +267,7 @@ func (c *Core) StartConversation(ctx context.Context, key string, in StartConver
 		return ConversationView{}, err
 	}
 	model := strings.TrimSpace(in.Model)
-	var row store.ModelRow
+	var row domain.ModelRow
 	if err := c.store.View(func(r store.Reader) error {
 		if err := writable(r, key); err != nil {
 			return err
@@ -311,7 +312,7 @@ func (c *Core) SendChatMessage(ctx context.Context, key string, in SendChatMessa
 	case len(in.Text) > SessionEventTextLimit:
 		return ConversationView{}, invalid("text", "a Chat Message is at most %d bytes; this one is %d", SessionEventTextLimit, len(in.Text))
 	}
-	var row store.ModelRow
+	var row domain.ModelRow
 	if err := c.store.View(func(r store.Reader) error {
 		if err := writable(r, key); err != nil {
 			return err
@@ -544,7 +545,7 @@ func (c *Core) watchChats() {
 
 // newConversation makes key's new current Conversation, after asking the
 // old one's Factory to stop any running reply. Callers hold cs.mu.
-func (c *Core) newConversation(key string, row store.ModelRow, model, effort string) *conversation {
+func (c *Core) newConversation(key string, row domain.ModelRow, model, effort string) *conversation {
 	cs := c.chats
 	if old := cs.all[key]; old != nil && old.running {
 		c.stopReply(key, old)
@@ -728,7 +729,7 @@ func (cs *chats) wake(key string) {
 }
 
 // chatRow is the Project's Chat row of its Models.
-func chatRow(r store.Reader, key string) store.ModelRow {
+func chatRow(r store.Reader, key string) domain.ModelRow {
 	p, _ := r.Project(key)
 	return p.Models.Chat
 }

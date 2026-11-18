@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/codehost"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -35,7 +36,7 @@ type GitHubIssuesView struct {
 	Watcher WatcherView `json:"watcher"`
 }
 
-func githubIssuesView(key string, g store.GitHubIssues, watcher WatcherView) GitHubIssuesView {
+func githubIssuesView(key string, g domain.GitHubIssues, watcher WatcherView) GitHubIssuesView {
 	v := GitHubIssuesView{On: g.On, Repositories: slices.Clone(g.Repositories), Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Watcher: watcher}
 	if v.Repositories == nil {
 		v.Repositories = []string{}
@@ -69,7 +70,7 @@ func (c *Core) SetGitHubIssues(ctx context.Context, key string, in SetGitHubIssu
 	if err := humanOnly(ctx, "set_github_issues"); err != nil {
 		return Written[ProjectView]{}, err
 	}
-	g := store.GitHubIssues{On: in.On, Label: strings.TrimSpace(in.Label), NewIssuesNeedMe: in.NewIssuesNeedMe}
+	g := domain.GitHubIssues{On: in.On, Label: strings.TrimSpace(in.Label), NewIssuesNeedMe: in.NewIssuesNeedMe}
 	for _, repository := range in.Repositories {
 		repository = strings.TrimSpace(repository)
 		switch {
@@ -91,13 +92,13 @@ func (c *Core) SetGitHubIssues(ctx context.Context, key string, in SetGitHubIssu
 	created := 0
 	if g.On {
 		var err error
-		created, err = c.createIntegrationSpec(key, func(p store.Project) int { return p.GitHubIssues.Spec },
-			store.Spec{Title: issuesSpecTitle(g.Repositories), Body: issuesSpecBody})
+		created, err = c.createIntegrationSpec(key, func(p domain.Project) int { return p.GitHubIssues.Spec },
+			domain.Spec{Title: issuesSpecTitle(g.Repositories), Body: issuesSpecBody})
 		if err != nil {
 			return Written[ProjectView]{}, err
 		}
 	}
-	var was store.GitHubIssues
+	var was domain.GitHubIssues
 	var before, after ProjectView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
@@ -129,7 +130,7 @@ func (c *Core) SetGitHubIssues(ctx context.Context, key string, in SetGitHubIssu
 }
 
 // sameGitHubIssues reports whether a and b are the same settings.
-func sameGitHubIssues(a, b store.GitHubIssues) bool {
+func sameGitHubIssues(a, b domain.GitHubIssues) bool {
 	return a.On == b.On && slices.Equal(a.Repositories, b.Repositories) && a.Label == b.Label &&
 		a.NewIssuesNeedMe == b.NewIssuesNeedMe && a.Spec == b.Spec
 }
@@ -139,7 +140,7 @@ func sameGitHubIssues(a, b store.GitHubIssues) bool {
 // with spec's title and body. specOf reads the Spec's number from the
 // Project's settings; when it already has one, nothing is created. It
 // returns the new Spec's number, else 0.
-func (c *Core) createIntegrationSpec(key string, specOf func(store.Project) int, spec store.Spec) (int, error) {
+func (c *Core) createIntegrationSpec(key string, specOf func(domain.Project) int, spec domain.Spec) (int, error) {
 	n := 0
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
@@ -167,7 +168,7 @@ func (c *Core) retitleIntegrationSpec(ctx context.Context, key string, n int, gi
 			return nil
 		}
 		s.Updated = c.now()
-		s.Edits = append(s.Edits, store.Edit{Number: len(s.Edits) + 1, Actor: string(ActorOf(ctx)), Time: s.Updated, Previous: map[string]string{"title": s.Title}})
+		s.Edits = append(s.Edits, domain.Edit{Number: len(s.Edits) + 1, Actor: string(ActorOf(ctx)), Time: s.Updated, Previous: map[string]string{"title": s.Title}})
 		s.Title = title
 		return w.PutSpec(key, s)
 	})
@@ -219,12 +220,12 @@ func (c *Core) SetIssuesCheck(check IssuesCheck) { c.issuesCheck = check }
 // with the reason and fix when it fails: on the repositories when the
 // problem is theirs, else on on. It runs outside the store's lock, as the
 // check calls GitHub.
-func (c *Core) checkIssues(ctx context.Context, key string, g store.GitHubIssues) error {
+func (c *Core) checkIssues(ctx context.Context, key string, g domain.GitHubIssues) error {
 	if !g.On || c.issuesCheck == nil {
 		return nil
 	}
-	var was store.GitHubIssues
-	var opts store.Options
+	var was domain.GitHubIssues
+	var opts domain.Options
 	err := c.store.View(func(r store.Reader) error {
 		if err := writable(r, key); err != nil {
 			return err

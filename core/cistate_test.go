@@ -11,6 +11,7 @@ import (
 
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/store"
 )
@@ -24,8 +25,8 @@ import (
 // CI item on get_ticket, on find_tickets rows and in Needs Me.
 func TestTicketsSharingAPushedCommitReadTheSameCI(t *testing.T) {
 	f := itemWorld(t)
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
-	f.ciRun(t, 2, "lint.yml", "abc123", "acme-8", store.CICompleted, store.CISuccess)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
+	f.ciRun(t, 2, "lint.yml", "abc123", "acme-8", domain.CICompleted, domain.CISuccess)
 	for _, id := range []string{"acme-5", "acme-8"} {
 		tk := f.getTicket(t, id)
 		if tk.CIResult != core.CIFailed || tk.CICommit != "abc123" || len(tk.CIRuns) != 2 {
@@ -35,7 +36,7 @@ func TestTicketsSharingAPushedCommitReadTheSameCI(t *testing.T) {
 			t.Errorf("%s: item %+v, want abc123's listing both", id, tk.CIItem)
 		}
 	}
-	rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: []store.State{store.Accepted}})
+	rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: []domain.State{domain.Accepted}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +54,7 @@ func TestTicketsSharingAPushedCommitReadTheSameCI(t *testing.T) {
 // waiting on it (code-central-432), whichever Ticket it was named on.
 func TestAResponseOnTheProjectCoversEveryTicketOnTheCommit(t *testing.T) {
 	f := itemWorld(t)
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 	if _, err := f.core.RerunCI(human, "acme", core.CIResponseInput{Ticket: "acme-5"}); err != nil {
 		t.Fatal(err)
 	}
@@ -86,10 +87,10 @@ func TestAResponseStoredOnAPushedCommitBeforeCIItemsKeepsItsEffectOnceMigrated(t
 	}
 	clk := clock.NewFake(t0)
 	f := itemWorldOn(t, fixture{core: core.New(s, clk, &ids.Sequence{}), clock: clk, store: s})
-	f.moveTo(t, 6, store.Accepted)
+	f.moveTo(t, 6, domain.Accepted)
 	f.pushed(t, "acme-6", "def456")
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
-	f.ciRun(t, 2, "ci.yml", "def456", "acme-6", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
+	f.ciRun(t, 2, "ci.yml", "def456", "acme-6", domain.CICompleted, domain.CIFailure)
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}

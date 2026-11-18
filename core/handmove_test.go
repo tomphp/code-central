@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // A human move out of Needs Answer dismisses the open Questions and ends
@@ -24,10 +24,10 @@ func TestAHumanMoveOutOfNeedsAnswerDismissesOpenQuestionsAndEndsTheClaim(t *test
 		t.Fatal(err)
 	}
 	qs := v.Rounds[0].Questions
-	if qs[0].Status != store.QuestionAnswered || qs[0].Answer != "Postgres" {
+	if qs[0].Status != domain.QuestionAnswered || qs[0].Answer != "Postgres" {
 		t.Fatalf("an answered Question changed: %+v", qs[0])
 	}
-	if qs[1].Status != store.QuestionDismissed || qs[1].Closed == nil || !qs[1].Closed.Equal(later) {
+	if qs[1].Status != domain.QuestionDismissed || qs[1].Closed == nil || !qs[1].Closed.Equal(later) {
 		t.Fatalf("the open Question was not dismissed: %+v", qs[1])
 	}
 	if c := v.Claims[0]; c.Ended == nil || !c.Ended.Equal(later) || c.EndedBy != "cancel" {
@@ -43,11 +43,11 @@ func TestAHumanMoveFromNeedsAnswerToInProgressKeepsTheClaim(t *testing.T) {
 	f.asking(t, qDB)
 	moved := t0.Add(2 * time.Hour)
 	f.clock.Set(moved)
-	v, err := record(f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: store.InProgress, Full: true}))
+	v, err := record(f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: domain.InProgress, Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if q := v.Rounds[0].Questions[0]; q.Status != store.QuestionDismissed {
+	if q := v.Rounds[0].Questions[0]; q.Status != domain.QuestionDismissed {
 		t.Fatalf("the open Question was not dismissed: %+v", q)
 	}
 	if c := v.Claims[0]; c.Ended != nil {
@@ -62,13 +62,13 @@ func TestAHumanMoveFromNeedsAnswerToInProgressKeepsTheClaim(t *testing.T) {
 func TestAHumanMoveFromNeedsAnswerToAnsweredLetsTheHolderPickUpAnswers(t *testing.T) {
 	f := newFixture(t)
 	f.asking(t, qDB)
-	if _, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: store.Answered}); err != nil {
+	if _, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: domain.Answered}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.core.PickUpAnswers(ctx, "acme", core.PickUpAnswersInput{Ticket: "2", ClaimID: "claim-1"}); err != nil {
 		t.Fatalf("pick_up_answers after a human move to Answered: %v", err)
 	}
-	if v := f.get(t, "2"); v.State != store.InProgress || v.Claims[0].Ended != nil {
+	if v := f.get(t, "2"); v.State != domain.InProgress || v.Claims[0].Ended != nil {
 		t.Fatalf("state %s, claim %+v", v.State, v.Claims[0])
 	}
 }

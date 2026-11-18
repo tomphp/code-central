@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
 )
@@ -58,8 +59,8 @@ const ciWaitLimit = 24 * time.Hour
 const ciKeep = 30 * 24 * time.Hour
 
 // keptCIRuns is runs without those finished more than ciKeep before now.
-func keptCIRuns(runs []store.CIRun, now time.Time) []store.CIRun {
-	return slices.DeleteFunc(runs, func(run store.CIRun) bool {
+func keptCIRuns(runs []domain.CIRun, now time.Time) []domain.CIRun {
+	return slices.DeleteFunc(runs, func(run domain.CIRun) bool {
 		ended := ciRunEnded(run)
 		return !ended.IsZero() && now.Sub(ended) > ciKeep
 	})
@@ -67,8 +68,8 @@ func keptCIRuns(runs []store.CIRun, now time.Time) []store.CIRun {
 
 // ciRunEnded is when a completed run finished, or, when the CI Provider
 // gave no finish time, when it started; zero for an unfinished run.
-func ciRunEnded(run store.CIRun) time.Time {
-	if run.Status != store.CICompleted {
+func ciRunEnded(run domain.CIRun) time.Time {
+	if run.Status != domain.CICompleted {
 		return time.Time{}
 	}
 	if !run.Finished.IsZero() {
@@ -87,9 +88,9 @@ type PushedCommitView struct {
 // CIJobView is one job of a CI Run; its conclusion is empty until it
 // ends.
 type CIJobView struct {
-	Name       string             `json:"name"`
-	Conclusion store.CIConclusion `json:"conclusion,omitempty"`
-	URL        string             `json:"url"`
+	Name       string              `json:"name"`
+	Conclusion domain.CIConclusion `json:"conclusion,omitempty"`
+	URL        string              `json:"url"`
 }
 
 // CIRunView is one CI Run as reads return it, and as report_ci_runs
@@ -104,16 +105,16 @@ type CIRunView struct {
 	Attempt    int    `json:"attempt"`
 	// Workflow is the workflow file's base name, such as ci.yml; Name is
 	// the name it shows.
-	Workflow   string             `json:"workflow"`
-	Name       string             `json:"name"`
-	Branch     string             `json:"branch"`
-	Commit     string             `json:"commit"`
-	Status     store.CIRunStatus  `json:"status"`
-	Conclusion store.CIConclusion `json:"conclusion,omitempty"`
-	Started    *time.Time         `json:"started,omitempty"`
-	Finished   *time.Time         `json:"finished,omitempty"`
-	URL        string             `json:"url"`
-	Jobs       []CIJobView        `json:"jobs"`
+	Workflow   string              `json:"workflow"`
+	Name       string              `json:"name"`
+	Branch     string              `json:"branch"`
+	Commit     string              `json:"commit"`
+	Status     domain.CIRunStatus  `json:"status"`
+	Conclusion domain.CIConclusion `json:"conclusion,omitempty"`
+	Started    *time.Time          `json:"started,omitempty"`
+	Finished   *time.Time          `json:"finished,omitempty"`
+	URL        string              `json:"url"`
+	Jobs       []CIJobView         `json:"jobs"`
 	// Ticket or Rule is what the run is tracked against: a Ticket's ID,
 	// or the ID of a CI Rule's Spec.
 	Ticket string `json:"ticket,omitempty"`
@@ -124,7 +125,7 @@ type CIRunView struct {
 }
 
 // ciRunView is r as reads return it.
-func ciRunView(key string, r store.CIRun) CIRunView {
+func ciRunView(key string, r domain.CIRun) CIRunView {
 	v := CIRunView{Repository: r.Repository, ID: r.ID, Attempt: r.Attempt, Workflow: r.Workflow, Name: r.Name, Branch: r.Branch, Commit: r.Commit,
 		Status: r.Status, Conclusion: r.Conclusion, URL: r.URL, Jobs: []CIJobView{}, Ignored: r.Ignored}
 	if !r.Started.IsZero() {
@@ -154,7 +155,7 @@ const ciRerunLapse = 10 * time.Minute
 
 // countsFor reports whether run counts towards commit's CI result: one
 // of commit's runs that isn't ignored.
-func countsFor(run store.CIRun, commit string) bool { return run.Commit == commit && !run.Ignored }
+func countsFor(run domain.CIRun, commit string) bool { return run.Commit == commit && !run.Ignored }
 
 // ciResultOf is the CI result of commit from runs: running while any of
 // its runs that aren't ignored is unfinished, or none is reported; failed
@@ -162,7 +163,7 @@ func countsFor(run store.CIRun, commit string) bool { return run.Commit == commi
 // cancelled, a lone cancelled run included; passed otherwise,
 // skipped and neutral counting as passed. A re-run's latest attempt
 // replaces its earlier ones.
-func ciResultOf(commit string, runs []store.CIRun) CIResult {
+func ciResultOf(commit string, runs []domain.CIRun) CIResult {
 	latest := countedRuns(commit, runs)
 	if len(latest) == 0 {
 		return CIRunning
@@ -170,7 +171,7 @@ func ciResultOf(commit string, runs []store.CIRun) CIResult {
 	failed, cancelled := false, false
 	for _, run := range latest {
 		switch {
-		case run.Status != store.CICompleted:
+		case run.Status != domain.CICompleted:
 			return CIRunning
 		case run.Conclusion.Failed():
 			failed = true
@@ -189,10 +190,10 @@ func ciResultOf(commit string, runs []store.CIRun) CIResult {
 
 // failedRuns are the runs of commit, counted towards its CI result, that
 // concluded failure or timed out.
-func failedRuns(commit string, runs []store.CIRun) []store.CIRun {
-	var out []store.CIRun
+func failedRuns(commit string, runs []domain.CIRun) []domain.CIRun {
+	var out []domain.CIRun
 	for _, run := range countedRuns(commit, runs) {
-		if run.Status == store.CICompleted && run.Conclusion.Failed() {
+		if run.Status == domain.CICompleted && run.Conclusion.Failed() {
 			out = append(out, run)
 		}
 	}
@@ -201,10 +202,10 @@ func failedRuns(commit string, runs []store.CIRun) []store.CIRun {
 
 // rerunnableRuns are the runs of commit, counted towards its CI result,
 // that failed or were cancelled: what a Re-run request covers.
-func rerunnableRuns(commit string, runs []store.CIRun) []store.CIRun {
-	var out []store.CIRun
+func rerunnableRuns(commit string, runs []domain.CIRun) []domain.CIRun {
+	var out []domain.CIRun
 	for _, run := range countedRuns(commit, runs) {
-		if run.Status == store.CICompleted && (run.Conclusion.Failed() || run.Conclusion.Cancelled()) {
+		if run.Status == domain.CICompleted && (run.Conclusion.Failed() || run.Conclusion.Cancelled()) {
 			out = append(out, run)
 		}
 	}
@@ -213,8 +214,8 @@ func rerunnableRuns(commit string, runs []store.CIRun) []store.CIRun {
 
 // countedRuns are the runs of commit that count towards its CI result,
 // by run ID: those that aren't ignored, each at its latest attempt.
-func countedRuns(commit string, runs []store.CIRun) map[int64]store.CIRun {
-	latest := map[int64]store.CIRun{}
+func countedRuns(commit string, runs []domain.CIRun) map[int64]domain.CIRun {
+	latest := map[int64]domain.CIRun{}
 	for _, run := range runs {
 		if !countsFor(run, commit) {
 			continue
@@ -258,8 +259,8 @@ func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushed
 	// The Tickets already waiting on the commit get a change notice: its
 	// CI item lists one more (code-central-432).
 	var sharing []int
-	v, err := c.updateTicketIn(key, "report_pushed_commit", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
-		if t.State != store.Accepted && t.State != store.InReview {
+	v, err := c.updateTicketIn(key, "report_pushed_commit", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
+		if t.State != domain.Accepted && t.State != domain.InReview {
 			return false, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is %s: only an Accepted or In Review Ticket is pushed", DisplayID(key, t.Number), t.State)}
 		}
 		p, _ := r.Project(key)
@@ -273,7 +274,7 @@ func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushed
 		if pc, ok := latestPushedTo(key, *t, name); ok && pc.Commit == commit {
 			return false, nil
 		}
-		t.PushedCommits = append(t.PushedCommits, store.PushedCommit{Repository: recordName(key, name), Commit: commit, Branch: strings.TrimSpace(in.Branch), Pushed: c.now()})
+		t.PushedCommits = append(t.PushedCommits, domain.PushedCommit{Repository: recordName(key, name), Commit: commit, Branch: strings.TrimSpace(in.Branch), Pushed: c.now()})
 		for _, o := range r.Tickets(key) {
 			if pushed := pushedIn(key, o, name); o.Number != t.Number && len(pushed) > 0 && pushed[len(pushed)-1].Commit == commit {
 				sharing = append(sharing, o.Number)
@@ -293,7 +294,7 @@ func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushed
 // repositoryOf is the Repository Name given names in p, field: the Home
 // Repository's when given is empty; refused when it names none of p's
 // Repositories.
-func repositoryOf(p store.Project, field, given string) (string, error) {
+func repositoryOf(p domain.Project, field, given string) (string, error) {
 	given = strings.TrimSpace(given)
 	if given == "" {
 		return p.Key, nil
@@ -306,7 +307,7 @@ func repositoryOf(p store.Project, field, given string) (string, error) {
 
 // notARepository refuses name, on field, as naming none of p's
 // Repositories, which it lists.
-func notARepository(p store.Project, field, name string) error {
+func notARepository(p domain.Project, field, name string) error {
 	return invalid(field, "%q is not one of this Project's Repositories, which are %s", name, strings.Join(repositoryNames(p.RepositoryList()), ", "))
 }
 
@@ -349,7 +350,7 @@ func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput)
 			if err != nil {
 				return err
 			}
-			at := slices.IndexFunc(runs, func(r store.CIRun) bool {
+			at := slices.IndexFunc(runs, func(r domain.CIRun) bool {
 				return r.Repository == run.Repository && r.ID == run.ID && r.Attempt == run.Attempt
 			})
 			switch {
@@ -396,7 +397,7 @@ func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput)
 // markCIRunChanged adds to changed every Ticket that reads run: those
 // whose CI result reads its commit. A run tracked against a Ticket that
 // has since pushed another still marks that Ticket.
-func markCIRunChanged(ci *ciState, changed map[int]bool, run store.CIRun) {
+func markCIRunChanged(ci *ciState, changed map[int]bool, run domain.CIRun) {
 	if run.Ticket == 0 {
 		return
 	}
@@ -409,9 +410,9 @@ func markCIRunChanged(ci *ciState, changed map[int]bool, run store.CIRun) {
 // ciRunOf is the run v reports in p, checked, as stored: for one of p's
 // Repositories, tracked against an existing Ticket or Spec, and ignored
 // when its workflow is.
-func (c *Core) ciRunOf(r store.Reader, p store.Project, v CIRunView, field string) (store.CIRun, error) {
+func (c *Core) ciRunOf(r store.Reader, p domain.Project, v CIRunView, field string) (domain.CIRun, error) {
 	key, ci := p.Key, p.CI
-	run := store.CIRun{ID: v.ID, Attempt: v.Attempt, Workflow: strings.TrimSpace(v.Workflow), Name: v.Name, Branch: v.Branch,
+	run := domain.CIRun{ID: v.ID, Attempt: v.Attempt, Workflow: strings.TrimSpace(v.Workflow), Name: v.Name, Branch: v.Branch,
 		Commit: strings.TrimSpace(v.Commit), Status: v.Status, Conclusion: v.Conclusion, URL: v.URL}
 	name, err := repositoryOf(p, field+".repository", v.Repository)
 	if err != nil {
@@ -428,10 +429,10 @@ func (c *Core) ciRunOf(r store.Reader, p store.Project, v CIRunView, field strin
 	case run.Commit == "":
 		return run, invalid(field+".commit", "a CI Run needs the commit it ran on")
 	case !run.Status.Valid():
-		return run, invalid(field+".status", "%q isn't a CI Run status (%s)", run.Status, joinNames(store.CIRunStatuses))
+		return run, invalid(field+".status", "%q isn't a CI Run status (%s)", run.Status, joinNames(domain.CIRunStatuses))
 	case !run.Conclusion.Valid():
-		return run, invalid(field+".conclusion", "%q isn't a CI conclusion (%s)", run.Conclusion, joinNames(store.CIConclusions))
-	case (run.Status == store.CICompleted) != (run.Conclusion != ""):
+		return run, invalid(field+".conclusion", "%q isn't a CI conclusion (%s)", run.Conclusion, joinNames(domain.CIConclusions))
+	case (run.Status == domain.CICompleted) != (run.Conclusion != ""):
 		return run, invalid(field+".conclusion", "a completed CI Run has a conclusion, and an unfinished one has none")
 	}
 	if v.Started != nil {
@@ -442,9 +443,9 @@ func (c *Core) ciRunOf(r store.Reader, p store.Project, v CIRunView, field strin
 	}
 	for j, job := range v.Jobs {
 		if !job.Conclusion.Valid() {
-			return run, invalid(fmt.Sprintf("%s.jobs[%d].conclusion", field, j), "%q isn't a CI conclusion (%s)", job.Conclusion, joinNames(store.CIConclusions))
+			return run, invalid(fmt.Sprintf("%s.jobs[%d].conclusion", field, j), "%q isn't a CI conclusion (%s)", job.Conclusion, joinNames(domain.CIConclusions))
 		}
-		run.Jobs = append(run.Jobs, store.CIJob{Name: job.Name, Conclusion: job.Conclusion, URL: job.URL})
+		run.Jobs = append(run.Jobs, domain.CIJob{Name: job.Name, Conclusion: job.Conclusion, URL: job.URL})
 	}
 	switch {
 	case (v.Ticket == "") == (v.Rule == ""):
@@ -501,7 +502,7 @@ func ciWaiting(ci *ciState, name string) []CIWaitingCommit {
 	out := []CIWaitingCommit{}
 	key := ci.p.Key
 	for _, t := range ci.r.Tickets(key) {
-		if len(t.PushedCommits) == 0 || t.State == store.Cancelled {
+		if len(t.PushedCommits) == 0 || t.State == domain.Cancelled {
 			continue
 		}
 		rc := ci.ticket(t).in(name)

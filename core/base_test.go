@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // The base the Factory reports under Pull Request (code-central-394):
@@ -18,7 +18,7 @@ func (f fixture) pullRequestProject(t *testing.T) {
 	if _, err := f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/web.git", Base: "main"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest}); err != nil {
 		t.Fatal(err)
 	}
 	beat(f, t, "cc", "box", core.HeartbeatOnline, 10)
@@ -126,8 +126,8 @@ func TestBaseDivergedOnlyShowsWhereTheFactoryKeepsTheBaseLevel(t *testing.T) {
 	f.pullRequestProject(t)
 	f.reportBase(t, core.ReportBaseInput{State: core.BaseDiverged, Local: "a", Remote: "b"})
 	for _, in := range []core.SetLandingMethodInput{
-		{Method: store.LandingMerge},
-		{Method: store.LandingBranch},
+		{Method: domain.LandingMerge},
+		{Method: domain.LandingBranch},
 	} {
 		if _, err := f.core.SetLandingMethod(human, "acme", in); err != nil {
 			t.Fatal(err)
@@ -141,7 +141,7 @@ func TestBaseDivergedOnlyShowsWhereTheFactoryKeepsTheBaseLevel(t *testing.T) {
 func TestBaseDivergedShowsUnderMergeWithPush(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestProject(t)
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingMerge, Push: true, Remote: "origin"}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"}); err != nil {
 		t.Fatal(err)
 	}
 	f.reportBase(t, core.ReportBaseInput{State: core.BaseDiverged, Local: "a", Remote: "b"})
@@ -183,7 +183,7 @@ func missingRow(t *testing.T, f fixture) (core.NeedsMeRow, bool) {
 }
 
 func TestAMissingBaseShowsUnderEveryLandingMethod(t *testing.T) {
-	for _, method := range []store.LandingMethod{store.LandingMerge, store.LandingBranch, store.LandingPullRequest} {
+	for _, method := range []domain.LandingMethod{domain.LandingMerge, domain.LandingBranch, domain.LandingPullRequest} {
 		f := newFixture(t)
 		f.pullRequestProject(t)
 		if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: method}); err != nil {

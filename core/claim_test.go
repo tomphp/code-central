@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // work is a Project acme with Spec acme-1 and the given Tickets on it,
 // created a minute apart so their claim order is their creation order.
-func (f fixture) work(t *testing.T, states ...store.State) []core.TicketView {
+func (f fixture) work(t *testing.T, states ...domain.State) []core.TicketView {
 	t.Helper()
 	f.project(t, "acme")
 	// Long-lived, so that its Tickets land one by one under the default Land per Spec.
@@ -52,14 +52,14 @@ func (f fixture) claim(t *testing.T, in core.ClaimInput) core.ClaimResult {
 
 func TestClaimTakesTheNextReadyTicketInClaimOrder(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Draft, store.Ready, store.Ready) // acme-2 Draft, acme-3 and acme-4 Ready
+	f.work(t, domain.Draft, domain.Ready, domain.Ready) // acme-2 Draft, acme-3 and acme-4 Ready
 	f.clock.Set(t0.Add(time.Hour))
 
 	res := f.claim(t, core.ClaimInput{SessionID: "sess-1"})
-	if res.ClaimID != "claim-1" || res.Ticket.ID != "acme-3" || res.Ticket.State != store.InProgress {
+	if res.ClaimID != "claim-1" || res.Ticket.ID != "acme-3" || res.Ticket.State != domain.InProgress {
 		t.Fatalf("got claim %q on %s (%s), want claim-1 on acme-3 In Progress", res.ClaimID, res.Ticket.ID, res.Ticket.State)
 	}
-	want := core.MoveView{From: store.Ready, To: store.InProgress, Actor: "agent", Time: t0.Add(time.Hour), Claim: 1}
+	want := core.MoveView{From: domain.Ready, To: domain.InProgress, Actor: "agent", Time: t0.Add(time.Hour), Claim: 1}
 	if moves := f.get(t, "acme-3").Moves; len(moves) != 1 || moves[0] != want {
 		t.Fatalf("moves %+v, want [%+v]", moves, want)
 	}
@@ -76,7 +76,7 @@ func TestClaimOrderBreaksTiesOnNumber(t *testing.T) {
 	f.project(t, "acme")
 	f.spec(t, "acme", "S")
 	for range 3 { // same created time
-		f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "T", State: store.Ready})
+		f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "T", State: domain.Ready})
 	}
 	for _, want := range []string{"acme-2", "acme-3", "acme-4"} {
 		if got := f.claim(t, core.ClaimInput{}).Ticket.ID; got != want {
@@ -87,7 +87,7 @@ func TestClaimOrderBreaksTiesOnNumber(t *testing.T) {
 
 func TestClaimWithNothingClaimableReturnsNoTicket(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Draft)
+	f.work(t, domain.Draft)
 	res, err := f.core.Claim(ctx, "acme", core.ClaimInput{})
 	if err != nil || res.Ticket != nil || res.ClaimID != "" {
 		t.Fatalf("got %+v, %v; want {ticket: null}", res, err)
@@ -100,9 +100,9 @@ func TestClaimWithNothingClaimableReturnsNoTicket(t *testing.T) {
 
 func TestClaimNarrowedToASpec(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready) // acme-2 on acme-1
+	f.work(t, domain.Ready) // acme-2 on acme-1
 	f.spec(t, "acme", "Other")
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "3", Title: "Later", State: store.Ready}) // acme-4
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "3", Title: "Later", State: domain.Ready}) // acme-4
 	if got := f.claim(t, core.ClaimInput{Spec: "acme-3"}).Ticket.ID; got != "acme-4" {
 		t.Fatalf("claimed %s, want acme-4 from Spec acme-3", got)
 	}
@@ -116,7 +116,7 @@ func TestClaimNarrowedToASpec(t *testing.T) {
 
 func TestClaimANamedTicket(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready, store.Draft) // acme-2, acme-3 Ready; acme-4 Draft
+	f.work(t, domain.Ready, domain.Ready, domain.Draft) // acme-2, acme-3 Ready; acme-4 Draft
 	if got := f.claim(t, core.ClaimInput{Ticket: "acme-3"}).Ticket.ID; got != "acme-3" {
 		t.Fatalf("claimed %s, want acme-3", got)
 	}
@@ -139,7 +139,7 @@ func TestClaimANamedTicket(t *testing.T) {
 
 func TestClaimRejectsBothSpecAndTicket(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	_, err := f.core.Claim(ctx, "acme", core.ClaimInput{Spec: "1", Ticket: "2"})
 	wantCode(t, err, core.Invalid, "ticket")
 }
@@ -153,7 +153,7 @@ func TestClaimOnAnUnknownProject(t *testing.T) {
 func TestTheClaimIDIsLeftOutOfEveryRead(t *testing.T) {
 	f := newFixture(t)
 	f.core = core.New(f.store, f.clock, fixedID("SECRETCLAIMID"))
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	res := f.claim(t, core.ClaimInput{})
 	if res.ClaimID != "SECRETCLAIMID" {
 		t.Fatalf("claim ID %q", res.ClaimID)
@@ -175,7 +175,7 @@ func TestTheClaimIDIsLeftOutOfEveryRead(t *testing.T) {
 
 func TestTwoConcurrentClaimsNeverTakeTheSameTicket(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready, store.Ready, store.Ready, store.Ready)
+	f.work(t, domain.Ready, domain.Ready, domain.Ready, domain.Ready, domain.Ready)
 	const agents = 20
 	var wg sync.WaitGroup
 	got := make(chan string, agents)
@@ -211,15 +211,15 @@ func (f fixedID) ClaimID() string { return string(f) }
 
 func TestTheHoldingSessionClaimsItsTicketAgainAndGetsTheSameClaim(t *testing.T) {
 	for _, c := range []struct {
-		state store.State
+		state domain.State
 		setup func(f fixture)
 	}{
-		{store.InProgress, func(f fixture) {
-			f.work(t, store.Ready)
+		{domain.InProgress, func(f fixture) {
+			f.work(t, domain.Ready)
 			f.claim(t, core.ClaimInput{SessionID: "sess-1"})
 		}},
-		{store.NeedsAnswer, func(f fixture) { f.asking(t, qDB) }},
-		{store.Answered, func(f fixture) {
+		{domain.NeedsAnswer, func(f fixture) { f.asking(t, qDB) }},
+		{domain.Answered, func(f fixture) {
 			f.asking(t, qDB)
 			if _, err := f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite"}); err != nil {
 				t.Fatal(err)
@@ -263,7 +263,7 @@ func TestTheHoldingSessionClaimsItsTicketAgainAndGetsTheSameClaim(t *testing.T) 
 
 func TestClaimingAgainTakesNoNewClaimID(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready)
+	f.work(t, domain.Ready, domain.Ready)
 	f.claim(t, core.ClaimInput{SessionID: "sess-1"})
 	f.claim(t, core.ClaimInput{Ticket: "2", SessionID: "sess-1"})
 	if got := f.claim(t, core.ClaimInput{}).ClaimID; got != "claim-2" {
@@ -273,7 +273,7 @@ func TestClaimingAgainTakesNoNewClaimID(t *testing.T) {
 
 func TestOnlyANamedTicketAndAMatchingSessionGetTheirClaimBack(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready) // acme-2, acme-3
+	f.work(t, domain.Ready, domain.Ready) // acme-2, acme-3
 	f.claim(t, core.ClaimInput{SessionID: "sess-1"})
 
 	// A bare or Spec-narrowed claim takes the next Ticket, not your own.
@@ -286,7 +286,7 @@ func TestOnlyANamedTicketAndAMatchingSessionGetTheirClaimBack(t *testing.T) {
 	}
 
 	// An empty session ID never matches, not even a Claim made without one.
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Td", State: store.Ready}) // acme-4
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Td", State: domain.Ready}) // acme-4
 	f.claim(t, core.ClaimInput{Ticket: "4"})
 	_, err = f.core.Claim(ctx, "acme", core.ClaimInput{Ticket: "4"})
 	wantMessage(t, err, core.ActionNotAllowed, "",

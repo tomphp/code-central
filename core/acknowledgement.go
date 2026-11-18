@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // A write that used to echo the whole record returns an Acknowledgement
@@ -27,7 +27,7 @@ type Acknowledgement struct {
 	// Edit is the number of the edit the write recorded, if it recorded one.
 	Edit int `json:"edit,omitempty"`
 	// State is a Ticket's State after the write; a Spec has none.
-	State store.State `json:"state,omitempty"`
+	State domain.State `json:"state,omitempty"`
 }
 
 // Written is an acknowledging write's result: its Acknowledgement, or

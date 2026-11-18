@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
-func (f fixture) move(t *testing.T, ref core.Ref, to store.State) core.TicketView {
+func (f fixture) move(t *testing.T, ref core.Ref, to domain.State) core.TicketView {
 	t.Helper()
 	v, err := record(f.core.Move(human, "acme", core.MoveInput{Ticket: ref, ToState: to, Full: true}))
 	if err != nil {
@@ -19,8 +19,8 @@ func (f fixture) move(t *testing.T, ref core.Ref, to store.State) core.TicketVie
 
 func TestTheHumanMovesATicketToAnyStateButFailedAndNeedsAnswer(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Draft)
-	for _, to := range []store.State{store.Ready, store.InReview, store.Done, store.Draft, store.Cancelled, store.Ready} {
+	f.work(t, domain.Draft)
+	for _, to := range []domain.State{domain.Ready, domain.InReview, domain.Done, domain.Draft, domain.Cancelled, domain.Ready} {
 		f.clock.Advance(time.Minute)
 		v := f.move(t, "2", to)
 		last := v.Moves[len(v.Moves)-1]
@@ -29,11 +29,11 @@ func TestTheHumanMovesATicketToAnyStateButFailedAndNeedsAnswer(t *testing.T) {
 		}
 	}
 	// Failed and Needs Answer are entered only by a Failure Report or a Round.
-	for _, to := range []store.State{store.Failed, store.NeedsAnswer} {
+	for _, to := range []domain.State{domain.Failed, domain.NeedsAnswer} {
 		_, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: to})
 		wantCode(t, err, core.Invalid, "to_state")
 	}
-	for _, to := range []store.State{"", "Nope", store.Ready} { // Ready: it is already there
+	for _, to := range []domain.State{"", "Nope", domain.Ready} { // Ready: it is already there
 		_, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: to})
 		wantCode(t, err, core.Invalid, "to_state")
 	}
@@ -41,19 +41,19 @@ func TestTheHumanMovesATicketToAnyStateButFailedAndNeedsAnswer(t *testing.T) {
 
 func TestMoveIsTheHumansAlone(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Draft)
-	_, err := f.core.Move(ctx, "acme", core.MoveInput{Ticket: "2", ToState: store.Ready})
+	f.work(t, domain.Draft)
+	_, err := f.core.Move(ctx, "acme", core.MoveInput{Ticket: "2", ToState: domain.Ready})
 	wantCode(t, err, core.ActionNotAllowed, "")
-	_, err = f.core.Move(human, "acme", core.MoveInput{Ticket: "9", ToState: store.Ready})
+	_, err = f.core.Move(human, "acme", core.MoveInput{Ticket: "9", ToState: domain.Ready})
 	wantCode(t, err, core.NotFound, "")
 }
 
 func TestMovingOutOfAClaimStateEndsTheClaim(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{})
 	f.clock.Advance(time.Hour)
-	v := f.move(t, "2", store.InReview)
+	v := f.move(t, "2", domain.InReview)
 	if c := v.Claims[0]; c.Ended == nil || !c.Ended.Equal(f.clock.Now()) || c.EndedBy != "move" {
 		t.Fatalf("claim %+v, want ended by move", c)
 	}
@@ -64,9 +64,9 @@ func TestMovingOutOfAClaimStateEndsTheClaim(t *testing.T) {
 
 func TestMovingWithinTheClaimStatesKeepsTheClaim(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{})
-	v := f.move(t, "2", store.Answered)
+	v := f.move(t, "2", domain.Answered)
 	if v.Claims[0].Ended != nil {
 		t.Fatalf("claim %+v, want still live", v.Claims[0])
 	}
@@ -74,7 +74,7 @@ func TestMovingWithinTheClaimStatesKeepsTheClaim(t *testing.T) {
 
 func TestRenameProjectChangesTheDisplayNameNeverTheKey(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	p, err := f.core.RenameProject(human, "acme", core.RenameProjectInput{DisplayName: "Acme Web"})
 	if err != nil || p.Key != "acme" || p.DisplayName != "Acme Web" || !p.Created.Equal(t0) {
 		t.Fatalf("got %+v, %v", p, err)

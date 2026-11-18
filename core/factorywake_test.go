@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // wakeAsync opens Factory factory's next_factory_wake call on Project key
@@ -49,10 +49,10 @@ func TestEveryMoveTheFactorysPollActsOnWakesIt(t *testing.T) {
 		move  func(f fixture) error
 	}{
 		{"create a Ready Ticket", func(t *testing.T, f fixture) { f.work(t) }, func(f fixture) error {
-			_, err := f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Ta", State: store.Ready})
+			_, err := f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Ta", State: domain.Ready})
 			return err
 		}},
-		{"approve", func(t *testing.T, f fixture) { f.work(t, store.Draft) }, func(f fixture) error {
+		{"approve", func(t *testing.T, f fixture) { f.work(t, domain.Draft) }, func(f fixture) error {
 			_, err := f.core.Approve(human, "acme", core.TicketInput{Ticket: "2"})
 			return err
 		}},
@@ -65,14 +65,14 @@ func TestEveryMoveTheFactorysPollActsOnWakesIt(t *testing.T) {
 			return err
 		}},
 		{"release", func(t *testing.T, f fixture) {
-			f.work(t, store.Ready)
+			f.work(t, domain.Ready)
 			f.claim(t, core.ClaimInput{})
 		}, func(f fixture) error {
 			_, err := f.core.Release(human, "acme", core.ReleaseInput{Ticket: "2"})
 			return err
 		}},
 		{"give up", func(t *testing.T, f fixture) {
-			f.work(t, store.Ready)
+			f.work(t, domain.Ready)
 			f.claim(t, core.ClaimInput{})
 		}, func(f fixture) error {
 			_, err := f.core.GiveUp(ctx, "acme", core.GiveUpInput{Ticket: "2", ClaimID: "claim-1", Note: "Out of ideas."})
@@ -94,12 +94,12 @@ func TestEveryMoveTheFactorysPollActsOnWakesIt(t *testing.T) {
 			_, err := f.core.Implement(human, "acme", core.TicketInput{Ticket: "4"})
 			return err
 		}},
-		{"cancel", func(t *testing.T, f fixture) { f.work(t, store.Draft) }, func(f fixture) error {
+		{"cancel", func(t *testing.T, f fixture) { f.work(t, domain.Draft) }, func(f fixture) error {
 			_, err := f.core.Cancel(human, "acme", core.CancelInput{Ticket: "2"})
 			return err
 		}},
 		{"a move by hand to Done", func(t *testing.T, f fixture) { f.inReview(t) }, func(f fixture) error {
-			_, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: store.Done})
+			_, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: domain.Done})
 			return err
 		}},
 	} {
@@ -122,7 +122,7 @@ func TestEveryMoveTheFactorysPollActsOnWakesIt(t *testing.T) {
 // empty.
 func TestWritesTheFactorysPollDoesNotActOnLeaveItAsleepUntilTheTimeout(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready)
+	f.work(t, domain.Ready, domain.Ready)
 	woken := f.wakeAsync("acme", "cc")
 	writes := []func() error{
 		func() error {
@@ -173,7 +173,7 @@ func TestWritesTheFactorysPollDoesNotActOnLeaveItAsleepUntilTheTimeout(t *testin
 
 func TestAChangeInAnotherProjectDoesNotWakeTheFactory(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Draft)
+	f.work(t, domain.Draft)
 	f.project(t, "other")
 	woken := f.wakeAsync("other", "cc")
 	f.approve(t, "2")
@@ -184,7 +184,7 @@ func TestAChangeInAnotherProjectDoesNotWakeTheFactory(t *testing.T) {
 
 func TestEveryFactoryOnTheProjectIsWoken(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Draft)
+	f.work(t, domain.Draft)
 	first, second := f.wakeAsync("acme", "cc"), f.wakeAsync("acme", "cc-2")
 	f.approve(t, "2")
 	f.clock.Advance(core.WaitTimeout)
@@ -197,7 +197,7 @@ func TestEveryFactoryOnTheProjectIsWoken(t *testing.T) {
 
 func TestANewerCallFromTheSameFactoryEndsTheOlderOneEmpty(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Draft)
+	f.work(t, domain.Draft)
 	older := f.wakeAsync("acme", "cc")
 	newer := make(chan core.FactoryWake, 1)
 	go func() {
@@ -255,7 +255,7 @@ func TestNextFactoryWakeRejections(t *testing.T) {
 // Project, and not yet woken.
 func TestWaitingFactoryWakesCountsTheOpenCallsNotYetWoken(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Draft)
+	f.work(t, domain.Draft)
 	if n := f.core.WaitingFactoryWakes("acme"); n != 0 {
 		t.Fatalf("with no call open, WaitingFactoryWakes = %d, want 0", n)
 	}
@@ -290,7 +290,7 @@ func (f fixture) wakes(t *testing.T, write func(f fixture) error) bool {
 // Factory may be counting on, and stops a turn it should know about.
 func TestALiveClaimEndedByAMoveItsHolderDidNotMakeWakesTheFactory(t *testing.T) {
 	claimed := func(t *testing.T, f fixture) {
-		f.work(t, store.Ready)
+		f.work(t, domain.Ready)
 		f.claim(t, core.ClaimInput{})
 	}
 	for _, tc := range []struct {
@@ -299,11 +299,11 @@ func TestALiveClaimEndedByAMoveItsHolderDidNotMakeWakesTheFactory(t *testing.T) 
 		move  func(f fixture) error
 	}{
 		{"a move by hand to In Review", claimed, func(f fixture) error {
-			_, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: store.InReview})
+			_, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: domain.InReview})
 			return err
 		}},
 		{"a move by hand to Draft", claimed, func(f fixture) error {
-			_, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: store.Draft})
+			_, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: domain.Draft})
 			return err
 		}},
 		{"cancel", claimed, func(f fixture) error {
@@ -334,7 +334,7 @@ func TestALiveClaimEndedByAMoveItsHolderDidNotMakeWakesTheFactory(t *testing.T) 
 // Factory's poll doesn't act on.
 func TestTheHoldersOwnReportFailureDoesNotWakeTheFactory(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.claim(t, core.ClaimInput{})
 	if f.wakes(t, func(f fixture) error {
 		_, err := f.core.ReportFailure(ctx, "acme", core.ReportFailureInput{Ticket: "2", ClaimID: "claim-1",
@@ -347,7 +347,7 @@ func TestTheHoldersOwnReportFailureDoesNotWakeTheFactory(t *testing.T) {
 
 func TestRemovingABlockerWakesTheFactory(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready)
+	f.work(t, domain.Ready, domain.Ready)
 	if _, err := f.core.AddBlocker(ctx, "acme", core.BlockerInput{Ticket: "3", Blocker: "2"}); err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +361,7 @@ func TestRemovingABlockerWakesTheFactory(t *testing.T) {
 
 func TestAddingABlockerDoesNotWakeTheFactory(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready)
+	f.work(t, domain.Ready, domain.Ready)
 	if f.wakes(t, func(f fixture) error {
 		_, err := f.core.AddBlocker(ctx, "acme", core.BlockerInput{Ticket: "3", Blocker: "2"})
 		return err
@@ -375,11 +375,11 @@ func TestChangingAProjectSettingTheFactoryReadsWakesIt(t *testing.T) {
 	base := "trunk"
 	for name, change := range map[string]func(f fixture) error{
 		"the base": func(f fixture) error {
-			_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingMerge, Base: &base})
+			_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Base: &base})
 			return err
 		},
 		"Landing": func(f fixture) error {
-			_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingBranch})
+			_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingBranch})
 			return err
 		},
 		"CI": func(f fixture) error {
@@ -399,7 +399,7 @@ func TestChangingAProjectSettingTheFactoryReadsWakesIt(t *testing.T) {
 			return err
 		},
 		"Auto-accept": func(f fixture) error {
-			_, err := f.core.SetAutoAccept(human, "acme", core.SetAutoAcceptInput{Kinds: map[store.AutoAcceptKind]bool{store.AutoAcceptImplementation: true}})
+			_, err := f.core.SetAutoAccept(human, "acme", core.SetAutoAcceptInput{Kinds: map[domain.AutoAcceptKind]bool{domain.AutoAcceptImplementation: true}})
 			return err
 		},
 		"Archived": func(f fixture) error {
@@ -435,7 +435,7 @@ func TestAnImportWakesTheFactory(t *testing.T) {
 	if !f.wakes(t, func(f fixture) error {
 		_, err := f.core.Import(human, "acme", core.ImportInput{Payload: core.ImportPayload{
 			Specs:   []core.ImportSpec{{Source: ".scratch/login/", Title: "Login"}},
-			Tickets: []core.ImportTicket{{Source: ".scratch/login/issues/01-form.md", Spec: ".scratch/login/", Title: "Form", State: store.Draft}},
+			Tickets: []core.ImportTicket{{Source: ".scratch/login/issues/01-form.md", Spec: ".scratch/login/", Title: "Form", State: domain.Draft}},
 		}})
 		return err
 	}) {
@@ -510,7 +510,7 @@ func TestProjectWritesTheFactorysPollDoesNotActOnLeaveItAsleep(t *testing.T) {
 			return nil
 		},
 		"CI Runs": func(f fixture) error {
-			_, err := f.core.ReportCIRuns(ctx, "acme", core.ReportCIRunsInput{Runs: []core.CIRunView{{ID: 1, Attempt: 1, Workflow: "ci.yml", Commit: "abc123", Status: store.CIQueued, Ticket: "acme-2"}}})
+			_, err := f.core.ReportCIRuns(ctx, "acme", core.ReportCIRunsInput{Runs: []core.CIRunView{{ID: 1, Attempt: 1, Workflow: "ci.yml", Commit: "abc123", Status: domain.CIQueued, Ticket: "acme-2"}}})
 			return err
 		},
 		"Chat": func(f fixture) error {
@@ -518,14 +518,14 @@ func TestProjectWritesTheFactorysPollDoesNotActOnLeaveItAsleep(t *testing.T) {
 			return err
 		},
 		"Options": func(f fixture) error {
-			focus := store.FocusActivityDashboard
+			focus := domain.FocusActivityDashboard
 			_, err := f.core.SetOptions(human, core.SetOptionsInput{FocusClear: &focus})
 			return err
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFixture(t)
-			f.work(t, store.Ready)
+			f.work(t, domain.Ready)
 			f.claim(t, core.ClaimInput{SessionID: "s1"})
 			if _, err := f.core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Repository: "acme/web"}); err != nil {
 				t.Fatal(err)

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
 )
@@ -19,7 +20,7 @@ func (f fixture) gatedBlocker(t *testing.T, n int) {
 	t.Helper()
 	err := f.store.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
-		p.Landing = store.Landing{Method: store.LandingMerge, Push: true, Remote: "origin"}
+		p.Landing = domain.Landing{Method: domain.LandingMerge, Push: true, Remote: "origin"}
 		p.CI = trackingOn("acme/web")
 		return w.PutProject(p)
 	})
@@ -28,8 +29,8 @@ func (f fixture) gatedBlocker(t *testing.T, n int) {
 	}
 	err = f.store.Update(func(w store.Writer) error {
 		tk, _ := w.Ticket("acme", n)
-		tk.State = store.Accepted
-		tk.PushedCommits = []store.PushedCommit{{Commit: "abc123", Pushed: f.clock.Now()}}
+		tk.State = domain.Accepted
+		tk.PushedCommits = []domain.PushedCommit{{Commit: "abc123", Pushed: f.clock.Now()}}
 		return w.PutTicket("acme", tk)
 	})
 	if err != nil {
@@ -52,12 +53,12 @@ func (f fixture) noticesOf(t *testing.T, do func()) map[events.Event]bool {
 
 // reportRun reports, as the CI Watcher, a run of ci.yml on abc123
 // tracked against ticket.
-func (f fixture) reportRun(t *testing.T, ticket string, status store.CIRunStatus, conclusion store.CIConclusion) {
+func (f fixture) reportRun(t *testing.T, ticket string, status domain.CIRunStatus, conclusion domain.CIConclusion) {
 	t.Helper()
 	started := f.clock.Now()
 	run := core.CIRunView{ID: 1, Attempt: 1, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: "abc123",
 		Status: status, Conclusion: conclusion, Started: &started, URL: "https://github.com/acme/web/actions/runs/1", Ticket: ticket}
-	if status == store.CICompleted {
+	if status == domain.CICompleted {
 		run.Finished = &started
 	}
 	if _, err := f.core.ReportCIRuns(ctx, "acme", core.ReportCIRunsInput{Runs: []core.CIRunView{run}}); err != nil {
@@ -67,13 +68,13 @@ func (f fixture) reportRun(t *testing.T, ticket string, status store.CIRunStatus
 
 func TestATicketBlockedByAnAcceptedTicketStaysBlockedWhateverItsCIResult(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready) // acme-2, acme-3
+	f.work(t, domain.Ready, domain.Ready) // acme-2, acme-3
 	f.addBlocker(t, "acme-2", "acme-3")
 	f.gatedBlocker(t, 3)
 	for _, c := range []struct {
-		status     store.CIRunStatus
-		conclusion store.CIConclusion
-	}{{store.CIInProgress, ""}, {store.CICompleted, store.CISuccess}, {store.CICompleted, store.CIFailure}} {
+		status     domain.CIRunStatus
+		conclusion domain.CIConclusion
+	}{{domain.CIInProgress, ""}, {domain.CICompleted, domain.CISuccess}, {domain.CICompleted, domain.CIFailure}} {
 		f.reportRun(t, "acme-3", c.status, c.conclusion)
 		if v := f.get(t, "acme-2"); !v.Blocked || v.Claimable {
 			t.Fatalf("blocked %v claimable %v, want acme-3 blocking with its run %s %s", v.Blocked, v.Claimable, c.status, c.conclusion)
@@ -88,11 +89,11 @@ func TestATicketBlockedByAnAcceptedTicketStaysBlockedWhateverItsCIResult(t *test
 
 func TestACIRunReportSendsNoNoticeToDependantsOfTheTicket(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready) // acme-2, acme-3
+	f.work(t, domain.Ready, domain.Ready) // acme-2, acme-3
 	f.addBlocker(t, "acme-2", "acme-3")
 	f.gatedBlocker(t, 3)
 
-	got := f.noticesOf(t, func() { f.reportRun(t, "acme-3", store.CICompleted, store.CISuccess) })
+	got := f.noticesOf(t, func() { f.reportRun(t, "acme-3", domain.CICompleted, domain.CISuccess) })
 	if !got[events.Event{Type: events.TicketChanged, Project: "acme", ID: "acme-3"}] {
 		t.Fatalf("notices %v, want ticket.changed for acme-3", got)
 	}

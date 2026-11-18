@@ -8,16 +8,16 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // finishedWork is Project acme with Spec acme-1, Done Ticket acme-2 and
 // Cancelled Ticket acme-3: nothing left to do.
 func (f fixture) finishedWork(t *testing.T) {
 	t.Helper()
-	f.work(t, store.Draft, store.Draft)
-	f.move(t, "2", store.Done)
-	f.move(t, "3", store.Cancelled)
+	f.work(t, domain.Draft, domain.Draft)
+	f.move(t, "2", domain.Done)
+	f.move(t, "3", domain.Cancelled)
 }
 
 func (f fixture) archive(t *testing.T, key string) core.ProjectView {
@@ -31,8 +31,8 @@ func (f fixture) archive(t *testing.T, key string) core.ProjectView {
 
 func TestArchiveIsRefusedWhileAnyTicketIsUnfinished(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Draft, store.Ready, store.Draft)
-	f.move(t, "2", store.Done)
+	f.work(t, domain.Draft, domain.Ready, domain.Draft)
+	f.move(t, "2", domain.Done)
 	_, err := f.core.ArchiveProject(human, "acme")
 	wantCode(t, err, core.ActionNotAllowed, "")
 	msg := err.Error()
@@ -230,7 +230,7 @@ var writesOnAcme = map[string]func(f fixture) error{
 		return err
 	},
 	"move": func(f fixture) error {
-		_, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: store.Ready})
+		_, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: domain.Ready})
 		return err
 	},
 	"rename_project": func(f fixture) error {
@@ -238,7 +238,7 @@ var writesOnAcme = map[string]func(f fixture) error{
 		return err
 	},
 	"set_landing_method": func(f fixture) error {
-		_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingBranch})
+		_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingBranch})
 		return err
 	},
 	"set_ci_tracking": func(f fixture) error {
@@ -262,7 +262,7 @@ var writesOnAcme = map[string]func(f fixture) error{
 		return err
 	},
 	"set_auto_accept": func(f fixture) error {
-		_, err := f.core.SetAutoAccept(human, "acme", core.SetAutoAcceptInput{Kinds: map[store.AutoAcceptKind]bool{store.AutoAcceptImplementation: true}})
+		_, err := f.core.SetAutoAccept(human, "acme", core.SetAutoAcceptInput{Kinds: map[domain.AutoAcceptKind]bool{domain.AutoAcceptImplementation: true}})
 		return err
 	},
 	"set_focus_kinds": func(f fixture) error {
@@ -367,7 +367,7 @@ var writesOnAcme = map[string]func(f fixture) error{
 		return err
 	},
 	"report_pull_request": func(f fixture) error {
-		_, err := f.core.ReportPullRequest(ctx, "acme", core.ReportPullRequestInput{Branch: "acme-2", Number: 1, Link: "https://github.com/a/b/pull/1", State: store.PROpen})
+		_, err := f.core.ReportPullRequest(ctx, "acme", core.ReportPullRequestInput{Branch: "acme-2", Number: 1, Link: "https://github.com/a/b/pull/1", State: domain.PROpen})
 		return err
 	},
 	"report_spec_merge": func(f fixture) error {
@@ -399,7 +399,7 @@ var writesOnAcme = map[string]func(f fixture) error{
 		return err
 	},
 	"report_ci_runs": func(f fixture) error {
-		_, err := f.core.ReportCIRuns(ctx, "acme", core.ReportCIRunsInput{Runs: []core.CIRunView{{ID: 1, Attempt: 1, Workflow: "ci.yml", Commit: "abc123", Status: store.CIQueued, Ticket: "acme-2"}}})
+		_, err := f.core.ReportCIRuns(ctx, "acme", core.ReportCIRunsInput{Runs: []core.CIRunView{{ID: 1, Attempt: 1, Workflow: "ci.yml", Commit: "abc123", Status: domain.CIQueued, Ticket: "acme-2"}}})
 		return err
 	},
 	"archive_project": func(f fixture) error {
@@ -433,7 +433,7 @@ var writesOnAcme = map[string]func(f fixture) error{
 	"import": func(f fixture) error {
 		_, err := f.core.Import(ctx, "acme", core.ImportInput{Payload: core.ImportPayload{
 			Specs:   []core.ImportSpec{{Source: "feat", Title: "Feat"}},
-			Tickets: []core.ImportTicket{{Source: "feat/01.md", Spec: "feat", Title: "One", State: store.Draft}},
+			Tickets: []core.ImportTicket{{Source: "feat/01.md", Spec: "feat", Title: "One", State: domain.Draft}},
 		}})
 		return err
 	},
@@ -479,7 +479,7 @@ var writesOnAcme = map[string]func(f fixture) error{
 	"import (dry run)": func(f fixture) error {
 		_, err := f.core.Import(ctx, "acme", core.ImportInput{DryRun: true, Payload: core.ImportPayload{
 			Specs:   []core.ImportSpec{{Source: "feat", Title: "Feat"}},
-			Tickets: []core.ImportTicket{{Source: "feat/01.md", Spec: "feat", Title: "One", State: store.Draft}},
+			Tickets: []core.ImportTicket{{Source: "feat/01.md", Spec: "feat", Title: "One", State: domain.Draft}},
 		}})
 		return err
 	},
@@ -511,10 +511,10 @@ func TestAnArchivedProjectStaysReadable(t *testing.T) {
 	f.finishedWork(t)
 	f.project(t, "other")
 	f.archive(t, "acme")
-	if v, err := f.core.GetTicket(ctx, "acme", whole("acme-2")); err != nil || v.State != store.Done {
+	if v, err := f.core.GetTicket(ctx, "acme", whole("acme-2")); err != nil || v.State != domain.Done {
 		t.Fatalf("get_ticket: %+v, %v", v, err)
 	}
-	if rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: []store.State{store.Done, store.Cancelled}}); err != nil || len(rows) != 2 {
+	if rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: []domain.State{domain.Done, domain.Cancelled}}); err != nil || len(rows) != 2 {
 		t.Fatalf("find_tickets: %+v, %v", rows, err)
 	}
 	if s, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "1"}); err != nil || s.ID != "acme-1" {
@@ -533,8 +533,8 @@ func TestAnArchivedProjectStaysReadable(t *testing.T) {
 
 func TestListProjectsCountsUnfinishedTickets(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, store.Draft, store.Ready, store.Draft)
-	f.move(t, "2", store.Done)
+	f.work(t, domain.Draft, domain.Ready, domain.Draft)
+	f.move(t, "2", domain.Done)
 	rows, err := f.core.ListProjects(ctx)
 	if err != nil || len(rows) != 1 || rows[0].Unfinished != 2 {
 		t.Fatalf("list_projects: %+v, %v", rows, err)
