@@ -15,6 +15,10 @@ Recipes for changes that touch many packages. Each one starts with a single edit
 
 Examples to copy: `02bd5d9` (`keep_as_draft`: a human operation with UI) and `8964c77` (`get_model_choice`: Factory-only, with a `client/` method).
 
+## Change the Factory's landing
+
+Which `factory/` file holds what, and the `factorytest` world builders and test helpers (including which one gives the Home a Clone URL), are in [the Factory map](factory-map.md). Read it before opening `land.go` whole.
+
 ## Change a store file
 
 Records and their enums live in `domain` (`domain/domain.go`); the file shapes that persist them live in `store`. Change the record in `domain` and its file struct in `store`. Any change to a store file struct (`store/file.go`), its yaml tags or a checked value set bumps the store format, even an additive one. File structs and their encode/decode stay explicit on purpose, so write them by hand and don't propose a generator: see [ADR 0003](../adr/0003-the-store-is-yaml-files-loaded-into-memory.md). Run `go test ./core -run TestTheStoreSchemaMatchesItsSnapshot`: when it fails, it prints the four steps and the snapshot to diff against. The example to copy is `8964c77`'s `store/migrate_claim_model_test.go`.
