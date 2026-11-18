@@ -66,7 +66,8 @@ export const WORK: Work = { branch: "impl", commit: "abc123" };
 
 // defaultLanding is the Landing row of a new Project, with overrides
 // applied: the one place a new default field is added for the cases that
-// compare a whole row.
+// compare a whole row. An override of method or push names
+// repository_landing too.
 export function defaultLanding(overrides: Partial<Landing> = {}): Landing {
   return {
     method: "merge",
@@ -78,6 +79,14 @@ export function defaultLanding(overrides: Partial<Landing> = {}): Landing {
     pat_env: "ADO_PAT",
     uses_azure_repos_pat: false,
     base: "main",
+    methods: {
+      merge: { offers_push: true, offers_land_per_spec: true, shows_code_host: false, uses_azure_repos_pat: false },
+      branch: { offers_push: true, offers_land_per_spec: false, shows_code_host: false, uses_azure_repos_pat: false },
+      pull_request: { offers_push: false, offers_land_per_spec: true, shows_code_host: true, uses_azure_repos_pat: false },
+    },
+    runs_pull_request_watcher: false,
+    repository_landing: "merge",
+    pushes_nothing: false,
     watcher: { state: "not_reported" },
     open_pull_requests: [],
     ...overrides,
