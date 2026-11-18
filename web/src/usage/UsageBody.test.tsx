@@ -38,10 +38,10 @@ describe("UsageBody states", () => {
     expect(before(screen.getByText("Loading…"), strip())).toBe(true);
   });
 
-  it("shows an error as an alert above the tab strip and no Loading…", () => {
+  it("shows an error as an alert below the tab strip and no Loading…", () => {
     body({ error: "boom" });
     expect(screen.getByRole("alert")).toHaveTextContent("boom");
-    expect(before(screen.getByRole("alert"), strip())).toBe(true);
+    expect(before(strip(), screen.getByRole("alert"))).toBe(true);
     expect(screen.queryByText("Loading…")).toBeNull();
   });
 

@@ -71,6 +71,19 @@ export const Populated = pane(async (api, s) => {
   return spec.id;
 });
 
+// Tickets blocked by others: the graph draws a Blocker as an edge with an arrow.
+export const WithBlockers = pane(async (api, s) => {
+  const { spec, charting } = await api.submitMap("acme", "Offline mode");
+  await s.accepted("acme", charting.id);
+  const store = await s.ticket("acme", { title: "Which store", spec: spec.id, state: "Accepted", labels: ["wayfinder:grilling"] });
+  const cache = await s.ticket("acme", { title: "Try a cache", spec: spec.id, state: "In Review", labels: ["prototype"] });
+  const sync = await s.ticket("acme", { title: "How to sync", spec: spec.id, state: "Draft", labels: ["wayfinder:grilling"] });
+  await s.addBlocker("acme", cache, store);
+  await s.addBlocker("acme", sync, cache);
+  await api.editSpec("acme", spec.id, { body: BODY });
+  return spec.id;
+});
+
 // An action is under way, so Start and Guided are disabled.
 export const Busy = pane(async (api) => (await api.submitMap("acme", "Offline mode", true)).spec.id, { busy: true });
 

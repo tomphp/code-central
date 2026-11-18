@@ -33,6 +33,13 @@ const chips = (scope: HTMLElement) =>
 const card = (title: string) => within(screen.getByRole("main", { name: "Board" })).getByRole("link", { name: new RegExp(title) });
 const ticketPane = () => screen.getByRole("complementary", { name: "Ticket" });
 const repositoryRows = () => within(within(ticketPane()).getByRole("region", { name: "Repositories" })).getAllByRole("listitem");
+// rowTexts is each row's non-empty grid cells (repository, landing, PR, CI, commit), joined by a space.
+const rowTexts = () =>
+  repositoryRows().map((r) =>
+    Array.from(r.children, (c) => c.textContent ?? "")
+      .filter((t) => t !== "")
+      .join(" "),
+  );
 
 describe("a Ticket's Changed Repositories", () => {
   it("show on its card, live while In Progress, then settled by its finish", async () => {
@@ -50,11 +57,11 @@ describe("a Ticket's Changed Repositories", () => {
     const section = within(ticketPane()).getByRole("region", { name: "Repositories" });
     expect(section).toHaveTextContent("changed so far");
     expect(repositoryRows().map((r) => r.getAttribute("aria-label"))).toEqual(["api"]);
-    expect(repositoryRows()[0]).toHaveTextContent(`api ${ticket}@4f1c2d9`);
+    expect(rowTexts()[0]).toBe(`api ${ticket}@4f1c2d9`);
 
     await s.inReview("acme", ticket, SETTLED);
     expect(within(ticketPane()).getByRole("region", { name: "Repositories" })).not.toHaveTextContent("changed so far");
-    expect(repositoryRows().map((r) => r.textContent)).toEqual(["acme acme-3@9a8b7c6", "api acme-3@1234567"]);
+    expect(rowTexts()).toEqual(["acme acme-3@9a8b7c6", "api acme-3@1234567"]);
   });
 
   it("list branch@commit per Repository in the Accepted panel, each not landed yet", async () => {
@@ -63,7 +70,7 @@ describe("a Ticket's Changed Repositories", () => {
     await renderApp(w, `/?view=inbox&ticket=${ticket}`);
     const panel = within(ticketPane()).getByRole("region", { name: "Accepted" });
     expect(within(panel).getAllByRole("listitem").map((r) => r.textContent)).toEqual(["acme: acme-3@9a8b7c6d5e4f", "api: acme-3@1234567890ab"]);
-    expect(repositoryRows().map((r) => r.textContent)).toEqual(["acme acme-3@9a8b7c6 · not landed", "api acme-3@1234567 · not landed"]);
+    expect(rowTexts()).toEqual(["acme not landed acme-3@9a8b7c6", "api not landed acme-3@1234567"]);
   });
 
   it("show on the Spec page as the union of its Tickets'", async () => {

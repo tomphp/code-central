@@ -20,6 +20,14 @@ const meta = {
   title: "Inbox/NeedsMeLink",
   component: NeedsMeLink,
   args: { row: ticket, now, link: storyLink("code-central-492") },
+  // The station and line come from the parent group, coloured by its Reason.
+  decorators: [
+    (Story, { args }) => (
+      <div className={`line-group reason-${args.row.reason}`}>
+        <Story />
+      </div>
+    ),
+  ],
 } satisfies Meta<typeof NeedsMeLink>;
 export default meta;
 type Story = StoryObj<typeof meta>;

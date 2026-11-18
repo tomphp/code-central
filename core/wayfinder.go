@@ -8,7 +8,7 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// Wayfinder Labels (Spec 213, ADR 0016). A Map is a Spec labelled
+// Wayfinder Labels (Spec 213, ADR 0057). A Map is a Spec labelled
 // wayfinder:map, and its Tickets carry a Wayfinder Label for their type;
 // a Prototype is a Ticket labelled prototype. Like stage:, Code Central
 // reads them on the read side only: they choose a Ticket's Guide and
@@ -23,7 +23,7 @@ const MapLabel = WayfinderPrefix + "map"
 // PrototypeLabel marks a Ticket as a Prototype.
 const PrototypeLabel = "prototype"
 
-// RetroLabel marks a Ticket as a Retro (ADR 0040).
+// RetroLabel marks a Ticket as a Retro (ADR 0061).
 const RetroLabel = "retro"
 
 // LongLivedLabel marks a Spec as a Long-lived Spec, one that never
@@ -46,16 +46,16 @@ const (
 
 // WayfinderTypes are the Map's Ticket types, each named as its Label's
 // suffix.
-var WayfinderTypes = []NodeType{NodeChart, NodeGrilling, NodeResearch, NodeTask}
+func WayfinderTypes() []NodeType { return []NodeType{NodeChart, NodeGrilling, NodeResearch, NodeTask} }
 
 // NodeTypes are the node types: the WayfinderTypes, then prototype and
 // ticket.
-var NodeTypes = append(slices.Clone(WayfinderTypes), NodePrototype, NodeTicket)
+var NodeTypes = append(slices.Clone(WayfinderTypes()), NodePrototype, NodeTicket)
 
 // wayfinderNames are every name the wayfinder: prefix allows.
 var wayfinderNames = func() []string {
 	names := []string{"map"}
-	for _, t := range WayfinderTypes {
+	for _, t := range WayfinderTypes() {
 		names = append(names, string(t))
 	}
 	return names
@@ -78,10 +78,10 @@ func typeGuide(l string) (guide string, ok bool) {
 	if l == PrototypeLabel || l == RetroLabel {
 		return l, true
 	}
-	if name, ok := strings.CutPrefix(l, WayfinderPrefix); ok && slices.Contains(WayfinderTypes, NodeType(name)) {
+	if name, ok := strings.CutPrefix(l, WayfinderPrefix); ok && slices.Contains(WayfinderTypes(), NodeType(name)) {
 		return mapGuidePrefix + name, true
 	}
-	if name, ok := strings.CutPrefix(l, StagePrefix); ok && slices.Contains(Stages, StageName(name)) {
+	if name, ok := strings.CutPrefix(l, StagePrefix); ok && slices.Contains(Stages(), StageName(name)) {
 		return name, true
 	}
 	return "", false

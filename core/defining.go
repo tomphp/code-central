@@ -188,7 +188,7 @@ const (
 )
 
 // RecordKinds are the kinds of record.
-var RecordKinds = []RecordKind{RecordSpec, RecordTicket}
+func RecordKinds() []RecordKind { return []RecordKind{RecordSpec, RecordTicket} }
 
 // TargetView is a Spec's or Ticket's Labels and Tags, as the Label and
 // Tag operations return them.

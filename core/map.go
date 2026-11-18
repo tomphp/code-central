@@ -9,14 +9,16 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// Maps (Spec code-central-213, ADR 0016). A Map is a Spec labelled
+// Maps (Spec code-central-213, ADR 0057). A Map is a Spec labelled
 // wayfinder:map: the human submits its text, and Code Central creates the
 // Spec and its Charting Ticket in one staged write. Its Map block is
 // derived on the read side; nothing in it is stored.
 
 // MapSections are the Map body's level-2 headings, in order. They are
 // fixed, because the UI and the guided read parse them as Sections.
-var MapSections = []string{"Destination", "Notes", "Decisions so far", "Not yet specified", "Out of scope"}
+func MapSections() []string {
+	return []string{"Destination", "Notes", "Decisions so far", "Not yet specified", "Out of scope"}
+}
 
 // SubmitMapInput is submit_map's input: the Map's free text, whose first
 // line becomes the Spec's title.
@@ -88,7 +90,7 @@ func mapBody(text string) string {
 	var b strings.Builder
 	b.WriteString(strings.TrimRight(text, "\n"))
 	b.WriteString("\n")
-	for _, s := range MapSections {
+	for _, s := range MapSections() {
 		b.WriteString("\n## " + s + "\n")
 	}
 	return b.String()
@@ -142,7 +144,7 @@ func mapView(e *evaluation, s store.Spec, tickets []store.Ticket) *MapView {
 			v.NeedsYou++
 		}
 		v.CanWriteSpec = v.CanWriteSpec && finished(t.State)
-		if !slices.Contains(WayfinderTypes, NodeTypeOf(t.Labels)) || t.State == store.Cancelled {
+		if !slices.Contains(WayfinderTypes(), NodeTypeOf(t.Labels)) || t.State == store.Cancelled {
 			continue
 		}
 		v.Total++

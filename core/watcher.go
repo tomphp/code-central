@@ -132,9 +132,11 @@ const (
 )
 
 // WatcherProblems are the problems.
-var WatcherProblems = []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable,
-	ProblemIssuesDisabled, ProblemNoTriage, ProblemNoWrite, ProblemPATMissing, ProblemPATRejected,
-	ProblemProjectUnreadable, ProblemPATScope, ProblemQueryUnusable, ProblemTooManyWorkItems, ProblemCheckFailed, ProblemCrashed}
+func WatcherProblems() []WatcherProblem {
+	return []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable,
+		ProblemIssuesDisabled, ProblemNoTriage, ProblemNoWrite, ProblemPATMissing, ProblemPATRejected,
+		ProblemProjectUnreadable, ProblemPATScope, ProblemQueryUnusable, ProblemTooManyWorkItems, ProblemCheckFailed, ProblemCrashed}
+}
 
 // WatcherCheckResult is a Watcher's check mode's answer: no Problem when
 // it can watch, else what is wrong and its fix.
@@ -172,7 +174,9 @@ const (
 )
 
 // WatcherStates are the states a Watcher can be in.
-var WatcherStates = []WatcherState{WatcherNotReported, WatcherWatching, WatcherError}
+func WatcherStates() []WatcherState {
+	return []WatcherState{WatcherNotReported, WatcherWatching, WatcherError}
+}
 
 // WatcherView is a Project's Watcher's status, in its kind's settings.
 type WatcherView struct {

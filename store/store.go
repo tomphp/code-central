@@ -101,7 +101,7 @@ type Project struct {
 	RetrosSpec int
 	// AutoAccept is the Project's Auto-accept setting: the kinds it is on
 	// for, in AutoAcceptKinds order (ADR 0037). It is stored as on, so a
-	// Project stored without it reads every kind off (ADR 0034).
+	// Project stored without it reads every kind off (ADR 0059).
 	AutoAccept []AutoAcceptKind
 	// Repositories are the Project's Repositories in landing order (Spec
 	// code-central-848), the Home Repository among them. A Project stored
@@ -272,7 +272,7 @@ type StageGuides struct {
 	// line out.
 	SubagentExplorationOff bool
 	// ModelAssignmentOn turns Model Assignment on. It is stored as on so
-	// that a Project stored without it reads off (ADR 0034).
+	// that a Project stored without it reads off (ADR 0059).
 	ModelAssignmentOn bool
 }
 

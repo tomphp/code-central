@@ -85,7 +85,7 @@ var handlers = map[string]handlerFunc{
 		// agent door, names its parts, so it leaves it out as MCP does.
 		in := core.GetTicketInput{Ticket: core.Ref(r.PathValue("n")), Parts: q["part"]}
 		if len(in.Parts) == 0 {
-			in.Parts, in.WithModelChoice = core.TicketParts, true
+			in.Parts, in.WithModelChoice = core.TicketParts(), true
 		}
 		return c.GetTicket(r.Context(), r.PathValue("key"), in)
 	},
@@ -119,7 +119,7 @@ var handlers = map[string]handlerFunc{
 		// whole Ticket, with its Model Choice.
 		in.Full = true
 		if len(in.Parts) == 0 {
-			in.Parts, in.WithModelChoice = core.TicketParts, true
+			in.Parts, in.WithModelChoice = core.TicketParts(), true
 		}
 		return c.FindTicketViews(r.Context(), r.PathValue("key"), in)
 	},

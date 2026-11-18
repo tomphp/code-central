@@ -50,7 +50,7 @@ flowchart TB
   CIW & ISW & PRW --> EXT
 ```
 
-A second, test-only composition exists: `world/` + `cmd/corewasm` build the real Core, `httpapi` and `mcp` over an in-memory store to WebAssembly, and the UI's tests and stories run against that instead of a hand-written fake (ADR 0039, 0044).
+A second, test-only composition exists: `world/` + `cmd/corewasm` build the real Core, `httpapi` and `mcp` over an in-memory store to WebAssembly, and the UI's tests and stories run against that instead of a hand-written fake (ADR 0060, 0044).
 
 ## Modules
 
@@ -106,13 +106,13 @@ Good:
 
 Anti-patterns and leaks found:
 
-1. **`factory` imports `cli`** (`factory/factory.go:18`) for `ResolveProject` and `ServiceURL`. The Factory depends on the whole command shell.
+1. ~~**`factory` imports `cli`** for `ResolveProject` and `ServiceURL`.~~ **Fixed:** both now live in `client`, and `factory/imports_test.go` guards against the import coming back.
 2. **`httpapi` and `client` import `store`** for domain enums (`httpapi/httpapi.go`, `httpapi/rounds.go`, `client/rounds.go`), though they should be HTTP-only (ADR 0002/0004). Root cause: `store` holds the domain model (`Ticket`, `State`, `Landing`…) as well as persistence, and 69 `core` files import it.
 3. **`cli` is a god package** (~16 internal imports): commands, `serve` composition (store, core, server, supervisor), service install, `init` scaffolding.
 4. **Per-operation wiring is duplicated** across `httpapi` (routes + handlers), `mcp` (tools), `client` and `cli`. Only tests catch drift. Ack-versus-full and `get_ticket` parts are handled per door.
 5. **`*core.Core` is a god object** and a concrete dependency of both transports, so they can't be tested against a fake.
 6. **Transport policy is split**: `mcp` records usage and forces the Actor; `server.Guard` sets the Actor for HTTP.
-7. **Provider knowledge in core**: `core/ci.go` imports `azdourl` and holds provider validators.
+7. **Provider knowledge in core** *(mostly resolved)*: remote-URL and repository-name parsing now lives in the leaf `codehost` (`Of`, `ValidGitHubRepository`, `ValidGitHubWorkflow`), and `core.CodeHost` stays the wire enum, converted from `codehost.Host`. What remains is `core` calling `azdourl` to validate Azure DevOps URLs, which stays a separate leaf.
 8. **Watcher plumbing**: each watcher has its own check/config/poll trio; `issuewatcher` is hard-wired to `gh`. (Done: `RateLimitError` and `FirstLine` now live in the leaf package `ratelimit`, so `gh` and `azdo` no longer import `watchers`, and the shared test harness is `watchers/watchertest`.)
 9. **Landing rules straddle packages**: `store.Landing.Normalized` versus `core.LandingPolicy`. The UI's `LandingMethodSection.tsx` also branches on the method, though ADR 0039 says no caller should.
 10. **Frontend duplicates some derived rules** (`edit/editable.ts`, `requirement/progress.ts`, `inbox/describeSpec.ts`). Mild.
@@ -122,7 +122,7 @@ Anti-patterns and leaks found:
 
 Roughly in order of value for effort. Each would be its own Ticket.
 
-1. Move `ResolveProject` and `ServiceURL` out of `cli` into `home` or `client`, so `factory` stops importing `cli`. *(small)*
+1. ~~Move `ResolveProject` and `ServiceURL` out of `cli` into `client`, so `factory` stops importing `cli`.~~ **Fixed.**
 2. ~~Move `RateLimitError` and `FirstLine` out of `watchers` into a leaf package. Move `ciwatchertest` to a shared watcher test package.~~ *(done: `ratelimit` and `watchers/watchertest`)*
 3. Split `store` into persistence and a domain-model package (`model`/`domain`) and re-home `LandingPolicy` and `Normalized` with it, so `httpapi`, `client` and `cli` no longer link persistence. *(medium, mechanical)*
 4. Move server composition from `cli/serve.go` into an `app`/`service` package. *(medium)*
@@ -130,8 +130,8 @@ Roughly in order of value for effort. Each would be its own Ticket.
 6. Give transports narrow interfaces over core (as `notify` does), and centralise usage/actor handling in one middleware. *(medium)*
 7. Have Go views carry derived flags (`editable`, stage progress, spec kind) and landing-method capabilities, so the UI's copies go away. *(medium)*
 8. Extract a `codehost` abstraction shared by `ciwatcher` and `pullrequestwatcher`, and decide whether `issuewatcher` needs a `Tracker` interface before a second tracker arrives. *(only if a second host/tracker is planned)*
-9. Move provider URL parsing out of `core`. *(small)*
-10. Split `factory/land.go`, `run.go` and `specbranch.go` into `landing` and `session`. Make `core`'s mutable enum slices functions. *(medium)*
-11. Hygiene: CI check that `make wiretypes` leaves no diff, finish ADR 0044's migration off `waitFor`, split the biggest UI files and tests, and renumber the duplicate ADRs (0010, 0016, 0032, 0034, 0039, 0040, 0047).
+9. ~~Move provider URL parsing out of `core`.~~ Done: `codehost` holds the remote-URL and repository-name parsing; `azdourl` stays beside it. *(small)*
+10. Split `factory/land.go`, `run.go` and `specbranch.go` into `landing` and `session`. Make `core`'s mutable enum slices functions (done; only `Operations` and `Workflow` remain package-level lists). *(medium)*
+11. Hygiene: CI check that `make wiretypes` leaves no diff, finish ADR 0044's migration off `waitFor`, split the biggest UI files and tests.
 
 Splitting `core` itself is the hardest item, because every file is a method on `*Core`. Items 5 and 6 shrink what depends on it and make a later split cheaper, so do them first.

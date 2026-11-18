@@ -1,6 +1,6 @@
 # A Repository with no Clone URL is local-only: never cloned, skipped by Push and refused under Pull Request
 
-[ADR 0047](0047-a-projects-repositories-are-a-project-setting-in-the-store-not-a-file-in-the-home-repository.md) made every Repository carry a Clone URL and ruled out a per-Repository Landing Method or Push remote. Not every repository the human works in has been pushed anywhere: some live only on their machine, and work lands in them just by merging into their base. Such a repository couldn't be added without inventing a remote, which the Factory would then clone from, check its Push remote against and push to.
+[ADR 0062](0062-a-projects-repositories-are-a-project-setting-in-the-store-not-a-file-in-the-home-repository.md) made every Repository carry a Clone URL and ruled out a per-Repository Landing Method or Push remote. Not every repository the human works in has been pushed anywhere: some live only on their machine, and work lands in them just by merging into their base. Such a repository couldn't be added without inventing a remote, which the Factory would then clone from, check its Push remote against and push to.
 
 So a Repository other than the Home Repository needs a Clone URL, a local path or both. One with no Clone URL is local-only:
 
@@ -9,7 +9,7 @@ So a Repository other than the Home Repository needs a Clone URL, a local path o
 - Pull Request refuses it, in both directions: a Repository with no Clone URL can't be added or have its Clone URL cleared while Pull Request is on, and Pull Request can't be turned on while any Repository has none.
 - CI Tracking starts it Not watched.
 
-This amends ADR 0047's "every Repository has a Clone URL". The Landing Method stays Project-wide and the skip is not a setting: it follows from the missing Clone URL. The Home Repository is unchanged. (Amended: the Home can be local-only too, [ADR 0053](0053-the-home-repository-can-be-local-only-and-not-watched-derived-from-its-clone-having-no-push-remote.md), and Landing is no longer Project-wide, [ADR 0054](0054-landing-has-a-project-default-and-each-repository-may-have-its-own-landing-and-push-remote.md).)
+This amends ADR 0062's "every Repository has a Clone URL". The Landing Method stays Project-wide and the skip is not a setting: it follows from the missing Clone URL. The Home Repository is unchanged. (Amended: the Home can be local-only too, [ADR 0053](0053-the-home-repository-can-be-local-only-and-not-watched-derived-from-its-clone-having-no-push-remote.md), and Landing is no longer Project-wide, [ADR 0054](0054-landing-has-a-project-default-and-each-repository-may-have-its-own-landing-and-push-remote.md).)
 
 Under Push, "Done" now means "on the remote wherever there is one". A Ticket that changed a pushed Repository and a local-only one is Done once the first is pushed (and green, with CI Tracking) and the second is merged.
 

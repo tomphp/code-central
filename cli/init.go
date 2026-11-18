@@ -16,11 +16,10 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// mcpFile is the file init writes and shell commands read the key from.
-const mcpFile = ".mcp.json"
-
-// serverName is the .mcp.json server entry init owns.
-const serverName = "code-central"
+const (
+	mcpFile    = client.MCPFile
+	serverName = client.ServerName
+)
 
 // mcpURL is the server URL for a Project Key, exactly as written into
 // .mcp.json. The shape is stable across versions.
@@ -65,12 +64,12 @@ func runInit(ctx context.Context, e Env, args []string) error {
 	}
 
 	path := filepath.Join(root, mcpFile)
-	doc, err := readMCP(path)
+	doc, err := client.ReadMCP(path)
 	if err != nil {
 		return err
 	}
 	proposed := ""
-	if k, ok := keyIn(doc); ok {
+	if k, ok := client.KeyIn(doc); ok {
 		switch p, err := c.GetProject(ctx, k); {
 		case err == nil:
 			// A known key: leave .mcp.json alone and refresh the rest.
@@ -168,16 +167,7 @@ func isCode(err error, code core.Code) bool {
 	return errors.As(err, &ce) && ce.Code == code
 }
 
-func serviceURL(e Env) string { return ServiceURL(e.Getenv) }
-
-// ServiceURL is the service every client talks to: CODE_CENTRAL_URL, else
-// client.DefaultURL.
-func ServiceURL(getenv func(string) string) string {
-	if u := getenv("CODE_CENTRAL_URL"); u != "" {
-		return u
-	}
-	return client.DefaultURL
-}
+func serviceURL(e Env) string { return client.ServiceURL(e.Getenv) }
 
 // gitOut runs git in dir and returns its trimmed output.
 func gitOut(dir string, args ...string) (string, error) {
@@ -234,62 +224,6 @@ func repoName(remote string) string {
 		s = s[i+1:]
 	}
 	return s
-}
-
-// readMCP reads .mcp.json as a generic document, so a merge keeps every
-// other key. A missing file is an empty document.
-func readMCP(path string) (map[string]any, error) {
-	b, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return map[string]any{}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	doc := map[string]any{}
-	if err := json.Unmarshal(b, &doc); err != nil {
-		return nil, fmt.Errorf("%s isn't valid JSON (%v); fix it and run init again", path, err)
-	}
-	return doc, nil
-}
-
-// keyIn is the Project Key in a .mcp.json document's code-central entry.
-func keyIn(doc map[string]any) (string, bool) {
-	servers, _ := doc["mcpServers"].(map[string]any)
-	entry, _ := servers[serverName].(map[string]any)
-	u, _ := entry["url"].(string)
-	i := strings.LastIndex(u, "/p/")
-	if i < 0 || !strings.HasSuffix(u, "/mcp") {
-		return "", false
-	}
-	key := strings.TrimSuffix(u[i+len("/p/"):], "/mcp")
-	if key == "" || strings.Contains(key, "/") {
-		return "", false
-	}
-	return key, true
-}
-
-// nearestKey is the Project Key in the nearest .mcp.json at or above dir
-// that has a code-central entry, or "" if there is none.
-func nearestKey(dir string) (string, error) {
-	for d := dir; d != ""; {
-		path := filepath.Join(d, mcpFile)
-		if _, err := os.Stat(path); err == nil {
-			doc, err := readMCP(path)
-			if err != nil {
-				return "", err
-			}
-			if k, ok := keyIn(doc); ok {
-				return k, nil
-			}
-		}
-		parent := filepath.Dir(d)
-		if parent == d {
-			break
-		}
-		d = parent
-	}
-	return "", nil
 }
 
 // writeMCP merges the code-central entry for key into doc and writes it.

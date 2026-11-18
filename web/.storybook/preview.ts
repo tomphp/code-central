@@ -10,7 +10,12 @@ import "../src/focus/focus.css";
 import "../src/options/options.css";
 import "../src/usage/usage.css";
 
+// The web fonts load lazily, once text first uses them, so a capture of a story with little text could
+// shoot before they arrive and show the fallback. Load them before each story renders.
+const fonts = ['600 12px "Red Hat Mono Variable"', '400 14px "Hanken Grotesk Variable"', '600 14px "Hanken Grotesk Variable"'];
+
 const preview: Preview = {
+  loaders: [async () => { await Promise.all(fonts.map((f) => document.fonts.load(f))); }],
   parameters: {
     controls: { matchers: { color: /(background|color)$/i } },
   },

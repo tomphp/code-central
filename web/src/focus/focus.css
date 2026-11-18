@@ -22,6 +22,10 @@
 .focus-requirement { margin: 0 0 8px; font-size: 20px; color: var(--muted); }
 .focus-badges { margin: 0 0 8px; display: flex; gap: 6px; flex-wrap: wrap; }
 .focus-why { margin: 0 0 24px; font-size: 20px; }
+/* In the Focus popup the title is the one large line: the ID and the wait
+   step down to small slate type. */
+.modal-card .focus-ticket .tid { font-size: 12.5px; }
+.modal-card .focus-why { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .focus-repository-missing { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; }
 .focus-repository-missing dt { color: var(--muted); }
 .focus-repository-missing dd { margin: 0; overflow-wrap: anywhere; }
@@ -49,6 +53,10 @@
 .focus-clear .btn { margin-top: 20px; }
 /* A brief note, under the header: the item on screen was dealt with
    elsewhere, or a Requirement or Map was added. */
+/* In Focus Mode the note floats over the top of the 760px column in a
+   zero-height slot, so the item doesn't shift when it shows. */
+.focus-note-slot { position: relative; width: 100%; max-width: 760px; height: 0; margin: 0 auto; padding: 0 24px; box-sizing: border-box; z-index: 1; }
+.focus-note-slot .focus-note { position: absolute; left: 24px; right: 24px; top: 8px; box-sizing: border-box; margin: 0; }
 .focus-note { margin: 16px auto 0; padding: 6px 14px; border-radius: 6px; background: var(--border); color: var(--muted); font-size: 16px; }
 /* The Activity Dashboard, in place of All clear: two State blocks side by
    side, each with its number in big type, and the In Progress Tickets
@@ -56,8 +64,8 @@
 .dashboard-blocks { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 24px; }
 .dashboard-block { --sc: var(--s-ready); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 16px; border-radius: 16px; background: var(--sc); color: var(--on-line); min-height: 30vh; }
 .dashboard-block.state-in-progress { --sc: var(--s-in-progress); }
-/* Not the .ci-running badge's ink (styles.css): the block keeps the other blocks' text colour. */
-.dashboard-block.ci-running { --sc: var(--ci-running); color: var(--on-line); border-color: transparent; padding: 0; }
+/* In Progress Cobalt, as the .ci-running badge (styles.css); the block keeps the other blocks' text colour. */
+.dashboard-block.ci-running { --sc: var(--s-in-progress); color: var(--on-line); border-color: transparent; padding: 0; }
 .dashboard-block-link { flex: 1; align-self: stretch; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 16px; border-radius: inherit; color: inherit; text-decoration: none; }
 .dashboard-state { margin-top: 8px; font-size: 24px; font-weight: 600; }
 .dashboard-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -71,9 +79,9 @@
 .dashboard-entry-detail { font-size: 15px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* A CI Running entry: its Ticket link fills the card, and the run's GitHub
    link sits beside it, at the right. */
-.dashboard-ci-entry { --sc: var(--ci-running); display: flex; align-items: center; gap: 12px; padding-right: 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); }
+.dashboard-ci-entry { --sc: var(--s-in-progress); display: flex; align-items: flex-start; gap: 12px; padding-right: 16px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); }
 .dashboard-ci-entry:hover { border-color: var(--muted); }
 .dashboard-ci-entry > a:first-child { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; color: var(--text); text-decoration: none; }
 .dashboard-ci-entry { font-variant-numeric: tabular-nums; }
-.dashboard-ci-github { font-size: 15px; white-space: nowrap; }
+.dashboard-ci-github { font-size: 15px; white-space: nowrap; padding-top: 12px; }
 .dashboard-entry { --sc: var(--s-in-progress); border-radius: 10px; }

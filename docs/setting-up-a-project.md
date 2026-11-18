@@ -342,7 +342,7 @@ Everything else works as for GitHub Actions, with these differences:
 - A run's **Workflow** is its pipeline's name, without its folder, and its name is the build number. Ignored workflows and CI Rules match pipeline names.
 - Runs are matched to a Ticket by its pushed commit, whatever repository in the project they built. Only the project's latest 200 builds are searched, which is plenty for a commit that is still waiting.
 - A run's jobs are the build's jobs; stages and tasks aren't listed.
-- A run that **partially succeeded** counts as **passed**, and its row says **Partially succeeded** with a warning mark.
+- A run that **partially succeeded** counts as **passed**, and its row says **partially succeeded**, with a dashed border.
 - **Re-run failed jobs** asks Azure DevOps to retry the build's failed jobs, as a new attempt of the same build.
 - Azure DevOps timing a job out reports it as failed or cancelled, and Code Central takes that as given.
 - Links read **View on Azure DevOps**.
@@ -375,7 +375,7 @@ Under **Merge + Push**, CI Tracking gates landing: the Factory pushes an accepte
 
 **CI**, in the **Admin** section of the Inbox's left pane above **Usage**, opens the CI view on the Project chosen in the left pane, or on **All Projects** when none is (with one active Project, the Sole Project, it opens on that Project and its picker doesn't offer All Projects). Its **Projects** picker changes that, and goes in the address (`/?view=ci&project=acme`); **Back to the Inbox** returns you to where you were. All Projects covers every active Project with CI Tracking on.
 
-At the top, each Project's CI Watcher status: Watching its repository (or Azure DevOps project URL), Starting, or an error with its fix, as in the CI section; a Project with CI Tracking off says so, linking its Project Options. Below it, the CI Runs: those still running first, newest first, then those that finished in the last 7 days, the latest to finish first. Each row has the workflow's name and file, branch, short commit, status, how long it ran (so far, while running), the Ticket or CI Rule it is tracked against, which opens it, and **View on GitHub** (**View on Azure DevOps** for an Azure Pipelines Project). A run that partially succeeded shows as **Partially succeeded**, in the passed colour with a warning mark. A re-run shows its latest attempt. Runs of Ignored workflows are greyed and marked **ignored**. The view follows the live feed: a run that changes, or a new one, pulses.
+At the top, each Project's CI Watcher status: Watching its repository (or Azure DevOps project URL), Starting, or an error with its fix, as in the CI section; a Project with CI Tracking off says so, linking its Project Options. Below it, the CI Runs: those still running first, newest first, then those that finished in the last 7 days, the latest to finish first. Each row has the workflow's name and file, branch, short commit, status, how long it ran (so far, while running), the Ticket or CI Rule it is tracked against, which opens it, and **View on GitHub** (**View on Azure DevOps** for an Azure Pipelines Project). A run that partially succeeded shows as **partially succeeded**, in the passed colour with a dashed border. A re-run shows its latest attempt. Runs of Ignored workflows are greyed and marked **ignored**. The view follows the live feed: a run that changes, or a new one, pulses.
 
 ```
 Acme API: Watching acme/acme-api.
@@ -589,7 +589,7 @@ curl -X POST localhost:7733/api/p/acme-api/set_model_assignment -d '{"on": true}
 
 A change applies from the next Claim and the next `get_stage_guide` call. A session already running, or one resumed after a Round, keeps the guide in the system prompt it started with, unlike Models, which apply from each Ticket's next turn. To read the guide your Project's agents get, `GET /api/p/{key}/stage-guides/{stage}` or `code-central get-stage-guide <stage>`, which prints the configured Project's guide (`--project` names another).
 
-Another optional line follows the same pattern: one named setting, whose zero value may keep the line in or leave it out, and one fragment in `core/stageguides/fragments/`, which a placeholder line in the guide (`<!-- subagent-exploration -->`, `<!-- model-assignment -->`) marks the place of. [ADR 0034](adr/0034-a-stage-guide-can-vary-by-project-only-through-named-project-settings-that-the-human-sets.md) records the decision.
+Another optional line follows the same pattern: one named setting, whose zero value may keep the line in or leave it out, and one fragment in `core/stageguides/fragments/`, which a placeholder line in the guide (`<!-- subagent-exploration -->`, `<!-- model-assignment -->`) marks the place of. [ADR 0059](adr/0059-a-stage-guide-can-vary-by-project-only-through-named-project-settings-that-the-human-sets.md) records the decision.
 
 ## Auto-accept
 

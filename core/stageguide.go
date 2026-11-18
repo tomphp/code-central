@@ -10,7 +10,7 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// Stage Guides (Spec 66, ADR 0007; Spec 213, ADR 0016). Code Central
+// Stage Guides (Spec 66, ADR 0007; Spec 213, ADR 0057). Code Central
 // owns what each Stage, Map Ticket and Prototype must produce and how to
 // finish it; a Factory owns how to run the agent. The guides ship with
 // the service, like the workflow prose, and name only Code Central
@@ -28,10 +28,10 @@ const mapGuidePrefix = "map-"
 // type, prototype, retro, then implementation.
 var GuideNames = func() []string {
 	var names []string
-	for _, s := range Stages {
+	for _, s := range Stages() {
 		names = append(names, string(s))
 	}
-	for _, t := range WayfinderTypes {
+	for _, t := range WayfinderTypes() {
 		names = append(names, mapGuidePrefix+string(t))
 	}
 	return append(names, PrototypeLabel, RetroLabel, ImplementationStage)
@@ -47,7 +47,7 @@ var stageGuides embed.FS
 //go:embed stageguides/fragments/*.md
 var guideFragments embed.FS
 
-// An optional guide line (ADR 0034) is one named Project setting and one
+// An optional guide line (ADR 0059) is one named Project setting and one
 // fragment: the guide holds a placeholder line, and the fragment's text,
 // already a whole bullet, replaces it when the setting is on; when it is
 // off, the placeholder line is removed whole.

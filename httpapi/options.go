@@ -26,8 +26,8 @@ func init() {
 		var in core.SetOptionsInput
 		if err := decodeBody(r, &in); err != nil {
 			// An unknown key is an unknown Option: name the ones there are.
-			if e, ok := err.(*core.Error); ok && e.Field != "" && !slices.Contains(core.OptionNames, e.Field) {
-				e.Message += fmt.Sprintf("; %q is not an Option (the Options are: %s)", e.Field, strings.Join(core.OptionNames, ", "))
+			if e, ok := err.(*core.Error); ok && e.Field != "" && !slices.Contains(core.OptionNames(), e.Field) {
+				e.Message += fmt.Sprintf("; %q is not an Option (the Options are: %s)", e.Field, strings.Join(core.OptionNames(), ", "))
 			}
 			return nil, err
 		}

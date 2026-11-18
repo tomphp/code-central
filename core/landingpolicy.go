@@ -52,11 +52,13 @@ const (
 )
 
 // RepositoryLandings lists every RepositoryLanding, the default first.
-var RepositoryLandings = []RepositoryLanding{RepositoryLandingDefault, RepositoryLandingMerge, RepositoryLandingMergePush,
-	RepositoryLandingBranch, RepositoryLandingBranchPush, RepositoryLandingPullRequest}
+func RepositoryLandings() []RepositoryLanding {
+	return []RepositoryLanding{RepositoryLandingDefault, RepositoryLandingMerge, RepositoryLandingMergePush,
+		RepositoryLandingBranch, RepositoryLandingBranchPush, RepositoryLandingPullRequest}
+}
 
 // Valid reports whether l is one of the RepositoryLandings.
-func (l RepositoryLanding) Valid() bool { return slices.Contains(RepositoryLandings, l) }
+func (l RepositoryLanding) Valid() bool { return slices.Contains(RepositoryLandings(), l) }
 
 // repositoryLandingOf is the RepositoryLanding of a Landing Method with
 // its Push option, normalised: Pull Request implies Push.

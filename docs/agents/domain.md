@@ -38,6 +38,8 @@ Multi-context repo (presence of `GLOSSARY-MAP.md` at the root):
         └── docs/adr/
 ```
 
+ADR numbers are unique: the next ADR's number is the highest in `docs/adr/` plus one (`ls docs/adr | tail -1`), and never one already taken. Check `ls docs/adr | cut -c1-4 | uniq -d` prints nothing.
+
 ## Use the glossary's vocabulary
 
 When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in `GLOSSARY.md`. Don't drift to synonyms the glossary explicitly avoids.

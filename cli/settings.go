@@ -14,7 +14,7 @@ import (
 // settings are the local, machine-only settings serve reads at startup
 // from $XDG_CONFIG_HOME/code-central/settings.yaml (falling back to
 // ~/.config/code-central/settings.yaml, where ~ is HOME or else the
-// profile folder: ADR 0010). They never live in a repository,
+// profile folder: ADR 0056). They never live in a repository,
 // so changing one never changes a committed file. A missing file means
 // the defaults; an unknown key or bad value stops serve, naming the file.
 // Add new settings as fields here, defaulted in loadSettings.

@@ -105,7 +105,7 @@ var Workflow = []Action{
 	{Name: failFinish, From: []store.State{store.InReview, store.Accepted}, To: store.Failed, Who: FactoryMove,
 		Requires: "a Failure Report's four parts; from Accepted only while landed nowhere"},
 	// implement is the other way to accept a Requirement's spec Stage
-	// (ADR 0016): valid only on that Stage, which core checks.
+	// (ADR 0057): valid only on that Stage, which core checks.
 	{Name: "implement", From: []store.State{store.InReview}, To: store.Done, Who: HumanActor,
 		Requires: "nothing; only on a spec Stage In Review: accepts it, creates one Ready implementation Ticket for the whole Spec and Cancels the tickets Stage with that Ticket as its Replacement",
 		NextStep: "The spec Stage is Done and the tickets Stage is Cancelled, and <id> now builds the whole Spec."},

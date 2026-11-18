@@ -27,7 +27,7 @@ const (
 )
 
 // Stages are the three Stages in order.
-var Stages = []StageName{StageGrilling, StageSpec, StageTickets}
+func Stages() []StageName { return []StageName{StageGrilling, StageSpec, StageTickets} }
 
 // StageLabel is the Label that marks a Ticket as the named Stage.
 func StageLabel(stage StageName) string { return StagePrefix + string(stage) }
@@ -36,7 +36,7 @@ func StageLabel(stage StageName) string { return StagePrefix + string(stage) }
 func checkStageLabels(field string, labels []string) error {
 	for _, l := range labels {
 		name, ok := strings.CutPrefix(l, StagePrefix)
-		if ok && !slices.Contains(Stages, StageName(name)) {
+		if ok && !slices.Contains(Stages(), StageName(name)) {
 			return invalid(field, "%q uses the reserved %q prefix; the only Stage Labels are stage:grilling, stage:spec and stage:tickets", l, StagePrefix)
 		}
 	}
@@ -109,16 +109,16 @@ func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequire
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		stages, mapID := Stages, ""
+		stages, mapID := Stages(), ""
 		if in.SkipGrilling {
-			stages = Stages[1:]
+			stages = Stages()[1:]
 		}
 		if in.Map != "" {
 			m, err := finishedMap(w, key, in.Map)
 			if err != nil {
 				return err
 			}
-			stages, mapID = Stages[1:], DisplayID(key, m.Number)
+			stages, mapID = Stages()[1:], DisplayID(key, m.Number)
 		}
 		sp := store.Spec{Title: title, Body: in.Text}
 		if mapID != "" {
@@ -262,7 +262,7 @@ type BuildProgress struct {
 // implementation Ticket.
 func StageOf(labels []string) StageName {
 	for _, l := range labels {
-		if name, ok := strings.CutPrefix(l, StagePrefix); ok && slices.Contains(Stages, StageName(name)) {
+		if name, ok := strings.CutPrefix(l, StagePrefix); ok && slices.Contains(Stages(), StageName(name)) {
 			return StageName(name)
 		}
 	}
@@ -285,7 +285,7 @@ func requirementView(e *evaluation, s store.Spec, tickets []store.Ticket) *Requi
 		return nil
 	}
 	slices.SortStableFunc(stages, func(a, b store.Ticket) int {
-		return slices.Index(Stages, StageOf(a.Labels)) - slices.Index(Stages, StageOf(b.Labels))
+		return slices.Index(Stages(), StageOf(a.Labels)) - slices.Index(Stages(), StageOf(b.Labels))
 	})
 	// claimable is a Ticket a Factory could claim now; one waiting on the
 	// human doesn't count.
