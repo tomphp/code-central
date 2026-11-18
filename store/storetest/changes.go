@@ -35,9 +35,9 @@ func runChanges(t *testing.T, f Factory) {
 	t.Run("a store never hears its own changes", func(t *testing.T) {
 		s := f.New(t)
 		seedProject(t, s)
-		heard := hear(s)
+		heard := Hear(s)
 		put(t, s, announcing(1, true))
-		nothingHeard(t, heard)
+		NothingHeard(t, heard)
 	})
 
 	if f.Second == nil {
@@ -48,15 +48,15 @@ func runChanges(t *testing.T, f Factory) {
 		a := f.New(t)
 		seedProject(t, a)
 		b := f.Second(t, a)
-		heard := hear(b)
+		heard := Hear(b)
 		put(t, a, func(w store.Writer) error {
 			if err := announcing(1, true)(w); err != nil {
 				return err
 			}
-			nothingHeard(t, heard)
+			NothingHeard(t, heard)
 			return nil
 		})
-		if got, want := nextHeard(t, heard), ticketChanged(1, true); got != want {
+		if got, want := NextHeard(t, heard), ticketChanged(1, true); got != want {
 			t.Fatalf("heard %+v, want %+v", got, want)
 		}
 	})
@@ -65,15 +65,15 @@ func runChanges(t *testing.T, f Factory) {
 		a := f.New(t)
 		seedProject(t, a)
 		b := f.Second(t, a)
-		heardByA, heardByB := hear(a), hear(b)
+		heardByA, heardByB := Hear(a), Hear(b)
 		put(t, a, announcing(1, true))
-		if got, want := nextHeard(t, heardByB), ticketChanged(1, true); got != want {
+		if got, want := NextHeard(t, heardByB), ticketChanged(1, true); got != want {
 			t.Fatalf("b heard %+v, want %+v", got, want)
 		}
 		put(t, b, announcing(2, false))
 		// A Store hears Changes in the order they commit, so a's own would
 		// come first.
-		if got, want := nextHeard(t, heardByA), ticketChanged(2, false); got != want {
+		if got, want := NextHeard(t, heardByA), ticketChanged(2, false); got != want {
 			t.Fatalf("a heard %+v first, want b's %+v", got, want)
 		}
 	})
@@ -82,7 +82,7 @@ func runChanges(t *testing.T, f Factory) {
 		a := f.New(t)
 		seedProject(t, a)
 		b := f.Second(t, a)
-		heard := hear(b)
+		heard := Hear(b)
 		failed := errors.New("failed after announcing")
 		err := a.Update(func(w store.Writer) error {
 			if err := announcing(1, true)(w); err != nil {
@@ -93,18 +93,20 @@ func runChanges(t *testing.T, f Factory) {
 		if !errors.Is(err, failed) {
 			t.Fatalf("update: %v", err)
 		}
-		nothingHeard(t, heard)
+		NothingHeard(t, heard)
 	})
 }
 
-// hear is the Changes s delivers, as they come.
-func hear(s store.Store) <-chan store.Change {
+// Hear is the Changes s delivers, as they come.
+func Hear(s store.Store) <-chan store.Change {
 	heard := make(chan store.Change, 64)
 	s.Changes(func(c store.Change) { heard <- c })
 	return heard
 }
 
-func nextHeard(t *testing.T, heard <-chan store.Change) store.Change {
+// NextHeard is the next Change heard, failing t when none comes within
+// a few seconds.
+func NextHeard(t *testing.T, heard <-chan store.Change) store.Change {
 	t.Helper()
 	select {
 	case c := <-heard:
@@ -115,7 +117,8 @@ func nextHeard(t *testing.T, heard <-chan store.Change) store.Change {
 	}
 }
 
-func nothingHeard(t *testing.T, heard <-chan store.Change) {
+// NothingHeard fails t if a Change is heard within a moment.
+func NothingHeard(t *testing.T, heard <-chan store.Change) {
 	t.Helper()
 	select {
 	case c := <-heard:

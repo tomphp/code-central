@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"strconv"
 	"testing"
+	"time"
 )
 
 // SetSQLiteFormat writes format into the closed SQLite Store at path, as
@@ -58,4 +59,12 @@ func DropPostgresChanges(t testing.TB, s *SQLStore) {
 	if dropped == 0 {
 		t.Fatal("no connection listening for Changes")
 	}
+}
+
+// SetListenCheck makes a LISTEN connection ping the database after d
+// without a notice, until t ends.
+func SetListenCheck(t testing.TB, d time.Duration) {
+	was := listenCheck
+	listenCheck = d
+	t.Cleanup(func() { listenCheck = was })
 }

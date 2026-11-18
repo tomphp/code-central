@@ -34,8 +34,8 @@ const (
 
 // listenCheck is how long the LISTEN connection waits for a notice before
 // it pings the database, so a connection that died without a word is
-// found and made again.
-const listenCheck = 30 * time.Second
+// found and made again. A variable for the tests alone.
+var listenCheck = 30 * time.Second
 
 // notice is a Change as it goes over the channel, with the ID of the
 // service that sent it.

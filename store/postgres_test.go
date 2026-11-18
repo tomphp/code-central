@@ -168,22 +168,11 @@ func TestAPostgresStoreHearsEveryProjectChangedAfterItsListenConnectionDrops(t *
 			t.Fatal(err)
 		}
 	}
-	heard := make(chan store.Change, 16)
-	b.Changes(func(c store.Change) { heard <- c })
-	next := func() store.Change {
-		t.Helper()
-		select {
-		case c := <-heard:
-			return c
-		case <-time.After(15 * time.Second):
-			t.Fatal("no Change heard")
-			return store.Change{}
-		}
-	}
+	heard := storetest.Hear(b)
 	store.DropPostgresChanges(t, b)
 	got := map[string]store.Change{}
 	for range 2 {
-		c := next()
+		c := storetest.NextHeard(t, heard)
 		got[c.Project] = c
 	}
 	for _, key := range []string{"acme", "beta"} {
@@ -191,14 +180,41 @@ func TestAPostgresStoreHearsEveryProjectChangedAfterItsListenConnectionDrops(t *
 			t.Fatalf("after the drop, heard %+v for %s, want %+v", got[key], key, want)
 		}
 	}
-	announced := store.Change{Project: "acme", Type: events.ProjectChanged}
+	announce(t, a, store.Change{Project: "acme", Type: events.ProjectChanged})
+	if c, want := storetest.NextHeard(t, heard), (store.Change{Project: "acme", Type: events.ProjectChanged}); c != want {
+		t.Fatalf("after reconnecting, heard %+v, want %+v", c, want)
+	}
+}
+
+// A LISTEN connection that hears nothing for a while pings the database
+// rather than taking the silence for a drop: it hears no project-wide
+// Changes, and still hears the other services'.
+func TestAQuietPostgresListenConnectionIsKeptAndStillHears(t *testing.T) {
+	store.SetListenCheck(t, 50*time.Millisecond)
+	url := storetest.FreshPostgres(t)
+	a, b := openPostgres(t, url), openPostgres(t, url)
 	if err := a.Update(func(w store.Writer) error {
-		w.Announce(announced)
-		return nil
+		return w.PutProject(domain.Project{Key: "acme", DisplayName: "acme", Mode: "committed"})
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if c := next(); c != announced {
-		t.Fatalf("after reconnecting, heard %+v, want %+v", c, announced)
+	heard := storetest.Hear(b)
+	time.Sleep(500 * time.Millisecond) // several checks' worth of silence
+	storetest.NothingHeard(t, heard)
+	want := store.Change{Project: "acme", Type: events.TicketChanged, ID: "acme-1"}
+	announce(t, a, want)
+	if c := storetest.NextHeard(t, heard); c != want {
+		t.Fatalf("after the silence, heard %+v, want %+v", c, want)
+	}
+}
+
+// announce commits an Update on s that announces ch and writes nothing.
+func announce(t *testing.T, s store.Store, ch store.Change) {
+	t.Helper()
+	if err := s.Update(func(w store.Writer) error {
+		w.Announce(ch)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
