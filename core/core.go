@@ -312,6 +312,11 @@ type TicketView struct {
 	LeftOut   map[string]int `json:"left_out,omitempty"`
 	Blocked   bool           `json:"blocked"`
 	Claimable bool           `json:"claimable"`
+	// Editable says the UI offers Edit on the Ticket, and Retroable its
+	// Retro button, as ticketEditable and ticketRetroable decide them.
+	// Every read sets them. Computed on read.
+	Editable  bool `json:"editable"`
+	Retroable bool `json:"retroable"`
 	// SilentSince is set while the Ticket is a Silent Claim: In Progress
 	// with no activity for 30 minutes. It is the time of the last
 	// activity, so the quiet time is now minus it. Computed, never stored.
@@ -813,6 +818,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t store.Ticket) Ticke
 		Claims: []ClaimView{}, Rounds: roundViews(t.Rounds), FailureReports: failureReportViews(t.FailureReports),
 		Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
 		Blocked: rule.blocked(t), Link: linkView(t.Link),
+		Editable: ticketEditable(pr, t), Retroable: ticketRetroable(pr, t),
 	}
 	for _, cl := range t.Claims {
 		cv := ClaimView{Number: cl.Number, SessionID: cl.SessionID, WorkingDir: cl.WorkingDir, ResumeCommand: cl.ResumeCommand, Model: cl.Model, Effort: cl.Effort, Started: cl.Started, LastActivity: c.claimActivity(t, cl), EndedBy: cl.EndedBy,

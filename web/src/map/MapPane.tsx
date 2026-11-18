@@ -11,7 +11,6 @@ import { useApi } from "../live";
 import { GUIDED_ON, GUIDED_TAG, type MapView, type SpecDetail, type TicketRow } from "../api/types";
 import { Markdown } from "../Markdown";
 import { useNeedsMe } from "../needsme/context";
-import { specRetroable } from "../edit/editable";
 import { NewPrototype, NewRetro, WriteTheSpec } from "../requirement/NewRequirement";
 import { RetroList } from "../spec/RetroList";
 import type { Link } from "../url";
@@ -29,8 +28,6 @@ import { StateChip } from "../controls/StateChip";
 
 export interface MapPaneProps {
   spec: SpecDetail & { map: MapView };
-  // archived is whether the Map's Project is Archived, which takes no Retro.
-  archived?: boolean;
   now: Date;
   // ticket is the selected Ticket.
   ticket?: string;
@@ -64,7 +61,7 @@ export interface MapBodyProps extends MapPaneProps {
   setGuided(on: boolean): void;
 }
 
-export function MapBody({ spec, archived, now, ticket, select, specLink, written, busy, error, start, setGuided }: MapBodyProps) {
+export function MapBody({ spec, now, ticket, select, specLink, written, busy, error, start, setGuided }: MapBodyProps) {
   const { reasonOf } = useNeedsMe();
   const [fogOpen, setFogOpen] = useState(false);
   const { tickets = [], body = "" } = spec;
@@ -83,7 +80,7 @@ export function MapBody({ spec, archived, now, ticket, select, specLink, written
       </label>
       <div className="spec-actions">
         <NewPrototype spec={spec.id} onSubmitted={(t) => select(t.id)} />
-        {specRetroable(spec, !!archived) && <NewRetro target={spec.id} onSubmitted={(t) => select(t.id)} />}
+        {spec.retroable && <NewRetro target={spec.id} onSubmitted={(t) => select(t.id)} />}
         {spec.link && <LinkBadge link={spec.link} />}
         <OpenExternal link={spec.link} />
         {spec.map.can_write_spec && (
