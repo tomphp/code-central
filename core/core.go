@@ -924,6 +924,6 @@ func landingViewWith(p store.Project, watcher WatcherView) LandingView {
 	return LandingView{Method: p.Landing.Method, Push: push, Remote: p.Landing.Remote, LandPerSpec: p.Landing.LandPerSpec,
 		CodeHost: host, Repository: repo, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv}), UsesAzureReposPAT: ps.UsesAzureReposPAT(azure),
 		Methods: landingCapabilities(p, azure), RunsPullRequestWatcher: ps.RunsPullRequestWatcher(),
-		RepositoryLanding: defaultRepositoryLanding(p), PushesNothing: pushesNothing(p),
+		RepositoryLanding: repositoryLandingOf(p.Landing.Method, p.Landing.Push), PushesNothing: pushesNothing(p),
 		Base: p.Base(), Watcher: watcher, OpenPullRequests: []OpenPullRequest{}}
 }

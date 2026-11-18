@@ -238,8 +238,11 @@ type LandingMethodCapabilities struct {
 // LandingMethodsCapabilities is the Landing capabilities of every Landing
 // Method, each as if it were the Default Landing.
 type LandingMethodsCapabilities struct {
-	Merge       LandingMethodCapabilities `json:"merge"`
-	Branch      LandingMethodCapabilities `json:"branch"`
+	// Merge is what the form offers with Merge drafted.
+	Merge LandingMethodCapabilities `json:"merge"`
+	// Branch is what the form offers with Leave as a branch drafted.
+	Branch LandingMethodCapabilities `json:"branch"`
+	// PullRequest is what the form offers with Pull Request drafted.
 	PullRequest LandingMethodCapabilities `json:"pull_request"`
 }
 
@@ -247,36 +250,32 @@ type LandingMethodsCapabilities struct {
 // as if it were the Default Landing, with p's other settings and every
 // Own Landing unchanged, given the Azure Repos Repositories' names.
 func landingCapabilities(p store.Project, azureRepos []string) LandingMethodsCapabilities {
-	of := func(m store.LandingMethod) LandingMethodCapabilities {
-		q := p
-		q.Landing.Method = m
+	capabilitiesOf := func(m store.LandingMethod) LandingMethodCapabilities {
+		drafted := p
+		drafted.Landing.Method = m
 		lp := NewLandingPolicy(m, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
 		return LandingMethodCapabilities{OffersPush: lp.OffersPush(), OffersLandPerSpec: lp.OffersLandPerSpec(),
-			ShowsCodeHost: lp.LandsByPullRequest(), UsesAzureReposPAT: landingPolicies(q).UsesAzureReposPAT(azureRepos)}
+			ShowsCodeHost: lp.LandsByPullRequest(), UsesAzureReposPAT: landingPolicies(drafted).UsesAzureReposPAT(azureRepos)}
 	}
-	return LandingMethodsCapabilities{Merge: of(store.LandingMerge), Branch: of(store.LandingBranch), PullRequest: of(store.LandingPullRequest)}
-}
-
-// defaultRepositoryLanding is p's Default Landing named as a Repository
-// Landing, as a Repository following it shows it.
-func defaultRepositoryLanding(p store.Project) RepositoryLanding {
-	return repositoryLandingOf(p.Landing.Method, p.Landing.Push)
+	return LandingMethodsCapabilities{Merge: capabilitiesOf(store.LandingMerge), Branch: capabilitiesOf(store.LandingBranch),
+		PullRequest: capabilitiesOf(store.LandingPullRequest)}
 }
 
 // pushesNothing is whether Push pushes nothing in p: every Repository is
-// local-only, so has "Push off when the Repository is local-only", while
-// some Repository's Landing, as chosen, needs a push remote.
+// local-only while some Repository's Landing, as the human chose it, needs
+// a push remote. It asks the chosen Landing's policy, not the
+// Repository's: that has "Push off when the Repository is local-only", so
+// would never need one here.
 func pushesNothing(p store.Project) bool {
-	vs := repositoriesView(p)
-	needs := false
-	for _, v := range vs {
-		if !v.LocalOnly {
+	needsRemote := false
+	for _, r := range repositoriesView(p) {
+		if !r.LocalOnly {
 			return false
 		}
-		m, push := v.Landing.methodAndPush()
-		needs = needs || NewLandingPolicy(m, push, p.Landing.LandPerSpec, p.CI.Tracking).NeedsPushRemote()
+		m, push := r.Landing.methodAndPush()
+		needsRemote = needsRemote || NewLandingPolicy(m, push, p.Landing.LandPerSpec, p.CI.Tracking).NeedsPushRemote()
 	}
-	return needs
+	return needsRemote
 }
 
 // OffersPush answers Push's "Under Pull Request, Push is implied", so the

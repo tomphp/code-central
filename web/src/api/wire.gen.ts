@@ -1535,8 +1535,11 @@ export interface ChatMessageView {
 // LandingMethodsCapabilities is the Landing capabilities of every Landing
 // Method, each as if it were the Default Landing.
 export interface LandingMethodsCapabilities {
+  // Merge is what the form offers with Merge drafted.
   merge: LandingMethodCapabilities;
+  // Branch is what the form offers with Leave as a branch drafted.
   branch: LandingMethodCapabilities;
+  // PullRequest is what the form offers with Pull Request drafted.
   pull_request: LandingMethodCapabilities;
 }
 

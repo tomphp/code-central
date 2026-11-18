@@ -13,28 +13,37 @@ describe("the real service guard", () => {
   });
 });
 
+// unmarkedLines returns the 1-based line numbers of text that match any
+// of patterns without a comment matching marker on the same line or the
+// line before.
+function unmarkedLines(text: string, patterns: RegExp[], marker: RegExp): number[] {
+  const lines = text.split("\n");
+  const marked = (line: string | undefined) => line !== undefined && marker.test(line);
+  const found: number[] = [];
+  lines.forEach((line, i) => {
+    if (patterns.some((p) => p.test(line)) && !marked(line) && !marked(lines[i - 1])) found.push(i + 1);
+  });
+  return found;
+}
+
+// filesUnder returns the files under dir whose path from dir, with
+// forward slashes, keep accepts.
+function filesUnder(dir: string, keep: (path: string) => boolean, root = dir): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return filesUnder(path, keep, root);
+    return keep(relative(root, path).split(sep).join("/")) ? [path] : [];
+  });
+}
+
 const waitPattern = /findBy|findAllBy|waitFor\(/;
 const markerPattern = /\/\/\s*waits:\s*\S/;
 
 // unmarkedWaits returns the 1-based line numbers that wait without a
 // `// waits: <reason>` comment on the same line or the line before.
-function unmarkedWaits(text: string): number[] {
-  const lines = text.split("\n");
-  const marked = (line: string | undefined) => line !== undefined && markerPattern.test(line);
-  const found: number[] = [];
-  lines.forEach((line, i) => {
-    if (waitPattern.test(line) && !marked(line) && !marked(lines[i - 1])) found.push(i + 1);
-  });
-  return found;
-}
+const unmarkedWaits = (text: string) => unmarkedLines(text, [waitPattern], markerPattern);
 
-function testFiles(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) return testFiles(path);
-    return entry.name.endsWith(".test.tsx") ? [path] : [];
-  });
-}
+const testFiles = (dir: string) => filesUnder(dir, (path) => path.endsWith(".test.tsx"));
 
 describe("the waits scan", () => {
   it("fails an unmarked wait", () => {
@@ -77,30 +86,23 @@ const landingMarker = /\/\/\s*landing:\s*\S/;
 // unmarkedLandingTests returns the 1-based line numbers that test a
 // landing value without a `// landing: <reason>` comment on the same line
 // or the line before.
-function unmarkedLandingTests(text: string): number[] {
-  const lines = text.split("\n");
-  const marked = (line: string | undefined) => line !== undefined && landingMarker.test(line);
-  const found: number[] = [];
-  lines.forEach((line, i) => {
-    if (landingPatterns.some((p) => p.test(line)) && !marked(line) && !marked(lines[i - 1])) found.push(i + 1);
-  });
-  return found;
-}
+const unmarkedLandingTests = (text: string) => unmarkedLines(text, landingPatterns, landingMarker);
 
 // landingScanSkips are the files that may test landing values: the
 // generated wire types, the contract cases, the scenario builder and the
 // Driver, which build and check worlds rather than show them.
 const landingScanSkips = ["api/wire.gen.ts", "api/contract/", "api/scenario.ts", "api/driver.ts"];
 
-function sourceFiles(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) return sourceFiles(path);
-    if (!/\.tsx?$/.test(entry.name) || /\.(test|stories)\./.test(entry.name)) return [];
-    const rel = relative(__dirname, path).split(sep).join("/");
-    return landingScanSkips.some((skip) => rel.startsWith(skip)) ? [] : [path];
-  });
-}
+// sourceFiles are the non-test .ts and .tsx files under dir the landing
+// scan reads.
+const sourceFiles = (dir: string) =>
+  filesUnder(
+    dir,
+    (path) =>
+      /\.tsx?$/.test(path) &&
+      !/\.(test|stories)\./.test(path) &&
+      !landingScanSkips.some((skip) => path.startsWith(skip)),
+  );
 
 describe("the landing scan", () => {
   it("fails a test of a landing value", () => {
