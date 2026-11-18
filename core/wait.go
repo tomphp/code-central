@@ -45,7 +45,9 @@ func (c *Core) Wait(ctx context.Context, key string, ref Ref, from domain.State)
 		for woken := false; !woken; {
 			select {
 			case e := <-notices:
-				woken = e.Type == events.TicketChanged && e.Project == key && e.ID == res.Ticket
+				// A project-wide notice may cover the Ticket: an Import, or a
+				// Shared Store that may have missed Changes. Refetch.
+				woken = e.Project == key && (e.Type == events.ProjectChanged || e.Type == events.TicketChanged && e.ID == res.Ticket)
 			case <-timeout:
 				return res, nil
 			case <-ctx.Done():

@@ -322,6 +322,7 @@ func Run(t *testing.T, f Factory) {
 	runCIRuns(t, f)
 	runUsage(t, f)
 	runConcurrency(t, f)
+	runChanges(t, f)
 }
 
 func seedProject(t *testing.T, s store.Store) {

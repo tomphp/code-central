@@ -81,6 +81,11 @@ type SQLStore struct {
 	url   string
 	lock  *storeLock
 	usage usage.Store
+	// service is this handle's ID on a Shared Store, in every Change it
+	// announces, so that it can leave its own out of those it hears.
+	service string
+	// stops ends what Changes started, before the database closes.
+	stops []func()
 	// migrated is the Migration this open ran, if any.
 	migrated *Migration
 }
@@ -95,8 +100,13 @@ func (s *SQLStore) Path() string { return s.path }
 // code-central-1049).
 func (s *SQLStore) Migrated() *Migration { return s.migrated }
 
-// Close closes the database and releases the Store's lock.
+// Close stops hearing Changes, closes the database and releases the
+// Store's lock.
 func (s *SQLStore) Close() error {
+	for _, stop := range s.stops {
+		stop()
+	}
+	s.stops = nil
 	var errs []error
 	if s.db != nil {
 		errs = append(errs, s.db.Close())
@@ -113,9 +123,15 @@ func (s *SQLStore) Close() error {
 // connection, outside any Update.
 func (s *SQLStore) Usage() usage.Store { return s.usage }
 
-// Changes never delivers: no other service shares a SQLite Store, and a
-// Postgres Store's notices come with Ticket code-central-1048.
-func (s *SQLStore) Changes(func(Change)) {}
+// Changes delivers the Changes the other services sharing a Postgres
+// Store commit, heard on a LISTEN connection of its own, until the Store
+// closes (postgres_changes.go). It never delivers on SQLite: no other
+// service shares it.
+func (s *SQLStore) Changes(deliver func(Change)) {
+	if s.d.shared {
+		s.listen(deliver)
+	}
+}
 
 // View runs fn over a Reader on one of the pool's connections, in the
 // dialect's read-only transaction when it has one, so every read sees
@@ -204,7 +220,7 @@ func (s *SQLStore) attempt(fn func(Writer) error) error {
 		}
 	}()
 	var failed error
-	w := &sqlWriter{sqlReader: sqlReader{q: conn, d: s.d, err: &failed}}
+	w := &sqlWriter{sqlReader: sqlReader{q: conn, d: s.d, err: &failed}, service: s.service}
 	err = fn(w)
 	if failed != nil {
 		// A statement that failed inside fn is the truer error: whatever

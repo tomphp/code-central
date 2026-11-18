@@ -60,6 +60,28 @@ func TestAForeignChangeEndsAWaitOnTheTicketItChanged(t *testing.T) {
 	}
 }
 
+// A Store that may have missed Changes, as a Postgres Store whose LISTEN
+// connection dropped, delivers a project-wide Change: a wait refetches.
+func TestAForeignProjectWideChangeEndsAWaitOnATicketThatMoved(t *testing.T) {
+	f, s := sharedFixture(t)
+	f.work(t, domain.Ready)
+	n := f.clock.Waiters()
+	done := make(chan core.WaitResult, 1)
+	go func() {
+		res, err := f.core.Wait(ctx, "acme", "2", domain.Ready)
+		if err != nil {
+			panic(err)
+		}
+		done <- res
+	}()
+	f.clock.BlockUntil(n + 1)
+	f.moveTo(t, 2, domain.InProgress)
+	s.deliver(store.Change{Project: "acme", Type: events.ProjectChanged, Wakes: true})
+	if res := <-done; res.State != domain.InProgress {
+		t.Fatalf("wait returned %s, want In Progress", res.State)
+	}
+}
+
 func TestAForeignChangeSendsItsNotice(t *testing.T) {
 	f, s := sharedFixture(t)
 	f.work(t, domain.Ready)
