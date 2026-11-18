@@ -59,7 +59,6 @@ export function InboxDetail({
         ) : map ? (
           <MapPane
             spec={map}
-            archived={isArchived(map.id)}
             now={now}
             ticket={loc.ticket}
             select={(id) => navigate({ ticket: id })}

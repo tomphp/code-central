@@ -51,6 +51,23 @@ func (c *Core) EditTicket(ctx context.Context, key string, in EditTicketInput) (
 	})
 }
 
+// ticketEditable is whether the UI offers Edit on t (the glossary's
+// Edit): while it is Draft, its Link doesn't own its definition, which
+// definitionOwned refuses, and its Project p takes writes, which writable
+// refuses. TicketView's editable.
+func ticketEditable(p store.Project, t store.Ticket) bool {
+	return t.State == store.Draft && !t.Link.Owned() && p.Archived.IsZero()
+}
+
+// specEditable is whether the UI offers Edit on s, whose Tickets are all
+// finished when specFinished (the glossary's Edit): until it is Finished,
+// never on a Map, while its Link doesn't own its definition, which
+// definitionOwned refuses, and its Project p takes writes, which writable
+// refuses. SpecDetail's editable.
+func specEditable(p store.Project, s store.Spec, specFinished bool) bool {
+	return !specFinished && !isMap(s.Labels) && !s.Link.Owned() && p.Archived.IsZero()
+}
+
 // EditSpecInput is edit_spec's input. A field left out is unchanged; a
 // body given replaces the old one whole.
 type EditSpecInput struct {

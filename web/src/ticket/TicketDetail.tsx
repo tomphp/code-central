@@ -6,7 +6,6 @@ import type { EditView, ReportedModels, State, TicketView } from "../api/types";
 import { ago, CLAUDE_CODE_DEFAULT } from "../format";
 import { Markdown } from "../Markdown";
 import { EditForm } from "../edit/EditForm";
-import { retroable, ticketEditable } from "../edit/editable";
 import { NewRetro } from "../requirement/NewRequirement";
 import { RetroList } from "../spec/RetroList";
 import { ActionPanel } from "../panels/ActionPanel";
@@ -55,8 +54,9 @@ export interface TicketDetailProps {
   // openTicket selects another Ticket, as a new Retro is; without it the
   // Retro button isn't offered.
   openTicket?(ticket: string): void;
-  // archived is whether the Ticket's Project is Archived, which takes no
-  // edits.
+  // archived is whether the Ticket's Project is Archived, whose
+  // Auto-accept switch is shown off. The Ticket's editable and retroable
+  // already count it.
   archived?: boolean;
   // onMoved is told once the Move control has moved the Ticket: the Board's
   // popup closes then.
@@ -124,12 +124,12 @@ export function TicketDetail(props: TicketDetailProps) {
           <>
             <h2>{t.title}</h2>
             <span className="ticket-head-actions">
-              {ticketEditable(t, !!props.archived) && (
+              {t.editable && (
                 <Button type="button"  onClick={() => setEditing(true)}>
                   Edit
                 </Button>
               )}
-              {retroable(t, !!props.archived) && props.openTicket && (
+              {t.retroable && props.openTicket && (
                 <NewRetro target={t.id} onSubmitted={(r) => props.openTicket?.(r.id)} />
               )}
             </span>
