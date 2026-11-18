@@ -1,13 +1,13 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // Under Merge + Push, when the local base and the remote's each hold
@@ -44,7 +44,7 @@ func TestUnderMergeAndPushAnUnpushedFactoryMergeIsRebuiltOnTheRemotesTipAndTheTi
 
 	r.Poll()
 	r.WantOutput("main: moved 1 unpushed commit onto origin/main")
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 	merge := h.Git("rev-parse", "main")
 	if got := h.Git("log", "-1", "--format=%P", merge); got != theirs+" "+head {
 		t.Errorf("main's tip has parents %q, want the remote's %s then the Ticket's head %s", got, theirs, head)
@@ -76,7 +76,7 @@ func TestUnderMergeAndPushAnUnpushedHumanCommitIsReplayedOnTheRemotesTipAndPushe
 
 	r := h.Start()
 	r.WantOutput("main: moved 1 unpushed commit onto origin/main")
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 	if got := h.Git("log", "--first-parent", "--reverse", "--format=%s", theirs+"..main"); got != "Change mine.txt\nMerge "+id+": Add a feature" {
 		t.Errorf("main holds on top of the remote's:\n%s\nwant the human's commit replayed, then the merge", got)
 	}
@@ -110,7 +110,7 @@ func TestUnderMergeAndPushAFactoryMergeAndAHumanCommitAreMovedTogetherInOrder(t 
 
 	r.Poll()
 	r.WantOutput("main: moved 2 unpushed commits onto origin/main")
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 	if got := h.Git("log", "--first-parent", "--reverse", "--format=%s", theirs+"..main"); got != "Merge "+id+": Add a feature\nChange mine.txt" {
 		t.Errorf("main holds on top of the remote's:\n%s\nwant the merge rebuilt, then the human's commit", got)
 	}
@@ -145,7 +145,7 @@ func TestUnderMergeAndPushAnUnpushedMergeThatIsntTheFactorysIsBaseDiverged(t *te
 	if got := remote.Git("rev-parse", "main"); got != theirs {
 		t.Errorf("the remote's main is at %q, want it left at %s", got, theirs)
 	}
-	if tk := h.Ticket(id); tk.State != store.Accepted {
+	if tk := h.Ticket(id); tk.State != domain.Accepted {
 		t.Errorf("%s is %s, want it held Accepted", id, tk.State)
 	}
 }
@@ -168,7 +168,7 @@ func TestUnderMergeAndPushUncommittedChangesInTheWayOfTheMoveMakeThePollWait(t *
 
 	r := h.Start()
 	r.WantOutput("warning: can't move main onto origin/main yet: uncommitted changes in")
-	if tk := h.Ticket(id); tk.State != store.Accepted {
+	if tk := h.Ticket(id); tk.State != domain.Accepted {
 		t.Errorf("%s is %s, want it held Accepted", id, tk.State)
 	}
 	if got := h.Git("rev-parse", "main"); got != before {
@@ -182,7 +182,7 @@ func TestUnderMergeAndPushUncommittedChangesInTheWayOfTheMoveMakeThePollWait(t *
 		t.Fatal(err)
 	}
 	r.Poll()
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 	h.Git("merge-base", "--is-ancestor", theirs, "main")
 	if got := remote.Git("rev-parse", "main"); got != h.Git("rev-parse", "main") {
 		t.Errorf("the remote's main is at %q, want it pushed level with the local base", got)
@@ -207,8 +207,8 @@ func TestUnderMergeAndPushAnUnpushedSpecBranchMergeIsRebuiltAndItsTicketsLand(t 
 
 	r.Poll()
 	r.WantOutput("main: moved 1 unpushed commit onto origin/main")
-	h.WantState(a, store.Done)
-	h.WantState(b, store.Done)
+	h.WantState(a, domain.Done)
+	h.WantState(b, domain.Done)
 	if got := h.Git("log", "-1", "--format=%P", "main"); got != theirs+" "+specTip {
 		t.Errorf("main's tip has parents %q, want the remote's %s then the Spec Branch's %s", got, theirs, specTip)
 	}

@@ -3,6 +3,7 @@ package pullrequestwatcher_test
 import (
 	"context"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"io"
 	"slices"
 	"strings"
@@ -15,7 +16,6 @@ import (
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/pullrequestwatcher"
-	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/watchers/watchertest"
 )
 
@@ -58,7 +58,7 @@ func newWatchingOn(t *testing.T, remote string) *watching {
 		return err
 	})
 	must(t, func() error {
-		_, err := c.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest})
+		_, err := c.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest})
 		return err
 	})
 	must(t, func() error { _, err := c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"}); return err })
@@ -68,7 +68,7 @@ func newWatchingOn(t *testing.T, remote string) *watching {
 		return err
 	})
 	must(t, func() error {
-		_, err := c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form", State: store.Ready})
+		_, err := c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form", State: domain.Ready})
 		return err
 	})
 	res, err := c.Claim(ctx, "acme", core.ClaimInput{Ticket: "2"})
@@ -138,7 +138,7 @@ func (w *watching) answerOne(n int, body string) {
 }
 
 // recorded is the pull request the Pull Request Watcher reported for acme-2.
-func (w *watching) recorded(state store.PullRequestState) *core.PullRequestView {
+func (w *watching) recorded(state domain.PullRequestState) *core.PullRequestView {
 	w.t.Helper()
 	var got *core.PullRequestView
 	codecentraltest.Eventually(w.t, func() bool {
@@ -204,7 +204,7 @@ func TestItOpensAReadyPullRequestIntoTheBaseWithTheTicketsTitleAndSummaryAndRepo
 	w.answerList()
 	w.h.Answer(fakegh.Answer{Args: []string{"api", repoPath + "/pulls", "--method", "POST"}, Stdout: pr(7, "open", "")})
 	w.start(w.h.Bin)
-	got := w.recorded(store.PROpen)
+	got := w.recorded(domain.PROpen)
 	if got.Number != 7 || got.Link != "https://github.com/acme/web/pull/7" {
 		t.Fatalf("recorded %+v, want pull request 7 and its link", got)
 	}
@@ -236,7 +236,7 @@ func TestItAdoptsAnOpenPullRequestFromTheBranchInsteadOfOpeningOne(t *testing.T)
 	w := newWatching(t)
 	w.answerList(pr(4, "open", ""))
 	w.start(w.h.Bin)
-	if got := w.recorded(store.PROpen); got.Number != 4 {
+	if got := w.recorded(domain.PROpen); got.Number != 4 {
 		t.Fatalf("recorded %+v, want the existing pull request 4", got)
 	}
 	if n := len(w.opened()); n != 0 {
@@ -249,22 +249,22 @@ func TestItReportsEachStateAndTheMergeCommit(t *testing.T) {
 	w.answerList(pr(4, "open", ""))
 	w.answerOne(4, pr(4, "open", `"mergeable":true,"mergeable_state":"clean"`))
 	w.start(w.h.Bin)
-	w.recorded(store.PROpen)
+	w.recorded(domain.PROpen)
 
 	// GitHub says it can't merge cleanly.
 	w.answerOne(4, pr(4, "open", `"mergeable":false,"mergeable_state":"dirty"`))
 	w.nextPoll(pullrequestwatcher.Interval)
-	w.recorded(store.PRConflicting)
+	w.recorded(domain.PRConflicting)
 
 	// Closed without merging.
 	w.answerList(pr(4, "closed", `"closed_at":"2099-01-01T00:00:00Z","merged_at":null`))
 	w.nextPoll(pullrequestwatcher.Interval)
-	w.recorded(store.PRClosed)
+	w.recorded(domain.PRClosed)
 
 	// Merged, at the commit the host made, however it merged.
 	w.answerList(pr(4, "closed", `"closed_at":"2099-01-01T00:00:00Z","merged_at":"2099-01-01T00:00:00Z","merge_commit_sha":"def4567"`))
 	w.nextPoll(pullrequestwatcher.Interval)
-	if got := w.recorded(store.PRMerged); got.MergeCommit != "def4567" {
+	if got := w.recorded(domain.PRMerged); got.MergeCommit != "def4567" {
 		t.Fatalf("recorded %+v, want the merge commit def4567", got)
 	}
 	if n := len(w.opened()); n != 0 {
@@ -276,13 +276,13 @@ func TestAClosedPullRequestIsPolledSoAReopenedOneIsSeen(t *testing.T) {
 	w := newWatching(t)
 	w.answerList(pr(4, "closed", `"closed_at":"2099-01-01T00:00:00Z","merged_at":null`))
 	w.start(w.h.Bin)
-	w.recorded(store.PRClosed)
+	w.recorded(domain.PRClosed)
 	if n := len(w.opened()); n != 0 {
 		t.Fatalf("opened %d pull requests while the closed one is newer than the push, want none", n)
 	}
 	w.answerList(pr(4, "open", ""))
 	w.nextPoll(pullrequestwatcher.Interval)
-	if got := w.recorded(store.PROpen); got.Number != 4 {
+	if got := w.recorded(domain.PROpen); got.Number != 4 {
 		t.Fatalf("recorded %+v, want pull request 4 open again", got)
 	}
 }
@@ -292,7 +292,7 @@ func TestANewPullRequestOpensAfterAClosedOneWhenTheLatestPushIsNewer(t *testing.
 	w.answerList(pr(4, "closed", `"closed_at":"2000-01-01T00:00:00Z","merged_at":null`))
 	w.h.Answer(fakegh.Answer{Args: []string{"api", repoPath + "/pulls", "--method", "POST"}, Stdout: pr(5, "open", "")})
 	w.start(w.h.Bin)
-	if got := w.recorded(store.PROpen); got.Number != 5 {
+	if got := w.recorded(domain.PROpen); got.Number != 5 {
 		t.Fatalf("recorded %+v, want the new pull request 5", got)
 	}
 	if n := len(w.opened()); n != 1 {
@@ -304,7 +304,7 @@ func TestAMergedPullRequestIsNotReplacedByANewOneAfterANewerPush(t *testing.T) {
 	w := newWatching(t)
 	w.answerList(pr(4, "closed", `"closed_at":"2000-01-01T00:00:00Z","merged_at":"2000-01-01T00:00:00Z","merge_commit_sha":"def4567"`))
 	w.start(w.h.Bin)
-	w.recorded(store.PRMerged)
+	w.recorded(domain.PRMerged)
 	if n := len(w.opened()); n != 0 {
 		t.Fatalf("opened %d pull requests, want none beside a merged one", n)
 	}
@@ -332,7 +332,7 @@ func TestItPollsEveryTwoMinutesAndEveryThirtySecondsWhileWorkLacksAPullRequest(t
 	w.srv.Clock.BlockUntil(1) // the second poll is over
 	w.h.Answer(fakegh.Answer{Args: []string{"api", repoPath + "/pulls", "--method", "POST"}, Stdout: pr(7, "open", "")})
 	w.srv.Clock.Advance(pullrequestwatcher.WaitingInterval)
-	w.recorded(store.PROpen)
+	w.recorded(domain.PROpen)
 	codecentraltest.Eventually(t, func() bool { return w.lists() == 3 }, "no third poll: %d lists", w.lists())
 	w.srv.Clock.BlockUntil(1)
 	w.srv.Clock.Advance(pullrequestwatcher.Interval - time.Second)
@@ -369,7 +369,7 @@ func TestARateLimitedWatcherMakesNoCallsUntilTheResetThenResumesAndIsNeverAnErro
 	}
 	w.answerList(pr(4, "open", ""))
 	w.srv.Clock.Advance(time.Second)
-	w.recorded(store.PROpen)
+	w.recorded(domain.PROpen)
 	if n := w.errorCount(); n != 0 {
 		t.Fatalf("went into an error %d times, want none", n)
 	}
@@ -416,7 +416,7 @@ func TestEachErrorIsReportedWithItsFixOnceAndClearsWhenFixed(t *testing.T) {
 			c.fix(w.h)
 			w.nextPoll(pullrequestwatcher.Interval)
 			w.status(core.WatcherWatching)
-			w.recorded(store.PROpen)
+			w.recorded(domain.PROpen)
 		})
 	}
 }
@@ -434,7 +434,7 @@ func TestItExitsWhenItsStdinCloses(t *testing.T) {
 	w := newWatching(t)
 	w.answerList(pr(4, "open", ""))
 	w.start(w.h.Bin)
-	w.recorded(store.PROpen)
+	w.recorded(domain.PROpen)
 	w.stdin.Close()
 	select {
 	case err := <-w.done:
@@ -449,7 +449,7 @@ func TestItExitsWhenItsStdinCloses(t *testing.T) {
 func TestItDoesNothingWhileTheLandingMethodIsNotPullRequest(t *testing.T) {
 	w := newWatching(t)
 	must(t, func() error {
-		_, err := w.srv.Core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingBranch, Push: true, Remote: "origin"})
+		_, err := w.srv.Core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 		return err
 	})
 	w.start(w.h.Bin)

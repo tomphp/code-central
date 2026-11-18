@@ -2,6 +2,7 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"slices"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // Local-only Repositories (Spec code-central-879): a Repository with no
@@ -94,7 +94,7 @@ func TestALocalOnlyRepositoryWithNothingAtItsPathIsRepositoryMissingAndNeverClon
 	if _, err := os.Lstat(web.Path); err == nil {
 		t.Errorf("%s was made, want nothing cloned there", web.Path)
 	}
-	if s := h.Ticket(id).State; s != store.Ready {
+	if s := h.Ticket(id).State; s != domain.Ready {
 		t.Errorf("%s is %s, want it not claimed while web is missing", id, s)
 	}
 	if got := files(t, filepath.Dir(h.Repo)); !slices.Equal(got, []string{"repo", "repo.worktrees"}) {
@@ -139,7 +139,7 @@ func TestALocalOnlyRepositoryGetsAWorktreeAndLandsOnceMerged(t *testing.T) {
 	api := h.AddLocalRepository("api")
 	id := inAPI(h, "Add an endpoint")
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	wantOnBranch(t, h, id, api.Worktree(id))
 	if got := h.GitIn(api.Path, "log", "-1", "--format=%s", id); got != "Change endpoint.go" {
 		t.Errorf("api's branch %s ends with %q, want the session's commit", id, got)
@@ -147,7 +147,7 @@ func TestALocalOnlyRepositoryGetsAWorktreeAndLandsOnceMerged(t *testing.T) {
 
 	h.Accept(id)
 	r.Poll()
-	tk := h.WantState(id, store.Done)
+	tk := h.WantState(id, domain.Done)
 	if merge := h.GitIn(api.Path, "rev-parse", "main"); landedIn(tk, "api") != merge {
 		t.Errorf("Changed Repositories %+v, want api landed at its merge %s", tk.Repositories, merge)
 	}

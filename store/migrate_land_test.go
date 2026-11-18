@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"testing"
 
@@ -50,7 +51,7 @@ edits: []
 	}
 	s.View(func(r store.Reader) error {
 		tk, ok := r.Ticket("acme", 2)
-		if !ok || tk.State != store.Done || tk.Branch != "" || tk.Commit != "" || tk.Moves[0].Commit != "" {
+		if !ok || tk.State != domain.Done || tk.Branch != "" || tk.Commit != "" || tk.Moves[0].Commit != "" {
 			t.Fatalf("ticket 2 after migrating: %+v, %v", tk, ok)
 		}
 		return nil

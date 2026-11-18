@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"testing"
 	"time"
@@ -25,7 +26,7 @@ func TestTheRealChainMigratesAFormat21StoreToTheSpecMergeFormat(t *testing.T) {
 			t.Errorf("spec merge of a plain Ticket = %+v, want none", tk.SpecMerge)
 		}
 		tk, _ := r.Ticket("acme", 3)
-		want := store.SpecMerge{Commit: "abc123", Merged: time.Date(2026, 1, 3, 3, 4, 5, 0, time.UTC)}
+		want := domain.SpecMerge{Commit: "abc123", Merged: time.Date(2026, 1, 3, 3, 4, 5, 0, time.UTC)}
 		if tk.SpecMerge == nil || *tk.SpecMerge != want {
 			t.Errorf("spec merge = %+v, want %+v", tk.SpecMerge, want)
 		}

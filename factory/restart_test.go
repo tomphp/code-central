@@ -2,6 +2,7 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"slices"
 	"strings"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 func TestARestartReconcilesEachSavedClaimAgainstCodeCentral(t *testing.T) {
@@ -27,8 +27,8 @@ func TestARestartReconcilesEachSavedClaimAgainstCodeCentral(t *testing.T) {
 		h.Script(id, factorytest.PostRound("Which colour?"), factorytest.Result("success"))
 	}
 	r := h.Start("--parallel", "5")
-	h.WantState(answered, store.NeedsAnswer)
-	h.WantState(waiting, store.NeedsAnswer)
+	h.WantState(answered, domain.NeedsAnswer)
+	h.WantState(waiting, domain.NeedsAnswer)
 	h.WantCalls(5)
 	r.Signal(os.Interrupt)
 	r.Signal(os.Interrupt)
@@ -59,7 +59,7 @@ func TestARestartReconcilesEachSavedClaimAgainstCodeCentral(t *testing.T) {
 
 	// --parallel 1: the Answered resume takes the one slot first.
 	r = h.Start("--parallel", "1")
-	h.WantState(answered, store.InReview)
+	h.WantState(answered, domain.InReview)
 	if got := stateTickets(t, h); !slices.Contains(got, cutOff) || !slices.Contains(got, waiting) || slices.Contains(got, finished) || slices.Contains(got, cancelled) {
 		t.Errorf("state file holds %q; want %s and %s kept, %s and %s dropped", got, cutOff, waiting, finished, cancelled)
 	}
@@ -80,7 +80,7 @@ func TestARestartReconcilesEachSavedClaimAgainstCodeCentral(t *testing.T) {
 	r.WantOutput("session " + first[cutOff].Session + " is held by pid")
 	hold()
 	r.Poll()
-	h.WantState(cutOff, store.InReview)
+	h.WantState(cutOff, domain.InReview)
 	c = lastCall(h, cutOff)
 	if s, _ := c.Flag("--resume"); s != first[cutOff].Session || c.Claim != first[cutOff].Claim || !strings.Contains(c.Prompt, "Your last turn was cut off; carry on.") {
 		t.Errorf("%s resumed with %q; want its session resumed as cut off under its Claim", cutOff, c.Args)
@@ -89,13 +89,13 @@ func TestARestartReconcilesEachSavedClaimAgainstCodeCentral(t *testing.T) {
 		t.Errorf("%s resumed with system prompt %q; want its first turn's, from the state file, %q", cutOff, c.SystemPrompt, first[cutOff].SystemPrompt)
 	}
 
-	if s := h.Ticket(waiting).State; s != store.NeedsAnswer || len(callsFor(h, waiting)) != 1 {
+	if s := h.Ticket(waiting).State; s != domain.NeedsAnswer || len(callsFor(h, waiting)) != 1 {
 		t.Errorf("%s is %s after %d runs; want it left waiting on its Round", waiting, s, len(callsFor(h, waiting)))
 	}
 	if n := len(callsFor(h, finished)) + len(callsFor(h, cancelled)) + len(callsFor(h, notOurs)); n != 2 {
 		t.Errorf("claude ran %d times for the finished, Cancelled and someone else's Tickets; want only their first runs", n)
 	}
-	if tk := h.Ticket(notOurs); tk.State != store.InProgress || len(tk.Claims) != 1 {
+	if tk := h.Ticket(notOurs); tk.State != domain.InProgress || len(tk.Claims) != 1 {
 		t.Errorf("%s is %s with %d Claims; a Claim not in the state file is never adopted", notOurs, tk.State, len(tk.Claims))
 	}
 }
@@ -139,5 +139,5 @@ func TestALostStateFileLosesItsClaimsButNotTheFactory(t *testing.T) {
 	}
 	h.Continue(next)
 	r.Settle()
-	h.WantState(next, store.InReview)
+	h.WantState(next, domain.InReview)
 }

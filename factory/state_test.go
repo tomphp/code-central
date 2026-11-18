@@ -3,11 +3,11 @@ package factory_test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"testing"
 
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 func TestASecondFactoryOnTheSameProjectRefusesToStartNamingTheFirstsPid(t *testing.T) {
@@ -56,7 +56,7 @@ func TestTheStateFileHoldsEachClaimAfterItIsMade(t *testing.T) {
 	}
 	h.Continue(id)
 	r.Settle()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 }
 
 func TestWithNoHOMETheStateFileIsUnderTheProfileFolder(t *testing.T) {
@@ -65,7 +65,7 @@ func TestWithNoHOMETheStateFileIsUnderTheProfileFolder(t *testing.T) {
 	h.Setenv("HOME", "") // as on Windows: Home is then only the profile folder
 	id := h.ReadyTicket("Work")
 	h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	if _, err := os.Stat(h.StateFile()); err != nil {
 		t.Fatalf("no state file under the profile folder: %v", err)
 	}

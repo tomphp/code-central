@@ -2,11 +2,11 @@ package cli_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"testing"
 
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
 )
 
 func TestReportFailureTakesTheFieldsAsJSONOnStdinWithFlagsOverriding(t *testing.T) {
@@ -15,7 +15,7 @@ func TestReportFailureTakesTheFieldsAsJSONOnStdinWithFlagsOverriding(t *testing.
 	ctx := context.Background()
 	srv.Core.CreateProject(ctx, core.CreateProjectInput{Key: "acme"})
 	srv.Core.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"})
-	srv.Core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", State: store.Ready})
+	srv.Core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", State: domain.Ready})
 	if _, err := srv.Core.Claim(ctx, "acme", core.ClaimInput{}); err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +24,7 @@ func TestReportFailureTakesTheFieldsAsJSONOnStdinWithFlagsOverriding(t *testing.
 
 	res := decode[core.StopResult](t, run(t, env, stdin, "report-failure", "acme-2", "--claim", "claim-1", "--file", "-", "--why", "Migration 12 never ran", "--full"))
 	r := res.Ticket.FailureReports
-	if res.Ticket.State != store.Failed || len(r) != 1 || r[0].WhatBroke != "Login 500s" || r[0].Why != "Migration 12 never ran" {
+	if res.Ticket.State != domain.Failed || len(r) != 1 || r[0].WhatBroke != "Login 500s" || r[0].Why != "Migration 12 never ran" {
 		t.Fatalf("result %+v", res)
 	}
 }

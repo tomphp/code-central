@@ -3,6 +3,7 @@ package factory_test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -10,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // line is the Factory's stdout line starting with prefix, failing the
@@ -32,8 +32,8 @@ func TestTheClaimedLineNamesTheTicketStageTitleSpecWorktreeAndResumeCommand(t *t
 	impl := h.ReadyTicket("Paint the shed")
 	grill := h.StageTicket("grilling", "Shed colours")
 	r := h.Start()
-	h.WantState(impl, store.InReview)
-	h.WantState(grill, store.InReview)
+	h.WantState(impl, domain.InReview)
+	h.WantState(grill, domain.InReview)
 	r.WantOutput(impl + " turn ended")
 	r.WantOutput(grill + " turn ended")
 
@@ -58,8 +58,8 @@ func TestTheTurnEndedLineGivesTheStageTitleExitStateAndDuration(t *testing.T) {
 	done := h.StageTicket("spec", "Write it up")
 	h.Script(asks, factorytest.PostRound("Which colour?"), factorytest.Result("success"))
 	r := h.Start()
-	h.WantState(asks, store.NeedsAnswer)
-	h.WantState(done, store.InReview)
+	h.WantState(asks, domain.NeedsAnswer)
+	h.WantState(done, domain.InReview)
 	r.WantOutput(asks + " turn ended")
 	r.WantOutput(done + " turn ended")
 
@@ -81,7 +81,7 @@ func TestTheTurnEndedLineNamesTheStateTheFactoryLeftTheTicketIn(t *testing.T) {
 	id := h.ReadyTicket("Stops early")
 	h.Script(id, factorytest.Say("I give up."), factorytest.Result("success"))
 	r := h.Start()
-	h.WantState(id, store.Failed)
+	h.WantState(id, domain.Failed)
 	r.WantOutput(id + " turn ended")
 	if got := line(t, r, id+" turn ended"); !strings.Contains(got, ": exit 0, success; now Failed; ran ") {
 		t.Errorf("turn ended line %q: want it to say the Factory's Failure Report left it Failed", got)
@@ -93,7 +93,7 @@ func TestTheResumedLineNamesTheRoundBeingAnswered(t *testing.T) {
 	h := factorytest.New(t)
 	id, _, r := answeredTicket(t, h)
 	r.Poll()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	r.WantOutput(id + " resumed")
 	want := id + ` resumed (implementation): "Ask first" with the answers to Round 1`
 	if got := line(t, r, id+" resumed"); got != want {
@@ -114,7 +114,7 @@ func TestTheResumedLineForACutOffClaimSaysSoAfterARestart(t *testing.T) {
 
 	h.Script(id, factorytest.Finish("Done."), factorytest.Result("success"))
 	r = h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	r.WantOutput(id + " turn ended")
 	want := id + ` resumed (tickets): "Cut it up" after being cut off`
 	if got := line(t, r, id+" resumed"); got != want {
@@ -167,7 +167,7 @@ func TestVerbosePrintsOneLinePerToolCallWithItsSummary(t *testing.T) {
 	wt := h.Worktree(id)
 	h.Script(id, toolCalls(wt)...)
 	r := h.Start("--verbose")
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	r.WantOutput(id + " turn ended")
 
 	var got []string
@@ -213,7 +213,7 @@ func TestWithoutVerboseNoToolCallLinesArePrinted(t *testing.T) {
 	id := h.ReadyTicket("Busy")
 	h.Script(id, toolCalls(h.Worktree(id))...)
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	r.WantOutput(id + " turn ended")
 	if out := r.Stdout(); strings.Contains(out, id+": Bash") || strings.Contains(out, "go test") {
 		t.Errorf("tool-call lines printed without --verbose:\n%s", out)

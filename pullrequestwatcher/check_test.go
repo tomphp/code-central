@@ -2,6 +2,7 @@ package pullrequestwatcher_test
 
 import (
 	"errors"
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -11,7 +12,6 @@ import (
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/pullrequestwatcher"
-	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/watchers/watchertest"
 )
 
@@ -33,11 +33,11 @@ func checking(t *testing.T, h *watchertest.Harness, path ...string) *codecentral
 }
 
 func turnOn(srv *codecentraltest.Server) error {
-	_, err := srv.Core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest})
+	_, err := srv.Core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest})
 	return err
 }
 
-func method(t *testing.T, srv *codecentraltest.Server) store.LandingMethod {
+func method(t *testing.T, srv *codecentraltest.Server) domain.LandingMethod {
 	t.Helper()
 	p, err := srv.Client.GetProject(ctx, "acme")
 	if err != nil {
@@ -53,7 +53,7 @@ func TestPullRequestTurnsOnWhenTheCheckPassesAndCreatesNoPullRequest(t *testing.
 	if err := turnOn(srv); err != nil {
 		t.Fatalf("turning on: %v", err)
 	}
-	if got := method(t, srv); got != store.LandingPullRequest {
+	if got := method(t, srv); got != domain.LandingPullRequest {
 		t.Fatalf("method = %s, want pull_request", got)
 	}
 	var got [][]string
@@ -99,7 +99,7 @@ func TestEachFailedCheckRefusesPullRequestWithItsReasonAndFix(t *testing.T) {
 			if !strings.Contains(e.Message, c.reason) || !strings.Contains(e.Fix, c.fix) {
 				t.Fatalf("refusal %q, fix %q; want %q and %q", e.Message, e.Fix, c.reason, c.fix)
 			}
-			if got := method(t, srv); got == store.LandingPullRequest {
+			if got := method(t, srv); got == domain.LandingPullRequest {
 				t.Fatal("the method turned on although its check failed")
 			}
 		})

@@ -2,11 +2,11 @@ package factory_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // Pull requests across Repositories (Spec code-central-848, ADR 0050).
@@ -18,7 +18,7 @@ func acceptedIn(t *testing.T, h *factorytest.Harness) (id string, r *factorytest
 	t.Helper()
 	id = inTwo(h, "Add an endpoint")
 	r = h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	h.Accept(id)
 	r.Poll()
 	return id, r
@@ -64,7 +64,7 @@ func wantPushedIn(t *testing.T, h *factorytest.Harness, repository, ticket strin
 // request in repository, as merged at commit.
 func reportPullRequestIn(t *testing.T, h *factorytest.Harness, repository, branch string, number int, commit string) {
 	t.Helper()
-	in := core.ReportPullRequestInput{Repository: repository, Branch: branch, Number: number, Link: "https://example.test/pull/1", State: store.PRMerged, MergeCommit: commit}
+	in := core.ReportPullRequestInput{Repository: repository, Branch: branch, Number: number, Link: "https://example.test/pull/1", State: domain.PRMerged, MergeCommit: commit}
 	if _, err := h.Server.Client.ReportPullRequest(context.Background(), h.Project, in); err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestUnderPullRequestEachChangedRepositoryIsPushedAndLandsWhenItsPullRequest
 	h.GitIn(api.Path, "push", "-q", "origin", id+":refs/heads/main")
 	reportPullRequestIn(t, h, "api", id, 4, apiHead)
 	r.Poll()
-	tk := h.WantState(id, store.Accepted)
+	tk := h.WantState(id, domain.Accepted)
 	if !tk.PartlyLanded || landedIn(tk, "api") != apiHead || landedIn(tk, h.Project) != "" {
 		t.Fatalf("after api merged: partly landed %v, api at %q, home at %q", tk.PartlyLanded, landedIn(tk, "api"), landedIn(tk, h.Project))
 	}
@@ -109,7 +109,7 @@ func TestUnderPullRequestEachChangedRepositoryIsPushedAndLandsWhenItsPullRequest
 	h.Git("push", "-q", home.Path, id+":refs/heads/main")
 	reportPullRequestIn(t, h, "", id, 7, homeHead)
 	r.Poll()
-	tk = h.WantState(id, store.Done)
+	tk = h.WantState(id, domain.Done)
 	if landedIn(tk, h.Project) != homeHead || landedIn(tk, "api") != apiHead {
 		t.Errorf("landed home at %q and api at %q, want each at its merge commit", landedIn(tk, h.Project), landedIn(tk, "api"))
 	}
@@ -129,7 +129,7 @@ func TestSentBackAfterASiblingMergedTheNextClaimStartsThatRepositorysBranchAtIts
 	h.GitIn(api.Path, "push", "-q", "origin", "squash:refs/heads/main")
 	reportPullRequestIn(t, h, "api", id, 4, squash)
 	r.Poll()
-	if tk := h.WantState(id, store.Accepted); landedIn(tk, "api") != squash {
+	if tk := h.WantState(id, domain.Accepted); landedIn(tk, "api") != squash {
 		t.Fatalf("api landed at %q, want %s", landedIn(tk, "api"), squash)
 	}
 
@@ -139,7 +139,7 @@ func TestSentBackAfterASiblingMergedTheNextClaimStartsThatRepositorysBranchAtIts
 	h.Script(id, factorytest.WriteFile("client.go", "package acme // v2\n"), factorytest.Git("add", "client.go"), factorytest.Git("commit", "-q", "-m", "Redo it"),
 		factorytest.FinishIn("Redone.", true), factorytest.Result("success"))
 	r.Poll()
-	tk := h.WantState(id, store.InReview)
+	tk := h.WantState(id, domain.InReview)
 
 	if got := h.GitIn(api.Path, "rev-parse", id); got == apiHead || got != squash {
 		t.Errorf("api's %s is at %q, want moved from %s to the Base tip %s", id, got, apiHead, squash)
@@ -163,7 +163,7 @@ func TestUnderPullRequestATicketInAnotherRepositoryLandsWhileTheHomeRepositorysB
 	pullRequestOn(h, "origin")
 	id := inAPI(h, "Add an endpoint")
 	r := h.Start()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	h.Accept(id)
 	r.Poll()
 	apiHead := wantPushedIn(t, h, "api", id)
@@ -172,13 +172,13 @@ func TestUnderPullRequestATicketInAnotherRepositoryLandsWhileTheHomeRepositorysB
 	// Host's URL reported again first.
 	pullRequestOn(h, "origin")
 	release := "release"
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingPullRequest, Remote: "origin", Base: &release})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin", Base: &release})
 	h.GitIn(api.Path, "push", "-q", "origin", id+":refs/heads/main")
 	reportPullRequestIn(t, h, "api", id, 4, apiHead)
 
 	r.Poll()
 
-	if tk := h.WantState(id, store.Done); landedIn(tk, "api") != apiHead {
+	if tk := h.WantState(id, domain.Done); landedIn(tk, "api") != apiHead {
 		t.Errorf("api landed at %q, want its merge commit %s", landedIn(tk, "api"), apiHead)
 	}
 }

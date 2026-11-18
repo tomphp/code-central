@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/tomoram/code-central/domain"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -18,7 +19,6 @@ import (
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
 )
 
 var human = core.WithActor(context.Background(), core.Human)
@@ -32,7 +32,7 @@ func asking(t *testing.T) *codecentraltest.Server {
 	for _, err := range []error{
 		second(c.CreateProject(ctx, core.CreateProjectInput{Key: "acme"})),
 		second(c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"})),
-		second(c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", State: store.Ready})),
+		second(c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", State: domain.Ready})),
 		second(c.Claim(ctx, "acme", core.ClaimInput{})),
 		second(c.PostRound(ctx, "acme", core.PostRoundInput{Ticket: "2", ClaimID: "claim-1", Questions: []core.QuestionInput{{Title: "DB?", Body: "Which?"}}})),
 	} {
@@ -70,7 +70,7 @@ func startWait(url string, clk *clock.Fake, args ...string) <-chan result {
 
 type waitOutput struct {
 	Ticket   string         `json:"ticket"`
-	State    store.State    `json:"state"`
+	State    domain.State   `json:"state"`
 	NextStep string         `json:"next_step"`
 	LastMove *core.MoveView `json:"last_move"`
 }
@@ -83,7 +83,7 @@ func TestWaitExitsZeroWhenTheTicketIsAnswered(t *testing.T) {
 	answer(t, srv)
 	r := <-done
 	out := decode[waitOutput](t, r)
-	if out.Ticket != "acme-2" || out.State != store.Answered || !strings.Contains(out.NextStep, "pick_up_answers") {
+	if out.Ticket != "acme-2" || out.State != domain.Answered || !strings.Contains(out.NextStep, "pick_up_answers") {
 		t.Fatalf("output %+v", out)
 	}
 
@@ -132,7 +132,7 @@ func TestWaitExitsThreeWhenTheTicketLeftForAnotherState(t *testing.T) {
 	if err := json.Unmarshal([]byte(r.stdout), &out); err != nil {
 		t.Fatalf("stdout is not JSON: %v\n%s", err, r.stdout)
 	}
-	if out.State != store.InReview || out.LastMove == nil || out.LastMove.From != store.InProgress || out.LastMove.To != store.InReview {
+	if out.State != domain.InReview || out.LastMove == nil || out.LastMove.From != domain.InProgress || out.LastMove.To != domain.InReview {
 		t.Fatalf("output %+v", out)
 	}
 }

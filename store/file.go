@@ -8,6 +8,7 @@ package store
 import (
 	"errors"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -175,25 +176,25 @@ func (s *FileStore) loadOptions() error {
 	if field, err := decodeStrict(data, &f); err != nil {
 		return &LoadError{File: rel, Field: field, Msg: err.Error()}
 	}
-	o := DefaultOptions()
+	o := domain.DefaultOptions()
 	if f.FocusClear != "" {
-		o.FocusClear = FocusClear(f.FocusClear)
+		o.FocusClear = domain.FocusClear(f.FocusClear)
 	}
 	if f.FocusPopup != "" {
-		o.FocusPopup = FocusPopup(f.FocusPopup)
+		o.FocusPopup = domain.FocusPopup(f.FocusPopup)
 	}
 	if f.LimitsPopup != "" {
-		o.LimitsPopup = LimitsPopup(f.LimitsPopup)
+		o.LimitsPopup = domain.LimitsPopup(f.LimitsPopup)
 	}
 	o.GHPath = f.GHPath
 	if !o.FocusClear.Valid() {
-		return &LoadError{File: rel, Field: "focus_clear", Msg: fmt.Sprintf("unknown value %q (%s)", f.FocusClear, strings.Join(FocusClearNames(), " or "))}
+		return &LoadError{File: rel, Field: "focus_clear", Msg: fmt.Sprintf("unknown value %q (%s)", f.FocusClear, strings.Join(domain.FocusClearNames(), " or "))}
 	}
 	if !o.FocusPopup.Valid() {
-		return &LoadError{File: rel, Field: "focus_popup", Msg: fmt.Sprintf("unknown value %q (%s)", f.FocusPopup, strings.Join(FocusPopupNames(), " or "))}
+		return &LoadError{File: rel, Field: "focus_popup", Msg: fmt.Sprintf("unknown value %q (%s)", f.FocusPopup, strings.Join(domain.FocusPopupNames(), " or "))}
 	}
 	if !o.LimitsPopup.Valid() {
-		return &LoadError{File: rel, Field: "limits_popup", Msg: fmt.Sprintf("unknown value %q (%s)", f.LimitsPopup, strings.Join(LimitsPopupNames(), " or "))}
+		return &LoadError{File: rel, Field: "limits_popup", Msg: fmt.Sprintf("unknown value %q (%s)", f.LimitsPopup, strings.Join(domain.LimitsPopupNames(), " or "))}
 	}
 	s.options = o
 	return nil
@@ -214,7 +215,7 @@ func (s *FileStore) loadProject(key string) error {
 	if pf.Key != key {
 		return &LoadError{File: rel, Field: "key", Msg: fmt.Sprintf("key %q does not match its folder %q", pf.Key, key)}
 	}
-	p := Project{Key: pf.Key, DisplayName: pf.DisplayName, Mode: Mode(pf.Mode)}
+	p := domain.Project{Key: pf.Key, DisplayName: pf.DisplayName, Mode: domain.Mode(pf.Mode)}
 	if !p.Mode.Valid() {
 		return &LoadError{File: rel, Field: "mode", Msg: fmt.Sprintf("unknown mode %q (committed or local)", pf.Mode)}
 	}
@@ -227,21 +228,21 @@ func (s *FileStore) loadProject(key string) error {
 		}
 	}
 	if l := pf.Landing; l != nil {
-		p.Landing = Landing{Method: LandingMethod(l.Method), Push: l.Push, Remote: l.Remote, LandPerSpec: l.LandPerSpec == nil || *l.LandPerSpec, PATEnv: l.PATEnv, Base: l.Base}
+		p.Landing = domain.Landing{Method: domain.LandingMethod(l.Method), Push: l.Push, Remote: l.Remote, LandPerSpec: l.LandPerSpec == nil || *l.LandPerSpec, PATEnv: l.PATEnv, Base: l.Base}
 		if !p.Landing.Method.Valid() {
-			return &LoadError{File: rel, Field: "landing.method", Msg: fmt.Sprintf("unknown landing method %q (%s)", l.Method, strings.Join(LandingMethodNames(), " or "))}
+			return &LoadError{File: rel, Field: "landing.method", Msg: fmt.Sprintf("unknown landing method %q (%s)", l.Method, strings.Join(domain.LandingMethodNames(), " or "))}
 		}
 	}
 	if c := pf.CI; c != nil {
-		p.CI = CI{Tracking: c.Tracking, PATEnv: c.PATEnv,
+		p.CI = domain.CI{Tracking: c.Tracking, PATEnv: c.PATEnv,
 			IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, NoPushRemote: c.NoPushRemote, PushRemoteBase: c.PushRemoteBase}
-		if c.Provider != "" && !CIProvider(c.Provider).Valid() {
-			return &LoadError{File: rel, Field: "ci.provider", Msg: fmt.Sprintf("unknown CI provider %q (%s)", c.Provider, strings.Join(CIProviderNames(), " or "))}
+		if c.Provider != "" && !domain.CIProvider(c.Provider).Valid() {
+			return &LoadError{File: rel, Field: "ci.provider", Msg: fmt.Sprintf("unknown CI provider %q (%s)", c.Provider, strings.Join(domain.CIProviderNames(), " or "))}
 		}
 		for i, r := range c.Rules {
 			field := fmt.Sprintf("ci.rules[%d]", i)
-			rule := CIRule{Spec: r.Spec, Workflow: r.Workflow, Branch: r.Branch, State: State(r.State)}
-			if rule.State != Draft && rule.State != Ready {
+			rule := domain.CIRule{Spec: r.Spec, Workflow: r.Workflow, Branch: r.Branch, State: domain.State(r.State)}
+			if rule.State != domain.Draft && rule.State != domain.Ready {
 				return &LoadError{File: rel, Field: field + ".state", Msg: fmt.Sprintf("a CI Rule's Tickets open as Draft or Ready, not %q", r.State)}
 			}
 			if rule.Created, err = parseTime(r.Created); err != nil {
@@ -256,13 +257,13 @@ func (s *FileStore) loadProject(key string) error {
 		p.CI.Repositories = withLegacyHomeCI(p.Key, p.CI.Repositories, *c)
 	}
 	if g := pf.GitHubIssues; g != nil {
-		p.GitHubIssues = GitHubIssues{On: g.On, Repositories: g.Repositories, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
+		p.GitHubIssues = domain.GitHubIssues{On: g.On, Repositories: g.Repositories, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
 	}
 	if a := pf.AzureBoards; a != nil {
-		p.AzureBoards = AzureBoards{On: a.On, Mode: AzureBoardsMode(a.Mode), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
+		p.AzureBoards = domain.AzureBoards{On: a.On, Mode: domain.AzureBoardsMode(a.Mode), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
 			PATEnv: a.PATEnv, NewIssuesNeedMe: a.NewIssuesNeedMe, Spec: a.Spec}
 		if a.Mode != "" && !p.AzureBoards.Mode.Valid() {
-			return &LoadError{File: rel, Field: "azure_boards.mode", Msg: fmt.Sprintf("unknown Azure Boards mode %q (%s)", a.Mode, strings.Join(AzureBoardsModeNames(), " or "))}
+			return &LoadError{File: rel, Field: "azure_boards.mode", Msg: fmt.Sprintf("unknown Azure Boards mode %q (%s)", a.Mode, strings.Join(domain.AzureBoardsModeNames(), " or "))}
 		}
 	}
 	if m := pf.Models; m != nil {
@@ -278,7 +279,7 @@ func (s *FileStore) loadProject(key string) error {
 		}
 	}
 	if g := pf.StageGuides; g != nil {
-		p.StageGuides = StageGuides{SubagentExplorationOff: g.SubagentExplorationOff, ModelAssignmentOn: g.ModelAssignmentOn}
+		p.StageGuides = domain.StageGuides{SubagentExplorationOff: g.SubagentExplorationOff, ModelAssignmentOn: g.ModelAssignmentOn}
 	}
 	var at string
 	if p.FocusKindsOff, at, err = decodeFocusKindsOff(pf.FocusKindsOff); err != nil {
@@ -293,7 +294,7 @@ func (s *FileStore) loadProject(key string) error {
 	p.SmallChangesSpec = pf.SmallChangesSpec
 	p.RetrosSpec = pf.RetrosSpec
 	for i, k := range pf.AutoAccept {
-		kind := AutoAcceptKind(k)
+		kind := domain.AutoAcceptKind(k)
 		if !kind.Valid() {
 			return &LoadError{File: rel, Field: fmt.Sprintf("auto_accept[%d]", i), Msg: fmt.Sprintf("unknown Auto-accept kind %q", k)}
 		}
@@ -377,15 +378,15 @@ func (s *FileStore) loadCIRuns(key string) error {
 		lerr.File = rel
 		return lerr
 	}
-	s.projects[key].ciRuns = CIRuns{Runs: runs}
+	s.projects[key].ciRuns = domain.CIRuns{Runs: runs}
 	return nil
 }
 
 type loadedFile struct {
 	rel    string
 	n      int
-	spec   Spec
-	ticket Ticket
+	spec   domain.Spec
+	ticket domain.Ticket
 	err    *LoadError
 }
 

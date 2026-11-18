@@ -2,6 +2,7 @@ package pullrequestwatcher_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"io"
 	"net/http"
 	"reflect"
@@ -17,7 +18,6 @@ import (
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakeazdo"
 	"github.com/tomoram/code-central/pullrequestwatcher"
-	"github.com/tomoram/code-central/store"
 )
 
 const (
@@ -127,12 +127,12 @@ func TestTurningPullRequestOnForAnAzureReposRemoteIsRefusedWithReasonAndFixWhenT
 		_, err := srv.Core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: azureRemote, Base: "main"})
 		return err
 	})
-	_, err := srv.Core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest, PATEnv: "MY_PAT"})
+	_, err := srv.Core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest, PATEnv: "MY_PAT"})
 	var e *core.Error
 	if !asError(err, &e) || e.Field != "pat_env" || !strings.Contains(e.Message, "MY_PAT") || !strings.Contains(e.Fix, "restart") {
 		t.Fatalf("err = %v, want a refusal on the PAT variable with its reason and fix", err)
 	}
-	if got := method(t, srv); got == store.LandingPullRequest {
+	if got := method(t, srv); got == domain.LandingPullRequest {
 		t.Fatal("Pull Request was turned on despite the failed check")
 	}
 }
@@ -196,7 +196,7 @@ func list(prs ...map[string]any) fakeazdo.Answer {
 func TestItOpensAReadyAzurePullRequestIntoTheBaseWithTheTicketsTitleAndSummaryAndReportsIt(t *testing.T) {
 	w := newAzureWatching(t, list(), fakeazdo.JSON("POST", prsPath, 201, apr(7, "active", "queued", nil)))
 	w.start("ADO_PAT=" + secretPAT)
-	got := w.recorded(store.PROpen)
+	got := w.recorded(domain.PROpen)
 	if got.Number != 7 || got.Link != w.azure.ProjectURL()+"/_git/web/pullrequest/7" {
 		t.Fatalf("recorded %+v, want pull request 7 and its link", got)
 	}
@@ -219,7 +219,7 @@ func TestItOpensAReadyAzurePullRequestIntoTheBaseWithTheTicketsTitleAndSummaryAn
 func TestItAdoptsAnActiveAzurePullRequestInsteadOfOpeningOne(t *testing.T) {
 	w := newAzureWatching(t, list(apr(4, "active", "succeeded", nil)))
 	w.start("ADO_PAT=" + secretPAT)
-	if got := w.recorded(store.PROpen); got.Number != 4 {
+	if got := w.recorded(domain.PROpen); got.Number != 4 {
 		t.Fatalf("recorded %+v, want the adopted pull request 4", got)
 	}
 	if n := len(w.requests("POST", prsPath)); n != 0 {
@@ -231,14 +231,14 @@ func TestItMapsAzureStatusesAndReportsTheMergeCommit(t *testing.T) {
 	closed := "2026-11-11T12:00:00Z"
 	for name, tc := range map[string]struct {
 		pr    map[string]any
-		state store.PullRequestState
+		state domain.PullRequestState
 		merge string
 	}{
-		"active":      {apr(5, "active", "succeeded", nil), store.PROpen, ""},
-		"conflicting": {apr(5, "active", "conflicts", nil), store.PRConflicting, ""},
-		"abandoned":   {apr(5, "abandoned", "succeeded", map[string]any{"closedDate": closed}), store.PRClosed, ""},
+		"active":      {apr(5, "active", "succeeded", nil), domain.PROpen, ""},
+		"conflicting": {apr(5, "active", "conflicts", nil), domain.PRConflicting, ""},
+		"abandoned":   {apr(5, "abandoned", "succeeded", map[string]any{"closedDate": closed}), domain.PRClosed, ""},
 		"completed": {apr(5, "completed", "succeeded", map[string]any{"closedDate": closed,
-			"lastMergeCommit": map[string]string{"commitId": "deadbeef"}}), store.PRMerged, "deadbeef"},
+			"lastMergeCommit": map[string]string{"commitId": "deadbeef"}}), domain.PRMerged, "deadbeef"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			w := newAzureWatching(t, list(tc.pr))
@@ -255,10 +255,10 @@ func TestAnAbandonedAzurePullRequestIsPolledSoAReopenedOneIsSeen(t *testing.T) {
 	closed := map[string]any{"closedDate": "2026-11-11T12:00:00Z"}
 	w := newAzureWatching(t, list(apr(5, "abandoned", "succeeded", closed)))
 	w.start("ADO_PAT=" + secretPAT)
-	w.recorded(store.PRClosed)
+	w.recorded(domain.PRClosed)
 	w.azure.Script(list(apr(5, "active", "succeeded", nil)))
 	w.nextPoll(pullrequestwatcher.Interval)
-	if got := w.recorded(store.PROpen); got.Number != 5 {
+	if got := w.recorded(domain.PROpen); got.Number != 5 {
 		t.Fatalf("recorded %+v, want pull request 5 open again", got)
 	}
 	if n := len(w.requests("POST", prsPath)); n != 0 {
@@ -271,7 +271,7 @@ func TestANewAzurePullRequestOpensAfterAnAbandonedOneWhenTheLatestPushIsNewer(t 
 	old := map[string]any{"closedDate": "2020-01-02T00:00:00Z", "creationDate": "2020-01-01T00:00:00Z"}
 	w := newAzureWatching(t, list(apr(5, "abandoned", "succeeded", old)), fakeazdo.JSON("POST", prsPath, 201, apr(6, "active", "queued", nil)))
 	w.start("ADO_PAT=" + secretPAT)
-	if got := w.recorded(store.PROpen); got.Number != 6 {
+	if got := w.recorded(domain.PROpen); got.Number != 6 {
 		t.Fatalf("recorded %+v, want the new pull request 6", got)
 	}
 }

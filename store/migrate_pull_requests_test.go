@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -37,9 +38,9 @@ func TestTheRealChainMigratesAFormat44StoreToThePullRequestsFormat(t *testing.T)
 			t.Errorf("%s changed:\n%s", rel, after[rel])
 		}
 	}
-	home := store.PullRequest{Number: 7, Link: "https://example.com/7", State: store.PROpen}
+	home := domain.PullRequest{Number: 7, Link: "https://example.com/7", State: domain.PROpen}
 	s.View(func(r store.Reader) error {
-		if tk, _ := r.Ticket("acme", 2); !reflect.DeepEqual(tk.PullRequests, []store.PullRequest{home}) {
+		if tk, _ := r.Ticket("acme", 2); !reflect.DeepEqual(tk.PullRequests, []domain.PullRequest{home}) {
 			t.Errorf("pull requests after migrating = %+v, want the Home Repository's alone", tk.PullRequests)
 		}
 		return nil
@@ -48,7 +49,7 @@ func TestTheRealChainMigratesAFormat44StoreToThePullRequestsFormat(t *testing.T)
 	// A pull request in another Repository, and one marked to close, read
 	// back as written; the Home Repository's stays pull_request.
 	home.Close = true
-	want := []store.PullRequest{home, {Repository: "api", Number: 3, Link: "https://example.com/api/3", State: store.PRMerged, MergeCommit: "def456"}}
+	want := []domain.PullRequest{home, {Repository: "api", Number: 3, Link: "https://example.com/api/3", State: domain.PRMerged, MergeCommit: "def456"}}
 	if err := s.Update(func(w store.Writer) error {
 		tk, _ := w.Ticket("acme", 2)
 		tk.PullRequests = want

@@ -4,6 +4,7 @@
 package storetest
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"slices"
 	"testing"
 	"time"
@@ -26,7 +27,7 @@ func Run(t *testing.T, f Factory) {
 	t.Run("a project reads back after it is written", func(t *testing.T) {
 		s := f.New(t)
 		put(t, s, func(w store.Writer) error {
-			return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: t0, Mode: "committed"})
+			return w.PutProject(domain.Project{Key: "acme", DisplayName: "Acme", Created: t0, Mode: "committed"})
 		})
 		read(t, s, func(r store.Reader) {
 			p, ok := r.Project("acme")
@@ -49,7 +50,7 @@ func Run(t *testing.T, f Factory) {
 		s := f.New(t)
 		at := t0.Add(time.Hour)
 		put(t, s, func(w store.Writer) error {
-			return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: t0, Mode: "committed", Archived: at})
+			return w.PutProject(domain.Project{Key: "acme", DisplayName: "Acme", Created: t0, Mode: "committed", Archived: at})
 		})
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
@@ -64,7 +65,7 @@ func Run(t *testing.T, f Factory) {
 			check(s)
 		}
 		put(t, s, func(w store.Writer) error {
-			return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: t0, Mode: "committed"})
+			return w.PutProject(domain.Project{Key: "acme", DisplayName: "Acme", Created: t0, Mode: "committed"})
 		})
 		read(t, s, func(r store.Reader) {
 			if p, _ := r.Project("acme"); !p.Archived.IsZero() {
@@ -76,8 +77,8 @@ func Run(t *testing.T, f Factory) {
 	t.Run("specs and tickets read back after they are written", func(t *testing.T) {
 		s := f.New(t)
 		seedProject(t, s)
-		spec := store.Spec{Number: 1, Title: "Login", Labels: []string{"auth"}, Tags: map[string]string{"area": "web"}, Created: t0, Updated: t0, Body: "# Login\n\nUsers log in.\n"}
-		ticket := store.Ticket{Number: 2, Title: "Form", State: store.Ready, Spec: 1, Labels: []string{"ui"}, Created: t0, Updated: t0.Add(time.Minute), Description: "Build the form.\n"}
+		spec := domain.Spec{Number: 1, Title: "Login", Labels: []string{"auth"}, Tags: map[string]string{"area": "web"}, Created: t0, Updated: t0, Body: "# Login\n\nUsers log in.\n"}
+		ticket := domain.Ticket{Number: 2, Title: "Form", State: domain.Ready, Spec: 1, Labels: []string{"ui"}, Created: t0, Updated: t0.Add(time.Minute), Description: "Build the form.\n"}
 		put(t, s, func(w store.Writer) error { return w.PutSpec("acme", spec) })
 		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", ticket) })
 		check := func(s store.Store) {
@@ -87,7 +88,7 @@ func Run(t *testing.T, f Factory) {
 					t.Fatalf("spec: got %+v", gs)
 				}
 				gt, ok := r.Ticket("acme", 2)
-				if !ok || gt.Title != "Form" || gt.State != store.Ready || gt.Spec != 1 || gt.Description != ticket.Description || !gt.Updated.Equal(ticket.Updated) || gt.Labels[0] != "ui" {
+				if !ok || gt.Title != "Form" || gt.State != domain.Ready || gt.Spec != 1 || gt.Description != ticket.Description || !gt.Updated.Equal(ticket.Updated) || gt.Labels[0] != "ui" {
 					t.Fatalf("ticket: got %+v", gt)
 				}
 				if len(r.Specs("acme")) != 1 || len(r.Tickets("acme")) != 1 {
@@ -107,16 +108,16 @@ func Run(t *testing.T, f Factory) {
 	t.Run("a ticket's claims, failure reports, comments and moves read back after they are written", func(t *testing.T) {
 		s := f.New(t)
 		seedProject(t, s)
-		tk := store.Ticket{
-			Number: 1, Title: "T", State: store.InReview, Spec: 1, Created: t0, Updated: t0,
-			Claims: []store.Claim{
+		tk := domain.Ticket{
+			Number: 1, Title: "T", State: domain.InReview, Spec: 1, Created: t0, Updated: t0,
+			Claims: []domain.Claim{
 				{Number: 1, ID: "ABC", SessionID: "sess-1", Started: t0, Ended: t0.Add(time.Hour), EndedBy: "finish"},
 				{Number: 2, ID: "DEF", Started: t0.Add(2 * time.Hour)},
 			},
-			FailureReports: []store.FailureReport{{Number: 1, Claim: 1, SessionID: "sess-1", Actor: "agent", Time: t0.Add(time.Hour),
+			FailureReports: []domain.FailureReport{{Number: 1, Claim: 1, SessionID: "sess-1", Actor: "agent", Time: t0.Add(time.Hour),
 				WhatBroke: "Broke.\n", Why: "Why.\n", WhatToFix: "Fix.\n", WhereWorkStands: "Pushed.\n"}},
-			Comments: []store.Comment{{Number: 1, Actor: "agent", Time: t0.Add(time.Hour), Claim: 1, Body: "Did it.\n"}},
-			Moves:    []store.Move{{From: store.Ready, To: store.InProgress, Actor: "agent", Time: t0, Claim: 1}},
+			Comments: []domain.Comment{{Number: 1, Actor: "agent", Time: t0.Add(time.Hour), Claim: 1, Body: "Did it.\n"}},
+			Moves:    []domain.Move{{From: domain.Ready, To: domain.InProgress, Actor: "agent", Time: t0, Claim: 1}},
 		}
 		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", tk) })
 		check := func(s store.Store) {
@@ -145,12 +146,12 @@ func Run(t *testing.T, f Factory) {
 	t.Run("a ticket's rounds read back after they are written, and reads are copies", func(t *testing.T) {
 		s := f.New(t)
 		seedProject(t, s)
-		tk := store.Ticket{
-			Number: 1, Title: "T", State: store.NeedsAnswer, Spec: 1, Created: t0, Updated: t0,
-			Rounds: []store.Round{{Number: 1, Claim: 1, SessionID: "sess-1", Posted: t0, Questions: []store.Question{
-				{Number: 1, Title: "Which DB?", Body: "Postgres or SQLite?\n", Recommended: "SQLite\n", Status: store.QuestionAnswered, Answer: "SQLite\n", Closed: t0.Add(time.Minute)},
-				{Number: 2, Title: "Name?", Body: "What name?", Status: store.QuestionOpen},
-				{Number: 3, Title: "Skip?", Body: "Skip it?", Status: store.QuestionDismissed, Closed: t0.Add(time.Hour)},
+		tk := domain.Ticket{
+			Number: 1, Title: "T", State: domain.NeedsAnswer, Spec: 1, Created: t0, Updated: t0,
+			Rounds: []domain.Round{{Number: 1, Claim: 1, SessionID: "sess-1", Posted: t0, Questions: []domain.Question{
+				{Number: 1, Title: "Which DB?", Body: "Postgres or SQLite?\n", Recommended: "SQLite\n", Status: domain.QuestionAnswered, Answer: "SQLite\n", Closed: t0.Add(time.Minute)},
+				{Number: 2, Title: "Name?", Body: "What name?", Status: domain.QuestionOpen},
+				{Number: 3, Title: "Skip?", Body: "Skip it?", Status: domain.QuestionDismissed, Closed: t0.Add(time.Hour)},
 			}}},
 		}
 		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", tk) })
@@ -164,10 +165,10 @@ func Run(t *testing.T, f Factory) {
 				if g.Number != w.Number || g.Claim != w.Claim || g.SessionID != w.SessionID || !g.Posted.Equal(w.Posted) || !slices.Equal(g.Questions, w.Questions) {
 					t.Fatalf("round: got %+v, want %+v", g, w)
 				}
-				got.Rounds[0].Questions[1].Status = store.QuestionAnswered
+				got.Rounds[0].Questions[1].Status = domain.QuestionAnswered
 			})
 			read(t, s, func(r store.Reader) {
-				if again, _ := r.Ticket("acme", 1); again.Rounds[0].Questions[1].Status != store.QuestionOpen {
+				if again, _ := r.Ticket("acme", 1); again.Rounds[0].Questions[1].Status != domain.QuestionOpen {
 					t.Fatal("changing a read Ticket's Questions changed the store")
 				}
 			})
@@ -181,11 +182,11 @@ func Run(t *testing.T, f Factory) {
 	t.Run("comments and edits read back after they are written", func(t *testing.T) {
 		s := f.New(t)
 		seedProject(t, s)
-		spec := store.Spec{Number: 1, Title: "Login v2", Created: t0, Updated: t0, Body: "New body.\n",
-			Edits: []store.Edit{{Number: 1, Actor: "agent", Time: t0, Previous: map[string]string{"title": "Login", "body": "# Old\n\nOld body.\n"}}}}
-		ticket := store.Ticket{Number: 2, Title: "Form", State: store.Draft, Spec: 1, Created: t0, Updated: t0,
-			Comments: []store.Comment{{Number: 1, Actor: "human", Time: t0, Body: "Looks good.\nShip it.\n"}},
-			Edits:    []store.Edit{{Number: 1, Actor: "agent", Time: t0, Previous: map[string]string{"description": ""}}}}
+		spec := domain.Spec{Number: 1, Title: "Login v2", Created: t0, Updated: t0, Body: "New body.\n",
+			Edits: []domain.Edit{{Number: 1, Actor: "agent", Time: t0, Previous: map[string]string{"title": "Login", "body": "# Old\n\nOld body.\n"}}}}
+		ticket := domain.Ticket{Number: 2, Title: "Form", State: domain.Draft, Spec: 1, Created: t0, Updated: t0,
+			Comments: []domain.Comment{{Number: 1, Actor: "human", Time: t0, Body: "Looks good.\nShip it.\n"}},
+			Edits:    []domain.Edit{{Number: 1, Actor: "agent", Time: t0, Previous: map[string]string{"description": ""}}}}
 		put(t, s, func(w store.Writer) error { return w.PutSpec("acme", spec) })
 		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", ticket) })
 		check := func(s store.Store) {
@@ -214,7 +215,7 @@ func Run(t *testing.T, f Factory) {
 	t.Run("a ticket write replaces the previous version", func(t *testing.T) {
 		s := f.New(t)
 		seedProject(t, s)
-		tk := store.Ticket{Number: 1, Title: "One", State: store.Draft, Spec: 1, Created: t0, Updated: t0}
+		tk := domain.Ticket{Number: 1, Title: "One", State: domain.Draft, Spec: 1, Created: t0, Updated: t0}
 		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", tk) })
 		tk.Title = "Two"
 		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", tk) })
@@ -229,7 +230,7 @@ func Run(t *testing.T, f Factory) {
 		s := f.New(t)
 		seedProject(t, s)
 		put(t, s, func(w store.Writer) error {
-			return w.PutTicket("acme", store.Ticket{Number: 1, Title: "T", State: store.Draft, Spec: 1, Labels: []string{"a"}, Created: t0, Updated: t0})
+			return w.PutTicket("acme", domain.Ticket{Number: 1, Title: "T", State: domain.Draft, Spec: 1, Labels: []string{"a"}, Created: t0, Updated: t0})
 		})
 		read(t, s, func(r store.Reader) {
 			got, _ := r.Ticket("acme", 1)
@@ -251,10 +252,10 @@ func Run(t *testing.T, f Factory) {
 			}
 		})
 		put(t, s, func(w store.Writer) error {
-			return w.PutSpec("acme", store.Spec{Number: 4, Title: "S", Created: t0, Updated: t0})
+			return w.PutSpec("acme", domain.Spec{Number: 4, Title: "S", Created: t0, Updated: t0})
 		})
 		put(t, s, func(w store.Writer) error {
-			return w.PutTicket("acme", store.Ticket{Number: 2, Title: "T", State: store.Draft, Spec: 4, Created: t0, Updated: t0})
+			return w.PutTicket("acme", domain.Ticket{Number: 2, Title: "T", State: domain.Draft, Spec: 4, Created: t0, Updated: t0})
 		})
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
@@ -273,10 +274,10 @@ func Run(t *testing.T, f Factory) {
 		s := f.New(t)
 		seedProject(t, s)
 		err := s.Update(func(w store.Writer) error {
-			if err := w.PutSpec("acme", store.Spec{Number: 1, Title: "S", Created: t0, Updated: t0}); err != nil {
+			if err := w.PutSpec("acme", domain.Spec{Number: 1, Title: "S", Created: t0, Updated: t0}); err != nil {
 				return err
 			}
-			return w.PutSpec("acme", store.Spec{Number: 2, Title: "S", Created: t0, Updated: t0})
+			return w.PutSpec("acme", domain.Spec{Number: 2, Title: "S", Created: t0, Updated: t0})
 		})
 		if err == nil {
 			t.Fatal("second write in one update was allowed")
@@ -287,7 +288,7 @@ func Run(t *testing.T, f Factory) {
 		s := f.New(t)
 		seedProject(t, s)
 		err := s.Update(func(w store.Writer) error {
-			return w.PutTicket("nope", store.Ticket{Number: 1, Title: "T", State: store.Draft, Spec: 1, Created: t0, Updated: t0})
+			return w.PutTicket("nope", domain.Ticket{Number: 1, Title: "T", State: domain.Draft, Spec: 1, Created: t0, Updated: t0})
 		})
 		if err == nil {
 			t.Fatal("write to an unknown project succeeded")
@@ -309,7 +310,7 @@ func Run(t *testing.T, f Factory) {
 func seedProject(t *testing.T, s store.Store) {
 	t.Helper()
 	put(t, s, func(w store.Writer) error {
-		return w.PutProject(store.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed"})
+		return w.PutProject(domain.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed"})
 	})
 }
 

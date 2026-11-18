@@ -9,54 +9,55 @@ package store
 
 import (
 	"errors"
+	"github.com/tomoram/code-central/domain"
 	"maps"
 	"slices"
 )
 
 // Reader reads from memory. Records returned are copies.
 type Reader interface {
-	Project(key string) (Project, bool)
-	Projects() []Project
-	Spec(project string, n int) (Spec, bool)
-	Specs(project string) []Spec
-	Ticket(project string, n int) (Ticket, bool)
+	Project(key string) (domain.Project, bool)
+	Projects() []domain.Project
+	Spec(project string, n int) (domain.Spec, bool)
+	Specs(project string) []domain.Spec
+	Ticket(project string, n int) (domain.Ticket, bool)
 	// Tickets returns the project's Tickets in number order.
-	Tickets(project string) []Ticket
+	Tickets(project string) []domain.Ticket
 	// NextNumber is the highest Spec or Ticket number in the project plus
 	// one. It is derived, never stored, so numbers are never reused.
 	NextNumber(project string) int
 	// Options is always a whole value: the defaults until any are written.
-	Options() Options
+	Options() domain.Options
 	// CIRuns is the project's CI Runs, in the order they were written.
-	CIRuns(project string) []CIRun
+	CIRuns(project string) []domain.CIRun
 }
 
 // Writer is a Reader that can also write one record.
 type Writer interface {
 	Reader
-	PutProject(Project) error
-	PutSpec(project string, s Spec) error
-	PutTicket(project string, t Ticket) error
+	PutProject(domain.Project) error
+	PutSpec(project string, s domain.Spec) error
+	PutTicket(project string, t domain.Ticket) error
 	// PutImport is the one bulk write: every Spec and Ticket in im is new,
 	// but for the existing ones it rewrites, and they all land together
 	// or none does. It counts as the update's one write.
 	PutImport(project string, im Import) error
 	// PutOptions replaces the Options whole. It touches no Project.
-	PutOptions(Options) error
+	PutOptions(domain.Options) error
 	// PutCIRuns replaces the project's CI Runs whole.
-	PutCIRuns(project string, runs []CIRun) error
+	PutCIRuns(project string, runs []domain.CIRun) error
 }
 
 // Import is a batch of new Specs and Tickets written all or nothing.
 type Import struct {
-	Specs   []Spec
-	Tickets []Ticket
+	Specs   []domain.Spec
+	Tickets []domain.Ticket
 	// Rewritten are existing Tickets written along with the new records,
 	// such as the Incoming Issue To Requirement Cancels.
-	Rewritten []Ticket
+	Rewritten []domain.Ticket
 	// RewrittenSpecs are existing Specs written along with them, such as
 	// a Spec given the auto-accept Label with the Tickets it accepts.
-	RewrittenSpecs []Spec
+	RewrittenSpecs []domain.Spec
 }
 
 func (im Import) clone() Import {
@@ -101,7 +102,7 @@ var (
 	ErrInvalidOption = errors.New("store: an Option's value is outside its set")
 )
 
-func cloneSpec(s Spec) Spec {
+func cloneSpec(s domain.Spec) domain.Spec {
 	s.Labels = slices.Clone(s.Labels)
 	s.Tags = maps.Clone(s.Tags)
 	s.Edits = cloneEdits(s.Edits)
@@ -109,7 +110,7 @@ func cloneSpec(s Spec) Spec {
 	return s
 }
 
-func cloneTicket(t Ticket) Ticket {
+func cloneTicket(t domain.Ticket) domain.Ticket {
 	t.Labels = slices.Clone(t.Labels)
 	t.Tags = maps.Clone(t.Tags)
 	t.BlockedBy = slices.Clone(t.BlockedBy)
@@ -140,7 +141,7 @@ func cloneTicket(t Ticket) Ticket {
 	return t
 }
 
-func cloneEdits(es []Edit) []Edit {
+func cloneEdits(es []domain.Edit) []domain.Edit {
 	es = slices.Clone(es)
 	for i := range es {
 		es[i].Previous = maps.Clone(es[i].Previous)
@@ -148,13 +149,13 @@ func cloneEdits(es []Edit) []Edit {
 	return es
 }
 
-func cloneCIRun(r CIRun) CIRun {
+func cloneCIRun(r domain.CIRun) domain.CIRun {
 	r.Jobs = slices.Clone(r.Jobs)
 	return r
 }
 
-func cloneCIRuns(rs CIRuns) CIRuns {
-	out := CIRuns{Runs: make([]CIRun, 0, len(rs.Runs))}
+func cloneCIRuns(rs domain.CIRuns) domain.CIRuns {
+	out := domain.CIRuns{Runs: make([]domain.CIRun, 0, len(rs.Runs))}
 	for _, r := range rs.Runs {
 		out.Runs = append(out.Runs, cloneCIRun(r))
 	}
@@ -162,14 +163,14 @@ func cloneCIRuns(rs CIRuns) CIRuns {
 }
 
 // landingOrDefault fills in what l leaves empty from DefaultLanding.
-func landingOrDefault(l Landing) Landing {
+func landingOrDefault(l domain.Landing) domain.Landing {
 	if l.Method == "" {
 		// A Landing with no method was never set: Land per Spec is on.
-		l.Method = LandingMerge
+		l.Method = domain.LandingMerge
 		l.LandPerSpec = true
 	}
 	if l.Remote == "" {
-		l.Remote = DefaultLandingRemote
+		l.Remote = domain.DefaultLandingRemote
 	}
 	return l
 }

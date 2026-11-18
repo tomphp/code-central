@@ -3,6 +3,7 @@ package server_test
 import (
 	"context"
 	"encoding/json"
+	"github.com/tomoram/code-central/domain"
 	"strconv"
 	"testing"
 	"time"
@@ -10,7 +11,6 @@ import (
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/events"
-	"github.com/tomoram/code-central/store"
 )
 
 // Tracking a pushed Ticket's CI Runs (code-central-256): the Factory's
@@ -57,12 +57,12 @@ func reportCIRuns(body string) httpCall {
 
 // runJSON is a run of workflow on commit abc123 tracked against acme-3.
 func runJSON(id int, workflow, status, conclusion string) string {
-	b, _ := json.Marshal(ciRun(int64(id), workflow, "abc123", store.CIRunStatus(status), store.CIConclusion(conclusion)))
+	b, _ := json.Marshal(ciRun(int64(id), workflow, "abc123", domain.CIRunStatus(status), domain.CIConclusion(conclusion)))
 	return string(b)
 }
 
 // ciRun is a run of workflow on commit tracked against acme-3.
-func ciRun(id int64, workflow, commit string, status store.CIRunStatus, conclusion store.CIConclusion) core.CIRunView {
+func ciRun(id int64, workflow, commit string, status domain.CIRunStatus, conclusion domain.CIConclusion) core.CIRunView {
 	started := codecentraltest.Start
 	return core.CIRunView{ID: id, Attempt: 1, Workflow: workflow, Name: workflow, Branch: "main", Commit: commit,
 		Status: status, Conclusion: conclusion, Started: &started, URL: "https://github.com/acme/web/actions/runs/" + strconv.FormatInt(id, 10),
@@ -90,7 +90,7 @@ func pushOn(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	must(t, func() error {
 		_, err := srv.Core.SetLandingMethod(core.WithActor(context.Background(), core.Human), "acme",
-			core.SetLandingMethodInput{Method: store.LandingMerge, Push: true, Remote: "origin"})
+			core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"})
 		return err
 	})
 }
@@ -162,13 +162,13 @@ func TestOnlyAnAcceptedOrInReviewTicketHasAPushedCommit(t *testing.T) {
 		return err
 	})
 	pushCommit(t, srv, "abc123")
-	if tk := ticket3(t, srv); tk.State != store.InReview || tk.PushedCommit == nil {
+	if tk := ticket3(t, srv); tk.State != domain.InReview || tk.PushedCommit == nil {
 		t.Fatalf("%s with pushed commit %+v, want In Review's hand merge tracked", tk.State, tk.PushedCommit)
 	}
 }
 
 func TestTheCIResultOfEachMixOfRuns(t *testing.T) {
-	run := func(id int64, workflow string, status store.CIRunStatus, conclusion store.CIConclusion) core.CIRunView {
+	run := func(id int64, workflow string, status domain.CIRunStatus, conclusion domain.CIConclusion) core.CIRunView {
 		return ciRun(id, workflow, "abc123", status, conclusion)
 	}
 	for _, tc := range []struct {
@@ -177,21 +177,21 @@ func TestTheCIResultOfEachMixOfRuns(t *testing.T) {
 		want core.CIResult
 	}{
 		{"none reported", nil, core.CIRunning},
-		{"one queued", []core.CIRunView{run(1, "ci.yml", store.CIQueued, ""), run(2, "lint.yml", store.CICompleted, store.CISuccess)}, core.CIRunning},
-		{"one in progress beside a failure", []core.CIRunView{run(1, "ci.yml", store.CIInProgress, ""), run(2, "lint.yml", store.CICompleted, store.CIFailure)}, core.CIRunning},
-		{"all succeeded", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CISuccess), run(2, "lint.yml", store.CICompleted, store.CISuccess)}, core.CIPassed},
-		{"skipped and neutral pass", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CISkipped), run(2, "lint.yml", store.CICompleted, store.CINeutral)}, core.CIPassed},
-		{"a failure", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CISuccess), run(2, "lint.yml", store.CICompleted, store.CIFailure)}, core.CIFailed},
-		{"a lone cancelled run", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CICancelled)}, core.CICancelled},
-		{"a cancelled run beside a pass", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CISuccess), run(2, "lint.yml", store.CICompleted, store.CICancelled)}, core.CICancelled},
-		{"a failure beside a cancelled run", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CICancelled), run(2, "lint.yml", store.CICompleted, store.CIFailure)}, core.CIFailed},
-		{"a timed out run beside a cancelled run", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CICancelled), run(2, "lint.yml", store.CICompleted, store.CITimedOut)}, core.CIFailed},
-		{"one in progress beside a cancelled run", []core.CIRunView{run(1, "ci.yml", store.CIInProgress, ""), run(2, "lint.yml", store.CICompleted, store.CICancelled)}, core.CIRunning},
-		{"an ignored cancelled run", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CISuccess), run(2, "nightly.yml", store.CICompleted, store.CICancelled)}, core.CIPassed},
-		{"a timed out run", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CITimedOut)}, core.CIFailed},
-		{"an ignored failure", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CISuccess), run(2, "nightly.yml", store.CICompleted, store.CIFailure)}, core.CIPassed},
-		{"only an ignored run", []core.CIRunView{run(2, "nightly.yml", store.CICompleted, store.CISuccess)}, core.CIRunning},
-		{"an ignored run unfinished", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CISuccess), run(2, "nightly.yml", store.CIInProgress, "")}, core.CIPassed},
+		{"one queued", []core.CIRunView{run(1, "ci.yml", domain.CIQueued, ""), run(2, "lint.yml", domain.CICompleted, domain.CISuccess)}, core.CIRunning},
+		{"one in progress beside a failure", []core.CIRunView{run(1, "ci.yml", domain.CIInProgress, ""), run(2, "lint.yml", domain.CICompleted, domain.CIFailure)}, core.CIRunning},
+		{"all succeeded", []core.CIRunView{run(1, "ci.yml", domain.CICompleted, domain.CISuccess), run(2, "lint.yml", domain.CICompleted, domain.CISuccess)}, core.CIPassed},
+		{"skipped and neutral pass", []core.CIRunView{run(1, "ci.yml", domain.CICompleted, domain.CISkipped), run(2, "lint.yml", domain.CICompleted, domain.CINeutral)}, core.CIPassed},
+		{"a failure", []core.CIRunView{run(1, "ci.yml", domain.CICompleted, domain.CISuccess), run(2, "lint.yml", domain.CICompleted, domain.CIFailure)}, core.CIFailed},
+		{"a lone cancelled run", []core.CIRunView{run(1, "ci.yml", domain.CICompleted, domain.CICancelled)}, core.CICancelled},
+		{"a cancelled run beside a pass", []core.CIRunView{run(1, "ci.yml", domain.CICompleted, domain.CISuccess), run(2, "lint.yml", domain.CICompleted, domain.CICancelled)}, core.CICancelled},
+		{"a failure beside a cancelled run", []core.CIRunView{run(1, "ci.yml", domain.CICompleted, domain.CICancelled), run(2, "lint.yml", domain.CICompleted, domain.CIFailure)}, core.CIFailed},
+		{"a timed out run beside a cancelled run", []core.CIRunView{run(1, "ci.yml", domain.CICompleted, domain.CICancelled), run(2, "lint.yml", domain.CICompleted, domain.CITimedOut)}, core.CIFailed},
+		{"one in progress beside a cancelled run", []core.CIRunView{run(1, "ci.yml", domain.CIInProgress, ""), run(2, "lint.yml", domain.CICompleted, domain.CICancelled)}, core.CIRunning},
+		{"an ignored cancelled run", []core.CIRunView{run(1, "ci.yml", domain.CICompleted, domain.CISuccess), run(2, "nightly.yml", domain.CICompleted, domain.CICancelled)}, core.CIPassed},
+		{"a timed out run", []core.CIRunView{run(1, "ci.yml", domain.CICompleted, domain.CITimedOut)}, core.CIFailed},
+		{"an ignored failure", []core.CIRunView{run(1, "ci.yml", domain.CICompleted, domain.CISuccess), run(2, "nightly.yml", domain.CICompleted, domain.CIFailure)}, core.CIPassed},
+		{"only an ignored run", []core.CIRunView{run(2, "nightly.yml", domain.CICompleted, domain.CISuccess)}, core.CIRunning},
+		{"an ignored run unfinished", []core.CIRunView{run(1, "ci.yml", domain.CICompleted, domain.CISuccess), run(2, "nightly.yml", domain.CIInProgress, "")}, core.CIPassed},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := newServer(t, pushedAccepted)
@@ -207,12 +207,12 @@ func TestTheCIResultOfEachMixOfRuns(t *testing.T) {
 
 func TestACancelledRunReRunToSuccessIsPassed(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
-	first := ciRun(1, "ci.yml", "abc123", store.CICompleted, store.CICancelled)
+	first := ciRun(1, "ci.yml", "abc123", domain.CICompleted, domain.CICancelled)
 	reportRuns(t, srv, first)
 	if got := ticket3(t, srv).CIResult; got != core.CICancelled {
 		t.Fatalf("ci result %q, want cancelled", got)
 	}
-	again := ciRun(1, "ci.yml", "abc123", store.CICompleted, store.CISuccess)
+	again := ciRun(1, "ci.yml", "abc123", domain.CICompleted, domain.CISuccess)
 	again.Attempt = 2
 	reportRuns(t, srv, again)
 	if got := ticket3(t, srv).CIResult; got != core.CIPassed {
@@ -222,13 +222,13 @@ func TestACancelledRunReRunToSuccessIsPassed(t *testing.T) {
 
 func TestReportCIRunsUpsertsByRunIDAndAttempt(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
-	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", store.CIInProgress, ""))
-	finished := ciRun(1, "ci.yml", "abc123", store.CICompleted, store.CIFailure)
+	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", domain.CIInProgress, ""))
+	finished := ciRun(1, "ci.yml", "abc123", domain.CICompleted, domain.CIFailure)
 	at := codecentraltest.Start.Add(5 * time.Minute)
 	finished.Finished = &at
 	reportRuns(t, srv, finished)
 	tk := ticket3(t, srv)
-	if len(tk.CIRuns) != 1 || tk.CIRuns[0].Status != store.CICompleted || tk.CIRuns[0].Finished == nil || !tk.CIRuns[0].Finished.Equal(at) {
+	if len(tk.CIRuns) != 1 || tk.CIRuns[0].Status != domain.CICompleted || tk.CIRuns[0].Finished == nil || !tk.CIRuns[0].Finished.Equal(at) {
 		t.Fatalf("runs = %+v, want the one run, now finished", tk.CIRuns)
 	}
 	if tk.CIResult != core.CIFailed {
@@ -237,7 +237,7 @@ func TestReportCIRunsUpsertsByRunIDAndAttempt(t *testing.T) {
 
 	// A re-run is the next attempt of the same run: it replaces the
 	// failed attempt in the CI result, and both are kept.
-	rerun := ciRun(1, "ci.yml", "abc123", store.CICompleted, store.CISuccess)
+	rerun := ciRun(1, "ci.yml", "abc123", domain.CICompleted, domain.CISuccess)
 	rerun.Attempt = 2
 	reportRuns(t, srv, rerun)
 	tk = ticket3(t, srv)
@@ -248,12 +248,12 @@ func TestReportCIRunsUpsertsByRunIDAndAttempt(t *testing.T) {
 
 func TestAReportedRunCarriesEverythingTheCIWatcherSaid(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
-	want := ciRun(7, "nightly.yml", "abc123", store.CICompleted, store.CIFailure)
+	want := ciRun(7, "nightly.yml", "abc123", domain.CICompleted, domain.CIFailure)
 	want.Name, want.Branch = "Nightly build", "acme-3"
 	at := codecentraltest.Start.Add(3 * time.Minute)
 	want.Finished = &at
-	want.Jobs = []core.CIJobView{{Name: "build", Conclusion: store.CISuccess, URL: "https://github.com/acme/web/actions/runs/7/job/1"},
-		{Name: "test", Conclusion: store.CIFailure, URL: "https://github.com/acme/web/actions/runs/7/job/2"}}
+	want.Jobs = []core.CIJobView{{Name: "build", Conclusion: domain.CISuccess, URL: "https://github.com/acme/web/actions/runs/7/job/1"},
+		{Name: "test", Conclusion: domain.CIFailure, URL: "https://github.com/acme/web/actions/runs/7/job/2"}}
 	reportRuns(t, srv, want)
 	want.Ignored = true
 	got := ticket3(t, srv).CIRuns
@@ -266,7 +266,7 @@ func TestAReportedRunCarriesEverythingTheCIWatcherSaid(t *testing.T) {
 
 func TestANewerPushedCommitReplacesTheOldAndKeepsItsRunsAsHistory(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
-	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", store.CICompleted, store.CIFailure))
+	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", domain.CICompleted, domain.CIFailure))
 	if got := ticket3(t, srv).CIResult; got != core.CIFailed {
 		t.Fatalf("ci result %q, want failed", got)
 	}
@@ -275,7 +275,7 @@ func TestANewerPushedCommitReplacesTheOldAndKeepsItsRunsAsHistory(t *testing.T) 
 	if tk.PushedCommit.Commit != "def456" || tk.CIResult != core.CIRunning {
 		t.Fatalf("pushed %+v with ci result %q, want def456 running", tk.PushedCommit, tk.CIResult)
 	}
-	reportRuns(t, srv, ciRun(2, "ci.yml", "def456", store.CICompleted, store.CISuccess))
+	reportRuns(t, srv, ciRun(2, "ci.yml", "def456", domain.CICompleted, domain.CISuccess))
 	tk = ticket3(t, srv)
 	if tk.CIResult != core.CIPassed || len(tk.CIRuns) != 2 || tk.CIRuns[0].Commit != "def456" || tk.CIRuns[1].Commit != "abc123" {
 		t.Fatalf("ci result %q with runs %+v, want passed, def456's run first and abc123's kept", tk.CIResult, tk.CIRuns)
@@ -284,17 +284,17 @@ func TestANewerPushedCommitReplacesTheOldAndKeepsItsRunsAsHistory(t *testing.T) 
 
 func TestReportCIRunsRefusesWhatItCantTrack(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
-	noTarget := ciRun(1, "ci.yml", "abc123", store.CIQueued, "")
+	noTarget := ciRun(1, "ci.yml", "abc123", domain.CIQueued, "")
 	noTarget.Ticket = ""
-	unfinishedConcluded := ciRun(1, "ci.yml", "abc123", store.CIInProgress, store.CISuccess)
-	path := ciRun(1, ".github/workflows/ci.yml", "abc123", store.CIQueued, "")
+	unfinishedConcluded := ciRun(1, "ci.yml", "abc123", domain.CIInProgress, domain.CISuccess)
+	path := ciRun(1, ".github/workflows/ci.yml", "abc123", domain.CIQueued, "")
 	for name, run := range map[string]core.CIRunView{"nothing tracked": noTarget, "a conclusion while running": unfinishedConcluded, "a workflow path": path} {
 		b, _ := json.Marshal(core.ReportCIRunsInput{Runs: []core.CIRunView{run}})
 		if e := httpRejected(t, srv, reportCIRuns(string(b)), core.Invalid); e.Field == "" {
 			t.Errorf("%s: refused with no field: %+v", name, e)
 		}
 	}
-	missing := ciRun(1, "ci.yml", "abc123", store.CIQueued, "")
+	missing := ciRun(1, "ci.yml", "abc123", domain.CIQueued, "")
 	missing.Ticket = "acme-99"
 	b, _ := json.Marshal(core.ReportCIRunsInput{Runs: []core.CIRunView{missing}})
 	httpRejected(t, srv, reportCIRuns(string(b)), core.Invalid)
@@ -306,7 +306,7 @@ func TestReportCIRunsRefusesWhatItCantTrack(t *testing.T) {
 func TestReportCIRunsNeedsCITrackingOn(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
 	httpOK(t, srv, setCITracking(`{"tracking":false}`))
-	b, _ := json.Marshal(core.ReportCIRunsInput{Runs: []core.CIRunView{ciRun(1, "ci.yml", "abc123", store.CIQueued, "")}})
+	b, _ := json.Marshal(core.ReportCIRunsInput{Runs: []core.CIRunView{ciRun(1, "ci.yml", "abc123", domain.CIQueued, "")}})
 	httpRejected(t, srv, reportCIRuns(string(b)), core.ActionNotAllowed)
 }
 
@@ -314,7 +314,7 @@ func TestReportedRunsSendTheirTicketAChangeNotice(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
 	sub, stop := srv.Core.Events().Subscribe()
 	defer stop()
-	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", store.CIQueued, ""))
+	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", domain.CIQueued, ""))
 	awaitNotice(t, sub, "ticket.changed on acme-3", func(e events.Event) bool { return e.Type == events.TicketChanged && e.ID == "acme-3" })
 }
 
@@ -333,7 +333,7 @@ func TestGetCIWatchHasThePushedCommitsStillWaiting(t *testing.T) {
 	}
 	// Its runs all finished, but it is newly pushed: another workflow may
 	// yet start.
-	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", store.CICompleted, store.CISuccess))
+	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", domain.CICompleted, domain.CISuccess))
 	if got := waiting(); len(got) != 1 {
 		t.Fatalf("waiting = %+v, want abc123 still watched while newly pushed", got)
 	}
@@ -341,7 +341,7 @@ func TestGetCIWatchHasThePushedCommitsStillWaiting(t *testing.T) {
 	if got := waiting(); len(got) != 0 {
 		t.Fatalf("waiting = %+v, want nothing once passed and no longer new", got)
 	}
-	reportRuns(t, srv, ciRun(2, "lint.yml", "abc123", store.CIInProgress, ""))
+	reportRuns(t, srv, ciRun(2, "lint.yml", "abc123", domain.CIInProgress, ""))
 	if got := waiting(); len(got) != 1 {
 		t.Fatalf("waiting = %+v, want abc123 watched again while a run is unfinished", got)
 	}

@@ -1,6 +1,7 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,7 +9,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // Under Merge + Push the Factory fetches the Push remote and brings the
@@ -29,7 +29,7 @@ func TestUnderMergeAndPushARemoteThatIsAheadIsFastForwardedBeforeTheTicketLands(
 
 	r := h.Start()
 	r.WantOutput("main: fast-forwarded to origin/main")
-	tk := h.WantState(id, store.Done)
+	tk := h.WantState(id, domain.Done)
 	merge := h.Git("rev-parse", "main")
 	if got := h.Git("log", "-1", "--format=%P", merge); got != theirs+" "+commit {
 		t.Errorf("main's tip has parents %q, want the remote's %s then %s", got, theirs, commit)
@@ -91,7 +91,7 @@ func TestUnderMergeAndPushALocalBaseAheadOfTheRemoteIsCurrent(t *testing.T) {
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	r := h.Start()
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 	if _, ok := baseDivergedItem(t, h); ok {
 		t.Error("an unpushed local commit showed Base diverged")
 	}
@@ -119,10 +119,10 @@ func TestUnderMergeAndPushAConflictingMoveLeavesTheBaseAsItWasAndStopsLandingAnd
 	if got := h.Git("rev-parse", "main"); got != mine {
 		t.Errorf("main moved to %s, want it left at %s", got, mine)
 	}
-	if tk := h.Ticket(id); tk.State != store.Accepted {
+	if tk := h.Ticket(id); tk.State != domain.Accepted {
 		t.Errorf("%s is %s, want it held Accepted", id, tk.State)
 	}
-	if tk := h.Ticket(ready); tk.State != store.Ready {
+	if tk := h.Ticket(ready); tk.State != domain.Ready {
 		t.Errorf("%s is %s, want it not claimed", ready, tk.State)
 	}
 	if got := remote.Git("rev-parse", "main"); got != theirs {
@@ -140,7 +140,7 @@ func TestUnderMergeAndPushAConflictingMoveLeavesTheBaseAsItWasAndStopsLandingAnd
 
 	h.Git("reset", "-q", "--hard", "origin/main")
 	r.Poll()
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 	if _, ok := baseDivergedItem(t, h); ok {
 		t.Error("Base diverged still shows in Needs Me after the base was reset to the remote's")
 	}
@@ -160,13 +160,13 @@ func TestUnderMergeAndPushAFailedFetchOnlyWarns(t *testing.T) {
 	if _, ok := baseDivergedItem(t, h); ok {
 		t.Error("a failed fetch showed Base diverged")
 	}
-	if tk := h.Ticket(id); tk.State != store.Accepted {
+	if tk := h.Ticket(id); tk.State != domain.Accepted {
 		t.Errorf("%s is %s, want it left Accepted", id, tk.State)
 	}
 
 	remote.Restore()
 	r.Poll()
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 }
 
 func TestUnderMergeAndPushUncommittedChangesInTheWayMakeThePollWait(t *testing.T) {
@@ -185,7 +185,7 @@ func TestUnderMergeAndPushUncommittedChangesInTheWayMakeThePollWait(t *testing.T
 
 	r := h.Start()
 	r.WantOutput("warning: can't fast-forward main to origin yet")
-	if tk := h.Ticket(id); tk.State != store.Accepted {
+	if tk := h.Ticket(id); tk.State != domain.Accepted {
 		t.Errorf("%s is %s, want it held Accepted", id, tk.State)
 	}
 	if got := h.Git("rev-parse", "main"); got != before {
@@ -199,7 +199,7 @@ func TestUnderMergeAndPushUncommittedChangesInTheWayMakeThePollWait(t *testing.T
 		t.Fatal(err)
 	}
 	r.Poll()
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 	h.Git("merge-base", "--is-ancestor", theirs, "main")
 }
 
@@ -214,11 +214,11 @@ func TestUnderMergeWithoutPushTheFactoryNeverFetches(t *testing.T) {
 	for _, ref := range strings.Fields(h.Git("for-each-ref", "--format=%(refname)", "refs/remotes")) {
 		h.Git("update-ref", "-d", ref)
 	}
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, Remote: "origin"})
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Remote: "origin"})
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	h.Start()
-	h.WantState(id, store.Done)
+	h.WantState(id, domain.Done)
 	if got := h.Git("branch", "-r"); got != "" {
 		t.Errorf("remote-tracking branches %q, want none: nothing was fetched", got)
 	}

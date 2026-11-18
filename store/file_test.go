@@ -3,6 +3,7 @@ package store_test
 import (
 	"errors"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -112,26 +113,26 @@ func TestFilesAreWrittenInFixedFieldOrder(t *testing.T) {
 	dir := t.TempDir()
 	s := openFile(t, dir)
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme Co", Created: t0, Mode: "committed"})
+		return w.PutProject(domain.Project{Key: "acme", DisplayName: "Acme Co", Created: t0, Mode: "committed"})
 	})
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutSpec("acme", store.Spec{Number: 1, Title: "Login", Labels: []string{"auth"}, Created: t0, Updated: t0, Body: "# Login\n\nText.\n",
-			Edits: []store.Edit{{Number: 1, Actor: "agent", Time: t0, Previous: map[string]string{"title": "Sign in", "body": "Old.\nText.\n"}}}})
+		return w.PutSpec("acme", domain.Spec{Number: 1, Title: "Login", Labels: []string{"auth"}, Created: t0, Updated: t0, Body: "# Login\n\nText.\n",
+			Edits: []domain.Edit{{Number: 1, Actor: "agent", Time: t0, Previous: map[string]string{"title": "Sign in", "body": "Old.\nText.\n"}}}})
 	})
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutTicket("acme", store.Ticket{
-			Number: 2, Title: "Form", State: store.Ready, Spec: 1, Labels: []string{"ui"},
+		return w.PutTicket("acme", domain.Ticket{
+			Number: 2, Title: "Form", State: domain.Ready, Spec: 1, Labels: []string{"ui"},
 			Created: t0, Updated: t0.Add(90 * time.Second), Description: "Build it.\nWell.\n",
-			Branch: "acme-2", Commit: "abc123", Recommendation: store.RecommendSplit,
-			Moves:  []store.Move{{From: store.Accepted, To: store.Done, Actor: "agent", Time: t0, Via: "merge", Commit: "def456"}},
-			Claims: []store.Claim{{Number: 1, ID: "ABC", SessionID: "s1", WorkingDir: "/work/acme 2", ResumeCommand: "claude --resume s1 && echo 'back'", Model: "opus", Effort: "high", Started: t0, Ended: t0.Add(time.Minute), EndedBy: "finish"}},
-			Rounds: []store.Round{{Number: 1, Claim: 1, SessionID: "s1", Posted: t0, Questions: []store.Question{
-				{Number: 1, Title: "Which DB?", Body: "Postgres\nor SQLite?\n", Recommended: "SQLite", Status: store.QuestionAnswered, Answer: "SQLite\nfor now.\n", Closed: t0.Add(30 * time.Second)},
+			Branch: "acme-2", Commit: "abc123", Recommendation: domain.RecommendSplit,
+			Moves:  []domain.Move{{From: domain.Accepted, To: domain.Done, Actor: "agent", Time: t0, Via: "merge", Commit: "def456"}},
+			Claims: []domain.Claim{{Number: 1, ID: "ABC", SessionID: "s1", WorkingDir: "/work/acme 2", ResumeCommand: "claude --resume s1 && echo 'back'", Model: "opus", Effort: "high", Started: t0, Ended: t0.Add(time.Minute), EndedBy: "finish"}},
+			Rounds: []domain.Round{{Number: 1, Claim: 1, SessionID: "s1", Posted: t0, Questions: []domain.Question{
+				{Number: 1, Title: "Which DB?", Body: "Postgres\nor SQLite?\n", Recommended: "SQLite", Status: domain.QuestionAnswered, Answer: "SQLite\nfor now.\n", Closed: t0.Add(30 * time.Second)},
 			}}},
-			FailureReports: []store.FailureReport{{Number: 1, Claim: 1, SessionID: "s1", WorkingDir: "/work/acme 2", ResumeCommand: "claude --resume s1 && echo 'back'", Actor: "agent", Time: t0,
+			FailureReports: []domain.FailureReport{{Number: 1, Claim: 1, SessionID: "s1", WorkingDir: "/work/acme 2", ResumeCommand: "claude --resume s1 && echo 'back'", Actor: "agent", Time: t0,
 				WhatBroke: "It broke.\nBadly.\n", Why: "Because.", WhatToFix: "Fix it.", WhereWorkStands: "Pushed."}},
-			Comments: []store.Comment{{Number: 1, Actor: "agent", Time: t0.Add(time.Minute), Claim: 1, Body: "Done.\nCheck it.\n"}},
-			Edits:    []store.Edit{{Number: 1, Actor: "agent", Time: t0, Previous: map[string]string{"description": "Old.\n"}}},
+			Comments: []domain.Comment{{Number: 1, Actor: "agent", Time: t0.Add(time.Minute), Claim: 1, Body: "Done.\nCheck it.\n"}},
+			Edits:    []domain.Edit{{Number: 1, Actor: "agent", Time: t0, Previous: map[string]string{"description": "Old.\n"}}},
 		})
 	})
 
@@ -264,11 +265,11 @@ func TestEachWriteLeavesOnlyItsOneFile(t *testing.T) {
 	dir := t.TempDir()
 	s := openFile(t, dir)
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutProject(store.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed"})
+		return w.PutProject(domain.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed"})
 	})
 	before := listFiles(t, dir)
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutTicket("acme", store.Ticket{Number: 1, Title: "T", State: store.Draft, Spec: 1, Created: t0, Updated: t0})
+		return w.PutTicket("acme", domain.Ticket{Number: 1, Title: "T", State: domain.Draft, Spec: 1, Created: t0, Updated: t0})
 	})
 	after := listFiles(t, dir)
 	var added []string
@@ -287,7 +288,7 @@ func TestOptionsAreOneFileAtTheStoreRoot(t *testing.T) {
 	s := openFile(t, dir)
 	before := listFiles(t, dir)
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutOptions(store.Options{FocusClear: store.FocusAllClear, FocusPopup: store.FocusPopupOff, LimitsPopup: store.LimitsPopupOn})
+		return w.PutOptions(domain.Options{FocusClear: domain.FocusAllClear, FocusPopup: domain.FocusPopupOff, LimitsPopup: domain.LimitsPopupOn})
 	})
 	var added []string
 	for _, f := range listFiles(t, dir) {
@@ -307,13 +308,13 @@ func TestAnOptionsFileKeepsTheGHPathOnlyWhenSet(t *testing.T) {
 	dir := t.TempDir()
 	s := openFile(t, dir)
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutOptions(store.Options{FocusClear: store.FocusAllClear, FocusPopup: store.FocusPopupOff, LimitsPopup: store.LimitsPopupOn, GHPath: "/opt/tools/gh"})
+		return w.PutOptions(domain.Options{FocusClear: domain.FocusAllClear, FocusPopup: domain.FocusPopupOff, LimitsPopup: domain.LimitsPopupOn, GHPath: "/opt/tools/gh"})
 	})
 	if got := readFile(t, filepath.Join(dir, "options.yaml")); got != "focus_clear: all_clear\nfocus_popup: \"off\"\ngh_path: /opt/tools/gh\n" {
 		t.Fatalf("options.yaml = %q", got)
 	}
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutOptions(store.Options{FocusClear: store.FocusAllClear, FocusPopup: store.FocusPopupOff, LimitsPopup: store.LimitsPopupOn})
+		return w.PutOptions(domain.Options{FocusClear: domain.FocusAllClear, FocusPopup: domain.FocusPopupOff, LimitsPopup: domain.LimitsPopupOn})
 	})
 	if got := readFile(t, filepath.Join(dir, "options.yaml")); got != "focus_clear: all_clear\nfocus_popup: \"off\"\n" {
 		t.Fatalf("options.yaml = %q, want no gh_path once it is cleared", got)
@@ -324,13 +325,13 @@ func TestAnOptionsFileKeepsTheLimitsPopupOnlyWhenOff(t *testing.T) {
 	dir := t.TempDir()
 	s := openFile(t, dir)
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutOptions(store.Options{FocusClear: store.FocusAllClear, FocusPopup: store.FocusPopupOff, LimitsPopup: store.LimitsPopupOff})
+		return w.PutOptions(domain.Options{FocusClear: domain.FocusAllClear, FocusPopup: domain.FocusPopupOff, LimitsPopup: domain.LimitsPopupOff})
 	})
 	if got := readFile(t, filepath.Join(dir, "options.yaml")); got != "focus_clear: all_clear\nfocus_popup: \"off\"\nlimits_popup: \"off\"\n" {
 		t.Fatalf("options.yaml = %q", got)
 	}
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutOptions(store.Options{FocusClear: store.FocusAllClear, FocusPopup: store.FocusPopupOff, LimitsPopup: store.LimitsPopupOn})
+		return w.PutOptions(domain.Options{FocusClear: domain.FocusAllClear, FocusPopup: domain.FocusPopupOff, LimitsPopup: domain.LimitsPopupOn})
 	})
 	if got := readFile(t, filepath.Join(dir, "options.yaml")); got != "focus_clear: all_clear\nfocus_popup: \"off\"\n" {
 		t.Fatalf("options.yaml = %q, want no limits_popup while it is the default", got)
@@ -343,7 +344,7 @@ func TestAnOptionsFileKeepsAnExplicitLimitsPopupOff(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "options.yaml"), "limits_popup: \"off\"\n")
 	s := openFile(t, dir)
 	s.View(func(r store.Reader) error {
-		if o := r.Options(); o.LimitsPopup != store.LimitsPopupOff {
+		if o := r.Options(); o.LimitsPopup != domain.LimitsPopupOff {
 			t.Fatalf("options = %+v, want Show Limits popup off as the file holds", o)
 		}
 		return nil
@@ -365,7 +366,7 @@ func TestAnOptionsFileWithNoKeysReadsAsTheDefaults(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "options.yaml"), "{}\n")
 	s := openFile(t, dir)
 	s.View(func(r store.Reader) error {
-		if o := r.Options(); o.FocusClear != store.FocusActivityDashboard {
+		if o := r.Options(); o.FocusClear != domain.FocusActivityDashboard {
 			t.Fatalf("options = %+v, want the defaults", o)
 		}
 		return nil
@@ -378,7 +379,7 @@ func TestAnOptionsFileKeepsAnExplicitAllClear(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "options.yaml"), "focus_clear: all_clear\nfocus_popup: \"off\"\n")
 	s := openFile(t, dir)
 	s.View(func(r store.Reader) error {
-		if o := r.Options(); o.FocusClear != store.FocusAllClear {
+		if o := r.Options(); o.FocusClear != domain.FocusAllClear {
 			t.Fatalf("options = %+v, want the All clear the file holds", o)
 		}
 		return nil
@@ -398,15 +399,15 @@ func TestADefaultLandingMethodLeavesProjectYAMLUnchanged(t *testing.T) {
 	dir := t.TempDir()
 	s := openFile(t, dir)
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC), Mode: store.ModeCommitted})
+		return w.PutProject(domain.Project{Key: "acme", DisplayName: "Acme", Created: time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC), Mode: domain.ModeCommitted})
 	})
 	const plain = "key: acme\ndisplay_name: Acme\ncreated: 2026-11-07T09:30:00Z\nmode: committed\n"
 	if got := readFile(t, filepath.Join(dir, "projects/acme/project.yaml")); got != plain {
 		t.Fatalf("project.yaml = %q", got)
 	}
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC), Mode: store.ModeCommitted,
-			Landing: store.Landing{Method: store.LandingBranch, Push: true, Remote: "origin", LandPerSpec: true}})
+		return w.PutProject(domain.Project{Key: "acme", DisplayName: "Acme", Created: time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC), Mode: domain.ModeCommitted,
+			Landing: domain.Landing{Method: domain.LandingBranch, Push: true, Remote: "origin", LandPerSpec: true}})
 	})
 	if got, want := readFile(t, filepath.Join(dir, "projects/acme/project.yaml")), plain+"landing:\n  method: branch\n  push: true\n  remote: origin\n"; got != want {
 		t.Fatalf("project.yaml = %q, want %q", got, want)
@@ -418,15 +419,15 @@ func TestDefaultCISettingsLeaveProjectYAMLUnchanged(t *testing.T) {
 	s := openFile(t, dir)
 	created := time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC)
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: created, Mode: store.ModeCommitted, CI: store.DefaultCI()})
+		return w.PutProject(domain.Project{Key: "acme", DisplayName: "Acme", Created: created, Mode: domain.ModeCommitted, CI: domain.DefaultCI()})
 	})
 	const plain = "key: acme\ndisplay_name: Acme\ncreated: 2026-11-07T09:30:00Z\nmode: committed\n"
 	if got := readFile(t, filepath.Join(dir, "projects/acme/project.yaml")); got != plain {
 		t.Fatalf("project.yaml = %q", got)
 	}
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: created, Mode: store.ModeCommitted,
-			CI: store.CI{Tracking: true, IgnoredWorkflows: []string{"nightly.yml"}, Repositories: []store.CIRepository{{Name: "acme", Provider: store.CIGitHubActions, Repository: "acme/web"}}}})
+		return w.PutProject(domain.Project{Key: "acme", DisplayName: "Acme", Created: created, Mode: domain.ModeCommitted,
+			CI: domain.CI{Tracking: true, IgnoredWorkflows: []string{"nightly.yml"}, Repositories: []domain.CIRepository{{Name: "acme", Provider: domain.CIGitHubActions, Repository: "acme/web"}}}})
 	})
 	want := plain + "ci:\n  tracking: true\n  ignored_workflows:\n    - nightly.yml\n  repositories:\n    - name: acme\n      provider: github_actions\n      repository: acme/web\n"
 	if got := readFile(t, filepath.Join(dir, "projects/acme/project.yaml")); got != want {
@@ -440,7 +441,7 @@ func TestFocusKindsAreLeftOutOfProjectYAMLWhileEveryReasonIsOn(t *testing.T) {
 	created := time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC)
 	put := func(off []string) {
 		mustUpdate(t, s, func(w store.Writer) error {
-			return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: created, Mode: store.ModeCommitted, FocusKindsOff: off})
+			return w.PutProject(domain.Project{Key: "acme", DisplayName: "Acme", Created: created, Mode: domain.ModeCommitted, FocusKindsOff: off})
 		})
 	}
 	const plain = "key: acme\ndisplay_name: Acme\ncreated: 2026-11-07T09:30:00Z\nmode: committed\n"
@@ -589,7 +590,7 @@ func TestUsageFoldersDoNotAffectLoading(t *testing.T) {
 	dir := t.TempDir()
 	s := openFile(t, dir)
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: t0, Mode: store.ModeCommitted})
+		return w.PutProject(domain.Project{Key: "acme", DisplayName: "Acme", Created: t0, Mode: domain.ModeCommitted})
 	})
 	s.Close()
 	writeFile(t, filepath.Join(dir, "projects/acme/usage/2026-11-07.jsonl"), `{"type":"mcp_call","op":"claim"}`+"\nnot json\n")

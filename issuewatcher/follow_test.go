@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"maps"
 	"slices"
 	"testing"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
-	"github.com/tomoram/code-central/store"
 )
 
 // answerIssue scripts GitHub's answer to reading acme/web's issue n on
@@ -73,10 +73,10 @@ func (w *watching) ticketOf(n int) core.TicketView {
 
 // wantExternal checks the Incoming Issue linked to acme/web's issue n is
 // still Draft, linked and not detached, with external state want.
-func wantExternal(t *testing.T, w *watching, n int, want store.ExternalState) {
+func wantExternal(t *testing.T, w *watching, n int, want domain.ExternalState) {
 	t.Helper()
 	got := w.ticketOf(n)
-	if got.State != store.Draft || got.Link == nil || got.Link.Detached || got.Link.ExternalState != want {
+	if got.State != domain.Draft || got.Link == nil || got.Link.Detached || got.Link.ExternalState != want {
 		t.Fatalf("issue %d's Ticket is %s with Link %+v, want Draft, linked, %s", n, got.State, got.Link, want)
 	}
 }
@@ -147,8 +147,8 @@ func TestAClosedIssueIsClosedExternallyUntilItIsReopened(t *testing.T) {
 	w.openIssues("", 1, openIssue(2))
 	w.answerIssue(1, "closed")
 	w.polled()
-	wantExternal(t, w, 1, store.ExternalClosed)
-	wantExternal(t, w, 2, store.ExternalOpen)
+	wantExternal(t, w, 1, domain.ExternalClosed)
+	wantExternal(t, w, 2, domain.ExternalOpen)
 	if got := w.reasons(); got[id] != core.ReasonClosedExternally || len(got) != 1 {
 		t.Fatalf("Needs Me %v, want only %s, closed externally", got, id)
 	}
@@ -157,7 +157,7 @@ func TestAClosedIssueIsClosedExternallyUntilItIsReopened(t *testing.T) {
 
 	w.openIssues("", 1, openIssue(1), openIssue(2))
 	w.polled()
-	wantExternal(t, w, 1, store.ExternalOpen)
+	wantExternal(t, w, 1, domain.ExternalOpen)
 	if got := w.reasons(); len(got) != 0 {
 		t.Fatalf("Needs Me %v, want nothing once issue 1 is reopened", got)
 	}
@@ -170,7 +170,7 @@ func TestADeletedIssueIsMarkedDeleted(t *testing.T) {
 	w.openIssues("", 1)
 	w.h.Answer(fakegh.DeletedIssue("acme/web", 1))
 	w.polled()
-	wantExternal(t, w, 1, store.ExternalDeleted)
+	wantExternal(t, w, 1, domain.ExternalDeleted)
 	wantIncoming(t, w, 1)
 }
 
@@ -183,8 +183,8 @@ func TestATransferredIssueIsOutOfScope(t *testing.T) {
 	w.h.Answer(fakegh.TransferredIssue("acme/web", 1, "acme/api", 7))
 	w.h.Answer(fakegh.HiddenIssue("acme/web", 2))
 	w.polled()
-	wantExternal(t, w, 1, store.ExternalOutOfScope)
-	wantExternal(t, w, 2, store.ExternalOutOfScope)
+	wantExternal(t, w, 1, domain.ExternalOutOfScope)
+	wantExternal(t, w, 2, domain.ExternalOutOfScope)
 	wantIncoming(t, w, 1, 2)
 }
 
@@ -202,12 +202,12 @@ func TestAnIssueThatLosesTheFilterLabelIsOutOfScopeUntilItHasItAgain(t *testing.
 	// GitHub's label names match whatever their case.
 	w.answerIssue(2, "open", "bug")
 	w.polled()
-	wantExternal(t, w, 1, store.ExternalOutOfScope)
-	wantExternal(t, w, 2, store.ExternalOpen)
+	wantExternal(t, w, 1, domain.ExternalOutOfScope)
+	wantExternal(t, w, 2, domain.ExternalOpen)
 
 	w.openIssues("Bug", 1, openIssue(1), openIssue(2))
 	w.polled()
-	wantExternal(t, w, 1, store.ExternalOpen)
+	wantExternal(t, w, 1, domain.ExternalOpen)
 }
 
 // GitHub rate-limiting an issue's read leaves its Incoming Issue as it
@@ -220,13 +220,13 @@ func TestARateLimitedIssueReadWaitsForTheResetTime(t *testing.T) {
 	w.rateLimitedOn(fakegh.IssuePath("acme/web", 1), "X-Ratelimit-Remaining: 0", fmt.Sprintf("X-Ratelimit-Reset: %d", reset.Unix()))
 	w.nextPoll()
 	w.rateLimitedUntil(reset)
-	wantExternal(t, w, 1, store.ExternalOpen)
+	wantExternal(t, w, 1, domain.ExternalOpen)
 
 	w.answerIssue(1, "closed")
 	w.srv.Clock.BlockUntil(1)
 	w.srv.Clock.Advance(15 * time.Minute)
 	w.rateLimitedUntil(time.Time{})
-	wantExternal(t, w, 1, store.ExternalClosed)
+	wantExternal(t, w, 1, domain.ExternalClosed)
 }
 
 // A renamed repository's closed issue is closed, not transferred: GitHub
@@ -239,5 +239,5 @@ func TestARenamedRepositorysClosedIssueIsClosedNotTransferred(t *testing.T) {
 	w.openIssues("", 1)
 	w.answerIssueIn("acme/website", "acme/website", 1, "closed")
 	w.polled()
-	wantExternal(t, w, 1, store.ExternalClosed)
+	wantExternal(t, w, 1, domain.ExternalClosed)
 }

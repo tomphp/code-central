@@ -27,7 +27,7 @@ var guardedFields = []string{"Method", "Push", "LandPerSpec", "Tracking", "Landi
 
 // guardedTypes hold the landing inputs, as package path and type name.
 // The type checker names an alias's type by where it is declared, so a
-// read through store.Landing is a read of domain.Landing.
+// read through domain.Landing is a read of domain.Landing.
 var guardedTypes = []string{
 	"github.com/tomoram/code-central/domain.Landing",
 	"github.com/tomoram/code-central/domain.OwnLanding",
@@ -262,21 +262,21 @@ const guardFixture = `package fixture
 
 import (
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // specView has a field named like a landing setting, on another type.
 type specView struct{ LandPerSpec bool }
 
 // wrapped promotes the Landing's fields.
-type wrapped struct{ store.Landing }
+type wrapped struct{ domain.Landing }
 
-func decides(p store.Project, s specView) bool {
-	_ = store.Landing{Method: store.LandingMerge, Push: true}
-	return p.Landing.Method == store.LandingMerge && s.LandPerSpec
+func decides(p domain.Project, s specView) bool {
+	_ = domain.Landing{Method: domain.LandingMerge, Push: true}
+	return p.Landing.Method == domain.LandingMerge && s.LandPerSpec
 }
 
-func viaPointer(c *store.CI) bool { return c.Tracking }
+func viaPointer(c *domain.CI) bool { return c.Tracking }
 
 func viaEmbedding(w wrapped) bool { return w.Push }
 

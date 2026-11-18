@@ -1,6 +1,7 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 // event is a Session Event without its time and seq, for comparing.
@@ -62,7 +62,7 @@ func TestATurnsStreamJSONIsPostedAsSessionEvents(t *testing.T) {
 		factorytest.Result("success"),
 	)
 	r := h.Start("--verbose")
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	r.WantOutput(id + " turn ended")
 	// The turn has ended, so everything it printed waits for a batch.
 	r.Poll()
@@ -105,7 +105,7 @@ func TestTheFactorysLinesAboutAClaimArePostedToItsTranscript(t *testing.T) {
 	id := h.ReadyTicket("Ask first")
 	h.Script(id, factorytest.PostRound("Which colour?"), factorytest.Result("success"))
 	r := h.Start()
-	h.WantState(id, store.NeedsAnswer)
+	h.WantState(id, domain.NeedsAnswer)
 	r.WantOutput(id + " turn ended")
 	h.Answer(id, "Green")
 	r.Poll()
@@ -159,7 +159,7 @@ func TestATurnThatKeepsPostingEventsNeverMakesItsClaimSilent(t *testing.T) {
 	}
 	h.Continue(id)
 	r.Settle()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 }
 
 func TestWithCodeCentralDownMidTurnTheTurnStillFinishesAndDroppedEventsHoldNothingUp(t *testing.T) {
@@ -179,7 +179,7 @@ func TestWithCodeCentralDownMidTurnTheTurnStillFinishesAndDroppedEventsHoldNothi
 	h.SetDown(false)
 	h.Continue(id)
 	r.Settle()
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	r.WantOutput(id + " turn ended")
 	r.Poll()
 	tr := h.Transcript(id, 1)

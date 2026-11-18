@@ -1,11 +1,11 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/factory/factorytest"
-	"github.com/tomoram/code-central/store"
 )
 
 func TestTheFactoryClaimsAReadyTicketAndRunsOneSessionToInReview(t *testing.T) {
@@ -22,7 +22,7 @@ func TestTheFactoryClaimsAReadyTicketAndRunsOneSessionToInReview(t *testing.T) {
 
 	r := h.Start()
 	r.WantOutput("base: main")
-	tk := h.WantState(id, store.InReview)
+	tk := h.WantState(id, domain.InReview)
 
 	calls := h.Calls()
 	if len(calls) != 1 {
@@ -58,7 +58,7 @@ func onlyCall(t *testing.T, args ...string) (factorytest.Call, *factorytest.Runn
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Work")
 	r := h.Start(args...)
-	h.WantState(id, store.InReview)
+	h.WantState(id, domain.InReview)
 	calls := h.Calls()
 	if len(calls) != 1 {
 		t.Fatalf("claude ran %d times, want once", len(calls))

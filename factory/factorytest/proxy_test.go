@@ -3,6 +3,7 @@ package factorytest
 import (
 	"context"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -13,7 +14,6 @@ import (
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
 )
 
 // fakeT is a testing.TB that records what the test logs and runs its
@@ -134,7 +134,7 @@ func TestLoseAnswerCutsAfterCodeCentralAppliedTheWrite(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "cannot reach Code Central") {
 		t.Fatalf("claim error = %v, want the connection cut", err)
 	}
-	if got := h.Ticket(id).State; got != store.InProgress {
+	if got := h.Ticket(id).State; got != domain.InProgress {
 		t.Fatalf("state = %v, want In Progress: Code Central applied the claim", got)
 	}
 	if n := h.Refused("/api/p/" + h.Project + "/claim"); n != 1 {
@@ -149,7 +149,7 @@ func TestLoseRequestCutsBeforeCodeCentralSeesIt(t *testing.T) {
 	if err := claimThroughProxy(h, id); err == nil {
 		t.Fatal("claim succeeded, want the connection cut")
 	}
-	if got := h.Ticket(id).State; got != store.Ready {
+	if got := h.Ticket(id).State; got != domain.Ready {
 		t.Fatalf("state = %v, want Ready: the claim never arrived", got)
 	}
 	if err := claimThroughProxy(h, id); err != nil {

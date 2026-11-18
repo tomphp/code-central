@@ -8,13 +8,13 @@ package ciwatcher_test
 import (
 	"context"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
-	"github.com/tomoram/code-central/store"
 )
 
 // pushedInTwo makes acme-2 an Accepted Ticket that changed acme and api,
@@ -31,12 +31,12 @@ func (w *watching) pushedInTwo(home, api string) string {
 		return err
 	})
 	must(w.t, func() error {
-		_, err := c.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingMerge, Push: true, Remote: "origin"})
+		_, err := c.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"})
 		return err
 	})
 	must(w.t, func() error { _, err := c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"}); return err })
 	must(w.t, func() error {
-		_, err := c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form", State: store.Ready})
+		_, err := c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form", State: domain.Ready})
 		return err
 	})
 	res, err := c.Claim(ctx, "acme", core.ClaimInput{Ticket: "2"})
