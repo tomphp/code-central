@@ -10,9 +10,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"errors"
-	"fmt"
-	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -32,10 +29,12 @@ var sqlite = dialect{
 
 // OpenSQLite locks and opens the SQLite Store at path, creating the
 // database, its folder and its lock file (<path>.lock) if needed. A
-// database at an older format is migrated (migrateSQLite), and one at a
-// newer format is refused by name.
+// database at an older format is migrated (sqlite_migrate.go), and one at
+// a newer format is refused by name.
 func OpenSQLite(path string) (*SQLStore, error) { return openSQLite(path, Format, migrations) }
 
+// openSQLite is OpenSQLite as a build whose format is format and whose
+// migration chain is steps: Format and migrations, except in tests.
 func openSQLite(path string, format int, steps []MigrationStep) (*SQLStore, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
@@ -72,146 +71,6 @@ func (s *SQLStore) connect() error {
 	db.SetMaxIdleConns(8)
 	s.db = db
 	s.usage = &sqlUsage{db: db, d: sqlite}
-	return nil
-}
-
-// Migrating a SQLite Store (Spec code-central-1032) runs the File Store's
-// chain of steps: the database is exported as a File Store layout into a
-// temporary folder, the File Store migrates that, and the result is
-// imported into a new database file beside the old one. Only then is the
-// old database copied to <path>.format-<n>.bak by VACUUM INTO and the new
-// one renamed over it. A failure before the rename deletes the new file
-// and the backup, and leaves the original untouched. Backups are never
-// deleted after.
-
-// failSQLiteMigrationBeforeSwap, set only by tests, fails a Migration
-// once its backup is written, just before the swap.
-var failSQLiteMigrationBeforeSwap error
-
-// sqliteBackupFor is where the database at path is kept after migrating
-// from format n.
-func sqliteBackupFor(path string, n int) string { return fmt.Sprintf("%s.format-%d.bak", path, n) }
-
-// migrate brings the open database from format from up to format, and
-// leaves s open on the migrated database.
-func (s *SQLStore) migrate(from, format int, steps []MigrationStep) error {
-	ctx := context.Background()
-	if _, err := migrationChain(from, format, steps); err != nil {
-		return fmt.Errorf("%s: %w", s.path, err)
-	}
-	bak := sqliteBackupFor(s.path, from)
-	if _, err := os.Lstat(bak); !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("cannot migrate %s from format %d: the backup %s already exists; move it aside and start again (the store is untouched)", s.path, from, bak)
-	}
-	next := filepath.Join(filepath.Dir(s.path), "."+filepath.Base(s.path)+".migrating")
-	if err := removeSQLite(next); err != nil { // left by a Migration that never finished
-		return err
-	}
-	stage, err := os.MkdirTemp("", "code-central-migrating-")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(stage)
-	swapped, backedUp := false, false
-	defer func() {
-		if swapped {
-			return
-		}
-		removeSQLite(next)
-		if backedUp {
-			os.Remove(bak)
-		}
-	}()
-
-	files := filepath.Join(stage, "store")
-	if err := exportFiles(ctx, s.db, s.d, files, from); err != nil {
-		return fmt.Errorf("migrating %s from format %d: staging it as files: %w (the store is untouched)", s.path, from, err)
-	}
-	staged, err := open(files, format, steps)
-	if err != nil {
-		return fmt.Errorf("%s: %w", s.path, err)
-	}
-	err = buildSQLite(ctx, next, format, staged)
-	staged.Close()
-	if err != nil {
-		return fmt.Errorf("migrating %s from format %d: loading the migrated records: %w (the store is untouched)", s.path, from, err)
-	}
-
-	if _, err := s.db.ExecContext(ctx, `VACUUM INTO ?`, bak); err != nil {
-		return fmt.Errorf("migrating %s from format %d: backing it up to %s: %w (the store is untouched)", s.path, from, bak, err)
-	}
-	backedUp = true
-	if failSQLiteMigrationBeforeSwap != nil {
-		return failSQLiteMigrationBeforeSwap
-	}
-	// Closed, the old database has checkpointed its WAL into the file, so
-	// none of it can be mistaken for the new database's.
-	if err := s.db.Close(); err != nil {
-		return err
-	}
-	s.db = nil
-	if err := removeSQLiteSidecars(s.path); err != nil {
-		return err
-	}
-	if err := os.Rename(next, s.path); err != nil {
-		return err
-	}
-	swapped = true
-	if err := syncDir(filepath.Dir(s.path)); err != nil {
-		return err
-	}
-	if err := s.connect(); err != nil {
-		return err
-	}
-	if _, err := prepare(ctx, s.db, s.d, format, s.path); err != nil {
-		return err
-	}
-	s.migrated = &Migration{From: from, To: format, Backup: bak}
-	return nil
-}
-
-// buildSQLite writes a new database at path, at format, holding every
-// record and Usage record of from, and closes it.
-func buildSQLite(ctx context.Context, path string, format int, from *FileStore) error {
-	db, err := sql.Open("sqlite", sqliteDSN(path))
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-	if _, err := prepare(ctx, db, sqlite, format, path); err != nil {
-		return err
-	}
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if err := importFiles(ctx, tx, sqlite, from); err != nil {
-		tx.Rollback()
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	return db.Close()
-}
-
-// removeSQLite deletes the database at path and its sidecar files, any
-// that exist.
-func removeSQLite(path string) error {
-	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
-	}
-	return removeSQLiteSidecars(path)
-}
-
-// removeSQLiteSidecars deletes the WAL, shared-memory and journal files
-// of the database at path, any that exist.
-func removeSQLiteSidecars(path string) error {
-	for _, suffix := range []string{"-wal", "-shm", "-journal"} {
-		if err := os.Remove(path + suffix); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return err
-		}
-	}
 	return nil
 }
 

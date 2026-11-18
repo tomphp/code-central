@@ -6,7 +6,12 @@
 // it, so a Migration can stage an old database as files and run the one
 // chain of steps over them. The importer loads a File Store, at this
 // build's format, into an empty database in one transaction. Usage goes
-// both ways as its lines, byte for byte.
+// both ways line by line, each the same JSON, a line no read could parse
+// included.
+//
+// The exporter reads the tables as this build lays them out. A format
+// that changes the tables, not only the documents, must have it read the
+// older layout too, or no older database could be migrated.
 
 package store
 
@@ -14,6 +19,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -146,38 +152,47 @@ func (x *exporter) rows(query string, fn func(scan func(...any) error) error) {
 // yamlFile writes the JSON document doc as the YAML file rel, after edit,
 // if any, has added to its node tree.
 func (x *exporter) yamlFile(rel string, doc []byte, edit func(*yaml.Node) error) error {
-	node, err := jsonNode(doc)
-	if err == nil && edit != nil {
-		err = edit(node)
-	}
-	if err != nil {
-		return fmt.Errorf("%s: %w", filepath.ToSlash(rel), err)
-	}
-	data, err := yamlOfDoc(node)
+	data, err := func() ([]byte, error) {
+		node, err := jsonNode(doc)
+		if err == nil && edit != nil {
+			err = edit(node)
+		}
+		if err != nil {
+			return nil, err
+		}
+		return yamlOfDoc(node)
+	}()
+	return x.file(rel, data, err)
+}
+
+// specFile writes the Spec document doc as its Markdown file: its
+// frontmatter, then its body.
+func (x *exporter) specFile(rel string, doc []byte) error {
+	data, err := func() ([]byte, error) {
+		node, err := jsonNode(doc)
+		if err != nil {
+			return nil, err
+		}
+		body := takeKey(node, "body")
+		if body == nil {
+			return nil, errors.New("the document has no body")
+		}
+		front, err := yamlOfDoc(node)
+		return append(append(append([]byte("---\n"), front...), "---\n"...), body.Value...), err
+	}()
+	return x.file(rel, data, err)
+}
+
+// file writes data as the file rel, or names rel in err, the failure to
+// make data.
+func (x *exporter) file(rel string, data []byte, err error) error {
 	if err != nil {
 		return fmt.Errorf("%s: %w", filepath.ToSlash(rel), err)
 	}
 	return x.write(rel, data)
 }
 
-// specFile writes the Spec document doc as its Markdown file: its
-// frontmatter, then its body.
-func (x *exporter) specFile(rel string, doc []byte) error {
-	node, err := jsonNode(doc)
-	if err != nil {
-		return fmt.Errorf("%s: %w", filepath.ToSlash(rel), err)
-	}
-	body := takeKey(node, "body")
-	if body == nil {
-		return fmt.Errorf("%s: the document has no body", filepath.ToSlash(rel))
-	}
-	front, err := yamlOfDoc(node)
-	if err != nil {
-		return fmt.Errorf("%s: %w", filepath.ToSlash(rel), err)
-	}
-	return x.write(rel, append(append(append([]byte("---\n"), front...), "---\n"...), body.Value...))
-}
-
+// write writes data as the file rel of the layout, making its folder.
 func (x *exporter) write(rel string, data []byte) error {
 	path := filepath.Join(x.dir, rel)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

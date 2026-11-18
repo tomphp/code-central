@@ -187,7 +187,7 @@ func TestTheRealChainMigratesAFormat46SQLiteStoreAsItDoesTheFileStore(t *testing
 	if got, w := dump(t, s), dump(t, want); got != w {
 		t.Fatalf("the migrated SQLite Store holds\n%s\nwant, as the File Store migrated\n%s", got, w)
 	}
-	if !bytes.Contains([]byte(dump(t, s)), []byte("Repositories:[acme/web]")) {
+	if !strings.Contains(dump(t, s), "Repositories:[acme/web]") {
 		t.Fatalf("the format 47 step did not run:\n%s", dump(t, s))
 	}
 	days := []string{"2026-01-03"}
@@ -215,13 +215,13 @@ func TestAFailedSQLiteMigrationLeavesTheOriginalUntouched(t *testing.T) {
 		want  string
 	}{
 		{name: "a step fails", steps: []store.MigrationStep{{From: 1, Name: "break tickets", File: func(rel string, data []byte) ([]byte, error) {
-			if bytes.Contains([]byte(rel), []byte("/tickets/")) {
+			if strings.Contains(rel, "/tickets/") {
 				return nil, errors.New("cannot rewrite")
 			}
 			return data, nil
 		}}}, want: `step "break tickets" failed on projects/acme/tickets/2.yaml`},
 		{name: "a step leaves a record this build refuses", steps: []store.MigrationStep{{From: 1, Name: "unknown key", File: func(rel string, data []byte) ([]byte, error) {
-			if bytes.Contains([]byte(rel), []byte("/tickets/")) {
+			if strings.Contains(rel, "/tickets/") {
 				return append(data, "surprise: 1\n"...), nil
 			}
 			return data, nil
@@ -287,5 +287,26 @@ func TestANewerSQLiteStoreIsRefusedAndLeftAsItIs(t *testing.T) {
 	}
 	if got := ticketTitle(t, openSQLiteFormat(t, path, 1), 2); got != "Form" {
 		t.Fatalf("ticket 2 = %q, want the database untouched", got)
+	}
+}
+
+// What a Migration that never finished left beside the database, its
+// staging folder and its half-built database, is cleared by the next.
+func TestASQLiteMigrationClearsWhatAnUnfinishedOneLeft(t *testing.T) {
+	path := seedSQLiteFormat1(t)
+	dir := filepath.Dir(path)
+	writeFile(t, filepath.Join(dir, ".code-central.db.staging", "store", "store.yaml"), "format: 1\n")
+	writeFile(t, filepath.Join(dir, ".code-central.db.migrating"), "half a database")
+	writeFile(t, filepath.Join(dir, ".code-central.db.migrating-wal"), "half a log")
+
+	s := openSQLiteFormat(t, path, 2, renaming(1))
+	if got := ticketTitle(t, s, 2); got != "Form (migrated)" {
+		t.Fatalf("ticket 2's title = %q: the chain did not run", got)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if got := siblings(t, path); fmt.Sprint(got) != "[code-central.db code-central.db.format-1.bak code-central.db.lock]" {
+		t.Fatalf("next to the database: %v (want nothing left of the unfinished Migration)", got)
 	}
 }

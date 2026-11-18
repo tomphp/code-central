@@ -135,6 +135,7 @@ func LoadSQLiteFixture(t testing.TB, dir, path string) {
 	}
 }
 
+// jsonText is the node tree n as a JSON document's text.
 func jsonText(t testing.TB, n *yaml.Node) string {
 	t.Helper()
 	j, err := jsonOf(n)
