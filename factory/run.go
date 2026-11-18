@@ -558,6 +558,7 @@ func (f *factory) startClaimed(ctx context.Context, in core.ClaimInput, res core
 	stage := core.GuideName(res.Ticket.Labels)
 	ws := f.repos.worktreesNamed(id, workBranch(stage, id))
 	conflicts := f.conflictsIn(ws, stage, *res.Ticket)
+	rebase := f.rebases(ctx, conflicts)
 	var guide core.StageGuideView
 	if len(conflicts) == 0 {
 		guide = f.stageGuide(ctx, res.StageGuide, stage)
@@ -566,13 +567,13 @@ func (f *factory) startClaimed(ctx context.Context, in core.ClaimInput, res core
 	c := claim{Ticket: id, ClaimID: res.ClaimID, SessionID: session, AllowedTools: []string{}, AddDirs: ws.addDirs()}
 	var prompt string
 	if ws.several() {
-		c.SystemPrompt, prompt = severalSystemPrompt(c, stage, ws, guide, len(conflicts) > 0), severalFirstPrompt(c, stage, ws, conflicts)
+		c.SystemPrompt, prompt = severalSystemPrompt(c, stage, ws, guide, len(conflicts) > 0), severalFirstPrompt(c, stage, ws, conflicts, rebase)
 	} else {
 		var files []string
 		if len(conflicts) > 0 {
 			files = conflicts[0].files
 		}
-		c.SystemPrompt, prompt = systemPrompt(c, stage, wt, guide, files), firstPrompt(c, stage, f.repos.baseBranch(), files)
+		c.SystemPrompt, prompt = systemPrompt(c, stage, wt, guide, files), firstPrompt(c, stage, f.repos.baseBranch(), files, rebase)
 	}
 	// The Ticket's Resume Command adds the folders its turns do.
 	resume := *in.ResumeCommand + addDirFlags(c.AddDirs)

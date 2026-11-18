@@ -183,6 +183,27 @@ func (r *fakeRepo) isAncestor(commit, rev string) bool {
 	return ok && r.reachable(commit, tip)
 }
 
+// mergeBase is the first of a's ancestors, nearest first by first
+// parent, that b reaches.
+func (r *fakeRepo) mergeBase(a, b string) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	from, _ := r.resolve(a)
+	to, _ := r.resolve(b)
+	seen := map[string]bool{}
+	for todo := []string{from}; len(todo) > 0; todo = todo[1:] {
+		c := todo[0]
+		if r.reachable(c, to) {
+			return c, nil
+		}
+		if !seen[c] {
+			seen[c] = true
+			todo = append(todo, r.parents[c]...)
+		}
+	}
+	return "", fmt.Errorf("git merge-base: %s and %s have no common ancestor", a, b)
+}
+
 func (r *fakeRepo) hasRemote(name string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -221,6 +242,10 @@ func (r *fakeRepo) commitTreeLike(tree, like string, parents ...string) (string,
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.newCommit(r.message[like], parents...), nil
+}
+
+func (r *fakeRepo) treeOf(commit string) (string, error) {
+	return "tree-of-" + commit, nil
 }
 
 func (r *fakeRepo) replayTree(base, commit string) (string, []string, error) {
@@ -296,6 +321,19 @@ func (r *fakeRepo) specBranches() ([]string, error) {
 	for ref := range r.refs {
 		if b, ok := strings.CutPrefix(ref, "refs/heads/"); ok && strings.HasPrefix(b, "spec/") {
 			out = append(out, b)
+		}
+	}
+	slices.Sort(out)
+	return out, nil
+}
+
+func (r *fakeRepo) forkPoints() ([]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []string
+	for ref := range r.refs {
+		if id, ok := strings.CutPrefix(ref, forkRefs); ok {
+			out = append(out, id)
 		}
 	}
 	slices.Sort(out)
