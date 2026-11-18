@@ -55,7 +55,7 @@ func (c *Core) HoldWatcherLease(_ context.Context, key string) (bool, error) {
 	l, err := c.store.Services().HoldLease(key, c.service.ID, now)
 	if err != nil {
 		l, ok := c.watchers.lease(key)
-		return ok && l.Holder == c.service.ID && now.Before(l.Expires), err
+		return ok && l.Holder == c.service.ID && !l.Lapsed(now), err
 	}
 	if c.watchers.hold(l, now) {
 		c.events.Publish(events.Event{Type: events.ProjectChanged, Project: key})

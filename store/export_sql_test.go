@@ -13,27 +13,49 @@ import (
 // a newer or older code-central would have left it.
 func SetSQLiteFormat(t testing.TB, path string, format int) {
 	t.Helper()
-	setFormat(t, "sqlite", sqliteDSN(path), sqlite, format)
+	execAll(t, "sqlite", sqliteDSN(path), setFormat(format))
 }
 
 // SetPostgresFormat writes format into the Postgres Store at url, as a
 // newer or older code-central would have left it.
 func SetPostgresFormat(t testing.TB, url string, format int) {
 	t.Helper()
-	setFormat(t, "pgx", url, postgres, format)
+	execAll(t, "pgx", url, setFormat(format))
 }
 
-// setFormat writes format into the meta row of the database at dsn,
-// opened with driver, in dialect d's placeholders.
-func setFormat(t testing.TB, driver, dsn string, d dialect, format int) {
+// DropSQLiteServiceTables drops the services' tables from the closed
+// SQLite Store at path, as a Store made before them would be.
+func DropSQLiteServiceTables(t testing.TB, path string) {
+	t.Helper()
+	execAll(t, "sqlite", sqliteDSN(path), dropServiceTables...)
+}
+
+// DropPostgresServiceTables drops the services' tables from the Postgres
+// Store at url, as a Store made before them would be.
+func DropPostgresServiceTables(t testing.TB, url string) {
+	t.Helper()
+	execAll(t, "pgx", url, dropServiceTables...)
+}
+
+// setFormat is the statement writing format into the meta row.
+func setFormat(format int) string {
+	return `UPDATE meta SET value = '` + strconv.Itoa(format) + `' WHERE key = 'format'`
+}
+
+var dropServiceTables = []string{`DROP TABLE watcher_leases`, `DROP TABLE registrations`}
+
+// execAll runs each statement on the database at dsn, opened with driver.
+func execAll(t testing.TB, driver, dsn string, stmts ...string) {
 	t.Helper()
 	db, err := sql.Open(driver, dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	if _, err := db.ExecContext(context.Background(), d.rebind(`UPDATE meta SET value = ? WHERE key = 'format'`), strconv.Itoa(format)); err != nil {
-		t.Fatal(err)
+	for _, stmt := range stmts {
+		if _, err := db.ExecContext(context.Background(), stmt); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

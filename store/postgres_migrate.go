@@ -58,7 +58,11 @@ func (s *SQLStore) migrateShared(from, format int, steps []MigrationStep, now ti
 		return failed("connecting", err)
 	}
 	defer conn.Close()
-	if _, err := conn.ExecContext(ctx, s.d.begin); err != nil {
+	// Read committed, as prepare is: a serializable transaction's snapshot
+	// would predate the wait at the schema lock, so a Migration that waited
+	// for another would not see its commit, nor a Registration renewed
+	// meanwhile. The locks keep every other writer out instead.
+	if _, err := conn.ExecContext(ctx, s.d.schemaBegin); err != nil {
 		return failed("beginning", err)
 	}
 	committed := false

@@ -50,6 +50,15 @@ type Lease struct {
 	Expires time.Time
 }
 
+// Lapsed is whether l has expired at now, so another service may take it.
+func (l Lease) Lapsed(now time.Time) bool { return !now.Before(l.Expires) }
+
+// byHost orders Registrations by host, then ID: the engines' collations
+// would order hosts apart, so every Kind sorts them itself.
+func byHost(a, b Registration) int {
+	return cmp.Or(cmp.Compare(a.Host, b.Host), cmp.Compare(a.ID, b.ID))
+}
+
 // Services is a Store's record of the services running on it.
 type Services interface {
 	// Register writes r as its service's Registration, or renews it,
@@ -131,7 +140,7 @@ func (m *memoryServices) Registrations(now time.Time) ([]Registration, error) {
 			out = append(out, r)
 		}
 	}
-	slices.SortFunc(out, func(a, b Registration) int { return cmp.Or(cmp.Compare(a.Host, b.Host), cmp.Compare(a.ID, b.ID)) })
+	slices.SortFunc(out, byHost)
 	return out, nil
 }
 
@@ -139,7 +148,7 @@ func (m *memoryServices) HoldLease(project, id string, now time.Time) (Lease, er
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	l, ok := m.leases[project]
-	if !ok || l.Holder == id || !now.Before(l.Expires) {
+	if !ok || l.Holder == id || l.Lapsed(now) {
 		l = Lease{Project: project, Holder: id, Expires: now.Add(ServiceLife)}
 		m.leases[project] = l
 	}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -135,6 +136,40 @@ func TestAPostgresMigrationRefusesWhileAnotherServiceIsRegistered(t *testing.T) 
 	}
 	if got := ticketTitle(t, openPostgresFormat(t, url, 2, renaming(1)), 2); got != "Form (migrated)" {
 		t.Fatalf("ticket 2's title = %q: the chain did not run", got)
+	}
+}
+
+// Two services at the new format opening an older Store at once migrate
+// it once: the second waits for the first and finds it migrated, its
+// records all there.
+func TestTwoServicesOpeningAnOlderPostgresStoreAtOnceMigrateItOnce(t *testing.T) {
+	url := seedPostgresFormat1(t)
+	before := dump(t, openPostgresFormat(t, url, 1))
+
+	opened := make([]*store.SQLStore, 2)
+	errs := make([]error, 2)
+	var wg sync.WaitGroup
+	for i := range opened {
+		wg.Go(func() { opened[i], errs[i] = store.OpenPostgresFormat(url, 2, []store.MigrationStep{renaming(1)}) })
+	}
+	wg.Wait()
+
+	migrated := 0
+	for i, s := range opened {
+		if errs[i] != nil {
+			t.Fatalf("open %d: %v", i, errs[i])
+		}
+		t.Cleanup(func() { s.Close() })
+		if s.Migrated() != nil {
+			migrated++
+		}
+	}
+	if migrated != 1 {
+		t.Fatalf("%d of the two opens migrated the store, want one", migrated)
+	}
+	want := strings.Replace(before, "Title:Form ", "Title:Form (migrated) ", 1)
+	if got := dump(t, opened[0]); got != want {
+		t.Fatalf("after both opens the store holds\n%s\nwant\n%s", got, want)
 	}
 }
 

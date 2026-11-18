@@ -166,7 +166,7 @@ function WatcherStatus({ status: { project, tracking, provider, repository, proj
     case "elsewhere":
       return (
         <p className="muted">
-          {name}: Runs on {watcher.host}, whose service holds its Watchers; its status shows there.
+          {name}: Runs on {watcher.host}, whose service holds this Project&apos;s Watchers; its status shows there.
         </p>
       );
     case "waiting":

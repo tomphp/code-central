@@ -1,7 +1,6 @@
 package watchers_test
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"os/exec"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/clock"
+	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/watchers"
@@ -56,33 +56,6 @@ func (l *leasing) renewals(key string) int {
 	return l.holds[key]
 }
 
-// syncLog is the service's log, written by the supervision's goroutines.
-type syncLog struct {
-	mu sync.Mutex
-	b  bytes.Buffer
-}
-
-func (s *syncLog) Write(p []byte) (int, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.b.Write(p)
-}
-
-func (s *syncLog) String() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.b.String()
-}
-
-func eventually(t *testing.T, ok func() bool, format string, args ...any) {
-	t.Helper()
-	for deadline := time.Now().Add(10 * time.Second); !ok(); time.Sleep(5 * time.Millisecond) {
-		if time.Now().After(deadline) {
-			t.Fatalf(format, args...)
-		}
-	}
-}
-
 // The supervision runs a Project's Watchers only while this service holds
 // its Watcher Lease, renewing each Lease once a tick whatever the kinds,
 // and stops them once another service has it.
@@ -93,7 +66,7 @@ func TestTheSupervisionRunsOnlyTheWatchersOfProjectsWhoseLeaseItHolds(t *testing
 	}
 	projects := &leasing{bus: events.New(), held: map[string]bool{"acme": true}, holds: map[string]int{}}
 	leaseTick := make(chan time.Time)
-	log := &syncLog{}
+	log := &codecentraltest.SyncBuffer{}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	kind := func(k core.WatcherKind) watchers.Kind {
@@ -107,7 +80,7 @@ func TestTheSupervisionRunsOnlyTheWatchersOfProjectsWhoseLeaseItHolds(t *testing
 	t.Cleanup(func() { cancel(); <-done })
 	logged := func(line string) {
 		t.Helper()
-		eventually(t, func() bool { return strings.Contains(log.String(), line) }, "the log never said %q:\n%s", line, log)
+		codecentraltest.Eventually(t, func() bool { return strings.Contains(log.String(), line) }, "the log never said %q:\n%s", line, log)
 	}
 
 	logged("started the CI Watcher for acme")

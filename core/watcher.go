@@ -273,7 +273,7 @@ func (w *watchers) view(k watcherKey, now time.Time) WatcherView {
 	defer w.mu.Unlock()
 	l, leased := w.leases[k.project]
 	switch {
-	case leased && !now.Before(l.Expires):
+	case leased && l.Lapsed(now):
 		return WatcherView{State: WatcherWaiting, Message: "Waiting for a service to take the Watchers."}
 	case leased && l.Holder != w.self:
 		return WatcherView{State: WatcherElsewhere, Host: l.Host}
@@ -303,7 +303,7 @@ func (w *watchers) hold(l store.Lease, now time.Time) bool {
 			}
 		}
 	}
-	return !known || was.Holder != l.Holder || was.Host != l.Host || !now.Before(was.Expires)
+	return !known || was.Holder != l.Holder || was.Host != l.Host || was.Lapsed(now)
 }
 
 // lease is the Project key's Watcher Lease as last known.

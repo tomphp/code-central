@@ -201,7 +201,7 @@ describe("the CI Watchers' statuses", () => {
     fake.w.holdWatcherLease("acme", "desktop");
     await renderApp(fake, "/?view=ci&project=acme");
     expect(
-      within(ci()).getByText("Acme: Runs on desktop, whose service holds its Watchers; its status shows there."),
+      within(ci()).getByText("Acme: Runs on desktop, whose service holds this Project's Watchers; its status shows there."),
     ).toBeInTheDocument();
 
     fake.w.advance(SERVICE_LIFE_MS);

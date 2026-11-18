@@ -285,7 +285,7 @@ describe("Project Options", () => {
       await renderApp(w, "/?view=project-options&project=acme");
       const watcher = () => within(ci()).getByRole("region", { name: "CI Watcher" });
       expect(watcher()).toHaveTextContent("CI Watcher: Starting; it hasn't reported yet.");
-      expect(watcher()).toHaveTextContent("It runs on laptop.");
+      expect(watcher()).toHaveTextContent(`It runs on ${WORLD_HOST}.`);
 
       w.advance(SERVICE_LIFE_MS);
       w.holdWatcherLease("acme", "desktop");
@@ -305,7 +305,7 @@ describe("Project Options", () => {
       });
       await settle(w);
       expect(watcher()).toHaveTextContent("CI Watcher: Waiting for a service to take the Watchers.");
-      expect(watcher()).not.toHaveTextContent("laptop");
+      expect(watcher()).not.toHaveTextContent(WORLD_HOST);
     });
 
     it("shows the service's refusal on its field", async () => {

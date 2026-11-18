@@ -244,7 +244,7 @@ func (s *SQLStore) attempt(fn func(Writer) error) error {
 // only if it doesn't exist. meta comes first: every format has it, and
 // prepare reads the format from it before deciding on the rest.
 func (d dialect) schema() []string {
-	return []string{
+	return append([]string{
 		`CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS projects (key TEXT PRIMARY KEY, doc ` + d.json + ` NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS options (id INTEGER PRIMARY KEY, doc ` + d.json + ` NOT NULL)`,
@@ -282,10 +282,16 @@ func (d dialect) schema() []string {
 		`CREATE INDEX IF NOT EXISTS claims_session ON claims (session_id, started)`,
 		`CREATE TABLE IF NOT EXISTS usage_records (id ` + d.serial + `, project TEXT NOT NULL, day TEXT NOT NULL, type TEXT NOT NULL, doc ` + d.json + ` NOT NULL)`,
 		`CREATE INDEX IF NOT EXISTS usage_records_day ON usage_records (day, project, id)`,
-		`CREATE TABLE IF NOT EXISTS registrations (id TEXT PRIMARY KEY, host TEXT NOT NULL, version TEXT NOT NULL, format INTEGER NOT NULL, renewed BIGINT NOT NULL)`,
-		`CREATE TABLE IF NOT EXISTS watcher_leases (project TEXT PRIMARY KEY, holder TEXT NOT NULL, expires BIGINT NOT NULL)`,
-		`CREATE INDEX IF NOT EXISTS watcher_leases_holder ON watcher_leases (holder)`,
-	}
+	}, servicesSchema...)
+}
+
+// servicesSchema is the services' tables, of Registrations and Watcher
+// Leases: they hold no records, so no format, and prepare makes them on
+// every open, so a Store made before them gains them.
+var servicesSchema = []string{
+	`CREATE TABLE IF NOT EXISTS registrations (id TEXT PRIMARY KEY, host TEXT NOT NULL, version TEXT NOT NULL, format INTEGER NOT NULL, renewed BIGINT NOT NULL)`,
+	`CREATE TABLE IF NOT EXISTS watcher_leases (project TEXT PRIMARY KEY, holder TEXT NOT NULL, expires BIGINT NOT NULL)`,
+	`CREATE INDEX IF NOT EXISTS watcher_leases_holder ON watcher_leases (holder)`,
 }
 
 // prepare checks the database's format and creates its schema, in one
@@ -324,8 +330,12 @@ func prepare(ctx context.Context, db *sql.DB, d dialect, format int, what string
 		}
 	}
 	schema := d.schema()
-	if _, err := conn.ExecContext(ctx, schema[0]); err != nil { // meta, which every format has
-		return 0, fmt.Errorf("%s: %w", what, err)
+	// meta, which every format has, and the services' tables, which no
+	// format names.
+	for _, stmt := range append([]string{schema[0]}, servicesSchema...) {
+		if _, err := conn.ExecContext(ctx, stmt); err != nil {
+			return 0, fmt.Errorf("%s: %w", what, err)
+		}
 	}
 	var stored string
 	err = conn.QueryRowContext(ctx, d.rebind(`SELECT value FROM meta WHERE key = 'format'`)).Scan(&stored)

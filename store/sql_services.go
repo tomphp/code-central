@@ -3,7 +3,6 @@
 package store
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -103,8 +102,7 @@ func liveRegistrations(ctx context.Context, q querier, d dialect, now time.Time)
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	// Sorted here, as the engines' collations would order hosts apart.
-	slices.SortFunc(out, func(a, b Registration) int { return cmp.Or(cmp.Compare(a.Host, b.Host), cmp.Compare(a.ID, b.ID)) })
+	slices.SortFunc(out, byHost)
 	return out, nil
 }
 
