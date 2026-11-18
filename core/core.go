@@ -863,12 +863,12 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t domain.Ticket) Tick
 			}
 		}
 		for _, it := range e.itemsOf(t) {
-			v.CIItems = append(v.CIItems, *ciItemView(r, pr, it))
+			v.CIItems = append(v.CIItems, *e.ciItemView(it))
 		}
 	}
 	v.PartlyLanded = partlyLanded(key, t)
 	if it, ok := e.itemOf(t); ok {
-		v.CIItem = ciItemView(r, pr, it)
+		v.CIItem = e.ciItemView(it)
 		if it.reason != ReasonCIUnavailable {
 			v.CIFailureOptions = v.CIItem.Options
 		}

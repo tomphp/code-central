@@ -1268,6 +1268,13 @@ export interface CIItemView {
   commit: string;
   tickets: CIItemTicket[];
   options: CIFailureOption[];
+  // NewFixNote is the note New fix Ticket starts from, the Run summary
+  // and the Project's Fix instructions; SendBackNote is the note Send
+  // back to fix starts from, the Run summary alone. Each is left out
+  // while its option isn't offered, and the human edits either before
+  // choosing it.
+  new_fix_note?: string;
+  send_back_note?: string;
 }
 
 // ClaimView is one Claim as reads show it: never with its Claim ID.
