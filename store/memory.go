@@ -68,7 +68,7 @@ func (r reader) Spec(project string, n int) (Spec, bool) {
 		return Spec{}, false
 	}
 	s, ok := p.specs[n]
-	return s.clone(), ok
+	return cloneSpec(s), ok
 }
 
 func (r reader) Specs(project string) []Spec {
@@ -78,7 +78,7 @@ func (r reader) Specs(project string) []Spec {
 	}
 	out := make([]Spec, 0, len(p.specs))
 	for _, s := range p.specs {
-		out = append(out, s.clone())
+		out = append(out, cloneSpec(s))
 	}
 	slices.SortFunc(out, func(a, b Spec) int { return cmp.Compare(a.Number, b.Number) })
 	return out
@@ -90,7 +90,7 @@ func (r reader) Ticket(project string, n int) (Ticket, bool) {
 		return Ticket{}, false
 	}
 	t, ok := p.tickets[n]
-	return t.clone(), ok
+	return cloneTicket(t), ok
 }
 
 func (r reader) Tickets(project string) []Ticket {
@@ -100,7 +100,7 @@ func (r reader) Tickets(project string) []Ticket {
 	}
 	out := make([]Ticket, 0, len(p.tickets))
 	for _, t := range p.tickets {
-		out = append(out, t.clone())
+		out = append(out, cloneTicket(t))
 	}
 	slices.SortFunc(out, func(a, b Ticket) int { return cmp.Compare(a.Number, b.Number) })
 	return out
@@ -128,7 +128,7 @@ func (r reader) CIRuns(project string) []CIRun {
 	if !ok {
 		return nil
 	}
-	return p.ciRuns.clone().Runs
+	return cloneCIRuns(p.ciRuns).Runs
 }
 
 type writer struct {
@@ -165,7 +165,7 @@ func (w *writer) PutProject(p Project) error {
 }
 
 func (w *writer) PutSpec(project string, s Spec) error {
-	s = s.clone()
+	s = cloneSpec(s)
 	if err := w.begin(s, project); err != nil {
 		return err
 	}
@@ -174,7 +174,7 @@ func (w *writer) PutSpec(project string, s Spec) error {
 }
 
 func (w *writer) PutTicket(project string, t Ticket) error {
-	t = t.clone()
+	t = cloneTicket(t)
 	if err := w.begin(t, project); err != nil {
 		return err
 	}
@@ -253,7 +253,7 @@ func (w *writer) PutOptions(o Options) error {
 }
 
 func (w *writer) PutCIRuns(project string, runs []CIRun) error {
-	rs := CIRuns{Runs: runs}.clone()
+	rs := cloneCIRuns(CIRuns{Runs: runs})
 	if err := w.begin(rs, project); err != nil {
 		return err
 	}
@@ -262,7 +262,7 @@ func (w *writer) PutCIRuns(project string, runs []CIRun) error {
 }
 
 func (x *index) setProject(p Project) {
-	p.Landing = p.Landing.orDefault()
+	p.Landing = landingOrDefault(p.Landing)
 	if d, ok := x.projects[p.Key]; ok {
 		d.project = p
 		return
