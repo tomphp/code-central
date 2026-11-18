@@ -67,7 +67,7 @@ type Core struct {
 // Events.
 func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
 	bus, wakes := events.New(), newFactoryWakes()
-	c := &Core{store: notifying{Store: archiveGuard{s}, bus: bus, wakes: wakes}, clock: clk, ids: idSource, events: bus, factoryWakes: wakes}
+	c := &Core{store: newNotifying(archiveGuard{s}, bus, wakes), clock: clk, ids: idSource, events: bus, factoryWakes: wakes}
 	c.activity = newActivity(c.now())
 	c.transcripts = &transcripts{all: map[markKey]*transcript{}, feeds: map[markKey]map[*TranscriptFeed]struct{}{}}
 	c.latestNotices = &latestNotices{sent: map[markKey]time.Time{}, pending: map[markKey]bool{}}

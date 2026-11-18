@@ -260,6 +260,7 @@ func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushed
 	// CI item lists one more (code-central-432).
 	var sharing []int
 	v, err := c.updateTicketIn(key, "report_pushed_commit", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
+		sharing = nil
 		if t.State != domain.Accepted && t.State != domain.InReview {
 			return false, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is %s: only an Accepted or In Review Ticket is pushed", DisplayID(key, t.Number), t.State)}
 		}
@@ -330,9 +331,10 @@ type CIRunsView struct {
 // as the Project gets ci.changed, so the UI updates live.
 func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput) (Written[CIRunsView], error) {
 	var reported CIRunsView
-	changed := map[int]bool{}
-	wrote := false
+	var changed map[int]bool
+	var wrote bool
 	err := c.store.Update(func(w store.Writer) error {
+		reported, changed, wrote = CIRunsView{}, map[int]bool{}, false
 		if err := writable(w, key); err != nil {
 			return err
 		}

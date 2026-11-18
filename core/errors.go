@@ -3,6 +3,8 @@ package core
 import (
 	"errors"
 	"fmt"
+
+	"github.com/tomoram/code-central/store"
 )
 
 // Code names the kind of an Error. The set is fixed by the spec.
@@ -16,6 +18,10 @@ const (
 	StaleClaim       Code = "stale_claim"
 	Invalid          Code = "invalid"
 	Cycle            Code = "cycle"
+	// Conflict means another service sharing the Store wrote what the
+	// write read at the same moment, until its attempts ran out: the
+	// write changed nothing, and trying again may succeed.
+	Conflict Code = "conflict"
 	// ServiceUnavailable is produced only by the client, never by core.
 	ServiceUnavailable Code = "service_unavailable"
 )
@@ -38,11 +44,16 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 
-// ErrorOf is err in the one error shape: the *Error it is or wraps, or
-// else an internal one, as something broke inside the service.
+// ErrorOf is err in the one error shape: the *Error it is or wraps, a
+// conflict for store.ErrConflict, or else an internal one, as something
+// broke inside the service.
 func ErrorOf(err error) *Error {
 	var e *Error
-	if !errors.As(err, &e) {
+	switch {
+	case errors.As(err, &e):
+	case errors.Is(err, store.ErrConflict):
+		e = &Error{Code: Conflict, Message: "another service changed this at the same moment, so nothing was written; try again"}
+	default:
 		e = &Error{Code: "internal", Message: err.Error()}
 	}
 	return e

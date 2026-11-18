@@ -107,7 +107,7 @@ Good:
 - The HTTP/MCP boundary is sharp. The Factory and watchers hold a `Client` interface and talk only over HTTP.
 - `ops.All()` is a real contract, checked by the cross-door suite in `server/*_test.go` and the UI/Go contract cases.
 - `notify` depends on a four-method `Source` interface, not on `*Core`, and the transports now do the same through `ops.Dispatcher` and `ops.Service`.
-- `store.Store{View, Update}` is small, with a shared contract suite (`storetest`).
+- `store.Store{View, Update, Changes, Usage}` is small, with a shared contract suite (`storetest`).
 - UI wire types are generated from Go (ADR 0042), and the UI's only `fetch` is in `web/src/api/http.ts`.
 - `clock`, `ids`, `events`, `home` are small and injectable.
 

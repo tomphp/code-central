@@ -142,6 +142,7 @@ func (c *Core) respondCI(key string, op CIFailureOption, in CIResponseInput, don
 	var v Written[TicketView]
 	var listed []int
 	err := c.store.Update(func(w store.Writer) error {
+		listed = nil
 		if err := writable(w, key); err != nil {
 			return err
 		}
