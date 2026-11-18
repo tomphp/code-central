@@ -299,7 +299,7 @@ func (s *ciState) reads(record, commit string) bool { return len(s.ticketsReadin
 func (s *ciState) ticketsReading(record, commit string) []domain.Ticket {
 	name := recordRepository(s.p.Key, record)
 	var out []domain.Ticket
-	for _, t := range s.r.Tickets(s.p.Key) {
+	for _, t := range s.r.FindTickets(s.p.Key, pushedCommit(s.p.Key, name, commit)) {
 		pushed := pushedIn(s.p.Key, t, name)
 		if len(pushed) > 0 && slices.ContainsFunc(s.resultCommits(t, name, pushed), func(pc domain.PushedCommit) bool { return pc.Commit == commit }) {
 			out = append(out, t)

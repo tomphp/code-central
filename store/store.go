@@ -10,6 +10,7 @@ package store
 import (
 	"errors"
 	"github.com/tomoram/code-central/domain"
+	"iter"
 	"maps"
 	"slices"
 )
@@ -35,6 +36,20 @@ type Reader interface {
 	// StateCounts is how many of the project's Tickets are in each State;
 	// a State no Ticket is in is left out.
 	StateCounts(project string) map[domain.State]int
+	// ClaimBySession is the most recently started Claim with the session
+	// ID, live or ended, in any Project; on a tie, the first in Project,
+	// Ticket and Claim order. An empty session ID finds none.
+	ClaimBySession(sessionID string) (SessionClaim, bool)
+	// TicketCommits is every commit the project's Tickets pushed and
+	// landed at, in number order, and each Ticket's pushed commits in the
+	// order they were pushed, then its landed ones: the Home Repository's
+	// from its Moves, then the other Repositories' in their order.
+	TicketCommits(project string) []TicketCommit
+	// Records reads the project's records whole: its Specs, then its
+	// Tickets, each in number order and each Ticket with every History
+	// part. It is for Export and Store Move, which copy a Project; every
+	// other read names what it needs.
+	Records(project string) iter.Seq[Record]
 	// NextNumber is the highest Spec or Ticket number in the project plus
 	// one. It is derived, never stored, so numbers are never reused.
 	NextNumber(project string) int

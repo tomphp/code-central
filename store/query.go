@@ -2,6 +2,8 @@ package store
 
 import (
 	"cmp"
+	"iter"
+	"maps"
 	"slices"
 
 	"github.com/tomoram/code-central/domain"
@@ -176,4 +178,102 @@ func (r reader) StateCounts(project string) map[domain.State]int {
 		}
 	}
 	return out
+}
+
+// SessionClaim is a Claim ClaimBySession found, with the Project and the
+// number of the Ticket it is on.
+type SessionClaim struct {
+	Project string
+	Ticket  int
+	Claim   domain.Claim
+}
+
+func (r reader) ClaimBySession(sessionID string) (SessionClaim, bool) {
+	var out SessionClaim
+	found := false
+	if sessionID == "" {
+		return out, false
+	}
+	for _, p := range r.Projects() {
+		tickets := r.x.projects[p.Key].tickets
+		for _, n := range slices.Sorted(maps.Keys(tickets)) {
+			for _, cl := range tickets[n].Claims {
+				if cl.SessionID == sessionID && (!found || cl.Started.After(out.Claim.Started)) {
+					out, found = SessionClaim{Project: p.Key, Ticket: n, Claim: cl}, true
+				}
+			}
+		}
+	}
+	return out, found
+}
+
+// TicketCommit is one commit TicketCommits lists: a Ticket of Spec
+// pushed it, or landed at it, in the Repository named.
+type TicketCommit struct {
+	Ticket int
+	Spec   int
+	// Repository is the Repository Name; empty for the Home Repository.
+	Repository string
+	Commit     string
+	Kind       CommitKind
+}
+
+// CommitKind is whether a TicketCommit was pushed or landed at.
+type CommitKind string
+
+// The kinds of TicketCommit.
+const (
+	CommitPushed CommitKind = "pushed"
+	CommitLanded CommitKind = "landed"
+)
+
+func (r reader) TicketCommits(project string) []TicketCommit {
+	out := []TicketCommit{}
+	p, ok := r.x.projects[project]
+	if !ok {
+		return out
+	}
+	for _, n := range slices.Sorted(maps.Keys(p.tickets)) {
+		t := p.tickets[n]
+		row := func(repository, commit string, kind CommitKind) {
+			out = append(out, TicketCommit{Ticket: n, Spec: t.Spec, Repository: repository, Commit: commit, Kind: kind})
+		}
+		for _, pc := range t.PushedCommits {
+			row(pc.Repository, pc.Commit, CommitPushed)
+		}
+		// The Home Repository landed at its Moves' commits, so its entry
+		// among the Repositories, named by the Project Key, is left out.
+		for _, m := range t.Moves {
+			if m.Commit != "" {
+				row("", m.Commit, CommitLanded)
+			}
+		}
+		for _, cr := range t.Repositories {
+			if cr.Landed != nil && cr.Name != project {
+				row(cr.Name, cr.Landed.Commit, CommitLanded)
+			}
+		}
+	}
+	return out
+}
+
+// Record is one record Records reads: a Spec or a Ticket, the other nil.
+type Record struct {
+	Spec   *domain.Spec
+	Ticket *domain.Ticket
+}
+
+func (r reader) Records(project string) iter.Seq[Record] {
+	return func(yield func(Record) bool) {
+		for _, s := range r.Specs(project) {
+			if !yield(Record{Spec: &s}) {
+				return
+			}
+		}
+		for _, t := range r.Tickets(project, History...) {
+			if !yield(Record{Ticket: &t}) {
+				return
+			}
+		}
+	}
 }

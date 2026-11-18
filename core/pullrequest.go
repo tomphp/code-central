@@ -265,12 +265,12 @@ func pushedWork(r store.Reader, key string) []PushedWorkView {
 	index := map[at]int{}
 	p, _ := r.Project(key)
 	var covered [][]domain.Ticket
-	for _, t := range r.Tickets(key) {
+	// The pull request's body is its finish summary.
+	watched := store.TicketFilter{States: []domain.State{domain.Accepted, domain.InReview}, HasPushes: true, Parts: []store.Part{store.Moves, store.Comments}}
+	for _, t := range r.FindTickets(key, watched) {
 		if !watchesPullRequest(t) {
 			continue
 		}
-		// The pull request's body is its finish summary.
-		t, _ = r.Ticket(key, t.Number, store.Moves, store.Comments)
 		for _, name := range pushedRepositories(key, t) {
 			branch := branchIn(key, t, name)
 			if branch == "" {
@@ -502,10 +502,9 @@ func (c *Core) ReportPullRequest(_ context.Context, key string, in ReportPullReq
 		if name != p.Key {
 			pr.Repository = name
 		}
-		for _, t := range r.Tickets(key) {
-			if t.State == domain.Done || t.State == domain.Cancelled {
-				continue
-			}
+		// A push reported without a branch was pushed as the Ticket's, so
+		// the Tickets are found by their pushes, not by the branch.
+		for _, t := range r.FindTickets(key, store.TicketFilter{States: unfinished, HasPushes: true}) {
 			if pc, ok := latestPushedTo(key, t, name); ok && pushedAs(pc, t, branch) {
 				covered = append(covered, t.Number)
 			}
