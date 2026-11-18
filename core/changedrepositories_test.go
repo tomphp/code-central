@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -21,7 +22,7 @@ import (
 // claimed under claim-1.
 func (f fixture) severalRepositories(t *testing.T) {
 	t.Helper()
-	f.work(t, store.Ready)
+	f.work(t, domain.Ready)
 	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
 	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git"})
 	if _, err := f.core.SetLandingOrder(human, "acme", core.SetLandingOrderInput{Names: []string{"web", "acme", "api"}}); err != nil {
@@ -95,7 +96,7 @@ func TestAFinishRefusesABadRepositoriesListAndKeepsTheClaim(t *testing.T) {
 			if !errors.As(err, &e) || e.Code != core.Invalid || !strings.HasPrefix(e.Field, "repositories") {
 				t.Fatalf("finish: %v, want invalid repositories", err)
 			}
-			if tk := f.get(t, "2"); tk.State != store.InProgress {
+			if tk := f.get(t, "2"); tk.State != domain.InProgress {
 				t.Fatalf("acme-2 is %s, want it still In Progress under its Claim", tk.State)
 			}
 		})
@@ -123,7 +124,7 @@ func TestAcceptingWorkOnlyInAnotherRepositoryWaitsToLand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.Record.State != store.Accepted {
+	if v.Record.State != domain.Accepted {
 		t.Fatalf("acme-2 is %s, want Accepted: it changed api", v.Record.State)
 	}
 }
@@ -134,13 +135,13 @@ func TestAcceptingWorkOnlyInAnotherRepositoryWaitsToLand(t *testing.T) {
 func TestAFinishDroppingAReportedRepositoryIsntAutoAccepted(t *testing.T) {
 	f := newFixture(t)
 	f.severalRepositories(t)
-	f.setAutoAccept(t, map[store.AutoAcceptKind]bool{store.AutoAcceptImplementation: true})
+	f.setAutoAccept(t, map[domain.AutoAcceptKind]bool{domain.AutoAcceptImplementation: true})
 	f.reportChanged(t, core.RepositoryWork{Name: "api", Branch: "acme-2", Commit: "bbb"})
 
-	if tk := f.finishWith(t, core.FinishInput{}); tk.State != store.InReview {
+	if tk := f.finishWith(t, core.FinishInput{}); tk.State != domain.InReview {
 		t.Fatalf("acme-2 is %s, want In Review for the finish check", tk.State)
 	}
-	if tk := f.get(t, "2"); tk.State != store.InReview {
+	if tk := f.get(t, "2"); tk.State != domain.InReview {
 		t.Fatalf("acme-2 is %s after the finish, want In Review: not auto-accepted", tk.State)
 	}
 }
@@ -148,12 +149,12 @@ func TestAFinishDroppingAReportedRepositoryIsntAutoAccepted(t *testing.T) {
 func TestAFinishKeepingItsRepositoriesIsAutoAccepted(t *testing.T) {
 	f := newFixture(t)
 	f.severalRepositories(t)
-	f.setAutoAccept(t, map[store.AutoAcceptKind]bool{store.AutoAcceptImplementation: true})
+	f.setAutoAccept(t, map[domain.AutoAcceptKind]bool{domain.AutoAcceptImplementation: true})
 	f.reportChanged(t, core.RepositoryWork{Name: "api", Branch: "acme-2", Commit: "bbb"})
 
 	f.finishWith(t, core.FinishInput{Repositories: []core.RepositoryWork{{Name: "api", Branch: "acme-2", Commit: "ccc"}}})
 
-	if tk := f.get(t, "2"); tk.State != store.Accepted {
+	if tk := f.get(t, "2"); tk.State != domain.Accepted {
 		t.Fatalf("acme-2 is %s, want Accepted on the human's behalf", tk.State)
 	}
 }
@@ -220,7 +221,7 @@ func TestTheFactoryReportsTheChangedRepositoriesLive(t *testing.T) {
 	if !slices.Equal(changedNames(tk), []string{"api"}) {
 		t.Fatalf("live Changed Repositories %v, want api", changedNames(tk))
 	}
-	rows, _ := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: []store.State{store.InProgress}})
+	rows, _ := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: []domain.State{domain.InProgress}})
 	if len(rows) != 1 || !slices.Equal(rows[0].Repositories, []string{"api"}) {
 		t.Fatalf("rows %+v, want acme-2's card naming api", rows)
 	}
@@ -265,7 +266,7 @@ func TestFailFinishMovesAFinishedTicketToFailedWithAFailureReportOnTheFinishingC
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tk.State != store.Failed || len(tk.FailureReports) != 1 {
+	if tk.State != domain.Failed || len(tk.FailureReports) != 1 {
 		t.Fatalf("acme-2 is %s with %d Failure Reports, want Failed with one", tk.State, len(tk.FailureReports))
 	}
 	if r := tk.FailureReports[0]; r.Claim != 1 || r.WhatBroke != "api is left out" {
@@ -284,7 +285,7 @@ func TestFailFinishMovesAnAcceptedTicketThatHasLandedNowhere(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if tk, err := f.failFinish(); err != nil || tk.State != store.Failed {
+	if tk, err := f.failFinish(); err != nil || tk.State != domain.Failed {
 		t.Fatalf("fail_finish: %v, %+v, want Failed", err, tk.State)
 	}
 }
@@ -300,7 +301,7 @@ func TestFailFinishRefusesAnAcceptedTicketThatHasLandedSomewhere(t *testing.T) {
 	// Repository.
 	if err := f.store.Update(func(w store.Writer) error {
 		tk, _ := w.Ticket("acme", 2)
-		tk.Repositories[1].Landed = &store.Landed{Commit: "eee", Time: t0}
+		tk.Repositories[1].Landed = &domain.Landed{Commit: "eee", Time: t0}
 		return w.PutTicket("acme", tk)
 	}); err != nil {
 		t.Fatal(err)
@@ -331,7 +332,7 @@ func TestASpecShowsTheUnionOfItsTicketsChangedRepositoriesInLandingOrder(t *test
 	f := newFixture(t)
 	f.severalRepositories(t)
 	f.finishWith(t, core.FinishInput{Repositories: []core.RepositoryWork{{Name: "api", Branch: "acme-2", Commit: "bbb"}}})
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Other", State: store.Ready}) // acme-3
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Other", State: domain.Ready}) // acme-3
 	if _, err := f.core.Claim(ctx, "acme", core.ClaimInput{Ticket: "3"}); err != nil {
 		t.Fatal(err)
 	}

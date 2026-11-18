@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -26,7 +27,7 @@ func itemWorld(t *testing.T) fixture {
 func itemWorldOn(t *testing.T, f fixture) fixture {
 	t.Helper()
 	f = landWorldOn(t, f, false)
-	f.landing(t, store.Landing{Method: store.LandingMerge, Push: true, Remote: "origin"})
+	f.landing(t, domain.Landing{Method: domain.LandingMerge, Push: true, Remote: "origin"})
 	err := f.store.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
 		p.CI = trackingOn("acme/web")
@@ -37,9 +38,9 @@ func itemWorldOn(t *testing.T, f fixture) fixture {
 	}
 	f.spec(t, "acme", "Other")
 	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-7", Title: "Third"})
-	f.moveTo(t, 5, store.Accepted)
+	f.moveTo(t, 5, domain.Accepted)
 	f.clock.Advance(time.Minute)
-	f.moveTo(t, 8, store.Accepted)
+	f.moveTo(t, 8, domain.Accepted)
 	f.pushed(t, "acme-5", "abc123")
 	f.pushed(t, "acme-8", "abc123")
 	return f
@@ -87,7 +88,7 @@ func listed(v *core.CIItemView) []string {
 
 func TestCIFailedIsOneItemPerCommitListingTheTicketsWaitingOnItAcrossSpecs(t *testing.T) {
 	f := itemWorld(t)
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 	row := f.theItem(t, core.ReasonCIFailed)
 	if row.Project != "acme" || row.Title != "CI failed at abc123" || row.CIFailure == nil || row.CIFailure.Commit != "abc123" || row.CIResult != core.CIFailed {
 		t.Fatalf("row %+v, want acme's CI failed at abc123 with its failure", row)
@@ -112,13 +113,13 @@ func TestCIFailedIsOneItemPerCommitListingTheTicketsWaitingOnItAcrossSpecs(t *te
 
 func TestAnItemListingOneTicketOffersSendBackUnlessItIsSpecLanded(t *testing.T) {
 	f := itemWorld(t)
-	f.moveTo(t, 8, store.Done)
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
+	f.moveTo(t, 8, domain.Done)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 	it := f.theItem(t, core.ReasonCIFailed).CIItem
 	if want := []core.CIFailureOption{"rerun_ci", "land_anyway", "send_back", "new_fix_ticket"}; !slices.Equal(it.Options, want) || !slices.Equal(listed(it), []string{"acme-5"}) {
 		t.Fatalf("item %+v, want acme-5 alone offered %v", it, want)
 	}
-	f.landing(t, store.Landing{Method: store.LandingMerge, Push: true, Remote: "origin", LandPerSpec: true})
+	f.landing(t, domain.Landing{Method: domain.LandingMerge, Push: true, Remote: "origin", LandPerSpec: true})
 	it = f.theItem(t, core.ReasonCIFailed).CIItem
 	if want := []core.CIFailureOption{"rerun_ci", "land_anyway", "new_fix_ticket"}; !slices.Equal(it.Options, want) {
 		t.Fatalf("options %v, want %v for a Spec-landed Ticket", it.Options, want)
@@ -129,19 +130,19 @@ func TestAnItemListingOneTicketOffersSendBackUnlessItIsSpecLanded(t *testing.T) 
 
 func TestSendBackIsRefusedWhileTheItemListsOtherTickets(t *testing.T) {
 	f := itemWorld(t)
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 	for _, id := range []core.Ref{"acme-5", "acme-8"} {
 		_, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: id, Note: "fix it"})
 		notAllowed(t, err)
 	}
-	if tk := f.getTicket(t, "acme-5"); tk.State != store.Accepted {
+	if tk := f.getTicket(t, "acme-5"); tk.State != domain.Accepted {
 		t.Fatalf("acme-5 is %s, want Accepted", tk.State)
 	}
 }
 
 func TestLandAnywayOnAnyListedTicketIsStoredOnceForTheCommitAndLandsEveryListedTicket(t *testing.T) {
 	f := itemWorld(t)
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 	if _, err := f.core.LandAnyway(human, "acme", core.CIResponseInput{Ticket: "acme-8"}); err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +169,7 @@ func TestLandAnywayOnAnyListedTicketIsStoredOnceForTheCommitAndLandsEveryListedT
 
 func TestRerunOnAListedTicketReRunsTheCommitOnceForEveryListedTicket(t *testing.T) {
 	f := itemWorld(t)
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 	if _, err := f.core.RerunCI(human, "acme", core.CIResponseInput{Ticket: "acme-5"}); err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +186,7 @@ func TestRerunOnAListedTicketReRunsTheCommitOnceForEveryListedTicket(t *testing.
 		t.Fatalf("reruns %+v, want run 1 on abc123 asked for once", w.Reruns)
 	}
 	// The new attempt passing lands both.
-	f.ciAttempt(t, 1, 2, "ci.yml", "abc123", "acme-8", store.CICompleted, store.CISuccess)
+	f.ciAttempt(t, 1, 2, "ci.yml", "abc123", "acme-8", domain.CICompleted, domain.CISuccess)
 	for _, id := range []string{"acme-5", "acme-8"} {
 		if got := f.getTicket(t, id).CIResult; got != core.CIPassed {
 			t.Errorf("%s: result %q, want passed", id, got)
@@ -195,17 +196,17 @@ func TestRerunOnAListedTicketReRunsTheCommitOnceForEveryListedTicket(t *testing.
 
 func TestNewFixTicketOpensOneReadyTicketOnTheCIFixesSpecAndLeavesTheListedTicketsWaiting(t *testing.T) {
 	f := itemWorld(t)
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 	if _, err := f.core.NewFixTicket(human, "acme", core.NewFixTicketInput{Ticket: "acme-8", Note: "ci.yml failed"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"acme-5", "acme-8"} {
-		if tk := f.getTicket(t, id); tk.State != store.Accepted || tk.LandAnyway || tk.NeedsMeReason != "" || tk.CIResult != core.CIFailed {
+		if tk := f.getTicket(t, id); tk.State != domain.Accepted || tk.LandAnyway || tk.NeedsMeReason != "" || tk.CIResult != core.CIFailed {
 			t.Errorf("%s: %s, land anyway %v, reason %q, result %q, want Accepted, failed and out of Needs Me", id, tk.State, tk.LandAnyway, tk.NeedsMeReason, tk.CIResult)
 		}
 	}
 	fix := f.getTicket(t, "acme-10")
-	if fix.State != store.Ready || fix.Spec.ID != "acme-9" {
+	if fix.State != domain.Ready || fix.Spec.ID != "acme-9" {
 		t.Fatalf("fix Ticket %s on %q, want Ready on the CI Fixes Spec acme-9", fix.State, fix.Spec.ID)
 	}
 	spec, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-9"})
@@ -235,9 +236,9 @@ func TestNewFixTicketOpensOneReadyTicketOnTheCIFixesSpecAndLeavesTheListedTicket
 }
 
 func TestTheCIFailedItemReturnsWhenItsFixTicketIsCancelledOrDoneWhileTheCommitStillFails(t *testing.T) {
-	for _, state := range []store.State{store.Cancelled, store.Done} {
+	for _, state := range []domain.State{domain.Cancelled, domain.Done} {
 		f := itemWorld(t)
-		f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
+		f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 		if _, err := f.core.NewFixTicket(human, "acme", core.NewFixTicketInput{Ticket: "acme-8", Note: "ci.yml failed"}); err != nil {
 			t.Fatal(err)
 		}
@@ -254,7 +255,7 @@ func TestTheCIFailedItemReturnsWhenItsFixTicketIsCancelledOrDoneWhileTheCommitSt
 
 func TestCICancelledIsOneItemPerCommitWithNoNewFixTicket(t *testing.T) {
 	f := itemWorld(t)
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CICancelled)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CICancelled)
 	it := f.theItem(t, core.ReasonCICancelled).CIItem
 	if want := []core.CIFailureOption{"rerun_ci", "land_anyway"}; !slices.Equal(it.Options, want) || !slices.Equal(listed(it), []string{"acme-5", "acme-8"}) {
 		t.Fatalf("item %+v, want acme-5 and acme-8 offered %v", it, want)
@@ -278,10 +279,10 @@ func TestCIUnavailableIsOneItemPerCommitWithNoOptions(t *testing.T) {
 
 func TestTwoCommitsAreTwoItems(t *testing.T) {
 	f := itemWorld(t)
-	f.moveTo(t, 6, store.Accepted)
+	f.moveTo(t, 6, domain.Accepted)
 	f.pushed(t, "acme-6", "def456")
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
-	f.ciRun(t, 2, "ci.yml", "def456", "acme-6", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
+	f.ciRun(t, 2, "ci.yml", "def456", "acme-6", domain.CICompleted, domain.CIFailure)
 	rows := f.needsMe(t)
 	if len(rows) != 2 || rows[0].CIItem == nil || rows[1].CIItem == nil {
 		t.Fatalf("needs me %+v, want two CI failed items", rows)
@@ -293,11 +294,11 @@ func TestTwoCommitsAreTwoItems(t *testing.T) {
 
 func TestALaterCommitPassingClearsTheItemWithNoComment(t *testing.T) {
 	f := itemWorld(t)
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 	f.theItem(t, core.ReasonCIFailed)
 	f.pushed(t, "acme-5", "def456")
 	f.pushed(t, "acme-8", "def456")
-	f.ciRun(t, 2, "ci.yml", "def456", "acme-5", store.CICompleted, store.CISuccess)
+	f.ciRun(t, 2, "ci.yml", "def456", "acme-5", domain.CICompleted, domain.CISuccess)
 	if rows := f.needsMe(t); len(rows) != 0 {
 		t.Fatalf("needs me %+v, want nothing waiting", rows)
 	}
@@ -311,13 +312,13 @@ func TestALaterCommitPassingClearsTheItemWithNoComment(t *testing.T) {
 
 func TestLandAnywayAppliesToThatCommitOnly(t *testing.T) {
 	f := itemWorld(t)
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 	if _, err := f.core.LandAnyway(human, "acme", core.CIResponseInput{Ticket: "acme-5"}); err != nil {
 		t.Fatal(err)
 	}
 	f.pushed(t, "acme-5", "def456")
 	f.pushed(t, "acme-8", "def456")
-	f.ciRun(t, 2, "ci.yml", "def456", "acme-5", store.CICompleted, store.CIFailure)
+	f.ciRun(t, 2, "ci.yml", "def456", "acme-5", domain.CICompleted, domain.CIFailure)
 	if it := f.theItem(t, core.ReasonCIFailed).CIItem; it.Commit != "def456" || !slices.Equal(listed(it), []string{"acme-5", "acme-8"}) {
 		t.Fatalf("item %+v, want def456 listing both again", it)
 	}

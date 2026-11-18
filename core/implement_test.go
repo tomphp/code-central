@@ -6,15 +6,15 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // specInReview is requirement with its spec Stage, acme-4, In Review.
 func (f fixture) specInReview(t *testing.T) {
 	t.Helper()
 	f.requirement(t)
-	f.setState(t, 3, store.Done)
-	f.setState(t, 4, store.InReview)
+	f.setState(t, 3, domain.Done)
+	f.setState(t, 4, domain.InReview)
 }
 
 func (f fixture) implement(t *testing.T, ref core.Ref) core.FinishResult {
@@ -30,7 +30,7 @@ func TestImplementAcceptsTheSpecStageCreatesOneTicketAndCancelsTheTicketsStage(t
 	f := newFixture(t)
 	f.specInReview(t)
 	res := f.implement(t, "acme-4")
-	if res.Acknowledgement == nil || res.Acknowledgement.ID != "acme-4" || res.Acknowledgement.State != store.Done {
+	if res.Acknowledgement == nil || res.Acknowledgement.ID != "acme-4" || res.Acknowledgement.State != domain.Done {
 		t.Fatalf("result %+v", res)
 	}
 	if res.NextStep == "" || !strings.Contains(res.NextStep, "acme-6") {
@@ -38,25 +38,25 @@ func TestImplementAcceptsTheSpecStageCreatesOneTicketAndCancelsTheTicketsStage(t
 	}
 
 	spec := f.get(t, "acme-4")
-	if m := spec.Moves[len(spec.Moves)-1]; m.From != store.InReview || m.To != store.Done || m.Actor != "human" || m.Via != "implement" {
+	if m := spec.Moves[len(spec.Moves)-1]; m.From != domain.InReview || m.To != domain.Done || m.Actor != "human" || m.Via != "implement" {
 		t.Fatalf("spec Stage move %+v", m)
 	}
 
 	build := f.get(t, "acme-6")
 	wantDescription := "Implement the whole Spec [acme-2](acme-2). Its User Stories, Implementation Decisions and Testing Decisions are the acceptance criteria, including writing the glossary terms and ADRs it records. Read them with `get_spec` and `sections`.\n"
-	if build.Title != "Implement: Add a dark mode" || build.State != store.Ready || build.Spec.ID != "acme-2" ||
+	if build.Title != "Implement: Add a dark mode" || build.State != domain.Ready || build.Spec.ID != "acme-2" ||
 		len(build.Labels) != 0 || len(build.BlockedBy) != 0 || build.Description != wantDescription {
 		t.Fatalf("implementation Ticket %+v", build)
 	}
-	if len(build.Moves) != 1 || build.Moves[0].To != store.Ready || build.Moves[0].Actor != "human" || build.Moves[0].Via != "implement" {
+	if len(build.Moves) != 1 || build.Moves[0].To != domain.Ready || build.Moves[0].Actor != "human" || build.Moves[0].Via != "implement" {
 		t.Fatalf("implementation Ticket moves %+v", build.Moves)
 	}
 
 	tickets := f.get(t, "acme-5")
-	if tickets.State != store.Cancelled || !slices.Equal(tickets.Replacements, []string{"acme-6"}) {
+	if tickets.State != domain.Cancelled || !slices.Equal(tickets.Replacements, []string{"acme-6"}) {
 		t.Fatalf("tickets Stage %+v", tickets)
 	}
-	if m := tickets.Moves[len(tickets.Moves)-1]; m.To != store.Cancelled || m.Via != "implement" {
+	if m := tickets.Moves[len(tickets.Moves)-1]; m.To != domain.Cancelled || m.Via != "implement" {
 		t.Fatalf("tickets Stage move %+v", m)
 	}
 	if len(tickets.Comments) != 1 || !strings.Contains(tickets.Comments[0].Body, "human chose Implement") || !strings.Contains(tickets.Comments[0].Body, "acme-6") {
@@ -81,7 +81,7 @@ func TestAfterImplementTheBuildFollowsTheImplementationTicket(t *testing.T) {
 	if r.Build != (core.BuildProgress{Done: 0, Total: 1}) || !r.WaitingForFactory {
 		t.Fatalf("build %+v waiting %v", r.Build, r.WaitingForFactory)
 	}
-	f.setState(t, 6, store.Done)
+	f.setState(t, 6, domain.Done)
 	r = f.requirementOf(t, "acme-2")
 	if r.Build != (core.BuildProgress{Done: 1, Total: 1}) || r.WaitingForFactory {
 		t.Fatalf("build %+v waiting %v", r.Build, r.WaitingForFactory)
@@ -95,15 +95,15 @@ func TestImplementIsRefusedAndWritesNothingWhenItCannotRun(t *testing.T) {
 		ref   core.Ref
 		want  string
 	}{
-		{"a grilling Stage", func(f fixture, t *testing.T) { f.setState(t, 3, store.InReview) }, "acme-3", "not a spec Stage"},
+		{"a grilling Stage", func(f fixture, t *testing.T) { f.setState(t, 3, domain.InReview) }, "acme-3", "not a spec Stage"},
 		{"an implementation Ticket", func(f fixture, t *testing.T) {
-			f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-2", Title: "Build", State: store.Ready})
-			f.setState(t, 6, store.InReview)
+			f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-2", Title: "Build", State: domain.Ready})
+			f.setState(t, 6, domain.InReview)
 		}, "acme-6", "not a spec Stage"},
 		{"a spec Stage not In Review", func(f fixture, t *testing.T) {}, "acme-4", "In Review"},
-		{"a Cancelled tickets Stage", func(f fixture, t *testing.T) { f.setState(t, 4, store.InReview); f.setState(t, 5, store.Cancelled) }, "acme-4", "Cancelled"},
-		{"a Done tickets Stage", func(f fixture, t *testing.T) { f.setState(t, 4, store.InReview); f.setState(t, 5, store.Done) }, "acme-4", "Done"},
-		{"a claimed tickets Stage", func(f fixture, t *testing.T) { f.setState(t, 4, store.InReview); f.setState(t, 5, store.InProgress) }, "acme-4", "In Progress"},
+		{"a Cancelled tickets Stage", func(f fixture, t *testing.T) { f.setState(t, 4, domain.InReview); f.setState(t, 5, domain.Cancelled) }, "acme-4", "Cancelled"},
+		{"a Done tickets Stage", func(f fixture, t *testing.T) { f.setState(t, 4, domain.InReview); f.setState(t, 5, domain.Done) }, "acme-4", "Done"},
+		{"a claimed tickets Stage", func(f fixture, t *testing.T) { f.setState(t, 4, domain.InReview); f.setState(t, 5, domain.InProgress) }, "acme-4", "In Progress"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

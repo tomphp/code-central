@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -31,10 +32,10 @@ type BlockerInput struct {
 // A brief view shows a Done Blocker as its ID and State only
 // (TicketView.Brief), leaving out its title, via and cleared.
 type BlockerView struct {
-	ID    string      `json:"id"`
-	Title string      `json:"title,omitempty"`
-	State store.State `json:"state"`
-	Via   string      `json:"via,omitempty"`
+	ID    string       `json:"id"`
+	Title string       `json:"title,omitempty"`
+	State domain.State `json:"state"`
+	Via   string       `json:"via,omitempty"`
 	// Cleared is whether it no longer blocks though it isn't Done, as one
 	// on the same Spec does once it is merged into the Spec Branch. It is
 	// always set, except on a brief view's Done Blocker.
@@ -47,7 +48,7 @@ func (b BlockerView) cleared() bool { return b.Cleared != nil && *b.Cleared }
 // AddBlocker is add_blocker(ticket, blocker). A link already there
 // writes nothing; one that would form a cycle is rejected with cycle.
 func (c *Core) AddBlocker(_ context.Context, key string, in BlockerInput) (Written[TicketView], error) {
-	return c.updateTicketIn(key, "add_blocker", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
+	return c.updateTicketIn(key, "add_blocker", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
 		blocker, err := resolveTicket(r, key, "add_blocker", "blocker", in.Blocker)
 		if err != nil {
 			return false, err
@@ -74,7 +75,7 @@ func (c *Core) AddBlocker(_ context.Context, key string, in BlockerInput) (Writt
 // link. A Ticket that blocks only through a Cancelled Blocker's
 // Replacements is unlinked by removing that Cancelled Blocker.
 func (c *Core) RemoveBlocker(_ context.Context, key string, in BlockerInput) (Written[TicketView], error) {
-	return c.updateTicketIn(key, "remove_blocker", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
+	return c.updateTicketIn(key, "remove_blocker", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
 		b, err := in.Blocker.number(key, "blocker")
 		if err != nil {
 			return false, err
@@ -103,7 +104,7 @@ func (c *Core) RemoveBlocker(_ context.Context, key string, in BlockerInput) (Wr
 // worked out one way.
 type blockRule struct {
 	r   store.Reader
-	p   store.Project
+	p   domain.Project
 	now time.Time
 }
 
@@ -116,20 +117,20 @@ func (c *Core) blockRule(r store.Reader, key string) blockRule {
 // blocked is computed: an unfinished Ticket with a Blocker, after
 // following Replacements, that isn't Done or cleared. Finished work is
 // never blocked.
-func (b blockRule) blocked(t store.Ticket) bool {
+func (b blockRule) blocked(t domain.Ticket) bool {
 	return len(b.openBlockers(t)) > 0
 }
 
 // openBlockers are the Blockers keeping an unfinished t blocked.
-func (b blockRule) openBlockers(t store.Ticket) []BlockerView {
+func (b blockRule) openBlockers(t domain.Ticket) []BlockerView {
 	if finished(t.State) {
 		return nil
 	}
-	return slices.DeleteFunc(b.blockerViews(t), func(v BlockerView) bool { return v.State == store.Done || v.cleared() })
+	return slices.DeleteFunc(b.blockerViews(t), func(v BlockerView) bool { return v.State == domain.Done || v.cleared() })
 }
 
 // blockerViews lists t's Blockers after following Replacements, each once.
-func (b blockRule) blockerViews(t store.Ticket) []BlockerView {
+func (b blockRule) blockerViews(t domain.Ticket) []BlockerView {
 	key := b.p.Key
 	out := []BlockerView{}
 	seen := map[int]bool{}
@@ -142,7 +143,7 @@ func (b blockRule) blockerViews(t store.Ticket) []BlockerView {
 			bt, _ := b.r.Ticket(key, m)
 			// Within a Spec, a Spec-landed Blocker clears once its work is
 			// merged into the Spec Branch.
-			cleared := bt.Spec == t.Spec && bt.State == store.Accepted && specMergeCounts(bt) && specLanded(b.r, b.p, bt)
+			cleared := bt.Spec == t.Spec && bt.State == domain.Accepted && specMergeCounts(bt) && specLanded(b.r, b.p, bt)
 			v := BlockerView{ID: DisplayID(key, m), Title: bt.Title, State: bt.State, Cleared: &cleared}
 			if m != n {
 				v.Via = DisplayID(key, n)
@@ -155,9 +156,9 @@ func (b blockRule) blockerViews(t store.Ticket) []BlockerView {
 
 // backToReady is when t last moved to Ready from another State, or zero
 // if it never has; its creation doesn't count.
-func backToReady(t store.Ticket) time.Time {
+func backToReady(t domain.Ticket) time.Time {
 	for _, m := range slices.Backward(t.Moves) {
-		if m.To == store.Ready && m.From != "" {
+		if m.To == domain.Ready && m.From != "" {
 			return m.Time
 		}
 	}
@@ -166,11 +167,11 @@ func backToReady(t store.Ticket) time.Time {
 
 // blockedError rejects claiming a blocked Ticket, naming its Blockers,
 
-func (b blockRule) blockedError(t store.Ticket, actor Actor) error {
+func (b blockRule) blockedError(t domain.Ticket, actor Actor) error {
 	var names []string
 	for _, v := range b.openBlockers(t) {
 		s := fmt.Sprintf("%s (%s", v.ID, v.State)
-		if v.State == store.Cancelled {
+		if v.State == domain.Cancelled {
 			s += ", with no Replacements"
 		}
 		if v.Via != "" {
@@ -190,7 +191,7 @@ func (b blockRule) blockedError(t store.Ticket, actor Actor) error {
 // Replacements. A Cancelled Ticket waits on nothing.
 func waitsOn(r store.Reader, key string, n int) []int {
 	t, ok := r.Ticket(key, n)
-	if !ok || t.State == store.Cancelled {
+	if !ok || t.State == domain.Cancelled {
 		return nil
 	}
 	var out []int
@@ -242,10 +243,10 @@ func cycleError(key string, chain []int) error {
 type overlay struct {
 	store.Reader
 	key string
-	t   store.Ticket
+	t   domain.Ticket
 }
 
-func (o overlay) Ticket(project string, n int) (store.Ticket, bool) {
+func (o overlay) Ticket(project string, n int) (domain.Ticket, bool) {
 	if project == o.key && n == o.t.Number {
 		return o.t, true
 	}
@@ -271,7 +272,7 @@ func ticketRefs(r store.Reader, key, op, field string, refs []Ref) ([]int, error
 
 // updateTicketIn is updateTicket with the Reader, for writes that check
 // other Tickets.
-func (c *Core) updateTicketIn(key, op string, ref Ref, full bool, fn func(r store.Reader, t *store.Ticket) (bool, error)) (Written[TicketView], error) {
+func (c *Core) updateTicketIn(key, op string, ref Ref, full bool, fn func(r store.Reader, t *domain.Ticket) (bool, error)) (Written[TicketView], error) {
 	var v Written[TicketView]
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {

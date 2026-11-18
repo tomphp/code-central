@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -18,19 +19,19 @@ import (
 // ciEntryOf is the CI entry of p's Repository named name: the one
 // stored, or with none stored, one filled in from its Clone URL. ok is
 // false when p has no such Repository.
-func ciEntryOf(p store.Project, name string) (entry store.CIRepository, ok bool) {
+func ciEntryOf(p domain.Project, name string) (entry domain.CIRepository, ok bool) {
 	for _, r := range p.RepositoryList() {
 		if r.Name == name {
 			return ciEntryOfRepository(p, r), true
 		}
 	}
-	return store.CIRepository{}, false
+	return domain.CIRepository{}, false
 }
 
 // ciEntryOfRepository is the CI entry of p's Repository r: the one
 // stored, or with none stored, one filled in from its Clone URL, the
 // reported Push remote's for the Home Repository.
-func ciEntryOfRepository(p store.Project, r store.Repository) store.CIRepository {
+func ciEntryOfRepository(p domain.Project, r domain.Repository) domain.CIRepository {
 	if e, ok := storedCIEntry(p, r.Name); ok {
 		return e
 	}
@@ -42,15 +43,15 @@ func ciEntryOfRepository(p store.Project, r store.Repository) store.CIRepository
 }
 
 // storedCIEntry is the CI entry p stores for its Repository name, if any.
-func storedCIEntry(p store.Project, name string) (store.CIRepository, bool) {
-	if i := slices.IndexFunc(p.CI.Repositories, func(e store.CIRepository) bool { return e.Name == name }); i >= 0 {
+func storedCIEntry(p domain.Project, name string) (domain.CIRepository, bool) {
+	if i := slices.IndexFunc(p.CI.Repositories, func(e domain.CIRepository) bool { return e.Name == name }); i >= 0 {
 		return p.CI.Repositories[i], true
 	}
-	return store.CIRepository{}, false
+	return domain.CIRepository{}, false
 }
 
 // ciEntryView is e as a Project read shows it.
-func ciEntryView(e store.CIRepository) CIRepositoryView {
+func ciEntryView(e domain.CIRepository) CIRepositoryView {
 	return CIRepositoryView{Name: e.Name, NotWatched: e.NotWatched, Provider: e.Provider, Repository: e.Repository, ProjectURL: e.ProjectURL}
 }
 
@@ -58,20 +59,20 @@ func ciEntryView(e store.CIRepository) CIRepositoryView {
 // GitHub Actions on a GitHub repository, Azure Pipelines on the Azure
 // DevOps project of an Azure Repos one, or Not watched for any other,
 // and for none, a local-only Repository's.
-func ciEntryFromCloneURL(name, url string) store.CIRepository {
+func ciEntryFromCloneURL(name, url string) domain.CIRepository {
 	switch host, repo := codeHostOf(url); host {
 	case CodeHostGitHub:
-		return store.CIRepository{Name: name, Provider: store.CIGitHubActions, Repository: repo}
+		return domain.CIRepository{Name: name, Provider: domain.CIGitHubActions, Repository: repo}
 	case CodeHostAzureRepos:
 		parts := strings.Split(repo, "/")
-		return store.CIRepository{Name: name, Provider: store.CIAzurePipelines, ProjectURL: "https://dev.azure.com/" + parts[0] + "/" + parts[1]}
+		return domain.CIRepository{Name: name, Provider: domain.CIAzurePipelines, ProjectURL: "https://dev.azure.com/" + parts[0] + "/" + parts[1]}
 	}
-	return store.CIRepository{Name: name, NotWatched: true}
+	return domain.CIRepository{Name: name, NotWatched: true}
 }
 
 // watchesCI reports whether CI Tracking watches p's Repository name:
 // while it is listed and its CI entry isn't Not watched.
-func watchesCI(p store.Project, name string) bool {
+func watchesCI(p domain.Project, name string) bool {
 	entry, ok := ciEntryOf(p, name)
 	return ok && !entry.NotWatched
 }
@@ -80,7 +81,7 @@ func watchesCI(p store.Project, name string) bool {
 // Provider watches.
 type ciTarget struct {
 	name     string
-	provider store.CIProvider
+	provider domain.CIProvider
 	// repository is the GitHub repository, projectURL the Azure DevOps
 	// project.
 	repository, projectURL string
@@ -88,7 +89,7 @@ type ciTarget struct {
 
 // ciTargets are the CI targets of p's watched Repositories, the Home's
 // included, in landing order.
-func ciTargets(p store.Project) []ciTarget {
+func ciTargets(p domain.Project) []ciTarget {
 	var out []ciTarget
 	for _, r := range p.RepositoryList() {
 		if e := ciEntryOfRepository(p, r); !e.NotWatched {
@@ -101,15 +102,15 @@ func ciTargets(p store.Project) []ciTarget {
 // ciProviders are the CI Providers p's watched Repositories use, each
 // once, or GitHub Actions while none is watched, as before any
 // Repository had a CI entry: a workflow name is checked against them.
-func ciProviders(p store.Project) []store.CIProvider {
-	var out []store.CIProvider
+func ciProviders(p domain.Project) []domain.CIProvider {
+	var out []domain.CIProvider
 	for _, t := range ciTargets(p) {
 		if !slices.Contains(out, t.provider) {
 			out = append(out, t.provider)
 		}
 	}
 	if len(out) == 0 {
-		return []store.CIProvider{store.CIGitHubActions}
+		return []domain.CIProvider{domain.CIGitHubActions}
 	}
 	return out
 }
@@ -124,8 +125,8 @@ func recordName(key, name string) string {
 }
 
 // pushedIn are the commits t pushed in the Repository name, oldest first.
-func pushedIn(key string, t store.Ticket, name string) []store.PushedCommit {
-	var out []store.PushedCommit
+func pushedIn(key string, t domain.Ticket, name string) []domain.PushedCommit {
+	var out []domain.PushedCommit
 	for _, pc := range t.PushedCommits {
 		if recordRepository(key, pc.Repository) == name {
 			out = append(out, pc)
@@ -138,10 +139,10 @@ func pushedIn(key string, t store.Ticket, name string) []store.PushedCommit {
 // pushed, whichever Ticket they were tracked against: Tickets sharing a
 // pushed commit share its runs. Runs tracked against a CI Rule are left
 // out.
-func runsIn(runs []store.CIRun, record string, pushed []store.PushedCommit) []store.CIRun {
-	var mine []store.CIRun
+func runsIn(runs []domain.CIRun, record string, pushed []domain.PushedCommit) []domain.CIRun {
+	var mine []domain.CIRun
 	for _, run := range runs {
-		if run.Ticket != 0 && run.Repository == record && slices.ContainsFunc(pushed, func(p store.PushedCommit) bool { return p.Commit == run.Commit }) {
+		if run.Ticket != 0 && run.Repository == record && slices.ContainsFunc(pushed, func(p domain.PushedCommit) bool { return p.Commit == run.Commit }) {
 			mine = append(mine, run)
 		}
 	}
@@ -151,16 +152,16 @@ func runsIn(runs []store.CIRun, record string, pushed []store.PushedCommit) []st
 // landedIn reports whether t's work has landed in the Repository name
 // while other Repositories still wait: a Partly landed Ticket's landed
 // Repositories.
-func landedIn(t store.Ticket, name string) bool {
-	return slices.ContainsFunc(t.Repositories, func(r store.ChangedRepository) bool { return r.Name == name && r.Landed != nil })
+func landedIn(t domain.Ticket, name string) bool {
+	return slices.ContainsFunc(t.Repositories, func(r domain.ChangedRepository) bool { return r.Name == name && r.Landed != nil })
 }
 
 // RepositoryCI is a Repository's CI entry as add_repository and
 // set_repository_ci take it: Not watched, or a CI Provider, GitHub
 // Actions when left out, with what it watches.
 type RepositoryCI struct {
-	NotWatched bool             `json:"not_watched,omitempty"`
-	Provider   store.CIProvider `json:"provider,omitempty"`
+	NotWatched bool              `json:"not_watched,omitempty"`
+	Provider   domain.CIProvider `json:"provider,omitempty"`
 	// Repository is the GitHub repository GitHub Actions watches, as
 	// owner/name.
 	Repository string `json:"repository,omitempty"`
@@ -182,17 +183,17 @@ type SetRepositoryCIInput struct {
 // ciEntry is in as the CI entry of the Repository name, checked: a
 // watched one needs a CI Provider and what it watches. field prefixes
 // the field a refusal names.
-func ciEntry(name string, in RepositoryCI, field string) (store.CIRepository, error) {
-	e := store.CIRepository{Name: name, NotWatched: in.NotWatched, Provider: in.Provider,
+func ciEntry(name string, in RepositoryCI, field string) (domain.CIRepository, error) {
+	e := domain.CIRepository{Name: name, NotWatched: in.NotWatched, Provider: in.Provider,
 		Repository: strings.TrimSpace(in.Repository), ProjectURL: strings.TrimSpace(in.ProjectURL)}
 	if e.NotWatched && e.Provider == "" {
 		return e, nil
 	}
 	if e.Provider == "" {
-		e.Provider = store.CIGitHubActions
+		e.Provider = domain.CIGitHubActions
 	}
 	if !e.Provider.Valid() {
-		return e, invalid(field+"provider", "CI Provider %q isn't %q or %q", e.Provider, store.CIGitHubActions, store.CIAzurePipelines)
+		return e, invalid(field+"provider", "CI Provider %q isn't %q or %q", e.Provider, domain.CIGitHubActions, domain.CIAzurePipelines)
 	}
 	if err := checkCITarget(&e); err != nil {
 		if ce, ok := err.(*Error); ok {
@@ -209,7 +210,7 @@ func ciEntry(name string, in RepositoryCI, field string) (store.CIRepository, er
 // field+project_url when the Azure DevOps project can't be read, else on
 // field+provider. It runs outside the store's lock, as the check calls
 // GitHub.
-func (c *Core) checkCIEntry(ctx context.Context, p store.Project, opts store.Options, e store.CIRepository, field string) error {
+func (c *Core) checkCIEntry(ctx context.Context, p domain.Project, opts domain.Options, e domain.CIRepository, field string) error {
 	return c.checkCIEntryOn(ctx, p, opts, e, field, "provider", e.Name+": ")
 }
 
@@ -218,7 +219,7 @@ func (c *Core) checkCIEntry(ctx context.Context, p store.Project, opts store.Opt
 // before the reason. A watched entry naming nothing to watch, as an older
 // client's set_ci_tracking may leave the Home's while CI Tracking is
 // off, is refused as needing it, without the check.
-func (c *Core) checkCIEntryOn(ctx context.Context, p store.Project, opts store.Options, e store.CIRepository, field, fallback, lead string) error {
+func (c *Core) checkCIEntryOn(ctx context.Context, p domain.Project, opts domain.Options, e domain.CIRepository, field, fallback, lead string) error {
 	if e.NotWatched {
 		return nil
 	}
@@ -232,7 +233,7 @@ func (c *Core) checkCIEntryOn(ctx context.Context, p store.Project, opts store.O
 		return nil
 	}
 	in := CICheckInput{Provider: e.Provider, Repository: e.Repository, GHPath: opts.GHPath}
-	if e.Provider == store.CIAzurePipelines {
+	if e.Provider == domain.CIAzurePipelines {
 		in.ProjectURL, in.PATEnv = e.ProjectURL, patEnvOf(p.CI)
 	}
 	res := c.ciCheck(ctx, in)
@@ -262,8 +263,8 @@ func (c *Core) SetRepositoryCI(ctx context.Context, key string, in SetRepository
 	if err != nil {
 		return Written[ProjectView]{}, err
 	}
-	var p store.Project
-	var opts store.Options
+	var p domain.Project
+	var opts domain.Options
 	err = c.store.View(func(r store.Reader) error {
 		if err := writable(r, key); err != nil {
 			return err
@@ -279,7 +280,7 @@ func (c *Core) SetRepositoryCI(ctx context.Context, key string, in SetRepository
 	if err := c.checkNewCIEntry(ctx, p, opts, e, ""); err != nil {
 		return Written[ProjectView]{}, err
 	}
-	return c.updateCIIn(key, in.Full, func(p store.Project, ci *store.CI) error {
+	return c.updateCIIn(key, in.Full, func(p domain.Project, ci *domain.CI) error {
 		if _, err := ciEntryNamed(p, name); err != nil {
 			return err
 		}
@@ -291,7 +292,7 @@ func (c *Core) SetRepositoryCI(ctx context.Context, key string, in SetRepository
 // checkNewCIEntry runs checkCIEntry for e, the CI entry about to replace
 // its Repository's in p, while the CI Watcher runs and e watches
 // something new.
-func (c *Core) checkNewCIEntry(ctx context.Context, p store.Project, opts store.Options, e store.CIRepository, field string) error {
+func (c *Core) checkNewCIEntry(ctx context.Context, p domain.Project, opts domain.Options, e domain.CIRepository, field string) error {
 	if was, _ := ciEntryOf(p, e.Name); landingPolicies(p).RunsCIWatcher() && (was.NotWatched || !sameCITarget(was, e)) {
 		return c.checkCIEntry(ctx, p, opts, e, field)
 	}
@@ -300,7 +301,7 @@ func (c *Core) checkNewCIEntry(ctx context.Context, p store.Project, opts store.
 
 // ciEntryNamed is the CI entry of p's Repository name, refusing a name p
 // has no Repository by.
-func ciEntryNamed(p store.Project, name string) (store.CIRepository, error) {
+func ciEntryNamed(p domain.Project, name string) (domain.CIRepository, error) {
 	e, ok := ciEntryOf(p, name)
 	if !ok {
 		return e, notARepository(p, "name", name)
@@ -309,15 +310,15 @@ func ciEntryNamed(p store.Project, name string) (store.CIRepository, error) {
 }
 
 // sameCITarget reports whether a and b, both watched, watch the same.
-func sameCITarget(a, b store.CIRepository) bool {
+func sameCITarget(a, b domain.CIRepository) bool {
 	return a.Provider == b.Provider && a.Repository == b.Repository && a.ProjectURL == b.ProjectURL
 }
 
 // withCIEntry is es with e in place of the entry of its name, or added,
 // on a copy of the list.
-func withCIEntry(es []store.CIRepository, e store.CIRepository) []store.CIRepository {
+func withCIEntry(es []domain.CIRepository, e domain.CIRepository) []domain.CIRepository {
 	out := slices.Clone(es)
-	if i := slices.IndexFunc(out, func(o store.CIRepository) bool { return o.Name == e.Name }); i >= 0 {
+	if i := slices.IndexFunc(out, func(o domain.CIRepository) bool { return o.Name == e.Name }); i >= 0 {
 		out[i] = e
 		return out
 	}

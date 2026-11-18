@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/domain"
 )
 
 // Accepted but not landed, and sending back a conflict (ticket 72).
@@ -54,7 +54,7 @@ func TestAnAgentSendsAcceptedWorkBackToReadyWithANote(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := v.Moves[len(v.Moves)-1]
-	if v.State != store.Ready || m.From != store.Accepted || m.Actor != "agent" {
+	if v.State != domain.Ready || m.From != domain.Accepted || m.Actor != "agent" {
 		t.Fatalf("state %s, last move %+v", v.State, m)
 	}
 	if c := v.Comments[len(v.Comments)-1]; c.Body != note || c.Actor != "agent" {
@@ -70,7 +70,7 @@ func TestSendingBackFromAcceptedNeedsANote(t *testing.T) {
 		_, err := f.core.SendBack(core.WithActor(ctx, actor), "acme", core.SendBackInput{Ticket: "2", Note: " "})
 		wantCode(t, err, core.Invalid, "note")
 	}
-	if v := f.get(t, "2"); v.State != store.Accepted {
+	if v := f.get(t, "2"); v.State != domain.Accepted {
 		t.Fatalf("state %s, want still Accepted", v.State)
 	}
 }
@@ -81,7 +81,7 @@ func TestTheHumansSendBackFromFailedIsUnchanged(t *testing.T) {
 	_, err := f.core.SendBack(ctx, "acme", core.SendBackInput{Ticket: "2", Note: "Try again."})
 	wantCode(t, err, core.ActionNotAllowed, "")
 	v, err := record(f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "2", Full: true}))
-	if err != nil || v.State != store.Ready {
+	if err != nil || v.State != domain.Ready {
 		t.Fatalf("state %s, err %v; the human sends back from Failed with no note", v.State, err)
 	}
 }
