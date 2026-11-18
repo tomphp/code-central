@@ -46,29 +46,3 @@ func init() {
 		return c.WontFix(r.Context(), r.PathValue("key"), in)
 	}
 }
-
-// The Issue Watcher's own (code-central-285): the read it polls, its
-// status, and each comment it writes to an issue.
-func init() {
-	legacyRoutes["get_issue_watch"] = "GET /api/p/{key}/integration/issue-watch"
-	legacyRoutes["report_issue_watcher_status"] = "POST /api/p/{key}/integration/report_issue_watcher_status"
-	legacyRoutes["report_issue_written"] = "POST /api/p/{key}/integration/report_issue_written"
-
-	handlers["get_issue_watch"] = func(c *core.Core, r *http.Request) (any, error) {
-		return c.GetIssueWatch(r.Context(), r.PathValue("key"))
-	}
-	handlers["report_issue_watcher_status"] = func(c *core.Core, r *http.Request) (any, error) {
-		var in core.ReportWatcherStatusInput
-		if err := decodeBody(r, &in); err != nil {
-			return nil, err
-		}
-		return c.ReportIssueWatcherStatus(r.Context(), r.PathValue("key"), in)
-	}
-	handlers["report_issue_written"] = func(c *core.Core, r *http.Request) (any, error) {
-		var in core.ReportIssueWrittenInput
-		if err := decodeBody(r, &in); err != nil {
-			return nil, err
-		}
-		return c.ReportIssueWritten(r.Context(), r.PathValue("key"), in)
-	}
-}
