@@ -22,7 +22,7 @@ export function CIRules({ project }: { project: ProjectRow }) {
 
   return (
     <fieldset className="project-options-rules-section">
-      <legend>CI Rules</legend>
+      <legend className="project-options-subhead">CI Rules</legend>
       <p className="project-options-hint">
         A CI Rule says &ldquo;when this workflow fails on this branch, open a
         Ticket to fix it&rdquo;, on the rule&apos;s own Spec. For now rules are

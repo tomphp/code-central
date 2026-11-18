@@ -92,7 +92,7 @@ export function DefaultLandingSection({ project }: { project: ProjectRow }) {
       <fieldset id="project-options-default-landing" className="project-options-section" disabled={project.archived}>
         <legend>Default Landing</legend>
         {project.archived && (
-          <p className="muted">
+          <p className="project-options-note" role="note">
             The Project is archived: unarchive it to change its options.
           </p>
         )}

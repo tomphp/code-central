@@ -200,7 +200,7 @@ function RepositoryRow({
   return (
     <li aria-label={r.name}>
       <div className="project-options-repository">
-        <strong>{r.name}</strong>
+        <strong className="project-options-subhead">{r.name}</strong>
         {r.home && <span className="project-options-home-badge">Home</span>}
       </div>
       <dl className="project-options-repository-details">
