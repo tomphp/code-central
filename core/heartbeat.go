@@ -14,8 +14,10 @@ import (
 
 // A Factory's Heartbeat (Spec code-central-305): each running Factory
 // announces itself with report_heartbeat on every poll. Code Central keeps
-// the latest Heartbeat of each Factory in memory only, never in the store,
-// and works out the Factory Status from them on every read.
+// the latest Heartbeat of each Factory in memory, writes it through to the
+// Store's Services side for the other services sharing the Store (Spec
+// code-central-1107), and works out the Factory Status from memory on
+// every read.
 
 // HeartbeatState is the state a Factory reports in a Heartbeat.
 type HeartbeatState string
@@ -76,6 +78,10 @@ type FactoryView struct {
 	// Chat is Chat support: the Factory can run Conversations. Chat is
 	// available for the Project while an Online Factory has it.
 	Chat bool `json:"chat"`
+	// ReportsTo is the host of the Factory's Reporting Service, the
+	// service its Heartbeats reach, when that is another service sharing
+	// the Store; empty when it is this one.
+	ReportsTo string `json:"reports_to,omitempty"`
 }
 
 // heartbeat is a Factory's latest Heartbeat.
@@ -90,11 +96,15 @@ type heartbeat struct {
 	// at receipt, and reported are them as the Factory sent them; both
 	// nil when it reports none.
 	limits, reported *PlanLimits
+	// service and serviceHost are the ID and host of the Factory's
+	// Reporting Service.
+	service, serviceHost string
 }
 
 type heartbeatKey struct{ project, name, host string }
 
-// heartbeats holds each Factory's latest Heartbeat, in memory only.
+// heartbeats holds each Factory's latest Heartbeat, in memory, as this
+// service received it or last read it from the Store.
 type heartbeats struct {
 	mu  sync.Mutex
 	all map[heartbeatKey]heartbeat
@@ -106,18 +116,38 @@ type heartbeats struct {
 	// clones is each Project's reported clones, by Repository Name
 	// (Spec code-central-848).
 	clones map[string]map[string]CloneView
+	// reportsAt is when each Project's base and clone reports last
+	// changed, here or on the service whose reports were last read, so
+	// the newest wins.
+	reportsAt map[string]time.Time
+	// self is this service's ID: a Factory whose Reporting Service is
+	// another lists that service's host.
+	self string
+}
+
+// deadline is how long after h a Factory with no newer Heartbeat goes
+// Offline.
+func (h heartbeat) deadline() time.Duration {
+	return max(heartbeatMissed*time.Duration(h.interval)*time.Second, heartbeatDeadlineFloor)
 }
 
 // status is h's status at now.
 func (h heartbeat) status(now time.Time) FactoryStatusName {
-	deadline := max(heartbeatMissed*time.Duration(h.interval)*time.Second, heartbeatDeadlineFloor)
 	switch {
-	case h.state == HeartbeatStopping, now.Sub(h.at) >= deadline:
+	case h.state == HeartbeatStopping, now.Sub(h.at) >= h.deadline():
 		return FactoryOffline
 	case h.state == HeartbeatDraining:
 		return FactoryDraining
 	}
 	return FactoryOnline
+}
+
+// noticed says whether h, replacing prev (seen says whether there was
+// one), changes what the human sees at now: so the Project's notice goes
+// out. A steady Factory's Heartbeat changes nothing.
+func noticed(prev heartbeat, seen bool, h heartbeat, now time.Time) bool {
+	return !seen || prev.status(now) != h.status(now) || prev.note != h.note || prev.chat != h.chat ||
+		prev.service != h.service || !sameLimits(prev.limits, h.limits)
 }
 
 // view is project's Factory Status at now.
@@ -131,7 +161,12 @@ func (hs *heartbeats) view(project string, now time.Time) FactoryStatusView {
 			continue
 		}
 		s := h.status(now)
-		v.Factories = append(v.Factories, FactoryView{Name: h.name, Host: h.host, Status: s, Note: h.note, LastHeartbeat: h.at, IntervalSeconds: h.interval, Chat: h.chat})
+		var reportsTo string
+		if h.service != hs.self {
+			reportsTo = h.serviceHost
+		}
+		v.Factories = append(v.Factories, FactoryView{Name: h.name, Host: h.host, Status: s, Note: h.note, LastHeartbeat: h.at,
+			IntervalSeconds: h.interval, Chat: h.chat, ReportsTo: reportsTo})
 		switch {
 		case s == FactoryOnline, s == FactoryDraining && v.Status == FactoryOffline:
 			v.Status = s
@@ -174,9 +209,11 @@ type ReportHeartbeatInput struct {
 }
 
 // ReportHeartbeat is the Factory's report_heartbeat. The Heartbeat replaces
-// the earlier one of the same factory and host, and is kept in memory only.
-// It sends the Project's notice only when a Factory is new or its status or
-// note changed, so a steady Factory doesn't make the UI refetch each poll.
+// the earlier one of the same factory and host, in memory and then in the
+// Store, with this service as its Reporting Service; a Store it can't
+// write to is logged, and the Heartbeat still counts here. It sends the
+// Project's notice only when a Factory is new or what the human sees of it
+// changed, so a steady Factory doesn't make the UI refetch each poll.
 func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeatInput) (Written[ProjectView], error) {
 	name, host := strings.TrimSpace(in.Factory), strings.TrimSpace(in.Host)
 	switch {
@@ -211,20 +248,27 @@ func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeat
 	}
 	now := c.now()
 	k := heartbeatKey{key, name, host}
-	h := heartbeat{name: name, host: host, state: in.State, note: note, interval: in.IntervalSeconds, chat: in.Chat, at: now, reported: reported}
+	h := heartbeat{name: name, host: host, state: in.State, note: note, interval: in.IntervalSeconds, chat: in.Chat, at: now, reported: reported,
+		service: c.service.ID, serviceHost: c.service.Host}
 	hs := c.heartbeats
 	hs.mu.Lock()
 	prev, seen := hs.all[k]
 	h.limits = keptLimits(prev, reported, now)
 	hs.all[k] = h
-	if !seen || prev.status(now) == FactoryOffline || in.State == HeartbeatStopping {
+	cleared := !seen || prev.status(now) == FactoryOffline || in.State == HeartbeatStopping
+	if cleared {
 		// A Factory that is new, back from a lapse or stopping holds
 		// no base or clone report of its own to trust.
 		delete(hs.base, key)
 		delete(hs.clones, key)
+		hs.reportsAt[key] = now
 	}
 	hs.mu.Unlock()
-	if !seen || prev.status(now) != h.status(now) || prev.note != note || prev.chat != in.Chat || !sameLimits(prev.limits, h.limits) {
+	c.recordHeartbeat(k, h)
+	if cleared {
+		c.recordReports(key)
+	}
+	if noticed(prev, seen, h, now) {
 		c.events.Publish(events.Event{Type: events.ProjectChanged, Project: key})
 	}
 	c.chatAfterHeartbeat(key)
@@ -233,19 +277,28 @@ func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeat
 }
 
 // WatchFactoryStatus is the background ticker behind Going Offline with no
-// write. On each tick it compares every Project's Factory Status, combined
-// and per Factory, with what it saw last time and calls changed(project)
-// for each Project that differs, so live views refetch. It also settles
-// each Conversation (see settleChat), which sends its own chat.changed.
-// The time comes from the injected clock, not the tick; serve ticks every
-// 10s. It returns when ctx ends.
+// write. On each tick it reads every Heartbeat and Factory report from the
+// Store, so it sees those other services received (see refreshFactories),
+// then compares every Project's
+// Factory Status, combined and per Factory, with what it saw last time and
+// calls changed(project) for each Project that differs, or whose Factories
+// another service changed, so live views refetch. It also settles each
+// Conversation (see settleChat), which sends its own chat.changed. The
+// time comes from the injected clock, not the tick; serve ticks every 10s.
+// It returns when ctx ends.
 func (c *Core) WatchFactoryStatus(ctx context.Context, ticks <-chan time.Time, changed func(project string)) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticks:
+			refreshed := c.refreshFactories()
 			for _, p := range c.factoryStatusChanges() {
+				if !slices.Contains(refreshed, p) {
+					refreshed = append(refreshed, p)
+				}
+			}
+			for _, p := range refreshed {
 				changed(p)
 			}
 			c.watchChats()
