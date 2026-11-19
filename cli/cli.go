@@ -2,8 +2,9 @@
 // kebab-case names of core's agent operations; each reaches the service
 // through the client package and prints JSON. Errors go to stderr as the
 // one error JSON shape with exit code 2; usage errors exit 1. The package
-// is commands only: serve reads its flags and the local settings and runs
-// the assembled service, app.Run.
+// is commands over client and ops: serve, store move, service install and
+// the Watchers' subcommands live in package wire, which registers them
+// with Register.
 package cli
 
 import (
@@ -527,3 +528,41 @@ func runFinish(ctx context.Context, e Env, args []string) error {
 	}
 	return printJSON(e, v)
 }
+
+// Command is a subcommand another package registers with Register: the
+// ones that need more than the service's client, such as serve, which
+// the wire package assembles.
+type Command struct {
+	Usage string
+	// Hidden leaves the command out of the usage: the service runs it.
+	Hidden bool
+	Run    func(ctx context.Context, e Env, args []string) error
+}
+
+// Register adds a command to Run, Commands and the usage. A package
+// registers its commands from init; programs and tests that need them
+// import it.
+func Register(name string, c Command) {
+	commands[name] = command{usage: c.Usage, hidden: c.Hidden, run: c.Run}
+}
+
+// UsageError is a mistake in the command line, reported as text, exit 1.
+func UsageError(format string, args ...any) error { return usagef(format, args...) }
+
+// FlagSet is a FlagSet that reports errors instead of printing them.
+func FlagSet(name string) *flag.FlagSet { return flagSet(name) }
+
+// Parse parses flags that may be interspersed with positional arguments.
+func Parse(fs *flag.FlagSet, args []string) ([]string, error) { return parse(fs, args) }
+
+// IsSet is whether the flag was given.
+func IsSet(fs *flag.FlagSet, name string) bool { return isSet(fs, name) }
+
+// NewClient is the client for the service, as the commands use it.
+func NewClient(e Env) *client.Client { return newClient(e) }
+
+// Home is where the default paths are found.
+func (e Env) Home() home.Lookup { return e.home() }
+
+// StampedVersion is this program's version: Env.Version else Version.
+func (e Env) StampedVersion() string { return e.version() }

@@ -23,6 +23,7 @@ import (
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 	"github.com/tomoram/code-central/ops"
+	_ "github.com/tomoram/code-central/wire"
 )
 
 // A call is one invocation of an operation, spelled for each door. A door

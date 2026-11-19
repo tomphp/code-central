@@ -1,6 +1,6 @@
 // The Start-menu shortcut service install writes on Windows, so toasts
 // show as Code Central.
-package cli
+package wire
 
 import (
 	"bytes"

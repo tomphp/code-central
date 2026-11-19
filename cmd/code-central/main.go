@@ -10,6 +10,7 @@ import (
 
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/notify"
+	_ "github.com/tomoram/code-central/wire"
 )
 
 func main() {

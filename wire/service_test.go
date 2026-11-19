@@ -1,4 +1,4 @@
-package cli_test
+package wire_test
 
 import (
 	"bytes"
@@ -14,6 +14,7 @@ import (
 	"unicode/utf16"
 
 	"github.com/tomoram/code-central/cli"
+	"github.com/tomoram/code-central/wire"
 )
 
 // fakeHost is a pretend machine: a temporary HOME, a working directory
@@ -446,7 +447,7 @@ func TestWindowsArgRoundTripsThroughTheCommandLine(t *testing.T) {
 		{`a\"b`, `"a\\\"b"`},
 		{``, `""`},
 	} {
-		if got := cli.WindowsArg(tc.in); got != tc.want {
+		if got := wire.WindowsArg(tc.in); got != tc.want {
 			t.Errorf("WindowsArg(%q) = %s, want %s", tc.in, got, tc.want)
 		}
 	}
