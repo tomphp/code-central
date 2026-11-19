@@ -806,7 +806,8 @@ func (l *lander) specLanded(spec core.SpecDetail) bool {
 // sweepSpecBranches deletes, in every Repository with a clone, each Spec
 // Branch that is in that Repository's base once every Ticket on its Spec
 // is Done or Cancelled. One not in the base, as when the whole Spec is
-// cancelled, is kept, with a line printed once.
+// cancelled, is kept, with a line printed once. The branch a Spec's branch
+// Tag names is swept the same way.
 func (l *lander) sweepSpecBranches(ctx context.Context, policies core.LandingPolicies) {
 	specs := map[string]*core.SpecDetail{}
 	for _, r := range l.repos.ready() {
@@ -825,8 +826,40 @@ func (l *lander) sweepSpecBranches(ctx context.Context, policies core.LandingPol
 				specs[id] = spec
 			}
 			if spec != nil {
-				l.sweepSpecBranch(r, branch, *spec, policies)
+				l.sweepSpecBranch(r, id, branch, *spec, policies)
 			}
+		}
+	}
+	l.sweepTaggedSpecBranches(ctx, policies)
+}
+
+// sweepTaggedSpecBranches is sweepSpecBranches' work for the Specs with a
+// branch Tag, finished ones included, in each Repository whose clone has
+// the branch the Tag names.
+func (l *lander) sweepTaggedSpecBranches(ctx context.Context, policies core.LandingPolicies) {
+	rows, err := l.client.FindSpecs(ctx, l.project, core.FindSpecsInput{Tags: map[string]string{core.BranchTag: ""}, Finished: true})
+	if err != nil {
+		return
+	}
+	for _, row := range rows {
+		branch := row.Tags[core.BranchTag]
+		if branch == "" {
+			continue
+		}
+		var spec *core.SpecDetail
+		for _, r := range l.repos.ready() {
+			if ctx.Err() != nil {
+				return
+			}
+			if _, err := r.git.commit("refs/heads/" + branch); err != nil {
+				continue
+			}
+			if spec == nil {
+				if spec = l.finishedSpec(ctx, row.ID); spec == nil {
+					break
+				}
+			}
+			l.sweepSpecBranch(r, row.ID, branch, *spec, policies)
 		}
 	}
 }
@@ -848,9 +881,9 @@ func (l *lander) finishedSpec(ctx context.Context, id string) *core.SpecDetail {
 
 // sweepSpecBranch deletes branch, the Spec Branch of the finished spec in
 // r, when it is in r's base, and otherwise says once that it is kept.
-func (l *lander) sweepSpecBranch(r *repository, branch string, spec core.SpecDetail, policies core.LandingPolicies) {
+func (l *lander) sweepSpecBranch(r *repository, id, branch string, spec core.SpecDetail, policies core.LandingPolicies) {
 	policy := r.policy(policies)
-	id, base := strings.TrimPrefix(branch, "spec/"), l.repos.baseOf(r)
+	base := l.repos.baseOf(r)
 	ref := "refs/heads/" + branch
 	tip, err := r.git.commit(ref)
 	if err != nil {
