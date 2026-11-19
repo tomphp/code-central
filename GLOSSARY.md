@@ -466,7 +466,7 @@ The view of the CI Runs in a Project, or in all Projects with CI Tracking on: th
 _Avoid_: CI dashboard, build monitor
 
 **Usage**:
-The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used. It shows its parts in three tabs, Token usage, Context Size and Code Central calls, in that order, with the open tab in the URL; a session opens in its Session popup. Its token kinds include `chat`. Subagents nest under their parent session. It is not Plan Limits and not the Limits popup.
+The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used. It shows its parts in four tabs, Token usage, Context Size, Code Central calls and Storage, in that order, with the open tab in the URL; Storage shows the Store, each Project's records, the service's memory and the Service Registrations, as they are now; a session opens in its Session popup. Its token kinds include `chat`. Subagents nest under their parent session. It is not Plan Limits and not the Limits popup.
 _Avoid_: Analytics dashboard, stats, metrics
 
 **Storage tab**:

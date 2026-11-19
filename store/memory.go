@@ -38,8 +38,8 @@ func (x *index) Services() Services { return x.services }
 // folder.
 func (x *index) Location() Location { return Location{Kind: Memory} }
 
-// Size is the fake's records' size as JSON, since it keeps no file to
-// measure. The File Store measures its folder.
+// Size is the fake's records' size as JSON, Usage included, since it
+// keeps no file to measure. The File Store measures its folder.
 func (x *index) Size() (int64, error) {
 	x.mu.RLock()
 	defer x.mu.RUnlock()
@@ -50,8 +50,11 @@ func (x *index) Size() (int64, error) {
 		return err
 	}
 	errs := []error{add(x.options)}
-	for _, p := range x.projects {
+	for key, p := range x.projects {
 		errs = append(errs, add(p.project), add(p.ciRuns))
+		days, err := x.usage.Days(key)
+		recs, rerr := x.usage.Read(key, days)
+		errs = append(errs, err, rerr, add(recs.Calls), add(recs.Responses))
 		for _, s := range p.specs {
 			errs = append(errs, add(s))
 		}

@@ -45,7 +45,7 @@ type StorageView struct {
 	Projects []StorageProject `json:"projects"`
 	Memory   ProcessMemory    `json:"memory"`
 	// Services are the live Service Registrations, in host order.
-	Services []StorageService `json:"services"`
+	Services []StorageRegistration `json:"services"`
 }
 
 // StorageProject is one Project's count of records.
@@ -68,8 +68,8 @@ type ProcessMemory struct {
 	Heap int64 `json:"heap"`
 }
 
-// StorageService is a live Service Registration.
-type StorageService struct {
+// StorageRegistration is a live Service Registration.
+type StorageRegistration struct {
 	Host    string    `json:"host"`
 	Version string    `json:"version"`
 	Renewed time.Time `json:"renewed"`
@@ -111,9 +111,9 @@ func (c *Core) GetStorage(_ context.Context, in GetStorageInput) (StorageView, e
 	if err != nil {
 		return StorageView{}, err
 	}
-	services := make([]StorageService, len(regs))
+	services := make([]StorageRegistration, len(regs))
 	for i, r := range regs {
-		services[i] = StorageService{Host: r.Host, Version: r.Version, Renewed: r.Renewed}
+		services[i] = StorageRegistration{Host: r.Host, Version: r.Version, Renewed: r.Renewed}
 	}
 	l := c.store.Location()
 	v := StorageView{Kind: string(l.Kind), Host: l.Host, Port: l.Port, Database: l.Database, Size: size,

@@ -1,14 +1,16 @@
 package storetest
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/usage"
 )
 
-// The Storage tab's figures: the Store's size, and each Project's count
-// of Specs beside its State counts.
+// The Storage tab's figures: the Store's size, Usage included, and each
+// Project's count of Specs beside its State counts.
 func runStorage(t *testing.T, f Factory) {
 	t.Run("spec counts count each project's specs", func(t *testing.T) {
 		s := f.New(t)
@@ -57,6 +59,28 @@ func runStorage(t *testing.T, f Factory) {
 		}
 		if size <= 0 {
 			t.Errorf("size %d, want above zero", size)
+		}
+	})
+
+	t.Run("a store's size counts its usage, as it is now", func(t *testing.T) {
+		s := f.New(t)
+		seedProject(t, s)
+		before, err := s.Size()
+		if err != nil {
+			t.Fatalf("size: %v", err)
+		}
+		// Enough records to fill new pages in a database's file.
+		recs := make([]usage.Record, 2_000)
+		for i := range recs {
+			recs[i] = usageResponse(fmt.Sprintf("acme-%d", i))
+		}
+		appendUsage(t, s, "acme", "2026-01-05", recs...)
+		after, err := s.Size()
+		if err != nil {
+			t.Fatalf("size: %v", err)
+		}
+		if after <= before {
+			t.Errorf("size %d after 2,000 Usage records, want above the %d before", after, before)
 		}
 	})
 }

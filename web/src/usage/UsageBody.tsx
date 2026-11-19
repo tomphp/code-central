@@ -59,8 +59,7 @@ export interface UsageBodyProps {
 export function UsageBody(props: UsageBodyProps) {
   const { data, days, scopeName, here, projectName, navigate, sort, onSort, tab, onTab, storage, project, now } = props;
   const over = `in ${scopeName} over the last ${days} days`;
-  const loaded = tab === "storage" ? storage : data;
-  const error = tab === "storage" ? props.storageError : props.error;
+  const [loaded, error] = tab === "storage" ? [storage, props.storageError] : [data, props.error];
   return (
     <div className="view-body">
       {!loaded && !error && <Loading />}

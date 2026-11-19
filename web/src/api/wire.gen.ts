@@ -859,7 +859,7 @@ export interface StorageView {
   projects: StorageProject[];
   memory: ProcessMemory;
   // Services are the live Service Registrations, in host order.
-  services: StorageService[];
+  services: StorageRegistration[];
 }
 
 // ConversationView is a Project's current Conversation as get_chat and
@@ -1646,8 +1646,8 @@ export interface ProcessMemory {
   heap: number;
 }
 
-// StorageService is a live Service Registration.
-export interface StorageService {
+// StorageRegistration is a live Service Registration.
+export interface StorageRegistration {
   host: string;
   version: string;
   renewed: string;

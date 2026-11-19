@@ -37,7 +37,7 @@ export function StoragePanel({ storage, project, now }: StoragePanelProps) {
           )}
           <tr>
             <th scope="row">Size</th>
-            <Bytes n={storage.size} />
+            <ByteCell n={storage.size} />
           </tr>
         </tbody>
       </table>
@@ -68,12 +68,12 @@ export function StoragePanel({ storage, project, now }: StoragePanelProps) {
           {!!storage.memory.resident && (
             <tr>
               <th scope="row">Resident</th>
-              <Bytes n={storage.memory.resident} />
+              <ByteCell n={storage.memory.resident} />
             </tr>
           )}
           <tr>
             <th scope="row">Go heap</th>
-            <Bytes n={storage.memory.heap} />
+            <ByteCell n={storage.memory.heap} />
           </tr>
         </tbody>
       </table>
@@ -100,8 +100,8 @@ export function StoragePanel({ storage, project, now }: StoragePanelProps) {
   );
 }
 
-// Bytes is a size in readable units, with the exact figure on hover.
-function Bytes({ n }: { n: number }) {
+// ByteCell is a size's cell, in readable units, with the exact figure on hover.
+function ByteCell({ n }: { n: number }) {
   return (
     <td className="num" title={`${count(n)} bytes`}>
       {bytes(n)}
