@@ -1070,6 +1070,10 @@ export interface AzureBoardsView {
   // HideCodeCentral is whether Write-back keeps Code Central out of what
   // it writes to a work item.
   hide_code_central: boolean;
+  // BranchFormat names the Spec Branch of a Requirement To Requirement
+  // makes of a work item, with {id} for its ID, such as feat/{id};
+  // empty for none.
+  branch_format: string;
   // Spec is the Azure Boards Spec's ID, left out until Azure Boards is
   // first turned on.
   spec?: string;
@@ -1207,6 +1211,9 @@ export interface LinkView {
 export interface SpecRef {
   id: string;
   title: string;
+  // Branch is the Spec's Spec Branch: its branch Tag's value, else
+  // spec/<id>.
+  branch: string;
 }
 
 // BlockerView is one Blocker as get_ticket shows it, after following
@@ -1525,6 +1532,11 @@ export interface LandPerSpecView {
   // Ready is whether the Spec is ready to land: the Factory merges it
   // into the base.
   ready: boolean;
+  // Pushed are the Repositories, by Repository Name, where one of the
+  // Spec's Tickets, finished or not, has a pushed commit reported on
+  // its Spec Branch: the Factory pushed it there, so a branch of that
+  // name on the Push remote is its own. Left out while there are none.
+  pushed?: string[];
 }
 
 // MapView is the Map block on a Spec read, present only when the Spec is

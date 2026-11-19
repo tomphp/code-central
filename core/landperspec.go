@@ -96,6 +96,11 @@ type LandPerSpecView struct {
 	// Ready is whether the Spec is ready to land: the Factory merges it
 	// into the base.
 	Ready bool `json:"ready"`
+	// Pushed are the Repositories, by Repository Name, where one of the
+	// Spec's Tickets, finished or not, has a pushed commit reported on
+	// its Spec Branch: the Factory pushed it there, so a branch of that
+	// name on the Push remote is its own. Left out while there are none.
+	Pushed []string `json:"pushed,omitempty"`
 }
 
 // landPerSpecView is the Land per Spec status of Spec s with these
@@ -128,7 +133,26 @@ func landPerSpecView(r store.Reader, key string, s domain.Spec, tickets []domain
 		}
 	}
 	v.Ready = ready && merged
+	v.Pushed = specBranchPushedIn(key, SpecBranch(DisplayID(key, s.Number), s.Tags), tickets)
 	return v
+}
+
+// specBranchPushedIn is the Repositories, by Repository Name and each
+// once, where one of tickets has a pushed commit reported on branch,
+// their Spec's Spec Branch.
+func specBranchPushedIn(key, branch string, tickets []domain.Ticket) []string {
+	var names []string
+	for _, t := range tickets {
+		for _, pc := range t.PushedCommits {
+			if pc.Branch != branch {
+				continue
+			}
+			if name := recordRepository(key, pc.Repository); !slices.Contains(names, name) {
+				names = append(names, name)
+			}
+		}
+	}
+	return names
 }
 
 // ReportSpecMergeInput is the Factory's report_spec_merge(ticket, commit,

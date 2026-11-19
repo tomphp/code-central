@@ -3,6 +3,7 @@ package factory
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/tomoram/code-central/core"
@@ -123,8 +124,9 @@ func (l *lander) rebuildOnto(repo *repository, onto, from string, heads map[stri
 // have as its second parent: the work there of each Accepted Ticket, and
 // the commits on each Spec Branch's first-parent line that the remote's
 // base at theirs doesn't hold, since a Spec Branch merged into the base
-// may have gone on since. A Ticket whose work isn't in the repository has
-// no merge to find.
+// may have gone on since. The Spec Branches are those under spec/ and
+// those an Accepted Spec-landed Ticket's Spec names by its branch Tag. A
+// Ticket whose work isn't in the repository has no merge to find.
 func (l *lander) mergeHeads(repo *repository, theirs string, merged []core.TicketView) (map[string]bool, error) {
 	heads := map[string]bool{}
 	for _, tk := range merged {
@@ -135,6 +137,14 @@ func (l *lander) mergeHeads(repo *repository, theirs string, merged []core.Ticke
 	specs, err := repo.git.specBranches()
 	if err != nil {
 		return nil, err
+	}
+	for _, tk := range merged {
+		if !tk.SpecLanded || slices.Contains(specs, tk.Spec.Branch) {
+			continue
+		}
+		if _, err := repo.git.commit("refs/heads/" + tk.Spec.Branch); err == nil {
+			specs = append(specs, tk.Spec.Branch)
+		}
 	}
 	for _, s := range specs {
 		line, err := repo.git.firstParents("refs/heads/"+s, theirs)

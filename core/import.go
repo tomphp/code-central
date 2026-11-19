@@ -126,6 +126,9 @@ func (c *Core) Import(ctx context.Context, key string, in ImportInput) (ImportRe
 		if err := alreadyImported(r, key, p); err != nil {
 			return store.Import{}, err
 		}
+		if err := importBranchTags(r, key, p); err != nil {
+			return store.Import{}, err
+		}
 		var im store.Import
 		im, res = c.buildImport(r, key, p)
 		return im, importCycles(r, key, im)
@@ -311,6 +314,31 @@ func alreadyImported(r store.Reader, key string, p ImportPayload) error {
 	}
 	return invalid(field, "this Project already has %d of these sources, so this Import has run before; nothing was imported: %s",
 		len(matches), strings.Join(matches, ", "))
+}
+
+// importBranchTags checks each new Spec's branch Tag as set_tags checks
+// one, and that no two of them share one name.
+func importBranchTags(r store.Reader, key string, p ImportPayload) error {
+	pr, _ := r.Project(key)
+	first := map[string]string{} // name → the field that first gave it
+	for i, s := range p.Specs {
+		name, ok := s.Tags[BranchTag]
+		if !ok {
+			continue
+		}
+		field := fmt.Sprintf("specs[%d].tags.%s", i, BranchTag)
+		if err := checkBranchTagName(pr, field, name); err != nil {
+			return err
+		}
+		if err := checkBranchTagFree(r, key, field, 0, name, chooseAnotherName); err != nil {
+			return err
+		}
+		if f, ok := first[name]; ok {
+			return invalid(field, "branch %q is already given by %s: each Spec needs its own Spec Branch", name, f)
+		}
+		first[name] = field
+	}
+	return nil
 }
 
 // buildImport numbers every item from the counter in source order (each

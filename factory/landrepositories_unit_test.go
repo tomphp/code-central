@@ -155,7 +155,7 @@ func TestEveryRepositorysSpecBranchIsCheckedBeforeAnyBaseMoves(t *testing.T) {
 	release := w.holdSpec()
 	id, _ := w.acceptedInTwo(api, "Add an endpoint")
 	w.pollRepositories()
-	branch := "refs/heads/" + specBranch(w.spec)
+	branch := "refs/heads/" + core.SpecBranch(w.spec, nil)
 	if w.repo.tip(branch) == "" || api.tip(branch) == "" {
 		t.Fatalf("%s wasn't merged into its Spec Branch in both:\n%s", id, w.out)
 	}
@@ -212,7 +212,7 @@ func TestATicketIsMergedIntoItsSpecBranchInEveryRepositoryOrNone(t *testing.T) {
 	if tk.State != domain.Ready || commentsSaying(tk, "merging it into the Spec Branch conflicts", "- api: merging", "  - endpoint.go") != 1 {
 		t.Fatalf("%s %s %+v, want it sent back naming api's conflict with its Spec Branch", id, tk.State, tk.Comments)
 	}
-	if spec := w.repo.tip("refs/heads/" + specBranch(w.spec)); w.repo.isAncestor(home, spec) {
+	if spec := w.repo.tip("refs/heads/" + core.SpecBranch(w.spec, nil)); w.repo.isAncestor(home, spec) {
 		t.Fatal("the Home Repository's Spec Branch holds the Ticket's work: a Ticket conflicting in any Repository is merged into none")
 	}
 }
@@ -251,7 +251,7 @@ func TestARefusedPushIsTriedAgainThoughAnotherRepositorysSpecBranchNowConflicts(
 	w.repo.setBroken("origin", true)
 	release()
 	w.pollRepositories()
-	homeMerge, branch := w.repo.tip("refs/heads/main"), "refs/heads/"+specBranch(w.spec)
+	homeMerge, branch := w.repo.tip("refs/heads/main"), "refs/heads/"+core.SpecBranch(w.spec, nil)
 	if w.repo.messageOf(homeMerge) != "Merge spec "+w.spec+": Work" || api.messageOf(api.tip("refs/heads/main")) == "Merge spec "+w.spec+": Work" {
 		t.Fatalf("want the Spec merged in the Home Repository, its push refused, and api not merged yet:\n%s", w.out)
 	}
@@ -284,7 +284,7 @@ func TestUnderPullRequestASpecTouchingARepositoryWithNoCloneIsPushedNowhere(t *t
 	release := w.holdSpec()
 	w.acceptedInTwo(api, "Add an endpoint")
 	w.pollRepositories()
-	if w.repo.tip("refs/heads/"+specBranch(w.spec)) == "" {
+	if w.repo.tip("refs/heads/"+core.SpecBranch(w.spec, nil)) == "" {
 		t.Fatalf("not merged into the Spec Branch:\n%s", w.out)
 	}
 	// api's clone has gone since.
@@ -293,7 +293,7 @@ func TestUnderPullRequestASpecTouchingARepositoryWithNoCloneIsPushedNowhere(t *t
 
 	w.pollRepositories()
 
-	if got := w.repo.remoteTip("origin", specBranch(w.spec)); got != "" {
+	if got := w.repo.remoteTip("origin", core.SpecBranch(w.spec, nil)); got != "" {
 		t.Fatalf("the Home Repository's Spec Branch was pushed at %s, though api's can't be checked", got)
 	}
 }

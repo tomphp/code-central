@@ -551,7 +551,11 @@ type AzureBoards struct {
 	// HideCodeCentral keeps Code Central out of what Write-back writes to a
 	// work item.
 	HideCodeCentral bool
-	Spec            int
+	// BranchFormat names the Spec Branch of a Requirement To Requirement
+	// makes of a work item, with {id} for the work item's ID; empty for
+	// none.
+	BranchFormat string
+	Spec         int
 }
 
 // AzureBoardsMode is how Azure Boards picks its work items.

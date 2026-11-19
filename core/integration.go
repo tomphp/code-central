@@ -26,14 +26,17 @@ type inbox struct {
 	spec int
 	// newIssuesNeedMe is the Integration's New issues need me.
 	newIssuesNeedMe bool
+	// branchFormat is the Integration's Branch format, empty for none.
+	// GitHub Issues has none yet.
+	branchFormat string
 }
 
 // inboxes are p's Integrations' inboxes, GitHub Issues' then Azure
 // Boards'.
 func inboxes(p domain.Project) []inbox {
 	return []inbox{
-		{IntegrationGitHub, p.GitHubIssues.Spec, p.GitHubIssues.NewIssuesNeedMe},
-		{IntegrationAzureBoards, p.AzureBoards.Spec, p.AzureBoards.NewIssuesNeedMe},
+		{integration: IntegrationGitHub, spec: p.GitHubIssues.Spec, newIssuesNeedMe: p.GitHubIssues.NewIssuesNeedMe},
+		{integration: IntegrationAzureBoards, spec: p.AzureBoards.Spec, newIssuesNeedMe: p.AzureBoards.NewIssuesNeedMe, branchFormat: p.AzureBoards.BranchFormat},
 	}
 }
 

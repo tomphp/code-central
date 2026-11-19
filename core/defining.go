@@ -246,7 +246,7 @@ func (c *Core) AddLabels(ctx context.Context, key string, in LabelsInput) (Targe
 		}
 		return c.sweepAutoAccept(ctx, r, key, target, c.now())
 	}
-	return c.updateTargetThen(key, in.Target, func(_ store.Reader, onSpec bool, labels *[]string, _ map[string]string) error {
+	return c.updateTargetThen(key, in.Target, func(_ store.Reader, _ int, onSpec bool, labels *[]string, _ map[string]string) error {
 		if err := checkPlacement("labels", in.Labels, onSpec); err != nil {
 			return err
 		}
@@ -307,7 +307,8 @@ type RemoveTagsInput struct {
 var tagKey = regexp.MustCompile(`^[a-z0-9._-]+$`)
 
 // SetTags is set_tags(target, {k: v}). It merges, overwriting only the
-// keys it names.
+// keys it names. A Spec's branch Tag is checked as checkBranchTagChange
+// says.
 func (c *Core) SetTags(_ context.Context, key string, in SetTagsInput) (TargetView, error) {
 	if len(in.Tags) == 0 {
 		return TargetView{}, invalid("tags", "name at least one Tag")
@@ -315,9 +316,14 @@ func (c *Core) SetTags(_ context.Context, key string, in SetTagsInput) (TargetVi
 	if err := checkTagSyntax(in.Tags); err != nil {
 		return TargetView{}, err
 	}
-	return c.updateTargetIn(key, in.Target, func(r store.Reader, onSpec bool, _ *[]string, tags map[string]string) error {
+	return c.updateTargetIn(key, in.Target, func(r store.Reader, n int, onSpec bool, _ *[]string, tags map[string]string) error {
 		if !onSpec {
 			if err := checkTicketTags(r, key, in.Tags); err != nil {
+				return err
+			}
+		}
+		if name, ok := in.Tags[BranchTag]; ok && onSpec {
+			if err := checkBranchTagChange(r, key, "tags", n, tags, name); err != nil {
 				return err
 			}
 		}
@@ -349,6 +355,8 @@ func checkTicketTags(r store.Reader, key string, tags map[string]string) error {
 }
 
 // RemoveTags is remove_tags(target, keys). A key not present is ignored.
+// Removing a Spec's branch Tag is refused once it is locked, as
+// checkBranchTagChange says.
 func (c *Core) RemoveTags(_ context.Context, key string, in RemoveTagsInput) (TargetView, error) {
 	if len(in.Keys) == 0 {
 		return TargetView{}, invalid("keys", "name at least one Tag key")
@@ -358,7 +366,12 @@ func (c *Core) RemoveTags(_ context.Context, key string, in RemoveTagsInput) (Ta
 			return TargetView{}, invalid("keys", "Tag key %q must be lowercase letters, digits, '.', '_' and '-'", k)
 		}
 	}
-	return c.updateTarget(key, in.Target, func(_ bool, _ *[]string, tags map[string]string) error {
+	return c.updateTargetIn(key, in.Target, func(r store.Reader, n int, onSpec bool, _ *[]string, tags map[string]string) error {
+		if onSpec && slices.Contains(in.Keys, BranchTag) {
+			if err := checkBranchTagChange(r, key, "keys", n, tags, ""); err != nil {
+				return err
+			}
+		}
 		for _, k := range in.Keys {
 			delete(tags, k)
 		}
@@ -370,20 +383,25 @@ func (c *Core) RemoveTags(_ context.Context, key string, in RemoveTagsInput) (Ta
 // counter) and applies fn to its Labels and Tags. It is written only
 // when they changed. Label and Tag changes aren't recorded in edits.
 func (c *Core) updateTarget(key string, ref Ref, fn func(onSpec bool, labels *[]string, tags map[string]string) error) (TargetView, error) {
-	return c.updateTargetIn(key, ref, func(_ store.Reader, onSpec bool, labels *[]string, tags map[string]string) error {
+	return c.updateTargetIn(key, ref, func(_ store.Reader, _ int, onSpec bool, labels *[]string, tags map[string]string) error {
 		return fn(onSpec, labels, tags)
 	})
 }
 
-// updateTargetIn is updateTarget with fn given the store too.
-func (c *Core) updateTargetIn(key string, ref Ref, fn func(r store.Reader, onSpec bool, labels *[]string, tags map[string]string) error) (TargetView, error) {
+// targetFn changes the Labels and Tags of the Spec or Ticket numbered n,
+// read through r.
+type targetFn func(r store.Reader, n int, onSpec bool, labels *[]string, tags map[string]string) error
+
+// updateTargetIn is updateTarget with fn given the store and the
+// target's number too.
+func (c *Core) updateTargetIn(key string, ref Ref, fn targetFn) (TargetView, error) {
 	return c.updateTargetThen(key, ref, fn, nil)
 }
 
 // updateTargetThen is updateTargetIn with then, when not nil, turning
 // the changed target, given as an Import that rewrites it alone, into
 // the records the write makes, so other records can change with it.
-func (c *Core) updateTargetThen(key string, ref Ref, fn func(r store.Reader, onSpec bool, labels *[]string, tags map[string]string) error,
+func (c *Core) updateTargetThen(key string, ref Ref, fn targetFn,
 	then func(r store.Reader, target store.Import) (store.Import, error)) (TargetView, error) {
 	var v TargetView
 	err := c.store.Update(func(w store.Writer) error {
@@ -399,7 +417,7 @@ func (c *Core) updateTargetThen(key string, ref Ref, fn func(r store.Reader, onS
 			if *tags == nil {
 				*tags = map[string]string{}
 			}
-			if err := fn(w, onSpec, labels, *tags); err != nil {
+			if err := fn(w, n, onSpec, labels, *tags); err != nil {
 				return false, err
 			}
 			return !slices.Equal(oldL, *labels) || !maps.Equal(oldT, *tags), nil
