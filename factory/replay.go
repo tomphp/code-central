@@ -166,41 +166,15 @@ func cantReplay(r *repository, branch, head, target string) string {
 }
 
 // replayFrom replays a Ticket's work in r, head, from fork onto onto, the
-// tip of target, named for the note: the non-merge commits on head's first-parent line after
-// fork, oldest first, each with its author, author date and message, as
-// `git rebase` drops merges and commits that change nothing. It makes the
-// commits and moves nothing. It returns the files the first commit that
-// doesn't apply cleanly conflicts in, or why it can't replay the work:
-// uncommitted changes in the branch's worktree in the way of moving it.
+// tip of target, named for the note: the non-merge commits on head's
+// first-parent line after fork (replayLine). It makes the commits and
+// moves nothing. It returns the files the first commit that doesn't apply
+// cleanly conflicts in, or why it can't replay the work: uncommitted
+// changes in the branch's worktree in the way of moving it.
 func (l *lander) replayFrom(r *repository, branch, head, fork, onto, target string) (rp *replay, conflicts []string, why string, err error) {
-	chain, err := r.git.firstParents(head, fork)
-	if err != nil {
-		return nil, nil, "", err
-	}
-	tip := onto
-	for _, c := range chain {
-		parents, err := r.git.parentsOf(c)
-		if err != nil {
-			return nil, nil, "", err
-		}
-		if len(parents) != 1 {
-			continue
-		}
-		tree, files, err := r.git.replayTree(tip, c)
-		if err != nil {
-			return nil, nil, "", err
-		}
-		if len(files) > 0 {
-			return nil, files, "", nil
-		}
-		if was, err := r.git.treeOf(tip); err != nil {
-			return nil, nil, "", err
-		} else if tree == was {
-			continue
-		}
-		if tip, err = r.git.commitTreeLike(tree, c, tip); err != nil {
-			return nil, nil, "", err
-		}
+	tip, conflicts, err := replayLine(r, head, fork, onto, false)
+	if err != nil || len(conflicts) > 0 {
+		return nil, conflicts, "", err
 	}
 	rp = &replay{branch: branch, head: head, tip: tip}
 	list, err := r.git.worktrees()
@@ -220,6 +194,96 @@ func (l *lander) replayFrom(r *repository, branch, head, fork, onto, target stri
 		}
 		rp.worktree = w.path
 	}
+	return rp, nil, "", nil
+}
+
+// replayLine replays onto onto the commits on head's first-parent line
+// after from, oldest first, each with its author, author date and
+// message, dropping commits that change nothing as `git rebase` does. It
+// drops merges too, as `git rebase` does, unless merges says to remake
+// each as a merge of the new tip and the same second parent, as the
+// `Merge <id>` commits on a Spec Branch's line are (rebuildOnto). It
+// makes the commits and moves nothing. It returns the new tip, or the
+// files the first commit that doesn't apply cleanly conflicts in.
+func replayLine(r *repository, head, from, onto string, merges bool) (tip string, conflicts []string, err error) {
+	chain, err := r.git.firstParents(head, from)
+	if err != nil {
+		return "", nil, err
+	}
+	tip = onto
+	for _, c := range chain {
+		parents, err := r.git.parentsOf(c)
+		if err != nil {
+			return "", nil, err
+		}
+		var tree string
+		var files []string
+		switch {
+		case len(parents) == 1:
+			tree, files, err = r.git.replayTree(tip, c)
+		case len(parents) == 2 && merges:
+			tree, files, err = r.git.mergeTree(tip, parents[1])
+		default:
+			continue
+		}
+		if err != nil {
+			return "", nil, err
+		}
+		if len(files) > 0 {
+			return "", files, nil
+		}
+		if was, err := r.git.treeOf(tip); err != nil {
+			return "", nil, err
+		} else if tree == was {
+			continue
+		}
+		if tip, err = r.git.commitTreeLike(tree, c, append([]string{tip}, parents[1:]...)...); err != nil {
+			return "", nil, err
+		}
+	}
+	return tip, nil, nil
+}
+
+// specBranchReplacement is a Spec Branch's move to a Spec merge Ticket's
+// rebased result under Rebase: from tip, its tip now, to next, the
+// Ticket's head with the commits the Spec Branch gained after fork, the
+// Ticket's fork point, replayed onto it. next doesn't descend from tip.
+type specBranchReplacement struct {
+	fork, tip, next string
+}
+
+// planSpecBranchReplacement works out replacing the Spec Branch branch in
+// r, at tip, with a Spec merge Ticket's head under Rebase: the Ticket's
+// branch was cut from the Spec Branch, at its fork point, and its agent
+// rebased it onto the base, so head doesn't descend from the Spec Branch.
+// When the Spec Branch is still at the fork point, head is the new tip.
+// When it has gone on since, because other Tickets were accepted
+// meanwhile, their commits after the fork point are replayed onto head
+// first, each `Merge <id>` remade (replayLine), so none is lost or
+// duplicated. It makes the commits and moves nothing. It returns the
+// files the first commit that doesn't apply cleanly conflicts in, with
+// the replacement's fork point and no next, or why it can't: without a
+// fork ref the Spec Branch holds, it can't tell which of the Spec
+// Branch's commits the branch lacks, and replaying from head's merge
+// base with it would replay the whole Spec Branch.
+func planSpecBranchReplacement(r *repository, ticket, branch, head, tip string) (rp *specBranchReplacement, conflicts []string, why string, err error) {
+	fork, err := r.git.commit(forkRef(ticket))
+	if err != nil || !r.git.isAncestor(fork, tip) {
+		return nil, nil, fmt.Sprintf("the Factory doesn't know where its branch forked from %s (its fork point isn't recorded, or %s no longer holds it), so it can't tell which of %s's commits to replay onto the branch. Move %s to the branch by hand, with any commits %s gained since the branch was cut rebased onto it first, and the Factory carries on.", branch, branch, branch, branch, branch), nil
+	}
+	rp = &specBranchReplacement{fork: fork, tip: tip, next: head}
+	if fork == tip {
+		return rp, nil, "", nil
+	}
+	next, conflicts, err := replayLine(r, tip, fork, head, true)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if len(conflicts) > 0 {
+		rp.next = ""
+		return rp, conflicts, "", nil
+	}
+	rp.next = next
 	return rp, nil, "", nil
 }
 
