@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/tomoram/code-central/domain"
 	"io"
 	"net/http"
 	"slices"
@@ -23,8 +22,10 @@ import (
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/httpapi"
 	"github.com/tomoram/code-central/ops"
+	"github.com/tomoram/code-central/ops/bind"
 )
 
 // A call is one invocation of an operation, spelled for each door. A door
@@ -522,6 +523,28 @@ func TestEveryOperationHasACase(t *testing.T) {
 			if cl.http.path == "" || agent != (cl.mcp != nil) || agent != (cl.cli != nil) {
 				t.Errorf("operation %s: a call does not cover exactly its doors", op.Name)
 			}
+		}
+	}
+}
+
+// Every definition has exactly one binding, the Core call that serves it,
+// and every binding serves a definition, so an operation defined in ops
+// and never bound fails here, not at run time.
+func TestEveryDefinitionHasExactlyOneBinding(t *testing.T) {
+	bound := map[ops.Operation]int{}
+	for _, op := range bind.Bound() {
+		bound[op]++
+	}
+	defined := map[ops.Operation]bool{}
+	for _, op := range ops.Definitions() {
+		defined[op] = true
+		if n := bound[op]; n != 1 {
+			t.Errorf("operation %s has %d bindings, want 1", op.Op().Name, n)
+		}
+	}
+	for op := range bound {
+		if !defined[op] {
+			t.Errorf("operation %s is bound but not in ops.Definitions", op.Op().Name)
 		}
 	}
 }

@@ -1,19 +1,18 @@
 // Package ops defines each of Code Central's operations once (ADR 0063).
-// It sits between core and the front doors: it imports core and nothing
-// from a transport, and httpapi, mcp, client and cli import it. A
-// Definition carries an operation's name, Audience, write flag, HTTP route,
-// the Core call that serves it, its one-line documentation and the
-// behaviour that varies by door; each door derives its route, tool, schema,
-// client call or command from it, so adding an operation means one
-// definition, one Core method and one cross-door case.
+// It imports the wire contract, api, and neither core nor a transport, and
+// httpapi, mcp, client and cli import it. A Definition carries an
+// operation's name, Audience, write flag, HTTP route, its one-line
+// documentation and the behaviour that varies by door; each door derives
+// its route, tool, schema, client call or command from it. The Core call
+// that serves each one is its binding, in the service-only ops/bind, so a
+// client that knows the operations links no Core. Adding an operation
+// means one definition, one binding, one Core method and one cross-door
+// case.
 package ops
 
 import (
-	"context"
 	"reflect"
 	"strings"
-
-	"github.com/tomoram/code-central/core"
 )
 
 // Audience says which front doors may expose an operation.
@@ -40,9 +39,10 @@ type Op struct {
 	Write    bool
 }
 
-// Definition defines one operation over its input and result types. Core's
-// input type is the single source of each field's wire shape and its
-// documentation, through struct tags:
+// Definition defines one operation over its input and result types, the
+// wire contract's. Its binding in ops/bind is the Core call that serves
+// it. The input type is the single source of each field's wire shape and
+// its documentation, through struct tags:
 //
 //	desc:"…"        the MCP schema description of the field
 //	required:"true" the MCP schema lists the field in required, in field order
@@ -73,9 +73,6 @@ type Definition[In, Out any] struct {
 	// Enums gives a string field's enum in the MCP schema by JSON name,
 	// where the values aren't known until run time.
 	Enums map[string][]string
-	// Call serves the operation: usually the Core method as a method
-	// expression, such as (*core.Core).CreateSpec.
-	Call func(c *core.Core, ctx context.Context, key string, in In) (Out, error)
 	// HTTPDefaults, when set, is applied to the input the HTTP door decoded,
 	// after the path is bound and before the call: the HTTP API's defaults
 	// where they differ from the agent doors'.
@@ -100,8 +97,6 @@ type Operation interface {
 	FieldEnum(name string) ([]string, bool)
 	// ApplyHTTPDefaults applies the HTTP defaults to in, a *In.
 	ApplyHTTPDefaults(in any)
-	// Invoke calls the operation with in, a *In.
-	Invoke(ctx context.Context, c *core.Core, key string, in any) (any, error)
 }
 
 func (d *Definition[In, Out]) Op() Op { return Op{Name: d.Name, Audience: d.Audience, Write: d.Write} }
@@ -131,10 +126,6 @@ func (d *Definition[In, Out]) ApplyHTTPDefaults(in any) {
 	if d.HTTPDefaults != nil {
 		d.HTTPDefaults(in.(*In))
 	}
-}
-
-func (d *Definition[In, Out]) Invoke(ctx context.Context, c *core.Core, key string, in any) (any, error) {
-	return d.Call(c, ctx, key, *in.(*In))
 }
 
 // entry is one row of the list: an operation by its definition.
@@ -187,7 +178,8 @@ func DefinitionOf(name string) (Operation, bool) {
 	return nil, false
 }
 
-// all is the list. Add a new operation here first, by its definition.
+// all is the list. Add a new operation here first, by its definition, then
+// its binding in ops/bind.
 var all = []entry{
 	defined(CreateProject),
 	defined(GetProject),
