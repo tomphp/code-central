@@ -384,6 +384,14 @@ _Avoid_: health, presence, liveness
 A separate process, started and supervised by Code Central, that watches one external system for one Project, reaching it through its CI Provider, `gh`, or Azure DevOps' API with a PAT, and reporting over the HTTP API. Each kind is run while its Project setting is on and its service holds the Project's Watcher Lease, restarted with backoff when it crashes, and has its own status, Watching or an error with its fix, of which going into an error sends one Notification; the status names the host it runs on, says Elsewhere, with the host, while another service holds the Lease, and Waiting once the Lease has lapsed with no service to take it. The kinds are the CI Watcher, the Issue Watcher, the Work Item Watcher and the Pull Request Watcher.
 _Avoid_: Daemon, poller
 
+**Wire Contract**:
+The `api` package: every type that crosses the HTTP boundary between the service and its clients (inputs, views, rows, results, error codes), importing only `domain` and `internal/fieldwalk` so that a client that uses it doesn't link the Core or the Store.
+_Avoid_: wire types package, DTOs
+
+**Watcher Status Contract**:
+The part of the Wire Contract between the Watchers and the service: a Watcher kind, the check result and Problem codes a Watcher reports, the Watcher's state, and the crash report the service makes of one.
+_Avoid_: watcher protocol
+
 **Watcher Lease**:
 The claim one service holds on a Project's Watchers in a Shared Store, renewed while it runs and taken over when it expires.
 _Avoid_: watcher lock

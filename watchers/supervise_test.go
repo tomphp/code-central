@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/watchers"
 )
@@ -29,11 +29,11 @@ type leasing struct {
 	holds map[string]int
 }
 
-func (l *leasing) WatchedProjects(context.Context, core.WatcherKind) []string {
+func (l *leasing) WatchedProjects(context.Context, api.WatcherKind) []string {
 	return []string{"acme", "beta"}
 }
 
-func (l *leasing) ReportWatcherCrash(context.Context, core.WatcherKind, string, core.WatcherCrash) {}
+func (l *leasing) ReportWatcherCrash(context.Context, api.WatcherKind, string, api.WatcherCrash) {}
 
 func (l *leasing) Events() *events.Bus { return l.bus }
 
@@ -69,12 +69,12 @@ func TestTheSupervisionRunsOnlyTheWatchersOfProjectsWhoseLeaseItHolds(t *testing
 	log := &codecentraltest.SyncBuffer{}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	kind := func(k core.WatcherKind) watchers.Kind {
+	kind := func(k api.WatcherKind) watchers.Kind {
 		return watchers.Kind{Kind: k, Args: func(string) []string { return nil }}
 	}
 	go func() {
 		defer close(done)
-		watchers.Supervise(ctx, watchers.Supervision{Projects: projects, Kinds: []watchers.Kind{kind(core.WatcherCI), kind(core.WatcherIssues)},
+		watchers.Supervise(ctx, watchers.Supervision{Projects: projects, Kinds: []watchers.Kind{kind(api.WatcherCI), kind(api.WatcherIssues)},
 			Program: cat, Clock: clock.NewFake(time.Now()), LeaseTick: leaseTick, Log: log})
 	}()
 	t.Cleanup(func() { cancel(); <-done })

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // Error is a CI system refusing a call for its rate limit.
@@ -40,8 +40,8 @@ func (e *Error) Until(now time.Time) time.Time {
 // CheckResult is a check failing because the system rate-limited it, at
 // now: there is no knowing yet whether the Watcher can watch, so it is the
 // check failed problem, with when to try again.
-func (e *Error) CheckResult(now time.Time) core.WatcherCheckResult {
-	r := core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: e.Error(), Fix: "Try again in a few minutes."}
+func (e *Error) CheckResult(now time.Time) api.WatcherCheckResult {
+	r := api.WatcherCheckResult{Problem: api.ProblemCheckFailed, Reason: e.Error(), Fix: "Try again in a few minutes."}
 	if until := e.Until(now); !until.IsZero() {
 		r.Fix = "Try again after " + until.Local().Format(time.Kitchen) + ", when " + e.System + "'s rate limit ends."
 	}
