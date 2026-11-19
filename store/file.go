@@ -267,7 +267,7 @@ func (s *FileStore) loadProject(key string) error {
 	}
 	if a := pf.AzureBoards; a != nil {
 		p.AzureBoards = domain.AzureBoards{On: a.On, Mode: domain.AzureBoardsMode(a.Mode), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
-			PATEnv: a.PATEnv, NewIssuesNeedMe: a.NewIssuesNeedMe, Spec: a.Spec}
+			PATEnv: a.PATEnv, NewIssuesNeedMe: a.NewIssuesNeedMe, HideCodeCentral: a.HideCodeCentral, Spec: a.Spec}
 		if a.Mode != "" && !p.AzureBoards.Mode.Valid() {
 			return &LoadError{File: rel, Field: "azure_boards.mode", Msg: fmt.Sprintf("unknown Azure Boards mode %q (%s)", a.Mode, strings.Join(domain.AzureBoardsModeNames(), " or "))}
 		}

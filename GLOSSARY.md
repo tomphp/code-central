@@ -721,7 +721,7 @@ A Project's Long-lived Spec that the Incoming Issues from every listed repositor
 _Avoid_: Inbox Spec, triage Spec
 
 **Azure Boards**:
-A Project's opt-in, off by default, to link the work items an Azure DevOps query returns through an Integration. The human turns it on in the Azure Boards section of Project Options, choosing a Saved query or a WIQL filter, the environment variable holding the PAT (the Project's CI PAT variable unless it names its own), and whether New issues need me; the settings of the mode not chosen are kept. Turning it on, or changing what it runs while on, first runs the Work Item Watcher's check mode, and the first time it creates the Azure Boards Spec. Turning it off leaves every Link as it is. It is inbound only, and never changes a work item's State. It is the second Integration.
+A Project's opt-in, off by default, to link the work items an Azure DevOps query returns through an Integration. The human turns it on in the Azure Boards section of Project Options, choosing a Saved query or a WIQL filter, the environment variable holding the PAT (the Project's CI PAT variable unless it names its own), whether New issues need me, and Hide Code Central; the settings of the mode not chosen are kept. Turning it on, or changing what it runs while on, first runs the Work Item Watcher's check mode, and the first time it creates the Azure Boards Spec. Turning it off leaves every Link as it is. It is inbound only, and never changes a work item's State. It is the second Integration.
 _Avoid_: ADO integration, Azure DevOps Boards sync
 
 **Work item**:
@@ -764,6 +764,10 @@ _Avoid_: Triage option, disposition
 A setting of GitHub Issues and, its own, of Azure Boards, off by default: when on, each new Incoming Issue from that Integration also shows in Needs Me and Focus Mode under New issue until the human triages it.
 _Avoid_: Notify on new issues
 
+**Hide Code Central**:
+A setting of Azure Boards, off by default, that the human sets in the Azure Boards section of Project Options. While it is on, Write-back to a work item still posts every comment, but nothing Code Central adds names Code Central, its Specs or its Tickets. It writes no Status label, drops the line linking back, leaves Ticket IDs out of landed lines, hides its marker as an opaque hash, and replaces this Project's IDs and ID Links in the written text with the items' titles, outside code. Comments and tags already on a work item stay as they are. Other prose is posted as written.
+_Avoid_: Anonymous mode, unbranded Write-back, stealth mode
+
 **Keep as Draft**:
 The human's triage action that leaves an Incoming Issue as it is, a Draft as it arrived, and clears its awaiting triage, taking it out of Needs Me for good, writing nothing to its issue or work item.
 _Avoid_: Park, snooze
@@ -777,11 +781,11 @@ The human's triage action that Cancels an Incoming Issue, with an optional reaso
 _Avoid_: Reject, decline
 
 **Status label**:
-The one `code-central:` label Code Central keeps on a linked GitHub issue to show where its work stands, such as `code-central:draft` on an Incoming Issue not yet triaged off the Issues Spec, `code-central:requirement` after To Requirement, `code-central:building` once the Requirement's Stages are all Done or Cancelled, `code-central:done` once its Spec is Finished with something landed, or `code-central:wont-fix` after Won't fix or once its Spec is Finished with nothing landed. The Issue Watcher creates it in the repository if it is missing. On a work item it is an Azure DevOps tag of the same name, and the Work Item Watcher replaces only `code-central:` tags, leaving the others. Azure DevOps' "tag" stays lowercase and external, never Code Central's Tag.
+The one `code-central:` label Code Central keeps on a linked GitHub issue to show where its work stands, such as `code-central:draft` on an Incoming Issue not yet triaged off the Issues Spec, `code-central:requirement` after To Requirement, `code-central:building` once the Requirement's Stages are all Done or Cancelled, `code-central:done` once its Spec is Finished with something landed, or `code-central:wont-fix` after Won't fix or once its Spec is Finished with nothing landed. The Issue Watcher creates it in the repository if it is missing. On a work item it is an Azure DevOps tag of the same name, and the Work Item Watcher replaces only `code-central:` tags, leaving the others. Azure DevOps' "tag" stays lowercase and external, never Code Central's Tag. No status tag is written to a work item while Hide Code Central is on, and tags already there are left alone.
 _Avoid_: Tag, state label
 
 **Write-back**:
-What Code Central writes to a linked GitHub issue or work item, worked out per Integration: its comments, such as a Requirement's grilling resolution, its Spec's body and each Ticket as it lands, its Status label, and, for a GitHub issue only, closing it; a work item's State is never changed. Each Ticket's landed comment names its commit in every Changed Repository, as `owner/repo@sha` for a GitHub-hosted Repository and as `Name@sha`, by Repository Name, otherwise; the comment listing what landed once the Spec is Finished also lists the Spec's Changed Repositories. In a single-repository Project they read as before. Code Central works out from the work's state what is due on each issue, never from events, and the Integration's Watcher makes it so, posting each comment exactly once. Only the linked issue or work item is written to, never another. Nothing is ever written from Rounds, answers, Failure Reports, Transcripts or Claims.
+What Code Central writes to a linked GitHub issue or work item, worked out per Integration: its comments, such as a Requirement's grilling resolution, its Spec's body and each Ticket as it lands, its Status label, and, for a GitHub issue only, closing it; a work item's State is never changed. Each Ticket's landed comment names its commit in every Changed Repository, as `owner/repo@sha` for a GitHub-hosted Repository and as `Name@sha`, by Repository Name, otherwise; the comment listing what landed once the Spec is Finished also lists the Spec's Changed Repositories. In a single-repository Project they read as before. Code Central works out from the work's state what is due on each issue, never from events, and the Integration's Watcher makes it so, posting each comment exactly once. Only the linked issue or work item is written to, never another. Nothing is ever written from Rounds, answers, Failure Reports, Transcripts or Claims. Under Hide Code Central, an Azure Boards Write-back carries no Status label, no link back and no IDs.
 _Avoid_: Sync, mirroring
 
 **Outbound Link**:

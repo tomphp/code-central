@@ -34,6 +34,9 @@ type AzureBoardsView struct {
 	// kept.
 	PATEnv          string `json:"pat_env"`
 	NewIssuesNeedMe bool   `json:"new_issues_need_me"`
+	// HideCodeCentral is whether Write-back keeps Code Central out of what
+	// it writes to a work item.
+	HideCodeCentral bool `json:"hide_code_central"`
 	// Spec is the Azure Boards Spec's ID, left out until Azure Boards is
 	// first turned on.
 	Spec string `json:"spec,omitempty"`
@@ -44,7 +47,7 @@ type AzureBoardsView struct {
 func azureBoardsView(p domain.Project, watcher WatcherView) AzureBoardsView {
 	a := p.AzureBoards
 	v := AzureBoardsView{On: a.On, Mode: azureBoardsModeOf(a), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
-		PATEnv: boardsPATEnvOf(p.CI, a), NewIssuesNeedMe: a.NewIssuesNeedMe, Watcher: watcher}
+		PATEnv: boardsPATEnvOf(p.CI, a), NewIssuesNeedMe: a.NewIssuesNeedMe, HideCodeCentral: a.HideCodeCentral, Watcher: watcher}
 	if a.Spec != 0 {
 		v.Spec = DisplayID(p.Key, a.Spec)
 	}
@@ -64,7 +67,7 @@ func boardsPATEnvOf(ci domain.CI, a domain.AzureBoards) string {
 }
 
 // SetAzureBoardsInput is the human's set_azure_boards(on, mode, query_url,
-// project_url, where, pat_env, new_issues_need_me, full?).
+// project_url, where, pat_env, new_issues_need_me, hide_code_central, full?).
 type SetAzureBoardsInput struct {
 	On bool `json:"on"`
 	// Mode is saved_query when left out.
@@ -79,13 +82,16 @@ type SetAzureBoardsInput struct {
 	// the Project's CI PAT variable when left out.
 	PATEnv          string `json:"pat_env"`
 	NewIssuesNeedMe bool   `json:"new_issues_need_me"`
+	// HideCodeCentral keeps Code Central out of what Write-back writes to a
+	// work item. It is no part of the Azure Boards check.
+	HideCodeCentral bool `json:"hide_code_central"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
 
 // SetAzureBoards is the human's set_azure_boards: Azure Boards on or off,
 // with its Mode and each Mode's settings, the PAT environment variable
-// and New issues need me. Turning it on needs the chosen Mode's settings,
+// New issues need me and Hide Code Central. Turning it on needs the chosen Mode's settings,
 // and turning it on, or changing what it runs while on, passes the check.
 // The settings of the Mode not chosen are kept. The first time it is
 // turned on, it creates the Azure Boards Spec, written before the
@@ -97,7 +103,7 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in SetAzureBoards
 		return Written[ProjectView]{}, err
 	}
 	a := domain.AzureBoards{On: in.On, Mode: in.Mode, QueryURL: strings.TrimSpace(in.QueryURL),
-		ProjectURL: strings.TrimSpace(in.ProjectURL), Where: strings.TrimSpace(in.Where), PATEnv: strings.TrimSpace(in.PATEnv), NewIssuesNeedMe: in.NewIssuesNeedMe}
+		ProjectURL: strings.TrimSpace(in.ProjectURL), Where: strings.TrimSpace(in.Where), PATEnv: strings.TrimSpace(in.PATEnv), NewIssuesNeedMe: in.NewIssuesNeedMe, HideCodeCentral: in.HideCodeCentral}
 	if err := checkAzureBoardsSettings(&a); err != nil {
 		return Written[ProjectView]{}, err
 	}
