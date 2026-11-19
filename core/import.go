@@ -330,7 +330,7 @@ func importBranchTags(r store.Reader, key string, p ImportPayload) error {
 		if err := checkBranchTagName(pr, field, name); err != nil {
 			return err
 		}
-		if err := checkBranchTagFree(r, key, field, 0, name); err != nil {
+		if err := checkBranchTagFree(r, key, field, 0, name, chooseAnotherName); err != nil {
 			return err
 		}
 		if f, ok := first[name]; ok {

@@ -93,8 +93,8 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     setGitHubIssues: (project, { on, repositories, label, new_issues_need_me }) =>
       call("POST", `${p(project)}/set_github_issues`, { on, repositories, label, new_issues_need_me, full: true }),
     // Only the settings themselves: a Project's read adds spec.
-    setAzureBoards: (project, { on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central }) =>
-      call("POST", `${p(project)}/set_azure_boards`, { on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central, full: true }),
+    setAzureBoards: (project, { on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central, branch_format }) =>
+      call("POST", `${p(project)}/set_azure_boards`, { on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central, branch_format, full: true }),
     setModels: (project, models) => call("POST", `${p(project)}/set_models`, { default: models.default, chat: models.chat ?? { model: "", effort: "" }, kinds: models.kinds, full: true }),
     setSubagentExploration: (project, on) => call("POST", `${p(project)}/set_subagent_exploration`, { on, full: true }),
     setModelAssignment: (project, on) => call("POST", `${p(project)}/set_model_assignment`, { on, full: true }),

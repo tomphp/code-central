@@ -1070,6 +1070,10 @@ export interface AzureBoardsView {
   // HideCodeCentral is whether Write-back keeps Code Central out of what
   // it writes to a work item.
   hide_code_central: boolean;
+  // BranchFormat names the Spec Branch of a Requirement To Requirement
+  // makes of a work item, with {id} for its ID, such as feat/{id};
+  // empty for none.
+  branch_format: string;
   // Spec is the Azure Boards Spec's ID, left out until Azure Boards is
   // first turned on.
   spec?: string;

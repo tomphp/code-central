@@ -231,6 +231,9 @@ export interface AzureBoardsChange {
   pat_env: string;
   new_issues_need_me: boolean;
   hide_code_central: boolean;
+  // branch_format names a Requirement's Spec Branch from its work item,
+  // with {id} for the work item's ID; "" for none.
+  branch_format: string;
 }
 
 // ---- Models and Factories ----
