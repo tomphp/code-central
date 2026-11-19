@@ -52,16 +52,18 @@ function azureDraft(project: ProjectRow): AzureBoardsChange {
     pat_env: a.pat_env,
     new_issues_need_me: a.new_issues_need_me,
     hide_code_central: a.hide_code_central,
+    branch_format: a.branch_format,
   };
 }
 
 // AzureBoardsSection is the Project's Azure Boards settings (Spec
 // code-central-894): the switch, the mode (a Saved query's URL, or a WIQL
-// filter's project URL and WHERE clause), the PAT variable and New issues
-// need me and Hide Code Central. Turning it on, or changing a setting while it is on, runs the
-// check, whose refusal shows in place with its fix; while it is on, the
-// Work Item Watcher's status shows below. Like the other sections it
-// follows the Project as read.
+// filter's project URL and WHERE clause), the PAT variable, New issues
+// need me, Hide Code Central and the Branch format. Turning it on, or
+// changing what it runs while it is on, runs the check; a refused save
+// shows its problem and fix in place. While it is on, the Work Item
+// Watcher's status shows below. Like the other sections it follows the
+// Project as read.
 export function AzureBoardsSection({ project }: { project: ProjectRow }) {
   const api = useApi();
   const azure = project.azure_boards;
@@ -71,10 +73,12 @@ export function AzureBoardsSection({ project }: { project: ProjectRow }) {
   const [error, setError] = useState<ApiError>();
   const [saved, setSaved] = useState(false);
   const id = useId();
-  const { on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central } = stored;
+  const { on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central, branch_format } =
+    stored;
   useEffect(
-    () => setDraft({ on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central }),
-    [on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central],
+    () =>
+      setDraft({ on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central, branch_format }),
+    [on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central, branch_format],
   );
 
   const edit = (patch: Partial<AzureBoardsChange>) => {
@@ -101,7 +105,8 @@ export function AzureBoardsSection({ project }: { project: ProjectRow }) {
     draft.where.trim() !== where ||
     draft.pat_env.trim() !== pat_env ||
     draft.new_issues_need_me !== new_issues_need_me ||
-    draft.hide_code_central !== hide_code_central;
+    draft.hide_code_central !== hide_code_central ||
+    draft.branch_format.trim() !== branch_format;
   const describedBy = (field: string, hint: string) =>
     error?.field === field ? `${hint} ${id}-error` : hint;
   const invalid = (field: string) => error?.field === field || undefined;
@@ -247,6 +252,26 @@ export function AzureBoardsSection({ project }: { project: ProjectRow }) {
             IDs. Tags and comments already on work items stay as they are.
           </p>
         </div>
+        <Field
+          label="Branch format"
+          hintId={`${id}-branch-format`}
+          hint={
+            <>
+              To Requirement names the new Requirement&apos;s Spec Branch with
+              it, <code>{"{id}"}</code> filled with the work item&apos;s ID, such
+              as <code>{"feat/{id}"}</code>. Empty, the Spec Branch is{" "}
+              <code>spec/&lt;spec id&gt;</code>.
+            </>
+          }
+        >
+          <input
+            value={draft.branch_format}
+            placeholder="feat/{id}"
+            onChange={(e) => edit({ branch_format: e.target.value })}
+            aria-describedby={describedBy("branch_format", `${id}-branch-format`)}
+            aria-invalid={invalid("branch_format")}
+          />
+        </Field>
         {azure.spec && <p className="muted">Incoming Issues arrive on {azure.spec}.</p>}
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">

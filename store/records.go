@@ -151,6 +151,7 @@ type azureBoardsFile struct {
 	PATEnv          string `yaml:"pat_env,omitempty"`
 	NewIssuesNeedMe bool   `yaml:"new_issues_need_me,omitempty"`
 	HideCodeCentral bool   `yaml:"hide_code_central,omitempty"`
+	BranchFormat    string `yaml:"branch_format,omitempty"`
 	Spec            int    `yaml:"spec,omitempty"`
 }
 
@@ -1082,7 +1083,7 @@ func encodeAzureBoards(a domain.AzureBoards) *azureBoardsFile {
 		return nil
 	}
 	return &azureBoardsFile{On: a.On, Mode: string(a.Mode), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
-		PATEnv: a.PATEnv, NewIssuesNeedMe: a.NewIssuesNeedMe, HideCodeCentral: a.HideCodeCentral, Spec: a.Spec}
+		PATEnv: a.PATEnv, NewIssuesNeedMe: a.NewIssuesNeedMe, HideCodeCentral: a.HideCodeCentral, BranchFormat: a.BranchFormat, Spec: a.Spec}
 }
 
 // encodeAutoAccept is the on kinds as project.yaml holds them.
@@ -1458,7 +1459,7 @@ func projectOf(pf projectFile) (domain.Project, *LoadError) {
 	}
 	if a := pf.AzureBoards; a != nil {
 		p.AzureBoards = domain.AzureBoards{On: a.On, Mode: domain.AzureBoardsMode(a.Mode), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
-			PATEnv: a.PATEnv, NewIssuesNeedMe: a.NewIssuesNeedMe, HideCodeCentral: a.HideCodeCentral, Spec: a.Spec}
+			PATEnv: a.PATEnv, NewIssuesNeedMe: a.NewIssuesNeedMe, HideCodeCentral: a.HideCodeCentral, BranchFormat: a.BranchFormat, Spec: a.Spec}
 		if a.Mode != "" && !p.AzureBoards.Mode.Valid() {
 			return fail("azure_boards.mode", fmt.Sprintf("unknown Azure Boards mode %q (%s)", a.Mode, strings.Join(domain.AzureBoardsModeNames(), " or ")))
 		}

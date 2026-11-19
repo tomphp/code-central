@@ -55,6 +55,7 @@ type boardsSettings struct {
 	patEnv     string
 	needMe     bool
 	hide       bool
+	format     string
 	spec       string
 }
 
@@ -67,7 +68,7 @@ func azureBoards(t *testing.T, project map[string]any, want boardsSettings) {
 	a, _ := project["azure_boards"].(map[string]any)
 	str := func(k string) string { s, _ := a[k].(string); return s }
 	got := boardsSettings{on: a["on"] == true, mode: str("mode"), queryURL: str("query_url"), projectURL: str("project_url"), where: str("where"),
-		patEnv: str("pat_env"), needMe: a["new_issues_need_me"] == true, hide: a["hide_code_central"] == true, spec: str("spec")}
+		patEnv: str("pat_env"), needMe: a["new_issues_need_me"] == true, hide: a["hide_code_central"] == true, format: str("branch_format"), spec: str("spec")}
 	if a == nil || got != want {
 		t.Fatalf("azure_boards = %v, want %+v", project["azure_boards"], want)
 	}
@@ -182,6 +183,22 @@ func TestChangingHideCodeCentralAloneRunsNoCheckAndKeepsTheWatchersStatus(t *tes
 	}
 	workItemWatcher(t, project(), "error", "Azure DevOps rejected the PAT", "Renew it.")
 	azureBoards(t, project(), boardsSettings{on: true, mode: "saved_query", queryURL: webQuery, patEnv: "ADO_PAT", hide: true, spec: "acme-4"})
+}
+
+func TestChangingTheBranchFormatAloneRunsNoCheckAndKeepsTheWatchersStatus(t *testing.T) {
+	checks := &boardsChecks{}
+	srv := newBoardsCheckServer(t, checks)
+	project := func() map[string]any { return httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}) }
+	httpOK(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`"}`))
+	httpOK(t, srv, reportWorkItemWatcherStatus(`{"state":"error","problem":"pat_rejected","message":"Azure DevOps rejected the PAT","fix":"Renew it."}`))
+
+	httpRejected(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`","branch_format":"feat/x"}`), core.Invalid)
+	httpOK(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`","branch_format":"feat/{id}"}`))
+	if n := len(checks.ran()); n != 1 {
+		t.Fatalf("changing only the Branch format ran %d checks, want the 1 of turning on", n)
+	}
+	workItemWatcher(t, project(), "error", "Azure DevOps rejected the PAT", "Renew it.")
+	azureBoards(t, project(), boardsSettings{on: true, mode: "saved_query", queryURL: webQuery, patEnv: "ADO_PAT", format: "feat/{id}", spec: "acme-4"})
 }
 
 func TestGitHubIssuesHasNoHideCodeCentral(t *testing.T) {

@@ -37,6 +37,10 @@ type AzureBoardsView struct {
 	// HideCodeCentral is whether Write-back keeps Code Central out of what
 	// it writes to a work item.
 	HideCodeCentral bool `json:"hide_code_central"`
+	// BranchFormat names the Spec Branch of a Requirement To Requirement
+	// makes of a work item, with {id} for its ID, such as feat/{id};
+	// empty for none.
+	BranchFormat string `json:"branch_format"`
 	// Spec is the Azure Boards Spec's ID, left out until Azure Boards is
 	// first turned on.
 	Spec string `json:"spec,omitempty"`
@@ -47,7 +51,7 @@ type AzureBoardsView struct {
 func azureBoardsView(p domain.Project, watcher WatcherView) AzureBoardsView {
 	a := p.AzureBoards
 	v := AzureBoardsView{On: a.On, Mode: azureBoardsModeOf(a), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
-		PATEnv: boardsPATEnvOf(p.CI, a), NewIssuesNeedMe: a.NewIssuesNeedMe, HideCodeCentral: a.HideCodeCentral, Watcher: watcher}
+		PATEnv: boardsPATEnvOf(p.CI, a), NewIssuesNeedMe: a.NewIssuesNeedMe, HideCodeCentral: a.HideCodeCentral, BranchFormat: a.BranchFormat, Watcher: watcher}
 	if a.Spec != 0 {
 		v.Spec = DisplayID(p.Key, a.Spec)
 	}
@@ -67,7 +71,8 @@ func boardsPATEnvOf(ci domain.CI, a domain.AzureBoards) string {
 }
 
 // SetAzureBoardsInput is the human's set_azure_boards(on, mode, query_url,
-// project_url, where, pat_env, new_issues_need_me, hide_code_central, full?).
+// project_url, where, pat_env, new_issues_need_me, hide_code_central,
+// branch_format, full?).
 type SetAzureBoardsInput struct {
 	On bool `json:"on"`
 	// Mode is saved_query when left out.
@@ -85,14 +90,20 @@ type SetAzureBoardsInput struct {
 	// HideCodeCentral keeps Code Central out of what Write-back writes to a
 	// work item. It is no part of the Azure Boards check.
 	HideCodeCentral bool `json:"hide_code_central"`
+	// BranchFormat names the Spec Branch of a Requirement To Requirement
+	// makes of a work item, with {id} for its ID; empty for none. It is
+	// no part of the Azure Boards check.
+	BranchFormat string `json:"branch_format"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
 
 // SetAzureBoards is the human's set_azure_boards: Azure Boards on or off,
-// with its Mode and each Mode's settings, the PAT environment variable
-// New issues need me and Hide Code Central. Turning it on needs the chosen Mode's settings,
-// and turning it on, or changing what it runs while on, passes the check.
+// with its Mode and each Mode's settings, the PAT environment variable,
+// New issues need me, Hide Code Central and the Branch format. Turning it
+// on needs the chosen Mode's settings, and turning it on, or changing
+// what it runs while on, passes the check. A Branch format is checked
+// whether on or off.
 // The settings of the Mode not chosen are kept. The first time it is
 // turned on, it creates the Azure Boards Spec, written before the
 // settings so they never name a missing Spec. A change of the chosen
@@ -103,8 +114,17 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in SetAzureBoards
 		return Written[ProjectView]{}, err
 	}
 	a := domain.AzureBoards{On: in.On, Mode: in.Mode, QueryURL: strings.TrimSpace(in.QueryURL),
-		ProjectURL: strings.TrimSpace(in.ProjectURL), Where: strings.TrimSpace(in.Where), PATEnv: strings.TrimSpace(in.PATEnv), NewIssuesNeedMe: in.NewIssuesNeedMe, HideCodeCentral: in.HideCodeCentral}
+		ProjectURL: strings.TrimSpace(in.ProjectURL), Where: strings.TrimSpace(in.Where), PATEnv: strings.TrimSpace(in.PATEnv), NewIssuesNeedMe: in.NewIssuesNeedMe, HideCodeCentral: in.HideCodeCentral,
+		BranchFormat: strings.TrimSpace(in.BranchFormat)}
 	if err := checkAzureBoardsSettings(&a); err != nil {
+		return Written[ProjectView]{}, err
+	}
+	// Checked before the Azure Boards check and the Azure Boards Spec, so
+	// a refused format leaves nothing behind.
+	if err := c.store.View(func(r store.Reader) error {
+		p, _ := r.Project(key)
+		return checkBranchFormat(p, "branch_format", a.BranchFormat)
+	}); err != nil {
 		return Written[ProjectView]{}, err
 	}
 	if err := c.checkAzureBoards(ctx, key, a); err != nil {

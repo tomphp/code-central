@@ -58,6 +58,33 @@ describe("the Azure Boards section", () => {
     expect((await w.api.listProjects())[0].azure_boards).toMatchObject({ on: false, hide_code_central: true });
   });
 
+  it("shows the Branch format empty with feat/{id} as its example, and saves it", async () => {
+    const { w } = await fresh();
+    await renderApp(w);
+
+    expect(field("Branch format")).toHaveValue("");
+    expect(field("Branch format")).toHaveAttribute("placeholder", "feat/{id}");
+    // {{ is user-event's escape for a literal {.
+    await userEvent.type(field("Branch format"), "feat/{{id}");
+    await save(w);
+
+    expect(within(boards()).getByRole("status")).toHaveTextContent("Saved");
+    expect(field("Branch format")).toHaveValue("feat/{id}");
+    expect((await w.api.listProjects())[0].azure_boards).toMatchObject({ on: false, branch_format: "feat/{id}" });
+  });
+
+  it("shows a refused Branch format in place, against its field, and keeps the format as it was", async () => {
+    const { w } = await fresh();
+    await renderApp(w);
+
+    await userEvent.type(field("Branch format"), "spec/{{id}");
+    await save(w);
+
+    expect(within(boards()).getByRole("alert")).toHaveTextContent("starts with spec/");
+    expect(field("Branch format")).toHaveAttribute("aria-invalid", "true");
+    expect((await w.api.listProjects())[0].azure_boards.branch_format).toBe("");
+  });
+
   it("switches to a WIQL filter's project URL and WHERE fields, and turns on with them", async () => {
     const { w } = await fresh();
     await renderApp(w);
@@ -137,7 +164,7 @@ describe("the Azure Boards section", () => {
   it("shows the Work Item Watcher's status while on, live", async () => {
     const { w, s } = await fresh();
     await renderApp(w);
-    await w.api.setAzureBoards("acme", { on: true, mode: "saved_query", query_url: QUERY, project_url: "", where: "", pat_env: "", new_issues_need_me: false, hide_code_central: false });
+    await w.api.setAzureBoards("acme", { on: true, mode: "saved_query", query_url: QUERY, project_url: "", where: "", pat_env: "", new_issues_need_me: false, hide_code_central: false, branch_format: "" });
     await settle(w);
     expect(watcher()).toHaveTextContent("Work Item Watcher: Starting; it hasn't reported yet.");
 

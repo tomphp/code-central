@@ -57,10 +57,15 @@ func looksLikeTicketID(key, name string) bool {
 	return regexp.MustCompile(`(?i)^` + regexp.QuoteMeta(key) + `-[0-9]+$`).MatchString(name)
 }
 
+// chooseAnotherName ends checkBranchTagFree's refusal of a name the
+// human gave.
+const chooseAnotherName = "or choose another name"
+
 // checkBranchTagFree refuses name as Spec n's branch Tag when another
-// Spec of Project key that isn't Finished already has it. n is 0 for a
-// Spec not yet made.
-func checkBranchTagFree(r store.Reader, key, field string, n int, name string) error {
+// Spec of Project key that isn't Finished already has it, saying to
+// change that Spec's Tag first, then orElse, such as "or choose another
+// name". n is 0 for a Spec not yet made.
+func checkBranchTagFree(r store.Reader, key, field string, n int, name, orElse string) error {
 	for _, s := range r.FindSpecs(key, store.SpecFilter{Tag: &store.TagFilter{Key: BranchTag, Values: []string{name}}}) {
 		if s.Number == n {
 			continue
@@ -69,8 +74,8 @@ func checkBranchTagFree(r store.Reader, key, field string, n int, name string) e
 			continue
 		}
 		id := DisplayID(key, s.Number)
-		return invalid(field, "branch %q is already the Spec Branch of %s, %q, which isn't Finished: change or remove the branch Tag on %s first, or choose another name",
-			name, id, s.Title, id)
+		return invalid(field, "branch %q is already the Spec Branch of %s, %q, which isn't Finished: change or remove the branch Tag on %s first, %s",
+			name, id, s.Title, id, orElse)
 	}
 	return nil
 }
@@ -96,7 +101,7 @@ func checkBranchTagChange(r store.Reader, key, field string, n int, tags map[str
 	if err := checkBranchTagName(p, field, name); err != nil {
 		return err
 	}
-	return checkBranchTagFree(r, key, field, n, name)
+	return checkBranchTagFree(r, key, field, n, name, chooseAnotherName)
 }
 
 // checkBranchTagLock refuses any change to Spec n's branch Tag, in tags,
