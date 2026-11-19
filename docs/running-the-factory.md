@@ -513,6 +513,8 @@ Switching from Branch to Merge merges, on the next poll, every Accepted Ticket y
 
 Under either method, you can still merge an In Review Ticket's branch yourself, and the Factory lands it.
 
+A Spec's `branch` Tag renames only its Spec Branch, so it has no effect under Branch: see [Land per Spec](#land-per-spec).
+
 ### Land per Spec
 
 Under Merge with Land per Spec on, the accepted work of every Spec but a Long-lived one first gathers on its Spec Branch, `spec/<spec id>`. A Long-lived Spec is one labelled `long-lived`, as a CI Rule's Spec and the Issues Spec are; its Tickets land one by one. Once every implementation Ticket on the Spec is Accepted, Done or Cancelled (and, for a Requirement, its tickets Stage is finished), and at least one is merged into the Spec Branch, the Factory merges the Spec Branch into the base as `Merge spec <spec id>: <title>`, and lands every waiting Ticket at that commit. With Push on, it pushes the base once and lands them after the push succeeds; with CI Tracking on, the same pushed commit is reported for each, they all land once its CI is passed, and if it fails they are listed on the commit's one CI failed item, with no Send back to fix, since their work is in the base with the Spec's. Only the base is pushed.
@@ -531,6 +533,16 @@ When the Spec Branch conflicts with the base, the Factory asks Code Central to o
 acme-shop-2: spec/acme-shop-2 conflicts with main in README.md: opened acme-shop-7 to merge the base into it
 acme-shop-2: spec/acme-shop-2 conflicts with main again: commented on acme-shop-7
 ```
+
+**Naming the Spec Branch.** A Spec's `branch` Tag, a reserved Spec Tag beside `map` and `effort`, names its Spec Branch in place of `spec/<spec id>`. Set it with `set_tags` or the Tags editor on the Spec pane, say `branch` = `feat/1234`, and Ticket branches are cut from, merged into and pushed as `feat/1234`, and the Factory's log lines say so. A Requirement made from an Azure Boards work item gets it from the Project's Branch format. The value must be a valid branch name, not `spec/…`, a Repository's Base or a Ticket ID, and no other unfinished Spec may use it; the refusal names the Spec that does. The Tag is **locked** once any implementation Ticket of the Spec has been claimed, as the Spec Branch exists by then: changing or removing it is refused, saying the Spec Branch already exists under that name, and setting the same value is fine.
+
+If the Push remote already has a branch of that name that the Factory didn't push (none of the Spec's Tickets has a pushed commit on it), the Factory won't push over it, forced or not, even under Rebase. It comments once on each waiting Ticket and tries again on every poll, so once you delete or rename the remote branch the push goes ahead. This holds for `spec/<spec id>` names too:
+
+```text
+origin already has a branch named feat/1234 that the Factory didn't push, so it won't push the Spec Branch over it. Delete or rename it on origin, and the Factory pushes the Spec Branch on a later poll.
+```
+
+The Tag names only the Spec Branch. With Land per Spec off, under the Branch Landing Method, and on a Long-lived Spec it has no effect, and Ticket branches keep their Ticket-ID names. A finished Spec's Tag-named Spec Branch is deleted by the rule below, as a `spec/` one is.
 
 Turning Land per Spec off part-way makes the Factory's next poll merge every Spec Branch that holds merged-but-not-landed Tickets into the base, ready or not, and land them as a group; later Tickets land one by one. Adding the `long-lived` Label to a Spec while its Tickets wait does the same for that Spec alone. Turning Land per Spec on, or taking the Label off, affects only Tickets accepted afterwards. A Ticket added to a Spec after it has landed lands with a second batch: the Spec Branch is merged into the base again once the new Ticket is accepted.
 
