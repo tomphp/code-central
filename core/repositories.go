@@ -111,8 +111,8 @@ func fillChangedBy(r store.Reader, v *ProjectView) {
 // the Repository named name.
 func changedBy(r store.Reader, key, name string) []string {
 	by := []string{}
-	for _, t := range r.Tickets(key) {
-		if !finished(t.State) && slices.Contains(changedRepositoryNames(key, t), name) {
+	for _, t := range r.FindTickets(key, store.TicketFilter{States: unfinished}) {
+		if slices.Contains(changedRepositoryNames(key, t), name) {
 			by = append(by, DisplayID(key, t.Number))
 		}
 	}
@@ -309,10 +309,8 @@ func (c *Core) EditRepository(ctx context.Context, key string, in EditRepository
 func (c *Core) publishAccepted(key string) {
 	var accepted []int
 	c.store.View(func(r store.Reader) error {
-		for _, t := range r.Tickets(key) {
-			if t.State == domain.Accepted {
-				accepted = append(accepted, t.Number)
-			}
+		for _, t := range r.FindTickets(key, store.TicketFilter{States: []domain.State{domain.Accepted}}) {
+			accepted = append(accepted, t.Number)
 		}
 		return nil
 	})

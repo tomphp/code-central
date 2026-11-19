@@ -88,15 +88,12 @@ func (c *Core) GetWorkItemWatch(_ context.Context, key string) (WorkItemWatch, e
 // first item to carry it.
 func linkIDs(r store.Reader, key, integration string) []string {
 	byNumber := map[int]string{}
-	for _, s := range r.Specs(key) {
-		if s.Link.Integration == integration {
-			byNumber[s.Number] = s.Link.ID
-		}
+	link := &store.LinkFilter{Integration: integration}
+	for _, s := range r.FindSpecs(key, store.SpecFilter{Link: link}) {
+		byNumber[s.Number] = s.Link.ID
 	}
-	for _, t := range r.Tickets(key) {
-		if t.Link.Integration == integration {
-			byNumber[t.Number] = t.Link.ID
-		}
+	for _, t := range r.FindTickets(key, store.TicketFilter{Link: link}) {
+		byNumber[t.Number] = t.Link.ID
 	}
 	out, seen := []string{}, map[string]bool{}
 	for n := 1; n < r.NextNumber(key); n++ {

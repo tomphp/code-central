@@ -155,15 +155,8 @@ func (b blockRule) blockerViews(t domain.Ticket) []BlockerView {
 }
 
 // backToReady is when t last moved to Ready from another State, or zero
-// if it never has; its creation doesn't count.
-func backToReady(t domain.Ticket) time.Time {
-	for _, m := range slices.Backward(t.Moves) {
-		if m.To == domain.Ready && m.From != "" {
-			return m.Time
-		}
-	}
-	return time.Time{}
-}
+// if it never has; its creation doesn't count. It is read from the head.
+func backToReady(t domain.Ticket) time.Time { return t.Head.BackToReady }
 
 // blockedError rejects claiming a blocked Ticket, naming its Blockers,
 
@@ -198,6 +191,31 @@ func waitsOn(r store.Reader, key string, n int) []int {
 	for _, b := range t.BlockedBy {
 		out = append(out, store.Follow(r, key, b)...)
 	}
+	return out
+}
+
+// waitingOn is the Tickets that wait on Ticket n, in number order. It
+// finds the Cancelled Tickets whose Replacements lead to n by repeating
+// the ReplacedBy query, then the Tickets any of them, or n, blocks; of
+// those, waitsOn keeps the ones whose waits do reach n.
+func waitingOn(r store.Reader, key string, n int) []int {
+	through, seen := []int{n}, map[int]bool{n: true}
+	for i := 0; i < len(through); i++ {
+		for _, c := range r.FindTickets(key, store.TicketFilter{ReplacedBy: through[i], States: []domain.State{domain.Cancelled}}) {
+			if !seen[c.Number] {
+				through, seen[c.Number] = append(through, c.Number), true
+			}
+		}
+	}
+	var out []int
+	for _, b := range through {
+		for _, d := range r.FindTickets(key, store.TicketFilter{BlockedBy: b}) {
+			if !slices.Contains(out, d.Number) && slices.Contains(waitsOn(r, key, d.Number), n) {
+				out = append(out, d.Number)
+			}
+		}
+	}
+	slices.Sort(out)
 	return out
 }
 
@@ -246,11 +264,11 @@ type overlay struct {
 	t   domain.Ticket
 }
 
-func (o overlay) Ticket(project string, n int) (domain.Ticket, bool) {
+func (o overlay) Ticket(project string, n int, parts ...store.Part) (domain.Ticket, bool) {
 	if project == o.key && n == o.t.Number {
 		return o.t, true
 	}
-	return o.Reader.Ticket(project, n)
+	return o.Reader.Ticket(project, n, parts...)
 }
 
 // ticketRefs resolves refs, op's field, to existing Tickets' numbers,
@@ -278,7 +296,7 @@ func (c *Core) updateTicketIn(key, op string, ref Ref, full bool, fn func(r stor
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		t, err := resolveTicket(w, key, op, "ticket", ref)
+		t, h, err := readForWrite(w, key, op, "ticket", ref, whole)
 		if err != nil {
 			return err
 		}
@@ -293,7 +311,7 @@ func (c *Core) updateTicketIn(key, op string, ref Ref, full bool, fn func(r stor
 		}
 		if changed {
 			t.Updated = c.now()
-			if err := w.PutTicket(key, t); err != nil {
+			if err := h.put(w, key, &t); err != nil {
 				return err
 			}
 		}

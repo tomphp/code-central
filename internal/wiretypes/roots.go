@@ -27,6 +27,7 @@ var roots = []reflect.Type{
 	reflect.TypeFor[core.CIOverview](),
 	reflect.TypeFor[core.UsageView](),
 	reflect.TypeFor[core.SessionUsageView](),
+	reflect.TypeFor[core.StorageView](),
 	reflect.TypeFor[core.ConversationView](),
 	reflect.TypeFor[core.OptionsView](),
 	reflect.TypeFor[core.Acknowledgement](),

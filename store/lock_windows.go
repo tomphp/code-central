@@ -25,8 +25,13 @@ type storeLock struct{ h windows.Handle }
 // Local\code-central-store-<hash>, and the store is locked when the mutex
 // already exists. The hash is of the absolute, cleaned and lower-cased
 // path, since Windows paths are case-insensitive.
-func lockStore(dir string) (*storeLock, error) {
-	abs, err := filepath.Abs(dir)
+func lockStore(dir string) (*storeLock, error) { return lockFile(dir, dir) }
+
+// lockFile takes the lock named for the path, for the Store named what,
+// which a failure names: a SQLite Store's is named for its lock file's
+// path, beside the database.
+func lockFile(path, what string) (*storeLock, error) {
+	abs, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +43,7 @@ func lockStore(dir string) (*storeLock, error) {
 	h, err := windows.CreateMutex(nil, false, name)
 	if errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
 		windows.CloseHandle(h)
-		return nil, fmt.Errorf("%s: %w", dir, ErrLocked)
+		return nil, fmt.Errorf("%s: %w", what, ErrLocked)
 	}
 	if err != nil {
 		return nil, err

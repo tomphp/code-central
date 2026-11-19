@@ -98,19 +98,15 @@ func definitionOwned(ctx context.Context, id string, l domain.Link) error {
 // separately: an external item with no parent is a Spec and its one
 // Ticket.
 func linkedTo(r store.Reader, key string, l domain.Link, specs bool) (string, bool) {
-	same := func(o domain.Link) bool { return o.Integration == l.Integration && o.ID == l.ID }
+	link := &store.LinkFilter{Integration: l.Integration, ID: l.ID}
 	if specs {
-		for _, s := range r.Specs(key) {
-			if same(s.Link) {
-				return DisplayID(key, s.Number), true
-			}
+		if found := r.FindSpecs(key, store.SpecFilter{Link: link}); len(found) > 0 {
+			return DisplayID(key, found[0].Number), true
 		}
 		return "", false
 	}
-	for _, t := range r.Tickets(key) {
-		if same(t.Link) {
-			return DisplayID(key, t.Number), true
-		}
+	if found := r.FindTickets(key, store.TicketFilter{Link: link}); len(found) > 0 {
+		return DisplayID(key, found[0].Number), true
 	}
 	return "", false
 }
@@ -210,7 +206,7 @@ func (c *Core) CreateLinkedTicket(ctx context.Context, key string, in CreateLink
 		now := c.now()
 		t := domain.Ticket{Number: w.NextNumber(key), Title: in.Title, State: state, Spec: specN, Link: l, Created: now, Updated: now, Description: in.Description,
 			AwaitingTriage: awaitsTriage(w, key, specN)}
-		if err := w.PutTicket(key, t); err != nil {
+		if err := whole.put(w, key, &t); err != nil {
 			return err
 		}
 		v, err = acknowledgeCreate(c.ticketView(w, key, domain.Ticket{}), c.ticketView(w, key, t), in.Full)
@@ -437,7 +433,8 @@ func (c *Core) updateLink(ctx context.Context, key string, ref Ref, fn func(l *d
 			row = specLinkedRow(key, s)
 			return nil
 		}
-		if t, ok := w.Ticket(key, n); ok {
+		h := held{store.Edits}
+		if t, ok := w.Ticket(key, n, h...); ok {
 			if !t.Link.Linked() {
 				return notLinked
 			}
@@ -448,7 +445,7 @@ func (c *Core) updateLink(ctx context.Context, key string, ref Ref, fn func(l *d
 			if prev != nil {
 				c.recordEdit(ctx, &t.Edits, prev)
 				t.Updated = c.now()
-				if err := w.PutTicket(key, t); err != nil {
+				if err := h.put(w, key, &t); err != nil {
 					return err
 				}
 			}
@@ -488,19 +485,13 @@ func (c *Core) FindLinked(_ context.Context, key string, in FindLinkedInput) ([]
 		if _, ok := r.Project(key); !ok {
 			return unknownProject(key)
 		}
-		match := func(l domain.Link) bool {
-			return l.Integration == in.Integration && (in.ID == "" || l.ID == in.ID)
-		}
+		link := &store.LinkFilter{Integration: in.Integration, ID: in.ID}
 		byNumber := map[int]LinkedRow{}
-		for _, s := range r.Specs(key) {
-			if match(s.Link) {
-				byNumber[s.Number] = specLinkedRow(key, s)
-			}
+		for _, s := range r.FindSpecs(key, store.SpecFilter{Link: link}) {
+			byNumber[s.Number] = specLinkedRow(key, s)
 		}
-		for _, t := range r.Tickets(key) {
-			if match(t.Link) {
-				byNumber[t.Number] = ticketLinkedRow(key, t)
-			}
+		for _, t := range r.FindTickets(key, store.TicketFilter{Link: link}) {
+			byNumber[t.Number] = ticketLinkedRow(key, t)
 		}
 		for n := 1; n < r.NextNumber(key); n++ {
 			if row, ok := byNumber[n]; ok {
@@ -523,10 +514,8 @@ func closedExternally(t domain.Ticket) (time.Time, bool) {
 	if !t.Link.Owned() || t.Link.ExternalState == domain.ExternalOpen || finished(t.State) {
 		return time.Time{}, false
 	}
-	for i := len(t.Edits) - 1; i >= 0; i-- {
-		if _, ok := t.Edits[i].Previous["external_state"]; ok {
-			return t.Edits[i].Time, true
-		}
+	if !t.Head.ExternalStateChanged.IsZero() {
+		return t.Head.ExternalStateChanged, true
 	}
 	return t.Created, true
 }

@@ -80,7 +80,7 @@ func TestAMapNeedsTextAndWritesNothingWithout(t *testing.T) {
 		wantCode(t, err, core.Invalid, "text")
 	}
 	f.store.View(func(r store.Reader) error {
-		if len(r.Specs("acme")) != 0 || len(r.Tickets("acme")) != 0 {
+		if len(r.FindSpecs("acme", store.SpecFilter{})) != 0 || len(r.FindTickets("acme", store.TicketFilter{})) != 0 {
 			t.Fatal("a rejected Map wrote something")
 		}
 		return nil
@@ -370,7 +370,7 @@ func TestWritingTheSpecIsRefusedForASpecThatIsNotAFinishedMap(t *testing.T) {
 		t.Fatalf("the refusal names the unfinished Ticket: %v", err)
 	}
 	f.store.View(func(r store.Reader) error {
-		if len(r.Specs("acme")) != 2 || len(r.Tickets("acme")) != 2 {
+		if len(r.FindSpecs("acme", store.SpecFilter{})) != 2 || len(r.FindTickets("acme", store.TicketFilter{})) != 2 {
 			t.Fatal("a refused Requirement wrote something")
 		}
 		return nil

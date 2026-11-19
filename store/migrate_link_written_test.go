@@ -38,7 +38,7 @@ func TestTheRealChainMigratesAFormat16StoreToTheLinkWrittenKeysFormat(t *testing
 		t.Errorf("store.yaml = %q", got)
 	}
 	s.View(func(r store.Reader) error {
-		tk, _ := r.Ticket("acme", 2)
+		tk, _ := r.Ticket("acme", 2, store.History...)
 		if len(tk.Link.Written) != 0 || tk.Link.ID != "acme/web#7" || !tk.AwaitingTriage {
 			t.Errorf("ticket after migrating = %+v, want its Link and awaiting triage kept, with nothing written", tk)
 		}
@@ -47,14 +47,14 @@ func TestTheRealChainMigratesAFormat16StoreToTheLinkWrittenKeysFormat(t *testing
 
 	// Keys written after migrating read back.
 	if err := s.Update(func(w store.Writer) error {
-		tk, _ := w.Ticket("acme", 2)
+		tk, _ := w.Ticket("acme", 2, store.History...)
 		tk.Link.Written = []string{"wont-fix"}
-		return w.PutTicket("acme", tk)
+		return w.PutTicket("acme", tk, store.History...)
 	}); err != nil {
 		t.Fatal(err)
 	}
 	s.View(func(r store.Reader) error {
-		if tk, _ := r.Ticket("acme", 2); !slices.Equal(tk.Link.Written, []string{"wont-fix"}) {
+		if tk, _ := r.Ticket("acme", 2, store.History...); !slices.Equal(tk.Link.Written, []string{"wont-fix"}) {
 			t.Errorf("written = %q, want wont-fix", tk.Link.Written)
 		}
 		return nil

@@ -42,11 +42,13 @@ func (c *Core) GetSpecQuestions(_ context.Context, key string, ref Ref) (SpecQue
 		n := s.Number
 		v = SpecQuestions{Spec: DisplayID(key, n), Tickets: []TicketQuestions{}}
 		for _, t := range specTickets(r, key, n) {
-			if len(t.Rounds) > 0 {
-				v.Tickets = append(v.Tickets, TicketQuestions{
-					ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Rounds: roundViews(t.Rounds),
-				})
+			if t.Head.LatestRound == nil {
+				continue
 			}
+			t, _ = r.Ticket(key, t.Number, store.Rounds)
+			v.Tickets = append(v.Tickets, TicketQuestions{
+				ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Rounds: roundViews(t.Rounds),
+			})
 		}
 		return nil
 	})

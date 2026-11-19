@@ -279,7 +279,7 @@ func (s *ciState) unavailable(rc *repoCI) *CIUnavailableView {
 		return nil
 	}
 	view := &CIUnavailableView{Commit: rc.latest.Commit, Pushed: rc.latest.Pushed}
-	if w := s.c.watchers.view(watcherKey{WatcherCI, s.p.Key}); !w.watches(rc.name) {
+	if w := s.c.watchers.view(watcherKey{WatcherCI, s.p.Key}, s.now); !w.watches(rc.name) {
 		view.Cause, view.Message = CIWatcherNotWatching, w.messageFor(rc.name)
 		return view
 	}
@@ -324,7 +324,7 @@ func (s *ciState) reads(record, commit string) bool { return len(s.ticketsReadin
 func (s *ciState) ticketsReading(record, commit string) []domain.Ticket {
 	name := recordRepository(s.p.Key, record)
 	var out []domain.Ticket
-	for _, t := range s.r.Tickets(s.p.Key) {
+	for _, t := range s.r.FindTickets(s.p.Key, pushedCommit(s.p.Key, name, commit)) {
 		pushed := pushedIn(s.p.Key, t, name)
 		if len(pushed) > 0 && slices.ContainsFunc(s.resultCommits(t, name, pushed), func(pc domain.PushedCommit) bool { return pc.Commit == commit }) {
 			out = append(out, t)

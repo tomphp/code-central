@@ -131,7 +131,9 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 	}
 	var v ProjectView
 	var accepted, left []int
+	var resetWatcher bool
 	err := c.store.Update(func(w store.Writer) error {
+		accepted, left, resetWatcher = nil, nil, false
 		if err := writable(w, key); err != nil {
 			return err
 		}
@@ -171,18 +173,17 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 			v = c.projectView(p)
 			return nil
 		}
+		acceptedTickets := w.FindTickets(key, store.TicketFilter{States: []domain.State{domain.Accepted}})
 		if p.Landing.Method != l.Method {
-			for _, t := range w.Tickets(key) {
-				if t.State == domain.Accepted {
-					accepted = append(accepted, t.Number)
-				}
+			for _, t := range acceptedTickets {
+				accepted = append(accepted, t.Number)
 			}
 		}
 		if was.RunsPullRequestWatcher() && !next.RunsPullRequestWatcher() {
 			// What the Pull Request Watcher said was about the old method.
-			c.watchers.reset(watcherKey{WatcherPullRequests, key})
-			for _, t := range w.Tickets(key) {
-				if t.State == domain.Accepted && slices.ContainsFunc(t.PullRequests, pullRequestOpen) {
+			resetWatcher = true
+			for _, t := range acceptedTickets {
+				if slices.ContainsFunc(t.PullRequests, pullRequestOpen) {
 					left = append(left, t.Number)
 				}
 			}
@@ -194,10 +195,14 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 	if err != nil {
 		return v, err
 	}
+	if resetWatcher {
+		c.watchers.reset(watcherKey{WatcherPullRequests, key})
+	}
 	// The pull requests stay on the host, so each Ticket says to close its own.
 	for _, n := range left {
 		if err := c.store.Update(func(w store.Writer) error {
-			t, ok := w.Ticket(key, n)
+			h := held{store.Comments}
+			t, ok := w.Ticket(key, n, h...)
 			var links []string
 			for _, pr := range t.PullRequests {
 				if pullRequestOpen(pr) {
@@ -213,7 +218,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 			}
 			addComment(&t, Human, c.now(), 0, body)
 			t.Updated = c.now()
-			return w.PutTicket(key, t)
+			return h.put(w, key, &t)
 		}); err != nil {
 			return v, err
 		}
@@ -257,8 +262,10 @@ func (c *Core) ListProjects(context.Context) ([]ProjectRow, error) {
 				if reason, _ := e.reason(t); reason != "" {
 					row.NeedsMe++
 				}
-				if !finished(t.State) {
-					row.Unfinished++
+			}
+			for state, n := range r.StateCounts(p.Key) {
+				if !finished(state) {
+					row.Unfinished += n
 				}
 			}
 			out = append(out, row)

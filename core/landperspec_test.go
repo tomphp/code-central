@@ -55,10 +55,10 @@ func (f fixture) landing(t *testing.T, l domain.Landing) {
 func (f fixture) moveTo(t *testing.T, n int, state domain.State) {
 	t.Helper()
 	err := f.store.Update(func(w store.Writer) error {
-		tk, _ := w.Ticket("acme", n)
+		tk, _ := w.Ticket("acme", n, store.Moves)
 		tk.Moves = append(tk.Moves, domain.Move{From: tk.State, To: state, Time: f.clock.Now()})
 		tk.State = state
-		return w.PutTicket("acme", tk)
+		return w.PutTicket("acme", tk, store.Moves)
 	})
 	if err != nil {
 		t.Fatal(err)

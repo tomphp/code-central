@@ -40,7 +40,7 @@ func TestTheRealChainMigratesAFormat27StoreToTheCIResponsesFormat(t *testing.T) 
 		if p, _ := r.Project("acme"); len(p.CIResponses) != 1 || p.CIResponses[0].Commit != "abc123" || p.CIResponses[0].LandAnyway.IsZero() {
 			t.Errorf("CI responses after migrating = %+v, want abc123's Land anyway kept", p.CIResponses)
 		}
-		if tk, _ := r.Ticket("acme", 2); len(tk.PushedCommits) != 1 || tk.PushedCommits[0].Commit != "abc123" {
+		if tk, _ := r.Ticket("acme", 2, store.History...); len(tk.PushedCommits) != 1 || tk.PushedCommits[0].Commit != "abc123" {
 			t.Errorf("pushed commits after migrating = %+v, want abc123", tk.PushedCommits)
 		}
 		return nil

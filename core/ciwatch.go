@@ -81,8 +81,8 @@ type CIRerun struct {
 func ciReruns(ci *ciState, name string) []CIRerun {
 	out := []CIRerun{}
 	key := ci.p.Key
-	for _, t := range ci.r.Tickets(key) {
-		if len(t.PushedCommits) == 0 || t.State == domain.Cancelled {
+	for _, t := range ci.r.FindTickets(key, store.TicketFilter{HasPushes: true}) {
+		if t.State == domain.Cancelled {
 			continue
 		}
 		rc := ci.ticket(t).in(name)
@@ -179,20 +179,12 @@ func ciRulesLastRuns(runs []domain.CIRun) map[int]time.Time {
 // Ticket landed at, each in its Repository, in Ticket order.
 func ciTicketCommits(r store.Reader, key string) (pushed, landed []CITicketCommit) {
 	pushed, landed = []CITicketCommit{}, []CITicketCommit{}
-	for _, t := range r.Tickets(key) {
-		id, spec := DisplayID(key, t.Number), DisplayID(key, t.Spec)
-		for _, p := range t.PushedCommits {
-			pushed = append(pushed, CITicketCommit{Ticket: id, Spec: spec, Repository: recordName(key, p.Repository), Commit: p.Commit})
-		}
-		for _, m := range t.Moves {
-			if m.Commit != "" {
-				landed = append(landed, CITicketCommit{Ticket: id, Spec: spec, Commit: m.Commit})
-			}
-		}
-		for _, cr := range t.Repositories {
-			if cr.Landed != nil && cr.Name != key {
-				landed = append(landed, CITicketCommit{Ticket: id, Spec: spec, Repository: cr.Name, Commit: cr.Landed.Commit})
-			}
+	for _, tc := range r.TicketCommits(key) {
+		row := CITicketCommit{Ticket: DisplayID(key, tc.Ticket), Spec: DisplayID(key, tc.Spec), Repository: tc.Repository, Commit: tc.Commit}
+		if tc.Kind == store.CommitLanded {
+			landed = append(landed, row)
+		} else {
+			pushed = append(pushed, row)
 		}
 	}
 	return pushed, landed

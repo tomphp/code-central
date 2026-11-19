@@ -34,7 +34,8 @@ func (c *Core) Implement(ctx context.Context, key string, in TicketInput) (Finis
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		t, err := resolveTicket(w, key, "implement", "ticket", in.Ticket)
+		// An Import rewrites the spec Stage whole, so it is read whole.
+		t, err := resolveTicket(w, key, "implement", "ticket", in.Ticket, whole...)
 		if err != nil {
 			return err
 		}
@@ -93,9 +94,10 @@ func (c *Core) implementStep(ctx context.Context, r store.Reader, key string, t 
 	}
 	var tickets domain.Ticket
 	found := false
-	for _, o := range r.Tickets(key) {
-		if o.Spec == t.Spec && StageOf(o.Labels) == "tickets" {
-			tickets, found = o, true
+	for _, o := range r.FindTickets(key, store.TicketFilter{Spec: []int{t.Spec}}) {
+		if StageOf(o.Labels) == "tickets" {
+			// It is rewritten whole.
+			tickets, found = r.Ticket(key, o.Number, whole...)
 			break
 		}
 	}

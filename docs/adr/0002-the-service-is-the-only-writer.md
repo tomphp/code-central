@@ -1,5 +1,7 @@
 # The running service is the only writer to the store
 
+Partly superseded by [ADR 0068](0068-several-services-may-share-a-postgres-store.md): several services write a Postgres Store at once, and the database orders their writes, so a Claim stays one atomic step; every other Store Kind keeps one writer and its lock.
+
 A Claim must be one atomic step across every process that can write, so we decided that only one process can write: the running Code Central service. Every `code-central` command, including `init` and Import, is an HTTP client of that service and never opens the store itself. The service takes an exclusive lock on the store at startup, so a second copy on another port refuses to start.
 
 ## Considered Options

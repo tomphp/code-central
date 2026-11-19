@@ -18,6 +18,7 @@ import {
   type SessionUsageFilter,
   type SessionUsageView,
   type SpecDetail,
+  type StorageView,
   type SpecRow,
   type TicketRow,
   type TicketView,
@@ -205,4 +206,14 @@ export function useSessionUsage(session: SessionUsageFilter | undefined): ReadRe
   const { api } = useLive("useSessionUsage");
   const { project, session: id, agent } = session ?? {};
   return useFetch(project && id ? () => api.sessionUsage({ project, session: id, agent }) : null, [api, project, id, agent]);
+}
+
+// useStorage reads the Storage tab's figures, every Project's counts,
+// while open; closed, it reads nothing. It loads each time it is opened,
+// and is never live: it leaves out the version, so a busy Factory's
+// notices don't refetch it, and the caller narrows the counts to its
+// scope, so a switch of Project doesn't either.
+export function useStorage(open: boolean): ReadResult<StorageView> {
+  const { api } = useLive("useStorage");
+  return useFetch(open ? () => api.storage() : null, [api, open]);
 }

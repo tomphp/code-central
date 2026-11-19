@@ -18,14 +18,20 @@ type storeLock struct{ f *os.File }
 
 // lockStore takes the exclusive lock on the store at dir.
 func lockStore(dir string) (*storeLock, error) {
-	f, err := os.OpenFile(filepath.Join(dir, "lock"), os.O_CREATE|os.O_RDWR, 0o644)
+	return lockFile(filepath.Join(dir, "lock"), dir)
+}
+
+// lockFile takes the exclusive lock on the lock file at path, for the
+// Store named what, which a failure names.
+func lockFile(path, what string) (*storeLock, error) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
 		return nil, err
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		f.Close()
 		if errors.Is(err, syscall.EWOULDBLOCK) {
-			return nil, fmt.Errorf("%s: %w", dir, ErrLocked)
+			return nil, fmt.Errorf("%s: %w", what, ErrLocked)
 		}
 		return nil, err
 	}

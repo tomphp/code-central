@@ -82,7 +82,7 @@ func TestARequirementNeedsText(t *testing.T) {
 		wantCode(t, err, core.Invalid, "text")
 	}
 	f.store.View(func(r store.Reader) error {
-		if len(r.Specs("acme")) != 0 || len(r.Tickets("acme")) != 0 {
+		if len(r.FindSpecs("acme", store.SpecFilter{})) != 0 || len(r.FindTickets("acme", store.TicketFilter{})) != 0 {
 			t.Fatal("a rejected Requirement wrote something")
 		}
 		return nil

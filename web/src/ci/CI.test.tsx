@@ -6,10 +6,10 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { newWorld, type World } from "../api/core/core";
+import { newWorld, SERVICE_LIFE_MS, WORLD_HOST, type World } from "../api/core/core";
 import type { Scenario } from "../api/scenario";
 import type { CIRunView } from "../api/types";
-import { renderApp as renderWorldApp, scenario } from "../worldTesting";
+import { renderApp as renderWorldApp, scenario, settle } from "../worldTesting";
 
 const MINUTE = 60_000;
 
@@ -191,6 +191,23 @@ describe("the CI Watchers' statuses", () => {
         "Acme: Starting; the CI Watcher hasn't reported yet.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("says where the CI Watcher runs, or that none does", async () => {
+    const fake = await world();
+    await tracked(fake, "acme");
+    fake.w.holdWatcherLease("acme", WORLD_HOST);
+    fake.w.advance(SERVICE_LIFE_MS);
+    fake.w.holdWatcherLease("acme", "desktop");
+    await renderApp(fake, "/?view=ci&project=acme");
+    expect(
+      within(ci()).getByText("Acme: Runs on desktop, whose service holds this Project's Watchers; its status shows there."),
+    ).toBeInTheDocument();
+
+    fake.w.advance(SERVICE_LIFE_MS);
+    await tracked(fake, "acme", "acme/app");
+    await settle(fake.w);
+    expect(within(ci()).getByText("Acme: Waiting for a service to take the Watchers.")).toBeInTheDocument();
   });
 
   it("says a Project has CI Tracking off, linking its Project Options", async () => {

@@ -84,7 +84,7 @@ func TestTheRealChainMigratesAFormat36StoreMovingPushedCommitResponsesOntoThePro
 		if p, _ := r.Project("acme"); !reflect.DeepEqual(p.CIResponses, want) {
 			t.Errorf("CI responses after migrating =\n%+v\nwant\n%+v", p.CIResponses, want)
 		}
-		tk, _ := r.Ticket("acme", 2)
+		tk, _ := r.Ticket("acme", 2, store.History...)
 		wantPushed := []domain.PushedCommit{
 			{Commit: "onpushed", Branch: "main", Pushed: at("2026-01-02T03:04:05Z")},
 			{Commit: "inproject", Pushed: at("2026-01-02T03:06:05Z")},

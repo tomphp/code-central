@@ -43,6 +43,10 @@ type Projects interface {
 	WatchedProjects(ctx context.Context, kind core.WatcherKind) []string
 	// ReportWatcherCrash reports that key's Watcher of kind crashed.
 	ReportWatcherCrash(ctx context.Context, kind core.WatcherKind, key string, crash core.WatcherCrash)
+	// HoldWatcherLease renews key's Watcher Lease for this service, or
+	// takes it if it is free, and reports whether this service holds it;
+	// an error is for the log.
+	HoldWatcherLease(ctx context.Context, key string) (bool, error)
 	// Events carries project.changed, on which the Watchers are started
 	// and stopped.
 	Events() *events.Bus
@@ -70,6 +74,11 @@ type Supervision struct {
 	// Tick, when set, checks which Watchers should run on each tick too,
 	// in case a project.changed was missed.
 	Tick <-chan time.Time
+	// LeaseTick, when set, runs a Project's Watchers only while this
+	// service holds its Watcher Lease (ADR 0068): each Lease is renewed,
+	// or taken once free, when its Project is first watched and on each
+	// tick, every store.ServiceRenewal. Unset, every Project's run here.
+	LeaseTick <-chan time.Time
 	// Log receives each start, stop and crash, and what the Watchers
 	// write.
 	Log io.Writer
@@ -96,6 +105,9 @@ func Supervise(ctx context.Context, cfg Supervision) {
 	running := map[watcherKey]*supervised{}
 	// stopping holds each Watcher that is still exiting.
 	stopping := map[watcherKey]*supervised{}
+	// held is whether this service holds each Project's Watcher Lease, as
+	// renewed since the last LeaseTick.
+	held := map[string]bool{}
 	defer func() {
 		for _, w := range running {
 			w.cancel()
@@ -118,6 +130,9 @@ func Supervise(ctx context.Context, cfg Supervision) {
 		want := map[watcherKey]bool{}
 		for _, kind := range cfg.Kinds {
 			for _, project := range cfg.Projects.WatchedProjects(ctx, kind.Kind) {
+				if !cfg.holds(ctx, held, project) {
+					continue
+				}
 				key := watcherKey{kind.Kind, project}
 				want[key] = true
 				if running[key] == nil {
@@ -139,6 +154,9 @@ func Supervise(ctx context.Context, cfg Supervision) {
 				return
 			case <-cfg.Tick:
 				break wait
+			case <-cfg.LeaseTick:
+				clear(held)
+				break wait
 			case e := <-notices:
 				if e.Type == events.ProjectChanged {
 					break wait
@@ -146,6 +164,24 @@ func Supervise(ctx context.Context, cfg Supervision) {
 			}
 		}
 	}
+}
+
+// holds reports whether this service holds project's Watcher Lease, or
+// runs every Project's Watchers, with no LeaseTick: the Lease is renewed
+// once between ticks, for every kind of Watcher, and held records it.
+func (cfg Supervision) holds(ctx context.Context, held map[string]bool, project string) bool {
+	if cfg.LeaseTick == nil {
+		return true
+	}
+	h, ok := held[project]
+	if !ok {
+		var err error
+		if h, err = cfg.Projects.HoldWatcherLease(ctx, project); err != nil {
+			cfg.logf("cannot renew %s's Watcher Lease: %v", project, err)
+		}
+		held[project] = h
+	}
+	return h
 }
 
 // watcherKey names one Project's Watcher of one kind in a map.

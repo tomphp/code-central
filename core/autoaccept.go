@@ -142,7 +142,7 @@ func (c *Core) autoAccept(ctx context.Context, w store.Writer, key string, t dom
 			return putRecords(w, key, im)
 		}
 	}
-	return w.PutTicket(key, t)
+	return w.PutTicket(key, t, whole...)
 }
 
 // acceptOnBehalf is the human's accept of t, In Review and auto-accept
@@ -183,11 +183,8 @@ func (c *Core) sweepAutoAccept(ctx context.Context, r store.Reader, key string, 
 	im := target
 	if len(target.RewrittenSpecs) == 1 {
 		sp = target.RewrittenSpecs[0]
-		for _, t := range r.Tickets(key) {
-			if t.Spec == sp.Number {
-				covered = append(covered, t)
-			}
-		}
+		// An accepted Ticket is rewritten whole.
+		covered = r.FindTickets(key, store.TicketFilter{Spec: []int{sp.Number}, States: []domain.State{domain.InReview}, Parts: whole})
 	} else {
 		// The labelled Ticket is written once, accepted or as it is.
 		covered, im = target.Rewritten, store.Import{}
@@ -224,7 +221,8 @@ func putRecords(w store.Writer, key string, im store.Import) error {
 		case len(im.RewrittenSpecs) == 1 && len(im.Rewritten) == 0:
 			return w.PutSpec(key, im.RewrittenSpecs[0])
 		case len(im.RewrittenSpecs) == 0 && len(im.Rewritten) == 1:
-			return w.PutTicket(key, im.Rewritten[0])
+			// An Import's Tickets are whole, so this write is too.
+			return w.PutTicket(key, im.Rewritten[0], whole...)
 		}
 	}
 	return w.PutImport(key, im)

@@ -21,6 +21,7 @@ import { projectSettingsContract } from "./project_settings";
 import { projectsContract } from "./projects";
 import { reviewContract } from "./review";
 import { roundsContract } from "./rounds";
+import { storageContract } from "./storage";
 import { ticketContract } from "./ticket";
 import { ticketsContract } from "./tickets";
 import { transcriptContract } from "./transcript";
@@ -50,6 +51,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
     projectsContract(() => d);
     reviewContract(() => d);
     roundsContract(() => d);
+    storageContract(() => d);
     ticketContract(() => d);
     ticketsContract(() => d);
     transcriptContract(() => d);

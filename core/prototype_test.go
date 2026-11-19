@@ -75,7 +75,7 @@ func TestAPrototypeNeedsTextAndAKnownSpec(t *testing.T) {
 	_, err = f.core.SubmitPrototype(ctx, "acme", core.SubmitPrototypeInput{Spec: "acme-9", Text: themePicker})
 	wantCode(t, err, core.Invalid, "spec")
 	f.store.View(func(r store.Reader) error {
-		if len(r.Tickets("acme")) != 0 {
+		if len(r.FindTickets("acme", store.TicketFilter{})) != 0 {
 			t.Fatal("a rejected Prototype wrote something")
 		}
 		return nil

@@ -196,7 +196,7 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 			return err
 		}
 		n := s.Number
-		tickets := specTickets(r, key, n)
+		tickets := specTickets(r, key, n, store.Moves)
 		sv := specView(key, s)
 		v = SpecDetail{
 			ID: sv.ID, Title: sv.Title, Labels: sv.Labels, Tags: sv.Tags,
@@ -298,7 +298,7 @@ func (c *Core) FindSpecs(_ context.Context, key string, in FindSpecsInput) ([]Sp
 		}
 		// One evaluation for every Spec.
 		e := c.evaluate(r, p)
-		for _, s := range r.Specs(key) {
+		for _, s := range r.FindSpecs(key, store.SpecFilter{}) {
 			if in.Title != "" && !strings.Contains(strings.ToLower(s.Title), strings.ToLower(in.Title)) {
 				continue
 			}
@@ -329,11 +329,10 @@ func (c *Core) FindSpecs(_ context.Context, key string, in FindSpecsInput) ([]Sp
 	return rows, nil
 }
 
-// specTickets are Spec n's Tickets in claim order.
-func specTickets(r store.Reader, key string, n int) []domain.Ticket {
-	tickets := slices.DeleteFunc(r.Tickets(key), func(t domain.Ticket) bool { return t.Spec != n })
-	slices.SortStableFunc(tickets, claimOrder)
-	return tickets
+// specTickets are Spec n's Tickets in claim order, with the History parts
+// named.
+func specTickets(r store.Reader, key string, n int, parts ...store.Part) []domain.Ticket {
+	return r.FindTickets(key, store.TicketFilter{Spec: []int{n}, Parts: parts, Order: store.ByClaim})
 }
 
 // summarise derives a Spec's State summary and whether it is finished.

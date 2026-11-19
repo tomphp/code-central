@@ -135,6 +135,12 @@ func pushedIn(key string, t domain.Ticket, name string) []domain.PushedCommit {
 	return out
 }
 
+// pushedCommit picks the Tickets that pushed commit in the Repository
+// name: those with commit among pushedIn's.
+func pushedCommit(key, name, commit string) store.TicketFilter {
+	return store.TicketFilter{PushedCommit: &store.PushedCommitFilter{Repository: recordName(key, name), Commit: commit}}
+}
+
 // runsIn are the Ticket-tracked runs, in the Repository record names, of
 // pushed, whichever Ticket they were tracked against: Tickets sharing a
 // pushed commit share its runs. Runs tracked against a CI Rule are left

@@ -74,7 +74,12 @@ func (c *Core) AttentionOf(_ context.Context, project, id string) (AttentionTick
 func attention(e *evaluation, t domain.Ticket) AttentionTicket {
 	a := AttentionTicket{
 		Project: e.p.Key, ID: DisplayID(e.p.Key, t.Number), Title: t.Title,
-		Rounds: len(t.Rounds), FailureReports: len(t.FailureReports),
+	}
+	if rd := t.Head.LatestRound; rd != nil {
+		a.Rounds = rd.Number
+	}
+	if fr := t.Head.LatestFailureReport; fr != nil {
+		a.FailureReports = fr.Number
 	}
 	reason, _ := e.reason(t)
 	if cl, ok := liveClaim(t); ok {

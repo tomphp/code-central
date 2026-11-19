@@ -139,10 +139,12 @@ func (c *Core) respondCI(key string, op CIFailureOption, in CIResponseInput, don
 	var v Written[TicketView]
 	var listed []int
 	err := c.store.Update(func(w store.Writer) error {
+		listed = nil
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		t, err := resolveTicket(w, key, string(op), "ticket", in.Ticket)
+		// Its view is the result, so it is read whole.
+		t, err := resolveTicket(w, key, string(op), "ticket", in.Ticket, whole...)
 		if err != nil {
 			return err
 		}
@@ -390,7 +392,7 @@ func (c *Core) openFixTicket(ctx context.Context, key string, failed domain.Tick
 			Created: now, Updated: now,
 			Description: fixTicketDescription(id, where, body), AutoFix: mark,
 		}
-		if err := w.PutTicket(key, f); err != nil {
+		if err := whole.put(w, key, &f); err != nil {
 			return err
 		}
 		fix = f.Number

@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/store"
 )
 
 // Auto-fix chains its attempts (Spec code-central-1022, ADR 0066): an
@@ -160,8 +161,8 @@ func (s *ciState) listedOn(t domain.Ticket, k itemKey) bool {
 func (s *ciState) openAutoFixes() []domain.Ticket {
 	if !s.autoFixesRead {
 		s.autoFixesRead = true
-		for _, t := range s.r.Tickets(s.p.Key) {
-			if t.AutoFix != nil && !finished(t.State) {
+		for _, t := range s.r.FindTickets(s.p.Key, store.TicketFilter{States: unfinished}) {
+			if t.AutoFix != nil {
 				s.autoFixes = append(s.autoFixes, t)
 			}
 		}
