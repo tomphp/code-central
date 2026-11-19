@@ -15,9 +15,9 @@ import (
 // and each Project's Watchers run on the one service holding its Watcher
 // Lease, whose host its Watcher status shows.
 
-// twoServices is two services, one on laptop and one on desktop, on one
+// laptopAndDesktop is two services, one on laptop and one on desktop, on one
 // Store and one fake clock, with acme's CI Tracking on.
-func twoServices(t *testing.T) (laptop, desktop fixture) {
+func laptopAndDesktop(t *testing.T) (laptop, desktop fixture) {
 	t.Helper()
 	s := store.NewMemory()
 	clk := clock.NewFake(t0)
@@ -50,7 +50,7 @@ func (f fixture) ciWatcher(t *testing.T) core.WatcherView {
 }
 
 func TestAProjectsWatcherStatusShowsTheHostHoldingItsLease(t *testing.T) {
-	laptop, desktop := twoServices(t)
+	laptop, desktop := laptopAndDesktop(t)
 	if !laptop.holdLease(t, "acme") {
 		t.Fatal("the laptop didn't take acme's free Watcher Lease")
 	}
@@ -73,7 +73,7 @@ func TestAProjectsWatcherStatusShowsTheHostHoldingItsLease(t *testing.T) {
 // service to take it; the next service to try takes it over, and the
 // one that held it sees it gone and forgets its own Watcher's status.
 func TestALapsedWatcherLeaseWaitsUntilAnotherServiceTakesItOver(t *testing.T) {
-	laptop, desktop := twoServices(t)
+	laptop, desktop := laptopAndDesktop(t)
 	laptop.holdLease(t, "acme")
 	if _, err := laptop.core.ReportCIWatcherStatus(ctx, "acme", core.ReportWatcherStatusInput{State: core.WatcherWatching}); err != nil {
 		t.Fatal(err)
@@ -114,7 +114,7 @@ func TestALapsedWatcherLeaseWaitsUntilAnotherServiceTakesItOver(t *testing.T) {
 // A service that holds no Lease yet shows its own Watcher's status alone,
 // as a service always did.
 func TestAWatcherStatusWithNoLeaseKnownShowsNoHost(t *testing.T) {
-	laptop, _ := twoServices(t)
+	laptop, _ := laptopAndDesktop(t)
 	if w := laptop.ciWatcher(t); w.State != core.WatcherNotReported || w.Host != "" {
 		t.Fatalf("the CI Watcher is %+v, want not reported, with no host", w)
 	}

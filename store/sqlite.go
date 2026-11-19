@@ -10,6 +10,8 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -21,11 +23,30 @@ import (
 // sqlite is SQLite's dialect: documents are TEXT, and the placeholders
 // are the ? the statements are written with.
 var sqlite = dialect{
+	size:        sqliteSize,
 	json:        "TEXT",
 	serial:      "INTEGER PRIMARY KEY AUTOINCREMENT",
 	rebind:      func(q string) string { return q },
 	begin:       "BEGIN IMMEDIATE",
 	schemaBegin: "BEGIN",
+}
+
+// sqliteSize is the database file and its WAL, as the file system has
+// them: a WAL not yet checkpointed holds the latest writes. A WAL that
+// isn't there counts for nothing.
+func sqliteSize(s *SQLStore) (int64, error) {
+	var size int64
+	for _, name := range []string{s.path, s.path + "-wal"} {
+		info, err := os.Stat(name)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return 0, err
+		}
+		size += info.Size()
+	}
+	return size, nil
 }
 
 // OpenSQLite locks and opens the SQLite Store at path, creating the
@@ -44,7 +65,7 @@ func openSQLite(path string, format int, steps []MigrationStep) (*SQLStore, erro
 	if err != nil {
 		return nil, err
 	}
-	s := &SQLStore{d: sqlite, path: path, format: format, lock: lock}
+	s := &SQLStore{d: sqlite, path: path, location: Location{Kind: SQLite, Path: path}, format: format, lock: lock}
 	err = s.connect()
 	var older int
 	if err == nil {

@@ -81,6 +81,30 @@ func mustRegisterAndHoldALease(t *testing.T, s store.Store) {
 	}
 }
 
+// A SQLite Store is its database file, and its size is the file and its
+// WAL, which hold every write.
+func TestASQLiteStoreIsItsFileAndItsSizeTheFileAndItsWAL(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "code-central.db")
+	s := openSQLite(t, path)
+	if got, want := s.Location(), (store.Location{Kind: store.SQLite, Path: path}); got != want {
+		t.Fatalf("location %v, want %v", got, want)
+	}
+	mustUpdate(t, s, func(w store.Writer) error {
+		return w.PutProject(domain.Project{Key: "acme", DisplayName: "Acme", Created: t0, Mode: "committed"})
+	})
+	var want int64
+	for _, name := range []string{path, path + "-wal"} {
+		info, err := os.Stat(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want += info.Size()
+	}
+	if got, err := s.Size(); err != nil || got != want {
+		t.Fatalf("size %d, %v; want the file and its WAL, %d", got, err, want)
+	}
+}
+
 func TestSQLiteMakesTheFolderAndTheFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "data", "code-central.db")
 	openSQLite(t, path)

@@ -16,6 +16,11 @@ const (
 	Postgres Kind = "postgres"
 )
 
+// Memory is the in-memory fake's Kind, which tests and the UI's
+// WebAssembly fake run on (ADR 0060). It keeps nothing, and no setting
+// opens it.
+const Memory Kind = "memory"
+
 // Location names a Store to open: its Kind and where it is. It shows no
 // credential, so it is safe to print.
 type Location struct {
@@ -23,6 +28,11 @@ type Location struct {
 	// Path is the File Store's folder, the SQLite database file, or the
 	// Postgres Store's address (host:port/database).
 	Path string
+	// Host, Port and Database are the Postgres Store's address in parts,
+	// as its URL names them: zero for the other Kinds.
+	Host     string
+	Port     int
+	Database string
 	// url is the Postgres Store's URL, with its credential, which only
 	// OpenAt reads: PostgresLocation sets it, and nothing shows it.
 	url string

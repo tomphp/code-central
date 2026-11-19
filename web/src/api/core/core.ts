@@ -68,7 +68,7 @@ export const SERVICE_LIFE_MS = 30_000;
 
 // READS are the Api's reads, by name, which actions leaves out.
 const READS: ReadonlySet<string> = new Set<keyof Api>([
-  "listProjects", "needsMe", "findTickets", "getTicket", "getSpec", "findSpecs", "specQuestions", "options", "transcript", "usage", "sessionUsage", "ciOverview",
+  "listProjects", "needsMe", "findTickets", "getTicket", "getSpec", "findSpecs", "specQuestions", "options", "transcript", "usage", "sessionUsage", "ciOverview", "storage",
 ]);
 
 // FEEDS are the Api's subscribes, by the stream kind each follows.

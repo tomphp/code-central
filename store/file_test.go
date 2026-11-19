@@ -613,6 +613,31 @@ func TestUsageFoldersDoNotAffectLoading(t *testing.T) {
 	}
 }
 
+// A File Store is its folder, and its size counts every file in it, its
+// Usage files' too.
+func TestAFileStoreIsItsFolderAndItsSizeCountsItsUsage(t *testing.T) {
+	dir := t.TempDir()
+	s := openFile(t, dir)
+	if got, want := s.Location(), (store.Location{Kind: store.Files, Path: dir}); got != want {
+		t.Fatalf("location %v, want %v", got, want)
+	}
+	mustUpdate(t, s, func(w store.Writer) error {
+		return w.PutProject(domain.Project{Key: "acme", DisplayName: "Acme", Created: t0, Mode: domain.ModeCommitted})
+	})
+	writeFile(t, filepath.Join(dir, "projects/acme/usage/2026-11-07.jsonl"), strings.Repeat("x", 10_000))
+	project, err := os.Stat(filepath.Join(dir, "projects/acme/project.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	size, err := s.Size()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if least := 10_000 + project.Size(); size < least || size > least+10_000 {
+		t.Fatalf("size %d, want the usage file and project.yaml, %d, and the store's few small files", size, least)
+	}
+}
+
 // ADR 0016's layout is unchanged by Usage being part of the Store: one
 // JSON Lines file per Project per local day, a "type" first on each line.
 func TestFileStoreKeepsUsageInADR0016sLayout(t *testing.T) {

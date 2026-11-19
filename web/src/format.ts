@@ -182,11 +182,12 @@ export function ago(now: Date, at: string): string {
 }
 
 // bytes is a size in readable units: bytes under 1 KB, then KB, then MB,
-// always to one decimal place, "1.0 KB" (1 KB is 1024 bytes).
+// then GB, always to one decimal place, "1.0 KB" (1 KB is 1024 bytes).
 export function bytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${oneDecimal(n / 1024)} KB`;
-  return `${oneDecimal(n / (1024 * 1024))} MB`;
+  if (n < 1024 * 1024 * 1024) return `${oneDecimal(n / (1024 * 1024))} MB`;
+  return `${oneDecimal(n / (1024 * 1024 * 1024))} GB`;
 }
 
 // count is a whole number with thousands separators: "12,345".

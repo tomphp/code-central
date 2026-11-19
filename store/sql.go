@@ -29,6 +29,8 @@ import (
 // of a document, how a row numbers itself, the placeholders, and how an
 // Update's transaction is ordered against other services'.
 type dialect struct {
+	// size measures the Store's size, as the Kind can tell it.
+	size func(*SQLStore) (int64, error)
 	// json is the column type a document is kept in.
 	json string
 	// serial is the column definition of a self-numbering key.
@@ -79,6 +81,8 @@ type SQLStore struct {
 	// url is the Postgres Store's URL, with its credential, kept for
 	// reopening in tests and never shown.
 	url string
+	// location is the Store's Location, as its open found it.
+	location Location
 	// format is the store format this service reads and writes: Format,
 	// except in tests.
 	format int
@@ -124,6 +128,14 @@ func (s *SQLStore) Close() error {
 // Usage is the Store's Usage (ADR 0069): a table written on its own
 // connection, outside any Update.
 func (s *SQLStore) Usage() usage.Store { return s.usage }
+
+// Location is the SQLite database file, or the Postgres Store's address,
+// which keeps its URL, credential and all, unshown.
+func (s *SQLStore) Location() Location { return s.location }
+
+// Size is the SQLite database file and its WAL, or the Postgres
+// database's size.
+func (s *SQLStore) Size() (int64, error) { return s.d.size(s) }
 
 // Services are the Store's Registrations and Watcher Leases, in tables of
 // their own, written on the pool's connections outside every Update.

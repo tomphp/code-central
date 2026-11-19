@@ -2,6 +2,8 @@ package store
 
 import (
 	"cmp"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/usage"
@@ -31,6 +33,40 @@ func (x *index) Usage() usage.Store { return x.usage }
 // Services are the one service holding the Store, which holds every
 // Watcher Lease.
 func (x *index) Services() Services { return x.services }
+
+// Location is the fake's: it is kept nowhere. The File Store names its
+// folder.
+func (x *index) Location() Location { return Location{Kind: Memory} }
+
+// Size is the fake's records' size as JSON, Usage included, since it
+// keeps no file to measure. The File Store measures its folder.
+func (x *index) Size() (int64, error) {
+	x.mu.RLock()
+	defer x.mu.RUnlock()
+	var size int64
+	add := func(v any) error {
+		b, err := json.Marshal(v)
+		size += int64(len(b))
+		return err
+	}
+	errs := []error{add(x.options)}
+	days, err := x.usage.Days()
+	errs = append(errs, err)
+	for key, d := range days {
+		recs, err := x.usage.Read(key, d)
+		errs = append(errs, err, add(recs.Calls), add(recs.Responses))
+	}
+	for _, p := range x.projects {
+		errs = append(errs, add(p.project), add(p.ciRuns))
+		for _, s := range p.specs {
+			errs = append(errs, add(s))
+		}
+		for _, t := range p.tickets {
+			errs = append(errs, add(t))
+		}
+	}
+	return size, errors.Join(errs...)
+}
 
 type projectData struct {
 	project domain.Project

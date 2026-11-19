@@ -1,12 +1,16 @@
 // Usage (Spec code-central-201): what agents have consumed in one
-// Project, or in all of them, over the last 7, 30 or 90 days, in three
+// Project, or in all of them, over the last 7, 30 or 90 days, in four
 // tabs in this order (Spec code-central-752): Token usage, a bar per day
 // filtered by kind of session; Context Size, each kind of session's peaks
 // and then the recent sessions, each a main session with its Subagents
 // nested under it, each linking to its Ticket and opening its Session
-// popup; and the Code Central calls table, one row per MCP operation,
-// sortable by each column. The scope and range in the header apply to
-// every tab. The open tab is in the address as tab= (none = Token usage),
+// popup; the Code Central calls table, one row per MCP operation,
+// sortable by each column; and Storage (Spec code-central-1032), the
+// Store, each Project's records, the memory and the services. The scope
+// and range in the header apply to every tab but Storage, which the scope
+// narrows to its Project's counts and which hides the range. Storage
+// loads each time it is opened, never on switching Project, and never
+// live. The open tab is in the address as tab= (none = Token usage),
 // and so is the open session, whose Session popup shows over the Context
 // Size tab whatever tab= says. ×, Escape or a click outside closes it to
 // Usage as it was, on the Context Size tab. Usage loads when opened and
@@ -18,7 +22,7 @@ import { ProjectPicker } from "../controls/ProjectPicker";
 import { useProjectScope } from "../projectScope";
 import { ViewHeader } from "../controls/ViewHeader";
 import { sessionKey, USAGE_DAYS, type ProjectRow, type UsageDays } from "../api/types";
-import { useUsage } from "../live";
+import { useStorage, useUsage } from "../live";
 import { USAGE_TABS, type UiLocation } from "../url";
 import { SessionPopup } from "./SessionPopup";
 import { DEFAULT_SORT, nextSort, UsageBody } from "./UsageBody";
@@ -33,14 +37,17 @@ export interface UsageViewProps {
   projects?: ProjectRow[];
   loc: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
+  // now is the clock the Storage tab's service renewals are measured against.
+  now: Date;
 }
 
-export function UsageView({ projects = [], loc, navigate }: UsageViewProps) {
+export function UsageView({ projects = [], loc, navigate, now }: UsageViewProps) {
   const { project, sole, resolved } = useProjectScope();
   const days = loc.days ?? USAGE_DAYS[0];
   // A session in the address opens over the Context Size tab, whatever tab= says.
   const tab = loc.session ? "context" : (loc.tab ?? USAGE_TABS[0]);
   const usage = useUsage(resolved ? { project, days } : undefined);
+  const storage = useStorage(tab === "storage");
   const [sort, setSort] = useState(DEFAULT_SORT);
   const scopeName = project ? projectName(projects, project) : "All Projects";
 
@@ -51,14 +58,16 @@ export function UsageView({ projects = [], loc, navigate }: UsageViewProps) {
         left={
           <>
             <ProjectPicker projects={projects} value={project} withoutAll={sole} onChange={(project) => navigate({ project })} />
-            <label>
-              <span className="view-picker-label">Range</span>
-              <Select
-                value={String(days)}
-                onChange={(v) => navigate({ days: Number(v) as UsageDays })}
-                options={USAGE_DAYS.map((d) => ({ value: String(d), label: `Last ${d} days` }))}
-              />
-            </label>
+            {tab !== "storage" && (
+              <label>
+                <span className="view-picker-label">Range</span>
+                <Select
+                  value={String(days)}
+                  onChange={(v) => navigate({ days: Number(v) as UsageDays })}
+                  options={USAGE_DAYS.map((d) => ({ value: String(d), label: `Last ${d} days` }))}
+                />
+              </label>
+            )}
           </>
         }
         right={<Button onClick={() => navigate(loc.back ?? { view: "inbox" })}>{backLabel(loc)}</Button>}
@@ -74,6 +83,10 @@ export function UsageView({ projects = [], loc, navigate }: UsageViewProps) {
         sort={sort}
         onSort={(key) => setSort((s) => nextSort(s, key))}
         tab={tab}
+        storage={storage.data}
+        storageError={storage.error?.message}
+        project={project}
+        now={now}
         // The Session popup covers the tabs, but a switch under it would close
         // the session too, since it shows over Context Size only.
         onTab={(to) => {

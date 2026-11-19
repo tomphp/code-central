@@ -79,6 +79,13 @@ type FileStore struct {
 // Dir is the store's directory.
 func (s *FileStore) Dir() string { return s.dir }
 
+// Location is the File Store's folder.
+func (s *FileStore) Location() Location { return Location{Kind: Files, Path: s.dir} }
+
+// Size is the bytes of every file in the store's folder, Usage's
+// included.
+func (s *FileStore) Size() (int64, error) { return folderSize(s.dir) }
+
 // Close releases the store's lock.
 func (s *FileStore) Close() error {
 	if s.lock == nil {
