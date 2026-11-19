@@ -21,7 +21,8 @@ var (
 	// codeFence opens or closes a fenced code block, as fence does for
 	// the section parser, but at any indentation, as a fence inside a
 	// list item is indented, so a fence is never taken for prose.
-	codeFence = regexp.MustCompile("^[ \t]*(`{3,}|~{3,})")
+	// An item's first line may open one: "- ```".
+	codeFence = regexp.MustCompile("^[ \t]*(?:(?:[-+*]|[0-9]{1,9}[.)])[ \t]+)?(`{3,}|~{3,})")
 	// listItem is a line that starts a list item: its indentation, its
 	// marker and the spaces after it.
 	listItem = regexp.MustCompile(`^[ \t]*(?:[-+*]|[0-9]{1,9}[.)])(?:[ \t]+|$)`)
@@ -56,7 +57,7 @@ func writtenText(r store.Reader, key, text string, hide bool) string {
 func titledText(text, key string, title func(n int) (string, bool)) string {
 	id := regexp.QuoteMeta(key) + `-([1-9][0-9]*)`
 	t := titler{key: key, title: title,
-		link: regexp.MustCompile(`^!?\[((?:[^\[\]]|\[[^\[\]]*\])*)\]\(\s*(?:<` + id + `>|` + id + `)(?:\s+(?:"[^"]*"|'[^']*'|\([^()]*\)))?\s*\)`),
+		link: regexp.MustCompile(`^!?\[((?:[^\[\]]|\[[^\[\]]*\])*)\]\(\s*(?:<` + id + `(?:#[^>\s]*)?>|` + id + `(?:#[^\s()<>]*)?)(?:\s+(?:"[^"]*"|'[^']*'|\([^()]*\)))?\s*\)`),
 		bare: regexp.MustCompile(`^` + id)}
 	var out, para []string
 	flush := func() {
