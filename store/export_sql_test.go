@@ -43,7 +43,8 @@ func setFormat(format int) string {
 	return `UPDATE meta SET value = '` + strconv.Itoa(format) + `' WHERE key = 'format'`
 }
 
-var dropServiceTables = []string{`DROP TABLE watcher_leases`, `DROP TABLE registrations`}
+var dropServiceTables = []string{`DROP TABLE watcher_leases`, `DROP TABLE registrations`,
+	`DROP TABLE heartbeats`, `DROP TABLE factory_reports`, `DROP TABLE pings`, `DROP TABLE transcript_holders`}
 
 // execAll runs each statement on the database at dsn, opened with driver.
 func execAll(t testing.TB, driver, dsn string, stmts ...string) {

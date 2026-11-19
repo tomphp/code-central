@@ -69,6 +69,10 @@ A Postgres Store that several services on different machines open at once.
 **Service Registration**:
 A running service's record in the Store, holding its host, version and known format, renewed on a timer.
 
+**Reporting Service**:
+The service a Factory sends its Heartbeats, Session Events and Chat replies to. In a Shared Store, a Factory's Transcripts and Conversations are on its Reporting Service, and the other services name that service's host.
+_Avoid_: home service, owning service
+
 **Models**:
 The section of Project Options where the human sets a model and effort for the Project default, for each kind of work (a Ticket's Stage Guide name) and for Chat. The Chat row is not a kind of work, and the Project default doesn't reach it.
 _Avoid_: Model config, AI settings
