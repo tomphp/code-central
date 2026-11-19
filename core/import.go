@@ -248,11 +248,11 @@ func importBranchTags(r store.Reader, key string, p api.ImportPayload) error {
 	pr, _ := r.Project(key)
 	first := map[string]string{} // name → the field that first gave it
 	for i, s := range p.Specs {
-		name, ok := s.Tags[BranchTag]
+		name, ok := s.Tags[domain.BranchTag]
 		if !ok {
 			continue
 		}
-		field := fmt.Sprintf("specs[%d].tags.%s", i, BranchTag)
+		field := fmt.Sprintf("specs[%d].tags.%s", i, domain.BranchTag)
 		if err := checkBranchTagName(pr, field, name); err != nil {
 			return err
 		}

@@ -2,8 +2,6 @@ package core
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"net/url"
 	"slices"
@@ -25,30 +23,6 @@ import (
 // item's Link. Labels and closing need no record, as the Watcher changes
 // only what differs. Nothing is ever due from Rounds, answers, Failure
 // Reports, Transcripts or Claims.
-
-// StatusLabelPrefix starts every status label, so a Watcher knows which
-// of an issue's labels, or a work item's tags, are Code Central's.
-const StatusLabelPrefix = "code-central:"
-
-// The status labels an issue carries, one at a time, and the tags of the
-// same names a work item carries.
-const (
-	// LabelDraft is on an Incoming Issue, a Draft or Ready Ticket on an
-	// inbox Spec that no triage action has taken off it.
-	LabelDraft = StatusLabelPrefix + "draft"
-	// LabelRequirement is on an issue To Requirement made a Requirement
-	// of, while the Requirement's Stages aren't all Done or Cancelled.
-	LabelRequirement = StatusLabelPrefix + "requirement"
-	// LabelBuilding is on it once the Stages are all Done or Cancelled, until the
-	// Spec is Finished.
-	LabelBuilding = StatusLabelPrefix + "building"
-	// LabelDone is on it once the Spec is Finished with at least one
-	// implementation Ticket Done.
-	LabelDone = StatusLabelPrefix + "done"
-	// LabelWontFix is on an issue the human chose Won't fix for, or whose
-	// Requirement's Spec is Finished with no implementation Ticket Done.
-	LabelWontFix = StatusLabelPrefix + "wont-fix"
-)
 
 // The keys of the comments written to an issue.
 const (
@@ -72,23 +46,6 @@ const (
 	CommentClosed = "closed"
 )
 
-// IssueMarker is the hidden HTML comment in the comment key posted for
-// target, so the Issue Watcher finds it on the issue before posting it
-// again after a crash.
-func IssueMarker(target, key string) string {
-	return fmt.Sprintf("<!-- code-central %s %s -->", target, key)
-}
-
-// OpaqueMarker is IssueMarker as Hide Code Central writes it: an HTML
-// comment holding only the first 12 hex digits of the SHA-256 of target
-// and key joined by a space, so it names neither Code Central nor the
-// item.
-func OpaqueMarker(target, key string) string {
-	sum := sha256.Sum256([]byte(target + " " + key))
-	return "<!-- " + hex.EncodeToString(sum[:])[:12] + " -->"
-}
-
-// SetUIURL makes url, such as http://localhost:7733, the UI's address
 // that a comment links back to. Call it before serving; without it,
 // the link is relative to the UI.
 func (c *Core) SetUIURL(url string) { c.uiURL = strings.TrimRight(url, "/") }
@@ -105,10 +62,10 @@ const (
 // requirementLink. Hidden, it is the opaque marker and the text alone.
 func (c *Core) issueComment(hide bool, target, open, key, text string) api.IssueComment {
 	if hide {
-		return api.IssueComment{Key: key, Body: OpaqueMarker(target, key) + "\n" + strings.TrimSpace(text)}
+		return api.IssueComment{Key: key, Body: domain.OpaqueMarker(target, key) + "\n" + strings.TrimSpace(text)}
 	}
 	link := fmt.Sprintf("[%s in Code Central](%s/?view=inbox&%s%s)", target, c.uiURL, open, url.QueryEscape(target))
-	return api.IssueComment{Key: key, Body: IssueMarker(target, key) + "\n" + strings.TrimSpace(text) + "\n\n" + link}
+	return api.IssueComment{Key: key, Body: domain.IssueMarker(target, key) + "\n" + strings.TrimSpace(text) + "\n\n" + link}
 }
 
 // triageComment is the comment the human's triage action via gave when
@@ -175,12 +132,12 @@ func (c *Core) ticketIssueWrites(r store.Reader, key string, t domain.Ticket, hi
 	id := DisplayID(key, t.Number)
 	w = api.IssueWrites{Target: id, Link: *linkView(t.Link), Comments: []api.IssueComment{}}
 	if reason, latest, _ := triageComment(t, api.OptionWontFix); latest {
-		w.Label, w.Close = LabelWontFix, api.CloseNotPlanned
+		w.Label, w.Close = domain.LabelWontFix, api.CloseNotPlanned
 		if strings.TrimSpace(reason) != "" && !slices.Contains(t.Link.Written, CommentWontFix) {
 			w.Comments = append(w.Comments, c.issueComment(hide, id, ticketLink, CommentWontFix, writtenText(r, key, reason, hide)))
 		}
 	} else if t.State == domain.Draft || t.State == domain.Ready {
-		w.Label = LabelDraft
+		w.Label = domain.LabelDraft
 	}
 	return dueWhile(t.Link.ExternalState, w)
 }
@@ -255,13 +212,13 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec, hide b
 func requirementStatus(finished, landed, stagesDone bool) (string, api.IssueClose) {
 	switch {
 	case finished && landed:
-		return LabelDone, api.CloseCompleted
+		return domain.LabelDone, api.CloseCompleted
 	case finished:
-		return LabelWontFix, api.CloseNotPlanned
+		return domain.LabelWontFix, api.CloseNotPlanned
 	case stagesDone:
-		return LabelBuilding, ""
+		return domain.LabelBuilding, ""
 	default:
-		return LabelRequirement, ""
+		return domain.LabelRequirement, ""
 	}
 }
 

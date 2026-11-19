@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/tomoram/code-central/domain"
 	"io"
 	"net/http"
 	"slices"
@@ -293,7 +294,7 @@ func init() {
 			check: func(t *testing.T, out map[string]any) {
 				field("id", "acme-1")(t, out)
 				field("kind", "spec")(t, out)
-				labels(core.LongLivedLabel)(t, out)
+				labels(domain.LongLivedLabel)(t, out)
 			},
 			bad: call{
 				mcp:  map[string]any{"target": 1, "labels": []string{""}},
@@ -472,7 +473,7 @@ func newServerWith(t *testing.T, opts []codecentraltest.Option, setups ...func(*
 	})
 	// Long-lived, so that its Tickets land one by one under the default Land per Spec.
 	must(t, func() error {
-		_, err := srv.Core.AddLabels(ctx, "acme", api.LabelsInput{Target: "acme-1", Labels: []string{core.LongLivedLabel}})
+		_, err := srv.Core.AddLabels(ctx, "acme", api.LabelsInput{Target: "acme-1", Labels: []string{domain.LongLivedLabel}})
 		return err
 	})
 	must(t, func() error {

@@ -16,7 +16,7 @@ const sessionLogsRule = "Claude Code keeps each session's log in its projects fo
 func TestARetroStartsTheRetroSkillReadOnlyInADetachedWorktreeAtTheBasesTip(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	id := h.LabelledTicket(core.RetroLabel, "Retro: Add a button")
+	id := h.LabelledTicket(domain.RetroLabel, "Retro: Add a button")
 	h.Script(id, factorytest.Finish("No candidates: see the resolution comment."), factorytest.Result("success"))
 	mainTip := h.Git("rev-parse", "main")
 
@@ -35,7 +35,7 @@ func TestARetroStartsTheRetroSkillReadOnlyInADetachedWorktreeAtTheBasesTip(t *te
 		sessionLogsRule,
 		"`<projects folder>/<working_dir with every non-alphanumeric character replaced by '-'>/<session_id>.jsonl`",
 		"that session's subagents' logs are under `<session_id>/subagents/` beside it",
-		"The Stage Guide for retro follows: what this Ticket must produce and how to finish it.\n\n" + guide(t, h, core.RetroLabel),
+		"The Stage Guide for retro follows: what this Ticket must produce and how to finish it.\n\n" + guide(t, h, domain.RetroLabel),
 	} {
 		if !strings.Contains(c.SystemPrompt, want) {
 			t.Errorf("system prompt %q doesn't say %q", c.SystemPrompt, want)

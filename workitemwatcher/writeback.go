@@ -9,12 +9,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"slices"
 	"strings"
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/azdo"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/ratelimit"
 )
 
@@ -84,7 +84,7 @@ func (cfg Config) writeComments(ctx context.Context, c *azdo.Client, item azdo.W
 	for _, cm := range w.Comments {
 		// Either marker, whatever the setting: it may have changed between
 		// posting a comment and reporting it written.
-		branded, opaque := core.IssueMarker(w.Target, cm.Key), core.OpaqueMarker(w.Target, cm.Key)
+		branded, opaque := domain.IssueMarker(w.Target, cm.Key), domain.OpaqueMarker(w.Target, cm.Key)
 		if !slices.ContainsFunc(existing, func(text string) bool { return strings.Contains(text, branded) || strings.Contains(text, opaque) }) {
 			if err := c.AddComment(ctx, item.Fields.TeamProject, item.ID, cm.Body); err != nil {
 				return posted, fmt.Errorf("posting the %s comment: %w", cm.Key, err)
@@ -99,7 +99,7 @@ func (cfg Config) writeComments(ctx context.Context, c *azdo.Client, item azdo.W
 }
 
 // withStatusTag is tags with tag the only status tag: every other tag
-// that starts with core.StatusLabelPrefix is removed, and tag is added if
+// that starts with domain.StatusLabelPrefix is removed, and tag is added if
 // it isn't there. Tags are the same whatever their case, as Azure DevOps
 // takes them. changed is false when tags already are so.
 func withStatusTag(tags []string, tag string) (out []string, changed bool) {
@@ -109,7 +109,7 @@ func withStatusTag(tags []string, tag string) (out []string, changed bool) {
 		case strings.EqualFold(t, tag):
 			has = true
 			out = append(out, t)
-		case strings.HasPrefix(strings.ToLower(t), core.StatusLabelPrefix):
+		case strings.HasPrefix(strings.ToLower(t), domain.StatusLabelPrefix):
 			changed = true
 		default:
 			out = append(out, t)

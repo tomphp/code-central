@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -258,7 +257,7 @@ func TestLandPerSpecCountsAFinishedTicketsPushOfTheSpecBranch(t *testing.T) {
 func TestLandPerSpecNamesTheRepositoryATaggedSpecBranchWasPushedTo(t *testing.T) {
 	f := specPullRequestWorld(t)
 	f.addRepository(t, api.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
-	if _, err := f.core.SetTags(ctx, "acme", api.SetTagsInput{Target: "acme-1", Tags: map[string]string{core.BranchTag: "feat/4711"}}); err != nil {
+	if _, err := f.core.SetTags(ctx, "acme", api.SetTagsInput{Target: "acme-1", Tags: map[string]string{domain.BranchTag: "feat/4711"}}); err != nil {
 		t.Fatal(err)
 	}
 	f.changes(t, 5, "acme", "api")

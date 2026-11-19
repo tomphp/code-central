@@ -181,7 +181,7 @@ func TestNeedsMeListsMapTicketsAndPrototypesOneByOneWithTheirSpec(t *testing.T) 
 	f := newFixture(t)
 	f.requirement(t)
 	f.spec(t, "acme", "Find the way") // acme-6
-	if _, err := f.core.AddLabels(ctx, "acme", api.LabelsInput{Target: "acme-6", Labels: []string{core.MapLabel}}); err != nil {
+	if _, err := f.core.AddLabels(ctx, "acme", api.LabelsInput{Target: "acme-6", Labels: []string{domain.MapLabel}}); err != nil {
 		t.Fatal(err)
 	}
 	f.ticket(t, "acme", api.CreateTicketInput{Spec: "6", Title: "Charting", Labels: []string{"wayfinder:chart"}, State: domain.Ready}) // acme-7
@@ -233,8 +233,8 @@ func TestNeedsMeListsMapTicketsAndPrototypesOneByOneWithTheirSpec(t *testing.T) 
 func TestNeedsMeMarksARetroForItsBadge(t *testing.T) {
 	f := newFixture(t)
 	f.requirement(t)
-	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Retro: Login", Labels: []string{core.RetroLabel}, State: domain.Ready})     // acme-6
-	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Try the form", Labels: []string{core.PrototypeLabel}, State: domain.Ready}) // acme-7
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Retro: Login", Labels: []string{domain.RetroLabel}, State: domain.Ready})     // acme-6
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Try the form", Labels: []string{domain.PrototypeLabel}, State: domain.Ready}) // acme-7
 	f.setState(t, 6, domain.InReview)
 	f.setState(t, 7, domain.InReview)
 	v, err := f.core.NeedsMe(ctx)

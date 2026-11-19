@@ -13,7 +13,7 @@ import (
 
 // stageGuide is the Stage Guide from the claim, or, from a service whose
 // claim gives none, the one get_stage_guide serves. stage is the guide's
-// name, one of core.GuideNames.
+// name, a domain Stage name, or prototype, retro or implementation.
 func (f *factory) stageGuide(ctx context.Context, fromClaim *api.StageGuideView, stage string) api.StageGuideView {
 	if fromClaim != nil {
 		return *fromClaim
@@ -60,8 +60,8 @@ var stageSkills = map[string]guideSkill{
 	"map-grilling":           {"grilling", "domain-modeling"},
 	mapResearch:              {skill: "research"},
 	"map-task":               {},
-	core.PrototypeLabel:      {skill: "prototype"},
-	core.RetroLabel:          {skill: "retro"},
+	domain.PrototypeLabel:    {skill: "prototype"},
+	domain.RetroLabel:        {skill: "retro"},
 	core.ImplementationStage: {skill: "implement"},
 }
 
@@ -79,8 +79,8 @@ func workBranch(guide, ticket string) string {
 	switch guide {
 	case core.ImplementationStage:
 		return ticket
-	case core.PrototypeLabel:
-		return core.PrototypeLabel + "/" + ticket
+	case domain.PrototypeLabel:
+		return domain.PrototypeLabel + "/" + ticket
 	case mapResearch:
 		return "research/" + ticket
 	}
@@ -291,7 +291,7 @@ func claimIntro(c claim, stage, wt string) string {
 	switch branch := workBranch(stage, c.Ticket); stage {
 	case core.ImplementationStage:
 		fmt.Fprintf(&b, "You are running under code-central-factory, in this Ticket's own worktree on branch %s. %s Commit on this branch only, with no push and no PR, and finish the Ticket when it is done.", branch, claimed)
-	case core.PrototypeLabel:
+	case domain.PrototypeLabel:
 		fmt.Fprintf(&b, "You are running under code-central-factory, in this Ticket's own worktree, %s, on the local branch %s. %s Commit on this branch only, with no push and no PR. Record the prototype Tag as `%s@<commit> %s`, with the branch's head commit; open the first Round with a \"Try it\" Question; and finish with no branch, since a Prototype never lands.", wt, branch, claimed, branch, wt)
 	case mapResearch:
 		fmt.Fprintf(&b, "You are running under code-central-factory, in this Ticket's own worktree, %s, on the local branch %s. %s Commit on this branch only, with no push and no PR. Record the research Tag as `%s@<commit>`, with the branch's head commit, and finish with no branch, since research never lands.", wt, branch, claimed, branch)
@@ -304,7 +304,7 @@ func claimIntro(c claim, stage, wt string) string {
 			what, writer = "this "+stage+" Ticket", "It"
 		}
 		fmt.Fprintf(&b, "You are running under code-central-factory, in a detached, read-only worktree at the base's tip, for %s. %s Finish the Ticket when it is done. %s writes nothing to the repository: no files, no commits and no branches.", what, claimed, writer)
-		if stage == core.RetroLabel {
+		if stage == domain.RetroLabel {
 			b.WriteString("\n\n" + sessionLogs)
 		}
 	}

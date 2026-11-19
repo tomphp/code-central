@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/factory/factorytest"
 )
@@ -25,7 +24,7 @@ const taggedBranch = "feat/4242"
 // tagSpec gives the harness's Spec the branch Tag taggedBranch.
 func tagSpec(t *testing.T, h *factorytest.Harness) {
 	t.Helper()
-	if _, err := h.Human().SetTags(context.Background(), h.Project, api.SetTagsInput{Target: api.Ref(h.SpecID()), Tags: map[string]string{core.BranchTag: taggedBranch}}); err != nil {
+	if _, err := h.Human().SetTags(context.Background(), h.Project, api.SetTagsInput{Target: api.Ref(h.SpecID()), Tags: map[string]string{domain.BranchTag: taggedBranch}}); err != nil {
 		t.Fatal(err)
 	}
 }

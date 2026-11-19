@@ -170,7 +170,7 @@ func (c *Core) AddLabels(ctx context.Context, key string, in api.LabelsInput) (a
 		if err := checkPlacement("labels", in.Labels, onSpec); err != nil {
 			return err
 		}
-		sweep = slices.Contains(in.Labels, AutoAcceptLabel) && !slices.Contains(*labels, AutoAcceptLabel)
+		sweep = slices.Contains(in.Labels, domain.AutoAcceptLabel) && !slices.Contains(*labels, domain.AutoAcceptLabel)
 		for _, l := range in.Labels {
 			if !slices.Contains(*labels, l) {
 				*labels = append(*labels, l)
@@ -230,7 +230,7 @@ func (c *Core) SetTags(_ context.Context, key string, in api.SetTagsInput) (api.
 				return err
 			}
 		}
-		if name, ok := in.Tags[BranchTag]; ok && onSpec {
+		if name, ok := in.Tags[domain.BranchTag]; ok && onSpec {
 			if err := checkBranchTagChange(r, key, "tags", n, tags, name); err != nil {
 				return err
 			}
@@ -275,7 +275,7 @@ func (c *Core) RemoveTags(_ context.Context, key string, in api.RemoveTagsInput)
 		}
 	}
 	return c.updateTargetIn(key, in.Target, func(r store.Reader, n int, onSpec bool, _ *[]string, tags map[string]string) error {
-		if onSpec && slices.Contains(in.Keys, BranchTag) {
+		if onSpec && slices.Contains(in.Keys, domain.BranchTag) {
 			if err := checkBranchTagChange(r, key, "keys", n, tags, ""); err != nil {
 				return err
 			}

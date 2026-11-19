@@ -32,7 +32,7 @@ func (f fixture) work(t *testing.T, states ...domain.State) []api.TicketView {
 // longLived gives s the long-lived Label.
 func (f fixture) longLived(t *testing.T, s api.SpecView) {
 	t.Helper()
-	if _, err := f.core.AddLabels(ctx, "acme", api.LabelsInput{Target: api.Ref(s.ID), Labels: []string{core.LongLivedLabel}}); err != nil {
+	if _, err := f.core.AddLabels(ctx, "acme", api.LabelsInput{Target: api.Ref(s.ID), Labels: []string{domain.LongLivedLabel}}); err != nil {
 		t.Fatalf("add_labels: %v", err)
 	}
 }

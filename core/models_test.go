@@ -236,10 +236,10 @@ func guideLabels(guide string) []string {
 	switch {
 	case guide == core.ImplementationStage:
 		return nil
-	case guide == core.PrototypeLabel || guide == core.RetroLabel:
+	case guide == domain.PrototypeLabel || guide == domain.RetroLabel:
 		return []string{guide}
 	case strings.HasPrefix(guide, "map-"):
-		return []string{core.WayfinderPrefix + strings.TrimPrefix(guide, "map-")}
+		return []string{domain.WayfinderPrefix + strings.TrimPrefix(guide, "map-")}
 	}
 	return []string{domain.StagePrefix + guide}
 }

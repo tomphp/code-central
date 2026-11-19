@@ -50,7 +50,7 @@ func (c *Core) SubmitRetro(_ context.Context, key string, in api.SubmitRetroInpu
 		now := c.now()
 		t := domain.Ticket{
 			Number: w.NextNumber(key), Title: "Retro: " + target.title, State: domain.Ready, Spec: spec,
-			Labels: []string{RetroLabel}, Tags: map[string]string{RetroOfTag: target.id},
+			Labels: []string{domain.RetroLabel}, Tags: map[string]string{RetroOfTag: target.id},
 			Created: now, Updated: now, Description: target.description(in.Note),
 			Moves: submitMoves(false, now, "submit_retro"),
 		}
@@ -80,7 +80,7 @@ func resolveRetroTarget(r store.Reader, key string, ref api.Ref) (retroTarget, e
 	}
 	id := DisplayID(key, n)
 	if s, ok := r.Spec(key, n); ok {
-		if slices.Contains(s.Labels, LongLivedLabel) {
+		if slices.Contains(s.Labels, domain.LongLivedLabel) {
 			return retroTarget{}, invalid("target", "%s is a Long-lived Spec, which never finishes; start a Retro on each of its finished Tickets instead", id)
 		}
 		tickets := specTickets(r, key, n, store.Claims)
@@ -111,7 +111,7 @@ func ticketRetroable(p domain.Project, t domain.Ticket) bool {
 // too, and while its Project p takes writes, which writable refuses.
 // SpecDetail's retroable.
 func specRetroable(p domain.Project, s domain.Spec, specFinished bool) bool {
-	return specFinished && !slices.Contains(s.Labels, LongLivedLabel) && p.Archived.IsZero()
+	return specFinished && !slices.Contains(s.Labels, domain.LongLivedLabel) && p.Archived.IsZero()
 }
 
 // description is a Retro's description: the target as a link, the
@@ -164,7 +164,7 @@ const retrosSpecBody = "This Spec holds the Retros the human opens on finished w
 // or nil when there are none.
 func retrosOf(r store.Reader, key, target string) []api.RetroView {
 	var out []api.RetroView
-	for _, t := range r.FindTickets(key, store.TicketFilter{Label: RetroLabel, Tag: &store.TagFilter{Key: RetroOfTag, Values: []string{target}}}) {
+	for _, t := range r.FindTickets(key, store.TicketFilter{Label: domain.RetroLabel, Tag: &store.TagFilter{Key: RetroOfTag, Values: []string{target}}}) {
 		out = append(out, api.RetroView{ID: DisplayID(key, t.Number), Title: t.Title, State: t.State})
 	}
 	return out

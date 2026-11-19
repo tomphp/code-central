@@ -130,8 +130,8 @@ func TestPlainSpecsTicketsAreSpecLandedButLongLivedSpecsAndPrototypesAreNot(t *t
 	plain := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-7", Title: "Plain work"})
 	f.longLived(t, f.spec(t, "acme", "CI"))
 	long := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-9", Title: "Long work"})
-	proto := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Try", Labels: []string{core.PrototypeLabel}})
-	retro := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-7", Title: "Look back", Labels: []string{core.RetroLabel}})
+	proto := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Try", Labels: []string{domain.PrototypeLabel}})
+	retro := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-7", Title: "Look back", Labels: []string{domain.RetroLabel}})
 	for id, want := range map[string]bool{plain.ID: true, long.ID: false, proto.ID: false, retro.ID: false} {
 		if got := f.getTicket(t, id).SpecLanded; got != want {
 			t.Errorf("%s Spec-landed = %v, want %v", id, got, want)

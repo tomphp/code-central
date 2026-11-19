@@ -328,7 +328,7 @@ func agreementWorld(t *testing.T) fixture {
 
 	f.project(t, "web")
 	sp := f.spec(t, "web", "Login")
-	must(f.core.AddLabels(ctx, "web", api.LabelsInput{Target: api.Ref(sp.ID), Labels: []string{core.LongLivedLabel}}))
+	must(f.core.AddLabels(ctx, "web", api.LabelsInput{Target: api.Ref(sp.ID), Labels: []string{domain.LongLivedLabel}}))
 	for _, branch := range []string{"web-2", "web-3"} {
 		f.ticket(t, "web", api.CreateTicketInput{Spec: api.Ref(sp.ID), Title: "W", State: domain.Ready})
 		res, err := f.core.Claim(ctx, "web", api.ClaimInput{Ticket: api.Ref(branch)})

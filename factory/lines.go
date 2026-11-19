@@ -18,7 +18,7 @@ import (
 // Ticket, so a restart fills it again from the first read.
 type claimInfo struct {
 	title string
-	stage string // the guide's name, one of core.GuideNames
+	stage string // the guide's name, a domain Stage name, or prototype, retro or implementation
 }
 
 // noteTicket keeps what the lines say of c's Ticket, as tk gives it,

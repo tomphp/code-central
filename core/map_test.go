@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -35,7 +34,7 @@ func TestSubmittingAMapCreatesItsSpecAndOneReadyChartingTicket(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get_spec: %v", err)
 	}
-	if sp.Title != "Offline mode" || *sp.Body != mapBody || !slices.Equal(sp.Labels, []string{core.MapLabel}) {
+	if sp.Title != "Offline mode" || *sp.Body != mapBody || !slices.Equal(sp.Labels, []string{domain.MapLabel}) {
 		t.Fatalf("spec %q %q %v", sp.Title, *sp.Body, sp.Labels)
 	}
 	tk := f.get(t, "acme-3")

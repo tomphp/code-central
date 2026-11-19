@@ -37,7 +37,7 @@ func (c *Core) projectSpecNumber(key string, ps projectSpec) (int, error) {
 		}
 		now := c.now()
 		n = w.NextNumber(key)
-		return w.PutSpec(key, domain.Spec{Number: n, Title: ps.title, Body: ps.body, Labels: []string{LongLivedLabel}, Created: now, Updated: now})
+		return w.PutSpec(key, domain.Spec{Number: n, Title: ps.title, Body: ps.body, Labels: []string{domain.LongLivedLabel}, Created: now, Updated: now})
 	})
 	if err != nil {
 		return 0, err

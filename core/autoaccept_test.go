@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -398,7 +397,7 @@ func TestPrototypesAndMapTicketsAreNeverAutoAccepted(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Login")
-	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Try", State: domain.Ready, Labels: []string{core.PrototypeLabel}})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Try", State: domain.Ready, Labels: []string{domain.PrototypeLabel}})
 	f.allKinds(t)
 	f.finishTicket(t, "acme-2")
 	if got := f.get(t, "acme-2"); got.State != domain.InReview {
@@ -406,7 +405,7 @@ func TestPrototypesAndMapTicketsAreNeverAutoAccepted(t *testing.T) {
 	}
 
 	g := newFixture(t)
-	g.mapWith(t, api.CreateTicketInput{Title: "Look into caching", State: domain.Ready, Labels: []string{core.WayfinderPrefix + "research"}},
+	g.mapWith(t, api.CreateTicketInput{Title: "Look into caching", State: domain.Ready, Labels: []string{domain.WayfinderPrefix + "research"}},
 		api.CreateTicketInput{Title: "Untyped", State: domain.Ready})
 	g.allKinds(t)
 	for _, ref := range []api.Ref{"acme-2", "acme-3"} {

@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -17,7 +16,7 @@ import (
 // branch where its Spec-landed Tickets' work gathers under Land per Spec,
 // as core names it: its branch Tag's value, else spec/<id>.
 func specRefOf(spec api.SpecDetail) api.SpecRef {
-	return api.SpecRef{ID: spec.ID, Title: spec.Title, Branch: core.SpecBranch(spec.ID, spec.Tags)}
+	return api.SpecRef{ID: spec.ID, Title: spec.Title, Branch: domain.SpecBranch(spec.ID, spec.Tags)}
 }
 
 // specBranchPushedIn is the Repositories where the Factory pushed spec's
@@ -724,7 +723,7 @@ func (l *lander) landSpecIn(ctx context.Context, spec api.SpecDetail, p api.Proj
 		}
 		return false
 	}
-	l.printf("%s: merged %s into %s at %s%s", spec.ID, core.SpecBranch(spec.ID, spec.Tags), base, short(merge), r.where())
+	l.printf("%s: merged %s into %s at %s%s", spec.ID, domain.SpecBranch(spec.ID, spec.Tags), base, short(merge), r.where())
 	l.printf("%s: landing its Tickets%s: %s", spec.ID, r.where(), joinIDs(pl.tickets))
 	for _, tk := range pl.tickets {
 		l.stateOf(r).mergedOn[tk.ID] = mergeOn{base, merge}
@@ -828,7 +827,7 @@ func (l *lander) openSpecConflict(ctx context.Context, spec api.SpecDetail, conf
 	}
 	// Where the Spec Branch conflicts: in each named Repository, or with
 	// the Home Repository alone, with the base in these files.
-	branch, with, again := core.SpecBranch(spec.ID, spec.Tags), l.repos.baseBranch()+" in "+strings.Join(in.Conflicts, ", "), l.repos.baseBranch()+" again"
+	branch, with, again := domain.SpecBranch(spec.ID, spec.Tags), l.repos.baseBranch()+" in "+strings.Join(in.Conflicts, ", "), l.repos.baseBranch()+" again"
 	if several {
 		with = "the base in " + strings.Join(names, ", ")
 		again = with + " again"
@@ -891,12 +890,12 @@ func (l *lander) sweepSpecBranches(ctx context.Context, policies api.LandingPoli
 // branch Tag, finished ones included, in each Repository whose clone has
 // the branch the Tag names.
 func (l *lander) sweepTaggedSpecBranches(ctx context.Context, policies api.LandingPolicies) {
-	rows, err := l.client.FindSpecs(ctx, l.project, api.FindSpecsInput{Tags: map[string]string{core.BranchTag: ""}, Finished: true})
+	rows, err := l.client.FindSpecs(ctx, l.project, api.FindSpecsInput{Tags: map[string]string{domain.BranchTag: ""}, Finished: true})
 	if err != nil {
 		return
 	}
 	for _, row := range rows {
-		branch := row.Tags[core.BranchTag]
+		branch := row.Tags[domain.BranchTag]
 		if branch == "" {
 			continue
 		}

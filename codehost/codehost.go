@@ -74,3 +74,32 @@ func ValidGitHubRepository(s string) bool { return githubRepository.MatchString(
 // ValidGitHubWorkflow reports whether name is a GitHub Actions workflow
 // file's base name.
 func ValidGitHubWorkflow(name string) bool { return githubWorkflow.MatchString(name) }
+
+// NormalCloneURL is url as Clone URLs are compared: two that name one
+// repository normalise the same, whether ssh, scp-like or https, with or
+// without a user, a port, a trailing .git or a trailing slash, and with
+// the host and path in any case. A GitHub or Azure Repos URL normalises
+// to its Code Host's repository, so Azure's ssh and https forms match.
+func NormalCloneURL(url string) string {
+	url = strings.ToLower(strings.TrimSpace(url))
+	if host, repo := Of(url); host != None {
+		return string(host) + ":" + repo
+	}
+	// withoutUser is a host with any user@ dropped.
+	withoutUser := func(host string) string { return host[strings.LastIndex(host, "@")+1:] }
+	var host, path string
+	scheme, rest, isURL := strings.Cut(url, "://")
+	switch h, p, scp := strings.Cut(url, ":"); {
+	case isURL && scheme == "file":
+		path = rest
+	case isURL:
+		host, path, _ = strings.Cut(rest, "/")
+		host, _, _ = strings.Cut(withoutUser(host), ":")
+	case scp && !strings.ContainsAny(h, `/\`):
+		host, path = withoutUser(h), p
+	default:
+		path = url
+	}
+	path = strings.TrimRight(strings.TrimSuffix(strings.TrimRight(path, "/"), ".git"), "/")
+	return host + "/" + strings.TrimLeft(path, "/")
+}

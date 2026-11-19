@@ -10,25 +10,6 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// BranchTag is the reserved Spec Tag whose value names the Spec's Spec
-// Branch in place of spec/<spec id> (Spec code-central-1089). On a
-// Ticket it means nothing and isn't checked.
-const BranchTag = "branch"
-
-// specBranchPrefix starts every default Spec Branch name, so no branch
-// Tag may start with it.
-const specBranchPrefix = "spec/"
-
-// SpecBranch is the Spec Branch of the Spec id, a display ID, carrying
-// tags: its branch Tag's value when it has one, else spec/<id>. It is
-// the one place the name is made.
-func SpecBranch(id string, tags map[string]string) string {
-	if name := tags[BranchTag]; name != "" {
-		return name
-	}
-	return specBranchPrefix + id
-}
-
 // checkBranchTagName checks name as a branch Tag in Project p, all but
 // its uniqueness: a valid branch name that isn't a default Spec Branch
 // name, any Repository's Base or a Ticket branch's name. field names the
@@ -38,8 +19,8 @@ func checkBranchTagName(p domain.Project, field, name string) error {
 		return invalid(field, "a branch Tag names the Spec Branch, so it must be a valid branch name: %s", err)
 	}
 	// In any case, since git's refs are files on a case-insensitive disk.
-	if strings.HasPrefix(strings.ToLower(name), specBranchPrefix) {
-		return invalid(field, "branch %q starts with %s, which is kept for the Spec Branches of Specs with no branch Tag", name, specBranchPrefix)
+	if strings.HasPrefix(strings.ToLower(name), domain.SpecBranchPrefix) {
+		return invalid(field, "branch %q starts with %s, which is kept for the Spec Branches of Specs with no branch Tag", name, domain.SpecBranchPrefix)
 	}
 	for _, r := range p.RepositoryList() {
 		if strings.EqualFold(baseOfRepository(p, r), name) {
@@ -67,7 +48,7 @@ const chooseAnotherName = "or choose another name"
 // change that Spec's Tag first, then orElse, such as "or choose another
 // name". n is 0 for a Spec not yet made.
 func checkBranchTagFree(r store.Reader, key, field string, n int, name, orElse string) error {
-	for _, s := range r.FindSpecs(key, store.SpecFilter{Tag: &store.TagFilter{Key: BranchTag, Values: []string{name}}}) {
+	for _, s := range r.FindSpecs(key, store.SpecFilter{Tag: &store.TagFilter{Key: domain.BranchTag, Values: []string{name}}}) {
 		if s.Number == n {
 			continue
 		}
@@ -89,7 +70,7 @@ func checkBranchTagFree(r store.Reader, key, field string, n int, name, orElse s
 // refused. It runs inside the store update that writes the Tag, so two
 // writes can't both take one name.
 func checkBranchTagChange(r store.Reader, key, field string, n int, tags map[string]string, name string) error {
-	if tags[BranchTag] == name {
+	if tags[domain.BranchTag] == name {
 		return nil
 	}
 	if err := checkBranchTagLock(r, key, n, tags); err != nil {
@@ -114,7 +95,7 @@ func checkBranchTagLock(r store.Reader, key string, n int, tags map[string]strin
 			id := DisplayID(key, n)
 			return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf(
 				"the Spec Branch of %s already exists as %s, since %s has been claimed, so its branch Tag can't change or be removed",
-				id, SpecBranch(id, tags), DisplayID(key, t.Number))}
+				id, domain.SpecBranch(id, tags), DisplayID(key, t.Number))}
 		}
 	}
 	return nil

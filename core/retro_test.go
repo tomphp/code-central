@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -22,7 +21,7 @@ func (f fixture) finishedSpec(t *testing.T) {
 	f.project(t, "acme")
 	f.spec(t, "acme", "Login")
 	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Grill it", State: domain.Ready, Labels: []string{"stage:grilling"}})
-	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Prototype: theme", State: domain.Ready, Labels: []string{core.PrototypeLabel}})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Prototype: theme", State: domain.Ready, Labels: []string{domain.PrototypeLabel}})
 	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Build it", State: domain.Ready})
 
 	grill := f.claim(t, api.ClaimInput{Ticket: "2", SessionID: "sess-1", WorkingDir: ptr("/w/one")})
@@ -55,7 +54,7 @@ func (f fixture) submitRetro(t *testing.T, in api.SubmitRetroInput) api.TicketVi
 func wantRetro(t *testing.T, tk api.TicketView, spec, title, target, description string) {
 	t.Helper()
 	if tk.Title != title || tk.State != domain.Ready || tk.Spec.ID != spec || !tk.Claimable ||
-		!slices.Equal(tk.Labels, []string{core.RetroLabel}) || !maps.Equal(tk.Tags, map[string]string{"retro-of": target}) {
+		!slices.Equal(tk.Labels, []string{domain.RetroLabel}) || !maps.Equal(tk.Tags, map[string]string{"retro-of": target}) {
 		t.Fatalf("Retro %+v", tk)
 	}
 	if len(tk.Moves) != 1 || tk.Moves[0].Actor != "human" || tk.Moves[0].To != domain.Ready || tk.Moves[0].Via != "submit_retro" {
@@ -114,7 +113,7 @@ func TestTheFirstRetroCreatesTheRetrosSpecAndALaterOneReusesItAfterARetitle(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sp.ID != "acme-5" || sp.Title != "Retros" || !slices.Equal(sp.Labels, []string{core.LongLivedLabel}) || sp.Body == nil || *sp.Body == "" {
+	if sp.ID != "acme-5" || sp.Title != "Retros" || !slices.Equal(sp.Labels, []string{domain.LongLivedLabel}) || sp.Body == nil || *sp.Body == "" {
 		t.Fatalf("Retros Spec %+v", sp)
 	}
 	var p domain.Project

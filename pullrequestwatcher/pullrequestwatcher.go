@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
 	"github.com/tomoram/code-central/watchers"
@@ -78,7 +77,7 @@ func Check(ctx context.Context, in api.PullRequestCheckInput, env gh.Env) api.Wa
 	if len(ps) == 0 {
 		return api.WatcherCheckResult{}
 	}
-	return core.SumRepositoryProblems(ps)
+	return api.SumRepositoryProblems(ps)
 }
 
 // checkOne is Check for in's one repository.

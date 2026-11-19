@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -27,7 +26,7 @@ func (f fixture) addLabels(t *testing.T, target api.Ref, labels ...string) api.T
 func TestTheLabelOnATicketAutoAcceptsItsFinishWithEveryKindOff(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
-	f.addLabels(t, "acme-2", core.AutoAcceptLabel)
+	f.addLabels(t, "acme-2", domain.AutoAcceptLabel)
 	f.finishWork(t, "acme-2")
 	autoAccepted(t, f.get(t, "acme-2"), domain.Accepted, domain.CauseTicketLabel)
 }
@@ -35,7 +34,7 @@ func TestTheLabelOnATicketAutoAcceptsItsFinishWithEveryKindOff(t *testing.T) {
 func TestTheLabelOnALongLivedSpecAutoAcceptsEachOfItsTicketsFinishes(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
-	f.addLabels(t, "acme-1", core.AutoAcceptLabel)
+	f.addLabels(t, "acme-1", domain.AutoAcceptLabel)
 	f.finishWork(t, "")
 	autoAccepted(t, f.get(t, "acme-2"), domain.Done, domain.CauseSpecLabel)
 }
@@ -44,15 +43,15 @@ func TestTheLabelOnTheTicketIsTheCauseBeforeTheSpecsAndTheProjects(t *testing.T)
 	f := newFixture(t)
 	f.work(t, domain.Ready)
 	f.setAutoAccept(t, map[domain.AutoAcceptKind]bool{domain.AutoAcceptImplementation: true})
-	f.addLabels(t, "acme-1", core.AutoAcceptLabel)
-	f.addLabels(t, "acme-2", core.AutoAcceptLabel)
+	f.addLabels(t, "acme-1", domain.AutoAcceptLabel)
+	f.addLabels(t, "acme-2", domain.AutoAcceptLabel)
 	f.finishWork(t, "acme-2")
 	autoAccepted(t, f.get(t, "acme-2"), domain.Accepted, domain.CauseTicketLabel)
 
 	g := newFixture(t)
 	g.work(t, domain.Ready)
 	g.setAutoAccept(t, map[domain.AutoAcceptKind]bool{domain.AutoAcceptImplementation: true})
-	g.addLabels(t, "acme-1", core.AutoAcceptLabel)
+	g.addLabels(t, "acme-1", domain.AutoAcceptLabel)
 	g.finishWork(t, "acme-2")
 	autoAccepted(t, g.get(t, "acme-2"), domain.Accepted, domain.CauseSpecLabel)
 }
@@ -60,7 +59,7 @@ func TestTheLabelOnTheTicketIsTheCauseBeforeTheSpecsAndTheProjects(t *testing.T)
 func TestTheLabelOnARequirementAutoAcceptsEveryStageWithEveryKindOff(t *testing.T) {
 	f := newFixture(t)
 	f.requirement(t)
-	f.addLabels(t, "acme-2", core.AutoAcceptLabel)
+	f.addLabels(t, "acme-2", domain.AutoAcceptLabel)
 
 	f.finishTicket(t, "acme-3")
 	autoAccepted(t, f.get(t, "acme-3"), domain.Done, domain.CauseSpecLabel)
@@ -76,7 +75,7 @@ func TestTheLabelOnARequirementAutoAcceptsEveryStageWithEveryKindOff(t *testing.
 func TestTheLabelOnASpecMergeTicketAutoAcceptsIt(t *testing.T) {
 	f := specMergeWorld(t)
 	f.openSpecMerge(t, "README")
-	f.addLabels(t, "acme-3", core.AutoAcceptLabel)
+	f.addLabels(t, "acme-3", domain.AutoAcceptLabel)
 	f.finishTicket(t, "acme-3")
 	autoAccepted(t, f.get(t, "acme-3"), domain.Done, domain.CauseTicketLabel)
 }
@@ -85,19 +84,19 @@ func TestPrototypesAndMapTicketsAreNeverAutoAcceptedUnderTheLabel(t *testing.T) 
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Login")
-	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Try", State: domain.Ready, Labels: []string{core.PrototypeLabel}})
-	f.addLabels(t, "acme-1", core.AutoAcceptLabel)
-	f.addLabels(t, "acme-2", core.AutoAcceptLabel)
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Try", State: domain.Ready, Labels: []string{domain.PrototypeLabel}})
+	f.addLabels(t, "acme-1", domain.AutoAcceptLabel)
+	f.addLabels(t, "acme-2", domain.AutoAcceptLabel)
 	f.finishTicket(t, "acme-2")
 	if got := f.get(t, "acme-2"); got.State != domain.InReview {
 		t.Fatalf("the Prototype is %s under the Label, want In Review", got.State)
 	}
 
 	g := newFixture(t)
-	g.mapWith(t, api.CreateTicketInput{Title: "Look into caching", State: domain.Ready, Labels: []string{core.WayfinderPrefix + "research"}},
+	g.mapWith(t, api.CreateTicketInput{Title: "Look into caching", State: domain.Ready, Labels: []string{domain.WayfinderPrefix + "research"}},
 		api.CreateTicketInput{Title: "Untyped", State: domain.Ready})
-	g.addLabels(t, "acme-1", core.AutoAcceptLabel)
-	g.addLabels(t, "acme-3", core.AutoAcceptLabel)
+	g.addLabels(t, "acme-1", domain.AutoAcceptLabel)
+	g.addLabels(t, "acme-3", domain.AutoAcceptLabel)
 	for _, ref := range []api.Ref{"acme-2", "acme-3"} {
 		g.finishTicket(t, ref)
 		if got := g.get(t, ref); got.State != domain.InReview {
@@ -127,7 +126,7 @@ func TestAddingTheLabelToATicketInReviewAcceptsItInTheSameWrite(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
 	f.finishWork(t, "acme-2")
-	f.addLabels(t, "acme-2", core.AutoAcceptLabel)
+	f.addLabels(t, "acme-2", domain.AutoAcceptLabel)
 	sweptBy(t, f.get(t, "acme-2"), domain.Accepted, domain.CauseTicketLabel)
 	if a, _ := f.core.AttentionOf(ctx, "acme", "acme-2"); a.NeedsMe {
 		t.Fatal("a swept Ticket is still in Needs Me")
@@ -139,12 +138,12 @@ func TestAddingTheLabelToASpecAcceptsEveryEligibleTicketInReviewOnIt(t *testing.
 	f.work(t, domain.Ready, domain.Ready, domain.Ready, domain.Ready)
 	f.finishTicket(t, "acme-2")
 	f.finishTicket(t, "acme-3")
-	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Try", State: domain.Ready, Labels: []string{core.PrototypeLabel}})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Try", State: domain.Ready, Labels: []string{domain.PrototypeLabel}})
 	f.finishTicket(t, "acme-6") // a Prototype, never auto-accepted
 	f.claim(t, api.ClaimInput{Ticket: "acme-4"})
 	// acme-5 stays Ready.
 
-	f.addLabels(t, "acme-1", core.AutoAcceptLabel)
+	f.addLabels(t, "acme-1", domain.AutoAcceptLabel)
 	sweptBy(t, f.get(t, "acme-2"), domain.Done, domain.CauseSpecLabel)
 	sweptBy(t, f.get(t, "acme-3"), domain.Done, domain.CauseSpecLabel)
 	for ref, want := range map[api.Ref]domain.State{"acme-4": domain.InProgress, "acme-5": domain.Ready, "acme-6": domain.InReview} {
@@ -158,7 +157,7 @@ func TestTheSweepFollowsASpecStagesRecommendationAndLeavesOneWithoutIt(t *testin
 	f := newFixture(t)
 	f.requirement(t)
 	f.finishSpecStage(t, domain.RecommendImplement)
-	f.addLabels(t, "acme-2", core.AutoAcceptLabel)
+	f.addLabels(t, "acme-2", domain.AutoAcceptLabel)
 	spec := f.get(t, "acme-4")
 	sweptBy(t, spec, domain.Done, domain.CauseSpecLabel)
 	if lastMove(spec).Via != "implement" {
@@ -172,7 +171,7 @@ func TestTheSweepFollowsASpecStagesRecommendationAndLeavesOneWithoutIt(t *testin
 	// sweep leaves it for the human.
 	g := newFixture(t)
 	g.specInReview(t)
-	g.addLabels(t, "acme-2", core.AutoAcceptLabel)
+	g.addLabels(t, "acme-2", domain.AutoAcceptLabel)
 	if got := g.get(t, "acme-4"); got.State != domain.InReview {
 		t.Fatalf("a spec Stage with no recommendation is %s after the sweep, want In Review", got.State)
 	}
@@ -191,9 +190,9 @@ func TestAddingTheLabelAgainOrAnotherLabelSweepsNothing(t *testing.T) {
 func TestRemovingTheLabelChangesNothingAlreadyAccepted(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready, domain.Ready)
-	f.addLabels(t, "acme-1", core.AutoAcceptLabel)
+	f.addLabels(t, "acme-1", domain.AutoAcceptLabel)
 	f.finishWork(t, "acme-2")
-	if _, err := f.core.RemoveLabels(human, "acme", api.LabelsInput{Target: "acme-1", Labels: []string{core.AutoAcceptLabel}}); err != nil {
+	if _, err := f.core.RemoveLabels(human, "acme", api.LabelsInput{Target: "acme-1", Labels: []string{domain.AutoAcceptLabel}}); err != nil {
 		t.Fatalf("remove_labels: %v", err)
 	}
 	autoAccepted(t, f.get(t, "acme-2"), domain.Accepted, domain.CauseSpecLabel)
@@ -219,7 +218,7 @@ func TestOnlyTheHumanNamesTheLabelOnAnyDoor(t *testing.T) {
 		f := newFixture(t)
 		f.work(t, domain.Ready)
 		f.finishWork(t, "acme-2")
-		label := []string{"ui", core.AutoAcceptLabel}
+		label := []string{"ui", domain.AutoAcceptLabel}
 
 		for _, target := range []api.Ref{"acme-1", "acme-2"} {
 			_, err := f.core.AddLabels(as, "acme", api.LabelsInput{Target: target, Labels: label})
@@ -229,7 +228,7 @@ func TestOnlyTheHumanNamesTheLabelOnAnyDoor(t *testing.T) {
 			t.Fatalf("a refused add_labels changed the Ticket: %s %v", got.State, got.Labels)
 		}
 
-		f.addLabels(t, "acme-2", core.AutoAcceptLabel)
+		f.addLabels(t, "acme-2", domain.AutoAcceptLabel)
 		_, err := f.core.RemoveLabels(as, "acme", api.LabelsInput{Target: "acme-2", Labels: label})
 		reservedForTheHuman(t, string(actor)+" remove_labels", err)
 
@@ -237,11 +236,11 @@ func TestOnlyTheHumanNamesTheLabelOnAnyDoor(t *testing.T) {
 		reservedForTheHuman(t, string(actor)+" create_ticket", err)
 
 		_, err = f.core.Import(as, "acme", api.ImportInput{Payload: api.ImportPayload{
-			Specs: []api.ImportSpec{{Source: ".scratch/a/spec.md", Title: "A", Labels: []string{core.AutoAcceptLabel}}}}})
+			Specs: []api.ImportSpec{{Source: ".scratch/a/spec.md", Title: "A", Labels: []string{domain.AutoAcceptLabel}}}}})
 		reservedForTheHuman(t, string(actor)+" import of a Spec", err)
 		_, err = f.core.Import(as, "acme", api.ImportInput{DryRun: true, Payload: api.ImportPayload{
 			Specs:   []api.ImportSpec{{Source: ".scratch/a/spec.md", Title: "A"}},
-			Tickets: []api.ImportTicket{{Source: ".scratch/a/1.md", Spec: ".scratch/a/spec.md", Title: "One", Labels: []string{core.AutoAcceptLabel}}}}})
+			Tickets: []api.ImportTicket{{Source: ".scratch/a/1.md", Spec: ".scratch/a/spec.md", Title: "One", Labels: []string{domain.AutoAcceptLabel}}}}})
 		reservedForTheHuman(t, string(actor)+" import of a Ticket", err)
 	}
 }
@@ -249,20 +248,20 @@ func TestOnlyTheHumanNamesTheLabelOnAnyDoor(t *testing.T) {
 func TestTheHumanGivesAndTakesTheLabelOnEveryDoorThatTakesLabels(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
-	if v := f.addLabels(t, "acme-1", core.AutoAcceptLabel, core.LongLivedLabel); len(v.Labels) != 2 {
+	if v := f.addLabels(t, "acme-1", domain.AutoAcceptLabel, domain.LongLivedLabel); len(v.Labels) != 2 {
 		t.Fatalf("spec labels %v", v.Labels)
 	}
 	// Not a type Label, so it goes beside a Stage or prototype Label.
-	tk, err := f.core.CreateTicket(human, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Try", Labels: []string{core.PrototypeLabel, core.AutoAcceptLabel}})
+	tk, err := f.core.CreateTicket(human, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Try", Labels: []string{domain.PrototypeLabel, domain.AutoAcceptLabel}})
 	if err != nil || tk.ID != "acme-3" {
 		t.Fatalf("create_ticket as the human: %+v, %v", tk, err)
 	}
-	if _, err := f.core.RemoveLabels(human, "acme", api.LabelsInput{Target: "acme-3", Labels: []string{core.AutoAcceptLabel}}); err != nil {
+	if _, err := f.core.RemoveLabels(human, "acme", api.LabelsInput{Target: "acme-3", Labels: []string{domain.AutoAcceptLabel}}); err != nil {
 		t.Fatalf("remove_labels as the human: %v", err)
 	}
 	if _, err := f.core.Import(human, "acme", api.ImportInput{DryRun: true, Payload: api.ImportPayload{
-		Specs:   []api.ImportSpec{{Source: ".scratch/a/spec.md", Title: "A", Labels: []string{core.AutoAcceptLabel}}},
-		Tickets: []api.ImportTicket{{Source: ".scratch/a/1.md", Spec: ".scratch/a/spec.md", Title: "One", Labels: []string{"stage:spec", core.AutoAcceptLabel}}}}}); err != nil {
+		Specs:   []api.ImportSpec{{Source: ".scratch/a/spec.md", Title: "A", Labels: []string{domain.AutoAcceptLabel}}},
+		Tickets: []api.ImportTicket{{Source: ".scratch/a/1.md", Spec: ".scratch/a/spec.md", Title: "One", Labels: []string{"stage:spec", domain.AutoAcceptLabel}}}}}); err != nil {
 		t.Fatalf("import as the human: %v", err)
 	}
 }

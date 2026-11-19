@@ -789,7 +789,7 @@ func (h *Harness) sharedSpec() {
 	c := h.Server.Client
 	s, err := c.CreateSpec(ctx, h.Project, api.CreateSpecInput{Title: "Work"})
 	must(h.t, err)
-	_, err = c.AddLabels(ctx, h.Project, api.LabelsInput{Target: api.Ref(s.ID), Labels: []string{core.LongLivedLabel}})
+	_, err = c.AddLabels(ctx, h.Project, api.LabelsInput{Target: api.Ref(s.ID), Labels: []string{domain.LongLivedLabel}})
 	must(h.t, err)
 	h.spec = s.ID
 }
@@ -799,7 +799,7 @@ func (h *Harness) sharedSpec() {
 func (h *Harness) MakePlainSpec() {
 	h.t.Helper()
 	h.sharedSpec()
-	_, err := h.Server.Client.RemoveLabels(context.Background(), h.Project, api.LabelsInput{Target: api.Ref(h.spec), Labels: []string{core.LongLivedLabel}})
+	_, err := h.Server.Client.RemoveLabels(context.Background(), h.Project, api.LabelsInput{Target: api.Ref(h.spec), Labels: []string{domain.LongLivedLabel}})
 	must(h.t, err)
 }
 

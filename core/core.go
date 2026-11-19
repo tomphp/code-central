@@ -273,7 +273,7 @@ func (c *Core) FindTickets(_ context.Context, key string, in api.FindTicketsInpu
 			return err
 		}
 		maps := map[int]bool{}
-		for _, s := range r.FindSpecs(key, store.SpecFilter{Label: MapLabel}) {
+		for _, s := range r.FindSpecs(key, store.SpecFilter{Label: domain.MapLabel}) {
 			maps[s.Number] = true
 		}
 		for _, t := range tickets {
@@ -449,7 +449,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t domain.Ticket) api.
 	rule := e.rule
 	v := api.TicketView{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State,
-		Spec:   api.SpecRef{ID: DisplayID(key, t.Spec), Title: sp.Title, Branch: SpecBranch(DisplayID(key, t.Spec), sp.Tags)},
+		Spec:   api.SpecRef{ID: DisplayID(key, t.Spec), Title: sp.Title, Branch: domain.SpecBranch(DisplayID(key, t.Spec), sp.Tags)},
 		Labels: orEmpty(t.Labels), Tags: orEmptyMap(t.Tags),
 		BlockedBy: displayIDs(key, t.BlockedBy), Replacements: displayIDs(key, t.Replacements),
 		Blockers: rule.blockerViews(t),

@@ -214,7 +214,7 @@ func TestNewFixTicketOpensOneReadyTicketOnTheCIFixesSpecAndLeavesTheListedTicket
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spec.Title != "CI Fixes" || !slices.Contains(spec.Labels, core.LongLivedLabel) {
+	if spec.Title != "CI Fixes" || !slices.Contains(spec.Labels, domain.LongLivedLabel) {
 		t.Fatalf("CI Fixes Spec %q with labels %v, want it long-lived", spec.Title, spec.Labels)
 	}
 	f.store.View(func(r store.Reader) error {

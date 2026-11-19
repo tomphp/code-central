@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/tomoram/code-central/codehost"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -335,7 +335,7 @@ func (l *lander) cloneOf(ctx context.Context, v api.RepositoryView, taken map[st
 	if err != nil {
 		return missing("%s has no remote %s, the Push remote", dir, remote)
 	}
-	if core.NormalCloneURL(url) != core.NormalCloneURL(v.CloneURL) {
+	if codehost.NormalCloneURL(url) != codehost.NormalCloneURL(v.CloneURL) {
 		return missing("%s's remote %s is %s, not %s", dir, remote, url, v.CloneURL)
 	}
 	return r
