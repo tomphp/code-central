@@ -597,6 +597,14 @@ a.link-badge:hover { text-decoration: underline; }
 .spec-body { margin: 14px 0; }
 .spec-body-head { display: flex; align-items: center; gap: 8px; }
 .spec-body-head .link { font-size: 14px; font-weight: 600; color: var(--muted); }
+.spec-tags { margin: 14px 0; }
+.spec-tags-head { margin: 0 0 6px; font-size: 14px; font-weight: 600; color: var(--muted); }
+.spec-tags-list { list-style: none; margin: 0; padding: 0; }
+.spec-tags-list > li { margin-bottom: 6px; }
+.spec-tag { display: flex; gap: 6px; align-items: center; }
+.spec-tag-key { min-width: 6em; }
+.spec-tag input { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; }
+.spec-tags .warning { margin: 4px 0 0; }
 
 /* The State chips' colours, and the State lists' By Ticket | By Spec toggle. */
 .st-draft { --st: var(--st-draft); }

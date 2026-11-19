@@ -1,7 +1,7 @@
 // The plain Spec pane, for a Spec that is neither a Requirement nor a Map,
 // above the shared Ticket pane: the header (ID, title, submitted time, New
 // Prototype, New Ticket when ticketable, Retro), its Changed Repositories' chips while the Project has
-// several, its body, collapsed, the sums of its Tickets' CI badges, then the Spec's Tickets
+// several, its body, collapsed, its Tags, the sums of its Tickets' CI badges, then the Spec's Tickets
 // with their States.
 import type { SpecDetail } from "../api/types";
 import { RepositoryChips } from "../controls/RepositoryChips";
@@ -14,6 +14,7 @@ import { LinkBadge } from "../ticket/LinkBadge";
 import { OpenExternal } from "../ticket/OpenExternal";
 import { LandPerSpec } from "./LandPerSpec";
 import { SpecAutoAccept } from "./SpecAutoAccept";
+import { SpecTags } from "./SpecTags";
 import { RetroList } from "./RetroList";
 import { TicketList } from "./TicketList";
 
@@ -48,6 +49,7 @@ export function SpecPane({ spec, archived, now, ticket, select }: SpecPaneProps)
       </div>
       <LandPerSpec status={spec.land_per_spec} />
       <BodySection api={api} spec={spec} heading="Body" />
+      <SpecTags spec={spec} archived={archived} />
       <CISums tickets={tickets} />
       {tickets.length === 0 ? (
         <p className="muted">No Tickets yet.</p>
