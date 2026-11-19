@@ -6,7 +6,8 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { newWorld, type World } from "../api/core/core";
 import type { Scenario } from "../api/scenario";
-import { renderApp, scenario, settle } from "../worldTesting";
+import { renderApp, renderLive, scenario, settle } from "../worldTesting";
+import { ChatDock } from "./ChatDock";
 
 const beat = { factory: "code-central-factory", host: "laptop", interval_seconds: 30 } as const;
 
@@ -188,5 +189,24 @@ describe("a Conversation in the pop-up", () => {
     expect(within(chat).getByRole("button", { name: "Send" })).toBeDisabled();
     expect(within(chat).getByRole("button", { name: "New conversation" })).toBeEnabled();
     expect(within(chat).getByText("Hi")).toBeInTheDocument();
+  });
+});
+
+// On a Shared Store (Spec code-central-1107) a Factory reporting to
+// another service can't take this service's Conversations: the icon still
+// shows, to open on where Chat runs, but nothing can be sent here.
+describe("Chat with a Factory reporting to another service", () => {
+  it("shows the icon but sends nothing here", async () => {
+    const { w } = await fresh();
+    const acme = (await w.api.listProjects()).find((p) => p.key === "acme")!;
+    const elsewhere = {
+      ...acme,
+      factory_status: { ...acme.factory_status, factories: acme.factory_status.factories.map((f) => ({ ...f, reports_to: "desktop" })) },
+    };
+    await renderLive(w, <ChatDock project={elsewhere} />);
+
+    const chat = await openPopup(w);
+    await userEvent.type(within(chat).getByRole("textbox", { name: "Chat Message" }), "hello");
+    expect(within(chat).getByRole("button", { name: "Send" })).toBeDisabled();
   });
 });
