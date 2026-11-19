@@ -207,6 +207,9 @@ type SpecView struct {
 type SpecRef struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
+	// Branch is the Spec's Spec Branch: its branch Tag's value, else
+	// spec/<id>.
+	Branch string `json:"branch"`
 }
 
 // MoveView is one State move. An imported Ticket's one move has no From.
@@ -465,9 +468,10 @@ type FindTicketsInput struct {
 	State  []domain.State `json:"state,omitempty" desc:"Only Tickets in one of these States."`
 	Title  string         `json:"title,omitempty" desc:"Only Tickets whose title contains this text."`
 	Labels []string       `json:"labels,omitempty" query:"label" desc:"Only Tickets with all of these Labels."`
-	// Tags must all be present with exactly these values. Over HTTP each
-	// is a tag=<key>=<value> parameter, which DecodeQuery reads.
-	Tags map[string]string `json:"tags,omitempty" query:"tag" desc:"Only Tickets with all of these Tags, as {key: value}."`
+	// Tags must all be present with exactly these values, or with any
+	// value for an empty one. Over HTTP each is a tag=<key>=<value>
+	// parameter, which DecodeQuery reads.
+	Tags map[string]string `json:"tags,omitempty" query:"tag" desc:"Only Tickets with all of these Tags, as {key: value}; an empty value matches any value."`
 	Spec Ref               `json:"spec,omitempty" desc:"Only Tickets in this Spec."`
 	// Claimable, when given, keeps only Tickets that are (or aren't) claimable.
 	Claimable *bool `json:"claimable,omitempty" desc:"Only Tickets that are (true) or aren't (false) claimable."`
@@ -762,7 +766,8 @@ func matches(t domain.Ticket, in FindTicketsInput) bool {
 }
 
 // hasAll reports whether every wanted Label is present and every wanted
-// Tag pair matches exactly.
+// Tag pair matches exactly, a wanted Tag with an empty value matching
+// any value: no Tag has an empty value.
 func hasAll(labels []string, tags map[string]string, wantLabels []string, wantTags map[string]string) bool {
 	for _, l := range wantLabels {
 		if !slices.Contains(labels, l) {
@@ -770,7 +775,7 @@ func hasAll(labels []string, tags map[string]string, wantLabels []string, wantTa
 		}
 	}
 	for k, v := range wantTags {
-		if got, ok := tags[k]; !ok || got != v {
+		if got, ok := tags[k]; !ok || (v != "" && got != v) {
 			return false
 		}
 	}
@@ -840,7 +845,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t domain.Ticket) Tick
 	rule := e.rule
 	v := TicketView{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State,
-		Spec:   SpecRef{ID: DisplayID(key, t.Spec), Title: sp.Title},
+		Spec:   SpecRef{ID: DisplayID(key, t.Spec), Title: sp.Title, Branch: SpecBranch(DisplayID(key, t.Spec), sp.Tags)},
 		Labels: orEmpty(t.Labels), Tags: orEmptyMap(t.Tags),
 		BlockedBy: displayIDs(key, t.BlockedBy), Replacements: displayIDs(key, t.Replacements),
 		Blockers: rule.blockerViews(t),

@@ -395,7 +395,7 @@
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Only Specs with all of these Tags, as {key: value}.",
+          "description": "Only Specs with all of these Tags, as {key: value}; an empty value matches any value.",
           "type": "object"
         },
         "title": {
@@ -445,7 +445,7 @@
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Only Tickets with all of these Tags, as {key: value}.",
+          "description": "Only Tickets with all of these Tags, as {key: value}; an empty value matches any value.",
           "type": "object"
         },
         "title": {

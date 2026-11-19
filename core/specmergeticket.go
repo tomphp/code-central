@@ -135,16 +135,17 @@ func (c *Core) OpenSpecMerge(ctx context.Context, key string, in OpenSpecMergeIn
 		// with Rebase in force in any, else to merge.
 		var rebase bool
 		var body string
+		branch := SpecBranch(id, sp.Tags)
 		if len(in.Repositories) == 0 {
 			rebase = landingPolicyIn(p, p.Key).RebaseInForce()
-			body = specMergeBody(id, p.Base(), in, rebase)
+			body = specMergeBody(branch, p.Base(), in, rebase)
 		} else {
 			cs, err := specMergeConflicts(p, in)
 			if err != nil {
 				return err
 			}
 			rebase = slices.ContainsFunc(cs, func(c SpecMergeConflict) bool { return landingPolicyIn(p, c.Name).RebaseInForce() })
-			body = specMergeBodyPerRepository(p, id, cs, rebase)
+			body = specMergeBodyPerRepository(p, branch, cs, rebase)
 		}
 		title := specMergeTitle(id, rebase)
 		now := c.now()
@@ -210,12 +211,12 @@ func openSpecMergeTicket(tickets []domain.Ticket, spec string) (domain.Ticket, b
 }
 
 // specMergeBody is a Spec merge Ticket's description, and each comment it
-// takes: the conflicting files and both tips, then what to do, which is
-// to rebase this branch onto the base with rebase, else to merge the
-// base into it.
-func specMergeBody(spec, base string, in OpenSpecMergeInput, rebase bool) string {
+// takes, for the Spec Branch named branch: the conflicting files and both
+// tips, then what to do, which is to rebase this branch onto the base
+// with rebase, else to merge the base into it.
+func specMergeBody(branch, base string, in OpenSpecMergeInput, rebase bool) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "The Spec Branch spec/%s conflicts with the base, %s, in these files:\n\n", spec, base)
+	fmt.Fprintf(&b, "The Spec Branch %s conflicts with the base, %s, in these files:\n\n", branch, base)
 	for _, f := range in.Conflicts {
 		fmt.Fprintf(&b, "- %s\n", f)
 	}
@@ -285,18 +286,18 @@ func (in OpenSpecMergeInput) homeGiven() bool {
 	return len(in.Conflicts) > 0 || in.BaseTip != "" || in.SpecBranchTip != ""
 }
 
-// specMergeBodyPerRepository is specMergeBody for a Spec Branch
-// conflicting in each of cs's Repositories, p's: one Spec merge Ticket
-// names each, with its base, both tips and its files (ADR 0049). Each of
-// cs names one of p's Repositories, as specMergeConflicts checked. With
-// rebase it says to rebase this branch onto its base in each, else to
-// merge each base into it.
-func specMergeBodyPerRepository(p domain.Project, spec string, cs []SpecMergeConflict, rebase bool) string {
+// specMergeBodyPerRepository is specMergeBody for the Spec Branch named
+// branch conflicting in each of cs's Repositories, p's: one Spec merge
+// Ticket names each, with its base, both tips and its files (ADR 0049).
+// Each of cs names one of p's Repositories, as specMergeConflicts
+// checked. With rebase it says to rebase this branch onto its base in
+// each, else to merge each base into it.
+func specMergeBodyPerRepository(p domain.Project, branch string, cs []SpecMergeConflict, rebase bool) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "The Spec Branch spec/%s conflicts with the base in these Repositories:\n\n", spec)
+	fmt.Fprintf(&b, "The Spec Branch %s conflicts with the base in these Repositories:\n\n", branch)
 	for _, c := range cs {
 		r, _ := repositoryField(p, c.Name)
-		fmt.Fprintf(&b, "- %s: merging spec/%s at %s into %s at %s conflicts in these files:\n", c.Name, spec, c.SpecBranchTip, baseOfRepository(p, r), c.BaseTip)
+		fmt.Fprintf(&b, "- %s: merging %s at %s into %s at %s conflicts in these files:\n", c.Name, branch, c.SpecBranchTip, baseOfRepository(p, r), c.BaseTip)
 		for _, f := range c.Conflicts {
 			fmt.Fprintf(&b, "  - %s\n", f)
 		}
