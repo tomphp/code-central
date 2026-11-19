@@ -111,6 +111,7 @@ func Run(ctx context.Context, o Options) error {
 			fmt.Fprintf(o.Stderr, "code-central serve: cannot deregister the service: %v\n", err)
 		}
 	}()
+	c.LoadFactories()
 	stopTimers := watchTimers(ctx, c)
 	defer stopTimers()
 	handler := newHandler(c, o, bindHosts)
@@ -242,6 +243,7 @@ func listenAll(o Options) (listeners []net.Listener, bindHosts []string, err err
 // which run as self.
 func newCore(st store.Store, clk clock.System, o Options, self string) *core.Core {
 	c := core.New(st, clk, ids.Random{})
+	c.SetLog(o.Stderr)
 	c.SetUsage(usage.NewRecorder(st.Usage(), clk, time.Local, o.Stderr))
 	c.SetCICheck(ciwatcher.Checker(self, os.Environ()))
 	c.SetIssuesCheck(issuewatcher.Checker(self, os.Environ()))

@@ -17,8 +17,8 @@ import (
 
 // Chat (Spec code-central-633, ADR 0040): the human talks to Claude about
 // a Project from the UI. Each Project has at most one current
-// Conversation, held in memory only, beside Transcripts and Heartbeats,
-// never in the store. A Factory with Chat support takes each turn on the
+// Conversation, held in memory only, beside Transcripts, never in the
+// store. A Factory with Chat support takes each turn on the
 // next_chat_work long-poll and posts the reply's items back with
 // PostChatEvents. Chat writes change only memory, so they add no Move,
 // Edit or Comment, and send chat.changed rather than a store notice.

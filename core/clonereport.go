@@ -126,7 +126,9 @@ func (c *Core) ReportRepositories(_ context.Context, key string, in ReportReposi
 		}
 	}
 	hs.clones[key] = report
+	hs.reportsAt[key] = now
 	hs.mu.Unlock()
+	c.recordReports(key)
 	if !maps.Equal(prev, report) {
 		c.events.Publish(events.Event{Type: events.ProjectChanged, Project: key})
 	}

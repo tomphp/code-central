@@ -124,7 +124,9 @@ func (c *Core) ReportBase(_ context.Context, key string, in ReportBaseInput) (Wr
 	}
 	prev, seen := hs.base[key][repository.Name]
 	hs.base[key][repository.Name] = BaseView{State: in.State, Local: local, Remote: remote, Branch: baseOfRepository(project, repository), At: now}
+	hs.reportsAt[key] = now
 	hs.mu.Unlock()
+	c.recordReports(key)
 	if !seen || prev.State != in.State || prev.Local != local || prev.Remote != remote {
 		c.events.Publish(events.Event{Type: events.ProjectChanged, Project: key})
 	}
