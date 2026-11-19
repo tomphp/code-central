@@ -12,7 +12,7 @@ Working, tested code that meets the acceptance criteria, committed on a branch n
 - Then review the code against the Spec and the repository's standards, and fix what you find. Don't `finish` without it.
 - Commit only on the branch named after the Ticket's ID. Don't push it, and don't open a pull request: the branch lands in the base after the human accepts it.
 
-If the latest comment is a merge conflict, merge the base into the branch first and resolve it, then run the full suite again before anything else. The comment names the base commit and the conflicting files.
+If the latest comment is a merge conflict, merge the base into the branch first and resolve it (rebase if it says so), then run the full suite again before anything else. The comment names the base commit and the conflicting files.
 
 ## Questions
 

@@ -55,13 +55,19 @@ func specBranchFailed(wt string, err error) *failure {
 }
 
 // specBranchMerge is a Ticket's merge into its Spec Branch in r: its work
-// there, head, into the Spec Branch at tip, making tree; merged when the
-// Spec Branch holds head already. Once the merge is made, tip is the
-// merge commit, the Spec Branch's new tip.
+// there, head, into the Spec Branch at tip, making tree, or under Rebase
+// replayed onto it as replay says, or, for a Spec merge Ticket under
+// Rebase, the Spec Branch moved to its rebased result as replacement
+// says; merged when the Spec Branch holds head already, or held it
+// replayed and the merge is reported. Once the merge, replay or move is
+// made, tip is the Spec Branch's new tip. replayed says the work went in
+// by a replay, and replaced that the Spec Branch was moved to it.
 type specBranchMerge struct {
-	r               *repository
-	head, tip, tree string
-	merged          bool
+	r                          *repository
+	head, tip, tree            string
+	replay                     *replay
+	replacement                *specBranchReplacement
+	merged, replayed, replaced bool
 }
 
 // mergeIntoSpecBranch merges an Accepted Spec-landed Ticket's work into
@@ -69,19 +75,30 @@ type specBranchMerge struct {
 // Spec Branch, but for one it has landed in, and reports the merge to
 // Code Central once its work is in every one, unless it is reported
 // already: a Repository can come under Land per Spec after the Ticket was
-// merged elsewhere, as when its Own Landing changes. Nothing reaches a
-// base: the Spec lands later. It works out every merge first: a conflict
-// in any merges it into none and sends the Ticket back to Ready (ADR
-// 0049). ok is false when it didn't merge into every one, so the Ticket's
-// other landing steps wait.
-func (l *lander) mergeIntoSpecBranch(ctx context.Context, tk core.TicketView, ws []changedWork) (ok bool) {
+// merged elsewhere, as when its Own Landing changes. Where Rebase is in
+// force it replays the work onto the Spec Branch instead (planReplay),
+// moving the Ticket's branch to the replayed commits and fast-forwarding
+// the Spec Branch to them. Work replayed, once reported, is on its Spec
+// Branch even after the Spec Branch is rewritten, so it is never
+// replayed twice. A Spec merge Ticket's work under Rebase is the Spec
+// Branch rebased onto the base: the Spec Branch moves to it instead, with
+// what it gained while the Ticket was open replayed onto it first
+// (planSpecBranchReplacement); when that conflicts, the Ticket is sent
+// back to bring those commits onto its branch itself, and its fork point
+// moves on to them (takeSpecBranchAsBrought). Nothing reaches a base:
+// the Spec lands later. It works
+// out every merge first: a conflict in any merges it into none and sends
+// the Ticket back to Ready (ADR 0049). ok is false when it didn't merge
+// into every one, so the Ticket's other landing steps wait.
+func (l *lander) mergeIntoSpecBranch(ctx context.Context, tk core.TicketView, policies core.LandingPolicies, ws []changedWork) (ok bool) {
 	branch := specBranch(tk.Spec.ID)
 	ref := "refs/heads/" + branch
 	var merges []specBranchMerge
 	var conflicts []landConflict
+	reported := tk.SpecMerge != nil && tk.SpecMerge.Counts
 	for _, w := range ws {
 		r := w.r
-		head, what, err := l.workIn(r, tk)
+		head, replayed, what, err := l.replayedWorkIn(r, tk)
 		if err != nil {
 			l.cantLandIn(ctx, tk, r, what+" isn't in this repository.")
 			return false
@@ -94,45 +111,110 @@ func (l *lander) mergeIntoSpecBranch(ctx context.Context, tk core.TicketView, ws
 			l.cantLandIn(ctx, tk, r, err.Error()+".")
 			return false
 		}
-		m := specBranchMerge{r: r, head: head, tip: tip, merged: r.git.isAncestor(head, ref)}
+		// Replayed work, once reported, is merged though a rewrite of the
+		// Spec Branch left it off.
+		m := specBranchMerge{r: r, head: head, tip: tip, replayed: replayed, merged: r.git.isAncestor(head, ref) || (replayed && reported)}
 		if !m.merged {
 			var files []string
-			if m.tree, files, err = r.git.mergeTree(tip, head); err != nil {
-				l.printf("warning: %s: can't merge%s: %v", tk.ID, r.where(), err)
-				return false
+			rebase := r.policy(policies).RebaseInForce()
+			switch {
+			case rebase && tk.IsSpecMergeTicket():
+				// Its agent rebased the Spec Branch onto the base: the
+				// Spec Branch moves to that result, with whatever it
+				// gained meanwhile replayed onto it.
+				var why string
+				if m.replacement, files, why, err = planSpecBranchReplacement(r, tk.ID, branch, head, tip); err != nil {
+					l.printf("warning: %s: can't replay %s onto its rebased result%s: %v", tk.ID, branch, r.where(), err)
+					return false
+				}
+				if why != "" {
+					l.cantLandIn(ctx, tk, r, why)
+					return false
+				}
+				if len(files) > 0 {
+					conflicts = append(conflicts, landConflict{r: r, head: head, into: branch, tip: tip, fork: m.replacement.fork, files: files, rebase: true, replaying: true, replacing: true})
+					continue
+				}
+			case rebase:
+				var why string
+				if m.replay, files, why, err = l.planReplay(r, tk.ID, branchIn(tk, r), head, tip); err != nil {
+					l.printf("warning: %s: can't replay%s: %v", tk.ID, r.where(), err)
+					return false
+				}
+				if why != "" {
+					l.cantLandIn(ctx, tk, r, why)
+					return false
+				}
+			default:
+				if m.tree, files, err = r.git.mergeTree(tip, head); err != nil {
+					l.printf("warning: %s: can't merge%s: %v", tk.ID, r.where(), err)
+					return false
+				}
 			}
 			if len(files) > 0 {
-				conflicts = append(conflicts, landConflict{r: r, head: head, into: branch, tip: tip, files: files})
+				conflicts = append(conflicts, landConflict{r: r, head: head, into: branch, tip: tip, files: files, rebase: rebase, replaying: rebase})
 				continue
 			}
 		}
 		merges = append(merges, m)
 	}
 	if len(conflicts) > 0 {
-		l.sendBackConflicts(ctx, tk, "Spec Branch", conflicts)
+		if l.sendBackConflicts(ctx, tk, "Spec Branch", conflicts) {
+			l.takeSpecBranchAsBrought(tk, conflicts)
+		}
 		return false
 	}
-	reported := tk.SpecMerge != nil && tk.SpecMerge.Counts
 	for i, m := range merges {
 		if m.merged {
 			continue
 		}
-		merge, err := m.r.git.commitTree(m.tree, fmt.Sprintf("Merge %s: %s", tk.ID, tk.Title), m.tip, m.head)
-		if err != nil {
-			l.printf("warning: %s: can't make the merge commit%s: %v", tk.ID, m.r.where(), err)
-			return false
+		var next string
+		switch {
+		case m.replacement != nil:
+			next, merges[i].replaced = m.replacement.next, true
+		case m.replay != nil:
+			if err := m.replay.apply(m.r, tk.ID, m.tip); err != nil {
+				l.cantLandIn(ctx, tk, m.r, err.Error()+".")
+				return false
+			}
+			next, merges[i].replayed = m.replay.tip, true
+		default:
+			merge, err := m.r.git.commitTree(m.tree, fmt.Sprintf("Merge %s: %s", tk.ID, tk.Title), m.tip, m.head)
+			if err != nil {
+				l.printf("warning: %s: can't make the merge commit%s: %v", tk.ID, m.r.where(), err)
+				return false
+			}
+			next = merge
 		}
-		if err := m.r.git.updateRef(ref, merge, m.tip); err != nil {
+		if err := m.r.git.updateRef(ref, next, m.tip); err != nil {
 			l.cantLandIn(ctx, tk, m.r, fmt.Sprintf("the Spec Branch %s moved while the Factory was merging, or git refused: %v", branch, err))
 			return false
 		}
-		merges[i].tip = merge
+		merges[i].tip = next
 		reported = false
 	}
 	if len(merges) > 0 && !reported {
 		l.reportSpecMerge(ctx, tk, branch, merges)
 	}
 	return true
+}
+
+// takeSpecBranchAsBrought moves a Spec merge Ticket's fork point to its
+// Spec Branch's tip in each Repository where replaying the Spec Branch's
+// later commits onto its head conflicted, now that it is sent back to
+// bring them onto its branch itself: when it finishes again, the branch
+// holds them, and only what the Spec Branch gains from here on is
+// replayed onto it. Otherwise the same commits would conflict again
+// however they were resolved.
+func (l *lander) takeSpecBranchAsBrought(tk core.TicketView, conflicts []landConflict) {
+	for _, c := range conflicts {
+		if !c.replacing {
+			continue
+		}
+		if err := setForkPoint(c.r, tk.ID, c.tip); err != nil {
+			l.printf("warning: %s: can't move its fork point to %s%s: %v", tk.ID, short(c.tip), c.r.where(), err)
+		}
+	}
 }
 
 // reportSpecMerge tells Code Central tk's work is in its Spec Branch in
@@ -149,7 +231,14 @@ func (l *lander) reportSpecMerge(ctx context.Context, tk core.TicketView, branch
 		return
 	}
 	for _, m := range merges {
-		l.printf("%s: merged into %s at %s%s", tk.ID, branch, short(m.tip), m.r.where())
+		switch {
+		case m.replaced:
+			l.printf("%s: moved %s to its rebased result at %s%s", tk.ID, branch, short(m.tip), m.r.where())
+		case m.replayed:
+			l.printf("%s: replayed onto %s at %s%s", tk.ID, branch, short(m.tip), m.r.where())
+		default:
+			l.printf("%s: merged into %s at %s%s", tk.ID, branch, short(m.tip), m.r.where())
+		}
 	}
 }
 
@@ -215,6 +304,11 @@ func (l *lander) landSpecs(ctx context.Context, p core.ProjectView) {
 // merged, as landing sees to it, or the Spec Branch is missing or in the
 // base already. ok is false when the Spec can't land this poll: r's base
 // is broken or not level with the remote's, or the merge can't be tried.
+// Where Rebase is in force, a Spec Branch about to be pushed, its tip not
+// on the remote yet, that doesn't descend from the fetched base's tip is
+// rebased onto it first (rebaseSpecBranch), and a conflict there is the
+// plan's; one pushed already isn't rebased again as the base moves, so
+// its CI doesn't rerun on each move.
 func (l *lander) planSpecPush(id string, r *repository, tickets []core.TicketView, policies core.LandingPolicies) (pl specPlan, push, ok bool) {
 	if slices.ContainsFunc(tickets, func(tk core.TicketView) bool { return pullRequestMergedIn(tk, r) }) {
 		return pl, false, true
@@ -222,15 +316,30 @@ func (l *lander) planSpecPush(id string, r *repository, tickets []core.TicketVie
 	if l.held(r, policies) != "" || !l.stateOf(r).current {
 		return pl, false, false
 	}
-	tip, err := r.git.commit("refs/heads/" + specBranch(id))
+	branch := specBranch(id)
+	tip, err := r.git.commit("refs/heads/" + branch)
 	if err != nil || l.repos.inBaseOf(r, tip) {
 		return pl, false, true
 	}
-	baseTip, err := r.git.commit("refs/heads/" + l.repos.baseOf(r))
+	base := l.repos.baseOf(r)
+	baseTip, err := r.git.commit("refs/heads/" + base)
 	if err != nil {
 		return pl, false, false
 	}
-	pl = specPlan{r: r, tickets: tickets, tip: tip, baseTip: baseTip, push: true}
+	pl = specPlan{r: r, tickets: tickets, tip: tip, baseTip: baseTip, push: true, rebase: r.policy(policies).RebaseInForce()}
+	if pl.rebase && !r.git.isAncestor(tip, "refs/remotes/"+r.remote+"/"+branch) && !r.git.isAncestor(baseTip, tip) {
+		rebased, conflicts, why := l.rebaseSpecBranch(r, baseTip, tip)
+		switch {
+		case len(conflicts) > 0:
+			pl.conflicts = conflicts
+			return pl, true, true
+		case why != "":
+			l.printf("warning: %s: can't rebase %s onto %s%s: %s", id, branch, base, r.where(), why)
+			return pl, false, false
+		}
+		pl.rebasedFrom, pl.tip = tip, rebased
+		return pl, true, true
+	}
 	if _, pl.conflicts, err = r.git.mergeTree(baseTip, tip); err != nil {
 		l.printf("warning: %s: can't merge %s%s: %v", id, specBranch(id), r.where(), err)
 		return pl, false, false
@@ -242,10 +351,13 @@ func (l *lander) planSpecPush(id string, r *repository, tickets []core.TicketVie
 // Repository's Push remote, and reports it as each of pl's Tickets'
 // pushed commit there, for the Pull Request Watcher to open the Spec's
 // one pull request on. A later merge into it is pushed again, which
-// updates the pull request.
+// updates the pull request; under Rebase, where it was rebased onto the
+// base and the remote holds its older tip, the push forces with lease,
+// and the new tip is each Ticket's pushed commit, so CI results on the
+// old one no longer count.
 func (l *lander) pushSpecBranch(ctx context.Context, id string, policies core.LandingPolicies, pl specPlan) {
 	branch := specBranch(id)
-	pushed, why := l.push(ctx, pl.r, pl.r.remote, branch, pl.tip)
+	pushed, why := l.push(ctx, pl.r, pl.r.remote, branch, pl.tip, pl.rebase)
 	if why != "" {
 		for _, tk := range pl.tickets {
 			l.cantPushIn(ctx, tk, pl.r, why)
@@ -337,14 +449,17 @@ func ticketsIn(tickets []core.TicketView, r *repository) []core.TicketView {
 // conflicts with the base at baseTip. Otherwise they land at old, a merge
 // it made into a base the Project no longer names; at once when the base
 // holds the Spec Branch's tip already; or by merging the Spec Branch at
-// tip into the base at baseTip, making tree, unless that conflicts.
+// tip into the base at baseTip, making tree, unless that conflicts. Under
+// Rebase, tip may be the Spec Branch rebased onto baseTip, from
+// rebasedFrom, where the Spec Branch is until it is moved to tip; rebase
+// says Rebase is in force in r.
 type specPlan struct {
-	r                  *repository
-	tickets            []core.TicketView
-	old                *mergeOn
-	tip, baseTip, tree string
-	inBase, push       bool
-	conflicts          []string
+	r                               *repository
+	tickets                         []core.TicketView
+	old                             *mergeOn
+	tip, baseTip, tree, rebasedFrom string
+	inBase, push, rebase            bool
+	conflicts                       []string
 }
 
 // mergeSpec lands spec's waiting Tickets, tickets, in each Repository
@@ -354,15 +469,19 @@ type specPlan struct {
 // the Spec's pull request (planSpecPush). It works out every Repository's
 // merge first: a conflict in any merges and pushes it nowhere and opens
 // the one Spec merge Ticket, naming each (ADR 0049), though a merge made
-// on an earlier poll still goes on to its push and land. Then, in landing
-// order, it makes the same "Merge spec" commit in each, advances the
-// base, pushes and lands, or pushes the Spec Branch, and stops at a
-// Repository it can't land in yet, to go on from there next poll. With
-// several Repositories, one with a broken base or no clone holds the
-// whole Spec back, as it can't be checked. It reports whether the Tickets
-// are handled this poll: false means every Spec Branch is already in its
-// base or one can't be read, and the Tickets land through the plain path,
-// as their work is in the base.
+// on an earlier poll still goes on to its push and land. Where Rebase is
+// in force and the Spec Branch doesn't descend from the base's tip, the
+// merge worked out is of the Spec Branch rebased onto it, and with no
+// conflict anywhere each Spec Branch is moved to its rebase first
+// (moveRebasedSpecBranches). Then, in landing order, it makes the same
+// "Merge spec" commit in each, advances the base, pushes and lands, or
+// pushes the Spec Branch, and stops at a Repository it can't land in yet,
+// to go on from there next poll. With several Repositories, one with a
+// broken base or no clone holds the whole Spec back, as it can't be
+// checked. It reports whether the Tickets are handled this poll: false
+// means every Spec Branch and the Tickets' work in it is already in its
+// base (landsHere), or one can't be read, and the Tickets land through
+// the plain path, as their work is in the base.
 func (l *lander) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets []core.TicketView, p core.ProjectView, mergesThere func(domain.LandingPolicy) bool, pushes bool) (handled bool) {
 	sort.SliceStable(tickets, func(i, j int) bool { return acceptedAt(tickets[i]).Before(acceptedAt(tickets[j])) })
 	policies := p.LandingPolicies()
@@ -390,7 +509,7 @@ func (l *lander) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets []
 		case l.repos.several() && l.held(r, policies) != "":
 			return true // its Tickets say why they wait
 		default:
-			if pl, readable, ok = l.planSpec(spec.ID, r, in); !ok {
+			if pl, readable, ok = l.planSpec(spec.ID, r, in, own.RebaseInForce()); !ok {
 				return readable
 			}
 		}
@@ -399,13 +518,15 @@ func (l *lander) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets []
 		}
 		plans = append(plans, pl)
 	}
-	if !slices.ContainsFunc(plans, func(pl specPlan) bool { return pl.push || !pl.inBase }) {
+	if !slices.ContainsFunc(plans, l.landsHere) {
 		// Merged on an earlier poll whose landing then failed: those Tickets
 		// land through the plain path, as their work is in every base.
 		return false
 	}
 	if len(conflicts) > 0 {
 		l.openSpecConflict(ctx, spec, conflicts)
+	} else if !l.moveRebasedSpecBranches(spec.ID, plans) {
+		return true
 	}
 	for _, pl := range plans {
 		switch {
@@ -421,11 +542,14 @@ func (l *lander) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets []
 	return true
 }
 
-// planSpec works out how the Spec id lands tickets in r. ok is false when
-// it can't, and then handled is mergeSpec's answer: false when the Spec
-// Branch can't be read, true with a line saying why otherwise.
-func (l *lander) planSpec(id string, r *repository, tickets []core.TicketView) (pl specPlan, handled, ok bool) {
-	pl = specPlan{r: r, tickets: tickets}
+// planSpec works out how the Spec id lands tickets in r. With rebase,
+// Rebase being in force there, a Spec Branch that doesn't descend from
+// the base's tip is rebased onto it first (rebaseSpecBranch), and a
+// conflict there is the plan's. ok is false when it can't, and then
+// handled is mergeSpec's answer: false when the Spec Branch can't be
+// read, true with a line saying why otherwise.
+func (l *lander) planSpec(id string, r *repository, tickets []core.TicketView, rebase bool) (pl specPlan, handled, ok bool) {
+	pl = specPlan{r: r, tickets: tickets, rebase: rebase}
 	tip, err := r.git.commit("refs/heads/" + specBranch(id))
 	if err != nil {
 		return pl, false, false
@@ -445,11 +569,58 @@ func (l *lander) planSpec(id string, r *repository, tickets []core.TicketView) (
 		pl.inBase = true
 		return pl, true, true
 	}
-	if pl.tree, pl.conflicts, err = r.git.mergeTree(pl.baseTip, tip); err != nil {
+	if rebase && !r.git.isAncestor(pl.baseTip, tip) {
+		rebased, conflicts, why := l.rebaseSpecBranch(r, pl.baseTip, tip)
+		switch {
+		case len(conflicts) > 0:
+			pl.conflicts = conflicts
+			return pl, true, true
+		case why != "":
+			l.printf("warning: %s: can't rebase %s onto %s%s: %s", id, specBranch(id), base, r.where(), why)
+			return pl, true, false
+		}
+		pl.rebasedFrom, pl.tip = tip, rebased
+	}
+	if pl.tree, pl.conflicts, err = r.git.mergeTree(pl.baseTip, pl.tip); err != nil {
 		l.printf("warning: %s: can't merge %s%s: %v", id, specBranch(id), r.where(), err)
 		return pl, true, false
 	}
 	return pl, true, true
+}
+
+// landsHere reports whether mergeSpec lands pl's Tickets, rather than the
+// plain path: pl pushes the Spec Branch, or the base doesn't hold it, or
+// it does but not a Ticket's work there, as when the work was replayed
+// onto the Spec Branch under Rebase and the Spec Branch since rebased
+// onto the base.
+func (l *lander) landsHere(pl specPlan) bool {
+	if pl.push || !pl.inBase {
+		return true
+	}
+	return slices.ContainsFunc(pl.tickets, func(tk core.TicketView) bool {
+		head, _, err := l.workIn(pl.r, tk)
+		return err == nil && !l.repos.inBaseOf(pl.r, head)
+	})
+}
+
+// moveRebasedSpecBranches moves the Spec id's Spec Branch in each of
+// plans' Repositories where it was rebased onto the base to its rebased
+// tip, from where it was, and reports whether every one moved. One that
+// moved meanwhile, or that git refuses, holds the Spec to the next poll,
+// which works it out again.
+func (l *lander) moveRebasedSpecBranches(id string, plans []specPlan) bool {
+	branch := specBranch(id)
+	for _, pl := range plans {
+		if pl.rebasedFrom == "" {
+			continue
+		}
+		if err := pl.r.git.updateRef("refs/heads/"+branch, pl.tip, pl.rebasedFrom); err != nil {
+			l.printf("warning: %s: can't move %s to its rebase onto %s%s: %v", id, branch, l.repos.baseOf(pl.r), pl.r.where(), err)
+			return false
+		}
+		l.printf("%s: rebased %s onto %s at %s%s", id, branch, l.repos.baseOf(pl.r), short(pl.tip), pl.r.where())
+	}
+	return true
 }
 
 // landSpecIn lands spec's Tickets in pl's Repository as pl says, making
@@ -589,9 +760,13 @@ func (l *lander) openSpecConflict(ctx context.Context, spec core.SpecDetail, con
 		with = "the base in " + strings.Join(names, ", ")
 		again = with + " again"
 	}
+	do := "merge the base into it"
+	if slices.ContainsFunc(conflicts, func(pl specPlan) bool { return pl.rebase }) {
+		do = "rebase it onto the base"
+	}
 	switch res.Outcome {
 	case core.SpecMergeOpened:
-		l.printf("%s: %s conflicts with %s: opened %s to merge the base into it", spec.ID, branch, with, res.Ticket)
+		l.printf("%s: %s conflicts with %s: opened %s to %s", spec.ID, branch, with, res.Ticket, do)
 	case core.SpecMergeCommented:
 		l.printf("%s: %s conflicts with %s: commented on %s", spec.ID, branch, again, res.Ticket)
 	}

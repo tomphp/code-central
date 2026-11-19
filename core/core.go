@@ -140,6 +140,10 @@ type LandingView struct {
 	// LandPerSpec is the Merge option to land a Spec's work together,
 	// shown whatever the method.
 	LandPerSpec bool `json:"land_per_spec"`
+	// Rebase is the Merge and Pull Request option to replay a Ticket's
+	// commits onto its target instead of merging its branch, shown
+	// whatever the method.
+	Rebase bool `json:"rebase"`
 	// CodeHost is the Code Host the reported Push remote URL names,
 	// github or azure_repos, empty while none is reported or it is
 	// unsupported. Repository is the host's name for the repository.
@@ -947,7 +951,7 @@ func landingViewWith(p domain.Project, watcher WatcherView) LandingView {
 	}
 	ps := landingPolicies(p)
 	return LandingView{Method: p.Landing.Method, Push: push, Remote: p.Landing.Remote, LandPerSpec: p.Landing.LandPerSpec,
-		CodeHost: host, Repository: repo, PATEnv: patEnvOf(domain.CI{PATEnv: p.Landing.PATEnv}), UsesAzureReposPAT: ps.UsesAzureReposPAT(azure),
+		Rebase: p.Landing.Rebase, CodeHost: host, Repository: repo, PATEnv: patEnvOf(domain.CI{PATEnv: p.Landing.PATEnv}), UsesAzureReposPAT: ps.UsesAzureReposPAT(azure),
 		Methods: landingCapabilities(p, azure), RunsPullRequestWatcher: ps.RunsPullRequestWatcher(),
 		RepositoryLanding: repositoryLandingOf(p.Landing.Method, p.Landing.Push), PushesNothing: pushesNothing(p),
 		Base: p.Base(), Watcher: watcher, OpenPullRequests: []OpenPullRequest{}}

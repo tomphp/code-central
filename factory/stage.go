@@ -121,6 +121,27 @@ func (f *factory) conflictsIn(ws worktreeSet, stage string, tk core.TicketView) 
 	return out
 }
 
+// rebases reports whether Rebase is in force (ADR 0067) in any
+// Repository of conflicts, so that a conflict Claim is asked to rebase its
+// branch, not merge the base into it. Without the Project, it merges.
+func (f *factory) rebases(ctx context.Context, conflicts []conflict) bool {
+	if len(conflicts) == 0 {
+		return false
+	}
+	p, err := f.client.GetProject(ctx, f.project)
+	if err != nil {
+		f.printf("warning: can't read the Landing Policy, so the conflict Claim is asked to merge: %v", err)
+		return false
+	}
+	policies := p.LandingPolicies()
+	for _, cf := range conflicts {
+		if cf.w.r.policy(policies).RebaseInForce() {
+			return true
+		}
+	}
+	return false
+}
+
 // conflictFiles is the files merging r's base's tip into the Ticket's
 // existing branch in r conflicts in, for an implementation Ticket; none
 // for any other, for a branch not yet cut (but a Spec merge Ticket's,
@@ -135,7 +156,7 @@ func (f *factory) conflictFiles(r *repository, stage string, tk core.TicketView)
 		// A Spec merge Ticket, marked or one opened before the mark, has
 		// no branch yet: it is cut from the Spec Branch, which is what
 		// conflicts.
-		if !tk.SpecLanded || tk.Title != core.SpecMergeTitle(tk.Spec.ID) {
+		if !tk.SpecLanded || !tk.IsSpecMergeTicket() {
 			return nil
 		}
 		if head, err = f.repos.specBranchTip(r, tk.Spec.ID); err != nil {
@@ -166,11 +187,16 @@ const mapResearch = "map-research"
 //
 // A conflict Claim (conflicts non-empty) starts no skill: the prompt
 // holds the instructions for resolving a merge of the base into the
-// Ticket's branch, which is all the work there is.
-func firstPrompt(c claim, stage, base string, conflicts []string) string {
+// Ticket's branch, or a rebase of the branch onto the base when rebase,
+// Rebase being in force (ADR 0067), which is all the work there is.
+func firstPrompt(c claim, stage, base string, conflicts []string, rebase bool) string {
 	if len(conflicts) > 0 {
 		var b strings.Builder
-		fmt.Fprintf(&b, "Ticket %s's branch, %s, conflicts with the base, %s. Merge %s into the branch and resolve the conflicts in these files:\n\n", c.Ticket, c.Ticket, base, base)
+		do := fmt.Sprintf("Merge %s into the branch", base)
+		if rebase {
+			do = fmt.Sprintf("Rebase the branch onto %s", base)
+		}
+		fmt.Fprintf(&b, "Ticket %s's branch, %s, conflicts with the base, %s. %s and resolve the conflicts in these files:\n\n", c.Ticket, c.Ticket, base, do)
 		for _, f := range conflicts {
 			fmt.Fprintf(&b, "- %s\n", f)
 		}
@@ -187,11 +213,15 @@ func firstPrompt(c claim, stage, base string, conflicts []string) string {
 // several Repositories (ADR 0048): a conflict Claim's names the files
 // conflicting in each Repository, and either ends with the Repositories
 // list, where the session finds each one.
-func severalFirstPrompt(c claim, stage string, ws worktreeSet, conflicts []conflict) string {
-	p := firstPrompt(c, stage, "", nil)
+func severalFirstPrompt(c claim, stage string, ws worktreeSet, conflicts []conflict, rebase bool) string {
+	p := firstPrompt(c, stage, "", nil, false)
 	if len(conflicts) > 0 {
 		var b strings.Builder
-		fmt.Fprintf(&b, "Ticket %s's branch, %s, conflicts with the base in these Repositories. In each one's worktree, merge its base into the branch and resolve the conflicts in these files:\n", c.Ticket, c.Ticket)
+		do := "merge its base into the branch"
+		if rebase {
+			do = "rebase the branch onto its base"
+		}
+		fmt.Fprintf(&b, "Ticket %s's branch, %s, conflicts with the base in these Repositories. In each one's worktree, %s and resolve the conflicts in these files:\n", c.Ticket, c.Ticket, do)
 		for _, cf := range conflicts {
 			fmt.Fprintf(&b, "\n%s, base %s:\n", cf.w.r.name, cf.w.base)
 			for _, f := range cf.files {

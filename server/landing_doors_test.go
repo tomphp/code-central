@@ -143,3 +143,27 @@ func TestLandPerSpecIsOnByDefaultAndKeptWhenSetLandingMethodLeavesItOut(t *testi
 		t.Fatalf("land_per_spec = %v, want true once set back", got)
 	}
 }
+
+func TestRebaseIsOffByDefaultAndKeptWhenSetLandingMethodLeavesItOut(t *testing.T) {
+	srv := newServer(t)
+	rebase := func(project map[string]any) any {
+		l, _ := project["landing"].(map[string]any)
+		return l["rebase"]
+	}
+	if got := rebase(httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""})); got != false {
+		t.Fatalf("rebase = %v, want false by default", got)
+	}
+	out := httpOK(t, srv, setLandingMethod(`{"method":"merge","rebase":true}`))
+	if got := rebase(out); got != true {
+		t.Fatalf("rebase = %v, want true once set", got)
+	}
+	// Left out, the stored value stays, even under Branch.
+	out = httpOK(t, srv, setLandingMethod(`{"method":"branch"}`))
+	if got := rebase(out); got != true {
+		t.Fatalf("rebase = %v, want true kept", got)
+	}
+	out = httpOK(t, srv, setLandingMethod(`{"method":"merge","rebase":false}`))
+	if got := rebase(out); got != false {
+		t.Fatalf("rebase = %v, want false once set back", got)
+	}
+}

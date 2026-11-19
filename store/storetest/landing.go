@@ -67,4 +67,30 @@ func runLanding(t *testing.T, f Factory) {
 			}
 		})
 	}
+
+	// Rebase is kept whatever the method, and the default Landing with it
+	// on is still written.
+	for _, want := range []domain.Landing{
+		{Method: domain.LandingMerge, Remote: domain.DefaultLandingRemote, LandPerSpec: true, Rebase: true},
+		{Method: domain.LandingBranch, Remote: "upstream", Rebase: true},
+		{Method: domain.LandingPullRequest, Remote: "upstream", LandPerSpec: true, Rebase: true},
+	} {
+		t.Run(fmt.Sprintf("a project's rebase reads back under %s", want.Method), func(t *testing.T) {
+			s := f.New(t)
+			put(t, s, func(w store.Writer) error {
+				return w.PutProject(domain.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed", Landing: want})
+			})
+			check := func(s store.Store) {
+				read(t, s, func(r store.Reader) {
+					if p, _ := r.Project("acme"); p.Landing != want {
+						t.Fatalf("landing = %+v, want %+v", p.Landing, want)
+					}
+				})
+			}
+			check(s)
+			if f.Reopen != nil {
+				check(f.Reopen(t, s))
+			}
+		})
+	}
 }

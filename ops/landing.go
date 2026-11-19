@@ -16,7 +16,7 @@ var Land = &Definition[core.LandInput, core.Written[core.TicketView]]{
 var SetLandingMethod = &Definition[core.SetLandingMethodInput, core.ProjectView]{
 	Name: "set_landing_method", Audience: HumanOnly, Write: true,
 	HTTP: "POST /api/p/{key}/set_landing_method",
-	Doc:  "Set how the Project's accepted work lands: the Landing Method, Push, remote, Land per Spec, the PAT variable and the base.",
+	Doc:  "Set how the Project's accepted work lands: the Landing Method, Push, remote, Land per Spec, Rebase, the PAT variable and the base.",
 	Call: (*core.Core).SetLandingMethod,
 }
 

@@ -25,11 +25,11 @@ func TestEachLandingMethodSaysWhatTheOptionsFormOffersAsIfItWereTheDefault(t *te
 	// "Under Pull Request, Push is implied"; "Land per Spec applies under
 	// Merge and Pull Request, and has no effect under Branch"; the Code
 	// Host is worked out for Pull Request, "the Ticket lands when the host
-	// reports it merged".
+	// reports it merged"; Rebase applies under Merge and Pull Request.
 	want := core.LandingMethodsCapabilities{
-		Merge:       core.LandingMethodCapabilities{OffersPush: true, OffersLandPerSpec: true},
+		Merge:       core.LandingMethodCapabilities{OffersPush: true, OffersLandPerSpec: true, OffersRebase: true},
 		Branch:      core.LandingMethodCapabilities{OffersPush: true},
-		PullRequest: core.LandingMethodCapabilities{OffersLandPerSpec: true, ShowsCodeHost: true},
+		PullRequest: core.LandingMethodCapabilities{OffersLandPerSpec: true, OffersRebase: true, ShowsCodeHost: true},
 	}
 	if got := f.landingOf(t).Methods; got != want {
 		t.Fatalf("methods %+v, want %+v", got, want)

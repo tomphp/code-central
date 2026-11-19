@@ -525,7 +525,7 @@ acme-shop-5: landed on main at 9ad0fd655dd2
 acme-shop-6: landed on main at 9ad0fd655dd2
 ```
 
-When the Spec Branch conflicts with the base, the Factory asks Code Central to open a Spec merge Ticket: a Ready Ticket on the Spec, "Merge the base into the Spec Branch of <spec id>", naming the conflicting files and both branches' tips, which Code Central marks as a Spec merge Ticket. While that Ticket is open, a later conflict is commented on it instead, and the same conflict again writes nothing. The Factory retries once the Ticket is accepted. A Ticket with that title made any other way, or opened by a Factory from before the mark, is not marked; Code Central comments on it the same way but leaves it unmarked.
+When the Spec Branch conflicts with the base, the Factory asks Code Central to open a Spec merge Ticket: a Ready Ticket on the Spec, "Merge the base into the Spec Branch of <spec id>" (under [Rebase](#rebase), "Rebase the Spec Branch of <spec id> onto the base"), naming the conflicting files and both branches' tips, which Code Central marks as a Spec merge Ticket. While that Ticket is open, a later conflict is commented on it instead, and the same conflict again writes nothing. The Factory retries once the Ticket is accepted. A Ticket with that title made any other way, or opened by a Factory from before the mark, is not marked; Code Central comments on it the same way but leaves it unmarked.
 
 ```text
 acme-shop-2: spec/acme-shop-2 conflicts with main in README.md: opened acme-shop-7 to merge the base into it
@@ -540,6 +540,22 @@ A Spec Branch is deleted once it is in the base and every Ticket on its Spec is 
 acme-shop-2: deleted spec/acme-shop-2, which is in main
 acme-shop-4: every Ticket is finished but spec/acme-shop-4 isn't in main: kept
 ```
+
+### Rebase
+
+With **Rebase instead of merging** ticked (under Merge or Pull Request; see [Setting up a project](setting-up-a-project.md#choosing-how-accepted-work-lands)), the Factory replays a Ticket's commits instead of merging its branch, so history stays linear with one merge commit per landing:
+
+- Under Land per Spec, a Ticket accepted onto its Spec Branch is replayed onto it, and before the one `Merge spec <spec id>` commit the Factory rebases the Spec Branch onto the base. When that conflicts, the Spec merge Ticket is "Rebase the Spec Branch of <spec id> onto the base", and accepting it replaces the Spec Branch.
+- With Land per Spec off, each Ticket's branch is replayed onto the base before its `Merge <id>` commit.
+- Under Pull Request, a branch about to be pushed is rebased onto the fetched base first and pushed with `--force-with-lease`. The Factory force-pushes only its own Ticket and Spec branches, never a base, and when a rebase conflicts it pushes in no Repository.
+- A conflict Claim is asked to rebase the branch onto the base, not merge the base into it.
+
+```text
+acme-shop-5: replayed onto spec/acme-shop-2 at 3b9e1f0c2d44
+acme-shop-6: replayed onto main at 7c41a9e0d2b8
+```
+
+Leave as a branch is unaffected.
 
 ### Pull Request
 

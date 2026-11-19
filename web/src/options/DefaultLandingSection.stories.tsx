@@ -10,6 +10,17 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Merge: Story = { ...optionsWorld() };
+// Rebase on, kept but disabled under Leave as a branch.
+export const MergeWithRebase: Story = {
+  ...optionsWorld(async (_s, w) => {
+    await w.api.setLandingMethod("acme", { method: "merge", push: false, remote: "origin", rebase: true });
+  }),
+};
+export const BranchWithRebaseKept: Story = {
+  ...optionsWorld(async (_s, w) => {
+    await w.api.setLandingMethod("acme", { method: "branch", push: false, remote: "origin", rebase: true });
+  }),
+};
 export const PullRequest: Story = {
   ...optionsWorld(async (s, w) => {
     await s.reportPushRemote("acme", "git@github.com:acme/web.git");

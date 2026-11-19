@@ -24,8 +24,13 @@ type repo interface {
 	// commit resolves rev to a commit, failing when it isn't one in the
 	// repository.
 	commit(rev string) (string, error)
+	// treeOf is commit's tree.
+	treeOf(commit string) (string, error)
 	// isAncestor reports whether commit is reachable from rev.
 	isAncestor(commit, rev string) bool
+	// mergeBase is a best common ancestor of a and b, failing when they
+	// have none.
+	mergeBase(a, b string) (string, error)
 	// hasRemote reports whether the repository has the remote name.
 	hasRemote(name string) bool
 	// remoteURL is the URL of the remote name, failing when the
@@ -64,11 +69,15 @@ type repo interface {
 	updateRef(ref, new, old string) error
 	// specBranches is the names of the branches under spec/.
 	specBranches() ([]string, error)
+	// forkPoints is the Ticket IDs with a fork ref (forkRef).
+	forkPoints() ([]string, error)
 	// deleteRef deletes ref, failing unless it is at old.
 	deleteRef(ref, old string) error
-	// push pushes branch to remote, never forcing; out is git's output
-	// when it fails. A stop (ctx) kills it.
-	push(ctx context.Context, remote, branch string) (out string, err error)
+	// push pushes branch to remote; out is git's output when it fails. With
+	// lease it forces, but only over the remote's branch at lease, as
+	// `--force-with-lease=<branch>:<lease>` does; with "" it never forces.
+	// A stop (ctx) kills it.
+	push(ctx context.Context, remote, branch, lease string) (out string, err error)
 	// fetch fetches remote, updating its remote-tracking refs; out is git's
 	// output when it fails. A stop (ctx) kills it.
 	fetch(ctx context.Context, remote string) (out string, err error)
@@ -108,10 +117,16 @@ func (g gitRepo) commit(rev string) (string, error) {
 	return g.out("rev-parse", "--verify", "-q", rev+"^{commit}")
 }
 
+func (g gitRepo) treeOf(commit string) (string, error) {
+	return g.out("rev-parse", "--verify", "-q", commit+"^{tree}")
+}
+
 func (g gitRepo) isAncestor(commit, rev string) bool {
 	_, err := g.out("merge-base", "--is-ancestor", commit, rev)
 	return err == nil
 }
+
+func (g gitRepo) mergeBase(a, b string) (string, error) { return g.out("merge-base", a, b) }
 
 func (g gitRepo) hasRemote(name string) bool {
 	_, err := g.remoteURL(name)
@@ -263,13 +278,26 @@ func (g gitRepo) specBranches() ([]string, error) {
 	return strings.Fields(out), err
 }
 
+func (g gitRepo) forkPoints() ([]string, error) {
+	out, err := g.out("for-each-ref", "--format=%(refname)", forkRefs)
+	var ids []string
+	for _, ref := range strings.Fields(out) {
+		ids = append(ids, strings.TrimPrefix(ref, forkRefs))
+	}
+	return ids, err
+}
+
 func (g gitRepo) deleteRef(ref, old string) error {
 	_, err := g.out("update-ref", "-d", ref, old)
 	return err
 }
 
-func (g gitRepo) push(ctx context.Context, remote, branch string) (string, error) {
-	cmd := exec.CommandContext(ctx, g.git, "push", remote, branch)
+func (g gitRepo) push(ctx context.Context, remote, branch, lease string) (string, error) {
+	args := []string{"push", remote, branch}
+	if lease != "" {
+		args = []string{"push", "--force-with-lease=" + branch + ":" + lease, remote, branch}
+	}
+	cmd := exec.CommandContext(ctx, g.git, args...)
 	cmd.Dir = g.dir
 	// A prompt for credentials would wait forever: nobody answers it.
 	cmd.Env = append(slices.Clone(g.environ), "GIT_TERMINAL_PROMPT=0")

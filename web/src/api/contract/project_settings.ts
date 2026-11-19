@@ -100,6 +100,20 @@ export function projectSettingsContract(driver: () => Driver) {
     expect(on.landing.land_per_spec).toBe(true);
   });
 
+  it("keeps Rebase off by default, sets it, and keeps it when a later set leaves it out", async () => {
+    await d.createProject("acme", "Acme");
+    expect((await d.api.listProjects())[0].landing.rebase).toBe(false);
+    const on = await d.api.setLandingMethod("acme", { method: "merge", push: false, remote: "", rebase: true });
+    expect(on.landing.rebase).toBe(true);
+    // Left out, the stored value stays, and it is shown whatever the method.
+    const kept = await d.api.setLandingMethod("acme", { method: "branch", push: false, remote: "" });
+    expect(kept.landing).toMatchObject({ method: "branch", rebase: true });
+    expect(kept.landing.methods.branch.offers_rebase).toBe(false);
+    expect(kept.landing.methods.merge.offers_rebase).toBe(true);
+    const off = await d.api.setLandingMethod("acme", { method: "merge", push: false, remote: "", rebase: false });
+    expect(off.landing.rebase).toBe(false);
+  });
+
   it("refuses turning CI Tracking on when the CI check fails, with its reason and fix", async () => {
     await d.createProject("acme", "Acme");
     await d.logOutOfGH();

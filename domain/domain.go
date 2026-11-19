@@ -335,6 +335,10 @@ type Landing struct {
 	// It reads as on for a Project that never stored it, and is kept
 	// whatever the method.
 	LandPerSpec bool
+	// Rebase is the Merge and Pull Request option that replays a Ticket's
+	// commits onto its target instead of merging its branch. It is off for
+	// a Project that never stored it, and is kept whatever the method.
+	Rebase bool
 	// PATEnv is the Pull Request setting naming the environment variable
 	// that holds the Azure Repos PAT. Empty reads as DefaultPATEnv, and
 	// it is kept whatever the method.

@@ -581,7 +581,7 @@ func TestUnderMergeAndPushTheBaseIsNotPushedAgainOnceTheRemoteHasIt(t *testing.T
 	w.setLanding(domain.LandingMerge, true, "origin")
 	id, _ := w.reviewed("Merged and pushed by hand")
 	w.repo.mergeByHand(id)
-	if _, err := w.repo.push(context.Background(), "origin", "main"); err != nil {
+	if _, err := w.repo.push(context.Background(), "origin", "main", ""); err != nil {
 		t.Fatal(err)
 	}
 

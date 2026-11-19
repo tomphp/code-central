@@ -141,16 +141,17 @@ func (l *lander) land(ctx context.Context, p core.ProjectView) {
 // Spec Branch there; by Pull Request it pushes its branch there for its
 // pull request, and lands it there once that is merged; by Branch it
 // leaves it for the human to merge there, and lands it there once
-// merged. Every merge the Factory makes is worked out before tk lands in
-// any Repository: one that conflicts, or can't be worked out this poll,
-// moves nothing of tk anywhere (ADR 0049). Then it goes through them in
-// the landing order, and stops at a merge it can't land yet, to go on
-// from there next poll. tk is Partly landed until it has landed in each.
+// merged. Every merge the Factory makes, and every rebase of its branch
+// before a push under Rebase, is worked out before tk lands in any
+// Repository: one that conflicts, or can't be worked out this poll, moves
+// nothing of tk anywhere (ADR 0049). Then it goes through them in the
+// landing order, and stops at a merge it can't land yet, to go on from
+// there next poll. tk is Partly landed until it has landed in each.
 func (l *lander) landEach(ctx context.Context, tk core.TicketView, p core.ProjectView, ws []changedWork) {
 	policies := p.LandingPolicies()
 	onSpec := l.waitsOnSpecBranch(tk)
 	routes := make([]domain.LandingRoute, len(ws))
-	var merges, specs []changedWork
+	var merges, specs, pullRequests []changedWork
 	for i, w := range ws {
 		routes[i] = w.r.policy(policies).Route(onSpec, pullRequestMergedIn(tk, w.r))
 		switch routes[i] {
@@ -158,13 +159,27 @@ func (l *lander) landEach(ctx context.Context, tk core.TicketView, p core.Projec
 			merges = append(merges, w)
 		case domain.RouteSpecBranch:
 			specs = append(specs, w)
+		case domain.RoutePullRequest:
+			pullRequests = append(pullRequests, w)
 		}
 	}
-	plans, ok := l.planMerges(ctx, tk, merges)
+	plans, conflicts, ok := l.planMerges(ctx, tk, policies, merges)
 	if !ok {
 		return
 	}
-	if len(specs) > 0 && !l.mergeIntoSpecBranch(ctx, tk, specs) {
+	var rebases map[*repository]pushRebase
+	if !onSpec {
+		var more []landConflict
+		if rebases, more, ok = l.planPushRebases(ctx, tk, policies, pullRequests); !ok {
+			return
+		}
+		conflicts = append(conflicts, more...)
+	}
+	if len(conflicts) > 0 {
+		l.sendBackConflicts(ctx, tk, "base", conflicts)
+		return
+	}
+	if len(specs) > 0 && !l.mergeIntoSpecBranch(ctx, tk, policies, specs) {
 		return
 	}
 	for i, w := range ws {
@@ -174,6 +189,9 @@ func (l *lander) landEach(ctx context.Context, tk core.TicketView, p core.Projec
 				return
 			}
 		case domain.RoutePullRequest:
+			if rb, ok := rebases[w.r]; ok && !l.rebaseForPush(ctx, tk, w.r, rb) {
+				return
+			}
 			if changedElsewhere(l.repos.home.name, tk) {
 				l.landPullRequestIn(ctx, tk, policies, w.r, onSpec)
 			} else {
@@ -238,7 +256,7 @@ func (l *lander) pushBranch(ctx context.Context, tk core.TicketView, policies co
 		l.cantPushYet(ctx, tk, "it was finished without a branch, so there is no branch to push.")
 		return
 	}
-	pushed, why := l.push(ctx, r, r.remote, branch, commit)
+	pushed, why := l.push(ctx, r, r.remote, branch, commit, false)
 	if why != "" {
 		l.cantPushIn(ctx, tk, r, why)
 		return
@@ -264,8 +282,30 @@ func (l *lander) workOf(tk core.TicketView) (commit, what string, err error) {
 }
 
 // workIn is workOf in r: the commit of tk's work there, its finish commit
-// for r, or with none, its branch's tip there.
+// for r, or with none, its branch's tip there; once the Factory has
+// replayed it onto its Spec Branch or the base under Rebase, its branch's
+// tip, which holds the replayed commits.
 func (l *lander) workIn(r *repository, tk core.TicketView) (commit, what string, err error) {
+	commit, _, what, err = l.replayedWorkIn(r, tk)
+	return commit, what, err
+}
+
+// replayedWorkIn is workIn, and whether it is tk's work replayed onto its
+// Spec Branch or the base.
+func (l *lander) replayedWorkIn(r *repository, tk core.TicketView) (commit string, replayed bool, what string, err error) {
+	commit, what, err = l.finishedIn(r, tk)
+	if err != nil {
+		return commit, false, what, err
+	}
+	if tip, ok := replayedTip(r, tk.ID, branchIn(tk, r)); ok {
+		return tip, true, what, nil
+	}
+	return commit, false, what, nil
+}
+
+// finishedIn is the commit of tk's work in r as finished: its finish
+// commit for r, or with none, its branch's tip there.
+func (l *lander) finishedIn(r *repository, tk core.TicketView) (commit, what string, err error) {
 	if r.home {
 		return l.workOf(tk)
 	}
@@ -433,47 +473,51 @@ func (l *lander) workToLand(tk core.TicketView, policies core.LandingPolicies) (
 // worked out before it lands any: at old, a merge it made into a base the
 // Project no longer names; at head, when the base holds it already; or by
 // merging head into the base at baseTip, making tree, unless that
-// conflicts.
+// conflicts. Under Rebase, head is the Ticket's work replayed onto
+// baseTip, made by replay, which moves its branch there before the merge,
+// or before it lands at baseTip itself when every commit was dropped as
+// already there; replaying says the conflicts are the replay's.
 type mergePlan struct {
 	r                   *repository
 	old                 *mergeOn
 	baseTip, head, tree string
-	inBase              bool
+	replay              *replay
+	inBase, replaying   bool
 	conflicts           []string
 }
 
 // planMerges works out how an Accepted Ticket's work is merged into the
 // base of each of ws, the Changed Repositories it lands in by Merge, that
-// it hasn't landed in (ADR 0049), by Repository. ok is false when it
-// lands in none this poll: a merge can't be worked out yet, or one
-// conflicts, which sends the Ticket back.
-func (l *lander) planMerges(ctx context.Context, tk core.TicketView, ws []changedWork) (plans map[*repository]mergePlan, ok bool) {
+// it hasn't landed in (ADR 0049), by Repository, and the merges that
+// conflict, in the wording of each Repository's Landing Policy,
+// policies', for the Ticket to be sent back with (sendBackConflicts). ok
+// is false when a merge can't be worked out yet, with a comment or a
+// line saying why.
+func (l *lander) planMerges(ctx context.Context, tk core.TicketView, policies core.LandingPolicies, ws []changedWork) (plans map[*repository]mergePlan, conflicts []landConflict, ok bool) {
 	plans = map[*repository]mergePlan{}
-	var conflicts []landConflict
 	for _, w := range ws {
-		pl, landed, planned := l.planMerge(ctx, tk, w)
+		rebase := w.r.policy(policies).RebaseInForce()
+		pl, landed, planned := l.planMerge(ctx, tk, w, rebase)
 		switch {
 		case !planned:
-			return nil, false
+			return nil, nil, false
 		case landed:
 		case len(pl.conflicts) > 0:
-			conflicts = append(conflicts, landConflict{r: pl.r, head: pl.head, into: l.repos.baseOf(pl.r), tip: pl.baseTip, files: pl.conflicts})
+			conflicts = append(conflicts, landConflict{r: pl.r, head: pl.head, into: l.repos.baseOf(pl.r), tip: pl.baseTip, files: pl.conflicts, rebase: rebase, replaying: pl.replaying})
 		default:
 			plans[w.r] = pl
 		}
 	}
-	if len(conflicts) > 0 {
-		l.sendBackConflicts(ctx, tk, "base", conflicts)
-		return nil, false
-	}
-	return plans, true
+	return plans, conflicts, true
 }
 
 // planMerge works out how tk lands in w's Repository, or that it has
-// landed there already: its landed commit holds its work. ok is false
-// when it can't be worked out this poll, with a comment or a line saying
-// why.
-func (l *lander) planMerge(ctx context.Context, tk core.TicketView, w changedWork) (pl mergePlan, landed, ok bool) {
+// landed there already: its landed commit holds its work. With rebase,
+// Rebase in force there, work that doesn't descend from the base's tip is
+// replayed onto it first (planBaseReplay), and a Ticket whose work can't
+// be replayed doesn't land rather than being merged. ok is false when it
+// can't be worked out this poll, with a comment or a line saying why.
+func (l *lander) planMerge(ctx context.Context, tk core.TicketView, w changedWork, rebase bool) (pl mergePlan, landed, ok bool) {
 	r := w.r
 	pl.r = r
 	if w.landed != "" {
@@ -503,7 +547,28 @@ func (l *lander) planMerge(ctx context.Context, tk core.TicketView, w changedWor
 		pl.inBase = true
 		return pl, false, true
 	}
-	if pl.tree, pl.conflicts, err = r.git.mergeTree(baseTip, head); err != nil {
+	if rebase && !r.git.isAncestor(baseTip, head) {
+		rp, files, why, err := l.planBaseReplay(r, branchIn(tk, r), head, baseTip)
+		switch {
+		case err != nil:
+			l.printf("warning: %s: can't replay%s: %v", tk.ID, r.where(), err)
+			return pl, false, false
+		case why != "":
+			l.cantLandIn(ctx, tk, r, why)
+			return pl, false, false
+		case len(files) > 0:
+			pl.conflicts, pl.replaying = files, true
+			return pl, false, true
+		}
+		pl.replay, pl.head = rp, rp.tip
+		if pl.head == baseTip {
+			// Every commit was dropped as already in the base: its branch
+			// moves to the base's tip, and it lands there with no merge.
+			pl.inBase = true
+			return pl, false, true
+		}
+	}
+	if pl.tree, pl.conflicts, err = r.git.mergeTree(baseTip, pl.head); err != nil {
 		l.printf("warning: %s: can't merge%s: %v", tk.ID, r.where(), err)
 		return pl, false, false
 	}
@@ -511,15 +576,23 @@ func (l *lander) planMerge(ctx context.Context, tk core.TicketView, w changedWor
 }
 
 // mergeAndLand lands tk in pl's Repository as pl says, making the merge
-// and advancing the base first when it needs one. It reports whether
-// landing can go on to the next Repository: it can't when a step failed
-// and is to be tried again next poll.
+// and advancing the base first when it needs one. Work replayed onto the
+// base's tip under Rebase moves its branch there first, and is what is
+// merged. It reports whether landing can go on to the next Repository: it
+// can't when a step failed and is to be tried again next poll.
 func (l *lander) mergeAndLand(ctx context.Context, tk core.TicketView, p core.ProjectView, pl mergePlan) bool {
 	r, base := pl.r, l.repos.baseOf(pl.r)
-	switch {
-	case pl.old != nil:
+	if pl.old != nil {
 		return l.landPushed(ctx, tk, p, r, pl.old.base, pl.old.commit)
-	case pl.inBase:
+	}
+	if pl.replay != nil {
+		if err := pl.replay.apply(r, tk.ID, pl.baseTip); err != nil {
+			l.cantLandIn(ctx, tk, r, err.Error()+".")
+			return false
+		}
+		l.printf("%s: replayed onto %s at %s%s", tk.ID, base, short(pl.head), r.where())
+	}
+	if pl.inBase {
 		return l.landPushed(ctx, tk, p, r, base, pl.head)
 	}
 	msg := fmt.Sprintf("Merge %s: %s", tk.ID, tk.Title)
@@ -559,7 +632,7 @@ func (l *lander) landPushed(ctx context.Context, tk core.TicketView, p core.Proj
 		l.landOnCI(ctx, tk, r, v)
 		return true
 	}
-	pushed, why := l.push(ctx, r, r.remote, base, commit)
+	pushed, why := l.push(ctx, r, r.remote, base, commit, false)
 	if why != "" {
 		l.cantLandIn(ctx, tk, r, why)
 		return false
@@ -733,19 +806,39 @@ func (l *lander) reportTip(ctx context.Context, policies core.LandingPolicies) {
 
 // push pushes branch to remote unless its remote-tracking ref already
 // holds commit: a push that succeeded moves that ref, so the Factory
-// needs no state of its own. It never forces, so a remote that has moved
-// ahead is left as it is. It returns whether it pushed, or why the push
-// failed. It pushes from r's clone, to r's own remote of that name.
-func (l *lander) push(ctx context.Context, r *repository, remote, branch, commit string) (pushed bool, why string) {
-	if r.git.isAncestor(commit, "refs/remotes/"+remote+"/"+branch) {
+// needs no state of its own. Without force it never forces, so a remote
+// that has moved ahead is left as it is. With force, which only the Spec
+// Branch's and a Ticket's branch's pushes under Rebase set (ADR 0067), a
+// remote branch that commit doesn't descend from, as after a rebase, is
+// replaced, but only from the tip its remote-tracking ref holds
+// (`--force-with-lease`), so a push the Factory hasn't fetched is never
+// lost; force on r's base is refused. It returns whether it pushed, or
+// why the push failed. It pushes from r's clone, to r's own remote of
+// that name.
+func (l *lander) push(ctx context.Context, r *repository, remote, branch, commit string, force bool) (pushed bool, why string) {
+	tracking := "refs/remotes/" + remote + "/" + branch
+	if r.git.isAncestor(commit, tracking) {
 		return false, ""
+	}
+	if force && l.isBase(r, branch) {
+		return false, fmt.Sprintf("the Factory never force-pushes a base, and %s is the base%s.", branch, r.where())
+	}
+	var lease string
+	if theirs, err := r.git.commit(tracking); force && err == nil && !r.git.isAncestor(theirs, commit) {
+		lease = theirs
 	}
 	defer l.work.busy("pushing ", branch)()
 	// A stop kills it, so a push that hangs doesn't hold up the Factory.
-	if out, err := r.git.push(ctx, remote, branch); err != nil {
+	if out, err := r.git.push(ctx, remote, branch, lease); err != nil {
 		return false, fmt.Sprintf("couldn't push %s to %s:\n\n```\n%s\n```", branch, remote, out)
 	}
 	return true, ""
+}
+
+// isBase reports whether branch is r's base, or for the Home Repository a
+// base the Project named earlier in this run.
+func (l *lander) isBase(r *repository, branch string) bool {
+	return branch == l.repos.baseOf(r) || r.home && slices.Contains(l.oldBases, branch)
 }
 
 // cantLandYet leaves a Ticket whose clean merge can't land where it is,
@@ -815,60 +908,109 @@ func firstLine(s string) string {
 
 // sendBack sends a Ticket whose work conflicts with the base back to
 // Ready, so a later Claim resolves the conflict and the human reviews it
-// again.
-func (l *lander) sendBack(ctx context.Context, tk core.TicketView, head, into, tip string, conflicts []string) {
+// again: under Rebase by rebasing its branch onto c.into, and otherwise
+// by merging c.into into its branch. A Spec merge Ticket whose Spec
+// Branch went on while it was open rebases those commits onto its branch
+// instead, since its branch already is the Spec Branch rebased, and the
+// Factory then takes the branch as holding them. It reports whether the
+// Ticket was sent back.
+func (l *lander) sendBack(ctx context.Context, tk core.TicketView, c landConflict) bool {
 	var b strings.Builder
-	fmt.Fprintf(&b, "The Factory couldn't land this: merging %s into %s at %s conflicts in these files:\n\n", short(head), into, short(tip))
-	for _, c := range conflicts {
-		fmt.Fprintf(&b, "- %s\n", c)
+	fmt.Fprintf(&b, "The Factory couldn't land this: %s at %s conflicts in these files:\n\n", c.what(), short(c.tip))
+	for _, f := range c.files {
+		fmt.Fprintf(&b, "- %s\n", f)
 	}
-	fmt.Fprintf(&b, "\nMerge %s into the branch, resolve the conflicts, and finish again.", into)
+	switch {
+	case c.replacing:
+		fmt.Fprintf(&b, "\nRebase %s's commits since %s onto the branch, resolve the conflicts, and finish again. The Factory then takes the branch as holding them, and moves %s to it.", c.into, short(c.fork), c.into)
+	case c.rebase:
+		fmt.Fprintf(&b, "\nRebase the branch onto %s, resolve the conflicts, and finish again.", c.into)
+	default:
+		fmt.Fprintf(&b, "\nMerge %s into the branch, resolve the conflicts, and finish again.", c.into)
+	}
 	if _, err := l.client.SendBack(ctx, l.project, core.SendBackInput{Ticket: core.Ref(tk.ID), Note: b.String()}); err != nil {
 		if ctx.Err() == nil {
 			l.printf("%s: send_back: %v", tk.ID, err)
 		}
-		return
+		return false
 	}
-	l.printf("%s: conflicts with %s at %s in %s: sent back to Ready", tk.ID, into, short(tip), strings.Join(conflicts, ", "))
+	l.printf("%s: conflicts with %s at %s in %s: sent back to Ready", tk.ID, c.into, short(c.tip), strings.Join(c.files, ", "))
+	return true
 }
 
 // landConflict is how merging a Ticket's work in r, head, into the
-// branch into at tip conflicts: in files.
+// branch into at tip conflicts, or replaying it onto into, or, for a
+// Spec merge Ticket under Rebase, replaying into's commits since fork
+// onto head: in files.
 type landConflict struct {
-	r               *repository
-	head, into, tip string
-	files           []string
+	r                     *repository
+	head, into, tip, fork string
+	files                 []string
+	// rebase is whether Rebase is in force, so the Ticket is asked to
+	// rebase its branch, replaying whether the Factory replayed it, and
+	// replacing whether it replayed into's later commits onto head, to
+	// move into there.
+	rebase, replaying, replacing bool
+}
+
+// what is what the Factory tried that conflicts: merging head into into,
+// replaying it onto into, or replaying into's commits since fork onto it.
+func (c landConflict) what() string {
+	switch {
+	case c.replacing:
+		return fmt.Sprintf("replaying %s's commits since %s onto %s", c.into, short(c.fork), short(c.head))
+	case c.replaying:
+		return fmt.Sprintf("replaying %s onto %s", short(c.head), c.into)
+	}
+	return fmt.Sprintf("merging %s into %s", short(c.head), c.into)
 }
 
 // sendBackConflicts is sendBack for a Ticket whose work conflicts with
 // its onto, its "base" or its "Spec Branch", in each of conflicts'
-// Repositories: one note names each, with its files (ADR 0049). The
-// Factory has merged it into none of them this time. With the Home
-// Repository alone it is sendBack.
-func (l *lander) sendBackConflicts(ctx context.Context, tk core.TicketView, onto string, conflicts []landConflict) {
+// Repositories: one note names each, with its files (ADR 0049), and says
+// to rebase the branch in each when Rebase is in force in any of them,
+// and to merge otherwise. The Factory has merged it into none of them
+// this time. With the Home Repository alone it is sendBack. It reports
+// whether the Ticket was sent back.
+func (l *lander) sendBackConflicts(ctx context.Context, tk core.TicketView, onto string, conflicts []landConflict) bool {
 	if !l.repos.several() {
-		c := conflicts[0]
-		l.sendBack(ctx, tk, c.head, c.into, c.tip, c.files)
-		return
+		return l.sendBack(ctx, tk, conflicts[0])
 	}
 	var b strings.Builder
 	var names []string
-	fmt.Fprintf(&b, "The Factory couldn't land this: merging it into the %s conflicts in these Repositories, so it merged it into none of them:\n\n", onto)
+	rebase := slices.ContainsFunc(conflicts, func(c landConflict) bool { return c.rebase })
+	replacing := slices.ContainsFunc(conflicts, func(c landConflict) bool { return c.replacing })
+	switch {
+	case replacing:
+		fmt.Fprintf(&b, "The Factory couldn't land this: replaying the %s's later commits onto it conflicts in these Repositories, so it moved the %s in none of them:\n\n", onto, onto)
+	case slices.ContainsFunc(conflicts, func(c landConflict) bool { return c.replaying }):
+		fmt.Fprintf(&b, "The Factory couldn't land this: replaying it onto the %s conflicts in these Repositories, so it replayed it onto none of them:\n\n", onto)
+	default:
+		fmt.Fprintf(&b, "The Factory couldn't land this: merging it into the %s conflicts in these Repositories, so it merged it into none of them:\n\n", onto)
+	}
 	for _, c := range conflicts {
 		names = append(names, c.r.name)
-		fmt.Fprintf(&b, "- %s: merging %s into %s at %s conflicts in these files:\n", c.r.name, short(c.head), c.into, short(c.tip))
+		fmt.Fprintf(&b, "- %s: %s at %s conflicts in these files:\n", c.r.name, c.what(), short(c.tip))
 		for _, file := range c.files {
 			fmt.Fprintf(&b, "  - %s\n", file)
 		}
 	}
-	fmt.Fprintf(&b, "\nIn each, merge its %s into the branch, resolve the conflicts, and finish again.", onto)
+	switch {
+	case replacing:
+		fmt.Fprintf(&b, "\nIn each, rebase its %s's commits since the fork point named above onto the branch, resolve the conflicts, and finish again. The Factory then takes the branch as holding them, and moves the %s to it.", onto, onto)
+	case rebase:
+		fmt.Fprintf(&b, "\nIn each, rebase the branch onto its %s, resolve the conflicts, and finish again.", onto)
+	default:
+		fmt.Fprintf(&b, "\nIn each, merge its %s into the branch, resolve the conflicts, and finish again.", onto)
+	}
 	if _, err := l.client.SendBack(ctx, l.project, core.SendBackInput{Ticket: core.Ref(tk.ID), Note: b.String()}); err != nil {
 		if ctx.Err() == nil {
 			l.printf("%s: send_back: %v", tk.ID, err)
 		}
-		return
+		return false
 	}
 	l.printf("%s: conflicts with the %s in %s: sent back to Ready", tk.ID, onto, strings.Join(names, ", "))
+	return true
 }
 
 // advanceBase fast-forwards r's base from old to merge. It returns why it

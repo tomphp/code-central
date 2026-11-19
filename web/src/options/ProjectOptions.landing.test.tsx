@@ -165,7 +165,7 @@ describe("Project Options", () => {
     expect(within(landing()).getByRole("region", { name: "Pull Request Watcher" })).toBeInTheDocument();
   });
 
-  it("offers each drafted method's Push, Land per Spec, Code Host and PAT parts, and the Watcher as saved", async () => {
+  it("offers each drafted method's Push, Land per Spec, Rebase, Code Host and PAT parts, and the Watcher as saved", async () => {
     const { w, s } = await acme();
     await s.reportPushRemote("acme", "https://dev.azure.com/acme/shop/_git/acme");
     await w.api.addRepository("acme", { name: "web", clone_url: "git@github.com:acme/web.git", landing: "pull_request" });
@@ -173,19 +173,21 @@ describe("Project Options", () => {
     const parts = () => ({
       push: within(landing()).queryByRole("checkbox", { name: "Push" }) !== null,
       landPerSpec: within(landing()).getByRole("checkbox", { name: "Land per Spec" }).hasAttribute("disabled") ? "disabled" : "enabled",
+      rebase: within(landing()).getByRole("checkbox", { name: "Rebase instead of merging" }).hasAttribute("disabled") ? "disabled" : "enabled",
       codeHost: within(landing()).queryByRole("status", { name: "Code Host" })?.textContent ?? null,
       pat: within(landing()).queryByRole("textbox", { name: "PAT variable" }) !== null,
       watcher: within(landing()).queryByRole("region", { name: "Pull Request Watcher" }) !== null,
     });
     const draft = (name: string) => userEvent.click(within(landing()).getByRole("radio", { name }));
 
-    expect(parts()).toEqual({ push: true, landPerSpec: "enabled", codeHost: null, pat: false, watcher: true });
+    expect(parts()).toEqual({ push: true, landPerSpec: "enabled", rebase: "enabled", codeHost: null, pat: false, watcher: true });
     await draft("Leave as a branch");
-    expect(parts()).toEqual({ push: true, landPerSpec: "disabled", codeHost: null, pat: false, watcher: true });
+    expect(parts()).toEqual({ push: true, landPerSpec: "disabled", rebase: "disabled", codeHost: null, pat: false, watcher: true });
     await draft("Pull Request");
     expect(parts()).toEqual({
       push: false,
       landPerSpec: "enabled",
+      rebase: "enabled",
       codeHost: "Code Host: Azure Repos, repository acme/shop/acme.",
       pat: true,
       watcher: true,
@@ -196,7 +198,7 @@ describe("Project Options", () => {
     await settle(w);
     expect(parts()).toMatchObject({ push: false, pat: true, watcher: false });
     await draft("Merge");
-    expect(parts()).toEqual({ push: true, landPerSpec: "enabled", codeHost: null, pat: false, watcher: false });
+    expect(parts()).toEqual({ push: true, landPerSpec: "enabled", rebase: "enabled", codeHost: null, pat: false, watcher: false });
   });
 
   it("refuses a Default Landing of Pull Request while a local-only Repository follows it, with a fix naming it", async () => {
@@ -232,6 +234,29 @@ describe("Project Options", () => {
     );
     expect(box).toBeDisabled();
     expect(box).not.toBeChecked();
+  });
+
+  it("shows Rebase off beside Land per Spec, enabled under Merge and Pull Request, kept across method switches, and saves it", async () => {
+    const { w, s } = await acme();
+    await s.reportPushRemote("acme", "git@github.com:acme/acme.git");
+    await renderApp(w, "/?view=project-options&project=acme");
+
+    const box = within(landing()).getByRole("checkbox", { name: "Rebase instead of merging" });
+    expect(box).not.toBeChecked();
+    expect(box).toBeEnabled();
+
+    await userEvent.click(box);
+    await userEvent.click(within(landing()).getByRole("radio", { name: "Leave as a branch" }));
+    expect(box).toBeDisabled();
+    expect(box).toBeChecked();
+    await userEvent.click(within(landing()).getByRole("radio", { name: "Pull Request" }));
+    expect(box).toBeEnabled();
+    expect(box).toBeChecked();
+
+    await userEvent.click(within(landing()).getByRole("radio", { name: "Merge" }));
+    await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    await settle(w);
+    expect((await w.api.listProjects())[0].landing).toMatchObject({ method: "merge", rebase: true });
   });
 
   it("shows the current setting, with the Push remote enabled without Push, for the Repositories with Own Landings", async () => {

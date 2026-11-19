@@ -18,27 +18,34 @@ func TestARepositorysLandingPolicy(t *testing.T) {
 			for _, lps := range []bool{false, true} {
 				for _, ci := range []bool{false, true} {
 					for _, own := range owns {
-						p := domain.Project{Key: "acme", Landing: domain.Landing{Method: m, Push: push, LandPerSpec: lps}, CI: domain.CI{Tracking: ci, PushRemoteURL: "git@github.com:acme/acme.git"}}
-						p.SetRepositories([]domain.Repository{
-							{Name: "acme", Home: true, OwnLanding: own},
-							{Name: "web", CloneURL: "git@github.com:acme/web.git", Base: "main", OwnLanding: own},
-							{Name: "notes", LocalPath: "/src/notes", Base: "main", OwnLanding: own},
-						})
-						em, ep := m, push
-						if own.Set() {
-							em, ep = own.Method, own.Push
-						}
-						ps := landingPolicies(p)
-						for name, localOnly := range map[string]bool{"acme": false, "web": false, "notes": true} {
-							if got, want := ps.In(name), domain.NewLandingPolicy(em, ep && !localOnly, lps, ci); got != want {
-								t.Errorf("%s's policy under (default %s, push %v, own %+v, land per spec %v, ci %v) = %+v, want %+v", name, m, push, own, lps, ci, got, want)
+						for _, rebase := range []bool{false, true} {
+							p := domain.Project{Key: "acme", Landing: domain.Landing{Method: m, Push: push, LandPerSpec: lps, Rebase: rebase}, CI: domain.CI{Tracking: ci, PushRemoteURL: "git@github.com:acme/acme.git"}}
+							p.SetRepositories([]domain.Repository{
+								{Name: "acme", Home: true, OwnLanding: own},
+								{Name: "web", CloneURL: "git@github.com:acme/web.git", Base: "main", OwnLanding: own},
+								{Name: "notes", LocalPath: "/src/notes", Base: "main", OwnLanding: own},
+							})
+							em, ep := m, push
+							if own.Set() {
+								em, ep = own.Method, own.Push
 							}
-						}
-						if got, want := ps.RunsPullRequestWatcher(), em == domain.LandingPullRequest; got != want {
-							t.Errorf("RunsPullRequestWatcher under (default %s, own %+v) = %v, want %v", m, own, got, want)
-						}
-						if got := ps.RunsCIWatcher(); got != ci {
-							t.Errorf("RunsCIWatcher with CI Tracking %v = %v", ci, got)
+							ps := landingPolicies(p)
+							for name, localOnly := range map[string]bool{"acme": false, "web": false, "notes": true} {
+								if got, want := ps.In(name), domain.NewLandingPolicy(em, ep && !localOnly, lps, rebase, ci); got != want {
+									t.Errorf("%s's policy under (default %s, push %v, own %+v, land per spec %v, rebase %v, ci %v) = %+v, want %+v", name, m, push, own, lps, rebase, ci, got, want)
+								}
+							}
+							if got, want := ps.RunsPullRequestWatcher(), em == domain.LandingPullRequest; got != want {
+								t.Errorf("RunsPullRequestWatcher under (default %s, own %+v) = %v, want %v", m, own, got, want)
+							}
+							if got := ps.RunsCIWatcher(); got != ci {
+								t.Errorf("RunsCIWatcher with CI Tracking %v = %v", ci, got)
+							}
+							// Rebase is Project-wide: in force wherever the
+							// effective method offers it.
+							if got, want := ps.RebaseInForce(), rebase && em != domain.LandingBranch; got != want {
+								t.Errorf("RebaseInForce under (default %s, own %+v, rebase %v) = %v, want %v", m, own, rebase, got, want)
+							}
 						}
 					}
 				}
