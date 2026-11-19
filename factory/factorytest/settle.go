@@ -454,7 +454,9 @@ func (r *Running) exited(failure string) int {
 			return r.code
 		}
 		if unmet != nil {
-			r.h.t.Fatalf("%s: still in flight: %s; stdout:\n%s", failure, strings.Join(unmet, "; "), r.stdout)
+			// What is open, with the clock's time, says whether a due timer
+			// went unheard or a turn never parked, which unmet alone can't.
+			r.h.t.Fatalf("%s: still in flight: %s; open work %s at clock %s; stdout:\n%s", failure, strings.Join(unmet, "; "), r.track.describe(), r.h.Clock.Now().Format(time.TimeOnly), r.stdout)
 		}
 		changes := r.h.changes()
 		next, ok := r.h.Clock.Next()
