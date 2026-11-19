@@ -120,14 +120,16 @@ func (l *lander) reportBaseState(ctx context.Context, r *repository, in core.Rep
 // Repository alone, under Pull Request there: one with nothing to merge
 // lands at once, one whose pull request is merged lands at the merge
 // commit, and the rest have their branch pushed for the Watcher to open a
-// pull request on.
+// pull request on. Under Rebase its branch holds its work rebased onto
+// the base, when it was (rebaseForPush), which is pushed with lease over
+// an older push.
 func (l *lander) landPullRequest(ctx context.Context, tk core.TicketView, p core.ProjectView) {
 	if hasMerged(tk.PullRequest) {
 		l.landMerged(ctx, tk)
 		return
 	}
 	remote := l.repos.home.remote
-	head, _, err := l.workOf(tk)
+	head, _, err := l.workIn(l.repos.home, tk)
 	if err == nil && tk.PullRequest == nil && !l.pushedAlreadyIn(l.repos.home, tk.Branch) && l.stateOf(l.repos.home).current && l.inBase(head) {
 		l.printf("%s: nothing to merge into %s", tk.ID, l.repos.baseBranch())
 		l.landAt(ctx, tk, l.repos.home, head)
@@ -140,7 +142,8 @@ func (l *lander) landPullRequest(ctx context.Context, tk core.TicketView, p core
 	if tk.Branch == "" {
 		return
 	}
-	pushed, why := l.push(ctx, l.repos.home, remote, tk.Branch, head)
+	policies := p.LandingPolicies()
+	pushed, why := l.push(ctx, l.repos.home, remote, tk.Branch, head, l.repos.home.policy(policies).RebaseInForce())
 	if why != "" {
 		l.cantPushYet(ctx, tk, why)
 		return
@@ -148,7 +151,7 @@ func (l *lander) landPullRequest(ctx context.Context, tk core.TicketView, p core
 	if pushed {
 		l.printf("%s: pushed %s to %s", tk.ID, tk.Branch, remote)
 	}
-	l.reportPushed(ctx, tk, p.LandingPolicies(), l.repos.home, tk.Branch, l.remoteTip(l.repos.home, remote, tk.Branch, head))
+	l.reportPushed(ctx, tk, policies, l.repos.home, tk.Branch, l.remoteTip(l.repos.home, remote, tk.Branch, head))
 }
 
 // inOldBase reports whether the Home's fetched Push remote holds commit
