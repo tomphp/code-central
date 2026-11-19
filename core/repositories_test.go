@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/codehost"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
@@ -442,7 +443,7 @@ func TestCloneURLsNormaliseAcrossSchemesAndSuffixes(t *testing.T) {
 	}
 	for _, group := range same {
 		for _, u := range group[1:] {
-			if a, b := core.NormalCloneURL(group[0]), core.NormalCloneURL(u); a != b {
+			if a, b := codehost.NormalCloneURL(group[0]), codehost.NormalCloneURL(u); a != b {
 				t.Errorf("%s normalises to %q and %s to %q, want the same", group[0], a, u, b)
 			}
 		}
@@ -451,11 +452,11 @@ func TestCloneURLsNormaliseAcrossSchemesAndSuffixes(t *testing.T) {
 		{"git@github.com:acme/web.git", "git@github.com:acme/api.git"},
 		{"git@github.com:acme/web.git", "git@gitlab.com:acme/web.git"},
 	} {
-		if core.NormalCloneURL(pair[0]) == core.NormalCloneURL(pair[1]) {
+		if codehost.NormalCloneURL(pair[0]) == codehost.NormalCloneURL(pair[1]) {
 			t.Errorf("%s and %s normalise the same", pair[0], pair[1])
 		}
 	}
-	if got := core.NormalCloneURL(" /srv/git/web.git/ "); !strings.HasSuffix(got, "/srv/git/web") {
+	if got := codehost.NormalCloneURL(" /srv/git/web.git/ "); !strings.HasSuffix(got, "/srv/git/web") {
 		t.Errorf("a local path normalises to %q", got)
 	}
 }
