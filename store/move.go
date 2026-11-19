@@ -132,6 +132,18 @@ func (t Tally) Empty() bool {
 	return len(t.Projects) == 0 && t.Options == domain.DefaultOptions()
 }
 
+// IsEmpty is whether s holds nothing at all: an empty Tally, and no Usage
+// under any key, even one with no Project, which a Tally leaves out. Only
+// an empty Store is a Store Move's target, so two are never merged.
+func IsEmpty(s Store) (bool, error) {
+	t, err := TallyOf(s)
+	if err != nil || !t.Empty() {
+		return false, err
+	}
+	days, err := s.Usage().Days()
+	return err == nil && len(days) == 0, err
+}
+
 // CheckStopped is an error naming each service registered live on s at
 // now, by host and version, or nil when there is none: a Store Move's
 // source must have none. It is what shows a service runs on a Postgres

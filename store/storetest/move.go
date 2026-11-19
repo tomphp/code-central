@@ -241,10 +241,13 @@ func runMove(t *testing.T, f Factory) {
 		}
 	})
 
-	t.Run("an empty store's tally is empty, and a filled one's isn't", func(t *testing.T) {
+	t.Run("a new store is empty, and one holding anything isn't", func(t *testing.T) {
 		s := f.New(t)
 		if tl, err := store.TallyOf(s); err != nil || !tl.Empty() {
 			t.Fatalf("a new store's tally %+v, %v; want empty", tl, err)
+		}
+		if empty, err := store.IsEmpty(s); err != nil || !empty {
+			t.Fatalf("a new store isn't empty (%v)", err)
 		}
 		for name, fill := range map[string]func(store.Store){
 			"a Project": func(s store.Store) { seedProject(t, s) },
@@ -255,11 +258,14 @@ func runMove(t *testing.T, f Factory) {
 					return w.PutOptions(o)
 				})
 			},
+			"Usage under a key with no Project": func(s store.Store) {
+				appendUsage(t, s, "gone", "2026-11-07", usageCall("get_spec"))
+			},
 		} {
 			s := f.New(t)
 			fill(s)
-			if tl, err := store.TallyOf(s); err != nil || tl.Empty() {
-				t.Errorf("a store holding only %s has an empty tally (%v)", name, err)
+			if empty, err := store.IsEmpty(s); err != nil || empty {
+				t.Errorf("a store holding only %s is empty (%v)", name, err)
 			}
 		}
 	})

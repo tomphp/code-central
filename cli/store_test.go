@@ -33,9 +33,29 @@ func moveHome(t *testing.T) (env map[string]string, source string, before storet
 	return map[string]string{"HOME": home, "XDG_DATA_HOME": data}, source, before
 }
 
+// movedToPostgres is moveHome's Store moved into a fresh Postgres schema,
+// whose URL is in CC_TEST_DB: the home, the URL, the contents it held and
+// the move's result.
+func movedToPostgres(t *testing.T) (env map[string]string, url string, before storetest.Contents, moved result) {
+	t.Helper()
+	url = storetest.FreshPostgres(t)
+	env, _, before = moveHome(t)
+	env["CC_TEST_DB"] = url
+	moved = run(t, env, "", "store", "move", "--to", "postgres", "--url-env", "CC_TEST_DB")
+	if moved.code != 0 {
+		t.Fatalf("move to postgres: exit %d: %s", moved.code, moved.stderr)
+	}
+	return env, url, before, moved
+}
+
+// settingsPath is the settings file of the home env names.
+func settingsPath(env map[string]string) string {
+	return filepath.Join(env["HOME"], ".config", "code-central", "settings.yaml")
+}
+
 func settingsText(t *testing.T, env map[string]string) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(env["HOME"], ".config", "code-central", "settings.yaml"))
+	b, err := os.ReadFile(settingsPath(env))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +122,7 @@ func TestAStoreMoveWithoutAPathTakesTheKindsDefaultAndWritesNoPath(t *testing.T)
 func TestAStoreMoveWritesTheSettingsFileWhenThereIsNone(t *testing.T) {
 	t.Parallel()
 	env, _, _ := moveHome(t)
-	os.Remove(filepath.Join(env["HOME"], ".config", "code-central", "settings.yaml"))
+	os.Remove(settingsPath(env))
 	db := filepath.Join(t.TempDir(), "central.db")
 	if r := run(t, env, "", "store", "move", "--to", "sqlite:"+db); r.code != 0 {
 		t.Fatalf("move: exit %d: %s", r.code, r.stderr)
@@ -227,13 +247,7 @@ func TestAStoreMoveToPostgresWithoutItsURLNamesTheVariable(t *testing.T) {
 // variable the URL is in, never the URL.
 func TestAStoreMovedToPostgresAndBackHoldsTheSameRecordsAndUsage(t *testing.T) {
 	t.Parallel()
-	url := storetest.FreshPostgres(t)
-	env, _, before := moveHome(t)
-	env["CC_TEST_DB"] = url
-	r := run(t, env, "", "store", "move", "--to", "postgres", "--url-env", "CC_TEST_DB")
-	if r.code != 0 {
-		t.Fatalf("move to postgres: exit %d: %s", r.code, r.stderr)
-	}
+	env, url, before, r := movedToPostgres(t)
 	if got := settingsText(t, env); !strings.HasSuffix(got, "store:\n  kind: postgres\n  url_env: CC_TEST_DB\n") || strings.Contains(got, url) {
 		t.Errorf("settings.yaml after the move:\n%s", got)
 	}
@@ -251,12 +265,7 @@ func TestAStoreMovedToPostgresAndBackHoldsTheSameRecordsAndUsage(t *testing.T) {
 // what show a service still runs on it.
 func TestAStoreMoveRefusesAPostgresSourceAServiceIsRegisteredOn(t *testing.T) {
 	t.Parallel()
-	url := storetest.FreshPostgres(t)
-	env, _, _ := moveHome(t)
-	env["CC_TEST_DB"] = url
-	if r := run(t, env, "", "store", "move", "--to", "postgres", "--url-env", "CC_TEST_DB"); r.code != 0 {
-		t.Fatalf("move to postgres: exit %d: %s", r.code, r.stderr)
-	}
+	env, url, _, _ := movedToPostgres(t)
 	s, err := store.OpenPostgres(url)
 	if err != nil {
 		t.Fatal(err)

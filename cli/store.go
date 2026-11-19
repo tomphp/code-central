@@ -136,35 +136,39 @@ func move(e Env, from, target store.Location) (store.Tally, error) {
 		return store.Tally{}, fmt.Errorf("cannot open the target, %s: %w", target, err)
 	}
 	defer dst.Close()
-	before, err := store.TallyOf(dst)
+	empty, err := store.IsEmpty(dst)
 	if err != nil {
 		return store.Tally{}, fmt.Errorf("cannot read the target, %s: %w", target, err)
 	}
-	if !before.Empty() {
+	if !empty {
 		return store.Tally{}, fmt.Errorf("%s isn't empty: Store Move copies only into an empty Store, never merging two", target)
 	}
-	partial := fmt.Sprintf("settings.yaml is unchanged and the source untouched; %s holds part of the copy: remove it before moving again", target)
+	// partial is err once the copy has begun: the target then holds part
+	// of it, and nothing else has changed.
+	partial := func(err error) (store.Tally, error) {
+		return store.Tally{}, fmt.Errorf("%w; settings.yaml is unchanged and the source untouched; %s holds part of the copy: remove it before moving again", err, target)
+	}
 	if err := copyStore(dst, src); err != nil {
-		return store.Tally{}, fmt.Errorf("the copy stopped: %w; %s", err, partial)
+		return partial(fmt.Errorf("the copy stopped: %w", err))
 	}
 	// A Postgres source takes no lock: a service that started during the
 	// copy would go on writing to it once the settings name the target.
 	if err := store.CheckStopped(src, time.Now()); err != nil {
-		return store.Tally{}, fmt.Errorf("%s: %w; %s", from, err, partial)
+		return partial(fmt.Errorf("%s: %w", from, err))
 	}
 	want, err := store.TallyOf(src)
 	if err != nil {
-		return store.Tally{}, fmt.Errorf("cannot count the source: %w; %s", err, partial)
+		return partial(fmt.Errorf("cannot count the source: %w", err))
 	}
 	got, err := store.TallyOf(dst)
 	if err != nil {
-		return store.Tally{}, fmt.Errorf("cannot count the copy: %w; %s", err, partial)
+		return partial(fmt.Errorf("cannot count the copy: %w", err))
 	}
 	if diff := store.CompareTallies(want, got); len(diff) > 0 {
-		return store.Tally{}, fmt.Errorf("the copy doesn't match the source: %s; %s", strings.Join(diff, "; "), partial)
+		return partial(fmt.Errorf("the copy doesn't match the source: %s", strings.Join(diff, "; ")))
 	}
 	if err := dst.Close(); err != nil {
-		return store.Tally{}, fmt.Errorf("cannot close the copy: %w; %s", err, partial)
+		return partial(fmt.Errorf("cannot close the copy: %w", err))
 	}
 	return want, nil
 }
