@@ -1,6 +1,6 @@
 // Package server builds the service's one handler: MCP at /p/<key>/mcp,
 // the HTTP API under /api/ and the embedded UI at /, on one ServeMux,
-// behind the Guard. Both doors reach the Core through ops.Serve, wrapped
+// behind the Guard. Both doors reach the Core through bind.Serve, wrapped
 // in the one Calls middleware for the Actor and Usage.
 package server
 
@@ -11,7 +11,7 @@ import (
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 	"github.com/tomoram/code-central/mcp"
-	"github.com/tomoram/code-central/ops"
+	"github.com/tomoram/code-central/ops/bind"
 )
 
 // Handler returns the service's handler. ui may be nil; log, when not
@@ -19,7 +19,7 @@ import (
 // --bind) the Guard accepts as Host and Origin.
 func Handler(c *core.Core, ui http.Handler, log io.Writer, bindHosts ...string) http.Handler {
 	mux := http.NewServeMux()
-	s := ops.Serve(c)
+	s := bind.Serve(c)
 	httpapi.Register(mux, Calls(s, c, log, Door{Name: "http"}))
 	mcp.Register(mux, Calls(s, c, log, Door{Name: "mcp", Usage: true}))
 	if ui != nil {

@@ -13,7 +13,7 @@ import (
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 	"github.com/tomoram/code-central/ids"
-	"github.com/tomoram/code-central/ops"
+	"github.com/tomoram/code-central/ops/bind"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -25,7 +25,7 @@ func newHandler(t *testing.T) http.Handler {
 // serve is the HTTP API over a fresh Core on s and clk.
 func serve(s store.Store, clk clock.Clock) http.Handler {
 	mux := http.NewServeMux()
-	httpapi.Register(mux, ops.Serve(core.New(s, clk, &ids.Sequence{})))
+	httpapi.Register(mux, bind.Serve(core.New(s, clk, &ids.Sequence{})))
 	return mux
 }
 

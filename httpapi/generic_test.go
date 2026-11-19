@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/ops"
 )
 
@@ -54,18 +53,30 @@ func (in *tagsInput) DecodeQuery(q url.Values) error {
 	return nil
 }
 
-// echo is a definition over In whose call returns the key and the input.
+// echo is a definition over In, for echoed to serve.
 func echo[In any](http string) *ops.Definition[In, map[string]any] {
-	return &ops.Definition[In, map[string]any]{
-		Name: "echo", HTTP: http,
-		Call: func(_ *core.Core, _ context.Context, key string, in In) (map[string]any, error) {
-			return map[string]any{"key": key, "in": in}, nil
-		},
-	}
+	return &ops.Definition[In, map[string]any]{Name: "echo", HTTP: http}
 }
 
-// serveOp mounts op's generic handler on a mux, as Register does.
-func serveOp(t *testing.T, op ops.Operation) http.Handler {
+// echoed serves a call with its key and the input the door decoded.
+func echoed(key string, in any) (any, error) {
+	return map[string]any{"key": key, "in": in}, nil
+}
+
+// serving is an ops.Service that serves every call with serve, as an
+// operation's binding would.
+type serving struct {
+	ops.Service
+	serve func(key string, in any) (any, error)
+}
+
+func (s serving) Dispatch(_ context.Context, call ops.Call) (any, error) {
+	return s.serve(call.Key, call.In)
+}
+
+// serveOp mounts op's generic handler on a mux, as Register does, served
+// by serve.
+func serveOp(t *testing.T, op ops.Operation, serve func(key string, in any) (any, error)) http.Handler {
 	t.Helper()
 	h, err := handle(op)
 	if err != nil {
@@ -74,7 +85,7 @@ func serveOp(t *testing.T, op ops.Operation) http.Handler {
 	mux := http.NewServeMux()
 	method, pattern := op.Route()
 	mux.HandleFunc(method+" "+pattern, func(w http.ResponseWriter, r *http.Request) {
-		v, err := h(ops.Serve(nil), r)
+		v, err := h(serving{serve: serve}, r)
 		if err != nil {
 			WriteError(w, err)
 			return
@@ -94,7 +105,7 @@ func call(h http.Handler, method, path, body string) (int, map[string]any) {
 }
 
 func TestThePathBindsTheItemAndWinsOverTheBody(t *testing.T) {
-	h := serveOp(t, echo[itemInput]("POST /api/p/{key}/tickets/{n}/comment"))
+	h := serveOp(t, echo[itemInput]("POST /api/p/{key}/tickets/{n}/comment"), echoed)
 	status, out := call(h, "POST", "/api/p/acme/tickets/7/comment", `{"ticket":"acme-99","body":"Hi"}`)
 	if status != 200 || out["key"] != "acme" {
 		t.Fatalf("%d %v", status, out)
@@ -106,7 +117,7 @@ func TestThePathBindsTheItemAndWinsOverTheBody(t *testing.T) {
 }
 
 func TestABodyIsDecodedStrictly(t *testing.T) {
-	h := serveOp(t, echo[itemInput]("POST /api/p/{key}/tickets/{n}/comment"))
+	h := serveOp(t, echo[itemInput]("POST /api/p/{key}/tickets/{n}/comment"), echoed)
 	status, out := call(h, "POST", "/api/p/acme/tickets/7/comment", `{"colour":"red"}`)
 	if status != 422 || out["code"] != string(api.Invalid) || out["field"] != "colour" {
 		t.Fatalf("%d %v", status, out)
@@ -114,7 +125,7 @@ func TestABodyIsDecodedStrictly(t *testing.T) {
 }
 
 func TestAQueryIsDecodedByItsTags(t *testing.T) {
-	h := serveOp(t, echo[queryInput]("GET /api/p/{key}/tickets/{n}"))
+	h := serveOp(t, echo[queryInput]("GET /api/p/{key}/tickets/{n}"), echoed)
 	status, out := call(h, "GET", "/api/p/acme/tickets/7?state=Ready&state=Draft&title=A&label=x&label=y&claimable=false&full=true&part=claims", "")
 	if status != 200 {
 		t.Fatalf("%d %v", status, out)
@@ -138,16 +149,13 @@ func TestAHiddenFieldWithAQueryTagIsDecodedFromTheQuery(t *testing.T) {
 		Parts  []string `json:"-" query:"part"`
 		Hidden bool     `json:"-"`
 	}
-	op := &ops.Definition[partsInput, []string]{
-		Name: "echo", HTTP: "GET /api/p/{key}/things",
-		Call: func(_ *core.Core, _ context.Context, _ string, in partsInput) ([]string, error) {
-			if in.Hidden {
-				t.Fatal("a json:\"-\" field with no query tag was set")
-			}
-			return in.Parts, nil
-		},
-	}
-	h := serveOp(t, op)
+	op := &ops.Definition[partsInput, []string]{Name: "echo", HTTP: "GET /api/p/{key}/things"}
+	h := serveOp(t, op, func(_ string, in any) (any, error) {
+		if in.(*partsInput).Hidden {
+			t.Fatal("a json:\"-\" field with no query tag was set")
+		}
+		return in.(*partsInput).Parts, nil
+	})
 	req := httptest.NewRequest("GET", "/api/p/acme/things?part=claims&part=edits", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -161,7 +169,7 @@ func TestAHiddenFieldWithAQueryTagIsDecodedFromTheQuery(t *testing.T) {
 }
 
 func TestAnUnknownQueryParameterIsRejectedNamingTheAllowedOnes(t *testing.T) {
-	h := serveOp(t, echo[queryInput]("GET /api/p/{key}/tickets/{n}"))
+	h := serveOp(t, echo[queryInput]("GET /api/p/{key}/tickets/{n}"), echoed)
 	status, out := call(h, "GET", "/api/p/acme/tickets/7?ticket=7", "")
 	if status != 422 || out["field"] != "ticket" {
 		t.Fatalf("%d %v: the path-bound field is not a parameter", status, out)
@@ -177,7 +185,7 @@ func TestAnUnknownQueryParameterIsRejectedNamingTheAllowedOnes(t *testing.T) {
 }
 
 func TestAnInputTypeDecodesItsOwnOddQueryShape(t *testing.T) {
-	h := serveOp(t, echo[tagsInput]("GET /api/p/{key}/things"))
+	h := serveOp(t, echo[tagsInput]("GET /api/p/{key}/things"), echoed)
 	status, out := call(h, "GET", "/api/p/acme/things?title=T&tag=effort=high&tag=model=fable", "")
 	if status != 200 {
 		t.Fatalf("%d %v", status, out)
