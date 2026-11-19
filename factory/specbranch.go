@@ -19,6 +19,15 @@ func specRefOf(spec core.SpecDetail) core.SpecRef {
 	return core.SpecRef{ID: spec.ID, Title: spec.Title, Branch: core.SpecBranch(spec.ID, spec.Tags)}
 }
 
+// pushedIn is the Repositories where the Factory pushed spec's Spec
+// Branch, as its Tickets' pushed commits say.
+func pushedIn(spec core.SpecDetail) []string {
+	if spec.LandPerSpec == nil {
+		return nil
+	}
+	return spec.LandPerSpec.Pushed
+}
+
 // specBranchTip makes sure the Spec Branch branch exists in r and returns
 // its tip. A missing one is created at r's base's tip; one already in the
 // base (after an earlier landing of the Spec) is fast-forwarded to the
@@ -372,10 +381,19 @@ func (l *lander) planSpecPush(spec core.SpecRef, r *repository, tickets []core.T
 // updates the pull request; under Rebase, where it was rebased onto the
 // base and the remote holds its older tip, the push forces with lease,
 // and the new tip is each Ticket's pushed commit, so CI results on the
-// old one no longer count.
-func (l *lander) pushSpecBranch(ctx context.Context, spec core.SpecRef, policies core.LandingPolicies, pl specPlan) {
+// old one no longer count. It never pushes, forced or not, over a branch
+// of that name the Factory didn't push (foreignSpecBranch); pushedIn is
+// the Repositories where it did.
+func (l *lander) pushSpecBranch(ctx context.Context, spec core.SpecRef, pushedIn []string, policies core.LandingPolicies, pl specPlan) {
 	id, branch := spec.ID, spec.Branch
-	pushed, why := l.push(ctx, pl.r, pl.r.remote, branch, pl.tip, pl.rebase)
+	why, ok := l.foreignSpecBranch(ctx, pl.r, branch, pl.tip, pushedIn)
+	if !ok {
+		return
+	}
+	var pushed bool
+	if why == "" {
+		pushed, why = l.push(ctx, pl.r, pl.r.remote, branch, pl.tip, pl.rebase)
+	}
 	if why != "" {
 		for _, tk := range pl.tickets {
 			l.cantPushIn(ctx, tk, pl.r, why)
@@ -388,6 +406,39 @@ func (l *lander) pushSpecBranch(ctx context.Context, spec core.SpecRef, policies
 	for _, tk := range pl.tickets {
 		l.reportPushed(ctx, tk, policies, pl.r, branch, l.remoteTip(pl.r, pl.r.remote, branch, pl.tip))
 	}
+}
+
+// foreignSpecBranch is why the Factory won't push the Spec Branch branch,
+// at tip, to r's Push remote: the remote has a branch of that name the
+// Factory didn't push, as none of the Spec's Tickets has a pushed commit
+// reported on it in r (pushedIn) and it isn't at tip, so a push would
+// replace, or under Rebase force over, someone else's work. The human
+// deletes or renames it there, as the Spec's branch Tag is locked by
+// now. A remote-tracking ref the remote's branch was deleted from since
+// is deleted too, and the push goes ahead. why is "" when the push can
+// go ahead; ok is false when the remote can't be asked, retried next
+// poll.
+func (l *lander) foreignSpecBranch(ctx context.Context, r *repository, branch, tip string, pushedIn []string) (why string, ok bool) {
+	tracking := "refs/remotes/" + r.remote + "/" + branch
+	theirs, err := r.git.commit(tracking)
+	if err != nil || theirs == tip || slices.Contains(pushedIn, r.name) {
+		return "", true
+	}
+	has, err := r.git.remoteHas(ctx, r.remote, branch)
+	if err != nil {
+		if ctx.Err() == nil {
+			l.printf("warning: can't ask %s for %s%s, so it isn't pushed this poll: %v", r.remote, branch, r.where(), err)
+		}
+		return "", false
+	}
+	if !has {
+		if err := r.git.deleteRef(tracking, theirs); err != nil {
+			l.printf("warning: can't forget %s, deleted from %s%s, so %s isn't pushed this poll: %v", tracking, r.remote, r.where(), branch, err)
+			return "", false
+		}
+		return "", true
+	}
+	return fmt.Sprintf("%s already has a branch named %s that the Factory didn't push, so it won't push the Spec Branch over it. Delete or rename it on %s, and the Factory pushes the Spec Branch on a later poll.", r.remote, branch, r.remote), true
 }
 
 // pullRequestMergedIn reports whether tk's pull request in r has merged.
@@ -552,7 +603,7 @@ func (l *lander) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets []
 			// Nothing is merged or pushed while a Spec Branch conflicts, but
 			// a merge made already goes on to its push and land.
 		case pl.push:
-			l.pushSpecBranch(ctx, ref, policies, pl)
+			l.pushSpecBranch(ctx, ref, pushedIn(spec), policies, pl)
 		case !l.landSpecIn(ctx, spec, p, pl):
 			return true
 		}

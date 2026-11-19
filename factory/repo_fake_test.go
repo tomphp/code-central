@@ -384,6 +384,16 @@ func (r *fakeRepo) fetch(ctx context.Context, remote string) (string, error) {
 	return "", nil
 }
 
+func (r *fakeRepo) remoteHas(ctx context.Context, remote, branch string) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	rm := r.remotes[remote]
+	if rm == nil || rm.broken {
+		return false, fmt.Errorf("git ls-remote: '%s' does not appear to be a git repository", remote)
+	}
+	return rm.refs[branch] != "", nil
+}
+
 func (r *fakeRepo) worktrees() ([]gitWorktree, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

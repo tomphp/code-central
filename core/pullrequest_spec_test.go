@@ -215,3 +215,61 @@ func TestATicketOutsideLandPerSpecGetsItsOwnPullRequestUnderPullRequest(t *testi
 		t.Error("acme-5 is Spec-landed with Land per Spec off")
 	}
 }
+
+// The Spec's Land per Spec status names the Repositories where one of
+// its Tickets has a pushed commit reported on its Spec Branch, so the
+// Factory can tell a branch of that name it pushed from one it didn't
+// (Spec code-central-1089, section "Factory").
+
+func TestLandPerSpecNamesNoRepositoryBeforeTheSpecBranchIsPushed(t *testing.T) {
+	f := specPullRequestWorld(t)
+	f.acceptedOnSpecBranch(t, 5, "one")
+	f.pushedFor(t, "", "acme-5", "base1")
+	if got := f.landStatus(t).Pushed; len(got) != 0 {
+		t.Fatalf("pushed = %v with only a push to main, want none", got)
+	}
+}
+
+func TestLandPerSpecNamesTheRepositoryItsSpecBranchWasPushedTo(t *testing.T) {
+	f := specPullRequestWorld(t)
+	f.acceptedOnSpecBranch(t, 5, "one")
+	f.acceptedOnSpecBranch(t, 6, "two")
+	f.pushSpecBranch(t, "tip1", "acme-5", "acme-6")
+	// A later push of the base, as CI Tracking reports once the pull
+	// request merges, leaves the Spec Branch's push counted.
+	f.pushedFor(t, "", "acme-5", "base1")
+	f.pushedFor(t, "", "acme-6", "base1")
+	if got := f.landStatus(t).Pushed; !slices.Equal(got, []string{"acme"}) {
+		t.Fatalf("pushed = %v, want the Home Repository acme", got)
+	}
+}
+
+func TestLandPerSpecCountsAFinishedTicketsPushOfTheSpecBranch(t *testing.T) {
+	f := specPullRequestWorld(t)
+	f.acceptedOnSpecBranch(t, 5, "one")
+	f.pushSpecBranch(t, "tip1", "acme-5")
+	f.moveTo(t, 5, domain.Done)
+	if got := f.landStatus(t).Pushed; !slices.Equal(got, []string{"acme"}) {
+		t.Fatalf("pushed = %v, want acme from acme-5's push though it is Done", got)
+	}
+}
+
+func TestLandPerSpecNamesTheRepositoryATaggedSpecBranchWasPushedTo(t *testing.T) {
+	f := specPullRequestWorld(t)
+	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
+	if _, err := f.core.SetTags(ctx, "acme", core.SetTagsInput{Target: "acme-1", Tags: map[string]string{core.BranchTag: "feat/4711"}}); err != nil {
+		t.Fatal(err)
+	}
+	f.changes(t, 5, "acme", "api")
+	f.acceptedOnSpecBranch(t, 5, "one")
+	f.pushSpecBranch(t, "tip1", "acme-5")
+	if got := f.landStatus(t).Pushed; len(got) != 0 {
+		t.Fatalf("pushed = %v after a push to %s, want none: the Spec Branch is feat/4711", got, specBranch)
+	}
+	if _, err := f.core.ReportPushedCommit(ctx, "acme", core.ReportPushedCommitInput{Ticket: "acme-5", Commit: "tip2", Branch: "feat/4711", Repository: "api"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.landStatus(t).Pushed; !slices.Equal(got, []string{"api"}) {
+		t.Fatalf("pushed = %v, want api, where feat/4711 was pushed", got)
+	}
+}
