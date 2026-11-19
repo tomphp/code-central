@@ -69,9 +69,9 @@ func (cfg Config) writeItem(ctx context.Context, c *azdo.Client, id int, w core.
 	return c.SetTags(ctx, id, item.Rev, tags)
 }
 
-// writeComments posts each of w's comments due on item, unless its marker
-// shows it was posted before a crash, and reports each written. It
-// reports whether it posted any.
+// writeComments posts each of w's comments due on item, unless its
+// branded or opaque marker shows it was posted before a crash, and
+// reports each written. It reports whether it posted any.
 func (cfg Config) writeComments(ctx context.Context, c *azdo.Client, item azdo.WorkItem, w core.WorkItemWrites) (posted bool, err error) {
 	if len(w.Comments) == 0 {
 		return false, nil
@@ -81,8 +81,10 @@ func (cfg Config) writeComments(ctx context.Context, c *azdo.Client, item azdo.W
 		return false, err
 	}
 	for _, cm := range w.Comments {
-		marker := core.IssueMarker(w.Target, cm.Key)
-		if !slices.ContainsFunc(existing, func(text string) bool { return strings.Contains(text, marker) }) {
+		// Either marker, whatever the setting: it may have changed between
+		// posting a comment and reporting it written.
+		branded, opaque := core.IssueMarker(w.Target, cm.Key), core.OpaqueMarker(w.Target, cm.Key)
+		if !slices.ContainsFunc(existing, func(text string) bool { return strings.Contains(text, branded) || strings.Contains(text, opaque) }) {
 			if err := c.AddComment(ctx, item.Fields.TeamProject, item.ID, cm.Body); err != nil {
 				return posted, fmt.Errorf("posting the %s comment: %w", cm.Key, err)
 			}

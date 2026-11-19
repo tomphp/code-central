@@ -56,9 +56,16 @@ func reportWorkItemWatcherStatus(body string) httpCall {
 // and New issues need me as needMe. On its own it creates the Azure
 // Boards Spec as acme-4.
 func boardsOn(needMe bool) func(*testing.T, *codecentraltest.Server) {
+	return boardsHidden(needMe, false)
+}
+
+// boardsHidden turns Azure Boards on for acme as boardsOn does, with
+// Hide Code Central as hide.
+func boardsHidden(needMe, hide bool) func(*testing.T, *codecentraltest.Server) {
 	return func(t *testing.T, srv *codecentraltest.Server) {
 		t.Helper()
-		httpOK(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`","new_issues_need_me":`+strconv.FormatBool(needMe)+`}`))
+		httpOK(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`","new_issues_need_me":`+strconv.FormatBool(needMe)+
+			`,"hide_code_central":`+strconv.FormatBool(hide)+`}`))
 	}
 }
 
