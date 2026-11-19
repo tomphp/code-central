@@ -36,24 +36,25 @@ func checkBranchTagName(p domain.Project, field, name string) error {
 	if err := checkBranchName(name); err != nil {
 		return invalid(field, "a branch Tag names the Spec Branch, so it must be a valid branch name: %s", err)
 	}
-	if strings.HasPrefix(name, specBranchPrefix) {
+	// In any case, since git's refs are files on a case-insensitive disk.
+	if strings.HasPrefix(strings.ToLower(name), specBranchPrefix) {
 		return invalid(field, "branch %q starts with %s, which is kept for the Spec Branches of Specs with no branch Tag", name, specBranchPrefix)
 	}
 	for _, r := range p.RepositoryList() {
-		if base := baseOfRepository(p, r); base == name {
+		if strings.EqualFold(baseOfRepository(p, r), name) {
 			return invalid(field, "branch %q is the Base of the Repository %s, so it can't name a Spec Branch", name, r.Name)
 		}
 	}
-	if ticketIDShape(p.Key).MatchString(name) {
+	if looksLikeTicketID(p.Key, name) {
 		return invalid(field, "branch %q has the shape of a Ticket ID, %s-<n>, which names Ticket branches", name, p.Key)
 	}
 	return nil
 }
 
-// ticketIDShape matches a name shaped like a Ticket ID of Project key, in
-// any case.
-func ticketIDShape(key string) *regexp.Regexp {
-	return regexp.MustCompile(`(?i)^` + regexp.QuoteMeta(key) + `-[0-9]+$`)
+// looksLikeTicketID reports whether name has the shape of a Ticket ID of
+// Project key, in any case.
+func looksLikeTicketID(key, name string) bool {
+	return regexp.MustCompile(`(?i)^` + regexp.QuoteMeta(key) + `-[0-9]+$`).MatchString(name)
 }
 
 // checkBranchTagFree refuses name as Spec n's branch Tag when another
