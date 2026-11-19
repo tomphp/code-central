@@ -2,6 +2,7 @@ package core
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -17,12 +18,13 @@ import (
 // and all other prose are left as written.
 
 var (
-	// codeFence opens or closes a fenced code block. It allows any
-	// indentation, as a fence inside a list item is indented, so a fence
-	// is never mistaken for prose.
+	// codeFence opens or closes a fenced code block, as fence does for
+	// the section parser, but at any indentation, as a fence inside a
+	// list item is indented, so a fence is never taken for prose.
 	codeFence = regexp.MustCompile("^[ \t]*(`{3,}|~{3,})")
-	// listItem is a line that starts a list item.
-	listItem = regexp.MustCompile(`^ {0,3}(?:[-+*]|[0-9]{1,9}[.)])(?:[ \t]|$)`)
+	// listItem is a line that starts a list item: its indentation, its
+	// marker and the spaces after it.
+	listItem = regexp.MustCompile(`^[ \t]*(?:[-+*]|[0-9]{1,9}[.)])(?:[ \t]+|$)`)
 	// urlStart is a URL with a scheme, up to the next space.
 	urlStart = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*://\S*`)
 )
@@ -45,29 +47,32 @@ func writtenText(r store.Reader, key, text string, hide bool) string {
 	})
 }
 
-// titledText is text, Markdown, with each reference to an item of key
-// that title names rewritten: a bare ID to the item's title in straight
+// titledText is text, Markdown, with each reference to a Spec or Ticket
+// of key that title names rewritten: a bare ID to its title in straight
 // double quotes, an ID Link whose text is the ID likewise, and an ID Link
 // with other text to that text, its own references rewritten. Code
 // blocks are left as written; the rest is rewritten a paragraph at a
 // time, so a code span may run over lines.
 func titledText(text, key string, title func(n int) (string, bool)) string {
-	t := idTitler{key: key, title: title,
-		link: regexp.MustCompile(`^\[([^\[\]]*)\]\(` + regexp.QuoteMeta(key) + `-([1-9][0-9]*)\)`),
-		bare: regexp.MustCompile(`^` + regexp.QuoteMeta(key) + `-([1-9][0-9]*)`)}
+	id := regexp.QuoteMeta(key) + `-([1-9][0-9]*)`
+	t := titler{key: key, title: title,
+		link: regexp.MustCompile(`^!?\[((?:[^\[\]]|\[[^\[\]]*\])*)\]\(\s*(?:<` + id + `>|` + id + `)(?:\s+(?:"[^"]*"|'[^']*'|\([^()]*\)))?\s*\)`),
+		bare: regexp.MustCompile(`^` + id)}
 	var out, para []string
 	flush := func() {
 		if len(para) > 0 {
-			out = append(out, t.inline(strings.Join(para, "\n")))
+			out = append(out, t.prose(strings.Join(para, "\n")))
 			para = nil
 		}
 	}
-	fence, indented, inList, afterBlank := "", false, false, true
+	// list is the column a list item's content starts at, 0 outside a
+	// list: code is indented four columns past it.
+	fence, indented, list, afterBlank := "", false, 0, true
 	for _, raw := range strings.Split(text, "\n") {
 		l := strings.TrimSuffix(raw, "\r")
 		switch {
 		case fence != "":
-			if m := codeFence.FindStringSubmatch(l); m != nil && closesFence(m[1], strings.TrimLeft(l, " \t")[len(m[1]):], fence) {
+			if m := codeFence.FindStringSubmatch(l); m != nil && closesFence(m[1], strings.TrimPrefix(strings.TrimLeft(l, " \t"), m[1]), fence) {
 				fence = ""
 			}
 			out = append(out, raw)
@@ -78,9 +83,8 @@ func titledText(text, key string, title func(n int) (string, bool)) string {
 			afterBlank = true
 			continue
 		}
-		indent := indentation(l)
-		indented = indent >= 4 && (indented || afterBlank && !inList)
-		afterBlank = false
+		indent, blankBefore := indentation(l), afterBlank
+		indented, afterBlank = indent >= list+4 && (indented || blankBefore), false
 		if indented {
 			flush()
 			out = append(out, raw)
@@ -92,8 +96,10 @@ func titledText(text, key string, title func(n int) (string, bool)) string {
 			out = append(out, raw)
 			continue
 		}
-		if indent < 4 {
-			inList = listItem.MatchString(l) || inList && len(para) > 0
+		if m := listItem.FindString(l); m != "" {
+			list = indentation(m) + len(strings.TrimLeft(m, " \t"))
+		} else if blankBefore && indent < list {
+			list = 0
 		}
 		para = append(para, raw)
 	}
@@ -118,17 +124,17 @@ func indentation(l string) int {
 	return n
 }
 
-// idTitler rewrites the references to key's items in prose.
-type idTitler struct {
+// titler rewrites the references to key's Specs and Tickets in prose.
+type titler struct {
 	key   string
 	title func(n int) (string, bool)
-	// link is an ID Link to one of key's items, bare a full ID of one.
+	// link is an ID Link, or an image, to a Spec or Ticket of key, its
+	// number in the first or second group; bare is a full ID of one.
 	link, bare *regexp.Regexp
 }
 
-// inline is s, prose, with its references rewritten outside code spans
-// and URLs.
-func (t idTitler) inline(s string) string {
+// prose is s with its references rewritten outside code spans and URLs.
+func (t titler) prose(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); {
 		rest := s[i:]
@@ -142,9 +148,9 @@ func (t idTitler) inline(s string) string {
 			b.WriteString(rest[:n])
 			i += n
 			continue
-		case rest[0] == '[':
+		case rest[0] == '[' || rest[0] == '!':
 			if m := t.link.FindStringSubmatch(rest); m != nil {
-				b.WriteString(t.linkText(m[0], m[1], m[2]))
+				b.WriteString(t.rewriteLink(m[0], m[1], m[2]+m[3]))
 				i += len(m[0])
 				continue
 			}
@@ -154,12 +160,12 @@ func (t idTitler) inline(s string) string {
 				i += len(m)
 				continue
 			}
-			if m := t.bare.FindStringSubmatch(rest); m != nil && wholeID(s[:i], rest[len(m[0]):]) {
-				if title, ok := t.titleOf(m[1]); ok {
-					b.WriteString(`"` + title + `"`)
-					i += len(m[0])
-					continue
-				}
+		}
+		if m := t.bare.FindStringSubmatch(rest); m != nil && wholeID(s[:i], rest[len(m[0]):]) {
+			if title, ok := t.titleOf(m[1]); ok {
+				b.WriteString(`"` + title + `"`)
+				i += len(m[0])
+				continue
 			}
 		}
 		_, size := utf8.DecodeRuneInString(rest)
@@ -169,11 +175,11 @@ func (t idTitler) inline(s string) string {
 	return b.String()
 }
 
-// linkText is what the ID Link whole, with text, to number n, is
+// rewriteLink is what the ID Link whole, with text, to number n, is
 // rewritten to: the quoted title when its text is the ID, else the text
 // alone with its references rewritten; whole as written when n names
 // nothing.
-func (t idTitler) linkText(whole, text, n string) string {
+func (t titler) rewriteLink(whole, text, n string) string {
 	title, ok := t.titleOf(n)
 	switch {
 	case !ok:
@@ -181,38 +187,41 @@ func (t idTitler) linkText(whole, text, n string) string {
 	case strings.TrimSpace(text) == t.key+"-"+n:
 		return `"` + title + `"`
 	default:
-		return t.inline(text)
+		return t.prose(text)
 	}
 }
 
-// titleOf is the title of key's item numbered n, a number in decimal.
-func (t idTitler) titleOf(n string) (string, bool) {
-	num := 0
-	for _, d := range n {
-		num = num*10 + int(d-'0')
-		if num > 1<<30 {
-			return "", false
-		}
+// titleOf is the title of key's Spec or Ticket numbered n, in decimal.
+func (t titler) titleOf(n string) (string, bool) {
+	num, err := strconv.Atoi(n)
+	if err != nil {
+		return "", false
 	}
 	return t.title(num)
 }
 
 // wholeID reports whether an ID between before and after stands as a
-// whole word: not part of a longer word, ID, path or file name.
+// whole word: not part of a longer word, ID, path or file name. An
+// underscore beside it counts only as emphasis, as in _acme-12_.
 func wholeID(before, after string) bool {
-	switch prev := lastRune(before); {
-	case prev == '-' || prev == '/' || prev == '.':
+	prev := lastRune(before)
+	switch {
+	case prev == '_':
+		if wordRune(lastRune(strings.TrimSuffix(before, "_"))) {
+			return false
+		}
+	case wordRune(prev) || prev == '-' || prev == '/' || prev == '.':
 		return false
 	case prev == '(' && strings.HasSuffix(before, "]("):
 		return false
 	}
 	next, size := utf8.DecodeRuneInString(after)
+	following, _ := utf8.DecodeRuneInString(after[size:])
 	switch {
+	case next == '_' || next == '.':
+		return !wordRune(following)
 	case wordRune(next) || next == '-' || next == '/':
 		return false
-	case next == '.':
-		following, _ := utf8.DecodeRuneInString(after[size:])
-		return !wordRune(following)
 	}
 	return true
 }

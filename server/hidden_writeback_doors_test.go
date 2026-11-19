@@ -67,7 +67,7 @@ func TestHiddenWontFixIsTheMarkerAndTheReasonAloneAndGitHubIsUnchanged(t *testin
 	}
 	wantDue(t, writesDue(t, srv), issue, "code-central:draft", "")
 
-	httpOK(t, srv, wontFix(strings.TrimPrefix(issue, "acme-"), `{"reason":"No."}`))
+	httpOK(t, srv, wontFix(strings.TrimPrefix(issue, "acme-"), `{"reason":"No, see acme-5."}`))
 	httpOK(t, srv, wontFix(strings.TrimPrefix(item, "acme-"), `{"reason":"  Not ours.  "}`))
 	itemDue := workItemWritesDue(t, srv)
 	wantTagDue(t, itemDue, item, "", "wont-fix")
@@ -78,7 +78,7 @@ func TestHiddenWontFixIsTheMarkerAndTheReasonAloneAndGitHubIsUnchanged(t *testin
 
 	issueDue := writesDue(t, srv)
 	wantDue(t, issueDue, issue, "code-central:wont-fix", "not_planned", "wont-fix")
-	want := "<!-- code-central " + issue + " wont-fix -->\nNo.\n\n[" + issue + " in Code Central](" + srv.URL + "/?view=inbox&ticket=" + issue + ")"
+	want := "<!-- code-central " + issue + " wont-fix -->\nNo, see acme-5.\n\n[" + issue + " in Code Central](" + srv.URL + "/?view=inbox&ticket=" + issue + ")"
 	if body := issueDue[issue].Comments[0].Body; body != want {
 		t.Fatalf("GitHub's wont-fix comment = %q, want %q", body, want)
 	}
@@ -175,7 +175,9 @@ func TestAHiddenSpecBodyNamesItsSpecsAndTicketsByTitle(t *testing.T) {
 		"```sh\ngit switch acme-10\n```\n\n" +
 		"    acme-10 indented\n\n" +
 		"~~~~\nacme-11\n~~~\nstill acme-11\n~~~~\n\n" +
-		"Ends with acme-11"
+		"Ends with acme-11, _acme-10_, [a [b] acme-11](acme-11), [acme-10](<acme-10> \"t\") and ![shot of acme-11](acme-11).\n\n" +
+		"- A list item\n\n  continued with acme-10\n\n      acme-10 indented in the list\n\n" +
+		"Back out at acme-11"
 	want := "## Plan\n\n" +
 		"Builds on \"Add the export button\", after \"Fix the login\". See the export work and \"Fix the login\" then \"Add the export button\".\n" +
 		"(\"Add the export button\") \"Fix the login\": ok; \"Fix the login\"!\n" +
@@ -183,7 +185,9 @@ func TestAHiddenSpecBodyNamesItsSpecsAndTicketsByTitle(t *testing.T) {
 		"```sh\ngit switch acme-10\n```\n\n" +
 		"    acme-10 indented\n\n" +
 		"~~~~\nacme-11\n~~~\nstill acme-11\n~~~~\n\n" +
-		"Ends with \"Fix the login\""
+		"Ends with \"Fix the login\", _\"Add the export button\"_, a [b] \"Fix the login\", \"Add the export button\" and shot of \"Fix the login\".\n\n" +
+		"- A list item\n\n  continued with \"Add the export button\"\n\n      acme-10 indented in the list\n\n" +
+		"Back out at \"Fix the login\""
 	asAgent(t, srv, httpCall{"POST", "/api/p/acme/specs/6/edit_spec", `{"body":` + quote(body) + `}`})
 	for _, n := range []string{"7", "8"} {
 		httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/" + n + "/move", `{"to_state":"Done"}`})
