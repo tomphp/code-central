@@ -145,12 +145,7 @@ func checkReplacements(r store.Reader, key string, t domain.Ticket, reps []int) 
 		}
 		from = append(from, followed...)
 	}
-	var dependants []int
-	for _, d := range r.Tickets(key) {
-		if slices.Contains(waitsOn(r, key, d.Number), t.Number) {
-			dependants = append(dependants, d.Number)
-		}
-	}
+	dependants := waitingOn(r, key, t.Number)
 	if len(dependants) == 0 {
 		return nil
 	}

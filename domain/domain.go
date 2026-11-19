@@ -836,6 +836,34 @@ type Ticket struct {
 	Comments       []Comment
 	Moves          []Move
 	Edits          []Edit
+	// Head is the derived head fields: what list views need from the
+	// Ticket History, kept by the Store on every write (Spec
+	// code-central-1032), so a read that loads no History still has them.
+	// A write ignores it.
+	Head TicketHead
+}
+
+// TicketHead is a Ticket's derived head fields: facts the Store works out
+// from the whole Ticket History on every write.
+type TicketHead struct {
+	// Entered is when the Ticket last moved into its State; zero when no
+	// Move records it.
+	Entered time.Time
+	// LiveClaim is the Ticket's live Claim; nil when it has none.
+	LiveClaim *Claim
+	// LatestRound is its last Round, the open one while it Needs Answer;
+	// nil when it has none. Its Number counts the Rounds.
+	LatestRound *Round
+	// LatestFailureReport is its last Failure Report; nil when it has
+	// none. Its Number counts the Failure Reports.
+	LatestFailureReport *FailureReport
+	// BackToReady is when the Ticket last moved to Ready from another
+	// State, which the CI gate and Land per Spec compare commits with;
+	// zero when it never has (its creation doesn't count).
+	BackToReady time.Time
+	// ExternalStateChanged is when an Edit last recorded its Link's
+	// external state changing; zero when none has.
+	ExternalStateChanged time.Time
 }
 
 // Recommendation is a spec Stage's Spec recommendation: how its agent

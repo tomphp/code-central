@@ -38,7 +38,7 @@ func seedFormat1(t *testing.T) string {
 	})
 	mustUpdate(t, s, func(w store.Writer) error {
 		return w.PutTicket("acme", domain.Ticket{Number: 2, Title: "Form", State: domain.Ready, Spec: 1, Created: t0, Updated: t0,
-			Moves: []domain.Move{{From: domain.Draft, To: domain.Ready, Actor: "agent", Time: t0}}})
+			Moves: []domain.Move{{From: domain.Draft, To: domain.Ready, Actor: "agent", Time: t0}}}, store.Moves)
 	})
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
@@ -135,7 +135,7 @@ func TestAnOlderFormatIsMigratedThroughStagingAndBackedUp(t *testing.T) {
 
 	// The migrated store is loaded, locked and writable.
 	s.View(func(r store.Reader) error {
-		if tk, ok := r.Ticket("acme", 2); !ok || tk.Title != "Form" {
+		if tk, ok := r.Ticket("acme", 2, store.History...); !ok || tk.Title != "Form" {
 			t.Fatalf("ticket 2 after migration: %+v %v", tk, ok)
 		}
 		return nil
@@ -280,7 +280,7 @@ func TestAMigrationStoppedBetweenTheRenamesFinishesAtStartup(t *testing.T) {
 		t.Fatalf("next to the store: %v", got)
 	}
 	s.View(func(r store.Reader) error {
-		if _, ok := r.Ticket("acme", 2); !ok {
+		if _, ok := r.Ticket("acme", 2, store.History...); !ok {
 			t.Fatal("ticket 2 not loaded")
 		}
 		return nil

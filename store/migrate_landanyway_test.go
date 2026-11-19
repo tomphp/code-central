@@ -35,7 +35,7 @@ func TestTheRealChainMigratesAFormat11StoreToTheLandAnywayFormat(t *testing.T) {
 		t.Errorf("store.yaml = %q", got)
 	}
 	s.View(func(r store.Reader) error {
-		tk, _ := r.Ticket("acme", 2)
+		tk, _ := r.Ticket("acme", 2, store.History...)
 		if len(tk.PushedCommits) != 1 || tk.PushedCommits[0].Commit != "abc123" {
 			t.Errorf("pushed commits after migrating = %+v, want abc123", tk.PushedCommits)
 		}

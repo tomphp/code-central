@@ -1,26 +1,23 @@
-// Package usage is the usage recorder (ADR 0016): what agents consume,
-// kept beside the store as append-only JSON Lines files, one per Project
-// per local day, at projects/<key>/usage/<YYYY-MM-DD>.jsonl, or in
-// memory beside the in-memory store. Callers record and read records;
-// they never see the files.
+// Package usage is the usage recorder (ADR 0016, amended by ADR 0069):
+// what agents consume, kept by the Store: in the File Store as
+// append-only JSON Lines files, one per Project per local day, at
+// projects/<key>/usage/<YYYY-MM-DD>.jsonl, or in memory beside the
+// in-memory store. Callers record and read records through a Recorder;
+// they never see where they are kept.
 //
 // Recording never fails its caller: an append that fails is written to
 // the service log and dropped. Reading skips a line it can't parse and
 // counts it in the log, unlike the store's YAML, where a bad file stops
 // startup.
 //
-// Retention: a file whose day is more than 90 days before today is
-// deleted at startup, and again whenever the recorder opens the first
-// file of a new day. There is no timer.
+// Retention: the days more than 90 before today are deleted at startup,
+// and again whenever the recorder appends the first record of a new day.
+// There is no timer.
 package usage
 
 import (
-	"bufio"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"sync"
 	"time"
 
@@ -92,71 +89,33 @@ func (t Tokens) ContextSize() int { return t.InputTokens + t.CacheWriteTokens + 
 // Total is all four counts as one number: what the response used.
 func (t Tokens) Total() int { return t.ContextSize() + t.OutputTokens }
 
-// Records are the records a read found, oldest file first, and Days the
-// local days it read, oldest first, as YYYY-MM-DD.
+// Records are the records a read found, oldest day first, and Days the
+// local days it read, oldest first, as YYYY-MM-DD. Skipped is where a
+// Store passed over lines it couldn't parse.
 type Records struct {
 	Calls     []Call
 	Responses []Response
 	Days      []string
+	Skipped   []Skipped
 }
 
-// KeepDays is how many days before today a file is kept: one whose day is
-// earlier than that is deleted.
+// KeepDays is how many days before today a day's records are kept: ones
+// from earlier than that are deleted.
 const KeepDays = 90
 
-// The record types, each line's "type".
-const (
-	typeCall     = "mcp_call"
-	typeResponse = "model_response"
-)
-
-// callLine and responseLine are each record type's line of a file: its
-// type, then the record's fields.
-type callLine struct {
-	Type string `json:"type"`
-	Call
-}
-
-type responseLine struct {
-	Type string `json:"type"`
-	Response
-}
-
-// Recorder appends and reads usage records. Its zero value is not
-// usable; build one with New or NewMemory. A nil Recorder records nothing
-// and reads nothing.
+// Recorder appends and reads usage records over a Store. Its zero value
+// is not usable; build one with NewRecorder, New or NewMemory. A nil
+// Recorder records nothing and reads nothing.
 type Recorder struct {
-	files dayFiles
+	store Store
 	clock clock.Clock
 	loc   *time.Location
 	log   io.Writer
-	// mu is the recorder's own lock, apart from the store-wide one, so an
-	// append never waits on a store write: appends take it to write,
-	// reads to read, so a read never sees half a line. files is used
-	// only under it.
-	mu sync.RWMutex
-	// prunedOn is the day the old files were last deleted on, under mu.
+	// mu guards prunedOn. The Store has its own lock, so an append never
+	// waits on a store write.
+	mu sync.Mutex
+	// prunedOn is the day the old records were last deleted on, under mu.
 	prunedOn string
-}
-
-// dayFiles is where a Recorder keeps its files, one per Project per
-// local day, the day as YYYY-MM-DD: on disk or in memory.
-type dayFiles interface {
-	// append adds line to the end of project's file for day d.
-	append(project, d string, line []byte) error
-	// open opens project's file for day d; a missing one is
-	// fs.ErrNotExist.
-	open(project, d string) (io.ReadCloser, error)
-	// days is the days project has a file for; a Project with none may
-	// be fs.ErrNotExist.
-	days(project string) ([]string, error)
-	// remove deletes project's file for day d.
-	remove(project, d string) error
-	// projects is every Project with a usage folder, sorted.
-	projects() []string
-	// name is how the log names project's file for day d, or its folder
-	// when d is "".
-	name(project, d string) string
 }
 
 // New returns a Recorder keeping its files under dir (the store's
@@ -164,174 +123,119 @@ type dayFiles interface {
 // clk, and writing failures and skipped lines to log. It deletes the
 // files older than KeepDays days before it returns.
 func New(dir string, clk clock.Clock, loc *time.Location, log io.Writer) *Recorder {
-	return newRecorder(onDisk{dir}, clk, loc, log)
+	return NewRecorder(NewFiles(dir), clk, loc, log)
 }
 
-// NewMemory returns a Recorder keeping its files in memory, as the
-// in-memory store keeps its records, and otherwise dating, reading and
+// NewMemory returns a Recorder keeping its records in memory, as the
+// in-memory store keeps its own, and otherwise dating, reading and
 // deleting them as New's does.
 func NewMemory(clk clock.Clock, loc *time.Location, log io.Writer) *Recorder {
-	return newRecorder(inMemory{}, clk, loc, log)
+	return NewRecorder(NewMemoryStore(), clk, loc, log)
 }
 
-func newRecorder(files dayFiles, clk clock.Clock, loc *time.Location, log io.Writer) *Recorder {
+// NewRecorder returns a Recorder over s, dating each record by its day in
+// loc, reading "today" from clk, and writing failures and skipped lines to
+// log. It deletes the days older than KeepDays days before it returns.
+func NewRecorder(s Store, clk clock.Clock, loc *time.Location, log io.Writer) *Recorder {
 	if log == nil {
 		log = io.Discard
 	}
-	r := &Recorder{files: files, clock: clk, loc: loc, log: log}
+	r := &Recorder{store: s, clock: clk, loc: loc, log: log}
 	r.prune()
 	return r
 }
 
-// RecordCall appends c to project's file for c's day. A failure is
+// RecordCall appends c to project's records for c's day. A failure is
 // logged and dropped.
 func (r *Recorder) RecordCall(project string, c Call) {
 	if r == nil {
 		return
 	}
-	if err := r.append(project, c.Time, callLine{typeCall, c}); err != nil {
-		fmt.Fprintf(r.log, "code-central serve: usage: dropped an %s record for %s: %v\n", typeCall, project, err)
+	if err := r.append(project, c.Time, Record{Call: &c}); err != nil {
+		fmt.Fprintf(r.log, "code-central serve: usage: dropped an %s record for %s: %v\n", TypeCall, project, err)
 	}
 }
 
-// RecordResponses appends each of rs to project's file for its day. A
+// RecordResponses appends each of rs to project's records for its day. A
 // failure is logged and drops only that record.
 func (r *Recorder) RecordResponses(project string, rs []Response) {
 	if r == nil {
 		return
 	}
 	for _, resp := range rs {
-		if err := r.append(project, resp.Time, responseLine{typeResponse, resp}); err != nil {
-			fmt.Fprintf(r.log, "code-central serve: usage: dropped a %s record for %s: %v\n", typeResponse, project, err)
+		if err := r.append(project, resp.Time, Record{Response: &resp}); err != nil {
+			fmt.Fprintf(r.log, "code-central serve: usage: dropped a %s record for %s: %v\n", TypeResponse, project, err)
 		}
 	}
 }
 
-// append writes v as one line to the end of project's file for t's day.
-func (r *Recorder) append(project string, t time.Time, v any) error {
-	line, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if day(r.today()) != r.prunedOn {
-		r.prune()
-	}
-	return r.files.append(project, day(t.In(r.loc)), append(line, '\n'))
+// append adds rec to project's records for t's day.
+func (r *Recorder) append(project string, t time.Time, rec Record) error {
+	r.pruneOnANewDay()
+	return r.store.Append(project, day(t.In(r.loc)), rec)
 }
 
 // Read returns the records of the last days local days, today among
 // them, for project, or for every Project when project is "".
 func (r *Recorder) Read(project string, days int) Records {
-	var out Records
 	if r == nil {
-		return out
-	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	projects := []string{project}
-	if project == "" {
-		projects = r.files.projects()
+		return Records{}
 	}
 	today := r.today()
+	var list []string
 	for i := days - 1; i >= 0; i-- {
-		d := day(today.AddDate(0, 0, -i))
-		out.Days = append(out.Days, d)
-		for _, p := range projects {
-			r.readFile(p, d, &out)
-		}
+		list = append(list, day(today.AddDate(0, 0, -i)))
+	}
+	out, err := r.store.Read(project, list)
+	if err != nil {
+		fmt.Fprintf(r.log, "code-central serve: usage: %v\n", err)
+	}
+	for _, s := range out.Skipped {
+		fmt.Fprintf(r.log, "code-central serve: usage: skipped %d unreadable line(s) in %s\n", s.Lines, s.Where)
+	}
+	out.Days = list
+	return out
+}
+
+// Days is how many days each Project has Usage for, by Project key. Like
+// Read, it never fails: what it can't read is logged and counts as none.
+func (r *Recorder) Days() map[string]int {
+	if r == nil {
+		return nil
+	}
+	days, err := r.store.Days()
+	if err != nil {
+		fmt.Fprintf(r.log, "code-central serve: usage: %v\n", err)
+	}
+	out := make(map[string]int, len(days))
+	for p, d := range days {
+		out[p] = len(d)
 	}
 	return out
 }
 
-// prune deletes every Project's files whose day is more than KeepDays days
-// before today, with mu held or before the Recorder is shared. A file it
+// pruneOnANewDay deletes the old days if it hasn't yet today.
+func (r *Recorder) pruneOnANewDay() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if day(r.today()) != r.prunedOn {
+		r.prune()
+	}
+}
+
+// prune deletes every Project's records for days more than KeepDays days
+// before today, with mu held or before the Recorder is shared. What it
 // can't delete is logged and left for the next day.
 func (r *Recorder) prune() {
 	today := r.today()
 	r.prunedOn = day(today)
-	oldest := day(today.AddDate(0, 0, -KeepDays))
-	for _, p := range r.files.projects() {
-		days, err := r.files.days(p)
-		if err != nil {
-			if !errors.Is(err, fs.ErrNotExist) {
-				fmt.Fprintf(r.log, "code-central serve: usage: cannot read %s: %v\n", r.files.name(p, ""), err)
-			}
-			continue
-		}
-		for _, d := range days {
-			if _, err := time.Parse(time.DateOnly, d); err != nil || d >= oldest {
-				continue
-			}
-			if err := r.files.remove(p, d); err != nil {
-				fmt.Fprintf(r.log, "code-central serve: usage: cannot delete %s: %v\n", r.files.name(p, d), err)
-			}
-		}
+	if err := r.store.Prune(day(today.AddDate(0, 0, -KeepDays))); err != nil {
+		fmt.Fprintf(r.log, "code-central serve: usage: %v\n", err)
 	}
 }
 
 // today is the clock's time in the service's time zone.
 func (r *Recorder) today() time.Time { return r.clock.Now().In(r.loc) }
 
-// readFile adds the records of project's file for day d to out, skipping
-// and counting any line that doesn't parse. A missing file holds no
-// records.
-func (r *Recorder) readFile(project, d string, out *Records) {
-	path := r.files.name(project, d)
-	f, err := r.files.open(project, d)
-	if errors.Is(err, fs.ErrNotExist) {
-		return
-	}
-	if err != nil {
-		fmt.Fprintf(r.log, "code-central serve: usage: cannot read %s: %v\n", path, err)
-		return
-	}
-	defer f.Close()
-	skipped := 0
-	sc := bufio.NewScanner(f)
-	sc.Buffer(nil, 1<<20)
-	for sc.Scan() {
-		var line struct {
-			Type string `json:"type"`
-		}
-		if err := json.Unmarshal(sc.Bytes(), &line); err != nil {
-			skipped++
-			continue
-		}
-		var err error
-		switch line.Type {
-		case typeCall:
-			out.Calls, err = appendRecord(out.Calls, sc.Bytes())
-		case typeResponse:
-			out.Responses, err = appendRecord(out.Responses, sc.Bytes())
-			if err == nil {
-				resp := &out.Responses[len(out.Responses)-1]
-				resp.Project, resp.Day = project, d
-			}
-		default:
-			// A type this build doesn't know, from a newer one: not an error.
-		}
-		if err != nil {
-			skipped++
-		}
-	}
-	if err := sc.Err(); err != nil {
-		fmt.Fprintf(r.log, "code-central serve: usage: stopped reading %s: %v\n", path, err)
-	}
-	if skipped > 0 {
-		fmt.Fprintf(r.log, "code-central serve: usage: skipped %d unreadable line(s) in %s\n", skipped, path)
-	}
-}
-
-// appendRecord adds the record line holds to recs.
-func appendRecord[T any](recs []T, line []byte) ([]T, error) {
-	var rec T
-	if err := json.Unmarshal(line, &rec); err != nil {
-		return recs, err
-	}
-	return append(recs, rec), nil
-}
-
-// day is t's date as a file names it.
+// day is t's date as a store names it.
 func day(t time.Time) string { return t.Format(time.DateOnly) }

@@ -37,6 +37,7 @@ get_pull_request_watch	GET	/api/p/{key}/pull-request-watch
 get_spec	GET	/api/p/{key}/specs/{n}
 get_spec_questions	GET	/api/p/{key}/specs/{n}/questions
 get_stage_guide	GET	/api/p/{key}/stage-guides/{stage}
+get_storage	GET	/api/storage
 get_ticket	GET	/api/p/{key}/tickets/{n}
 get_work_item_watch	GET	/api/p/{key}/integration/work-item-watch
 get_workflow	GET	/api/workflow

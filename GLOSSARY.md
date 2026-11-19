@@ -48,6 +48,27 @@ _Avoid_: Slug, Project ID
 The page where the human sets a Project's settings, such as its Landing Method, CI Tracking, GitHub Issues, Models, Stage Guides, Auto-accept and Focus, with Auto-fix in its CI section, and its Repositories section, where the human adds and removes the Project's Repositories (the CLI does the same) and, in each Repository's row, sets its Own Landing, Push remote and CI choice. Unlike an Option, what it sets belongs to one Project.
 _Avoid_: Project settings, preferences, config
 
+**Store**:
+Where Code Central keeps the Projects' records, Options, CI Runs and Usage. A service opens one Store, of one Store Kind.
+_Avoid_: database, backend
+
+**Store Kind**:
+Files (YAML and Markdown files loaded into memory; the default), SQLite (one local database file) or Postgres (a database server that several services may share).
+_Avoid_: store type, driver
+
+**Store Move**:
+Copying every record of one Store, Usage included, into another, empty Store of any Kind, offline, then switching the settings to it. The source is left untouched. It is not a Migration.
+_Avoid_: migration, store migration
+
+**Migration**:
+A format bump that rewrites a Store to a new format version. It is not a Store Move, which copies a Store into another.
+
+**Shared Store**:
+A Postgres Store that several services on different machines open at once.
+
+**Service Registration**:
+A running service's record in the Store, holding its host, version and known format, renewed on a timer.
+
 **Models**:
 The section of Project Options where the human sets a model and effort for the Project default, for each kind of work (a Ticket's Stage Guide name) and for Chat. The Chat row is not a kind of work, and the Project default doesn't reach it.
 _Avoid_: Model config, AI settings
@@ -142,6 +163,13 @@ _Avoid_: Planning, setup
 **Ticket**:
 A unit of work within a Spec. Every Ticket belongs to exactly one Spec.
 _Avoid_: Issue (that word means only GitHub's item, which an Incoming Issue mirrors), task, card
+
+**Ticket History**:
+A Ticket's Claims, Rounds, Comments, Moves, Edits and Failure Reports. The Store reads each part only when asked.
+
+**Ticket head**:
+A Ticket without its Ticket History, with the derived head fields the Store works out from that History on every write: when it entered its State, its live Claim, its latest Round and Failure Report, when it last went back to Ready, and when its Link's external state last changed. Lists and Needs Me read heads only.
+_Avoid_: summary, stub
 
 **Prototype**:
 A Ticket, on any Spec, that makes a cheap, throwaway artifact for the human to try and react to, so a decision can be made. Its work never lands. A Question answered "Prototype this" in a grilling or Charting Round becomes one, which blocks the asking Ticket until it is Done.
@@ -353,8 +381,12 @@ Whether a Project's Factories are **Online**, **Draining** (claiming nothing new
 _Avoid_: health, presence, liveness
 
 **Watcher**:
-A separate process, started and supervised by Code Central, that watches one external system for one Project, reaching it through its CI Provider, `gh`, or Azure DevOps' API with a PAT, and reporting over the HTTP API. Each kind is run while its Project setting is on, restarted with backoff when it crashes, and has its own status, Watching or an error with its fix, of which going into an error sends one Notification. The kinds are the CI Watcher, the Issue Watcher, the Work Item Watcher and the Pull Request Watcher.
+A separate process, started and supervised by Code Central, that watches one external system for one Project, reaching it through its CI Provider, `gh`, or Azure DevOps' API with a PAT, and reporting over the HTTP API. Each kind is run while its Project setting is on and its service holds the Project's Watcher Lease, restarted with backoff when it crashes, and has its own status, Watching or an error with its fix, of which going into an error sends one Notification; the status names the host it runs on, says Elsewhere, with the host, while another service holds the Lease, and Waiting once the Lease has lapsed with no service to take it. The kinds are the CI Watcher, the Issue Watcher, the Work Item Watcher and the Pull Request Watcher.
 _Avoid_: Daemon, poller
+
+**Watcher Lease**:
+The claim one service holds on a Project's Watchers in a Shared Store, renewed while it runs and taken over when it expires.
+_Avoid_: watcher lock
 
 **CI Watcher**:
 The kind of Watcher that watches one Project's CI, in every Repository that isn't Not watched, each through its own CI Provider, and reports what it sees over the HTTP API. A failing Repository is named in its error, and it carries on with the others. Before CI Tracking turns on, Code Central runs it once in its **check mode**, which checks it can reach what it watches in every watched Repository and answers with what is wrong and its fix, if anything is. Its status, **Watching** or an error with its fix, shows in the CI section of Project Options; going into an error sends one Notification. Rate-limited by its CI Provider, it is still Watching, until the time it may call again, and sends no Notification. The service starts one per Project with CI Tracking on, stops it when CI Tracking is turned off or the Project is archived, and restarts one that crashes with backoff, reporting it as crashed, restarted N times.
@@ -442,8 +474,11 @@ The view of the CI Runs in a Project, or in all Projects with CI Tracking on: th
 _Avoid_: CI dashboard, build monitor
 
 **Usage**:
-The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used. It shows its parts in three tabs, Token usage, Context Size and Code Central calls, in that order, with the open tab in the URL; a session opens in its Session popup. Its token kinds include `chat`. Subagents nest under their parent session. It is not Plan Limits and not the Limits popup.
+The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used. It shows its parts in four tabs, Token usage, Context Size, Code Central calls and Storage, in that order, with the open tab in the URL; Storage shows the Store, each Project's records, the service's memory and the Service Registrations, as they are now; a session opens in its Session popup. Its token kinds include `chat`. Subagents nest under their parent session. It is not Plan Limits and not the Limits popup.
 _Avoid_: Analytics dashboard, stats, metrics
+
+**Storage tab**:
+The Usage page's tab that shows the Store Kind, its size, record counts, process memory and the registered services.
 
 **Session popup**:
 Usage's popup for one session (a Claim's main session or a Subagent): its Context Size response by response as a line chart, opened from Recent sessions. It is kept in the URL. A Subagent's popup links to its parent session's in place. It is not the Limits popup.

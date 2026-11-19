@@ -526,3 +526,29 @@ func readShortcut(t *testing.T, path string) (target, appID string) {
 	}
 	return target, appID
 }
+
+func TestServiceInstallLeavesTheStoreToTheSettingsBlock(t *testing.T) {
+	t.Parallel()
+	h := newHost(t, "linux")
+	writeHomeSettings(t, h.home, "store:\n  kind: sqlite\n")
+	if r := h.run(nil, "service", "install"); r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	unit := h.read(filepath.Join(h.home, ".config", "systemd", "user", "code-central.service"))
+	if !strings.Contains(unit, `" serve`+"\n") || strings.Contains(unit, "--store") {
+		t.Fatalf("unit names a store the settings choose:\n%s", unit)
+	}
+	// --store still wins, as it does for serve.
+	store := filepath.Join(h.dir, "my store")
+	if r := h.run(nil, "service", "install", "--store", store); r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	if unit := h.read(filepath.Join(h.home, ".config", "systemd", "user", "code-central.service")); !strings.Contains(unit, `--store "`+systemdEscaped(store)+`"`) {
+		t.Fatalf("unit lacks --store:\n%s", unit)
+	}
+	// A bad block stops the install as it would stop the service.
+	writeHomeSettings(t, h.home, "store:\n  kind: mysql\n")
+	if r := h.run(nil, "service", "install"); r.code != 1 || !strings.Contains(r.stderr, "store.kind") {
+		t.Fatalf("install with a bad store block: %+v", r)
+	}
+}

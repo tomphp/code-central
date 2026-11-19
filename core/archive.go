@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -92,13 +91,9 @@ func (c *Core) UnarchiveProject(ctx context.Context, key string) (ProjectView, e
 // unfinishedTickets names each unfinished Ticket in the Project with its
 // State, in number order.
 func unfinishedTickets(r store.Reader, key string) []string {
-	tickets := r.Tickets(key)
-	slices.SortFunc(tickets, func(a, b domain.Ticket) int { return a.Number - b.Number })
 	var out []string
-	for _, t := range tickets {
-		if !finished(t.State) {
-			out = append(out, fmt.Sprintf("%s (%s)", DisplayID(key, t.Number), t.State))
-		}
+	for _, t := range r.FindTickets(key, store.TicketFilter{States: unfinished}) {
+		out = append(out, fmt.Sprintf("%s (%s)", DisplayID(key, t.Number), t.State))
 	}
 	return out
 }
@@ -134,11 +129,11 @@ func (w guardedWriter) PutSpec(key string, s domain.Spec) error {
 	return w.Writer.PutSpec(key, s)
 }
 
-func (w guardedWriter) PutTicket(key string, t domain.Ticket) error {
+func (w guardedWriter) PutTicket(key string, t domain.Ticket, parts ...store.Part) error {
 	if err := writable(w, key); err != nil {
 		return err
 	}
-	return w.Writer.PutTicket(key, t)
+	return w.Writer.PutTicket(key, t, parts...)
 }
 
 func (w guardedWriter) PutCIRuns(key string, runs []domain.CIRun) error {

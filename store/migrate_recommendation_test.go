@@ -32,7 +32,7 @@ func TestTheRealChainMigratesAFormat33StoreToTheRecommendationFormat(t *testing.
 		}
 	}
 	s.View(func(r store.Reader) error {
-		if tk, _ := r.Ticket("acme", 4); tk.State != domain.InReview || tk.Recommendation != "" {
+		if tk, _ := r.Ticket("acme", 4, store.History...); tk.State != domain.InReview || tk.Recommendation != "" {
 			t.Errorf("ticket after migrating = %+v, want In Review with no recommendation", tk)
 		}
 		return nil
@@ -40,15 +40,15 @@ func TestTheRealChainMigratesAFormat33StoreToTheRecommendationFormat(t *testing.
 
 	// A recommendation recorded after migrating reads back.
 	if err := s.Update(func(w store.Writer) error {
-		tk, _ := w.Ticket("acme", 4)
+		tk, _ := w.Ticket("acme", 4, store.History...)
 		tk.Recommendation = domain.RecommendSplit
-		return w.PutTicket("acme", tk)
+		return w.PutTicket("acme", tk, store.History...)
 	}); err != nil {
 		t.Fatal(err)
 	}
 	s = reopen(t, s)
 	s.View(func(r store.Reader) error {
-		if tk, _ := r.Ticket("acme", 4); tk.Recommendation != domain.RecommendSplit {
+		if tk, _ := r.Ticket("acme", 4, store.History...); tk.Recommendation != domain.RecommendSplit {
 			t.Errorf("recommendation = %q, want split", tk.Recommendation)
 		}
 		return nil

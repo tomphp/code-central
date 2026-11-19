@@ -4,7 +4,8 @@
 # gets its own log). Every step runs under bash, so the
 # commands are identical on every OS and a red run on one OS is a real
 # platform difference. A separate job checks the commit messages since
-# the latest tag.
+# the latest tag, and another runs the store and cli tests again on Linux
+# against a Postgres service container, which no other runner can give.
 name: CI
 
 on:
@@ -40,6 +41,44 @@ jobs:
         uses: cocogitto/cocogitto-action@v3
         with:
           check-latest-tag-only: true
+
+  # The store's contract suite, serve's store: block, a service's
+  # Registration and core's waits and wakes across two services on a real
+  # Postgres, which only a Linux runner can give as a service container. The test
+  # jobs below run the same tests without one and skip those cases, naming
+  # CODE_CENTRAL_TEST_POSTGRES_URL, as make test does locally.
+  test-postgres:
+    name: test (postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: code_central_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # -v so the log shows the Postgres cases run, not skipped.
+      - name: go test
+        env:
+          CODE_CENTRAL_TEST_POSTGRES_URL: postgres://postgres:postgres@localhost:5432/code_central_test?sslmode=disable
+        run: go test -v ./store/... ./cli/... ./core/... ./app/...
 
   test:
     name: test (${{ matrix.os }})
@@ -89,7 +128,8 @@ jobs:
           fi
 
       # Against the committed placeholder page, so no Vite build is needed.
-      # -v so the log lists every skipped test with its reason.
+      # -v so the log lists every skipped test with its reason: the
+      # Postgres cases among them, which the test-postgres job runs.
       - name: go test
         run: go test -v ./...
 

@@ -1,8 +1,10 @@
 package core_test
 
 import (
+	"errors"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
@@ -142,6 +144,24 @@ func TestReplacementsThatWouldFormACycleAreRejected(t *testing.T) {
 	if v := f.get(t, "acme-3"); v.State != domain.Ready {
 		t.Fatalf("rejected cancel was written: %s", v.State)
 	}
+}
+
+func TestAReplacementThatADependantWaitsOnThroughCancelledTicketsCannotLoopBack(t *testing.T) {
+	f := newFixture(t)
+	f.work(t, domain.Ready, domain.Ready, domain.Ready, domain.Ready, domain.Ready) // acme-2 to acme-6
+	// acme-2 waits on acme-3, which hands its work to acme-4, then acme-5.
+	f.addBlocker(t, "acme-2", "acme-3")
+	f.cancel(t, core.CancelInput{Ticket: "acme-3", Replacements: []core.Ref{"acme-4"}})
+	f.cancel(t, core.CancelInput{Ticket: "acme-4", Replacements: []core.Ref{"acme-5"}})
+	// So replacing acme-5 by acme-2 would make acme-2 wait on itself.
+	_, err := f.core.Cancel(ctx, "acme", core.CancelInput{Ticket: "acme-5", Replacements: []core.Ref{"acme-2"}})
+	wantCode(t, err, core.Cycle, "")
+	var e *core.Error
+	if errors.As(err, &e); !strings.Contains(e.Message, "acme-2 → acme-2") {
+		t.Fatalf("message %q, want the chain acme-2 → acme-2", e.Message)
+	}
+	// Replacing it by a Ticket nothing waits through is fine.
+	f.cancel(t, core.CancelInput{Ticket: "acme-5", Replacements: []core.Ref{"acme-6"}})
 }
 
 func TestAReplacementChainCannotLoopBack(t *testing.T) {

@@ -7,7 +7,6 @@
 package core
 
 import (
-	"cmp"
 	"context"
 	"maps"
 	"regexp"
@@ -65,6 +64,9 @@ type Core struct {
 	// autoFixLocks holds each Project's Auto-fix lock, a *sync.Mutex by
 	// Project key (lockAutoFix).
 	autoFixLocks sync.Map
+	// service is this service as the Store's record of the services
+	// running on it names it.
+	service Service
 }
 
 // New returns a Core persisting through s, telling time with clk and
@@ -72,11 +74,11 @@ type Core struct {
 // Events.
 func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
 	bus, wakes := events.New(), newFactoryWakes()
-	c := &Core{store: notifying{Store: archiveGuard{s}, bus: bus, wakes: wakes}, clock: clk, ids: idSource, events: bus, factoryWakes: wakes}
+	c := &Core{store: newNotifying(archiveGuard{s}, bus, wakes), clock: clk, ids: idSource, events: bus, factoryWakes: wakes}
 	c.activity = newActivity(c.now())
 	c.transcripts = &transcripts{all: map[markKey]*transcript{}, feeds: map[markKey]map[*TranscriptFeed]struct{}{}}
 	c.latestNotices = &latestNotices{sent: map[markKey]time.Time{}, pending: map[markKey]bool{}}
-	c.watchers = &watchers{all: map[watcherKey]watcherStatus{}}
+	c.watchers = &watchers{all: map[watcherKey]watcherStatus{}, leases: map[string]store.Lease{}}
 	c.heartbeats = &heartbeats{all: map[heartbeatKey]heartbeat{}, seen: map[string]string{}, base: map[string]map[string]BaseView{}, clones: map[string]map[string]CloneView{}}
 	c.chats = newChats()
 	return c
@@ -601,7 +603,7 @@ func (c *Core) CreateTicket(ctx context.Context, key string, in CreateTicketInpu
 			Number: w.NextNumber(key), Title: in.Title, State: state, Spec: specN,
 			Labels: in.Labels, Tags: maps.Clone(in.Tags), BlockedBy: blockedBy, Created: now, Updated: now, Description: in.Description,
 		}
-		if err := w.PutTicket(key, t); err != nil {
+		if err := whole.put(w, key, &t); err != nil {
 			return err
 		}
 		v, err = acknowledgeCreate(c.ticketView(w, key, domain.Ticket{}), c.ticketView(w, key, t), in.Full)
@@ -623,7 +625,8 @@ func (c *Core) GetTicket(_ context.Context, key string, in GetTicketInput) (Tick
 		if !ok {
 			return unknownProject(key)
 		}
-		t, err := resolveTicket(r, key, "get_ticket", "ticket", in.Ticket)
+		// It is read whole: left_out counts the parts it leaves out.
+		t, err := resolveTicket(r, key, "get_ticket", "ticket", in.Ticket, whole...)
 		if err != nil {
 			return err
 		}
@@ -662,8 +665,8 @@ func (c *Core) FindTickets(_ context.Context, key string, in FindTicketsInput) (
 			return err
 		}
 		maps := map[int]bool{}
-		for _, s := range r.Specs(key) {
-			maps[s.Number] = isMap(s.Labels)
+		for _, s := range r.FindSpecs(key, store.SpecFilter{Label: MapLabel}) {
+			maps[s.Number] = true
 		}
 		for _, t := range tickets {
 			rows = append(rows, c.ticketRow(r, e, t, maps[t.Spec]))
@@ -691,6 +694,8 @@ func (c *Core) FindTicketViews(_ context.Context, key string, in FindTicketsInpu
 			return err
 		}
 		for _, t := range tickets {
+			// Each is read whole, as get_ticket reads it.
+			t, _ = r.Ticket(key, t.Number, whole...)
 			views = append(views, shapeView(c.ticketViewIn(r, e, t), r, e.p, t, in.Parts, parts, in.WithModelChoice))
 		}
 		return nil
@@ -716,7 +721,10 @@ func (c *Core) findIn(r store.Reader, key string, in FindTicketsInput) (*evaluat
 	if !ok {
 		return nil, nil, unknownProject(key)
 	}
-	specN := 0
+	f := store.TicketFilter{States: in.State, Order: store.ByClaim}
+	if len(f.States) == 0 {
+		f.States = unfinished
+	}
 	if in.Spec != "" {
 		n, err := in.Spec.number(key, "spec")
 		if err != nil {
@@ -727,14 +735,13 @@ func (c *Core) findIn(r store.Reader, key string, in FindTicketsInput) (*evaluat
 		if err := ticketNotSpec(r, key, "find_tickets", "spec", n); err != nil {
 			return nil, nil, err
 		}
-		specN = n
+		f.Spec = []int{n}
 	}
-	tickets := r.Tickets(key)
-	slices.SortStableFunc(tickets, claimOrder)
+	tickets := r.FindTickets(key, f)
 	e := c.evaluate(r, p)
 	found := tickets[:0]
 	for _, t := range tickets {
-		if !matches(t, in, specN) {
+		if !matches(t, in) {
 			continue
 		}
 		if in.Claimable != nil && *in.Claimable != (t.State == domain.Ready && !e.rule.blocked(t)) {
@@ -745,21 +752,13 @@ func (c *Core) findIn(r store.Reader, key string, in FindTicketsInput) (*evaluat
 	return e, found, nil
 }
 
-func matches(t domain.Ticket, in FindTicketsInput, specN int) bool {
-	if len(in.State) > 0 {
-		if !slices.Contains(in.State, t.State) {
-			return false
-		}
-	} else if finished(t.State) {
-		return false
-	}
+// matches reports whether t matches in's filters that the Store's query
+// leaves to core: its title, Labels and Tags.
+func matches(t domain.Ticket, in FindTicketsInput) bool {
 	if in.Title != "" && !strings.Contains(strings.ToLower(t.Title), strings.ToLower(in.Title)) {
 		return false
 	}
-	if !hasAll(t.Labels, t.Tags, in.Labels, in.Tags) {
-		return false
-	}
-	return specN == 0 || t.Spec == specN
+	return hasAll(t.Labels, t.Tags, in.Labels, in.Tags)
 }
 
 // hasAll reports whether every wanted Label is present and every wanted
@@ -804,19 +803,13 @@ func (c *Core) ticketRow(r store.Reader, e *evaluation, t domain.Ticket, onMap b
 	return row
 }
 
-func claimOrder(a, b domain.Ticket) int {
-	if c := a.Created.Compare(b.Created); c != 0 {
-		return c
-	}
-	return cmp.Compare(a.Number, b.Number)
-}
-
 func finished(s domain.State) bool { return s == domain.Done || s == domain.Cancelled }
 
 func (c *Core) projectView(p domain.Project) ProjectView {
+	now := c.now()
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
-		Landing: landingViewWith(p, c.watchers.view(watcherKey{WatcherPullRequests, p.Key})), CI: ciView(p, c.watchers.view(watcherKey{WatcherCI, p.Key})),
-		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), AzureBoards: azureBoardsView(p, c.watchers.view(watcherKey{WatcherWorkItems, p.Key})), Models: modelsView(p.Models),
+		Landing: landingViewWith(p, c.watchers.view(watcherKey{WatcherPullRequests, p.Key}, now)), CI: ciView(p, c.watchers.view(watcherKey{WatcherCI, p.Key}, now)),
+		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key}, now)), AzureBoards: azureBoardsView(p, c.watchers.view(watcherKey{WatcherWorkItems, p.Key}, now)), Models: modelsView(p.Models),
 		ReportedModels: reportedModelsView(p.ReportedModels), StageGuides: stageGuidesView(p.StageGuides), AutoAccept: autoAcceptView(p),
 		FocusKinds: focusKindsView(p.FocusKindsOff), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now()), Repositories: repositoriesView(p)}
 	c.fillClones(p.Key, v.Repositories)

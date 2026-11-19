@@ -59,7 +59,7 @@ edits: []
 		t.Fatalf("the Ticket file changed:\n%s", got)
 	}
 	s.View(func(r store.Reader) error {
-		tk, ok := r.Ticket("acme", 2)
+		tk, ok := r.Ticket("acme", 2, store.History...)
 		if !ok || tk.Claims[0].SessionID != "s1" || tk.Claims[0].WorkingDir != "" || tk.Claims[0].ResumeCommand != "" ||
 			tk.FailureReports[0].WorkingDir != "" || tk.FailureReports[0].ResumeCommand != "" {
 			t.Fatalf("ticket 2 after migrating: %+v, %v", tk, ok)

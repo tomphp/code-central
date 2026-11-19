@@ -62,7 +62,7 @@ func (c *Core) SubmitRetro(_ context.Context, key string, in SubmitRetroInput) (
 			Created: now, Updated: now, Description: target.description(in.Note),
 			Moves: submitMoves(false, now, "submit_retro"),
 		}
-		if err := w.PutTicket(key, t); err != nil {
+		if err := whole.put(w, key, &t); err != nil {
 			return err
 		}
 		v, err = acknowledgeCreate(c.ticketView(w, key, domain.Ticket{}), c.ticketView(w, key, t), in.Full)
@@ -91,13 +91,13 @@ func resolveRetroTarget(r store.Reader, key string, ref Ref) (retroTarget, error
 		if slices.Contains(s.Labels, LongLivedLabel) {
 			return retroTarget{}, invalid("target", "%s is a Long-lived Spec, which never finishes; start a Retro on each of its finished Tickets instead", id)
 		}
-		tickets := specTickets(r, key, n)
+		tickets := specTickets(r, key, n, store.Claims)
 		if _, done := summarise(tickets); !done {
 			return retroTarget{}, invalid("target", "Spec %s isn't Finished; a Retro looks back on finished work, so start it once every Ticket is Done or Cancelled", id)
 		}
 		return retroTarget{key: key, id: id, kind: "Spec", title: s.Title, tickets: tickets}, nil
 	}
-	if t, ok := r.Ticket(key, n); ok {
+	if t, ok := r.Ticket(key, n, store.Claims); ok {
 		if !finished(t.State) {
 			return retroTarget{}, invalid("target", "%s is %s; a Retro looks back on finished work, so start it once the Ticket is Done or Cancelled", id, t.State)
 		}
@@ -179,10 +179,8 @@ type RetroView struct {
 // or nil when there are none.
 func retrosOf(r store.Reader, key, target string) []RetroView {
 	var out []RetroView
-	for _, t := range r.Tickets(key) {
-		if t.Tags[RetroOfTag] == target && slices.Contains(t.Labels, RetroLabel) {
-			out = append(out, RetroView{ID: DisplayID(key, t.Number), Title: t.Title, State: t.State})
-		}
+	for _, t := range r.FindTickets(key, store.TicketFilter{Label: RetroLabel, Tag: &store.TagFilter{Key: RetroOfTag, Values: []string{target}}}) {
+		out = append(out, RetroView{ID: DisplayID(key, t.Number), Title: t.Title, State: t.State})
 	}
 	return out
 }

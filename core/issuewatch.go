@@ -73,8 +73,8 @@ func incomingIssues(r store.Reader, key, integration string) []IncomingIssue {
 	if in.spec == 0 {
 		return out
 	}
-	for _, t := range r.Tickets(key) {
-		if t.Spec == in.spec && t.Link.Integration == integration && t.Link.Owned() && !finished(t.State) {
+	for _, t := range r.FindTickets(key, store.TicketFilter{Spec: []int{in.spec}, States: unfinished, Link: &store.LinkFilter{Integration: integration}}) {
+		if t.Link.Owned() {
 			out = append(out, IncomingIssue{Ticket: DisplayID(key, t.Number), Link: *linkView(t.Link), Title: t.Title, Description: t.Description})
 		}
 	}

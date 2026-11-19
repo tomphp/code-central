@@ -78,7 +78,7 @@ func (c *Core) SubmitMap(_ context.Context, key string, in SubmitMapInput) (Subm
 		if res.Spec, err = acknowledgeCreate(specView(key, domain.Spec{}), specView(key, s), in.Full); err != nil {
 			return err
 		}
-		t, _ := r.Ticket(key, specN+1)
+		t, _ := r.Ticket(key, specN+1, whole...)
 		res.Charting, err = acknowledgeCreate(c.ticketView(r, key, domain.Ticket{}), c.ticketView(r, key, t), in.Full)
 		return err
 	})
@@ -135,10 +135,8 @@ func mapView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *MapView {
 	key := e.p.Key
 	id := DisplayID(key, s.Number)
 	v := &MapView{Guided: s.Tags[GuidedTag] == GuidedOn, CanWriteSpec: true, Requirements: []string{}}
-	for _, sp := range e.r.Specs(key) {
-		if sp.Tags[MapTag] == id {
-			v.Requirements = append(v.Requirements, DisplayID(key, sp.Number))
-		}
+	for _, sp := range e.r.FindSpecs(key, store.SpecFilter{Tag: &store.TagFilter{Key: MapTag, Values: []string{id}}}) {
+		v.Requirements = append(v.Requirements, DisplayID(key, sp.Number))
 	}
 	for _, t := range tickets {
 		if reason, _ := e.reason(t); reason != "" {

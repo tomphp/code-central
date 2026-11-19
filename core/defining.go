@@ -427,7 +427,8 @@ func (c *Core) updateTargetThen(key string, ref Ref, fn func(r store.Reader, onS
 			v = TargetView{ID: DisplayID(key, n), Kind: RecordSpec, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags)}
 			return nil
 		}
-		if t, ok := w.Ticket(key, n); ok {
+		// An Import rewrites the Ticket whole, so it is read whole.
+		if t, ok := w.Ticket(key, n, whole...); ok {
 			changed, err := apply(false, &t.Labels, &t.Tags)
 			if err != nil {
 				return err

@@ -109,7 +109,7 @@ function Views({ now }: { now: () => Date }) {
       case "options":
         return <OptionsView api={api} options={options} loc={loc} navigate={navigate} />;
       case "usage":
-        return <UsageView projects={inbox.data?.projects} loc={loc} navigate={navigate} />;
+        return <UsageView projects={inbox.data?.projects} loc={loc} navigate={navigate} now={now()} />;
       case "ci":
         return <CIView now={now()} projects={inbox.data?.projects} loc={loc} navigate={navigate} />;
       case "activity":

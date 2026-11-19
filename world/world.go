@@ -36,6 +36,7 @@ var ErrDropped = errors.New("the world has been dropped")
 // none seeds or writes state.
 type World struct {
 	core    *core.Core
+	store   store.Store
 	clock   *clock.Fake
 	handler http.Handler
 
@@ -66,13 +67,20 @@ var streams = func() *http.ServeMux {
 	return mux
 }()
 
+// Host is the machine the world's own service runs on.
+const Host = "laptop"
+
 // New is a fresh world whose fake clock reads start.
 func New(start time.Time) *World {
 	clk := clock.NewFake(start)
-	c := core.New(store.NewMemory(), clk, &ids.Sequence{})
+	s := store.NewMemory()
+	c := core.New(s, clk, &ids.Sequence{})
 	c.SetUsage(usage.NewMemory(clk, time.UTC, nil))
+	c.SetService(core.Service{ID: Host, Host: Host, Version: Version})
+	c.Register(context.Background()) // a fresh memory Store refuses no Registration
 	w := &World{
 		core:     c,
+		store:    s,
 		clock:    clk,
 		handler:  server.Versioned(server.Handler(c, nil, nil), Version),
 		requests: map[*request]struct{}{},
@@ -133,6 +141,22 @@ func (w *World) answer(check *core.WatcherCheckResult) core.WatcherCheckResult {
 // Watcher supervisor does.
 func (w *World) ReportWatcherCrash(kind core.WatcherKind, key string, crash core.WatcherCrash) {
 	w.core.ReportWatcherCrash(context.Background(), kind, key, crash)
+}
+
+// HoldWatcherLease has the service on host hold key's Watcher Lease, as
+// serve's Watcher supervisor does on each renewal: the world's own service
+// on Host, or another service on the same Store, which takes it if it is
+// free. The world's service then renews it or sees where it is held, as
+// its supervisor would.
+func (w *World) HoldWatcherLease(key, host string) {
+	ctx := context.Background()
+	if host != Host {
+		other := core.New(w.store, w.clock, &ids.Sequence{})
+		other.SetService(core.Service{ID: host, Host: host, Version: Version})
+		other.Register(ctx)
+		other.HoldWatcherLease(ctx, key)
+	}
+	w.core.HoldWatcherLease(ctx, key)
 }
 
 // DropStreams ends every open stream, change notices and Transcript

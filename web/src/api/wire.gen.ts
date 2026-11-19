@@ -116,6 +116,8 @@ export const WATCHER_STATES = [
   "not_reported",
   "watching",
   "error",
+  "elsewhere",
+  "waiting",
 ] as const;
 export type WatcherState = (typeof WATCHER_STATES)[number];
 
@@ -852,6 +854,31 @@ export interface SessionUsageView {
   agent_type?: string;
   description?: string;
   responses: SessionUsageResponse[];
+}
+
+// StorageView is get_storage.
+export interface StorageView {
+  // Kind is the Store Kind: files, sqlite or postgres; memory for the
+  // in-memory fake.
+  kind: string;
+  // Path is the File Store's folder or the SQLite database file; empty
+  // for Postgres and the fake.
+  path?: string;
+  // Host, Port and Database are the Postgres Store's address, as its
+  // URL names them, without its user or password; empty for the other
+  // Kinds.
+  host?: string;
+  port?: number;
+  database?: string;
+  // Size is the Store's size in bytes, Usage included, as its Kind can
+  // tell it.
+  size: number;
+  // Projects are the Projects' counts, in key order: the scoped one's
+  // alone, or every one's.
+  projects: StorageProject[];
+  memory: ProcessMemory;
+  // Services are the live Service Registrations, in host order.
+  services: StorageRegistration[];
 }
 
 // ConversationView is a Project's current Conversation as get_chat and
@@ -1622,6 +1649,33 @@ export interface SessionUsageResponse extends Tokens {
   context_size: number;
 }
 
+// StorageProject is one Project's count of records.
+export interface StorageProject {
+  key: string;
+  name: string;
+  // Specs and Tickets are its Specs and Tickets, in every State.
+  specs: number;
+  tickets: number;
+  // UsageDays is how many days of Usage it keeps.
+  usage_days: number;
+}
+
+// ProcessMemory is this service's memory.
+export interface ProcessMemory {
+  // Resident is the process's resident size in bytes, as the operating
+  // system counts it; 0 where it doesn't say.
+  resident?: number;
+  // Heap is the bytes of Go heap the process's objects occupy.
+  heap: number;
+}
+
+// StorageRegistration is a live Service Registration.
+export interface StorageRegistration {
+  host: string;
+  version: string;
+  renewed: string;
+}
+
 // ChatFactory names the Factory holding a Conversation, by its
 // Heartbeat's name and host.
 export interface ChatFactory {
@@ -1670,6 +1724,9 @@ export interface WatcherView {
   // Since is when the Watcher went into this state; nil until it
   // reports.
   since?: string;
+  // Host is the machine whose service holds the Project's Watcher
+  // Lease, and so runs the Watcher, once a Lease is known.
+  host?: string;
 }
 
 // OpenPullRequest is a pull request left open for an Accepted Ticket.

@@ -82,7 +82,7 @@ func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, er
 			}
 		}
 		for _, p := range projects {
-			v := ciView(p, c.watchers.view(watcherKey{WatcherCI, p.Key}))
+			v := ciView(p, c.watchers.view(watcherKey{WatcherCI, p.Key}, now))
 			out.Projects = append(out.Projects, CIProjectStatus{Project: p.Key, Tracking: v.Tracking, Provider: v.Provider, Repository: v.Repository, ProjectURL: v.ProjectURL, Watcher: v.Watcher})
 			ci := c.ciStateOf(r, p)
 			for _, run := range latestAttempts(keptCIRuns(r.CIRuns(p.Key), now)) {

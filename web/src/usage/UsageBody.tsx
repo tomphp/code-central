@@ -2,9 +2,10 @@
 // the view read, the sort of the calls table and the open tab come in as
 // props, and the view fetches them. The loading banner sits above the
 // tab strip, the error banner below it, and each tab's panel shows its part or says it has
-// nothing to show. Its parts are components of their own in this folder;
+// nothing to show. The Storage tab's banners are its own read's, the
+// other tabs' Usage's. Its parts are components of their own in this folder;
 // the Session popup the view shows over it is SessionPopup.
-import type { UsageOperation, UsageView } from "../api/types";
+import type { StorageView, UsageOperation, UsageView } from "../api/types";
 import { Empty, Loading } from "../controls/Empty";
 import { ErrorBanner } from "../controls/ErrorBanner";
 import { Tabs } from "../controls/Tabs";
@@ -12,6 +13,7 @@ import { USAGE_TABS, type UiLocation, type UsageTab } from "../url";
 import { CallsTable, DEFAULT_SORT, nextSort, type Sort } from "./CallsTable";
 import { KindsTable } from "./KindsTable";
 import { SessionsTable } from "./SessionsTable";
+import { StoragePanel } from "./StoragePanel";
 import { TokenChart } from "./TokenChart";
 import "./usage.css";
 
@@ -23,6 +25,7 @@ const TAB_LABELS: Record<UsageTab, string> = {
   tokens: "Token usage",
   context: "Context Size",
   calls: "Code Central calls",
+  storage: "Storage",
 };
 const TABS = USAGE_TABS.map((value) => ({ value, label: TAB_LABELS[value] }));
 
@@ -43,15 +46,26 @@ export interface UsageBodyProps {
   // tab is the open tab, and onTab switches it.
   tab: UsageTab;
   onTab(tab: UsageTab): void;
+  // storage is the Storage tab's read, left out while it loads, and
+  // storageError its failure; project is the scope's Project, which
+  // narrows its counts, and now the clock its services' renewals are
+  // measured against.
+  storage?: StorageView;
+  storageError?: string;
+  project?: string;
+  now: Date;
 }
 
-export function UsageBody({ data, error, days, scopeName, here, projectName, navigate, sort, onSort, tab, onTab }: UsageBodyProps) {
+export function UsageBody(props: UsageBodyProps) {
+  const { data, days, scopeName, here, projectName, navigate, sort, onSort, tab, onTab, storage, project, now } = props;
   const over = `in ${scopeName} over the last ${days} days`;
+  const [loaded, error] = tab === "storage" ? [storage, props.storageError] : [data, props.error];
   return (
     <div className="view-body">
-      {!data && !error && <Loading />}
+      {!loaded && !error && <Loading />}
       <Tabs label="Usage" tabs={TABS} value={tab} onChange={onTab}>
         {error && <ErrorBanner>{error}</ErrorBanner>}
+        {storage && tab === "storage" && <StoragePanel storage={storage} project={project} now={now} />}
         {data && tab === "tokens" &&
           (data.kinds.length ? (
             <TokenChart days={data.days} kinds={data.kinds.map((k) => k.kind)} />

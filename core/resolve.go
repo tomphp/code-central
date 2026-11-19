@@ -13,18 +13,19 @@ import (
 // operation's main target fails not_found, a nested field invalid with
 // the field.
 
-// resolveTicket reads the Ticket ref names as op's field.
-func resolveTicket(r store.Reader, key, op, field string, ref Ref) (domain.Ticket, error) {
+// resolveTicket reads the Ticket ref names as op's field, with the
+// History parts named.
+func resolveTicket(r store.Reader, key, op, field string, ref Ref, parts ...store.Part) (domain.Ticket, error) {
 	n, err := ref.number(key, field)
 	if err != nil {
 		return domain.Ticket{}, err
 	}
-	return ticketNumbered(r, key, op, field, n)
+	return ticketNumbered(r, key, op, field, n, parts...)
 }
 
 // ticketNumbered is resolveTicket for a number already parsed.
-func ticketNumbered(r store.Reader, key, op, field string, n int) (domain.Ticket, error) {
-	if t, ok := r.Ticket(key, n); ok {
+func ticketNumbered(r store.Reader, key, op, field string, n int, parts ...store.Part) (domain.Ticket, error) {
+	if t, ok := r.Ticket(key, n, parts...); ok {
 		return t, nil
 	}
 	if err := specNotTicket(r, key, op, field, n); err != nil {

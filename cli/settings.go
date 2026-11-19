@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 
 	"github.com/tomoram/code-central/app"
 	"github.com/tomoram/code-central/home"
@@ -25,7 +26,33 @@ type settings struct {
 	Port int `yaml:"port"`
 	// Notifications is on (the default) or off.
 	Notifications string `yaml:"notifications"`
+	// Store names the Store Kind and where it is (ADR 0067); nil, the
+	// default, is a File Store in the data folder. The --store flag and
+	// CODE_CENTRAL_STORE override it with a File Store at their folder.
+	Store *storeSettings `yaml:"store"`
 }
+
+// storeSettings is the store: block.
+type storeSettings struct {
+	// Kind is files, sqlite or postgres.
+	Kind string `yaml:"kind"`
+	// Path is the File Store's folder or the SQLite database file; empty
+	// means the data folder, or code-central.db in it. A postgres store
+	// has none.
+	Path string `yaml:"path,omitempty"`
+	// URLEnv is the environment variable a postgres store reads its URL
+	// from, with its credential: defaultURLEnv when empty. The other
+	// Kinds have none.
+	URLEnv string `yaml:"url_env,omitempty"`
+}
+
+// storeKinds are the Kinds the store: block accepts; serve.go maps them
+// to the store's.
+var storeKinds = []string{"files", "sqlite", "postgres"}
+
+// defaultURLEnv is the variable a postgres store reads its URL from when
+// url_env names none.
+const defaultURLEnv = "CODE_CENTRAL_DATABASE_URL"
 
 func loadSettings(h home.Lookup) (settings, error) {
 	s := settings{Port: app.Port, Notifications: "on"}
@@ -51,6 +78,17 @@ func loadSettings(h home.Lookup) (settings, error) {
 	}
 	if s.Notifications != "on" && s.Notifications != "off" {
 		return s, fmt.Errorf("%s: field notifications: must be on or off, not %q", path, s.Notifications)
+	}
+	if st := s.Store; st != nil {
+		if !slices.Contains(storeKinds, st.Kind) {
+			return s, fmt.Errorf("%s: field store.kind: must be files, sqlite or postgres, not %q", path, st.Kind)
+		}
+		if st.Kind == "postgres" && st.Path != "" {
+			return s, fmt.Errorf("%s: field store.path: a postgres store is where its URL says, in the environment variable url_env names; it has no path", path)
+		}
+		if st.Kind != "postgres" && st.URLEnv != "" {
+			return s, fmt.Errorf("%s: field store.url_env: only a postgres store reads its URL from the environment; a %s store has a path", path, st.Kind)
+		}
 	}
 	return s, nil
 }

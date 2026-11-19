@@ -145,7 +145,7 @@ describe("tabs", () => {
 
   it("opens on Token usage, the tabs in order, with no tab in the address", async () => {
     await renderApp(await withUsage(), "/?view=usage");
-    expect(tabs().map((t) => t.textContent)).toEqual(["Token usage", "Context Size", "Code Central calls"]);
+    expect(tabs().map((t) => t.textContent)).toEqual(["Token usage", "Context Size", "Code Central calls", "Storage"]);
     expect(selected()).toHaveTextContent("Token usage");
     expect(within(usage()).getByRole("tabpanel")).toHaveAccessibleName("Token usage");
     expect(window.location.search).toBe("?view=usage");
@@ -184,7 +184,7 @@ describe("tabs", () => {
     expect(selected()).toHaveTextContent("Context Size");
     expect(window.location.search).toBe("?view=usage&tab=context");
     await userEvent.keyboard("{ArrowLeft}{ArrowLeft}");
-    expect(selected()).toHaveTextContent("Code Central calls");
+    expect(selected()).toHaveTextContent("Storage");
   });
 
   it("goes back through the tabs on the browser's Back", async () => {

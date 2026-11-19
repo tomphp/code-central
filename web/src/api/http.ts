@@ -132,6 +132,7 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
       if (agent) q.set("agent", agent);
       return call("GET", `/api/usage/session?${q}`);
     },
+    storage: (project) => call("GET", `/api/storage${project ? `?${new URLSearchParams({ project })}` : ""}`),
     subscribe: (h) =>
       follow(doFetch, base + "/api/events", retryMs, {
         onOpen: h.onOpen,

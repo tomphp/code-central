@@ -4,7 +4,7 @@
 // or ?view=options&from=<inbox|focus>&... for the Options view, which keeps
 // the parameters of the view it came from, to return to it,
 // or ?view=project-options&project=<key> for a Project's Project Options page,
-// or ?view=usage&project=<key>&days=<30|90>&tab=<context|calls>&session_project=<key>&session=<id>&agent=<id>&back=<query>
+// or ?view=usage&project=<key>&days=<30|90>&tab=<context|calls|storage>&session_project=<key>&session=<id>&agent=<id>&back=<query>
 // for Usage, where project is Usage's scope (none = All Projects), days its
 // range (none = 7), tab its open tab (none = Token usage, so tokens is left
 // out and an unknown tab reads as none), session_project, session and agent the
@@ -39,7 +39,7 @@ export type View = "inbox" | "focus" | "options" | "project-options" | "usage" |
 export type ReturnView = Exclude<View, "options" | "project-options" | "usage" | "ci" | "activity" | "board">;
 export type List = "requirements" | "tickets";
 // USAGE_TABS are Usage's tabs, in order; the first is the default.
-export const USAGE_TABS = ["tokens", "context", "calls"] as const;
+export const USAGE_TABS = ["tokens", "context", "calls", "storage"] as const;
 export type UsageTab = (typeof USAGE_TABS)[number];
 
 export interface UiLocation {

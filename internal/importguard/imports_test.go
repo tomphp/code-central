@@ -84,8 +84,10 @@ func storeSelectors(t *testing.T, file string) []string {
 	return uses
 }
 
-// In cli only the commands that open the store (serve, service) import it.
+// In cli only the commands that open the store (serve, service, and
+// store move, ADR 0070) import it.
 func TestOnlyServeCommandsImportStoreInCLI(t *testing.T) {
+	opens := map[string]bool{"serve.go": true, "service.go": true, "store.go": true}
 	files, err := filepath.Glob("../../cli/*.go")
 	if err != nil {
 		t.Fatal(err)
@@ -100,8 +102,8 @@ func TestOnlyServeCommandsImportStoreInCLI(t *testing.T) {
 		}
 		base := filepath.Base(file)
 		for _, imp := range src.Imports {
-			if strings.Trim(imp.Path.Value, `"`) == module+"/store" && base != "serve.go" && base != "service.go" {
-				t.Errorf("cli/%s imports store; only serve.go and service.go may", base)
+			if strings.Trim(imp.Path.Value, `"`) == module+"/store" && !opens[base] {
+				t.Errorf("cli/%s imports store; only serve.go, service.go and store.go may", base)
 			}
 		}
 	}

@@ -42,7 +42,7 @@ func reopen(t *testing.T, s *store.FileStore) *store.FileStore {
 func counts(t *testing.T, s store.Store) (specs, tickets int) {
 	t.Helper()
 	s.View(func(r store.Reader) error {
-		specs, tickets = len(r.Specs("acme")), len(r.Tickets("acme"))
+		specs, tickets = len(r.FindSpecs("acme", store.SpecFilter{})), len(r.FindTickets("acme", store.TicketFilter{}))
 		return nil
 	})
 	return

@@ -38,7 +38,7 @@ code-central service install
 - **Linux:** writes the systemd user unit `~/.config/systemd/user/code-central.service` (or under `$XDG_CONFIG_HOME`), enables it and starts it. Logs: `journalctl --user -u code-central`.
 - **Windows:** writes the scheduled task `~\.local\state\code-central\code-central-task.xml`, registers it for your account as the task `Code Central` (no admin rights needed) and starts it. The task runs `serve --log`, which appends to `~\.local\state\code-central\code-central.log`. See [ADR 0011](adr/0011-service-install-on-windows-is-a-per-user-scheduled-task-not-a-windows-service.md) for why it isn't a Windows Service. It also writes the Start-menu shortcut `Code Central.lnk` (under `%APPDATA%\Microsoft\Windows\Start Menu\Programs`), which makes Notifications show as "Code Central", with their own entry in Settings > Notifications. Without it, as when you run `serve` by hand, they still appear, shown as Windows PowerShell.
 
-The service starts at login and restarts after a crash. The unit records the binary's absolute path as you invoked it, without resolving symlinks, so a symlinked install keeps working when the target is replaced. It also records the store folder, resolved when you install.
+The service starts at login and restarts after a crash. The unit records the binary's absolute path as you invoked it, without resolving symlinks, so a symlinked install keeps working when the target is replaced. It also records the store folder, resolved when you install, unless a `store:` block in your settings names the store (see [Choosing the store](#choosing-the-store)).
 
 `service install` is safe to run again: it rewrites the unit (and on Windows the shortcut) and restarts the service. Run it again whenever you want to change `--store` or `--bind`.
 
@@ -71,6 +71,8 @@ If a step fails, the original store is untouched, the staging folder is deleted,
 On Windows, a migration doesn't wait for each staged file to reach the disk, because flushing 10,000 files one by one takes minutes. If the power fails or Windows crashes within a few seconds of a migration, some of the migrated files may not have been written, and the service then refuses to start, naming a file that fails to load. Your data is still in `code-central.format-<n>.bak`: restore it as in [Downgrading](#downgrading), but keep the new binary, so the next start migrates again. Only the migration takes this risk; every other write reaches the disk before the service acknowledges it.
 
 The service keeps one backup per format it has migrated from and never deletes them. If a backup for that format already exists (say you downgraded and upgraded again), the migration stops and names it: move it aside and restart. Delete old backups yourself once you're happy with the new version.
+
+A Postgres Store, which several services may share, migrates in one transaction, keeps no backup of its own, and migrates only while no other service is running on it: see [A Postgres Store](#a-postgres-store).
 
 ### Downgrading
 
@@ -142,6 +144,89 @@ The port is 7733, and every repository's `.mcp.json` says `${CODE_CENTRAL_URL:-h
 3. `code-central service restart`.
 
 Unknown keys or a bad value in `settings.yaml` stop the service and name the file.
+
+## Choosing the store
+
+The service keeps its records in one **Store**, of one **Store Kind**. The default is **Files**: YAML and Markdown files under `~/.local/share/code-central` (or `$XDG_DATA_HOME/code-central`), which you can read, grep and, with the service stopped, edit by hand. The other Kinds keep the same records as document rows in a database: **SQLite**, one database file on this machine's disk, and **Postgres**, a database several services may share. Choose one with a `store:` block in the same `settings.yaml` as the port:
+
+```yaml
+store:
+  kind: sqlite                                   # files (the default), sqlite or postgres
+  path: /home/me/.local/share/code-central/code-central.db   # optional: code-central.db in the data folder
+```
+
+Then `code-central service restart` (or `service install` again). A new Store starts empty: to take your records with you, use [Store Move](#moving-to-another-store) instead of writing the block by hand. The service's startup line names what it opened, such as `(store: sqlite at /home/me/.local/share/code-central/code-central.db)`, and the log does too.
+
+- `kind` is `files`, `sqlite` or `postgres`. Anything else stops the service: `settings.yaml: field store.kind: must be files, sqlite or postgres, not "mysql"`.
+- `path` is the File Store's folder or the SQLite database file. Left out, it is the data folder, or `code-central.db` in it. A Postgres Store has none: giving it one stops the service, naming `store.path`.
+- `url_env` names the environment variable a Postgres Store reads its URL from; `CODE_CENTRAL_DATABASE_URL` when left out. The other Kinds refuse it, naming `store.url_env`.
+- No `store:` block means Files in the data folder, exactly as before.
+- `--store <dir>` and `CODE_CENTRAL_STORE` still mean a File Store at that folder, and override the block, so an existing unit or script runs as it did. `service install --store <dir>` writes `--store` into the unit; without it, and with a `store:` block, the unit names no store and the service reads the block at startup.
+
+A SQLite Store is one file plus its write-ahead log (`code-central.db-wal`), and the service holds an exclusive lock file beside it (`code-central.db.lock`) while it runs, so a second service refuses to open it, naming the file. **Don't put it on a network share** (NFS, SMB, a synced folder): SQLite's locking doesn't hold there and the database can be corrupted. A store with a newer format than the binary knows is refused by name (`unknown format`), as a File Store is.
+
+A SQLite Store at an older format is migrated at startup by the same chained steps as a File Store (see [The store is migrated at startup](#the-store-is-migrated-at-startup)). The database is written out as a File Store's files into a staging folder beside it (`.code-central.db.staging`), so the disk needs room for about three copies of the store while it runs. The steps run over those files, and the result is loaded into a new database beside the old one (`.code-central.db.migrating`). Only then is the old database copied to `code-central.db.format-<n>.bak` (by SQLite's `VACUUM INTO`) and the new one renamed over it. Serve prints the same `migrated the store from format <n> to <m>` line with the backup's path. If anything fails before the swap, the new file and the backup are deleted, the database is untouched, and the service refuses to start, naming what failed. As with a File Store, an existing backup for that format stops the migration until you move it aside. To downgrade, stop the service and put `code-central.db.format-<n>.bak` back as `code-central.db`, deleting any `code-central.db-wal` and `code-central.db-shm` beside it first.
+
+### A Postgres Store
+
+A **Postgres Store** keeps the records in a Postgres database, and several services, on several machines, may open it at once: it takes no lock, and the database orders their writes, and each Project's Watchers run on one of them. A change one service commits reaches the others over Postgres's `LISTEN` and `NOTIFY`, so a write on one machine ends a `wait`, wakes the Factory and refreshes the UI on the rest. Give the service a database of its own, empty, and put its URL, with the user and password, in the environment of the service, never in `settings.yaml`:
+
+```yaml
+store:
+  kind: postgres
+  url_env: CODE_CENTRAL_DATABASE_URL             # optional: the variable holding the URL; this is the default
+```
+
+```sh
+export CODE_CENTRAL_DATABASE_URL='postgres://code_central:s3cret@db.example.com:5432/code_central?sslmode=require'
+```
+
+Set it for the service's own session as [Giving the service an environment variable](#giving-the-service-an-environment-variable) shows: `service install` copies no variable into the unit, so a hand-edited `Environment=` line is lost at the next install. The URL is anything the [pgx](https://github.com/jackc/pgx) driver reads: a `postgres://` URL, or `host=… dbname=… user=… password=…`. Without the variable the service stops: `code-central serve: the postgres store needs its URL in CODE_CENTRAL_DATABASE_URL, which is not set`. The service creates the tables on first start, and refuses a database at a newer format by name, as the other Kinds do: an older binary started on a Store a newer one has migrated stops with `unknown format <n> (this code-central understands format <m>)`.
+
+The startup line and the log show the store as its host, port and database, never the user or password: `(store: postgres at db.example.com:5432/code_central)`.
+
+When two services change the same record at the same moment, the database lets one through and the other tries again, up to five times, before it answers the caller with a `conflict` error, `another service changed this at the same moment, so nothing was written; try again`: an agent or the UI runs the command again and it goes through.
+
+Each running service registers itself in the Store, with its host and version, renews that every 10 seconds, and deletes it as it stops; one that dies without stopping drops out 30 seconds after it last renewed. A Project's Watchers run on one service at a time: the one holding the Project's **Watcher Lease**, which it renews every 10 seconds and loses 30 seconds after it last did. The others take a lapsed Lease on their next renewal, and a stopping service lets go of its Leases at once, so the Watchers move to another running service within about 10 seconds. The Project's Watcher status names the host they run on. On a service that doesn't hold the Lease it reads `Runs on desktop, whose service holds this Project's Watchers; its status shows there`: open the UI on that host to see whether they can reach GitHub or Azure DevOps. With no service running to take it, it reads `Waiting for a service to take the Watchers`. Each service runs the Watchers with its own `gh` login and environment, so give every host that may hold a Lease what its Watchers need (see [Finding `gh`](#finding-gh) and [Giving the service an environment variable](#giving-the-service-an-environment-variable)). The hosts' clocks must agree to within a few seconds, as NTP keeps them.
+
+**Backups.** Back the database up with Postgres's own tools: `pg_dump`, or your provider's backups and point-in-time recovery. A Postgres Migration keeps no backup of its own, unlike the File and SQLite Stores: it runs as one transaction and relies on those, so a backup, or a point in time, is at one format or the other, never between.
+
+**Upgrading.** A service at a newer version than the Store's format migrates it at startup, in one transaction, and prints `code-central serve: migrated the store from format <n> to <m>, in one transaction`. It does so only with no other service registered on the Store, since one would go on writing the old format: otherwise it stops, naming each one, `cannot migrate db.example.com:5432/code_central from format <n> to <m> while another service is registered on it: desktop (v1.4.0); stop it and start this one again, or wait 30s for one that stopped without saying so (the store is untouched)`. So to upgrade, stop every service on the Store, start one at the new version, and then upgrade and start the others. A service at the old version that had dropped out, cut off from the database for 30 seconds or more, and comes back after the Migration stops writing at once and exits at its next renewal: `code-central serve: db.example.com:5432/code_central: another service migrated the store to format <m>, and this code-central writes format <n>; it stops writing it: upgrade it and start it again`. If the Migration fails, the transaction rolls back, the Store stays at its old format, and the service stops, naming what failed.
+
+### Moving to another Store
+
+**Store Move** copies every record of the Store the service opens, with its History, the Options, the CI Runs and the Usage, into a new, empty Store of any Kind, and points `settings.yaml` at it. It works offline, opening both Stores itself, so stop the service first, as for [Downgrading](#downgrading):
+
+```sh
+launchctl bootout gui/$(id -u)/com.github.tomoram.code-central   # macOS; Linux: systemctl --user stop code-central; Windows: schtasks /End /TN "Code Central"
+```
+
+Then:
+
+```sh
+code-central store move --to sqlite                       # code-central.db in the data folder
+code-central store move --to sqlite:/srv/cc/central.db    # or a path of your own
+code-central store move --to files:/srv/cc/store          # back to files, in a new folder
+code-central store move --to postgres                     # the URL in CODE_CENTRAL_DATABASE_URL
+code-central store move --to postgres --url-env MY_DB     # or in MY_DB
+```
+
+```
+Moved files at /home/me/.local/share/code-central into sqlite at /home/me/.local/share/code-central/code-central.db:
+  acme: 12 Specs, 140 Tickets, 35 CI Runs, 41 Usage days
+  and the Options
+/home/me/.config/code-central/settings.yaml now names sqlite at /home/me/.local/share/code-central/code-central.db, which the next serve opens.
+The source, files at /home/me/.local/share/code-central, is untouched: keep it as a backup, or delete it once the new Store serves you.
+```
+
+Then start the service again with `code-central service install`; its startup line names the new Store.
+
+- The source is always the Store `serve` would open: the one `--store <dir>`, `CODE_CENTRAL_STORE` or the `store:` block names. While a service has it open, the move refuses: `files at /home/me/.local/share/code-central is locked by a running code-central serve: stop the service and move again`. A Postgres source isn't locked, so the move refuses while any service is registered on it, before copying and again after, naming each one: `postgres at db.example.com:5432/code_central: a service is running on it: desktop (v1.4.0); stop it and move again, or wait 30s for one that stopped without saying so`.
+- The target must be empty: a Store holding any Project, any Usage, or Options other than the defaults, is refused (`sqlite at … isn't empty`), so two Stores are never merged.
+- After copying, the move counts each Project's Specs, Tickets, CI Runs and Usage days, and the Options, in both Stores, and stops on any difference, naming it. If the copy stops or the counts differ, `settings.yaml` and the source are left as they were, and the target holds part of the copy: delete it (the folder, the database file, or the Postgres database's tables) before moving again.
+- Only the `store:` block of `settings.yaml` is rewritten; your other settings, and their comments, stay. A Postgres target is written as its `url_env`, never its URL, so set the same variable in the service's environment too.
+- The source is never changed, so it is your backup. If the source came from `--store` or `CODE_CENTRAL_STORE`, they still win over the block: the move says so, so drop them, and run `service install` without `--store`.
+- A Usage line that no read can parse isn't moved.
 
 ## Options
 
@@ -257,9 +342,9 @@ Pick **Spec** on the toggle and the columns split into lanes, one for each Spec 
 
 ## Usage
 
-**Usage** shows what agents have consumed: the tokens they used each day, how full their sessions' context got, and the Code Central calls they made, in one Project or in all of them, over the last 7, 30 or 90 days. Open it with **Usage** in the **Admin** section of the Inbox's left pane. It opens on **All Projects** (or, with one active Project, the Sole Project, which the address doesn't name) and **Last 7 days**; the **Projects** picker lists every Project, Archived ones marked `(Archived)`, and the **Range** picker offers 7, 30 and 90 days. Both stay in the header and apply to every tab. Usage loads when you open it and when you change the Project or range; it doesn't follow the live feed. A day is a day in the service's local time, and "the last 7 days" is today and the 6 days before it.
+**Usage** shows what agents have consumed: the tokens they used each day, how full their sessions' context got, and the Code Central calls they made, in one Project or in all of them, over the last 7, 30 or 90 days. Open it with **Usage** in the **Admin** section of the Inbox's left pane. It opens on **All Projects** (or, with one active Project, the Sole Project, which the address doesn't name) and **Last 7 days**; the **Projects** picker lists every Project, Archived ones marked `(Archived)`, and the **Range** picker offers 7, 30 and 90 days. Both stay in the header and apply to every tab but Storage, which hides the Range and reads its own figures. Usage loads when you open it and when you change the Project or range; it doesn't follow the live feed. A day is a day in the service's local time, and "the last 7 days" is today and the 6 days before it.
 
-Usage shows its parts in three tabs, in this order: **Token usage**, **Context Size** and **Code Central calls**. It opens on Token usage. Click a tab, or move between them with the arrow keys, Home and End; switching keeps the Project and range and doesn't read Usage again. The open tab goes in the address with the Project and range (`/?view=usage&project=acme&days=30&tab=calls`, `tab=context` for Context Size, `tab` left out for Token usage), so a reload or a bookmark keeps them, the browser's Back goes back through the tabs you switched between, and **Back to the Inbox** returns you to where you were. A tab with nothing to show says so.
+Usage shows its parts in four tabs, in this order: **Token usage**, **Context Size**, **Code Central calls** and **Storage**. It opens on Token usage. Click a tab, or move between them with the arrow keys, Home and End; switching keeps the Project and range and doesn't read Usage again. The open tab goes in the address with the Project and range (`/?view=usage&project=acme&days=30&tab=calls`, `tab=context` for Context Size, `tab=storage` for Storage, `tab` left out for Token usage), so a reload or a bookmark keeps them, the browser's Back goes back through the tabs you switched between, and **Back to the Inbox** returns you to where you were. A tab with nothing to show says so.
 
 **Token usage** draws one bar per day of the range, oldest first, including days with none, stacked by input, cache write, cache read and output tokens. The **Kind** picker narrows the bars to one kind of session, or shows **All kinds**, without reading Usage again. Point at a bar, or tab to it, to see that day's exact figures and their total. It counts tokens only and never shows a price, since a subscription has none per token.
 
@@ -268,6 +353,8 @@ Usage shows its parts in three tabs, in this order: **Token usage**, **Context S
 Click a session's ID in **Recent sessions**, a main session's or a Subagent's, to open its **Session popup** over the Context Size tab: its Context Size response by response as a line chart, headed by the session's ID (and the Subagent's name), its number of responses and its peak. The chart reads every day Usage keeps, whatever the range, and hovering or focusing a point shows that response's time, Context Size and four token counts; a session with no responses in those days says so. A Subagent's popup links to its parent session, which switches the popup to the parent's chart. The open session goes in the address too (`/?view=usage&tab=context&session_project=acme&session=<id>&agent=<id>`, `agent` left out for a main session), so a reload or a bookmark reopens it, over the Context Size tab whatever `tab` says, even when the rest of Usage can't be read. ×, Escape or a click outside the popup closes it, leaving Usage on the Context Size tab with the same Project, range and Subagents expanded, and so does the browser's Back when the popup was the last thing you opened.
 
 The **Code Central calls** table has one row per MCP operation: its calls, the total and average size of the requests (the arguments' JSON) and of the responses (the text the agent was given, as `bytes=` in [the service log](#the-service-log)), and how many the service rejected. Sizes are in B, KB and MB, with the exact figure on hover. Click a column's header to sort by it, and again to reverse it. Only agents' MCP calls are counted, rejected ones included: not calls to a Project that doesn't exist, and never the HTTP API's, so neither the UI nor the Factory adds to it.
+
+**Storage** shows where the service keeps its records and what it holds, as they are now; it keeps no history. The **Store** table gives its Kind (Files, SQLite or Postgres), its location (the store folder, the SQLite database file, or a Postgres Store's host, port and database, never its user or password) and its size, Usage included. **Projects' records** counts each Project's Specs, Tickets (in every State) and days of Usage, narrowed to the picked Project. **Memory** is this service's: its resident size where the operating system gives it (Linux and Windows), and the Go heap its objects occupy. **Services** lists each service registered on the Store, with its host, version and when it last renewed its Registration. Memory and Services always show whole, whichever Project is picked. Storage reads them each time you open the tab, not when you change the Project; it is `GET /api/storage` (`?project=<key>` for one Project's counts) in the HTTP API.
 
 The token usage comes from a Factory, which posts each model response to `POST /api/usage` with `{"session_id": "...", "responses": [...]}`. Each response has its `time`, its `agent` (left out for the main session), its `kind`, its `model` (optional; left out when unknown) and its `input_tokens`, `cache_write_tokens`, `cache_read_tokens` and `output_tokens`. The service files them under the newest Claim with that session ID, which gives the Project, Ticket and Claim, and drops them when there is none. The post counts as a ping, and it always answers `204`, even for an unknown session or a body it can't read.
 

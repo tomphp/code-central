@@ -302,6 +302,9 @@ var all = []entry{
 	defined(GetOptions),
 	defined(SetOptions),
 
+	// The Storage tab (Spec code-central-1032). HTTP only.
+	defined(GetStorage),
+
 	// CI Tracking (Spec code-central-247).
 	defined(SetCITracking),
 	defined(SetAutoFix),

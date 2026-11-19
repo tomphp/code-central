@@ -32,10 +32,10 @@ func (f fixture) acceptedOnSpecBranch(t *testing.T, n int, summary string) {
 	t.Helper()
 	at := f.clock.Now()
 	err := f.store.Update(func(w store.Writer) error {
-		tk, _ := w.Ticket("acme", n)
+		tk, _ := w.Ticket("acme", n, store.Comments, store.Moves)
 		tk.Comments = append(tk.Comments, domain.Comment{Number: 1, Actor: "agent", Time: at, Body: summary})
 		tk.Moves = append(tk.Moves, domain.Move{From: tk.State, To: domain.InReview, Time: at})
-		return w.PutTicket("acme", tk)
+		return w.PutTicket("acme", tk, store.Comments, store.Moves)
 	})
 	if err != nil {
 		t.Fatal(err)
