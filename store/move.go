@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"time"
 
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/usage"
@@ -129,6 +130,22 @@ type ProjectTally struct {
 // and the default Options.
 func (t Tally) Empty() bool {
 	return len(t.Projects) == 0 && t.Options == domain.DefaultOptions()
+}
+
+// CheckStopped is an error naming each service registered live on s at
+// now, by host and version, or nil when there is none: a Store Move's
+// source must have none. It is what shows a service runs on a Postgres
+// Store, which takes no lock.
+func CheckStopped(s Store, now time.Time) error {
+	regs, err := s.Services().Registrations(now)
+	if err != nil {
+		return fmt.Errorf("cannot read its Service Registrations: %w", err)
+	}
+	if len(regs) > 0 {
+		return fmt.Errorf("a service is running on it: %s; stop it and move again, or wait %s for one that stopped without saying so",
+			registered(regs), ServiceLife)
+	}
+	return nil
 }
 
 // TallyOf counts what s holds.

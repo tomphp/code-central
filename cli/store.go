@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
@@ -127,6 +128,9 @@ func move(e Env, from, target store.Location) (store.Tally, error) {
 		fmt.Fprintf(e.Stderr, "code-central store move: migrated the source from format %d to %d, as serve would; the old store is kept at %s\n",
 			m.From, m.To, m.Backup)
 	}
+	if err := store.CheckStopped(src, time.Now()); err != nil {
+		return store.Tally{}, fmt.Errorf("%s: %w", from, err)
+	}
 	dst, err := store.OpenAt(target)
 	if err != nil {
 		return store.Tally{}, fmt.Errorf("cannot open the target, %s: %w", target, err)
@@ -142,6 +146,11 @@ func move(e Env, from, target store.Location) (store.Tally, error) {
 	partial := fmt.Sprintf("settings.yaml is unchanged and the source untouched; %s holds part of the copy: remove it before moving again", target)
 	if err := copyStore(dst, src); err != nil {
 		return store.Tally{}, fmt.Errorf("the copy stopped: %w; %s", err, partial)
+	}
+	// A Postgres source takes no lock: a service that started during the
+	// copy would go on writing to it once the settings name the target.
+	if err := store.CheckStopped(src, time.Now()); err != nil {
+		return store.Tally{}, fmt.Errorf("%s: %w; %s", from, err, partial)
 	}
 	want, err := store.TallyOf(src)
 	if err != nil {

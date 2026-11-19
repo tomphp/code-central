@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/domain"
@@ -244,4 +245,30 @@ func TestAStoreMovedToPostgresAndBackHoldsTheSameRecordsAndUsage(t *testing.T) {
 		t.Fatalf("move back to files: exit %d: %s", r.code, r.stderr)
 	}
 	storetest.SameContents(t, before, contentsAt(t, store.Location{Kind: store.Files, Path: back}))
+}
+
+// A Postgres Store takes no lock, so its live Service Registrations are
+// what show a service still runs on it.
+func TestAStoreMoveRefusesAPostgresSourceAServiceIsRegisteredOn(t *testing.T) {
+	t.Parallel()
+	url := storetest.FreshPostgres(t)
+	env, _, _ := moveHome(t)
+	env["CC_TEST_DB"] = url
+	if r := run(t, env, "", "store", "move", "--to", "postgres", "--url-env", "CC_TEST_DB"); r.code != 0 {
+		t.Fatalf("move to postgres: exit %d: %s", r.code, r.stderr)
+	}
+	s, err := store.OpenPostgres(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	reg := store.Registration{ID: "a", Host: "desktop", Version: "v1.2.3", Format: store.Format, Renewed: time.Now()}
+	if err := s.Services().Register(reg); err != nil {
+		t.Fatal(err)
+	}
+	db := filepath.Join(t.TempDir(), "central.db")
+	refused(t, env, []string{"desktop (v1.2.3)", "stop"}, "--to", "sqlite:"+db)
+	if _, err := os.Stat(db); err == nil {
+		t.Error("the target was made")
+	}
 }

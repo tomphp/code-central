@@ -9,6 +9,7 @@ import (
 	"maps"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -274,6 +275,23 @@ func runMove(t *testing.T, f Factory) {
 		}
 		if !slices.Equal(got, want) {
 			t.Errorf("differences %q, want %q", got, want)
+		}
+	})
+
+	t.Run("a store with a live service isn't stopped, and names each one", func(t *testing.T) {
+		s := f.New(t)
+		at := time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)
+		if err := store.CheckStopped(s, at); err != nil {
+			t.Errorf("no service registered: %v", err)
+		}
+		register(t, s, registration("a", "laptop", at))
+		register(t, s, registration("b", "desktop", at))
+		err := store.CheckStopped(s, at.Add(store.ServiceLife-time.Second))
+		if err == nil || !strings.Contains(err.Error(), "desktop (v1.2.3), laptop (v1.2.3)") {
+			t.Errorf("two services live: %v", err)
+		}
+		if err := store.CheckStopped(s, at.Add(store.ServiceLife+time.Second)); err != nil {
+			t.Errorf("both lapsed: %v", err)
 		}
 	})
 }
