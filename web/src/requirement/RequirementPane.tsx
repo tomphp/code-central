@@ -2,7 +2,7 @@
 // title, submitted time, New Prototype, Retro), its Changed Repositories'
 // chips while the Project has several, the clickable Stage strip (its
 // Map segment linking to the Map it was made from, if any), what it waits
-// for, its body (the text, then the Spec) collapsed, and under Build the sums of its implementation Tickets' CI badges
+// for, its body (the text, then the Spec) collapsed, its Tags, and under Build the sums of its implementation Tickets' CI badges
 // and those Tickets with their States.
 import type { SpecDetail } from "../api/types";
 import { RepositoryChips } from "../controls/RepositoryChips";
@@ -10,6 +10,7 @@ import { useApi } from "../live";
 import { BodySection } from "../edit/BodySection";
 import { LandPerSpec } from "../spec/LandPerSpec";
 import { SpecAutoAccept } from "../spec/SpecAutoAccept";
+import { SpecTags } from "../spec/SpecTags";
 import { RetroList } from "../spec/RetroList";
 import { TicketList } from "../spec/TicketList";
 import { CISums } from "../ticket/CIBadge";
@@ -67,6 +68,7 @@ export function RequirementPane({ spec, archived, now, ticket, select, specLink 
       <LandPerSpec status={spec.land_per_spec} />
       {/* The text is the Requirement's until its spec Stage has written the Spec. */}
       <BodySection api={api} spec={spec} heading={specDone ? "Spec" : "Requirement's text"} />
+      <SpecTags spec={spec} archived={archived} />
       <CISums tickets={build} />
       {build.length > 0 && <TicketList label="Build" tickets={build} now={now} ticket={ticket} select={select} />}
       <RetroList retros={spec.retros} select={select} />
