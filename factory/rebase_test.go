@@ -48,8 +48,13 @@ func authored(h *factorytest.Harness, dir, commit string) string {
 // onSpecBranch is the commits on the Spec Branch that main lacks, oldest
 // first, and its merge commits among them.
 func onSpecBranch(h *factorytest.Harness, dir string) (commits, merges []string) {
-	spec := "spec/" + h.SpecID()
-	return strings.Fields(h.GitIn(dir, "rev-list", "--reverse", "main.."+spec)), strings.Fields(h.GitIn(dir, "rev-list", "--merges", "main.."+spec))
+	return inRange(h, dir, "main..spec/"+h.SpecID())
+}
+
+// inRange is the commits in dir's revision range rng, oldest first, and
+// its merge commits among them.
+func inRange(h *factorytest.Harness, dir, rng string) (commits, merges []string) {
+	return strings.Fields(h.GitIn(dir, "rev-list", "--reverse", rng)), strings.Fields(h.GitIn(dir, "rev-list", "--merges", rng))
 }
 
 // acceptedAs makes an Accepted Ticket whose branch, cut from main, holds

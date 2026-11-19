@@ -16,7 +16,7 @@ import (
 // mergedLine is the commits a merge's second parent adds to its first
 // parent's line, oldest first, and its merges among them.
 func mergedLine(h *factorytest.Harness, dir, merge string) (commits, merges []string) {
-	return strings.Fields(h.GitIn(dir, "rev-list", "--reverse", merge+"^1.."+merge+"^2")), strings.Fields(h.GitIn(dir, "rev-list", "--merges", merge+"^1.."+merge+"^2"))
+	return inRange(h, dir, merge+"^1.."+merge+"^2")
 }
 
 func TestUnderRebaseWithoutLandPerSpecATicketIsReplayedOntoTheBaseBeforeItsMergeCommit(t *testing.T) {
@@ -167,5 +167,27 @@ func TestUnderRebaseWithoutLandPerSpecTwoRepositoriesAreBothReplayedAndLand(t *t
 		if got := h.GitIn(dir, "rev-parse", id); got != line[0] {
 			t.Errorf("%s's branch in %s is at %s, want its replayed tip %s", id, dir, got, line[0])
 		}
+	}
+}
+
+func TestUnderRebaseWithoutLandPerSpecWorkAlreadyInTheBaseLandsAtItsTipWithNoMerge(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	setRebase(h, true)
+	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
+	// The same change reaches the base by another commit.
+	tip := h.CommitOn("main", "feature.txt", "feature\n")
+
+	h.Start()
+	tk := h.WantState(id, domain.Done)
+
+	if got := h.Git("rev-parse", "main"); got != tip {
+		t.Errorf("main moved to %s, want it left at %s: nothing is left to merge", got, tip)
+	}
+	if m := tk.Moves[len(tk.Moves)-1]; m.Commit != tip {
+		t.Errorf("land move %+v, want it landed at the base's tip %s", m, tip)
+	}
+	if got := h.Git("rev-parse", id); got != tip {
+		t.Errorf("%s's branch is at %s, want it moved to the base's tip %s", id, got, tip)
 	}
 }

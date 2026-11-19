@@ -456,8 +456,9 @@ func (l *lander) workToLand(tk core.TicketView, policies core.LandingPolicies) (
 // Project no longer names; at head, when the base holds it already; or by
 // merging head into the base at baseTip, making tree, unless that
 // conflicts. Under Rebase, head is the Ticket's work replayed onto
-// baseTip, made by replay, which moves its branch there before the merge;
-// replaying says the conflicts are the replay's.
+// baseTip, made by replay, which moves its branch there before the merge,
+// or before it lands at baseTip itself when every commit was dropped as
+// already there; replaying says the conflicts are the replay's.
 type mergePlan struct {
 	r                   *repository
 	old                 *mergeOn
@@ -545,9 +546,15 @@ func (l *lander) planMerge(ctx context.Context, tk core.TicketView, w changedWor
 			pl.conflicts, pl.replaying = files, true
 			return pl, false, true
 		}
-		pl.replay, head = rp, rp.tip
+		pl.replay, pl.head = rp, rp.tip
+		if pl.head == baseTip {
+			// Every commit was dropped as already in the base: its branch
+			// moves to the base's tip, and it lands there with no merge.
+			pl.inBase = true
+			return pl, false, true
+		}
 	}
-	if pl.tree, pl.conflicts, err = r.git.mergeTree(baseTip, head); err != nil {
+	if pl.tree, pl.conflicts, err = r.git.mergeTree(baseTip, pl.head); err != nil {
 		l.printf("warning: %s: can't merge%s: %v", tk.ID, r.where(), err)
 		return pl, false, false
 	}
@@ -561,23 +568,21 @@ func (l *lander) planMerge(ctx context.Context, tk core.TicketView, w changedWor
 // can't when a step failed and is to be tried again next poll.
 func (l *lander) mergeAndLand(ctx context.Context, tk core.TicketView, p core.ProjectView, pl mergePlan) bool {
 	r, base := pl.r, l.repos.baseOf(pl.r)
-	switch {
-	case pl.old != nil:
+	if pl.old != nil {
 		return l.landPushed(ctx, tk, p, r, pl.old.base, pl.old.commit)
-	case pl.inBase:
-		return l.landPushed(ctx, tk, p, r, base, pl.head)
 	}
-	head := pl.head
 	if pl.replay != nil {
 		if err := pl.replay.apply(r, tk.ID, pl.baseTip); err != nil {
 			l.cantLandIn(ctx, tk, r, err.Error()+".")
 			return false
 		}
-		head = pl.replay.tip
-		l.printf("%s: replayed onto %s at %s%s", tk.ID, base, short(head), r.where())
+		l.printf("%s: replayed onto %s at %s%s", tk.ID, base, short(pl.head), r.where())
+	}
+	if pl.inBase {
+		return l.landPushed(ctx, tk, p, r, base, pl.head)
 	}
 	msg := fmt.Sprintf("Merge %s: %s", tk.ID, tk.Title)
-	merge, err := r.git.commitTree(pl.tree, msg, pl.baseTip, head)
+	merge, err := r.git.commitTree(pl.tree, msg, pl.baseTip, pl.head)
 	if err != nil {
 		l.printf("warning: %s: can't make the merge commit%s: %v", tk.ID, r.where(), err)
 		return false

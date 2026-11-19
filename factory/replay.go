@@ -98,10 +98,11 @@ func forkPoint(r *repository, ticket, head, onto string) (string, error) {
 }
 
 // replayedTip is ticket's branch's tip in r when it is the work the
-// Factory last replayed onto its Spec Branch, or onto the base: the branch
-// is at its replayed ref. Those commits are the Ticket's work from then
-// on, whether or not the Spec Branch was rewritten since, and even when the replay
-// made the very commits finished, as onto the commit they were made on.
+// Factory last replayed onto its Spec Branch, or onto the base: the
+// branch is at its replayed ref. Those commits are the Ticket's work from
+// then on, whether or not the Spec Branch was rewritten since, and even
+// when the replay made the very commits finished, as onto the commit they
+// were made on.
 func replayedTip(r *repository, ticket, branch string) (string, bool) {
 	if branch == "" {
 		return "", false
@@ -117,9 +118,9 @@ func replayedTip(r *repository, ticket, branch string) (string, bool) {
 }
 
 // replay is a Ticket's work in a Repository replayed onto its Spec
-// Branch or the base: the commits made, ending at tip, and the Ticket's branch to move
-// there from head, by a reset in worktree when it is checked out there.
-// Nothing is moved until it is applied.
+// Branch or the base: the commits made, ending at tip, and the Ticket's
+// branch to move there from head, by a reset in worktree when it is
+// checked out there. Nothing is moved until it is applied.
 type replay struct {
 	branch, head, worktree, tip string
 }
@@ -127,7 +128,7 @@ type replay struct {
 // planReplay replays tk's work in r, head, onto onto, the Spec Branch's
 // tip, from its fork point (forkPoint), as replayFrom does.
 func (l *lander) planReplay(r *repository, ticket, branch, head, onto string) (rp *replay, conflicts []string, why string, err error) {
-	if why := replayable(r, branch, head, "its Spec Branch"); why != "" {
+	if why := cantReplay(r, branch, head, "its Spec Branch"); why != "" {
 		return nil, nil, why, nil
 	}
 	fork, err := forkPoint(r, ticket, head, onto)
@@ -141,7 +142,7 @@ func (l *lander) planReplay(r *repository, ticket, branch, head, onto string) (r
 // with Land per Spec off: from head's merge base with onto, as
 // replayFrom does.
 func (l *lander) planBaseReplay(r *repository, branch, head, onto string) (rp *replay, conflicts []string, why string, err error) {
-	if why := replayable(r, branch, head, "the base"); why != "" {
+	if why := cantReplay(r, branch, head, "the base"); why != "" {
 		return nil, nil, why, nil
 	}
 	fork, err := r.git.mergeBase(head, onto)
@@ -151,10 +152,10 @@ func (l *lander) planBaseReplay(r *repository, branch, head, onto string) (rp *r
 	return l.replayFrom(r, branch, head, fork, onto, "the base")
 }
 
-// replayable says why a Ticket's work in r, head, can't be replayed onto
-// target and its branch moved there: it has no branch, or its branch has
-// moved on from head. "" when it can.
-func replayable(r *repository, branch, head, target string) string {
+// cantReplay says why a Ticket's work in r, head, can't be replayed onto
+// target, named for the note, and its branch moved there: it has no
+// branch, or its branch has moved on from head. "" when it can.
+func cantReplay(r *repository, branch, head, target string) string {
 	if branch == "" {
 		return fmt.Sprintf("it has no branch to move to its work replayed onto %s, as Rebase does.", target)
 	}
@@ -164,8 +165,8 @@ func replayable(r *repository, branch, head, target string) string {
 	return ""
 }
 
-// replayFrom replays a Ticket's work in r, head, from fork onto onto,
-// target's tip: the non-merge commits on head's first-parent line after
+// replayFrom replays a Ticket's work in r, head, from fork onto onto, the
+// tip of target, named for the note: the non-merge commits on head's first-parent line after
 // fork, oldest first, each with its author, author date and message, as
 // `git rebase` drops merges and commits that change nothing. It makes the
 // commits and moves nothing. It returns the files the first commit that
@@ -223,9 +224,10 @@ func (l *lander) replayFrom(r *repository, branch, head, fork, onto, target stri
 }
 
 // apply moves the Ticket's branch in r to the replayed commits. Its fork
-// ref, to onto, the Spec Branch's or base's tip they were replayed onto, and its
-// replayed ref, to them, move first, so that a branch found at its
-// replayed ref never replays twice; they move back when the branch can't.
+// ref, to onto, the Spec Branch's or the base's tip they were replayed
+// onto, and its replayed ref, to them, move first, so that a branch found
+// at its replayed ref never replays twice; they move back when the branch
+// can't. The sweep deletes both once the Ticket is Done or Cancelled.
 func (rp *replay) apply(r *repository, ticket, onto string) error {
 	oldFork, err := setRef(r, forkRef(ticket), onto)
 	if err != nil {
