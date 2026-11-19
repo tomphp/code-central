@@ -100,6 +100,15 @@ Your list: core logic, factory, ci watcher, issue tracker, web api, frontend, st
 
 Intended: `clients → client → HTTP → server → httpapi/mcp → core → store → domain → leaves`; `client` and `httpapi` import `domain` but not `store`; only `core` and the service's composition root (`app`) link persistence. Mostly held. No import cycles. `core` never imports a transport, `factory`, or `gh`/`azdo`. Watchers and the Factory never touch the store directly.
 
+### The Store
+
+`store.Store` (ADR 0067, 0068, 0069) is what `core` persists through, and every Store Kind (files, SQLite, Postgres) implements it:
+
+- **Queries, not a map.** `View` hands a `Reader` whose reads say what they want: `Ticket`, `FindTickets` with a `TicketFilter`, `FindSpecs`, `StateCounts`, `SpecCount`, `ClaimBySession`, `TicketCommits`, `NextNumber`. A database Store answers them in SQL over its document rows, a File Store from memory. `Records` reads a Project whole and is for Export and Store Move alone.
+- **History in parts.** A Ticket is a head plus its History, in the parts `store.History` lists: claims, rounds, comments, moves, edits and failure reports (ADR 0015). A read loads only the `Part`s it names, and `PutTicket` writes only the parts it names, so a Claim doesn't rewrite the Ticket's comments.
+- **Transactions.** `Update` takes a `Writer` and writes at most one record (a second write is `ErrSecondWrite`; `PutImport` is the one bulk write). A File or SQLite Store runs it under one store-wide mutex. A Postgres Store runs each attempt in a `SERIALIZABLE` transaction (and a `View` in a `REPEATABLE READ READ ONLY` one), tries a collision again up to five times, then fails with `ErrConflict`, so an Update's function must be safe to run more than once. `Announce` sends the Update's `Change` to the other services only when it commits.
+- **Services and the Lease.** `Services()` holds each running service's Registration and each Project's Watcher Lease, outside any View or Update. `HoldLease` renews or takes a Lease in one statement, and `watchers` runs a Project's Watchers only while this service holds it (ADR 0068). `Changes` delivers other services' Changes, `Usage()` is the Store's Usage (ADR 0069), and `Location()` and `Size()` feed the Storage tab.
+
 ## 2. Are the interfaces clearly defined?
 
 Good:
@@ -107,7 +116,7 @@ Good:
 - The HTTP/MCP boundary is sharp. The Factory and watchers hold a `Client` interface and talk only over HTTP.
 - `ops.All()` is a real contract, checked by the cross-door suite in `server/*_test.go` and the UI/Go contract cases.
 - `notify` depends on a four-method `Source` interface, not on `*Core`, and the transports now do the same through `ops.Dispatcher` and `ops.Service`.
-- `store.Store{View, Update, Changes, Usage}` is small, with a shared contract suite (`storetest`).
+- `store.Store{View, Update, Changes, Usage, Services, Location, Size}` is small, with a shared contract suite (`storetest`) that runs on the fake, Files, SQLite and, in CI, Postgres.
 - UI wire types are generated from Go (ADR 0042), and the UI's only `fetch` is in `web/src/api/http.ts`.
 - `clock`, `ids`, `events`, `home` are small and injectable.
 
