@@ -26,6 +26,7 @@ PERL_INPLACE = re.compile(r"(?:^|[;&|\n]\s*)perl\s+(?:-\S+\s+)*?-[0pnlasw0-9]*i\
 PERL_OPEN3 = re.compile(r"""\bopen\s*\(?\s*[^,;()]+,\s*['"]\s*([+<>]+)[^'"]*['"]\s*,\s*([^,);]+)""")
 PERL_OPEN2 = re.compile(r"""\bopen\s*\(?\s*[^,;()]+,\s*"\s*([+<>]+)\s*([^"]+)\"""")
 PERL_SLURP = re.compile(r"\b(read|write)_file\s*\(?\s*([^,;)]+)")
+CAT_APPEND = re.compile(r"cat\s*>>\s*\S+(?:\s*<<-?[ \t]*['\"]?\w+['\"]?)?")
 QUOTED =re.compile(r"""'[^']*'|"[^"]*\"""")
 
 
@@ -111,6 +112,9 @@ def perl_operands(shell):
 
 def edits_one_file(command):
     shell, bodies = split_heredocs(command)
+    if CAT_APPEND.fullmatch(shell.strip()):
+        # Appending leaves the existing text alone, so it is never a replace; the body is only data.
+        return False
     if any("python" in shell and rewrites_one_path(b) for b in bodies) or (
             not bodies and re.search(r"\bpython3?\b", command) and rewrites_one_path(command)):
         return True
@@ -146,6 +150,9 @@ def main():
                 "Read the lines you are changing first (Read with offset and limit, "
                 "which Edit accepts), then Edit. Edit fails when old_string isn't "
                 "found or isn't unique, so a missed change can't pass silently. "
+                "For a change in several places, make several Edit calls in one message. "
+                "For a merge conflict, take one side with `git checkout --ours <file>` or "
+                "`git checkout --theirs <file>`, then Edit in what you want from the other. "
                 "A command that rewrites several files (`sed -i` or `perl -pi` with two or more "
                 "file operands, a glob, or a loop) is allowed."
             ),

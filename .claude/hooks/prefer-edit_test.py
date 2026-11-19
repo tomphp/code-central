@@ -107,6 +107,25 @@ open(my $out, '>', $b) or die;
 EOF"""
         self.assertFalse(edits_one_file(cmd))
 
+    def test_heredoc_append_passes(self):
+        self.assertFalse(edits_one_file("cat >> docs/a.md <<'EOF'\nnew line\nEOF"))
+        self.assertFalse(edits_one_file(
+            "cat >> notes.md <<EOF\nrun python3 -c 'p=\"x.md\"; open(p).read().replace(1,2); open(p, \"w\")'\nEOF"))
+
+    def test_refusal_names_the_alternatives(self):
+        import io, json, contextlib, sys
+        event = {"tool_name": "Bash", "tool_input": {"command": "sed -i 's/a/b/' x.go"}}
+        out, stdin = io.StringIO(), sys.stdin
+        sys.stdin = io.StringIO(json.dumps(event))
+        try:
+            with contextlib.redirect_stdout(out):
+                prefer_edit.main()
+        finally:
+            sys.stdin = stdin
+        reason = json.loads(out.getvalue())["hookSpecificOutput"]["permissionDecisionReason"]
+        self.assertIn("several Edit calls in one message", reason)
+        self.assertIn("git checkout --theirs", reason)
+
     def test_read_only_commands_pass(self):
         self.assertFalse(edits_one_file("go test ./..."))
         self.assertFalse(edits_one_file("python3 - <<'EOF'\nprint(open('a.md').read().replace('a','b'))\nEOF"))
