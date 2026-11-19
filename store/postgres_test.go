@@ -57,7 +57,7 @@ func TestPostgresRefusesAnUnknownFormat(t *testing.T) {
 }
 
 // A Postgres Store made before the services' tables gains them when it is
-// opened, so its services can register.
+// opened, so its services can register and share their runtime state.
 func TestAPostgresStoreMadeBeforeTheServicesTablesGainsThem(t *testing.T) {
 	url := storetest.FreshPostgres(t)
 	if err := openPostgres(t, url).Close(); err != nil {
@@ -65,7 +65,7 @@ func TestAPostgresStoreMadeBeforeTheServicesTablesGainsThem(t *testing.T) {
 	}
 	store.DropPostgresServiceTables(t, url)
 
-	mustRegisterAndHoldALease(t, openPostgres(t, url))
+	mustUseTheServicesTables(t, openPostgres(t, url))
 }
 
 // A running service whose Store another service migrates past its
