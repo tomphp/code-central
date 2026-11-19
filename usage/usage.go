@@ -197,6 +197,19 @@ func (r *Recorder) Read(project string, days int) Records {
 	return out
 }
 
+// Days is how many days project has Usage for. Like Read, it never
+// fails: what it can't read is logged and counts as none.
+func (r *Recorder) Days(project string) int {
+	if r == nil {
+		return 0
+	}
+	days, err := r.store.Days(project)
+	if err != nil {
+		fmt.Fprintf(r.log, "code-central serve: usage: %v\n", err)
+	}
+	return len(days)
+}
+
 // pruneOnANewDay deletes the old days if it hasn't yet today.
 func (r *Recorder) pruneOnANewDay() {
 	r.mu.Lock()

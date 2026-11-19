@@ -837,6 +837,31 @@ export interface SessionUsageView {
   responses: SessionUsageResponse[];
 }
 
+// StorageView is get_storage.
+export interface StorageView {
+  // Kind is the Store Kind: files, sqlite or postgres; memory for the
+  // in-memory fake.
+  kind: string;
+  // Path is the File Store's folder or the SQLite database file; empty
+  // for Postgres and the fake.
+  path?: string;
+  // Host, Port and Database are the Postgres Store's address, as its
+  // URL names them, without its user or password; empty for the other
+  // Kinds.
+  host?: string;
+  port?: number;
+  database?: string;
+  // Size is the Store's size in bytes, Usage included, as its Kind can
+  // tell it.
+  size: number;
+  // Projects are the Projects' counts, in key order: the scoped one's
+  // alone, or every one's.
+  projects: StorageProject[];
+  memory: ProcessMemory;
+  // Services are the live Service Registrations, in host order.
+  services: StorageService[];
+}
+
 // ConversationView is a Project's current Conversation as get_chat and
 // the Chat writes return it. With none, Availability is none and the rest
 // is empty.
@@ -1599,6 +1624,33 @@ export interface UsageDay {
 export interface SessionUsageResponse extends Tokens {
   time: string;
   context_size: number;
+}
+
+// StorageProject is one Project's count of records.
+export interface StorageProject {
+  key: string;
+  name: string;
+  // Specs and Tickets are its Specs and Tickets, in every State.
+  specs: number;
+  tickets: number;
+  // UsageDays is how many days of Usage it keeps.
+  usage_days: number;
+}
+
+// ProcessMemory is this service's memory.
+export interface ProcessMemory {
+  // Resident is the process's resident size in bytes, as the operating
+  // system counts it; 0 where it doesn't say.
+  resident?: number;
+  // Heap is the bytes of Go heap the process's objects occupy.
+  heap: number;
+}
+
+// StorageService is a live Service Registration.
+export interface StorageService {
+  host: string;
+  version: string;
+  renewed: string;
 }
 
 // ChatFactory names the Factory holding a Conversation, by its

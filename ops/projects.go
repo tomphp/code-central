@@ -151,6 +151,17 @@ var GetOptions = &Definition[struct{}, core.OptionsView]{
 	},
 }
 
+// GetStorage is get_storage (Spec code-central-1032): the Storage tab's
+// figures, on no Project; its project query narrows the counts to one.
+var GetStorage = &Definition[core.GetStorageInput, core.StorageView]{
+	Name: "get_storage", Audience: HumanOnly,
+	HTTP: "GET /api/storage",
+	Doc:  "Get where the Store is and its size, each Project's count of Specs, Tickets and Usage days, the process's memory and the services registered on the Store.",
+	Call: func(c *core.Core, ctx context.Context, _ string, in core.GetStorageInput) (core.StorageView, error) {
+		return c.GetStorage(ctx, in)
+	},
+}
+
 // SetOptions is the human's set_options; each Option left out stays.
 var SetOptions = &Definition[core.SetOptionsInput, core.OptionsView]{
 	Name: "set_options", Audience: HumanOnly, Write: true,
