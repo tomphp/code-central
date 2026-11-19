@@ -547,7 +547,7 @@ With **Rebase instead of merging** ticked (under Merge or Pull Request; see [Set
 
 - Under Land per Spec, a Ticket accepted onto its Spec Branch is replayed onto it, and before the one `Merge spec <spec id>` commit the Factory rebases the Spec Branch onto the base. When that conflicts, the Spec merge Ticket is "Rebase the Spec Branch of <spec id> onto the base", and accepting it replaces the Spec Branch.
 - With Land per Spec off, each Ticket's branch is replayed onto the base before its `Merge <id>` commit.
-- Under Pull Request, a branch about to be pushed is rebased onto the fetched base first and pushed with `--force-with-lease`. The Factory force-pushes only its own Ticket and Spec branches, never a base, and when a rebase conflicts it pushes in no Repository.
+- Under Pull Request, a branch about to be pushed is rebased onto the fetched base first and pushed with `--force-with-lease`. The Factory force-pushes only its own Ticket and Spec branches, never a base or a branch of the Spec Branch's name it didn't push (see [Pull Request](#pull-request)), and when a rebase conflicts it pushes in no Repository.
 - A conflict Claim is asked to rebase the branch onto the base, not merge the base into it.
 
 ```text
@@ -691,6 +691,12 @@ acme-shop-5: landed on main at 22eeda3a9de2
 acme-shop-6: pull request 9 merged
 acme-shop-6: landed on main at 22eeda3a9de2
 acme-shop-2: deleted spec/acme-shop-2, which is in main
+```
+
+The Factory pushes the Spec Branch only over a branch it pushed itself. When the remote already has a branch of that name, say one made by hand, and none of the Spec's Tickets has a pushed commit reported on it there, the Factory doesn't push, forced or not, even under [Rebase](#rebase). It comments once on each waiting Ticket and tries again on every poll, pushing once you have deleted or renamed that branch on the remote (by then the Spec's `branch` Tag can't change):
+
+```text
+acme-shop-5: can't push yet: origin already has a branch named spec/acme-shop-2 that the Factory didn't push, so it won't push the Spec Branch over it. Delete or rename it on origin, and the Factory pushes the Spec Branch on a later poll.
 ```
 
 An Accepted Ticket whose pull request is closed without merging shows **Pull request closed**, offering Send back and Cancel (for a Spec, New fix Ticket and Cancel). A merged pull request that is conflicting shows under **To merge** as conflicting. There is no CI gate and no Land anyway under Pull Request: CI Tracking only informs, and on Azure Pipelines it follows the builds of the pull request's merge.

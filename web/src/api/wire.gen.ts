@@ -1532,6 +1532,11 @@ export interface LandPerSpecView {
   // Ready is whether the Spec is ready to land: the Factory merges it
   // into the base.
   ready: boolean;
+  // Pushed are the Repositories, by Repository Name, where one of the
+  // Spec's Tickets, finished or not, has a pushed commit reported on
+  // its Spec Branch: the Factory pushed it there, so a branch of that
+  // name on the Push remote is its own. Left out while there are none.
+  pushed?: string[];
 }
 
 // MapView is the Map block on a Spec read, present only when the Spec is

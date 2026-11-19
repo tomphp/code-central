@@ -81,6 +81,11 @@ type repo interface {
 	// fetch fetches remote, updating its remote-tracking refs; out is git's
 	// output when it fails. A stop (ctx) kills it.
 	fetch(ctx context.Context, remote string) (out string, err error)
+	// remoteHas reports whether remote has branch now, asking it as `git
+	// ls-remote` does, so a branch deleted there since the last fetch,
+	// which leaves its remote-tracking ref, isn't counted. A stop (ctx)
+	// kills it.
+	remoteHas(ctx context.Context, remote, branch string) (bool, error)
 	// worktrees is what `git worktree list` reports, the repo itself first.
 	worktrees() ([]gitWorktree, error)
 	// status is the worktree dir's uncommitted changes, untracked files
@@ -311,6 +316,20 @@ func (g gitRepo) fetch(ctx context.Context, remote string) (string, error) {
 	cmd.Env = append(slices.Clone(g.environ), "GIT_TERMINAL_PROMPT=0")
 	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err
+}
+
+func (g gitRepo) remoteHas(ctx context.Context, remote, branch string) (bool, error) {
+	args := []string{"ls-remote", "--heads", remote, "refs/heads/" + branch}
+	cmd := exec.CommandContext(ctx, g.git, args...)
+	cmd.Dir = g.dir
+	cmd.Env = append(slices.Clone(g.environ), "GIT_TERMINAL_PROMPT=0")
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return false, fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
+	}
+	return strings.TrimSpace(string(out)) != "", nil
 }
 
 func (g gitRepo) worktrees() ([]gitWorktree, error) {

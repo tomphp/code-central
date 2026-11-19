@@ -29,7 +29,8 @@ type fakeRepo struct {
 	next      int
 }
 
-// fakeRemote is a remote's branches; a broken one refuses every push.
+// fakeRemote is a remote's branches; a broken one refuses every push
+// and every ls-remote.
 type fakeRemote struct {
 	refs   map[string]string // branch -> commit
 	broken bool
@@ -382,6 +383,16 @@ func (r *fakeRepo) fetch(ctx context.Context, remote string) (string, error) {
 		r.refs["refs/remotes/"+remote+"/"+branch] = commit
 	}
 	return "", nil
+}
+
+func (r *fakeRepo) remoteHas(ctx context.Context, remote, branch string) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	rm := r.remotes[remote]
+	if rm == nil || rm.broken {
+		return false, fmt.Errorf("git ls-remote: '%s' does not appear to be a git repository", remote)
+	}
+	return rm.refs[branch] != "", nil
 }
 
 func (r *fakeRepo) worktrees() ([]gitWorktree, error) {
