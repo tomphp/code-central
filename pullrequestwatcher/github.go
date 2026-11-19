@@ -11,7 +11,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
 )
@@ -30,7 +30,7 @@ type github struct {
 // CheckAccess finds gh, checks its login, reads the repository and checks
 // the login has write permission there, which opening a pull request
 // needs.
-func (g *github) CheckAccess(ctx context.Context, _ bool) (core.WatcherCheckResult, error) {
+func (g *github) CheckAccess(ctx context.Context, _ bool) (api.WatcherCheckResult, error) {
 	prog, r, err := gh.Ready(ctx, g.env, g.ghPath)
 	if r.Problem != "" || err != nil {
 		return r, err
@@ -40,12 +40,12 @@ func (g *github) CheckAccess(ctx context.Context, _ bool) (core.WatcherCheckResu
 	if err != nil {
 		var limit *ratelimit.Error
 		if errors.As(err, &limit) {
-			return core.WatcherCheckResult{}, limit
+			return api.WatcherCheckResult{}, limit
 		}
 		if r, ran := gh.DidntRun(prog, err); !ran {
 			return r, nil
 		}
-		return core.WatcherCheckResult{Problem: core.ProblemRepositoryUnreadable, Reason: fmt.Sprintf("gh can't read the repository %s: %s", g.repository, msg),
+		return api.WatcherCheckResult{Problem: api.ProblemRepositoryUnreadable, Reason: fmt.Sprintf("gh can't read the repository %s: %s", g.repository, msg),
 			Fix: "Check the repository is the owner/name GitHub shows, and that the account gh is logged in as can see it."}, nil
 	}
 	var repo struct {
@@ -54,11 +54,11 @@ func (g *github) CheckAccess(ctx context.Context, _ bool) (core.WatcherCheckResu
 		} `json:"permissions"`
 	}
 	if err := json.Unmarshal(body, &repo); err != nil || !repo.Permissions.Push {
-		return core.WatcherCheckResult{Problem: core.ProblemNoWrite,
+		return api.WatcherCheckResult{Problem: api.ProblemNoWrite,
 			Reason: fmt.Sprintf("the account gh is logged in as can't write to %s, which opening a pull request needs", g.repository),
 			Fix:    "Log gh in as an account with write access to the repository: `gh auth login`, or ask for write access."}, nil
 	}
-	return core.WatcherCheckResult{}, nil
+	return api.WatcherCheckResult{}, nil
 }
 
 // list is every pull request from branch into the base, newest first.

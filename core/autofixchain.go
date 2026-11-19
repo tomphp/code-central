@@ -3,6 +3,7 @@ package core
 import (
 	"slices"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -15,19 +16,19 @@ import (
 
 // ciAutoFix is what Auto-fix does about t's CI failure in the Repository
 // name, nil when it does nothing.
-func (e *evaluation) ciAutoFix(t domain.Ticket, name string) *CIAutoFixView {
+func (e *evaluation) ciAutoFix(t domain.Ticket, name string) *api.CIAutoFixView {
 	rc := e.ci.ticket(t).in(name)
 	switch {
 	case rc == nil:
 		return nil
 	case rc.fixing != nil && rc.fixing.AutoFix != nil:
-		return &CIAutoFixView{Fixing: &AutoFixFixingView{FixTicket: DisplayID(e.p.Key, rc.fixing.Number), Attempt: rc.fixing.AutoFix.Attempt, Limit: e.p.CI.AutoFix.AttemptLimit()}}
+		return &api.CIAutoFixView{Fixing: &api.AutoFixFixingView{FixTicket: DisplayID(e.p.Key, rc.fixing.Number), Attempt: rc.fixing.AutoFix.Attempt, Limit: e.p.CI.AutoFix.AttemptLimit()}}
 	case rc.covering != nil:
-		return &CIAutoFixView{Covering: &AutoFixCoveringView{FixTicket: DisplayID(e.p.Key, rc.covering.Number), Commit: rc.covering.AutoFix.Commit}}
+		return &api.CIAutoFixView{Covering: &api.AutoFixCoveringView{FixTicket: DisplayID(e.p.Key, rc.covering.Number), Commit: rc.covering.AutoFix.Commit}}
 	}
 	if it, ok := e.itemIn(t, name); ok {
 		if stopped := e.autoFixStoppedLine(it); stopped != nil {
-			return &CIAutoFixView{Stopped: stopped}
+			return &api.CIAutoFixView{Stopped: stopped}
 		}
 	}
 	return nil
@@ -36,12 +37,12 @@ func (e *evaluation) ciAutoFix(t domain.Ticket, name string) *CIAutoFixView {
 // autoFixStoppedLine is it's "Auto-fix stopped" line while Auto-fix has
 // stopped at the limit on it, nil otherwise: each attempt, found by
 // following the chain back from the highest auto fix Ticket it lists.
-func (e *evaluation) autoFixStoppedLine(it ciItem) *AutoFixStoppedView {
+func (e *evaluation) autoFixStoppedLine(it ciItem) *api.AutoFixStoppedView {
 	plan, status := e.planAutoFix(it)
 	if status != autoFixStopped {
 		return nil
 	}
-	v := &AutoFixStoppedView{Attempts: []string{}}
+	v := &api.AutoFixStoppedView{Attempts: []string{}}
 	// A chain is never longer than its highest attempt.
 	for n := plan.mark.Previous; n != 0 && len(v.Attempts) < plan.mark.Attempt; {
 		v.Attempts = append(v.Attempts, DisplayID(e.p.Key, n))
@@ -119,7 +120,7 @@ func (s *ciState) listedOn(t domain.Ticket, k itemKey) bool {
 	if t.State != domain.Accepted || landedIn(t, k.name) || len(pushed) == 0 || pushed[len(pushed)-1].Commit != k.commit {
 		return false
 	}
-	return s.repoResult(t, k.name).result == CIFailed
+	return s.repoResult(t, k.name).result == api.CIFailed
 }
 
 // openAutoFixes are the Project's auto fix Tickets that are neither Done

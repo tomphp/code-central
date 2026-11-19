@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -20,9 +21,9 @@ import (
 // whatever the operation, which keeps "every write" true for operations
 // added later.
 
-func archivedError(key string) *Error {
-	return &Error{
-		Code:           ActionNotAllowed,
+func archivedError(key string) *api.Error {
+	return &api.Error{
+		Code:           api.ActionNotAllowed,
 		Message:        fmt.Sprintf("Project %s is archived, so it takes no writes; only the human can bring it back, with unarchive_project", key),
 		AllowedActions: []string{"unarchive_project"},
 	}
@@ -43,17 +44,17 @@ func writable(r store.Reader, key string) error {
 
 // ArchiveProject is the human's archive_project: it puts away a Project
 // whose Tickets are all finished.
-func (c *Core) ArchiveProject(ctx context.Context, key string) (ProjectView, error) {
+func (c *Core) ArchiveProject(ctx context.Context, key string) (api.ProjectView, error) {
 	if err := humanOnly(ctx, "archive_project"); err != nil {
-		return ProjectView{}, err
+		return api.ProjectView{}, err
 	}
-	var v ProjectView
+	var v api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
 		}
 		if open := unfinishedTickets(w, key); len(open) > 0 {
-			return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf(
+			return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf(
 				"Project %s still has unfinished work, so it can't be archived until every Ticket is Done or Cancelled: %s",
 				key, strings.Join(open, ", "))}
 		}
@@ -67,11 +68,11 @@ func (c *Core) ArchiveProject(ctx context.Context, key string) (ProjectView, err
 
 // UnarchiveProject is the human's unarchive_project: the Project takes
 // writes again. Unarchiving a Project that isn't archived changes nothing.
-func (c *Core) UnarchiveProject(ctx context.Context, key string) (ProjectView, error) {
+func (c *Core) UnarchiveProject(ctx context.Context, key string) (api.ProjectView, error) {
 	if err := humanOnly(ctx, "unarchive_project"); err != nil {
-		return ProjectView{}, err
+		return api.ProjectView{}, err
 	}
-	var v ProjectView
+	var v api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {
 		p, ok := w.Project(key)
 		if !ok {
@@ -99,8 +100,8 @@ func unfinishedTickets(r store.Reader, key string) []string {
 }
 
 func humanOnly(ctx context.Context, op string) error {
-	if a := ActorOf(ctx); a != Human {
-		return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is a human action; this request is made as %s", op, a)}
+	if a := api.ActorOf(ctx); a != api.Human {
+		return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s is a human action; this request is made as %s", op, a)}
 	}
 	return nil
 }

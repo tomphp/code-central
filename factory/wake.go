@@ -10,7 +10,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // wakeRetry is how long the wake loop waits after a next_factory_wake
@@ -29,12 +29,12 @@ func (f *factory) wakeLoop(ctx context.Context, s *stint) {
 	failing := false
 	for pollCtx.Err() == nil {
 		s.rest(WakeLongPoll)
-		w, err := f.client.NextFactoryWake(pollCtx, f.project, core.NextFactoryWakeInput{Factory: factoryName, Host: f.host})
+		w, err := f.client.NextFactoryWake(pollCtx, f.project, api.NextFactoryWakeInput{Factory: factoryName, Host: f.host})
 		if err != nil {
 			if pollCtx.Err() != nil {
 				return
 			}
-			if ce := (*core.Error)(nil); errors.As(err, &ce) && ce.Code == core.NotFound {
+			if ce := (*api.Error)(nil); errors.As(err, &ce) && ce.Code == api.NotFound {
 				f.printf("warning: Code Central has no next_factory_wake: polling every %s only", f.o.poll)
 				return
 			}

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
@@ -28,13 +29,13 @@ func TestTheWayfinderLabelsAndPrototypeAreAcceptedWhereTheyBelong(t *testing.T) 
 	f.project(t, "acme")
 	f.spec(t, "acme", "Map") // acme-1
 	for l := range ticketTypeLabels {
-		f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: l, Labels: []string{"ui", l}})
-		tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: l + " later"})
-		if _, err := f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: core.Ref(tk.ID), Labels: []string{l}}); err != nil {
+		f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: l, Labels: []string{"ui", l}})
+		tk := f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: l + " later"})
+		if _, err := f.core.AddLabels(ctx, "acme", api.LabelsInput{Target: api.Ref(tk.ID), Labels: []string{l}}); err != nil {
 			t.Errorf("add_labels %s on a Ticket: %v", l, err)
 		}
 	}
-	if _, err := f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: "acme-1", Labels: []string{"wayfinder:map"}}); err != nil {
+	if _, err := f.core.AddLabels(ctx, "acme", api.LabelsInput{Target: "acme-1", Labels: []string{"wayfinder:map"}}); err != nil {
 		t.Errorf("add_labels wayfinder:map on a Spec: %v", err)
 	}
 
@@ -42,7 +43,7 @@ func TestTheWayfinderLabelsAndPrototypeAreAcceptedWhereTheyBelong(t *testing.T) 
 	p.Specs[0].Labels = []string{"wayfinder:map"}
 	p.Tickets[0].Labels = []string{"wayfinder:chart"}
 	p.Tickets[1].Labels = []string{"backend", "prototype"}
-	if _, err := f.core.Import(ctx, "acme", core.ImportInput{Payload: p, DryRun: true}); err != nil {
+	if _, err := f.core.Import(ctx, "acme", api.ImportInput{Payload: p, DryRun: true}); err != nil {
 		t.Errorf("import with Wayfinder Labels where they belong: %v", err)
 	}
 }
@@ -51,13 +52,13 @@ func TestAnUnknownWayfinderNameIsRejectedListingTheValidOnes(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Map") // acme-1
-	tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Form"})
+	tk := f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Form"})
 
 	wantList := func(err error) {
 		t.Helper()
-		var e *core.Error
+		var e *api.Error
 		if !errors.As(err, &e) {
-			t.Fatalf("err = %v, want a core.Error", err)
+			t.Fatalf("err = %v, want an api.Error", err)
 		}
 		for _, name := range []string{"wayfinder:map", "wayfinder:chart", "wayfinder:grilling", "wayfinder:research", "wayfinder:task"} {
 			if !strings.Contains(e.Message, name) {
@@ -66,53 +67,53 @@ func TestAnUnknownWayfinderNameIsRejectedListingTheValidOnes(t *testing.T) {
 		}
 	}
 	for _, l := range []string{"wayfinder:reseach", "wayfinder:", "wayfinder:Map", "wayfinder:prototype"} {
-		_, err := f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", Labels: []string{"ui", l}})
-		wantCode(t, err, core.Invalid, "labels")
+		_, err := f.core.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "Form", Labels: []string{"ui", l}})
+		wantCode(t, err, api.Invalid, "labels")
 		wantList(err)
-		_, err = f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: core.Ref(tk.ID), Labels: []string{l}})
-		wantCode(t, err, core.Invalid, "labels")
-		_, err = f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: "acme-1", Labels: []string{l}})
-		wantCode(t, err, core.Invalid, "labels")
+		_, err = f.core.AddLabels(ctx, "acme", api.LabelsInput{Target: api.Ref(tk.ID), Labels: []string{l}})
+		wantCode(t, err, api.Invalid, "labels")
+		_, err = f.core.AddLabels(ctx, "acme", api.LabelsInput{Target: "acme-1", Labels: []string{l}})
+		wantCode(t, err, api.Invalid, "labels")
 	}
 
 	p := scratch()
 	p.Tickets[1].Labels = []string{"backend", "wayfinder:reseach"}
-	_, err := f.core.Import(ctx, "acme", core.ImportInput{Payload: p, DryRun: true})
-	wantCode(t, err, core.Invalid, "tickets[1].labels[1]")
+	_, err := f.core.Import(ctx, "acme", api.ImportInput{Payload: p, DryRun: true})
+	wantCode(t, err, api.Invalid, "tickets[1].labels[1]")
 	wantList(err)
 	p = scratch()
 	p.Specs[0].Labels = []string{"wayfinder:mpa"}
-	_, err = f.core.Import(ctx, "acme", core.ImportInput{Payload: p, DryRun: true})
-	wantCode(t, err, core.Invalid, "specs[0].labels[0]")
+	_, err = f.core.Import(ctx, "acme", api.ImportInput{Payload: p, DryRun: true})
+	wantCode(t, err, api.Invalid, "specs[0].labels[0]")
 
 	// Labels that only look like the prefix aren't reserved.
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Free", Labels: []string{"wayfinder", "my-wayfinder:x", "prototypes", "Prototype"}})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Free", Labels: []string{"wayfinder", "my-wayfinder:x", "prototypes", "Prototype"}})
 }
 
 func TestTheMapLabelIsOnlyForSpecsAndTheTicketTypesOnlyForTickets(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Map") // acme-1
-	tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Form"})
+	tk := f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Form"})
 
-	_, err := f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", Labels: []string{"wayfinder:map"}})
-	wantCode(t, err, core.Invalid, "labels")
-	_, err = f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: core.Ref(tk.ID), Labels: []string{"wayfinder:map"}})
-	wantCode(t, err, core.Invalid, "labels")
+	_, err := f.core.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "Form", Labels: []string{"wayfinder:map"}})
+	wantCode(t, err, api.Invalid, "labels")
+	_, err = f.core.AddLabels(ctx, "acme", api.LabelsInput{Target: api.Ref(tk.ID), Labels: []string{"wayfinder:map"}})
+	wantCode(t, err, api.Invalid, "labels")
 	for l := range ticketTypeLabels {
-		_, err = f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: "acme-1", Labels: []string{l}})
-		wantCode(t, err, core.Invalid, "labels")
+		_, err = f.core.AddLabels(ctx, "acme", api.LabelsInput{Target: "acme-1", Labels: []string{l}})
+		wantCode(t, err, api.Invalid, "labels")
 	}
 
 	p := scratch()
 	p.Tickets[1].Labels = []string{"backend", "wayfinder:map"}
-	_, err = f.core.Import(ctx, "acme", core.ImportInput{Payload: p, DryRun: true})
-	wantCode(t, err, core.Invalid, "tickets[1].labels[1]")
+	_, err = f.core.Import(ctx, "acme", api.ImportInput{Payload: p, DryRun: true})
+	wantCode(t, err, api.Invalid, "tickets[1].labels[1]")
 	for l := range ticketTypeLabels {
 		p = scratch()
 		p.Specs[0].Labels = []string{"auth", l}
-		_, err = f.core.Import(ctx, "acme", core.ImportInput{Payload: p, DryRun: true})
-		wantCode(t, err, core.Invalid, "specs[0].labels[1]")
+		_, err = f.core.Import(ctx, "acme", api.ImportInput{Payload: p, DryRun: true})
+		wantCode(t, err, api.Invalid, "specs[0].labels[1]")
 	}
 }
 
@@ -131,26 +132,26 @@ func TestATicketCarriesAtMostOneReservedTypeLabel(t *testing.T) {
 		{"retro", "stage:spec"},
 		{"wayfinder:task", "retro"},
 	} {
-		_, err := f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Two", Labels: append([]string{"ui"}, pair...)})
-		wantCode(t, err, core.Invalid, "labels")
+		_, err := f.core.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "Two", Labels: append([]string{"ui"}, pair...)})
+		wantCode(t, err, api.Invalid, "labels")
 
-		tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "One", Labels: pair[:1]})
-		_, err = f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: core.Ref(tk.ID), Labels: pair[1:]})
-		wantCode(t, err, core.Invalid, "labels")
-		_, err = f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: core.Ref(tk.ID), Labels: []string{"ui", pair[0]}})
+		tk := f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "One", Labels: pair[:1]})
+		_, err = f.core.AddLabels(ctx, "acme", api.LabelsInput{Target: api.Ref(tk.ID), Labels: pair[1:]})
+		wantCode(t, err, api.Invalid, "labels")
+		_, err = f.core.AddLabels(ctx, "acme", api.LabelsInput{Target: api.Ref(tk.ID), Labels: []string{"ui", pair[0]}})
 		if err != nil {
 			t.Errorf("add_labels of the Label it already has, %s: %v", pair[0], err)
 		}
 
 		p := scratch()
 		p.Tickets[0].Labels = pair
-		_, err = f.core.Import(ctx, "acme", core.ImportInput{Payload: p, DryRun: true})
-		wantCode(t, err, core.Invalid, "tickets[0].labels")
+		_, err = f.core.Import(ctx, "acme", api.ImportInput{Payload: p, DryRun: true})
+		wantCode(t, err, api.Invalid, "tickets[0].labels")
 	}
 	// The same Label twice is still one.
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Twice", Labels: []string{"prototype", "prototype"}})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Twice", Labels: []string{"prototype", "prototype"}})
 	// A Spec isn't limited: the rule is per Ticket.
-	if _, err := f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: "acme-1", Labels: []string{"wayfinder:map", "stage:spec"}}); err != nil {
+	if _, err := f.core.AddLabels(ctx, "acme", api.LabelsInput{Target: "acme-1", Labels: []string{"wayfinder:map", "stage:spec"}}); err != nil {
 		t.Errorf("add_labels on a Spec: %v", err)
 	}
 }
@@ -182,8 +183,8 @@ func TestClaimCarriesTheGuideForEachWayfinderTypeAndAPrototype(t *testing.T) {
 	f.project(t, "acme")
 	f.spec(t, "acme", "Map")
 	for l, name := range ticketTypeLabels {
-		tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: l, State: domain.Ready, Labels: []string{l}})
-		res, err := f.core.Claim(ctx, "acme", core.ClaimInput{Ticket: core.Ref(tk.ID)})
+		tk := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: l, State: domain.Ready, Labels: []string{l}})
+		res, err := f.core.Claim(ctx, "acme", api.ClaimInput{Ticket: api.Ref(tk.ID)})
 		if err != nil {
 			t.Fatal(err)
 		}

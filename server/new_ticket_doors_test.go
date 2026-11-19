@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // New Ticket (Spec code-central-1067): the human's, so HTTP only. The
@@ -26,7 +26,7 @@ func init() {
 			labels()(t, out)
 		},
 		bad:  call{http: newTicket(`{"spec":"acme-1","text":"More"}`)},
-		code: core.ActionNotAllowed,
+		code: api.ActionNotAllowed,
 	}
 }
 
@@ -47,9 +47,9 @@ func TestASpecReadSaysWhetherNewTicketIsAllowed(t *testing.T) {
 	srv := newServer(t, plainSpec)
 	boolField(t, httpOK(t, srv, httpCall{"GET", "/api/p/acme/specs/4", ""}), "ticketable", true)
 	boolField(t, httpOK(t, srv, httpCall{"GET", "/api/p/acme/specs/1", ""}), "ticketable", false)
-	e := httpRejected(t, srv, newTicket(`{"spec":"acme-1","text":"More"}`), core.ActionNotAllowed)
+	e := httpRejected(t, srv, newTicket(`{"spec":"acme-1","text":"More"}`), api.ActionNotAllowed)
 	if !strings.Contains(e.Message, "Long-lived") {
 		t.Fatalf("new_ticket on a Long-lived Spec refused with %q, want it to say why", e.Message)
 	}
-	httpRejected(t, srv, newTicket(`{"spec":"acme-4","text":"  "}`), core.Invalid)
+	httpRejected(t, srv, newTicket(`{"spec":"acme-4","text":"  "}`), api.Invalid)
 }

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/ids"
@@ -30,7 +31,7 @@ func storageWorld(t *testing.T) fixture {
 	f.project(t, "beta")
 	spec := f.spec(t, "acme", "Pick a colour")
 	f.spec(t, "acme", "Pick a font")
-	f.ticket(t, "acme", core.CreateTicketInput{Title: "Paint it", Spec: core.Ref(spec.ID)})
+	f.ticket(t, "acme", api.CreateTicketInput{Title: "Paint it", Spec: api.Ref(spec.ID)})
 	f.core.RecordCall("acme", usage.Call{Op: "get_ticket"})
 	f.clock.Advance(24 * time.Hour)
 	f.core.RecordCall("acme", usage.Call{Op: "find_tickets"})
@@ -47,7 +48,7 @@ func storageWorld(t *testing.T) fixture {
 	return f
 }
 
-func getStorage(t *testing.T, f fixture, in core.GetStorageInput) core.StorageView {
+func getStorage(t *testing.T, f fixture, in api.GetStorageInput) api.StorageView {
 	t.Helper()
 	v, err := f.core.GetStorage(ctx, in)
 	if err != nil {
@@ -58,7 +59,7 @@ func getStorage(t *testing.T, f fixture, in core.GetStorageInput) core.StorageVi
 
 func TestStorageShowsTheStoreEachProjectsCountsTheProcessAndTheServices(t *testing.T) {
 	f := storageWorld(t)
-	v := getStorage(t, f, core.GetStorageInput{})
+	v := getStorage(t, f, api.GetStorageInput{})
 
 	if v.Kind != "memory" || v.Path != "" || v.Host != "" {
 		t.Errorf("the fake shows as %q at %q%q, want memory, nowhere", v.Kind, v.Path, v.Host)
@@ -66,7 +67,7 @@ func TestStorageShowsTheStoreEachProjectsCountsTheProcessAndTheServices(t *testi
 	if v.Size <= 0 {
 		t.Errorf("size %d, want the records' size", v.Size)
 	}
-	want := []core.StorageProject{
+	want := []api.StorageProject{
 		{Key: "acme", Name: "acme", Specs: 2, Tickets: 1, UsageDays: 2},
 		{Key: "beta", Name: "beta"},
 	}
@@ -96,7 +97,7 @@ func TestStorageLeavesOutAServiceWhoseRegistrationLapsed(t *testing.T) {
 	if err := f.core.Register(ctx); err != nil {
 		t.Fatal(err)
 	}
-	v := getStorage(t, f, core.GetStorageInput{})
+	v := getStorage(t, f, api.GetStorageInput{})
 	if len(v.Services) != 1 || v.Services[0].Host != "laptop" {
 		t.Errorf("services %+v, want laptop alone", v.Services)
 	}
@@ -106,9 +107,9 @@ func TestStorageLeavesOutAServiceWhoseRegistrationLapsed(t *testing.T) {
 // memory and the services are whole whatever the scope.
 func TestStorageScopedToAProjectCountsItAlone(t *testing.T) {
 	f := storageWorld(t)
-	all := getStorage(t, f, core.GetStorageInput{})
-	v := getStorage(t, f, core.GetStorageInput{Project: "beta"})
-	if want := []core.StorageProject{{Key: "beta", Name: "beta"}}; !slices.Equal(v.Projects, want) {
+	all := getStorage(t, f, api.GetStorageInput{})
+	v := getStorage(t, f, api.GetStorageInput{Project: "beta"})
+	if want := []api.StorageProject{{Key: "beta", Name: "beta"}}; !slices.Equal(v.Projects, want) {
 		t.Errorf("projects %+v, want %+v", v.Projects, want)
 	}
 	if v.Kind != all.Kind || v.Size != all.Size || len(v.Services) != 2 || v.Memory.Heap <= 0 {
@@ -118,9 +119,9 @@ func TestStorageScopedToAProjectCountsItAlone(t *testing.T) {
 
 func TestStorageOfAnUnknownProjectIsNotFound(t *testing.T) {
 	f := storageWorld(t)
-	_, err := f.core.GetStorage(ctx, core.GetStorageInput{Project: "gamma"})
-	var e *core.Error
-	if !errors.As(err, &e) || e.Code != core.NotFound {
+	_, err := f.core.GetStorage(ctx, api.GetStorageInput{Project: "gamma"})
+	var e *api.Error
+	if !errors.As(err, &e) || e.Code != api.NotFound {
 		t.Fatalf("get_storage of gamma: %v, want not_found", err)
 	}
 }
@@ -142,7 +143,7 @@ func TestStorageOfAPostgresStoreShowsItsAddressAndNoCredential(t *testing.T) {
 	}
 	s := postgresAt{store.NewMemory(), l}
 	c := core.New(s, clock.NewFake(t0), &ids.Sequence{})
-	v, err := c.GetStorage(ctx, core.GetStorageInput{})
+	v, err := c.GetStorage(ctx, api.GetStorageInput{})
 	if err != nil {
 		t.Fatal(err)
 	}

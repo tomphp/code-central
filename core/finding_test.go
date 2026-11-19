@@ -5,13 +5,13 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
 func boolPtr(b bool) *bool { return &b }
 
-func rowIDs(rows []core.TicketRow) []string {
+func rowIDs(rows []api.TicketRow) []string {
 	out := []string{}
 	for _, r := range rows {
 		out = append(out, r.ID)
@@ -23,7 +23,7 @@ func TestFindTicketsByTagsAndClaimable(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready, domain.Ready, domain.Draft) // acme-2, acme-3, acme-4
 	f.addBlocker(t, "acme-3", "acme-4")
-	for _, in := range []core.SetTagsInput{
+	for _, in := range []api.SetTagsInput{
 		{Target: "acme-2", Tags: map[string]string{"area": "web", "size": "s"}},
 		{Target: "acme-3", Tags: map[string]string{"area": "web"}},
 		{Target: "acme-4", Tags: map[string]string{"area": "Web"}},
@@ -34,14 +34,14 @@ func TestFindTicketsByTagsAndClaimable(t *testing.T) {
 	}
 	for _, c := range []struct {
 		name string
-		in   core.FindTicketsInput
+		in   api.FindTicketsInput
 		want []string
 	}{
-		{"one tag, exact value", core.FindTicketsInput{Tags: map[string]string{"area": "web"}}, []string{"acme-2", "acme-3"}},
-		{"every tag pair", core.FindTicketsInput{Tags: map[string]string{"area": "web", "size": "s"}}, []string{"acme-2"}},
-		{"claimable", core.FindTicketsInput{Claimable: boolPtr(true)}, []string{"acme-2"}},
-		{"not claimable", core.FindTicketsInput{Claimable: boolPtr(false)}, []string{"acme-3", "acme-4"}},
-		{"combined", core.FindTicketsInput{Tags: map[string]string{"area": "web"}, Claimable: boolPtr(false)}, []string{"acme-3"}},
+		{"one tag, exact value", api.FindTicketsInput{Tags: map[string]string{"area": "web"}}, []string{"acme-2", "acme-3"}},
+		{"every tag pair", api.FindTicketsInput{Tags: map[string]string{"area": "web", "size": "s"}}, []string{"acme-2"}},
+		{"claimable", api.FindTicketsInput{Claimable: boolPtr(true)}, []string{"acme-2"}},
+		{"not claimable", api.FindTicketsInput{Claimable: boolPtr(false)}, []string{"acme-3", "acme-4"}},
+		{"combined", api.FindTicketsInput{Tags: map[string]string{"area": "web"}, Claimable: boolPtr(false)}, []string{"acme-3"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			rows, err := f.core.FindTickets(ctx, "acme", c.in)
@@ -53,7 +53,7 @@ func TestFindTicketsByTagsAndClaimable(t *testing.T) {
 			}
 		})
 	}
-	rows, _ := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{Title: "Tb"})
+	rows, _ := f.core.FindTickets(ctx, "acme", api.FindTicketsInput{Title: "Tb"})
 	if len(rows) != 1 || !rows[0].Blocked {
 		t.Fatalf("row for blocked acme-3: %+v", rows)
 	}
@@ -65,7 +65,7 @@ func TestGetSpecShowsItsProgress(t *testing.T) {
 	f.setState(t, 3, domain.Done)
 	empty := f.spec(t, "acme", "Later") // acme-5
 
-	v, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-1"})
+	v, err := f.core.GetSpec(ctx, "acme", api.GetSpecInput{Spec: "acme-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestGetSpecShowsItsProgress(t *testing.T) {
 		t.Fatalf("tickets %v", got)
 	}
 
-	v, err = f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: core.Ref(empty.ID)})
+	v, err = f.core.GetSpec(ctx, "acme", api.GetSpecInput{Spec: api.Ref(empty.ID)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,25 +89,25 @@ func TestGetSpecShowsItsProgress(t *testing.T) {
 		t.Fatalf("a Spec with no Tickets: summary %v finished %v tickets %v", v.StateSummary, v.Finished, v.Tickets)
 	}
 
-	_, err = f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-2"})
-	wantCode(t, err, core.NotFound, "")
+	_, err = f.core.GetSpec(ctx, "acme", api.GetSpecInput{Spec: "acme-2"})
+	wantCode(t, err, api.NotFound, "")
 }
 
 func TestFindSpecsHidesFinishedSpecsUnlessAsked(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, domain.Ready)                                                                    // Spec acme-1 "Login", acme-2
-	f.spec(t, "acme", "Search")                                                                // acme-3, no Tickets: not finished
-	f.spec(t, "acme", "Old login")                                                             // acme-4
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "4", Title: "Gone", State: domain.Ready}) // acme-5
+	f.work(t, domain.Ready)                                                                   // Spec acme-1 "Login", acme-2
+	f.spec(t, "acme", "Search")                                                               // acme-3, no Tickets: not finished
+	f.spec(t, "acme", "Old login")                                                            // acme-4
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "4", Title: "Gone", State: domain.Ready}) // acme-5
 	f.setState(t, 5, domain.Cancelled)
-	if _, err := f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: "acme-1", Labels: []string{"auth"}}); err != nil {
+	if _, err := f.core.AddLabels(ctx, "acme", api.LabelsInput{Target: "acme-1", Labels: []string{"auth"}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.core.SetTags(ctx, "acme", core.SetTagsInput{Target: "acme-3", Tags: map[string]string{"area": "web"}}); err != nil {
+	if _, err := f.core.SetTags(ctx, "acme", api.SetTagsInput{Target: "acme-3", Tags: map[string]string{"area": "web"}}); err != nil {
 		t.Fatal(err)
 	}
 
-	ids := func(rows []core.SpecRow) []string {
+	ids := func(rows []api.SpecRow) []string {
 		out := []string{}
 		for _, r := range rows {
 			out = append(out, r.ID)
@@ -116,14 +116,14 @@ func TestFindSpecsHidesFinishedSpecsUnlessAsked(t *testing.T) {
 	}
 	for _, c := range []struct {
 		name string
-		in   core.FindSpecsInput
+		in   api.FindSpecsInput
 		want []string
 	}{
-		{"unfinished only", core.FindSpecsInput{}, []string{"acme-1", "acme-3"}},
-		{"finished too", core.FindSpecsInput{Finished: true}, []string{"acme-1", "acme-3", "acme-4"}},
-		{"title", core.FindSpecsInput{Title: "LOGIN", Finished: true}, []string{"acme-1", "acme-4"}},
-		{"labels", core.FindSpecsInput{Labels: []string{"auth"}}, []string{"acme-1"}},
-		{"tags", core.FindSpecsInput{Tags: map[string]string{"area": "web"}}, []string{"acme-3"}},
+		{"unfinished only", api.FindSpecsInput{}, []string{"acme-1", "acme-3"}},
+		{"finished too", api.FindSpecsInput{Finished: true}, []string{"acme-1", "acme-3", "acme-4"}},
+		{"title", api.FindSpecsInput{Title: "LOGIN", Finished: true}, []string{"acme-1", "acme-4"}},
+		{"labels", api.FindSpecsInput{Labels: []string{"auth"}}, []string{"acme-1"}},
+		{"tags", api.FindSpecsInput{Tags: map[string]string{"area": "web"}}, []string{"acme-3"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			rows, err := f.core.FindSpecs(ctx, "acme", c.in)
@@ -135,7 +135,7 @@ func TestFindSpecsHidesFinishedSpecsUnlessAsked(t *testing.T) {
 			}
 		})
 	}
-	rows, _ := f.core.FindSpecs(ctx, "acme", core.FindSpecsInput{Finished: true})
+	rows, _ := f.core.FindSpecs(ctx, "acme", api.FindSpecsInput{Finished: true})
 	old := rows[2]
 	if old.Title != "Old login" || !old.Finished || !maps.Equal(old.StateSummary, map[domain.State]int{domain.Cancelled: 1}) {
 		t.Fatalf("row %+v", old)
@@ -145,8 +145,8 @@ func TestFindSpecsHidesFinishedSpecsUnlessAsked(t *testing.T) {
 func TestTagFiltersNeedValidKeys(t *testing.T) {
 	f := newFixture(t)
 	f.work(t)
-	_, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{Tags: map[string]string{"Bad Key": "x"}})
-	wantCode(t, err, core.Invalid, "tags")
-	_, err = f.core.FindSpecs(ctx, "acme", core.FindSpecsInput{Tags: map[string]string{"Bad Key": "x"}})
-	wantCode(t, err, core.Invalid, "tags")
+	_, err := f.core.FindTickets(ctx, "acme", api.FindTicketsInput{Tags: map[string]string{"Bad Key": "x"}})
+	wantCode(t, err, api.Invalid, "tags")
+	_, err = f.core.FindSpecs(ctx, "acme", api.FindSpecsInput{Tags: map[string]string{"Bad Key": "x"}})
+	wantCode(t, err, api.Invalid, "tags")
 }

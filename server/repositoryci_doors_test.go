@@ -3,7 +3,7 @@ package server_test
 import (
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // A Repository's CI entry (Spec code-central-848): set_repository_ci is
@@ -22,7 +22,7 @@ func init() {
 			}
 		},
 		bad:  call{http: setRepositoryCI(`{"name":"web","repository":"not a repository"}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 

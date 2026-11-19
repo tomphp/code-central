@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
@@ -81,8 +82,8 @@ func openIssues(ctx context.Context, env gh.Env, prog, repository, label string)
 // Link in the Project, detached ones included, so an unlinked or triaged
 // issue never comes in again, as a Draft Ticket on the Issues Spec. What
 // goes wrong is logged and tried again on the next poll.
-func (cfg Config) arrive(ctx context.Context, watch core.IssueWatch, repository string, issues []ghIssue) {
-	linked, err := cfg.Client.FindLinked(ctx, cfg.Project, core.FindLinkedInput{Integration: Integration})
+func (cfg Config) arrive(ctx context.Context, watch api.IssueWatch, repository string, issues []ghIssue) {
+	linked, err := cfg.Client.FindLinked(ctx, cfg.Project, api.FindLinkedInput{Integration: Integration})
 	if err != nil {
 		if ctx.Err() == nil {
 			cfg.logf("find_linked: %v", err)
@@ -98,9 +99,9 @@ func (cfg Config) arrive(ctx context.Context, watch core.IssueWatch, repository 
 		if have[id] {
 			continue
 		}
-		_, err := cfg.Client.CreateLinkedTicket(ctx, cfg.Project, core.CreateLinkedTicketInput{
-			Spec: core.Ref(watch.Spec), Title: i.Title, Description: i.Body, State: domain.Draft,
-			Link: core.LinkInput{Integration: Integration, ID: id, URL: i.HTMLURL},
+		_, err := cfg.Client.CreateLinkedTicket(ctx, cfg.Project, api.CreateLinkedTicketInput{
+			Spec: api.Ref(watch.Spec), Title: i.Title, Description: i.Body, State: domain.Draft,
+			Link: api.LinkInput{Integration: Integration, ID: id, URL: i.HTMLURL},
 		})
 		if err != nil {
 			if ctx.Err() != nil {

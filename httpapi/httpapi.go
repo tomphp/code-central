@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/ops"
 )
@@ -53,7 +54,7 @@ func Register(mux *http.ServeMux, s ops.Service) {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		WriteError(w, &core.Error{Code: core.NotFound, Message: fmt.Sprintf("no API resource at %s %s", r.Method, r.URL.Path)})
+		WriteError(w, &api.Error{Code: api.NotFound, Message: fmt.Sprintf("no API resource at %s %s", r.Method, r.URL.Path)})
 	})
 }
 
@@ -73,20 +74,20 @@ func ping(s ops.Service) http.HandlerFunc {
 }
 
 // Status maps an error code to its HTTP status.
-func Status(code core.Code) int {
+func Status(code api.Code) int {
 	switch code {
-	case core.UnknownProject, core.NotFound:
+	case api.UnknownProject, api.NotFound:
 		return http.StatusNotFound
-	case core.ActionNotAllowed, core.StaleClaim, core.Cycle, core.Conflict:
+	case api.ActionNotAllowed, api.StaleClaim, api.Cycle, api.Conflict:
 		return http.StatusConflict
-	case core.Invalid:
+	case api.Invalid:
 		return http.StatusUnprocessableEntity
 	}
 	return http.StatusInternalServerError
 }
 
 // WriteError writes err as the API's JSON error with its status; an error
-// that is not a *core.Error is internal.
+// that is not a *api.Error is internal.
 func WriteError(w http.ResponseWriter, err error) {
 	e := core.ErrorOf(err)
 	writeJSON(w, Status(e.Code), e)
@@ -102,9 +103,9 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 func decodeBody(r *http.Request, v any) error {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 8<<20))
 	if err != nil {
-		return &core.Error{Code: core.Invalid, Message: "cannot read the request body"}
+		return &api.Error{Code: api.Invalid, Message: "cannot read the request body"}
 	}
-	return core.Decode(r.Context(), body, v)
+	return api.Decode(r.Context(), body, v)
 }
 
 func onlyParams(q url.Values, allowed ...string) error {
@@ -114,7 +115,7 @@ func onlyParams(q url.Values, allowed ...string) error {
 			ok = ok || k == a
 		}
 		if !ok {
-			return &core.Error{Code: core.Invalid, Field: k, Message: fmt.Sprintf("unknown query parameter %q (allowed: %s)", k, strings.Join(allowed, ", "))}
+			return &api.Error{Code: api.Invalid, Field: k, Message: fmt.Sprintf("unknown query parameter %q (allowed: %s)", k, strings.Join(allowed, ", "))}
 		}
 	}
 	return nil

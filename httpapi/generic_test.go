@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/ops"
 )
@@ -16,14 +17,14 @@ import (
 // The fixtures: small input types, each exercising one decoding rule.
 
 type itemInput struct {
-	Ticket core.Ref `json:"ticket" path:"n"`
-	Body   string   `json:"body"`
+	Ticket api.Ref `json:"ticket" path:"n"`
+	Body   string  `json:"body"`
 }
 
 type kind string
 
 type queryInput struct {
-	Ticket    core.Ref `json:"ticket" path:"n"`
+	Ticket    api.Ref  `json:"ticket" path:"n"`
 	State     []kind   `json:"state,omitempty"`
 	Title     string   `json:"title,omitempty"`
 	Labels    []string `json:"labels,omitempty" query:"label"`
@@ -43,7 +44,7 @@ func (in *tagsInput) DecodeQuery(q url.Values) error {
 	for _, p := range q["tag"] {
 		k, v, ok := strings.Cut(p, "=")
 		if !ok {
-			return &core.Error{Code: core.Invalid, Field: "tag", Message: "a Tag filter is tag=<key>=<value>"}
+			return &api.Error{Code: api.Invalid, Field: "tag", Message: "a Tag filter is tag=<key>=<value>"}
 		}
 		if in.Tags == nil {
 			in.Tags = map[string]string{}
@@ -107,7 +108,7 @@ func TestThePathBindsTheItemAndWinsOverTheBody(t *testing.T) {
 func TestABodyIsDecodedStrictly(t *testing.T) {
 	h := serveOp(t, echo[itemInput]("POST /api/p/{key}/tickets/{n}/comment"))
 	status, out := call(h, "POST", "/api/p/acme/tickets/7/comment", `{"colour":"red"}`)
-	if status != 422 || out["code"] != string(core.Invalid) || out["field"] != "colour" {
+	if status != 422 || out["code"] != string(api.Invalid) || out["field"] != "colour" {
 		t.Fatalf("%d %v", status, out)
 	}
 }
@@ -200,11 +201,11 @@ func TestADefinitionTheHandlerCannotDecodeFailsNamingTheField(t *testing.T) {
 		Tags map[string]string `json:"tags" query:"tag"`
 	}
 	type pathless struct {
-		Ticket core.Ref `json:"ticket"`
+		Ticket api.Ref `json:"ticket"`
 	}
 	type doubled struct {
-		Ticket core.Ref `json:"ticket" path:"n"`
-		Spec   core.Ref `json:"spec" path:"n"`
+		Ticket api.Ref `json:"ticket" path:"n"`
+		Spec   api.Ref `json:"spec" path:"n"`
 	}
 	for _, c := range []struct {
 		name string

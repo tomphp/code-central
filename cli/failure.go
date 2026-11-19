@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // Failure Reports and giving up (ticket 30).
@@ -26,7 +26,7 @@ func runReportFailure(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	in := core.ReportFailureInput{}
+	in := api.ReportFailureInput{}
 	if *file != "" {
 		text, err := longInput(e, "", *file)
 		if err != nil {
@@ -70,7 +70,7 @@ func runGiveUp(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.GiveUp(ctx, sc.project, core.GiveUpInput{Ticket: ref, ClaimID: *claim, Note: text, Full: *full})
+	v, err := sc.client.GiveUp(ctx, sc.project, api.GiveUpInput{Ticket: ref, ClaimID: *claim, Note: text, Full: *full})
 	if err != nil {
 		return err
 	}
@@ -92,7 +92,7 @@ func runSendBack(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.SendBack(ctx, sc.project, core.SendBackInput{Ticket: ref, Note: text, Full: *full})
+	v, err := sc.client.SendBack(ctx, sc.project, api.SendBackInput{Ticket: ref, Note: text, Full: *full})
 	if err != nil {
 		return err
 	}

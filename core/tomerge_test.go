@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
@@ -14,7 +15,7 @@ import (
 
 func (f fixture) setLanding(t *testing.T, m domain.LandingMethod) {
 	t.Helper()
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: m}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: m}); err != nil {
 		t.Fatalf("set_landing_method %s: %v", m, err)
 	}
 }
@@ -25,33 +26,33 @@ func TestAnAcceptedTicketUnderBranchIsToMergeAtOnce(t *testing.T) {
 	f.setLanding(t, domain.LandingBranch)
 	acceptedAt := t0.Add(2 * time.Hour)
 
-	wantReason(t, f.get(t, "2"), core.ReasonToMerge)
+	wantReason(t, f.get(t, "2"), api.ReasonToMerge)
 	row, ok := longRow(t, f, "acme-2")
-	if !ok || row.Reason != core.ReasonToMerge || !row.Since.Equal(acceptedAt) || row.Branch != "acme-2" {
+	if !ok || row.Reason != api.ReasonToMerge || !row.Since.Equal(acceptedAt) || row.Branch != "acme-2" {
 		t.Fatalf("Needs Me row %+v, want to_merge on branch acme-2 since the accept %s", row, acceptedAt)
 	}
 
 	f.clock.Advance(core.NotLandedAfter + time.Hour)
-	wantReason(t, f.get(t, "2"), core.ReasonToMerge)
+	wantReason(t, f.get(t, "2"), api.ReasonToMerge)
 }
 
 func TestToMergeComesStraightAfterInReview(t *testing.T) {
 	f := newFixture(t)
 	f.accepted(t)
 	f.setLanding(t, domain.LandingBranch)
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Tc", State: domain.Ready}) // acme-3
-	if _, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "3", ToState: domain.InReview}); err != nil {
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Tc", State: domain.Ready}) // acme-3
+	if _, err := f.core.Move(human, "acme", api.MoveInput{Ticket: "3", ToState: domain.InReview}); err != nil {
 		t.Fatalf("move: %v", err)
 	}
 	v, err := f.core.NeedsMe(human)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var reasons []core.NeedsMeReason
+	var reasons []api.NeedsMeReason
 	for _, g := range v.Groups {
 		reasons = append(reasons, g.Reason)
 	}
-	if len(reasons) != 2 || reasons[0] != core.ReasonInReview || reasons[1] != core.ReasonToMerge {
+	if len(reasons) != 2 || reasons[0] != api.ReasonInReview || reasons[1] != api.ReasonToMerge {
 		t.Fatalf("groups %v, want in_review then to_merge", reasons)
 	}
 }
@@ -60,13 +61,13 @@ func TestSwitchingTheLandingMethodSwitchesTheReason(t *testing.T) {
 	f := newFixture(t)
 	f.accepted(t)
 	f.clock.Advance(core.NotLandedAfter + time.Second)
-	wantReason(t, f.get(t, "2"), core.ReasonAcceptedNotLanded)
+	wantReason(t, f.get(t, "2"), api.ReasonAcceptedNotLanded)
 
 	f.setLanding(t, domain.LandingBranch)
-	wantReason(t, f.get(t, "2"), core.ReasonToMerge)
+	wantReason(t, f.get(t, "2"), api.ReasonToMerge)
 
 	f.setLanding(t, domain.LandingMerge)
-	wantReason(t, f.get(t, "2"), core.ReasonAcceptedNotLanded)
+	wantReason(t, f.get(t, "2"), api.ReasonAcceptedNotLanded)
 }
 
 func TestSwitchingTheLandingMethodSendsANoticeForEachAcceptedTicket(t *testing.T) {
@@ -105,5 +106,5 @@ func TestTheWatchNeverRaisesAcceptedNotLandedUnderBranch(t *testing.T) {
 	if got := tick(); len(got) != 0 {
 		t.Fatalf("got %v, want none: a Branch Project's Accepted work is never not landed", got)
 	}
-	wantReason(t, f.get(t, "2"), core.ReasonToMerge)
+	wantReason(t, f.get(t, "2"), api.ReasonToMerge)
 }

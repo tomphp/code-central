@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // Focus Kinds (Spec code-central-550): set_focus_kinds is the human's, so
@@ -22,7 +22,7 @@ func init() {
 			}
 		},
 		bad:  call{http: setFocusKinds(`{"off":["lunch"]}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -76,7 +76,7 @@ func TestSetFocusKindsReplacesTheListWholeAndCollapsesDuplicates(t *testing.T) {
 
 func TestSetFocusKindsRefusesAnUnknownReasonNamingTheField(t *testing.T) {
 	srv := newServer(t)
-	e := httpRejected(t, srv, setFocusKinds(`{"off":["answered","lunch"]}`), core.Invalid)
+	e := httpRejected(t, srv, setFocusKinds(`{"off":["answered","lunch"]}`), api.Invalid)
 	if e.Field != "off" {
 		t.Fatalf("field = %q, want off (%s)", e.Field, e.Message)
 	}
@@ -88,8 +88,8 @@ func TestSetFocusKindsRefusesAnUnknownReasonNamingTheField(t *testing.T) {
 
 func TestSetFocusKindsIsRejectedForAnAgent(t *testing.T) {
 	srv := newServer(t)
-	status, b := httpDoAs(t, srv, core.Agent, setFocusKinds(`{"off":["answered"]}`))
-	errorJSON(t, b, core.ActionNotAllowed)
+	status, b := httpDoAs(t, srv, api.Agent, setFocusKinds(`{"off":["answered"]}`))
+	errorJSON(t, b, api.ActionNotAllowed)
 	if status == 200 {
 		t.Fatalf("status %d, want a refusal", status)
 	}

@@ -6,26 +6,28 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 )
 
 // stageGuide is the Stage Guide from the claim, or, from a service whose
 // claim gives none, the one get_stage_guide serves. stage is the guide's
 // name, one of core.GuideNames.
-func (f *factory) stageGuide(ctx context.Context, fromClaim *core.StageGuideView, stage string) core.StageGuideView {
+func (f *factory) stageGuide(ctx context.Context, fromClaim *api.StageGuideView, stage string) api.StageGuideView {
 	if fromClaim != nil {
 		return *fromClaim
 	}
-	g, err := f.client.GetStageGuide(ctx, f.project, core.StageGuideInput{Stage: stage})
+	g, err := f.client.GetStageGuide(ctx, f.project, api.StageGuideInput{Stage: stage})
 	if err != nil {
 		f.printf("get_stage_guide %s: %v", stage, err)
-		return core.StageGuideView{Stage: stage}
+		return api.StageGuideView{Stage: stage}
 	}
 	return g
 }
 
 // failure is a reason to stop a Claim with a Failure Report.
-type failure struct{ report core.ReportFailureInput }
+type failure struct{ report api.ReportFailureInput }
 
 func (e *failure) Error() string { return e.report.WhatBroke }
 
@@ -33,7 +35,7 @@ func (e *failure) Error() string { return e.report.WhatBroke }
 // whether it did.
 func (f *factory) reportFailure(ctx context.Context, c claim, fl *failure) bool {
 	in := fl.report
-	in.Ticket, in.ClaimID = core.Ref(c.Ticket), c.ClaimID
+	in.Ticket, in.ClaimID = api.Ref(c.Ticket), c.ClaimID
 	if _, err := f.client.ReportFailure(ctx, f.project, in); err != nil {
 		f.claimf(c, "%s: report_failure: %v", c.Ticket, err)
 		return false
@@ -111,7 +113,7 @@ type conflict struct {
 
 // conflictsIn is the conflicts of tk's branch with the base in each
 // Repository of ws that has them (conflictFiles).
-func (f *factory) conflictsIn(ws worktreeSet, stage string, tk core.TicketView) []conflict {
+func (f *factory) conflictsIn(ws worktreeSet, stage string, tk api.TicketView) []conflict {
 	var out []conflict
 	for _, w := range ws {
 		if files := f.conflictFiles(w.r, stage, tk); len(files) > 0 {
@@ -146,7 +148,7 @@ func (f *factory) rebases(ctx context.Context, conflicts []conflict) bool {
 // existing branch in r conflicts in, for an implementation Ticket; none
 // for any other, for a branch not yet cut (but a Spec merge Ticket's,
 // checked at the Spec Branch), or when the merge is clean.
-func (f *factory) conflictFiles(r *repository, stage string, tk core.TicketView) []string {
+func (f *factory) conflictFiles(r *repository, stage string, tk api.TicketView) []string {
 	branch := workBranch(stage, tk.ID)
 	if stage != core.ImplementationStage || branch == "" {
 		return nil
@@ -258,14 +260,14 @@ func repositoriesList(ws worktreeSet) string {
 //
 // For a conflict Claim (conflicts non-empty) the Stage Guide is replaced
 // by a short finish instruction, since the first prompt holds the work.
-func systemPrompt(c claim, stage, wt string, g core.StageGuideView, conflicts []string) string {
+func systemPrompt(c claim, stage, wt string, g api.StageGuideView, conflicts []string) string {
 	return claimIntro(c, stage, wt) + guideOrFinish(g, len(conflicts) > 0)
 }
 
 // severalSystemPrompt is systemPrompt for a Claim with its worktrees ws
 // in several Repositories (ADR 0048): it adds where they are and how to
 // commit in them and finish, before the guide.
-func severalSystemPrompt(c claim, stage string, ws worktreeSet, g core.StageGuideView, conflicted bool) string {
+func severalSystemPrompt(c claim, stage string, ws worktreeSet, g api.StageGuideView, conflicted bool) string {
 	var several string
 	if branch := workBranch(stage, c.Ticket); branch != "" {
 		several = fmt.Sprintf("This Project has several Repositories, and this Ticket has a worktree in each on branch %s, listed at the end of your first prompt; this session starts in the Home Repository's. Commit each Repository's changes in its own worktree, on branch %s, and finish with `repositories`: one entry for each Repository you committed in, with its branch and head commit.", branch, branch)
@@ -298,7 +300,7 @@ func claimIntro(c claim, stage, wt string) string {
 			fmt.Fprintf(&b, "Run /%s alongside /%s, to sharpen the terms as you grill.\n\n", sk.alongside, sk.skill)
 		}
 		what, writer := "the "+stage+" Stage", "A Stage"
-		if !slices.Contains(core.Stages(), core.StageName(stage)) {
+		if !slices.Contains(domain.Stages(), domain.StageName(stage)) {
 			what, writer = "this "+stage+" Ticket", "It"
 		}
 		fmt.Fprintf(&b, "You are running under code-central-factory, in a detached, read-only worktree at the base's tip, for %s. %s Finish the Ticket when it is done. %s writes nothing to the repository: no files, no commits and no branches.", what, claimed, writer)
@@ -312,7 +314,7 @@ func claimIntro(c claim, stage, wt string) string {
 
 // guideOrFinish ends a Claim's system prompt: the Stage Guide g, or for a
 // conflict Claim a short finish instruction in its place.
-func guideOrFinish(g core.StageGuideView, conflicted bool) string {
+func guideOrFinish(g api.StageGuideView, conflicted bool) string {
 	if conflicted {
 		return "\n\n" + conflictFinish
 	}

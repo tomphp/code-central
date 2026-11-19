@@ -1,11 +1,12 @@
 package factory_test
 
 import (
-	"github.com/tomoram/code-central/domain"
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -20,15 +21,15 @@ func resets(h *factorytest.Harness, hours int) int64 {
 
 // planLimits is the Project's Plan Limits, read as the human after the
 // next poll's Heartbeat.
-func planLimits(t *testing.T, h *factorytest.Harness, r *factorytest.Running) *core.PlanLimits {
+func planLimits(t *testing.T, h *factorytest.Harness, r *factorytest.Running) *api.PlanLimits {
 	t.Helper()
 	r.Poll()
-	return wantFactory(t, h, core.FactoryOnline, "turns running").PlanLimits
+	return wantFactory(t, h, api.FactoryOnline, "turns running").PlanLimits
 }
 
 // wantWindow fails the test unless w is used percent and resets at
 // resetsAt, in Unix seconds.
-func wantWindow(t *testing.T, name string, w *core.PlanLimitWindow, percent float64, resetsAt int64) {
+func wantWindow(t *testing.T, name string, w *api.PlanLimitWindow, percent float64, resetsAt int64) {
 	t.Helper()
 	if w == nil {
 		t.Fatalf("%s window missing, want %g%% resetting at %v", name, percent, time.Unix(resetsAt, 0).UTC())
@@ -86,7 +87,7 @@ func TestADrainingHeartbeatCarriesTheRunningTurnsPlanLimits(t *testing.T) {
 	// figures stay only if it carries them too.
 	r.Interrupt()
 	r.Settle()
-	pl := wantFactory(t, h, core.FactoryDraining, "draining").PlanLimits
+	pl := wantFactory(t, h, api.FactoryDraining, "draining").PlanLimits
 	if pl == nil {
 		t.Fatal("no Plan Limits on the draining Heartbeat")
 	}

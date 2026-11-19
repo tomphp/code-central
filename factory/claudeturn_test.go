@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/factory"
 	"github.com/tomoram/code-central/factory/factorytest"
 )
@@ -21,8 +21,8 @@ type turnTest struct {
 	runner *factory.TurnRunner
 
 	mu     sync.Mutex
-	events []core.SessionEvent
-	usage  []core.UsageResponse
+	events []api.SessionEvent
+	usage  []api.UsageResponse
 	lines  []string
 }
 
@@ -51,12 +51,12 @@ func (tt *turnTest) input(id string) factory.TurnInput {
 		Session:   "11111111-2222-4333-8444-555555555555",
 		Prompt:    "Do the work.\n\nTicket: " + id + "\n",
 		UsageKind: "implementation",
-		OnEvent: func(e core.SessionEvent) {
+		OnEvent: func(e api.SessionEvent) {
 			tt.mu.Lock()
 			defer tt.mu.Unlock()
 			tt.events = append(tt.events, e)
 		},
-		OnUsage: func(r core.UsageResponse) {
+		OnUsage: func(r api.UsageResponse) {
 			tt.mu.Lock()
 			defer tt.mu.Unlock()
 			tt.usage = append(tt.usage, r)
@@ -98,7 +98,7 @@ func TestATurnThatSucceedsIsDoneWithItsEventsAndLastText(t *testing.T) {
 	if o.End.LastText != "All done." {
 		t.Errorf("the last text is %q, want %q", o.End.LastText, "All done.")
 	}
-	if !slices.ContainsFunc(tt.events, func(e core.SessionEvent) bool { return e.Kind == "text" && e.Text == "All done." }) {
+	if !slices.ContainsFunc(tt.events, func(e api.SessionEvent) bool { return e.Kind == "text" && e.Text == "All done." }) {
 		t.Errorf("the event sink got %+v, want the Say", tt.events)
 	}
 }

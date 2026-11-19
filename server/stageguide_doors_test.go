@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 )
 
@@ -29,7 +29,7 @@ func init() {
 			http: httpCall{"GET", "/api/p/acme/stage-guides/build", ""},
 			cli:  []string{"build"},
 		},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -86,7 +86,7 @@ func init() {
 			}
 		},
 		bad:  call{http: setSubagentExploration(`{"on":"no"}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -96,9 +96,9 @@ func setSubagentExploration(body string) httpCall {
 
 func TestSetSubagentExplorationIsRejectedForAnAgent(t *testing.T) {
 	srv := newServer(t)
-	status, b := httpDoAs(t, srv, core.Agent, setSubagentExploration(`{"on":false}`))
-	if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
-		t.Fatalf("status %d, want %d; message %q", status, httpapi.Status(core.ActionNotAllowed), e.Message)
+	status, b := httpDoAs(t, srv, api.Agent, setSubagentExploration(`{"on":false}`))
+	if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
+		t.Fatalf("status %d, want %d; message %q", status, httpapi.Status(api.ActionNotAllowed), e.Message)
 	}
 	sg, _ := httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""})["stage_guides"].(map[string]any)
 	if sg["subagent_exploration"] != true {
@@ -157,7 +157,7 @@ func init() {
 			}
 		},
 		bad:  call{http: setModelAssignment(`{"on":"no"}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -167,9 +167,9 @@ func setModelAssignment(body string) httpCall {
 
 func TestSetModelAssignmentIsRejectedForAnAgentAndProjectsReadItOff(t *testing.T) {
 	srv := newServer(t)
-	status, b := httpDoAs(t, srv, core.Agent, setModelAssignment(`{"on":true}`))
-	if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
-		t.Fatalf("status %d, want %d; message %q", status, httpapi.Status(core.ActionNotAllowed), e.Message)
+	status, b := httpDoAs(t, srv, api.Agent, setModelAssignment(`{"on":true}`))
+	if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
+		t.Fatalf("status %d, want %d; message %q", status, httpapi.Status(api.ActionNotAllowed), e.Message)
 	}
 	sg, _ := httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""})["stage_guides"].(map[string]any)
 	if sg["model_assignment"] != false {

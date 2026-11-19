@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/httpapi"
 )
 
@@ -24,7 +24,7 @@ func init() {
 			}
 		},
 		bad:  call{http: setAutoAccept(`{"kinds":{"prototype":true}}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -34,10 +34,10 @@ func setAutoAccept(body string) httpCall {
 
 func TestSetAutoAcceptIsRejectedForAnAgentAndAnIntegrationAndProjectsReadItOff(t *testing.T) {
 	srv := newServer(t)
-	for _, actor := range []core.Actor{core.Agent, core.Integration} {
+	for _, actor := range []api.Actor{api.Agent, api.Integration} {
 		status, b := httpDoAs(t, srv, actor, setAutoAccept(`{"kinds":{"implementation":true}}`))
-		if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
-			t.Fatalf("as %s: status %d, want %d; message %q", actor, status, httpapi.Status(core.ActionNotAllowed), e.Message)
+		if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
+			t.Fatalf("as %s: status %d, want %d; message %q", actor, status, httpapi.Status(api.ActionNotAllowed), e.Message)
 		}
 	}
 	out := httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""})

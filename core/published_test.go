@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
@@ -69,9 +70,9 @@ func TestTheWorkflowsActionsAreTheTableCoreEnforces(t *testing.T) {
 
 func TestTheWorkflowSaysWhatCountsAsNeedsMe(t *testing.T) {
 	w := workflow(t)
-	want := []core.NeedsMeReason{
-		core.ReasonNeedsAnswer, core.ReasonAnswered, core.ReasonSilentClaim, core.ReasonLongClaim, core.ReasonFailed,
-		core.ReasonInReview, core.ReasonCIFailed, core.ReasonCICancelled, core.ReasonBaseDiverged, core.ReasonBaseMissing, core.ReasonRepositoryMissing, core.ReasonPullRequestClosed, core.ReasonToMerge, core.ReasonCIUnavailable, core.ReasonAcceptedNotLanded, core.ReasonBlockedByCancelled, core.ReasonNewIssue, core.ReasonClosedExternally,
+	want := []api.NeedsMeReason{
+		api.ReasonNeedsAnswer, api.ReasonAnswered, api.ReasonSilentClaim, api.ReasonLongClaim, api.ReasonFailed,
+		api.ReasonInReview, api.ReasonCIFailed, api.ReasonCICancelled, api.ReasonBaseDiverged, api.ReasonBaseMissing, api.ReasonRepositoryMissing, api.ReasonPullRequestClosed, api.ReasonToMerge, api.ReasonCIUnavailable, api.ReasonAcceptedNotLanded, api.ReasonBlockedByCancelled, api.ReasonNewIssue, api.ReasonClosedExternally,
 	}
 	if len(w.NeedsMe) != len(want) {
 		t.Fatalf("Needs Me reasons %v, want the eighteen in group order", w.NeedsMe)
@@ -120,7 +121,7 @@ func TestTheInstructionsSayToReadASpecInParts(t *testing.T) {
 	}
 }
 
-func action(t *testing.T, w core.WorkflowView, name string, who core.Who) core.ActionView {
+func action(t *testing.T, w api.WorkflowView, name string, who api.Who) api.ActionView {
 	t.Helper()
 	for _, a := range w.Actions {
 		if a.Name == name && a.Who == who {
@@ -128,10 +129,10 @@ func action(t *testing.T, w core.WorkflowView, name string, who core.Who) core.A
 		}
 	}
 	t.Fatalf("no action %s taken by %s in %+v", name, who, w.Actions)
-	return core.ActionView{}
+	return api.ActionView{}
 }
 
-func workflow(t *testing.T) core.WorkflowView {
+func workflow(t *testing.T) api.WorkflowView {
 	t.Helper()
 	w, err := newFixture(t).core.GetWorkflow(ctx)
 	if err != nil {

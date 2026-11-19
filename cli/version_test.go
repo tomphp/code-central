@@ -9,9 +9,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // runVersion runs one command as a CLI of the given version.
@@ -51,7 +51,7 @@ func TestTheServiceSendsItsVersionInAResponseHeader(t *testing.T) {
 func TestTheCLISendsItsVersionOnEveryRequest(t *testing.T) {
 	t.Parallel()
 	srv := codecentraltest.NewServer(t)
-	if _, err := srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"}); err != nil {
+	if _, err := srv.Client.CreateProject(context.Background(), api.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)
 	}
 	var mu sync.Mutex
@@ -95,12 +95,12 @@ func TestTheCLIWarnsWithoutFailingWhenVersionsDiffer(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := codecentraltest.NewServer(t, codecentraltest.WithVersion(tc.service))
-			if _, err := srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"}); err != nil {
+			if _, err := srv.Client.CreateProject(context.Background(), api.CreateProjectInput{Key: "acme"}); err != nil {
 				t.Fatal(err)
 			}
 			env := map[string]string{"CODE_CENTRAL_URL": srv.URL, "CODE_CENTRAL_PROJECT": "acme"}
 			r := runVersion(t, tc.cli, env, "create-spec", "--title", "Login")
-			spec := decode[core.SpecView](t, r)
+			spec := decode[api.SpecView](t, r)
 			if spec.ID != "acme-1" {
 				t.Fatalf("spec %+v", spec)
 			}
@@ -118,7 +118,7 @@ func TestTheCLIWarnsWithoutFailingWhenVersionsDiffer(t *testing.T) {
 func TestTheCLIIsQuietWhenVersionsMatch(t *testing.T) {
 	t.Parallel()
 	srv := codecentraltest.NewServer(t, codecentraltest.WithVersion("v1.2.0"))
-	if _, err := srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"}); err != nil {
+	if _, err := srv.Client.CreateProject(context.Background(), api.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)
 	}
 	r := runVersion(t, "v1.2.0", map[string]string{"CODE_CENTRAL_URL": srv.URL, "CODE_CENTRAL_PROJECT": "acme"}, "get-ticket", "1")

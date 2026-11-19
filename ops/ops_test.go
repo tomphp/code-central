@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/internal/fieldwalk"
 	"github.com/tomoram/code-central/ops"
 )
@@ -69,7 +69,7 @@ func TestEveryDefinitionIsListedWithItsOp(t *testing.T) {
 
 func TestQueryParamFollowsTheTags(t *testing.T) {
 	type in struct {
-		Ticket core.Ref          `json:"ticket" path:"n"`
+		Ticket api.Ref           `json:"ticket" path:"n"`
 		Title  string            `json:"title,omitempty"`
 		Labels []string          `json:"labels,omitempty" query:"label"`
 		Parts  []string          `json:"-" query:"part"`

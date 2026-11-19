@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -12,7 +12,7 @@ func TestAnsweringPartOfARoundMovesNothingAndAnswersStayEditable(t *testing.T) {
 	f := newFixture(t)
 	f.asking(t, qDB, qName)
 	f.clock.Set(t0.Add(2 * time.Hour))
-	v, err := record(f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "Postgres", Full: true}))
+	v, err := record(f.core.Answer(human, "acme", api.AnswerInput{Ticket: "2", Question: 1, Text: "Postgres", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,12 +20,12 @@ func TestAnsweringPartOfARoundMovesNothingAndAnswersStayEditable(t *testing.T) {
 		t.Fatalf("answering part of a Round moved the Ticket to %s", v.State)
 	}
 	f.clock.Set(t0.Add(3 * time.Hour))
-	v, err = record(f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite after all", Full: true}))
+	v, err = record(f.core.Answer(human, "acme", api.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite after all", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	closed := t0.Add(3 * time.Hour)
-	want := core.QuestionView{Number: 1, Title: qDB.Title, Body: qDB.Body, Recommended: "SQLite", Status: domain.QuestionAnswered, Answer: "SQLite after all", Closed: &closed}
+	want := api.QuestionView{Number: 1, Title: qDB.Title, Body: qDB.Body, Recommended: "SQLite", Status: domain.QuestionAnswered, Answer: "SQLite after all", Closed: &closed}
 	if q := v.Rounds[0].Questions[0]; !sameQuestion(q, want) {
 		t.Fatalf("question %+v, want %+v", q, want)
 	}
@@ -35,10 +35,10 @@ func TestTheLastAnswerMovesToAnsweredKeepingTheClaim(t *testing.T) {
 	f := newFixture(t)
 	f.asking(t, qDB, qName)
 	f.clock.Set(t0.Add(2 * time.Hour))
-	if _, err := f.core.DismissQuestion(human, "acme", core.DismissQuestionInput{Ticket: "2", Question: 2}); err != nil {
+	if _, err := f.core.DismissQuestion(human, "acme", api.DismissQuestionInput{Ticket: "2", Question: 2}); err != nil {
 		t.Fatal(err)
 	}
-	v, err := record(f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite", Full: true}))
+	v, err := record(f.core.Answer(human, "acme", api.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestTheLastAnswerMovesToAnsweredKeepingTheClaim(t *testing.T) {
 	if v.Claims[0].Ended != nil {
 		t.Fatalf("Answered keeps the Claim: %+v", v.Claims[0])
 	}
-	wantMove := core.MoveView{From: domain.NeedsAnswer, To: domain.Answered, Actor: "human", Time: t0.Add(2 * time.Hour), Claim: 1}
+	wantMove := api.MoveView{From: domain.NeedsAnswer, To: domain.Answered, Actor: "human", Time: t0.Add(2 * time.Hour), Claim: 1}
 	if m := v.Moves[len(v.Moves)-1]; m != wantMove {
 		t.Fatalf("move %+v, want %+v", m, wantMove)
 	}
@@ -56,16 +56,16 @@ func TestTheLastAnswerMovesToAnsweredKeepingTheClaim(t *testing.T) {
 		t.Fatalf("dismissed question %+v", q)
 	}
 
-	_, err = f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "Postgres"})
-	wantCode(t, err, core.ActionNotAllowed, "")
-	_, err = f.core.DismissQuestion(human, "acme", core.DismissQuestionInput{Ticket: "2", Question: 1})
-	wantCode(t, err, core.ActionNotAllowed, "")
+	_, err = f.core.Answer(human, "acme", api.AnswerInput{Ticket: "2", Question: 1, Text: "Postgres"})
+	wantCode(t, err, api.ActionNotAllowed, "")
+	_, err = f.core.DismissQuestion(human, "acme", api.DismissQuestionInput{Ticket: "2", Question: 1})
+	wantCode(t, err, api.ActionNotAllowed, "")
 }
 
 func TestDismissingTheOnlyOpenQuestionMovesToAnswered(t *testing.T) {
 	f := newFixture(t)
 	f.asking(t, qName)
-	v, err := record(f.core.DismissQuestion(human, "acme", core.DismissQuestionInput{Ticket: "2", Question: 1, Full: true}))
+	v, err := record(f.core.DismissQuestion(human, "acme", api.DismissQuestionInput{Ticket: "2", Question: 1, Full: true}))
 	if err != nil || v.State != domain.Answered {
 		t.Fatalf("got %s, %v", v.State, err)
 	}
@@ -73,12 +73,12 @@ func TestDismissingTheOnlyOpenQuestionMovesToAnswered(t *testing.T) {
 
 func TestAcceptRecommendedAnswersEveryOpenQuestionWithItsRecommendation(t *testing.T) {
 	f := newFixture(t)
-	qCache := core.QuestionInput{Title: "Cache?", Body: "Add a cache?", Recommended: "No"}
+	qCache := api.QuestionInput{Title: "Cache?", Body: "Add a cache?", Recommended: "No"}
 	f.asking(t, qDB, qName, qCache)
-	if _, err := f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 3, Text: "Yes"}); err != nil {
+	if _, err := f.core.Answer(human, "acme", api.AnswerInput{Ticket: "2", Question: 3, Text: "Yes"}); err != nil {
 		t.Fatal(err)
 	}
-	v, err := record(f.core.AcceptRecommended(human, "acme", core.AcceptRecommendedInput{Ticket: "2", Round: 1, Full: true}))
+	v, err := record(f.core.AcceptRecommended(human, "acme", api.AcceptRecommendedInput{Ticket: "2", Round: 1, Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,26 +92,26 @@ func TestAcceptRecommendedAnswersEveryOpenQuestionWithItsRecommendation(t *testi
 
 	f2 := newFixture(t)
 	f2.asking(t, qDB)
-	if v, err := record(f2.core.AcceptRecommended(human, "acme", core.AcceptRecommendedInput{Ticket: "2", Round: 1, Full: true})); err != nil || v.State != domain.Answered {
+	if v, err := record(f2.core.AcceptRecommended(human, "acme", api.AcceptRecommendedInput{Ticket: "2", Round: 1, Full: true})); err != nil || v.State != domain.Answered {
 		t.Fatalf("got %s, %v", v.State, err)
 	}
-	_, err = f2.core.AcceptRecommended(human, "acme", core.AcceptRecommendedInput{Ticket: "2", Round: 1})
-	wantCode(t, err, core.ActionNotAllowed, "")
+	_, err = f2.core.AcceptRecommended(human, "acme", api.AcceptRecommendedInput{Ticket: "2", Round: 1})
+	wantCode(t, err, api.ActionNotAllowed, "")
 }
 
 func TestRoundActionRejections(t *testing.T) {
 	f := newFixture(t)
 	f.asking(t, qDB)
-	_, err := f.core.Answer(ctx, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite"})
-	wantCode(t, err, core.ActionNotAllowed, "")
-	_, err = f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: " "})
-	wantCode(t, err, core.Invalid, "text")
-	_, err = f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 9, Text: "x"})
-	wantCode(t, err, core.NotFound, "")
-	_, err = f.core.DismissQuestion(ctx, "acme", core.DismissQuestionInput{Ticket: "2", Question: 1})
-	wantCode(t, err, core.ActionNotAllowed, "")
-	_, err = f.core.AcceptRecommended(human, "acme", core.AcceptRecommendedInput{Ticket: "2", Round: 2})
-	wantCode(t, err, core.NotFound, "")
+	_, err := f.core.Answer(ctx, "acme", api.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite"})
+	wantCode(t, err, api.ActionNotAllowed, "")
+	_, err = f.core.Answer(human, "acme", api.AnswerInput{Ticket: "2", Question: 1, Text: " "})
+	wantCode(t, err, api.Invalid, "text")
+	_, err = f.core.Answer(human, "acme", api.AnswerInput{Ticket: "2", Question: 9, Text: "x"})
+	wantCode(t, err, api.NotFound, "")
+	_, err = f.core.DismissQuestion(ctx, "acme", api.DismissQuestionInput{Ticket: "2", Question: 1})
+	wantCode(t, err, api.ActionNotAllowed, "")
+	_, err = f.core.AcceptRecommended(human, "acme", api.AcceptRecommendedInput{Ticket: "2", Round: 2})
+	wantCode(t, err, api.NotFound, "")
 	if v := f.get(t, "2"); v.State != domain.NeedsAnswer || v.Rounds[0].Questions[0].Status != domain.QuestionOpen {
 		t.Fatalf("a rejected action changed the Ticket: %+v", v)
 	}
@@ -120,29 +120,29 @@ func TestRoundActionRejections(t *testing.T) {
 func TestPickUpAnswersReturnsTheRoundAndCommentsSinceIt(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
-	f.claim(t, core.ClaimInput{})
-	if _, err := f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: "Before the Round."}); err != nil {
+	f.claim(t, api.ClaimInput{})
+	if _, err := f.core.Comment(ctx, "acme", api.CommentInput{Ticket: "2", Body: "Before the Round."}); err != nil {
 		t.Fatal(err)
 	}
 	f.clock.Set(t0.Add(time.Hour))
-	if _, err := f.core.PostRound(ctx, "acme", core.PostRoundInput{Ticket: "2", ClaimID: "claim-1", Questions: []core.QuestionInput{qDB, qName}}); err != nil {
+	if _, err := f.core.PostRound(ctx, "acme", api.PostRoundInput{Ticket: "2", ClaimID: "claim-1", Questions: []api.QuestionInput{qDB, qName}}); err != nil {
 		t.Fatal(err)
 	}
 	f.clock.Set(t0.Add(2 * time.Hour))
-	if _, err := f.core.Comment(human, "acme", core.CommentInput{Ticket: "2", Body: "Keep it small."}); err != nil {
+	if _, err := f.core.Comment(human, "acme", api.CommentInput{Ticket: "2", Body: "Keep it small."}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite"}); err != nil {
+	if _, err := f.core.Answer(human, "acme", api.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.core.DismissQuestion(human, "acme", core.DismissQuestionInput{Ticket: "2", Question: 2}); err != nil {
+	if _, err := f.core.DismissQuestion(human, "acme", api.DismissQuestionInput{Ticket: "2", Question: 2}); err != nil {
 		t.Fatal(err)
 	}
 
-	_, err := f.core.PickUpAnswers(ctx, "acme", core.PickUpAnswersInput{Ticket: "2", ClaimID: "claim-9"})
-	wantCode(t, err, core.StaleClaim, "")
+	_, err := f.core.PickUpAnswers(ctx, "acme", api.PickUpAnswersInput{Ticket: "2", ClaimID: "claim-9"})
+	wantCode(t, err, api.StaleClaim, "")
 	f.clock.Set(t0.Add(3 * time.Hour))
-	res, err := f.core.PickUpAnswers(ctx, "acme", core.PickUpAnswersInput{Ticket: "2", ClaimID: "claim-1"})
+	res, err := f.core.PickUpAnswers(ctx, "acme", api.PickUpAnswersInput{Ticket: "2", ClaimID: "claim-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,17 +153,17 @@ func TestPickUpAnswersReturnsTheRoundAndCommentsSinceIt(t *testing.T) {
 		t.Fatalf("comments %+v, want only the one since the Round", res.Comments)
 	}
 	v := f.get(t, "2")
-	wantMove := core.MoveView{From: domain.Answered, To: domain.InProgress, Actor: "agent", Time: t0.Add(3 * time.Hour), Claim: 1}
+	wantMove := api.MoveView{From: domain.Answered, To: domain.InProgress, Actor: "agent", Time: t0.Add(3 * time.Hour), Claim: 1}
 	if v.State != domain.InProgress || v.Moves[len(v.Moves)-1] != wantMove || v.Claims[0].Ended != nil {
 		t.Fatalf("state %s, moves %+v, claim %+v", v.State, v.Moves, v.Claims[0])
 	}
-	_, err = f.core.PickUpAnswers(ctx, "acme", core.PickUpAnswersInput{Ticket: "2", ClaimID: "claim-1"})
-	wantCode(t, err, core.ActionNotAllowed, "")
+	_, err = f.core.PickUpAnswers(ctx, "acme", api.PickUpAnswersInput{Ticket: "2", ClaimID: "claim-1"})
+	wantCode(t, err, api.ActionNotAllowed, "")
 }
 
 func TestPickUpAnswersWaitsForTheLastAnswer(t *testing.T) {
 	f := newFixture(t)
 	f.asking(t, qDB)
-	_, err := f.core.PickUpAnswers(ctx, "acme", core.PickUpAnswersInput{Ticket: "2", ClaimID: "claim-1"})
-	wantCode(t, err, core.ActionNotAllowed, "")
+	_, err := f.core.PickUpAnswers(ctx, "acme", api.PickUpAnswersInput{Ticket: "2", ClaimID: "claim-1"})
+	wantCode(t, err, api.ActionNotAllowed, "")
 }

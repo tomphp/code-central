@@ -3,7 +3,7 @@ package factory
 import (
 	"context"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -16,7 +16,7 @@ import (
 // looked for, so never adopted.
 func (f *factory) restart(ctx context.Context) {
 	for _, c := range f.heldClaims() {
-		tk, err := f.client.GetTicket(ctx, f.project, core.Ref(c.Ticket))
+		tk, err := f.client.GetTicket(ctx, f.project, api.Ref(c.Ticket))
 		if err != nil {
 			if ctx.Err() == nil {
 				f.claimf(c, "%s: get_ticket: %v: keeping its saved Claim", c.Ticket, err)

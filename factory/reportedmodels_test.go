@@ -6,12 +6,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
 // reported is the Project's Reported Models, read as the human.
-func reported(t *testing.T, h *factorytest.Harness) core.ReportedModelsView {
+func reported(t *testing.T, h *factorytest.Harness) api.ReportedModelsView {
 	t.Helper()
 	p, err := h.Human().GetProject(context.Background(), h.Project)
 	if err != nil {
@@ -22,7 +22,7 @@ func reported(t *testing.T, h *factorytest.Harness) core.ReportedModelsView {
 
 // wantReport fails the test unless the Factory has made its report_models
 // (a test settles the Factory first), and returns it.
-func wantReport(t *testing.T, h *factorytest.Harness) core.ReportedModelsView {
+func wantReport(t *testing.T, h *factorytest.Harness) api.ReportedModelsView {
 	t.Helper()
 	got := reported(t, h)
 	if got.Reported == nil {
@@ -32,7 +32,7 @@ func wantReport(t *testing.T, h *factorytest.Harness) core.ReportedModelsView {
 }
 
 // wantAccepts checks the Reported Models hold levels, aliases and flags.
-func wantAccepts(t *testing.T, got core.ReportedModelsView, levels, aliases []string, modelFlag, effortFlag string) {
+func wantAccepts(t *testing.T, got api.ReportedModelsView, levels, aliases []string, modelFlag, effortFlag string) {
 	t.Helper()
 	if !slices.Equal(got.EffortLevels, levels) || !slices.Equal(got.Aliases, aliases) || got.ModelFlag != modelFlag || got.EffortFlag != effortFlag {
 		t.Errorf("reported %+v, want levels %v, aliases %v, --model %q, --effort %q", got, levels, aliases, modelFlag, effortFlag)
@@ -92,7 +92,7 @@ func TestHelpTheFactoryCantReadWarnsAndReportsNoLevelsOrAliases(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	// What an earlier Factory found is kept.
-	if _, err := h.Server.Client.ReportModels(context.Background(), h.Project, core.ReportModelsInput{EffortLevels: []string{"low", "high"}, Aliases: []string{"opus"}}); err != nil {
+	if _, err := h.Server.Client.ReportModels(context.Background(), h.Project, api.ReportModelsInput{EffortLevels: []string{"low", "high"}, Aliases: []string{"opus"}}); err != nil {
 		t.Fatal(err)
 	}
 	h.ClaudeHelp("Usage: claude [options] [prompt]\n\nOptions:\n  -p, --print   Print response and exit\n")

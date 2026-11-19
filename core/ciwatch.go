@@ -5,6 +5,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -18,8 +19,8 @@ import (
 // by Ticket, then run, once per run: Tickets sharing a pushed commit
 // share its request, so the CI Watcher asks for each run once
 // (code-central-432). A Cancelled Ticket's are left out.
-func ciReruns(ci *ciState, name string) []CIRerun {
-	out := []CIRerun{}
+func ciReruns(ci *ciState, name string) []api.CIRerun {
+	out := []api.CIRerun{}
 	key := ci.p.Key
 	for _, t := range ci.r.FindTickets(key, store.TicketFilter{HasPushes: true}) {
 		if t.State == domain.Cancelled {
@@ -31,10 +32,10 @@ func ciReruns(ci *ciState, name string) []CIRerun {
 		}
 		commit := rc.latest.Commit
 		for _, a := range rc.reruns {
-			if slices.ContainsFunc(out, func(x CIRerun) bool { return x.Commit == commit && x.ID == a.ID && x.Attempt == a.Attempt }) {
+			if slices.ContainsFunc(out, func(x api.CIRerun) bool { return x.Commit == commit && x.ID == a.ID && x.Attempt == a.Attempt }) {
 				continue
 			}
-			out = append(out, CIRerun{Ticket: DisplayID(key, t.Number), Commit: commit, ID: a.ID, Attempt: a.Attempt, Requested: ci.response(rc.record, commit).Rerun})
+			out = append(out, api.CIRerun{Ticket: DisplayID(key, t.Number), Commit: commit, ID: a.ID, Attempt: a.Attempt, Requested: ci.response(rc.record, commit).Rerun})
 		}
 	}
 	return out
@@ -42,21 +43,21 @@ func ciReruns(ci *ciState, name string) []CIRerun {
 
 // GetCIWatch is the CI Watcher's get_ci_watch. With CI Tracking off,
 // nothing waits and nothing is re-run.
-func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
-	var out CIWatch
+func (c *Core) GetCIWatch(_ context.Context, key string) (api.CIWatch, error) {
+	var out api.CIWatch
 	err := c.store.View(func(r store.Reader) error {
 		p, ok := r.Project(key)
 		if !ok {
 			return unknownProject(key)
 		}
-		v := ciView(p, WatcherView{})
+		v := ciView(p, api.WatcherView{})
 		home, _ := ciEntryOf(p, key)
-		out = CIWatch{Project: key, Tracking: v.Tracking, NotWatched: home.NotWatched, Provider: providerOrDefault(home.Provider), Repository: home.Repository, ProjectURL: home.ProjectURL, PATEnv: v.PATEnv,
-			IgnoredWorkflows: v.IgnoredWorkflows, Rules: []CIWatchRule{}, GHPath: r.Options().GHPath,
-			Waiting: []CIWaitingCommit{}, Reruns: []CIRerun{}, Repositories: []CIWatchRepository{}, Pushed: []CITicketCommit{}, Landed: []CITicketCommit{}}
+		out = api.CIWatch{Project: key, Tracking: v.Tracking, NotWatched: home.NotWatched, Provider: providerOrDefault(home.Provider), Repository: home.Repository, ProjectURL: home.ProjectURL, PATEnv: v.PATEnv,
+			IgnoredWorkflows: v.IgnoredWorkflows, Rules: []api.CIWatchRule{}, GHPath: r.Options().GHPath,
+			Waiting: []api.CIWaitingCommit{}, Reruns: []api.CIRerun{}, Repositories: []api.CIWatchRepository{}, Pushed: []api.CITicketCommit{}, Landed: []api.CITicketCommit{}}
 		last := ciRulesLastRuns(r.CIRuns(key))
 		for i, rule := range v.Rules {
-			w := CIWatchRule{CIRuleView: rule}
+			w := api.CIWatchRule{CIRuleView: rule}
 			if at, ok := last[p.CI.Rules[i].Spec]; ok {
 				w.LastRun = &at
 			}
@@ -73,8 +74,8 @@ func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
 			if t.name == key {
 				continue
 			}
-			w := CIWatchRepository{Name: t.name, Provider: t.provider, Repository: t.repository, ProjectURL: t.projectURL,
-				Waiting: []CIWaitingCommit{}, Reruns: []CIRerun{}}
+			w := api.CIWatchRepository{Name: t.name, Provider: t.provider, Repository: t.repository, ProjectURL: t.projectURL,
+				Waiting: []api.CIWaitingCommit{}, Reruns: []api.CIRerun{}}
 			if runs {
 				w.Waiting, w.Reruns = ciWaiting(ci, t.name), ciReruns(ci, t.name)
 			}
@@ -99,10 +100,10 @@ func ciRulesLastRuns(runs []domain.CIRun) map[int]time.Time {
 
 // ciTicketCommits is every commit pushed for a Ticket, and every commit a
 // Ticket landed at, each in its Repository, in Ticket order.
-func ciTicketCommits(r store.Reader, key string) (pushed, landed []CITicketCommit) {
-	pushed, landed = []CITicketCommit{}, []CITicketCommit{}
+func ciTicketCommits(r store.Reader, key string) (pushed, landed []api.CITicketCommit) {
+	pushed, landed = []api.CITicketCommit{}, []api.CITicketCommit{}
 	for _, tc := range r.TicketCommits(key) {
-		row := CITicketCommit{Ticket: DisplayID(key, tc.Ticket), Spec: DisplayID(key, tc.Spec), Repository: tc.Repository, Commit: tc.Commit}
+		row := api.CITicketCommit{Ticket: DisplayID(key, tc.Ticket), Spec: DisplayID(key, tc.Spec), Repository: tc.Repository, Commit: tc.Commit}
 		if tc.Kind == store.CommitLanded {
 			landed = append(landed, row)
 		} else {
@@ -114,6 +115,6 @@ func ciTicketCommits(r store.Reader, key string) (pushed, landed []CITicketCommi
 
 // ReportCIWatcherStatus is report_ci_watcher_status: the CI Watcher
 // reports its status on every poll.
-func (c *Core) ReportCIWatcherStatus(_ context.Context, key string, in ReportWatcherStatusInput) (Written[ProjectView], error) {
-	return c.reportWatcherStatus(WatcherCI, key, in)
+func (c *Core) ReportCIWatcherStatus(_ context.Context, key string, in api.ReportWatcherStatusInput) (api.Written[api.ProjectView], error) {
+	return c.reportWatcherStatus(api.WatcherCI, key, in)
 }

@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/internal/fieldwalk"
 	"github.com/tomoram/code-central/ops"
 )
@@ -58,7 +58,7 @@ func derive(op ops.Operation) (tool, error) {
 	return tool{description: op.Description(), schema: s, op: op}, nil
 }
 
-var refType = reflect.TypeFor[core.Ref]()
+var refType = reflect.TypeFor[api.Ref]()
 
 // schema is the input schema of struct type t: an object with its JSON
 // fields as properties and additionalProperties false. A field's

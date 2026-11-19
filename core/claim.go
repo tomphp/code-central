@@ -7,80 +7,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
-// ClaimInput is claim's input: narrow to a Spec or name a Ticket, not both.
-type ClaimInput struct {
-	Spec      Ref    `json:"spec,omitempty" desc:"Claim the next Ticket in this Spec."`
-	Ticket    Ref    `json:"ticket,omitempty" desc:"Claim this Ticket."`
-	SessionID string `json:"session_id,omitempty" desc:"Your session ID, shown to the human for resuming you."`
-	// WorkingDir and ResumeCommand are free-form and never parsed; nil
-	// leaves them unset.
-	WorkingDir    *string `json:"working_dir,omitempty" desc:"The directory you work in, where the human runs the resume command. A hook usually fills it in for you."`
-	ResumeCommand *string `json:"resume_command,omitempty" desc:"The command that resumes your session from working_dir, shown to the human as is. Without one the human is shown claude --resume <session_id>."`
-}
-
-// ClaimResult is claim's result: the Claim ID with the full Ticket view
-// and the Stage Guide for its Stage (implementation when it has none),
-// or {ticket: null} when nothing can be claimed.
-type ClaimResult struct {
-	ClaimID    string          `json:"claim_id,omitempty"`
-	Ticket     *TicketView     `json:"ticket"`
-	StageGuide *StageGuideView `json:"stage_guide,omitempty"`
-	// ModelChoice is the model and effort the Claim's first turn runs
-	// with, as far as Code Central sets them.
-	ModelChoice *ModelChoice `json:"model_choice,omitempty"`
-}
-
-// FinishInput is finish's input.
-type FinishInput struct {
-	Ticket  Ref    `json:"ticket" path:"n" desc:"The Ticket." required:"true"`
-	ClaimID string `json:"claim_id" desc:"The Claim ID claim returned." required:"true"`
-	Summary string `json:"summary" desc:"What was done, where, and what the reviewer should check, in Markdown." required:"true"`
-	// Branch and Commit name the work's branch and its head commit in the
-	// Home Repository. Both are optional and free-form; one left out keeps
-	// the stored value. A Ticket with a branch is Accepted, not Done, when
-	// the human accepts it.
-	Branch string `json:"branch,omitempty" desc:"The branch the work is on, if any. Accepting work on a branch moves it to Accepted, to land once merged."`
-	Commit string `json:"commit,omitempty" desc:"The branch's head commit, if any."`
-	// Repositories are the branch and head commit in each other
-	// Repository the work changed (Spec code-central-848); the Home
-	// Repository may be given here instead of in Branch and Commit, not
-	// in both. The finish replaces the Ticket's Changed Repositories.
-	Repositories []RepositoryWork `json:"repositories,omitempty" desc:"With several Repositories: each other Repository you committed in. branch and commit stay the Home Repository's."`
-	// Recommendation is the Spec recommendation, implement or split:
-	// required on a spec Stage and refused on any other Ticket. It
-	// replaces the one an earlier finish gave.
-	Recommendation domain.Recommendation `json:"recommendation,omitempty" desc:"Required on a spec Stage only: implement or split." enum:"implement,split"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
-}
-
-// FinishResult is finish's result: the Acknowledgement and the next step,
-// or with full the Ticket and the next step.
-type FinishResult struct {
-	*Acknowledgement
-	Ticket   *TicketView `json:"ticket,omitempty"`
-	NextStep string      `json:"next_step"`
-}
-
-// stopResult is the StopResult of action name, which ends the agent's
-// work, from the write's result v.
-func stopResult(v Written[TicketView], name string) StopResult {
+// stopResult is the result of action name, which ends the agent's work:
+// the Acknowledgement, or with full the Ticket, and the next step, "stop
+// working this Ticket", from the write's result v.
+func stopResult(v api.Written[api.TicketView], name string) api.FinishResult {
 	if v.Record != nil {
-		return StopResult{Ticket: v.Record, NextStep: nextStep(name)}
+		return api.FinishResult{Ticket: v.Record, NextStep: nextStep(name)}
 	}
-	return StopResult{Acknowledgement: &v.Acknowledgement, NextStep: nextStep(name)}
-}
-
-// RejectInput is reject's input.
-type RejectInput struct {
-	Ticket  Ref    `json:"ticket" path:"n"`
-	Comment string `json:"comment"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
+	return api.FinishResult{Acknowledgement: &v.Acknowledgement, NextStep: nextStep(name)}
 }
 
 // stopWorking is the next step after an action that ends the agent's work.
@@ -91,11 +30,11 @@ const stopWorking = "stop working this Ticket"
 // Claim, in one atomic step under the store's write lock. A named Ticket
 // whose live Claim has the caller's non-empty session ID returns that
 // Claim instead, writing nothing.
-func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResult, error) {
+func (c *Core) Claim(ctx context.Context, key string, in api.ClaimInput) (api.ClaimResult, error) {
 	if in.Spec != "" && in.Ticket != "" {
-		return ClaimResult{}, invalid("ticket", "pass spec or ticket, not both")
+		return api.ClaimResult{}, invalid("ticket", "pass spec or ticket, not both")
 	}
-	var res ClaimResult
+	var res api.ClaimResult
 	// Made once, and kept by a retried Update, so the ID committed is the
 	// one returned; claiming again takes none.
 	var id string
@@ -111,7 +50,7 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 		t, _ := w.Ticket(key, target.Number, whole...)
 		if live, ok := liveClaim(t); ok && in.Ticket != "" {
 			if in.SessionID == "" || live.SessionID != in.SessionID {
-				return heldError(key, t, live, in.SessionID, ActorOf(ctx))
+				return heldError(key, t, live, in.SessionID, api.ActorOf(ctx))
 			}
 			// The holding session claims again: its Claim, nothing written
 			// (ADR 0010).
@@ -119,7 +58,7 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 			return nil
 		}
 		if t.State == domain.Ready && rule.blocked(t) {
-			return rule.blockedError(t, ActorOf(ctx))
+			return rule.blockedError(t, api.ActorOf(ctx))
 		}
 		now := c.now()
 		cl := domain.Claim{Number: len(t.Claims) + 1, SessionID: in.SessionID, Started: now}
@@ -142,28 +81,28 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 }
 
 // claimResult is claim's result for Claim id on t.
-func (c *Core) claimResult(r store.Reader, key string, t domain.Ticket, id string) ClaimResult {
+func (c *Core) claimResult(r store.Reader, key string, t domain.Ticket, id string) api.ClaimResult {
 	v := defaultView(c.ticketView(r, key, t))
 	p, _ := r.Project(key)
 	g := stageGuide(GuideName(t.Labels), p)
 	mc := modelChoice(p, t)
-	return ClaimResult{ClaimID: id, Ticket: &v, StageGuide: &g, ModelChoice: &mc}
+	return api.ClaimResult{ClaimID: id, Ticket: &v, StageGuide: &g, ModelChoice: &mc}
 }
 
 // heldError is claim's action_not_allowed on a named Ticket whose live
 // Claim isn't the caller's, saying who holds it and what to do.
-func heldError(key string, t domain.Ticket, live *domain.Claim, sessionID string, actor Actor) error {
+func heldError(key string, t domain.Ticket, live *domain.Claim, sessionID string, actor api.Actor) error {
 	msg := fmt.Sprintf("%s is held by Claim %d of another session; claim another Ticket, or ask the human to release it",
 		DisplayID(key, t.Number), live.Number)
 	if sessionID == "" {
 		msg += "; if this session holds it, call claim again with your session_id"
 	}
-	return &Error{Code: ActionNotAllowed, Message: msg, AllowedActions: allowedActions(t.State, actor)}
+	return &api.Error{Code: api.ActionNotAllowed, Message: msg, AllowedActions: allowedActions(t.State, actor)}
 }
 
 // claimTarget is the named Ticket, or the first claimable one (in the
 // Spec, if given) in claim order. found is false when nothing is claimable.
-func claimTarget(rule blockRule, in ClaimInput) (t domain.Ticket, found bool, err error) {
+func claimTarget(rule blockRule, in api.ClaimInput) (t domain.Ticket, found bool, err error) {
 	r, key := rule.r, rule.p.Key
 	if in.Ticket != "" {
 		t, err := resolveTicket(r, key, "claim", "ticket", in.Ticket)
@@ -200,15 +139,15 @@ func claimTarget(rule blockRule, in ClaimInput) (t domain.Ticket, found bool, er
 // write, an auto-accept eligible Ticket is accepted on the human's
 // behalf (ADR 0037), unless the finish dropped one of its Changed
 // Repositories; the result is the same either way.
-func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishResult, error) {
+func (c *Core) Finish(ctx context.Context, key string, in api.FinishInput) (api.FinishResult, error) {
 	if strings.TrimSpace(in.Summary) == "" {
-		return FinishResult{}, invalid("summary", "finish needs a summary: what was done, where (branch or commit) and what the reviewer should check")
+		return api.FinishResult{}, invalid("summary", "finish needs a summary: what was done, where (branch or commit) and what the reviewer should check")
 	}
 	rec := domain.Recommendation(strings.TrimSpace(string(in.Recommendation)))
 	if rec != "" && !rec.Valid() {
-		return FinishResult{}, invalid("recommendation", "recommendation %q is neither %q nor %q", in.Recommendation, domain.RecommendImplement, domain.RecommendSplit)
+		return api.FinishResult{}, invalid("recommendation", "recommendation %q is neither %q nor %q", in.Recommendation, domain.RecommendImplement, domain.RecommendSplit)
 	}
-	var v Written[TicketView]
+	var v api.Written[api.TicketView]
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -218,7 +157,7 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 			return err
 		}
 		// With full the before view isn't compared, so it isn't built.
-		var before TicketView
+		var before api.TicketView
 		if !in.Full {
 			before = c.ticketView(w, key, t)
 		}
@@ -252,7 +191,7 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 		return c.autoAccept(ctx, w, key, t, now)
 	})
 	if err != nil {
-		return FinishResult{}, err
+		return api.FinishResult{}, err
 	}
 	return stopResult(v, "finish"), nil
 }
@@ -260,7 +199,7 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 // Accept is the human's accept(ticket): In Review to Accepted when the
 // work's finish named a branch, so it waits to land (ADR 0006), and to
 // Done otherwise.
-func (c *Core) Accept(ctx context.Context, key string, in TicketInput) (Written[TicketView], error) {
+func (c *Core) Accept(ctx context.Context, key string, in api.TicketInput) (api.Written[api.TicketView], error) {
 	return c.updateTicket(key, "accept", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		return true, acceptStep(ctx, t, key, "", c.now())
 	})
@@ -282,18 +221,6 @@ func acceptStep(ctx context.Context, t *domain.Ticket, key string, cause domain.
 	return nil
 }
 
-// LandInput is land's input: the commit that put the work into the base
-// of one of the Ticket's Changed Repositories.
-type LandInput struct {
-	Ticket Ref    `json:"ticket" path:"n" desc:"The Ticket." required:"true" cli:"<id>"`
-	Commit string `json:"commit" desc:"The commit that put the work into the base, such as the merge commit." required:"true" cli:"--commit <sha>"`
-	// Repository is the Repository Name of the base the work landed in;
-	// blank for the Home Repository.
-	Repository string `json:"repository,omitempty" desc:"The Repository Name whose base it landed in; the Home Repository when left out." cli:"--repository <name>"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
-}
-
 // Land is land(ticket, commit, repository?): human or agent, once the
 // work is in the base of one of the Ticket's Changed Repositories, the
 // Home Repository's unless it names another (ADR 0049). It records that
@@ -301,10 +228,10 @@ type LandInput struct {
 // moves the Ticket from Accepted or In Review to Done, with the commit on
 // the Move, Via merge; until then the Ticket stays where it is, Partly
 // landed once Accepted.
-func (c *Core) Land(ctx context.Context, key string, in LandInput) (Written[TicketView], error) {
+func (c *Core) Land(ctx context.Context, key string, in api.LandInput) (api.Written[api.TicketView], error) {
 	commit := strings.TrimSpace(in.Commit)
 	if commit == "" {
-		return Written[TicketView]{}, invalid("commit", "land needs the commit that put the work into the base")
+		return api.Written[api.TicketView]{}, invalid("commit", "land needs the commit that put the work into the base")
 	}
 	return c.updateTicketIn(key, "land", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
 		p, _ := r.Project(key)
@@ -315,7 +242,7 @@ func (c *Core) Land(ctx context.Context, key string, in LandInput) (Written[Tick
 		now := c.now()
 		i := slices.IndexFunc(t.Repositories, func(cr domain.ChangedRepository) bool { return cr.Name == name })
 		if !landsLast(changedRepositories(key, *t), name) {
-			if _, err := check("land", t.State, "", ActorOf(ctx), DisplayID(key, t.Number)); err != nil {
+			if _, err := check("land", t.State, "", api.ActorOf(ctx), DisplayID(key, t.Number)); err != nil {
 				return false, err
 			}
 			if l := t.Repositories[i].Landed; l != nil && l.Commit == commit {
@@ -339,9 +266,9 @@ func (c *Core) Land(ctx context.Context, key string, in LandInput) (Written[Tick
 // Reject is the human's reject(ticket, comment): In Review back to Ready,
 // with the comment required. The Ticket keeps its created time, so it
 // keeps its place near the front of the claim order.
-func (c *Core) Reject(ctx context.Context, key string, in RejectInput) (Written[TicketView], error) {
+func (c *Core) Reject(ctx context.Context, key string, in api.RejectInput) (api.Written[api.TicketView], error) {
 	if strings.TrimSpace(in.Comment) == "" {
-		return Written[TicketView]{}, invalid("comment", "reject needs a comment saying what to change")
+		return api.Written[api.TicketView]{}, invalid("comment", "reject needs a comment saying what to change")
 	}
 	return c.act(ctx, key, in.Ticket, in.Full, "reject", "", in.Comment)
 }
@@ -350,13 +277,13 @@ func (c *Core) Reject(ctx context.Context, key string, in RejectInput) (Written[
 // the transition, then the action's note (if any) as a comment under the
 // Claim it was made on. Its result is the Acknowledgement, or with full
 // the Ticket.
-func (c *Core) act(ctx context.Context, key string, ref Ref, full bool, name, claimID, note string) (Written[TicketView], error) {
+func (c *Core) act(ctx context.Context, key string, ref api.Ref, full bool, name, claimID, note string) (api.Written[api.TicketView], error) {
 	return c.actThen(ctx, key, ref, full, name, claimID, note, nil)
 }
 
 // actThen is act with then applied to the Ticket after the transition,
 // in the same write. An error from then abandons the write.
-func (c *Core) actThen(ctx context.Context, key string, ref Ref, full bool, name, claimID, note string, then func(*domain.Ticket) error) (Written[TicketView], error) {
+func (c *Core) actThen(ctx context.Context, key string, ref api.Ref, full bool, name, claimID, note string, then func(*domain.Ticket) error) (api.Written[api.TicketView], error) {
 	return c.updateTicket(key, name, ref, full, func(t *domain.Ticket) (bool, error) {
 		if err := c.actOn(ctx, t, key, name, claimID, note, c.now()); err != nil {
 			return false, err
@@ -382,7 +309,7 @@ func (c *Core) actOn(ctx context.Context, t *domain.Ticket, key, name, claimID, 
 		return err
 	}
 	if note != "" {
-		addComment(t, ActorOf(ctx), now, claim, note)
+		addComment(t, api.ActorOf(ctx), now, claim, note)
 	}
 	return nil
 }

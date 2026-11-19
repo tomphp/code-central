@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
@@ -22,7 +23,7 @@ type claimInfo struct {
 
 // noteTicket keeps what the lines say of c's Ticket, as tk gives it,
 // unless c has ended.
-func (f *factory) noteTicket(c claim, tk core.TicketView) {
+func (f *factory) noteTicket(c claim, tk api.TicketView) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.ended[c.ClaimID] {
@@ -56,12 +57,12 @@ func (f *factory) claimInfo(c claim) claimInfo {
 func (f *factory) claimf(c claim, format string, args ...any) {
 	line := fmt.Sprintf(format, args...)
 	f.printf("%s", line)
-	f.events.add(c.SessionID, core.SessionEvent{Time: f.e.Clock.Now(), Kind: core.EventFactory, Text: line})
+	f.events.add(c.SessionID, api.SessionEvent{Time: f.e.Clock.Now(), Kind: api.EventFactory, Text: line})
 }
 
 // claimed prints the line for a new Claim on tk, once its Home worktree
 // wt and its Resume Command are known and before its turn starts.
-func (f *factory) claimed(c claim, tk core.TicketView, wt, resume string) {
+func (f *factory) claimed(c claim, tk api.TicketView, wt, resume string) {
 	f.claimf(c, "%s claimed %s in Spec %s; worktree %s; resume: %s", c.Ticket, f.about(c), tk.Spec.ID, wt, resume)
 }
 

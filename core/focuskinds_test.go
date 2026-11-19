@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 )
@@ -29,7 +29,7 @@ func TestSetFocusKindsSendsTheProjectsNoticeOnlyOnAChange(t *testing.T) {
 	notices, stop := f.core.Events().Subscribe()
 	defer stop()
 
-	w, err := f.core.SetFocusKinds(human, "acme", core.SetFocusKindsInput{Off: []core.NeedsMeReason{core.ReasonAnswered}})
+	w, err := f.core.SetFocusKinds(human, "acme", api.SetFocusKindsInput{Off: []api.NeedsMeReason{api.ReasonAnswered}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestSetFocusKindsSendsTheProjectsNoticeOnlyOnAChange(t *testing.T) {
 		t.Fatalf("got %+v, want the Project's notice", got)
 	}
 	noNotice(t, notices)
-	if _, err := f.core.SetFocusKinds(human, "acme", core.SetFocusKindsInput{Off: []core.NeedsMeReason{core.ReasonAnswered, core.ReasonAnswered}}); err != nil {
+	if _, err := f.core.SetFocusKinds(human, "acme", api.SetFocusKindsInput{Off: []api.NeedsMeReason{api.ReasonAnswered, api.ReasonAnswered}}); err != nil {
 		t.Fatal(err)
 	}
 	noNotice(t, notices)
@@ -49,6 +49,6 @@ func TestSetFocusKindsSendsTheProjectsNoticeOnlyOnAChange(t *testing.T) {
 func TestAnAgentCannotSetFocusKinds(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	_, err := f.core.SetFocusKinds(ctx, "acme", core.SetFocusKindsInput{Off: []core.NeedsMeReason{core.ReasonAnswered}})
-	wantCode(t, err, core.ActionNotAllowed, "")
+	_, err := f.core.SetFocusKinds(ctx, "acme", api.SetFocusKindsInput{Off: []api.NeedsMeReason{api.ReasonAnswered}})
+	wantCode(t, err, api.ActionNotAllowed, "")
 }

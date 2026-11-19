@@ -8,23 +8,24 @@ package ciwatcher_test
 import (
 	"context"
 	"fmt"
-	"github.com/tomoram/code-central/domain"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/ciwatcher"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
 )
 
 // rule adds a CI Rule as the human and returns its Spec's ID.
 func (w *watching) rule(workflow, branch string, state domain.State) string {
 	w.t.Helper()
-	out, err := w.srv.Core.AddCIRule(core.WithActor(context.Background(), core.Human), "acme",
-		core.CIRuleInput{Workflow: workflow, Branch: branch, State: state, Full: true})
+	out, err := w.srv.Core.AddCIRule(api.WithActor(context.Background(), api.Human), "acme",
+		api.CIRuleInput{Workflow: workflow, Branch: branch, State: state, Full: true})
 	if err != nil {
 		w.t.Fatal(err)
 	}
@@ -73,16 +74,16 @@ func (w *watching) rulePoll() {
 
 // fixTickets are the Tickets on spec find_tickets finds, which leaves
 // out Cancelled ones, oldest first.
-func (w *watching) fixTickets(spec string) []core.TicketView {
+func (w *watching) fixTickets(spec string) []api.TicketView {
 	w.t.Helper()
 	ctx := context.Background()
-	rows, err := w.srv.Client.FindTickets(ctx, "acme", core.FindTicketsInput{Spec: core.Ref(spec)})
+	rows, err := w.srv.Client.FindTickets(ctx, "acme", api.FindTicketsInput{Spec: api.Ref(spec)})
 	if err != nil {
 		w.t.Fatal(err)
 	}
-	var out []core.TicketView
+	var out []api.TicketView
 	for _, r := range rows {
-		tk, err := w.srv.Client.GetTicket(ctx, "acme", core.Ref(r.ID))
+		tk, err := w.srv.Client.GetTicket(ctx, "acme", api.Ref(r.ID))
 		if err != nil {
 			w.t.Fatal(err)
 		}
@@ -173,23 +174,23 @@ func TestAFailingLandCommitLinksItsTicketAndSpec(t *testing.T) {
 	w := newWatching(t)
 	ctx := context.Background()
 	must(t, func() error {
-		_, err := w.srv.Core.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"})
+		_, err := w.srv.Core.CreateSpec(ctx, "acme", api.CreateSpecInput{Title: "Login"})
 		return err
 	})
 	must(t, func() error {
-		_, err := w.srv.Core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form", State: domain.Ready})
+		_, err := w.srv.Core.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "Login form", State: domain.Ready})
 		return err
 	})
-	res, err := w.srv.Core.Claim(ctx, "acme", core.ClaimInput{Ticket: "2"})
+	res, err := w.srv.Core.Claim(ctx, "acme", api.ClaimInput{Ticket: "2"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	must(t, func() error {
-		_, err := w.srv.Core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: res.ClaimID, Summary: "Done.", Branch: "acme-2", Commit: "aaa000"})
+		_, err := w.srv.Core.Finish(ctx, "acme", api.FinishInput{Ticket: "2", ClaimID: res.ClaimID, Summary: "Done.", Branch: "acme-2", Commit: "aaa000"})
 		return err
 	})
 	must(t, func() error {
-		_, err := w.srv.Client.Land(ctx, "acme", core.LandInput{Ticket: "acme-2", Commit: "land99"})
+		_, err := w.srv.Client.Land(ctx, "acme", api.LandInput{Ticket: "acme-2", Commit: "land99"})
 		return err
 	})
 	spec := w.rule("any", "main", domain.Ready)
@@ -271,7 +272,7 @@ func TestAFurtherFailureCommentsOnTheRulesUnfinishedTicket(t *testing.T) {
 
 	// Once the fix Ticket is finished, the next failure opens another.
 	must(t, func() error {
-		_, err := w.srv.Core.Cancel(core.WithActor(context.Background(), core.Human), "acme", core.CancelInput{Ticket: core.Ref(tks[0].ID), Reason: "Flaky."})
+		_, err := w.srv.Core.Cancel(api.WithActor(context.Background(), api.Human), "acme", api.CancelInput{Ticket: api.Ref(tks[0].ID), Reason: "Flaky."})
 		return err
 	})
 	third := branchRun{id: 23, workflow: "ci.yml", branch: "main", commit: "fff333", conclude: "failure", finished: 12}
@@ -317,8 +318,8 @@ func TestRunsFinishingBeforeTheRuleExistedDontFireIt(t *testing.T) {
 func TestAnIgnoredWorkflowFiresOnlyARuleNamingIt(t *testing.T) {
 	w := newWatching(t)
 	must(t, func() error {
-		_, err := w.srv.Core.SetCITracking(core.WithActor(context.Background(), core.Human), "acme",
-			core.SetCITrackingInput{Tracking: true, Repository: "acme/web", IgnoredWorkflows: []string{"nightly.yml"}})
+		_, err := w.srv.Core.SetCITracking(api.WithActor(context.Background(), api.Human), "acme",
+			api.SetCITrackingInput{Tracking: true, Repository: "acme/web", IgnoredWorkflows: []string{"nightly.yml"}})
 		return err
 	})
 	anyRule := w.rule("any", "main", domain.Ready)

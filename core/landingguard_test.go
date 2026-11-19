@@ -16,7 +16,7 @@ import (
 	"testing"
 )
 
-// The guard holds ADR 0039's line: no code in domain, core or the Factory
+// The guard holds ADR 0039's line: no code in domain, api, core or the Factory
 // reads a landing setting to decide, outside the policy and the code that
 // saves and shows the settings. It type-checks the packages' non-test
 // files and flags every read of a guarded field on a guarded type.
@@ -49,7 +49,8 @@ var landingGuardAllowlist = []guardAllow{
 	{file: "domain/domain.go", fn: "Set", why: "reports whether an Own Landing is set"},
 	{file: "domain/domain.go", fn: "Normalized", why: "normalises an Own Landing as it is stored"},
 	{file: "domain/domain.go", fn: "Equal", why: "compares the CI settings"},
-	{file: "core/landingpolicy.go", why: "the policy's builders, including ProjectView.LandingPolicies(), and a Repository's Landing"},
+	{file: "api/landingpolicy.go", why: "the policy's builders, including ProjectView.LandingPolicies()"},
+	{file: "core/landingpolicy.go", why: "a Repository's Landing, and the policies of a Project's Repositories"},
 	{file: "core/repositories.go", fn: "repositoryView", why: "builds the RepositoryView"},
 	{file: "core/humanops.go", fn: "SetLandingMethod", why: "saves the Landing settings"},
 	{file: "core/core.go", fn: "landingViewWith", why: "builds the LandingView"},

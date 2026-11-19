@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -15,8 +16,8 @@ import (
 // keeps them, with the model IDs the Factory's posted usage names,
 // checks effort against the levels, and the Models pickers offer them.
 
-func reportedModelsView(r domain.ReportedModels) ReportedModelsView {
-	v := ReportedModelsView{EffortLevels: validLevels(r), Aliases: orEmpty(r.Aliases), ModelIDs: orEmpty(r.ModelIDs), ModelFlag: r.ModelFlag, EffortFlag: r.EffortFlag}
+func reportedModelsView(r domain.ReportedModels) api.ReportedModelsView {
+	v := api.ReportedModelsView{EffortLevels: validLevels(r), Aliases: orEmpty(r.Aliases), ModelIDs: orEmpty(r.ModelIDs), ModelFlag: r.ModelFlag, EffortFlag: r.EffortFlag}
 	if !r.Reported.IsZero() {
 		at := r.Reported
 		v.Reported = &at
@@ -37,22 +38,22 @@ func validLevels(r domain.ReportedModels) []string {
 // levels or aliases leave the kept ones, so a failed read of claude
 // --help loses nothing; the flags are always replaced; model IDs are never
 // removed. It records when the report arrived.
-func (c *Core) ReportModels(_ context.Context, key string, in ReportModelsInput) (Written[ProjectView], error) {
+func (c *Core) ReportModels(_ context.Context, key string, in api.ReportModelsInput) (api.Written[api.ProjectView], error) {
 	levels, err := reportedList("effort_levels", in.EffortLevels)
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	aliases, err := reportedList("aliases", in.Aliases)
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	modelFlag, effortFlag := strings.TrimSpace(in.ModelFlag), strings.TrimSpace(in.EffortFlag)
 	for _, f := range []struct{ field, v string }{{"model_flag", modelFlag}, {"effort_flag", effortFlag}} {
 		if strings.ContainsAny(f.v, "\r\n") {
-			return Written[ProjectView]{}, invalid(f.field, "a flag's value is one line")
+			return api.Written[api.ProjectView]{}, invalid(f.field, "a flag's value is one line")
 		}
 	}
-	var before, after ProjectView
+	var before, after api.ProjectView
 	err = c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -72,7 +73,7 @@ func (c *Core) ReportModels(_ context.Context, key string, in ReportModelsInput)
 		return w.PutProject(p)
 	})
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	return acknowledgeProject(before, after, in.Full, c.now())
 }
@@ -102,7 +103,7 @@ const syntheticModel = "<synthetic>"
 // models past sessions ran with. It writes, and so sends the Project's
 // notice, only when one is new; an archived Project is left alone. Like
 // PostUsage, it never fails.
-func (c *Core) addModelIDs(key string, responses []UsageResponse) {
+func (c *Core) addModelIDs(key string, responses []api.UsageResponse) {
 	var seen []string
 	_ = c.store.View(func(r store.Reader) error {
 		if p, ok := r.Project(key); ok {
@@ -129,7 +130,7 @@ func (c *Core) addModelIDs(key string, responses []UsageResponse) {
 
 // unseenModelIDs are the models the responses name that aren't in seen,
 // in order of first use, without blanks or syntheticModel.
-func unseenModelIDs(seen []string, responses []UsageResponse) []string {
+func unseenModelIDs(seen []string, responses []api.UsageResponse) []string {
 	var out []string
 	for _, r := range responses {
 		m := strings.TrimSpace(r.Model)

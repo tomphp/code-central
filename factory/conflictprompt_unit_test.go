@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 )
 
@@ -44,9 +45,9 @@ func TestUnderRebaseAConflictFirstPromptAsksForARebase(t *testing.T) {
 
 func TestUnderRebaseAConflictFirstPromptInSeveralRepositoriesAsksForARebaseInEach(t *testing.T) {
 	c := claim{Ticket: "acme-7", ClaimID: "C7"}
-	api := repositoryWorktree{r: &repository{name: "api"}, path: "/wt/api", base: "main", branch: "acme-7"}
-	ws := worktreeSet{api}
-	conflicts := []conflict{{w: api, files: []string{"endpoint.go"}}}
+	apiRepo := repositoryWorktree{r: &repository{name: "api"}, path: "/wt/api", base: "main", branch: "acme-7"}
+	ws := worktreeSet{apiRepo}
+	conflicts := []conflict{{w: apiRepo, files: []string{"endpoint.go"}}}
 	p := severalFirstPrompt(c, core.ImplementationStage, ws, conflicts, true)
 	if want := "In each one's worktree, rebase the branch onto its base and resolve the conflicts in these files:\n\napi, base main:\n- endpoint.go\n"; !strings.Contains(p, want) {
 		t.Errorf("prompt %q lacks %q", p, want)
@@ -58,7 +59,7 @@ func TestUnderRebaseAConflictFirstPromptInSeveralRepositoriesAsksForARebaseInEac
 
 func TestAConflictSystemPromptKeepsTheClaimAndSwapsTheGuideForAFinishInstruction(t *testing.T) {
 	c := claim{Ticket: "acme-7", ClaimID: "C7"}
-	g := core.StageGuideView{Stage: core.ImplementationStage, Guide: "THE GUIDE"}
+	g := api.StageGuideView{Stage: core.ImplementationStage, Guide: "THE GUIDE"}
 	p := systemPrompt(c, core.ImplementationStage, "/wt", g, []string{"README"})
 	for _, want := range []string{"Ticket: acme-7\nClaim: C7\n", "Claim C7 is yours", "own worktree on branch acme-7", "`branch`", "`commit`"} {
 		if !strings.Contains(p, want) {

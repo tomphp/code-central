@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/mcp"
@@ -117,7 +118,7 @@ const severalRepositoriesAllowance = 450
 func TestEachStageGuideStaysWithinItsBudget(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	f.reportModels(t, core.ReportModelsInput{Aliases: []string{"opus", "sonnet", "haiku"}, EffortLevels: []string{"low", "medium", "high", "xhigh", "max"}})
+	f.reportModels(t, api.ReportModelsInput{Aliases: []string{"opus", "sonnet", "haiku"}, EffortLevels: []string{"low", "medium", "high", "xhigh", "max"}})
 	f.setModelAssignment(t, true)
 	for _, stage := range core.GuideNames {
 		limit, ok := guideBudgets[stage]
@@ -129,7 +130,7 @@ func TestEachStageGuideStaysWithinItsBudget(t *testing.T) {
 			t.Errorf("the %s guide is %d bytes, over the %d budget", stage, n, limit)
 		}
 	}
-	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
+	f.addRepository(t, api.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
 	for _, stage := range severalRepositoriesGuides {
 		if n, limit := len(guide(t, f, stage)), guideBudgets[stage]+severalRepositoriesAllowance; n > limit {
 			t.Errorf("with several Repositories the %s guide is %d bytes, over the %d budget", stage, n, limit)
@@ -146,7 +147,7 @@ func TestTheWorkflowResponseStaysWithinItsBudget(t *testing.T) {
 func TestTheDefaultTicketReadStaysWithinItsBudget(t *testing.T) {
 	f := newFixture(t)
 	f.redone(t)
-	v, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "acme-2"})
+	v, err := f.core.GetTicket(ctx, "acme", api.GetTicketInput{Ticket: "acme-2"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,36 +179,36 @@ func acknowledgements(t *testing.T) map[string][]byte {
 		out[name] = marshal(t, v)
 	}
 	title, desc := "Login form", "The form, with its fields."
-	s, err := f.core.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Search", Body: "Find things.\n"}) // acme-6
+	s, err := f.core.CreateSpec(ctx, "acme", api.CreateSpecInput{Title: "Search", Body: "Find things.\n"}) // acme-6
 	write("create_spec", s, err)
-	s, err = f.core.EditSpec(ctx, "acme", core.EditSpecInput{Spec: "1", Title: &title, Body: ptr("New.\n")})
+	s, err = f.core.EditSpec(ctx, "acme", api.EditSpecInput{Spec: "1", Title: &title, Body: ptr("New.\n")})
 	write("edit_spec", s, err)
-	v, err := f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Logout", Description: desc}) // acme-7
+	v, err := f.core.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "Logout", Description: desc}) // acme-7
 	write("create_ticket", v, err)
-	v, err = f.core.EditTicket(ctx, "acme", core.EditTicketInput{Ticket: "2", Title: &title, Description: &desc})
+	v, err = f.core.EditTicket(ctx, "acme", api.EditTicketInput{Ticket: "2", Title: &title, Description: &desc})
 	write("edit_ticket", v, err)
-	v, err = f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: "Still on it"})
+	v, err = f.core.Comment(ctx, "acme", api.CommentInput{Ticket: "2", Body: "Still on it"})
 	write("comment", v, err)
-	v, err = f.core.AddBlocker(ctx, "acme", core.BlockerInput{Ticket: "5", Blocker: "4"})
+	v, err = f.core.AddBlocker(ctx, "acme", api.BlockerInput{Ticket: "5", Blocker: "4"})
 	write("add_blocker", v, err)
-	v, err = f.core.RemoveBlocker(ctx, "acme", core.BlockerInput{Ticket: "5", Blocker: "4"})
+	v, err = f.core.RemoveBlocker(ctx, "acme", api.BlockerInput{Ticket: "5", Blocker: "4"})
 	write("remove_blocker", v, err)
-	v, err = f.core.Cancel(human, "acme", core.CancelInput{Ticket: "7", Reason: "Not needed"})
+	v, err = f.core.Cancel(human, "acme", api.CancelInput{Ticket: "7", Reason: "Not needed"})
 	write("cancel", v, err)
 
-	f.claim(t, core.ClaimInput{}) // claim-1 on acme-2
-	v, err = f.core.SetSession(ctx, "acme", core.SetSessionInput{Ticket: "2", ClaimID: "claim-1", SessionID: "s1"})
+	f.claim(t, api.ClaimInput{}) // claim-1 on acme-2
+	v, err = f.core.SetSession(ctx, "acme", api.SetSessionInput{Ticket: "2", ClaimID: "claim-1", SessionID: "s1"})
 	write("set_session", v, err)
-	r, err := f.core.PostRound(ctx, "acme", core.PostRoundInput{Ticket: "2", ClaimID: "claim-1", Questions: []core.QuestionInput{qDB}})
+	r, err := f.core.PostRound(ctx, "acme", api.PostRoundInput{Ticket: "2", ClaimID: "claim-1", Questions: []api.QuestionInput{qDB}})
 	write("post_round", r, err)
-	f.claim(t, core.ClaimInput{}) // claim-2 on acme-3
-	fin, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "3", ClaimID: "claim-2", Summary: "Done on acme-3.", Branch: "acme-3", Commit: "abc123"})
+	f.claim(t, api.ClaimInput{}) // claim-2 on acme-3
+	fin, err := f.core.Finish(ctx, "acme", api.FinishInput{Ticket: "3", ClaimID: "claim-2", Summary: "Done on acme-3.", Branch: "acme-3", Commit: "abc123"})
 	write("finish", fin, err)
-	f.claim(t, core.ClaimInput{}) // claim-3 on acme-4
+	f.claim(t, api.ClaimInput{}) // claim-3 on acme-4
 	stop, err := f.core.ReportFailure(ctx, "acme", report("4", "claim-3"))
 	write("report_failure", stop, err)
-	f.claim(t, core.ClaimInput{}) // claim-4 on acme-5
-	stop, err = f.core.GiveUp(ctx, "acme", core.GiveUpInput{Ticket: "5", ClaimID: "claim-4", Note: "Branch acme-5 has the form"})
+	f.claim(t, api.ClaimInput{}) // claim-4 on acme-5
+	stop, err = f.core.GiveUp(ctx, "acme", api.GiveUpInput{Ticket: "5", ClaimID: "claim-4", Note: "Branch acme-5 has the form"})
 	write("give_up", stop, err)
 	return out
 }

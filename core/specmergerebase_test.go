@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -32,7 +32,7 @@ func TestOpenSpecMergeTitlesTheTicketToRebaseWhenRebaseIsInForce(t *testing.T) {
 
 	res := f.openSpecMerge(t, "README", "go.mod")
 
-	if res != (core.OpenSpecMergeResult{Ticket: "acme-3", Outcome: core.SpecMergeOpened}) {
+	if res != (api.OpenSpecMergeResult{Ticket: "acme-3", Outcome: api.SpecMergeOpened}) {
 		t.Fatalf("result %+v, want acme-3 opened", res)
 	}
 	tk := f.getTicket(t, "acme-3")
@@ -48,11 +48,11 @@ func TestOpenSpecMergeTitlesTheTicketToRebaseWhenRebaseIsInForceInAnyConflicting
 	// force; api's Own Landing is Merge, where it is.
 	f := specMergeInTwo(t)
 	f.landing(t, domain.Landing{Method: domain.LandingBranch, Remote: "origin", LandPerSpec: true, Rebase: true})
-	f.editLanding(t, "api", core.RepositoryLandingMerge)
-	home := core.SpecMergeConflict{Name: "acme", Conflicts: []string{"README"}, BaseTip: "aaa111", SpecBranchTip: "bbb222"}
-	api := core.SpecMergeConflict{Name: "api", Conflicts: []string{"endpoint.go"}, BaseTip: "ccc333", SpecBranchTip: "ddd444"}
+	f.editLanding(t, "api", api.RepositoryLandingMerge)
+	home := api.SpecMergeConflict{Name: "acme", Conflicts: []string{"README"}, BaseTip: "aaa111", SpecBranchTip: "bbb222"}
+	apiRepo := api.SpecMergeConflict{Name: "api", Conflicts: []string{"endpoint.go"}, BaseTip: "ccc333", SpecBranchTip: "ddd444"}
 
-	if _, err := f.core.OpenSpecMerge(ctx, "acme", core.OpenSpecMergeInput{Spec: "acme-1", Repositories: []core.SpecMergeConflict{home}}); err != nil {
+	if _, err := f.core.OpenSpecMerge(ctx, "acme", api.OpenSpecMergeInput{Spec: "acme-1", Repositories: []api.SpecMergeConflict{home}}); err != nil {
 		t.Fatal(err)
 	}
 	if tk := f.getTicket(t, "acme-3"); tk.Title != specMergeTitle || !strings.HasSuffix(tk.Description, "\nIn each, merge the base into this branch and resolve the conflicts.\n") {
@@ -60,7 +60,7 @@ func TestOpenSpecMergeTitlesTheTicketToRebaseWhenRebaseIsInForceInAnyConflicting
 	}
 	f.moveTo(t, 3, domain.Done)
 
-	if _, err := f.core.OpenSpecMerge(ctx, "acme", core.OpenSpecMergeInput{Spec: "acme-1", Repositories: []core.SpecMergeConflict{home, api}}); err != nil {
+	if _, err := f.core.OpenSpecMerge(ctx, "acme", api.OpenSpecMergeInput{Spec: "acme-1", Repositories: []api.SpecMergeConflict{home, apiRepo}}); err != nil {
 		t.Fatal(err)
 	}
 	tk := f.getTicket(t, "acme-4")
@@ -81,7 +81,7 @@ func TestTheRebaseTitledSpecMergeTicketKeepsTheMergeResultsAutoAcceptKind(t *tes
 	autoAccepted(t, f.get(t, "acme-3"), domain.Done, domain.CauseProject)
 
 	// An ordinary Ticket with the rebase title is Implementation results.
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: specMergeRebaseTitle, State: domain.Ready})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: specMergeRebaseTitle, State: domain.Ready})
 	f.finishTicket(t, "acme-4")
 	if got := f.get(t, "acme-4"); got.State != domain.InReview {
 		t.Fatalf("a Ticket titled like a rebase Spec merge Ticket is %s under Merge results, want In Review", got.State)
@@ -95,14 +95,14 @@ func TestOpenSpecMergeCommentsOnTheOpenMarkedTicketWhateverItsTitle(t *testing.T
 	f.openSpecMerge(t, "README")
 	f.landing(t, domain.Landing{Method: domain.LandingMerge, Remote: "origin", LandPerSpec: true, Rebase: true})
 
-	if res := f.openSpecMerge(t, "go.mod"); res != (core.OpenSpecMergeResult{Ticket: "acme-3", Outcome: core.SpecMergeCommented}) {
+	if res := f.openSpecMerge(t, "go.mod"); res != (api.OpenSpecMergeResult{Ticket: "acme-3", Outcome: api.SpecMergeCommented}) {
 		t.Fatalf("with Rebase on, a new conflict gave %+v, want acme-3 commented", res)
 	}
 	tk := f.getTicket(t, "acme-3")
 	if tk.Title != specMergeTitle || len(tk.Comments) != 1 || !strings.Contains(tk.Comments[0].Body, "Rebase this branch onto the base") {
 		t.Errorf("acme-3 is %+v, want it still titled %q with one comment saying to rebase", tk, specMergeTitle)
 	}
-	rows, _ := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{Spec: "acme-1", State: []domain.State{domain.Ready}})
+	rows, _ := f.core.FindTickets(ctx, "acme", api.FindTicketsInput{Spec: "acme-1", State: []domain.State{domain.Ready}})
 	if len(rows) != 2 {
 		t.Errorf("Ready Tickets on acme-1 %+v, want acme-2 and acme-3 alone", rows)
 	}
@@ -110,12 +110,12 @@ func TestOpenSpecMergeCommentsOnTheOpenMarkedTicketWhateverItsTitle(t *testing.T
 
 func TestOpenSpecMergeCommentsOnAnUnmarkedTicketWithTheRebaseTitleWithoutMarkingIt(t *testing.T) {
 	f := specMergeRebaseWorld(t)
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: specMergeRebaseTitle, Description: "Opened by an older Factory.\n", State: domain.Ready})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: specMergeRebaseTitle, Description: "Opened by an older Factory.\n", State: domain.Ready})
 
-	if res := f.openSpecMerge(t, "README"); res != (core.OpenSpecMergeResult{Ticket: "acme-3", Outcome: core.SpecMergeCommented}) {
+	if res := f.openSpecMerge(t, "README"); res != (api.OpenSpecMergeResult{Ticket: "acme-3", Outcome: api.SpecMergeCommented}) {
 		t.Fatalf("result %+v, want acme-3 commented", res)
 	}
-	if res := f.openSpecMerge(t, "README"); res.Outcome != core.SpecMergeUnchanged {
+	if res := f.openSpecMerge(t, "README"); res.Outcome != api.SpecMergeUnchanged {
 		t.Errorf("the same conflict again gave %+v, want unchanged", res)
 	}
 	tk := f.getTicket(t, "acme-3")

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // Nested Subagents (Spec code-central-638): GET /api/usage lists main
@@ -17,8 +17,8 @@ import (
 // Subagents'.
 
 // everySession is each main session followed by its Subagents.
-func everySession(mains []core.UsageSession) []core.UsageSession {
-	var out []core.UsageSession
+func everySession(mains []api.UsageSession) []api.UsageSession {
+	var out []api.UsageSession
 	for _, m := range mains {
 		out = append(append(out, m), m.Subagents...)
 	}
@@ -26,7 +26,7 @@ func everySession(mains []core.UsageSession) []core.UsageSession {
 }
 
 // agents are the agents of sessions, in order.
-func agents(sessions []core.UsageSession) []string {
+func agents(sessions []api.UsageSession) []string {
 	out := []string{}
 	for _, s := range sessions {
 		out = append(out, s.Agent)
@@ -37,8 +37,8 @@ func agents(sessions []core.UsageSession) []string {
 func TestSubagentsNestUnderTheirMainSessionOldestFirst(t *testing.T) {
 	srv := newServer(t)
 	claim(t, srv, "acme", "impl")
-	ctx := core.WithActor(context.Background(), core.Human)
-	must(t, func() error { _, err := srv.Core.Approve(ctx, "acme", core.TicketInput{Ticket: "2"}); return err })
+	ctx := api.WithActor(context.Background(), api.Human)
+	must(t, func() error { _, err := srv.Core.Approve(ctx, "acme", api.TicketInput{Ticket: "2"}); return err })
 	claim(t, srv, "acme", "spec")
 
 	postResponses(t, srv, "impl",
@@ -88,8 +88,8 @@ func TestSubagentsNestUnderTheirMainSessionOldestFirst(t *testing.T) {
 func TestEachSessionHasItsTokensAndAMainSessionItsTotalWithItsSubagents(t *testing.T) {
 	srv := newServer(t)
 	claim(t, srv, "acme", "impl")
-	ctx := core.WithActor(context.Background(), core.Human)
-	must(t, func() error { _, err := srv.Core.Approve(ctx, "acme", core.TicketInput{Ticket: "2"}); return err })
+	ctx := api.WithActor(context.Background(), api.Human)
+	must(t, func() error { _, err := srv.Core.Approve(ctx, "acme", api.TicketInput{Ticket: "2"}); return err })
 	claim(t, srv, "acme", "spec")
 
 	postResponses(t, srv, "impl",
@@ -134,7 +134,7 @@ func TestAMainSessionWhoseOnlyResponsesInRangeAreItsSubagentsIsListed(t *testing
 	}
 	got := u.Sessions[0]
 	got.Subagents = nil
-	want := core.UsageSession{
+	want := api.UsageSession{
 		Project: "acme", Ticket: "acme-2", Claim: 1, SessionID: "s1",
 		Started: at(2), Models: []string{}, TotalTokens: new(11 + 22),
 	}
@@ -145,7 +145,7 @@ func TestAMainSessionWhoseOnlyResponsesInRangeAreItsSubagentsIsListed(t *testing
 		t.Errorf("Subagents %v, want toolu_a and toolu_b", a)
 	}
 	// The kinds count only sessions with responses.
-	wantKinds := []core.UsageKind{
+	wantKinds := []api.UsageKind{
 		{Kind: "review", Sessions: 1, AveragePeak: 20, LargestPeak: 20},
 		{Kind: "subagent", Sessions: 1, AveragePeak: 10, LargestPeak: 10},
 	}
@@ -173,7 +173,7 @@ func TestTheRecentSessionsLimitCountsMainSessionsOnly(t *testing.T) {
 			response{time: at(i), agent: "toolu_b", kind: "subagent", input: 1},
 		)
 		must(t, func() error {
-			_, err := srv.Core.GiveUp(ctx, "acme", core.GiveUpInput{Ticket: "3", ClaimID: c.ClaimID, Note: "next"})
+			_, err := srv.Core.GiveUp(ctx, "acme", api.GiveUpInput{Ticket: "3", ClaimID: c.ClaimID, Note: "next"})
 			return err
 		})
 	}
@@ -187,7 +187,7 @@ func TestTheRecentSessionsLimitCountsMainSessionsOnly(t *testing.T) {
 			t.Errorf("%s's Subagents %v, want both", s.SessionID, got)
 		}
 	}
-	want := []core.UsageKind{
+	want := []api.UsageKind{
 		{Kind: "implementation", Sessions: 55, AveragePeak: 1, LargestPeak: 1},
 		{Kind: "subagent", Sessions: 110, AveragePeak: 1, LargestPeak: 1},
 	}

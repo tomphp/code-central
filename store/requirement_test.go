@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/ids"
@@ -25,7 +26,7 @@ func TestASubmittedRequirementStoppedAtAnyStepRecoversToAllOrNothing(t *testing.
 			s := seedAcme(t, t.TempDir())
 			store.StopImportAfter(s, k)
 			c := core.New(s, clock.NewFake(t0), &ids.Sequence{})
-			_, err := c.SubmitRequirement(context.Background(), "acme", core.SubmitRequirementInput{Text: "Dark mode\n"})
+			_, err := c.SubmitRequirement(context.Background(), "acme", api.SubmitRequirementInput{Text: "Dark mode\n"})
 			if k > steps {
 				if err != nil {
 					t.Fatalf("the Requirement was not submitted: %v", err)

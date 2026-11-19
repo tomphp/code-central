@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/issuewatcher"
@@ -51,7 +51,7 @@ func (w *watching) openIssuesOf(repository string, ns ...int) {
 func (w *watching) listing() {
 	w.t.Helper()
 	repositoryOf(w.h, "acme/api")
-	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web", "acme/api"}}); err != nil {
+	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", api.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web", "acme/api"}}); err != nil {
 		w.t.Fatal(err)
 	}
 }
@@ -62,7 +62,7 @@ func TestIssuesFromTwoRepositoriesReachTheOneIssuesSpec(t *testing.T) {
 	w.openIssues("", 1, openIssue(1))
 	w.openIssuesOf("acme/api", 5)
 	w.start(w.h.Bin)
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 
 	got := w.incoming()
 	want := []string{issueLine(1), "acme/api#5 https://github.com/acme/api/issues/5 Issue 5: Body 5"}
@@ -73,7 +73,7 @@ func TestIssuesFromTwoRepositoriesReachTheOneIssuesSpec(t *testing.T) {
 	if !slices.Equal(watch.Repositories, []string{"acme/web", "acme/api"}) {
 		t.Fatalf("get_issue_watch repositories = %v, want both", watch.Repositories)
 	}
-	spec, err := w.srv.Core.GetSpec(human, "acme", core.GetSpecInput{Spec: core.Ref(watch.Spec)})
+	spec, err := w.srv.Core.GetSpec(human, "acme", api.GetSpecInput{Spec: api.Ref(watch.Spec)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,12 +98,12 @@ func TestOneFailingRepositoryShowsItsOwnErrorWhileTheOthersKeepWatching(t *testi
 	w.openIssues("", 1, openIssue(1))
 	w.start(w.h.Bin)
 
-	got := w.status(core.WatcherError)
-	if len(got.Repositories) != 1 || got.Repositories[0].Repository != "acme/api" || got.Repositories[0].Problem != core.ProblemRepositoryUnreadable ||
+	got := w.status(api.WatcherError)
+	if len(got.Repositories) != 1 || got.Repositories[0].Repository != "acme/api" || got.Repositories[0].Problem != api.ProblemRepositoryUnreadable ||
 		!strings.Contains(got.Repositories[0].Message, "can't read the repository acme/api") || got.Repositories[0].Fix == "" {
 		t.Fatalf("status %+v, want acme/api's own problem and fix", got)
 	}
-	if got.Problem != core.ProblemRepositoryUnreadable || !strings.Contains(got.Message, "acme/api") || strings.Contains(got.Message, "acme/web") {
+	if got.Problem != api.ProblemRepositoryUnreadable || !strings.Contains(got.Message, "acme/api") || strings.Contains(got.Message, "acme/web") {
 		t.Fatalf("status %+v, want the summary to name acme/api alone", got)
 	}
 	codecentraltest.Eventually(t, func() bool { return len(w.incoming()) == 1 }, "acme/web's issue didn't arrive while acme/api failed")
@@ -113,7 +113,7 @@ func TestOneFailingRepositoryShowsItsOwnErrorWhileTheOthersKeepWatching(t *testi
 	// keeps being watched.
 	w.openIssues("", 1, openIssue(1), openIssue(2))
 	w.polled()
-	w.status(core.WatcherError)
+	w.status(api.WatcherError)
 	wantIncoming(t, w, 1, 2)
 	if n := w.errorCount(); n != 1 {
 		t.Fatalf("went into an error %d times, want once", n)
@@ -122,7 +122,7 @@ func TestOneFailingRepositoryShowsItsOwnErrorWhileTheOthersKeepWatching(t *testi
 	// A second repository failing while in error sends no second one.
 	w.h.Unreadable("acme/web")
 	w.polled()
-	if got := w.status(core.WatcherError); len(got.Repositories) != 2 {
+	if got := w.status(api.WatcherError); len(got.Repositories) != 2 {
 		t.Fatalf("status %+v, want both repositories named", got)
 	}
 	if n := w.errorCount(); n != 1 {
@@ -133,7 +133,7 @@ func TestOneFailingRepositoryShowsItsOwnErrorWhileTheOthersKeepWatching(t *testi
 	repositoryOf(w.h, "acme/api")
 	w.openIssuesOf("acme/api", 5)
 	w.polled()
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	if got := w.incoming(); len(got) != 3 {
 		t.Fatalf("Incoming Issues %q, want acme/api's arrived once it was fixed", got)
 	}
@@ -147,23 +147,23 @@ func TestCheckModeAnswersPerRepository(t *testing.T) {
 	h.Unreadable("acme/api")
 	repositoryOf(h, "acme/site")
 
-	r := issuewatcher.Check(ctx, core.IssuesCheckInput{Repositories: []string{"acme/web", "acme/api", "acme/site"}}, gh.Env{Environ: h.Environ(h.Bin), InstallPlaces: []string{}})
-	if len(r.Repositories) != 1 || r.Repositories[0].Repository != "acme/api" || r.Problem != core.ProblemRepositoryUnreadable {
+	r := issuewatcher.Check(ctx, api.IssuesCheckInput{Repositories: []string{"acme/web", "acme/api", "acme/site"}}, gh.Env{Environ: h.Environ(h.Bin), InstallPlaces: []string{}})
+	if len(r.Repositories) != 1 || r.Repositories[0].Repository != "acme/api" || r.Problem != api.ProblemRepositoryUnreadable {
 		t.Fatalf("check = %+v, want acme/api's problem alone", r)
 	}
-	r = issuewatcher.Check(ctx, core.IssuesCheckInput{Repositories: []string{"acme/web", "acme/site"}}, gh.Env{Environ: h.Environ(h.Bin), InstallPlaces: []string{}})
+	r = issuewatcher.Check(ctx, api.IssuesCheckInput{Repositories: []string{"acme/web", "acme/site"}}, gh.Env{Environ: h.Environ(h.Bin), InstallPlaces: []string{}})
 	if r.Problem != "" {
 		t.Fatalf("check = %+v, want it to pass", r)
 	}
 	// One repository is answered as it always was.
-	r = issuewatcher.Check(ctx, core.IssuesCheckInput{Repositories: []string{"acme/api"}}, gh.Env{Environ: h.Environ(h.Bin), InstallPlaces: []string{}})
-	if r.Problem != core.ProblemRepositoryUnreadable || len(r.Repositories) != 0 {
+	r = issuewatcher.Check(ctx, api.IssuesCheckInput{Repositories: []string{"acme/api"}}, gh.Env{Environ: h.Environ(h.Bin), InstallPlaces: []string{}})
+	if r.Problem != api.ProblemRepositoryUnreadable || len(r.Repositories) != 0 {
 		t.Fatalf("check = %+v, want a plain problem with no repositories", r)
 	}
 	// gh being logged out answers for every repository at once.
 	h.LoggedOut()
-	r = issuewatcher.Check(ctx, core.IssuesCheckInput{Repositories: []string{"acme/web", "acme/api"}}, gh.Env{Environ: h.Environ(h.Bin), InstallPlaces: []string{}})
-	if r.Problem != core.ProblemLoggedOut || len(r.Repositories) != 0 {
+	r = issuewatcher.Check(ctx, api.IssuesCheckInput{Repositories: []string{"acme/web", "acme/api"}}, gh.Env{Environ: h.Environ(h.Bin), InstallPlaces: []string{}})
+	if r.Problem != api.ProblemLoggedOut || len(r.Repositories) != 0 {
 		t.Fatalf("check = %+v, want logged out for them all", r)
 	}
 }
@@ -175,18 +175,18 @@ func TestWritesGoToTheRepositoryOfTheirIssue(t *testing.T) {
 	w.openIssues("", 1, openIssue(1))
 	w.openIssuesOf("acme/api", 5)
 	w.start(w.h.Bin)
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 
-	var api string
+	var apiRepo string
 	for _, i := range w.watch().Issues {
 		if i.Link.ID == "acme/api#5" {
-			api = i.Ticket
+			apiRepo = i.Ticket
 		}
 	}
-	if api == "" {
+	if apiRepo == "" {
 		t.Fatalf("Incoming Issues %q, want acme/api#5", w.incoming())
 	}
-	if _, err := w.srv.Core.WontFix(human, "acme", core.WontFixInput{Ticket: core.Ref(api), Reason: "Out of scope"}); err != nil {
+	if _, err := w.srv.Core.WontFix(human, "acme", api.WontFixInput{Ticket: api.Ref(apiRepo), Reason: "Out of scope"}); err != nil {
 		t.Fatal(err)
 	}
 	w.polled()

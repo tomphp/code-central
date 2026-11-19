@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -26,7 +26,7 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, out turnOutcome) domai
 	if out.Kind != turnOutage {
 		f.turnWentWell(t)
 	}
-	tk, err := f.client.GetTicket(ctx, f.project, core.Ref(c.Ticket))
+	tk, err := f.client.GetTicket(ctx, f.project, api.Ref(c.Ticket))
 	if err != nil {
 		f.claimf(c, "%s: get_ticket: %v", c.Ticket, err)
 		return ""
@@ -86,7 +86,7 @@ func (f *factory) reportStuck(ctx context.Context, t *turn, end turnEnd) bool {
 	if end.Result == nil && len(f.o.claudeArgs) > 0 {
 		fix += fmt.Sprintf(" The turn started with the Claude Args %s: if claude rejected one, fix it and restart the Factory.", joinArgs(f.o.claudeArgs))
 	}
-	return f.reportFailure(ctx, c, &failure{core.ReportFailureInput{
+	return f.reportFailure(ctx, c, &failure{api.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("The turn exited with its Claim still In Progress: %s.", end.how()),
 		Why:             why,
 		WhatToFix:       fix,

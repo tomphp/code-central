@@ -3,15 +3,16 @@ package server_test
 import (
 	"context"
 	"encoding/json"
-	"github.com/tomoram/code-central/domain"
 	"net/http"
 	"slices"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
 )
@@ -20,13 +21,13 @@ import (
 // Runs, or every active Project's, with each CI Watcher's status; and CI
 // Runs finished more than 30 days ago are pruned.
 
-func readCI(t *testing.T, srv *codecentraltest.Server, query string) core.CIOverview {
+func readCI(t *testing.T, srv *codecentraltest.Server, query string) api.CIOverview {
 	t.Helper()
 	status, b := httpDo(t, srv, httpCall{method: "GET", path: "/api/ci" + query})
 	if status != http.StatusOK {
 		t.Fatalf("GET /api/ci%s: status %d: %s", query, status, b)
 	}
-	var v core.CIOverview
+	var v api.CIOverview
 	if err := json.Unmarshal(b, &v); err != nil {
 		t.Fatalf("not the CI view's shape: %v: %s", err, b)
 	}
@@ -41,7 +42,7 @@ func after(d time.Duration) *time.Time {
 
 // started is a run of workflow tracked against acme-3, started at
 // started and still in progress.
-func started(id int64, workflow string, started time.Duration) core.CIRunView {
+func started(id int64, workflow string, started time.Duration) api.CIRunView {
 	run := ciRun(id, workflow, "abc123", domain.CIInProgress, "")
 	run.Started = after(started)
 	return run
@@ -49,14 +50,14 @@ func started(id int64, workflow string, started time.Duration) core.CIRunView {
 
 // finished is a run of workflow tracked against acme-3 that ran from
 // started to finished and ended with conclusion.
-func finished(id int64, workflow string, started, finished time.Duration, conclusion domain.CIConclusion) core.CIRunView {
+func finished(id int64, workflow string, started, finished time.Duration, conclusion domain.CIConclusion) api.CIRunView {
 	run := ciRun(id, workflow, "abc123", domain.CICompleted, conclusion)
 	run.Started, run.Finished = after(started), after(finished)
 	return run
 }
 
 // runKeys are the view's runs as project/workflow#attempt.
-func runKeys(v core.CIOverview) []string {
+func runKeys(v api.CIOverview) []string {
 	out := []string{}
 	for _, r := range v.Runs {
 		out = append(out, r.Project+"/"+r.Workflow+"#"+strconv.Itoa(r.Attempt))
@@ -88,7 +89,7 @@ func TestTheCIViewListsInProgressRunsFirstThenTheLastSevenDaysFinished(t *testin
 		t.Fatalf("row %+v, want everything the CI Watcher reported of it", r)
 	}
 	if len(v.Projects) != 1 || v.Projects[0].Project != "acme" || !v.Projects[0].Tracking || v.Projects[0].Repository != "acme/web" ||
-		v.Projects[0].Watcher.State != core.WatcherNotReported {
+		v.Projects[0].Watcher.State != api.WatcherNotReported {
 		t.Fatalf("projects %+v, want acme's CI Watcher, not reported yet", v.Projects)
 	}
 }
@@ -117,15 +118,15 @@ func TestTheCIViewForAllProjectsHasEveryActiveProjectWithCITrackingOn(t *testing
 	ruled := started(2, "ci.yml", time.Minute)
 	ruled.Ticket, ruled.Rule = "", "other-1"
 	must(t, func() error {
-		_, err := srv.Client.ReportCIRuns(context.Background(), "other", core.ReportCIRunsInput{Runs: []core.CIRunView{ruled}})
+		_, err := srv.Client.ReportCIRuns(context.Background(), "other", api.ReportCIRunsInput{Runs: []api.CIRunView{ruled}})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Client.ReportCIWatcherStatus(context.Background(), "other", core.ReportWatcherStatusInput{State: core.WatcherWatching})
+		_, err := srv.Client.ReportCIWatcherStatus(context.Background(), "other", api.ReportWatcherStatusInput{State: api.WatcherWatching})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.CreateProject(context.Background(), core.CreateProjectInput{Key: "quiet"})
+		_, err := srv.Core.CreateProject(context.Background(), api.CreateProjectInput{Key: "quiet"})
 		return err
 	})
 
@@ -144,7 +145,7 @@ func TestTheCIViewForAllProjectsHasEveryActiveProjectWithCITrackingOn(t *testing
 	// An Archived Project's CI Watcher is stopped: All Projects leaves it
 	// out, though its own read still has its runs.
 	must(t, func() error {
-		_, err := srv.Core.ArchiveProject(core.WithActor(context.Background(), core.Human), "other")
+		_, err := srv.Core.ArchiveProject(api.WithActor(context.Background(), api.Human), "other")
 		return err
 	})
 	if got := runKeys(readCI(t, srv, "")); !slices.Equal(got, []string{"acme/ci.yml#1"}) {
@@ -165,8 +166,8 @@ func TestTheCIViewOfAProjectWithCITrackingOffSaysSo(t *testing.T) {
 
 func TestTheCIViewRefusesAnUnknownProjectOrParameter(t *testing.T) {
 	srv := newServer(t)
-	httpRejected(t, srv, httpCall{method: "GET", path: "/api/ci?project=nope"}, core.NotFound)
-	httpRejected(t, srv, httpCall{method: "GET", path: "/api/ci?days=7"}, core.Invalid)
+	httpRejected(t, srv, httpCall{method: "GET", path: "/api/ci?project=nope"}, api.NotFound)
+	httpRejected(t, srv, httpCall{method: "GET", path: "/api/ci?days=7"}, api.Invalid)
 }
 
 func TestCIRunsFinishedMoreThanThirtyDaysAgoArePruned(t *testing.T) {
@@ -298,7 +299,7 @@ func TestUnderTheCIGateTheRunningReadKeepsRunsOnATicketsEarlierPushedCommit(t *t
 func TestOutsideTheCIGateTheRunningReadLeavesOutRunsOnATicketsEarlierPushedCommit(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
 	must(t, func() error {
-		_, err := srv.Core.SetLandingMethod(core.WithActor(context.Background(), core.Human), "acme", core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
+		_, err := srv.Core.SetLandingMethod(api.WithActor(context.Background(), api.Human), "acme", api.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 		return err
 	})
 	reportRuns(t, srv, started(1, "ci.yml", 0))
@@ -326,7 +327,7 @@ func TestTheRunningReadForAllProjectsHasEveryActiveProjectWithCITrackingOn(t *te
 	going := ciRun(2, "e2e.yml", "fed321", domain.CIInProgress, "")
 	going.Ticket, going.Started = "other-2", after(time.Minute)
 	must(t, func() error {
-		_, err := srv.Client.ReportCIRuns(context.Background(), "other", core.ReportCIRunsInput{Runs: []core.CIRunView{going}})
+		_, err := srv.Client.ReportCIRuns(context.Background(), "other", api.ReportCIRunsInput{Runs: []api.CIRunView{going}})
 		return err
 	})
 
@@ -339,14 +340,14 @@ func TestTheRunningReadForAllProjectsHasEveryActiveProjectWithCITrackingOn(t *te
 
 	// The Ticket's State doesn't matter: Done, its run still counts.
 	must(t, func() error {
-		_, err := srv.Client.Land(context.Background(), "other", core.LandInput{Ticket: "other-2", Commit: "fed321"})
+		_, err := srv.Client.Land(context.Background(), "other", api.LandInput{Ticket: "other-2", Commit: "fed321"})
 		return err
 	})
 	if got := runKeys(readCI(t, srv, "?project=other&running=true")); !slices.Equal(got, []string{"other/e2e.yml#1"}) {
 		t.Fatalf("other's runs %v, want its run, other-2 Done", got)
 	}
 	must(t, func() error {
-		_, err := srv.Core.ArchiveProject(core.WithActor(context.Background(), core.Human), "other")
+		_, err := srv.Core.ArchiveProject(api.WithActor(context.Background(), api.Human), "other")
 		return err
 	})
 	if got := runKeys(readCI(t, srv, "?running=true")); !slices.Equal(got, []string{"acme/ci.yml#1"}) {
@@ -360,7 +361,7 @@ func TestTheRunningReadForAllProjectsHasEveryActiveProjectWithCITrackingOn(t *te
 
 func TestTheRunningReadRefusesAValueOtherThanTrueOrFalse(t *testing.T) {
 	srv := newServer(t)
-	e := httpRejected(t, srv, httpCall{method: "GET", path: "/api/ci?running=yes"}, core.Invalid)
+	e := httpRejected(t, srv, httpCall{method: "GET", path: "/api/ci?running=yes"}, api.Invalid)
 	if e.Field != "running" {
 		t.Fatalf("field %q, want running", e.Field)
 	}
@@ -371,31 +372,31 @@ func TestTheRunningReadRefusesAValueOtherThanTrueOrFalse(t *testing.T) {
 func pushedInOther(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	ctx := context.Background()
-	human := core.WithActor(ctx, core.Human)
+	human := api.WithActor(ctx, api.Human)
 	httpOK(t, srv, httpCall{"POST", "/api/p/other/set_ci_tracking", `{"tracking":true,"repository":"acme/other"}`})
 	must(t, func() error {
-		_, err := srv.Core.SetLandingMethod(human, "other", core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"})
+		_, err := srv.Core.SetLandingMethod(human, "other", api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.CreateSpec(ctx, "other", core.CreateSpecInput{Title: "Search"})
+		_, err := srv.Core.CreateSpec(ctx, "other", api.CreateSpecInput{Title: "Search"})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.CreateTicket(ctx, "other", core.CreateTicketInput{Spec: "1", Title: "Search box", State: "Ready"})
+		_, err := srv.Core.CreateTicket(ctx, "other", api.CreateTicketInput{Spec: "1", Title: "Search box", State: "Ready"})
 		return err
 	})
-	claim, err := srv.Core.Claim(ctx, "other", core.ClaimInput{})
+	claim, err := srv.Core.Claim(ctx, "other", api.ClaimInput{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	must(t, func() error {
-		_, err := srv.Core.Finish(ctx, "other", core.FinishInput{Ticket: "2", ClaimID: claim.ClaimID, Summary: "Done.", Branch: "other-2", Commit: "fed321"})
+		_, err := srv.Core.Finish(ctx, "other", api.FinishInput{Ticket: "2", ClaimID: claim.ClaimID, Summary: "Done.", Branch: "other-2", Commit: "fed321"})
 		return err
 	})
-	must(t, func() error { _, err := srv.Core.Accept(human, "other", core.TicketInput{Ticket: "2"}); return err })
+	must(t, func() error { _, err := srv.Core.Accept(human, "other", api.TicketInput{Ticket: "2"}); return err })
 	must(t, func() error {
-		_, err := srv.Client.ReportPushedCommit(ctx, "other", core.ReportPushedCommitInput{Ticket: "other-2", Commit: "fed321"})
+		_, err := srv.Client.ReportPushedCommit(ctx, "other", api.ReportPushedCommitInput{Ticket: "other-2", Commit: "fed321"})
 		return err
 	})
 }

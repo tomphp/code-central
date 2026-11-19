@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/issuewatcher"
@@ -20,7 +20,7 @@ import (
 	"github.com/tomoram/code-central/watchers/watchertest"
 )
 
-var human = core.WithActor(context.Background(), core.Human)
+var human = api.WithActor(context.Background(), api.Human)
 
 // watching is a real Code Central with GitHub Issues on for acme, from
 // acme/web, which gh can triage, and the Issue Watcher's loop running
@@ -38,10 +38,10 @@ type watching struct {
 func newWatching(t *testing.T) *watching {
 	t.Helper()
 	srv := codecentraltest.NewServer(t)
-	if _, err := srv.Core.CreateProject(human, core.CreateProjectInput{Key: "acme"}); err != nil {
+	if _, err := srv.Core.CreateProject(human, api.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}}); err != nil {
+	if _, err := srv.Core.SetGitHubIssues(human, "acme", api.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}}); err != nil {
 		t.Fatal(err)
 	}
 	h := watchertest.New(t)
@@ -60,7 +60,7 @@ func (w *watching) start(path ...string) {
 		pw.Close()
 	})
 	c := client.New(w.srv.URL)
-	c.Actor = core.Integration
+	c.Actor = api.Integration
 	go func() {
 		w.done <- issuewatcher.Watch(ctx, issuewatcher.Config{
 			Client: c, Project: "acme", Clock: w.srv.Clock, Stdin: r, Log: io.Discard,
@@ -71,9 +71,9 @@ func (w *watching) start(path ...string) {
 
 // status waits for the Issue Watcher's status in acme's Project read to
 // be state, and returns it.
-func (w *watching) status(state core.WatcherState) core.WatcherView {
+func (w *watching) status(state api.WatcherState) api.WatcherView {
 	w.t.Helper()
-	var got core.WatcherView
+	var got api.WatcherView
 	codecentraltest.Eventually(w.t, func() bool {
 		got = settings(w.t, w.srv).Watcher
 		return got.State == state
@@ -92,7 +92,7 @@ func (w *watching) nextPoll() {
 // each one Notification.
 func (w *watching) errorCount() int {
 	for _, a := range w.srv.Core.WatcherAttention(context.Background()) {
-		if a.Kind == core.WatcherIssues && a.Project == "acme" {
+		if a.Kind == api.WatcherIssues && a.Project == "acme" {
 			return a.Errors
 		}
 	}
@@ -102,7 +102,7 @@ func (w *watching) errorCount() int {
 func TestTheIssueWatcherReportsWatchingWhenItCanTriageTheRepositorysIssues(t *testing.T) {
 	w := newWatching(t)
 	w.start(w.h.Bin)
-	if got := w.status(core.WatcherWatching); got.Message != "" || got.Fix != "" || !got.RateLimitedUntil.IsZero() {
+	if got := w.status(api.WatcherWatching); got.Message != "" || got.Fix != "" || !got.RateLimitedUntil.IsZero() {
 		t.Fatalf("status %+v, want watching with no message", got)
 	}
 	// It polls every 2 minutes, reading the repository each time.
@@ -131,38 +131,38 @@ func TestEachErrorIsReportedWithItsFixUntilItIsFixed(t *testing.T) {
 	for _, c := range []struct {
 		name        string
 		cause, fix  func(h *watchertest.Harness)
-		problem     core.WatcherProblem
+		problem     api.WatcherProblem
 		message, to string
 	}{
 		{"logged out", func(h *watchertest.Harness) { h.LoggedOut() }, func(h *watchertest.Harness) { h.Answer(fakegh.Answer{Args: []string{"auth", "status"}}) },
-			core.ProblemLoggedOut, "not logged into", "gh auth login"},
+			api.ProblemLoggedOut, "not logged into", "gh auth login"},
 		{"unreadable", func(h *watchertest.Harness) { h.Unreadable("acme/web") }, func(h *watchertest.Harness) { repository(h, true, triage) },
-			core.ProblemRepositoryUnreadable, "can't read the repository acme/web", "owner/name"},
+			api.ProblemRepositoryUnreadable, "can't read the repository acme/web", "owner/name"},
 		{"issues disabled", func(h *watchertest.Harness) { repository(h, false, write) }, func(h *watchertest.Harness) { repository(h, true, write) },
-			core.ProblemIssuesDisabled, "acme/web has its issues turned off", "Features"},
+			api.ProblemIssuesDisabled, "acme/web has its issues turned off", "Features"},
 		{"below triage", func(h *watchertest.Harness) { repository(h, true, read) }, func(h *watchertest.Harness) { repository(h, true, triage) },
-			core.ProblemNoTriage, "can't triage the issues of acme/web", "triage permission"},
+			api.ProblemNoTriage, "can't triage the issues of acme/web", "triage permission"},
 		{"unreadable answer", func(h *watchertest.Harness) {
 			h.Answer(fakegh.Answer{Args: []string{"api", "repos/acme/web"}, Stdout: "not json"})
-		}, func(h *watchertest.Harness) { repository(h, true, triage) }, core.ProblemCheckFailed, "acme/web", "gh works"},
+		}, func(h *watchertest.Harness) { repository(h, true, triage) }, api.ProblemCheckFailed, "acme/web", "gh works"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWatching(t)
 			c.cause(w.h)
 			w.start(w.h.Bin)
-			got := w.status(core.WatcherError)
+			got := w.status(api.WatcherError)
 			if got.Problem != c.problem || !strings.Contains(got.Message, c.message) || !strings.Contains(got.Fix, c.to) {
 				t.Fatalf("status %+v, want %s, %q, with the fix %q", got, c.problem, c.message, c.to)
 			}
 			w.nextPoll()
 			w.nextPoll()
-			w.status(core.WatcherError)
+			w.status(api.WatcherError)
 			if n := w.errorCount(); n != 1 {
 				t.Fatalf("went into an error %d times, want once, for one Notification", n)
 			}
 			c.fix(w.h)
 			w.nextPoll()
-			w.status(core.WatcherWatching)
+			w.status(api.WatcherWatching)
 		})
 	}
 }
@@ -172,16 +172,16 @@ func TestEachErrorIsReportedWithItsFixUntilItIsFixed(t *testing.T) {
 func TestAMissingGHIsAnErrorUntilTheGHPathOptionFindsIt(t *testing.T) {
 	w := newWatching(t)
 	w.start(t.TempDir())
-	got := w.status(core.WatcherError)
-	if got.Problem != core.ProblemGHMissing || !strings.Contains(got.Fix, "https://cli.github.com") {
+	got := w.status(api.WatcherError)
+	if got.Problem != api.ProblemGHMissing || !strings.Contains(got.Fix, "https://cli.github.com") {
 		t.Fatalf("status %+v, want gh missing with how to install it", got)
 	}
 	ghPath := w.h.Bin
-	if _, err := w.srv.Core.SetOptions(human, core.SetOptionsInput{GHPath: &ghPath}); err != nil {
+	if _, err := w.srv.Core.SetOptions(human, api.SetOptionsInput{GHPath: &ghPath}); err != nil {
 		t.Fatal(err)
 	}
 	w.nextPoll()
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 }
 
 // rateLimited scripts GitHub's rate-limit answer to reading acme/web,
@@ -208,10 +208,10 @@ func (w *watching) rateLimitedOn(path string, headers ...string) {
 // rate-limited until until.
 func (w *watching) rateLimitedUntil(until time.Time) {
 	w.t.Helper()
-	var got core.WatcherView
+	var got api.WatcherView
 	codecentraltest.Eventually(w.t, func() bool {
 		got = settings(w.t, w.srv).Watcher
-		return got.State == core.WatcherWatching && got.RateLimitedUntil.Equal(until)
+		return got.State == api.WatcherWatching && got.RateLimitedUntil.Equal(until)
 	}, "the Issue Watcher's status %+v, want Watching, rate-limited until %s", &got, until)
 }
 
@@ -261,7 +261,7 @@ func TestWithoutAResetTimeTheIssueWatchersIntervalDoublesUpTo10Minutes(t *testin
 	}
 	w.rateLimitedUntil(time.Time{})
 	w.nextPoll()
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	if n := w.errorCount(); n != 0 {
 		t.Fatalf("went into an error %d times, want none: a rate limit sends no Notification", n)
 	}
@@ -271,7 +271,7 @@ func TestWithoutAResetTimeTheIssueWatchersIntervalDoublesUpTo10Minutes(t *testin
 // loop reports nothing until it is stopped.
 func TestTheIssueWatcherReportsNothingWithGitHubIssuesOff(t *testing.T) {
 	w := newWatching(t)
-	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: false, Repositories: []string{"acme/web"}}); err != nil {
+	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", api.SetGitHubIssuesInput{On: false, Repositories: []string{"acme/web"}}); err != nil {
 		t.Fatal(err)
 	}
 	w.start(w.h.Bin)
@@ -279,7 +279,7 @@ func TestTheIssueWatcherReportsNothingWithGitHubIssuesOff(t *testing.T) {
 	if calls := w.h.Calls(); len(calls) != 0 {
 		t.Fatalf("gh calls %v with GitHub Issues off, want none", calls)
 	}
-	if got := settings(t, w.srv).Watcher; got.State != core.WatcherNotReported {
+	if got := settings(t, w.srv).Watcher; got.State != api.WatcherNotReported {
 		t.Fatalf("status %+v, want not reported", got)
 	}
 }
@@ -287,7 +287,7 @@ func TestTheIssueWatcherReportsNothingWithGitHubIssuesOff(t *testing.T) {
 func TestTheIssueWatcherExitsWhenItsStdinCloses(t *testing.T) {
 	w := newWatching(t)
 	w.start(w.h.Bin)
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	w.stop()
 }
 
@@ -316,7 +316,7 @@ func TestTheIssueWatcherSubcommandWatchesAndExitsWhenItsStdinCloses(t *testing.T
 		cmd.Process.Kill()
 		<-done
 	})
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	stdin.Close()
 	select {
 	case <-done:

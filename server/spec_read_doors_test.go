@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 )
 
@@ -17,7 +17,7 @@ func TestTheLighterGetSpecThroughEveryDoor(t *testing.T) {
 	srv := newServer(t, func(t *testing.T, srv *codecentraltest.Server) {
 		body := "## Solution\n\nDo it.\n\n## Testing Decisions\n\nSeams.\n"
 		must(t, func() error {
-			_, err := srv.Core.EditSpec(context.Background(), "acme", core.EditSpecInput{Spec: "1", Body: &body})
+			_, err := srv.Core.EditSpec(context.Background(), "acme", api.EditSpecInput{Spec: "1", Body: &body})
 			return err
 		})
 	})
@@ -86,7 +86,7 @@ func TestTheLighterGetSpecThroughEveryDoor(t *testing.T) {
 		}
 	}
 
-	namesTheHeadings := func(t *testing.T, e core.Error) {
+	namesTheHeadings := func(t *testing.T, e api.Error) {
 		t.Helper()
 		if e.Field != "sections" || !strings.Contains(e.Message, `"Missing"`) || !strings.Contains(e.Message, "Testing Decisions") {
 			t.Fatalf("error %+v", e)
@@ -94,19 +94,19 @@ func TestTheLighterGetSpecThroughEveryDoor(t *testing.T) {
 	}
 	t.Run("unknown section/http", func(t *testing.T) {
 		status, b := httpDo(t, srv, httpCall{"GET", "/api/p/acme/specs/1?section=Missing", ""})
-		if status != httpapi.Status(core.Invalid) {
+		if status != httpapi.Status(api.Invalid) {
 			t.Fatalf("status %d: %s", status, b)
 		}
-		namesTheHeadings(t, errorJSON(t, b, core.Invalid))
+		namesTheHeadings(t, errorJSON(t, b, api.Invalid))
 	})
 	t.Run("unknown section/mcp", func(t *testing.T) {
-		namesTheHeadings(t, mcpRejected(t, s, "get_spec", map[string]any{"spec": "acme-1", "sections": []string{"Missing"}}, core.Invalid))
+		namesTheHeadings(t, mcpRejected(t, s, "get_spec", map[string]any{"spec": "acme-1", "sections": []string{"Missing"}}, api.Invalid))
 	})
 	t.Run("unknown section/cli", func(t *testing.T) {
-		namesTheHeadings(t, cliRejected(t, srv, []string{"get-spec", "acme-1", "--section", "Missing"}, core.Invalid))
+		namesTheHeadings(t, cliRejected(t, srv, []string{"get-spec", "acme-1", "--section", "Missing"}, api.Invalid))
 	})
 	// Other query parameters are still rejected.
 	t.Run("unknown parameter/http", func(t *testing.T) {
-		httpRejected(t, srv, httpCall{"GET", "/api/p/acme/specs/1?parts=body", ""}, core.Invalid)
+		httpRejected(t, srv, httpCall{"GET", "/api/p/acme/specs/1?parts=body", ""}, api.Invalid)
 	})
 }

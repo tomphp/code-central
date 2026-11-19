@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // Submitting a Requirement (ticket 67).
@@ -48,7 +48,7 @@ func init() {
 			http: httpCall{"POST", "/api/p/acme/submit_requirement", `{"text":"  "}`},
 			cli:  []string{"--text", "  "},
 		},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -57,7 +57,7 @@ func init() {
 func submittedRequirement(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	must(t, func() error {
-		_, err := srv.Core.SubmitRequirement(context.Background(), "acme", core.SubmitRequirementInput{Text: "Dark mode"})
+		_, err := srv.Core.SubmitRequirement(context.Background(), "acme", api.SubmitRequirementInput{Text: "Dark mode"})
 		return err
 	})
 }
@@ -135,16 +135,16 @@ func TestEveryDoorReadsARequirement(t *testing.T) {
 		t.Fatalf("a plain Spec has no requirement block: %v", plain)
 	}
 
-	httpRejected(t, srv, httpCall{"GET", "/api/p/acme/specs?requirements=maybe", ""}, core.Invalid)
-	httpRejected(t, srv, httpCall{"GET", "/api/p/acme/specs?requirements=true&tag=Bad+Key%3Dx", ""}, core.Invalid)
-	mcpRejected(t, s, "find_specs", map[string]any{"requirements": true, "tags": map[string]any{"Bad Key": "x"}}, core.Invalid)
-	cliRejected(t, srv, []string{"find-specs", "--requirements", "--tag", "Bad Key=x"}, core.Invalid)
+	httpRejected(t, srv, httpCall{"GET", "/api/p/acme/specs?requirements=maybe", ""}, api.Invalid)
+	httpRejected(t, srv, httpCall{"GET", "/api/p/acme/specs?requirements=true&tag=Bad+Key%3Dx", ""}, api.Invalid)
+	mcpRejected(t, s, "find_specs", map[string]any{"requirements": true, "tags": map[string]any{"Bad Key": "x"}}, api.Invalid)
+	cliRejected(t, srv, []string{"find-specs", "--requirements", "--tag", "Bad Key=x"}, api.Invalid)
 }
 
 func TestNeedsMeRowsNameTheirRequirementOverHTTP(t *testing.T) {
 	srv := newServer(t, submittedRequirement)
 	must(t, func() error {
-		_, err := srv.Core.Move(core.WithActor(context.Background(), core.Human), "acme", core.MoveInput{Ticket: "5", ToState: "In Review"})
+		_, err := srv.Core.Move(api.WithActor(context.Background(), api.Human), "acme", api.MoveInput{Ticket: "5", ToState: "In Review"})
 		return err
 	})
 	out := httpOK(t, srv, httpCall{"GET", "/api/needs-me", ""})
@@ -171,7 +171,7 @@ func TestTheSubmitRequirementCommandReadsTheTextFromAFile(t *testing.T) {
 func TestEveryDoorSubmitsAStraightToSpecRequirement(t *testing.T) {
 	srv := newServer(t)
 	s := connect(t, srv, "acme")
-	mcpRejected(t, s, "submit_requirement", map[string]any{"text": "Dark mode", "skip_grilling": true, "map": "acme-1"}, core.Invalid)
+	mcpRejected(t, s, "submit_requirement", map[string]any{"text": "Dark mode", "skip_grilling": true, "map": "acme-1"}, api.Invalid)
 	written := map[string]map[string]any{
 		"mcp":  mcpOK(t, s, "submit_requirement", map[string]any{"text": "Dark mode", "skip_grilling": true, "full": true}),
 		"http": httpOK(t, srv, httpCall{"POST", "/api/p/acme/submit_requirement", `{"text":"Dark mode","skip_grilling":true,"full":true}`}),

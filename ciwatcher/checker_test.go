@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/ciwatcher"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/watchers/watchertest"
 )
 
@@ -21,32 +21,32 @@ var ctx = context.Background()
 func serviceWith(t *testing.T, h *watchertest.Harness, path ...string) *codecentraltest.Server {
 	t.Helper()
 	srv := codecentraltest.NewServer(t, codecentraltest.WithCICheck(ciwatcher.Checker(h.CodeCentral, h.Environ(path...))))
-	if _, err := srv.Client.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}); err != nil {
+	if _, err := srv.Client.CreateProject(ctx, api.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)
 	}
-	srv.Client.Actor = core.Human
+	srv.Client.Actor = api.Human
 	return srv
 }
 
 // setGHPath sets the gh path Option, as the human.
 func setGHPath(t *testing.T, srv *codecentraltest.Server, gh string) {
 	t.Helper()
-	if _, err := srv.Client.SetOptions(ctx, core.SetOptionsInput{GHPath: &gh}); err != nil {
+	if _, err := srv.Client.SetOptions(ctx, api.SetOptionsInput{GHPath: &gh}); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func turnOn(srv *codecentraltest.Server) error {
-	_, err := srv.Client.SetCITracking(ctx, "acme", core.SetCITrackingInput{Tracking: true, Repository: "acme/web"})
+	_, err := srv.Client.SetCITracking(ctx, "acme", api.SetCITrackingInput{Tracking: true, Repository: "acme/web"})
 	return err
 }
 
 // refusal is err as the refusal of turning CI Tracking on: on the
 // repository when gh can't read it, else on tracking.
-func refusal(t *testing.T, err error) *core.Error {
+func refusal(t *testing.T, err error) *api.Error {
 	t.Helper()
-	var e *core.Error
-	if !errors.As(err, &e) || e.Code != core.Invalid || (e.Field != "tracking" && e.Field != "repository") {
+	var e *api.Error
+	if !errors.As(err, &e) || e.Code != api.Invalid || (e.Field != "tracking" && e.Field != "repository") {
 		t.Fatalf("err = %v, want CI Tracking refused", err)
 	}
 	return e
@@ -123,7 +123,7 @@ func TestTurningCITrackingOffRunsNoCheck(t *testing.T) {
 	}
 	h.LoggedOut()
 	before := len(h.Calls())
-	if _, err := srv.Client.SetCITracking(ctx, "acme", core.SetCITrackingInput{Repository: "acme/web"}); err != nil || tracking(t, srv) {
+	if _, err := srv.Client.SetCITracking(ctx, "acme", api.SetCITrackingInput{Repository: "acme/web"}); err != nil || tracking(t, srv) {
 		t.Fatalf("turning off: %v", err)
 	}
 	if n := len(h.Calls()); n != before {
@@ -134,10 +134,10 @@ func TestTurningCITrackingOffRunsNoCheck(t *testing.T) {
 func TestACheckThatDoesntFinishRefusesCITracking(t *testing.T) {
 	h := watchertest.New(t)
 	srv := codecentraltest.NewServer(t, codecentraltest.WithCICheck(ciwatcher.Checker(filepath.Join(t.TempDir(), "missing"), h.Environ(h.Bin))))
-	if _, err := srv.Client.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}); err != nil {
+	if _, err := srv.Client.CreateProject(ctx, api.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)
 	}
-	srv.Client.Actor = core.Human
+	srv.Client.Actor = api.Human
 	if e := refusal(t, turnOn(srv)); !strings.Contains(e.Message, "didn't finish") || e.Fix == "" {
 		t.Fatalf("refusal %+v, want the check that didn't finish, with a fix", e)
 	}

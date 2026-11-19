@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
@@ -14,12 +15,12 @@ import (
 func TestAHumanMoveOutOfNeedsAnswerDismissesOpenQuestionsAndEndsTheClaim(t *testing.T) {
 	f := newFixture(t)
 	f.asking(t, qDB, qName)
-	if _, err := f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "Postgres"}); err != nil {
+	if _, err := f.core.Answer(human, "acme", api.AnswerInput{Ticket: "2", Question: 1, Text: "Postgres"}); err != nil {
 		t.Fatal(err)
 	}
 	later := t0.Add(2 * time.Hour)
 	f.clock.Set(later)
-	v, err := record(f.core.Cancel(human, "acme", core.CancelInput{Ticket: "2", Full: true}))
+	v, err := record(f.core.Cancel(human, "acme", api.CancelInput{Ticket: "2", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +44,7 @@ func TestAHumanMoveFromNeedsAnswerToInProgressKeepsTheClaim(t *testing.T) {
 	f.asking(t, qDB)
 	moved := t0.Add(2 * time.Hour)
 	f.clock.Set(moved)
-	v, err := record(f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: domain.InProgress, Full: true}))
+	v, err := record(f.core.Move(human, "acme", api.MoveInput{Ticket: "2", ToState: domain.InProgress, Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,10 +63,10 @@ func TestAHumanMoveFromNeedsAnswerToInProgressKeepsTheClaim(t *testing.T) {
 func TestAHumanMoveFromNeedsAnswerToAnsweredLetsTheHolderPickUpAnswers(t *testing.T) {
 	f := newFixture(t)
 	f.asking(t, qDB)
-	if _, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: domain.Answered}); err != nil {
+	if _, err := f.core.Move(human, "acme", api.MoveInput{Ticket: "2", ToState: domain.Answered}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.core.PickUpAnswers(ctx, "acme", core.PickUpAnswersInput{Ticket: "2", ClaimID: "claim-1"}); err != nil {
+	if _, err := f.core.PickUpAnswers(ctx, "acme", api.PickUpAnswersInput{Ticket: "2", ClaimID: "claim-1"}); err != nil {
 		t.Fatalf("pick_up_answers after a human move to Answered: %v", err)
 	}
 	if v := f.get(t, "2"); v.State != domain.InProgress || v.Claims[0].Ended != nil {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // Finished work and Archived Projects (ticket 39): the human's, so HTTP
@@ -20,7 +20,7 @@ func init() {
 			}
 		},
 		bad:  call{http: httpCall{"POST", "/api/p/acme/archive_project", `{}`}},
-		code: core.ActionNotAllowed,
+		code: api.ActionNotAllowed,
 	}
 	cases["unarchive_project"] = opCase{
 		setup: otherArchived,
@@ -31,12 +31,12 @@ func init() {
 			}
 		},
 		bad:  call{http: httpCall{"POST", "/api/p/nope/unarchive_project", `{}`}},
-		code: core.UnknownProject,
+		code: api.UnknownProject,
 	}
 }
 
 func otherArchived(t *testing.T, srv *codecentraltest.Server) {
-	human := core.WithActor(context.Background(), core.Human)
+	human := api.WithActor(context.Background(), api.Human)
 	must(t, func() error { _, err := srv.Core.ArchiveProject(human, "other"); return err })
 }
 
@@ -44,23 +44,23 @@ func otherArchived(t *testing.T, srv *codecentraltest.Server) {
 // shape, listing unarchive_project; reads by URL keep working.
 func TestAnArchivedProjectsRefusalThroughEveryDoor(t *testing.T) {
 	srv := newServer(t, func(t *testing.T, srv *codecentraltest.Server) {
-		human := core.WithActor(context.Background(), core.Human)
-		for _, n := range []core.Ref{"2", "3"} {
+		human := api.WithActor(context.Background(), api.Human)
+		for _, n := range []api.Ref{"2", "3"} {
 			must(t, func() error {
-				_, err := srv.Core.Move(human, "acme", core.MoveInput{Ticket: n, ToState: "Done"})
+				_, err := srv.Core.Move(human, "acme", api.MoveInput{Ticket: n, ToState: "Done"})
 				return err
 			})
 		}
 		must(t, func() error { _, err := srv.Core.ArchiveProject(human, "acme"); return err })
 	})
-	want := func(t *testing.T, e core.Error) {
+	want := func(t *testing.T, e api.Error) {
 		t.Helper()
 		if len(e.AllowedActions) != 1 || e.AllowedActions[0] != "unarchive_project" {
 			t.Fatalf("refusal %+v, want allowed_actions [unarchive_project]", e)
 		}
 	}
-	want(t, mcpRejected(t, connect(t, srv, "acme"), "create_spec", map[string]any{"title": "More"}, core.ActionNotAllowed))
-	want(t, cliRejected(t, srv, []string{"create-spec", "--title", "More"}, core.ActionNotAllowed))
-	httpRejected(t, srv, httpCall{"POST", "/api/p/acme/create_ticket", `{"spec":1,"title":"More"}`}, core.ActionNotAllowed)
+	want(t, mcpRejected(t, connect(t, srv, "acme"), "create_spec", map[string]any{"title": "More"}, api.ActionNotAllowed))
+	want(t, cliRejected(t, srv, []string{"create-spec", "--title", "More"}, api.ActionNotAllowed))
+	httpRejected(t, srv, httpCall{"POST", "/api/p/acme/create_ticket", `{"spec":1,"title":"More"}`}, api.ActionNotAllowed)
 	field("state", "Done")(t, httpOK(t, srv, httpCall{"GET", "/api/p/acme/tickets/2", ""}))
 }

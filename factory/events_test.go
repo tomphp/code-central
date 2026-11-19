@@ -1,12 +1,14 @@
 package factory_test
 
 import (
-	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
@@ -14,12 +16,12 @@ import (
 
 // event is a Session Event without its time and seq, for comparing.
 type event struct {
-	Kind                  core.SessionEventKind
+	Kind                  api.SessionEventKind
 	Text, Tool, ToolUseID string
 	IsError, Truncated    bool
 }
 
-func events(tr core.TranscriptView) []event {
+func events(tr api.TranscriptView) []event {
 	var out []event
 	for _, e := range tr.Events {
 		out = append(out, event{e.Kind, e.Text, e.Tool, e.ToolUseID, e.IsError, e.Truncated})
@@ -30,11 +32,11 @@ func events(tr core.TranscriptView) []event {
 // waitForTranscript polls until the Transcript of ticket's first Claim
 // holds an event whose text contains s, and returns it. The Ticket has
 // been claimed: a test settles the Factory first.
-func waitForTranscript(h *factorytest.Harness, r *factorytest.Running, ticket, s string) core.TranscriptView {
-	var tr core.TranscriptView
+func waitForTranscript(h *factorytest.Harness, r *factorytest.Running, ticket, s string) api.TranscriptView {
+	var tr api.TranscriptView
 	r.PollUntil("an event with "+s+" in "+ticket+"'s Transcript", func() bool {
 		tr = h.Transcript(ticket, 1)
-		return slices.ContainsFunc(tr.Events, func(e core.HeldSessionEvent) bool { return strings.Contains(e.Text, s) })
+		return slices.ContainsFunc(tr.Events, func(e api.HeldSessionEvent) bool { return strings.Contains(e.Text, s) })
 	})
 	return tr
 }

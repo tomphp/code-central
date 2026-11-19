@@ -1,13 +1,14 @@
 package factory_test
 
 import (
-	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -214,7 +215,7 @@ func TestUnderMergeWithoutPushTheFactoryNeverFetches(t *testing.T) {
 	for _, ref := range strings.Fields(h.Git("for-each-ref", "--format=%(refname)", "refs/remotes")) {
 		h.Git("update-ref", "-d", ref)
 	}
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Remote: "origin"})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Remote: "origin"})
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	h.Start()

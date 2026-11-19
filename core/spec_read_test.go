@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -20,13 +20,13 @@ func (f fixture) sectionedSpec(t *testing.T) {
 	t.Helper()
 	f.work(t, domain.Ready, domain.Draft)
 	body := specBody
-	if _, err := f.core.EditSpec(ctx, "acme", core.EditSpecInput{Spec: "1", Body: &body}); err != nil {
+	if _, err := f.core.EditSpec(ctx, "acme", api.EditSpecInput{Spec: "1", Body: &body}); err != nil {
 		t.Fatalf("edit_spec: %v", err)
 	}
 }
 
 // readSpec is get_spec's result as a caller sees its JSON.
-func (f fixture) readSpec(t *testing.T, in core.GetSpecInput) map[string]any {
+func (f fixture) readSpec(t *testing.T, in api.GetSpecInput) map[string]any {
 	t.Helper()
 	v, err := f.core.GetSpec(ctx, "acme", in)
 	if err != nil {
@@ -66,7 +66,7 @@ var specOutline = []any{
 func TestGetSpecWithNeitherInputIsTheFullSpec(t *testing.T) {
 	f := newFixture(t)
 	f.sectionedSpec(t)
-	full := f.readSpec(t, core.GetSpecInput{Spec: "acme-1"})
+	full := f.readSpec(t, api.GetSpecInput{Spec: "acme-1"})
 	want := []string{"body", "claimed", "created", "editable", "edits", "finished", "id", "kind", "labels", "retroable", "state_summary", "tags", "ticketable", "tickets", "title", "updated"}
 	if got := keys(full); !slices.Equal(got, want) {
 		t.Fatalf("keys %v, want %v: no outline on a full read", got, want)
@@ -77,10 +77,10 @@ func TestGetSpecWithNeitherInputIsTheFullSpec(t *testing.T) {
 	// An empty body and no edits are still there, not left out.
 	empty := f.spec(t, "acme", "Empty")
 	none := ""
-	if _, err := f.core.EditSpec(ctx, "acme", core.EditSpecInput{Spec: core.Ref(empty.ID), Body: &none}); err != nil {
+	if _, err := f.core.EditSpec(ctx, "acme", api.EditSpecInput{Spec: api.Ref(empty.ID), Body: &none}); err != nil {
 		t.Fatal(err)
 	}
-	v, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: core.Ref(empty.ID)})
+	v, err := f.core.GetSpec(ctx, "acme", api.GetSpecInput{Spec: api.Ref(empty.ID)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestGetSpecReturnsOnlyTheAskedForParts(t *testing.T) {
 		{[]string{"body", "tickets", "edits"}, []string{"body", "edits", "tickets"}},
 	} {
 		t.Run(strings.Join(c.parts, ","), func(t *testing.T) {
-			out := f.readSpec(t, core.GetSpecInput{Spec: "acme-1", Parts: c.parts})
+			out := f.readSpec(t, api.GetSpecInput{Spec: "acme-1", Parts: c.parts})
 			want := append(slices.Clone(always), c.extra...)
 			slices.Sort(want)
 			if got := keys(out); !slices.Equal(got, want) {
@@ -128,7 +128,7 @@ func TestGetSpecReturnsOnlyTheAskedForParts(t *testing.T) {
 func TestGetSpecWithSectionsCutsTheBody(t *testing.T) {
 	f := newFixture(t)
 	f.sectionedSpec(t)
-	out := f.readSpec(t, core.GetSpecInput{Spec: "acme-1", Sections: []string{"testing decisions", "Solution"}})
+	out := f.readSpec(t, api.GetSpecInput{Spec: "acme-1", Sections: []string{"testing decisions", "Solution"}})
 	if want := "## Solution\n\nDo it.\n\n### Detail\n\nSmall print.\n\n## Testing Decisions\n\nSeams."; out["body"] != want {
 		t.Fatalf("body %q, want %q", out["body"], want)
 	}
@@ -139,11 +139,11 @@ func TestGetSpecWithSectionsCutsTheBody(t *testing.T) {
 		t.Fatalf("sections without parts: keys %v, want %v; outline %v", got, want, out["outline"])
 	}
 	// An explicit parts still wins.
-	out = f.readSpec(t, core.GetSpecInput{Spec: "acme-1", Parts: []string{"body", "tickets"}, Sections: []string{"Solution"}})
+	out = f.readSpec(t, api.GetSpecInput{Spec: "acme-1", Parts: []string{"body", "tickets"}, Sections: []string{"Solution"}})
 	if len(out["tickets"].([]any)) != 2 || out["edits"] != nil || out["body"] != "## Solution\n\nDo it.\n\n### Detail\n\nSmall print." {
 		t.Fatalf("sections with parts body and tickets %v", out)
 	}
-	out = f.readSpec(t, core.GetSpecInput{Spec: "acme-1", Parts: []string{"body"}, Sections: []string{"Detail"}})
+	out = f.readSpec(t, api.GetSpecInput{Spec: "acme-1", Parts: []string{"body"}, Sections: []string{"Detail"}})
 	if out["body"] != "### Detail\n\nSmall print." || out["tickets"] != nil || out["edits"] != nil {
 		t.Fatalf("parts and sections %v", out)
 	}
@@ -152,13 +152,13 @@ func TestGetSpecWithSectionsCutsTheBody(t *testing.T) {
 func TestGetSpecRejectsAContradictoryOrMistypedRead(t *testing.T) {
 	f := newFixture(t)
 	f.sectionedSpec(t)
-	_, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-1", Parts: []string{"body", "history"}})
-	wantCode(t, err, core.Invalid, "parts")
-	_, err = f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-1", Parts: []string{"tickets"}, Sections: []string{"Solution"}})
-	wantCode(t, err, core.Invalid, "sections")
-	_, err = f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-1", Sections: []string{"Solution", "Solutoin"}})
-	wantCode(t, err, core.Invalid, "sections")
-	msg := err.(*core.Error).Message
+	_, err := f.core.GetSpec(ctx, "acme", api.GetSpecInput{Spec: "acme-1", Parts: []string{"body", "history"}})
+	wantCode(t, err, api.Invalid, "parts")
+	_, err = f.core.GetSpec(ctx, "acme", api.GetSpecInput{Spec: "acme-1", Parts: []string{"tickets"}, Sections: []string{"Solution"}})
+	wantCode(t, err, api.Invalid, "sections")
+	_, err = f.core.GetSpec(ctx, "acme", api.GetSpecInput{Spec: "acme-1", Sections: []string{"Solution", "Solutoin"}})
+	wantCode(t, err, api.Invalid, "sections")
+	msg := err.(*api.Error).Message
 	for _, want := range []string{`"Solutoin"`, "Solution", "Detail", "Testing Decisions"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("message %q doesn't name %s", msg, want)
@@ -169,12 +169,12 @@ func TestGetSpecRejectsAContradictoryOrMistypedRead(t *testing.T) {
 func TestALighterReadKeepsTheLinkAndTheRequirement(t *testing.T) {
 	f := newFixture(t)
 	f.linked(t)
-	if out := f.readSpec(t, core.GetSpecInput{Spec: "acme-1", Parts: []string{"tickets"}}); out["link"] == nil {
+	if out := f.readSpec(t, api.GetSpecInput{Spec: "acme-1", Parts: []string{"tickets"}}); out["link"] == nil {
 		t.Fatalf("a linked Spec's lighter read has no link: %v", out)
 	}
 	f = newFixture(t)
 	f.requirement(t)
-	if out := f.readSpec(t, core.GetSpecInput{Spec: "acme-2", Parts: []string{"edits"}}); out["requirement"] == nil {
+	if out := f.readSpec(t, api.GetSpecInput{Spec: "acme-2", Parts: []string{"edits"}}); out["requirement"] == nil {
 		t.Fatalf("a Requirement's lighter read has no requirement: %v", out)
 	}
 }

@@ -6,8 +6,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // get_ticket's smaller default and its parts (ticket 192, ADR 0015): the
@@ -17,18 +17,18 @@ func TestTheSmallerGetTicketThroughEveryDoor(t *testing.T) {
 	srv := newServer(t, func(t *testing.T, srv *codecentraltest.Server) {
 		ctx := context.Background()
 		must(t, func() error {
-			_, err := srv.Core.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: "Use the old form"})
+			_, err := srv.Core.Comment(ctx, "acme", api.CommentInput{Ticket: "2", Body: "Use the old form"})
 			return err
 		})
 		must(t, func() error {
-			_, err := srv.Core.Approve(ctx, "acme", core.TicketInput{Ticket: "2"})
+			_, err := srv.Core.Approve(ctx, "acme", api.TicketInput{Ticket: "2"})
 			return err
 		})
 	})
 	s := connect(t, srv, "acme")
 	has := func(t *testing.T, out map[string]any, parts ...string) {
 		t.Helper()
-		for _, p := range core.TicketParts() {
+		for _, p := range api.TicketParts() {
 			_, ok := out[p]
 			if want := slices.Contains(parts, p); ok != want {
 				t.Fatalf("%s there: %v, want %v: %v", p, ok, want, out)
@@ -44,7 +44,7 @@ func TestTheSmallerGetTicketThroughEveryDoor(t *testing.T) {
 	}{
 		"default": {
 			check: func(t *testing.T, out map[string]any) {
-				has(t, out, core.DefaultTicketParts()...)
+				has(t, out, api.DefaultTicketParts()...)
 				if c := out["comments"].([]any); len(c) != 1 {
 					t.Fatalf("comments %v", c)
 				}
@@ -72,14 +72,14 @@ func TestTheSmallerGetTicketThroughEveryDoor(t *testing.T) {
 		},
 		"whole": {
 			check: func(t *testing.T, out map[string]any) {
-				has(t, out, core.TicketParts()...)
+				has(t, out, api.TicketParts()...)
 				if _, ok := out["left_out"]; ok {
 					t.Fatalf("left_out on the whole Ticket: %v", out)
 				}
 			},
 			calls: []map[string]any{
 				httpOK(t, srv, httpCall{"GET", "/api/p/acme/tickets/2", ""}),
-				mcpOK(t, s, "get_ticket", map[string]any{"ticket": "acme-2", "parts": core.TicketParts()}),
+				mcpOK(t, s, "get_ticket", map[string]any{"ticket": "acme-2", "parts": api.TicketParts()}),
 			},
 		},
 	}
@@ -91,15 +91,15 @@ func TestTheSmallerGetTicketThroughEveryDoor(t *testing.T) {
 	}
 
 	t.Run("unknown part/http", func(t *testing.T) {
-		httpRejected(t, srv, httpCall{"GET", "/api/p/acme/tickets/2?part=history", ""}, core.Invalid)
+		httpRejected(t, srv, httpCall{"GET", "/api/p/acme/tickets/2?part=history", ""}, api.Invalid)
 	})
 	t.Run("unknown part/mcp", func(t *testing.T) {
-		mcpRejected(t, s, "get_ticket", map[string]any{"ticket": "acme-2", "parts": []string{"history"}}, core.Invalid)
+		mcpRejected(t, s, "get_ticket", map[string]any{"ticket": "acme-2", "parts": []string{"history"}}, api.Invalid)
 	})
 	t.Run("unknown part/cli", func(t *testing.T) {
-		cliRejected(t, srv, []string{"get-ticket", "acme-2", "--part", "history"}, core.Invalid)
+		cliRejected(t, srv, []string{"get-ticket", "acme-2", "--part", "history"}, api.Invalid)
 	})
 	t.Run("unknown parameter/http", func(t *testing.T) {
-		httpRejected(t, srv, httpCall{"GET", "/api/p/acme/tickets/2?parts=moves", ""}, core.Invalid)
+		httpRejected(t, srv, httpCall{"GET", "/api/p/acme/tickets/2?parts=moves", ""}, api.Invalid)
 	})
 }

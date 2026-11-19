@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -30,32 +32,10 @@ const RetroLabel = "retro"
 // finishes, such as a CI Rule's Spec or an Issues Spec.
 const LongLivedLabel = store.LongLivedLabel
 
-// NodeType is a Ticket's type on a Map (NodeTypeOf): one of the
-// WayfinderTypes, prototype, or ticket for a Ticket with neither.
-type NodeType string
-
-// The node types.
-const (
-	NodeChart     NodeType = "chart"
-	NodeGrilling  NodeType = "grilling"
-	NodeResearch  NodeType = "research"
-	NodeTask      NodeType = "task"
-	NodePrototype NodeType = "prototype"
-	NodeTicket    NodeType = "ticket"
-)
-
-// WayfinderTypes are the Map's Ticket types, each named as its Label's
-// suffix.
-func WayfinderTypes() []NodeType { return []NodeType{NodeChart, NodeGrilling, NodeResearch, NodeTask} }
-
-// NodeTypes are the node types: the WayfinderTypes, then prototype and
-// ticket.
-var NodeTypes = append(slices.Clone(WayfinderTypes()), NodePrototype, NodeTicket)
-
 // wayfinderNames are every name the wayfinder: prefix allows.
 var wayfinderNames = func() []string {
 	names := []string{"map"}
-	for _, t := range WayfinderTypes() {
+	for _, t := range api.WayfinderTypes() {
 		names = append(names, string(t))
 	}
 	return names
@@ -78,10 +58,10 @@ func typeGuide(l string) (guide string, ok bool) {
 	if l == PrototypeLabel || l == RetroLabel {
 		return l, true
 	}
-	if name, ok := strings.CutPrefix(l, WayfinderPrefix); ok && slices.Contains(WayfinderTypes(), NodeType(name)) {
+	if name, ok := strings.CutPrefix(l, WayfinderPrefix); ok && slices.Contains(api.WayfinderTypes(), api.NodeType(name)) {
 		return mapGuidePrefix + name, true
 	}
-	if name, ok := strings.CutPrefix(l, StagePrefix); ok && slices.Contains(Stages(), StageName(name)) {
+	if name, ok := strings.CutPrefix(l, domain.StagePrefix); ok && slices.Contains(domain.Stages(), domain.StageName(name)) {
 		return name, true
 	}
 	return "", false
@@ -119,7 +99,7 @@ func checkReservedNames(field string, labels []string) error {
 // checkHumanLabels rejects the auto-accept Label named by anyone but the
 // human, who alone adds or removes it.
 func checkHumanLabels(ctx context.Context, field string, labels []string) error {
-	if slices.Contains(labels, AutoAcceptLabel) && ActorOf(ctx) != Human {
+	if slices.Contains(labels, AutoAcceptLabel) && api.ActorOf(ctx) != api.Human {
 		return invalid(field, "%q is reserved for the human, who alone adds or removes it", AutoAcceptLabel)
 	}
 	return nil

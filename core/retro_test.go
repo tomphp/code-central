@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
@@ -20,26 +21,26 @@ func (f fixture) finishedSpec(t *testing.T) {
 	t.Helper()
 	f.project(t, "acme")
 	f.spec(t, "acme", "Login")
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Grill it", State: domain.Ready, Labels: []string{"stage:grilling"}})
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Prototype: theme", State: domain.Ready, Labels: []string{core.PrototypeLabel}})
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Build it", State: domain.Ready})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Grill it", State: domain.Ready, Labels: []string{"stage:grilling"}})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Prototype: theme", State: domain.Ready, Labels: []string{core.PrototypeLabel}})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Build it", State: domain.Ready})
 
-	grill := f.claim(t, core.ClaimInput{Ticket: "2", SessionID: "sess-1", WorkingDir: ptr("/w/one")})
-	if _, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: grill.ClaimID, Summary: "Grilled."}); err != nil {
+	grill := f.claim(t, api.ClaimInput{Ticket: "2", SessionID: "sess-1", WorkingDir: ptr("/w/one")})
+	if _, err := f.core.Finish(ctx, "acme", api.FinishInput{Ticket: "2", ClaimID: grill.ClaimID, Summary: "Grilled."}); err != nil {
 		t.Fatalf("finish: %v", err)
 	}
 	f.move(t, "2", domain.Done)
-	f.claim(t, core.ClaimInput{Ticket: "3", WorkingDir: ptr("/w/two")})
+	f.claim(t, api.ClaimInput{Ticket: "3", WorkingDir: ptr("/w/two")})
 	f.move(t, "3", domain.Cancelled)
-	f.claim(t, core.ClaimInput{Ticket: "4", SessionID: "sess-2"})
-	if _, err := f.core.Release(human, "acme", core.ReleaseInput{Ticket: "4"}); err != nil {
+	f.claim(t, api.ClaimInput{Ticket: "4", SessionID: "sess-2"})
+	if _, err := f.core.Release(human, "acme", api.ReleaseInput{Ticket: "4"}); err != nil {
 		t.Fatalf("release: %v", err)
 	}
-	f.claim(t, core.ClaimInput{Ticket: "4", SessionID: "sess-3", WorkingDir: ptr("/w/three")})
+	f.claim(t, api.ClaimInput{Ticket: "4", SessionID: "sess-3", WorkingDir: ptr("/w/three")})
 	f.move(t, "4", domain.Done)
 }
 
-func (f fixture) submitRetro(t *testing.T, in core.SubmitRetroInput) core.TicketView {
+func (f fixture) submitRetro(t *testing.T, in api.SubmitRetroInput) api.TicketView {
 	t.Helper()
 	in.Full = true
 	tk, err := record(f.core.SubmitRetro(ctx, "acme", in))
@@ -51,7 +52,7 @@ func (f fixture) submitRetro(t *testing.T, in core.SubmitRetroInput) core.Ticket
 
 // wantRetro checks tk is a Ready Retro of target on Spec spec, titled
 // title, with one move to Ready and description.
-func wantRetro(t *testing.T, tk core.TicketView, spec, title, target, description string) {
+func wantRetro(t *testing.T, tk api.TicketView, spec, title, target, description string) {
 	t.Helper()
 	if tk.Title != title || tk.State != domain.Ready || tk.Spec.ID != spec || !tk.Claimable ||
 		!slices.Equal(tk.Labels, []string{core.RetroLabel}) || !maps.Equal(tk.Tags, map[string]string{"retro-of": target}) {
@@ -68,7 +69,7 @@ func wantRetro(t *testing.T, tk core.TicketView, spec, title, target, descriptio
 func TestARetroOnAFinishedSpecListsEveryClaimOnItsTickets(t *testing.T) {
 	f := newFixture(t)
 	f.finishedSpec(t)
-	tk := f.submitRetro(t, core.SubmitRetroInput{Target: "acme-1"})
+	tk := f.submitRetro(t, api.SubmitRetroInput{Target: "acme-1"})
 	wantRetro(t, tk, "acme-5", "Retro: Login", "acme-1", "Retro on Spec [acme-1](acme-1): Login.\n"+
 		"\n## Claims to read\n\n"+
 		"- acme-2 (Grill it), Claim 1: session_id `sess-1`, working_dir `/w/one`, ended by finish.\n"+
@@ -80,7 +81,7 @@ func TestARetroOnAFinishedSpecListsEveryClaimOnItsTickets(t *testing.T) {
 func TestARetroOnADoneTicketListsItsClaims(t *testing.T) {
 	f := newFixture(t)
 	f.finishedSpec(t)
-	tk := f.submitRetro(t, core.SubmitRetroInput{Target: "4"})
+	tk := f.submitRetro(t, api.SubmitRetroInput{Target: "4"})
 	wantRetro(t, tk, "acme-5", "Retro: Build it", "acme-4", "Retro on Ticket [acme-4](acme-4): Build it.\n"+
 		"\n## Claims to read\n\n"+
 		"- acme-4 (Build it), Claim 1: session_id `sess-2`, no working_dir, ended by release.\n"+
@@ -90,7 +91,7 @@ func TestARetroOnADoneTicketListsItsClaims(t *testing.T) {
 func TestARetroOnACancelledTicketShowsTheNoteUnderItsOwnHeading(t *testing.T) {
 	f := newFixture(t)
 	f.finishedSpec(t)
-	tk := f.submitRetro(t, core.SubmitRetroInput{Target: "acme-3", Note: "  Why did we drop it?\n"})
+	tk := f.submitRetro(t, api.SubmitRetroInput{Target: "acme-3", Note: "  Why did we drop it?\n"})
 	wantRetro(t, tk, "acme-5", "Retro: Prototype: theme", "acme-3", "Retro on Ticket [acme-3](acme-3): Prototype: theme.\n"+
 		"\n## Note\n\nWhy did we drop it?\n"+
 		"\n## Claims to read\n\n"+
@@ -100,7 +101,7 @@ func TestARetroOnACancelledTicketShowsTheNoteUnderItsOwnHeading(t *testing.T) {
 func TestARetroOnWorkWithNoClaimsStillOpens(t *testing.T) {
 	f := newFixture(t)
 	f.finishedWork(t) // acme-2 Done and acme-3 Cancelled, never claimed
-	tk := f.submitRetro(t, core.SubmitRetroInput{Target: "acme-2", Note: " \n"})
+	tk := f.submitRetro(t, api.SubmitRetroInput{Target: "acme-2", Note: " \n"})
 	wantRetro(t, tk, "acme-4", "Retro: Ta", "acme-2", "Retro on Ticket [acme-2](acme-2): Ta.\n"+
 		"\n## Claims to read\n\nNone: no agent ever claimed this work, so there is no session to read.\n")
 }
@@ -108,8 +109,8 @@ func TestARetroOnWorkWithNoClaimsStillOpens(t *testing.T) {
 func TestTheFirstRetroCreatesTheRetrosSpecAndALaterOneReusesItAfterARetitle(t *testing.T) {
 	f := newFixture(t)
 	f.finishedSpec(t)
-	first := f.submitRetro(t, core.SubmitRetroInput{Target: "acme-2"})
-	sp, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: core.Ref(first.Spec.ID)})
+	first := f.submitRetro(t, api.SubmitRetroInput{Target: "acme-2"})
+	sp, err := f.core.GetSpec(ctx, "acme", api.GetSpecInput{Spec: api.Ref(first.Spec.ID)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,10 +122,10 @@ func TestTheFirstRetroCreatesTheRetrosSpecAndALaterOneReusesItAfterARetitle(t *t
 	if p.RetrosSpec != 5 {
 		t.Fatalf("the Project names Retros Spec %d", p.RetrosSpec)
 	}
-	if _, err := f.core.EditSpec(ctx, "acme", core.EditSpecInput{Spec: "acme-5", Title: ptr("Looking back")}); err != nil {
+	if _, err := f.core.EditSpec(ctx, "acme", api.EditSpecInput{Spec: "acme-5", Title: ptr("Looking back")}); err != nil {
 		t.Fatal(err)
 	}
-	if second := f.submitRetro(t, core.SubmitRetroInput{Target: "acme-4"}); second.Spec.ID != "acme-5" || second.ID != "acme-7" {
+	if second := f.submitRetro(t, api.SubmitRetroInput{Target: "acme-4"}); second.Spec.ID != "acme-5" || second.ID != "acme-7" {
 		t.Fatalf("second Retro %+v", second)
 	}
 }
@@ -132,13 +133,13 @@ func TestTheFirstRetroCreatesTheRetrosSpecAndALaterOneReusesItAfterARetitle(t *t
 func TestARetroCanTargetARetroAndSeveralCanTargetTheSameWork(t *testing.T) {
 	f := newFixture(t)
 	f.finishedSpec(t)
-	first := f.submitRetro(t, core.SubmitRetroInput{Target: "acme-2"})
-	second := f.submitRetro(t, core.SubmitRetroInput{Target: "acme-2"})
+	first := f.submitRetro(t, api.SubmitRetroInput{Target: "acme-2"})
+	second := f.submitRetro(t, api.SubmitRetroInput{Target: "acme-2"})
 	if first.ID == second.ID || second.Tags["retro-of"] != "acme-2" {
 		t.Fatalf("Retros %s and %+v", first.ID, second)
 	}
-	f.move(t, core.Ref(first.ID), domain.Done)
-	onRetro := f.submitRetro(t, core.SubmitRetroInput{Target: core.Ref(first.ID)})
+	f.move(t, api.Ref(first.ID), domain.Done)
+	onRetro := f.submitRetro(t, api.SubmitRetroInput{Target: api.Ref(first.ID)})
 	if onRetro.Title != "Retro: Retro: Grill it" || onRetro.Tags["retro-of"] != first.ID || onRetro.Spec.ID != "acme-5" {
 		t.Fatalf("Retro on a Retro %+v", onRetro)
 	}
@@ -147,7 +148,7 @@ func TestARetroCanTargetARetroAndSeveralCanTargetTheSameWork(t *testing.T) {
 func TestSubmittingARetroAcknowledgesItsTicket(t *testing.T) {
 	f := newFixture(t)
 	f.finishedSpec(t)
-	res, err := f.core.SubmitRetro(ctx, "acme", core.SubmitRetroInput{Target: "acme-2"})
+	res, err := f.core.SubmitRetro(ctx, "acme", api.SubmitRetroInput{Target: "acme-2"})
 	if err != nil {
 		t.Fatalf("submit_retro: %v", err)
 	}
@@ -156,7 +157,7 @@ func TestSubmittingARetroAcknowledgesItsTicket(t *testing.T) {
 }
 
 func TestARetroIsRefusedOnWorkThatIsMissingUnfinishedOrLongLived(t *testing.T) {
-	for name, target := range map[string]core.Ref{
+	for name, target := range map[string]api.Ref{
 		"no target":         "",
 		"not an ID":         "nope",
 		"another Project's": "other-2",
@@ -170,11 +171,11 @@ func TestARetroIsRefusedOnWorkThatIsMissingUnfinishedOrLongLived(t *testing.T) {
 			f.work(t, domain.Draft) // Long-lived acme-1, finished: acme-2 Done
 			f.move(t, "2", domain.Done)
 			f.spec(t, "acme", "Signup") // acme-3, unfinished: acme-4 In Review
-			f.ticket(t, "acme", core.CreateTicketInput{Spec: "3", Title: "Form"})
+			f.ticket(t, "acme", api.CreateTicketInput{Spec: "3", Title: "Form"})
 			f.move(t, "4", domain.InReview)
-			_, err := f.core.SubmitRetro(ctx, "acme", core.SubmitRetroInput{Target: target})
-			wantCode(t, err, core.Invalid, "target")
-			if specs, _ := f.core.FindSpecs(ctx, "acme", core.FindSpecsInput{Finished: true}); len(specs) != 2 {
+			_, err := f.core.SubmitRetro(ctx, "acme", api.SubmitRetroInput{Target: target})
+			wantCode(t, err, api.Invalid, "target")
+			if specs, _ := f.core.FindSpecs(ctx, "acme", api.FindSpecsInput{Finished: true}); len(specs) != 2 {
 				t.Fatalf("a refused Retro wrote a Spec: %+v", specs)
 			}
 		})
@@ -184,11 +185,11 @@ func TestARetroIsRefusedOnWorkThatIsMissingUnfinishedOrLongLived(t *testing.T) {
 func TestTicketAndSpecReadsListTheirRetrosOldestFirstAndLeaveThemOutWhenThereAreNone(t *testing.T) {
 	f := newFixture(t)
 	f.finishedSpec(t)
-	tk, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "acme-2"})
+	tk, err := f.core.GetTicket(ctx, "acme", api.GetTicketInput{Ticket: "acme-2"})
 	if err != nil || tk.Retros != nil {
 		t.Fatalf("Ticket without Retros: %+v, %v", tk.Retros, err)
 	}
-	sp, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-1"})
+	sp, err := f.core.GetSpec(ctx, "acme", api.GetSpecInput{Spec: "acme-1"})
 	if err != nil || sp.Retros != nil {
 		t.Fatalf("Spec without Retros: %+v, %v", sp.Retros, err)
 	}
@@ -196,30 +197,30 @@ func TestTicketAndSpecReadsListTheirRetrosOldestFirstAndLeaveThemOutWhenThereAre
 		t.Fatalf("retros not left out: %s", b)
 	}
 
-	first := f.submitRetro(t, core.SubmitRetroInput{Target: "acme-2"})
-	second := f.submitRetro(t, core.SubmitRetroInput{Target: "acme-2"})
-	onSpec := f.submitRetro(t, core.SubmitRetroInput{Target: "acme-1"})
-	f.move(t, core.Ref(second.ID), domain.Done)
+	first := f.submitRetro(t, api.SubmitRetroInput{Target: "acme-2"})
+	second := f.submitRetro(t, api.SubmitRetroInput{Target: "acme-2"})
+	onSpec := f.submitRetro(t, api.SubmitRetroInput{Target: "acme-1"})
+	f.move(t, api.Ref(second.ID), domain.Done)
 
-	tk, err = f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "acme-2"})
+	tk, err = f.core.GetTicket(ctx, "acme", api.GetTicketInput{Ticket: "acme-2"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []core.RetroView{
+	want := []api.RetroView{
 		{ID: first.ID, Title: "Retro: Grill it", State: domain.Ready},
 		{ID: second.ID, Title: "Retro: Grill it", State: domain.Done},
 	}
 	if !slices.Equal(tk.Retros, want) {
 		t.Fatalf("Ticket Retros %+v, want %+v", tk.Retros, want)
 	}
-	sp, err = f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-1"})
+	sp, err = f.core.GetSpec(ctx, "acme", api.GetSpecInput{Spec: "acme-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if wantSpec := []core.RetroView{{ID: onSpec.ID, Title: "Retro: Login", State: domain.Ready}}; !slices.Equal(sp.Retros, wantSpec) {
+	if wantSpec := []api.RetroView{{ID: onSpec.ID, Title: "Retro: Login", State: domain.Ready}}; !slices.Equal(sp.Retros, wantSpec) {
 		t.Fatalf("Spec Retros %+v, want %+v", sp.Retros, wantSpec)
 	}
-	other, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "acme-4"})
+	other, err := f.core.GetTicket(ctx, "acme", api.GetTicketInput{Ticket: "acme-4"})
 	if err != nil || other.Retros != nil {
 		t.Fatalf("another Ticket's Retros: %+v, %v", other.Retros, err)
 	}

@@ -3,7 +3,7 @@ package core
 import (
 	"context"
 
-	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -14,68 +14,20 @@ import (
 // report_issue_written, and its status report is accepted from that
 // Actor only.
 
-// WorkItemWatch is get_work_item_watch: everything the Work Item Watcher
-// needs on each poll, so it keeps no state of its own.
-type WorkItemWatch struct {
-	Project string `json:"project"`
-	On      bool   `json:"on"`
-	// Mode is how it picks its work items: saved_query or wiql.
-	Mode domain.AzureBoardsMode `json:"mode"`
-	// QueryURL is the Saved query's URL.
-	QueryURL string `json:"query_url"`
-	// ProjectURL is the Azure DevOps project a WIQL filter runs in, and
-	// Where its WHERE clause.
-	ProjectURL string `json:"project_url"`
-	Where      string `json:"where"`
-	// PATEnv is the name of the environment variable holding the Azure
-	// DevOps PAT.
-	PATEnv string `json:"pat_env"`
-	// Spec is the Azure Boards Spec's ID, left out until Azure Boards is
-	// first turned on.
-	Spec string `json:"spec,omitempty"`
-	// Issues are the Incoming Issues on the Azure Boards Spec, in number
-	// order, so the Watcher sees which work items it has and which have
-	// changed.
-	Issues []IncomingIssue `json:"issues"`
-	// Linked is every azure-boards Link ID in the Project, detached and
-	// outbound ones too, once each, so the Watcher tells a new work item
-	// from one already taken off the inbox.
-	Linked []string `json:"linked"`
-	// Writes are the items, Incoming Issues and outbound Specs, whose work
-	// items have writes due, in number order (writeback.go).
-	Writes []WorkItemWrites `json:"writes"`
-}
-
-// WorkItemWrites is an item whose work item has writes due, as
-// get_work_item_watch lists it: what is due on a GitHub issue, with the
-// status label as the work item's tag of the same name, and never a
-// close, as a work item's State is the human's to move.
-type WorkItemWrites struct {
-	// Target is the item, such as acme-5.
-	Target string   `json:"target"`
-	Link   LinkView `json:"link"`
-	// Comments are the comments due, in the order to post them.
-	Comments []IssueComment `json:"comments"`
-	// Tag is the status tag the work item should carry, in place of any
-	// other code-central: tag; empty asks for none to be changed, as it
-	// always is under Hide Code Central.
-	Tag string `json:"tag,omitempty"`
-}
-
 // GetWorkItemWatch is the Work Item Watcher's get_work_item_watch.
-func (c *Core) GetWorkItemWatch(_ context.Context, key string) (WorkItemWatch, error) {
-	var out WorkItemWatch
+func (c *Core) GetWorkItemWatch(_ context.Context, key string) (api.WorkItemWatch, error) {
+	var out api.WorkItemWatch
 	err := c.store.View(func(r store.Reader) error {
 		p, ok := r.Project(key)
 		if !ok {
 			return unknownProject(key)
 		}
-		a := azureBoardsView(p, WatcherView{})
-		out = WorkItemWatch{Project: key, On: a.On, Mode: a.Mode, QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where, PATEnv: a.PATEnv,
-			Spec: a.Spec, Issues: incomingIssues(r, key, IntegrationAzureBoards), Linked: linkIDs(r, key, IntegrationAzureBoards), Writes: []WorkItemWrites{}}
+		a := azureBoardsView(p, api.WatcherView{})
+		out = api.WorkItemWatch{Project: key, On: a.On, Mode: a.Mode, QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where, PATEnv: a.PATEnv,
+			Spec: a.Spec, Issues: incomingIssues(r, key, IntegrationAzureBoards), Linked: linkIDs(r, key, IntegrationAzureBoards), Writes: []api.WorkItemWrites{}}
 		for _, w := range c.integrationWrites(r, key, IntegrationAzureBoards, p.AzureBoards.HideCodeCentral) {
 			if w.Label != "" || len(w.Comments) > 0 {
-				out.Writes = append(out.Writes, WorkItemWrites{Target: w.Target, Link: w.Link, Comments: w.Comments, Tag: w.Label})
+				out.Writes = append(out.Writes, api.WorkItemWrites{Target: w.Target, Link: w.Link, Comments: w.Comments, Tag: w.Label})
 			}
 		}
 		return nil
@@ -107,9 +59,9 @@ func linkIDs(r store.Reader, key, integration string) []string {
 // ReportWorkItemWatcherStatus is report_work_item_watcher_status: the
 // Work Item Watcher reports its status on every poll, as the integration
 // Actor.
-func (c *Core) ReportWorkItemWatcherStatus(ctx context.Context, key string, in ReportWatcherStatusInput) (Written[ProjectView], error) {
-	if err := requireActor(ctx, "report_work_item_watcher_status", Integration); err != nil {
-		return Written[ProjectView]{}, err
+func (c *Core) ReportWorkItemWatcherStatus(ctx context.Context, key string, in api.ReportWatcherStatusInput) (api.Written[api.ProjectView], error) {
+	if err := requireActor(ctx, "report_work_item_watcher_status", api.Integration); err != nil {
+		return api.Written[api.ProjectView]{}, err
 	}
-	return c.reportWatcherStatus(WatcherWorkItems, key, in)
+	return c.reportWatcherStatus(api.WatcherWorkItems, key, in)
 }

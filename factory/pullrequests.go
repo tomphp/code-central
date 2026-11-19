@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -22,12 +22,12 @@ import (
 
 // changedElsewhere reports whether tk's work is in a Repository beside
 // the Home Repository, home.
-func changedElsewhere(home string, tk core.TicketView) bool {
-	return slices.ContainsFunc(tk.Repositories, func(r core.ChangedRepositoryView) bool { return r.Name != home })
+func changedElsewhere(home string, tk api.TicketView) bool {
+	return slices.ContainsFunc(tk.Repositories, func(r api.ChangedRepositoryView) bool { return r.Name != home })
 }
 
 // hasMerged reports whether pr is a pull request that has merged.
-func hasMerged(pr *core.PullRequestView) bool { return pr != nil && pr.State == domain.PRMerged }
+func hasMerged(pr *api.PullRequestView) bool { return pr != nil && pr.State == domain.PRMerged }
 
 // repositoryNamed is the Repository name with a clone, or nil.
 func (l *lander) repositoryNamed(name string) *repository {
@@ -56,7 +56,7 @@ func (l *lander) baseHolds(r *repository, commit string) bool {
 // to here. Under Rebase its branch holds its work rebased onto the base,
 // when it was (rebaseForPush), which is pushed with lease over an older
 // push.
-func (l *lander) landPullRequestIn(ctx context.Context, tk core.TicketView, policies core.LandingPolicies, r *repository, onSpec bool) {
+func (l *lander) landPullRequestIn(ctx context.Context, tk api.TicketView, policies api.LandingPolicies, r *repository, onSpec bool) {
 	rec, ok := viewIn(tk, r)
 	if !ok || rec.Landed != nil {
 		return
@@ -111,7 +111,7 @@ type pushRebase struct {
 // conflict, for tk to be sent back to rebase. ok is false when one can't
 // be worked out this poll: a base not fetched level with the remote's
 // waits for one that is, and otherwise a comment or a line says why.
-func (l *lander) planPushRebases(ctx context.Context, tk core.TicketView, policies core.LandingPolicies, ws []changedWork) (rebases map[*repository]pushRebase, conflicts []landConflict, ok bool) {
+func (l *lander) planPushRebases(ctx context.Context, tk api.TicketView, policies api.LandingPolicies, ws []changedWork) (rebases map[*repository]pushRebase, conflicts []landConflict, ok bool) {
 	rebases = map[*repository]pushRebase{}
 	for _, w := range ws {
 		r := w.r
@@ -151,7 +151,7 @@ func (l *lander) planPushRebases(ctx context.Context, tk core.TicketView, polici
 // rebaseForPush moves tk's branch in r to its work replayed onto the
 // base's tip, as rb says, before it is pushed, and reports whether it
 // did; it comments why when it can't, to be tried again next poll.
-func (l *lander) rebaseForPush(ctx context.Context, tk core.TicketView, r *repository, rb pushRebase) bool {
+func (l *lander) rebaseForPush(ctx context.Context, tk api.TicketView, r *repository, rb pushRebase) bool {
 	if err := rb.replay.apply(r, tk.ID, rb.onto); err != nil {
 		l.cantPushIn(ctx, tk, r, err.Error()+".")
 		return false
@@ -163,7 +163,7 @@ func (l *lander) rebaseForPush(ctx context.Context, tk core.TicketView, r *repos
 // landMergedIn lands tk in r, whose pull request there is reported
 // merged, at the merge commit, once r's base holds it. Until then it
 // waits for a later poll.
-func (l *lander) landMergedIn(ctx context.Context, tk core.TicketView, r *repository, pr *core.PullRequestView) {
+func (l *lander) landMergedIn(ctx context.Context, tk api.TicketView, r *repository, pr *api.PullRequestView) {
 	if !l.baseHolds(r, pr.MergeCommit) {
 		key := tk.ID + "@" + pr.MergeCommit
 		if !l.leftOnBranch[key] {
@@ -179,8 +179,8 @@ func (l *lander) landMergedIn(ctx context.Context, tk core.TicketView, r *reposi
 // landIn calls land for tk in r with the commit that put its work into
 // r's base, naming r so the Ticket is Done only once every one of its
 // Changed Repositories has landed.
-func (l *lander) landIn(ctx context.Context, tk core.TicketView, r *repository, commit string) {
-	in := core.LandInput{Ticket: core.Ref(tk.ID), Commit: commit, Repository: r.name}
+func (l *lander) landIn(ctx context.Context, tk api.TicketView, r *repository, commit string) {
+	in := api.LandInput{Ticket: api.Ref(tk.ID), Commit: commit, Repository: r.name}
 	if _, err := l.client.Land(ctx, l.project, in); err != nil {
 		if ctx.Err() == nil {
 			l.printf("%s: land%s: %v", tk.ID, r.where(), err)
@@ -201,7 +201,7 @@ func (l *lander) pushedAlreadyIn(r *repository, branch string) bool {
 // Repositories in each Repository under Pull Request, its base not
 // broken (held) under policies, whose pull request is merged, as
 // detectMergedPullRequests does for one in the Home Repository alone.
-func (l *lander) detectMergedPullRequestsIn(ctx context.Context, tk core.TicketView, policies core.LandingPolicies) {
+func (l *lander) detectMergedPullRequestsIn(ctx context.Context, tk api.TicketView, policies api.LandingPolicies) {
 	for _, rec := range tk.Repositories {
 		if rec.Landed != nil || !hasMerged(rec.PullRequest) {
 			continue

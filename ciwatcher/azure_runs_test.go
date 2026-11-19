@@ -8,14 +8,15 @@ package ciwatcher_test
 import (
 	"context"
 	"fmt"
-	"github.com/tomoram/code-central/domain"
 	"io"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/ciwatcher"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakeazdo"
 )
@@ -39,9 +40,9 @@ func newAzureWatching(t *testing.T) *azureWatching {
 // track turns CI Tracking on for the fake, ignoring ignored pipelines.
 func (a *azureWatching) track(ignored ...string) {
 	a.t.Helper()
-	human := core.WithActor(context.Background(), core.Human)
+	human := api.WithActor(context.Background(), api.Human)
 	must(a.t, func() error {
-		_, err := a.srv.Core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Provider: domain.CIAzurePipelines,
+		_, err := a.srv.Core.SetCITracking(human, "acme", api.SetCITrackingInput{Tracking: true, Provider: domain.CIAzurePipelines,
 			ProjectURL: a.azdo.ProjectURL(), IgnoredWorkflows: ignored})
 		return err
 	})
@@ -171,7 +172,7 @@ func TestTheCIWatcherReportsAnAzureCommitsBuildsAsRunsMatchedByCommit(t *testing
 	a.timeline(12, azRecord{"Job", "build", "failed", 1})
 	a.startAzure()
 
-	tk := a.ciResult(id, core.CIPassed)
+	tk := a.ciResult(id, api.CIPassed)
 	if len(tk.CIRuns) != 2 {
 		t.Fatalf("runs = %+v, want the two builds of the commit, not the other commit's", tk.CIRuns)
 	}
@@ -181,7 +182,7 @@ func TestTheCIWatcherReportsAnAzureCommitsBuildsAsRunsMatchedByCommit(t *testing
 		ci.Started == nil || ci.Finished == nil || !ci.Finished.Equal(time.Date(2026, 1, 5, 9, 5, 0, 0, time.UTC)) || ci.Ignored {
 		t.Fatalf("CI's run = %+v", ci)
 	}
-	want := []core.CIJobView{
+	want := []api.CIJobView{
 		{Name: "test", Conclusion: domain.CISuccess}, {Name: "lint", Conclusion: domain.CIPartiallySucceeded},
 		{Name: "docs", Conclusion: domain.CISkipped}, {Name: "deploy", Conclusion: domain.CICancelled}}
 	if len(ci.Jobs) != len(want) {
@@ -200,17 +201,17 @@ func TestTheCIWatcherReportsAnAzureCommitsBuildsAsRunsMatchedByCommit(t *testing
 func TestAnAzureStatusAndResultMapToCodeCentrals(t *testing.T) {
 	for _, c := range []struct {
 		status, result string
-		wantResult     core.CIResult
+		wantResult     api.CIResult
 		wantStatus     domain.CIRunStatus
 		wantConclusion domain.CIConclusion
 	}{
-		{"notStarted", "", core.CIRunning, domain.CIQueued, ""},
-		{"postponed", "", core.CIRunning, domain.CIQueued, ""},
-		{"inProgress", "", core.CIRunning, domain.CIInProgress, ""},
-		{"cancelling", "", core.CIRunning, domain.CIInProgress, ""},
-		{"completed", "succeeded", core.CIPassed, domain.CICompleted, domain.CISuccess},
-		{"completed", "failed", core.CIFailed, domain.CICompleted, domain.CIFailure},
-		{"completed", "canceled", core.CICancelled, domain.CICompleted, domain.CICancelled},
+		{"notStarted", "", api.CIRunning, domain.CIQueued, ""},
+		{"postponed", "", api.CIRunning, domain.CIQueued, ""},
+		{"inProgress", "", api.CIRunning, domain.CIInProgress, ""},
+		{"cancelling", "", api.CIRunning, domain.CIInProgress, ""},
+		{"completed", "succeeded", api.CIPassed, domain.CICompleted, domain.CISuccess},
+		{"completed", "failed", api.CIFailed, domain.CICompleted, domain.CIFailure},
+		{"completed", "canceled", api.CICancelled, domain.CICompleted, domain.CICancelled},
 	} {
 		t.Run(c.status+"/"+c.result, func(t *testing.T) {
 			a := newAzureWatching(t)
@@ -235,7 +236,7 @@ func TestAnUnchangedAzureBuildCostsNoFurtherTimelineCall(t *testing.T) {
 	a.builds(azBuild{id: 11, pipeline: "CI", commit: "abc123", status: "inProgress", changed: "2026-01-05T09:02:00Z"})
 	a.timeline(11, azRecord{"Job", "test", "", 1})
 	a.startAzure()
-	a.ciResult(id, core.CIRunning)
+	a.ciResult(id, api.CIRunning)
 
 	a.poll()
 	a.poll()
@@ -247,7 +248,7 @@ func TestAnUnchangedAzureBuildCostsNoFurtherTimelineCall(t *testing.T) {
 	a.builds(azBuild{id: 11, pipeline: "CI", commit: "abc123", status: "completed", result: "failed", changed: "2026-01-05T09:06:00Z", finished: "2026-01-05T09:06:00Z"})
 	a.timeline(11, azRecord{"Job", "test", "failed", 1})
 	a.poll()
-	tk := a.ciResult(id, core.CIFailed)
+	tk := a.ciResult(id, api.CIFailed)
 	if tk.CIRuns[0].Jobs[0].Conclusion != domain.CIFailure || a.requests("/timeline") != 2 {
 		t.Fatalf("run = %+v after %d timeline reads, want its job failed after one more", tk.CIRuns[0], a.requests("/timeline"))
 	}
@@ -259,15 +260,15 @@ func TestARetriedAzureBuildsAttemptIsItsHighestJobAttempt(t *testing.T) {
 	a.builds(azBuild{id: 11, pipeline: "CI", commit: "abc123", status: "completed", result: "failed", changed: "2026-01-05T09:05:00Z", finished: "2026-01-05T09:05:00Z"})
 	a.timeline(11, azRecord{"Job", "test", "failed", 1}, azRecord{"Job", "lint", "succeeded", 1})
 	a.startAzure()
-	if tk := a.ciResult(id, core.CIFailed); tk.CIRuns[0].Attempt != 1 {
+	if tk := a.ciResult(id, api.CIFailed); tk.CIRuns[0].Attempt != 1 {
 		t.Fatalf("attempt = %d, want 1 before any retry", tk.CIRuns[0].Attempt)
 	}
 
 	a.builds(azBuild{id: 11, pipeline: "CI", commit: "abc123", status: "completed", result: "succeeded", changed: "2026-01-05T09:09:00Z", finished: "2026-01-05T09:09:00Z"})
 	a.timeline(11, azRecord{"Job", "test", "succeeded", 2}, azRecord{"Job", "lint", "succeeded", 1})
 	a.poll()
-	tk := a.ciResult(id, core.CIPassed)
-	var latest *core.CIRunView
+	tk := a.ciResult(id, api.CIPassed)
+	var latest *api.CIRunView
 	for i, r := range tk.CIRuns {
 		if r.Attempt == 2 {
 			latest = &tk.CIRuns[i]
@@ -360,18 +361,18 @@ func TestAnAnyRuleMatchesAnAzurePipelineWhateverItsName(t *testing.T) {
 func (a *azureWatching) pullRequestPushed(commit string) string {
 	a.t.Helper()
 	id := a.pushed(commit)
-	ctx, human := context.Background(), core.WithActor(context.Background(), core.Human)
+	ctx, human := context.Background(), api.WithActor(context.Background(), api.Human)
 	c := a.srv.Core
 	must(a.t, func() error {
-		_, err := c.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "https://dev.azure.com/acme/web/_git/web", Base: "main"})
+		_, err := c.ReportPushRemote(ctx, "acme", api.ReportPushRemoteInput{URL: "https://dev.azure.com/acme/web/_git/web", Base: "main"})
 		return err
 	})
 	must(a.t, func() error {
-		_, err := c.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest})
+		_, err := c.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest})
 		return err
 	})
 	must(a.t, func() error {
-		_, err := c.ReportPullRequest(ctx, "acme", core.ReportPullRequestInput{Branch: id, Number: 7, Link: "https://dev.azure.com/acme/web/_git/web/pullrequest/7", State: domain.PROpen})
+		_, err := c.ReportPullRequest(ctx, "acme", api.ReportPullRequestInput{Branch: id, Number: 7, Link: "https://dev.azure.com/acme/web/_git/web/pullrequest/7", State: domain.PROpen})
 		return err
 	})
 	return id
@@ -386,7 +387,7 @@ func TestAnAzureBuildOnThePullRequestsMergeRefCountsTowardsThePushedCommit(t *te
 	a.timeline(11, azRecord{"Job", "test", "failed", 1})
 	a.startAzure()
 
-	tk := a.ciResult(id, core.CIFailed)
+	tk := a.ciResult(id, api.CIFailed)
 	if len(tk.CIRuns) != 1 || tk.CIRuns[0].ID != 11 || tk.CIRuns[0].Commit != "abc123" || tk.CIRuns[0].Ticket != id {
 		t.Fatalf("runs = %+v, want only the pull request 7 merge build, counted on the pushed commit", tk.CIRuns)
 	}
@@ -398,10 +399,10 @@ func TestAnAzureRerunActsOnABuildOnThePullRequestsMergeRef(t *testing.T) {
 	a.builds(azBuild{id: 11, pipeline: "CI", branch: "refs/pull/7/merge", commit: "mergesha", status: "completed", result: "failed", changed: "2026-01-05T09:05:00Z", finished: "2026-01-05T09:05:00Z"})
 	a.timeline(11, azRecord{"Job", "test", "failed", 1})
 	a.startAzure()
-	a.ciResult(id, core.CIFailed)
-	human := core.WithActor(context.Background(), core.Human)
+	a.ciResult(id, api.CIFailed)
+	human := api.WithActor(context.Background(), api.Human)
 	must(t, func() error {
-		_, err := a.srv.Core.RerunCI(human, "acme", core.CIResponseInput{Ticket: core.Ref(id)})
+		_, err := a.srv.Core.RerunCI(human, "acme", api.CIResponseInput{Ticket: api.Ref(id)})
 		return err
 	})
 	a.poll()

@@ -4,14 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // toRequirement is the human's To Requirement on ticket with context,
 // returning the Requirement's Spec.
 func (w *watching) toRequirement(ticket, context string) string {
 	w.t.Helper()
-	if _, err := w.srv.Core.ToRequirement(human, "acme", core.ToRequirementInput{Ticket: core.Ref(ticket), Context: context}); err != nil {
+	if _, err := w.srv.Core.ToRequirement(human, "acme", api.ToRequirementInput{Ticket: api.Ref(ticket), Context: context}); err != nil {
 		w.t.Fatal(err)
 	}
 	rows := w.linked()
@@ -48,7 +48,7 @@ func TestALaterGitHubEditDoesntChangeTheRequirement(t *testing.T) {
 	edited.Title = "Issue 1, edited"
 	w.openIssues("", 1, edited)
 	w.polled()
-	sp, err := w.srv.Core.GetSpec(context.Background(), "acme", core.GetSpecInput{Spec: core.Ref(spec)})
+	sp, err := w.srv.Core.GetSpec(context.Background(), "acme", api.GetSpecInput{Spec: api.Ref(spec)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestALaterGitHubEditDoesntChangeTheRequirement(t *testing.T) {
 func TestAfterUnlinkingTheSpecNothingMoreIsWritten(t *testing.T) {
 	w := newWatching(t)
 	spec := w.toRequirement(w.arrivedFirst(labelled(1, "code-central:draft")), "Seen on every login.")
-	if _, err := w.srv.Core.Unlink(human, "acme", core.UnlinkInput{Target: core.Ref(spec)}); err != nil {
+	if _, err := w.srv.Core.Unlink(human, "acme", api.UnlinkInput{Target: api.Ref(spec)}); err != nil {
 		t.Fatal(err)
 	}
 	from := len(w.h.Calls())

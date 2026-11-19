@@ -2,11 +2,13 @@ package cli_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/codecentraltest"
@@ -90,7 +92,7 @@ func TestInitWritesTheTeachingFilesAndAPointerToThem(t *testing.T) {
 	write(t, dir, "AGENTS.md", "agents\n")
 
 	r := ok(t, runIn(t, dir, map[string]string{"CODE_CENTRAL_URL": srv.URL}, "\ny\n", "init"))
-	wantMode(t, srv, "api", core.ModeCommitted)
+	wantMode(t, srv, "api", domain.ModeCommitted)
 	wantTeachingFiles(t, dir)
 	wantHooksIn(t, dir, ".claude/settings.json")
 	if got := read(t, dir, "CLAUDE.md"); !strings.HasPrefix(got, "# API\n\nBe kind.\n") || !strings.Contains(got, trackerDoc) {
@@ -130,7 +132,7 @@ func TestInitLocalKeepsEverythingOutOfTheRepository(t *testing.T) {
 	env := map[string]string{"CODE_CENTRAL_URL": srv.URL}
 	ok(t, runIn(t, dir, env, "\ny\n", "init", "--local"))
 
-	wantMode(t, srv, "api", core.ModeLocal)
+	wantMode(t, srv, "api", domain.ModeLocal)
 	wantURL(t, dir, "api")
 	wantTeachingFiles(t, dir)
 	wantHooksIn(t, dir, ".claude/settings.local.json")
@@ -175,18 +177,18 @@ func TestAFlagThatConflictsWithTheStoredModeAsksBeforeSwitching(t *testing.T) {
 	if !strings.Contains(r.stdout, "Switch it to local?") {
 		t.Fatalf("no question in %q", r.stdout)
 	}
-	wantMode(t, srv, "api", core.ModeCommitted)
+	wantMode(t, srv, "api", domain.ModeCommitted)
 	wantHooksIn(t, dir, ".claude/settings.json")
 
 	ok(t, runIn(t, dir, env, "y\n", "init", "--local"))
-	wantMode(t, srv, "api", core.ModeLocal)
+	wantMode(t, srv, "api", domain.ModeLocal)
 	wantHooksIn(t, dir, ".claude/settings.local.json")
 	if !strings.Contains(read(t, dir, ".git/info/exclude"), "/.mcp.json\n") {
 		t.Fatal("not excluded after switching to local")
 	}
 
 	ok(t, runIn(t, dir, env, "y\n", "init", "--committed"))
-	wantMode(t, srv, "api", core.ModeCommitted)
+	wantMode(t, srv, "api", domain.ModeCommitted)
 	wantHooksIn(t, dir, ".claude/settings.json")
 	if strings.Contains(read(t, dir, ".git/info/exclude"), ".mcp.json") {
 		t.Fatal("still excluded after switching back")
@@ -253,7 +255,7 @@ func TestHelpSandboxesCoversSbxAndBind(t *testing.T) {
 func TestConnectionErrorsPointAtTheSandboxHelp(t *testing.T) {
 	t.Parallel()
 	r := run(t, map[string]string{"CODE_CENTRAL_URL": "http://" + freeAddr(t), "CODE_CENTRAL_PROJECT": "acme"}, "", "get-ticket", "1")
-	if e := wantError(t, r, core.ServiceUnavailable); !strings.Contains(e.Message, "code-central help sandboxes") {
+	if e := wantError(t, r, api.ServiceUnavailable); !strings.Contains(e.Message, "code-central help sandboxes") {
 		t.Fatalf("message %q", e.Message)
 	}
 }

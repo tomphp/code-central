@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/client"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/ops"
 )
 
@@ -53,9 +53,9 @@ func runCancel(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	in := core.CancelInput{Ticket: ref, Reason: text, Full: *full}
+	in := api.CancelInput{Ticket: ref, Reason: text, Full: *full}
 	for _, r := range reps {
-		in.Replacements = append(in.Replacements, core.Ref(r))
+		in.Replacements = append(in.Replacements, api.Ref(r))
 	}
 	v, err := sc.client.Cancel(ctx, sc.project, in)
 	if err != nil {

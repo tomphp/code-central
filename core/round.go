@@ -6,94 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
-
-// QuestionInput is one Question of a Round being posted.
-type QuestionInput struct {
-	Title       string `json:"title" desc:"A short title." required:"true"`
-	Body        string `json:"body" desc:"The Question in Markdown, with any choices as prose." required:"true"`
-	Recommended string `json:"recommended,omitempty" desc:"Your recommended answer, if you have one."`
-}
-
-// PostRoundInput is post_round's input.
-type PostRoundInput struct {
-	Ticket    Ref             `json:"ticket" path:"n" desc:"The Ticket." required:"true"`
-	ClaimID   string          `json:"claim_id" desc:"The Claim ID claim returned." required:"true"`
-	SessionID string          `json:"session_id,omitempty" desc:"Your session ID, shown to the human for resuming you."`
-	Questions []QuestionInput `json:"questions" minItems:"1" desc:"The Questions, each with a title, a body and an optional recommended answer." required:"true"`
-	// Full asks for the Round number and the next step without the
-	// Acknowledgement: post_round's record is its Round, not the Ticket.
-	Full bool `json:"full,omitempty" desc:"Return only the Round number and the next step instead of the acknowledgement."`
-}
-
-// PostRoundResult is post_round's result: the Acknowledgement (none with
-// full), the Round number and the next step.
-type PostRoundResult struct {
-	*Acknowledgement
-	Round    int    `json:"round"`
-	NextStep string `json:"next_step"`
-}
-
-// PickUpAnswersInput is pick_up_answers' input.
-type PickUpAnswersInput struct {
-	Ticket  Ref    `json:"ticket" path:"n" desc:"The Ticket." required:"true" cli:"<id>"`
-	ClaimID string `json:"claim_id" desc:"The Claim ID claim returned." required:"true" cli:"--claim <claim-id>"`
-}
-
-// PickUpAnswersResult is the latest Round with every answer and
-// dismissal, and the comments added since it was posted.
-type PickUpAnswersResult struct {
-	Ticket   string        `json:"ticket"`
-	Round    RoundView     `json:"round"`
-	Comments []CommentView `json:"comments"`
-}
-
-// AnswerInput is the human's answer(question, text). Questions are
-// numbered across their Ticket.
-type AnswerInput struct {
-	Ticket   Ref    `json:"ticket" path:"n"`
-	Question int    `json:"question"`
-	Text     string `json:"text"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
-// DismissQuestionInput is the human's dismiss_question(question).
-type DismissQuestionInput struct {
-	Ticket   Ref `json:"ticket" path:"n"`
-	Question int `json:"question"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
-// AcceptRecommendedInput is the human's accept_recommended(round).
-type AcceptRecommendedInput struct {
-	Ticket Ref `json:"ticket" path:"n"`
-	Round  int `json:"round"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
-// RoundView is one Round as reads show it.
-type RoundView struct {
-	Number    int            `json:"number"`
-	Claim     int            `json:"claim"`
-	SessionID string         `json:"session_id,omitempty"`
-	Posted    time.Time      `json:"posted"`
-	Questions []QuestionView `json:"questions"`
-}
-
-// QuestionView is one Question: open, answered or dismissed.
-type QuestionView struct {
-	Number      int                   `json:"number"`
-	Title       string                `json:"title"`
-	Body        string                `json:"body"`
-	Recommended string                `json:"recommended,omitempty"`
-	Status      domain.QuestionStatus `json:"status"`
-	Answer      string                `json:"answer,omitempty"`
-	Closed      *time.Time            `json:"closed,omitempty"`
-}
 
 // postRoundNextStep is post_round's next step (its row in Workflow);
 // <id> becomes the Ticket ID.
@@ -102,19 +17,19 @@ const postRoundNextStep = "End your turn now, after running `code-central wait <
 // PostRound is post_round(ticket, claim_id, session_id?, questions): the
 // holder posts a numbered Round in one write, moving In Progress to Needs
 // Answer and keeping the Claim. The session ID defaults to the Claim's.
-func (c *Core) PostRound(ctx context.Context, key string, in PostRoundInput) (PostRoundResult, error) {
+func (c *Core) PostRound(ctx context.Context, key string, in api.PostRoundInput) (api.PostRoundResult, error) {
 	if len(in.Questions) == 0 {
-		return PostRoundResult{}, invalid("questions", "a Round needs at least one Question")
+		return api.PostRoundResult{}, invalid("questions", "a Round needs at least one Question")
 	}
 	for i, q := range in.Questions {
 		if strings.TrimSpace(q.Title) == "" {
-			return PostRoundResult{}, invalid(fmt.Sprintf("questions[%d].title", i), "every Question needs a title")
+			return api.PostRoundResult{}, invalid(fmt.Sprintf("questions[%d].title", i), "every Question needs a title")
 		}
 		if strings.TrimSpace(q.Body) == "" {
-			return PostRoundResult{}, invalid(fmt.Sprintf("questions[%d].body", i), "every Question needs a body")
+			return api.PostRoundResult{}, invalid(fmt.Sprintf("questions[%d].body", i), "every Question needs a body")
 		}
 	}
-	var res PostRoundResult
+	var res api.PostRoundResult
 	v, err := c.updateTicket(key, "post_round", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		claim, _ := claimToWrite(t)
 		now := c.now()
@@ -134,11 +49,11 @@ func (c *Core) PostRound(ctx context.Context, key string, in PostRoundInput) (Po
 			r.Questions = append(r.Questions, domain.Question{Number: n, Title: q.Title, Body: q.Body, Recommended: q.Recommended, Status: domain.QuestionOpen})
 		}
 		t.Rounds = append(t.Rounds, r)
-		res = PostRoundResult{Round: r.Number, NextStep: strings.ReplaceAll(nextStep("post_round"), "<id>", DisplayID(key, t.Number))}
+		res = api.PostRoundResult{Round: r.Number, NextStep: strings.ReplaceAll(nextStep("post_round"), "<id>", DisplayID(key, t.Number))}
 		return true, nil
 	})
 	if err != nil {
-		return PostRoundResult{}, err
+		return api.PostRoundResult{}, err
 	}
 	if v.Record == nil {
 		res.Acknowledgement = &v.Acknowledgement
@@ -148,15 +63,15 @@ func (c *Core) PostRound(ctx context.Context, key string, in PostRoundInput) (Po
 
 // PickUpAnswers is pick_up_answers(ticket, claim_id): the holder moves
 // Answered to In Progress in one step and gets the latest Round back.
-func (c *Core) PickUpAnswers(ctx context.Context, key string, in PickUpAnswersInput) (PickUpAnswersResult, error) {
-	var res PickUpAnswersResult
+func (c *Core) PickUpAnswers(ctx context.Context, key string, in api.PickUpAnswersInput) (api.PickUpAnswersResult, error) {
+	var res api.PickUpAnswersResult
 	// With full, as the Ticket isn't returned: no before view is built.
 	_, err := c.updateTicket(key, "pick_up_answers", in.Ticket, true, func(t *domain.Ticket) (bool, error) {
 		if err := transition(ctx, t, key, "pick_up_answers", in.ClaimID, c.now()); err != nil {
 			return false, err
 		}
 		r := t.Rounds[len(t.Rounds)-1]
-		res = PickUpAnswersResult{Ticket: DisplayID(key, t.Number), Round: roundView(r), Comments: []CommentView{}}
+		res = api.PickUpAnswersResult{Ticket: DisplayID(key, t.Number), Round: roundView(r), Comments: []api.CommentView{}}
 		for _, cv := range commentViews(t.Comments) {
 			if !cv.Time.Before(r.Posted) {
 				res.Comments = append(res.Comments, cv)
@@ -170,9 +85,9 @@ func (c *Core) PickUpAnswers(ctx context.Context, key string, in PickUpAnswersIn
 // Answer is the human's answer(question, text). An answer can be changed
 // until its Round is complete; the last open Question answered moves the
 // Ticket to Answered.
-func (c *Core) Answer(ctx context.Context, key string, in AnswerInput) (Written[TicketView], error) {
+func (c *Core) Answer(ctx context.Context, key string, in api.AnswerInput) (api.Written[api.TicketView], error) {
 	if strings.TrimSpace(in.Text) == "" {
-		return Written[TicketView]{}, invalid("text", "an answer needs text; to decline a Question, dismiss it")
+		return api.Written[api.TicketView]{}, invalid("text", "an answer needs text; to decline a Question, dismiss it")
 	}
 	return c.onQuestion(ctx, key, in.Ticket, in.Full, "answer", in.Question, func(q *domain.Question, now time.Time) {
 		q.Status, q.Answer, q.Closed = domain.QuestionAnswered, in.Text, now
@@ -181,7 +96,7 @@ func (c *Core) Answer(ctx context.Context, key string, in AnswerInput) (Written[
 
 // DismissQuestion is the human's dismiss_question(question): one Question
 // declined without moving the Ticket, unless it was the last open one.
-func (c *Core) DismissQuestion(ctx context.Context, key string, in DismissQuestionInput) (Written[TicketView], error) {
+func (c *Core) DismissQuestion(ctx context.Context, key string, in api.DismissQuestionInput) (api.Written[api.TicketView], error) {
 	return c.onQuestion(ctx, key, in.Ticket, in.Full, "dismiss_question", in.Question, func(q *domain.Question, now time.Time) {
 		q.Status, q.Answer, q.Closed = domain.QuestionDismissed, "", now
 	})
@@ -189,7 +104,7 @@ func (c *Core) DismissQuestion(ctx context.Context, key string, in DismissQuesti
 
 // AcceptRecommended is the human's accept_recommended(round): every open
 // Question with a recommendation is answered with it.
-func (c *Core) AcceptRecommended(ctx context.Context, key string, in AcceptRecommendedInput) (Written[TicketView], error) {
+func (c *Core) AcceptRecommended(ctx context.Context, key string, in api.AcceptRecommendedInput) (api.Written[api.TicketView], error) {
 	find := func(t *domain.Ticket) (*domain.Round, error) {
 		if in.Round < 1 || in.Round > len(t.Rounds) {
 			return nil, notFound("there is no Round %d on %s", in.Round, DisplayID(key, t.Number))
@@ -209,7 +124,7 @@ func (c *Core) AcceptRecommended(ctx context.Context, key string, in AcceptRecom
 }
 
 // onQuestion runs a Round action on Question n of the Ticket.
-func (c *Core) onQuestion(ctx context.Context, key string, ref Ref, full bool, name string, n int, apply func(*domain.Question, time.Time)) (Written[TicketView], error) {
+func (c *Core) onQuestion(ctx context.Context, key string, ref api.Ref, full bool, name string, n int, apply func(*domain.Question, time.Time)) (api.Written[api.TicketView], error) {
 	var target int
 	find := func(t *domain.Ticket) (*domain.Round, error) {
 		for i := range t.Rounds {
@@ -231,11 +146,11 @@ func (c *Core) onQuestion(ctx context.Context, key string, ref Ref, full bool, n
 // onRound runs one of the human's Round actions: only the human may take
 // it, only on a Round that is not yet complete, and when it leaves no
 // open Question the Ticket moves to Answered in the same write.
-func (c *Core) onRound(ctx context.Context, key string, ref Ref, full bool, name string,
-	find func(*domain.Ticket) (*domain.Round, error), apply func(*domain.Round, time.Time) bool) (Written[TicketView], error) {
+func (c *Core) onRound(ctx context.Context, key string, ref api.Ref, full bool, name string,
+	find func(*domain.Ticket) (*domain.Round, error), apply func(*domain.Round, time.Time) bool) (api.Written[api.TicketView], error) {
 	return c.updateTicket(key, name, ref, full, func(t *domain.Ticket) (bool, error) {
-		if actor := ActorOf(ctx); actor != Human {
-			return false, &Error{Code: ActionNotAllowed, AllowedActions: allowedActions(t.State, actor),
+		if actor := api.ActorOf(ctx); actor != api.Human {
+			return false, &api.Error{Code: api.ActionNotAllowed, AllowedActions: allowedActions(t.State, actor),
 				Message: fmt.Sprintf("%s is a human action; this request is made as %s", name, actor)}
 		}
 		r, err := find(t)
@@ -243,7 +158,7 @@ func (c *Core) onRound(ctx context.Context, key string, ref Ref, full bool, name
 			return false, err
 		}
 		if complete(*r) {
-			return false, &Error{Code: ActionNotAllowed, AllowedActions: allowedActions(t.State, Human), Message: fmt.Sprintf(
+			return false, &api.Error{Code: api.ActionNotAllowed, AllowedActions: allowedActions(t.State, api.Human), Message: fmt.Sprintf(
 				"Round %d on %s is complete, so its answers can't change; add a comment instead", r.Number, DisplayID(key, t.Number))}
 		}
 		now := c.now()
@@ -288,18 +203,18 @@ func questionCount(t domain.Ticket) int {
 	return n
 }
 
-func roundViews(rs []domain.Round) []RoundView {
-	out := []RoundView{}
+func roundViews(rs []domain.Round) []api.RoundView {
+	out := []api.RoundView{}
 	for _, r := range rs {
 		out = append(out, roundView(r))
 	}
 	return out
 }
 
-func roundView(r domain.Round) RoundView {
-	v := RoundView{Number: r.Number, Claim: r.Claim, SessionID: r.SessionID, Posted: r.Posted, Questions: []QuestionView{}}
+func roundView(r domain.Round) api.RoundView {
+	v := api.RoundView{Number: r.Number, Claim: r.Claim, SessionID: r.SessionID, Posted: r.Posted, Questions: []api.QuestionView{}}
 	for _, q := range r.Questions {
-		qv := QuestionView{Number: q.Number, Title: q.Title, Body: q.Body, Recommended: q.Recommended, Status: q.Status, Answer: q.Answer}
+		qv := api.QuestionView{Number: q.Number, Title: q.Title, Body: q.Body, Recommended: q.Recommended, Status: q.Status, Answer: q.Answer}
 		if !q.Closed.IsZero() {
 			closed := q.Closed
 			qv.Closed = &closed

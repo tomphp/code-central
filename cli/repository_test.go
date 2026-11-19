@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // srcPath is a clone's absolute path on this OS: "/src/<name>" isn't
@@ -23,7 +23,7 @@ func srcPath(name string) string { return filepath.ToSlash(filepath.Join(os.Temp
 func repositoryEnv(t *testing.T) (*codecentraltest.Server, map[string]string) {
 	t.Helper()
 	srv := codecentraltest.NewServer(t)
-	if _, err := srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"}); err != nil {
+	if _, err := srv.Client.CreateProject(context.Background(), api.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)
 	}
 	return srv, map[string]string{"CODE_CENTRAL_URL": srv.URL, "CODE_CENTRAL_PROJECT": "acme"}
@@ -70,7 +70,7 @@ func TestRepositoryListShowsTheHomeRepositoryAlone(t *testing.T) {
 func TestRepositoryListShowsALocalOnlyHome(t *testing.T) {
 	t.Parallel()
 	srv, env := repositoryEnv(t)
-	if _, err := srv.Client.ReportPushRemote(context.Background(), "acme", core.ReportPushRemoteInput{URL: ""}); err != nil {
+	if _, err := srv.Client.ReportPushRemote(context.Background(), "acme", api.ReportPushRemoteInput{URL: ""}); err != nil {
 		t.Fatal(err)
 	}
 	out := printed(t, run(t, env, "", "repository", "list"))
@@ -139,7 +139,7 @@ func TestRepositoryAddsALocalOnlyRepositoryAndClearsACloneURL(t *testing.T) {
 	}
 	// The service decides the rule: a local-only Repository keeps its
 	// local path.
-	if e := wantError(t, run(t, env, "", "repository", "edit", "web", "--local-path", ""), core.Invalid); e.Field != "clone_url" || e.Fix == "" {
+	if e := wantError(t, run(t, env, "", "repository", "edit", "web", "--local-path", ""), api.Invalid); e.Field != "clone_url" || e.Fix == "" {
 		t.Fatalf("clearing local-only web's local path: %+v, want clone_url refused with a fix", e)
 	}
 }
@@ -165,15 +165,15 @@ func TestRepositoryTakesALandingAndPushRemoteAndListsThem(t *testing.T) {
 	printed(t, run(t, env, "", "repository", "edit", "acme", "--landing", "merge+push"))
 	printed(t, run(t, env, "", "repository", "edit", "web", "--landing", "default", "--push-remote", ""))
 	p, _ := srv.Client.GetProject(context.Background(), "acme")
-	if home := p.Repositories[0]; home.Landing != core.RepositoryLandingMergePush || !home.OwnLanding {
+	if home := p.Repositories[0]; home.Landing != api.RepositoryLandingMergePush || !home.OwnLanding {
 		t.Fatalf("the Home = %+v, want its Own Landing, Merge + Push", home)
 	}
-	if web := p.Repositories[1]; web.Landing != core.RepositoryLandingMerge || web.OwnLanding || web.OwnPushRemote {
+	if web := p.Repositories[1]; web.Landing != api.RepositoryLandingMerge || web.OwnLanding || web.OwnPushRemote {
 		t.Fatalf("web = %+v, want it back on the Default Landing and the Project's remote", web)
 	}
 
 	printed(t, run(t, env, "", "repository", "add", "notes", "--local-path", srcPath("notes"), "--landing", "branch"))
-	if e := wantError(t, run(t, env, "", "repository", "edit", "notes", "--landing", "pull-request"), core.Invalid); e.Field != "landing" || !strings.Contains(e.Fix, "notes") {
+	if e := wantError(t, run(t, env, "", "repository", "edit", "notes", "--landing", "pull-request"), api.Invalid); e.Field != "landing" || !strings.Contains(e.Fix, "notes") {
 		t.Fatalf("Pull Request on local-only notes: %+v, want landing refused with a fix naming notes", e)
 	}
 	if r := run(t, env, "", "repository", "edit", "web", "--landing", "rebase"); r.code != 1 || !strings.Contains(r.stderr, "merge+push") {
@@ -210,17 +210,17 @@ func TestRepositoryRefusalsCarryTheirFix(t *testing.T) {
 	_, env := repositoryEnv(t)
 	printed(t, run(t, env, "", "repository", "add", "web", "--clone-url", "git@github.com:acme/web.git"))
 
-	e := wantError(t, run(t, env, "", "repository", "add", "api", "--clone-url", "https://github.com/acme/web"), core.Invalid)
+	e := wantError(t, run(t, env, "", "repository", "add", "api", "--clone-url", "https://github.com/acme/web"), api.Invalid)
 	if e.Field != "clone_url" || e.Fix == "" {
 		t.Fatalf("error %+v, want clone_url refused with a fix", e)
 	}
-	if e := wantError(t, run(t, env, "", "repository", "remove", "acme"), core.Invalid); e.Fix == "" {
+	if e := wantError(t, run(t, env, "", "repository", "remove", "acme"), api.Invalid); e.Fix == "" {
 		t.Fatalf("removing the Home Repository: %+v, want a fix", e)
 	}
-	if e := wantError(t, run(t, env, "", "repository", "edit", "acme", "--base", "trunk"), core.Invalid); e.Field != "base" {
+	if e := wantError(t, run(t, env, "", "repository", "edit", "acme", "--base", "trunk"), api.Invalid); e.Field != "base" {
 		t.Fatalf("editing the Home Repository's Base: %+v", e)
 	}
-	wantError(t, run(t, env, "", "repository", "move", "shop", "--before", "web"), core.NotFound)
+	wantError(t, run(t, env, "", "repository", "move", "shop", "--before", "web"), api.NotFound)
 }
 
 func TestRepositoryUsageErrorsExitOne(t *testing.T) {

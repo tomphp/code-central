@@ -2,12 +2,13 @@ package server_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // Pull requests per Repository (Spec code-central-848): land's
@@ -19,14 +20,14 @@ import (
 // acme-3 Accepted with work in acme and api.
 func acceptedInAPI(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
-	ctx, human := context.Background(), core.WithActor(context.Background(), core.Human)
+	ctx, human := context.Background(), api.WithActor(context.Background(), api.Human)
 	withAPI(claimedTicket)(t, srv)
 	must(t, func() error {
-		_, err := srv.Client.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/acme.git", Base: "main"})
+		_, err := srv.Client.ReportPushRemote(ctx, "acme", api.ReportPushRemoteInput{URL: "git@github.com:acme/acme.git", Base: "main"})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin"})
+		_, err := srv.Core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin"})
 		return err
 	})
 	acceptInTwo(t, srv)
@@ -76,11 +77,11 @@ func TestLandTakesARepositoryThroughEveryDoor(t *testing.T) {
 func TestLandRefusesARepositoryTheTicketDidntChangeThroughEveryDoor(t *testing.T) {
 	srv := newServer(t, acceptedInAPI)
 	must(t, func() error {
-		_, err := srv.Core.AddRepository(core.WithActor(context.Background(), core.Human), "acme", core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git"})
+		_, err := srv.Core.AddRepository(api.WithActor(context.Background(), api.Human), "acme", api.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git"})
 		return err
 	})
 	_, b := httpDo(t, srv, httpCall{"POST", "/api/p/acme/tickets/3/land", `{"commit":"x","repository":"web"}`})
-	if e := errorJSON(t, b, core.Invalid); !strings.Contains(e.Message, "acme, api") {
+	if e := errorJSON(t, b, api.Invalid); !strings.Contains(e.Message, "acme, api") {
 		t.Fatalf("http refusal %+v, want it to name the Changed Repositories", e)
 	}
 	res, mb := mcpCall(t, connect(t, srv, "acme"), "land", map[string]any{"ticket": "acme-3", "commit": "x", "repository": "web"})
@@ -100,11 +101,11 @@ func TestThePushAndThePullRequestOfARepositoryAreRecordedInIt(t *testing.T) {
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/3/report_pushed_commit", `{"commit":"def456","branch":"acme-3","repository":"api"}`})
 	httpOK(t, srv, reportPullRequest(`{"repository":"api","branch":"acme-3","number":4,"link":"https://github.com/acme/api/pull/4","state":"open"}`))
 	tk := httpOK(t, srv, httpCall{"GET", "/api/p/acme/tickets/3", ""})
-	api := tk["repositories"].([]any)[1].(map[string]any)
-	pushed, _ := api["pushed_commit"].(map[string]any)
-	pr, _ := api["pull_request"].(map[string]any)
-	if api["name"] != "api" || pushed["commit"] != "def456" || pr["number"] != float64(4) {
-		t.Fatalf("api = %v, want its pushed commit and pull request", api)
+	apiRepo := tk["repositories"].([]any)[1].(map[string]any)
+	pushed, _ := apiRepo["pushed_commit"].(map[string]any)
+	pr, _ := apiRepo["pull_request"].(map[string]any)
+	if apiRepo["name"] != "api" || pushed["commit"] != "def456" || pr["number"] != float64(4) {
+		t.Fatalf("api = %v, want its pushed commit and pull request", apiRepo)
 	}
 
 	for _, c := range []httpCall{
@@ -112,6 +113,6 @@ func TestThePushAndThePullRequestOfARepositoryAreRecordedInIt(t *testing.T) {
 		reportPullRequest(`{"repository":"nope","branch":"acme-3","number":4,"link":"l","state":"open"}`),
 	} {
 		_, b := httpDo(t, srv, c)
-		errorJSON(t, b, core.Invalid)
+		errorJSON(t, b, api.Invalid)
 	}
 }

@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/issuewatcher"
 )
@@ -32,7 +32,7 @@ func runIssueWatcher(ctx context.Context, e Env, args []string) error {
 	fs := flagSet(issuewatcher.Command)
 	check := fs.Bool("check", false, "check access once and exit")
 	project := fs.String("project", "", "the Project to watch")
-	var in core.IssuesCheckInput
+	var in api.IssuesCheckInput
 	repositories := fs.String("repositories", "", "GitHub repositories, owner/name, comma-separated")
 	fs.StringVar(&in.GHPath, "gh-path", "", "the gh path Option")
 	pos, err := parse(fs, args)
@@ -46,7 +46,7 @@ func runIssueWatcher(ctx context.Context, e Env, args []string) error {
 		return usagef("the Issue Watcher needs --project, or --check")
 	case !*check:
 		c := newClient(e)
-		c.Actor = core.Integration
+		c.Actor = api.Integration
 		return issuewatcher.Watch(ctx, issuewatcher.Config{Client: c, Project: *project, Env: gh.Env{Environ: os.Environ()},
 			Clock: clock.System{}, Stdin: e.Stdin, Log: e.Stderr})
 	case *repositories == "":

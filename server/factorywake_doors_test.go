@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 )
@@ -22,7 +23,7 @@ func init() {
 			}
 		},
 		bad:  call{http: httpCall{"GET", "/api/p/acme/factory/next-wake?host=h", ""}},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -32,7 +33,7 @@ func approveOnceTheWakeHolds(t *testing.T, srv *codecentraltest.Server) {
 	n := srv.Clock.Waiters()
 	go func() {
 		srv.Clock.BlockUntil(n + 1)
-		if _, err := srv.Core.Approve(core.WithActor(context.Background(), core.Human), "acme", core.TicketInput{Ticket: "2"}); err != nil {
+		if _, err := srv.Core.Approve(api.WithActor(context.Background(), api.Human), "acme", api.TicketInput{Ticket: "2"}); err != nil {
 			t.Errorf("approve: %v", err)
 		}
 	}()
@@ -40,11 +41,11 @@ func approveOnceTheWakeHolds(t *testing.T, srv *codecentraltest.Server) {
 
 func TestTheClientsNextFactoryWakeIsWokenAndEndsEmptyAtTheTimeout(t *testing.T) {
 	srv := newServer(t, approveOnceTheWakeHolds)
-	in := core.NextFactoryWakeInput{Factory: "f", Host: "h"}
+	in := api.NextFactoryWakeInput{Factory: "f", Host: "h"}
 	if w, err := srv.Client.NextFactoryWake(context.Background(), "acme", in); err != nil || !w.Woken {
 		t.Fatalf("next_factory_wake = %+v, %v; want woken", w, err)
 	}
-	done := make(chan core.FactoryWake, 1)
+	done := make(chan api.FactoryWake, 1)
 	n := srv.Clock.Waiters()
 	go func() {
 		w, err := srv.Client.NextFactoryWake(context.Background(), "acme", in)

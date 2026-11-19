@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -18,37 +19,14 @@ import (
 // operations are deliberately minimal: the first real Integration will
 // settle their signatures.
 
-// LinkView is a Spec's or Ticket's Link as reads show it: the external
-// item its Integration mirrors. While it isn't detached, the title and
-// description belong to the external system. Outbound marks a Link that
-// doesn't own the item's definition: Code Central owns it and only
-// writes to the external item.
-type LinkView struct {
-	Integration   string               `json:"integration"`
-	ID            string               `json:"id"`
-	URL           string               `json:"url,omitempty"`
-	ExternalState domain.ExternalState `json:"external_state"`
-	Detached      bool                 `json:"detached"`
-	Outbound      bool                 `json:"outbound"`
-}
-
-func linkView(l domain.Link) *LinkView {
+func linkView(l domain.Link) *api.LinkView {
 	if !l.Linked() {
 		return nil
 	}
-	return &LinkView{Integration: l.Integration, ID: l.ID, URL: l.URL, ExternalState: l.ExternalState, Detached: l.Detached, Outbound: l.Outbound}
+	return &api.LinkView{Integration: l.Integration, ID: l.ID, URL: l.URL, ExternalState: l.ExternalState, Detached: l.Detached, Outbound: l.Outbound}
 }
 
-// LinkInput is the Link an Integration creates an item with. The
-// external state defaults to open.
-type LinkInput struct {
-	Integration   string               `json:"integration"`
-	ID            string               `json:"id"`
-	URL           string               `json:"url,omitempty"`
-	ExternalState domain.ExternalState `json:"external_state,omitempty"`
-}
-
-func (in LinkInput) link() (domain.Link, error) {
+func linkOf(in api.LinkInput) (domain.Link, error) {
 	l := domain.Link{Integration: strings.TrimSpace(in.Integration), ID: strings.TrimSpace(in.ID), URL: in.URL, ExternalState: in.ExternalState}
 	if l.ExternalState == "" {
 		l.ExternalState = domain.ExternalOpen
@@ -75,9 +53,9 @@ func absoluteURL(s string) bool {
 }
 
 // requireActor refuses op unless the request is made as want.
-func requireActor(ctx context.Context, op string, want Actor) error {
-	if a := ActorOf(ctx); a != want {
-		return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is an action for the %s Actor; this request is made as %s", op, want, a)}
+func requireActor(ctx context.Context, op string, want api.Actor) error {
+	if a := api.ActorOf(ctx); a != want {
+		return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s is an action for the %s Actor; this request is made as %s", op, want, a)}
 	}
 	return nil
 }
@@ -85,8 +63,8 @@ func requireActor(ctx context.Context, op string, want Actor) error {
 // definitionOwned refuses a definition write by anyone but the
 // integration Actor on an item whose Link owns its definition.
 func definitionOwned(ctx context.Context, id string, l domain.Link) error {
-	if a := ActorOf(ctx); l.Owned() && a != Integration {
-		return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf(
+	if a := api.ActorOf(ctx); l.Owned() && a != api.Integration {
+		return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf(
 			"%s is linked to %s %s, which owns its definition: change it there, or unlink it first (this request is made as %s)",
 			id, l.Integration, l.ID, a)}
 	}
@@ -111,29 +89,20 @@ func linkedTo(r store.Reader, key string, l domain.Link, specs bool) (string, bo
 	return "", false
 }
 
-// CreateLinkedSpecInput is create_linked_spec's input.
-type CreateLinkedSpecInput struct {
-	Title string    `json:"title"`
-	Body  string    `json:"body,omitempty"`
-	Link  LinkInput `json:"link"`
-	// Full asks for the Spec in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
 // CreateLinkedSpec is the integration's create_linked_spec(title, body,
 // link, full?).
-func (c *Core) CreateLinkedSpec(ctx context.Context, key string, in CreateLinkedSpecInput) (Written[SpecView], error) {
-	if err := requireActor(ctx, "create_linked_spec", Integration); err != nil {
-		return Written[SpecView]{}, err
+func (c *Core) CreateLinkedSpec(ctx context.Context, key string, in api.CreateLinkedSpecInput) (api.Written[api.SpecView], error) {
+	if err := requireActor(ctx, "create_linked_spec", api.Integration); err != nil {
+		return api.Written[api.SpecView]{}, err
 	}
 	if strings.TrimSpace(in.Title) == "" {
-		return Written[SpecView]{}, invalid("title", "a Spec needs a title")
+		return api.Written[api.SpecView]{}, invalid("title", "a Spec needs a title")
 	}
-	l, err := in.Link.link()
+	l, err := linkOf(in.Link)
 	if err != nil {
-		return Written[SpecView]{}, err
+		return api.Written[api.SpecView]{}, err
 	}
-	var v Written[SpecView]
+	var v api.Written[api.SpecView]
 	err = c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -152,45 +121,33 @@ func (c *Core) CreateLinkedSpec(ctx context.Context, key string, in CreateLinked
 	return v, err
 }
 
-// CreateLinkedTicketInput is create_linked_ticket's input. State is
-// Draft (the default) or Ready, as the Integration is configured.
-type CreateLinkedTicketInput struct {
-	Spec        Ref          `json:"spec"`
-	Title       string       `json:"title"`
-	Description string       `json:"description,omitempty"`
-	State       domain.State `json:"state,omitempty"`
-	Link        LinkInput    `json:"link"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
 // CreateLinkedTicket is the integration's create_linked_ticket(spec,
 // title, description, state, link, full?). On an Integration's inbox
 // Spec, the Issues Spec or the Azure Boards Spec, while that
 // Integration's New issues need me is on, Code Central marks the Ticket
 // awaiting triage (Spec code-central-279, Spec code-central-894).
-func (c *Core) CreateLinkedTicket(ctx context.Context, key string, in CreateLinkedTicketInput) (Written[TicketView], error) {
-	if err := requireActor(ctx, "create_linked_ticket", Integration); err != nil {
-		return Written[TicketView]{}, err
+func (c *Core) CreateLinkedTicket(ctx context.Context, key string, in api.CreateLinkedTicketInput) (api.Written[api.TicketView], error) {
+	if err := requireActor(ctx, "create_linked_ticket", api.Integration); err != nil {
+		return api.Written[api.TicketView]{}, err
 	}
 	if strings.TrimSpace(in.Title) == "" {
-		return Written[TicketView]{}, invalid("title", "a Ticket needs a title")
+		return api.Written[api.TicketView]{}, invalid("title", "a Ticket needs a title")
 	}
 	state := in.State
 	if state == "" {
 		state = domain.Draft
 	}
 	if state != domain.Draft && state != domain.Ready {
-		return Written[TicketView]{}, invalid("state", "an Integration creates a Ticket in Draft or Ready, not %q", state)
+		return api.Written[api.TicketView]{}, invalid("state", "an Integration creates a Ticket in Draft or Ready, not %q", state)
 	}
 	if in.Spec == "" {
-		return Written[TicketView]{}, invalid("spec", "every Ticket belongs to a Spec")
+		return api.Written[api.TicketView]{}, invalid("spec", "every Ticket belongs to a Spec")
 	}
-	l, err := in.Link.link()
+	l, err := linkOf(in.Link)
 	if err != nil {
-		return Written[TicketView]{}, err
+		return api.Written[api.TicketView]{}, err
 	}
-	var v Written[TicketView]
+	var v api.Written[api.TicketView]
 	err = c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -215,27 +172,17 @@ func (c *Core) CreateLinkedTicket(ctx context.Context, key string, in CreateLink
 	return v, err
 }
 
-// UpdateLinkedSpecInput is update_linked_spec's input. A field left out
-// is unchanged.
-type UpdateLinkedSpecInput struct {
-	Spec  Ref     `json:"spec" path:"n"`
-	Title *string `json:"title,omitempty"`
-	Body  *string `json:"body,omitempty"`
-	// Full asks for the Spec in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
 // UpdateLinkedSpec is the integration's update_linked_spec(spec, title?,
 // body?, full?) on a Spec whose Link owns its definition, recorded in its
 // edits.
-func (c *Core) UpdateLinkedSpec(ctx context.Context, key string, in UpdateLinkedSpecInput) (Written[SpecView], error) {
-	if err := requireActor(ctx, "update_linked_spec", Integration); err != nil {
-		return Written[SpecView]{}, err
+func (c *Core) UpdateLinkedSpec(ctx context.Context, key string, in api.UpdateLinkedSpecInput) (api.Written[api.SpecView], error) {
+	if err := requireActor(ctx, "update_linked_spec", api.Integration); err != nil {
+		return api.Written[api.SpecView]{}, err
 	}
 	if in.Title != nil && strings.TrimSpace(*in.Title) == "" {
-		return Written[SpecView]{}, invalid("title", "a Spec needs a title")
+		return api.Written[api.SpecView]{}, invalid("title", "a Spec needs a title")
 	}
-	var v Written[SpecView]
+	var v api.Written[api.SpecView]
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -264,32 +211,18 @@ func (c *Core) UpdateLinkedSpec(ctx context.Context, key string, in UpdateLinked
 	return v, err
 }
 
-// UpdateLinkedTicketInput is update_linked_ticket's input. A field left
-// out is unchanged; spec moves the Ticket under another Spec (its
-// external parent changed), and url refreshes its Link's URL (the
-// external item moved), which isn't a definition edit.
-type UpdateLinkedTicketInput struct {
-	Ticket      Ref     `json:"ticket" path:"n"`
-	Title       *string `json:"title,omitempty"`
-	Description *string `json:"description,omitempty"`
-	Spec        *Ref    `json:"spec,omitempty"`
-	URL         *string `json:"url,omitempty"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
 // UpdateLinkedTicket is the integration's update_linked_ticket(ticket,
 // title?, description?, spec?, full?) on a Ticket whose Link owns its
 // definition, recorded in its edits.
-func (c *Core) UpdateLinkedTicket(ctx context.Context, key string, in UpdateLinkedTicketInput) (Written[TicketView], error) {
-	if err := requireActor(ctx, "update_linked_ticket", Integration); err != nil {
-		return Written[TicketView]{}, err
+func (c *Core) UpdateLinkedTicket(ctx context.Context, key string, in api.UpdateLinkedTicketInput) (api.Written[api.TicketView], error) {
+	if err := requireActor(ctx, "update_linked_ticket", api.Integration); err != nil {
+		return api.Written[api.TicketView]{}, err
 	}
 	if in.Title != nil && strings.TrimSpace(*in.Title) == "" {
-		return Written[TicketView]{}, invalid("title", "a Ticket needs a title")
+		return api.Written[api.TicketView]{}, invalid("title", "a Ticket needs a title")
 	}
 	if in.URL != nil && !absoluteURL(*in.URL) {
-		return Written[TicketView]{}, invalid("url", "a Link's URL is an absolute http or https URL, not %q", *in.URL)
+		return api.Written[api.TicketView]{}, invalid("url", "a Link's URL is an absolute http or https URL, not %q", *in.URL)
 	}
 	return c.updateTicketIn(key, "update_linked_ticket", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
 		if err := ownedByLink(DisplayID(key, t.Number), t.Link); err != nil {
@@ -322,11 +255,11 @@ func (c *Core) UpdateLinkedTicket(ctx context.Context, key string, in UpdateLink
 func ownedByLink(id string, l domain.Link) error {
 	switch {
 	case !l.Linked():
-		return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is not linked, so Code Central owns its definition", id)}
+		return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s is not linked, so Code Central owns its definition", id)}
 	case l.Detached:
-		return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s was unlinked from %s %s, so Code Central owns its definition now", id, l.Integration, l.ID)}
+		return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s was unlinked from %s %s, so Code Central owns its definition now", id, l.Integration, l.ID)}
 	case l.Outbound:
-		return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s's Link to %s %s is outbound, so Code Central owns its definition and only writes to %s", id, l.Integration, l.ID, l.Integration)}
+		return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s's Link to %s %s is outbound, so Code Central owns its definition and only writes to %s", id, l.Integration, l.ID, l.Integration)}
 	}
 	return nil
 }
@@ -336,36 +269,20 @@ func (c *Core) recordEdit(ctx context.Context, edits *[]domain.Edit, prev map[st
 	if len(prev) == 0 {
 		return false
 	}
-	*edits = append(*edits, domain.Edit{Number: len(*edits) + 1, Actor: string(ActorOf(ctx)), Time: c.now(), Previous: prev})
+	*edits = append(*edits, domain.Edit{Number: len(*edits) + 1, Actor: string(api.ActorOf(ctx)), Time: c.now(), Previous: prev})
 	return true
-}
-
-// LinkedRow is a linked Spec or Ticket as the link operations return it.
-// State is set for a Ticket.
-type LinkedRow struct {
-	Kind  RecordKind   `json:"kind"`
-	ID    string       `json:"id"`
-	Title string       `json:"title"`
-	State domain.State `json:"state,omitempty"`
-	Link  LinkView     `json:"link"`
-}
-
-// SetExternalStateInput is set_external_state's input.
-type SetExternalStateInput struct {
-	Target        Ref                  `json:"target"`
-	ExternalState domain.ExternalState `json:"external_state"`
 }
 
 // SetExternalState is the integration's set_external_state(target,
 // external_state): the external status as last seen. It never moves
 // State; a linked Ticket that isn't open shows as closed externally in
 // Needs Me instead.
-func (c *Core) SetExternalState(ctx context.Context, key string, in SetExternalStateInput) (LinkedRow, error) {
-	if err := requireActor(ctx, "set_external_state", Integration); err != nil {
-		return LinkedRow{}, err
+func (c *Core) SetExternalState(ctx context.Context, key string, in api.SetExternalStateInput) (api.LinkedRow, error) {
+	if err := requireActor(ctx, "set_external_state", api.Integration); err != nil {
+		return api.LinkedRow{}, err
 	}
 	if !in.ExternalState.Valid() {
-		return LinkedRow{}, invalid("external_state", "unknown external state %q (open, closed, deleted or out_of_scope)", in.ExternalState)
+		return api.LinkedRow{}, invalid("external_state", "unknown external state %q (open, closed, deleted or out_of_scope)", in.ExternalState)
 	}
 	return c.updateLink(ctx, key, in.Target, func(l *domain.Link) (map[string]string, error) {
 		if l.ExternalState == in.ExternalState {
@@ -377,18 +294,13 @@ func (c *Core) SetExternalState(ctx context.Context, key string, in SetExternalS
 	})
 }
 
-// UnlinkInput is the human's unlink(target).
-type UnlinkInput struct {
-	Target Ref `json:"target"`
-}
-
 // Unlink is the human's unlink(target): the Link is kept but detached,
 // so the definition becomes editable, it stops counting for Needs Me,
 // nothing more is written to the external item, and lookups still find
 // it. There is no re-link.
-func (c *Core) Unlink(ctx context.Context, key string, in UnlinkInput) (LinkedRow, error) {
-	if err := requireActor(ctx, "unlink", Human); err != nil {
-		return LinkedRow{}, err
+func (c *Core) Unlink(ctx context.Context, key string, in api.UnlinkInput) (api.LinkedRow, error) {
+	if err := requireActor(ctx, "unlink", api.Human); err != nil {
+		return api.LinkedRow{}, err
 	}
 	return c.updateLink(ctx, key, in.Target, func(l *domain.Link) (map[string]string, error) {
 		if l.Detached {
@@ -403,8 +315,8 @@ func (c *Core) Unlink(ctx context.Context, key string, in UnlinkInput) (LinkedRo
 // names (they share one counter). fn returns the edit's previous values,
 // nil when nothing changed, and empty for a change kept out of the edit
 // history.
-func (c *Core) updateLink(ctx context.Context, key string, ref Ref, fn func(l *domain.Link) (map[string]string, error)) (LinkedRow, error) {
-	var row LinkedRow
+func (c *Core) updateLink(ctx context.Context, key string, ref api.Ref, fn func(l *domain.Link) (map[string]string, error)) (api.LinkedRow, error) {
+	var row api.LinkedRow
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -457,36 +369,29 @@ func (c *Core) updateLink(ctx context.Context, key string, ref Ref, fn func(l *d
 	return row, err
 }
 
-func specLinkedRow(key string, s domain.Spec) LinkedRow {
-	return LinkedRow{Kind: RecordSpec, ID: DisplayID(key, s.Number), Title: s.Title, Link: *linkView(s.Link)}
+func specLinkedRow(key string, s domain.Spec) api.LinkedRow {
+	return api.LinkedRow{Kind: api.RecordSpec, ID: DisplayID(key, s.Number), Title: s.Title, Link: *linkView(s.Link)}
 }
 
-func ticketLinkedRow(key string, t domain.Ticket) LinkedRow {
-	return LinkedRow{Kind: RecordTicket, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Link: *linkView(t.Link)}
-}
-
-// FindLinkedInput is find_linked's filters: the Integration, and
-// optionally one external ID.
-type FindLinkedInput struct {
-	Integration string `json:"integration"`
-	ID          string `json:"id,omitempty"`
+func ticketLinkedRow(key string, t domain.Ticket) api.LinkedRow {
+	return api.LinkedRow{Kind: api.RecordTicket, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Link: *linkView(t.Link)}
 }
 
 // FindLinked is find_linked(integration, id?): every Spec and Ticket in
 // the Project linked by that Integration, detached and outbound ones
 // too, so an Integration knows what it has already pulled in. Rows are
 // in number order.
-func (c *Core) FindLinked(_ context.Context, key string, in FindLinkedInput) ([]LinkedRow, error) {
+func (c *Core) FindLinked(_ context.Context, key string, in api.FindLinkedInput) ([]api.LinkedRow, error) {
 	if strings.TrimSpace(in.Integration) == "" {
 		return nil, invalid("integration", "name the Integration whose links to find")
 	}
-	rows := []LinkedRow{}
+	rows := []api.LinkedRow{}
 	err := c.store.View(func(r store.Reader) error {
 		if _, ok := r.Project(key); !ok {
 			return unknownProject(key)
 		}
 		link := &store.LinkFilter{Integration: in.Integration, ID: in.ID}
-		byNumber := map[int]LinkedRow{}
+		byNumber := map[int]api.LinkedRow{}
 		for _, s := range r.FindSpecs(key, store.SpecFilter{Link: link}) {
 			byNumber[s.Number] = specLinkedRow(key, s)
 		}

@@ -17,8 +17,8 @@ import (
 	"io"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
 	"github.com/tomoram/code-central/watchers"
@@ -36,12 +36,12 @@ const Interval = 2 * time.Minute
 // Client is what the Work Item Watcher calls on Code Central, as the
 // integration Actor; *client.Client with its Actor set is one.
 type Client interface {
-	GetWorkItemWatch(ctx context.Context, key string) (core.WorkItemWatch, error)
-	ReportWorkItemWatcherStatus(ctx context.Context, key string, in core.ReportWatcherStatusInput) (core.Written[core.ProjectView], error)
-	CreateLinkedTicket(ctx context.Context, key string, in core.CreateLinkedTicketInput) (core.Written[core.TicketView], error)
-	UpdateLinkedTicket(ctx context.Context, key string, in core.UpdateLinkedTicketInput) (core.Written[core.TicketView], error)
-	SetExternalState(ctx context.Context, key string, in core.SetExternalStateInput) (core.LinkedRow, error)
-	ReportIssueWritten(ctx context.Context, key string, in core.ReportIssueWrittenInput) (core.LinkedRow, error)
+	GetWorkItemWatch(ctx context.Context, key string) (api.WorkItemWatch, error)
+	ReportWorkItemWatcherStatus(ctx context.Context, key string, in api.ReportWatcherStatusInput) (api.Written[api.ProjectView], error)
+	CreateLinkedTicket(ctx context.Context, key string, in api.CreateLinkedTicketInput) (api.Written[api.TicketView], error)
+	UpdateLinkedTicket(ctx context.Context, key string, in api.UpdateLinkedTicketInput) (api.Written[api.TicketView], error)
+	SetExternalState(ctx context.Context, key string, in api.SetExternalStateInput) (api.LinkedRow, error)
+	ReportIssueWritten(ctx context.Context, key string, in api.ReportIssueWrittenInput) (api.LinkedRow, error)
 }
 
 // Config wires the watch mode.
@@ -60,7 +60,7 @@ type Config struct {
 }
 
 // Kind is the Work Item Watcher as the service's supervision runs it.
-var Kind = watchers.Kind{Kind: core.WatcherWorkItems, Args: WatchArgs}
+var Kind = watchers.Kind{Kind: api.WatcherWorkItems, Args: WatchArgs}
 
 // WatchArgs are the arguments that run program's Work Item Watcher in its
 // watch mode for project, after the program itself.
@@ -86,7 +86,7 @@ func Watch(ctx context.Context, cfg Config) error {
 		reachable, limit := cfg.poll(ctx)
 		every, until := pace.Next(cfg.Clock.Now(), Interval, limit)
 		if reachable {
-			cfg.report(ctx, core.ReportWatcherStatusInput{State: core.WatcherWatching, RateLimitedUntil: until})
+			cfg.report(ctx, api.ReportWatcherStatusInput{State: api.WatcherWatching, RateLimitedUntil: until})
 		}
 		select {
 		case <-ctx.Done():
@@ -118,7 +118,7 @@ func (cfg Config) poll(ctx context.Context) (reachable bool, limit *ratelimit.Er
 	case errors.As(err, &limit):
 		return true, limit
 	case r.Problem != "":
-		cfg.report(ctx, core.ReportWatcherStatusInput{State: core.WatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
+		cfg.report(ctx, api.ReportWatcherStatusInput{State: api.WatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
 		return false, nil
 	}
 	limit = cfg.mirror(ctx, watch, q)
@@ -135,19 +135,19 @@ func (cfg Config) poll(ctx context.Context) (reachable bool, limit *ratelimit.Er
 	case err != nil:
 		// Only the PAT's scope stops write-back this way.
 		r := writeScopeProblem(watch, q)
-		cfg.report(ctx, core.ReportWatcherStatusInput{State: core.WatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
+		cfg.report(ctx, api.ReportWatcherStatusInput{State: api.WatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
 		return false, nil
 	}
 	return true, nil
 }
 
 // checkInput is what watch runs, as the Azure Boards check takes it.
-func checkInput(watch core.WorkItemWatch) core.AzureBoardsCheckInput {
-	return core.AzureBoardsCheckInput{Mode: watch.Mode, QueryURL: watch.QueryURL, ProjectURL: watch.ProjectURL, Where: watch.Where, PATEnv: watch.PATEnv}
+func checkInput(watch api.WorkItemWatch) api.AzureBoardsCheckInput {
+	return api.AzureBoardsCheckInput{Mode: watch.Mode, QueryURL: watch.QueryURL, ProjectURL: watch.ProjectURL, Where: watch.Where, PATEnv: watch.PATEnv}
 }
 
 // report reports the Work Item Watcher's status.
-func (cfg Config) report(ctx context.Context, in core.ReportWatcherStatusInput) {
+func (cfg Config) report(ctx context.Context, in api.ReportWatcherStatusInput) {
 	if _, err := cfg.Client.ReportWorkItemWatcherStatus(ctx, cfg.Project, in); err != nil && ctx.Err() == nil {
 		cfg.logf("report_work_item_watcher_status: %v", err)
 	}

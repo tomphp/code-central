@@ -7,6 +7,7 @@ import (
 	"runtime/metrics"
 	"slices"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -16,8 +17,8 @@ import (
 // history is kept.
 
 // GetStorage is get_storage.
-func (c *Core) GetStorage(_ context.Context, in GetStorageInput) (StorageView, error) {
-	var projects []StorageProject
+func (c *Core) GetStorage(_ context.Context, in api.GetStorageInput) (api.StorageView, error) {
+	var projects []api.StorageProject
 	found := false
 	err := c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
@@ -29,41 +30,41 @@ func (c *Core) GetStorage(_ context.Context, in GetStorageInput) (StorageView, e
 			for _, n := range r.StateCounts(p.Key) {
 				tickets += n
 			}
-			projects = append(projects, StorageProject{Key: p.Key, Name: p.DisplayName, Specs: r.SpecCount(p.Key), Tickets: tickets})
+			projects = append(projects, api.StorageProject{Key: p.Key, Name: p.DisplayName, Specs: r.SpecCount(p.Key), Tickets: tickets})
 		}
 		return nil
 	})
 	if err != nil {
-		return StorageView{}, err
+		return api.StorageView{}, err
 	}
 	if in.Project != "" && !found {
-		return StorageView{}, notFound("no Project %q", in.Project)
+		return api.StorageView{}, notFound("no Project %q", in.Project)
 	}
-	slices.SortFunc(projects, func(a, b StorageProject) int { return cmp.Compare(a.Key, b.Key) })
+	slices.SortFunc(projects, func(a, b api.StorageProject) int { return cmp.Compare(a.Key, b.Key) })
 	days := c.usage.Days()
 	for i := range projects {
 		projects[i].UsageDays = days[projects[i].Key]
 	}
 	size, err := c.store.Size()
 	if err != nil {
-		return StorageView{}, fmt.Errorf("cannot measure the store: %w", err)
+		return api.StorageView{}, fmt.Errorf("cannot measure the store: %w", err)
 	}
 	regs, err := c.store.Services().Registrations(c.now())
 	if err != nil {
-		return StorageView{}, err
+		return api.StorageView{}, err
 	}
-	services := make([]StorageRegistration, len(regs))
+	services := make([]api.StorageRegistration, len(regs))
 	for i, r := range regs {
-		services[i] = StorageRegistration{Host: r.Host, Version: r.Version, Renewed: r.Renewed}
+		services[i] = api.StorageRegistration{Host: r.Host, Version: r.Version, Renewed: r.Renewed}
 	}
 	l := c.store.Location()
-	v := StorageView{Kind: string(l.Kind), Host: l.Host, Port: l.Port, Database: l.Database, Size: size,
+	v := api.StorageView{Kind: string(l.Kind), Host: l.Host, Port: l.Port, Database: l.Database, Size: size,
 		Projects: projects, Memory: processMemory(), Services: services}
 	if l.Kind != store.Postgres {
 		v.Path = l.Path
 	}
 	if v.Projects == nil {
-		v.Projects = []StorageProject{}
+		v.Projects = []api.StorageProject{}
 	}
 	return v, nil
 }
@@ -73,10 +74,10 @@ func (c *Core) GetStorage(_ context.Context, in GetStorageInput) (StorageView, e
 const heapObjects = "/memory/classes/heap/objects:bytes"
 
 // processMemory is the process's memory now.
-func processMemory() ProcessMemory {
+func processMemory() api.ProcessMemory {
 	sample := []metrics.Sample{{Name: heapObjects}}
 	metrics.Read(sample)
-	m := ProcessMemory{Resident: residentSize()}
+	m := api.ProcessMemory{Resident: residentSize()}
 	if sample[0].Value.Kind() == metrics.KindUint64 {
 		m.Heap = int64(sample[0].Value.Uint64())
 	}

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -16,7 +16,7 @@ import (
 
 const followUp = "Rename the toggle\n\nReview asked for \"Dark theme\", not \"Night mode\".\n"
 
-func (f fixture) newTicket(t *testing.T, in core.NewTicketInput) core.Written[core.TicketView] {
+func (f fixture) newTicket(t *testing.T, in api.NewTicketInput) api.Written[api.TicketView] {
 	t.Helper()
 	res, err := f.core.NewTicket(human, "acme", in)
 	if err != nil {
@@ -28,7 +28,7 @@ func (f fixture) newTicket(t *testing.T, in core.NewTicketInput) core.Written[co
 func TestNewTicketOpensAReadyTicketOnTheSpecTitledWithTheTextsFirstLine(t *testing.T) {
 	f := newFixture(t)
 	f.plainSpec(t, domain.Done)
-	tk := f.newTicket(t, core.NewTicketInput{Spec: "acme-1", Text: followUp, Full: true}).Record
+	tk := f.newTicket(t, api.NewTicketInput{Spec: "acme-1", Text: followUp, Full: true}).Record
 	if tk.ID != "acme-3" || tk.Title != "Rename the toggle" || tk.Description != followUp || tk.State != domain.Ready ||
 		tk.Spec.ID != "acme-1" || len(tk.Labels) != 0 || len(tk.Tags) != 0 || len(tk.BlockedBy) != 0 || !tk.Claimable {
 		t.Fatalf("new Ticket %+v", tk)
@@ -41,7 +41,7 @@ func TestNewTicketOpensAReadyTicketOnTheSpecTitledWithTheTextsFirstLine(t *testi
 func TestNewTicketReturnsAnAcknowledgementUnlessFull(t *testing.T) {
 	f := newFixture(t)
 	f.plainSpec(t)
-	res := f.newTicket(t, core.NewTicketInput{Spec: "1", Text: followUp})
+	res := f.newTicket(t, api.NewTicketInput{Spec: "1", Text: followUp})
 	if res.Record != nil || res.Acknowledgement.ID != "acme-2" || res.Acknowledgement.State != domain.Ready {
 		t.Fatalf("result %+v", res)
 	}
@@ -50,7 +50,7 @@ func TestNewTicketReturnsAnAcknowledgementUnlessFull(t *testing.T) {
 func TestADraftNewTicketIsADraftTicketWithNoMoves(t *testing.T) {
 	f := newFixture(t)
 	f.plainSpec(t)
-	tk := f.newTicket(t, core.NewTicketInput{Spec: "acme-1", Text: followUp, Draft: true, Full: true}).Record
+	tk := f.newTicket(t, api.NewTicketInput{Spec: "acme-1", Text: followUp, Draft: true, Full: true}).Record
 	if tk.State != domain.Draft || tk.Claimable || len(tk.Moves) != 0 {
 		t.Fatalf("Draft new Ticket %+v", tk)
 	}
@@ -59,22 +59,22 @@ func TestADraftNewTicketIsADraftTicketWithNoMoves(t *testing.T) {
 func TestNewTicketWithNoTextIsInvalid(t *testing.T) {
 	f := newFixture(t)
 	f.plainSpec(t)
-	_, err := f.core.NewTicket(human, "acme", core.NewTicketInput{Spec: "acme-1", Text: " \n# \n"})
-	wantCode(t, err, core.Invalid, "text")
+	_, err := f.core.NewTicket(human, "acme", api.NewTicketInput{Spec: "acme-1", Text: " \n# \n"})
+	wantCode(t, err, api.Invalid, "text")
 }
 
 func TestNewTicketIsTheHumans(t *testing.T) {
 	f := newFixture(t)
 	f.plainSpec(t)
-	_, err := f.core.NewTicket(ctx, "acme", core.NewTicketInput{Spec: "acme-1", Text: followUp})
-	wantCode(t, err, core.ActionNotAllowed, "")
+	_, err := f.core.NewTicket(ctx, "acme", api.NewTicketInput{Spec: "acme-1", Text: followUp})
+	wantCode(t, err, api.ActionNotAllowed, "")
 }
 
 func TestNewTicketOnAMissingSpecIsInvalid(t *testing.T) {
 	f := newFixture(t)
 	f.plainSpec(t)
-	_, err := f.core.NewTicket(human, "acme", core.NewTicketInput{Spec: "acme-9", Text: followUp})
-	wantCode(t, err, core.Invalid, "spec")
+	_, err := f.core.NewTicket(human, "acme", api.NewTicketInput{Spec: "acme-9", Text: followUp})
+	wantCode(t, err, api.Invalid, "spec")
 }
 
 // New Ticket: offered on any Spec but a Map or a Long-lived Spec, on a
@@ -82,40 +82,40 @@ func TestNewTicketOnAMissingSpecIsInvalid(t *testing.T) {
 // too; never in an Archived Project. The write and the read agree.
 func TestNewTicketIsAllowedWhereTheSpecReadSaysItIsTicketable(t *testing.T) {
 	for name, c := range map[string]struct {
-		setup func(f fixture, t *testing.T) core.Ref
+		setup func(f fixture, t *testing.T) api.Ref
 		// refusal is part of the refusal's message, or "" when allowed.
 		refusal string
 	}{
-		"a Spec":          {func(f fixture, t *testing.T) core.Ref { f.plainSpec(t, domain.Ready); return "1" }, ""},
-		"an empty Spec":   {func(f fixture, t *testing.T) core.Ref { f.plainSpec(t); return "1" }, ""},
-		"a Finished Spec": {func(f fixture, t *testing.T) core.Ref { f.plainSpec(t, domain.Done, domain.Cancelled); return "1" }, ""},
-		"a Map":           {func(f fixture, t *testing.T) core.Ref { f.aMap(t); return "1" }, "is a Map"},
-		"a Long-lived Spec": {func(f fixture, t *testing.T) core.Ref {
+		"a Spec":          {func(f fixture, t *testing.T) api.Ref { f.plainSpec(t, domain.Ready); return "1" }, ""},
+		"an empty Spec":   {func(f fixture, t *testing.T) api.Ref { f.plainSpec(t); return "1" }, ""},
+		"a Finished Spec": {func(f fixture, t *testing.T) api.Ref { f.plainSpec(t, domain.Done, domain.Cancelled); return "1" }, ""},
+		"a Map":           {func(f fixture, t *testing.T) api.Ref { f.aMap(t); return "1" }, "is a Map"},
+		"a Long-lived Spec": {func(f fixture, t *testing.T) api.Ref {
 			f.plainSpec(t)
-			f.longLived(t, core.SpecView{ID: "acme-1"})
+			f.longLived(t, api.SpecView{ID: "acme-1"})
 			return "1"
 		}, "Long-lived"},
-		"a Requirement with running Stages": {func(f fixture, t *testing.T) core.Ref { f.requirement(t); return "2" }, "Stages"},
-		"a Requirement in its tickets Stage": {func(f fixture, t *testing.T) core.Ref {
+		"a Requirement with running Stages": {func(f fixture, t *testing.T) api.Ref { f.requirement(t); return "2" }, "Stages"},
+		"a Requirement in its tickets Stage": {func(f fixture, t *testing.T) api.Ref {
 			f.requirement(t)
 			f.setState(t, 3, domain.Done)
 			f.setState(t, 4, domain.Done)
 			return "2"
 		}, "Stages"},
-		"a Requirement whose Stages are Done": {func(f fixture, t *testing.T) core.Ref { f.stagesDone(t, domain.Done); return "2" }, ""},
-		"a Requirement after Implement": {func(f fixture, t *testing.T) core.Ref {
+		"a Requirement whose Stages are Done": {func(f fixture, t *testing.T) api.Ref { f.stagesDone(t, domain.Done); return "2" }, ""},
+		"a Requirement after Implement": {func(f fixture, t *testing.T) api.Ref {
 			f.specInReview(t)
 			f.implement(t, "acme-4")
 			return "2"
 		}, ""},
-		"a cancelled Requirement": {func(f fixture, t *testing.T) core.Ref {
+		"a cancelled Requirement": {func(f fixture, t *testing.T) api.Ref {
 			f.requirement(t)
-			for _, n := range []core.Ref{"3", "4", "5"} {
+			for _, n := range []api.Ref{"3", "4", "5"} {
 				f.move(t, n, domain.Cancelled)
 			}
 			return "2"
 		}, "Stages"},
-		"an Archived Project": {func(f fixture, t *testing.T) core.Ref { f.archivedWork(t); return "1" }, "archived"},
+		"an Archived Project": {func(f fixture, t *testing.T) api.Ref { f.archivedWork(t); return "1" }, "archived"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFixture(t)
@@ -124,14 +124,14 @@ func TestNewTicketIsAllowedWhereTheSpecReadSaysItIsTicketable(t *testing.T) {
 			if got := f.specRead(t, ref).Ticketable; got != want {
 				t.Fatalf("Spec %s ticketable %v, want %v", ref, got, want)
 			}
-			_, err := f.core.NewTicket(human, "acme", core.NewTicketInput{Spec: ref, Text: followUp})
+			_, err := f.core.NewTicket(human, "acme", api.NewTicketInput{Spec: ref, Text: followUp})
 			if want {
 				if err != nil {
 					t.Fatalf("new_ticket on %s: %v", ref, err)
 				}
 				return
 			}
-			wantCode(t, err, core.ActionNotAllowed, "")
+			wantCode(t, err, api.ActionNotAllowed, "")
 			if !strings.Contains(err.Error(), c.refusal) {
 				t.Fatalf("new_ticket on %s refused with %q, want it to say %q", ref, err, c.refusal)
 			}
@@ -148,7 +148,7 @@ func TestANewTicketKeepsItsSpecFromBeingReadyToLandUnderLandPerSpec(t *testing.T
 	if st := f.landStatus(t); st == nil || !st.Ready {
 		t.Fatalf("land per spec = %+v, want ready before the New Ticket", st)
 	}
-	tk := f.newTicket(t, core.NewTicketInput{Spec: "acme-1", Text: followUp, Full: true}).Record
+	tk := f.newTicket(t, api.NewTicketInput{Spec: "acme-1", Text: followUp, Full: true}).Record
 	if !tk.SpecLanded {
 		t.Fatalf("New Ticket %s isn't Spec-landed", tk.ID)
 	}

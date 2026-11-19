@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
@@ -66,7 +67,7 @@ type repository struct {
 // listedAs takes from v, r as the Project lists it, what every poll
 // reads again: its Push remote, and whether it is local-only, and so
 // under Pull Request.
-func (r *repository) listedAs(v core.RepositoryView) {
+func (r *repository) listedAs(v api.RepositoryView) {
 	r.remote, r.localOnly, r.localOnlyUnderPullRequest = v.PushRemote, v.LocalOnly, v.LocalOnlyUnderPullRequest
 }
 
@@ -74,7 +75,7 @@ func (r *repository) listedAs(v core.RepositoryView) {
 // landing step in r asks: its Own Landing, else the Default Landing, with
 // Push off in a local-only Repository (ADR 0039, Spec code-central-890).
 // A function given the policies with r asks this.
-func (r *repository) policy(policies core.LandingPolicies) domain.LandingPolicy {
+func (r *repository) policy(policies api.LandingPolicies) domain.LandingPolicy {
 	return policies.In(r.name)
 }
 
@@ -221,10 +222,10 @@ func (rs *repositories) inBaseOf(r *repository, commit string) bool {
 // clone, and reports every clone to Code Central. A Project with the
 // Home Repository alone has nothing to clone or report, once a report
 // has cleared any from when it had more.
-func (l *lander) syncRepositories(ctx context.Context, p core.ProjectView) {
+func (l *lander) syncRepositories(ctx context.Context, p api.ProjectView) {
 	next := map[string]*repository{}
 	var inOrder []*repository
-	var report []core.RepositoryReport
+	var report []api.RepositoryReport
 	// taken is each path an earlier Repository, or the Home, resolves
 	// to, with whose it is: a later one there is Repository missing.
 	taken := map[string]string{}
@@ -253,11 +254,11 @@ func (l *lander) syncRepositories(ctx context.Context, p core.ProjectView) {
 		l.sayLocalOnlyUnderPullRequest(r)
 		next[v.Name] = r
 		inOrder = append(inOrder, r)
-		state := core.CloneReady
+		state := api.CloneReady
 		if r.problem != "" {
-			state = core.CloneMissing
+			state = api.CloneMissing
 		}
-		report = append(report, core.RepositoryReport{Name: v.Name, Path: r.dir, State: state, Problem: r.problem})
+		report = append(report, api.RepositoryReport{Name: v.Name, Path: r.dir, State: state, Problem: r.problem})
 	}
 	l.repos.replace(next, inOrder)
 	// Back to the Home Repository alone, one more report clears the last.
@@ -266,7 +267,7 @@ func (l *lander) syncRepositories(ctx context.Context, p core.ProjectView) {
 		return
 	}
 	l.reportedSeveral = several
-	if _, err := l.client.ReportRepositories(ctx, l.project, core.ReportRepositoriesInput{Repositories: report}); err != nil && ctx.Err() == nil {
+	if _, err := l.client.ReportRepositories(ctx, l.project, api.ReportRepositoriesInput{Repositories: report}); err != nil && ctx.Err() == nil {
 		if !l.reportRepositoriesFailing {
 			l.printf("warning: can't report the Repositories' clones to Code Central: %v", err)
 		}
@@ -283,7 +284,7 @@ func (l *lander) syncRepositories(ctx context.Context, p core.ProjectView) {
 // never cloned: whatever git repository of its own is at its path is
 // adopted with no remote check (Spec code-central-879). A path in taken
 // is another Repository's, so missing too; v's path is added to it.
-func (l *lander) cloneOf(ctx context.Context, v core.RepositoryView, taken map[string]string) *repository {
+func (l *lander) cloneOf(ctx context.Context, v api.RepositoryView, taken map[string]string) *repository {
 	dir := v.LocalPath
 	if dir == "" {
 		dir = filepath.Join(filepath.Dir(l.repos.home.dir), v.Name)

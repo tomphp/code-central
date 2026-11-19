@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // A Requirement's landed and Finished comments in a Project with several
@@ -16,8 +16,8 @@ import (
 func TestALandedCommentGivesOneCommitPerChangedRepository(t *testing.T) {
 	srv := newServer(t, requirementFromIssue)
 	asAgent(t, srv, reportPushRemote(`{"url":"git@github.com:acme/home.git"}`))
-	human := core.WithActor(context.Background(), core.Human)
-	for _, in := range []core.AddRepositoryInput{
+	human := api.WithActor(context.Background(), api.Human)
+	for _, in := range []api.AddRepositoryInput{
 		{Name: "web", CloneURL: "git@github.com:acme/web.git"},
 		{Name: "docs", CloneURL: "https://dev.azure.com/org/proj/_git/docs"},
 		{Name: "tools", CloneURL: "git@github.com:acme/tools.git"},

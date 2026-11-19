@@ -8,6 +8,7 @@ package factory
 import (
 	"context"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
@@ -15,7 +16,7 @@ import (
 // startGuidedMaps approves the first frontier Ticket, in created order,
 // of each guided Map that is idle: at most one Ticket per Map per poll.
 func (f *factory) startGuidedMaps(ctx context.Context) {
-	maps, err := f.client.FindSpecs(ctx, f.project, core.FindSpecsInput{
+	maps, err := f.client.FindSpecs(ctx, f.project, api.FindSpecsInput{
 		Labels: []string{core.MapLabel}, Tags: map[string]string{core.GuidedTag: core.GuidedOn}})
 	if err != nil {
 		if ctx.Err() == nil {
@@ -28,7 +29,7 @@ func (f *factory) startGuidedMaps(ctx context.Context) {
 			return
 		}
 		// Rows leave Done and Cancelled out and are in created order.
-		rows, err := f.client.FindTickets(ctx, f.project, core.FindTicketsInput{Spec: core.Ref(m.ID)})
+		rows, err := f.client.FindTickets(ctx, f.project, api.FindTicketsInput{Spec: api.Ref(m.ID)})
 		if err != nil {
 			if ctx.Err() == nil {
 				f.printf("warning: can't read the guided Map %s: %v", m.ID, err)
@@ -39,7 +40,7 @@ func (f *factory) startGuidedMaps(ctx context.Context) {
 		if !ok {
 			continue
 		}
-		if _, err := f.client.Approve(ctx, f.project, core.TicketInput{Ticket: core.Ref(next.ID)}); err != nil {
+		if _, err := f.client.Approve(ctx, f.project, api.TicketInput{Ticket: api.Ref(next.ID)}); err != nil {
 			if ctx.Err() == nil {
 				f.printf("%s: approve: %v", next.ID, err)
 			}
@@ -53,10 +54,10 @@ func (f *factory) startGuidedMaps(ctx context.Context) {
 // blocked) among its unfinished Tickets, in created order, when the Map
 // is idle: every one of them but research is Draft. Any other State
 // waits on the human or an agent, so it holds the Map.
-func nextDecision(rows []core.TicketRow) (next core.TicketRow, ok bool) {
+func nextDecision(rows []api.TicketRow) (next api.TicketRow, ok bool) {
 	for _, r := range rows {
 		if r.State != domain.Draft && r.NodeType != "research" {
-			return core.TicketRow{}, false
+			return api.TicketRow{}, false
 		}
 	}
 	for _, r := range rows {
@@ -64,5 +65,5 @@ func nextDecision(rows []core.TicketRow) (next core.TicketRow, ok bool) {
 			return r, true
 		}
 	}
-	return core.TicketRow{}, false
+	return api.TicketRow{}, false
 }

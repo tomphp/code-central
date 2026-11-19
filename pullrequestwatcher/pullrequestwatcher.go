@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
@@ -30,7 +31,7 @@ const Command = "pull-request-watcher"
 
 // CheckArgs are the arguments that run program's Pull Request Watcher in
 // its check mode for in, after the program itself.
-func CheckArgs(in core.PullRequestCheckInput) []string {
+func CheckArgs(in api.PullRequestCheckInput) []string {
 	args := []string{Command, "--check", "--code-host", string(in.CodeHost), "--repository", in.Repository}
 	if len(in.Repositories) > 0 {
 		list, _ := json.Marshal(in.Repositories)
@@ -48,9 +49,9 @@ func CheckArgs(in core.PullRequestCheckInput) []string {
 // Checker is the service's Pull Request check: program, the service's own
 // executable, run once in the Pull Request Watcher's check mode with
 // environ, the service's environment, so gh is found on the service's PATH.
-func Checker(program string, environ []string) core.PullRequestCheck {
-	return func(ctx context.Context, in core.PullRequestCheckInput) core.WatcherCheckResult {
-		return watchers.Check(ctx, program, environ, CheckArgs(in), core.WatcherPullRequests)
+func Checker(program string, environ []string) api.PullRequestCheck {
+	return func(ctx context.Context, in api.PullRequestCheckInput) api.WatcherCheckResult {
+		return watchers.Check(ctx, program, environ, CheckArgs(in), api.WatcherPullRequests)
 	}
 }
 
@@ -62,26 +63,26 @@ func Checker(program string, environ []string) core.PullRequestCheck {
 // Being rate-limited fails the check, as there is no knowing yet. Given a
 // list of Repositories it checks each of them in place of in's one, and
 // answers with each failing Repository's problem.
-func Check(ctx context.Context, in core.PullRequestCheckInput, env gh.Env) core.WatcherCheckResult {
+func Check(ctx context.Context, in api.PullRequestCheckInput, env gh.Env) api.WatcherCheckResult {
 	if len(in.Repositories) == 0 {
 		return checkOne(ctx, in, env)
 	}
-	var ps []core.RepositoryProblem
+	var ps []api.RepositoryProblem
 	for _, rv := range in.Repositories {
 		one := in
 		one.Repositories, one.CodeHost, one.Repository = nil, rv.CodeHost, rv.Repository
 		if r := checkOne(ctx, one, env); r.Problem != "" {
-			ps = append(ps, core.RepositoryProblem{Repository: rv.Name, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
+			ps = append(ps, api.RepositoryProblem{Repository: rv.Name, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
 		}
 	}
 	if len(ps) == 0 {
-		return core.WatcherCheckResult{}
+		return api.WatcherCheckResult{}
 	}
 	return core.SumRepositoryProblems(ps)
 }
 
 // checkOne is Check for in's one repository.
-func checkOne(ctx context.Context, in core.PullRequestCheckInput, env gh.Env) core.WatcherCheckResult {
+func checkOne(ctx context.Context, in api.PullRequestCheckInput, env gh.Env) api.WatcherCheckResult {
 	_, r, err := access(ctx, in, "", env, true)
 	var limit *ratelimit.Error
 	if errors.As(err, &limit) {
@@ -102,7 +103,7 @@ type Host interface {
 	// refused write; each poll reads the repository only. The Code Host
 	// rate-limiting it is a *ratelimit.Error, as from every method: not a
 	// problem, just a wait. The pull requests are reachable once it passes.
-	CheckAccess(ctx context.Context, full bool) (core.WatcherCheckResult, error)
+	CheckAccess(ctx context.Context, full bool) (api.WatcherCheckResult, error)
 	pullRequests
 }
 
@@ -128,11 +129,11 @@ type pullRequests interface {
 // base, chosen by in's Code Host. It reaches nothing until CheckAccess:
 // GitHub then finds gh with in's gh path Option, and Azure Repos reads the
 // PAT from env by in's PAT environment variable.
-func NewHost(in core.PullRequestCheckInput, base string, env gh.Env) (Host, error) {
+func NewHost(in api.PullRequestCheckInput, base string, env gh.Env) (Host, error) {
 	switch in.CodeHost {
-	case core.CodeHostGitHub:
+	case api.CodeHostGitHub:
 		return &github{ghPath: in.GHPath, env: env, repository: in.Repository, base: base}, nil
-	case core.CodeHostAzureRepos:
+	case api.CodeHostAzureRepos:
 		return &azureRepos{in: in, env: env, base: base}, nil
 	}
 	return nil, fmt.Errorf("this Pull Request Watcher can't open pull requests on %q: it works with GitHub and Azure Repos", in.CodeHost)
@@ -141,10 +142,10 @@ func NewHost(in core.PullRequestCheckInput, base string, env gh.Env) (Host, erro
 // access is Check, as each poll runs it too, with the Code Host it
 // checked, for base: the Code Host's rate-limiting a call is a
 // *ratelimit.Error, not a problem.
-func access(ctx context.Context, in core.PullRequestCheckInput, base string, env gh.Env, full bool) (Host, core.WatcherCheckResult, error) {
+func access(ctx context.Context, in api.PullRequestCheckInput, base string, env gh.Env, full bool) (Host, api.WatcherCheckResult, error) {
 	h, err := NewHost(in, base, env)
 	if err != nil {
-		return nil, core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: err.Error(), Fix: "Use Merge or Branch as the Landing Method."}, nil
+		return nil, api.WatcherCheckResult{Problem: api.ProblemCheckFailed, Reason: err.Error(), Fix: "Use Merge or Branch as the Landing Method."}, nil
 	}
 	r, err := h.CheckAccess(ctx, full)
 	return h, r, err

@@ -2,7 +2,6 @@ package pullrequestwatcher_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"io"
 	"net/http"
 	"reflect"
@@ -12,9 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakeazdo"
 	"github.com/tomoram/code-central/pullrequestwatcher"
@@ -27,14 +28,14 @@ const (
 	prsPath     = reposPath + "/pullrequests"
 )
 
-func azureCheck(srv *fakeazdo.Server, environ ...string) core.WatcherCheckResult {
-	in := core.PullRequestCheckInput{CodeHost: core.CodeHostAzureRepos, Repository: "acme/web/web", PATEnv: "ADO_PAT", ProjectURL: srv.ProjectURL()}
+func azureCheck(srv *fakeazdo.Server, environ ...string) api.WatcherCheckResult {
+	in := api.PullRequestCheckInput{CodeHost: api.CodeHostAzureRepos, Repository: "acme/web/web", PATEnv: "ADO_PAT", ProjectURL: srv.ProjectURL()}
 	return pullrequestwatcher.Check(context.Background(), in, gh.Env{Environ: environ})
 }
 
 func TestAnAzureCheckWithAWorkingPATPassesAndCreatesNoPullRequest(t *testing.T) {
 	srv := fakeazdo.New(t, fakeazdo.JSON("POST", prsPath, 400, map[string]string{"message": "TF401398: source branch not found"}))
-	if r := azureCheck(srv, "ADO_PAT="+secretPAT); !reflect.DeepEqual(r, core.WatcherCheckResult{}) {
+	if r := azureCheck(srv, "ADO_PAT="+secretPAT); !reflect.DeepEqual(r, api.WatcherCheckResult{}) {
 		t.Fatalf("check = %+v, want no problem", r)
 	}
 	reqs := srv.Requests()
@@ -54,7 +55,7 @@ func TestAnUnsetOrEmptyAzurePATVariableIsPATMissing(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			srv := fakeazdo.New(t)
 			r := azureCheck(srv, environ...)
-			if r.Problem != core.ProblemPATMissing || !strings.Contains(r.Reason, "ADO_PAT") || !strings.Contains(r.Fix, "restart") || !strings.Contains(r.Fix, "Code: Read & write") {
+			if r.Problem != api.ProblemPATMissing || !strings.Contains(r.Reason, "ADO_PAT") || !strings.Contains(r.Fix, "restart") || !strings.Contains(r.Fix, "Code: Read & write") {
 				t.Fatalf("check = %+v, want pat_missing naming ADO_PAT, the scope and a restart", r)
 			}
 			want := map[string]string{"darwin": "launchctl setenv ADO_PAT", "linux": "systemctl --user set-environment", "windows": "user environment variable"}[runtime.GOOS]
@@ -71,13 +72,13 @@ func TestAnUnsetOrEmptyAzurePATVariableIsPATMissing(t *testing.T) {
 func TestEachAzureRefusalIsItsOwnProblem(t *testing.T) {
 	for name, tc := range map[string]struct {
 		answers []fakeazdo.Answer
-		problem core.WatcherProblem
+		problem api.WatcherProblem
 		fix     string
 	}{
-		"rejected":          {[]fakeazdo.Answer{{Path: "/", Status: 401}}, core.ProblemPATRejected, "Code: Read & write"},
-		"repo not found":    {[]fakeazdo.Answer{{Path: reposPath, Method: "GET", Status: 404}}, core.ProblemRepositoryUnreadable, "Push remote"},
-		"no contribute":     {[]fakeazdo.Answer{{Path: prsPath, Method: "POST", Status: 403}}, core.ProblemPATScope, "Code: Read & write"},
-		"read scope absent": {[]fakeazdo.Answer{{Path: reposPath, Method: "GET", Status: 403}}, core.ProblemPATScope, "Code: Read & write"},
+		"rejected":          {[]fakeazdo.Answer{{Path: "/", Status: 401}}, api.ProblemPATRejected, "Code: Read & write"},
+		"repo not found":    {[]fakeazdo.Answer{{Path: reposPath, Method: "GET", Status: 404}}, api.ProblemRepositoryUnreadable, "Push remote"},
+		"no contribute":     {[]fakeazdo.Answer{{Path: prsPath, Method: "POST", Status: 403}}, api.ProblemPATScope, "Code: Read & write"},
+		"read scope absent": {[]fakeazdo.Answer{{Path: reposPath, Method: "GET", Status: 403}}, api.ProblemPATScope, "Code: Read & write"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := azureCheck(fakeazdo.New(t, tc.answers...), "ADO_PAT="+secretPAT)
@@ -93,10 +94,10 @@ func TestEachAzureRefusalIsItsOwnProblem(t *testing.T) {
 
 func TestAnUnreachableAzureHostIsRepositoryUnreadable(t *testing.T) {
 	srv := fakeazdo.New(t)
-	in := core.PullRequestCheckInput{CodeHost: core.CodeHostAzureRepos, Repository: "acme/web/web", PATEnv: "ADO_PAT", ProjectURL: srv.ProjectURL()}
+	in := api.PullRequestCheckInput{CodeHost: api.CodeHostAzureRepos, Repository: "acme/web/web", PATEnv: "ADO_PAT", ProjectURL: srv.ProjectURL()}
 	srv.Close()
 	r := pullrequestwatcher.Check(context.Background(), in, gh.Env{Environ: []string{"ADO_PAT=" + secretPAT}})
-	if r.Problem != core.ProblemRepositoryUnreadable {
+	if r.Problem != api.ProblemRepositoryUnreadable {
 		t.Fatalf("check = %+v, want repository_unreadable", r)
 	}
 }
@@ -104,15 +105,15 @@ func TestAnUnreachableAzureHostIsRepositoryUnreadable(t *testing.T) {
 func TestARateLimitedAzureCheckFailsWithoutAProblemOfItsOwn(t *testing.T) {
 	srv := fakeazdo.New(t, fakeazdo.Answer{Path: "/", Status: 429}.WithHeader("Retry-After", "60"))
 	r := azureCheck(srv, "ADO_PAT="+secretPAT)
-	if r.Problem != core.ProblemCheckFailed || !strings.Contains(r.Reason, "throttling") {
+	if r.Problem != api.ProblemCheckFailed || !strings.Contains(r.Reason, "throttling") {
 		t.Fatalf("check = %+v, want check_failed about the rate limit", r)
 	}
 }
 
 func TestTurningPullRequestOnForAnAzureReposRemoteIsRefusedWithReasonAndFixWhenTheCheckFails(t *testing.T) {
 	azure := fakeazdo.New(t)
-	check := func(ctx context.Context, in core.PullRequestCheckInput) core.WatcherCheckResult {
-		if in.CodeHost != core.CodeHostAzureRepos || in.Repository != "acme/web/web" || in.PATEnv != "MY_PAT" {
+	check := func(ctx context.Context, in api.PullRequestCheckInput) api.WatcherCheckResult {
+		if in.CodeHost != api.CodeHostAzureRepos || in.Repository != "acme/web/web" || in.PATEnv != "MY_PAT" {
 			t.Errorf("check input = %+v, want Azure Repos acme/web/web with MY_PAT", in)
 		}
 		in.ProjectURL = azure.ProjectURL()
@@ -120,15 +121,15 @@ func TestTurningPullRequestOnForAnAzureReposRemoteIsRefusedWithReasonAndFixWhenT
 	}
 	srv := codecentraltest.NewServer(t, codecentraltest.WithPullRequestCheck(check))
 	must(t, func() error {
-		_, err := srv.Core.CreateProject(human, core.CreateProjectInput{Key: "acme"})
+		_, err := srv.Core.CreateProject(human, api.CreateProjectInput{Key: "acme"})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: azureRemote, Base: "main"})
+		_, err := srv.Core.ReportPushRemote(ctx, "acme", api.ReportPushRemoteInput{URL: azureRemote, Base: "main"})
 		return err
 	})
-	_, err := srv.Core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest, PATEnv: "MY_PAT"})
-	var e *core.Error
+	_, err := srv.Core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest, PATEnv: "MY_PAT"})
+	var e *api.Error
 	if !asError(err, &e) || e.Field != "pat_env" || !strings.Contains(e.Message, "MY_PAT") || !strings.Contains(e.Fix, "restart") {
 		t.Fatalf("err = %v, want a refusal on the PAT variable with its reason and fix", err)
 	}
@@ -200,7 +201,7 @@ func TestItOpensAReadyAzurePullRequestIntoTheBaseWithTheTicketsTitleAndSummaryAn
 	if got.Number != 7 || got.Link != w.azure.ProjectURL()+"/_git/web/pullrequest/7" {
 		t.Fatalf("recorded %+v, want pull request 7 and its link", got)
 	}
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	opened := w.requests("POST", prsPath)
 	if len(opened) != 1 {
 		t.Fatalf("%d pull requests opened, want one", len(opened))
@@ -281,7 +282,7 @@ func TestAnAzureRateLimitStopsCallsUntilTheResetAndIsNeverAnError(t *testing.T) 
 	reset := w.srv.Clock.Now().Add(15 * time.Minute)
 	w.azure.Script(fakeazdo.Answer{Path: "/", Status: http.StatusTooManyRequests}.WithHeader("X-RateLimit-Reset", itoa(reset.Unix())))
 	w.start("ADO_PAT=" + secretPAT)
-	var got core.WatcherView
+	var got api.WatcherView
 	codecentraltest.Eventually(t, func() bool {
 		p, err := w.srv.Client.GetProject(ctx, "acme")
 		if err != nil {
@@ -290,7 +291,7 @@ func TestAnAzureRateLimitStopsCallsUntilTheResetAndIsNeverAnError(t *testing.T) 
 		got = p.Landing.Watcher
 		return got.RateLimitedUntil.Equal(reset)
 	}, "status %+v, want Watching until %s", &got, reset)
-	if got.State != core.WatcherWatching {
+	if got.State != api.WatcherWatching {
 		t.Fatalf("status %+v, want Watching", got)
 	}
 	calls := len(w.azure.Requests())
@@ -306,14 +307,14 @@ func TestAnAzureRateLimitStopsCallsUntilTheResetAndIsNeverAnError(t *testing.T) 
 func TestAMissingAzurePATIsAnErrorWithItsFixThatClearsWhenFixed(t *testing.T) {
 	w := newAzureWatching(t, list(apr(4, "active", "succeeded", nil)))
 	w.start()
-	got := w.status(core.WatcherError)
-	if got.Problem != core.ProblemPATMissing || !strings.Contains(got.Message, "ADO_PAT") || got.Fix == "" {
+	got := w.status(api.WatcherError)
+	if got.Problem != api.ProblemPATMissing || !strings.Contains(got.Message, "ADO_PAT") || got.Fix == "" {
 		t.Fatalf("status %+v, want pat_missing naming ADO_PAT with a fix", got)
 	}
 }
 
-func asError(err error, target **core.Error) bool {
-	e, ok := err.(*core.Error)
+func asError(err error, target **api.Error) bool {
+	e, ok := err.(*api.Error)
 	if ok {
 		*target = e
 	}

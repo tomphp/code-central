@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -20,21 +20,21 @@ func (f fixture) redone(t *testing.T) {
 	t.Helper()
 	f.failed(t)
 	title := "Login form"
-	if _, err := f.core.EditTicket(ctx, "acme", core.EditTicketInput{Ticket: "2", Title: &title}); err != nil {
+	if _, err := f.core.EditTicket(ctx, "acme", api.EditTicketInput{Ticket: "2", Title: &title}); err != nil {
 		t.Fatalf("edit_ticket: %v", err)
 	}
-	if _, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "2", Note: "Migration 12 has run now"}); err != nil {
+	if _, err := f.core.SendBack(human, "acme", api.SendBackInput{Ticket: "2", Note: "Migration 12 has run now"}); err != nil {
 		t.Fatalf("send_back: %v", err)
 	}
-	f.claim(t, core.ClaimInput{SessionID: "s2"})
+	f.claim(t, api.ClaimInput{SessionID: "s2"})
 	f.clock.Set(t0.Add(2 * time.Hour))
-	if _, err := f.core.PostRound(ctx, "acme", core.PostRoundInput{Ticket: "2", ClaimID: "claim-2", Questions: []core.QuestionInput{qDB}}); err != nil {
+	if _, err := f.core.PostRound(ctx, "acme", api.PostRoundInput{Ticket: "2", ClaimID: "claim-2", Questions: []api.QuestionInput{qDB}}); err != nil {
 		t.Fatalf("post_round: %v", err)
 	}
 }
 
 // readTicket is get_ticket's result as a caller sees its JSON.
-func (f fixture) readTicket(t *testing.T, in core.GetTicketInput) map[string]any {
+func (f fixture) readTicket(t *testing.T, in api.GetTicketInput) map[string]any {
 	t.Helper()
 	v, err := f.core.GetTicket(ctx, "acme", in)
 	if err != nil {
@@ -72,7 +72,7 @@ func withKeys(base []string, more ...string) []string {
 func TestGetTicketByDefaultLeavesOutRoundsMovesAndEditsAndCountsThem(t *testing.T) {
 	f := newFixture(t)
 	f.redone(t)
-	v := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2"})
+	v := f.readTicket(t, api.GetTicketInput{Ticket: "acme-2"})
 	if got, want := keys(v), withKeys(scalars, "claims", "failure_reports", "comments", "left_out"); !slices.Equal(got, want) {
 		t.Fatalf("keys %v, want %v", got, want)
 	}
@@ -98,11 +98,11 @@ func TestGetTicketByDefaultLeavesOutRoundsMovesAndEditsAndCountsThem(t *testing.
 }
 
 func TestGetTicketWithOnePartReturnsTheScalarsAndOnlyThatPart(t *testing.T) {
-	for _, part := range core.TicketParts() {
+	for _, part := range api.TicketParts() {
 		t.Run(part, func(t *testing.T) {
 			f := newFixture(t)
 			f.redone(t)
-			v := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2", Parts: []string{part}})
+			v := f.readTicket(t, api.GetTicketInput{Ticket: "acme-2", Parts: []string{part}})
 			if got, want := keys(v), withKeys(scalars, part, "left_out"); !slices.Equal(got, want) {
 				t.Fatalf("keys %v, want %v", got, want)
 			}
@@ -125,12 +125,12 @@ func TestGetTicketWithOnePartReturnsTheScalarsAndOnlyThatPart(t *testing.T) {
 func TestGetTicketWithEveryPartIsTheWholeTicket(t *testing.T) {
 	f := newFixture(t)
 	f.redone(t)
-	v := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2", Parts: core.TicketParts()})
-	if got, want := keys(v), withKeys(scalars, core.TicketParts()...); !slices.Equal(got, want) {
+	v := f.readTicket(t, api.GetTicketInput{Ticket: "acme-2", Parts: api.TicketParts()})
+	if got, want := keys(v), withKeys(scalars, api.TicketParts()...); !slices.Equal(got, want) {
 		t.Fatalf("keys %v, want %v: no left_out on the whole Ticket", got, want)
 	}
 	// It is what a write returns with full.
-	w, err := record(f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: "Still on it", Full: true}))
+	w, err := record(f.core.Comment(ctx, "acme", api.CommentInput{Ticket: "2", Body: "Still on it", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +144,7 @@ func TestGetTicketLeavesOutOnlyPartsThatHaveSomething(t *testing.T) {
 	f.work(t, domain.Ready)
 	// A new Ticket has nothing in any part; a part asked for that is empty
 	// is still there, as [].
-	v := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2", Parts: []string{"rounds"}})
+	v := f.readTicket(t, api.GetTicketInput{Ticket: "acme-2", Parts: []string{"rounds"}})
 	if !reflect.DeepEqual(v["rounds"], []any{}) {
 		t.Fatalf("rounds %v, want []", v["rounds"])
 	}
@@ -153,7 +153,7 @@ func TestGetTicketLeavesOutOnlyPartsThatHaveSomething(t *testing.T) {
 	}
 	f.move(t, "2", domain.Draft)
 	f.move(t, "2", domain.Ready)
-	v = f.readTicket(t, core.GetTicketInput{Ticket: "acme-2", Parts: []string{"rounds"}})
+	v = f.readTicket(t, api.GetTicketInput{Ticket: "acme-2", Parts: []string{"rounds"}})
 	if want := map[string]any{"moves": float64(2)}; !reflect.DeepEqual(v["left_out"], want) {
 		t.Fatalf("left_out %v, want %v", v["left_out"], want)
 	}
@@ -162,21 +162,21 @@ func TestGetTicketLeavesOutOnlyPartsThatHaveSomething(t *testing.T) {
 func TestGetTicketRejectsAnUnknownPart(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
-	_, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "2", Parts: []string{"rounds", "history"}})
-	wantCode(t, err, core.Invalid, "parts")
-	if want := `unknown part "history" (the parts are claims, failure_reports, comments, rounds, moves, edits)`; err.(*core.Error).Message != want {
-		t.Fatalf("message %q, want %q", err.(*core.Error).Message, want)
+	_, err := f.core.GetTicket(ctx, "acme", api.GetTicketInput{Ticket: "2", Parts: []string{"rounds", "history"}})
+	wantCode(t, err, api.Invalid, "parts")
+	if want := `unknown part "history" (the parts are claims, failure_reports, comments, rounds, moves, edits)`; err.(*api.Error).Message != want {
+		t.Fatalf("message %q, want %q", err.(*api.Error).Message, want)
 	}
 }
 
 func TestClaimReturnsTheTicketInGetTicketsDefaultShape(t *testing.T) {
 	f := newFixture(t)
 	f.failed(t)
-	if _, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "2", Note: "Migration 12 has run now"}); err != nil {
+	if _, err := f.core.SendBack(human, "acme", api.SendBackInput{Ticket: "2", Note: "Migration 12 has run now"}); err != nil {
 		t.Fatalf("send_back: %v", err)
 	}
-	res := f.claim(t, core.ClaimInput{SessionID: "s2"})
-	want := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2"})
+	res := f.claim(t, api.ClaimInput{SessionID: "s2"})
+	want := f.readTicket(t, api.GetTicketInput{Ticket: "acme-2"})
 	if got := asJSON(t, res.Ticket); !reflect.DeepEqual(got, want) {
 		t.Fatalf("claim's Ticket\n%v\nwant get_ticket's default\n%v", got, want)
 	}
@@ -186,7 +186,7 @@ func TestClaimReturnsTheTicketInGetTicketsDefaultShape(t *testing.T) {
 }
 
 // commentBodies is the bodies of a read's comments.
-func commentBodies(v core.TicketView) []string {
+func commentBodies(v api.TicketView) []string {
 	var out []string
 	for _, c := range v.Comments {
 		out = append(out, c.Body)
@@ -201,25 +201,25 @@ func TestARedosClaimCarriesWhyTheLastClaimEnded(t *testing.T) {
 	f := newFixture(t)
 	f.failed(t)
 	sendBack := "Migration 12 has run now"
-	if _, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "2", Note: sendBack}); err != nil {
+	if _, err := f.core.SendBack(human, "acme", api.SendBackInput{Ticket: "2", Note: sendBack}); err != nil {
 		t.Fatal(err)
 	}
-	f.claim(t, core.ClaimInput{SessionID: "s2"})
+	f.claim(t, api.ClaimInput{SessionID: "s2"})
 	summary := "Branch acme-2 at abc123: the form posts to /login"
-	if _, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: "claim-2", Summary: summary}); err != nil {
+	if _, err := f.core.Finish(ctx, "acme", api.FinishInput{Ticket: "2", ClaimID: "claim-2", Summary: summary}); err != nil {
 		t.Fatal(err)
 	}
 	rejection := "The form forgets the email after an error"
-	if _, err := f.core.Reject(human, "acme", core.RejectInput{Ticket: "2", Comment: rejection}); err != nil {
+	if _, err := f.core.Reject(human, "acme", api.RejectInput{Ticket: "2", Comment: rejection}); err != nil {
 		t.Fatal(err)
 	}
-	f.claim(t, core.ClaimInput{SessionID: "s3"})
+	f.claim(t, api.ClaimInput{SessionID: "s3"})
 	giveUp := "Out of context: the email is kept, the error message is left"
-	if _, err := f.core.GiveUp(ctx, "acme", core.GiveUpInput{Ticket: "2", ClaimID: "claim-3", Note: giveUp}); err != nil {
+	if _, err := f.core.GiveUp(ctx, "acme", api.GiveUpInput{Ticket: "2", ClaimID: "claim-3", Note: giveUp}); err != nil {
 		t.Fatal(err)
 	}
 
-	tk := *f.claim(t, core.ClaimInput{SessionID: "s4"}).Ticket
+	tk := *f.claim(t, api.ClaimInput{SessionID: "s4"}).Ticket
 	if want := []string{sendBack, summary, rejection, giveUp}; !slices.Equal(commentBodies(tk), want) {
 		t.Fatalf("comments %q, want %q", commentBodies(tk), want)
 	}
@@ -238,30 +238,30 @@ func TestARedosClaimCarriesWhyTheLastClaimEnded(t *testing.T) {
 func TestTheSpecStageReadsTheGrillingTicketsAnswersAndResolution(t *testing.T) {
 	f := newFixture(t)
 	f.asking(t, qDB)
-	if _, err := f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite, one file"}); err != nil {
+	if _, err := f.core.Answer(human, "acme", api.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite, one file"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.core.PickUpAnswers(ctx, "acme", core.PickUpAnswersInput{Ticket: "2", ClaimID: "claim-1"}); err != nil {
+	if _, err := f.core.PickUpAnswers(ctx, "acme", api.PickUpAnswersInput{Ticket: "2", ClaimID: "claim-1"}); err != nil {
 		t.Fatal(err)
 	}
 	resolution := "# Resolution\n\nSQLite, one file."
-	if _, err := f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: resolution}); err != nil {
+	if _, err := f.core.Comment(ctx, "acme", api.CommentInput{Ticket: "2", Body: resolution}); err != nil {
 		t.Fatal(err)
 	}
 	// The default says there is a Round to read.
-	if v := f.readTicket(t, core.GetTicketInput{Ticket: "2"}); !reflect.DeepEqual(v["left_out"], map[string]any{"rounds": float64(1), "moves": float64(4)}) {
+	if v := f.readTicket(t, api.GetTicketInput{Ticket: "2"}); !reflect.DeepEqual(v["left_out"], map[string]any{"rounds": float64(1), "moves": float64(4)}) {
 		t.Fatalf("left_out %v", v["left_out"])
 	}
 	// The spec guide reads the resolution comment, then the Rounds when it
 	// points to one.
-	v, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "2", Parts: []string{"comments"}})
+	v, err := f.core.GetTicket(ctx, "acme", api.GetTicketInput{Ticket: "2", Parts: []string{"comments"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Equal(commentBodies(v), []string{resolution}) {
 		t.Fatalf("comments %q", commentBodies(v))
 	}
-	v, err = f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "2", Parts: []string{"rounds"}})
+	v, err = f.core.GetTicket(ctx, "acme", api.GetTicketInput{Ticket: "2", Parts: []string{"rounds"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,21 +280,21 @@ func (f fixture) claimedThenBlocked(t *testing.T) {
 	t.Helper()
 	f.work(t, domain.Ready, domain.Ready, domain.Ready)
 	f.move(t, "3", domain.Done)
-	if _, err := f.core.Claim(ctx, "acme", core.ClaimInput{Ticket: "acme-2", SessionID: "s1", WorkingDir: str("/work/acme-2"), ResumeCommand: str("claude --resume s1")}); err != nil {
+	if _, err := f.core.Claim(ctx, "acme", api.ClaimInput{Ticket: "acme-2", SessionID: "s1", WorkingDir: str("/work/acme-2"), ResumeCommand: str("claude --resume s1")}); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
-	for _, b := range []core.Ref{"3", "4"} {
-		if _, err := f.core.AddBlocker(ctx, "acme", core.BlockerInput{Ticket: "2", Blocker: b}); err != nil {
+	for _, b := range []api.Ref{"3", "4"} {
+		if _, err := f.core.AddBlocker(ctx, "acme", api.BlockerInput{Ticket: "2", Blocker: b}); err != nil {
 			t.Fatalf("add_blocker %s: %v", b, err)
 		}
 	}
-	f.core.PostSessionEvents(ctx, "s1", []core.SessionEvent{{Time: f.clock.Now(), Kind: "tool_call", Text: "Bash: go test ./..."}})
+	f.core.PostSessionEvents(ctx, "s1", []api.SessionEvent{{Time: f.clock.Now(), Kind: "tool_call", Text: "Bash: go test ./..."}})
 }
 
 func TestGetTicketByDefaultShowsADoneBlockerAsItsIDAndStateOnly(t *testing.T) {
 	f := newFixture(t)
 	f.claimedThenBlocked(t)
-	v := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2"})
+	v := f.readTicket(t, api.GetTicketInput{Ticket: "acme-2"})
 	want := []any{
 		map[string]any{"id": "acme-3", "state": "Done"},
 		map[string]any{"id": "acme-4", "title": "Tc", "state": "Ready", "cleared": false},
@@ -308,9 +308,9 @@ func TestGetTicketByDefaultShowsADoneReplacementBlockerAsItsIDAndStateOnly(t *te
 	f := newFixture(t)
 	f.work(t, domain.Ready, domain.Ready, domain.Ready) // acme-2..acme-4
 	f.addBlocker(t, "acme-2", "acme-3")
-	f.cancel(t, core.CancelInput{Ticket: "acme-3", Replacements: []core.Ref{"acme-4"}})
+	f.cancel(t, api.CancelInput{Ticket: "acme-3", Replacements: []api.Ref{"acme-4"}})
 	f.setState(t, 4, domain.Done)
-	v := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2"})
+	v := f.readTicket(t, api.GetTicketInput{Ticket: "acme-2"})
 	if want := []any{map[string]any{"id": "acme-4", "state": "Done"}}; !reflect.DeepEqual(v["blockers"], want) {
 		t.Fatalf("blockers %v, want %v", v["blockers"], want)
 	}
@@ -319,7 +319,7 @@ func TestGetTicketByDefaultShowsADoneReplacementBlockerAsItsIDAndStateOnly(t *te
 func TestGetTicketByDefaultLeavesOutTheClaimsSessionFieldsAndCountsThem(t *testing.T) {
 	f := newFixture(t)
 	f.claimedThenBlocked(t)
-	v := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2"})
+	v := f.readTicket(t, api.GetTicketInput{Ticket: "acme-2"})
 	c := v["claims"].([]any)[0].(map[string]any)
 	for _, k := range []string{"working_dir", "resume_command", "latest_event"} {
 		if _, ok := c[k]; ok {
@@ -334,7 +334,7 @@ func TestGetTicketByDefaultLeavesOutTheClaimsSessionFieldsAndCountsThem(t *testi
 	}
 	// claim returns the same.
 	f.clock.Advance(time.Minute)
-	res := f.claim(t, core.ClaimInput{Ticket: "acme-2", SessionID: "s1"})
+	res := f.claim(t, api.ClaimInput{Ticket: "acme-2", SessionID: "s1"})
 	if got := asJSON(t, res.Ticket); !reflect.DeepEqual(got["claims"], v["claims"]) {
 		t.Fatalf("claim's claims %v, want %v", got["claims"], v["claims"])
 	}
@@ -343,7 +343,7 @@ func TestGetTicketByDefaultLeavesOutTheClaimsSessionFieldsAndCountsThem(t *testi
 func TestGetTicketWithTheClaimsPartReturnsThemInFull(t *testing.T) {
 	f := newFixture(t)
 	f.claimedThenBlocked(t)
-	v := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2", Parts: []string{"claims"}})
+	v := f.readTicket(t, api.GetTicketInput{Ticket: "acme-2", Parts: []string{"claims"}})
 	c := v["claims"].([]any)[0].(map[string]any)
 	if c["working_dir"] != "/work/acme-2" || c["resume_command"] != "claude --resume s1" {
 		t.Fatalf("claim %v", c)
@@ -362,9 +362,9 @@ func TestGetTicketWithTheClaimsPartReturnsThemInFull(t *testing.T) {
 func TestFindTicketViewsGivesEachTicketAsGetTicketDoes(t *testing.T) {
 	f := newFixture(t)
 	f.redone(t)
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Logout", State: domain.Ready})
-	in := core.FindTicketsInput{State: domain.States, Full: true}
-	for _, parts := range [][]string{nil, core.TicketParts()} {
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Logout", State: domain.Ready})
+	in := api.FindTicketsInput{State: domain.States, Full: true}
+	for _, parts := range [][]string{nil, api.TicketParts()} {
 		in.Parts = parts
 		views, err := f.core.FindTicketViews(ctx, "acme", in)
 		if err != nil {
@@ -378,7 +378,7 @@ func TestFindTicketViewsGivesEachTicketAsGetTicketDoes(t *testing.T) {
 			t.Fatalf("%d views for %d rows, want the same Tickets and at least two", len(views), len(rows))
 		}
 		for i, v := range views {
-			want, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: core.Ref(rows[i].ID), Parts: parts})
+			want, err := f.core.GetTicket(ctx, "acme", api.GetTicketInput{Ticket: api.Ref(rows[i].ID), Parts: parts})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -392,19 +392,19 @@ func TestFindTicketViewsGivesEachTicketAsGetTicketDoes(t *testing.T) {
 func TestFindTicketViewsAreFilteredAsTheRowsAre(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready, domain.Draft)
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Logout", State: domain.Ready})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Logout", State: domain.Ready})
 	claimable := true
-	views, err := f.core.FindTicketViews(ctx, "acme", core.FindTicketsInput{Full: true, Claimable: &claimable, Title: "logout"})
+	views, err := f.core.FindTicketViews(ctx, "acme", api.FindTicketsInput{Full: true, Claimable: &claimable, Title: "logout"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(views) != 1 || views[0].Title != "Logout" {
 		t.Fatalf("views %+v, want only the claimable Logout", views)
 	}
-	if _, err := f.core.FindTicketViews(ctx, "acme", core.FindTicketsInput{Full: true, State: []domain.State{"Nope"}}); err == nil {
+	if _, err := f.core.FindTicketViews(ctx, "acme", api.FindTicketsInput{Full: true, State: []domain.State{"Nope"}}); err == nil {
 		t.Error("an unknown State was accepted")
 	}
-	if _, err := f.core.FindTicketViews(ctx, "acme", core.FindTicketsInput{Full: true, Parts: []string{"nope"}}); err == nil {
+	if _, err := f.core.FindTicketViews(ctx, "acme", api.FindTicketsInput{Full: true, Parts: []string{"nope"}}); err == nil {
 		t.Error("an unknown part was accepted")
 	}
 }

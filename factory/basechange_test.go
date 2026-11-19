@@ -2,18 +2,19 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
 // setMergeBase sets Merge with Push to origin and the base, which is what
 // the Project's Options save together.
 func setMergeBase(h *factorytest.Harness, base string) {
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin", Base: &base})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin", Base: &base})
 }
 
 // pullRequestBase changes the base under Pull Request. The Factory
@@ -21,10 +22,10 @@ func setMergeBase(h *factorytest.Harness, base string) {
 // which Pull Request doesn't accept, so the Code Host's URL is reported
 // again first.
 func pullRequestBase(h *factorytest.Harness, base string) {
-	if _, err := h.Server.Client.ReportPushRemote(context.Background(), h.Project, core.ReportPushRemoteInput{URL: "https://github.com/acme/app.git"}); err != nil {
+	if _, err := h.Server.Client.ReportPushRemote(context.Background(), h.Project, api.ReportPushRemoteInput{URL: "https://github.com/acme/app.git"}); err != nil {
 		panic(err)
 	}
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin", Base: &base})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin", Base: &base})
 }
 
 func contains(h *factorytest.Harness, branch, commit string) bool {
@@ -151,7 +152,7 @@ func TestUnderBranchAWaitingTicketIsWatchedOnTheNewBase(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	h.Git("branch", "release", "main")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch})
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	r := h.Start()
 	r.WantOutput(id + ": Accepted under the Branch Landing Method: merge " + id + " into main")
@@ -166,7 +167,7 @@ func TestUnderBranchAWaitingTicketIsWatchedOnTheNewBase(t *testing.T) {
 	}
 
 	base := "release"
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch, Base: &base})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch, Base: &base})
 	r.Poll()
 	h.WantState(id, domain.Done)
 	r.WantOutput(id + ": merged into release by hand")
@@ -238,7 +239,7 @@ func TestLandingByMergeWithoutPushResetsBaseDiverged(t *testing.T) {
 	}
 
 	// Merge without Push never keeps the base level with the remote's.
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge})
 	r.Poll()
 
 	h.WantState(ready, domain.InProgress)

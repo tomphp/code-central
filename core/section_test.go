@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 )
 
@@ -42,7 +43,7 @@ First notes.
 Second notes.`
 
 func TestTheOutlineListsEveryHeadingWithItsLevel(t *testing.T) {
-	want := []core.Heading{
+	want := []api.Heading{
 		{Text: "Title", Level: 1, Size: 144}, {Text: "Solution", Level: 2, Size: 48}, {Text: "Detail", Level: 3, Size: 24},
 		{Text: "Testing Decisions", Level: 2, Size: 53}, {Text: "Notes", Level: 2, Size: 22}, {Text: "Appendix", Level: 1, Size: 35}, {Text: "notes", Level: 2, Size: 23},
 	}
@@ -51,18 +52,18 @@ func TestTheOutlineListsEveryHeadingWithItsLevel(t *testing.T) {
 	}
 	cases := map[string]struct {
 		body string
-		want []core.Heading
+		want []api.Heading
 	}{
-		"no headings":           {"Just text.\nMore.", []core.Heading{}},
-		"six levels, not seven": {"###### Six\n####### Seven", []core.Heading{{Text: "Six", Level: 6}}},
-		"a # needs a space":     {"#hashtag\n# Real", []core.Heading{{Text: "Real", Level: 1}}},
-		"up to three spaces":    {"   # Indented\n    # Code", []core.Heading{{Text: "Indented", Level: 1}}},
-		"setext isn't":          {"Title\n=====\n\nSub\n---", []core.Heading{}},
-		"closing marks":         {"## Both ends ##\n# C# #", []core.Heading{{Text: "Both ends", Level: 2}, {Text: "C#", Level: 1}}},
-		"tilde fences":          {"~~~\n# no\n~~~\n# yes", []core.Heading{{Text: "yes", Level: 1}}},
-		"a longer fence closes": {"````\n```\n# no\n````\n# yes", []core.Heading{{Text: "yes", Level: 1}}},
-		"an empty heading":      {"#\n## Next", []core.Heading{{Text: "", Level: 1}, {Text: "Next", Level: 2}}},
-		"CRLF line endings":     {"## Foo ##\r\n```\r\n# no\r\n```\r\n# Bar\r\n", []core.Heading{{Text: "Foo", Level: 2}, {Text: "Bar", Level: 1}}},
+		"no headings":           {"Just text.\nMore.", []api.Heading{}},
+		"six levels, not seven": {"###### Six\n####### Seven", []api.Heading{{Text: "Six", Level: 6}}},
+		"a # needs a space":     {"#hashtag\n# Real", []api.Heading{{Text: "Real", Level: 1}}},
+		"up to three spaces":    {"   # Indented\n    # Code", []api.Heading{{Text: "Indented", Level: 1}}},
+		"setext isn't":          {"Title\n=====\n\nSub\n---", []api.Heading{}},
+		"closing marks":         {"## Both ends ##\n# C# #", []api.Heading{{Text: "Both ends", Level: 2}, {Text: "C#", Level: 1}}},
+		"tilde fences":          {"~~~\n# no\n~~~\n# yes", []api.Heading{{Text: "yes", Level: 1}}},
+		"a longer fence closes": {"````\n```\n# no\n````\n# yes", []api.Heading{{Text: "yes", Level: 1}}},
+		"an empty heading":      {"#\n## Next", []api.Heading{{Text: "", Level: 1}, {Text: "Next", Level: 2}}},
+		"CRLF line endings":     {"## Foo ##\r\n```\r\n# no\r\n```\r\n# Bar\r\n", []api.Heading{{Text: "Foo", Level: 2}, {Text: "Bar", Level: 1}}},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {

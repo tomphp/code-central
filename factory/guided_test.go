@@ -2,10 +2,12 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
@@ -18,12 +20,12 @@ func newMap(t *testing.T, h *factorytest.Harness, title string, tags map[string]
 	t.Helper()
 	ctx := context.Background()
 	c := h.Server.Client
-	s, err := c.CreateSpec(ctx, h.Project, core.CreateSpecInput{Title: title})
+	s, err := c.CreateSpec(ctx, h.Project, api.CreateSpecInput{Title: title})
 	mustNot(t, err)
-	_, err = c.AddLabels(ctx, h.Project, core.LabelsInput{Target: core.Ref(s.ID), Labels: []string{core.MapLabel}})
+	_, err = c.AddLabels(ctx, h.Project, api.LabelsInput{Target: api.Ref(s.ID), Labels: []string{core.MapLabel}})
 	mustNot(t, err)
 	if len(tags) > 0 {
-		_, err = h.Human().SetTags(ctx, h.Project, core.SetTagsInput{Target: core.Ref(s.ID), Tags: tags})
+		_, err = h.Human().SetTags(ctx, h.Project, api.SetTagsInput{Target: api.Ref(s.ID), Tags: tags})
 		mustNot(t, err)
 	}
 	return s.ID
@@ -39,7 +41,7 @@ func guidedMap(t *testing.T, h *factorytest.Harness, title string) string {
 // creates its decision Tickets, and returns its ID.
 func decision(t *testing.T, h *factorytest.Harness, m, label, title string) string {
 	t.Helper()
-	tk, err := h.Server.Client.CreateTicket(context.Background(), h.Project, core.CreateTicketInput{Spec: core.Ref(m), Title: title, Labels: []string{label}})
+	tk, err := h.Server.Client.CreateTicket(context.Background(), h.Project, api.CreateTicketInput{Spec: api.Ref(m), Title: title, Labels: []string{label}})
 	mustNot(t, err)
 	return tk.ID
 }
@@ -83,7 +85,7 @@ func TestTheFactoryStartsOneDecisionPerIdleGuidedMapInCreatedOrder(t *testing.T)
 	other := guidedMap(t, h, "Dark mode")
 	blocked := decision(t, h, other, "wayfinder:task", "Pick colours")
 	unblocked := decision(t, h, other, "wayfinder:task", "Pick a toggle")
-	_, err := h.Server.Client.AddBlocker(context.Background(), h.Project, core.BlockerInput{Ticket: core.Ref(blocked), Blocker: core.Ref(unblocked)})
+	_, err := h.Server.Client.AddBlocker(context.Background(), h.Project, api.BlockerInput{Ticket: api.Ref(blocked), Blocker: api.Ref(unblocked)})
 	mustNot(t, err)
 	h.Script(first, factorytest.Wait(), factorytest.Finish("Legal says yes."), factorytest.Result("success"))
 

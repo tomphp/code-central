@@ -3,18 +3,20 @@ package workitemwatcher_test
 import (
 	"context"
 	"fmt"
-	"github.com/tomoram/code-central/domain"
 	"net/http"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakeazdo"
 )
 
 // agent is the context an agent's writes are made in.
-var agent = core.WithActor(context.Background(), core.Agent)
+var agent = api.WithActor(context.Background(), api.Agent)
 
 // workItemPath is where work item id is read and patched, below the
 // fake's root.
@@ -60,7 +62,7 @@ func (w *watching) wantNoStateChange() {
 func (w *watching) toRequirement(id int, context string) string {
 	w.t.Helper()
 	ticket := w.ticketOf(id).ID
-	if _, err := w.srv.Core.ToRequirement(human, "acme", core.ToRequirementInput{Ticket: core.Ref(ticket), Context: context}); err != nil {
+	if _, err := w.srv.Core.ToRequirement(human, "acme", api.ToRequirementInput{Ticket: api.Ref(ticket), Context: context}); err != nil {
 		w.t.Fatal(err)
 	}
 	rows := w.linked()
@@ -105,7 +107,7 @@ func TestADraftIncomingIssueIsTaggedDraftBesideItsOwnTags(t *testing.T) {
 	w.fake.PutWorkItems(tagged)
 	w.fake.SavedQuery(queryID, 1)
 	w.start()
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	w.polled()
 	if got := w.patches(0); !slices.Equal(got, []string{retagged(1, 7, "frontend; Needs Design; code-central:draft")}) {
 		t.Fatalf("patches %q, want one adding the tag, testing revision 7", got)
@@ -126,7 +128,7 @@ func TestTheStatusTagReplacesEveryOtherCodeCentralTagAndNoOtherTag(t *testing.T)
 	w.fake.PutWorkItems(tagged)
 	w.fake.SavedQuery(queryID, 1)
 	w.start()
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	w.polled()
 	if got := w.tags(1); got != "keep; code-central:draft; codecentral:keep; other" {
 		t.Fatalf("tags %q, want the other code-central: tag removed, the rest in place", got)
@@ -147,7 +149,7 @@ func TestAWorkItemWithTheTagAlreadyIsNotPatched(t *testing.T) {
 	w.fake.PutWorkItems(tagged)
 	w.fake.SavedQuery(queryID, 1)
 	w.start()
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	w.polled()
 	if got := w.patches(0); len(got) != 0 {
 		t.Fatalf("patches %q, want none", got)
@@ -165,7 +167,7 @@ func TestARevisionConflictIsRetriedOnTheNextPollFromTheNewRevision(t *testing.T)
 	stale.Times = 1
 	w.fake.Script(stale)
 	w.start()
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	w.polled()
 	if got := w.tags(1); got != "" {
 		t.Fatalf("tags %q, want none: the conflict changed nothing", got)
@@ -193,10 +195,10 @@ func TestAPATThatCantWriteWorkItemsIsAnErrorWithItsFix(t *testing.T) {
 	w.fake.SavedQuery(queryID, 1)
 	w.failing("PATCH", workItemPath(1), http.StatusForbidden, "VS402625: Dependent rules failed")
 	w.start()
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	w.nextPoll()
-	got := w.status(core.WatcherError)
-	if got.Problem != core.ProblemPATScope || !strings.Contains(got.Message, "ADO_PAT") || !strings.Contains(got.Fix, "Work Items: Read & write") {
+	got := w.status(api.WatcherError)
+	if got.Problem != api.ProblemPATScope || !strings.Contains(got.Message, "ADO_PAT") || !strings.Contains(got.Fix, "Work Items: Read & write") {
 		t.Fatalf("status %+v, want pat_scope naming ADO_PAT, with the Read & write scope as the fix", got)
 	}
 	if strings.Contains(got.Message+got.Fix, pat) {
@@ -204,9 +206,9 @@ func TestAPATThatCantWriteWorkItemsIsAnErrorWithItsFix(t *testing.T) {
 	}
 	w.nextPoll()
 	w.nextPoll()
-	w.status(core.WatcherError)
+	w.status(api.WatcherError)
 	w.nextPoll()
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	if got := w.tags(1); got != "code-central:draft" {
 		t.Fatalf("tags %q, want the tag once the PAT could write", got)
 	}
@@ -218,7 +220,7 @@ func TestWontFixCommentsAndTagsTheWorkItemAndNeverChangesItsState(t *testing.T) 
 	w := newWatching(t)
 	w.arrived(1)
 	ticket := w.ticketOf(1).ID
-	if _, err := w.srv.Core.WontFix(human, "acme", core.WontFixInput{Ticket: core.Ref(ticket), Reason: "Not for us."}); err != nil {
+	if _, err := w.srv.Core.WontFix(human, "acme", api.WontFixInput{Ticket: api.Ref(ticket), Reason: "Not for us."}); err != nil {
 		t.Fatal(err)
 	}
 	w.polled()
@@ -243,7 +245,7 @@ func TestWontFixCommentsAndTagsTheWorkItemAndNeverChangesItsState(t *testing.T) 
 func TestWontFixWithoutAReasonOnlyTags(t *testing.T) {
 	w := newWatching(t)
 	w.arrived(1)
-	if _, err := w.srv.Core.WontFix(human, "acme", core.WontFixInput{Ticket: core.Ref(w.ticketOf(1).ID)}); err != nil {
+	if _, err := w.srv.Core.WontFix(human, "acme", api.WontFixInput{Ticket: api.Ref(w.ticketOf(1).ID)}); err != nil {
 		t.Fatal(err)
 	}
 	w.polled()
@@ -329,7 +331,7 @@ func TestARequirementsProgressIsPostedOnceAsMarkdownAndTheTagFollowsIt(t *testin
 // stages are the Stage Tickets of Requirement spec, in Stage order.
 func (w *watching) stages(spec string) []string {
 	w.t.Helper()
-	sp, err := w.srv.Core.GetSpec(context.Background(), "acme", core.GetSpecInput{Spec: core.Ref(spec)})
+	sp, err := w.srv.Core.GetSpec(context.Background(), "acme", api.GetSpecInput{Spec: api.Ref(spec)})
 	if err != nil {
 		w.t.Fatal(err)
 	}
@@ -345,26 +347,26 @@ func (w *watching) stages(spec string) []string {
 // landed with it.
 func (w *watching) workedDone(ticket, comment, commit string) {
 	w.t.Helper()
-	c, err := w.srv.Core.Claim(agent, "acme", core.ClaimInput{Ticket: core.Ref(ticket)})
+	c, err := w.srv.Core.Claim(agent, "acme", api.ClaimInput{Ticket: api.Ref(ticket)})
 	if err == nil && comment != "" {
-		_, err = w.srv.Core.Comment(agent, "acme", core.CommentInput{Ticket: core.Ref(ticket), Body: comment})
+		_, err = w.srv.Core.Comment(agent, "acme", api.CommentInput{Ticket: api.Ref(ticket), Body: comment})
 	}
 	branch := ""
 	if commit != "" {
 		branch = ticket
 	}
 	if err == nil {
-		in := core.FinishInput{Ticket: core.Ref(ticket), ClaimID: c.ClaimID, Summary: "Finished " + ticket + ".", Branch: branch}
+		in := api.FinishInput{Ticket: api.Ref(ticket), ClaimID: c.ClaimID, Summary: "Finished " + ticket + ".", Branch: branch}
 		if core.StageOf(c.Ticket.Labels) == "spec" {
 			in.Recommendation = domain.RecommendSplit
 		}
 		_, err = w.srv.Core.Finish(agent, "acme", in)
 	}
 	if err == nil {
-		_, err = w.srv.Core.Accept(human, "acme", core.TicketInput{Ticket: core.Ref(ticket)})
+		_, err = w.srv.Core.Accept(human, "acme", api.TicketInput{Ticket: api.Ref(ticket)})
 	}
 	if err == nil && commit != "" {
-		_, err = w.srv.Core.Land(agent, "acme", core.LandInput{Ticket: core.Ref(ticket), Commit: commit})
+		_, err = w.srv.Core.Land(agent, "acme", api.LandInput{Ticket: api.Ref(ticket), Commit: commit})
 	}
 	if err != nil {
 		w.t.Fatal(err)
@@ -375,7 +377,7 @@ func (w *watching) workedDone(ticket, comment, commit string) {
 // spec, returning its ID.
 func (w *watching) implementation(spec, title string) string {
 	w.t.Helper()
-	out, err := w.srv.Core.CreateTicket(agent, "acme", core.CreateTicketInput{Spec: core.Ref(spec), Title: title, State: "Ready", Full: true})
+	out, err := w.srv.Core.CreateTicket(agent, "acme", api.CreateTicketInput{Spec: api.Ref(spec), Title: title, State: "Ready", Full: true})
 	if err != nil {
 		w.t.Fatal(err)
 	}
@@ -387,13 +389,13 @@ func (w *watching) implementation(spec, title string) string {
 // item, and the human's own, stay as they are.
 func TestUnderHideCodeCentralTheHiddenCommentIsPostedAndNoTagIsWritten(t *testing.T) {
 	w := newWatching(t)
-	w.setBoards(core.SetAzureBoardsInput{On: true, QueryURL: w.queryURL(queryID), HideCodeCentral: true})
+	w.setBoards(api.SetAzureBoardsInput{On: true, QueryURL: w.queryURL(queryID), HideCodeCentral: true})
 	tagged := item(1)
 	tagged.Tags = "frontend; code-central:draft"
 	w.fake.PutWorkItems(tagged)
 	w.fake.SavedQuery(queryID, 1)
 	w.start()
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	wantIncoming(t, w, 1)
 	spec := w.toRequirement(1, "  Seen on every login.  ")
 	w.polled()
@@ -420,7 +422,7 @@ func TestEitherMarkerOnTheWorkItemStopsTheCommentBeingPostedAgain(t *testing.T) 
 		for name, marker := range map[string]func(target, key string) string{"branded": core.IssueMarker, "opaque": core.OpaqueMarker} {
 			t.Run(fmt.Sprintf("%s marker, hidden %t", name, hide), func(t *testing.T) {
 				w := newWatching(t)
-				w.setBoards(core.SetAzureBoardsInput{On: true, QueryURL: w.queryURL(queryID), HideCodeCentral: hide})
+				w.setBoards(api.SetAzureBoardsInput{On: true, QueryURL: w.queryURL(queryID), HideCodeCentral: hide})
 				w.arrived(1)
 				spec := w.toRequirement(1, "Seen on every login.")
 				w.fake.PutComment(1, marker(spec, core.CommentContext)+"\nSeen on every login.")

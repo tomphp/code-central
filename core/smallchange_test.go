@@ -4,15 +4,16 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
 const fixTypo = "Fix the typo in the footer\n\nIt says \"Copyrigth\".\n"
 
-func submitSmallChange(t *testing.T, f fixture, text string) core.Written[core.TicketView] {
+func submitSmallChange(t *testing.T, f fixture, text string) api.Written[api.TicketView] {
 	t.Helper()
-	res, err := f.core.SubmitSmallChange(ctx, "acme", core.SubmitSmallChangeInput{Text: text, Full: true})
+	res, err := f.core.SubmitSmallChange(ctx, "acme", api.SubmitSmallChangeInput{Text: text, Full: true})
 	if err != nil {
 		t.Fatalf("submit_small_change: %v", err)
 	}
@@ -30,7 +31,7 @@ func TestTheFirstSmallChangeCreatesALongLivedSmallChangesSpecAndAReadyTicketOnIt
 	if len(tk.Moves) != 1 || tk.Moves[0].Actor != "human" || tk.Moves[0].To != domain.Ready || tk.Moves[0].Via != "submit_small_change" {
 		t.Fatalf("moves %+v", tk.Moves)
 	}
-	sp, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-1"})
+	sp, err := f.core.GetSpec(ctx, "acme", api.GetSpecInput{Spec: "acme-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,13 +44,13 @@ func TestASecondSmallChangeReusesTheSpecEvenAfterItIsRetitled(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	submitSmallChange(t, f, fixTypo)
-	if _, err := f.core.EditSpec(ctx, "acme", core.EditSpecInput{Spec: "acme-1", Title: ptr("Odd jobs")}); err != nil {
+	if _, err := f.core.EditSpec(ctx, "acme", api.EditSpecInput{Spec: "acme-1", Title: ptr("Odd jobs")}); err != nil {
 		t.Fatal(err)
 	}
 	if tk := submitSmallChange(t, f, "Rename the label").Record; tk.Spec.ID != "acme-1" || tk.ID != "acme-2" && tk.ID != "acme-3" {
 		t.Fatalf("second Small Change %+v", tk)
 	}
-	if specs, err := f.core.FindSpecs(ctx, "acme", core.FindSpecsInput{}); err != nil || len(specs) != 1 {
+	if specs, err := f.core.FindSpecs(ctx, "acme", api.FindSpecsInput{}); err != nil || len(specs) != 1 {
 		t.Fatalf("specs %+v, %v", specs, err)
 	}
 }
@@ -57,7 +58,7 @@ func TestASecondSmallChangeReusesTheSpecEvenAfterItIsRetitled(t *testing.T) {
 func TestASmallChangeIsWrittenAsHumanWhoeverCalls(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	res, err := f.core.SubmitSmallChange(ctx, "acme", core.SubmitSmallChangeInput{Text: "Fix it", Full: true})
+	res, err := f.core.SubmitSmallChange(ctx, "acme", api.SubmitSmallChangeInput{Text: "Fix it", Full: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,15 +70,15 @@ func TestASmallChangeIsWrittenAsHumanWhoeverCalls(t *testing.T) {
 func TestASmallChangeWithNoTextIsInvalid(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	_, err := f.core.SubmitSmallChange(ctx, "acme", core.SubmitSmallChangeInput{Text: " \n "})
-	wantCode(t, err, core.Invalid, "text")
+	_, err := f.core.SubmitSmallChange(ctx, "acme", api.SubmitSmallChangeInput{Text: " \n "})
+	wantCode(t, err, api.Invalid, "text")
 }
 
 func TestAnAgentClaimsASmallChangeWithTheImplementationGuide(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	submitSmallChange(t, f, fixTypo)
-	res, err := f.core.Claim(ctx, "acme", core.ClaimInput{})
+	res, err := f.core.Claim(ctx, "acme", api.ClaimInput{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +93,7 @@ func TestASmallChangeLandsOnItsOwnUnderLandPerSpec(t *testing.T) {
 	if f.getTicket(t, tk.ID).SpecLanded {
 		t.Error("a Small Change is Spec-landed")
 	}
-	if f.specStatus(t, core.Ref(tk.Spec.ID)) != nil {
+	if f.specStatus(t, api.Ref(tk.Spec.ID)) != nil {
 		t.Error("the Small Changes Spec has a Land per Spec status")
 	}
 }
@@ -100,7 +101,7 @@ func TestASmallChangeLandsOnItsOwnUnderLandPerSpec(t *testing.T) {
 func TestADraftSmallChangeIsADraftTicketWithNoMoves(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	res, err := f.core.SubmitSmallChange(ctx, "acme", core.SubmitSmallChangeInput{Text: fixTypo, Draft: true, Full: true})
+	res, err := f.core.SubmitSmallChange(ctx, "acme", api.SubmitSmallChangeInput{Text: fixTypo, Draft: true, Full: true})
 	if err != nil {
 		t.Fatal(err)
 	}

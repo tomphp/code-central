@@ -7,17 +7,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
 // whole asks get_ticket for every part: the whole Ticket.
-func whole(ref core.Ref) core.GetTicketInput {
-	return core.GetTicketInput{Ticket: ref, Parts: core.TicketParts()}
+func whole(ref api.Ref) api.GetTicketInput {
+	return api.GetTicketInput{Ticket: ref, Parts: api.TicketParts()}
 }
 
-func (f fixture) get(t *testing.T, ref core.Ref) core.TicketView {
+func (f fixture) get(t *testing.T, ref api.Ref) api.TicketView {
 	t.Helper()
 	v, err := f.core.GetTicket(ctx, "acme", whole(ref))
 	if err != nil {
@@ -26,9 +26,9 @@ func (f fixture) get(t *testing.T, ref core.Ref) core.TicketView {
 	return v
 }
 
-func (f fixture) addBlocker(t *testing.T, ticket, blocker core.Ref) core.TicketView {
+func (f fixture) addBlocker(t *testing.T, ticket, blocker api.Ref) api.TicketView {
 	t.Helper()
-	v, err := record(f.core.AddBlocker(ctx, "acme", core.BlockerInput{Ticket: ticket, Blocker: blocker, Full: true}))
+	v, err := record(f.core.AddBlocker(ctx, "acme", api.BlockerInput{Ticket: ticket, Blocker: blocker, Full: true}))
 	if err != nil {
 		t.Fatalf("add_blocker %s %s: %v", ticket, blocker, err)
 	}
@@ -49,7 +49,7 @@ func (f fixture) setState(t *testing.T, n int, s domain.State) {
 	}
 }
 
-func blockerIDs(v core.TicketView) []string {
+func blockerIDs(v api.TicketView) []string {
 	var out []string
 	for _, b := range v.Blockers {
 		out = append(out, b.ID+" "+string(b.State))
@@ -70,10 +70,10 @@ func TestABlockedReadyTicketStaysReadyButIsNotClaimable(t *testing.T) {
 		t.Fatalf("blockers %v", got)
 	}
 	// The next claim passes over the older, blocked acme-2.
-	if res := f.claim(t, core.ClaimInput{}); res.Ticket.ID != "acme-3" {
+	if res := f.claim(t, api.ClaimInput{}); res.Ticket.ID != "acme-3" {
 		t.Fatalf("claimed %s, want acme-3", res.Ticket.ID)
 	}
-	if res, _ := f.core.Claim(ctx, "acme", core.ClaimInput{}); res.Ticket != nil {
+	if res, _ := f.core.Claim(ctx, "acme", api.ClaimInput{}); res.Ticket != nil {
 		t.Fatalf("claimed %s while it is blocked", res.Ticket.ID)
 	}
 }
@@ -84,9 +84,9 @@ func TestClaimingANamedBlockedTicketIsRejectedWithItsBlockers(t *testing.T) {
 	f.addBlocker(t, "acme-2", "acme-3")
 	f.addBlocker(t, "acme-2", "acme-4")
 
-	_, err := f.core.Claim(ctx, "acme", core.ClaimInput{Ticket: "acme-2"})
-	var e *core.Error
-	if !errors.As(err, &e) || e.Code != core.ActionNotAllowed {
+	_, err := f.core.Claim(ctx, "acme", api.ClaimInput{Ticket: "acme-2"})
+	var e *api.Error
+	if !errors.As(err, &e) || e.Code != api.ActionNotAllowed {
 		t.Fatalf("err = %v, want action_not_allowed", err)
 	}
 	if !strings.Contains(e.Message, "acme-3 (Ready)") || !strings.Contains(e.Message, "acme-4 (Draft)") {
@@ -116,32 +116,32 @@ func TestOnlyDoneClearsABlocker(t *testing.T) {
 func TestCreateTicketTakesBlockers(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready) // acme-2
-	v := f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Next", State: domain.Ready, BlockedBy: []core.Ref{"acme-2", "2"}})
+	v := f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Next", State: domain.Ready, BlockedBy: []api.Ref{"acme-2", "2"}})
 	if !slices.Equal(v.BlockedBy, []string{"acme-2"}) || !v.Blocked {
 		t.Fatalf("blocked_by %v blocked %v", v.BlockedBy, v.Blocked)
 	}
-	_, err := f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "X", BlockedBy: []core.Ref{"acme-9"}})
-	wantCode(t, err, core.Invalid, "blocked_by")
-	_, err = f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "X", BlockedBy: []core.Ref{"acme-1"}})
-	wantCode(t, err, core.Invalid, "blocked_by") // a Spec is not a Ticket
+	_, err := f.core.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "X", BlockedBy: []api.Ref{"acme-9"}})
+	wantCode(t, err, api.Invalid, "blocked_by")
+	_, err = f.core.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "X", BlockedBy: []api.Ref{"acme-1"}})
+	wantCode(t, err, api.Invalid, "blocked_by") // a Spec is not a Ticket
 }
 
 func TestBlockersLinkAcrossSpecsWithinOneProject(t *testing.T) {
 	f := newFixture(t)
-	f.work(t, domain.Ready)                                                // Spec acme-1, acme-2
-	f.spec(t, "acme", "Search")                                            // acme-3
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "3", Title: "Index"}) // acme-4
+	f.work(t, domain.Ready)                                               // Spec acme-1, acme-2
+	f.spec(t, "acme", "Search")                                           // acme-3
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "3", Title: "Index"}) // acme-4
 	v := f.addBlocker(t, "acme-2", "acme-4")
 	if !slices.Equal(v.BlockedBy, []string{"acme-4"}) {
 		t.Fatalf("blocked_by %v", v.BlockedBy)
 	}
 	f.project(t, "other")
-	_, err := f.core.AddBlocker(ctx, "acme", core.BlockerInput{Ticket: "acme-2", Blocker: "other-4"})
-	wantCode(t, err, core.Invalid, "blocker")
-	_, err = f.core.AddBlocker(ctx, "acme", core.BlockerInput{Ticket: "acme-2", Blocker: "acme-9"})
-	wantCode(t, err, core.Invalid, "blocker")
-	_, err = f.core.AddBlocker(ctx, "acme", core.BlockerInput{Ticket: "acme-9", Blocker: "acme-2"})
-	wantCode(t, err, core.NotFound, "")
+	_, err := f.core.AddBlocker(ctx, "acme", api.BlockerInput{Ticket: "acme-2", Blocker: "other-4"})
+	wantCode(t, err, api.Invalid, "blocker")
+	_, err = f.core.AddBlocker(ctx, "acme", api.BlockerInput{Ticket: "acme-2", Blocker: "acme-9"})
+	wantCode(t, err, api.Invalid, "blocker")
+	_, err = f.core.AddBlocker(ctx, "acme", api.BlockerInput{Ticket: "acme-9", Blocker: "acme-2"})
+	wantCode(t, err, api.NotFound, "")
 }
 
 func TestAddingABlockerTwiceWritesNothing(t *testing.T) {
@@ -161,13 +161,13 @@ func TestABlockerThatWouldFormACycleIsRejected(t *testing.T) {
 	f.addBlocker(t, "acme-2", "acme-3")
 	f.addBlocker(t, "acme-3", "acme-4")
 
-	_, err := f.core.AddBlocker(ctx, "acme", core.BlockerInput{Ticket: "acme-4", Blocker: "acme-2"})
-	wantCode(t, err, core.Cycle, "")
+	_, err := f.core.AddBlocker(ctx, "acme", api.BlockerInput{Ticket: "acme-4", Blocker: "acme-2"})
+	wantCode(t, err, api.Cycle, "")
 	if !strings.Contains(err.Error(), "acme-4 → acme-2 → acme-3 → acme-4") {
 		t.Fatalf("message %q should show the cycle", err)
 	}
-	_, err = f.core.AddBlocker(ctx, "acme", core.BlockerInput{Ticket: "acme-2", Blocker: "acme-2"})
-	wantCode(t, err, core.Cycle, "")
+	_, err = f.core.AddBlocker(ctx, "acme", api.BlockerInput{Ticket: "acme-2", Blocker: "acme-2"})
+	wantCode(t, err, api.Cycle, "")
 	if v := f.get(t, "acme-4"); len(v.BlockedBy) != 0 {
 		t.Fatalf("rejected link was written: %v", v.BlockedBy)
 	}
@@ -177,13 +177,13 @@ func TestRemoveBlocker(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready, domain.Ready)
 	f.addBlocker(t, "acme-2", "acme-3")
-	v, err := record(f.core.RemoveBlocker(ctx, "acme", core.BlockerInput{Ticket: "acme-2", Blocker: "acme-3", Full: true}))
+	v, err := record(f.core.RemoveBlocker(ctx, "acme", api.BlockerInput{Ticket: "acme-2", Blocker: "acme-3", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(v.BlockedBy) != 0 || v.Blocked || !v.Claimable {
 		t.Fatalf("after remove: %+v", v)
 	}
-	_, err = f.core.RemoveBlocker(ctx, "acme", core.BlockerInput{Ticket: "acme-2", Blocker: "acme-3"})
-	wantCode(t, err, core.Invalid, "blocker")
+	_, err = f.core.RemoveBlocker(ctx, "acme", api.BlockerInput{Ticket: "acme-2", Blocker: "acme-3"})
+	wantCode(t, err, api.Invalid, "blocker")
 }

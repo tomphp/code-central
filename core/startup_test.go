@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
@@ -70,7 +71,7 @@ func timeStartup(t *testing.T, dir string) (loaded, took time.Duration) {
 	}
 	total := 0
 	for _, p := range rows {
-		all, err := c.FindTickets(ctx, p.Key, core.FindTicketsInput{State: domain.States})
+		all, err := c.FindTickets(ctx, p.Key, api.FindTicketsInput{State: domain.States})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 const (
@@ -61,7 +61,7 @@ func (f *factory) chatLoop(ctx context.Context, s *stint) {
 	failing := false
 	for pollCtx.Err() == nil {
 		s.rest(ChatLongPoll)
-		w, err := f.client.NextChatWork(pollCtx, f.project, core.NextChatWorkInput{Factory: factoryName, Host: f.host})
+		w, err := f.client.NextChatWork(pollCtx, f.project, api.NextChatWorkInput{Factory: factoryName, Host: f.host})
 		if err != nil {
 			if pollCtx.Err() != nil {
 				return
@@ -97,7 +97,7 @@ func (f *factory) chatLoop(ctx context.Context, s *stint) {
 		stopsMu.Unlock()
 		turns.Add(1)
 		work := f.starting("turn ", chatTurnKey)
-		go func(t core.ChatTurn) {
+		go func(t api.ChatTurn) {
 			defer turns.Done()
 			defer work.stop()
 			defer func() {
@@ -120,7 +120,7 @@ func (f *factory) chatLoop(ctx context.Context, s *stint) {
 // runChatTurn answers one Chat Message and posts the reply as it comes:
 // its items, then its outcome. work is the turn's line of work, busy
 // starting it; stopWork hands its Turn runner a stop's busy work.
-func (f *factory) runChatTurn(ctx context.Context, t core.ChatTurn, work *stint, stopWork handoff) {
+func (f *factory) runChatTurn(ctx context.Context, t api.ChatTurn, work *stint, stopWork handoff) {
 	ws := f.chatWorktrees(t.First)
 	session := t.SessionID
 	if t.First {
@@ -129,7 +129,7 @@ func (f *factory) runChatTurn(ctx context.Context, t core.ChatTurn, work *stint,
 	p := f.newChatPoster(t, session, chatResumeCommand(ws.home().path, session, ws.addDirs()))
 	p.start()
 	outcome, msg := f.answerChat(ctx, t, session, ws, p, work, stopWork)
-	if outcome == core.ChatFailed {
+	if outcome == api.ChatFailed {
 		f.printf("chat: the reply failed: %s", firstLine(msg))
 	}
 	p.end(outcome, msg)
@@ -156,18 +156,18 @@ func (f *factory) chatWorktrees(first bool) worktreeSet {
 // from the Home Repository's, and says how the reply ended, with the
 // error text of a failed one. A first turn moves each Chat worktree to
 // its base's tip first.
-func (f *factory) answerChat(ctx context.Context, t core.ChatTurn, session string, ws worktreeSet, p *chatPoster, work *stint, stopWork handoff) (core.ChatOutcome, string) {
+func (f *factory) answerChat(ctx context.Context, t api.ChatTurn, session string, ws worktreeSet, p *chatPoster, work *stint, stopWork handoff) (api.ChatOutcome, string) {
 	if t.First {
 		for _, w := range ws {
 			if err := f.chatWorktreeAtBase(w.r, w.path); err != nil {
-				return core.ChatFailed, ws.about(w, err.Error())
+				return api.ChatFailed, ws.about(w, err.Error())
 			}
 		}
 	}
 	// A turn that waited on the one before it starts nothing once the
 	// Factory is stopping.
 	if ctx.Err() != nil {
-		return core.ChatStopped, ""
+		return api.ChatStopped, ""
 	}
 	wt := ws.home().path
 	if t.First {
@@ -200,44 +200,44 @@ func (f *factory) answerChat(ctx context.Context, t core.ChatTurn, session strin
 // Factory's error text, naming the cause when it was a rejected model or
 // effort, an Outage or an expired login. Chat never retries, pauses or
 // stops the Factory for any of them.
-func chatOutcome(t core.ChatTurn, out turnOutcome) (core.ChatOutcome, string) {
+func chatOutcome(t api.ChatTurn, out turnOutcome) (api.ChatOutcome, string) {
 	const pick = "Pick another in New conversation, or set the Chat row's in Project Options → Models."
 	switch out.Kind {
 	case turnStopped:
-		return core.ChatStopped, ""
+		return api.ChatStopped, ""
 	case turnDone:
-		return core.ChatDone, ""
+		return api.ChatDone, ""
 	case turnEffortRejected:
-		return core.ChatFailed, fmt.Sprintf("The effort `%s` isn't one this Factory's claude accepts (%s), so no reply was started. %s", t.Effort, strings.Join(out.Levels, ", "), pick)
+		return api.ChatFailed, fmt.Sprintf("The effort `%s` isn't one this Factory's claude accepts (%s), so no reply was started. %s", t.Effort, strings.Join(out.Levels, ", "), pick)
 	case turnModelRejected:
 		model := "`" + t.Model + "`"
 		if t.Model == "" {
 			model = "its default"
 		}
-		return core.ChatFailed, fmt.Sprintf("claude rejected the model %s (model_not_found): it doesn't exist, or this account can't use it. %s", model, pick)
+		return api.ChatFailed, fmt.Sprintf("claude rejected the model %s (model_not_found): it doesn't exist, or this account can't use it. %s", model, pick)
 	case turnOutage:
-		return core.ChatFailed, fmt.Sprintf("claude hit an Outage (`%s`): a usage or rate limit, overload, or a server or network error cut off the reply. Send the message again later.", out.End.apiError())
+		return api.ChatFailed, fmt.Sprintf("claude hit an Outage (`%s`): a usage or rate limit, overload, or a server or network error cut off the reply. Send the message again later.", out.End.apiError())
 	case turnLoginFailed:
-		return core.ChatFailed, "claude's login has expired or is missing (authentication_failed): log in with `claude /login` on the Factory's host, then send the message again."
+		return api.ChatFailed, "claude's login has expired or is missing (authentication_failed): log in with `claude /login` on the Factory's host, then send the message again."
 	}
 	if out.StartErr != nil {
-		return core.ChatFailed, fmt.Sprintf("The Factory couldn't start claude: %v", out.StartErr)
+		return api.ChatFailed, fmt.Sprintf("The Factory couldn't start claude: %v", out.StartErr)
 	}
 	end := out.End
 	msg := "claude ended the reply with " + end.how()
-	if api := end.apiError(); api != "" {
-		msg += ", API error " + api
+	if apiRepo := end.apiError(); apiRepo != "" {
+		msg += ", API error " + apiRepo
 	}
 	if end.Result != nil && strings.TrimSpace(end.Result.Result) != "" {
 		msg += ": " + end.Result.Result
 	}
-	return core.ChatFailed, msg
+	return api.ChatFailed, msg
 }
 
 // denialsItem is the item listing the distinct calls a Chat turn had
 // denied.
-func denialsItem(ds []denial, now time.Time) core.SessionEvent {
-	return core.SessionEvent{Time: now, Kind: core.EventPermissionDenials, Text: "Auto mode denied these calls:\n" + denialList(ds)}
+func denialsItem(ds []denial, now time.Time) api.SessionEvent {
+	return api.SessionEvent{Time: now, Kind: api.EventPermissionDenials, Text: "Auto mode denied these calls:\n" + denialList(ds)}
 }
 
 // chatWorktreeAtBase makes r's Chat worktree wt detached at its base's
@@ -300,33 +300,33 @@ func chatPrompt(project, wt string) string {
 // but for the session, which goes with the next: it never fails the turn.
 type chatPoster struct {
 	f       *factory
-	base    core.PostChatEventsInput // the Conversation, Factory and host
-	session string                   // the turn's session, for its usage
+	base    api.PostChatEventsInput // the Conversation, Factory and host
+	session string                  // the turn's session, for its usage
 
 	mu sync.Mutex
 	// items wait for the next post.
-	items []core.SessionEvent
+	items []api.SessionEvent
 	// sessionUnposted says the session ID and Resume Command are yet to
 	// be posted; usage waits until they have been.
 	sessionUnposted bool
 	resumeCommand   string
-	usage           []core.UsageResponse
+	usage           []api.UsageResponse
 
 	ended chan chatEnd // the outcome, from end
 	done  chan struct{}
 }
 
-func (f *factory) newChatPoster(t core.ChatTurn, session, resume string) *chatPoster {
+func (f *factory) newChatPoster(t api.ChatTurn, session, resume string) *chatPoster {
 	return &chatPoster{
 		f:       f,
-		base:    core.PostChatEventsInput{Conversation: t.Conversation, Factory: factoryName, Host: f.host},
+		base:    api.PostChatEventsInput{Conversation: t.Conversation, Factory: factoryName, Host: f.host},
 		session: session, sessionUnposted: t.First, resumeCommand: resume,
 		ended: make(chan chatEnd), done: make(chan struct{}),
 	}
 }
 
 // add queues an item of the reply.
-func (p *chatPoster) add(e core.SessionEvent) {
+func (p *chatPoster) add(e api.SessionEvent) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.items = append(p.items, e)
@@ -334,7 +334,7 @@ func (p *chatPoster) add(e core.SessionEvent) {
 
 // addUsage posts a model response's usage under the turn's session, once
 // Code Central has the session.
-func (p *chatPoster) addUsage(r core.UsageResponse) {
+func (p *chatPoster) addUsage(r api.UsageResponse) {
 	p.mu.Lock()
 	if p.sessionUnposted {
 		p.usage = append(p.usage, r)
@@ -375,13 +375,13 @@ func (p *chatPoster) run(tick <-chan time.Time, waited func()) {
 // chatEnd is how a reply ended: its outcome, with error text msg on a
 // failed one. The zero chatEnd is a reply still running.
 type chatEnd struct {
-	outcome core.ChatOutcome
+	outcome api.ChatOutcome
 	msg     string
 }
 
 // end posts the outcome, with error text msg on a failed one, after the
 // items still waiting, and returns once it has been posted or dropped.
-func (p *chatPoster) end(outcome core.ChatOutcome, msg string) {
+func (p *chatPoster) end(outcome api.ChatOutcome, msg string) {
 	p.ended <- chatEnd{outcome, msg}
 	<-p.done
 }
@@ -393,7 +393,7 @@ func (p *chatPoster) post(e chatEnd) {
 	in.Outcome, in.Error = e.outcome, e.msg
 	p.mu.Lock()
 	in.Items, p.items = p.items, nil
-	reporting := p.sessionUnposted && (len(in.Items) > 0 || in.Outcome != "" && in.Outcome != core.ChatFailed)
+	reporting := p.sessionUnposted && (len(in.Items) > 0 || in.Outcome != "" && in.Outcome != api.ChatFailed)
 	if reporting {
 		in.SessionID, in.ResumeCommand = p.session, p.resumeCommand
 	}

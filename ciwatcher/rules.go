@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/ratelimit"
 )
@@ -31,7 +31,7 @@ import (
 // next poll. The rules are the Project's, and fire on runs in every
 // watched Repository: p is the Repository repo's CI Provider, "" for the
 // Home Repository.
-func (w *watcher) fireRules(ctx context.Context, p Provider, watch core.CIWatch, repo string) error {
+func (w *watcher) fireRules(ctx context.Context, p Provider, watch api.CIWatch, repo string) error {
 	pushed := map[string]bool{}
 	for _, c := range watch.Pushed {
 		if c.Repository == repo {
@@ -39,7 +39,7 @@ func (w *watcher) fireRules(ctx context.Context, p Provider, watch core.CIWatch,
 		}
 	}
 	var branches []string
-	onBranch := map[string][]core.CIWatchRule{}
+	onBranch := map[string][]api.CIWatchRule{}
 	for _, r := range watch.Rules {
 		if onBranch[r.Branch] == nil {
 			branches = append(branches, r.Branch)
@@ -85,7 +85,7 @@ func (w *watcher) fireRules(ctx context.Context, p Provider, watch core.CIWatch,
 
 // ruleSince is when r starts firing: after it was created, and after the
 // latest run tracked against it.
-func ruleSince(r core.CIWatchRule) time.Time {
+func ruleSince(r api.CIWatchRule) time.Time {
 	if r.LastRun != nil && r.LastRun.After(r.Created) {
 		return *r.LastRun
 	}
@@ -94,16 +94,16 @@ func ruleSince(r core.CIWatchRule) time.Time {
 
 // matchRule is the rule of rules, all on run's branch, that run fires: one
 // naming its workflow, else one for any workflow unless it is ignored.
-func matchRule(rules []core.CIWatchRule, run Run, ignored []string) (core.CIWatchRule, bool) {
-	if i := slices.IndexFunc(rules, func(r core.CIWatchRule) bool { return r.Workflow == run.Workflow }); i >= 0 {
+func matchRule(rules []api.CIWatchRule, run Run, ignored []string) (api.CIWatchRule, bool) {
+	if i := slices.IndexFunc(rules, func(r api.CIWatchRule) bool { return r.Workflow == run.Workflow }); i >= 0 {
 		return rules[i], true
 	}
 	if slices.Contains(ignored, run.Workflow) {
-		return core.CIWatchRule{}, false
+		return api.CIWatchRule{}, false
 	}
-	i := slices.IndexFunc(rules, func(r core.CIWatchRule) bool { return r.Workflow == domain.AnyWorkflow })
+	i := slices.IndexFunc(rules, func(r api.CIWatchRule) bool { return r.Workflow == domain.AnyWorkflow })
 	if i < 0 {
-		return core.CIWatchRule{}, false
+		return api.CIWatchRule{}, false
 	}
 	return rules[i], true
 }
@@ -112,7 +112,7 @@ func matchRule(rules []core.CIWatchRule, run Run, ignored []string) (core.CIWatc
 // rule's unfinished one, then reports run tracked against rule. The CI
 // Provider rate-limiting it is the only error it returns, a
 // *ratelimit.Error; it logs the others.
-func (w *watcher) fire(ctx context.Context, p Provider, watch core.CIWatch, rule core.CIWatchRule, run Run) error {
+func (w *watcher) fire(ctx context.Context, p Provider, watch api.CIWatch, rule api.CIWatchRule, run Run) error {
 	key := runKey{run.Repository, run.ID, run.Attempt}
 	jobs, err := p.Jobs(ctx, run.ID, run.Attempt)
 	var limit *ratelimit.Error
@@ -135,7 +135,7 @@ func (w *watcher) fire(ctx context.Context, p Provider, watch core.CIWatch, rule
 		}
 		w.fired[key] = true
 	}
-	if _, err := w.Client.ReportCIRuns(ctx, w.Project, core.ReportCIRunsInput{Runs: []core.CIRunView{run.CIRunView}}); err != nil && ctx.Err() == nil {
+	if _, err := w.Client.ReportCIRuns(ctx, w.Project, api.ReportCIRunsInput{Runs: []api.CIRunView{run.CIRunView}}); err != nil && ctx.Err() == nil {
 		w.logf("report_ci_runs: run %d: %v", run.ID, err)
 	}
 	return nil
@@ -143,18 +143,18 @@ func (w *watcher) fire(ctx context.Context, p Provider, watch core.CIWatch, rule
 
 // openOrComment comments on the oldest unfinished Ticket on rule's Spec
 // with run, so failures don't pile up, or opens a fix Ticket for it.
-func (w *watcher) openOrComment(ctx context.Context, watch core.CIWatch, rule core.CIWatchRule, run Run) error {
-	rows, err := w.Client.FindTickets(ctx, w.Project, core.FindTicketsInput{Spec: core.Ref(rule.Spec)})
+func (w *watcher) openOrComment(ctx context.Context, watch api.CIWatch, rule api.CIWatchRule, run Run) error {
+	rows, err := w.Client.FindTickets(ctx, w.Project, api.FindTicketsInput{Spec: api.Ref(rule.Spec)})
 	if err != nil {
 		return err
 	}
 	for _, t := range rows {
 		if t.State != domain.Done && t.State != domain.Cancelled {
-			_, err := w.Client.Comment(ctx, w.Project, core.CommentInput{Ticket: core.Ref(t.ID), Body: fixComment(watch, run)})
+			_, err := w.Client.Comment(ctx, w.Project, api.CommentInput{Ticket: api.Ref(t.ID), Body: fixComment(watch, run)})
 			return err
 		}
 	}
-	_, err = w.Client.CreateTicket(ctx, w.Project, core.CreateTicketInput{Spec: core.Ref(rule.Spec), State: rule.State,
+	_, err = w.Client.CreateTicket(ctx, w.Project, api.CreateTicketInput{Spec: api.Ref(rule.Spec), State: rule.State,
 		Title: fmt.Sprintf("Fix %s failing on %s%s", run.Workflow, run.Branch, where(run)), Description: fixDescription(watch, rule, run)})
 	return err
 }
@@ -170,7 +170,7 @@ func where(run Run) string {
 
 // fixDescription is a fix Ticket's description: the failed run, its
 // failed jobs, the Ticket its commit landed, and what fixing it means.
-func fixDescription(watch core.CIWatch, rule core.CIWatchRule, run Run) string {
+func fixDescription(watch api.CIWatch, rule api.CIWatchRule, run Run) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "**%s** (`%s`) failed on `%s`%s at commit `%s`, so the CI Rule on Spec %s opened this Ticket to fix it.\n\n",
 		run.Name, run.Workflow, run.Branch, where(run), run.Commit, rule.Spec)
@@ -181,13 +181,13 @@ func fixDescription(watch core.CIWatch, rule core.CIWatchRule, run Run) string {
 
 // fixComment is the comment on an unfinished fix Ticket for a further
 // failure.
-func fixComment(watch core.CIWatch, run Run) string {
+func fixComment(watch api.CIWatch, run Run) string {
 	return fmt.Sprintf("**%s** (`%s`) failed on `%s`%s again, at commit `%s`.\n\n%s", run.Name, run.Workflow, run.Branch, where(run), run.Commit, runDetails(watch, run))
 }
 
 // runDetails links run and names its failed jobs, and the Tickets its
 // commit landed with their Specs.
-func runDetails(watch core.CIWatch, run Run) string {
+func runDetails(watch api.CIWatch, run Run) string {
 	var failed []string
 	for _, j := range run.Jobs {
 		if j.Conclusion.Failed() {

@@ -1,4 +1,4 @@
-package core
+package api
 
 import (
 	"fmt"
@@ -6,12 +6,6 @@ import (
 	"sort"
 	"strings"
 )
-
-// The finders' Tag filter has a query shape struct tags can't express:
-// over HTTP each Tag is a tag=<key>=<value> parameter. Their inputs decode
-// and encode that shape themselves, through the HTTP door's query-decoding
-// interface (httpapi.QueryDecoder) and the client's encoding counterpart;
-// every other field follows its query or json tag.
 
 // DecodeQuery reads the Tag filter from q's tag parameters.
 func (in *FindTicketsInput) DecodeQuery(q url.Values) (err error) {

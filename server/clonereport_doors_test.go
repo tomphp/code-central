@@ -3,8 +3,8 @@ package server_test
 import (
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // The Factory's clones of the Repositories (Spec code-central-848):
@@ -25,7 +25,7 @@ func init() {
 			}
 		},
 		bad:  call{http: reportRepositories(`{"repositories":[{"name":"acme","path":"/src/acme","state":"missing"}]}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 

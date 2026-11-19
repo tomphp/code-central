@@ -3,15 +3,16 @@ package server_test
 import (
 	"context"
 	"fmt"
-	"github.com/tomoram/code-central/domain"
 	"reflect"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 	"github.com/tomoram/code-central/store"
 )
@@ -30,7 +31,7 @@ func init() {
 			azureBoards(t, out, boardsSettings{on: true, mode: "saved_query", queryURL: webQuery, patEnv: "ADO_PAT", needMe: true, spec: "acme-4"})
 		},
 		bad:  call{http: setAzureBoards(`{"on":true,"mode":"saved_query"}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -91,19 +92,19 @@ func TestEveryProjectReadCarriesAzureBoardsOff(t *testing.T) {
 
 func TestSetAzureBoardsIsRejectedForAnAgent(t *testing.T) {
 	srv := newServer(t)
-	status, b := httpDoAs(t, srv, core.Agent, setAzureBoards(`{"on":true,"mode":"saved_query","query_url":"`+webQuery+`"}`))
-	if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
-		t.Fatalf("status %d, want %d; message %q", status, httpapi.Status(core.ActionNotAllowed), e.Message)
+	status, b := httpDoAs(t, srv, api.Agent, setAzureBoards(`{"on":true,"mode":"saved_query","query_url":"`+webQuery+`"}`))
+	if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
+		t.Fatalf("status %d, want %d; message %q", status, httpapi.Status(api.ActionNotAllowed), e.Message)
 	}
 	acmeBoards(t, srv, boardsOff)
 }
 
 func TestAnArchivedProjectRejectsSetAzureBoards(t *testing.T) {
 	srv := newServer(t)
-	human := core.WithActor(context.Background(), core.Human)
+	human := api.WithActor(context.Background(), api.Human)
 	must(t, func() error { _, err := srv.Core.ArchiveProject(human, "other"); return err })
-	httpRejected(t, srv, httpCall{"POST", "/api/p/other/set_azure_boards", `{"on":false}`}, core.ActionNotAllowed)
-	httpRejected(t, srv, httpCall{"POST", "/api/p/nope/set_azure_boards", `{"on":false}`}, core.UnknownProject)
+	httpRejected(t, srv, httpCall{"POST", "/api/p/other/set_azure_boards", `{"on":false}`}, api.ActionNotAllowed)
+	httpRejected(t, srv, httpCall{"POST", "/api/p/nope/set_azure_boards", `{"on":false}`}, api.UnknownProject)
 }
 
 func TestTurningAzureBoardsOnNeedsTheChosenModesSettings(t *testing.T) {
@@ -115,7 +116,7 @@ func TestTurningAzureBoardsOnNeedsTheChosenModesSettings(t *testing.T) {
 		{`{"on":true,"mode":"wiql","project_url":"https://dev.azure.com/contoso/web","where":"  "}`, "where", "WHERE clause"},
 		{`{"on":true,"mode":"query","query_url":"` + webQuery + `"}`, "mode", "saved_query"},
 	} {
-		e := httpRejected(t, srv, setAzureBoards(c.body), core.Invalid)
+		e := httpRejected(t, srv, setAzureBoards(c.body), api.Invalid)
 		if e.Field != c.field || !strings.Contains(e.Message, c.says) {
 			t.Fatalf("%s: field %q message %q, want %s saying %q", c.body, e.Field, e.Message, c.field, c.says)
 		}
@@ -132,7 +133,7 @@ func TestAzureBoardsSettingsAreCheckedAndTidied(t *testing.T) {
 		{`{"on":true,"mode":"wiql","project_url":"https://dev.azure.com/contoso/web","where":"WHERE [System.Id] > 0"}`, "where", "only the WHERE clause"},
 		{`{"on":true,"query_url":"` + webQuery + `","pat_env":"MY-PAT"}`, "pat_env", "environment variable"},
 	} {
-		e := httpRejected(t, srv, setAzureBoards(c.body), core.Invalid)
+		e := httpRejected(t, srv, setAzureBoards(c.body), api.Invalid)
 		if e.Field != c.field || !strings.Contains(e.Message, c.says) {
 			t.Fatalf("%s: field %q message %q, want %s saying %q", c.body, e.Field, e.Message, c.field, c.says)
 		}
@@ -192,7 +193,7 @@ func TestChangingTheBranchFormatAloneRunsNoCheckAndKeepsTheWatchersStatus(t *tes
 	httpOK(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`"}`))
 	httpOK(t, srv, reportWorkItemWatcherStatus(`{"state":"error","problem":"pat_rejected","message":"Azure DevOps rejected the PAT","fix":"Renew it."}`))
 
-	httpRejected(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`","branch_format":"feat/x"}`), core.Invalid)
+	httpRejected(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`","branch_format":"feat/x"}`), api.Invalid)
 	httpOK(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`","branch_format":"feat/{id}"}`))
 	if n := len(checks.ran()); n != 1 {
 		t.Fatalf("changing only the Branch format ran %d checks, want the 1 of turning on", n)
@@ -203,7 +204,7 @@ func TestChangingTheBranchFormatAloneRunsNoCheckAndKeepsTheWatchersStatus(t *tes
 
 func TestGitHubIssuesHasNoHideCodeCentral(t *testing.T) {
 	srv := newServer(t)
-	httpRejected(t, srv, httpCall{"POST", "/api/p/acme/set_github_issues", `{"on":false,"hide_code_central":true}`}, core.Invalid)
+	httpRejected(t, srv, httpCall{"POST", "/api/p/acme/set_github_issues", `{"on":false,"hide_code_central":true}`}, api.Invalid)
 	if _, ok := httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""})["github_issues"].(map[string]any)["hide_code_central"]; ok {
 		t.Fatal("github_issues carries hide_code_central")
 	}
@@ -276,9 +277,9 @@ func TestChangingAzureBoardsKeepsTheHumansTitle(t *testing.T) {
 func TestTurningAzureBoardsOffLeavesEveryLink(t *testing.T) {
 	srv := newServer(t, linkedItems)
 	httpOK(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`"}`))
-	as := core.WithActor(t.Context(), core.Integration)
+	as := api.WithActor(t.Context(), api.Integration)
 	must(t, func() error {
-		_, err := srv.Core.CreateLinkedTicket(as, "acme", core.CreateLinkedTicketInput{Spec: "6", Title: "Work item", Link: core.LinkInput{Integration: "azure-boards", ID: "contoso#4512"}})
+		_, err := srv.Core.CreateLinkedTicket(as, "acme", api.CreateLinkedTicketInput{Spec: "6", Title: "Work item", Link: api.LinkInput{Integration: "azure-boards", ID: "contoso#4512"}})
 		return err
 	})
 	links := func() []any {
@@ -332,18 +333,18 @@ func TestTheSameAzureBoardsSettingsWriteNothing(t *testing.T) {
 // answers with result.
 type boardsChecks struct {
 	mu     sync.Mutex
-	calls  []core.AzureBoardsCheckInput
-	result core.WatcherCheckResult
+	calls  []api.AzureBoardsCheckInput
+	result api.WatcherCheckResult
 }
 
-func (c *boardsChecks) check(_ context.Context, in core.AzureBoardsCheckInput) core.WatcherCheckResult {
+func (c *boardsChecks) check(_ context.Context, in api.AzureBoardsCheckInput) api.WatcherCheckResult {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.calls = append(c.calls, in)
 	return c.result
 }
 
-func (c *boardsChecks) ran() []core.AzureBoardsCheckInput {
+func (c *boardsChecks) ran() []api.AzureBoardsCheckInput {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return slices.Clone(c.calls)
@@ -359,22 +360,22 @@ func TestTurningAzureBoardsOnRunsTheCheckOnTheChosenModesSettings(t *testing.T) 
 	srv := newBoardsCheckServer(t, checks)
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/set_ci_tracking", `{"tracking":false,"provider":"azure_pipelines","pat_env":"PIPELINES_PAT"}`})
 	httpOK(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`","project_url":"https://dev.azure.com/contoso/api","where":"[System.Id] > 0"}`))
-	want := []core.AzureBoardsCheckInput{{Mode: domain.AzureBoardsSavedQuery, QueryURL: webQuery, PATEnv: "PIPELINES_PAT"}}
+	want := []api.AzureBoardsCheckInput{{Mode: domain.AzureBoardsSavedQuery, QueryURL: webQuery, PATEnv: "PIPELINES_PAT"}}
 	if got := checks.ran(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("checks = %+v, want %+v", got, want)
 	}
 	httpOK(t, srv, setAzureBoards(`{"on":true,"mode":"wiql","query_url":"`+webQuery+`","project_url":"https://dev.azure.com/contoso/api","where":"[System.Id] > 0","pat_env":"BOARDS_PAT"}`))
-	want = append(want, core.AzureBoardsCheckInput{Mode: domain.AzureBoardsWIQL, ProjectURL: "https://dev.azure.com/contoso/api", Where: "[System.Id] > 0", PATEnv: "BOARDS_PAT"})
+	want = append(want, api.AzureBoardsCheckInput{Mode: domain.AzureBoardsWIQL, ProjectURL: "https://dev.azure.com/contoso/api", Where: "[System.Id] > 0", PATEnv: "BOARDS_PAT"})
 	if got := checks.ran(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("checks = %+v, want %+v", got, want)
 	}
 }
 
 func TestAFailedAzureBoardsCheckRefusesWithItsProblemAndFix(t *testing.T) {
-	checks := &boardsChecks{result: core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: "The environment variable ADO_PAT is not set.", Fix: "Set ADO_PAT for the service."}}
+	checks := &boardsChecks{result: api.WatcherCheckResult{Problem: api.ProblemCheckFailed, Reason: "The environment variable ADO_PAT is not set.", Fix: "Set ADO_PAT for the service."}}
 	srv := newBoardsCheckServer(t, checks)
 	before := specCount(t, srv)
-	e := httpRejected(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`"}`), core.Invalid)
+	e := httpRejected(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`"}`), api.Invalid)
 	if e.Field != "on" || e.Message != "The environment variable ADO_PAT is not set." || e.Fix != "Set ADO_PAT for the service." {
 		t.Fatalf("refusal = %+v, want the check's problem and fix on on", e)
 	}
@@ -385,10 +386,10 @@ func TestAFailedAzureBoardsCheckRefusesWithItsProblemAndFix(t *testing.T) {
 
 	// While on, a change that fails the check is refused too, and the
 	// settings stay as they were.
-	checks.result = core.WatcherCheckResult{}
+	checks.result = api.WatcherCheckResult{}
 	httpOK(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`"}`))
-	checks.result = core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: "TF51005: The query references a field that does not exist.", Fix: "Fix the WHERE clause."}
-	e = httpRejected(t, srv, setAzureBoards(`{"on":true,"mode":"wiql","project_url":"https://dev.azure.com/contoso/web","where":"[Nope] = 1"}`), core.Invalid)
+	checks.result = api.WatcherCheckResult{Problem: api.ProblemCheckFailed, Reason: "TF51005: The query references a field that does not exist.", Fix: "Fix the WHERE clause."}
+	e = httpRejected(t, srv, setAzureBoards(`{"on":true,"mode":"wiql","project_url":"https://dev.azure.com/contoso/web","where":"[Nope] = 1"}`), api.Invalid)
 	if !strings.Contains(e.Message, "TF51005") || e.Fix != "Fix the WHERE clause." {
 		t.Fatalf("refusal = %+v, want the check's problem and fix", e)
 	}
@@ -414,7 +415,7 @@ func TestOnlyTurningAzureBoardsOnOrChangingWhatItRunsRunsTheCheck(t *testing.T) 
 	}
 
 	// Turning off runs no check, even when the check would fail.
-	checks.result = core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: "no PAT", Fix: "Set it."}
+	checks.result = api.WatcherCheckResult{Problem: api.ProblemCheckFailed, Reason: "no PAT", Fix: "Set it."}
 	acmeOff := httpOK(t, srv, setAzureBoards(`{"on":false,"query_url":"`+apiQuery+`","full":true}`))
 	azureBoards(t, acmeOff, boardsSettings{mode: "saved_query", queryURL: apiQuery, patEnv: "ADO_PAT", spec: "acme-4"})
 	if n := len(checks.ran()); n != 3 {

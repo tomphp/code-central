@@ -3,7 +3,6 @@ package factorytest
 import (
 	"context"
 	"fmt"
-	"github.com/tomoram/code-central/domain"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,9 +10,11 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // fakeT is a testing.TB that records what the test logs and runs its
@@ -122,7 +123,7 @@ func TestProxyDropsLinesAfterTheTest(t *testing.T) {
 // client's error.
 func claimThroughProxy(h *Harness, ticket string) error {
 	c := client.New(h.URL)
-	_, err := c.Claim(context.Background(), h.Project, core.ClaimInput{Ticket: core.Ref(ticket)})
+	_, err := c.Claim(context.Background(), h.Project, api.ClaimInput{Ticket: api.Ref(ticket)})
 	return err
 }
 

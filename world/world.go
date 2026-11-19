@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
@@ -44,7 +45,7 @@ type World struct {
 	requests map[*request]struct{}
 	dropped  bool
 	// The answers the stand-in checks give; the zero one passes.
-	ciCheck, issuesCheck, azureBoardsCheck, pullRequestCheck core.WatcherCheckResult
+	ciCheck, issuesCheck, azureBoardsCheck, pullRequestCheck api.WatcherCheckResult
 }
 
 // request is one request being served, for ending it.
@@ -85,12 +86,12 @@ func New(start time.Time) *World {
 		handler:  server.Versioned(server.Handler(c, nil, nil), Version),
 		requests: map[*request]struct{}{},
 	}
-	c.SetCICheck(func(context.Context, core.CICheckInput) core.WatcherCheckResult { return w.answer(&w.ciCheck) })
-	c.SetIssuesCheck(func(context.Context, core.IssuesCheckInput) core.WatcherCheckResult { return w.answer(&w.issuesCheck) })
-	c.SetAzureBoardsCheck(func(context.Context, core.AzureBoardsCheckInput) core.WatcherCheckResult {
+	c.SetCICheck(func(context.Context, api.CICheckInput) api.WatcherCheckResult { return w.answer(&w.ciCheck) })
+	c.SetIssuesCheck(func(context.Context, api.IssuesCheckInput) api.WatcherCheckResult { return w.answer(&w.issuesCheck) })
+	c.SetAzureBoardsCheck(func(context.Context, api.AzureBoardsCheckInput) api.WatcherCheckResult {
 		return w.answer(&w.azureBoardsCheck)
 	})
-	c.SetPullRequestCheck(func(context.Context, core.PullRequestCheckInput) core.WatcherCheckResult {
+	c.SetPullRequestCheck(func(context.Context, api.PullRequestCheckInput) api.WatcherCheckResult {
 		return w.answer(&w.pullRequestCheck)
 	})
 	return w
@@ -105,33 +106,33 @@ func (w *World) Advance(d time.Duration) { w.clock.Advance(d) }
 // SetCICheck makes the CI Watcher's check mode, which runs gh in serve,
 // answer res: a Problem, whose reason and fix Core refuses with on the
 // field the Problem picks, or none to pass.
-func (w *World) SetCICheck(res core.WatcherCheckResult) { w.setAnswer(&w.ciCheck, res) }
+func (w *World) SetCICheck(res api.WatcherCheckResult) { w.setAnswer(&w.ciCheck, res) }
 
 // SetIssuesCheck makes the Issue Watcher's check mode answer res, as
 // SetCICheck does the CI Watcher's.
-func (w *World) SetIssuesCheck(res core.WatcherCheckResult) { w.setAnswer(&w.issuesCheck, res) }
+func (w *World) SetIssuesCheck(res api.WatcherCheckResult) { w.setAnswer(&w.issuesCheck, res) }
 
 // SetAzureBoardsCheck makes the Azure Boards check, which calls Azure
 // DevOps in serve, answer res, as SetCICheck does the CI Watcher's.
-func (w *World) SetAzureBoardsCheck(res core.WatcherCheckResult) {
+func (w *World) SetAzureBoardsCheck(res api.WatcherCheckResult) {
 	w.setAnswer(&w.azureBoardsCheck, res)
 }
 
 // SetPullRequestCheck makes the Pull Request Watcher's check mode answer
 // res, as SetCICheck does the CI Watcher's.
-func (w *World) SetPullRequestCheck(res core.WatcherCheckResult) {
+func (w *World) SetPullRequestCheck(res api.WatcherCheckResult) {
 	w.setAnswer(&w.pullRequestCheck, res)
 }
 
 // setAnswer and answer set and read one stand-in check's answer, which a
 // request's check reads while a test may set it.
-func (w *World) setAnswer(check *core.WatcherCheckResult, res core.WatcherCheckResult) {
+func (w *World) setAnswer(check *api.WatcherCheckResult, res api.WatcherCheckResult) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	*check = res
 }
 
-func (w *World) answer(check *core.WatcherCheckResult) core.WatcherCheckResult {
+func (w *World) answer(check *api.WatcherCheckResult) api.WatcherCheckResult {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return *check
@@ -139,7 +140,7 @@ func (w *World) answer(check *core.WatcherCheckResult) core.WatcherCheckResult {
 
 // ReportWatcherCrash reports that key's Watcher of kind crashed, as serve's
 // Watcher supervisor does.
-func (w *World) ReportWatcherCrash(kind core.WatcherKind, key string, crash core.WatcherCrash) {
+func (w *World) ReportWatcherCrash(kind api.WatcherKind, key string, crash api.WatcherCrash) {
 	w.core.ReportWatcherCrash(context.Background(), kind, key, crash)
 }
 

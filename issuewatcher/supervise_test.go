@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/ciwatcher"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/issuewatcher"
 	"github.com/tomoram/code-central/watchers"
 	"github.com/tomoram/code-central/watchers/watchertest"
@@ -37,7 +37,7 @@ func newSupervising(t *testing.T) *supervising {
 // project creates key, with GitHub Issues on or off.
 func (s *supervising) project(key string, on bool) {
 	s.t.Helper()
-	if _, err := s.srv.Core.CreateProject(human, core.CreateProjectInput{Key: key}); err != nil {
+	if _, err := s.srv.Core.CreateProject(human, api.CreateProjectInput{Key: key}); err != nil {
 		s.t.Fatal(err)
 	}
 	s.issues(key, on)
@@ -46,7 +46,7 @@ func (s *supervising) project(key string, on bool) {
 // issues turns key's GitHub Issues on or off, as the human does.
 func (s *supervising) issues(key string, on bool) {
 	s.t.Helper()
-	if _, err := s.srv.Core.SetGitHubIssues(human, key, core.SetGitHubIssuesInput{On: on, Repositories: []string{"acme/web"}}); err != nil {
+	if _, err := s.srv.Core.SetGitHubIssues(human, key, api.SetGitHubIssuesInput{On: on, Repositories: []string{"acme/web"}}); err != nil {
 		s.t.Fatal(err)
 	}
 }
@@ -59,9 +59,9 @@ func (s *supervising) start(program string, kinds ...watchers.Kind) {
 
 // status waits for key's Issue Watcher status to be state, and returns
 // it.
-func (s *supervising) status(key string, state core.WatcherState) core.WatcherView {
+func (s *supervising) status(key string, state api.WatcherState) api.WatcherView {
 	s.t.Helper()
-	var got core.WatcherView
+	var got api.WatcherView
 	codecentraltest.Eventually(s.t, func() bool {
 		p, err := s.srv.Client.GetProject(context.Background(), key)
 		if err != nil {
@@ -80,11 +80,11 @@ func TestTheServiceStartsAnIssueWatcherForEachProjectWithGitHubIssuesOn(t *testi
 	s.project("acme", true)
 	s.project("beta", false)
 	s.start(s.h.CodeCentral, ciwatcher.Kind, issuewatcher.Kind)
-	s.status("acme", core.WatcherWatching)
+	s.status("acme", api.WatcherWatching)
 	s.Logged("started the Issue Watcher for acme", 1)
 
 	s.issues("beta", true)
-	s.status("beta", core.WatcherWatching)
+	s.status("beta", api.WatcherWatching)
 	s.Logged("started the Issue Watcher for beta", 1)
 	if strings.Contains(s.Log.String(), "CI Watcher") {
 		t.Fatalf("a CI Watcher started with CI Tracking off:\n%s", s.Log)
@@ -95,21 +95,21 @@ func TestTurningGitHubIssuesOffStopsItsIssueWatcher(t *testing.T) {
 	s := newSupervising(t)
 	s.project("acme", true)
 	s.start(s.h.CodeCentral, ciwatcher.Kind, issuewatcher.Kind)
-	s.status("acme", core.WatcherWatching)
+	s.status("acme", api.WatcherWatching)
 	s.issues("acme", false)
 	s.Logged("stopped the Issue Watcher for acme", 1)
 
 	// And on again starts a new one.
 	s.issues("acme", true)
 	s.Logged("started the Issue Watcher for acme", 2)
-	s.status("acme", core.WatcherWatching)
+	s.status("acme", api.WatcherWatching)
 }
 
 func TestArchivingAProjectStopsItsIssueWatcher(t *testing.T) {
 	s := newSupervising(t)
 	s.project("acme", true)
 	s.start(s.h.CodeCentral, ciwatcher.Kind, issuewatcher.Kind)
-	s.status("acme", core.WatcherWatching)
+	s.status("acme", api.WatcherWatching)
 	if _, err := s.srv.Core.ArchiveProject(human, "acme"); err != nil {
 		t.Fatal(err)
 	}
@@ -126,8 +126,8 @@ func TestStoppingTheServiceStopsEveryIssueWatcher(t *testing.T) {
 	s.project("acme", true)
 	s.project("beta", true)
 	s.start(s.h.CodeCentral, ciwatcher.Kind, issuewatcher.Kind)
-	s.status("acme", core.WatcherWatching)
-	s.status("beta", core.WatcherWatching)
+	s.status("acme", api.WatcherWatching)
+	s.status("beta", api.WatcherWatching)
 	s.Stop()
 	select {
 	case <-s.Done:
@@ -151,12 +151,12 @@ func TestACrashingIssueWatcherIsRestartedWithBackoff(t *testing.T) {
 	for i, d := range []time.Duration{time.Second, 2 * time.Second, 4 * time.Second} {
 		codecentraltest.Eventually(t, func() bool { return s.h.CrashRuns() == i+1 }, "the crashing Issue Watcher didn't start %d times", i+1)
 		s.srv.Clock.BlockUntil(1)
-		got := s.status("acme", core.WatcherError)
+		got := s.status("acme", api.WatcherError)
 		times := fmt.Sprintf("%d times", i+1)
 		if i == 0 {
 			times = "1 time"
 		}
-		if got.Problem != core.ProblemCrashed || !strings.Contains(got.Message, "The Issue Watcher crashed, restarted "+times) ||
+		if got.Problem != api.ProblemCrashed || !strings.Contains(got.Message, "The Issue Watcher crashed, restarted "+times) ||
 			!strings.Contains(got.Message, "broke on purpose") || !strings.Contains(got.Fix, "service's log") {
 			t.Fatalf("status %+v, want crashed, restarted %s, with its last line on stderr", got, times)
 		}
@@ -167,7 +167,7 @@ func TestACrashingIssueWatcherIsRestartedWithBackoff(t *testing.T) {
 		s.srv.Clock.Advance(time.Millisecond)
 	}
 	for _, a := range s.srv.Core.WatcherAttention(context.Background()) {
-		if a.Kind == core.WatcherIssues && a.Errors != 1 {
+		if a.Kind == api.WatcherIssues && a.Errors != 1 {
 			t.Fatalf("Issue Watcher attention %+v, want one error, for one Notification", a)
 		}
 	}

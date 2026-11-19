@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -71,40 +72,6 @@ const (
 	CommentClosed = "closed"
 )
 
-// IssueClose is how an issue is closed.
-type IssueClose string
-
-// The ways an issue is closed, as GitHub names them.
-const (
-	CloseCompleted  IssueClose = "completed"
-	CloseNotPlanned IssueClose = "not_planned"
-)
-
-// IssueWrites is an item whose issue has GitHub writes due, as
-// get_issue_watch lists it.
-type IssueWrites struct {
-	// Target is the item, such as acme-5.
-	Target string   `json:"target"`
-	Link   LinkView `json:"link"`
-	// Comments are the comments due, in the order to post them.
-	Comments []IssueComment `json:"comments"`
-	// Label is the status label the issue should carry; empty asks for
-	// none to be changed.
-	Label string `json:"label,omitempty"`
-	// Close is how the issue should be closed; empty when it shouldn't.
-	Close IssueClose `json:"close,omitempty"`
-}
-
-// IssueComment is a comment due on an issue: its key, stable for the
-// item, and its Markdown body ready to post, which carries the hidden
-// marker IssueMarker gives and ends with a link back to the item. Under
-// Hide Code Central it carries the marker OpaqueMarker gives instead, and
-// no link back.
-type IssueComment struct {
-	Key  string `json:"key"`
-	Body string `json:"body"`
-}
-
 // IssueMarker is the hidden HTML comment in the comment key posted for
 // target, so the Issue Watcher finds it on the issue before posting it
 // again after a crash.
@@ -136,25 +103,25 @@ const (
 // issueComment is the comment key on target, with text, as it is posted.
 // Its link back opens target in the UI by open, ticketLink or
 // requirementLink. Hidden, it is the opaque marker and the text alone.
-func (c *Core) issueComment(hide bool, target, open, key, text string) IssueComment {
+func (c *Core) issueComment(hide bool, target, open, key, text string) api.IssueComment {
 	if hide {
-		return IssueComment{Key: key, Body: OpaqueMarker(target, key) + "\n" + strings.TrimSpace(text)}
+		return api.IssueComment{Key: key, Body: OpaqueMarker(target, key) + "\n" + strings.TrimSpace(text)}
 	}
 	link := fmt.Sprintf("[%s in Code Central](%s/?view=inbox&%s%s)", target, c.uiURL, open, url.QueryEscape(target))
-	return IssueComment{Key: key, Body: IssueMarker(target, key) + "\n" + strings.TrimSpace(text) + "\n\n" + link}
+	return api.IssueComment{Key: key, Body: IssueMarker(target, key) + "\n" + strings.TrimSpace(text) + "\n\n" + link}
 }
 
 // triageComment is the comment the human's triage action via gave when
 // it Cancelled t, if it ever did: empty when it gave none. latest
 // reports whether that Cancel is still t's last Move.
-func triageComment(t domain.Ticket, via TriageAction) (comment string, latest, ok bool) {
+func triageComment(t domain.Ticket, via api.TriageAction) (comment string, latest, ok bool) {
 	for i, m := range slices.Backward(t.Moves) {
 		if m.To != domain.Cancelled || m.Via != string(via) {
 			continue
 		}
 		latest = i == len(t.Moves)-1 && t.State == domain.Cancelled
 		for _, cm := range slices.Backward(t.Comments) {
-			if cm.Time.Equal(m.Time) && cm.Actor == string(Human) {
+			if cm.Time.Equal(m.Time) && cm.Actor == string(api.Human) {
 				return cm.Body, latest, true
 			}
 		}
@@ -169,13 +136,13 @@ func triageComment(t domain.Ticket, via TriageAction) (comment string, latest, o
 // is first turned on. hide writes as Hide Code Central does: each comment
 // in the hidden form and no status label. The comments due are the same
 // either way.
-func (c *Core) integrationWrites(r store.Reader, key, integration string, hide bool) []IssueWrites {
-	out := []IssueWrites{}
+func (c *Core) integrationWrites(r store.Reader, key, integration string, hide bool) []api.IssueWrites {
+	out := []api.IssueWrites{}
 	in := inboxOf(r, key, integration)
 	if in.spec == 0 {
 		return out
 	}
-	byNumber := map[int]IssueWrites{}
+	byNumber := map[int]api.IssueWrites{}
 	link := &store.LinkFilter{Integration: integration}
 	for _, s := range r.FindSpecs(key, store.SpecFilter{Link: link}) {
 		if w, ok := c.specIssueWrites(r, key, s, hide); ok {
@@ -201,14 +168,14 @@ func (c *Core) integrationWrites(r store.Reader, key, integration string, hide b
 // ticketIssueWrites is what is due on the issue t, a Ticket on key's
 // inbox Spec, is linked to, its comments hidden as hide asks; ok is false
 // when nothing is.
-func (c *Core) ticketIssueWrites(r store.Reader, key string, t domain.Ticket, hide bool) (w IssueWrites, ok bool) {
+func (c *Core) ticketIssueWrites(r store.Reader, key string, t domain.Ticket, hide bool) (w api.IssueWrites, ok bool) {
 	if !t.Link.Attached() {
-		return IssueWrites{}, false
+		return api.IssueWrites{}, false
 	}
 	id := DisplayID(key, t.Number)
-	w = IssueWrites{Target: id, Link: *linkView(t.Link), Comments: []IssueComment{}}
-	if reason, latest, _ := triageComment(t, OptionWontFix); latest {
-		w.Label, w.Close = LabelWontFix, CloseNotPlanned
+	w = api.IssueWrites{Target: id, Link: *linkView(t.Link), Comments: []api.IssueComment{}}
+	if reason, latest, _ := triageComment(t, api.OptionWontFix); latest {
+		w.Label, w.Close = LabelWontFix, api.CloseNotPlanned
 		if strings.TrimSpace(reason) != "" && !slices.Contains(t.Link.Written, CommentWontFix) {
 			w.Comments = append(w.Comments, c.issueComment(hide, id, ticketLink, CommentWontFix, writtenText(r, key, reason, hide)))
 		}
@@ -227,12 +194,12 @@ func (c *Core) ticketIssueWrites(r store.Reader, key string, t domain.Ticket, hi
 // what landed once the Spec is Finished. The label follows the work, and
 // the issue is closed once the Spec is Finished: as completed if
 // anything landed, as not planned if nothing did.
-func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec, hide bool) (w IssueWrites, ok bool) {
+func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec, hide bool) (w api.IssueWrites, ok bool) {
 	if !s.Link.Attached() || !s.Link.Outbound {
-		return IssueWrites{}, false
+		return api.IssueWrites{}, false
 	}
 	id := DisplayID(key, s.Number)
-	w = IssueWrites{Target: id, Link: *linkView(s.Link), Comments: []IssueComment{}}
+	w = api.IssueWrites{Target: id, Link: *linkView(s.Link), Comments: []api.IssueComment{}}
 	due := func(k, text string) {
 		if strings.TrimSpace(text) != "" && !slices.Contains(s.Link.Written, k) {
 			w.Comments = append(w.Comments, c.issueComment(hide, id, requirementLink, k, text))
@@ -240,7 +207,7 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec, hide b
 	}
 	due(CommentContext, writtenText(r, key, requirementContext(r, key, s.Link), hide))
 	tickets := specTickets(r, key, s.Number, store.Moves, store.Comments)
-	stages, stagesDone := map[StageName]domain.Ticket{}, true
+	stages, stagesDone := map[domain.StageName]domain.Ticket{}, true
 	var landed []domain.Ticket
 	for _, t := range tickets {
 		if stage := StageOf(t.Labels); stage != "" {
@@ -285,12 +252,12 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec, hide b
 // requirementStatus is the status label and closing due on the issue of
 // a Requirement whose Spec is finished or not, with something landed or
 // not, and whose Stages are all Done or Cancelled or not.
-func requirementStatus(finished, landed, stagesDone bool) (string, IssueClose) {
+func requirementStatus(finished, landed, stagesDone bool) (string, api.IssueClose) {
 	switch {
 	case finished && landed:
-		return LabelDone, CloseCompleted
+		return LabelDone, api.CloseCompleted
 	case finished:
-		return LabelWontFix, CloseNotPlanned
+		return LabelWontFix, api.CloseNotPlanned
 	case stagesDone:
 		return LabelBuilding, ""
 	default:
@@ -303,7 +270,7 @@ func requirementStatus(finished, landed, stagesDone bool) (string, IssueClose) {
 // other note stored under a Claim; empty when there is none.
 func resolution(t domain.Ticket) string {
 	for _, cm := range slices.Backward(t.Comments) {
-		if cm.Actor == string(Agent) && cm.Claim == 0 {
+		if cm.Actor == string(api.Agent) && cm.Claim == 0 {
 			return cm.Body
 		}
 	}
@@ -382,7 +349,7 @@ func repositoryLabel(p domain.Project, name string) string {
 		if rv.Name != name {
 			continue
 		}
-		if host, repository := codeHostOf(rv.CloneURL); host == CodeHostGitHub {
+		if host, repository := codeHostOf(rv.CloneURL); host == api.CodeHostGitHub {
 			return repository
 		}
 	}
@@ -395,7 +362,7 @@ func repositoryLabel(p domain.Project, name string) string {
 // moved on later.
 func requirementContext(r store.Reader, key string, l domain.Link) string {
 	for _, t := range r.FindTickets(key, store.TicketFilter{Link: &store.LinkFilter{Integration: l.Integration, ID: l.ID}, Parts: []store.Part{store.Moves, store.Comments}}) {
-		if extra, _, ok := triageComment(t, OptionToRequirement); ok {
+		if extra, _, ok := triageComment(t, api.OptionToRequirement); ok {
 			return extra
 		}
 	}
@@ -405,33 +372,26 @@ func requirementContext(r store.Reader, key string, l domain.Link) string {
 // dueWhile is w, the writes due on an issue last seen as state: its label
 // and closing are due only while it is open, and nothing is due on a
 // deleted issue. ok is false when nothing is due.
-func dueWhile(state domain.ExternalState, w IssueWrites) (IssueWrites, bool) {
+func dueWhile(state domain.ExternalState, w api.IssueWrites) (api.IssueWrites, bool) {
 	if state != domain.ExternalOpen {
 		w.Label, w.Close = "", ""
 	}
 	if state == domain.ExternalDeleted {
-		w.Comments = []IssueComment{}
+		w.Comments = []api.IssueComment{}
 	}
 	return w, len(w.Comments) > 0 || w.Label != "" || w.Close != ""
-}
-
-// ReportIssueWrittenInput is report_issue_written's input: the linked
-// item and the key of the comment written to its issue.
-type ReportIssueWrittenInput struct {
-	Target Ref    `json:"target"`
-	Key    string `json:"key"`
 }
 
 // ReportIssueWritten is the Issue Watcher's report_issue_written(target,
 // key), accepted from the integration Actor only: the comment key is
 // written to target's issue, so it is never due again. Reporting it
 // again changes nothing.
-func (c *Core) ReportIssueWritten(ctx context.Context, key string, in ReportIssueWrittenInput) (LinkedRow, error) {
-	if err := requireActor(ctx, "report_issue_written", Integration); err != nil {
-		return LinkedRow{}, err
+func (c *Core) ReportIssueWritten(ctx context.Context, key string, in api.ReportIssueWrittenInput) (api.LinkedRow, error) {
+	if err := requireActor(ctx, "report_issue_written", api.Integration); err != nil {
+		return api.LinkedRow{}, err
 	}
 	if strings.TrimSpace(in.Key) == "" {
-		return LinkedRow{}, invalid("key", "name the key of the comment written")
+		return api.LinkedRow{}, invalid("key", "name the key of the comment written")
 	}
 	return c.updateLink(ctx, key, in.Target, func(l *domain.Link) (map[string]string, error) {
 		if slices.Contains(l.Written, in.Key) {

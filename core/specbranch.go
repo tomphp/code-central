@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -111,7 +112,7 @@ func checkBranchTagLock(r store.Reader, key string, n int, tags map[string]strin
 	for _, t := range specTickets(r, key, n, store.Claims) {
 		if StageOf(t.Labels) == "" && len(t.Claims) > 0 {
 			id := DisplayID(key, n)
-			return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf(
+			return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf(
 				"the Spec Branch of %s already exists as %s, since %s has been claimed, so its branch Tag can't change or be removed",
 				id, SpecBranch(id, tags), DisplayID(key, t.Number))}
 		}

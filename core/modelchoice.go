@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -30,10 +31,10 @@ var seededEffortLevels = []string{"low", "medium", "high", "xhigh", "max"}
 // tier first: t's Tag, p's Models row for t's kind of work, then p's
 // default row. It is worked out afresh for every turn, never kept per
 // Claim.
-func modelChoice(p domain.Project, t domain.Ticket) ModelChoice {
+func modelChoice(p domain.Project, t domain.Ticket) api.ModelChoice {
 	name := GuideName(t.Labels)
 	kind := p.Models.Kind(name)
-	return ModelChoice{
+	return api.ModelChoice{
 		Model:  choose(t.Tags[ModelTag], name, kind.Model, p.Models.Default.Model),
 		Effort: choose(t.Tags[EffortTag], name, kind.Effort, p.Models.Default.Effort),
 	}
@@ -41,16 +42,16 @@ func modelChoice(p domain.Project, t domain.Ticket) ModelChoice {
 
 // choose is the first value set, from the Tag, the row for the kind of
 // work, and the default row, with its source.
-func choose(tag, kindName, kindValue, def string) ChoiceValue {
+func choose(tag, kindName, kindValue, def string) api.ChoiceValue {
 	switch {
 	case tag != "":
-		return ChoiceValue{Value: tag, Source: SourceTicketTag}
+		return api.ChoiceValue{Value: tag, Source: api.SourceTicketTag}
 	case kindValue != "":
-		return ChoiceValue{Value: kindValue, Source: SourceProjectKind, Kind: kindName}
+		return api.ChoiceValue{Value: kindValue, Source: api.SourceProjectKind, Kind: kindName}
 	case def != "":
-		return ChoiceValue{Value: def, Source: SourceProjectDefault}
+		return api.ChoiceValue{Value: def, Source: api.SourceProjectDefault}
 	}
-	return ChoiceValue{Source: SourceNone}
+	return api.ChoiceValue{Source: api.SourceNone}
 }
 
 // effortLevels are the valid effort levels for a Project: its Reported
@@ -72,8 +73,8 @@ func checkEffort(r store.Reader, key, field, effort string) error {
 
 // GetModelChoice is the Factory's get_model_choice: the Model Choice for
 // the Ticket's next turn, which it reads before every resume.
-func (c *Core) GetModelChoice(_ context.Context, key string, in GetModelChoiceInput) (ModelChoice, error) {
-	var mc ModelChoice
+func (c *Core) GetModelChoice(_ context.Context, key string, in api.GetModelChoiceInput) (api.ModelChoice, error) {
+	var mc api.ModelChoice
 	err := c.store.View(func(r store.Reader) error {
 		p, ok := r.Project(key)
 		if !ok {
@@ -91,11 +92,11 @@ func (c *Core) GetModelChoice(_ context.Context, key string, in GetModelChoiceIn
 
 // ReportModelChoice is the Factory's report_model_choice: it records the
 // model and effort on the live Claim, overwriting the previous turn's.
-func (c *Core) ReportModelChoice(_ context.Context, key string, in ReportModelChoiceInput) (Written[TicketView], error) {
+func (c *Core) ReportModelChoice(_ context.Context, key string, in api.ReportModelChoiceInput) (api.Written[api.TicketView], error) {
 	model, effort := strings.TrimSpace(in.Model), strings.TrimSpace(in.Effort)
 	for field, v := range map[string]string{"model": model, "effort": effort} {
 		if strings.ContainsAny(v, "\r\n") {
-			return Written[TicketView]{}, invalid(field, "a %s is single-line", field)
+			return api.Written[api.TicketView]{}, invalid(field, "a %s is single-line", field)
 		}
 	}
 	return c.updateTicket(key, "report_model_choice", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {

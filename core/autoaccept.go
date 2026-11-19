@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -22,35 +23,22 @@ import (
 // removes it.
 const AutoAcceptLabel = "auto-accept"
 
-// AutoAcceptView is a Project's Auto-accept setting: on or off for
-// every Auto-accept kind.
-type AutoAcceptView map[domain.AutoAcceptKind]bool
-
 // autoAcceptView is p's Auto-accept setting with every kind present.
-func autoAcceptView(p domain.Project) AutoAcceptView {
-	v := AutoAcceptView{}
+func autoAcceptView(p domain.Project) api.AutoAcceptView {
+	v := api.AutoAcceptView{}
 	for _, k := range domain.AutoAcceptKinds {
 		v[k] = p.AutoAccepts(k)
 	}
 	return v
 }
 
-// SetAutoAcceptInput is the human's set_auto_accept(kinds, full?).
-type SetAutoAcceptInput struct {
-	// Kinds is on or off per Auto-accept kind; a kind left out keeps its
-	// value.
-	Kinds map[domain.AutoAcceptKind]bool `json:"kinds"`
-	// Full asks for the Project in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
 // SetAutoAccept is the human's set_auto_accept: turns the Project's
 // Auto-accept setting on or off per kind. It applies to finishes from
 // now on, accepting nothing already In Review. Like the Project's other
 // settings it adds no Move, Edit or Comment.
-func (c *Core) SetAutoAccept(ctx context.Context, key string, in SetAutoAcceptInput) (Written[ProjectView], error) {
+func (c *Core) SetAutoAccept(ctx context.Context, key string, in api.SetAutoAcceptInput) (api.Written[api.ProjectView], error) {
 	if err := humanOnly(ctx, "set_auto_accept"); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	var unknown []string
 	for k := range in.Kinds {
@@ -60,9 +48,9 @@ func (c *Core) SetAutoAccept(ctx context.Context, key string, in SetAutoAcceptIn
 	}
 	if len(unknown) > 0 {
 		sort.Strings(unknown)
-		return Written[ProjectView]{}, invalid("kinds", "unknown Auto-accept kind %s; the kinds are %s", strings.Join(unknown, ", "), joinKinds())
+		return api.Written[api.ProjectView]{}, invalid("kinds", "unknown Auto-accept kind %s; the kinds are %s", strings.Join(unknown, ", "), joinKinds())
 	}
-	var before, after ProjectView
+	var before, after api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -80,7 +68,7 @@ func (c *Core) SetAutoAccept(ctx context.Context, key string, in SetAutoAcceptIn
 		return w.PutProject(p)
 	})
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	return acknowledgeProject(before, after, in.Full, c.now())
 }
@@ -153,11 +141,11 @@ func (c *Core) autoAccept(ctx context.Context, w store.Writer, key string, t dom
 // accepted is false, with no records, when implement isn't allowed just
 // now, so the spec Stage stays In Review for the human.
 func (c *Core) acceptOnBehalf(ctx context.Context, r store.Reader, key string, t domain.Ticket, cause domain.AutoAcceptCause, now time.Time) (im store.Import, accepted bool, err error) {
-	human := WithActor(ctx, Human)
+	human := api.WithActor(ctx, api.Human)
 	if t.Recommendation == domain.RecommendImplement {
 		done, err := c.implementStep(human, r, key, &t, cause, now)
-		var e *Error
-		if errors.As(err, &e) && e.Code == ActionNotAllowed {
+		var e *api.Error
+		if errors.As(err, &e) && e.Code == api.ActionNotAllowed {
 			return store.Import{}, false, nil
 		}
 		if err != nil {

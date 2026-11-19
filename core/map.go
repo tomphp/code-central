@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -21,35 +22,16 @@ func MapSections() []string {
 	return []string{"Destination", "Notes", "Decisions so far", "Not yet specified", "Out of scope"}
 }
 
-// SubmitMapInput is submit_map's input: the Map's free text, whose first
-// line becomes the Spec's title.
-type SubmitMapInput struct {
-	Text string `json:"text" desc:"The Map's text, in Markdown; its first line becomes the Spec's title." required:"true"`
-	// Draft saves every Ticket the submit writes as Draft, not Ready, so
-	// nothing is claimed until the human moves them to Ready.
-	Draft bool `json:"draft,omitempty" desc:"Save the Charting Ticket as Draft instead of Ready, so nothing is claimed until the human moves it to Ready."`
-	// Full asks for the Spec and Charting Ticket in place of their
-	// Acknowledgements.
-	Full bool `json:"full,omitempty" desc:"Return the whole Spec and Charting Ticket instead of their acknowledgements."`
-}
-
-// SubmitMapResult is the new Map: its Spec and its Charting Ticket, each
-// acknowledged, or with full each the record.
-type SubmitMapResult struct {
-	Spec     Written[SpecView]   `json:"spec"`
-	Charting Written[TicketView] `json:"charting"`
-}
-
 // chartingDescription is the Charting Ticket's description, given the
 // Map's ID. Its guide is stageguides/map-chart.md.
 const chartingDescription = "Chart the Map [%[1]s](%[1]s): settle its destination with the human, fill in its sections and create its first decision Tickets.\n"
 
 // SubmitMap is submit_map(text). It writes as human whoever calls, both
 // records or neither.
-func (c *Core) SubmitMap(_ context.Context, key string, in SubmitMapInput) (SubmitMapResult, error) {
+func (c *Core) SubmitMap(_ context.Context, key string, in api.SubmitMapInput) (api.SubmitMapResult, error) {
 	title := titleLine(in.Text)
 	if title == "" {
-		return SubmitMapResult{}, invalid("text", "a Map needs text; its first line becomes the Spec's title")
+		return api.SubmitMapResult{}, invalid("text", "a Map needs text; its first line becomes the Spec's title")
 	}
 	var specN int
 	err := c.store.Update(func(w store.Writer) error {
@@ -69,9 +51,9 @@ func (c *Core) SubmitMap(_ context.Context, key string, in SubmitMapInput) (Subm
 		})
 	})
 	if err != nil {
-		return SubmitMapResult{}, err
+		return api.SubmitMapResult{}, err
 	}
-	var res SubmitMapResult
+	var res api.SubmitMapResult
 	err = c.store.View(func(r store.Reader) error {
 		s, _ := r.Spec(key, specN)
 		var err error
@@ -97,25 +79,6 @@ func mapBody(text string) string {
 	return b.String()
 }
 
-// MapView is the Map block on a Spec read, present only when the Spec is
-// labelled wayfinder:map. Nothing in it is stored.
-type MapView struct {
-	// Decided is the Map's Wayfinder Tickets that are Done.
-	Decided int `json:"decided"`
-	// Total is its Wayfinder Tickets that aren't Cancelled.
-	Total int `json:"total"`
-	// NeedsYou is its Tickets with a Needs Me reason, Prototypes included.
-	NeedsYou int `json:"needs_you"`
-	// Guided is whether its guided Tag is on: the Factory then starts its
-	// next decision whenever it is idle.
-	Guided bool `json:"guided"`
-	// CanWriteSpec is whether it has no unfinished Tickets.
-	CanWriteSpec bool `json:"can_write_spec"`
-	// Requirements are the Specs whose map Tag names this Map: the
-	// Requirements Write the Spec made from it, in creation order.
-	Requirements []string `json:"requirements"`
-}
-
 // GuidedTag is the Tag that marks a Map as guided when its value is
 // GuidedOn; a missing Tag or any other value means off.
 const (
@@ -128,13 +91,13 @@ func isMap(labels []string) bool { return slices.Contains(labels, MapLabel) }
 
 // mapView is the Map block for Spec s with these Tickets, or nil when s
 // isn't a Map, reading their reasons from their Project's evaluation e.
-func mapView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *MapView {
+func mapView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *api.MapView {
 	if !isMap(s.Labels) {
 		return nil
 	}
 	key := e.p.Key
 	id := DisplayID(key, s.Number)
-	v := &MapView{Guided: s.Tags[GuidedTag] == GuidedOn, CanWriteSpec: true, Requirements: []string{}}
+	v := &api.MapView{Guided: s.Tags[GuidedTag] == GuidedOn, CanWriteSpec: true, Requirements: []string{}}
 	for _, sp := range e.r.FindSpecs(key, store.SpecFilter{Tag: &store.TagFilter{Key: MapTag, Values: []string{id}}}) {
 		v.Requirements = append(v.Requirements, DisplayID(key, sp.Number))
 	}
@@ -143,7 +106,7 @@ func mapView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *MapView {
 			v.NeedsYou++
 		}
 		v.CanWriteSpec = v.CanWriteSpec && finished(t.State)
-		if !slices.Contains(WayfinderTypes(), NodeTypeOf(t.Labels)) || t.State == domain.Cancelled {
+		if !slices.Contains(api.WayfinderTypes(), NodeTypeOf(t.Labels)) || t.State == domain.Cancelled {
 			continue
 		}
 		v.Total++
@@ -156,15 +119,15 @@ func mapView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *MapView {
 
 // NodeTypeOf is a Map Ticket's type, from its reserved Label: one of the
 // WayfinderTypes, prototype, or ticket for a Ticket with neither.
-func NodeTypeOf(labels []string) NodeType {
+func NodeTypeOf(labels []string) api.NodeType {
 	for _, l := range labels {
 		guide, _ := typeGuide(l)
 		if guide == PrototypeLabel {
-			return NodePrototype
+			return api.NodePrototype
 		}
 		if name, ok := strings.CutPrefix(guide, mapGuidePrefix); ok {
-			return NodeType(name)
+			return api.NodeType(name)
 		}
 	}
-	return NodeTicket
+	return api.NodeTicket
 }

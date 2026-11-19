@@ -1,12 +1,13 @@
 package server_test
 
 import (
-	"github.com/tomoram/code-central/domain"
 	"slices"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // CI cancelled: an Accepted Ticket whose CI result is cancelled waits in
@@ -26,23 +27,23 @@ func cancelledCI(t *testing.T, srv *codecentraltest.Server) {
 func TestAnAcceptedTicketWhoseCIWasCancelledIsInNeedsMeAsCICancelled(t *testing.T) {
 	srv := newServer(t, cancelledCI)
 	row, ok := needsMeRowOf(t, srv, "acme-3")
-	if !ok || row.Reason != core.ReasonCICancelled || !row.Since.Equal(failedAt) || row.CIFailure != nil {
+	if !ok || row.Reason != api.ReasonCICancelled || !row.Since.Equal(failedAt) || row.CIFailure != nil {
 		t.Fatalf("row %+v, want CI cancelled since its run finished, with no failure", row)
 	}
 	tk := ticket3(t, srv)
-	if tk.CIResult != core.CICancelled || tk.NeedsMeReason != core.ReasonCICancelled {
+	if tk.CIResult != api.CICancelled || tk.NeedsMeReason != api.ReasonCICancelled {
 		t.Fatalf("ci result %q, reason %q, want cancelled", tk.CIResult, tk.NeedsMeReason)
 	}
-	if want := []core.CIFailureOption{"rerun_ci", "land_anyway", "send_back"}; !slices.Equal(tk.CIFailureOptions, want) {
+	if want := []api.CIFailureOption{"rerun_ci", "land_anyway", "send_back"}; !slices.Equal(tk.CIFailureOptions, want) {
 		t.Fatalf("options %v, want %v", tk.CIFailureOptions, want)
 	}
-	httpRejected(t, srv, httpCall{"POST", "/api/p/acme/tickets/3/new_fix_ticket", `{"note":"x"}`}, core.ActionNotAllowed)
+	httpRejected(t, srv, httpCall{"POST", "/api/p/acme/tickets/3/new_fix_ticket", `{"note":"x"}`}, api.ActionNotAllowed)
 }
 
 func TestAFailedRunAlongsideACancelledOneStaysCIFailed(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
 	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", domain.CICompleted, domain.CICancelled), ciRun(2, "lint.yml", "abc123", domain.CICompleted, domain.CIFailure))
-	if tk := ticket3(t, srv); tk.NeedsMeReason != core.ReasonCIFailed {
+	if tk := ticket3(t, srv); tk.NeedsMeReason != api.ReasonCIFailed {
 		t.Fatalf("reason %q, want CI failed", tk.NeedsMeReason)
 	}
 }
@@ -70,17 +71,17 @@ func TestRerunOfACancelledRunWaitsAndNothingReRunsByItself(t *testing.T) {
 	}
 	httpOK(t, srv, rerunCI("3"))
 	w := ciWatch(t, srv)
-	if !slices.Equal(w.Reruns, []core.CIRerun{{Ticket: "acme-3", Commit: "abc123", ID: 1, Attempt: 1, Requested: codecentraltest.Start}}) {
+	if !slices.Equal(w.Reruns, []api.CIRerun{{Ticket: "acme-3", Commit: "abc123", ID: 1, Attempt: 1, Requested: codecentraltest.Start}}) {
 		t.Fatalf("reruns %+v, want the cancelled run 1 requested", w.Reruns)
 	}
-	if tk := ticket3(t, srv); tk.CIResult != core.CIRunning {
+	if tk := ticket3(t, srv); tk.CIResult != api.CIRunning {
 		t.Fatalf("ci result %q, want running", tk.CIResult)
 	}
 	// Its new attempt passing reads as passed.
 	again := ciRun(1, "ci.yml", "abc123", domain.CICompleted, domain.CISuccess)
 	again.Attempt = 2
 	reportRuns(t, srv, again)
-	if tk := ticket3(t, srv); tk.CIResult != core.CIPassed || tk.NeedsMeReason == core.ReasonCICancelled {
+	if tk := ticket3(t, srv); tk.CIResult != api.CIPassed || tk.NeedsMeReason == api.ReasonCICancelled {
 		t.Fatalf("ci result %q, reason %q, want passed", tk.CIResult, tk.NeedsMeReason)
 	}
 }

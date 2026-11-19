@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -42,7 +42,7 @@ func runPostRound(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	in := core.PostRoundInput{Ticket: ref, ClaimID: *claim, SessionID: sessionID(e, *session), Full: *full}
+	in := api.PostRoundInput{Ticket: ref, ClaimID: *claim, SessionID: sessionID(e, *session), Full: *full}
 	if err := decodeField(ctx, text, "questions", &in.Questions); err != nil {
 		return err
 	}
@@ -56,8 +56,8 @@ func runPostRound(ctx context.Context, e Env, args []string) error {
 // decodeField decodes text, the JSON a flag gave, into v, an input's
 // field, with any refusal naming the field.
 func decodeField(ctx context.Context, text, field string, v any) error {
-	err := core.Decode(ctx, []byte(text), v)
-	var ce *core.Error
+	err := api.Decode(ctx, []byte(text), v)
+	var ce *api.Error
 	if errors.As(err, &ce) {
 		ce.Field = field + dotted(ce.Field)
 	}
@@ -89,8 +89,8 @@ func runWait(ctx context.Context, e Env, args []string) error {
 	}
 	for {
 		res, err := sc.client.Wait(ctx, sc.project, ref, domain.NeedsAnswer)
-		var ce *core.Error
-		if errors.As(err, &ce) && ce.Code == core.ServiceUnavailable {
+		var ce *api.Error
+		if errors.As(err, &ce) && ce.Code == api.ServiceUnavailable {
 			select {
 			case <-e.After(waitRetry):
 				continue

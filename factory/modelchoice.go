@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // turnChoice is the Model Choice a turn is started with, after the
@@ -23,19 +23,19 @@ type turnChoice struct {
 
 // sourceFlag is the source of a value the Factory took from its own
 // --model or --effort, beside the sources Code Central works out.
-const sourceFlag core.ChoiceSource = "factory_flag"
+const sourceFlag api.ChoiceSource = "factory_flag"
 
 // choiceFrom is where a Model Choice value was set: its source, on a
 // Ticket of kind of work kind.
 type choiceFrom struct {
-	source core.ChoiceSource
+	source api.ChoiceSource
 	kind   string
 }
 
 // withFlags is mc, for a Ticket of kind of work kind, with each value it
 // leaves unset taken from the Factory's flag. A nil mc sets nothing.
-func (f *factory) withFlags(kind string, mc *core.ModelChoice) turnChoice {
-	var set core.ModelChoice
+func (f *factory) withFlags(kind string, mc *api.ModelChoice) turnChoice {
+	var set api.ModelChoice
 	if mc != nil {
 		set = *mc
 	}
@@ -58,13 +58,13 @@ func (s choiceFrom) describe(name, accepted string) (where, fix string) {
 	case sourceFlag:
 		return fmt.Sprintf("the Factory's `--%s` flag", name),
 			fmt.Sprintf("Start the Factory again with a `--%s` that %s, or none, then send the Ticket back.", name, accepted)
-	case core.SourceTicketTag:
+	case api.SourceTicketTag:
 		return fmt.Sprintf("the Ticket's `%s` Tag", name),
 			fmt.Sprintf("Set the Ticket's `%s` Tag to one that %s, or remove it (in the Ticket panel, or with `set_tags` or `remove_tags`), then send the Ticket back.", name, accepted)
-	case core.SourceProjectKind:
+	case api.SourceProjectKind:
 		return "the Project's Models row for " + s.kind,
 			fmt.Sprintf("In Project Options, set the %s in the Models row for %s to one that %s, or to Default, then send the Ticket back.", name, s.kind, accepted)
-	case core.SourceProjectDefault:
+	case api.SourceProjectDefault:
 		return "the Project's default Models row",
 			fmt.Sprintf("In Project Options, set the %s in the default Models row to one that %s, or to Default, then send the Ticket back.", name, accepted)
 	}
@@ -79,7 +79,7 @@ func (s choiceFrom) describe(name, accepted string) (where, fix string) {
 func (f *factory) reportRejectedEffort(ctx context.Context, c claim, dir string, tm turnChoice, levels []string) {
 	list := strings.Join(levels, ", ")
 	where, fix := tm.effortFrom.describe("effort", "claude accepts ("+list+")")
-	f.reportFailure(ctx, c, &failure{core.ReportFailureInput{
+	f.reportFailure(ctx, c, &failure{api.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("The effort `%s`, set by %s, isn't one this Factory's claude accepts (%s), so no turn was started.", tm.effort, where, list),
 		Why:             "claude ignores an `--effort` it doesn't accept and runs at its default effort, so the Factory checks a turn's effort against the levels `claude --help` lists before starting it. A value set while other levels were valid stays set when a later report drops its level.",
 		WhatToFix:       fix,
@@ -96,7 +96,7 @@ func (f *factory) reportRejectedModel(ctx context.Context, t *turn, end turnEnd)
 		model = "its default"
 	}
 	where, fix := tm.modelFrom.describe("model", "claude accepts")
-	return f.reportFailure(ctx, t.claim, &failure{core.ReportFailureInput{
+	return f.reportFailure(ctx, t.claim, &failure{api.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("claude rejected the model %s, set by %s (model_not_found).", model, where),
 		Why:             "The API answered the turn with model_not_found (404): the model doesn't exist, or this account can't use it. claude says:\n\n" + end.LastText,
 		WhatToFix:       fix,
@@ -108,7 +108,7 @@ func (f *factory) reportRejectedModel(ctx context.Context, t *turn, end turnEnd)
 // changed while it waited applies. ok is false when Code Central can't
 // say, and the resume waits a poll.
 func (f *factory) resumeChoice(ctx context.Context, c claim) (turnChoice, bool) {
-	mc, err := f.client.GetModelChoice(ctx, f.project, core.GetModelChoiceInput{Ticket: core.Ref(c.Ticket)})
+	mc, err := f.client.GetModelChoice(ctx, f.project, api.GetModelChoiceInput{Ticket: api.Ref(c.Ticket)})
 	if err != nil {
 		if ctx.Err() == nil {
 			f.claimf(c, "%s: get_model_choice: %v: waiting a poll before resuming", c.Ticket, err)
@@ -120,7 +120,7 @@ func (f *factory) resumeChoice(ctx context.Context, c claim) (turnChoice, bool) 
 
 // reportChoice records on c's Claim what its turn was started with.
 func (f *factory) reportChoice(ctx context.Context, c claim, tm turnChoice) {
-	in := core.ReportModelChoiceInput{Ticket: core.Ref(c.Ticket), ClaimID: c.ClaimID, Model: tm.model, Effort: tm.effort}
+	in := api.ReportModelChoiceInput{Ticket: api.Ref(c.Ticket), ClaimID: c.ClaimID, Model: tm.model, Effort: tm.effort}
 	if _, err := f.client.ReportModelChoice(ctx, f.project, in); err != nil && ctx.Err() == nil {
 		f.claimf(c, "%s: report_model_choice: %v", c.Ticket, err)
 	}

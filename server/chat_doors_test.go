@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/events"
@@ -30,7 +31,7 @@ func init() {
 			}
 		},
 		bad:  call{http: httpCall{"GET", "/api/p/nope/chat", ""}},
-		code: core.UnknownProject,
+		code: api.UnknownProject,
 	}
 	cases["start_conversation"] = opCase{
 		setup: chatFactory,
@@ -45,7 +46,7 @@ func init() {
 			}
 		},
 		bad:  call{http: startConversation(`{"effort":"extreme"}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 	cases["send_chat_message"] = opCase{
 		setup: chatFactory,
@@ -65,7 +66,7 @@ func init() {
 			field("from", "claude")(t, ms[1].(map[string]any))
 		},
 		bad:  call{http: sendChatMessage(`{"text":" "}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 	cases["stop_chat_reply"] = opCase{
 		setup: chatMessageSent,
@@ -79,7 +80,7 @@ func init() {
 			field("outcome", "stopped")(t, ms[1].(map[string]any))
 		},
 		bad:  call{http: httpCall{"POST", "/api/p/nope/stop_chat_reply", `{}`}},
-		code: core.UnknownProject,
+		code: api.UnknownProject,
 	}
 	cases["next_chat_work"] = opCase{
 		setup: chatMessageSent,
@@ -94,7 +95,7 @@ func init() {
 			}
 		},
 		bad:  call{http: httpCall{"GET", "/api/p/acme/chat/next-work?host=h", ""}},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -132,31 +133,31 @@ func chatMessageSent(t *testing.T, srv *codecentraltest.Server) {
 	sendChat(t, srv, "What is acme?")
 }
 
-func conversationOf(t *testing.T, b []byte) core.ConversationView {
+func conversationOf(t *testing.T, b []byte) api.ConversationView {
 	t.Helper()
-	var v core.ConversationView
+	var v api.ConversationView
 	if err := json.Unmarshal(b, &v); err != nil {
 		t.Fatalf("not a Conversation: %v: %s", err, b)
 	}
 	return v
 }
 
-func getChat(t *testing.T, srv *codecentraltest.Server) core.ConversationView {
+func getChat(t *testing.T, srv *codecentraltest.Server) api.ConversationView {
 	t.Helper()
 	return conversationOf(t, mustOK(t, srv, httpCall{"GET", "/api/p/acme/chat", ""}))
 }
 
-func sendChat(t *testing.T, srv *codecentraltest.Server, text string) core.ConversationView {
+func sendChat(t *testing.T, srv *codecentraltest.Server, text string) api.ConversationView {
 	t.Helper()
-	body, _ := json.Marshal(core.SendChatMessageInput{Text: text})
+	body, _ := json.Marshal(api.SendChatMessageInput{Text: text})
 	return conversationOf(t, mustOK(t, srv, sendChatMessage(string(body))))
 }
 
 // takeWork is factory's next_chat_work when work is already waiting for it.
-func takeWork(t *testing.T, srv *codecentraltest.Server, factory string) core.ChatWork {
+func takeWork(t *testing.T, srv *codecentraltest.Server, factory string) api.ChatWork {
 	t.Helper()
 	b := mustOK(t, srv, nextChatWork(factory))
-	var w core.ChatWork
+	var w api.ChatWork
 	if err := json.Unmarshal(b, &w); err != nil {
 		t.Fatalf("not chat work: %v: %s", err, b)
 	}
@@ -165,13 +166,13 @@ func takeWork(t *testing.T, srv *codecentraltest.Server, factory string) core.Ch
 
 // waitWork opens factory's next_chat_work and returns once it is waiting
 // on the clock; its work arrives on the channel.
-func waitWork(t *testing.T, srv *codecentraltest.Server, factory string) <-chan core.ChatWork {
+func waitWork(t *testing.T, srv *codecentraltest.Server, factory string) <-chan api.ChatWork {
 	t.Helper()
 	timers := srv.Clock.Waiters()
-	out := make(chan core.ChatWork, 1)
+	out := make(chan api.ChatWork, 1)
 	go func() {
 		req, _ := http.NewRequest("GET", srv.URL+nextChatWork(factory).path, nil)
-		var w core.ChatWork
+		var w api.ChatWork
 		if resp, err := http.DefaultClient.Do(req); err == nil {
 			json.NewDecoder(resp.Body).Decode(&w)
 			resp.Body.Close()
@@ -183,19 +184,19 @@ func waitWork(t *testing.T, srv *codecentraltest.Server, factory string) <-chan 
 }
 
 // received is the work on w, failing the test when there is none.
-func received(t *testing.T, w <-chan core.ChatWork) core.ChatWork {
+func received(t *testing.T, w <-chan api.ChatWork) api.ChatWork {
 	t.Helper()
 	select {
 	case got := <-w:
 		return got
 	case <-time.After(codecentraltest.EventuallyWithin):
 		t.Fatal("next_chat_work never returned")
-		return core.ChatWork{}
+		return api.ChatWork{}
 	}
 }
 
 // postChat posts to the Chat events path, which always answers 204.
-func postChat(t *testing.T, srv *codecentraltest.Server, in core.PostChatEventsInput) {
+func postChat(t *testing.T, srv *codecentraltest.Server, in api.PostChatEventsInput) {
 	t.Helper()
 	body, _ := json.Marshal(in)
 	postChatBody(t, srv, string(body))
@@ -210,18 +211,18 @@ func postChatBody(t *testing.T, srv *codecentraltest.Server, body string) {
 }
 
 // reply posts factory's whole reply to turn: one text item and done.
-func reply(t *testing.T, srv *codecentraltest.Server, factory string, turn *core.ChatTurn, text string) {
+func reply(t *testing.T, srv *codecentraltest.Server, factory string, turn *api.ChatTurn, text string) {
 	t.Helper()
-	postChat(t, srv, core.PostChatEventsInput{
+	postChat(t, srv, api.PostChatEventsInput{
 		Conversation: turn.Conversation, Factory: factory, Host: "h",
 		SessionID: "chat-session", ResumeCommand: "cd /w/acme.worktrees/chat && claude --resume chat-session",
-		Items: []core.SessionEvent{{Kind: "text", Text: text}}, Outcome: core.ChatDone,
+		Items: []api.SessionEvent{{Kind: "text", Text: text}}, Outcome: api.ChatDone,
 	})
 }
 
-func lastMessage(v core.ConversationView) core.ChatMessageView {
+func lastMessage(v api.ConversationView) api.ChatMessageView {
 	if len(v.Messages) == 0 {
-		return core.ChatMessageView{}
+		return api.ChatMessageView{}
 	}
 	return v.Messages[len(v.Messages)-1]
 }
@@ -234,8 +235,8 @@ func TestATurnGoesToExactlyOneOfTwoWaitingFactoriesAndBindsTheConversation(t *te
 	sendChat(t, srv, "What is acme?")
 
 	var winner, loser string
-	var turn *core.ChatTurn
-	var other <-chan core.ChatWork
+	var turn *api.ChatTurn
+	var other <-chan api.ChatWork
 	select {
 	case w := <-wa:
 		winner, loser, turn, other = "a", "b", w.Turn, wb
@@ -251,7 +252,7 @@ func TestATurnGoesToExactlyOneOfTwoWaitingFactoriesAndBindsTheConversation(t *te
 	if w := received(t, other); w.Turn != nil || w.Stop != nil {
 		t.Fatalf("%s was handed %+v too", loser, w)
 	}
-	if v := getChat(t, srv); v.Factory == nil || v.Factory.Name != winner || v.Factory.Host != "h" || v.Availability != core.ChatAvailable {
+	if v := getChat(t, srv); v.Factory == nil || v.Factory.Name != winner || v.Factory.Host != "h" || v.Availability != api.ChatAvailable {
 		t.Fatalf("conversation %+v, want it held by %s", v, winner)
 	}
 
@@ -259,7 +260,7 @@ func TestATurnGoesToExactlyOneOfTwoWaitingFactoriesAndBindsTheConversation(t *te
 	reply(t, srv, winner, turn, "acme tracks work.")
 	v := getChat(t, srv)
 	got := lastMessage(v)
-	if v.Running || got.Outcome != core.ChatDone || len(got.Items) != 1 || got.Items[0].Text != "acme tracks work." ||
+	if v.Running || got.Outcome != api.ChatDone || len(got.Items) != 1 || got.Items[0].Text != "acme tracks work." ||
 		v.SessionID != "chat-session" || !strings.Contains(v.ResumeCommand, "claude --resume chat-session") {
 		t.Fatalf("conversation %+v", v)
 	}
@@ -283,8 +284,8 @@ func TestATurnGoesToExactlyOneOfTwoWaitingFactoriesAndBindsTheConversation(t *te
 	if !getChat(t, srv).Running {
 		t.Fatal("the reply ended before its Factory posted stopped")
 	}
-	postChat(t, srv, core.PostChatEventsInput{Conversation: turn.Conversation, Factory: winner, Host: "h", Outcome: core.ChatStopped})
-	if got := lastMessage(getChat(t, srv)); got.Outcome != core.ChatStopped {
+	postChat(t, srv, api.PostChatEventsInput{Conversation: turn.Conversation, Factory: winner, Host: "h", Outcome: api.ChatStopped})
+	if got := lastMessage(getChat(t, srv)); got.Outcome != api.ChatStopped {
 		t.Fatalf("reply %+v, want stopped", got)
 	}
 	srv.Clock.Advance(core.WaitTimeout)
@@ -349,14 +350,14 @@ func TestAFactoryWithoutChatSupportIsNotHandedATurn(t *testing.T) {
 
 func TestChatAvailabilityFollowsTheHeartbeats(t *testing.T) {
 	srv := newServer(t)
-	if v := getChat(t, srv); v.Availability != core.ChatNone {
+	if v := getChat(t, srv); v.Availability != api.ChatNone {
 		t.Fatalf("availability %s, want none", v.Availability)
 	}
-	if v := conversationOf(t, mustOK(t, srv, startConversation(`{}`))); v.Availability != core.ChatUnavailable {
+	if v := conversationOf(t, mustOK(t, srv, startConversation(`{}`))); v.Availability != api.ChatUnavailable {
 		t.Fatalf("with no Factory: %s, want unavailable", v.Availability)
 	}
 	chatFactory(t, srv)
-	if v := getChat(t, srv); v.Availability != core.ChatAvailable || v.Factory != nil {
+	if v := getChat(t, srv); v.Availability != api.ChatAvailable || v.Factory != nil {
 		t.Fatalf("unbound with a Factory: %+v, want available", v)
 	}
 	turn := chatTurn(t, srv, "What is acme?")
@@ -365,14 +366,14 @@ func TestChatAvailabilityFollowsTheHeartbeats(t *testing.T) {
 	for _, step := range []struct {
 		state string
 		chat  bool
-		want  core.ChatAvailability
+		want  api.ChatAvailability
 	}{
-		{"draining", true, core.ChatUnavailable},
-		{"online", true, core.ChatAvailable},
-		{"stopping", true, core.ChatUnavailable},
-		{"online", true, core.ChatAvailable},
-		{"online", false, core.ChatUnavailable},
-		{"online", true, core.ChatAvailable},
+		{"draining", true, api.ChatUnavailable},
+		{"online", true, api.ChatAvailable},
+		{"stopping", true, api.ChatUnavailable},
+		{"online", true, api.ChatAvailable},
+		{"online", false, api.ChatUnavailable},
+		{"online", true, api.ChatAvailable},
 	} {
 		chatHeartbeat(t, srv, "f", step.state, step.chat)
 		if v := getChat(t, srv); v.Availability != step.want {
@@ -383,17 +384,17 @@ func TestChatAvailabilityFollowsTheHeartbeats(t *testing.T) {
 	chatHeartbeat(t, srv, "g", "online", true)
 	srv.Clock.Advance(3 * time.Minute)
 	chatHeartbeat(t, srv, "g", "online", true)
-	if v := getChat(t, srv); v.Availability != core.ChatUnavailable {
+	if v := getChat(t, srv); v.Availability != api.ChatUnavailable {
 		t.Fatalf("with its Factory Offline: %s, want unavailable", v.Availability)
 	}
 	chatFactory(t, srv)
-	if v := getChat(t, srv); v.Availability != core.ChatAvailable || len(v.Messages) != 2 {
+	if v := getChat(t, srv); v.Availability != api.ChatAvailable || len(v.Messages) != 2 {
 		t.Fatalf("with its Factory back Online: %+v, want available with its messages", v)
 	}
 }
 
 // chatTurn sends text and has Factory f take its turn.
-func chatTurn(t *testing.T, srv *codecentraltest.Server, text string) *core.ChatTurn {
+func chatTurn(t *testing.T, srv *codecentraltest.Server, text string) *api.ChatTurn {
 	t.Helper()
 	sendChat(t, srv, text)
 	w := takeWork(t, srv, "f")
@@ -415,24 +416,24 @@ func mustOK(t *testing.T, srv *codecentraltest.Server, c httpCall) []byte {
 
 func TestSendIsRefusedWhileAReplyRunsAndWhileTheConversationIsUnavailable(t *testing.T) {
 	srv := newServer(t)
-	e := httpRejected(t, srv, sendChatMessage(`{"text":"Anyone?"}`), core.ActionNotAllowed)
+	e := httpRejected(t, srv, sendChatMessage(`{"text":"Anyone?"}`), api.ActionNotAllowed)
 	if !strings.Contains(e.Message, "Chat support") {
 		t.Errorf("with no Factory: %q", e.Message)
 	}
-	if v := getChat(t, srv); v.Availability != core.ChatNone {
+	if v := getChat(t, srv); v.Availability != api.ChatNone {
 		t.Fatalf("a refused send started a Conversation: %+v", v)
 	}
 
 	chatFactory(t, srv)
 	turn := chatTurn(t, srv, "What is acme?")
-	e = httpRejected(t, srv, sendChatMessage(`{"text":"Hello?"}`), core.ActionNotAllowed)
+	e = httpRejected(t, srv, sendChatMessage(`{"text":"Hello?"}`), api.ActionNotAllowed)
 	if !slices.Equal(e.AllowedActions, []string{"stop_chat_reply"}) {
 		t.Errorf("while running: %+v", e)
 	}
 	reply(t, srv, "f", turn, "A Project.")
 
 	chatHeartbeat(t, srv, "f", "draining", true)
-	e = httpRejected(t, srv, sendChatMessage(`{"text":"Hello?"}`), core.ActionNotAllowed)
+	e = httpRejected(t, srv, sendChatMessage(`{"text":"Hello?"}`), api.ActionNotAllowed)
 	if !strings.Contains(e.Message, "unavailable") || !strings.Contains(e.Message, "draining") || !slices.Equal(e.AllowedActions, []string{"start_conversation"}) {
 		t.Errorf("while unavailable: %+v", e)
 	}
@@ -443,8 +444,8 @@ func TestSendIsRefusedWhileAReplyRunsAndWhileTheConversationIsUnavailable(t *tes
 
 func TestAnOverLongChatMessageIsRefused(t *testing.T) {
 	srv := newServer(t, chatFactory)
-	body, _ := json.Marshal(core.SendChatMessageInput{Text: strings.Repeat("x", core.SessionEventTextLimit+1)})
-	if e := httpRejected(t, srv, sendChatMessage(string(body)), core.Invalid); e.Field != "text" {
+	body, _ := json.Marshal(api.SendChatMessageInput{Text: strings.Repeat("x", core.SessionEventTextLimit+1)})
+	if e := httpRejected(t, srv, sendChatMessage(string(body)), api.Invalid); e.Field != "text" {
 		t.Fatalf("field %q, want text", e.Field)
 	}
 	if v := sendChat(t, srv, strings.Repeat("x", core.SessionEventTextLimit)); len(v.Messages) != 2 {
@@ -454,22 +455,22 @@ func TestAnOverLongChatMessageIsRefused(t *testing.T) {
 
 func TestAConversationDropsWholeOldMessagesAndMarksATail(t *testing.T) {
 	srv := newServer(t, chatFactory)
-	items := func(n int) []core.SessionEvent {
-		out := make([]core.SessionEvent, n)
+	items := func(n int) []api.SessionEvent {
+		out := make([]api.SessionEvent, n)
 		for i := range out {
-			out[i] = core.SessionEvent{Kind: "tool_call", Tool: "Bash", Text: fmt.Sprint(i)}
+			out[i] = api.SessionEvent{Kind: "tool_call", Tool: "Bash", Text: fmt.Sprint(i)}
 		}
 		return out
 	}
 	first := chatTurn(t, srv, "one")
-	postChat(t, srv, core.PostChatEventsInput{Conversation: first.Conversation, Factory: "f", Host: "h", SessionID: "s", Items: items(1500), Outcome: core.ChatDone})
+	postChat(t, srv, api.PostChatEventsInput{Conversation: first.Conversation, Factory: "f", Host: "h", SessionID: "s", Items: items(1500), Outcome: api.ChatDone})
 	if v := getChat(t, srv); v.Tail || len(v.Messages) != 2 {
 		t.Fatalf("under the bound: tail %t, %d messages", v.Tail, len(v.Messages))
 	}
 
 	second := chatTurn(t, srv, "two")
 	long := strings.Repeat("y", core.SessionEventTextLimit+10)
-	postChat(t, srv, core.PostChatEventsInput{Conversation: second.Conversation, Factory: "f", Host: "h", Items: append(items(599), core.SessionEvent{Kind: "text", Text: long})})
+	postChat(t, srv, api.PostChatEventsInput{Conversation: second.Conversation, Factory: "f", Host: "h", Items: append(items(599), api.SessionEvent{Kind: "text", Text: long})})
 	v := getChat(t, srv)
 	if !v.Tail || len(v.Messages) != 2 || v.Messages[0].Text != "two" || len(v.Messages[1].Items) != 600 {
 		t.Fatalf("over the bound: tail %t, messages %d, first %q", v.Tail, len(v.Messages), v.Messages[0].Text)
@@ -487,7 +488,7 @@ func TestChatPostsFromTheWrongFactoryOrForAReplacedConversationAreDropped(t *tes
 	srv := newServer(t, chatFactory)
 	chatHeartbeat(t, srv, "g", "online", true)
 	turn := chatTurn(t, srv, "What is acme?")
-	postChat(t, srv, core.PostChatEventsInput{Conversation: turn.Conversation, Factory: "g", Host: "h", Items: []core.SessionEvent{{Kind: "text", Text: "Not mine."}}, Outcome: core.ChatDone})
+	postChat(t, srv, api.PostChatEventsInput{Conversation: turn.Conversation, Factory: "g", Host: "h", Items: []api.SessionEvent{{Kind: "text", Text: "Not mine."}}, Outcome: api.ChatDone})
 	if v := getChat(t, srv); !v.Running || len(lastMessage(v).Items) != 0 {
 		t.Fatalf("a post from the wrong Factory was kept: %+v", v)
 	}
@@ -515,33 +516,33 @@ func TestARunningReplyFailsWhenItsFactoryGoesOffline(t *testing.T) {
 	chatTurn(t, srv, "What is acme?")
 	srv.Clock.Advance(3 * time.Minute)
 	v := getChat(t, srv)
-	if got := lastMessage(v); v.Running || got.Outcome != core.ChatFailed || got.Error != "the Factory stopped answering" {
+	if got := lastMessage(v); v.Running || got.Outcome != api.ChatFailed || got.Error != "the Factory stopped answering" {
 		t.Fatalf("reply %+v, want failed", got)
 	}
 
 	// A reply that had begun, when its Factory stops.
 	chatFactory(t, srv)
 	turn := chatTurn(t, srv, "Again?")
-	postChat(t, srv, core.PostChatEventsInput{Conversation: turn.Conversation, Factory: "f", Host: "h", Items: []core.SessionEvent{{Kind: "text", Text: "Let me"}}})
+	postChat(t, srv, api.PostChatEventsInput{Conversation: turn.Conversation, Factory: "f", Host: "h", Items: []api.SessionEvent{{Kind: "text", Text: "Let me"}}})
 	chatHeartbeat(t, srv, "f", "stopping", true)
-	if got := lastMessage(getChat(t, srv)); got.Outcome != core.ChatFailed || len(got.Items) != 1 {
+	if got := lastMessage(getChat(t, srv)); got.Outcome != api.ChatFailed || len(got.Items) != 1 {
 		t.Fatalf("reply %+v, want failed keeping its items", got)
 	}
 	// A late post for it is dropped.
 	chatFactory(t, srv)
 	reply(t, srv, "f", turn, "done now")
-	if got := lastMessage(getChat(t, srv)); got.Outcome != core.ChatFailed || len(got.Items) != 1 {
+	if got := lastMessage(getChat(t, srv)); got.Outcome != api.ChatFailed || len(got.Items) != 1 {
 		t.Fatalf("reply %+v, want the late post dropped", got)
 	}
 }
 
 func TestStopEndsAReplyNoFactoryHasTakenAtOnceAndIsANoOpWithNoneRunning(t *testing.T) {
 	srv := newServer(t, chatFactory)
-	if v := conversationOf(t, mustOK(t, srv, stopChatReply())); v.Availability != core.ChatNone {
+	if v := conversationOf(t, mustOK(t, srv, stopChatReply())); v.Availability != api.ChatNone {
 		t.Fatalf("stop with no Conversation: %+v", v)
 	}
 	sendChat(t, srv, "What is acme?")
-	if v := conversationOf(t, mustOK(t, srv, stopChatReply())); v.Running || lastMessage(v).Outcome != core.ChatStopped {
+	if v := conversationOf(t, mustOK(t, srv, stopChatReply())); v.Running || lastMessage(v).Outcome != api.ChatStopped {
 		t.Fatalf("stop before any Factory took the turn: %+v", v)
 	}
 	w := waitWork(t, srv, "f")
@@ -549,7 +550,7 @@ func TestStopEndsAReplyNoFactoryHasTakenAtOnceAndIsANoOpWithNoneRunning(t *testi
 	if got := received(t, w); got.Turn != nil || got.Stop != nil {
 		t.Fatalf("the stopped turn was handed out: %+v", got)
 	}
-	if v := conversationOf(t, mustOK(t, srv, stopChatReply())); lastMessage(v).Outcome != core.ChatStopped {
+	if v := conversationOf(t, mustOK(t, srv, stopChatReply())); lastMessage(v).Outcome != api.ChatStopped {
 		t.Fatalf("a second stop changed the reply: %+v", v)
 	}
 }
@@ -583,7 +584,7 @@ func TestANewConversationTakesTheChatRowOrHaiku(t *testing.T) {
 		"effort": `{"effort":"extreme"}`,
 		"model":  `{"model":"opus\nsonnet"}`,
 	} {
-		if e := httpRejected(t, srv, startConversation(body), core.Invalid); e.Field != field {
+		if e := httpRejected(t, srv, startConversation(body), api.Invalid); e.Field != field {
 			t.Errorf("%s: field %q", body, e.Field)
 		}
 	}

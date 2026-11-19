@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -15,45 +16,29 @@ import (
 // nothing: Needs Me, its count, the needs-you reason on Tickets and
 // Notifications still include the reasons that are off.
 
-// FocusKindsView is a Project's Focus Kinds as every Project read returns
-// them: the Needs Me reasons that are off, in group order, empty while
-// every reason is on.
-type FocusKindsView struct {
-	Off []NeedsMeReason `json:"off"`
-}
-
 // focusItem reports whether an item waiting for reason is a Focus Item
 // in Project p: whether p's Focus Kinds leave reason on.
-func focusItem(p domain.Project, reason NeedsMeReason) bool {
+func focusItem(p domain.Project, reason api.NeedsMeReason) bool {
 	return !slices.Contains(p.FocusKindsOff, string(reason))
 }
 
-func focusKindsView(off []string) FocusKindsView {
-	v := FocusKindsView{Off: []NeedsMeReason{}}
+func focusKindsView(off []string) api.FocusKindsView {
+	v := api.FocusKindsView{Off: []api.NeedsMeReason{}}
 	for _, r := range off {
-		v.Off = append(v.Off, NeedsMeReason(r))
+		v.Off = append(v.Off, api.NeedsMeReason(r))
 	}
 	return v
-}
-
-// SetFocusKindsInput is the human's set_focus_kinds(off, full?).
-type SetFocusKindsInput struct {
-	// Off is the whole list of Needs Me reasons to turn off; every other
-	// reason is on.
-	Off []NeedsMeReason `json:"off"`
-	// Full asks for the Project in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
 }
 
 // SetFocusKinds is the human's set_focus_kinds: it replaces the Project's
 // list of reasons that are off whole, collapsing duplicates. Like the
 // Project's other settings it adds no Move, Edit or Comment; the
 // Project's notice announces it, and only on a change.
-func (c *Core) SetFocusKinds(ctx context.Context, key string, in SetFocusKindsInput) (Written[ProjectView], error) {
+func (c *Core) SetFocusKinds(ctx context.Context, key string, in api.SetFocusKindsInput) (api.Written[api.ProjectView], error) {
 	if err := humanOnly(ctx, "set_focus_kinds"); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
-	var before, after ProjectView
+	var before, after api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -73,19 +58,19 @@ func (c *Core) SetFocusKinds(ctx context.Context, key string, in SetFocusKindsIn
 		return w.PutProject(p)
 	})
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	return acknowledgeProject(before, after, in.Full, c.now())
 }
 
 // checkedFocusKindsOff checks every reason is a Needs Me reason and
 // returns them as stored: in group order, each once.
-func checkedFocusKindsOff(in []NeedsMeReason) ([]string, error) {
+func checkedFocusKindsOff(in []api.NeedsMeReason) ([]string, error) {
 	var off []string
 	for _, r := range in {
 		if groupIndex(r) < 0 {
 			var names []string
-			for _, x := range needsMeReasons {
+			for _, x := range api.NeedsMeReasonViews {
 				names = append(names, string(x.Reason))
 			}
 			return nil, invalid("off", "%q isn't a Needs Me reason; the reasons are %s", r, strings.Join(names, ", "))
@@ -95,7 +80,7 @@ func checkedFocusKindsOff(in []NeedsMeReason) ([]string, error) {
 		}
 	}
 	slices.SortFunc(off, func(a, b string) int {
-		return groupIndex(NeedsMeReason(a)) - groupIndex(NeedsMeReason(b))
+		return groupIndex(api.NeedsMeReason(a)) - groupIndex(api.NeedsMeReason(b))
 	})
 	return off, nil
 }

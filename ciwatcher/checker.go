@@ -6,7 +6,7 @@ package ciwatcher
 import (
 	"context"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/watchers"
 )
@@ -16,7 +16,7 @@ const Command = "ci-watcher"
 
 // CheckArgs are the arguments that run program's CI Watcher in its check
 // mode for in, after the program itself.
-func CheckArgs(in core.CICheckInput) []string {
+func CheckArgs(in api.CICheckInput) []string {
 	args := []string{Command, "--check", "--provider", string(in.Provider)}
 	if in.Provider == domain.CIAzurePipelines {
 		// The PAT is never an argument: the check reads it from the
@@ -34,8 +34,8 @@ func CheckArgs(in core.CICheckInput) []string {
 // Checker is the service's CI check: program, the service's own
 // executable, run once in the CI Watcher's check mode with environ, the
 // service's environment, so gh is found on the service's PATH.
-func Checker(program string, environ []string) core.CICheck {
-	return func(ctx context.Context, in core.CICheckInput) core.WatcherCheckResult {
-		return watchers.Check(ctx, program, environ, CheckArgs(in), core.WatcherCI)
+func Checker(program string, environ []string) api.CICheck {
+	return func(ctx context.Context, in api.CICheckInput) api.WatcherCheckResult {
+		return watchers.Check(ctx, program, environ, CheckArgs(in), api.WatcherCI)
 	}
 }

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/ops"
 )
 
@@ -34,8 +34,8 @@ const TranscriptStreamPath = "GET /api/projects/{key}/tickets/{n}/claims/{c}/tra
 func sessionEvents(s ops.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			SessionID string              `json:"session_id"`
-			Events    []core.SessionEvent `json:"events"`
+			SessionID string             `json:"session_id"`
+			Events    []api.SessionEvent `json:"events"`
 		}
 		if decodeBody(r, &in) == nil {
 			s.PostSessionEvents(r.Context(), in.SessionID, in.Events)
@@ -52,13 +52,13 @@ func transcript(s ops.Service, r *http.Request) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return s.Transcript(r.Context(), r.PathValue("key"), core.Ref(r.PathValue("n")), claim)
+	return s.Transcript(r.Context(), r.PathValue("key"), api.Ref(r.PathValue("n")), claim)
 }
 
 func claimNumber(r *http.Request) (int, error) {
 	claim, err := strconv.Atoi(r.PathValue("c"))
 	if err != nil {
-		return 0, &core.Error{Code: core.NotFound, Message: "there is no Claim " + strconv.Quote(r.PathValue("c"))}
+		return 0, &api.Error{Code: api.NotFound, Message: "there is no Claim " + strconv.Quote(r.PathValue("c"))}
 	}
 	return claim, nil
 }
@@ -81,7 +81,7 @@ func transcriptStream(s ops.Service) http.HandlerFunc {
 		}
 		// A Last-Event-ID that isn't a seq is no resume: send it all.
 		after, _ := strconv.Atoi(r.Header.Get("Last-Event-ID"))
-		feed, err := s.FollowTranscript(r.Context(), r.PathValue("key"), core.Ref(r.PathValue("n")), claim, after)
+		feed, err := s.FollowTranscript(r.Context(), r.PathValue("key"), api.Ref(r.PathValue("n")), claim, after)
 		if err != nil {
 			WriteError(w, err)
 			return

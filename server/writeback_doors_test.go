@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 )
 
@@ -25,7 +25,7 @@ func init() {
 			boolField(t, out, "awaiting_triage", false)
 		},
 		bad:  call{http: wontFix("2", `{}`)},
-		code: core.ActionNotAllowed,
+		code: api.ActionNotAllowed,
 	}
 	cases["report_issue_written"] = opCase{
 		setup: newIssue,
@@ -35,7 +35,7 @@ func init() {
 			field("id", "acme/web#7")(t, out["link"].(map[string]any))
 		},
 		bad:  call{http: reportIssueWritten(`{"target":"acme-2","key":"wont-fix"}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -184,13 +184,13 @@ func TestReportIssueWrittenStopsACommentBeingDue(t *testing.T) {
 func TestReportIssueWrittenIsRefusedFromAnyoneButTheIntegrationActor(t *testing.T) {
 	srv := newServer(t, newIssue)
 	httpOK(t, srv, wontFix("5", `{"reason":"No."}`))
-	for _, actor := range []core.Actor{core.Agent, core.Human} {
+	for _, actor := range []api.Actor{api.Agent, api.Human} {
 		status, b := httpDoAs(t, srv, actor, reportIssueWritten(`{"target":"acme-5","key":"wont-fix"}`))
-		if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) || !strings.Contains(e.Message, "integration") {
+		if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) || !strings.Contains(e.Message, "integration") {
 			t.Fatalf("as %s: status %d; message %q, want the integration Actor's", actor, status, e.Message)
 		}
 	}
-	httpRejected(t, srv, reportIssueWritten(`{"target":"acme-5","key":" "}`), core.Invalid)
+	httpRejected(t, srv, reportIssueWritten(`{"target":"acme-5","key":" "}`), api.Invalid)
 	wantDue(t, writesDue(t, srv), "acme-5", "code-central:wont-fix", "not_planned", "wont-fix")
 }
 
@@ -235,7 +235,7 @@ func TestWontFixIsRefusedOnAnythingButAnIncomingIssue(t *testing.T) {
 		"7": "unlinked",
 		"8": "Cancelled",
 	} {
-		e := httpRejected(t, srv, wontFix(n, `{"reason":"No."}`), core.ActionNotAllowed)
+		e := httpRejected(t, srv, wontFix(n, `{"reason":"No."}`), api.ActionNotAllowed)
 		if !strings.Contains(e.Message, "acme-"+n) || !strings.Contains(e.Message, why) {
 			t.Errorf("acme-%s: message %q, want it named and %q", n, e.Message, why)
 		}
@@ -247,8 +247,8 @@ func TestWontFixIsRefusedOnAnythingButAnIncomingIssue(t *testing.T) {
 
 func TestWontFixIsRejectedForAnAgent(t *testing.T) {
 	srv := newServer(t, newIssue)
-	status, b := httpDoAs(t, srv, core.Agent, wontFix("5", `{}`))
-	if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
+	status, b := httpDoAs(t, srv, api.Agent, wontFix("5", `{}`))
+	if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
 		t.Fatalf("status %d; message %q, want the human's", status, e.Message)
 	}
 	field("state", "Draft")(t, ticket5(t, srv))

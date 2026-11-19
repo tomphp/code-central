@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/ids"
@@ -36,128 +37,13 @@ const DefaultChatModel = "haiku"
 // Offline before it ended.
 const factoryStoppedAnswering = "the Factory stopped answering"
 
-// ChatAvailability is whether the Project's current Conversation can take
-// a Chat Message now, worked out from the Heartbeats on every read.
-type ChatAvailability string
-
-const (
-	// ChatNone is a Project with no current Conversation.
-	ChatNone ChatAvailability = "none"
-	// ChatAvailable is a Conversation its Factory, or before any Factory
-	// has taken it any Factory with Chat support, can answer now.
-	ChatAvailable ChatAvailability = "available"
-	// ChatUnavailable is a Conversation whose Factory is Draining,
-	// Offline or without Chat support, or, before any Factory has taken
-	// it, one no Online Factory with Chat support can take.
-	ChatUnavailable ChatAvailability = "unavailable"
-)
-
-// ChatAvailabilities are the Chat availabilities.
-func ChatAvailabilities() []ChatAvailability {
-	return []ChatAvailability{ChatNone, ChatAvailable, ChatUnavailable}
-}
-
-// ChatOutcome is how a Claude Chat Message ended.
-type ChatOutcome string
-
-const (
-	// ChatDone is a reply that ran to its end.
-	ChatDone ChatOutcome = "done"
-	// ChatStopped is a reply the human stopped.
-	ChatStopped ChatOutcome = "stopped"
-	// ChatFailed is a reply that went wrong, with its error text.
-	ChatFailed ChatOutcome = "failed"
-)
-
-// ChatOutcomes are the ways a Claude Chat Message ends.
-func ChatOutcomes() []ChatOutcome { return []ChatOutcome{ChatDone, ChatStopped, ChatFailed} }
-
-// ChatAuthor is who wrote a Chat Message.
-type ChatAuthor string
-
-// The authors of Chat Messages.
-const (
-	ChatFromHuman  ChatAuthor = "human"
-	ChatFromClaude ChatAuthor = "claude"
-)
-
-// ChatAuthors are the authors of Chat Messages.
-func ChatAuthors() []ChatAuthor { return []ChatAuthor{ChatFromHuman, ChatFromClaude} }
-
-// ConversationView is a Project's current Conversation as get_chat and
-// the Chat writes return it. With none, Availability is none and the rest
-// is empty.
-type ConversationView struct {
-	Availability ChatAvailability `json:"availability"`
-	ID           string           `json:"id,omitempty"`
-	Model        string           `json:"model,omitempty"`
-	// Effort is empty for Claude Code's default.
-	Effort string `json:"effort,omitempty"`
-	// Factory is the Factory holding the Conversation, left out until one
-	// takes its first turn.
-	Factory *ChatFactory `json:"factory,omitempty"`
-	// Running says a reply is pending or running.
-	Running bool `json:"running"`
-	// Tail says older Chat Messages were dropped from the front.
-	Tail bool `json:"tail"`
-	// SessionID and ResumeCommand are as the Factory reported them, empty
-	// until it does.
-	SessionID     string            `json:"session_id,omitempty"`
-	ResumeCommand string            `json:"resume_command,omitempty"`
-	Messages      []ChatMessageView `json:"messages"`
-}
-
-// ChatFactory names the Factory holding a Conversation, by its
-// Heartbeat's name and host.
-type ChatFactory struct {
-	Name string `json:"name"`
-	Host string `json:"host"`
-}
-
-// ChatMessageView is one Chat Message. A human's holds its Text; a
-// Claude's holds its Items, in the shape of Session Events (with
-// permission_denials as an item of their own), and its Outcome once the
-// reply has ended, with Error on a failed one.
-type ChatMessageView struct {
-	From    ChatAuthor         `json:"from"`
-	Time    time.Time          `json:"time"`
-	Text    string             `json:"text,omitempty"`
-	Items   []HeldSessionEvent `json:"items,omitempty"`
-	Outcome ChatOutcome        `json:"outcome,omitempty"`
-	Error   string             `json:"error,omitempty"`
-}
-
-// size is how many items m counts towards ChatItemLimit: a human Chat
+// chatMessageSize is how many items m counts towards ChatItemLimit: a human Chat
 // Message is one.
-func (m ChatMessageView) size() int {
-	if m.From == ChatFromHuman {
+func chatMessageSize(m api.ChatMessageView) int {
+	if m.From == api.ChatFromHuman {
 		return 1
 	}
 	return len(m.Items)
-}
-
-// ChatWork is what next_chat_work hands a Factory: a Turn, a Stop, or,
-// when the long-poll times out, neither.
-type ChatWork struct {
-	Turn *ChatTurn `json:"turn,omitempty"`
-	Stop *ChatStop `json:"stop,omitempty"`
-}
-
-// ChatTurn is one Chat Message for the Factory to answer.
-type ChatTurn struct {
-	Conversation string `json:"conversation"`
-	Text         string `json:"text"`
-	Model        string `json:"model"`
-	Effort       string `json:"effort,omitempty"`
-	// First says the turn starts the Conversation's session; otherwise
-	// SessionID is the session to resume.
-	First     bool   `json:"first"`
-	SessionID string `json:"session_id,omitempty"`
-}
-
-// ChatStop asks the Factory to stop the Conversation's running turn.
-type ChatStop struct {
-	Conversation string `json:"conversation"`
 }
 
 // conversation is a Project's current Conversation.
@@ -167,7 +53,7 @@ type conversation struct {
 	// factory is the Factory holding it; nil until one takes a turn.
 	factory                  *heartbeatKey
 	sessionID, resumeCommand string
-	messages                 []ChatMessageView
+	messages                 []api.ChatMessageView
 	lastSeq                  int
 	tail                     bool
 	// running says a reply is pending or running; queued that its turn,
@@ -193,65 +79,25 @@ type chats struct {
 	// to be told to stop, oldest first.
 	stops map[heartbeatKey][]string
 	// seen is each Project's availability as chat.changed last announced.
-	seen map[string]ChatAvailability
+	seen map[string]api.ChatAvailability
 	// feeds is each Project's followers (FollowChat).
 	feeds map[string]map[*ChatFeed]struct{}
 }
 
 // newChats is an empty holder.
 func newChats() *chats {
-	return &chats{all: map[string]*conversation{}, polls: map[heartbeatKey]*longPoll{}, stops: map[heartbeatKey][]string{}, seen: map[string]ChatAvailability{}, feeds: map[string]map[*ChatFeed]struct{}{}}
+	return &chats{all: map[string]*conversation{}, polls: map[heartbeatKey]*longPoll{}, stops: map[heartbeatKey][]string{}, seen: map[string]api.ChatAvailability{}, feeds: map[string]map[*ChatFeed]struct{}{}}
 }
-
-// StartConversationInput is the human's start_conversation(model?,
-// effort?): either left empty takes the Chat row's.
-type StartConversationInput struct {
-	Model  string `json:"model"`
-	Effort string `json:"effort"`
-}
-
-// SendChatMessageInput is the human's send_chat_message(text).
-type SendChatMessageInput struct {
-	Text string `json:"text"`
-}
-
-// StopChatReplyInput is the human's stop_chat_reply(), which takes nothing.
-type StopChatReplyInput struct{}
-
-// NextChatWorkInput is the Factory's next_chat_work(factory, host), named
-// as its Heartbeat names it.
-type NextChatWorkInput struct {
-	Factory string `json:"-" query:"factory"`
-	Host    string `json:"-" query:"host"`
-}
-
-// PostChatEventsInput is POST /api/p/{key}/chat/events: the Factory
-// holding Conversation posts its running reply's new Items, the session
-// ID and Resume Command on its first post, and the Outcome, with Error
-// when failed, on its last.
-type PostChatEventsInput struct {
-	Conversation  string         `json:"conversation"`
-	Factory       string         `json:"factory"`
-	Host          string         `json:"host"`
-	SessionID     string         `json:"session_id"`
-	ResumeCommand string         `json:"resume_command"`
-	Items         []SessionEvent `json:"items"`
-	Outcome       ChatOutcome    `json:"outcome"`
-	Error         string         `json:"error"`
-}
-
-// GetChatInput is the human's get_chat(), which takes nothing.
-type GetChatInput struct{}
 
 // GetChat is the human's get_chat: the Project's current Conversation.
-func (c *Core) GetChat(_ context.Context, key string, _ GetChatInput) (ConversationView, error) {
+func (c *Core) GetChat(_ context.Context, key string, _ api.GetChatInput) (api.ConversationView, error) {
 	if err := c.store.View(func(r store.Reader) error {
 		if _, ok := r.Project(key); !ok {
 			return unknownProject(key)
 		}
 		return nil
 	}); err != nil {
-		return ConversationView{}, err
+		return api.ConversationView{}, err
 	}
 	cs := c.chats
 	cs.mu.Lock()
@@ -265,9 +111,9 @@ func (c *Core) GetChat(_ context.Context, key string, _ GetChatInput) (Conversat
 // Factory, first asking the old one's Factory to stop any running reply.
 // The model is the one given, else the Chat row's, else haiku; the
 // effort the one given, else the Chat row's, else none.
-func (c *Core) StartConversation(ctx context.Context, key string, in StartConversationInput) (ConversationView, error) {
+func (c *Core) StartConversation(ctx context.Context, key string, in api.StartConversationInput) (api.ConversationView, error) {
 	if err := humanOnly(ctx, "start_conversation"); err != nil {
-		return ConversationView{}, err
+		return api.ConversationView{}, err
 	}
 	model := strings.TrimSpace(in.Model)
 	var row domain.ModelRow
@@ -289,7 +135,7 @@ func (c *Core) StartConversation(ctx context.Context, key string, in StartConver
 		row = chatRow(r, key)
 		return nil
 	}); err != nil {
-		return ConversationView{}, err
+		return api.ConversationView{}, err
 	}
 	cs := c.chats
 	cs.mu.Lock()
@@ -305,15 +151,15 @@ func (c *Core) StartConversation(ctx context.Context, key string, in StartConver
 // Conversation's Factory, or for the first Factory with Chat support to
 // ask when none holds it yet. It is refused while a reply is running and
 // while the Conversation is unavailable: messages are never queued.
-func (c *Core) SendChatMessage(ctx context.Context, key string, in SendChatMessageInput) (ConversationView, error) {
+func (c *Core) SendChatMessage(ctx context.Context, key string, in api.SendChatMessageInput) (api.ConversationView, error) {
 	if err := humanOnly(ctx, "send_chat_message"); err != nil {
-		return ConversationView{}, err
+		return api.ConversationView{}, err
 	}
 	switch {
 	case strings.TrimSpace(in.Text) == "":
-		return ConversationView{}, invalid("text", "text is required: the Chat Message to send")
+		return api.ConversationView{}, invalid("text", "text is required: the Chat Message to send")
 	case len(in.Text) > SessionEventTextLimit:
-		return ConversationView{}, invalid("text", "a Chat Message is at most %d bytes; this one is %d", SessionEventTextLimit, len(in.Text))
+		return api.ConversationView{}, invalid("text", "a Chat Message is at most %d bytes; this one is %d", SessionEventTextLimit, len(in.Text))
 	}
 	var row domain.ModelRow
 	if err := c.store.View(func(r store.Reader) error {
@@ -323,7 +169,7 @@ func (c *Core) SendChatMessage(ctx context.Context, key string, in SendChatMessa
 		row = chatRow(r, key)
 		return nil
 	}); err != nil {
-		return ConversationView{}, err
+		return api.ConversationView{}, err
 	}
 	cs := c.chats
 	cs.mu.Lock()
@@ -331,22 +177,22 @@ func (c *Core) SendChatMessage(ctx context.Context, key string, in SendChatMessa
 	fs := c.settleChat(key)
 	cv := cs.all[key]
 	if cv == nil {
-		if chatAvailability(&conversation{}, fs) != ChatAvailable {
-			return ConversationView{}, unavailableChat(key, nil, fs)
+		if chatAvailability(&conversation{}, fs) != api.ChatAvailable {
+			return api.ConversationView{}, unavailableChat(key, nil, fs)
 		}
 		cv = c.newConversation(key, row, "", "")
 	}
 	switch {
 	case cv.running:
-		return ConversationView{}, &Error{Code: ActionNotAllowed, AllowedActions: []string{"stop_chat_reply"},
+		return api.ConversationView{}, &api.Error{Code: api.ActionNotAllowed, AllowedActions: []string{"stop_chat_reply"},
 			Message: "a reply is running; wait for it to end, or stop it, before sending another Chat Message"}
-	case chatAvailability(cv, fs) != ChatAvailable:
-		return ConversationView{}, unavailableChat(key, cv.factory, fs)
+	case chatAvailability(cv, fs) != api.ChatAvailable:
+		return api.ConversationView{}, unavailableChat(key, cv.factory, fs)
 	}
 	now := c.now()
 	cv.messages = append(cv.messages,
-		ChatMessageView{From: ChatFromHuman, Time: now, Text: in.Text},
-		ChatMessageView{From: ChatFromClaude, Time: now})
+		api.ChatMessageView{From: api.ChatFromHuman, Time: now, Text: in.Text},
+		api.ChatMessageView{From: api.ChatFromClaude, Time: now})
 	cv.emit(ChatEventMessage, cv.messages[len(cv.messages)-2])
 	cv.emit(ChatEventMessage, cv.messages[len(cv.messages)-1])
 	cv.running, cv.queued, cv.stopAsked, cv.turn = true, true, false, in.Text
@@ -360,12 +206,12 @@ func (c *Core) SendChatMessage(ctx context.Context, key string, in SendChatMessa
 // Conversation's Factory to stop the running reply. A reply whose turn no
 // Factory has taken yet ends stopped at once. With no reply running it
 // does nothing.
-func (c *Core) StopChatReply(ctx context.Context, key string, _ StopChatReplyInput) (ConversationView, error) {
+func (c *Core) StopChatReply(ctx context.Context, key string, _ api.StopChatReplyInput) (api.ConversationView, error) {
 	if err := humanOnly(ctx, "stop_chat_reply"); err != nil {
-		return ConversationView{}, err
+		return api.ConversationView{}, err
 	}
 	if err := c.store.View(func(r store.Reader) error { return writable(r, key) }); err != nil {
-		return ConversationView{}, err
+		return api.ConversationView{}, err
 	}
 	cs := c.chats
 	cs.mu.Lock()
@@ -385,10 +231,10 @@ func (c *Core) StopChatReply(ctx context.Context, key string, _ StopChatReplyInp
 // Online Factory with Chat support, and binds the Conversation to it; a
 // later turn or stop goes only to that Factory. Each is handed out once.
 // A newer call from the same Factory and host ends this one, empty.
-func (c *Core) NextChatWork(ctx context.Context, key string, in NextChatWorkInput) (ChatWork, error) {
+func (c *Core) NextChatWork(ctx context.Context, key string, in api.NextChatWorkInput) (api.ChatWork, error) {
 	k, err := c.longPollKey(key, in.Factory, in.Host)
 	if err != nil {
-		return ChatWork{}, err
+		return api.ChatWork{}, err
 	}
 	cs := c.chats
 	p := newLongPoll()
@@ -416,11 +262,11 @@ func (c *Core) NextChatWork(ctx context.Context, key string, in NextChatWorkInpu
 		select {
 		case <-p.wake:
 		case <-p.replaced:
-			return ChatWork{}, nil
+			return api.ChatWork{}, nil
 		case <-timeout:
-			return ChatWork{}, nil
+			return api.ChatWork{}, nil
 		case <-ctx.Done():
-			return ChatWork{}, nil
+			return api.ChatWork{}, nil
 		}
 	}
 }
@@ -428,12 +274,12 @@ func (c *Core) NextChatWork(ctx context.Context, key string, in NextChatWorkInpu
 // takeChatWork hands Factory k's call p its next piece of work, if there
 // is one: a stop first, then a queued turn. A call a newer one has
 // replaced ends with none, so it can't take work nobody reads.
-func (c *Core) takeChatWork(k heartbeatKey, p *longPoll) (ChatWork, bool) {
+func (c *Core) takeChatWork(k heartbeatKey, p *longPoll) (api.ChatWork, bool) {
 	cs := c.chats
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	if cs.polls[k] != p {
-		return ChatWork{}, true
+		return api.ChatWork{}, true
 	}
 	fs := c.settleChat(k.project)
 	if stops := cs.stops[k]; len(stops) > 0 {
@@ -441,18 +287,18 @@ func (c *Core) takeChatWork(k heartbeatKey, p *longPoll) (ChatWork, bool) {
 		if len(cs.stops[k]) == 0 {
 			delete(cs.stops, k)
 		}
-		return ChatWork{Stop: &ChatStop{Conversation: stops[0]}}, true
+		return api.ChatWork{Stop: &api.ChatStop{Conversation: stops[0]}}, true
 	}
 	cv := cs.all[k.project]
 	if cv == nil || !cv.queued || cv.factory != nil && *cv.factory != k {
-		return ChatWork{}, false
+		return api.ChatWork{}, false
 	}
-	if f, ok := fs[k]; !ok || f.Status != FactoryOnline || !f.Chat {
-		return ChatWork{}, false
+	if f, ok := fs[k]; !ok || f.Status != api.FactoryOnline || !f.Chat {
+		return api.ChatWork{}, false
 	}
 	cv.factory, cv.queued = &k, false
 	c.chatChanged(k.project)
-	return ChatWork{Turn: &ChatTurn{
+	return api.ChatWork{Turn: &api.ChatTurn{
 		Conversation: cv.id, Text: cv.turn, Model: cv.model, Effort: cv.effort,
 		First: cv.sessionID == "", SessionID: cv.sessionID,
 	}}, true
@@ -464,7 +310,7 @@ func (c *Core) takeChatWork(k heartbeatKey, p *longPoll) (ChatWork, bool) {
 // of the operations and never fails: a post for a Conversation that is no
 // longer current, from a Factory that doesn't hold it, or for a reply
 // that has already ended is dropped.
-func (c *Core) PostChatEvents(_ context.Context, key string, in PostChatEventsInput) {
+func (c *Core) PostChatEvents(_ context.Context, key string, in api.PostChatEventsInput) {
 	cs := c.chats
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
@@ -476,7 +322,7 @@ func (c *Core) PostChatEvents(_ context.Context, key string, in PostChatEventsIn
 	}
 	if (in.SessionID != "" && in.SessionID != cv.sessionID) || (in.ResumeCommand != "" && in.ResumeCommand != cv.resumeCommand) {
 		cv.sessionID, cv.resumeCommand = cmp.Or(in.SessionID, cv.sessionID), cmp.Or(in.ResumeCommand, cv.resumeCommand)
-		cv.emit(ChatEventSession, ChatSessionEvent{SessionID: cv.sessionID, ResumeCommand: cv.resumeCommand})
+		cv.emit(ChatEventSession, api.ChatSessionEvent{SessionID: cv.sessionID, ResumeCommand: cv.resumeCommand})
 	}
 	reply := &cv.messages[len(cv.messages)-1]
 	now := c.now()
@@ -486,14 +332,14 @@ func (c *Core) PostChatEvents(_ context.Context, key string, in PostChatEventsIn
 		}
 		e.Text, e.Truncated = cutText(e.Text, e.Truncated)
 		cv.lastSeq++
-		held := HeldSessionEvent{Seq: cv.lastSeq, SessionEvent: e}
+		held := api.HeldSessionEvent{Seq: cv.lastSeq, SessionEvent: e}
 		reply.Items = append(reply.Items, held)
 		cv.emit(ChatEventItem, held)
 	}
 	switch in.Outcome {
-	case ChatDone, ChatStopped, ChatFailed:
+	case api.ChatDone, api.ChatStopped, api.ChatFailed:
 		msg, _ := cutText(in.Error, false)
-		if in.Outcome != ChatFailed {
+		if in.Outcome != api.ChatFailed {
 			msg = ""
 		}
 		cv.end(in.Outcome, msg)
@@ -582,7 +428,7 @@ func (c *Core) newConversation(key string, row domain.ModelRow, model, effort st
 func (c *Core) stopReply(key string, cv *conversation) {
 	cs := c.chats
 	if cv.queued {
-		cv.end(ChatStopped, "")
+		cv.end(api.ChatStopped, "")
 		c.chatChanged(key)
 		return
 	}
@@ -601,13 +447,13 @@ func (c *Core) stopReply(key string, cv *conversation) {
 // has gone Offline, announces any change in the Conversation's
 // availability, and returns the Project's Factories by key. Callers hold
 // cs.mu.
-func (c *Core) settleChat(key string) map[heartbeatKey]FactoryView {
+func (c *Core) settleChat(key string) map[heartbeatKey]api.FactoryView {
 	cs := c.chats
 	fs := c.chatFactories(key)
 	cv := cs.all[key]
 	if cv != nil && cv.running && cv.factory != nil {
-		if f, ok := fs[*cv.factory]; !ok || f.Status == FactoryOffline {
-			cv.end(ChatFailed, factoryStoppedAnswering)
+		if f, ok := fs[*cv.factory]; !ok || f.Status == api.FactoryOffline {
+			cv.end(api.ChatFailed, factoryStoppedAnswering)
 			c.chatChanged(key)
 		}
 	}
@@ -622,8 +468,8 @@ func (c *Core) settleChat(key string) map[heartbeatKey]FactoryView {
 }
 
 // chatFactories is the Project's Factories as their Heartbeats stand now.
-func (c *Core) chatFactories(key string) map[heartbeatKey]FactoryView {
-	fs := map[heartbeatKey]FactoryView{}
+func (c *Core) chatFactories(key string) map[heartbeatKey]api.FactoryView {
+	fs := map[heartbeatKey]api.FactoryView{}
 	for _, f := range c.heartbeats.view(key, c.clock.Now()).Factories {
 		fs[heartbeatKey{key, f.Name, f.Host}] = f
 	}
@@ -631,29 +477,29 @@ func (c *Core) chatFactories(key string) map[heartbeatKey]FactoryView {
 }
 
 // chatAvailability is cv's availability among the Project's Factories fs.
-func chatAvailability(cv *conversation, fs map[heartbeatKey]FactoryView) ChatAvailability {
+func chatAvailability(cv *conversation, fs map[heartbeatKey]api.FactoryView) api.ChatAvailability {
 	if cv == nil {
-		return ChatNone
+		return api.ChatNone
 	}
-	answers := func(f FactoryView) bool { return f.Status == FactoryOnline && f.Chat }
+	answers := func(f api.FactoryView) bool { return f.Status == api.FactoryOnline && f.Chat }
 	if cv.factory != nil {
 		if f, ok := fs[*cv.factory]; ok && answers(f) {
-			return ChatAvailable
+			return api.ChatAvailable
 		}
-		return ChatUnavailable
+		return api.ChatUnavailable
 	}
 	for _, f := range fs {
 		if answers(f) {
-			return ChatAvailable
+			return api.ChatAvailable
 		}
 	}
-	return ChatUnavailable
+	return api.ChatUnavailable
 }
 
 // unavailableChat is send_chat_message's refusal while the Conversation,
 // held by factory or by none yet, is unavailable.
-func unavailableChat(key string, factory *heartbeatKey, fs map[heartbeatKey]FactoryView) *Error {
-	e := &Error{Code: ActionNotAllowed, AllowedActions: []string{"start_conversation"}}
+func unavailableChat(key string, factory *heartbeatKey, fs map[heartbeatKey]api.FactoryView) *api.Error {
+	e := &api.Error{Code: api.ActionNotAllowed, AllowedActions: []string{"start_conversation"}}
 	if factory == nil {
 		e.AllowedActions = nil
 		e.Message = fmt.Sprintf("no Online Factory of %s has Chat support; start code-central-factory without --no-chat", key)
@@ -661,8 +507,8 @@ func unavailableChat(key string, factory *heartbeatKey, fs map[heartbeatKey]Fact
 	}
 	f, ok := fs[*factory]
 	switch {
-	case !ok || f.Status != FactoryOnline:
-		e.Message = fmt.Sprintf("the Conversation is unavailable: its Factory %s on %s is %s; start a new Conversation, or send again once it is back Online", factory.name, factory.host, cmp.Or(f.Status, FactoryOffline))
+	case !ok || f.Status != api.FactoryOnline:
+		e.Message = fmt.Sprintf("the Conversation is unavailable: its Factory %s on %s is %s; start a new Conversation, or send again once it is back Online", factory.name, factory.host, cmp.Or(f.Status, api.FactoryOffline))
 	default:
 		e.Message = fmt.Sprintf("the Conversation is unavailable: its Factory %s on %s no longer has Chat support; start a new Conversation", factory.name, factory.host)
 	}
@@ -670,8 +516,8 @@ func unavailableChat(key string, factory *heartbeatKey, fs map[heartbeatKey]Fact
 }
 
 // conversationView is cv as reads return it.
-func (c *Core) conversationView(cv *conversation, fs map[heartbeatKey]FactoryView) ConversationView {
-	v := ConversationView{Availability: chatAvailability(cv, fs), Messages: []ChatMessageView{}}
+func (c *Core) conversationView(cv *conversation, fs map[heartbeatKey]api.FactoryView) api.ConversationView {
+	v := api.ConversationView{Availability: chatAvailability(cv, fs), Messages: []api.ChatMessageView{}}
 	if cv == nil {
 		return v
 	}
@@ -679,10 +525,10 @@ func (c *Core) conversationView(cv *conversation, fs map[heartbeatKey]FactoryVie
 	v.Running, v.Tail = cv.running, cv.tail
 	v.SessionID, v.ResumeCommand = cv.sessionID, cv.resumeCommand
 	if cv.factory != nil {
-		v.Factory = &ChatFactory{Name: cv.factory.name, Host: cv.factory.host}
+		v.Factory = &api.ChatFactory{Name: cv.factory.name, Host: cv.factory.host}
 	}
 	for _, m := range cv.messages {
-		m.Items = append([]HeldSessionEvent(nil), m.Items...)
+		m.Items = append([]api.HeldSessionEvent(nil), m.Items...)
 		v.Messages = append(v.Messages, m)
 	}
 	return v
@@ -695,10 +541,10 @@ func (c *Core) chatChanged(key string) {
 }
 
 // end ends cv's running reply with outcome, and error text when failed.
-func (cv *conversation) end(outcome ChatOutcome, errText string) {
+func (cv *conversation) end(outcome api.ChatOutcome, errText string) {
 	reply := &cv.messages[len(cv.messages)-1]
 	reply.Outcome, reply.Error = outcome, errText
-	cv.emit(ChatEventOutcome, ChatOutcomeEvent{Outcome: outcome, Error: errText})
+	cv.emit(ChatEventOutcome, api.ChatOutcomeEvent{Outcome: outcome, Error: errText})
 	cv.running, cv.queued, cv.stopAsked, cv.turn = false, false, false, ""
 }
 
@@ -708,10 +554,10 @@ func (cv *conversation) end(outcome ChatOutcome, errText string) {
 func (cv *conversation) bound() {
 	total := 0
 	for _, m := range cv.messages {
-		total += m.size()
+		total += chatMessageSize(m)
 	}
 	for total > ChatItemLimit && len(cv.messages) > 1 {
-		total -= cv.messages[0].size()
+		total -= chatMessageSize(cv.messages[0])
 		cv.messages = cv.messages[1:]
 		cv.tail = true
 	}

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 )
@@ -290,8 +291,8 @@ func TestAHiddenLandedLineHasNoTicketID(t *testing.T) {
 // Repository, and the Changed Repositories line is as branded.
 func TestAHiddenLandedLineWithSeveralRepositoriesHasNoTicketID(t *testing.T) {
 	srv := newServer(t, boardsHidden(true, true)) // acme-4
-	human := core.WithActor(context.Background(), core.Human)
-	if _, err := srv.Core.AddRepository(human, "acme", core.AddRepositoryInput{Name: "docs", CloneURL: "https://dev.azure.com/org/proj/_git/docs"}); err != nil {
+	human := api.WithActor(context.Background(), api.Human)
+	if _, err := srv.Core.AddRepository(human, "acme", api.AddRepositoryInput{Name: "docs", CloneURL: "https://dev.azure.com/org/proj/_git/docs"}); err != nil {
 		t.Fatal(err)
 	}
 	w := hiddenLanded(t, srv, `"branch":"acme-10","commit":"h1","repositories":[{"name":"docs","branch":"acme-10","commit":"d1"}]`,

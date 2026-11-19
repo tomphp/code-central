@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
@@ -43,7 +44,7 @@ type setup struct {
 	root     string
 	inGit    bool
 	key      string
-	project  core.ProjectView
+	project  api.ProjectView
 	wantMode domain.Mode // from --local or --committed; "" follows the stored mode
 	wroteMCP bool
 }
@@ -53,7 +54,7 @@ type setup struct {
 func setUp(ctx context.Context, e Env, ask func(string) (string, error), c *client.Client, s setup) error {
 	mode := s.project.Mode
 	if mode == "" {
-		mode = core.ModeCommitted
+		mode = domain.ModeCommitted
 	}
 	if s.wantMode != "" && s.wantMode != mode {
 		answer, err := ask(fmt.Sprintf("Project %s is set up as %s. Switch it to %s? [y/N]: ", s.key, mode, s.wantMode))
@@ -61,7 +62,7 @@ func setUp(ctx context.Context, e Env, ask func(string) (string, error), c *clie
 			return err
 		}
 		if yes(answer, false) {
-			if _, err := c.SetProjectMode(ctx, s.key, core.SetProjectModeInput{Mode: s.wantMode}); err != nil {
+			if _, err := c.SetProjectMode(ctx, s.key, api.SetProjectModeInput{Mode: s.wantMode}); err != nil {
 				return err
 			}
 			mode = s.wantMode
@@ -69,7 +70,7 @@ func setUp(ctx context.Context, e Env, ask func(string) (string, error), c *clie
 			fmt.Fprintf(e.Stdout, "Keeping Project %s %s.\n", s.key, mode)
 		}
 	}
-	local := mode == core.ModeLocal
+	local := mode == domain.ModeLocal
 	at := func(rel string) string { return filepath.Join(s.root, filepath.FromSlash(rel)) }
 
 	var wrote, kept []string

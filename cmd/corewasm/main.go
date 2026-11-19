@@ -39,7 +39,7 @@ import (
 	"syscall/js"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/world"
 )
 
@@ -49,9 +49,9 @@ var (
 )
 
 func main() {
-	api := js.Global().Get("Object").New()
+	apiObj := js.Global().Get("Object").New()
 	set := func(name string, fn func(a []js.Value) any) {
-		api.Set(name, js.FuncOf(func(_ js.Value, a []js.Value) any { return fn(a) }))
+		apiObj.Set(name, js.FuncOf(func(_ js.Value, a []js.Value) any { return fn(a) }))
 	}
 	set("newWorld", func(a []js.Value) any {
 		id := nextID
@@ -70,7 +70,7 @@ func main() {
 	set("setAzureBoardsCheck", func(a []js.Value) any { of(a[0]).SetAzureBoardsCheck(checkResult(a[1])); return nil })
 	set("setPullRequestCheck", func(a []js.Value) any { of(a[0]).SetPullRequestCheck(checkResult(a[1])); return nil })
 	set("reportWatcherCrash", func(a []js.Value) any {
-		of(a[0]).ReportWatcherCrash(core.WatcherKind(a[1].String()), a[2].String(), core.WatcherCrash{
+		of(a[0]).ReportWatcherCrash(api.WatcherKind(a[1].String()), a[2].String(), api.WatcherCrash{
 			Restarts: a[3].Int(), LastLine: a[4].String(), RestartAt: parseTime(a[5]),
 		})
 		return nil
@@ -89,7 +89,7 @@ func main() {
 		delete(worlds, a[0].Int())
 		return nil
 	})
-	js.Global().Set("codeCentralCore", api)
+	js.Global().Set("codeCentralCore", apiObj)
 	select {}
 }
 
@@ -110,8 +110,8 @@ func parseTime(v js.Value) time.Time {
 	return t
 }
 
-func checkResult(v js.Value) core.WatcherCheckResult {
-	var res core.WatcherCheckResult
+func checkResult(v js.Value) api.WatcherCheckResult {
+	var res api.WatcherCheckResult
 	if err := json.Unmarshal([]byte(v.String()), &res); err != nil {
 		panic("corewasm: a check's result: " + err.Error())
 	}

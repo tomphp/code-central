@@ -2,20 +2,21 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
 // pullRequestOn sets the Pull Request Landing Method with the Push remote.
 func pullRequestOn(h *factorytest.Harness, remote string) {
 	// The harness's remote is a path; Pull Request needs a Code Host's URL.
-	if _, err := h.Server.Client.ReportPushRemote(context.Background(), h.Project, core.ReportPushRemoteInput{URL: "https://github.com/acme/app.git", Base: "main"}); err != nil {
+	if _, err := h.Server.Client.ReportPushRemote(context.Background(), h.Project, api.ReportPushRemoteInput{URL: "https://github.com/acme/app.git", Base: "main"}); err != nil {
 		panic(err)
 	}
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: remote})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: remote})
 }
 
 // wantPushed checks the Factory has reported ticket's branch as pushed, at
@@ -39,7 +40,7 @@ func wantPushed(t *testing.T, h *factorytest.Harness, ticket, commit string) {
 // request, as merged at commit when commit isn't "".
 func reportPullRequest(t *testing.T, h *factorytest.Harness, branch, commit string) {
 	t.Helper()
-	in := core.ReportPullRequestInput{Branch: branch, Number: 7, Link: "https://example.test/pull/7", State: domain.PROpen}
+	in := api.ReportPullRequestInput{Branch: branch, Number: 7, Link: "https://example.test/pull/7", State: domain.PROpen}
 	if commit != "" {
 		in.State, in.MergeCommit = domain.PRMerged, commit
 	}
@@ -70,7 +71,7 @@ func TestUnderPullRequestEarlierAcceptedTicketsArePushedOnTheNextPoll(t *testing
 	t.Parallel()
 	h := factorytest.New(t)
 	remote := h.AddRemote("origin")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch})
 	id, commit := accepted(h, "Accepted before the switch", "early.txt", "early\n")
 	r := h.Start()
 	r.Poll()
@@ -199,12 +200,12 @@ func TestUnderPullRequestADivergedBaseStopsLandingAndClaiming(t *testing.T) {
 }
 
 // baseDivergedItem is the Project's Base diverged item in Needs Me.
-func baseDivergedItem(t *testing.T, h *factorytest.Harness) (core.NeedsMeRow, bool) {
+func baseDivergedItem(t *testing.T, h *factorytest.Harness) (api.NeedsMeRow, bool) {
 	t.Helper()
-	if rows := h.NeedsMeItems(core.ReasonBaseDiverged); len(rows) > 0 {
+	if rows := h.NeedsMeItems(api.ReasonBaseDiverged); len(rows) > 0 {
 		return rows[0], true
 	}
-	return core.NeedsMeRow{}, false
+	return api.NeedsMeRow{}, false
 }
 
 func TestUnderPullRequestANewBranchIsCutFromTheFastForwardedBase(t *testing.T) {
@@ -268,7 +269,7 @@ func TestUnderPullRequestAMergedPullRequestLandsAnInReviewTicketAndWarnsOfOthers
 	r := h.Start()
 	wantPushed(t, h, id, "")
 	reportPullRequest(t, h, id, "")
-	if _, err := h.Human().SendBack(context.Background(), h.Project, core.SendBackInput{Ticket: core.Ref(id), Note: "fix"}); err != nil {
+	if _, err := h.Human().SendBack(context.Background(), h.Project, api.SendBackInput{Ticket: api.Ref(id), Note: "fix"}); err != nil {
 		t.Fatal(err)
 	}
 	squash := h.CommitOn("squash", "feature.txt", "feature\n")
@@ -286,7 +287,7 @@ func TestUnderPullRequestLandingNeedsNoCI(t *testing.T) {
 	h := factorytest.New(t)
 	remote := h.AddRemote("origin")
 	pullRequestOn(h, "origin")
-	if _, err := h.Human().SetCITracking(context.Background(), h.Project, core.SetCITrackingInput{Tracking: true, Repository: "acme/app"}); err != nil {
+	if _, err := h.Human().SetCITracking(context.Background(), h.Project, api.SetCITrackingInput{Tracking: true, Repository: "acme/app"}); err != nil {
 		t.Fatal(err)
 	}
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
@@ -313,7 +314,7 @@ func TestSwitchingFromPullRequestToMergeLandsWaitingTicketsAlreadyInTheBaseAndMe
 	h.Git("merge", "-q", "--no-ff", "-m", "by hand", inBase)
 	handMerge := h.Git("rev-parse", "main")
 
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge})
 	r.Poll()
 	h.WantState(inBase, domain.Done)
 	h.WantState(other, domain.Done)
@@ -332,7 +333,7 @@ func TestSwitchingFromPullRequestToBranchWaitsForTheBranchInTheBaseByAncestry(t 
 	wantPushed(t, h, id, "")
 	reportPullRequest(t, h, id, "")
 
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch})
 	r.Poll()
 	if tk := h.Ticket(id); tk.State != domain.Accepted {
 		t.Fatalf("%s is %s, want it waiting Accepted for its branch", id, tk.State)

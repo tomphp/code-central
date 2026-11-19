@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/factory/factorytest"
 )
@@ -22,11 +22,11 @@ import (
 // remote, Rebase on and Land per Spec as landPerSpec says.
 func rebasePullRequestOn(h *factorytest.Harness, remote string, landPerSpec bool) {
 	// The harness's remote is a path; Pull Request needs a Code Host's URL.
-	if _, err := h.Server.Client.ReportPushRemote(context.Background(), h.Project, core.ReportPushRemoteInput{URL: "https://github.com/acme/app.git", Base: "main"}); err != nil {
+	if _, err := h.Server.Client.ReportPushRemote(context.Background(), h.Project, api.ReportPushRemoteInput{URL: "https://github.com/acme/app.git", Base: "main"}); err != nil {
 		panic(err)
 	}
 	on := true
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: remote, Rebase: &on, LandPerSpec: &landPerSpec})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: remote, Rebase: &on, LandPerSpec: &landPerSpec})
 }
 
 // moveRemoteBase moves the remote's main on, as a pull request merged on
@@ -232,7 +232,7 @@ func TestUnderPullRequestWithRebaseATicketConflictingInOneRepositoryIsRebasedAnd
 	t.Parallel()
 	h := factorytest.New(t)
 	home := h.AddRemote("origin")
-	api := h.AddRepository("api")
+	apiRepo := h.AddRepository("api")
 	rebasePullRequestOn(h, "origin", false)
 	id := inTwo(h, "Add an endpoint")
 	r := h.Start()
@@ -240,9 +240,9 @@ func TestUnderPullRequestWithRebaseATicketConflictingInOneRepositoryIsRebasedAnd
 	// Both remote bases move on: the Home Repository's cleanly, api's in
 	// conflict.
 	moveRemoteBase(h, home, "base.txt", "base\n")
-	api.CommitOn("upstream", "endpoint.go", "package other\n")
-	h.GitIn(api.Path, "push", "-q", "origin", "upstream:refs/heads/main")
-	homeBranch, apiBranch := h.Git("rev-parse", id), h.GitIn(api.Path, "rev-parse", id)
+	apiRepo.CommitOn("upstream", "endpoint.go", "package other\n")
+	h.GitIn(apiRepo.Path, "push", "-q", "origin", "upstream:refs/heads/main")
+	homeBranch, apiBranch := h.Git("rev-parse", id), h.GitIn(apiRepo.Path, "rev-parse", id)
 	h.Script(id, factorytest.Wait())
 
 	h.Accept(id)
@@ -252,10 +252,10 @@ func TestUnderPullRequestWithRebaseATicketConflictingInOneRepositoryIsRebasedAnd
 	if !movedTo(tk, domain.Accepted, domain.Ready) {
 		t.Fatalf("%s wasn't sent back: %+v", id, tk.Moves)
 	}
-	if h.Git("rev-parse", id) != homeBranch || h.GitIn(api.Path, "rev-parse", id) != apiBranch {
+	if h.Git("rev-parse", id) != homeBranch || h.GitIn(apiRepo.Path, "rev-parse", id) != apiBranch {
 		t.Error("a branch moved: a Ticket conflicting in any Repository is rebased in none")
 	}
-	if strings.TrimSpace(home.Git("branch", "--list", id)) != "" || strings.TrimSpace(api.Remote("origin").Git("branch", "--list", id)) != "" {
+	if strings.TrimSpace(home.Git("branch", "--list", id)) != "" || strings.TrimSpace(apiRepo.Remote("origin").Git("branch", "--list", id)) != "" {
 		t.Error("a branch was pushed: a Ticket conflicting in any Repository is pushed in none")
 	}
 	if !commented(tk, "- api: replaying", "  - endpoint.go", "In each, rebase the branch onto its base") || commented(tk, "- "+h.Project+":") {

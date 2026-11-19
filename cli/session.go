@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/client"
-	"github.com/tomoram/code-central/core"
 )
 
 // Sessions, ping and the hooks init writes (ticket 31).
@@ -62,7 +62,7 @@ func runSetSession(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	in := core.SetSessionInput{Ticket: ref, ClaimID: *claim, SessionID: sessionID(e, *session), Full: *full}
+	in := api.SetSessionInput{Ticket: ref, ClaimID: *claim, SessionID: sessionID(e, *session), Full: *full}
 	in.WorkingDir, in.ResumeCommand = resume.values()
 	v, err := sc.client.SetSession(ctx, sc.project, in)
 	if err != nil {

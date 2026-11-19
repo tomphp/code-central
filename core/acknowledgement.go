@@ -7,6 +7,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/internal/fieldwalk"
 )
 
@@ -17,13 +18,13 @@ import (
 
 // acknowledge is a write's result from the record's full view before and
 // after it: after itself with full, else the Acknowledgement.
-func acknowledge[V any](before, after V, full bool) (Written[V], error) {
+func acknowledge[V any](before, after V, full bool) (api.Written[V], error) {
 	return written(before, after, full, "updated")
 }
 
 // acknowledgeCreate is a create's result, as acknowledge with the empty
 // record as before; the id and times every create sets aren't changed.
-func acknowledgeCreate[V any](empty, after V, full bool) (Written[V], error) {
+func acknowledgeCreate[V any](empty, after V, full bool) (api.Written[V], error) {
 	return written(empty, after, full, "id", "created", "updated")
 }
 
@@ -31,7 +32,7 @@ func acknowledgeCreate[V any](empty, after V, full bool) (Written[V], error) {
 // out factory_status, which time moves and no write sets. A
 // Project has no id or updated, so its Acknowledgement gives its key as
 // the id and the write's time as updated.
-func acknowledgeProject(before, after ProjectView, full bool, at time.Time) (Written[ProjectView], error) {
+func acknowledgeProject(before, after api.ProjectView, full bool, at time.Time) (api.Written[api.ProjectView], error) {
 	w, err := written(before, after, full, "factory_status")
 	if err == nil && w.Record == nil {
 		w.ID, w.Updated = after.Key, at
@@ -50,20 +51,20 @@ var offers = []string{"editable", "retroable"}
 // last of its edits when they changed, and a Ticket's state, by those
 // JSON names, which the Spec and Ticket views share (a Spec view has no
 // state).
-func written[V any](before, after V, full bool, unlisted ...string) (Written[V], error) {
+func written[V any](before, after V, full bool, unlisted ...string) (api.Written[V], error) {
 	if full {
-		return Written[V]{Record: &after}, nil
+		return api.Written[V]{Record: &after}, nil
 	}
 	unlisted = append(unlisted, offers...)
 	b, err := topLevel(before)
 	if err != nil {
-		return Written[V]{}, err
+		return api.Written[V]{}, err
 	}
 	a, err := topLevel(after)
 	if err != nil {
-		return Written[V]{}, err
+		return api.Written[V]{}, err
 	}
-	ack := Acknowledgement{Changed: []string{}}
+	ack := api.Acknowledgement{Changed: []string{}}
 	for _, name := range JSONNames(reflect.TypeFor[V]()) {
 		if !bytes.Equal(b[name], a[name]) && !slices.Contains(unlisted, name) {
 			ack.Changed = append(ack.Changed, name)
@@ -72,17 +73,17 @@ func written[V any](before, after V, full bool, unlisted ...string) (Written[V],
 	// A Project's view has neither; acknowledgeProject fills them in.
 	if id, ok := a["id"]; ok {
 		if err := json.Unmarshal(id, &ack.ID); err != nil {
-			return Written[V]{}, err
+			return api.Written[V]{}, err
 		}
 	}
 	if updated, ok := a["updated"]; ok {
 		if err := json.Unmarshal(updated, &ack.Updated); err != nil {
-			return Written[V]{}, err
+			return api.Written[V]{}, err
 		}
 	}
 	if state, ok := a["state"]; ok {
 		if err := json.Unmarshal(state, &ack.State); err != nil {
-			return Written[V]{}, err
+			return api.Written[V]{}, err
 		}
 	}
 	if slices.Contains(ack.Changed, "edits") {
@@ -90,13 +91,13 @@ func written[V any](before, after V, full bool, unlisted ...string) (Written[V],
 			Number int `json:"number"`
 		}
 		if err := json.Unmarshal(a["edits"], &edits); err != nil {
-			return Written[V]{}, err
+			return api.Written[V]{}, err
 		}
 		if len(edits) > 0 {
 			ack.Edit = edits[len(edits)-1].Number
 		}
 	}
-	return Written[V]{Acknowledgement: ack}, nil
+	return api.Written[V]{Acknowledgement: ack}, nil
 }
 
 // topLevel is v's JSON, field by top-level field.

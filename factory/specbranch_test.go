@@ -1,11 +1,12 @@
 package factory_test
 
 import (
-	"github.com/tomoram/code-central/domain"
 	"os"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -132,7 +133,7 @@ func TestAnAcceptedTicketsWorktreeIsRemovedOnceItsSpecMergeIsRecorded(t *testing
 func TestUnderTheBranchMethodNoSpecBranchIsMade(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch})
 	id, _ := requirementAccepted(h, "Add a feature", "feature.txt", "feature\n")
 	h.Start()
 	if h.Ticket(id).State != domain.Accepted || h.Git("branch", "--list", "spec/*") != "" {

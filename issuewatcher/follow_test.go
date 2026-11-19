@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/tomoram/code-central/domain"
 	"maps"
 	"slices"
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/internal/fakegh"
 )
 
@@ -50,17 +51,17 @@ func (w *watching) arrived(label string, ns ...int) {
 	}
 	w.openIssues(label, 1, issues...)
 	w.start(w.h.Bin)
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	wantIncoming(w.t, w, ns...)
 }
 
 // ticketOf is the Incoming Issue linked to acme/web's issue n.
-func (w *watching) ticketOf(n int) core.TicketView {
+func (w *watching) ticketOf(n int) api.TicketView {
 	w.t.Helper()
 	id := fmt.Sprintf("acme/web#%d", n)
 	for _, row := range w.linked() {
 		if row.Link.ID == id {
-			got, err := w.srv.Core.GetTicket(context.Background(), "acme", core.GetTicketInput{Ticket: core.Ref(row.ID), Parts: []string{core.PartEdits}})
+			got, err := w.srv.Core.GetTicket(context.Background(), "acme", api.GetTicketInput{Ticket: api.Ref(row.ID), Parts: []string{api.PartEdits}})
 			if err != nil {
 				w.t.Fatal(err)
 			}
@@ -68,7 +69,7 @@ func (w *watching) ticketOf(n int) core.TicketView {
 		}
 	}
 	w.t.Fatalf("no Ticket linked to %s", id)
-	return core.TicketView{}
+	return api.TicketView{}
 }
 
 // wantExternal checks the Incoming Issue linked to acme/web's issue n is
@@ -82,13 +83,13 @@ func wantExternal(t *testing.T, w *watching, n int, want domain.ExternalState) {
 }
 
 // reasons is each of acme's Tickets waiting in Needs Me, by its reason.
-func (w *watching) reasons() map[string]core.NeedsMeReason {
+func (w *watching) reasons() map[string]api.NeedsMeReason {
 	w.t.Helper()
 	nm, err := w.srv.Core.NeedsMe(context.Background())
 	if err != nil {
 		w.t.Fatal(err)
 	}
-	out := map[string]core.NeedsMeReason{}
+	out := map[string]api.NeedsMeReason{}
 	for _, g := range nm.Groups {
 		for _, row := range g.Tickets {
 			out[row.ID] = g.Reason
@@ -120,7 +121,7 @@ func TestEditsOnGitHubUpdateAnIncomingIssue(t *testing.T) {
 	}
 	for n, field := range map[int]string{1: "title", 2: "description"} {
 		edits := w.ticketOf(n).Edits
-		if len(edits) != 1 || edits[0].Actor != string(core.Integration) || !slices.Equal(slices.Collect(maps.Keys(edits[0].Previous)), []string{field}) {
+		if len(edits) != 1 || edits[0].Actor != string(api.Integration) || !slices.Equal(slices.Collect(maps.Keys(edits[0].Previous)), []string{field}) {
 			t.Fatalf("issue %d's edits %+v, want one by the integration, of its %s", n, edits, field)
 		}
 	}
@@ -149,7 +150,7 @@ func TestAClosedIssueIsClosedExternallyUntilItIsReopened(t *testing.T) {
 	w.polled()
 	wantExternal(t, w, 1, domain.ExternalClosed)
 	wantExternal(t, w, 2, domain.ExternalOpen)
-	if got := w.reasons(); got[id] != core.ReasonClosedExternally || len(got) != 1 {
+	if got := w.reasons(); got[id] != api.ReasonClosedExternally || len(got) != 1 {
 		t.Fatalf("Needs Me %v, want only %s, closed externally", got, id)
 	}
 	// It stays an Incoming Issue, to triage.
@@ -192,7 +193,7 @@ func TestATransferredIssueIsOutOfScope(t *testing.T) {
 // it is open again.
 func TestAnIssueThatLosesTheFilterLabelIsOutOfScopeUntilItHasItAgain(t *testing.T) {
 	w := newWatching(t)
-	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}, Label: "Bug"}); err != nil {
+	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", api.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}, Label: "Bug"}); err != nil {
 		t.Fatal(err)
 	}
 	w.arrived("Bug", 1, 2)

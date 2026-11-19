@@ -1,6 +1,7 @@
 package core
 
 import (
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -20,7 +21,7 @@ var whole = held(store.History)
 
 // readForWrite reads the Ticket ref names, op's field, with the parts h
 // names, for a write that h.put makes.
-func readForWrite(r store.Reader, key, op, field string, ref Ref, h held) (domain.Ticket, held, error) {
+func readForWrite(r store.Reader, key, op, field string, ref api.Ref, h held) (domain.Ticket, held, error) {
 	t, err := resolveTicket(r, key, op, field, ref, h...)
 	return t, h, err
 }

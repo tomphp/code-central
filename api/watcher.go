@@ -200,3 +200,14 @@ type WatcherView struct {
 	// Lease, and so runs the Watcher, once a Lease is known.
 	Host string `json:"host,omitempty"`
 }
+
+// WatcherAttention is one Project's Watcher of one kind as notify watches
+// it.
+type WatcherAttention struct {
+	Kind    WatcherKind
+	Project string
+	// Errors counts the times it went into an error since the service
+	// started, and LastError is the latest one's message.
+	Errors    int
+	LastError string
+}

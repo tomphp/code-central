@@ -4,17 +4,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/events"
 )
 
 // limitsBeat is an Online Heartbeat from factory on box with limits.
-func limitsBeat(factory string, limits *core.PlanLimits) core.ReportHeartbeatInput {
-	return core.ReportHeartbeatInput{Factory: factory, Host: "box", State: core.HeartbeatOnline, IntervalSeconds: 10, PlanLimits: limits}
+func limitsBeat(factory string, limits *api.PlanLimits) api.ReportHeartbeatInput {
+	return api.ReportHeartbeatInput{Factory: factory, Host: "box", State: api.HeartbeatOnline, IntervalSeconds: 10, PlanLimits: limits}
 }
 
 // sendBeat sends in to acme.
-func sendBeat(f fixture, t *testing.T, in core.ReportHeartbeatInput) {
+func sendBeat(f fixture, t *testing.T, in api.ReportHeartbeatInput) {
 	t.Helper()
 	if _, err := f.core.ReportHeartbeat(ctx, "acme", in); err != nil {
 		t.Fatal(err)
@@ -22,30 +22,30 @@ func sendBeat(f fixture, t *testing.T, in core.ReportHeartbeatInput) {
 }
 
 // beatLimits sends limitsBeat(factory, limits).
-func beatLimits(f fixture, t *testing.T, factory string, limits *core.PlanLimits) {
+func beatLimits(f fixture, t *testing.T, factory string, limits *api.PlanLimits) {
 	t.Helper()
 	sendBeat(f, t, limitsBeat(factory, limits))
 }
 
 // sameWindow says whether got is want.
-func sameWindow(got, want *core.PlanLimitWindow) bool {
+func sameWindow(got, want *api.PlanLimitWindow) bool {
 	return got != nil && got.UsedPercent == want.UsedPercent && got.ResetsAt.Equal(want.ResetsAt)
 }
 
 // limitsAt is Plan Limits observed at, with both windows at five and week
 // percent used.
-func limitsAt(at time.Time, five, week float64) *core.PlanLimits {
-	return &core.PlanLimits{
+func limitsAt(at time.Time, five, week float64) *api.PlanLimits {
+	return &api.PlanLimits{
 		ObservedAt: at,
-		FiveHour:   &core.PlanLimitWindow{UsedPercent: five, ResetsAt: at.Add(3 * time.Hour)},
-		Weekly:     &core.PlanLimitWindow{UsedPercent: week, ResetsAt: at.Add(72 * time.Hour)},
+		FiveHour:   &api.PlanLimitWindow{UsedPercent: five, ResetsAt: at.Add(3 * time.Hour)},
+		Weekly:     &api.PlanLimitWindow{UsedPercent: week, ResetsAt: at.Add(72 * time.Hour)},
 	}
 }
 
 func TestAProjectHasNoPlanLimitsUntilAFactoryReportsThem(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	beat(f, t, "cc", "box", core.HeartbeatOnline, 10)
+	beat(f, t, "cc", "box", api.HeartbeatOnline, 10)
 	if pl := factoryStatus(f, t).PlanLimits; pl != nil {
 		t.Fatalf("plan_limits = %+v", pl)
 	}
@@ -65,12 +65,12 @@ func TestAHeartbeatsPlanLimitsShowOnTheFactoryStatus(t *testing.T) {
 func TestOneWindowAloneIsKeptAndNeitherIsNone(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	only := &core.PlanLimits{ObservedAt: t0, Weekly: &core.PlanLimitWindow{UsedPercent: 100, ResetsAt: t0.Add(time.Hour)}}
+	only := &api.PlanLimits{ObservedAt: t0, Weekly: &api.PlanLimitWindow{UsedPercent: 100, ResetsAt: t0.Add(time.Hour)}}
 	beatLimits(f, t, "cc", only)
 	if got := factoryStatus(f, t).PlanLimits; got == nil || got.FiveHour != nil || got.Weekly == nil || got.Weekly.UsedPercent != 100 {
 		t.Fatalf("weekly only: %+v", got)
 	}
-	beatLimits(f, t, "cc", &core.PlanLimits{ObservedAt: t0})
+	beatLimits(f, t, "cc", &api.PlanLimits{ObservedAt: t0})
 	if got := factoryStatus(f, t).PlanLimits; got != nil {
 		t.Fatalf("neither window: %+v", got)
 	}
@@ -79,17 +79,17 @@ func TestOneWindowAloneIsKeptAndNeitherIsNone(t *testing.T) {
 func TestPlanLimitsAreRefusedWithTheFieldAndItsFix(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	for field, mutate := range map[string]func(*core.PlanLimits){
-		"plan_limits.observed_at":            func(pl *core.PlanLimits) { pl.ObservedAt = time.Time{} },
-		"plan_limits.five_hour.used_percent": func(pl *core.PlanLimits) { pl.FiveHour.UsedPercent = 100.5 },
-		"plan_limits.weekly.used_percent":    func(pl *core.PlanLimits) { pl.Weekly.UsedPercent = -1 },
-		"plan_limits.five_hour.resets_at":    func(pl *core.PlanLimits) { pl.FiveHour.ResetsAt = time.Time{} },
-		"plan_limits.weekly.resets_at":       func(pl *core.PlanLimits) { pl.Weekly.ResetsAt = time.Time{} },
+	for field, mutate := range map[string]func(*api.PlanLimits){
+		"plan_limits.observed_at":            func(pl *api.PlanLimits) { pl.ObservedAt = time.Time{} },
+		"plan_limits.five_hour.used_percent": func(pl *api.PlanLimits) { pl.FiveHour.UsedPercent = 100.5 },
+		"plan_limits.weekly.used_percent":    func(pl *api.PlanLimits) { pl.Weekly.UsedPercent = -1 },
+		"plan_limits.five_hour.resets_at":    func(pl *api.PlanLimits) { pl.FiveHour.ResetsAt = time.Time{} },
+		"plan_limits.weekly.resets_at":       func(pl *api.PlanLimits) { pl.Weekly.ResetsAt = time.Time{} },
 	} {
 		pl := limitsAt(t0, 10, 20)
 		mutate(pl)
 		_, err := f.core.ReportHeartbeat(ctx, "acme", limitsBeat("cc", pl))
-		wantCode(t, err, core.Invalid, field)
+		wantCode(t, err, api.Invalid, field)
 	}
 	if fs := factoryStatus(f, t); len(fs.Factories) != 0 {
 		t.Fatalf("a refused Heartbeat was kept: %+v", fs)
@@ -137,7 +137,7 @@ func TestAnOfflineFactorysPlanLimitsDropOutAtOnce(t *testing.T) {
 		t.Fatalf("plan_limits = %+v, want b's", got)
 	}
 	stopping := limitsBeat("b", limitsAt(t0, 60, 60))
-	stopping.State = core.HeartbeatStopping
+	stopping.State = api.HeartbeatStopping
 	sendBeat(f, t, stopping)
 	if got := factoryStatus(f, t).PlanLimits; got != nil {
 		t.Fatalf("every Factory Offline: plan_limits = %+v", got)

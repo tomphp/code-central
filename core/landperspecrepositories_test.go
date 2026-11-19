@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -18,17 +18,17 @@ import (
 func specMergeInTwo(t *testing.T) fixture {
 	t.Helper()
 	f := specMergeWorld(t)
-	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git", Base: "trunk"})
+	f.addRepository(t, api.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git", Base: "trunk"})
 	return f
 }
 
 func TestOpenSpecMergeNamesEachConflictingRepositoryInLandingOrder(t *testing.T) {
 	f := specMergeInTwo(t)
-	if _, err := f.core.SetLandingOrder(human, "acme", core.SetLandingOrderInput{Names: []string{"api", "acme"}}); err != nil {
+	if _, err := f.core.SetLandingOrder(human, "acme", api.SetLandingOrderInput{Names: []string{"api", "acme"}}); err != nil {
 		t.Fatal(err)
 	}
 
-	res, err := f.core.OpenSpecMerge(ctx, "acme", core.OpenSpecMergeInput{Spec: "acme-1", Repositories: []core.SpecMergeConflict{
+	res, err := f.core.OpenSpecMerge(ctx, "acme", api.OpenSpecMergeInput{Spec: "acme-1", Repositories: []api.SpecMergeConflict{
 		{Name: "acme", Conflicts: []string{"README"}, BaseTip: "aaa111", SpecBranchTip: "bbb222"},
 		{Name: "api", Conflicts: []string{"endpoint.go", "go.mod"}, BaseTip: "ccc333", SpecBranchTip: "ddd444"},
 	}})
@@ -36,7 +36,7 @@ func TestOpenSpecMergeNamesEachConflictingRepositoryInLandingOrder(t *testing.T)
 		t.Fatalf("open_spec_merge: %v", err)
 	}
 
-	if res != (core.OpenSpecMergeResult{Ticket: "acme-3", Outcome: core.SpecMergeOpened}) {
+	if res != (api.OpenSpecMergeResult{Ticket: "acme-3", Outcome: api.SpecMergeOpened}) {
 		t.Fatalf("result %+v, want acme-3 opened", res)
 	}
 	want := "The Spec Branch spec/acme-1 conflicts with the base in these Repositories:\n\n" +
@@ -50,38 +50,38 @@ func TestOpenSpecMergeNamesEachConflictingRepositoryInLandingOrder(t *testing.T)
 
 func TestOpenSpecMergeTakesTheHomeRepositorysConflictInEitherForm(t *testing.T) {
 	f := specMergeInTwo(t)
-	api := core.SpecMergeConflict{Name: "api", Conflicts: []string{"endpoint.go"}, BaseTip: "ccc333", SpecBranchTip: "ddd444"}
-	f.core.OpenSpecMerge(ctx, "acme", core.OpenSpecMergeInput{Spec: "acme-1", Conflicts: []string{"README"}, BaseTip: "aaa111", SpecBranchTip: "bbb222", Repositories: []core.SpecMergeConflict{api}})
+	apiRepo := api.SpecMergeConflict{Name: "api", Conflicts: []string{"endpoint.go"}, BaseTip: "ccc333", SpecBranchTip: "ddd444"}
+	f.core.OpenSpecMerge(ctx, "acme", api.OpenSpecMergeInput{Spec: "acme-1", Conflicts: []string{"README"}, BaseTip: "aaa111", SpecBranchTip: "bbb222", Repositories: []api.SpecMergeConflict{apiRepo}})
 
 	// The same conflicts, the Home Repository's named in repositories.
-	res, err := f.core.OpenSpecMerge(ctx, "acme", core.OpenSpecMergeInput{Spec: "acme-1", Repositories: []core.SpecMergeConflict{
-		{Name: "acme", Conflicts: []string{"README"}, BaseTip: "aaa111", SpecBranchTip: "bbb222"}, api,
+	res, err := f.core.OpenSpecMerge(ctx, "acme", api.OpenSpecMergeInput{Spec: "acme-1", Repositories: []api.SpecMergeConflict{
+		{Name: "acme", Conflicts: []string{"README"}, BaseTip: "aaa111", SpecBranchTip: "bbb222"}, apiRepo,
 	}})
-	if err != nil || res.Outcome != core.SpecMergeUnchanged {
+	if err != nil || res.Outcome != api.SpecMergeUnchanged {
 		t.Fatalf("the same conflicts again gave %+v (%v), want acme-3 unchanged", res, err)
 	}
 }
 
 func TestOpenSpecMergeRefusesABadRepositoryConflict(t *testing.T) {
-	home := core.SpecMergeConflict{Name: "acme", Conflicts: []string{"README"}, BaseTip: "aaa111", SpecBranchTip: "bbb222"}
+	home := api.SpecMergeConflict{Name: "acme", Conflicts: []string{"README"}, BaseTip: "aaa111", SpecBranchTip: "bbb222"}
 	for name, c := range map[string]struct {
-		in    core.OpenSpecMergeInput
+		in    api.OpenSpecMergeInput
 		field string
 	}{
-		"an unknown Repository": {core.OpenSpecMergeInput{Repositories: []core.SpecMergeConflict{{Name: "web", Conflicts: []string{"a"}, BaseTip: "a", SpecBranchTip: "b"}}}, "repositories[0].name"},
-		"a Repository twice":    {core.OpenSpecMergeInput{Repositories: []core.SpecMergeConflict{home, home}}, "repositories[1].name"},
-		"no files":              {core.OpenSpecMergeInput{Repositories: []core.SpecMergeConflict{{Name: "api", BaseTip: "a", SpecBranchTip: "b"}}}, "repositories[0].conflicts"},
-		"no base tip":           {core.OpenSpecMergeInput{Repositories: []core.SpecMergeConflict{{Name: "api", Conflicts: []string{"a"}, SpecBranchTip: "b"}}}, "repositories[0].base_tip"},
-		"no Spec Branch tip":    {core.OpenSpecMergeInput{Repositories: []core.SpecMergeConflict{{Name: "api", Conflicts: []string{"a"}, BaseTip: "a"}}}, "repositories[0].spec_branch_tip"},
-		"the Home Repository in both forms": {core.OpenSpecMergeInput{Conflicts: []string{"README"}, BaseTip: "aaa111", SpecBranchTip: "bbb222",
-			Repositories: []core.SpecMergeConflict{home}}, "repositories"},
+		"an unknown Repository": {api.OpenSpecMergeInput{Repositories: []api.SpecMergeConflict{{Name: "web", Conflicts: []string{"a"}, BaseTip: "a", SpecBranchTip: "b"}}}, "repositories[0].name"},
+		"a Repository twice":    {api.OpenSpecMergeInput{Repositories: []api.SpecMergeConflict{home, home}}, "repositories[1].name"},
+		"no files":              {api.OpenSpecMergeInput{Repositories: []api.SpecMergeConflict{{Name: "api", BaseTip: "a", SpecBranchTip: "b"}}}, "repositories[0].conflicts"},
+		"no base tip":           {api.OpenSpecMergeInput{Repositories: []api.SpecMergeConflict{{Name: "api", Conflicts: []string{"a"}, SpecBranchTip: "b"}}}, "repositories[0].base_tip"},
+		"no Spec Branch tip":    {api.OpenSpecMergeInput{Repositories: []api.SpecMergeConflict{{Name: "api", Conflicts: []string{"a"}, BaseTip: "a"}}}, "repositories[0].spec_branch_tip"},
+		"the Home Repository in both forms": {api.OpenSpecMergeInput{Conflicts: []string{"README"}, BaseTip: "aaa111", SpecBranchTip: "bbb222",
+			Repositories: []api.SpecMergeConflict{home}}, "repositories"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := specMergeInTwo(t)
 			c.in.Spec = "acme-1"
 			_, err := f.core.OpenSpecMerge(ctx, "acme", c.in)
-			wantCode(t, err, core.Invalid, c.field)
-			if rows, _ := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{Title: specMergeTitle}); len(rows) != 0 {
+			wantCode(t, err, api.Invalid, c.field)
+			if rows, _ := f.core.FindTickets(ctx, "acme", api.FindTicketsInput{Title: specMergeTitle}); len(rows) != 0 {
 				t.Errorf("opened %+v", rows)
 			}
 		})
@@ -90,7 +90,7 @@ func TestOpenSpecMergeRefusesABadRepositoryConflict(t *testing.T) {
 
 func TestASpecLandedTicketPushedInSomeOfItsRepositoriesStillWaitsForItsSpec(t *testing.T) {
 	f := landWorld(t, true)
-	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
+	f.addRepository(t, api.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
 	f.landing(t, domain.Landing{Method: domain.LandingMerge, Push: true, Remote: "origin", LandPerSpec: true})
 	err := f.store.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
@@ -123,10 +123,10 @@ func TestASpecLandedTicketPushedInSomeOfItsRepositoriesStillWaitsForItsSpec(t *t
 
 func TestASpecLandedTicketWaitsForItsSpecOnlyInRepositoriesWhereLandPerSpecIsInForce(t *testing.T) {
 	f := landWorld(t, true)
-	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
+	f.addRepository(t, api.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
 	// Under Branch in api Land per Spec has no effect: a Ticket lands
 	// there once the human merges it (Spec code-central-890).
-	f.editLanding(t, "api", core.RepositoryLandingBranch)
+	f.editLanding(t, "api", api.RepositoryLandingBranch)
 	f.changes(t, 5, "api")
 	f.moveTo(t, 5, domain.Accepted)
 	f.changes(t, 6, "acme", "api")
@@ -143,7 +143,7 @@ func TestASpecLandedTicketWaitsForItsSpecOnlyInRepositoriesWhereLandPerSpecIsInF
 		t.Fatalf("Land per Spec %+v, want the Spec ready with acme-6 alone waiting", s)
 	}
 
-	if _, err := f.core.Land(ctx, "acme", core.LandInput{Ticket: "acme-6", Commit: "abc123", Repository: "acme"}); err != nil {
+	if _, err := f.core.Land(ctx, "acme", api.LandInput{Ticket: "acme-6", Commit: "abc123", Repository: "acme"}); err != nil {
 		t.Fatal(err)
 	}
 	if tk := f.getTicket(t, "acme-6"); !tk.PartlyLanded || tk.WaitingForSpec {
@@ -153,17 +153,17 @@ func TestASpecLandedTicketWaitsForItsSpecOnlyInRepositoriesWhereLandPerSpecIsInF
 
 func TestASpecLandedTicketLandedInItsRepositoryUnderPullRequestNoLongerWaitsForItsSpec(t *testing.T) {
 	f := landWorld(t, true)
-	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
-	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git"})
-	f.editLanding(t, "api", core.RepositoryLandingPullRequest)
-	f.editLanding(t, "web", core.RepositoryLandingBranch)
+	f.addRepository(t, api.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
+	f.addRepository(t, api.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git"})
+	f.editLanding(t, "api", api.RepositoryLandingPullRequest)
+	f.editLanding(t, "web", api.RepositoryLandingBranch)
 	f.changes(t, 5, "api", "web")
 	f.moveTo(t, 5, domain.Accepted)
 	if !f.getTicket(t, "acme-5").WaitingForSpec {
 		t.Fatal("acme-5 isn't waiting for its Spec, though it is to land with the Spec's pull request in api")
 	}
 
-	if _, err := f.core.Land(ctx, "acme", core.LandInput{Ticket: "acme-5", Commit: "abc123", Repository: "api"}); err != nil {
+	if _, err := f.core.Land(ctx, "acme", api.LandInput{Ticket: "acme-5", Commit: "abc123", Repository: "api"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -174,8 +174,8 @@ func TestASpecLandedTicketLandedInItsRepositoryUnderPullRequestNoLongerWaitsForI
 
 func TestASpecLandedTicketPushedInARepositoryUnderBranchCanBeSentBackToFixItsCI(t *testing.T) {
 	f := landWorld(t, true)
-	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
-	f.editLanding(t, "api", core.RepositoryLandingBranchPush)
+	f.addRepository(t, api.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
+	f.editLanding(t, "api", api.RepositoryLandingBranchPush)
 	err := f.store.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
 		p.CI.Tracking = true
@@ -191,26 +191,26 @@ func TestASpecLandedTicketPushedInARepositoryUnderBranchCanBeSentBackToFixItsCI(
 	f.pushedFor(t, "api", "acme-5", "abc123")
 	f.ciRunIn(t, "api", 7, "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 
-	if tk := f.getTicket(t, "acme-5"); !tk.SpecLanded || !slices.Contains(tk.CIFailureOptions, core.OptionSendBack) {
+	if tk := f.getTicket(t, "acme-5"); !tk.SpecLanded || !slices.Contains(tk.CIFailureOptions, api.OptionSendBack) {
 		t.Fatalf("acme-5 Spec-landed %v with CI failure options %v; want Send back to fix offered", tk.SpecLanded, tk.CIFailureOptions)
 	}
-	if _, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "acme-5", Note: "Fix the build."}); err != nil {
+	if _, err := f.core.SendBack(human, "acme", api.SendBackInput{Ticket: "acme-5", Note: "Fix the build."}); err != nil {
 		t.Fatalf("send_back: %v", err)
 	}
 }
 
 func TestReportSpecMergeRecordsTheRepositoryItNames(t *testing.T) {
 	f := landWorld(t, true)
-	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
+	f.addRepository(t, api.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
 	f.moveTo(t, 5, domain.Accepted)
 
-	if _, err := f.core.ReportSpecMerge(ctx, "acme", core.ReportSpecMergeInput{Ticket: "acme-5", Commit: "abc123", Repository: "api"}); err != nil {
+	if _, err := f.core.ReportSpecMerge(ctx, "acme", api.ReportSpecMergeInput{Ticket: "acme-5", Commit: "abc123", Repository: "api"}); err != nil {
 		t.Fatalf("report_spec_merge: %v", err)
 	}
 
 	if sm := f.getTicket(t, "acme-5").SpecMerge; sm == nil || sm.Commit != "abc123" || sm.Repository != "api" || !sm.Counts {
 		t.Fatalf("spec merge %+v, want abc123 in api, counting", sm)
 	}
-	_, err := f.core.ReportSpecMerge(ctx, "acme", core.ReportSpecMergeInput{Ticket: "acme-5", Commit: "abc123", Repository: "web"})
-	wantCode(t, err, core.Invalid, "repository")
+	_, err := f.core.ReportSpecMerge(ctx, "acme", api.ReportSpecMergeInput{Ticket: "acme-5", Commit: "abc123", Repository: "web"})
+	wantCode(t, err, api.Invalid, "repository")
 }

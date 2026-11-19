@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -50,20 +50,20 @@ func wantAcknowledgement(t *testing.T, v any, id string, updated time.Time, chan
 func TestEditSpecAcknowledgesTheFieldsItChanged(t *testing.T) {
 	f := defining(t)
 	f.clock.Advance(time.Minute)
-	v, err := f.core.EditSpec(ctx, "acme", core.EditSpecInput{Spec: "1", Body: ptr("New.\n")})
+	v, err := f.core.EditSpec(ctx, "acme", api.EditSpecInput{Spec: "1", Body: ptr("New.\n")})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantAcknowledgement(t, v, "acme-1", t0.Add(time.Minute), []string{"body", "edits"}, 1)
 
-	v, err = f.core.EditSpec(ctx, "acme", core.EditSpecInput{Spec: "1", Title: ptr("Sign in"), Body: ptr("Newer.\n")})
+	v, err = f.core.EditSpec(ctx, "acme", api.EditSpecInput{Spec: "1", Title: ptr("Sign in"), Body: ptr("Newer.\n")})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantAcknowledgement(t, v, "acme-1", t0.Add(time.Minute), []string{"title", "body", "edits"}, 2)
 
 	f.clock.Advance(time.Minute)
-	v, err = f.core.EditSpec(ctx, "acme", core.EditSpecInput{Spec: "1", Body: ptr("Newer.\n")})
+	v, err = f.core.EditSpec(ctx, "acme", api.EditSpecInput{Spec: "1", Body: ptr("Newer.\n")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,12 +72,12 @@ func TestEditSpecAcknowledgesTheFieldsItChanged(t *testing.T) {
 
 func TestCreateSpecAcknowledgesWithTheNewID(t *testing.T) {
 	f := defining(t)
-	v, err := f.core.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Search", Body: "Find things.\n"})
+	v, err := f.core.CreateSpec(ctx, "acme", api.CreateSpecInput{Title: "Search", Body: "Find things.\n"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantAcknowledgement(t, v, "acme-3", t0, []string{"title", "body"}, 0)
-	v, err = f.core.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Empty"})
+	v, err = f.core.CreateSpec(ctx, "acme", api.CreateSpecInput{Title: "Empty"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,19 +87,19 @@ func TestCreateSpecAcknowledgesWithTheNewID(t *testing.T) {
 func TestLinkedSpecWritesAcknowledge(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	v, err := f.core.CreateLinkedSpec(integration, "acme", core.CreateLinkedSpecInput{Title: "Login", Body: "Users log in.\n", Link: ghLink("10")})
+	v, err := f.core.CreateLinkedSpec(integration, "acme", api.CreateLinkedSpecInput{Title: "Login", Body: "Users log in.\n", Link: ghLink("10")})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantAcknowledgement(t, v, "acme-1", t0, []string{"title", "body", "link"}, 0)
 
 	f.clock.Advance(time.Minute)
-	v, err = f.core.UpdateLinkedSpec(integration, "acme", core.UpdateLinkedSpecInput{Spec: "1", Body: ptr("New.\n")})
+	v, err = f.core.UpdateLinkedSpec(integration, "acme", api.UpdateLinkedSpecInput{Spec: "1", Body: ptr("New.\n")})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantAcknowledgement(t, v, "acme-1", t0.Add(time.Minute), []string{"body", "edits"}, 1)
-	v, err = f.core.UpdateLinkedSpec(integration, "acme", core.UpdateLinkedSpecInput{Spec: "1", Body: ptr("New.\n")})
+	v, err = f.core.UpdateLinkedSpec(integration, "acme", api.UpdateLinkedSpecInput{Spec: "1", Body: ptr("New.\n")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,16 +111,16 @@ func TestSpecWritesWithFullReturnTheSpec(t *testing.T) {
 	f.clock.Advance(time.Minute)
 	writes := map[string]func() (any, error){
 		"create_spec": func() (any, error) {
-			return f.core.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Search", Full: true})
+			return f.core.CreateSpec(ctx, "acme", api.CreateSpecInput{Title: "Search", Full: true})
 		},
 		"edit_spec": func() (any, error) {
-			return f.core.EditSpec(ctx, "acme", core.EditSpecInput{Spec: "1", Body: ptr("New.\n"), Full: true})
+			return f.core.EditSpec(ctx, "acme", api.EditSpecInput{Spec: "1", Body: ptr("New.\n"), Full: true})
 		},
 		"create_linked_spec": func() (any, error) {
-			return f.core.CreateLinkedSpec(integration, "acme", core.CreateLinkedSpecInput{Title: "Epic", Link: ghLink("10"), Full: true})
+			return f.core.CreateLinkedSpec(integration, "acme", api.CreateLinkedSpecInput{Title: "Epic", Link: ghLink("10"), Full: true})
 		},
 		"update_linked_spec": func() (any, error) {
-			return f.core.UpdateLinkedSpec(integration, "acme", core.UpdateLinkedSpecInput{Spec: "4", Title: ptr("Epic 2"), Full: true})
+			return f.core.UpdateLinkedSpec(integration, "acme", api.UpdateLinkedSpecInput{Spec: "4", Title: ptr("Epic 2"), Full: true})
 		},
 	}
 	for _, name := range []string{"create_spec", "edit_spec", "create_linked_spec", "update_linked_spec"} {
@@ -129,7 +129,7 @@ func TestSpecWritesWithFullReturnTheSpec(t *testing.T) {
 			t.Fatalf("%s: %v", name, err)
 		}
 		out := resultJSON(t, v)
-		get, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: core.Ref(out["id"].(string))})
+		get, err := f.core.GetSpec(ctx, "acme", api.GetSpecInput{Spec: api.Ref(out["id"].(string))})
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -137,7 +137,7 @@ func TestSpecWritesWithFullReturnTheSpec(t *testing.T) {
 		// record, so only the record's keys are compared.
 		want := resultJSON(t, get)
 		for k := range want {
-			if _, ok := resultJSON(t, core.SpecView{})[k]; !ok && k != "link" {
+			if _, ok := resultJSON(t, api.SpecView{})[k]; !ok && k != "link" {
 				delete(want, k)
 			}
 		}
@@ -168,45 +168,45 @@ func TestTicketWritesAcknowledgeTheFieldsTheyChangedAndTheState(t *testing.T) {
 	at := func() time.Time { return f.clock.Now() }
 	f.clock.Advance(time.Minute)
 
-	v, err := f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: "Looks good."})
+	v, err := f.core.Comment(ctx, "acme", api.CommentInput{Ticket: "2", Body: "Looks good."})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantTicketAcknowledgement(t, v, "acme-2", at(), domain.Draft, []string{"comments"}, 0)
 
-	e, err := f.core.EditTicket(ctx, "acme", core.EditTicketInput{Ticket: "2", Description: ptr("Build it well.\n")})
+	e, err := f.core.EditTicket(ctx, "acme", api.EditTicketInput{Ticket: "2", Description: ptr("Build it well.\n")})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantTicketAcknowledgement(t, e, "acme-2", at(), domain.Draft, []string{"description", "edits"}, 1)
 	f.clock.Advance(time.Minute)
-	e, err = f.core.EditTicket(ctx, "acme", core.EditTicketInput{Ticket: "2", Description: ptr("Build it well.\n")})
+	e, err = f.core.EditTicket(ctx, "acme", api.EditTicketInput{Ticket: "2", Description: ptr("Build it well.\n")})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantTicketAcknowledgement(t, e, "acme-2", at().Add(-time.Minute), domain.Draft, []string{}, 0)
 
-	a, err := f.core.Approve(ctx, "acme", core.TicketInput{Ticket: "2"})
+	a, err := f.core.Approve(ctx, "acme", api.TicketInput{Ticket: "2"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantTicketAcknowledgement(t, a, "acme-2", at(), domain.Ready, []string{"state", "moves", "claimable"}, 0)
 
-	blocker := f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "API", Full: true})
-	b, err := f.core.AddBlocker(ctx, "acme", core.BlockerInput{Ticket: "2", Blocker: core.Ref(blocker.ID)})
+	blocker := f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "API", Full: true})
+	b, err := f.core.AddBlocker(ctx, "acme", api.BlockerInput{Ticket: "2", Blocker: api.Ref(blocker.ID)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantTicketAcknowledgement(t, b, "acme-2", at(), domain.Ready, []string{"blocked_by", "blockers", "blocked", "claimable"}, 0)
-	b, err = f.core.RemoveBlocker(ctx, "acme", core.BlockerInput{Ticket: "2", Blocker: core.Ref(blocker.ID)})
+	b, err = f.core.RemoveBlocker(ctx, "acme", api.BlockerInput{Ticket: "2", Blocker: api.Ref(blocker.ID)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantTicketAcknowledgement(t, b, "acme-2", at(), domain.Ready, []string{"blocked_by", "blockers", "blocked", "claimable"}, 0)
 
-	claimed := f.claim(t, core.ClaimInput{Ticket: "2"})
+	claimed := f.claim(t, api.ClaimInput{Ticket: "2"})
 	f.clock.Advance(time.Minute)
-	s, err := f.core.SetSession(ctx, "acme", core.SetSessionInput{Ticket: "2", ClaimID: claimed.ClaimID, SessionID: "s-1"})
+	s, err := f.core.SetSession(ctx, "acme", api.SetSessionInput{Ticket: "2", ClaimID: claimed.ClaimID, SessionID: "s-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,13 +215,13 @@ func TestTicketWritesAcknowledgeTheFieldsTheyChangedAndTheState(t *testing.T) {
 
 func TestCreateTicketAcknowledgesTheFieldsItFilledIn(t *testing.T) {
 	f := defining(t)
-	v, err := f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "API", Description: "Serve it.\n", Labels: []string{"api"}})
+	v, err := f.core.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "API", Description: "Serve it.\n", Labels: []string{"api"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantTicketAcknowledgement(t, v, "acme-3", t0, domain.Draft, []string{"title", "state", "spec", "labels", "description", "spec_landed"}, 0)
 
-	v, err = f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Ready", State: domain.Ready, BlockedBy: []core.Ref{"3"}})
+	v, err = f.core.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "Ready", State: domain.Ready, BlockedBy: []api.Ref{"3"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,14 +232,14 @@ func TestLinkedTicketWritesAcknowledge(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Login")
-	v, err := f.core.CreateLinkedTicket(integration, "acme", core.CreateLinkedTicketInput{Spec: "1", Title: "Form", Link: ghLink("11")})
+	v, err := f.core.CreateLinkedTicket(integration, "acme", api.CreateLinkedTicketInput{Spec: "1", Title: "Form", Link: ghLink("11")})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantTicketAcknowledgement(t, v, "acme-2", t0, domain.Draft, []string{"title", "state", "spec", "spec_landed", "link"}, 0)
 
 	f.clock.Advance(time.Minute)
-	v, err = f.core.UpdateLinkedTicket(integration, "acme", core.UpdateLinkedTicketInput{Ticket: "2", Title: ptr("Login form")})
+	v, err = f.core.UpdateLinkedTicket(integration, "acme", api.UpdateLinkedTicketInput{Ticket: "2", Title: ptr("Login form")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,17 +249,17 @@ func TestLinkedTicketWritesAcknowledge(t *testing.T) {
 func TestHumanTicketActionsAcknowledgeWithTheNewState(t *testing.T) {
 	f := defining(t)
 	f.clock.Advance(time.Minute)
-	v, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: domain.Ready})
+	v, err := f.core.Move(human, "acme", api.MoveInput{Ticket: "2", ToState: domain.Ready})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantTicketAcknowledgement(t, v, "acme-2", t0.Add(time.Minute), domain.Ready, []string{"state", "moves", "claimable"}, 0)
-	v, err = f.core.Defer(ctx, "acme", core.DeferInput{Ticket: "2", Reason: "Not yet."})
+	v, err = f.core.Defer(ctx, "acme", api.DeferInput{Ticket: "2", Reason: "Not yet."})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantTicketAcknowledgement(t, v, "acme-2", t0.Add(time.Minute), domain.Draft, []string{"state", "comments", "moves", "claimable"}, 0)
-	v, err = f.core.Cancel(human, "acme", core.CancelInput{Ticket: "2"})
+	v, err = f.core.Cancel(human, "acme", api.CancelInput{Ticket: "2"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,28 +274,28 @@ func TestTicketWritesWithFullReturnTheTicket(t *testing.T) {
 		write func() (any, error)
 	}{
 		{"create_ticket", func() (any, error) {
-			return f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "API", Full: true})
+			return f.core.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "API", Full: true})
 		}},
 		{"edit_ticket", func() (any, error) {
-			return f.core.EditTicket(ctx, "acme", core.EditTicketInput{Ticket: "2", Title: ptr("Login form"), Full: true})
+			return f.core.EditTicket(ctx, "acme", api.EditTicketInput{Ticket: "2", Title: ptr("Login form"), Full: true})
 		}},
 		{"comment", func() (any, error) {
-			return f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: "Hi.", Full: true})
+			return f.core.Comment(ctx, "acme", api.CommentInput{Ticket: "2", Body: "Hi.", Full: true})
 		}},
 		{"approve", func() (any, error) {
-			return f.core.Approve(ctx, "acme", core.TicketInput{Ticket: "2", Full: true})
+			return f.core.Approve(ctx, "acme", api.TicketInput{Ticket: "2", Full: true})
 		}},
 		{"add_blocker", func() (any, error) {
-			return f.core.AddBlocker(ctx, "acme", core.BlockerInput{Ticket: "2", Blocker: "3", Full: true})
+			return f.core.AddBlocker(ctx, "acme", api.BlockerInput{Ticket: "2", Blocker: "3", Full: true})
 		}},
 		{"move", func() (any, error) {
-			return f.core.Move(human, "acme", core.MoveInput{Ticket: "3", ToState: domain.Done, Full: true})
+			return f.core.Move(human, "acme", api.MoveInput{Ticket: "3", ToState: domain.Done, Full: true})
 		}},
 		{"create_linked_ticket", func() (any, error) {
-			return f.core.CreateLinkedTicket(integration, "acme", core.CreateLinkedTicketInput{Spec: "1", Title: "Linked", Link: ghLink("11"), Full: true})
+			return f.core.CreateLinkedTicket(integration, "acme", api.CreateLinkedTicketInput{Spec: "1", Title: "Linked", Link: ghLink("11"), Full: true})
 		}},
 		{"update_linked_ticket", func() (any, error) {
-			return f.core.UpdateLinkedTicket(integration, "acme", core.UpdateLinkedTicketInput{Ticket: "4", Title: ptr("Linked 2"), Full: true})
+			return f.core.UpdateLinkedTicket(integration, "acme", api.UpdateLinkedTicketInput{Ticket: "4", Title: ptr("Linked 2"), Full: true})
 		}},
 	}
 	for _, w := range writes {
@@ -304,7 +304,7 @@ func TestTicketWritesWithFullReturnTheTicket(t *testing.T) {
 			t.Fatalf("%s: %v", w.name, err)
 		}
 		out := resultJSON(t, v)
-		get, err := f.core.GetTicket(ctx, "acme", whole(core.Ref(out["id"].(string))))
+		get, err := f.core.GetTicket(ctx, "acme", whole(api.Ref(out["id"].(string))))
 		if err != nil {
 			t.Fatalf("%s: %v", w.name, err)
 		}
@@ -324,25 +324,25 @@ func TestReviewAndFailureActionsAcknowledgeWithTheNewState(t *testing.T) {
 		changed []string
 	}{
 		{"accept", fixture.inReview, func(f fixture) (any, error) {
-			return f.core.Accept(human, "acme", core.TicketInput{Ticket: "2"})
+			return f.core.Accept(human, "acme", api.TicketInput{Ticket: "2"})
 		}, domain.Done, []string{"state", "moves", "needs_me_reason"}},
 		{"reject", fixture.inReview, func(f fixture) (any, error) {
-			return f.core.Reject(human, "acme", core.RejectInput{Ticket: "2", Comment: "Not yet."})
+			return f.core.Reject(human, "acme", api.RejectInput{Ticket: "2", Comment: "Not yet."})
 		}, domain.Ready, []string{"state", "comments", "moves", "claimable", "needs_me_reason"}},
 		{"land", fixture.inReview, func(f fixture) (any, error) {
-			return f.core.Land(ctx, "acme", core.LandInput{Ticket: "2", Commit: "def456"})
+			return f.core.Land(ctx, "acme", api.LandInput{Ticket: "2", Commit: "def456"})
 		}, domain.Done, []string{"state", "moves", "needs_me_reason"}},
 		{"send_back", fixture.failed, func(f fixture) (any, error) {
-			return f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "2", Note: "Fixed."})
+			return f.core.SendBack(human, "acme", api.SendBackInput{Ticket: "2", Note: "Fixed."})
 		}, domain.Ready, []string{"state", "comments", "moves", "claimable", "needs_me_reason"}},
 		{"to_draft", fixture.failed, func(f fixture) (any, error) {
-			return f.core.ToDraft(human, "acme", core.TicketInput{Ticket: "2"})
+			return f.core.ToDraft(human, "acme", api.TicketInput{Ticket: "2"})
 		}, domain.Draft, []string{"state", "moves", "needs_me_reason"}},
 		{"release", func(f fixture, t *testing.T) {
 			f.work(t, domain.Ready)
-			f.claim(t, core.ClaimInput{})
+			f.claim(t, api.ClaimInput{})
 		}, func(f fixture) (any, error) {
-			return f.core.Release(human, "acme", core.ReleaseInput{Ticket: "2"})
+			return f.core.Release(human, "acme", api.ReleaseInput{Ticket: "2"})
 		}, domain.Ready, []string{"state", "claims", "moves", "claimable", "silent_since", "needs_me_reason"}}, // a Silent Claim, two hours quiet
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -362,17 +362,17 @@ func TestRoundActionsAcknowledgeTheRoundsAndAnsweredOnTheLastOne(t *testing.T) {
 	f := newFixture(t)
 	f.asking(t, qDB, qName)
 	f.clock.Set(t0.Add(2 * time.Hour))
-	v, err := f.core.AcceptRecommended(human, "acme", core.AcceptRecommendedInput{Ticket: "2", Round: 1})
+	v, err := f.core.AcceptRecommended(human, "acme", api.AcceptRecommendedInput{Ticket: "2", Round: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantTicketAcknowledgement(t, v, "acme-2", t0.Add(2*time.Hour), domain.NeedsAnswer, []string{"rounds"}, 0)
-	v, err = f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "Postgres"})
+	v, err = f.core.Answer(human, "acme", api.AnswerInput{Ticket: "2", Question: 1, Text: "Postgres"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantTicketAcknowledgement(t, v, "acme-2", t0.Add(2*time.Hour), domain.NeedsAnswer, []string{"rounds"}, 0)
-	v, err = f.core.DismissQuestion(human, "acme", core.DismissQuestionInput{Ticket: "2", Question: 2})
+	v, err = f.core.DismissQuestion(human, "acme", api.DismissQuestionInput{Ticket: "2", Question: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -388,22 +388,22 @@ func TestClaimEndingActionsAcknowledgeWithTheirNextStep(t *testing.T) {
 		changed []string
 	}{
 		{"finish", func(f fixture) (any, error) {
-			return f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: "Done."})
+			return f.core.Finish(ctx, "acme", api.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: "Done."})
 		}, domain.InReview, []string{"state", "claims", "comments", "moves", "needs_me_reason"}},
 		{"finish on a branch", func(f fixture) (any, error) {
-			return f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: "Done.", Branch: "acme-2", Commit: "abc123"})
+			return f.core.Finish(ctx, "acme", api.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: "Done.", Branch: "acme-2", Commit: "abc123"})
 		}, domain.InReview, []string{"state", "branch", "commit", "claims", "comments", "moves", "needs_me_reason"}},
 		{"report_failure", func(f fixture) (any, error) {
 			return f.core.ReportFailure(ctx, "acme", report("2", "claim-1"))
 		}, domain.Failed, []string{"state", "claims", "failure_reports", "moves", "needs_me_reason"}},
 		{"give_up", func(f fixture) (any, error) {
-			return f.core.GiveUp(ctx, "acme", core.GiveUpInput{Ticket: "2", ClaimID: "claim-1", Note: "Out of context."})
+			return f.core.GiveUp(ctx, "acme", api.GiveUpInput{Ticket: "2", ClaimID: "claim-1", Note: "Out of context."})
 		}, domain.Ready, []string{"state", "claims", "comments", "moves", "claimable"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			f := newFixture(t)
 			f.work(t, domain.Ready)
-			f.claim(t, core.ClaimInput{})
+			f.claim(t, api.ClaimInput{})
 			f.clock.Set(at)
 			v, err := c.write(f)
 			if err != nil {
@@ -420,9 +420,9 @@ func TestClaimEndingActionsAcknowledgeWithTheirNextStep(t *testing.T) {
 func TestPostRoundAcknowledgesWithTheRoundAndTheNextStep(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
-	f.claim(t, core.ClaimInput{})
+	f.claim(t, api.ClaimInput{})
 	f.clock.Set(t0.Add(10 * time.Minute)) // before the Claim falls silent
-	v, err := f.core.PostRound(ctx, "acme", core.PostRoundInput{Ticket: "2", ClaimID: "claim-1", Questions: []core.QuestionInput{qDB}})
+	v, err := f.core.PostRound(ctx, "acme", api.PostRoundInput{Ticket: "2", ClaimID: "claim-1", Questions: []api.QuestionInput{qDB}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -441,19 +441,19 @@ func TestClaimEndingActionsAndPostRoundWithFullReturnTheirFormerResult(t *testin
 		step  string
 	}{
 		{"finish", func(f fixture) (any, error) {
-			return f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: "Done.", Full: true})
+			return f.core.Finish(ctx, "acme", api.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: "Done.", Full: true})
 		}, "stop working this Ticket"},
 		{"report_failure", func(f fixture) (any, error) {
 			return f.core.ReportFailure(ctx, "acme", fullReport("2", "claim-1"))
 		}, "stop working this Ticket"},
 		{"give_up", func(f fixture) (any, error) {
-			return f.core.GiveUp(ctx, "acme", core.GiveUpInput{Ticket: "2", ClaimID: "claim-1", Note: "Out of context.", Full: true})
+			return f.core.GiveUp(ctx, "acme", api.GiveUpInput{Ticket: "2", ClaimID: "claim-1", Note: "Out of context.", Full: true})
 		}, "stop working this Ticket"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			f := newFixture(t)
 			f.work(t, domain.Ready)
-			f.claim(t, core.ClaimInput{})
+			f.claim(t, api.ClaimInput{})
 			v, err := c.write(f)
 			if err != nil {
 				t.Fatal(err)
@@ -471,8 +471,8 @@ func TestClaimEndingActionsAndPostRoundWithFullReturnTheirFormerResult(t *testin
 	t.Run("post_round", func(t *testing.T) {
 		f := newFixture(t)
 		f.work(t, domain.Ready)
-		f.claim(t, core.ClaimInput{})
-		v, err := f.core.PostRound(ctx, "acme", core.PostRoundInput{Ticket: "2", ClaimID: "claim-1", Questions: []core.QuestionInput{qName}, Full: true})
+		f.claim(t, api.ClaimInput{})
+		v, err := f.core.PostRound(ctx, "acme", api.PostRoundInput{Ticket: "2", ClaimID: "claim-1", Questions: []api.QuestionInput{qName}, Full: true})
 		if err != nil {
 			t.Fatal(err)
 		}

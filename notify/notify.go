@@ -22,8 +22,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/events"
 )
 
@@ -50,9 +50,9 @@ type Sender interface {
 // Source is what notify reads; *core.Core is one.
 type Source interface {
 	Events() *events.Bus
-	Attention(context.Context) []core.AttentionTicket
-	AttentionOf(ctx context.Context, project, id string) (core.AttentionTicket, bool)
-	WatcherAttention(context.Context) []core.WatcherAttention
+	Attention(context.Context) []api.AttentionTicket
+	AttentionOf(ctx context.Context, project, id string) (api.AttentionTicket, bool)
+	WatcherAttention(context.Context) []api.WatcherAttention
 }
 
 // Config wires notify.
@@ -96,8 +96,8 @@ var reasons = [...]struct{ title, one, many string }{
 // error's message, and watcher is its kind.
 type event struct {
 	reason  reason
-	ticket  core.AttentionTicket
-	watcher core.WatcherKind
+	ticket  api.AttentionTicket
+	watcher api.WatcherKind
 }
 
 // Start takes its first look at every Ticket, sends the startup summary if
@@ -107,7 +107,7 @@ func Start(ctx context.Context, cfg Config) {
 	if cfg.Log == nil {
 		cfg.Log = io.Discard
 	}
-	w := &watcher{cfg: cfg, known: map[string]core.AttentionTicket{}, long: map[longKey]bool{}, ciFailed: map[commitKey]bool{}, watcherErrors: map[watcherKey]int{}}
+	w := &watcher{cfg: cfg, known: map[string]api.AttentionTicket{}, long: map[longKey]bool{}, ciFailed: map[commitKey]bool{}, watcherErrors: map[watcherKey]int{}}
 	// Subscribe before the first look so no change falls between them.
 	notices, stop := cfg.Source.Events().Subscribe()
 	all := cfg.Source.Attention(ctx)
@@ -129,7 +129,7 @@ func Start(ctx context.Context, cfg Config) {
 
 type watcher struct {
 	cfg     Config
-	known   map[string]core.AttentionTicket // by display ID
+	known   map[string]api.AttentionTicket // by display ID
 	pending []event
 	// long is every Claim already counted as Long: one Notification each,
 	// however often it stops and starts being Long.
@@ -151,7 +151,7 @@ type commitKey struct {
 
 // watcherKey names one Project's Watcher of one kind.
 type watcherKey struct {
-	kind    core.WatcherKind
+	kind    api.WatcherKind
 	project string
 }
 
@@ -213,7 +213,7 @@ func (w *watcher) notice(ctx context.Context, e events.Event) {
 }
 
 // observe compares t with the last look at it and gathers what is new.
-func (w *watcher) observe(t core.AttentionTicket) {
+func (w *watcher) observe(t api.AttentionTicket) {
 	was := w.known[t.ID]
 	w.known[t.ID] = t
 	for range t.Rounds - was.Rounds {
@@ -254,7 +254,7 @@ func (w *watcher) observeWatchers(ctx context.Context) {
 		was := w.watcherErrors[k]
 		w.watcherErrors[k] = a.Errors
 		if a.Errors > was {
-			w.pending = append(w.pending, event{reason: watcherError, ticket: core.AttentionTicket{Project: a.Project, Title: a.LastError}, watcher: a.Kind})
+			w.pending = append(w.pending, event{reason: watcherError, ticket: api.AttentionTicket{Project: a.Project, Title: a.LastError}, watcher: a.Kind})
 		}
 	}
 }
@@ -294,7 +294,7 @@ func (w *watcher) single(e event) Notification {
 
 func (w *watcher) summary(es []event) Notification {
 	var counts [len(reasons)]int
-	watchers := map[core.WatcherKind]int{}
+	watchers := map[api.WatcherKind]int{}
 	var projects []string
 	for _, e := range es {
 		counts[e.reason]++
@@ -319,7 +319,7 @@ func (w *watcher) summary(es []event) Notification {
 
 // startup is the one summary sent at startup when Needs Me is not empty.
 // Claims already Silent or Long go into it rather than each notifying.
-func (w *watcher) startup(all []core.AttentionTicket) {
+func (w *watcher) startup(all []api.AttentionTicket) {
 	var projects []string
 	for _, t := range all {
 		if t.NeedsMe {

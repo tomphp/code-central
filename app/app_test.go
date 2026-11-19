@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/app"
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/clock"
@@ -117,13 +118,13 @@ func TestATicketSurvivesARestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := client.New(r.url())
-	if _, err := c.CreateProject(ctx, core.CreateProjectInput{Key: "acme", DisplayName: "Acme"}); err != nil {
+	if _, err := c.CreateProject(ctx, api.CreateProjectInput{Key: "acme", DisplayName: "Acme"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"}); err != nil {
+	if _, err := c.CreateSpec(ctx, "acme", api.CreateSpecInput{Title: "Login"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", State: domain.Ready}); err != nil {
+	if _, err := c.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "Form", State: domain.Ready}); err != nil {
 		t.Fatal(err)
 	}
 	r.stop(t)
@@ -147,7 +148,7 @@ func TestATicketSurvivesARestart(t *testing.T) {
 		t.Fatalf("after restart: %+v", got)
 	}
 	// the counter is derived again at startup
-	next, err := c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Next", Full: true})
+	next, err := c.CreateSpec(ctx, "acme", api.CreateSpecInput{Title: "Next", Full: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,14 +235,14 @@ func storeInReview(t *testing.T) string {
 	defer st.Close()
 	c := core.New(st, clock.System{}, ids.Random{})
 	ctx := context.Background()
-	c.CreateProject(ctx, core.CreateProjectInput{Key: "acme"})
-	c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login", Body: "b\n"})
-	c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", State: domain.Ready})
-	res, err := c.Claim(ctx, "acme", core.ClaimInput{})
+	c.CreateProject(ctx, api.CreateProjectInput{Key: "acme"})
+	c.CreateSpec(ctx, "acme", api.CreateSpecInput{Title: "Login", Body: "b\n"})
+	c.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "Form", State: domain.Ready})
+	res, err := c.Claim(ctx, "acme", api.ClaimInput{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: res.ClaimID, Summary: "done"}); err != nil {
+	if _, err := c.Finish(ctx, "acme", api.FinishInput{Ticket: "2", ClaimID: res.ClaimID, Summary: "done"}); err != nil {
 		t.Fatal(err)
 	}
 	return dir

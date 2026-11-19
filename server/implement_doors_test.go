@@ -2,11 +2,12 @@ package server_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 const implementNextStep = "The spec Stage is Done and the tickets Stage is Cancelled, and acme-8 now builds the whole Spec."
@@ -28,7 +29,7 @@ func init() {
 			field("state", "Done")(t, tk)
 		},
 		bad:  call{http: httpCall{"POST", "/api/p/acme/tickets/5/implement", `{}`}},
-		code: core.ActionNotAllowed,
+		code: api.ActionNotAllowed,
 	}
 }
 
@@ -38,7 +39,7 @@ func specStageInReview(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	submittedRequirement(t, srv)
 	must(t, func() error {
-		_, err := srv.Core.Move(core.WithActor(context.Background(), core.Human), "acme", core.MoveInput{Ticket: "6", ToState: domain.InReview})
+		_, err := srv.Core.Move(api.WithActor(context.Background(), api.Human), "acme", api.MoveInput{Ticket: "6", ToState: domain.InReview})
 		return err
 	})
 }

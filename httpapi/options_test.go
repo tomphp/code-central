@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
@@ -18,7 +19,7 @@ import (
 // the Actor header.
 func asHuman(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h.ServeHTTP(w, r.WithContext(core.WithActor(r.Context(), core.Human)))
+		h.ServeHTTP(w, r.WithContext(api.WithActor(r.Context(), api.Human)))
 	})
 }
 
@@ -87,7 +88,7 @@ func TestSetOptionsRefusesBadInput(t *testing.T) {
 			rec := do(h, "POST", "/api/set_options", c.body)
 			var e map[string]any
 			json.Unmarshal(rec.Body.Bytes(), &e)
-			if rec.Code != http.StatusUnprocessableEntity || e["code"] != string(core.Invalid) || e["field"] != c.field {
+			if rec.Code != http.StatusUnprocessableEntity || e["code"] != string(api.Invalid) || e["field"] != c.field {
 				t.Fatalf("%d %s", rec.Code, rec.Body)
 			}
 			if msg, _ := e["message"].(string); !strings.Contains(msg, c.mentions) {

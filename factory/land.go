@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
@@ -16,13 +17,13 @@ import (
 // human can change at any time, so it is read again on every poll, with
 // whether CI Tracking is on. Its Landing Policy is what those make. ok is
 // false when it can't be read, and then nothing lands this poll.
-func (l *lander) landing(ctx context.Context) (p core.ProjectView, ok bool) {
+func (l *lander) landing(ctx context.Context) (p api.ProjectView, ok bool) {
 	p, err := l.client.GetProject(ctx, l.project)
 	if err != nil {
 		if ctx.Err() == nil {
 			l.printf("warning: can't read the Project's Landing Method, so nothing lands this poll: %v", err)
 		}
-		return core.ProjectView{}, false
+		return api.ProjectView{}, false
 	}
 	l.setBase(p.Landing.Base)
 	return p, true
@@ -33,8 +34,8 @@ func (l *lander) landing(ctx context.Context) (p core.ProjectView, ok bool) {
 // code-central-890): at start, when the name changes, and when the remote
 // has gone while p has the Home pushed; one added later waits for the next
 // start. It returns p as the report left it.
-func (l *lander) reportPushRemote(ctx context.Context, p core.ProjectView) core.ProjectView {
-	i := slices.IndexFunc(p.Repositories, func(v core.RepositoryView) bool { return v.Home })
+func (l *lander) reportPushRemote(ctx context.Context, p api.ProjectView) api.ProjectView {
+	i := slices.IndexFunc(p.Repositories, func(v api.RepositoryView) bool { return v.Home })
 	if i < 0 {
 		return p
 	}
@@ -46,7 +47,7 @@ func (l *lander) reportPushRemote(ctx context.Context, p core.ProjectView) core.
 	if l.remoteReported && home.PushRemote == l.reportedRemote && (url != "" || home.LocalOnly) {
 		return p
 	}
-	got, err := l.client.ReportPushRemote(ctx, l.project, core.ReportPushRemoteInput{URL: url, Full: true})
+	got, err := l.client.ReportPushRemote(ctx, l.project, api.ReportPushRemoteInput{URL: url, Full: true})
 	if err != nil {
 		if ctx.Err() == nil && !l.reportRemoteFailing {
 			l.printf("warning: can't report the Push remote's URL to Code Central: %v", err)
@@ -73,7 +74,7 @@ func (l *lander) reportPushRemote(ctx context.Context, p core.ProjectView) core.
 // under its Merge + Push not level with the remote's) holds back only
 // the Tickets landing in it; with the Home Repository alone, it holds
 // back everything, as it always has (Spec code-central-848).
-func (l *lander) land(ctx context.Context, p core.ProjectView) {
+func (l *lander) land(ctx context.Context, p api.ProjectView) {
 	if l.stateOf(l.repos.home).missing && !l.repos.several() {
 		return
 	}
@@ -147,7 +148,7 @@ func (l *lander) land(ctx context.Context, p core.ProjectView) {
 // nothing of tk anywhere (ADR 0049). Then it goes through them in the
 // landing order, and stops at a merge it can't land yet, to go on from
 // there next poll. tk is Partly landed until it has landed in each.
-func (l *lander) landEach(ctx context.Context, tk core.TicketView, p core.ProjectView, ws []changedWork) {
+func (l *lander) landEach(ctx context.Context, tk api.TicketView, p api.ProjectView, ws []changedWork) {
 	policies := p.LandingPolicies()
 	onSpec := l.waitsOnSpecBranch(tk)
 	routes := make([]domain.LandingRoute, len(ws))
@@ -212,7 +213,7 @@ func (l *lander) landEach(ctx context.Context, tk core.TicketView, p core.Projec
 // a line saying so once: never merged, never sent back. With Push on
 // there, as it is in every Repository but a local-only one, its branch
 // there is pushed to the remote meanwhile.
-func (l *lander) landMergedBranch(ctx context.Context, tk core.TicketView, policies core.LandingPolicies, w changedWork) {
+func (l *lander) landMergedBranch(ctx context.Context, tk api.TicketView, policies api.LandingPolicies, w changedWork) {
 	r := w.r
 	head, what, err := l.workIn(r, tk)
 	switch {
@@ -242,7 +243,7 @@ func (l *lander) landMergedBranch(ctx context.Context, tk core.TicketView, polic
 }
 
 // branchIn is tk's branch in r: the one its finish named there.
-func branchIn(tk core.TicketView, r *repository) string {
+func branchIn(tk api.TicketView, r *repository) string {
 	v, _ := viewIn(tk, r)
 	return v.Branch
 }
@@ -250,7 +251,7 @@ func branchIn(tk core.TicketView, r *repository) string {
 // pushBranch makes sure tk's branch in r, holding commit, is on r's Push
 // remote, and comments when it can't be pushed yet, to be retried next
 // poll.
-func (l *lander) pushBranch(ctx context.Context, tk core.TicketView, policies core.LandingPolicies, r *repository, commit string) {
+func (l *lander) pushBranch(ctx context.Context, tk api.TicketView, policies api.LandingPolicies, r *repository, commit string) {
 	branch := branchIn(tk, r)
 	if branch == "" {
 		l.cantPushYet(ctx, tk, "it was finished without a branch, so there is no branch to push.")
@@ -272,7 +273,7 @@ func (l *lander) pushBranch(ctx context.Context, tk core.TicketView, policies co
 // workOf is the commit of the work the human reviewed: the finish
 // commit, or with none, the branch's tip. what names it, and err says
 // it isn't in the repository.
-func (l *lander) workOf(tk core.TicketView) (commit, what string, err error) {
+func (l *lander) workOf(tk api.TicketView) (commit, what string, err error) {
 	work, what := tk.Commit, "its commit "+tk.Commit
 	if work == "" {
 		work, what = "refs/heads/"+tk.Branch, "its branch "+tk.Branch
@@ -285,14 +286,14 @@ func (l *lander) workOf(tk core.TicketView) (commit, what string, err error) {
 // for r, or with none, its branch's tip there; once the Factory has
 // replayed it onto its Spec Branch or the base under Rebase, its branch's
 // tip, which holds the replayed commits.
-func (l *lander) workIn(r *repository, tk core.TicketView) (commit, what string, err error) {
+func (l *lander) workIn(r *repository, tk api.TicketView) (commit, what string, err error) {
 	commit, _, what, err = l.replayedWorkIn(r, tk)
 	return commit, what, err
 }
 
 // replayedWorkIn is workIn, and whether it is tk's work replayed onto its
 // Spec Branch or the base.
-func (l *lander) replayedWorkIn(r *repository, tk core.TicketView) (commit string, replayed bool, what string, err error) {
+func (l *lander) replayedWorkIn(r *repository, tk api.TicketView) (commit string, replayed bool, what string, err error) {
 	commit, what, err = l.finishedIn(r, tk)
 	if err != nil {
 		return commit, false, what, err
@@ -305,7 +306,7 @@ func (l *lander) replayedWorkIn(r *repository, tk core.TicketView) (commit strin
 
 // finishedIn is the commit of tk's work in r as finished: its finish
 // commit for r, or with none, its branch's tip there.
-func (l *lander) finishedIn(r *repository, tk core.TicketView) (commit, what string, err error) {
+func (l *lander) finishedIn(r *repository, tk api.TicketView) (commit, what string, err error) {
 	if r.home {
 		return l.workOf(tk)
 	}
@@ -330,7 +331,7 @@ func (l *lander) finishedIn(r *repository, tk core.TicketView) (commit, what str
 // Repository under Pull Request it is a merged pull request that lands
 // the Ticket there, not its finish commit in the base
 // (detectMergedPullRequests).
-func (l *lander) detectHandMerges(ctx context.Context, p core.ProjectView) {
+func (l *lander) detectHandMerges(ctx context.Context, p api.ProjectView) {
 	policies := p.LandingPolicies()
 	for _, tk := range l.landable(ctx, mergeableStates...) {
 		if l.hooks.stopped(ctx) {
@@ -366,7 +367,7 @@ func (l *lander) detectHandMerges(ctx context.Context, p core.ProjectView) {
 // holds tk's finish commit there and which it hasn't landed in, but for
 // one whose base is broken (held) under policies, and one under Pull
 // Request, where its pull request lands it.
-func (l *lander) mergedByHand(tk core.TicketView, policies core.LandingPolicies) []changedWork {
+func (l *lander) mergedByHand(tk api.TicketView, policies api.LandingPolicies) []changedWork {
 	ws, why := l.changedWorkOf(tk)
 	if why != "" {
 		return nil
@@ -397,8 +398,8 @@ func (l *lander) inBase(commit string) bool { return l.repos.inBaseOf(l.repos.ho
 
 // landable is every Ticket in these States, read in full by one
 // find_tickets call. If the call fails it lands nothing this poll.
-func (l *lander) landable(ctx context.Context, states ...domain.State) []core.TicketView {
-	out, err := l.client.FindTicketViews(ctx, l.project, core.FindTicketsInput{State: states})
+func (l *lander) landable(ctx context.Context, states ...domain.State) []api.TicketView {
+	out, err := l.client.FindTicketViews(ctx, l.project, api.FindTicketsInput{State: states})
 	if err != nil {
 		if ctx.Err() == nil {
 			l.printf("warning: can't find %v Tickets: %v", states, err)
@@ -409,7 +410,7 @@ func (l *lander) landable(ctx context.Context, states ...domain.State) []core.Ti
 }
 
 // acceptedAt is when the Ticket last moved to Accepted.
-func acceptedAt(tk core.TicketView) time.Time {
+func acceptedAt(tk api.TicketView) time.Time {
 	for i := len(tk.Moves) - 1; i >= 0; i-- {
 		if tk.Moves[i].To == domain.Accepted {
 			return tk.Moves[i].Time
@@ -429,7 +430,7 @@ type changedWork struct {
 // changedWorkOf is tk's Changed Repositories in landing order, or with
 // none named, as with the Home Repository alone, the Home Repository. It
 // says why not when one it hasn't landed in has no clone.
-func (l *lander) changedWorkOf(tk core.TicketView) ([]changedWork, string) {
+func (l *lander) changedWorkOf(tk api.TicketView) ([]changedWork, string) {
 	if len(tk.Repositories) == 0 {
 		return []changedWork{{r: l.repos.home, commit: tk.Commit}}, ""
 	}
@@ -456,7 +457,7 @@ func (l *lander) changedWorkOf(tk core.TicketView) ([]changedWork, string) {
 // land this poll: one of them has no clone, or a broken base (held),
 // though one it has landed in doesn't hold it back. Every one is checked
 // before tk lands in any, whatever its route (ADR 0049).
-func (l *lander) workToLand(tk core.TicketView, policies core.LandingPolicies) ([]changedWork, string) {
+func (l *lander) workToLand(tk api.TicketView, policies api.LandingPolicies) ([]changedWork, string) {
 	ws, why := l.changedWorkOf(tk)
 	if why != "" {
 		return nil, why
@@ -493,7 +494,7 @@ type mergePlan struct {
 // policies', for the Ticket to be sent back with (sendBackConflicts). ok
 // is false when a merge can't be worked out yet, with a comment or a
 // line saying why.
-func (l *lander) planMerges(ctx context.Context, tk core.TicketView, policies core.LandingPolicies, ws []changedWork) (plans map[*repository]mergePlan, conflicts []landConflict, ok bool) {
+func (l *lander) planMerges(ctx context.Context, tk api.TicketView, policies api.LandingPolicies, ws []changedWork) (plans map[*repository]mergePlan, conflicts []landConflict, ok bool) {
 	plans = map[*repository]mergePlan{}
 	for _, w := range ws {
 		rebase := w.r.policy(policies).RebaseInForce()
@@ -517,7 +518,7 @@ func (l *lander) planMerges(ctx context.Context, tk core.TicketView, policies co
 // replayed onto it first (planBaseReplay), and a Ticket whose work can't
 // be replayed doesn't land rather than being merged. ok is false when it
 // can't be worked out this poll, with a comment or a line saying why.
-func (l *lander) planMerge(ctx context.Context, tk core.TicketView, w changedWork, rebase bool) (pl mergePlan, landed, ok bool) {
+func (l *lander) planMerge(ctx context.Context, tk api.TicketView, w changedWork, rebase bool) (pl mergePlan, landed, ok bool) {
 	r := w.r
 	pl.r = r
 	if w.landed != "" {
@@ -580,7 +581,7 @@ func (l *lander) planMerge(ctx context.Context, tk core.TicketView, w changedWor
 // base's tip under Rebase moves its branch there first, and is what is
 // merged. It reports whether landing can go on to the next Repository: it
 // can't when a step failed and is to be tried again next poll.
-func (l *lander) mergeAndLand(ctx context.Context, tk core.TicketView, p core.ProjectView, pl mergePlan) bool {
+func (l *lander) mergeAndLand(ctx context.Context, tk api.TicketView, p api.ProjectView, pl mergePlan) bool {
 	r, base := pl.r, l.repos.baseOf(pl.r)
 	if pl.old != nil {
 		return l.landPushed(ctx, tk, p, r, pl.old.base, pl.old.commit)
@@ -620,7 +621,7 @@ func (l *lander) mergeAndLand(ctx context.Context, tk core.TicketView, p core.Pr
 // Repository goes on once the push is made, as the gate holds only the
 // land. A Repository Not watched lands once pushed, and a local-only one,
 // with Push off, once merged.
-func (l *lander) landPushed(ctx context.Context, tk core.TicketView, p core.ProjectView, r *repository, base, commit string) bool {
+func (l *lander) landPushed(ctx context.Context, tk api.TicketView, p api.ProjectView, r *repository, base, commit string) bool {
 	policies := p.LandingPolicies()
 	own := r.policy(policies)
 	if !own.PushesBase() {
@@ -667,7 +668,7 @@ func (l *lander) landPushed(ctx context.Context, tk core.TicketView, p core.Proj
 // the remote's base holds now, maybe a later Ticket's push, mustn't
 // replace it. A pushed commit of its branch, from Branch + Push, isn't
 // one.
-func (l *lander) pushedBase(r *repository, pushed *core.PushedCommitView, remote, base, commit string) bool {
+func (l *lander) pushedBase(r *repository, pushed *api.PushedCommitView, remote, base, commit string) bool {
 	if pushed == nil {
 		return false
 	}
@@ -679,13 +680,13 @@ func (l *lander) pushedBase(r *repository, pushed *core.PushedCommitView, remote
 // passed, or once the human chose Land anyway on a failed one there, at
 // its latest. Until then it stays where it is, with a line for each CI
 // result it waits on.
-func (l *lander) landOnCI(ctx context.Context, tk core.TicketView, r *repository, v core.ChangedRepositoryView) {
+func (l *lander) landOnCI(ctx context.Context, tk api.TicketView, r *repository, v api.ChangedRepositoryView) {
 	pushed := v.PushedCommit.Commit
-	if v.CIResult == core.CIPassed {
+	if v.CIResult == api.CIPassed {
 		l.landAt(ctx, tk, r, v.CICommit)
 		return
 	}
-	if (v.CIResult == core.CIFailed || v.CIResult == core.CICancelled) && v.LandAnyway {
+	if (v.CIResult == api.CIFailed || v.CIResult == api.CICancelled) && v.LandAnyway {
 		l.printf("%s: landing anyway at %s%s, as you chose, though its CI %s", tk.ID, short(pushed), r.where(), v.CIResult)
 		l.landAt(ctx, tk, r, pushed)
 		return
@@ -695,11 +696,11 @@ func (l *lander) landOnCI(ctx context.Context, tk core.TicketView, r *repository
 		return
 	}
 	l.saidOnCI[key] = true
-	if v.CIResult == core.CIFailed {
+	if v.CIResult == api.CIFailed {
 		l.printf("%s: CI failed at %s%s, so it stays %s", tk.ID, short(pushed), r.where(), tk.State)
 		return
 	}
-	if v.CIResult == core.CICancelled {
+	if v.CIResult == api.CICancelled {
 		l.printf("%s: CI cancelled at %s%s, so it stays %s", tk.ID, short(pushed), r.where(), tk.State)
 		return
 	}
@@ -709,14 +710,14 @@ func (l *lander) landOnCI(ctx context.Context, tk core.TicketView, r *repository
 // viewIn is tk's Changed Repository r as tk's view shows it: with the
 // Home Repository alone, made from the Ticket's own fields, which are the
 // Home's. ok is false when tk didn't change r.
-func viewIn(tk core.TicketView, r *repository) (v core.ChangedRepositoryView, ok bool) {
+func viewIn(tk api.TicketView, r *repository) (v api.ChangedRepositoryView, ok bool) {
 	if len(tk.Repositories) == 0 && r.home {
-		return core.ChangedRepositoryView{Name: r.name, Branch: tk.Branch, Commit: tk.Commit, PushedCommit: tk.PushedCommit,
+		return api.ChangedRepositoryView{Name: r.name, Branch: tk.Branch, Commit: tk.Commit, PushedCommit: tk.PushedCommit,
 			CIResult: tk.CIResult, CICommit: tk.CICommit, LandAnyway: tk.LandAnyway, PullRequest: tk.PullRequest}, true
 	}
-	i := slices.IndexFunc(tk.Repositories, func(v core.ChangedRepositoryView) bool { return v.Name == r.name })
+	i := slices.IndexFunc(tk.Repositories, func(v api.ChangedRepositoryView) bool { return v.Name == r.name })
 	if i < 0 {
-		return core.ChangedRepositoryView{}, false
+		return api.ChangedRepositoryView{}, false
 	}
 	return tk.Repositories[i], true
 }
@@ -736,7 +737,7 @@ func (l *lander) remoteTip(r *repository, remote, branch, pushed string) string 
 // branch in r, as tk's pushed commit there: the one CI runs on. It is
 // reported once, when it isn't tk's pushed commit there already. ok is
 // false when the report failed.
-func (l *lander) reportPushed(ctx context.Context, tk core.TicketView, policies core.LandingPolicies, r *repository, branch, commit string) (ok bool) {
+func (l *lander) reportPushed(ctx context.Context, tk api.TicketView, policies api.LandingPolicies, r *repository, branch, commit string) (ok bool) {
 	own := r.policy(policies)
 	if !own.RecordsPushedCommit() {
 		return true
@@ -744,7 +745,7 @@ func (l *lander) reportPushed(ctx context.Context, tk core.TicketView, policies 
 	if v, _ := viewIn(tk, r); v.PushedCommit != nil && v.PushedCommit.Commit == commit {
 		return true
 	}
-	in := core.ReportPushedCommitInput{Ticket: core.Ref(tk.ID), Commit: commit, Branch: branch}
+	in := api.ReportPushedCommitInput{Ticket: api.Ref(tk.ID), Commit: commit, Branch: branch}
 	if !r.home {
 		in.Repository = r.name
 	}
@@ -770,7 +771,7 @@ func (l *lander) reportPushed(ctx context.Context, tk core.TicketView, policies 
 // base's to none until it is fixed. A Repository whose own Landing Policy
 // has no CI gate, a local-only one, has no tip to report. Each tip is
 // read from the Repository's own Push remote.
-func (l *lander) reportTip(ctx context.Context, policies core.LandingPolicies) {
+func (l *lander) reportTip(ctx context.Context, policies api.LandingPolicies) {
 	type tipIn struct {
 		r   *repository
 		tip string
@@ -843,14 +844,14 @@ func (l *lander) isBase(r *repository, branch string) bool {
 
 // cantLandYet leaves a Ticket whose clean merge can't land where it is,
 // to be retried next poll. Each distinct reason is commented once.
-func (l *lander) cantLandYet(ctx context.Context, tk core.TicketView, why string) {
+func (l *lander) cantLandYet(ctx context.Context, tk api.TicketView, why string) {
 	l.commentOnce(ctx, tk, "can't land yet", "The Factory can't land this yet", why)
 }
 
 // cantLandIn is cantLandYet for a landing step in r. With several
 // Repositories the comment names r, so Accepted but not landed can give
 // it as why tk hasn't landed there.
-func (l *lander) cantLandIn(ctx context.Context, tk core.TicketView, r *repository, why string) {
+func (l *lander) cantLandIn(ctx context.Context, tk api.TicketView, r *repository, why string) {
 	if !l.repos.several() {
 		l.cantLandYet(ctx, tk, why)
 		return
@@ -867,13 +868,13 @@ func (l *lander) cantLandIn(ctx context.Context, tk core.TicketView, r *reposito
 // cantPushYet leaves an Accepted Ticket whose branch couldn't be pushed
 // where it is, to be retried next poll. Each distinct reason is commented
 // once.
-func (l *lander) cantPushYet(ctx context.Context, tk core.TicketView, why string) {
+func (l *lander) cantPushYet(ctx context.Context, tk api.TicketView, why string) {
 	l.commentOnce(ctx, tk, "can't push yet", "The Factory can't push this Ticket's branch yet", why)
 }
 
 // cantPushIn is cantPushYet for a push in r, which the comment names
 // unless it is the Home Repository.
-func (l *lander) cantPushIn(ctx context.Context, tk core.TicketView, r *repository, why string) {
+func (l *lander) cantPushIn(ctx context.Context, tk api.TicketView, r *repository, why string) {
 	if !r.home {
 		why = fmt.Sprintf("in %s, %s", r.name, why)
 	}
@@ -882,20 +883,20 @@ func (l *lander) cantPushIn(ctx context.Context, tk core.TicketView, r *reposito
 
 // commentOnce comments on tk that the Factory can't do something yet,
 // and why, unless that comment is already there, and prints a line.
-func (l *lander) commentOnce(ctx context.Context, tk core.TicketView, line, lead, why string) {
+func (l *lander) commentOnce(ctx context.Context, tk api.TicketView, line, lead, why string) {
 	l.postOnce(ctx, tk, line, why, fmt.Sprintf("%s: %s\n\nIt stays %s and the Factory tries again on every poll.", lead, why, tk.State), time.Time{})
 }
 
 // postOnce comments body on tk unless that comment is already there since
 // since, and prints a line saying why.
-func (l *lander) postOnce(ctx context.Context, tk core.TicketView, line, why, body string, since time.Time) {
+func (l *lander) postOnce(ctx context.Context, tk api.TicketView, line, why, body string, since time.Time) {
 	for _, c := range tk.Comments {
 		if c.Body == body && !c.Time.Before(since) {
 			return
 		}
 	}
 	l.printf("%s: %s: %s", tk.ID, line, strings.TrimSuffix(firstLine(why), ":"))
-	if _, err := l.client.Comment(ctx, l.project, core.CommentInput{Ticket: core.Ref(tk.ID), Body: body}); err != nil && ctx.Err() == nil {
+	if _, err := l.client.Comment(ctx, l.project, api.CommentInput{Ticket: api.Ref(tk.ID), Body: body}); err != nil && ctx.Err() == nil {
 		l.printf("%s: comment: %v", tk.ID, err)
 	}
 }
@@ -914,7 +915,7 @@ func firstLine(s string) string {
 // instead, since its branch already is the Spec Branch rebased, and the
 // Factory then takes the branch as holding them. It reports whether the
 // Ticket was sent back.
-func (l *lander) sendBack(ctx context.Context, tk core.TicketView, c landConflict) bool {
+func (l *lander) sendBack(ctx context.Context, tk api.TicketView, c landConflict) bool {
 	var b strings.Builder
 	fmt.Fprintf(&b, "The Factory couldn't land this: %s at %s conflicts in these files:\n\n", c.what(), short(c.tip))
 	for _, f := range c.files {
@@ -928,7 +929,7 @@ func (l *lander) sendBack(ctx context.Context, tk core.TicketView, c landConflic
 	default:
 		fmt.Fprintf(&b, "\nMerge %s into the branch, resolve the conflicts, and finish again.", c.into)
 	}
-	if _, err := l.client.SendBack(ctx, l.project, core.SendBackInput{Ticket: core.Ref(tk.ID), Note: b.String()}); err != nil {
+	if _, err := l.client.SendBack(ctx, l.project, api.SendBackInput{Ticket: api.Ref(tk.ID), Note: b.String()}); err != nil {
 		if ctx.Err() == nil {
 			l.printf("%s: send_back: %v", tk.ID, err)
 		}
@@ -972,7 +973,7 @@ func (c landConflict) what() string {
 // and to merge otherwise. The Factory has merged it into none of them
 // this time. With the Home Repository alone it is sendBack. It reports
 // whether the Ticket was sent back.
-func (l *lander) sendBackConflicts(ctx context.Context, tk core.TicketView, onto string, conflicts []landConflict) bool {
+func (l *lander) sendBackConflicts(ctx context.Context, tk api.TicketView, onto string, conflicts []landConflict) bool {
 	if !l.repos.several() {
 		return l.sendBack(ctx, tk, conflicts[0])
 	}
@@ -1003,7 +1004,7 @@ func (l *lander) sendBackConflicts(ctx context.Context, tk core.TicketView, onto
 	default:
 		fmt.Fprintf(&b, "\nIn each, merge its %s into the branch, resolve the conflicts, and finish again.", onto)
 	}
-	if _, err := l.client.SendBack(ctx, l.project, core.SendBackInput{Ticket: core.Ref(tk.ID), Note: b.String()}); err != nil {
+	if _, err := l.client.SendBack(ctx, l.project, api.SendBackInput{Ticket: api.Ref(tk.ID), Note: b.String()}); err != nil {
 		if ctx.Err() == nil {
 			l.printf("%s: send_back: %v", tk.ID, err)
 		}
@@ -1080,8 +1081,8 @@ func (l *lander) mergedOnOldBase(r *repository, id string) (mergeOn, bool) {
 
 // landAt calls land with the commit that put tk's work into r's base,
 // naming r unless it is the Home Repository.
-func (l *lander) landAt(ctx context.Context, tk core.TicketView, r *repository, commit string) (landed bool) {
-	in := core.LandInput{Ticket: core.Ref(tk.ID), Commit: commit}
+func (l *lander) landAt(ctx context.Context, tk api.TicketView, r *repository, commit string) (landed bool) {
+	in := api.LandInput{Ticket: api.Ref(tk.ID), Commit: commit}
 	if !r.home {
 		in.Repository = r.name
 	}

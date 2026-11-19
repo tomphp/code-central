@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 )
@@ -22,7 +23,7 @@ func init() {
 			}
 		},
 		bad:  call{http: httpCall{"POST", "/api/p/acme/tickets/3/report_spec_merge", `{"commit":" "}`}},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -31,11 +32,11 @@ func init() {
 func specLandedAccepted(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	must(t, func() error {
-		_, err := srv.Core.RemoveLabels(context.Background(), "acme", core.LabelsInput{Target: "acme-1", Labels: []string{core.LongLivedLabel}})
+		_, err := srv.Core.RemoveLabels(context.Background(), "acme", api.LabelsInput{Target: "acme-1", Labels: []string{core.LongLivedLabel}})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.CreateTicket(context.Background(), "acme", core.CreateTicketInput{Spec: "1", Title: "Grilling", Labels: []string{core.StageLabel("grilling")}})
+		_, err := srv.Core.CreateTicket(context.Background(), "acme", api.CreateTicketInput{Spec: "1", Title: "Grilling", Labels: []string{core.StageLabel("grilling")}})
 		return err
 	})
 	acceptedTicket(t, srv)
@@ -51,7 +52,7 @@ func TestReportSpecMergeTakesARepositoryOverHTTP(t *testing.T) {
 		t.Fatalf("spec_merge %v, want def456 in api", tk["spec_merge"])
 	}
 	_, b := httpDo(t, srv, httpCall{"POST", "/api/p/acme/tickets/3/report_spec_merge", `{"commit":"def456","repository":"web"}`})
-	if e := errorJSON(t, b, core.Invalid); !strings.Contains(e.Message, "acme, api") {
+	if e := errorJSON(t, b, api.Invalid); !strings.Contains(e.Message, "acme, api") {
 		t.Fatalf("refusal %+v, want it to name the Repositories", e)
 	}
 }
