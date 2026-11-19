@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/events"
 )
 
@@ -28,7 +28,7 @@ import (
 const (
 	FirstBackoff = time.Second
 	MaxBackoff   = 5 * time.Minute
-	ResetAfter   = core.WatcherSteadyAfter
+	ResetAfter   = api.WatcherSteadyAfter
 )
 
 // StopLimit bounds how long a Watcher has to exit once its stdin
@@ -40,9 +40,9 @@ const StopLimit = 10 * time.Second
 type Projects interface {
 	// WatchedProjects is the key of every Project that should have a
 	// Watcher of kind.
-	WatchedProjects(ctx context.Context, kind core.WatcherKind) []string
+	WatchedProjects(ctx context.Context, kind api.WatcherKind) []string
 	// ReportWatcherCrash reports that key's Watcher of kind crashed.
-	ReportWatcherCrash(ctx context.Context, kind core.WatcherKind, key string, crash core.WatcherCrash)
+	ReportWatcherCrash(ctx context.Context, kind api.WatcherKind, key string, crash api.WatcherCrash)
 	// HoldWatcherLease renews key's Watcher Lease for this service, or
 	// takes it if it is free, and reports whether this service holds it;
 	// an error is for the log.
@@ -54,7 +54,7 @@ type Projects interface {
 
 // Kind is how the service runs one kind of Watcher.
 type Kind struct {
-	Kind core.WatcherKind
+	Kind api.WatcherKind
 	// Args are the arguments that run the service's own executable as
 	// project's Watcher of this kind, in its watch mode.
 	Args func(project string) []string
@@ -186,7 +186,7 @@ func (cfg Supervision) holds(ctx context.Context, held map[string]bool, project 
 
 // watcherKey names one Project's Watcher of one kind in a map.
 type watcherKey struct {
-	kind    core.WatcherKind
+	kind    api.WatcherKind
 	project string
 }
 
@@ -220,7 +220,7 @@ func (cfg Supervision) supervise(ctx context.Context, o projectWatcher, prev *su
 			}
 			restarts++
 			cfg.logf("%s crashed; restarting it in %v", o.name(), backoff)
-			cfg.Projects.ReportWatcherCrash(ctx, o.kind.Kind, o.project, core.WatcherCrash{Restarts: restarts, LastLine: lastLine,
+			cfg.Projects.ReportWatcherCrash(ctx, o.kind.Kind, o.project, api.WatcherCrash{Restarts: restarts, LastLine: lastLine,
 				RestartAt: cfg.Clock.Now().Add(backoff)})
 			select {
 			case <-ctx.Done():

@@ -31,7 +31,8 @@ flowchart TB
     API["httpapi<br/>REST /api"]
     MCP["mcp<br/>/p/key/mcp"]
     OPS["ops<br/>ops.All(): every operation, bound to *core.Core"]
-    CORE["core<br/>*Core: workflow, landing, CI, chat, views<br/>+ the wire types"]
+    CORE["core<br/>*Core: workflow, landing, CI, chat, views<br/>+ most of the wire types"]
+    WIRE["api<br/>the wire contract (so far the Watcher status contract)"]
     DOMAIN["domain<br/>records, enums, Landing Policy"]
     STORE["store<br/>Files · SQLite · Postgres"]
     SUP["watchers.Supervise"]
@@ -49,6 +50,8 @@ flowchart TB
   CORE --> STORE --> DOMAIN
   CORE --> DOMAIN
   CORE --> SIDE
+  CORE --> WIRE --> DOMAIN
+  SUP -.imports.-> WIRE
   SUP -.starts.-> W
   FAC --> GIT
   FAC -.spawns.-> AGENT
@@ -76,7 +79,7 @@ A second, test-only composition exists: `world/` + `cmd/corewasm` build the real
 | `factory`, `cmd/code-central-factory` | A separate process that runs Claims as Claude Code sessions (`*factory`) and lands work (`lander`), over a shared registry of repositories. | Talks to the service only through `client`. |
 | `ciwatcher`, `pullrequestwatcher`, `issuewatcher`, `workitemwatcher` | One Watcher each: CI runs, pull requests, GitHub Issues (inbound, ADR 0047) and Azure Boards (ADR 0053). `ciwatcher` has a `Provider` and `pullrequestwatcher` a `Host`, each with a GitHub and an Azure implementation. | Talk to the service through `client`; to the code host through `gh` and `azdo`. |
 | `watchers` | Generic supervision: restart with backoff, and running a Project's Watchers only while this service holds its Watcher Lease. | `watchers.Supervise` over a `Central` interface. |
-| `gh`, `azdo`, `azdourl`, `codehost`, `ratelimit` | Reaching a code host: `gh.Ready` and `azdo.Access` check access, `codehost` and `azdourl` parse remote URLs and repository names, `ratelimit` holds `RateLimitError` and `FirstLine`. | Functions; meant to be leaves (they aren't yet: [weakness 2](#2-the-code-host-leaves-import-core)). |
+| `gh`, `azdo`, `azdourl`, `codehost`, `ratelimit` | Reaching a code host: `gh.Ready` and `azdo.Access` check access, `codehost` and `azdourl` parse remote URLs and repository names, `ratelimit` holds `RateLimitError` and `FirstLine`. | Functions; leaves that import only `api` for the Watcher status contract (ADR 0072). |
 | `notify` | OS notifications for what needs the human. | Reads through a four-method `Source` interface. |
 | `clock`, `events`, `ids`, `home`, `usage` | Small injectable leaves: time, the in-memory change bus, IDs, XDG paths (ADR 0056), Usage records and the Recorder. | Small types. |
 | `web/` | The React UI, embedded by `web/web.go`. All its reads, actions and the live feed go through one `Api` (`web/src/api/api.ts`); the production `fetch` is in `web/src/api/http.ts` alone. | `Api`; wire types generated from Go into `wire.gen.ts` (ADR 0042); `web/src/api/contract/` pins `createHttpApi` on the WASM Core and on a real service. |
@@ -103,7 +106,7 @@ Found:
 
 - **No import cycles**, and `core` never imports a door, `ops`, `factory`, `gh` or `azdo`.
 - **Direct imports hold, transitive ones don't.** `internal/importguard` keeps `client`, `httpapi`, `mcp`, `factory` and the Watchers from importing `store` directly, and they don't. But each of them imports `core` (for the wire types) or `ops`, and `core` imports `store`, so `client`, `gh`, every Watcher and the Factory binary all link `store` and its 16 database driver packages. That the Factory and the Watchers never touch the Store is kept by discipline, not by the compiler.
-- **The leaves aren't leaves.** `gh`, `azdo` and `ratelimit` import `core`.
+- **The leaves are leaves.** `gh`, `azdo` and `ratelimit` import `api` (the Watcher status contract) and not `core`.
 
 | Package | Imports of Code Central (non-test) |
 |---|---|
@@ -112,15 +115,16 @@ Found:
 | `ciwatcher`, `pullrequestwatcher` | azdo, clock, core, domain, gh, ratelimit, watchers |
 | `issuewatcher` | clock, core, domain, gh, ratelimit, watchers |
 | `workitemwatcher` | azdo, azdourl, clock, core, domain, gh, ratelimit, watchers |
-| `gh` | core, ratelimit |
-| `azdo` | azdourl, core, domain, ratelimit |
-| `ratelimit` | core |
-| `watchers` | clock, core, events, ratelimit |
+| `api` | domain, internal/fieldwalk (so far only the Watcher status contract is in it) |
+| `gh` | api, ratelimit |
+| `azdo` | api, azdourl, domain, ratelimit |
+| `ratelimit` | api |
+| `watchers` | api, clock, events, ratelimit |
 | `ops` | core, domain, events, internal/fieldwalk |
 | `httpapi` | core, domain, ops, internal/fieldwalk |
 | `mcp` | core, ops, internal/fieldwalk |
 | `server` | core, httpapi, mcp, ops, usage |
-| `core` | azdourl, clock, codehost, domain, events, ids, store, usage, internal/fieldwalk |
+| `core` | api, azdourl, clock, codehost, domain, events, ids, store, usage, internal/fieldwalk |
 | `store` | domain, events, home, usage |
 | `cli` | app, ciwatcher, client, clock, core, domain, gh, home, issuewatcher, notify, ops, pullrequestwatcher, store, workitemwatcher, internal/fieldwalk |
 
@@ -157,11 +161,9 @@ About 200 of `core`'s 318 exported types are the wire contract: inputs, views, r
 
 **Recommendation:** move the wire types, the error codes, `Ref`, `Actor` and `Decode` into their own package (say `api`) that imports only `domain`. `core`, `ops`, the doors and the clients import `api`; extend `internal/importguard` so that no client (`client`, `factory`, the Watchers, `gh`, `azdo`, `ratelimit`, `watchers`, `notify`) imports `core` or `store`, checked on the transitive imports (`go list -deps`), not the direct ones. This also gives `wiretypes` one package to generate from. It is mechanical but wide: about 1,850 references to `core.` in non-test code outside `core`, and many more in tests.
 
-### 2. The code-host leaves import `core`
+### 2. The code-host leaves import `core` (fixed)
 
-`gh`, `azdo` and `ratelimit` import `core` only for `WatcherCheckResult` and the `Problem*` codes, and `watchers` for `WatcherKind`, `WatcherCrash` and `WatcherSteadyAfter`. A leaf that imports the Core isn't a leaf, and `ratelimit` (a 1-file package) links all of it.
-
-**Recommendation:** these types are the Watcher status contract between the Watchers and the service; they belong in the wire package of weakness 1. Until then, a `watcherstatus` package under `domain`'s rules (imports nothing) would do.
+`gh`, `azdo`, `ratelimit` and `watchers` used to import `core` for the Watcher status contract. It is now in `api` (ADR 0072), and none of the four links `core` or `store`. The rest of the wire contract is still in `core` (weakness 1).
 
 ### 3. Clients run Core logic, not just Core types
 
