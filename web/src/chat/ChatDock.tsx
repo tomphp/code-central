@@ -1,18 +1,28 @@
 // Chat in the lower right corner of a Project-scoped view (Spec
 // code-central-633): the floating icon, shown only when Chat is available
-// for the Project, and the pop-up it opens. The pop-up follows the
+// for the Project, here or on another service sharing the Store, where
+// the pop-up says it runs, and the pop-up it opens. The pop-up follows the
 // Conversation and, once open, stays open if Chat stops being available.
 import { useState } from "react";
-import type { ApiError, ModelRow, ProjectRow } from "../api/types";
+import type { ApiError, FactoryView, ModelRow, ProjectRow } from "../api/types";
 import { Button } from "../controls/Button";
 import { useApi } from "../live";
 import "./chat.css";
 import { ChatPopup } from "./ChatPopup";
 import { useConversation } from "./useConversation";
 
-// chatAvailable is whether Chat is available for the Project: at least
-// one of its Factories is Online and reports Chat support.
-export const chatAvailable = (project: ProjectRow) => project.factory_status.factories.some((f) => f.status === "online" && f.chat);
+// answers is whether a Factory can answer a Conversation now.
+const answers = (f: FactoryView) => f.status === "online" && f.chat;
+
+// chatAvailable is whether Chat is available for the Project here: at
+// least one of its Factories reporting to this service is Online and
+// reports Chat support. Conversations are held on the service their
+// Factory reports to (Spec code-central-1107).
+export const chatAvailable = (project: ProjectRow) => project.factory_status.factories.some((f) => answers(f) && !f.reports_to);
+
+// chatElsewhere is whether one reporting to another service is, so the
+// pop-up can say where Chat runs.
+const chatElsewhere = (project: ProjectRow) => project.factory_status.factories.some((f) => answers(f) && !!f.reports_to);
 
 export interface ChatDockProps {
   // project is the Project the view is scoped to; none in the all-Projects scope.
@@ -45,7 +55,7 @@ function Dock({ project }: { project: ProjectRow }) {
   };
 
   if (!open) {
-    if (!available) return null;
+    if (!available && !chatElsewhere(project)) return null;
     return (
       <Button type="button" className="chat-icon" aria-label="Chat" onClick={() => setOpen(true)}>
         <svg aria-hidden="true" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round">

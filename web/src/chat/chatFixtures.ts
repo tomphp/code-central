@@ -22,4 +22,5 @@ export const conversation = (messages: ChatMessage[], more: Partial<Conversation
 });
 
 // noConversation is a Project with none yet.
-export const noConversation = (): Conversation => conversation([], { availability: "none", id: undefined, model: undefined });
+export const noConversation = (more: Partial<Conversation> = {}): Conversation =>
+  conversation([], { availability: "none", id: undefined, model: undefined, ...more });
