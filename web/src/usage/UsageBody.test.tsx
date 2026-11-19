@@ -21,6 +21,7 @@ function body(props: Partial<UsageBodyProps> = {}) {
       onSort={onSort}
       tab="tokens"
       onTab={onTab}
+      now={new Date("2026-11-07T09:00:30Z")}
       {...props}
     />,
   );
@@ -51,7 +52,7 @@ describe("UsageBody states", () => {
       within(strip())
         .getAllByRole("tab")
         .map((t) => t.textContent),
-    ).toEqual(["Token usage", "Context Size", "Code Central calls"]);
+    ).toEqual(["Token usage", "Context Size", "Code Central calls", "Storage"]);
     expect(screen.queryByText(/No usage yet/)).toBeNull();
   });
 

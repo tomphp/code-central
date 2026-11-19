@@ -33,6 +33,7 @@ import type {
   UsageFilter,
   SessionUsageFilter,
   SessionUsageView,
+  StorageView,
   TargetView,
   ChatItem,
   ChatMessage,
@@ -247,6 +248,11 @@ export interface Api {
   // its Context Size, for its line chart. An unknown Project is not_found;
   // an unknown session has none.
   sessionUsage(filter: SessionUsageFilter): Promise<SessionUsageView>;
+  // storage reads the Storage tab (Spec code-central-1032): where the
+  // Store is and its size, each Project's counts, or project's alone, the
+  // process's memory and the services registered on the Store. An unknown
+  // Project is not_found.
+  storage(project?: string): Promise<StorageView>;
   // subscribe opens the live feed and returns a function that closes it.
   subscribe(handlers: EventHandlers): () => void;
   // transcript reads Claim number claim's Transcript (ticket 110).
