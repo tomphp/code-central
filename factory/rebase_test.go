@@ -48,8 +48,13 @@ func authored(h *factorytest.Harness, dir, commit string) string {
 // onSpecBranch is the commits on the Spec Branch that main lacks, oldest
 // first, and its merge commits among them.
 func onSpecBranch(h *factorytest.Harness, dir string) (commits, merges []string) {
-	spec := "spec/" + h.SpecID()
-	return strings.Fields(h.GitIn(dir, "rev-list", "--reverse", "main.."+spec)), strings.Fields(h.GitIn(dir, "rev-list", "--merges", "main.."+spec))
+	return inRange(h, dir, "main..spec/"+h.SpecID())
+}
+
+// inRange is the commits in dir's revision range rng, oldest first, and
+// its merge commits among them.
+func inRange(h *factorytest.Harness, dir, rng string) (commits, merges []string) {
+	return strings.Fields(h.GitIn(dir, "rev-list", "--reverse", rng)), strings.Fields(h.GitIn(dir, "rev-list", "--merges", rng))
 }
 
 // acceptedAs makes an Accepted Ticket whose branch, cut from main, holds
@@ -222,10 +227,9 @@ func TestUnderRebaseABaseConflictSendsBackAndClaimsWithTheRebaseWording(t *testi
 	h.Script(id, factorytest.Wait())
 	h.Start()
 
-	// Not Spec-landed, it was merged into the base, not replayed, but is
-	// asked to rebase all the same.
-	if !commented(h.Ticket(id), "merging", "into main", "Rebase the branch onto main, resolve the conflicts, and finish again.") || commented(h.Ticket(id), "replaying") {
-		t.Errorf("comments %+v, want the send-back note to say the merge conflicted and to rebase onto main", h.Ticket(id).Comments)
+	// Not Spec-landed, it is replayed onto the base.
+	if !commented(h.Ticket(id), "replaying", "onto main", "- README", "Rebase the branch onto main, resolve the conflicts, and finish again.") || commented(h.Ticket(id), "merging") || commented(h.Ticket(id), "Merge main into the branch") {
+		t.Errorf("comments %+v, want the send-back note to say the replay conflicted and to rebase onto main", h.Ticket(id).Comments)
 	}
 	c := callFor(t, h, id)
 	requireConflictClaim(t, c, "README")
