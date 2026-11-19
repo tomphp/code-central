@@ -265,18 +265,18 @@ func (l *lander) workOf(tk core.TicketView) (commit, what string, err error) {
 
 // workIn is workOf in r: the commit of tk's work there, its finish commit
 // for r, or with none, its branch's tip there; once the Factory has
-// replayed it onto its Spec Branch under Rebase, its branch's tip, which
-// holds the replayed commits.
+// replayed it onto its Spec Branch or the base under Rebase, its branch's
+// tip, which holds the replayed commits.
 func (l *lander) workIn(r *repository, tk core.TicketView) (commit, what string, err error) {
 	commit, _, what, err = l.replayedWorkIn(r, tk)
 	return commit, what, err
 }
 
 // replayedWorkIn is workIn, and whether it is tk's work replayed onto its
-// Spec Branch.
+// Spec Branch or the base.
 func (l *lander) replayedWorkIn(r *repository, tk core.TicketView) (commit string, replayed bool, what string, err error) {
 	commit, what, err = l.finishedIn(r, tk)
-	if err != nil || !tk.SpecLanded {
+	if err != nil {
 		return commit, false, what, err
 	}
 	if tip, ok := replayedTip(r, tk.ID, branchIn(tk, r)); ok {
@@ -455,12 +455,15 @@ func (l *lander) workToLand(tk core.TicketView, policies core.LandingPolicies) (
 // worked out before it lands any: at old, a merge it made into a base the
 // Project no longer names; at head, when the base holds it already; or by
 // merging head into the base at baseTip, making tree, unless that
-// conflicts.
+// conflicts. Under Rebase, head is the Ticket's work replayed onto
+// baseTip, made by replay, which moves its branch there before the merge;
+// replaying says the conflicts are the replay's.
 type mergePlan struct {
 	r                   *repository
 	old                 *mergeOn
 	baseTip, head, tree string
-	inBase              bool
+	replay              *replay
+	inBase, replaying   bool
 	conflicts           []string
 }
 
@@ -474,13 +477,14 @@ func (l *lander) planMerges(ctx context.Context, tk core.TicketView, policies co
 	plans = map[*repository]mergePlan{}
 	var conflicts []landConflict
 	for _, w := range ws {
-		pl, landed, planned := l.planMerge(ctx, tk, w)
+		rebase := w.r.policy(policies).RebaseInForce()
+		pl, landed, planned := l.planMerge(ctx, tk, w, rebase)
 		switch {
 		case !planned:
 			return nil, false
 		case landed:
 		case len(pl.conflicts) > 0:
-			conflicts = append(conflicts, landConflict{r: pl.r, head: pl.head, into: l.repos.baseOf(pl.r), tip: pl.baseTip, files: pl.conflicts, rebase: pl.r.policy(policies).RebaseInForce()})
+			conflicts = append(conflicts, landConflict{r: pl.r, head: pl.head, into: l.repos.baseOf(pl.r), tip: pl.baseTip, files: pl.conflicts, rebase: rebase, replaying: pl.replaying})
 		default:
 			plans[w.r] = pl
 		}
@@ -493,10 +497,12 @@ func (l *lander) planMerges(ctx context.Context, tk core.TicketView, policies co
 }
 
 // planMerge works out how tk lands in w's Repository, or that it has
-// landed there already: its landed commit holds its work. ok is false
-// when it can't be worked out this poll, with a comment or a line saying
-// why.
-func (l *lander) planMerge(ctx context.Context, tk core.TicketView, w changedWork) (pl mergePlan, landed, ok bool) {
+// landed there already: its landed commit holds its work. With rebase,
+// Rebase in force there, work that doesn't descend from the base's tip is
+// replayed onto it first (planBaseReplay), and a Ticket whose work can't
+// be replayed doesn't land rather than being merged. ok is false when it
+// can't be worked out this poll, with a comment or a line saying why.
+func (l *lander) planMerge(ctx context.Context, tk core.TicketView, w changedWork, rebase bool) (pl mergePlan, landed, ok bool) {
 	r := w.r
 	pl.r = r
 	if w.landed != "" {
@@ -526,6 +532,21 @@ func (l *lander) planMerge(ctx context.Context, tk core.TicketView, w changedWor
 		pl.inBase = true
 		return pl, false, true
 	}
+	if rebase && !r.git.isAncestor(baseTip, head) {
+		rp, files, why, err := l.planBaseReplay(r, branchIn(tk, r), head, baseTip)
+		switch {
+		case err != nil:
+			l.printf("warning: %s: can't replay%s: %v", tk.ID, r.where(), err)
+			return pl, false, false
+		case why != "":
+			l.cantLandIn(ctx, tk, r, why)
+			return pl, false, false
+		case len(files) > 0:
+			pl.conflicts, pl.replaying = files, true
+			return pl, false, true
+		}
+		pl.replay, head = rp, rp.tip
+	}
 	if pl.tree, pl.conflicts, err = r.git.mergeTree(baseTip, head); err != nil {
 		l.printf("warning: %s: can't merge%s: %v", tk.ID, r.where(), err)
 		return pl, false, false
@@ -534,9 +555,10 @@ func (l *lander) planMerge(ctx context.Context, tk core.TicketView, w changedWor
 }
 
 // mergeAndLand lands tk in pl's Repository as pl says, making the merge
-// and advancing the base first when it needs one. It reports whether
-// landing can go on to the next Repository: it can't when a step failed
-// and is to be tried again next poll.
+// and advancing the base first when it needs one. Work replayed onto the
+// base's tip under Rebase moves its branch there first, and is what is
+// merged. It reports whether landing can go on to the next Repository: it
+// can't when a step failed and is to be tried again next poll.
 func (l *lander) mergeAndLand(ctx context.Context, tk core.TicketView, p core.ProjectView, pl mergePlan) bool {
 	r, base := pl.r, l.repos.baseOf(pl.r)
 	switch {
@@ -545,8 +567,17 @@ func (l *lander) mergeAndLand(ctx context.Context, tk core.TicketView, p core.Pr
 	case pl.inBase:
 		return l.landPushed(ctx, tk, p, r, base, pl.head)
 	}
+	head := pl.head
+	if pl.replay != nil {
+		if err := pl.replay.apply(r, tk.ID, pl.baseTip); err != nil {
+			l.cantLandIn(ctx, tk, r, err.Error()+".")
+			return false
+		}
+		head = pl.replay.tip
+		l.printf("%s: replayed onto %s at %s%s", tk.ID, base, short(head), r.where())
+	}
 	msg := fmt.Sprintf("Merge %s: %s", tk.ID, tk.Title)
-	merge, err := r.git.commitTree(pl.tree, msg, pl.baseTip, pl.head)
+	merge, err := r.git.commitTree(pl.tree, msg, pl.baseTip, head)
 	if err != nil {
 		l.printf("warning: %s: can't make the merge commit%s: %v", tk.ID, r.where(), err)
 		return false

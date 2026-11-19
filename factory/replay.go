@@ -12,12 +12,18 @@ import (
 // "already merged". Where its own commits start is its fork point, kept
 // per Ticket per Repository in a Factory-private fork ref, and the commits
 // a replay made in its replayed ref.
+//
+// With Land per Spec off, the Ticket's own commits, from its merge base
+// with the base, are replayed onto the base's tip in the same way, and
+// its branch moves to them before the `Merge <id>` commit is made, so
+// that the "head is in the base" check still answers "landed".
 
 // forkRefs is the namespace of the Factory's fork refs.
 const forkRefs = "refs/code-central/fork/"
 
 // forkRef is ticket's fork ref in a Repository: the Spec Branch tip its
-// branch was cut from or last replayed onto, where its own commits start.
+// branch was cut from or last replayed onto, or the base's tip it was
+// last replayed onto with Land per Spec off, where its own commits start.
 // It is written at the cut, moved whenever the Factory moves the branch,
 // and deleted when the Ticket's branch is cleaned up.
 func forkRef(ticket string) string { return forkRefs + ticket }
@@ -92,9 +98,9 @@ func forkPoint(r *repository, ticket, head, onto string) (string, error) {
 }
 
 // replayedTip is ticket's branch's tip in r when it is the work the
-// Factory last replayed onto its Spec Branch: the branch is at its
-// replayed ref. Those commits are the Ticket's work from then on, whether
-// or not the Spec Branch was rewritten since, and even when the replay
+// Factory last replayed onto its Spec Branch, or onto the base: the branch
+// is at its replayed ref. Those commits are the Ticket's work from then
+// on, whether or not the Spec Branch was rewritten since, and even when the replay
 // made the very commits finished, as onto the commit they were made on.
 func replayedTip(r *repository, ticket, branch string) (string, bool) {
 	if branch == "" {
@@ -111,7 +117,7 @@ func replayedTip(r *repository, ticket, branch string) (string, bool) {
 }
 
 // replay is a Ticket's work in a Repository replayed onto its Spec
-// Branch: the commits made, ending at tip, and the Ticket's branch to move
+// Branch or the base: the commits made, ending at tip, and the Ticket's branch to move
 // there from head, by a reset in worktree when it is checked out there.
 // Nothing is moved until it is applied.
 type replay struct {
@@ -119,24 +125,53 @@ type replay struct {
 }
 
 // planReplay replays tk's work in r, head, onto onto, the Spec Branch's
-// tip: the non-merge commits on head's first-parent line after its fork
-// point, oldest first, each with its author, author date and message, as
-// `git rebase` drops merges and commits that change nothing. It makes the
-// commits and moves nothing. It returns the files the first commit that
-// doesn't apply cleanly conflicts in, or why it can't replay the work:
-// no branch to move, a branch moved on from head, or uncommitted changes
-// in the branch's worktree in the way of moving it.
+// tip, from its fork point (forkPoint), as replayFrom does.
 func (l *lander) planReplay(r *repository, ticket, branch, head, onto string) (rp *replay, conflicts []string, why string, err error) {
-	if branch == "" {
-		return nil, nil, "it has no branch to move to its work replayed onto its Spec Branch, as Rebase does.", nil
-	}
-	if tip, err := r.git.commit("refs/heads/" + branch); err != nil || tip != head {
-		return nil, nil, fmt.Sprintf("its branch %s isn't at its finish commit %s, so which work to replay onto its Spec Branch is unclear. Send it back to finish again at the branch's head.", branch, short(head)), nil
+	if why := replayable(r, branch, head, "its Spec Branch"); why != "" {
+		return nil, nil, why, nil
 	}
 	fork, err := forkPoint(r, ticket, head, onto)
 	if err != nil {
 		return nil, nil, "", err
 	}
+	return l.replayFrom(r, branch, head, fork, onto, "its Spec Branch")
+}
+
+// planBaseReplay replays tk's work in r, head, onto onto, the base's tip,
+// with Land per Spec off: from head's merge base with onto, as
+// replayFrom does.
+func (l *lander) planBaseReplay(r *repository, branch, head, onto string) (rp *replay, conflicts []string, why string, err error) {
+	if why := replayable(r, branch, head, "the base"); why != "" {
+		return nil, nil, why, nil
+	}
+	fork, err := r.git.mergeBase(head, onto)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	return l.replayFrom(r, branch, head, fork, onto, "the base")
+}
+
+// replayable says why a Ticket's work in r, head, can't be replayed onto
+// target and its branch moved there: it has no branch, or its branch has
+// moved on from head. "" when it can.
+func replayable(r *repository, branch, head, target string) string {
+	if branch == "" {
+		return fmt.Sprintf("it has no branch to move to its work replayed onto %s, as Rebase does.", target)
+	}
+	if tip, err := r.git.commit("refs/heads/" + branch); err != nil || tip != head {
+		return fmt.Sprintf("its branch %s isn't at its finish commit %s, so which work to replay onto %s is unclear. Send it back to finish again at the branch's head.", branch, short(head), target)
+	}
+	return ""
+}
+
+// replayFrom replays a Ticket's work in r, head, from fork onto onto,
+// target's tip: the non-merge commits on head's first-parent line after
+// fork, oldest first, each with its author, author date and message, as
+// `git rebase` drops merges and commits that change nothing. It makes the
+// commits and moves nothing. It returns the files the first commit that
+// doesn't apply cleanly conflicts in, or why it can't replay the work:
+// uncommitted changes in the branch's worktree in the way of moving it.
+func (l *lander) replayFrom(r *repository, branch, head, fork, onto, target string) (rp *replay, conflicts []string, why string, err error) {
 	chain, err := r.git.firstParents(head, fork)
 	if err != nil {
 		return nil, nil, "", err
@@ -180,7 +215,7 @@ func (l *lander) planReplay(r *repository, ticket, branch, head, onto string) (r
 			return nil, nil, "", err
 		}
 		if status != "" {
-			return nil, nil, fmt.Sprintf("uncommitted changes in %s, where %s is checked out, are in the way of moving it to its commits replayed onto its Spec Branch:\n\n%s", w.path, branch, status), nil
+			return nil, nil, fmt.Sprintf("uncommitted changes in %s, where %s is checked out, are in the way of moving it to its commits replayed onto %s:\n\n%s", w.path, branch, target, status), nil
 		}
 		rp.worktree = w.path
 	}
@@ -188,7 +223,7 @@ func (l *lander) planReplay(r *repository, ticket, branch, head, onto string) (r
 }
 
 // apply moves the Ticket's branch in r to the replayed commits. Its fork
-// ref, to onto, the Spec Branch tip they were replayed onto, and its
+// ref, to onto, the Spec Branch's or base's tip they were replayed onto, and its
 // replayed ref, to them, move first, so that a branch found at its
 // replayed ref never replays twice; they move back when the branch can't.
 func (rp *replay) apply(r *repository, ticket, onto string) error {
