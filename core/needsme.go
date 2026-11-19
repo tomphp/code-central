@@ -341,8 +341,7 @@ func (e *evaluation) row(t domain.Ticket, tr ticketReason) NeedsMeRow {
 	}
 	switch tr.reason {
 	case ReasonNeedsAnswer:
-		if n := len(t.Rounds); n > 0 {
-			rd := t.Rounds[n-1]
+		if rd := t.Head.LatestRound; rd != nil {
 			s := RoundSummary{Number: rd.Number, Questions: len(rd.Questions)}
 			for _, q := range rd.Questions {
 				if q.Status == domain.QuestionOpen {
@@ -352,15 +351,15 @@ func (e *evaluation) row(t domain.Ticket, tr ticketReason) NeedsMeRow {
 			row.Round = &s
 		}
 	case ReasonFailed:
-		if n := len(t.FailureReports); n > 0 {
-			row.Failure = &FailureSummary{Headline: firstLine(t.FailureReports[n-1].WhatBroke), Reports: n}
+		if fr := t.Head.LatestFailureReport; fr != nil {
+			row.Failure = &FailureSummary{Headline: firstLine(fr.WhatBroke), Reports: fr.Number}
 		}
 	case ReasonInReview:
-		row.Summary = firstLine(finishSummary(t))
+		row.Summary = firstLine(finishSummary(e.withComments(t)))
 	case ReasonToMerge:
 		row.Branch = branchOf(t)
 	case ReasonAcceptedNotLanded:
-		row.NotLanded = e.c.notLandedView(e.p, t, e.ci)
+		row.NotLanded = e.c.notLandedView(e.p, e.withComments(t), e.ci)
 	case ReasonPullRequestClosed:
 		row.ClosedPullRequests = closedPullRequests(e.p, t)
 		if row.PullRequest == nil && len(row.ClosedPullRequests) > 0 {
@@ -373,6 +372,15 @@ func (e *evaluation) row(t domain.Ticket, tr ticketReason) NeedsMeRow {
 		row.Blocker = &b
 	}
 	return row
+}
+
+// withComments is t, which the evaluation read as a head, with its
+// Comments: a row reads them only for the reasons that show one.
+func (e *evaluation) withComments(t domain.Ticket) domain.Ticket {
+	if full, ok := e.r.Ticket(e.p.Key, t.Number, store.Comments); ok {
+		return full
+	}
+	return t
 }
 
 // finishSummary is the comment stored with t's last move into In Review,
@@ -393,14 +401,12 @@ func firstLine(s string) string {
 }
 
 // entered is when t moved into its current State (its last write, if no
-// move records it).
+// move records it), from its head.
 func entered(t domain.Ticket) time.Time {
-	for i := len(t.Moves) - 1; i >= 0; i-- {
-		if t.Moves[i].To == t.State {
-			return t.Moves[i].Time
-		}
+	if t.Head.Entered.IsZero() {
+		return t.Updated
 	}
-	return t.Updated
+	return t.Head.Entered
 }
 
 // cancelledBlocker is the first open Blocker of t that is Cancelled with

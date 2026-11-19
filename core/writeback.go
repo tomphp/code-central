@@ -176,18 +176,13 @@ func (c *Core) integrationWrites(r store.Reader, key, integration string, hide b
 		return out
 	}
 	byNumber := map[int]IssueWrites{}
-	for _, s := range r.Specs(key) {
-		if s.Link.Integration != integration {
-			continue
-		}
+	link := &store.LinkFilter{Integration: integration}
+	for _, s := range r.FindSpecs(key, store.SpecFilter{Link: link}) {
 		if w, ok := c.specIssueWrites(r, key, s, hide); ok {
 			byNumber[s.Number] = w
 		}
 	}
-	for _, t := range r.Tickets(key) {
-		if t.Spec != in.spec || t.Link.Integration != integration {
-			continue
-		}
+	for _, t := range r.FindTickets(key, store.TicketFilter{Spec: []int{in.spec}, Link: link, Parts: []store.Part{store.Moves, store.Comments}}) {
 		if w, ok := c.ticketIssueWrites(r, key, t, hide); ok {
 			byNumber[t.Number] = w
 		}
@@ -244,7 +239,7 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec, hide b
 		}
 	}
 	due(CommentContext, writtenText(r, key, requirementContext(r, key, s.Link), hide))
-	tickets := specTickets(r, key, s.Number)
+	tickets := specTickets(r, key, s.Number, store.Moves, store.Comments)
 	stages, stagesDone := map[StageName]domain.Ticket{}, true
 	var landed []domain.Ticket
 	for _, t := range tickets {
@@ -399,10 +394,7 @@ func repositoryLabel(p domain.Project, name string) string {
 // Issue, empty when it gave none. It stays due if the Incoming Issue is
 // moved on later.
 func requirementContext(r store.Reader, key string, l domain.Link) string {
-	for _, t := range r.Tickets(key) {
-		if t.Link.Integration != l.Integration || t.Link.ID != l.ID {
-			continue
-		}
+	for _, t := range r.FindTickets(key, store.TicketFilter{Link: &store.LinkFilter{Integration: l.Integration, ID: l.ID}, Parts: []store.Part{store.Moves, store.Comments}}) {
 		if extra, _, ok := triageComment(t, OptionToRequirement); ok {
 			return extra
 		}

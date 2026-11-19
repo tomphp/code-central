@@ -49,7 +49,7 @@ func TestASubmittedRequirementStoppedAtAnyStepRecoversToAllOrNothing(t *testing.
 			}
 			if committed {
 				s.View(func(r store.Reader) error {
-					spec, _ := r.Ticket("acme", 3)
+					spec, _ := r.Ticket("acme", 3, store.History...)
 					if len(spec.BlockedBy) != 1 || spec.BlockedBy[0] != 2 {
 						t.Fatalf("step %d: the spec Stage lost its Blocker: %+v", k, spec)
 					}

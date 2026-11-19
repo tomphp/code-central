@@ -139,7 +139,8 @@ interface WatcherStatusProps {
 }
 
 // WatcherStatus is one Project's CI Watcher's status, as it last
-// reported it, or that the Project has CI Tracking off.
+// reported it, or the host whose service runs it, or that none does
+// (ADR 0068), or that the Project has CI Tracking off.
 function WatcherStatus({ status: { project, tracking, provider, repository, project_url, watcher }, name, navigate }: WatcherStatusProps) {
   const options: Partial<UiLocation> = { view: "project-options", project };
   if (!tracking) {
@@ -162,6 +163,18 @@ function WatcherStatus({ status: { project, tracking, provider, repository, proj
       );
     case "not_reported":
       return <p className="muted">{name}: Starting; the CI Watcher hasn&apos;t reported yet.</p>;
+    case "elsewhere":
+      return (
+        <p className="muted">
+          {name}: Runs on {watcher.host}, whose service holds this Project&apos;s Watchers; its status shows there.
+        </p>
+      );
+    case "waiting":
+      return (
+        <p className="muted">
+          {name}: {watcher.message}
+        </p>
+      );
     case "error":
       return (
         <ErrorBanner>

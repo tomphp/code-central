@@ -47,7 +47,7 @@ func (c *Core) NewTicket(ctx context.Context, key string, in NewTicketInput) (Wr
 		if err != nil {
 			return err
 		}
-		if why := whyNotNewTicket(p, s, specTickets(w, key, s.Number)); why != "" {
+		if why := whyNotNewTicket(p, s, specTickets(w, key, s.Number, store.Moves)); why != "" {
 			return notAllowed("%s", why)
 		}
 		now := c.now()
@@ -56,7 +56,7 @@ func (c *Core) NewTicket(ctx context.Context, key string, in NewTicketInput) (Wr
 			Created: now, Updated: now, Description: in.Text,
 			Moves: submitMoves(in.Draft, now, "new_ticket"),
 		}
-		if err := w.PutTicket(key, t); err != nil {
+		if err := w.PutTicket(key, t, whole...); err != nil {
 			return err
 		}
 		v, err = acknowledgeCreate(c.ticketView(w, key, domain.Ticket{}), c.ticketView(w, key, t), in.Full)

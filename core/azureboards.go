@@ -120,12 +120,16 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in SetAzureBoards
 		}
 	}
 	var was domain.AzureBoards
-	var before, after ProjectView
+	var before ProjectView
+	var p domain.Project
+	var resetWatcher bool
+	given := a
 	err := c.store.Update(func(w store.Writer) error {
+		a, resetWatcher = given, false
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		p, _ := w.Project(key)
+		p, _ = w.Project(key)
 		before, was = c.projectView(p), p.AzureBoards
 		a.Spec = cmp.Or(was.Spec, created)
 		// Naming the variable the CI settings name keeps following them.
@@ -133,19 +137,22 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in SetAzureBoards
 			a.PATEnv = ""
 		}
 		p.AzureBoards = a
-		after = c.projectView(p)
 		if a == was {
 			return nil
 		}
 		// What the Work Item Watcher said was about the old settings.
 		if !a.On || azureBoardsCheckInput(p.CI, a) != azureBoardsCheckInput(p.CI, was) {
-			c.watchers.reset(watcherKey{WatcherWorkItems, key})
+			resetWatcher = true
 		}
 		return w.PutProject(p)
 	})
 	if err != nil {
 		return Written[ProjectView]{}, err
 	}
+	if resetWatcher {
+		c.watchers.reset(watcherKey{WatcherWorkItems, key})
+	}
+	after := c.projectView(p)
 	if title := azureBoardsSpecTitle(a); was.Spec != 0 && title != "" && title != azureBoardsSpecTitle(was) {
 		if err := c.retitleIntegrationSpec(ctx, key, was.Spec, givenAzureBoardsSpecTitle, title); err != nil {
 			return Written[ProjectView]{}, err

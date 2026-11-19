@@ -18,6 +18,16 @@ import (
 type Factory struct {
 	New    func(t *testing.T) store.Store
 	Reopen func(t *testing.T, s store.Store) store.Store
+	// BreakUsage, when non-nil, makes every later append to the Project's
+	// Usage in s fail, as a full disk would, leaving other Projects'
+	// appends alone. A Kind with no way to fail leaves it nil and the
+	// failing-append case is skipped.
+	BreakUsage func(t *testing.T, s store.Store, project string)
+	// Second, when non-nil, opens another handle on the Store s holds, as
+	// a second service sharing it would, closed when t ends. A Kind one
+	// service holds alone leaves it nil, and the Shared Store cases (two
+	// services' Updates at the same moment) are skipped.
+	Second func(t *testing.T, s store.Store) store.Store
 }
 
 var t0 = time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC)
@@ -91,7 +101,7 @@ func Run(t *testing.T, f Factory) {
 				if !ok || gt.Title != "Form" || gt.State != domain.Ready || gt.Spec != 1 || gt.Description != ticket.Description || !gt.Updated.Equal(ticket.Updated) || gt.Labels[0] != "ui" {
 					t.Fatalf("ticket: got %+v", gt)
 				}
-				if len(r.Specs("acme")) != 1 || len(r.Tickets("acme")) != 1 {
+				if len(r.FindSpecs("acme", store.SpecFilter{})) != 1 || len(r.FindTickets("acme", store.TicketFilter{})) != 1 {
 					t.Fatal("wrong list lengths")
 				}
 				if _, ok := r.Ticket("acme", 1); ok {
@@ -119,10 +129,10 @@ func Run(t *testing.T, f Factory) {
 			Comments: []domain.Comment{{Number: 1, Actor: "agent", Time: t0.Add(time.Hour), Claim: 1, Body: "Did it.\n"}},
 			Moves:    []domain.Move{{From: domain.Ready, To: domain.InProgress, Actor: "agent", Time: t0, Claim: 1}},
 		}
-		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", tk) })
+		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", tk, store.History...) })
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
-				got, _ := r.Ticket("acme", 1)
+				got, _ := r.Ticket("acme", 1, store.History...)
 				if len(got.Claims) != 2 || got.Claims[0] != tk.Claims[0] || got.Claims[1] != tk.Claims[1] {
 					t.Fatalf("claims: got %+v", got.Claims)
 				}
@@ -154,10 +164,10 @@ func Run(t *testing.T, f Factory) {
 				{Number: 3, Title: "Skip?", Body: "Skip it?", Status: domain.QuestionDismissed, Closed: t0.Add(time.Hour)},
 			}}},
 		}
-		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", tk) })
+		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", tk, store.Rounds) })
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
-				got, _ := r.Ticket("acme", 1)
+				got, _ := r.Ticket("acme", 1, store.Rounds)
 				if len(got.Rounds) != 1 {
 					t.Fatalf("rounds: got %+v", got.Rounds)
 				}
@@ -168,7 +178,7 @@ func Run(t *testing.T, f Factory) {
 				got.Rounds[0].Questions[1].Status = domain.QuestionAnswered
 			})
 			read(t, s, func(r store.Reader) {
-				if again, _ := r.Ticket("acme", 1); again.Rounds[0].Questions[1].Status != domain.QuestionOpen {
+				if again, _ := r.Ticket("acme", 1, store.Rounds); again.Rounds[0].Questions[1].Status != domain.QuestionOpen {
 					t.Fatal("changing a read Ticket's Questions changed the store")
 				}
 			})
@@ -188,7 +198,7 @@ func Run(t *testing.T, f Factory) {
 			Comments: []domain.Comment{{Number: 1, Actor: "human", Time: t0, Body: "Looks good.\nShip it.\n"}},
 			Edits:    []domain.Edit{{Number: 1, Actor: "agent", Time: t0, Previous: map[string]string{"description": ""}}}}
 		put(t, s, func(w store.Writer) error { return w.PutSpec("acme", spec) })
-		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", ticket) })
+		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", ticket, store.Comments, store.Edits) })
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
 				gs, _ := r.Spec("acme", 1)
@@ -196,7 +206,7 @@ func Run(t *testing.T, f Factory) {
 					gs.Edits[0].Previous["title"] != "Login" || gs.Edits[0].Actor != "agent" || !gs.Edits[0].Time.Equal(t0) {
 					t.Fatalf("spec: got %+v", gs)
 				}
-				gt, _ := r.Ticket("acme", 2)
+				gt, _ := r.Ticket("acme", 2, store.Comments, store.Edits)
 				if len(gt.Comments) != 1 || gt.Comments[0] != ticket.Comments[0] {
 					t.Fatalf("comments: got %+v", gt.Comments)
 				}
@@ -295,6 +305,11 @@ func Run(t *testing.T, f Factory) {
 		}
 	})
 
+	runHistory(t, f)
+	runQueries(t, f)
+	runClaimBySession(t, f)
+	runTicketCommits(t, f)
+	runRecords(t, f)
 	runReplacements(t, f)
 	runImport(t, f)
 	runLinks(t, f)
@@ -305,6 +320,12 @@ func Run(t *testing.T, f Factory) {
 	runAzureBoards(t, f)
 	runAwaitingTriage(t, f)
 	runCIRuns(t, f)
+	runUsage(t, f)
+	runMove(t, f)
+	runServices(t, f)
+	runStorage(t, f)
+	runConcurrency(t, f)
+	runChanges(t, f)
 }
 
 func seedProject(t *testing.T, s store.Store) {

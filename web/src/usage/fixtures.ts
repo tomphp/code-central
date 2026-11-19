@@ -1,6 +1,6 @@
-// Fixed Usage figures for UsageBody's and the Session popup's stories and
-// prop tests.
-import type { SessionUsageResponse, UsageSession, UsageView } from "../api/types";
+// Fixed Usage and Storage figures for UsageBody's and the Session popup's
+// stories and prop tests.
+import type { SessionUsageResponse, StorageView, UsageSession, UsageView } from "../api/types";
 
 const session = (over: Partial<UsageSession>): UsageSession => ({
   project: "acme",
@@ -62,3 +62,22 @@ export const sessionResponses:SessionUsageResponse[] = [12_000, 34_000, 58_000, 
   cache_read_tokens: context_size - 2_040 - i,
   output_tokens: 600 + 50 * i,
 }));
+
+// storage is a Postgres Store two services share, for the Storage tab.
+export const storage: StorageView = {
+  kind: "postgres",
+  host: "db.example.com",
+  port: 5432,
+  database: "central",
+  size: 48_234_496,
+  projects: [
+    { key: "acme", name: "Acme", specs: 12, tickets: 140, usage_days: 61 },
+    { key: "globex", name: "Globex", specs: 3, tickets: 22, usage_days: 9 },
+    { key: "initech", name: "Initech", specs: 0, tickets: 0, usage_days: 0 },
+  ],
+  memory: { resident: 61_865_984, heap: 14_680_064 },
+  services: [
+    { host: "desktop", version: "1.3.0", renewed: "2026-11-07T09:00:00Z" },
+    { host: "laptop", version: "1.2.0", renewed: "2026-11-07T08:59:50Z" },
+  ],
+};

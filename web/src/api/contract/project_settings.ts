@@ -3,7 +3,7 @@ import type { CIProvider, LandingMethod, NeedsMeReason } from "../types";
 import { ApiError, NEEDS_ME_REASONS } from "../types";
 import type { Driver } from "../driver";
 import { defaultCI, defaultLanding } from "../scenario";
-import { wantAcknowledgement } from "./support";
+import { wantAcknowledgement, withoutHost } from "./support";
 
 export function projectSettingsContract(driver: () => Driver) {
   let d: Driver;
@@ -529,7 +529,8 @@ export function projectSettingsContract(driver: () => Driver) {
       push_remote_url: "git@github.com:acme/web.git",
     });
     expect(v).toMatchObject({ key: "acme", ci: on });
-    expect((await d.api.listProjects())[0].ci).toEqual(on);
+    const { ci } = (await d.api.listProjects())[0];
+    expect({ ...ci, watcher: withoutHost(ci.watcher) }).toEqual(on);
 
     const none = await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: " ", ignored_workflows: [] }).catch((e) => e);
     expect(none).toMatchObject({ status: 422, code: "invalid", field: "repository" });
@@ -553,6 +554,7 @@ export function projectSettingsContract(driver: () => Driver) {
     expect(off.ci).toMatchObject({ tracking: false });
 
     // Off, the repository may be empty.
-    expect((await d.api.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "", ignored_workflows: [] })).ci).toEqual(defaultCI({ push_remote_url: "git@github.com:acme/web.git" }));
+    const empty = (await d.api.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "", ignored_workflows: [] })).ci;
+    expect({ ...empty, watcher: withoutHost(empty.watcher) }).toEqual(defaultCI({ push_remote_url: "git@github.com:acme/web.git" }));
   });
 }

@@ -96,15 +96,19 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 		return ClaimResult{}, invalid("ticket", "pass spec or ticket, not both")
 	}
 	var res ClaimResult
+	// Made once, and kept by a retried Update, so the ID committed is the
+	// one returned; claiming again takes none.
+	var id string
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
 		}
 		rule := c.blockRule(w, key)
-		t, found, err := claimTarget(rule, in)
+		target, found, err := claimTarget(rule, in)
 		if err != nil || !found {
 			return err
 		}
+		t, _ := w.Ticket(key, target.Number, whole...)
 		if live, ok := liveClaim(t); ok && in.Ticket != "" {
 			if in.SessionID == "" || live.SessionID != in.SessionID {
 				return heldError(key, t, live, in.SessionID, ActorOf(ctx))
@@ -124,12 +128,14 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 		if err := transition(ctx, &t, key, "claim", "", now); err != nil {
 			return err
 		}
-		claim := &t.Claims[len(t.Claims)-1]
-		claim.ID = c.ids.ClaimID()
-		if err := w.PutTicket(key, t); err != nil {
+		if id == "" {
+			id = c.ids.ClaimID()
+		}
+		t.Claims[len(t.Claims)-1].ID = id
+		if err := whole.put(w, key, &t); err != nil {
 			return err
 		}
-		res = c.claimResult(w, key, t, claim.ID)
+		res = c.claimResult(w, key, t, id)
 		return nil
 	})
 	return res, err
@@ -176,10 +182,12 @@ func claimTarget(rule blockRule, in ClaimInput) (t domain.Ticket, found bool, er
 		}
 		specN = sp.Number
 	}
-	tickets := r.Tickets(key)
-	slices.SortStableFunc(tickets, claimOrder)
-	for _, t := range tickets {
-		if t.State == domain.Ready && !rule.blocked(t) && (specN == 0 || t.Spec == specN) {
+	f := store.TicketFilter{States: []domain.State{domain.Ready}, Order: store.ByClaim}
+	if specN != 0 {
+		f.Spec = []int{specN}
+	}
+	for _, t := range r.FindTickets(key, f) {
+		if !rule.blocked(t) {
 			return t, true, nil
 		}
 	}
@@ -205,7 +213,7 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		t, err := resolveTicket(w, key, "finish", "ticket", in.Ticket)
+		t, h, err := readForWrite(w, key, "finish", "ticket", in.Ticket, whole)
 		if err != nil {
 			return err
 		}
@@ -239,7 +247,7 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 		}
 		if dropsRepositories(key, t, was) {
 			// The Factory's finish check comes first.
-			return w.PutTicket(key, t)
+			return h.put(w, key, &t)
 		}
 		return c.autoAccept(ctx, w, key, t, now)
 	})

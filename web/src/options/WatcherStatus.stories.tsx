@@ -19,6 +19,11 @@ export const RateLimited: Story = {
   },
 };
 export const Starting: Story = { args: { watcher: { state: "not_reported" } } };
+export const WatchingOnAHost: Story = { args: { watcher: { state: "watching", host: "laptop" } } };
+export const Elsewhere: Story = { args: { watcher: { state: "elsewhere", host: "desktop" } } };
+export const Waiting: Story = {
+  args: { watcher: { state: "waiting", message: "Waiting for a service to take the Watchers." } },
+};
 export const Error: Story = {
   args: {
     watcher: {

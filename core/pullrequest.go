@@ -265,7 +265,9 @@ func pushedWork(r store.Reader, key string) []PushedWorkView {
 	index := map[at]int{}
 	p, _ := r.Project(key)
 	var covered [][]domain.Ticket
-	for _, t := range r.Tickets(key) {
+	// The pull request's body is its finish summary.
+	watched := store.TicketFilter{States: []domain.State{domain.Accepted, domain.InReview}, HasPushes: true, Parts: []store.Part{store.Moves, store.Comments}}
+	for _, t := range r.FindTickets(key, watched) {
 		if !watchesPullRequest(t) {
 			continue
 		}
@@ -322,10 +324,7 @@ func pushedWork(r store.Reader, key string) []PushedWorkView {
 // Tickets marked to close, by Ticket.
 func pullRequestsToClose(r store.Reader, p domain.Project) []PullRequestToClose {
 	out := []PullRequestToClose{}
-	for _, t := range r.Tickets(p.Key) {
-		if finished(t.State) {
-			continue
-		}
+	for _, t := range r.FindTickets(p.Key, store.TicketFilter{States: unfinished}) {
 		for _, pr := range t.PullRequests {
 			if !pr.Close || (pr.State != domain.PROpen && pr.State != domain.PRConflicting) {
 				continue
@@ -503,10 +502,9 @@ func (c *Core) ReportPullRequest(_ context.Context, key string, in ReportPullReq
 		if name != p.Key {
 			pr.Repository = name
 		}
-		for _, t := range r.Tickets(key) {
-			if t.State == domain.Done || t.State == domain.Cancelled {
-				continue
-			}
+		// A push reported without a branch was pushed as the Ticket's, so
+		// the Tickets are found by their pushes, not by the branch.
+		for _, t := range r.FindTickets(key, store.TicketFilter{States: unfinished, HasPushes: true}) {
 			if pc, ok := latestPushedTo(key, t, name); ok && pushedAs(pc, t, branch) {
 				covered = append(covered, t.Number)
 			}
@@ -524,6 +522,8 @@ func (c *Core) ReportPullRequest(_ context.Context, key string, in ReportPullReq
 	for _, n := range covered {
 		moved := false
 		err := c.store.Update(func(w store.Writer) error {
+			moved = false
+			// The pull request is on the head: no History is written.
 			t, ok := w.Ticket(key, n)
 			if !ok || !setPullRequest(&t, pr) {
 				return nil
@@ -574,10 +574,7 @@ func pullRequestOpen(p domain.PullRequest) bool {
 func openPullRequests(r store.Reader, p domain.Project) []OpenPullRequest {
 	out := []OpenPullRequest{}
 	ps := landingPolicies(p)
-	for _, t := range r.Tickets(p.Key) {
-		if t.State != domain.Accepted {
-			continue
-		}
+	for _, t := range r.FindTickets(p.Key, store.TicketFilter{States: []domain.State{domain.Accepted}}) {
 		for _, pr := range t.PullRequests {
 			if pullRequestOpen(pr) && !ps.In(recordRepository(p.Key, pr.Repository)).LandsByPullRequest() {
 				out = append(out, OpenPullRequest{Ticket: DisplayID(p.Key, t.Number), Link: pr.Link})

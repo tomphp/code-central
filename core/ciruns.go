@@ -260,6 +260,7 @@ func (c *Core) ReportPushedCommit(ctx context.Context, key string, in ReportPush
 	// CI item lists one more (code-central-432).
 	var sharing []int
 	v, err := c.updateTicketIn(key, "report_pushed_commit", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
+		sharing = nil
 		if t.State != domain.Accepted && t.State != domain.InReview {
 			return false, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is %s: only an Accepted or In Review Ticket is pushed", DisplayID(key, t.Number), t.State)}
 		}
@@ -275,7 +276,7 @@ func (c *Core) ReportPushedCommit(ctx context.Context, key string, in ReportPush
 			return false, nil
 		}
 		t.PushedCommits = append(t.PushedCommits, domain.PushedCommit{Repository: recordName(key, name), Commit: commit, Branch: strings.TrimSpace(in.Branch), Pushed: c.now()})
-		for _, o := range r.Tickets(key) {
+		for _, o := range r.FindTickets(key, pushedCommit(key, name, commit)) {
 			if pushed := pushedIn(key, o, name); o.Number != t.Number && len(pushed) > 0 && pushed[len(pushed)-1].Commit == commit {
 				sharing = append(sharing, o.Number)
 			}
@@ -334,9 +335,10 @@ type CIRunsView struct {
 // as the Project gets ci.changed, so the UI updates live.
 func (c *Core) ReportCIRuns(ctx context.Context, key string, in ReportCIRunsInput) (Written[CIRunsView], error) {
 	var reported CIRunsView
-	changed := map[int]bool{}
-	wrote := false
+	var changed map[int]bool
+	var wrote bool
 	err := c.store.Update(func(w store.Writer) error {
+		reported, changed, wrote = CIRunsView{}, map[int]bool{}, false
 		if err := writable(w, key); err != nil {
 			return err
 		}
@@ -509,8 +511,8 @@ type CIWaitingCommit struct {
 func ciWaiting(ci *ciState, name string) []CIWaitingCommit {
 	out := []CIWaitingCommit{}
 	key := ci.p.Key
-	for _, t := range ci.r.Tickets(key) {
-		if len(t.PushedCommits) == 0 || t.State == domain.Cancelled {
+	for _, t := range ci.r.FindTickets(key, store.TicketFilter{HasPushes: true}) {
+		if t.State == domain.Cancelled {
 			continue
 		}
 		rc := ci.ticket(t).in(name)

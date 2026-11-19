@@ -22,10 +22,10 @@ func TestTheRealChainMigratesAFormat21StoreToTheSpecMergeFormat(t *testing.T) {
 
 	s := openFile(t, dir)
 	s.View(func(r store.Reader) error {
-		if tk, _ := r.Ticket("acme", 2); tk.SpecMerge != nil {
+		if tk, _ := r.Ticket("acme", 2, store.History...); tk.SpecMerge != nil {
 			t.Errorf("spec merge of a plain Ticket = %+v, want none", tk.SpecMerge)
 		}
-		tk, _ := r.Ticket("acme", 3)
+		tk, _ := r.Ticket("acme", 3, store.History...)
 		want := domain.SpecMerge{Commit: "abc123", Merged: time.Date(2026, 1, 3, 3, 4, 5, 0, time.UTC)}
 		if tk.SpecMerge == nil || *tk.SpecMerge != want {
 			t.Errorf("spec merge = %+v, want %+v", tk.SpecMerge, want)

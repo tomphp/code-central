@@ -116,7 +116,7 @@ func (c *Core) PostRound(ctx context.Context, key string, in PostRoundInput) (Po
 	}
 	var res PostRoundResult
 	v, err := c.updateTicket(key, "post_round", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
-		claim, _ := liveClaim(*t)
+		claim, _ := claimToWrite(t)
 		now := c.now()
 		if err := transition(ctx, t, key, "post_round", in.ClaimID, now); err != nil {
 			return false, err

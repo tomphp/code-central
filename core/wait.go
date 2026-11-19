@@ -45,7 +45,9 @@ func (c *Core) Wait(ctx context.Context, key string, ref Ref, from domain.State)
 		for woken := false; !woken; {
 			select {
 			case e := <-notices:
-				woken = e.Type == events.TicketChanged && e.Project == key && e.ID == res.Ticket
+				// A project-wide notice may cover the Ticket: an Import, or a
+				// Shared Store that may have missed Changes. Refetch.
+				woken = e.Project == key && (e.Type == events.ProjectChanged || e.Type == events.TicketChanged && e.ID == res.Ticket)
 			case <-timeout:
 				return res, nil
 			case <-ctx.Done():
@@ -61,7 +63,7 @@ func (c *Core) waitResult(key string, ref Ref) (WaitResult, error) {
 		if _, ok := r.Project(key); !ok {
 			return unknownProject(key)
 		}
-		t, err := resolveTicket(r, key, "wait", "ticket", ref)
+		t, err := resolveTicket(r, key, "wait", "ticket", ref, store.Moves)
 		if err != nil {
 			return err
 		}
@@ -79,26 +81,50 @@ func (c *Core) waitResult(key string, ref Ref) (WaitResult, error) {
 // notifying wraps a store so every successful Update sends a change
 // notice for the record it wrote, after the write is durable, and wakes
 // the Project's open next_factory_wake calls when the write is one the
-// Factory's poll acts on (wakesTheFactory).
+// Factory's poll acts on (wakesTheFactory). It announces the same, as a
+// store.Change, to the other services sharing the store, and gives each
+// Change they commit the notice and wake a write here would.
 type notifying struct {
 	store.Store
 	bus   *events.Bus
 	wakes *factoryWakes
 }
 
+// newNotifying wraps s, hearing the Changes other services commit.
+func newNotifying(s store.Store, bus *events.Bus, wakes *factoryWakes) notifying {
+	n := notifying{Store: s, bus: bus, wakes: wakes}
+	s.Changes(n.deliver)
+	return n
+}
+
 func (n notifying) Update(fn func(store.Writer) error) error {
-	w := &noticeWriter{}
+	var change *store.Change
 	err := n.Store.Update(func(sw store.Writer) error {
-		w.Writer = sw
-		return fn(w)
+		// Afresh on each attempt, so a retried one's notice never fires.
+		w := &noticeWriter{Writer: sw}
+		change = nil
+		if err := fn(w); err != nil {
+			return err
+		}
+		if w.notice != nil {
+			change = &store.Change{Project: w.notice.Project, Type: w.notice.Type, ID: w.notice.ID, Wakes: w.wake != ""}
+			sw.Announce(*change)
+		}
+		return nil
 	})
-	if err == nil && w.notice != nil {
-		n.bus.Publish(*w.notice)
-	}
-	if err == nil && w.wake != "" {
-		n.wakes.wake(w.wake)
+	if err == nil && change != nil {
+		n.deliver(*change)
 	}
 	return err
+}
+
+// deliver sends ch's change notice, and wakes its Project's open
+// next_factory_wake calls when it wakes the Factories.
+func (n notifying) deliver(ch store.Change) {
+	n.bus.Publish(events.Event{Type: ch.Type, Project: ch.Project, ID: ch.ID})
+	if ch.Wakes {
+		n.wakes.wake(ch.Project)
+	}
 }
 
 type noticeWriter struct {
@@ -121,9 +147,9 @@ func (w *noticeWriter) PutSpec(key string, s domain.Spec) error {
 	return w.wakeIf(wakes, key, w.put(w.Writer.PutSpec(key, s), events.Event{Type: events.SpecChanged, Project: key, ID: DisplayID(key, s.Number)}))
 }
 
-func (w *noticeWriter) PutTicket(key string, t domain.Ticket) error {
+func (w *noticeWriter) PutTicket(key string, t domain.Ticket, parts ...store.Part) error {
 	wakes := wakesTheFactory(w.Writer, key, t)
-	return w.wakeIf(wakes, key, w.put(w.Writer.PutTicket(key, t), events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, t.Number)}))
+	return w.wakeIf(wakes, key, w.put(w.Writer.PutTicket(key, t, parts...), events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, t.Number)}))
 }
 
 // PutImport sends one project.changed notice for the whole Import, so a

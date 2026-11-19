@@ -13,6 +13,16 @@ export function wantAcknowledgement(ack: TicketAcknowledgement, id: string, stat
   expect(ack.changed).not.toContain("updated");
 }
 
+// withoutHost is a Watcher's status without the host of the service
+// holding the Project's Watcher Lease: a real service takes the Lease
+// once CI Tracking is on and names its own machine, which the fake's
+// world leaves out until a test gives it a Lease (HoldWatcherLease).
+export function withoutHost<W extends { host?: string }>(w: W): Omit<W, "host"> {
+  const rest = { ...w };
+  delete rest.host;
+  return rest;
+}
+
 // startedAt is a Usage session with its start, and its Subagents', in
 // milliseconds, so the service's and the fake's times compare.
 export function startedAt(s: UsageSession): object {

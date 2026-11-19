@@ -46,7 +46,7 @@ func (c *Core) SubmitPrototype(_ context.Context, key string, in SubmitPrototype
 			Labels: []string{PrototypeLabel}, Created: now, Updated: now, Description: in.Text,
 			Moves: []domain.Move{{To: domain.Ready, Actor: string(Human), Time: now, Via: "submit_prototype"}},
 		}
-		if err := w.PutTicket(key, t); err != nil {
+		if err := whole.put(w, key, &t); err != nil {
 			return err
 		}
 		v, err = acknowledgeCreate(c.ticketView(w, key, domain.Ticket{}), c.ticketView(w, key, t), in.Full)

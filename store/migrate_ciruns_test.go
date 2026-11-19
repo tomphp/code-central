@@ -36,7 +36,7 @@ func TestTheRealChainMigratesAFormat10StoreToTheCIRunsFormat(t *testing.T) {
 		t.Errorf("store.yaml = %q", got)
 	}
 	s.View(func(r store.Reader) error {
-		if tk, _ := r.Ticket("acme", 2); len(tk.PushedCommits) != 0 {
+		if tk, _ := r.Ticket("acme", 2, store.History...); len(tk.PushedCommits) != 0 {
 			t.Errorf("pushed commits after migrating = %+v, want none", tk.PushedCommits)
 		}
 		if runs := r.CIRuns("acme"); len(runs) != 0 {

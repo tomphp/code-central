@@ -2,8 +2,11 @@ package store
 
 import (
 	"cmp"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/usage"
 	"slices"
 	"sync"
 )
@@ -16,6 +19,53 @@ type index struct {
 	options  domain.Options
 	// persist, when set, makes a record durable before memory changes.
 	persist func(record any, project string) error
+	// usage is where the Store keeps Usage: in memory here, the File
+	// Store's files in the file-backed store.
+	usage usage.Store
+	// services are kept in memory in both: one service holds the Store.
+	services *memoryServices
+}
+
+// Usage is the Store's Usage (ADR 0069): appended to, read and pruned
+// outside any Update, under its own lock.
+func (x *index) Usage() usage.Store { return x.usage }
+
+// Services are the one service holding the Store, which holds every
+// Watcher Lease.
+func (x *index) Services() Services { return x.services }
+
+// Location is the fake's: it is kept nowhere. The File Store names its
+// folder.
+func (x *index) Location() Location { return Location{Kind: Memory} }
+
+// Size is the fake's records' size as JSON, Usage included, since it
+// keeps no file to measure. The File Store measures its folder.
+func (x *index) Size() (int64, error) {
+	x.mu.RLock()
+	defer x.mu.RUnlock()
+	var size int64
+	add := func(v any) error {
+		b, err := json.Marshal(v)
+		size += int64(len(b))
+		return err
+	}
+	errs := []error{add(x.options)}
+	days, err := x.usage.Days()
+	errs = append(errs, err)
+	for key, d := range days {
+		recs, err := x.usage.Read(key, d)
+		errs = append(errs, err, add(recs.Calls), add(recs.Responses))
+	}
+	for _, p := range x.projects {
+		errs = append(errs, add(p.project), add(p.ciRuns))
+		for _, s := range p.specs {
+			errs = append(errs, add(s))
+		}
+		for _, t := range p.tickets {
+			errs = append(errs, add(t))
+		}
+	}
+	return size, errors.Join(errs...)
 }
 
 type projectData struct {
@@ -25,12 +75,14 @@ type projectData struct {
 	ciRuns  domain.CIRuns
 }
 
-func newIndex() *index {
-	return &index{projects: map[string]*projectData{}, options: domain.DefaultOptions()}
+// newIndex is the empty index of a Store at format.
+func newIndex(format int) *index {
+	return &index{projects: map[string]*projectData{}, options: domain.DefaultOptions(), usage: usage.NewMemoryStore(),
+		services: newMemoryServices(format)}
 }
 
 // NewMemory returns the in-memory fake store.
-func NewMemory() Store { return newIndex() }
+func NewMemory() Store { return newIndex(Format) }
 
 func (x *index) View(fn func(Reader) error) error {
 	x.mu.RLock()
@@ -43,6 +95,9 @@ func (x *index) Update(fn func(Writer) error) error {
 	defer x.mu.Unlock()
 	return fn(&writer{reader: reader{x}})
 }
+
+// Changes never delivers: no other service shares the store.
+func (x *index) Changes(func(Change)) {}
 
 type reader struct{ x *index }
 
@@ -72,39 +127,19 @@ func (r reader) Spec(project string, n int) (domain.Spec, bool) {
 	return cloneSpec(s), ok
 }
 
-func (r reader) Specs(project string) []domain.Spec {
-	p, ok := r.x.projects[project]
-	if !ok {
-		return nil
-	}
-	out := make([]domain.Spec, 0, len(p.specs))
-	for _, s := range p.specs {
-		out = append(out, cloneSpec(s))
-	}
-	slices.SortFunc(out, func(a, b domain.Spec) int { return cmp.Compare(a.Number, b.Number) })
-	return out
+// readOf is a copy of the stored Ticket t with only the History parts
+// named, as every Store Kind reads one.
+func readOf(t domain.Ticket, parts []Part) domain.Ticket {
+	return cloneTicket(withParts(t, domain.Ticket{}, parts))
 }
 
-func (r reader) Ticket(project string, n int) (domain.Ticket, bool) {
+func (r reader) Ticket(project string, n int, parts ...Part) (domain.Ticket, bool) {
 	p, ok := r.x.projects[project]
 	if !ok {
 		return domain.Ticket{}, false
 	}
 	t, ok := p.tickets[n]
-	return cloneTicket(t), ok
-}
-
-func (r reader) Tickets(project string) []domain.Ticket {
-	p, ok := r.x.projects[project]
-	if !ok {
-		return nil
-	}
-	out := make([]domain.Ticket, 0, len(p.tickets))
-	for _, t := range p.tickets {
-		out = append(out, cloneTicket(t))
-	}
-	slices.SortFunc(out, func(a, b domain.Ticket) int { return cmp.Compare(a.Number, b.Number) })
-	return out
+	return readOf(t, parts), ok
 }
 
 func (r reader) NextNumber(project string) int {
@@ -174,8 +209,12 @@ func (w *writer) PutSpec(project string, s domain.Spec) error {
 	return nil
 }
 
-func (w *writer) PutTicket(project string, t domain.Ticket) error {
-	t = cloneTicket(t)
+func (w *writer) PutTicket(project string, t domain.Ticket, parts ...Part) error {
+	var stored domain.Ticket
+	if p, ok := w.x.projects[project]; ok {
+		stored = p.tickets[t.Number]
+	}
+	t = withHead(cloneTicket(withParts(t, stored, parts)))
 	if err := w.begin(t, project); err != nil {
 		return err
 	}
@@ -185,36 +224,17 @@ func (w *writer) PutTicket(project string, t domain.Ticket) error {
 
 func (w *writer) PutImport(project string, im Import) error {
 	im = im.clone()
+	for i, t := range im.Tickets {
+		im.Tickets[i] = withHead(t)
+	}
+	for i, t := range im.Rewritten {
+		im.Rewritten[i] = withHead(t)
+	}
 	if p, ok := w.x.projects[project]; ok {
-		seen := map[int]bool{}
-		taken := func(n int) bool {
-			_, s := p.specs[n]
-			_, t := p.tickets[n]
-			dup := seen[n]
-			seen[n] = true
-			return s || t || dup
-		}
-		for _, s := range im.Specs {
-			if taken(s.Number) {
-				return fmt.Errorf("%w: %s-%d", ErrExists, project, s.Number)
-			}
-		}
-		for _, t := range im.Tickets {
-			if taken(t.Number) {
-				return fmt.Errorf("%w: %s-%d", ErrExists, project, t.Number)
-			}
-		}
-		for _, t := range im.Rewritten {
-			if _, ok := p.tickets[t.Number]; !ok || seen[t.Number] {
-				return fmt.Errorf("%w: %s-%d", ErrNotExists, project, t.Number)
-			}
-			seen[t.Number] = true
-		}
-		for _, sp := range im.RewrittenSpecs {
-			if _, ok := p.specs[sp.Number]; !ok || seen[sp.Number] {
-				return fmt.Errorf("%w: %s-%d", ErrNotExists, project, sp.Number)
-			}
-			seen[sp.Number] = true
+		hasSpec := func(n int) bool { _, ok := p.specs[n]; return ok }
+		hasTicket := func(n int) bool { _, ok := p.tickets[n]; return ok }
+		if err := checkImport(project, im, hasSpec, hasTicket); err != nil {
+			return err
 		}
 	}
 	if err := w.begin(im, project); err != nil {
@@ -236,7 +256,44 @@ func (w *writer) PutImport(project string, im Import) error {
 	return nil
 }
 
-func (w *writer) PutOptions(o domain.Options) error {
+// checkImport is the Import's numbering rule, which every Kind keeps:
+// a new Spec or Ticket takes a number no record has (ErrExists), and a
+// rewritten one the number of a record of its kind (ErrNotExists), each
+// number once in the Import.
+func checkImport(project string, im Import, hasSpec, hasTicket func(int) bool) error {
+	seen := map[int]bool{}
+	taken := func(n int) bool {
+		dup := seen[n]
+		seen[n] = true
+		return hasSpec(n) || hasTicket(n) || dup
+	}
+	for _, s := range im.Specs {
+		if taken(s.Number) {
+			return fmt.Errorf("%w: %s-%d", ErrExists, project, s.Number)
+		}
+	}
+	for _, t := range im.Tickets {
+		if taken(t.Number) {
+			return fmt.Errorf("%w: %s-%d", ErrExists, project, t.Number)
+		}
+	}
+	for _, t := range im.Rewritten {
+		if !hasTicket(t.Number) || seen[t.Number] {
+			return fmt.Errorf("%w: %s-%d", ErrNotExists, project, t.Number)
+		}
+		seen[t.Number] = true
+	}
+	for _, sp := range im.RewrittenSpecs {
+		if !hasSpec(sp.Number) || seen[sp.Number] {
+			return fmt.Errorf("%w: %s-%d", ErrNotExists, project, sp.Number)
+		}
+		seen[sp.Number] = true
+	}
+	return nil
+}
+
+// checkOptions refuses an Option set to a value it can't take.
+func checkOptions(o domain.Options) error {
 	if !o.FocusClear.Valid() {
 		return fmt.Errorf("%w: focus_clear %q", ErrInvalidOption, o.FocusClear)
 	}
@@ -246,12 +303,22 @@ func (w *writer) PutOptions(o domain.Options) error {
 	if !o.FocusPopup.Valid() {
 		return fmt.Errorf("%w: focus_popup %q", ErrInvalidOption, o.FocusPopup)
 	}
+	return nil
+}
+
+func (w *writer) PutOptions(o domain.Options) error {
+	if err := checkOptions(o); err != nil {
+		return err
+	}
 	if err := w.begin(o, ""); err != nil {
 		return err
 	}
 	w.x.options = o
 	return nil
 }
+
+// Announce is ignored: no other service shares the store.
+func (w *writer) Announce(Change) {}
 
 func (w *writer) PutCIRuns(project string, runs []domain.CIRun) error {
 	rs := cloneCIRuns(domain.CIRuns{Runs: runs})

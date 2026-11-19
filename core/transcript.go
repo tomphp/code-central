@@ -150,22 +150,13 @@ func (c *Core) hold(k markKey, started time.Time, events []SessionEvent) {
 // newestClaim is the most recently started Claim with the session ID, in
 // any Project, and when it started.
 func (c *Core) newestClaim(sessionID string) (markKey, time.Time, bool) {
-	var k markKey
-	var started time.Time
+	var sc store.SessionClaim
 	found := false
 	c.store.View(func(r store.Reader) error {
-		for _, p := range r.Projects() {
-			for _, t := range r.Tickets(p.Key) {
-				for _, cl := range t.Claims {
-					if cl.SessionID == sessionID && (!found || cl.Started.After(started)) {
-						k, started, found = markKey{p.Key, t.Number, cl.Number}, cl.Started, true
-					}
-				}
-			}
-		}
+		sc, found = r.ClaimBySession(sessionID)
 		return nil
 	})
-	return k, started, found
+	return markKey{sc.Project, sc.Ticket, sc.Claim.Number}, sc.Claim.Started, found
 }
 
 // cutText cuts text to SessionEventTextLimit bytes of whole runes, and
@@ -213,7 +204,7 @@ func (c *Core) claimKey(key, op string, ticket Ref, claim int) (markKey, error) 
 		if err != nil {
 			return notFound("there is no Ticket %s", ticket)
 		}
-		t, err := ticketNumbered(r, key, op, "ticket", n)
+		t, err := ticketNumbered(r, key, op, "ticket", n, store.Claims)
 		if err != nil {
 			return err
 		}

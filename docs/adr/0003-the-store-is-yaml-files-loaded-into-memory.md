@@ -1,5 +1,7 @@
 # The store is YAML files loaded whole into memory
 
+Partly superseded by [ADR 0067](0067-stores-are-pluggable-and-a-database-store-keeps-document-rows.md): the File Store this ADR describes stays the default and unchanged, but it is one Store Kind of several, and SQLite is no longer rejected.
+
 The store has to stay readable and fixable by hand, so we decided to keep it as plain files rather than a database: one strict YAML file per Ticket, holding its whole history, and Markdown with YAML frontmatter per Spec, under `projects/<key>/`. The running service loads every file into memory at startup and serves all reads from memory. Each operation writes exactly one file, using a temp file, fsync and rename, under one store-wide mutex, and memory is updated only once the file is on disk. This is only safe because the service is the only writer ([ADR 0002](0002-the-service-is-the-only-writer.md)).
 
 ## Considered Options

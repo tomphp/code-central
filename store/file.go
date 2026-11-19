@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/tomoram/code-central/home"
+	"github.com/tomoram/code-central/usage"
 )
 
 // ErrLocked means another process already holds the store's lock.
@@ -78,6 +79,13 @@ type FileStore struct {
 // Dir is the store's directory.
 func (s *FileStore) Dir() string { return s.dir }
 
+// Location is the File Store's folder.
+func (s *FileStore) Location() Location { return Location{Kind: Files, Path: s.dir} }
+
+// Size is the bytes of every file in the store's folder, Usage's
+// included.
+func (s *FileStore) Size() (int64, error) { return folderSize(s.dir) }
+
 // Close releases the store's lock.
 func (s *FileStore) Close() error {
 	if s.lock == nil {
@@ -106,7 +114,8 @@ func open(dir string, format int, steps []MigrationStep) (*FileStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &FileStore{index: newIndex(), dir: dir, lock: lock, format: format, steps: steps}
+	s := &FileStore{index: newIndex(format), dir: dir, lock: lock, format: format, steps: steps}
+	s.usage = usage.NewFiles(dir)
 	if err := s.recoverImports(); err != nil {
 		s.Close()
 		return nil, err
@@ -176,25 +185,10 @@ func (s *FileStore) loadOptions() error {
 	if field, err := decodeStrict(data, &f); err != nil {
 		return &LoadError{File: rel, Field: field, Msg: err.Error()}
 	}
-	o := domain.DefaultOptions()
-	if f.FocusClear != "" {
-		o.FocusClear = domain.FocusClear(f.FocusClear)
-	}
-	if f.FocusPopup != "" {
-		o.FocusPopup = domain.FocusPopup(f.FocusPopup)
-	}
-	if f.LimitsPopup != "" {
-		o.LimitsPopup = domain.LimitsPopup(f.LimitsPopup)
-	}
-	o.GHPath = f.GHPath
-	if !o.FocusClear.Valid() {
-		return &LoadError{File: rel, Field: "focus_clear", Msg: fmt.Sprintf("unknown value %q (%s)", f.FocusClear, strings.Join(domain.FocusClearNames(), " or "))}
-	}
-	if !o.FocusPopup.Valid() {
-		return &LoadError{File: rel, Field: "focus_popup", Msg: fmt.Sprintf("unknown value %q (%s)", f.FocusPopup, strings.Join(domain.FocusPopupNames(), " or "))}
-	}
-	if !o.LimitsPopup.Valid() {
-		return &LoadError{File: rel, Field: "limits_popup", Msg: fmt.Sprintf("unknown value %q (%s)", f.LimitsPopup, strings.Join(domain.LimitsPopupNames(), " or "))}
+	o, lerr := optionsOf(f)
+	if lerr != nil {
+		lerr.File = rel
+		return lerr
 	}
 	s.options = o
 	return nil
@@ -215,99 +209,10 @@ func (s *FileStore) loadProject(key string) error {
 	if pf.Key != key {
 		return &LoadError{File: rel, Field: "key", Msg: fmt.Sprintf("key %q does not match its folder %q", pf.Key, key)}
 	}
-	p := domain.Project{Key: pf.Key, DisplayName: pf.DisplayName, Mode: domain.Mode(pf.Mode)}
-	if !p.Mode.Valid() {
-		return &LoadError{File: rel, Field: "mode", Msg: fmt.Sprintf("unknown mode %q (committed or local)", pf.Mode)}
-	}
-	if p.Created, err = parseTime(pf.Created); err != nil {
-		return &LoadError{File: rel, Field: "created", Msg: err.Error()}
-	}
-	if pf.Archived != "" {
-		if p.Archived, err = parseTime(pf.Archived); err != nil {
-			return &LoadError{File: rel, Field: "archived", Msg: err.Error()}
-		}
-	}
-	if l := pf.Landing; l != nil {
-		p.Landing = domain.Landing{Method: domain.LandingMethod(l.Method), Push: l.Push, Remote: l.Remote, LandPerSpec: l.LandPerSpec == nil || *l.LandPerSpec, Rebase: l.Rebase, PATEnv: l.PATEnv, Base: l.Base}
-		if !p.Landing.Method.Valid() {
-			return &LoadError{File: rel, Field: "landing.method", Msg: fmt.Sprintf("unknown landing method %q (%s)", l.Method, strings.Join(domain.LandingMethodNames(), " or "))}
-		}
-	}
-	if c := pf.CI; c != nil {
-		p.CI = domain.CI{Tracking: c.Tracking, PATEnv: c.PATEnv,
-			IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, NoPushRemote: c.NoPushRemote, PushRemoteBase: c.PushRemoteBase}
-		if a := c.AutoFix; a != nil {
-			if a.Limit != 0 && (a.Limit < domain.MinAutoFixLimit || a.Limit > domain.MaxAutoFixLimit) {
-				return &LoadError{File: rel, Field: "ci.auto_fix.limit", Msg: fmt.Sprintf("the Auto-fix limit is %d to %d, not %d", domain.MinAutoFixLimit, domain.MaxAutoFixLimit, a.Limit)}
-			}
-			p.CI.AutoFix = domain.AutoFix{On: a.On, Instructions: a.Instructions, Limit: a.Limit}
-		}
-		if c.Provider != "" && !domain.CIProvider(c.Provider).Valid() {
-			return &LoadError{File: rel, Field: "ci.provider", Msg: fmt.Sprintf("unknown CI provider %q (%s)", c.Provider, strings.Join(domain.CIProviderNames(), " or "))}
-		}
-		for i, r := range c.Rules {
-			field := fmt.Sprintf("ci.rules[%d]", i)
-			rule := domain.CIRule{Spec: r.Spec, Workflow: r.Workflow, Branch: r.Branch, State: domain.State(r.State)}
-			if rule.State != domain.Draft && rule.State != domain.Ready {
-				return &LoadError{File: rel, Field: field + ".state", Msg: fmt.Sprintf("a CI Rule's Tickets open as Draft or Ready, not %q", r.State)}
-			}
-			if rule.Created, err = parseTime(r.Created); err != nil {
-				return &LoadError{File: rel, Field: field + ".created", Msg: err.Error()}
-			}
-			p.CI.Rules = append(p.CI.Rules, rule)
-		}
-		var at string
-		if p.CI.Repositories, at, err = decodeCIRepositories(c.Repositories); err != nil {
-			return &LoadError{File: rel, Field: "ci.repositories" + at, Msg: err.Error()}
-		}
-		p.CI.Repositories = withLegacyHomeCI(p.Key, p.CI.Repositories, *c)
-	}
-	if g := pf.GitHubIssues; g != nil {
-		p.GitHubIssues = domain.GitHubIssues{On: g.On, Repositories: g.Repositories, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
-	}
-	if a := pf.AzureBoards; a != nil {
-		p.AzureBoards = domain.AzureBoards{On: a.On, Mode: domain.AzureBoardsMode(a.Mode), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
-			PATEnv: a.PATEnv, NewIssuesNeedMe: a.NewIssuesNeedMe, HideCodeCentral: a.HideCodeCentral, Spec: a.Spec}
-		if a.Mode != "" && !p.AzureBoards.Mode.Valid() {
-			return &LoadError{File: rel, Field: "azure_boards.mode", Msg: fmt.Sprintf("unknown Azure Boards mode %q (%s)", a.Mode, strings.Join(domain.AzureBoardsModeNames(), " or "))}
-		}
-	}
-	if m := pf.Models; m != nil {
-		var field string
-		if p.Models, field, err = decodeModels(*m); err != nil {
-			return &LoadError{File: rel, Field: "models." + field, Msg: err.Error()}
-		}
-	}
-	if m := pf.ReportedModels; m != nil {
-		var field string
-		if p.ReportedModels, field, err = decodeReportedModels(*m); err != nil {
-			return &LoadError{File: rel, Field: "reported_models." + field, Msg: err.Error()}
-		}
-	}
-	if g := pf.StageGuides; g != nil {
-		p.StageGuides = domain.StageGuides{SubagentExplorationOff: g.SubagentExplorationOff, ModelAssignmentOn: g.ModelAssignmentOn}
-	}
-	var at string
-	if p.FocusKindsOff, at, err = decodeFocusKindsOff(pf.FocusKindsOff); err != nil {
-		return &LoadError{File: rel, Field: "focus_kinds_off" + at, Msg: err.Error()}
-	}
-	rs, at, err := decodeCIResponses(pf.CIResponses)
-	if err != nil {
-		return &LoadError{File: rel, Field: "ci_responses" + at, Msg: err.Error()}
-	}
-	p.CIResponses = rs
-	p.CIFixesSpec = pf.CIFixesSpec
-	p.SmallChangesSpec = pf.SmallChangesSpec
-	p.RetrosSpec = pf.RetrosSpec
-	for i, k := range pf.AutoAccept {
-		kind := domain.AutoAcceptKind(k)
-		if !kind.Valid() {
-			return &LoadError{File: rel, Field: fmt.Sprintf("auto_accept[%d]", i), Msg: fmt.Sprintf("unknown Auto-accept kind %q", k)}
-		}
-		p.SetAutoAccept(kind, true)
-	}
-	if p.Repositories, at, err = decodeRepositories(p.Key, pf.Repositories); err != nil {
-		return &LoadError{File: rel, Field: "repositories" + at, Msg: err.Error()}
+	p, lerr := projectOf(pf)
+	if lerr != nil {
+		lerr.File = rel
+		return lerr
 	}
 	s.setProject(p)
 	if err := s.loadCIRuns(key); err != nil {
@@ -359,7 +264,7 @@ func (s *FileStore) loadProject(key string) error {
 			if kind == "specs" {
 				s.projects[key].specs[f.n] = f.spec
 			} else {
-				s.projects[key].tickets[f.n] = f.ticket
+				s.projects[key].tickets[f.n] = withHead(f.ticket)
 			}
 		}
 	}

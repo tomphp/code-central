@@ -36,7 +36,7 @@ func TestTheRealChainMigratesAFormat18StoreToTheClaimModelFormat(t *testing.T) {
 		t.Errorf("store.yaml = %q", got)
 	}
 	s.View(func(r store.Reader) error {
-		tk, _ := r.Ticket("acme", 2)
+		tk, _ := r.Ticket("acme", 2, store.History...)
 		if len(tk.Claims) != 1 || tk.Claims[0].SessionID != "s1" || tk.Claims[0].Model != "" || tk.Claims[0].Effort != "" || tk.Tags["model"] != "opus" {
 			t.Errorf("ticket after migrating = %+v, want its Claim and Tags kept, with no model or effort recorded", tk)
 		}
@@ -45,15 +45,15 @@ func TestTheRealChainMigratesAFormat18StoreToTheClaimModelFormat(t *testing.T) {
 
 	// A model and effort recorded after migrating read back.
 	if err := s.Update(func(w store.Writer) error {
-		tk, _ := w.Ticket("acme", 2)
+		tk, _ := w.Ticket("acme", 2, store.History...)
 		tk.Claims[0].Model, tk.Claims[0].Effort = "opus", "high"
-		return w.PutTicket("acme", tk)
+		return w.PutTicket("acme", tk, store.History...)
 	}); err != nil {
 		t.Fatal(err)
 	}
 	s = reopen(t, s)
 	s.View(func(r store.Reader) error {
-		if tk, _ := r.Ticket("acme", 2); tk.Claims[0].Model != "opus" || tk.Claims[0].Effort != "high" {
+		if tk, _ := r.Ticket("acme", 2, store.History...); tk.Claims[0].Model != "opus" || tk.Claims[0].Effort != "high" {
 			t.Errorf("claim = %+v, want opus at high", tk.Claims[0])
 		}
 		return nil

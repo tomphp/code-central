@@ -179,7 +179,7 @@ func specWork(r store.Reader, key string, t domain.Ticket) []domain.Ticket {
 	if !inSpecWork(r, p, t) {
 		return nil
 	}
-	return specWorkOf(r, p, r.Tickets(key), t.Spec)
+	return specWorkOf(r, p, r.FindTickets(key, store.TicketFilter{Spec: []int{t.Spec}, States: []domain.State{domain.Accepted}}), t.Spec)
 }
 
 // inSpecWork reports whether t waits on its Spec's one pull request in
@@ -274,7 +274,7 @@ func (c *Core) newSpecFixTicket(ctx context.Context, key string, in NewFixTicket
 			Created: now, Updated: now,
 			Description: fmt.Sprintf("Fix %s on the Spec Branch: its work waits on one pull request, and accepting this pushes the Spec Branch again.\n\n%s", what, in.Note),
 		}
-		if err := w.PutTicket(key, f); err != nil {
+		if err := whole.put(w, key, &f); err != nil {
 			return err
 		}
 		v, err = acknowledgeCreate(c.ticketView(w, key, domain.Ticket{}), c.ticketView(w, key, f), in.Full)

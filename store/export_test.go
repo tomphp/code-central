@@ -1,5 +1,11 @@
 package store
 
+import (
+	"errors"
+
+	"github.com/tomoram/code-central/usage"
+)
+
 // StopImportAfter makes s's next Imports stop dead after step k, as if
 // the process had died there: nothing is cleaned up and memory is not
 // updated. Steps are: stage each file, write the manifest, rename each
@@ -31,3 +37,9 @@ func StopMigrationBetweenRenames(t interface{ Cleanup(func()) }) {
 
 // ErrMigrationStopped is what a migration stopped by the hook returns.
 var ErrMigrationStopped = errMigrationStopped
+
+// FailUsageAppends makes the in-memory fake s refuse every later Usage
+// append to project, as a full disk does the File Store's.
+func FailUsageAppends(s Store, project string) {
+	s.Usage().(*usage.Memory).FailAppends(project, errors.New("no space left on device"))
+}
