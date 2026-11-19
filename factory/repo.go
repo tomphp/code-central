@@ -73,9 +73,11 @@ type repo interface {
 	forkPoints() ([]string, error)
 	// deleteRef deletes ref, failing unless it is at old.
 	deleteRef(ref, old string) error
-	// push pushes branch to remote, never forcing; out is git's output
-	// when it fails. A stop (ctx) kills it.
-	push(ctx context.Context, remote, branch string) (out string, err error)
+	// push pushes branch to remote; out is git's output when it fails. With
+	// lease it forces, but only over the remote's branch at lease, as
+	// `--force-with-lease=<branch>:<lease>` does; with "" it never forces.
+	// A stop (ctx) kills it.
+	push(ctx context.Context, remote, branch, lease string) (out string, err error)
 	// fetch fetches remote, updating its remote-tracking refs; out is git's
 	// output when it fails. A stop (ctx) kills it.
 	fetch(ctx context.Context, remote string) (out string, err error)
@@ -290,8 +292,12 @@ func (g gitRepo) deleteRef(ref, old string) error {
 	return err
 }
 
-func (g gitRepo) push(ctx context.Context, remote, branch string) (string, error) {
-	cmd := exec.CommandContext(ctx, g.git, "push", remote, branch)
+func (g gitRepo) push(ctx context.Context, remote, branch, lease string) (string, error) {
+	args := []string{"push", remote, branch}
+	if lease != "" {
+		args = []string{"push", "--force-with-lease=" + branch + ":" + lease, remote, branch}
+	}
+	cmd := exec.CommandContext(ctx, g.git, args...)
 	cmd.Dir = g.dir
 	// A prompt for credentials would wait forever: nobody answers it.
 	cmd.Env = append(slices.Clone(g.environ), "GIT_TERMINAL_PROMPT=0")

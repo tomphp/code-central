@@ -350,7 +350,7 @@ func (r *fakeRepo) deleteRef(ref, old string) error {
 	return nil
 }
 
-func (r *fakeRepo) push(ctx context.Context, remote, branch string) (string, error) {
+func (r *fakeRepo) push(ctx context.Context, remote, branch, lease string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	rm := r.remotes[remote]
@@ -358,7 +358,11 @@ func (r *fakeRepo) push(ctx context.Context, remote, branch string) (string, err
 		return fmt.Sprintf("fatal: '%s' does not appear to be a git repository", remote), errors.New("exit status 128")
 	}
 	local := r.refs["refs/heads/"+branch]
-	if theirs := rm.refs[branch]; theirs != "" && !r.reachable(theirs, local) {
+	theirs := rm.refs[branch]
+	switch {
+	case lease != "" && theirs != lease:
+		return fmt.Sprintf(" ! [rejected]        %s -> %s (stale info)", branch, branch), errors.New("exit status 1")
+	case lease == "" && theirs != "" && !r.reachable(theirs, local):
 		return fmt.Sprintf(" ! [rejected]        %s -> %s (fetch first)", branch, branch), errors.New("exit status 1")
 	}
 	r.pushes++

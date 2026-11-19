@@ -141,16 +141,17 @@ func (l *lander) land(ctx context.Context, p core.ProjectView) {
 // Spec Branch there; by Pull Request it pushes its branch there for its
 // pull request, and lands it there once that is merged; by Branch it
 // leaves it for the human to merge there, and lands it there once
-// merged. Every merge the Factory makes is worked out before tk lands in
-// any Repository: one that conflicts, or can't be worked out this poll,
-// moves nothing of tk anywhere (ADR 0049). Then it goes through them in
-// the landing order, and stops at a merge it can't land yet, to go on
-// from there next poll. tk is Partly landed until it has landed in each.
+// merged. Every merge the Factory makes, and every rebase of its branch
+// before a push under Rebase, is worked out before tk lands in any
+// Repository: one that conflicts, or can't be worked out this poll, moves
+// nothing of tk anywhere (ADR 0049). Then it goes through them in the
+// landing order, and stops at a merge it can't land yet, to go on from
+// there next poll. tk is Partly landed until it has landed in each.
 func (l *lander) landEach(ctx context.Context, tk core.TicketView, p core.ProjectView, ws []changedWork) {
 	policies := p.LandingPolicies()
 	onSpec := l.waitsOnSpecBranch(tk)
 	routes := make([]domain.LandingRoute, len(ws))
-	var merges, specs []changedWork
+	var merges, specs, pulls []changedWork
 	for i, w := range ws {
 		routes[i] = w.r.policy(policies).Route(onSpec, pullRequestMergedIn(tk, w.r))
 		switch routes[i] {
@@ -158,10 +159,24 @@ func (l *lander) landEach(ctx context.Context, tk core.TicketView, p core.Projec
 			merges = append(merges, w)
 		case domain.RouteSpecBranch:
 			specs = append(specs, w)
+		case domain.RoutePullRequest:
+			pulls = append(pulls, w)
 		}
 	}
-	plans, ok := l.planMerges(ctx, tk, policies, merges)
+	plans, conflicts, ok := l.planMerges(ctx, tk, policies, merges)
 	if !ok {
+		return
+	}
+	var rebases map[*repository]pushRebase
+	if !onSpec {
+		var more []landConflict
+		if rebases, more, ok = l.planPushRebases(ctx, tk, policies, pulls); !ok {
+			return
+		}
+		conflicts = append(conflicts, more...)
+	}
+	if len(conflicts) > 0 {
+		l.sendBackConflicts(ctx, tk, "base", conflicts)
 		return
 	}
 	if len(specs) > 0 && !l.mergeIntoSpecBranch(ctx, tk, policies, specs) {
@@ -174,6 +189,9 @@ func (l *lander) landEach(ctx context.Context, tk core.TicketView, p core.Projec
 				return
 			}
 		case domain.RoutePullRequest:
+			if rb, ok := rebases[w.r]; ok && !l.rebaseForPush(ctx, tk, w.r, rb) {
+				return
+			}
 			if changedElsewhere(l.repos.home.name, tk) {
 				l.landPullRequestIn(ctx, tk, policies, w.r, onSpec)
 			} else {
@@ -238,7 +256,7 @@ func (l *lander) pushBranch(ctx context.Context, tk core.TicketView, policies co
 		l.cantPushYet(ctx, tk, "it was finished without a branch, so there is no branch to push.")
 		return
 	}
-	pushed, why := l.push(ctx, r, r.remote, branch, commit)
+	pushed, why := l.push(ctx, r, r.remote, branch, commit, false)
 	if why != "" {
 		l.cantPushIn(ctx, tk, r, why)
 		return
@@ -470,19 +488,19 @@ type mergePlan struct {
 
 // planMerges works out how an Accepted Ticket's work is merged into the
 // base of each of ws, the Changed Repositories it lands in by Merge, that
-// it hasn't landed in (ADR 0049), by Repository. ok is false when it
-// lands in none this poll: a merge can't be worked out yet, or one
-// conflicts, which sends the Ticket back in the wording of each
-// Repository's Landing Policy, policies' (sendBackConflicts).
-func (l *lander) planMerges(ctx context.Context, tk core.TicketView, policies core.LandingPolicies, ws []changedWork) (plans map[*repository]mergePlan, ok bool) {
+// it hasn't landed in (ADR 0049), by Repository, and the merges that
+// conflict, in the wording of each Repository's Landing Policy,
+// policies', for the Ticket to be sent back with (sendBackConflicts). ok
+// is false when a merge can't be worked out yet, with a comment or a
+// line saying why.
+func (l *lander) planMerges(ctx context.Context, tk core.TicketView, policies core.LandingPolicies, ws []changedWork) (plans map[*repository]mergePlan, conflicts []landConflict, ok bool) {
 	plans = map[*repository]mergePlan{}
-	var conflicts []landConflict
 	for _, w := range ws {
 		rebase := w.r.policy(policies).RebaseInForce()
 		pl, landed, planned := l.planMerge(ctx, tk, w, rebase)
 		switch {
 		case !planned:
-			return nil, false
+			return nil, nil, false
 		case landed:
 		case len(pl.conflicts) > 0:
 			conflicts = append(conflicts, landConflict{r: pl.r, head: pl.head, into: l.repos.baseOf(pl.r), tip: pl.baseTip, files: pl.conflicts, rebase: rebase, replaying: pl.replaying})
@@ -490,11 +508,7 @@ func (l *lander) planMerges(ctx context.Context, tk core.TicketView, policies co
 			plans[w.r] = pl
 		}
 	}
-	if len(conflicts) > 0 {
-		l.sendBackConflicts(ctx, tk, "base", conflicts)
-		return nil, false
-	}
-	return plans, true
+	return plans, conflicts, true
 }
 
 // planMerge works out how tk lands in w's Repository, or that it has
@@ -618,7 +632,7 @@ func (l *lander) landPushed(ctx context.Context, tk core.TicketView, p core.Proj
 		l.landOnCI(ctx, tk, r, v)
 		return true
 	}
-	pushed, why := l.push(ctx, r, r.remote, base, commit)
+	pushed, why := l.push(ctx, r, r.remote, base, commit, false)
 	if why != "" {
 		l.cantLandIn(ctx, tk, r, why)
 		return false
@@ -792,19 +806,39 @@ func (l *lander) reportTip(ctx context.Context, policies core.LandingPolicies) {
 
 // push pushes branch to remote unless its remote-tracking ref already
 // holds commit: a push that succeeded moves that ref, so the Factory
-// needs no state of its own. It never forces, so a remote that has moved
-// ahead is left as it is. It returns whether it pushed, or why the push
-// failed. It pushes from r's clone, to r's own remote of that name.
-func (l *lander) push(ctx context.Context, r *repository, remote, branch, commit string) (pushed bool, why string) {
-	if r.git.isAncestor(commit, "refs/remotes/"+remote+"/"+branch) {
+// needs no state of its own. Without force it never forces, so a remote
+// that has moved ahead is left as it is. With force, which only the Spec
+// Branch's and a Ticket's branch's pushes under Rebase set (ADR 0067), a
+// remote branch that commit doesn't descend from, as after a rebase, is
+// replaced, but only from the tip its remote-tracking ref holds
+// (`--force-with-lease`), so a push the Factory hasn't fetched is never
+// lost; force on r's base is refused. It returns whether it pushed, or
+// why the push failed. It pushes from r's clone, to r's own remote of
+// that name.
+func (l *lander) push(ctx context.Context, r *repository, remote, branch, commit string, force bool) (pushed bool, why string) {
+	tracking := "refs/remotes/" + remote + "/" + branch
+	if r.git.isAncestor(commit, tracking) {
 		return false, ""
+	}
+	if force && l.isBase(r, branch) {
+		return false, fmt.Sprintf("the Factory never force-pushes a base, and %s is the base%s.", branch, r.where())
+	}
+	var lease string
+	if theirs, err := r.git.commit(tracking); force && err == nil && !r.git.isAncestor(theirs, commit) {
+		lease = theirs
 	}
 	defer l.work.busy("pushing ", branch)()
 	// A stop kills it, so a push that hangs doesn't hold up the Factory.
-	if out, err := r.git.push(ctx, remote, branch); err != nil {
+	if out, err := r.git.push(ctx, remote, branch, lease); err != nil {
 		return false, fmt.Sprintf("couldn't push %s to %s:\n\n```\n%s\n```", branch, remote, out)
 	}
 	return true, ""
+}
+
+// isBase reports whether branch is r's base, or for the Home Repository a
+// base the Project named earlier in this run.
+func (l *lander) isBase(r *repository, branch string) bool {
+	return branch == l.repos.baseOf(r) || r.home && slices.Contains(l.oldBases, branch)
 }
 
 // cantLandYet leaves a Ticket whose clean merge can't land where it is,

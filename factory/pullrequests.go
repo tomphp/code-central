@@ -53,7 +53,9 @@ func (l *lander) baseHolds(r *repository, commit string) bool {
 // branch is pushed to r's Push remote for the Watcher to open a pull
 // request on. A Ticket still waiting on its Spec Branch, onSpec, has that
 // pushed instead, by landSpecs, so only its merged pull request is seen
-// to here.
+// to here. Under Rebase its branch holds its work rebased onto the base,
+// when it was (rebaseForPush), which is pushed with lease over an older
+// push.
 func (l *lander) landPullRequestIn(ctx context.Context, tk core.TicketView, policies core.LandingPolicies, r *repository, onSpec bool) {
 	rec, ok := viewIn(tk, r)
 	if !ok || rec.Landed != nil {
@@ -68,7 +70,7 @@ func (l *lander) landPullRequestIn(ctx context.Context, tk core.TicketView, poli
 	if branch == "" || onSpec {
 		return
 	}
-	head, err := r.git.commit(rec.Commit)
+	head, _, err := l.workIn(r, tk)
 	if err != nil {
 		l.cantPushYet(ctx, tk, fmt.Sprintf("its work in %s, %s, isn't in that Repository.", r.name, rec.Commit))
 		return
@@ -78,7 +80,7 @@ func (l *lander) landPullRequestIn(ctx context.Context, tk core.TicketView, poli
 		l.landIn(ctx, tk, r, head)
 		return
 	}
-	pushed, why := l.push(ctx, r, remote, branch, head)
+	pushed, why := l.push(ctx, r, remote, branch, head, r.policy(policies).RebaseInForce())
 	if why != "" {
 		l.cantPushYet(ctx, tk, fmt.Sprintf("in %s, %s", r.name, why))
 		return
@@ -87,6 +89,75 @@ func (l *lander) landPullRequestIn(ctx context.Context, tk core.TicketView, poli
 		l.printf("%s: pushed %s to %s%s", tk.ID, branch, remote, r.where())
 	}
 	l.reportPushed(ctx, tk, policies, r, branch, l.remoteTip(r, remote, branch, head))
+}
+
+// pushRebase is a Ticket's work in a Repository under Pull Request with
+// Rebase in force replayed onto onto, the fetched base's tip, as its
+// branch is about to be pushed.
+type pushRebase struct {
+	replay *replay
+	onto   string
+}
+
+// planPushRebases works out, for an Accepted tk not waiting on its Spec
+// Branch, which of ws, the Changed Repositories it lands in by Pull
+// Request, have its branch rebased onto the fetched base's tip before it
+// is pushed (ADR 0067): those where Rebase is in force, its pull request
+// hasn't merged, and its work, neither in the base nor on the remote yet,
+// so about to be pushed, doesn't descend from the base's tip. A branch
+// pushed already isn't rebased again as the base moves, so its CI doesn't
+// rerun on each move. Every one is worked out before any branch moves
+// (ADR 0049): it returns the replays by Repository, and those that
+// conflict, for tk to be sent back to rebase. ok is false when one can't
+// be worked out this poll: a base not fetched level with the remote's
+// waits for one that is, and otherwise a comment or a line says why.
+func (l *lander) planPushRebases(ctx context.Context, tk core.TicketView, policies core.LandingPolicies, ws []changedWork) (rebases map[*repository]pushRebase, conflicts []landConflict, ok bool) {
+	rebases = map[*repository]pushRebase{}
+	for _, w := range ws {
+		r := w.r
+		v, in := viewIn(tk, r)
+		if !r.policy(policies).RebaseInForce() || !in || v.Landed != nil || hasMerged(v.PullRequest) || v.Branch == "" {
+			continue
+		}
+		head, _, err := l.workIn(r, tk)
+		if err != nil || l.repos.inBaseOf(r, head) || r.git.isAncestor(head, "refs/remotes/"+r.remote+"/"+v.Branch) {
+			continue
+		}
+		if !l.stateOf(r).current {
+			return nil, nil, false
+		}
+		base := l.repos.baseOf(r)
+		baseTip, err := r.git.commit("refs/heads/" + base)
+		if err != nil || r.git.isAncestor(baseTip, head) {
+			continue
+		}
+		rp, files, why, err := l.planBaseReplay(r, v.Branch, head, baseTip)
+		switch {
+		case err != nil:
+			l.printf("warning: %s: can't replay%s: %v", tk.ID, r.where(), err)
+			return nil, nil, false
+		case why != "":
+			l.cantPushIn(ctx, tk, r, why)
+			return nil, nil, false
+		case len(files) > 0:
+			conflicts = append(conflicts, landConflict{r: r, head: head, into: base, tip: baseTip, files: files, rebase: true, replaying: true})
+		default:
+			rebases[r] = pushRebase{replay: rp, onto: baseTip}
+		}
+	}
+	return rebases, conflicts, true
+}
+
+// rebaseForPush moves tk's branch in r to its work replayed onto the
+// base's tip, as rb says, before it is pushed, and reports whether it
+// did; it comments why when it can't, to be tried again next poll.
+func (l *lander) rebaseForPush(ctx context.Context, tk core.TicketView, r *repository, rb pushRebase) bool {
+	if err := rb.replay.apply(r, tk.ID, rb.onto); err != nil {
+		l.cantPushIn(ctx, tk, r, err.Error()+".")
+		return false
+	}
+	l.printf("%s: replayed onto %s at %s%s", tk.ID, l.repos.baseOf(r), short(rb.replay.tip), r.where())
+	return true
 }
 
 // landMergedIn lands tk in r, whose pull request there is reported
