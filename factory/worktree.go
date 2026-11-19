@@ -187,7 +187,7 @@ func (rs *repositories) cutBranchWorktree(r *repository, tk core.TicketView, bra
 	from, fork := rs.baseOf(r), ""
 	if tk.SpecLanded {
 		if _, err := r.git.commit("refs/heads/" + branch); err != nil {
-			tip, err := rs.specBranchTip(r, tk.Spec.ID)
+			tip, err := rs.specBranchTip(r, tk.Spec.Branch)
 			if err != nil {
 				return specBranchFailed(wt, err)
 			}
@@ -447,7 +447,7 @@ func (l *lander) sweepUnusedBranch(r *repository, tk core.TicketView, branch str
 	if err != nil {
 		return
 	}
-	if !onFirstParentLine(r.git, tip, "refs/heads/"+l.repos.baseOf(r)) && !onFirstParentLine(r.git, tip, "refs/heads/"+specBranch(tk.Spec.ID)) {
+	if !onFirstParentLine(r.git, tip, "refs/heads/"+l.repos.baseOf(r)) && !onFirstParentLine(r.git, tip, "refs/heads/"+tk.Spec.Branch) {
 		return
 	}
 	if _, replayed := replayedTip(r, tk.ID, branch); replayed && tk.State != domain.Done && tk.State != domain.Cancelled {

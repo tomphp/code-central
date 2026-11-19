@@ -50,7 +50,7 @@ func (rs *repositories) changedHead(r *repository, tk core.TicketView, branch st
 	if _, err := r.git.commit("refs/heads/" + rs.baseOf(r)); err != nil {
 		return "", false
 	}
-	if tk.SpecLanded && r.git.isAncestor(head, "refs/heads/"+specBranch(tk.Spec.ID)) {
+	if tk.SpecLanded && r.git.isAncestor(head, "refs/heads/"+tk.Spec.Branch) {
 		return "", false
 	}
 	return head, true
