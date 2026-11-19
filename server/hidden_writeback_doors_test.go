@@ -4,11 +4,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/codecentraltest"
+	"github.com/tomoram/code-central/core"
 )
 
 // Hide Code Central (Spec code-central-1050): while it is on,
@@ -17,21 +16,22 @@ import (
 // come due at the same points under the same keys. get_issue_watch
 // doesn't change.
 
-// boardsHidden turns Azure Boards on for acme as boardsOn does, with
-// Hide Code Central as hide.
-func boardsHidden(needMe, hide bool) func(*testing.T, *codecentraltest.Server) {
-	return func(t *testing.T, srv *codecentraltest.Server) {
-		t.Helper()
-		httpOK(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`","new_issues_need_me":`+strconv.FormatBool(needMe)+
-			`,"hide_code_central":`+strconv.FormatBool(hide)+`}`))
-	}
-}
-
 // opaque is the opaque marker of the comment key on target: the first 12
-// hex digits of the SHA-256 of the two joined by a space.
+// hex digits of the SHA-256 of the two joined by a space. It is worked
+// out here, apart from core.OpaqueMarker, so the tests check the Spec's
+// definition rather than the code against itself.
 func opaque(target, key string) string {
 	sum := sha256.Sum256([]byte(target + " " + key))
 	return "<!-- " + hex.EncodeToString(sum[:])[:12] + " -->"
+}
+
+// The opaque marker is the same in every release: acme-5's grilling
+// comment always carries this hash.
+func TestTheOpaqueMarkerIsAStableHashOfTheTargetAndKey(t *testing.T) {
+	want := "<!-- 6bfc160dceca -->"
+	if got := core.OpaqueMarker("acme-5", "grilling"); got != want || opaque("acme-5", "grilling") != want {
+		t.Fatalf("opaque marker = %q, want %q", got, want)
+	}
 }
 
 // wantHidden checks w's comments are each in the hidden form: the opaque

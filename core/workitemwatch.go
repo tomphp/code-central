@@ -73,11 +73,7 @@ func (c *Core) GetWorkItemWatch(_ context.Context, key string) (WorkItemWatch, e
 		a := azureBoardsView(p, WatcherView{})
 		out = WorkItemWatch{Project: key, On: a.On, Mode: a.Mode, QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where, PATEnv: a.PATEnv,
 			Spec: a.Spec, Issues: incomingIssues(r, key, IntegrationAzureBoards), Linked: linkIDs(r, key, IntegrationAzureBoards), Writes: []WorkItemWrites{}}
-		hide := p.AzureBoards.HideCodeCentral
-		for _, w := range c.integrationWrites(r, key, IntegrationAzureBoards, hide) {
-			if hide {
-				w.Label = ""
-			}
+		for _, w := range c.integrationWrites(r, key, IntegrationAzureBoards, p.AzureBoards.HideCodeCentral) {
 			if w.Label != "" || len(w.Comments) > 0 {
 				out.Writes = append(out.Writes, WorkItemWrites{Target: w.Target, Link: w.Link, Comments: w.Comments, Tag: w.Label})
 			}

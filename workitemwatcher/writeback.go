@@ -71,8 +71,7 @@ func (cfg Config) writeItem(ctx context.Context, c *azdo.Client, id int, w core.
 
 // writeComments posts each of w's comments due on item, unless its
 // branded or opaque marker shows it was posted before a crash, and
-// reports each written. It
-// reports whether it posted any.
+// reports each written. It reports whether it posted any.
 func (cfg Config) writeComments(ctx context.Context, c *azdo.Client, item azdo.WorkItem, w core.WorkItemWrites) (posted bool, err error) {
 	if len(w.Comments) == 0 {
 		return false, nil

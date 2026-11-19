@@ -166,8 +166,9 @@ func triageComment(t domain.Ticket, via TriageAction) (comment string, latest, o
 // integrationWrites is what is due on each of integration's Links in key,
 // in number order: on the Tickets on its inbox Spec, and on the Specs
 // with an outbound Link through it. There is none before the Integration
-// is first turned on. hide renders each comment as Hide Code Central
-// does; what is due is the same either way.
+// is first turned on. hide writes as Hide Code Central does: each comment
+// in the hidden form and no status label. The comments due are the same
+// either way.
 func (c *Core) integrationWrites(r store.Reader, key, integration string, hide bool) []IssueWrites {
 	out := []IssueWrites{}
 	in := inboxOf(r, key, integration)
@@ -193,6 +194,9 @@ func (c *Core) integrationWrites(r store.Reader, key, integration string, hide b
 	}
 	for n := 1; n < r.NextNumber(key); n++ {
 		if w, ok := byNumber[n]; ok {
+			if hide {
+				w.Label = ""
+			}
 			out = append(out, w)
 		}
 	}
