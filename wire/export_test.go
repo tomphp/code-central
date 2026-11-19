@@ -1,4 +1,4 @@
-package cli
+package wire
 
 import (
 	"github.com/tomoram/code-central/domain"

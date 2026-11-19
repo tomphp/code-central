@@ -72,7 +72,8 @@ A second, test-only composition exists: `world/` + `cmd/corewasm` build the real
 | `domain` | The records (`Ticket`, `State`, `Landing`, `CI`…), the enums and `LandingPolicy` (ADR 0064). Imports nothing of Code Central. | Plain types. |
 | `store` | Persistence: file shapes, migrations, locking, the Store Kinds (Files, SQLite, Postgres; ADR 0067, 0068), Service Registrations and Watcher Leases, and the Store's Usage (ADR 0069). | `store.Store`, with the `storetest` contract suite. See [The Store](#the-store). |
 | `client` | The Go HTTP client, its calls derived from `ops`. Used by the CLI, the Factory and the Watchers. | `client.Client`. |
-| `cli`, `cmd/*` | The command surface, `init` scaffolding, service install, the Watchers' subcommands, and `serve`'s flags and local settings (it calls `app.Run`). | Commands; most built from `ops.All()`. |
+| `cli`, `cmd/*` | The command surface and `init` scaffolding: commands over `client` and `ops`. | Commands; most built from `ops.All()`. |
+| `wire` | The commands that need more than the service's client, registered with `cli.Register`: `serve`'s flags and local settings (it calls `app.Run`), the Store location, `store move`, `service install` and the Watchers' subcommands. `cmd/code-central` and the fake binaries of `factorytest` and `watchertest` import it. | Commands. |
 | `factory`, `cmd/code-central-factory` | A separate process that runs Claims as Claude Code sessions (`*factory`) and lands work (`lander`), over a shared registry of repositories. | Talks to the service only through `client`. |
 | `ciwatcher`, `pullrequestwatcher`, `issuewatcher`, `workitemwatcher` | One Watcher each: CI runs, pull requests, GitHub Issues (inbound, ADR 0047) and Azure Boards (ADR 0053). `ciwatcher` has a `Provider` and `pullrequestwatcher` a `Host`, each with a GitHub and an Azure implementation. | Talk to the service through `client`; to the code host through `gh` and `azdo`. |
 | `watchers` | Generic supervision: restart with backoff, and running a Project's Watchers only while this service holds its Watcher Lease. | `watchers.Supervise` over a `Central` interface. |
@@ -122,7 +123,8 @@ Found:
 | `server` | core, httpapi, mcp, ops, usage |
 | `core` | azdourl, clock, codehost, domain, events, ids, store, usage, internal/fieldwalk |
 | `store` | domain, events, home, usage |
-| `cli` | app, ciwatcher, client, clock, core, domain, gh, home, issuewatcher, notify, ops, pullrequestwatcher, store, workitemwatcher, internal/fieldwalk |
+| `cli` | client, core, domain, home, notify, ops, internal/fieldwalk |
+| `wire` | app, ciwatcher, cli, clock, core, domain, gh, home, issuewatcher, notify, pullrequestwatcher, store, workitemwatcher |
 
 ### The Store
 
@@ -198,9 +200,3 @@ One type with 150 methods and 20 fields, mixing the persisted workflow with in-m
 Heartbeats, Transcripts, chats and Watcher status live in one service's memory ("in memory only, never in the store", `core/heartbeat.go`; ADR 0008). Since ADR 0068, several services can share a Postgres Store and hear each other's Changes, but not each other's runtime state: a Factory reporting to one service is Offline in the UI of another, and its Transcript is blank there. Nothing in the docs says whether that is intended.
 
 **Recommendation:** decide it and record the decision in an ADR, either "a Factory and the UI that watches it use the same service" (and say so where a shared Store is set up), or move the state that must be seen everywhere (at least Heartbeats) into the Store's `Services()` side, outside any View or Update, as Registrations and Leases already are.
-
-### 8. `cli` is still wide
-
-`cli` imports 15 Code Central packages, `store` and all four Watchers among them: `serve`'s Store location (`cli/serve.go`), the Watchers' subcommands and Store Move live beside the commands that are only HTTP clients. That is why `factory/factorytest` and `watchers/watchertest`, which re-run `cli.Run` as a fake binary, link everything too.
-
-**Recommendation:** move the Watchers' subcommands and Store location into `app` (or a `cmd/code-central` wiring file), leaving `cli` as commands over `client` and `ops`.
