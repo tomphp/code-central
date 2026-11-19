@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -78,6 +79,15 @@ type Services interface {
 	// service holds it unexpired. It returns the Lease as it then is:
 	// id's, or the other holder's.
 	HoldLease(project, id string, now time.Time) (Lease, error)
+}
+
+// registered names each service in regs by its host and version.
+func registered(regs []Registration) string {
+	names := make([]string, 0, len(regs))
+	for _, r := range regs {
+		names = append(names, fmt.Sprintf("%s (%s)", r.Host, r.Version))
+	}
+	return strings.Join(names, ", ")
 }
 
 // FormatChangedError is a Store whose format another service changed

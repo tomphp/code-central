@@ -103,24 +103,24 @@ func (u *sqlUsage) readDay(project, day string, out *usage.Records) error {
 	return nil
 }
 
-func (u *sqlUsage) Days(project string) ([]string, error) {
-	rows, err := u.db.QueryContext(context.Background(), u.d.rebind(`SELECT DISTINCT day FROM usage_records WHERE project = ? ORDER BY day`), project)
+func (u *sqlUsage) Days() (map[string][]string, error) {
+	rows, err := u.db.QueryContext(context.Background(), `SELECT DISTINCT project, day FROM usage_records ORDER BY project, day`)
 	if err != nil {
-		return nil, fmt.Errorf("cannot read %s's usage days: %w", project, err)
+		return nil, fmt.Errorf("cannot list usage's days: %w", err)
 	}
 	defer rows.Close()
-	var days []string
+	out := map[string][]string{}
 	for rows.Next() {
-		var d string
-		if err := rows.Scan(&d); err != nil {
-			return nil, fmt.Errorf("stopped reading %s's usage days: %w", project, err)
+		var p, day string
+		if err := rows.Scan(&p, &day); err != nil {
+			return out, fmt.Errorf("stopped listing usage's days: %w", err)
 		}
-		days = append(days, d)
+		out[p] = append(out[p], day)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("stopped reading %s's usage days: %w", project, err)
+		return out, fmt.Errorf("stopped listing usage's days: %w", err)
 	}
-	return days, nil
+	return out, nil
 }
 
 func (u *sqlUsage) Prune(before string) error {

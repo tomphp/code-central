@@ -155,7 +155,7 @@ store:
   path: /home/me/.local/share/code-central/code-central.db   # optional: code-central.db in the data folder
 ```
 
-Then `code-central service restart` (or `service install` again). The store starts empty: moving the records of an existing File Store into it is a later release's Store Move. The service's startup line names what it opened, such as `(store: sqlite at /home/me/.local/share/code-central/code-central.db)`, and the log does too.
+Then `code-central service restart` (or `service install` again). A new Store starts empty: to take your records with you, use [Store Move](#moving-to-another-store) instead of writing the block by hand. The service's startup line names what it opened, such as `(store: sqlite at /home/me/.local/share/code-central/code-central.db)`, and the log does too.
 
 - `kind` is `files`, `sqlite` or `postgres`. Anything else stops the service: `settings.yaml: field store.kind: must be files, sqlite or postgres, not "mysql"`.
 - `path` is the File Store's folder or the SQLite database file. Left out, it is the data folder, or `code-central.db` in it. A Postgres Store has none: giving it one stops the service, naming `store.path`.
@@ -192,6 +192,41 @@ Each running service registers itself in the Store, with its host and version, r
 **Backups.** Back the database up with Postgres's own tools: `pg_dump`, or your provider's backups and point-in-time recovery. A Postgres Migration keeps no backup of its own, unlike the File and SQLite Stores: it runs as one transaction and relies on those, so a backup, or a point in time, is at one format or the other, never between.
 
 **Upgrading.** A service at a newer version than the Store's format migrates it at startup, in one transaction, and prints `code-central serve: migrated the store from format <n> to <m>, in one transaction`. It does so only with no other service registered on the Store, since one would go on writing the old format: otherwise it stops, naming each one, `cannot migrate db.example.com:5432/code_central from format <n> to <m> while another service is registered on it: desktop (v1.4.0); stop it and start this one again, or wait 30s for one that stopped without saying so (the store is untouched)`. So to upgrade, stop every service on the Store, start one at the new version, and then upgrade and start the others. A service at the old version that had dropped out, cut off from the database for 30 seconds or more, and comes back after the Migration stops writing at once and exits at its next renewal: `code-central serve: db.example.com:5432/code_central: another service migrated the store to format <m>, and this code-central writes format <n>; it stops writing it: upgrade it and start it again`. If the Migration fails, the transaction rolls back, the Store stays at its old format, and the service stops, naming what failed.
+
+### Moving to another Store
+
+**Store Move** copies every record of the Store the service opens, with its History, the Options, the CI Runs and the Usage, into a new, empty Store of any Kind, and points `settings.yaml` at it. It works offline, opening both Stores itself, so stop the service first, as for [Downgrading](#downgrading):
+
+```sh
+launchctl bootout gui/$(id -u)/com.github.tomoram.code-central   # macOS; Linux: systemctl --user stop code-central; Windows: schtasks /End /TN "Code Central"
+```
+
+Then:
+
+```sh
+code-central store move --to sqlite                       # code-central.db in the data folder
+code-central store move --to sqlite:/srv/cc/central.db    # or a path of your own
+code-central store move --to files:/srv/cc/store          # back to files, in a new folder
+code-central store move --to postgres                     # the URL in CODE_CENTRAL_DATABASE_URL
+code-central store move --to postgres --url-env MY_DB     # or in MY_DB
+```
+
+```
+Moved files at /home/me/.local/share/code-central into sqlite at /home/me/.local/share/code-central/code-central.db:
+  acme: 12 Specs, 140 Tickets, 35 CI Runs, 41 Usage days
+  and the Options
+/home/me/.config/code-central/settings.yaml now names sqlite at /home/me/.local/share/code-central/code-central.db, which the next serve opens.
+The source, files at /home/me/.local/share/code-central, is untouched: keep it as a backup, or delete it once the new Store serves you.
+```
+
+Then start the service again with `code-central service install`; its startup line names the new Store.
+
+- The source is always the Store `serve` would open: the one `--store <dir>`, `CODE_CENTRAL_STORE` or the `store:` block names. While a service has it open, the move refuses: `files at /home/me/.local/share/code-central is locked by a running code-central serve: stop the service and move again`. A Postgres source isn't locked, so the move refuses while any service is registered on it, before copying and again after, naming each one: `postgres at db.example.com:5432/code_central: a service is running on it: desktop (v1.4.0); stop it and move again, or wait 30s for one that stopped without saying so`.
+- The target must be empty: a Store holding any Project, any Usage, or Options other than the defaults, is refused (`sqlite at … isn't empty`), so two Stores are never merged.
+- After copying, the move counts each Project's Specs, Tickets, CI Runs and Usage days, and the Options, in both Stores, and stops on any difference, naming it. If the copy stops or the counts differ, `settings.yaml` and the source are left as they were, and the target holds part of the copy: delete it (the folder, the database file, or the Postgres database's tables) before moving again.
+- Only the `store:` block of `settings.yaml` is rewritten; your other settings, and their comments, stay. A Postgres target is written as its `url_env`, never its URL, so set the same variable in the service's environment too.
+- The source is never changed, so it is your backup. If the source came from `--store` or `CODE_CENTRAL_STORE`, they still win over the block: the move says so, so drop them, and run `service install` without `--store`.
+- A Usage line that no read can parse isn't moved.
 
 ## Options
 

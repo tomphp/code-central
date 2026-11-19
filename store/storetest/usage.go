@@ -2,6 +2,7 @@ package storetest
 
 import (
 	"bytes"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -118,26 +119,38 @@ func runUsage(t *testing.T, f Factory) {
 		}
 	})
 
-	t.Run("a project's usage days are the days it has records for, oldest first", func(t *testing.T) {
+	t.Run("usage lists each project's days, oldest first", func(t *testing.T) {
 		s := f.New(t)
-		appendUsage(t, s, "acme", "2026-01-06", usageCall("find_tickets"))
-		appendUsage(t, s, "acme", "2026-01-04", usageResponse("acme-1"))
-		appendUsage(t, s, "acme", "2026-01-06", usageCall("get_ticket"))
-		appendUsage(t, s, "beta", "2026-01-05", usageCall("get_ticket"))
-		for project, want := range map[string][]string{"acme": {"2026-01-04", "2026-01-06"}, "beta": {"2026-01-05"}, "gamma": nil} {
-			got, err := s.Usage().Days(project)
-			if err != nil {
-				t.Fatalf("%s's days: %v", project, err)
-			}
-			if !slices.Equal(got, want) {
-				t.Errorf("%s's days %v, want %v", project, got, want)
-			}
+		for _, d := range []string{"2026-01-06", "2026-01-04", "2026-01-05"} {
+			appendUsage(t, s, "acme", d, usageCall(d))
+		}
+		appendUsage(t, s, "acme", "2026-01-05", usageResponse("acme-1"))
+		appendUsage(t, s, "nobody", "2026-01-07", usageResponse("nobody-1"))
+		got, err := s.Usage().Days()
+		if err != nil {
+			t.Fatalf("days: %v", err)
+		}
+		want := map[string][]string{"acme": {"2026-01-04", "2026-01-05", "2026-01-06"}, "nobody": {"2026-01-07"}}
+		if !maps.EqualFunc(got, want, slices.Equal) {
+			t.Errorf("days %v, want %v", got, want)
 		}
 		if err := s.Usage().Prune("2026-01-05"); err != nil {
 			t.Fatalf("prune: %v", err)
 		}
-		if got, _ := s.Usage().Days("acme"); !slices.Equal(got, []string{"2026-01-06"}) {
-			t.Errorf("acme's days after pruning %v, want [2026-01-06]", got)
+		got, err = s.Usage().Days()
+		if err != nil {
+			t.Fatalf("days after pruning: %v", err)
+		}
+		want["acme"] = []string{"2026-01-05", "2026-01-06"}
+		if !maps.EqualFunc(got, want, slices.Equal) {
+			t.Errorf("days after pruning before 2026-01-05 %v, want %v", got, want)
+		}
+	})
+
+	t.Run("an empty store's usage has no days", func(t *testing.T) {
+		got, err := f.New(t).Usage().Days()
+		if err != nil || len(got) != 0 {
+			t.Fatalf("days %v, %v; want none", got, err)
 		}
 	})
 

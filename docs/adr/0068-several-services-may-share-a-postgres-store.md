@@ -27,7 +27,6 @@ ADR 0067 made the Store pluggable and gave the database Kinds one schema of docu
 - **The database's clock for Registrations and Leases.** Rejected for now: it would spare the hosts agreeing on the time, but the Store interface would no longer take its times from the caller, so the contract suite and core's tests couldn't run them on a fake clock. Hosts kept by NTP agree far closer than the 30 seconds a Lease lives.
 - **Migrating with other services still running, then telling them.** Rejected: a service at the old format would go on writing records of that format into the new one between the Migration and its next renewal. Refusing while another is registered, and stopping a running one whose format the Store has passed, keeps every write at the Store's format.
 - **Copying the old tables aside before a Migration, as SQLite copies its file.** Rejected: one transaction already leaves the Store at the old format if anything fails, and a copy inside the same database would double its size and outlive its use; the provider's backups and point-in-time recovery are the backup.
-
 - **Polling the Store for what changed.** Rejected: every service would read every Project's latest update over and over, and a waiter would still lag by the polling interval. `NOTIFY` costs nothing between writes, and is sent only on commit, which is what a waiter needs.
 
 ## Consequences

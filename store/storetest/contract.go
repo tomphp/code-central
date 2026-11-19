@@ -321,6 +321,7 @@ func Run(t *testing.T, f Factory) {
 	runAwaitingTriage(t, f)
 	runCIRuns(t, f)
 	runUsage(t, f)
+	runMove(t, f)
 	runServices(t, f)
 	runStorage(t, f)
 	runConcurrency(t, f)

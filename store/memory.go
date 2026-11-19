@@ -50,11 +50,14 @@ func (x *index) Size() (int64, error) {
 		return err
 	}
 	errs := []error{add(x.options)}
-	for key, p := range x.projects {
+	days, err := x.usage.Days()
+	errs = append(errs, err)
+	for key, d := range days {
+		recs, err := x.usage.Read(key, d)
+		errs = append(errs, err, add(recs.Calls), add(recs.Responses))
+	}
+	for _, p := range x.projects {
 		errs = append(errs, add(p.project), add(p.ciRuns))
-		days, err := x.usage.Days(key)
-		recs, rerr := x.usage.Read(key, days)
-		errs = append(errs, err, rerr, add(recs.Calls), add(recs.Responses))
 		for _, s := range p.specs {
 			errs = append(errs, add(s))
 		}

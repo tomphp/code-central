@@ -100,8 +100,9 @@ func (c *Core) GetStorage(_ context.Context, in GetStorageInput) (StorageView, e
 		return StorageView{}, notFound("no Project %q", in.Project)
 	}
 	slices.SortFunc(projects, func(a, b StorageProject) int { return cmp.Compare(a.Key, b.Key) })
+	days := c.usage.Days()
 	for i := range projects {
-		projects[i].UsageDays = c.usage.Days(projects[i].Key)
+		projects[i].UsageDays = days[projects[i].Key]
 	}
 	size, err := c.store.Size()
 	if err != nil {

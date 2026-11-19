@@ -87,10 +87,16 @@ func (m *Memory) Read(project string, days []string) (Records, error) {
 	return out, nil
 }
 
-func (m *Memory) Days(project string) ([]string, error) {
+func (m *Memory) Days() (map[string][]string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return slices.Sorted(maps.Keys(m.projects[project])), nil
+	out := map[string][]string{}
+	for p, days := range m.projects {
+		if len(days) > 0 {
+			out[p] = slices.Sorted(maps.Keys(days))
+		}
+	}
+	return out, nil
 }
 
 func (m *Memory) Prune(before string) error {

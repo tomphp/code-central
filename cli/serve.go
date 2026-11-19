@@ -139,17 +139,23 @@ func storeIsAFolder(flag string, local settings, h home.Lookup) bool {
 
 // storeLocation resolves the Store serve opens: the --store flag or
 // CODE_CENTRAL_STORE name a File Store at their folder, else the
-// settings' store: block names the Kind and place (a postgres store's
-// URL, with its credential, comes from the environment variable url_env
-// names, and the Location keeps it unseen), else it is a File Store in
-// the data folder.
+// settings' store: block names the Kind and place (blockLocation), else
+// it is a File Store in the data folder.
 func storeLocation(flag string, local settings, h home.Lookup) (store.Location, error) {
 	if storeIsAFolder(flag, local, h) {
 		dir, err := store.Dir(flag, h)
 		return store.Location{Kind: store.Files, Path: dir}, err
 	}
-	if store.Kind(local.Store.Kind) == store.Postgres {
-		name := local.Store.URLEnv
+	return blockLocation(*local.Store, h)
+}
+
+// blockLocation resolves the Store a store: block names: a postgres
+// store's URL, with its credential, comes from the environment variable
+// url_env names, and the Location keeps it unseen; a files or sqlite
+// store without a path is in the data folder.
+func blockLocation(b storeSettings, h home.Lookup) (store.Location, error) {
+	if store.Kind(b.Kind) == store.Postgres {
+		name := b.URLEnv
 		if name == "" {
 			name = defaultURLEnv
 		}
@@ -163,7 +169,7 @@ func storeLocation(flag string, local settings, h home.Lookup) (store.Location, 
 		}
 		return l, nil
 	}
-	l := store.Location{Kind: store.Kind(local.Store.Kind), Path: local.Store.Path}
+	l := store.Location{Kind: store.Kind(b.Kind), Path: b.Path}
 	if l.Path == "" {
 		dir, err := store.Dir("", h)
 		if err != nil {

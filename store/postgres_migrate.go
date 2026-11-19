@@ -20,7 +20,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -137,13 +136,4 @@ func (s *SQLStore) migrateShared(from, format int, steps []MigrationStep, now ti
 	committed = true
 	s.migrated = &Migration{From: from, To: format}
 	return nil
-}
-
-// registered names each service in regs by its host and version.
-func registered(regs []Registration) string {
-	names := make([]string, 0, len(regs))
-	for _, r := range regs {
-		names = append(names, fmt.Sprintf("%s (%s)", r.Host, r.Version))
-	}
-	return strings.Join(names, ", ")
 }
