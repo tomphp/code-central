@@ -119,3 +119,32 @@ func TestAnUnmergedSpecBranchIsKeptWithOneLine(t *testing.T) {
 		t.Errorf("line printed %d times", n)
 	}
 }
+
+func TestAFinishedTaggedSpecsBranchIsDeletedOnceInTheBase(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	taggedRequirement(t, h)
+	a, b := twoAccepted(t, h)
+	cancelDrafts(t, h)
+	r := h.Start()
+	h.WantState(a, domain.Done)
+	h.WantState(b, domain.Done)
+	r.Poll()
+	r.WantOutput(h.SpecID() + ": deleted " + taggedBranch + ", which is in main")
+	wantNoBranch(t, h, h.Repo, taggedBranch)
+}
+
+func TestAnUnfinishedTaggedSpecsBranchIsKept(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	taggedRequirement(t, h)
+	a, _ := accepted(h, "First", "one.txt", "1\n")
+	release := holdTicketsStage(t, h)
+	defer release()
+	r := h.Start()
+	r.WantOutput(a + ": merged into " + taggedBranch)
+	r.Poll()
+	if out := h.Git("branch", "--list", taggedBranch); out == "" {
+		t.Error("the unfinished Spec's branch was deleted")
+	}
+}
