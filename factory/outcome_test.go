@@ -153,6 +153,60 @@ func TestDenialsOnATurnThatFinishedAreListedInAComment(t *testing.T) {
 	}
 }
 
+// hookRefused scripts a call a PreToolUse hook refused, and the result
+// listing it among the permission_denials, as claude does.
+func hookRefused(command string) []factorytest.Step {
+	d := factorytest.Denied(command)
+	return []factorytest.Step{
+		factorytest.ToolResult(d.ID, "PreToolUse:Bash hook error: Edit the file with the Edit tool", true),
+	}
+}
+
+func TestAHookRefusalOnATurnThatStoppedIsStuckNotAnAllowRound(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	id := h.ReadyTicket("Hook refused")
+	h.Script(id, append(hookRefused("python3 replace.py"),
+		factorytest.ResultDenied(factorytest.Denied("python3 replace.py")))...)
+	r := h.Start()
+
+	tk := h.WantState(id, domain.Failed)
+	r.WantOutput(id + " turn ended")
+	if len(tk.Rounds) != 0 {
+		t.Errorf("a hook refusal got a Round: %+v", tk.Rounds)
+	}
+	if len(tk.FailureReports) != 1 {
+		t.Errorf("%d Failure Reports, want the stuck path's 1", len(tk.FailureReports))
+	}
+}
+
+func TestAHookRefusalOnATurnThatFinishedIsNotListedAsADenial(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	id := h.ReadyTicket("Hook refused, then done")
+	steps := hookRefused("python3 replace.py")
+	steps = append(steps, factorytest.Finish("Done."), factorytest.ResultDenied(
+		factorytest.Denied("python3 replace.py"),
+		factorytest.Denied("golangci-lint run")))
+	h.Script(id, steps...)
+	r := h.Start()
+
+	tk := h.WantState(id, domain.InReview)
+	r.WantOutput(id + " turn ended")
+	var body string
+	for _, c := range tk.Comments {
+		if strings.Contains(c.Body, "denied") {
+			body = c.Body
+		}
+	}
+	if !strings.Contains(body, "Bash(golangci-lint run)") {
+		t.Fatalf("comments %+v: want one listing the real denial", tk.Comments)
+	}
+	if strings.Contains(body, "python3") {
+		t.Errorf("comment %q lists the hook's refusal as a denial", body)
+	}
+}
+
 func TestAnOutagePausesClaimingAndResumingAndSaysWhatItIsWaitingOn(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
