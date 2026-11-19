@@ -38,6 +38,10 @@ type Store interface {
 	// counted in Skipped and left out, and the error, if any, names what it
 	// couldn't read at all. Records.Days is left for the caller.
 	Read(project string, days []string) (Records, error)
+	// Days is every day each Project has records for, oldest first, by
+	// Project key: what Store Move copies and counts. A Project with no
+	// records is left out, and a Project's usage needs no Project record.
+	Days() (map[string][]string, error)
 	// Prune deletes every Project's records for days earlier than before.
 	// It deletes what it can and returns an error for what it couldn't.
 	Prune(before string) error

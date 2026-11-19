@@ -373,7 +373,7 @@ Whether a Project's Factories are **Online**, **Draining** (claiming nothing new
 _Avoid_: health, presence, liveness
 
 **Watcher**:
-A separate process, started and supervised by Code Central, that watches one external system for one Project, reaching it through its CI Provider, `gh`, or Azure DevOps' API with a PAT, and reporting over the HTTP API. Each kind is run while its Project setting is on, restarted with backoff when it crashes, and has its own status, Watching or an error with its fix, of which going into an error sends one Notification. The kinds are the CI Watcher, the Issue Watcher, the Work Item Watcher and the Pull Request Watcher.
+A separate process, started and supervised by Code Central, that watches one external system for one Project, reaching it through its CI Provider, `gh`, or Azure DevOps' API with a PAT, and reporting over the HTTP API. Each kind is run while its Project setting is on and its service holds the Project's Watcher Lease, restarted with backoff when it crashes, and has its own status, Watching or an error with its fix, of which going into an error sends one Notification; the status names the host it runs on, says Elsewhere, with the host, while another service holds the Lease, and Waiting once the Lease has lapsed with no service to take it. The kinds are the CI Watcher, the Issue Watcher, the Work Item Watcher and the Pull Request Watcher.
 _Avoid_: Daemon, poller
 
 **Watcher Lease**:

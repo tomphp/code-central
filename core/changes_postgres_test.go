@@ -17,7 +17,7 @@ import (
 // Two services on one Postgres Store (Spec code-central-1032, User
 // Stories 9 and 10): a write through one ends a wait and wakes the
 // Factories on the other. Each is a fixture over its own Store handle.
-func twoServices(t *testing.T) (here, there fixture) {
+func twoPostgresServices(t *testing.T) (here, there fixture) {
 	t.Helper()
 	url := storetest.FreshPostgres(t)
 	service := func() fixture {
@@ -33,7 +33,7 @@ func twoServices(t *testing.T) (here, there fixture) {
 }
 
 func TestAClaimOnOneServiceEndsAWaitOnAnother(t *testing.T) {
-	here, there := twoServices(t)
+	here, there := twoPostgresServices(t)
 	here.work(t, domain.Ready)
 	n := there.clock.Waiters()
 	done := make(chan core.WaitResult, 1)
@@ -54,7 +54,7 @@ func TestAClaimOnOneServiceEndsAWaitOnAnother(t *testing.T) {
 }
 
 func TestNewWorkOnOneServiceWakesTheFactoriesOnAnother(t *testing.T) {
-	here, there := twoServices(t)
+	here, there := twoPostgresServices(t)
 	here.work(t)
 	call := there.wakeAsync("acme", "main")
 	here.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "New work", State: domain.Ready})

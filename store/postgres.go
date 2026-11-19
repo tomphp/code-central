@@ -4,9 +4,10 @@
 // schema in a Postgres database that several services, on several
 // machines, open at once, on pgx. No service locks it. Each Update is a
 // serializable transaction the engine orders against the others', run
-// again when two collide; a service's place in the Store is the Service
-// Registration of Ticket code-central-1049, and its notices to the
-// others go over LISTEN and NOTIFY (postgres_changes.go).
+// again when two collide. Each service registers itself in the Store,
+// and holds the Watcher Leases of the Projects whose Watchers it runs
+// (sql_services.go); its notices to the others go over LISTEN and NOTIFY
+// (postgres_changes.go).
 
 package store
 
@@ -54,11 +55,15 @@ const connectTimeout = 10 * time.Second
 
 // OpenPostgres opens the Postgres Store at url: a postgres:// URL, or a
 // key=value string, as pgx reads them, holding the credential. It creates
-// the schema if needed, and refuses a database at another format by name:
-// a newer one as every Kind does, and an older one until a Postgres
-// Store's Migrations land (Ticket code-central-1049). It takes no lock:
-// the Store is shared by design.
-func OpenPostgres(url string) (*SQLStore, error) {
+// the schema if needed, migrates a database at an older format in one
+// transaction (postgres_migrate.go), while no other service is
+// registered on it, and refuses one at a newer format by name. It takes
+// no lock: the Store is shared by design.
+func OpenPostgres(url string) (*SQLStore, error) { return openPostgres(url, Format, migrations) }
+
+// openPostgres is OpenPostgres as a build whose format is format and
+// whose migration chain is steps: Format and migrations, except in tests.
+func openPostgres(url string, format int, steps []MigrationStep) (*SQLStore, error) {
 	cfg, addr, err := parsePostgres(url)
 	if err != nil {
 		return nil, err
@@ -71,11 +76,11 @@ func OpenPostgres(url string) (*SQLStore, error) {
 	// appends beside them.
 	db.SetMaxOpenConns(8)
 	db.SetMaxIdleConns(4)
-	s := &SQLStore{db: db, d: postgres, path: addr, url: url, service: newServiceID()}
+	s := &SQLStore{db: db, d: postgres, path: addr, url: url, format: format, service: newServiceID()}
 	s.usage = &sqlUsage{db: db, d: postgres}
-	older, err := prepare(context.Background(), db, postgres, Format, addr)
+	older, err := prepare(context.Background(), db, postgres, format, addr)
 	if err == nil && older > 0 {
-		err = fmt.Errorf("%s: format %d: this code-central cannot yet migrate a postgres store (it understands format %d)", addr, older, Format)
+		err = s.migrateShared(older, format, steps, time.Now())
 	}
 	if err != nil {
 		s.Close()

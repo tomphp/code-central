@@ -61,9 +61,11 @@ type Options struct {
 }
 
 // Run is the service: lock the store (rolling forward an Import,
-// migrating an older format, loading every file), then bind, then serve
-// until ctx ends, and shut down. It returns once every Watcher it
-// supervises has stopped.
+// migrating an older format, loading every file), then bind, then
+// register and serve until ctx ends, and shut down. It returns once
+// every Watcher it supervises has stopped, with a
+// *store.FormatChangedError once another service has migrated the Store
+// past this build's format.
 func Run(ctx context.Context, o Options) error {
 	if o.Stdout == nil {
 		o.Stdout = io.Discard
@@ -76,6 +78,8 @@ func Run(ctx context.Context, o Options) error {
 		return err
 	}
 	defer st.Close()
+	ctx, stop := context.WithCancelCause(ctx)
+	defer stop(nil)
 	// The Watchers run as the service's own executable.
 	self, err := os.Executable()
 	if err != nil {
@@ -87,6 +91,26 @@ func Run(ctx context.Context, o Options) error {
 	}
 	clk := clock.System{}
 	c := newCore(st, clk, o, self)
+	if err := register(ctx, c, o); err != nil {
+		closeListeners(listeners)
+		return err
+	}
+	renewal := time.NewTicker(serviceRenewal)
+	renewing := make(chan struct{})
+	go func() {
+		defer close(renewing)
+		renewRegistration(ctx, c, renewal.C, o.Stderr, stop)
+	}()
+	// Once the Watchers have stopped, so no other service takes their
+	// Leases while they run, and the renewals, so none renews it again.
+	defer func() {
+		stop(nil)
+		renewal.Stop()
+		<-renewing
+		if err := c.Deregister(context.Background()); err != nil {
+			fmt.Fprintf(o.Stderr, "code-central serve: cannot deregister the service: %v\n", err)
+		}
+	}()
 	stopTimers := watchTimers(ctx, c)
 	defer stopTimers()
 	handler := newHandler(c, o, bindHosts)
@@ -105,7 +129,7 @@ func Run(ctx context.Context, o Options) error {
 		stopSupervising()
 		<-supervised
 	}()
-	return serveOn(ctx, listeners, handler, func() {
+	err = serveOn(ctx, listeners, handler, func() {
 		go func() {
 			defer close(supervised)
 			supervise(superviseCtx, c, clk, self, bound[0], o.Stderr)
@@ -119,6 +143,11 @@ func Run(ctx context.Context, o Options) error {
 			o.OnListening(bound)
 		}
 	})
+	var changed *store.FormatChangedError
+	if errors.As(context.Cause(ctx), &changed) {
+		return changed
+	}
+	return err
 }
 
 // openStore locks and opens the Store, whatever its Kind, saying so
@@ -128,11 +157,60 @@ func openStore(o Options) (store.OpenedStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot open the store: %w", err)
 	}
-	if m := st.Migrated(); m != nil {
+	switch m := st.Migrated(); {
+	case m == nil:
+	case m.Backup == "":
+		// A Postgres Store, migrated in one transaction: its database's
+		// own backups are its backup.
+		fmt.Fprintf(o.Stderr, "code-central serve: migrated the store from format %d to %d, in one transaction\n", m.From, m.To)
+	default:
 		fmt.Fprintf(o.Stderr, "code-central serve: migrated the store from format %d to %d; the old store is kept at %s\n",
 			m.From, m.To, m.Backup)
 	}
 	return st, nil
+}
+
+// serviceRenewal is how often the service renews its Service
+// Registration and its Watcher Leases: store.ServiceRenewal, but in
+// tests.
+var serviceRenewal = store.ServiceRenewal
+
+// register names the service, with an ID of its own, this machine's name
+// and its version, and writes its Service Registration (ADR 0068): a
+// Store another service has migrated past this build's format refuses it.
+func register(ctx context.Context, c *core.Core, o Options) error {
+	host, err := os.Hostname()
+	if err != nil || host == "" {
+		host = "unknown"
+	}
+	c.SetService(core.Service{ID: ids.Random{}.ClaimID(), Host: host, Version: o.Version})
+	if err := c.Register(ctx); err != nil {
+		return fmt.Errorf("cannot register the service in the store: %w", err)
+	}
+	return nil
+}
+
+// renewRegistration renews the service's Registration on each tick until
+// ctx ends. One that finds the Store migrated past this build's format
+// stops the service, with stop, so it writes no more; another error is
+// logged, and the next tick tries again.
+func renewRegistration(ctx context.Context, c *core.Core, tick <-chan time.Time, log io.Writer, stop context.CancelCauseFunc) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick:
+		}
+		err := c.Register(ctx)
+		var changed *store.FormatChangedError
+		switch {
+		case errors.As(err, &changed):
+			stop(err)
+			return
+		case err != nil:
+			fmt.Fprintf(log, "code-central serve: cannot renew the service's registration: %v\n", err)
+		}
+	}
 }
 
 // listenAll binds o.Addrs and then o.Bind, warning about the latter.
@@ -200,10 +278,12 @@ func newHandler(c *core.Core, o Options, bindHosts []string) http.Handler {
 func supervise(ctx context.Context, c *core.Core, clk clock.System, self, bound string, log io.Writer) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
+	leases := time.NewTicker(serviceRenewal)
+	defer leases.Stop()
 	watchers.Supervise(ctx, watchers.Supervision{
 		Projects: c,
 		Kinds:    []watchers.Kind{ciwatcher.Kind, issuewatcher.Kind, pullrequestwatcher.Kind, workitemwatcher.Kind},
-		Program:  self, Clock: clk, Tick: ticker.C, Log: log,
+		Program:  self, Clock: clk, Tick: ticker.C, LeaseTick: leases.C, Log: log,
 		Environ: append(os.Environ(), "CODE_CENTRAL_URL=http://"+bound),
 	})
 }

@@ -44,7 +44,7 @@ func openSQLite(path string, format int, steps []MigrationStep) (*SQLStore, erro
 	if err != nil {
 		return nil, err
 	}
-	s := &SQLStore{d: sqlite, path: path, lock: lock}
+	s := &SQLStore{d: sqlite, path: path, format: format, lock: lock}
 	err = s.connect()
 	var older int
 	if err == nil {
@@ -52,6 +52,11 @@ func openSQLite(path string, format int, steps []MigrationStep) (*SQLStore, erro
 	}
 	if err == nil && older > 0 {
 		err = s.migrate(older, format, steps)
+	}
+	if err == nil {
+		// Under the lock no other service is running: a Registration or a
+		// Lease here is from one that stopped without deregistering.
+		_, err = s.db.Exec(`DELETE FROM registrations; DELETE FROM watcher_leases`)
 	}
 	if err != nil {
 		s.Close()

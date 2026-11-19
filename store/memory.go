@@ -20,11 +20,17 @@ type index struct {
 	// usage is where the Store keeps Usage: in memory here, the File
 	// Store's files in the file-backed store.
 	usage usage.Store
+	// services are kept in memory in both: one service holds the Store.
+	services *memoryServices
 }
 
 // Usage is the Store's Usage (ADR 0069): appended to, read and pruned
 // outside any Update, under its own lock.
 func (x *index) Usage() usage.Store { return x.usage }
+
+// Services are the one service holding the Store, which holds every
+// Watcher Lease.
+func (x *index) Services() Services { return x.services }
 
 type projectData struct {
 	project domain.Project
@@ -33,12 +39,14 @@ type projectData struct {
 	ciRuns  domain.CIRuns
 }
 
-func newIndex() *index {
-	return &index{projects: map[string]*projectData{}, options: domain.DefaultOptions(), usage: usage.NewMemoryStore()}
+// newIndex is the empty index of a Store at format.
+func newIndex(format int) *index {
+	return &index{projects: map[string]*projectData{}, options: domain.DefaultOptions(), usage: usage.NewMemoryStore(),
+		services: newMemoryServices(format)}
 }
 
 // NewMemory returns the in-memory fake store.
-func NewMemory() Store { return newIndex() }
+func NewMemory() Store { return newIndex(Format) }
 
 func (x *index) View(fn func(Reader) error) error {
 	x.mu.RLock()

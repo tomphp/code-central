@@ -29,20 +29,34 @@ func OpenSQLiteFormat(path string, format int, steps []MigrationStep) (*SQLStore
 // but a Migration reads a database at an older format.
 func LoadSQLiteFixture(t testing.TB, dir, path string) {
 	t.Helper()
+	loadFixture(t, dir, "sqlite", sqliteDSN(path), sqlite)
+}
+
+// LoadPostgresFixture is LoadSQLiteFixture into the empty Postgres Store
+// at url.
+func LoadPostgresFixture(t testing.TB, dir, url string) {
+	t.Helper()
+	loadFixture(t, dir, "pgx", url, postgres)
+}
+
+// loadFixture is LoadSQLiteFixture into the empty database at dsn,
+// opened with driver, in dialect d.
+func loadFixture(t testing.TB, dir, driver, dsn string, d dialect) {
+	t.Helper()
 	ctx := context.Background()
-	db, err := sql.Open("sqlite", sqliteDSN(path))
+	db, err := sql.Open(driver, dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	for _, stmt := range sqlite.schema() {
+	for _, stmt := range d.schema() {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {
 			t.Fatal(err)
 		}
 	}
 	exec := func(q string, args ...any) {
 		t.Helper()
-		if _, err := db.ExecContext(ctx, q, args...); err != nil {
+		if _, err := db.ExecContext(ctx, d.rebind(q), args...); err != nil {
 			t.Fatalf("%s: %v", q, err)
 		}
 	}

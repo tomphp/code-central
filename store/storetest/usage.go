@@ -2,6 +2,7 @@ package storetest
 
 import (
 	"bytes"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -115,6 +116,41 @@ func runUsage(t *testing.T, f Factory) {
 		}
 		if err := s.Usage().Prune("2026-01-05"); err != nil {
 			t.Errorf("pruning again: %v", err)
+		}
+	})
+
+	t.Run("usage lists each project's days, oldest first", func(t *testing.T) {
+		s := f.New(t)
+		for _, d := range []string{"2026-01-06", "2026-01-04", "2026-01-05"} {
+			appendUsage(t, s, "acme", d, usageCall(d))
+		}
+		appendUsage(t, s, "acme", "2026-01-05", usageResponse("acme-1"))
+		appendUsage(t, s, "nobody", "2026-01-07", usageResponse("nobody-1"))
+		got, err := s.Usage().Days()
+		if err != nil {
+			t.Fatalf("days: %v", err)
+		}
+		want := map[string][]string{"acme": {"2026-01-04", "2026-01-05", "2026-01-06"}, "nobody": {"2026-01-07"}}
+		if !maps.EqualFunc(got, want, slices.Equal) {
+			t.Errorf("days %v, want %v", got, want)
+		}
+		if err := s.Usage().Prune("2026-01-05"); err != nil {
+			t.Fatalf("prune: %v", err)
+		}
+		got, err = s.Usage().Days()
+		if err != nil {
+			t.Fatalf("days after pruning: %v", err)
+		}
+		want["acme"] = []string{"2026-01-05", "2026-01-06"}
+		if !maps.EqualFunc(got, want, slices.Equal) {
+			t.Errorf("days after pruning before 2026-01-05 %v, want %v", got, want)
+		}
+	})
+
+	t.Run("an empty store's usage has no days", func(t *testing.T) {
+		got, err := f.New(t).Usage().Days()
+		if err != nil || len(got) != 0 {
+			t.Fatalf("days %v, %v; want none", got, err)
 		}
 	})
 

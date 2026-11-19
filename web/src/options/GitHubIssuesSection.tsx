@@ -47,6 +47,8 @@ function repositoryStatus(
   if (watcher.state === "not_reported") {
     return { text: "Starting; it hasn't reported yet.", error: false };
   }
+  if (watcher.state === "elsewhere") return { text: `Runs on ${watcher.host ?? ""}`, error: false };
+  if (watcher.state === "waiting") return { text: watcher.message ?? "", error: false };
   if (watcher.state === "watching") return { text: "Watching", error: false };
   const failing = watcher.repositories ?? [];
   if (failing.length === 0) {

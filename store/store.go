@@ -142,6 +142,9 @@ type Store interface {
 	// the way the Store Kind keeps it, and appended to, read and pruned on
 	// its own, outside any View or Update.
 	Usage() usage.Store
+	// Services is the Store's record of the services running on it (ADR
+	// 0068), read and written on its own, outside any View or Update.
+	Services() Services
 }
 
 var (

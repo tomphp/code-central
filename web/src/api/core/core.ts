@@ -26,6 +26,7 @@ interface CoreModule {
   setAzureBoardsCheck(id: number, resultJSON: string): void;
   setPullRequestCheck(id: number, resultJSON: string): void;
   reportWatcherCrash(id: number, kind: string, key: string, restarts: number, lastLine: string, restartAtISO: string): void;
+  holdWatcherLease(id: number, key: string, host: string): void;
   dropStreams(id: number): void;
   transcriptStreams(id: number): number;
   settled(id: number, events: number, transcripts: number, chats: number): string;
@@ -57,6 +58,13 @@ export interface WatcherCrash {
 
 // START is when a world's clock starts unless told otherwise.
 export const START = "2026-11-07T09:00:00Z";
+
+// WORLD_HOST is the machine a world's own service runs on (world.Host).
+export const WORLD_HOST = "laptop";
+
+// SERVICE_LIFE_MS is how long a Watcher Lease lasts unless renewed
+// (store.ServiceLife).
+export const SERVICE_LIFE_MS = 30_000;
 
 // READS are the Api's reads, by name, which actions leaves out.
 const READS: ReadonlySet<string> = new Set<keyof Api>([
@@ -287,6 +295,14 @@ export class World {
   // service's Watcher supervisor does.
   reportWatcherCrash(kind: "ci" | "issues" | "pull_request", key: string, crash: WatcherCrash) {
     this.live().reportWatcherCrash(this.id, kind, key, crash.restarts, crash.lastLine, crash.restartAt.toISOString());
+  }
+
+  // holdWatcherLease has the service on host hold key's Watcher Lease, as
+  // the service's Watcher supervisor does: the world's own, on
+  // WORLD_HOST, or another service on the same store, which takes it if
+  // it is free. The world's service then sees where it is held.
+  holdWatcherLease(key: string, host: string) {
+    this.live().holdWatcherLease(this.id, key, host);
   }
 
   // dropStreams ends every open stream, change notices and Transcript

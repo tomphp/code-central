@@ -39,11 +39,11 @@ type storeSettings struct {
 	// Path is the File Store's folder or the SQLite database file; empty
 	// means the data folder, or code-central.db in it. A postgres store
 	// has none.
-	Path string `yaml:"path"`
+	Path string `yaml:"path,omitempty"`
 	// URLEnv is the environment variable a postgres store reads its URL
 	// from, with its credential: defaultURLEnv when empty. The other
 	// Kinds have none.
-	URLEnv string `yaml:"url_env"`
+	URLEnv string `yaml:"url_env,omitempty"`
 }
 
 // storeKinds are the Kinds the store: block accepts; serve.go maps them
