@@ -87,7 +87,7 @@ func Status(code api.Code) int {
 }
 
 // WriteError writes err as the API's JSON error with its status; an error
-// that is not a *core.Error is internal.
+// that is not a *api.Error is internal.
 func WriteError(w http.ResponseWriter, err error) {
 	e := core.ErrorOf(err)
 	writeJSON(w, Status(e.Code), e)

@@ -98,7 +98,7 @@ func wantCode(t *testing.T, err error, code api.Code, field string) {
 	t.Helper()
 	var e *api.Error
 	if !errors.As(err, &e) {
-		t.Fatalf("err = %v, want a core.Error with code %s", err, code)
+		t.Fatalf("err = %v, want an api.Error with code %s", err, code)
 	}
 	if e.Code != code || e.Field != field {
 		t.Fatalf("got code %s field %q (%s), want %s field %q", e.Code, e.Field, e.Message, code, field)

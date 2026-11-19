@@ -7,7 +7,7 @@ import (
 	"github.com/tomoram/code-central/api"
 )
 
-// parts is the set of parts the read returns.
+// ticketReadParts is the set of parts the read returns.
 func ticketReadParts(in api.GetTicketInput) (map[string]bool, error) {
 	asked := in.Parts
 	if len(asked) == 0 {

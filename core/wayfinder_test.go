@@ -58,7 +58,7 @@ func TestAnUnknownWayfinderNameIsRejectedListingTheValidOnes(t *testing.T) {
 		t.Helper()
 		var e *api.Error
 		if !errors.As(err, &e) {
-			t.Fatalf("err = %v, want a core.Error", err)
+			t.Fatalf("err = %v, want an api.Error", err)
 		}
 		for _, name := range []string{"wayfinder:map", "wayfinder:chart", "wayfinder:grilling", "wayfinder:research", "wayfinder:task"} {
 			if !strings.Contains(e.Message, name) {

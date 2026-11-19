@@ -16,7 +16,7 @@ import (
 	"testing"
 )
 
-// The guard holds ADR 0039's line: no code in domain, core or the Factory
+// The guard holds ADR 0039's line: no code in domain, api, core or the Factory
 // reads a landing setting to decide, outside the policy and the code that
 // saves and shows the settings. It type-checks the packages' non-test
 // files and flags every read of a guarded field on a guarded type.

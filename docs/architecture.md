@@ -171,7 +171,7 @@ What is left of the problem is that nothing yet *stops* a client linking `core`:
 
 The Factory and the Watchers call `core` functions, so the same rule runs on both sides of the HTTP boundary from one copy of the code, and a client is pinned to the service's version of it:
 
-- `factory`: `core.SpecBranch` and `BranchTag` (branch naming), `core.NormalCloneURL`, `core.Stages()`, `core.GuideNames`, the `LandingPolicies` type, the reserved labels and tags.
+- `factory`: `core.SpecBranch` and `BranchTag` (branch naming), `core.NormalCloneURL`, `domain.Stages()`, `core.GuideNames`, the `api.LandingPolicies` type, the reserved labels and tags.
 - `issuewatcher`, `workitemwatcher`: `core.IssueMarker`, `core.OpaqueMarker`, `core.StatusLabelPrefix`; `pullrequestwatcher`, `issuewatcher`: `core.SumRepositoryProblems`.
 - `cli`: `core.TeachingFiles()`, `core.DefaultTicketParts()`.
 
