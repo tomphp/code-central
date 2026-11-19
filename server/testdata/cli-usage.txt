@@ -43,6 +43,7 @@ Commands:
   service install [--store <dir>] [--bind <ip>] | service restart  run serve as a login item (launchd on macOS, systemd user unit on Linux, a scheduled task on Windows); install again after an upgrade
   set-session <id> --claim <claim-id> [--session <id>] [--working-dir <dir>] [--resume-command <command>] [--full]  (session defaults to $CLAUDE_CODE_SESSION_ID)
   set-tags <id> <key>=<value>...
+  store move --to <kind>[:<path>] [--url-env <name>] [--store <dir>]  copy the Store serve opens into a new, empty files, sqlite or postgres Store and switch settings.yaml to it; offline: stop serve first
   submit-map [--text <md> | --file <path|->] [--draft] [--full]  submit a Map; its first line becomes the Spec's title
   submit-prototype <spec> [--text <md> | --file <path|->] [--full]  submit a Prototype on the Spec; its first line becomes the title
   submit-requirement [--text <md> | --file <path|->] [--map <spec>] [--skip-grilling] [--draft] [--full]  submit a Requirement, from a finished Map with --map; its first line becomes the Spec's title
