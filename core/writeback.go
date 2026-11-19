@@ -188,7 +188,7 @@ func (c *Core) integrationWrites(r store.Reader, key, integration string, hide b
 		if t.Spec != in.spec || t.Link.Integration != integration {
 			continue
 		}
-		if w, ok := c.ticketIssueWrites(key, t, hide); ok {
+		if w, ok := c.ticketIssueWrites(r, key, t, hide); ok {
 			byNumber[t.Number] = w
 		}
 	}
@@ -206,7 +206,7 @@ func (c *Core) integrationWrites(r store.Reader, key, integration string, hide b
 // ticketIssueWrites is what is due on the issue t, a Ticket on key's
 // inbox Spec, is linked to, its comments hidden as hide asks; ok is false
 // when nothing is.
-func (c *Core) ticketIssueWrites(key string, t domain.Ticket, hide bool) (w IssueWrites, ok bool) {
+func (c *Core) ticketIssueWrites(r store.Reader, key string, t domain.Ticket, hide bool) (w IssueWrites, ok bool) {
 	if !t.Link.Attached() {
 		return IssueWrites{}, false
 	}
@@ -215,7 +215,7 @@ func (c *Core) ticketIssueWrites(key string, t domain.Ticket, hide bool) (w Issu
 	if reason, latest, _ := triageComment(t, OptionWontFix); latest {
 		w.Label, w.Close = LabelWontFix, CloseNotPlanned
 		if strings.TrimSpace(reason) != "" && !slices.Contains(t.Link.Written, CommentWontFix) {
-			w.Comments = append(w.Comments, c.issueComment(hide, id, ticketLink, CommentWontFix, reason))
+			w.Comments = append(w.Comments, c.issueComment(hide, id, ticketLink, CommentWontFix, writtenText(r, key, reason, hide)))
 		}
 	} else if t.State == domain.Draft || t.State == domain.Ready {
 		w.Label = LabelDraft
@@ -243,7 +243,7 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec, hide b
 			w.Comments = append(w.Comments, c.issueComment(hide, id, requirementLink, k, text))
 		}
 	}
-	due(CommentContext, requirementContext(r, key, s.Link))
+	due(CommentContext, writtenText(r, key, requirementContext(r, key, s.Link), hide))
 	tickets := specTickets(r, key, s.Number)
 	stages, stagesDone := map[StageName]domain.Ticket{}, true
 	var landed []domain.Ticket
@@ -256,10 +256,10 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec, hide b
 		}
 	}
 	if g, done := stages["grilling"]; done && g.State == domain.Done {
-		due(CommentGrilling, resolution(g))
+		due(CommentGrilling, writtenText(r, key, resolution(g), hide))
 	}
 	if sp, done := stages["spec"]; done && sp.State == domain.Done {
-		due(CommentSpec, bodyAt(s, doneMove(sp).Time))
+		due(CommentSpec, writtenText(r, key, bodyAt(s, doneMove(sp).Time), hide))
 	}
 	slices.SortStableFunc(landed, func(a, b domain.Ticket) int { return doneMove(a).Time.Compare(doneMove(b).Time) })
 	p, _ := r.Project(key)
