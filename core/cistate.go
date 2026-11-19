@@ -279,7 +279,7 @@ func (s *ciState) unavailable(rc *repoCI) *CIUnavailableView {
 		return nil
 	}
 	view := &CIUnavailableView{Commit: rc.latest.Commit, Pushed: rc.latest.Pushed}
-	if w := s.c.watchers.view(watcherKey{WatcherCI, s.p.Key}); !w.watches(rc.name) {
+	if w := s.c.watchers.view(watcherKey{WatcherCI, s.p.Key}, s.now); !w.watches(rc.name) {
 		view.Cause, view.Message = CIWatcherNotWatching, w.messageFor(rc.name)
 		return view
 	}

@@ -64,6 +64,9 @@ type Core struct {
 	// autoFixLocks holds each Project's Auto-fix lock, a *sync.Mutex by
 	// Project key (lockAutoFix).
 	autoFixLocks sync.Map
+	// service is this service as the Store's record of the services
+	// running on it names it.
+	service Service
 }
 
 // New returns a Core persisting through s, telling time with clk and
@@ -75,7 +78,7 @@ func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
 	c.activity = newActivity(c.now())
 	c.transcripts = &transcripts{all: map[markKey]*transcript{}, feeds: map[markKey]map[*TranscriptFeed]struct{}{}}
 	c.latestNotices = &latestNotices{sent: map[markKey]time.Time{}, pending: map[markKey]bool{}}
-	c.watchers = &watchers{all: map[watcherKey]watcherStatus{}}
+	c.watchers = &watchers{all: map[watcherKey]watcherStatus{}, leases: map[string]store.Lease{}}
 	c.heartbeats = &heartbeats{all: map[heartbeatKey]heartbeat{}, seen: map[string]string{}, base: map[string]map[string]BaseView{}, clones: map[string]map[string]CloneView{}}
 	c.chats = newChats()
 	return c
@@ -793,9 +796,10 @@ func (c *Core) ticketRow(r store.Reader, e *evaluation, t domain.Ticket, onMap b
 func finished(s domain.State) bool { return s == domain.Done || s == domain.Cancelled }
 
 func (c *Core) projectView(p domain.Project) ProjectView {
+	now := c.now()
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
-		Landing: landingViewWith(p, c.watchers.view(watcherKey{WatcherPullRequests, p.Key})), CI: ciView(p, c.watchers.view(watcherKey{WatcherCI, p.Key})),
-		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), AzureBoards: azureBoardsView(p, c.watchers.view(watcherKey{WatcherWorkItems, p.Key})), Models: modelsView(p.Models),
+		Landing: landingViewWith(p, c.watchers.view(watcherKey{WatcherPullRequests, p.Key}, now)), CI: ciView(p, c.watchers.view(watcherKey{WatcherCI, p.Key}, now)),
+		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key}, now)), AzureBoards: azureBoardsView(p, c.watchers.view(watcherKey{WatcherWorkItems, p.Key}, now)), Models: modelsView(p.Models),
 		ReportedModels: reportedModelsView(p.ReportedModels), StageGuides: stageGuidesView(p.StageGuides), AutoAccept: autoAcceptView(p),
 		FocusKinds: focusKindsView(p.FocusKindsOff), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now()), Repositories: repositoriesView(p)}
 	c.fillClones(p.Key, v.Repositories)

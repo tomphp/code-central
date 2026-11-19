@@ -78,9 +78,12 @@ type SQLStore struct {
 	path string
 	// url is the Postgres Store's URL, with its credential, kept for
 	// reopening in tests and never shown.
-	url   string
-	lock  *storeLock
-	usage usage.Store
+	url string
+	// format is the store format this service reads and writes: Format,
+	// except in tests.
+	format int
+	lock   *storeLock
+	usage  usage.Store
 	// service is this handle's ID on a Shared Store, in every Change it
 	// announces, so that it can leave its own out of those it hears.
 	service string
@@ -95,9 +98,8 @@ type SQLStore struct {
 func (s *SQLStore) Path() string { return s.path }
 
 // Migrated is the Migration the open ran, or nil if the database was
-// already at this build's format. A Postgres Store never migrates yet:
-// one at an older format is refused until its Migrations land (Ticket
-// code-central-1049).
+// already at this build's format. A Postgres Store's names no Backup: it
+// ran in one transaction, and the database's own backups are its backup.
 func (s *SQLStore) Migrated() *Migration { return s.migrated }
 
 // Close stops hearing Changes, closes the database and releases the
@@ -122,6 +124,10 @@ func (s *SQLStore) Close() error {
 // Usage is the Store's Usage (ADR 0069): a table written on its own
 // connection, outside any Update.
 func (s *SQLStore) Usage() usage.Store { return s.usage }
+
+// Services are the Store's Registrations and Watcher Leases, in tables of
+// their own, written on the pool's connections outside every Update.
+func (s *SQLStore) Services() Services { return sqlServices{s} }
 
 // Changes delivers the Changes the other services sharing a Postgres
 // Store commit, heard on a LISTEN connection of its own, until the Store
@@ -219,6 +225,19 @@ func (s *SQLStore) attempt(fn func(Writer) error) error {
 			conn.ExecContext(ctx, "ROLLBACK")
 		}
 	}()
+	if s.d.shared {
+		// Another service may have migrated the Store since this one
+		// opened it: its records are then of a format this one doesn't
+		// write. Read in the transaction, so a Migration committing
+		// beside it is one of the collisions the engine orders.
+		stored, err := storedFormat(ctx, conn, s.d)
+		if err != nil {
+			return err
+		}
+		if stored != s.format {
+			return &FormatChangedError{Where: s.path, Stored: stored, Own: s.format}
+		}
+	}
 	var failed error
 	w := &sqlWriter{sqlReader: sqlReader{q: conn, d: s.d, err: &failed}, service: s.service}
 	err = fn(w)
@@ -241,7 +260,7 @@ func (s *SQLStore) attempt(fn func(Writer) error) error {
 // only if it doesn't exist. meta comes first: every format has it, and
 // prepare reads the format from it before deciding on the rest.
 func (d dialect) schema() []string {
-	return []string{
+	return append([]string{
 		`CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS projects (key TEXT PRIMARY KEY, doc ` + d.json + ` NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS options (id INTEGER PRIMARY KEY, doc ` + d.json + ` NOT NULL)`,
@@ -279,7 +298,16 @@ func (d dialect) schema() []string {
 		`CREATE INDEX IF NOT EXISTS claims_session ON claims (session_id, started)`,
 		`CREATE TABLE IF NOT EXISTS usage_records (id ` + d.serial + `, project TEXT NOT NULL, day TEXT NOT NULL, type TEXT NOT NULL, doc ` + d.json + ` NOT NULL)`,
 		`CREATE INDEX IF NOT EXISTS usage_records_day ON usage_records (day, project, id)`,
-	}
+	}, servicesSchema...)
+}
+
+// servicesSchema is the services' tables, of Registrations and Watcher
+// Leases: they hold no records, so no format, and prepare makes them on
+// every open, so a Store made before them gains them.
+var servicesSchema = []string{
+	`CREATE TABLE IF NOT EXISTS registrations (id TEXT PRIMARY KEY, host TEXT NOT NULL, version TEXT NOT NULL, format INTEGER NOT NULL, renewed BIGINT NOT NULL)`,
+	`CREATE TABLE IF NOT EXISTS watcher_leases (project TEXT PRIMARY KEY, holder TEXT NOT NULL, expires BIGINT NOT NULL)`,
+	`CREATE INDEX IF NOT EXISTS watcher_leases_holder ON watcher_leases (holder)`,
 }
 
 // prepare checks the database's format and creates its schema, in one
@@ -318,8 +346,12 @@ func prepare(ctx context.Context, db *sql.DB, d dialect, format int, what string
 		}
 	}
 	schema := d.schema()
-	if _, err := conn.ExecContext(ctx, schema[0]); err != nil { // meta, which every format has
-		return 0, fmt.Errorf("%s: %w", what, err)
+	// meta, which every format has, and the services' tables, which no
+	// format names.
+	for _, stmt := range append([]string{schema[0]}, servicesSchema...) {
+		if _, err := conn.ExecContext(ctx, stmt); err != nil {
+			return 0, fmt.Errorf("%s: %w", what, err)
+		}
 	}
 	var stored string
 	err = conn.QueryRowContext(ctx, d.rebind(`SELECT value FROM meta WHERE key = 'format'`)).Scan(&stored)

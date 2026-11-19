@@ -14,6 +14,7 @@ import (
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
+	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/world"
 )
 
@@ -221,6 +222,36 @@ func TestAWatcherCrashIsReportedToCore(t *testing.T) {
 
 	if b := ok(t, w, "", "GET", "/api/projects/acme", ""); !strings.Contains(b, `"problem":"crashed"`) || !strings.Contains(b, "panic: no gh") {
 		t.Errorf("get_project: %s, want the CI Watcher crashed with its last line", b)
+	}
+}
+
+// A Project's Watchers run where its Watcher Lease is held: on the
+// world's own service, or another service on the same Store, and nowhere
+// once it lapses.
+func TestAWatcherLeaseIsHeldWhereTheTestSays(t *testing.T) {
+	w := checkedWorld(t)
+	ok(t, w, "", "POST", "/api/p/acme/set_ci_tracking", `{"tracking":true,"repository":"acme/app"}`)
+	watcher := func() core.WatcherView {
+		t.Helper()
+		var p core.ProjectView
+		if err := json.Unmarshal([]byte(ok(t, w, "", "GET", "/api/projects/acme", "")), &p); err != nil {
+			t.Fatal(err)
+		}
+		return p.CI.Watcher
+	}
+
+	w.HoldWatcherLease("acme", world.Host)
+	if v := watcher(); v.State != core.WatcherNotReported || v.Host != world.Host {
+		t.Fatalf("held by the world's own service: %+v", v)
+	}
+	w.Advance(store.ServiceLife)
+	w.HoldWatcherLease("acme", "desktop")
+	if v := watcher(); v.State != core.WatcherElsewhere || v.Host != "desktop" {
+		t.Fatalf("held on desktop: %+v", v)
+	}
+	w.Advance(store.ServiceLife)
+	if v := watcher(); v.State != core.WatcherWaiting {
+		t.Fatalf("lapsed: %+v", v)
 	}
 }
 

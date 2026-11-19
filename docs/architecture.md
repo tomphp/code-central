@@ -78,9 +78,9 @@ Your list: core logic, factory, ci watcher, issue tracker, web api, frontend, st
 - **`mcp`**: the agents' transport.
 - **`server`** (formerly `frontdoor`): builds the service's one handler (MCP, HTTP API, UI) behind the Host/Origin Guard, with the `Calls` middleware on both doors' dispatch for the Actor and Usage.
 - **`client`**: the Go HTTP client used by CLI, Factory and watchers.
-- **`app`**: the service's composition root. `app.Run` opens the store, builds the Core with its Watcher check modes and usage, serves `server`'s handler, supervises the Watchers and starts `notify`.
+- **`app`**: the service's composition root. `app.Run` opens the store, builds the Core with its Watcher check modes and usage, registers the service in the store and renews that, serves `server`'s handler, supervises the Watchers and starts `notify`.
 - **`cli` and `cmd/*`**: the command surface. `serve` reads its flags and the local settings and calls `app.Run`.
-- **`watchers`**: generic supervision (restart with backoff).
+- **`watchers`**: generic supervision (restart with backoff), running a Project's Watchers only while the service holds its Watcher Lease.
 - **Support leaves**: `clock`, `events` (in-memory change bus), `ids`, `home` (XDG paths), `usage` (usage records and the Recorder; the Store keeps them, ADR 0069), `notify` (OS notifications).
 - **Test and wasm tooling**: `world`, `cmd/corewasm`, `internal/*`, `codecentraltest`, `e2e`.
 

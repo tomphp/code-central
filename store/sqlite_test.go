@@ -57,6 +57,30 @@ func TestSQLiteRefusesAnUnknownFormat(t *testing.T) {
 	}
 }
 
+// A SQLite Store made before the services' tables gains them when it is
+// opened, so its service can register.
+func TestASQLiteStoreMadeBeforeTheServicesTablesGainsThem(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "code-central.db")
+	if err := openSQLite(t, path).Close(); err != nil {
+		t.Fatal(err)
+	}
+	store.DropSQLiteServiceTables(t, path)
+
+	mustRegisterAndHoldALease(t, openSQLite(t, path))
+}
+
+// mustRegisterAndHoldALease registers a service on s and has it hold
+// acme's Watcher Lease.
+func mustRegisterAndHoldALease(t *testing.T, s store.Store) {
+	t.Helper()
+	if err := s.Services().Register(store.Registration{ID: "a", Host: "laptop", Version: "v1", Format: store.Format, Renewed: t0}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	if l, err := s.Services().HoldLease("acme", "a", t0); err != nil || l.Holder != "a" {
+		t.Fatalf("hold acme's Watcher Lease: %+v, %v", l, err)
+	}
+}
+
 func TestSQLiteMakesTheFolderAndTheFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "data", "code-central.db")
 	openSQLite(t, path)

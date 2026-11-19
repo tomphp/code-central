@@ -13,6 +13,7 @@
 //	setCICheck(id, resultJSON), setIssuesCheck(id, resultJSON),
 //	setAzureBoardsCheck(id, resultJSON), setPullRequestCheck(id, resultJSON)
 //	reportWatcherCrash(id, kind, key, restarts, lastLine, restartAtISO)
+//	holdWatcherLease(id, key, host)
 //	dropStreams(id)
 //	transcriptStreams(id) -> count
 //	settled(id, events, transcripts, chats) -> busyJSON
@@ -74,6 +75,7 @@ func main() {
 		})
 		return nil
 	})
+	set("holdWatcherLease", func(a []js.Value) any { of(a[0]).HoldWatcherLease(a[1].String(), a[2].String()); return nil })
 	set("dropStreams", func(a []js.Value) any { of(a[0]).DropStreams(); return nil })
 	set("transcriptStreams", func(a []js.Value) any { return of(a[0]).TranscriptStreams() })
 	set("settled", func(a []js.Value) any {
