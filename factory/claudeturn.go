@@ -14,6 +14,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -457,6 +458,7 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, now func() time.Time,
 	var end turnEnd
 	var retryErr string
 	tools := map[string]string{}
+	hookRefused := map[string]bool{}
 	sc := bufio.NewScanner(stdout)
 	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
 	for sc.Scan() {
@@ -477,6 +479,12 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, now func() time.Time,
 			onEvent(e)
 		}
 		switch msg.Type {
+		case "user":
+			for _, c := range msg.Message.Content {
+				if c.Type == "tool_result" && c.IsError && isHookRefusal(c.Content) {
+					hookRefused[c.ToolUseID] = true
+				}
+			}
 		case "system":
 			if msg.Subtype == "api_retry" && msg.Error != "" {
 				retryErr = msg.Error
@@ -488,6 +496,9 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, now func() time.Time,
 		case "result":
 			var r result
 			if json.Unmarshal(sc.Bytes(), &r) == nil {
+				// A PreToolUse hook's refusal is listed as a denial
+				// too, but no --allowedTools rule lifts it.
+				r.PermissionDenials = slices.DeleteFunc(r.PermissionDenials, func(d denial) bool { return hookRefused[d.ID] })
 				end.Result = &r
 			}
 		}
@@ -513,4 +524,21 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, now func() time.Time,
 		end.ExitCode = -1
 	}
 	return end
+}
+
+// isHookRefusal reports whether a tool result's content, a string or a
+// list of text blocks, is the error a PreToolUse hook's refusal gives:
+// text starting "PreToolUse:".
+func isHookRefusal(content json.RawMessage) bool {
+	var text string
+	if json.Unmarshal(content, &text) != nil {
+		var blocks []struct {
+			Text string `json:"text"`
+		}
+		if json.Unmarshal(content, &blocks) != nil || len(blocks) == 0 {
+			return false
+		}
+		text = blocks[0].Text
+	}
+	return strings.HasPrefix(strings.TrimSpace(text), "PreToolUse:")
 }
