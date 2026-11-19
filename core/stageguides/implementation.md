@@ -1,6 +1,6 @@
 # Stage Guide: implementation
 
-You hold a Claim on an implementation Ticket. Its description holds the acceptance criteria, and its Spec holds the decisions behind them. The Ticket may quote the decisions it needs; if not, `get_spec` with `parts: ["outline"]` lists headings with sizes: fetch only the `sections` you need, never the whole Spec. `get_stage_guide` with stage `implementation` re-serves this.
+You hold a Claim on an implementation Ticket. Its description holds the acceptance criteria, and its Spec holds the decisions behind them. The Ticket may quote the decisions it needs; if not, `get_spec` with `parts: ["outline"]` lists headings with sizes: fetch only the `sections` you need, never the whole Spec. Read files in ranges. `get_stage_guide` with stage `implementation` re-serves this.
 
 ## What this Ticket produces
 
@@ -9,7 +9,7 @@ Working, tested code that meets the acceptance criteria, committed on a branch n
 - Work test-first at the seams the Spec's Testing Decisions name.
 <!-- subagent-exploration -->
 - Run the full suite and make it pass.
-- Then run the `code-review` skill on the branch's diff since the base (Spec and Standards), and fix what you find. Reading the diff yourself isn't it. Don't `finish` without it, unless the change is docs-only.
+- Then run the `code-review` skill on the branch's diff since the base (Spec and Standards), and fix what you find. Reading the diff yourself isn't it. Have the reviewers return only a short findings list (file, line, fix), not their full reports. Don't `finish` without it, unless the change is docs-only.
 - Commit only on the branch named after the Ticket's ID. Don't push it, and don't open a pull request: the branch lands in the base after the human accepts it.
 
 If the latest comment is a merge conflict, merge the base into the branch first and resolve it (rebase if it says so), then run the full suite again before anything else. The comment names the base commit and the conflicting files.
