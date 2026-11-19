@@ -113,7 +113,43 @@ func TestATaggedSpecBranchConflictOpensTheSpecMergeTicketNamingTheTagsBranch(t *
 	r.Poll()
 	r.WantOutput(h.SpecID() + ": " + taggedBranch + " conflicts with main in README: opened ")
 	r.Poll()
+
+	// The Spec merge Ticket, its branch not cut yet, is checked at the
+	// Tag's branch, so it starts as a Conflict Claim.
+	rows, err := h.Server.Client.FindTickets(context.Background(), h.Project, core.FindTicketsInput{Title: core.SpecMergeTitle(h.SpecID())})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("Spec merge Tickets %+v (%v), want one", rows, err)
+	}
+	requireConflictClaim(t, callFor(t, h, rows[0].ID), "README")
 	wantNoDefaultSpecBranch(t, h, h.Repo)
+}
+
+func TestATaggedSpecsTicketCutFromItsSpecBranchDoesntCountARepositoryItLeftAloneChanged(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	h.MakeRequirement()
+	api := h.AddRepository("api")
+	tagSpec(t, h)
+	first := inTwo(h, "Add an endpoint")
+	holdTicketsStage(t, h)
+	r := h.Start()
+	h.WantState(first, domain.InReview)
+	h.Accept(first)
+	r.Poll()
+	r.WantOutput(first + ": merged into " + taggedBranch)
+
+	// The second Ticket's api branch is cut at the Spec Branch's tip, which
+	// holds the first's work there, and it commits in the Home alone.
+	second := h.ReadyTicket("Call it")
+	h.Script(second, factorytest.WriteFile("call.go", "package acme\n"), factorytest.Git("add", "call.go"), factorytest.Git("commit", "-q", "-m", "Call it"), factorytest.Wait())
+	r.PollUntil("the Home's work to be reported live", func() bool { return len(h.Ticket(second).Repositories) > 0 })
+	home := h.GitIn(h.Repo, "rev-parse", second)
+	if got := changed(h.Ticket(second)); len(got) != 1 || got[0] != "acme@"+home {
+		t.Errorf("Changed Repositories %v, want the Home's alone at %s: api's branch holds nothing beyond %s there", got, home, taggedBranch)
+	}
+	if got := h.GitIn(api.Path, "rev-parse", second); got != h.GitIn(api.Path, "rev-parse", taggedBranch) {
+		t.Errorf("api's branch is at %s, want %s's tip", got, taggedBranch)
+	}
 }
 
 func TestUnderMergeAndPushAnUnpushedTaggedSpecBranchMergeIsRebuiltWhenTheBaseMoves(t *testing.T) {
@@ -320,7 +356,7 @@ func TestATaggedSpecBranchThatCantBeCreatedFailsTheClaimNamingTheTagsBranch(t *t
 	if len(tk.FailureReports) == 0 {
 		t.Fatalf("%s is %s with no Failure Report", id, tk.State)
 	}
-	if fr := tk.FailureReports[0]; !strings.Contains(fr.WhatBroke, "Spec Branch "+taggedBranch) || strings.Contains(fr.WhatBroke, `"spec"`) {
-		t.Errorf("the Failure Report says %q, want it to name %s and not a branch called spec", fr.WhatBroke, taggedBranch)
+	if fr := tk.FailureReports[0]; !strings.Contains(fr.WhatBroke, "Spec Branch "+taggedBranch) || !strings.Contains(fr.WhatBroke, `named "feat" may be`) || strings.Contains(fr.WhatBroke, `"spec"`) {
+		t.Errorf("the Failure Report says %q, want it to name %s, and feat as in its way, not a branch called spec", fr.WhatBroke, taggedBranch)
 	}
 }

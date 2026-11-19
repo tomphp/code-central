@@ -33,7 +33,7 @@ func (rs *repositories) specBranchTip(r *repository, branch string) (string, err
 	tip, err := r.git.commit(ref)
 	if err != nil {
 		if err := r.git.updateRef(ref, baseTip, ""); err != nil {
-			return "", fmt.Errorf("can't create the Spec Branch %s%s: %v", branch, inTheWayOf(branch), err)
+			return "", fmt.Errorf("can't create the Spec Branch %s%s: %v", branch, inTheWayHint(branch), err)
 		}
 		return baseTip, nil
 	}
@@ -46,15 +46,19 @@ func (rs *repositories) specBranchTip(r *repository, branch string) (string, err
 	return tip, nil
 }
 
-// inTheWayOf is the hint, for a Spec Branch git can't create, of the
-// branch that may be in the way: one named for its folder, as spec is for
-// spec/<id>. A name with no folder gets none.
-func inTheWayOf(branch string) string {
-	dir := path.Dir(branch)
-	if dir == "." {
+// inTheWayHint is the hint, for a Spec Branch git can't create, of the
+// branches that may be in the way: one named for any folder of its name, as
+// spec is for spec/<id>, and a/b or a for a/b/c. A name with no folder gets
+// none.
+func inTheWayHint(branch string) string {
+	var dirs []string
+	for dir := path.Dir(branch); dir != "."; dir = path.Dir(dir) {
+		dirs = append([]string{fmt.Sprintf("%q", dir)}, dirs...)
+	}
+	if len(dirs) == 0 {
 		return ""
 	}
-	return fmt.Sprintf(" (a branch named %q may be in the way)", dir)
+	return fmt.Sprintf(" (a branch named %s may be in the way)", strings.Join(dirs, " or "))
 }
 
 // specBranchFailed is the failure for a Spec Branch the Factory can't
@@ -666,7 +670,7 @@ func (l *lander) landSpecIn(ctx context.Context, spec core.SpecDetail, p core.Pr
 		}
 		return false
 	}
-	l.printf("%s: merged %s into %s at %s%s", spec.ID, specRefOf(spec).Branch, base, short(merge), r.where())
+	l.printf("%s: merged %s into %s at %s%s", spec.ID, core.SpecBranch(spec.ID, spec.Tags), base, short(merge), r.where())
 	l.printf("%s: landing its Tickets%s: %s", spec.ID, r.where(), joinIDs(pl.tickets))
 	for _, tk := range pl.tickets {
 		l.stateOf(r).mergedOn[tk.ID] = mergeOn{base, merge}
@@ -770,7 +774,7 @@ func (l *lander) openSpecConflict(ctx context.Context, spec core.SpecDetail, con
 	}
 	// Where the Spec Branch conflicts: in each named Repository, or with
 	// the Home Repository alone, with the base in these files.
-	branch, with, again := specRefOf(spec).Branch, l.repos.baseBranch()+" in "+strings.Join(in.Conflicts, ", "), l.repos.baseBranch()+" again"
+	branch, with, again := core.SpecBranch(spec.ID, spec.Tags), l.repos.baseBranch()+" in "+strings.Join(in.Conflicts, ", "), l.repos.baseBranch()+" again"
 	if several {
 		with = "the base in " + strings.Join(names, ", ")
 		again = with + " again"
