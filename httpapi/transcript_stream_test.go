@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +13,9 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/httpapi"
+	"github.com/tomoram/code-central/ids"
+	"github.com/tomoram/code-central/ops"
 )
 
 // frame is one SSE event on a Transcript stream.
@@ -271,4 +275,35 @@ func TestATranscriptStreamEndsWhenTheRequestContextEnds(t *testing.T) {
 	}()
 	cancel()
 	<-done // a hang here fails the test by timeout
+}
+
+// On a Shared Store, a service whose Transcript another, running, service
+// holds names that service's host and ends the stream: there is nothing
+// to follow here.
+func TestATranscriptStreamOfATranscriptAnotherServiceHoldsNamesItsHostAndEnds(t *testing.T) {
+	f := newTranscriptFixture(t)
+	f.claim(t, 2, "s1")
+	var desktop http.Handler
+	for _, svc := range []core.Service{{ID: "a", Host: "laptop"}, {ID: "b", Host: "desktop"}} {
+		c := core.New(f.store, f.clock, &ids.Sequence{})
+		c.SetService(svc)
+		if err := c.Register(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if svc.Host == "laptop" {
+			c.PostSessionEvents(context.Background(), "s1", []core.SessionEvent{{Time: f.clock.Now(), Kind: core.EventText, Text: "one"}})
+			continue
+		}
+		mux := http.NewServeMux()
+		httpapi.Register(mux, ops.Serve(c))
+		desktop = mux
+	}
+
+	r := transcriptStream(t, liveServer(t, desktop).URL, 2, 1, "")
+	if name, data := nextEvent(t, r); name != "host" || data != `{"host":"laptop"}` {
+		t.Fatalf("got %s %s, want the laptop named", name, data)
+	}
+	if line, err := r.ReadString('\n'); err != io.EOF {
+		t.Fatalf("read %q, %v, want the stream ended", line, err)
+	}
 }

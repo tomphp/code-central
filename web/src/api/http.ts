@@ -163,20 +163,25 @@ export function toError(status: number, text: string): ApiError {
 
 // subscribeTranscript follows a Transcript stream, sending the last seq
 // it saw as Last-Event-ID on each reconnect, so the stream resumes with no
-// gap and no repeats.
+// gap and no repeats. A host frame, from a service holding none, ends it
+// for good: it doesn't reconnect.
 function subscribeTranscript(doFetch: typeof fetch, url: string, retryMs: number, h: TranscriptHandlers): () => void {
   let last: string | undefined;
-  return follow(doFetch, url, retryMs, {
+  const stop = follow(doFetch, url, retryMs, {
     headers: (): Record<string, string> => (last ? { "Last-Event-ID": last } : {}),
     onOpen: h.onOpen,
     onFrame: (f) => {
       if (f.name === "tail") h.onTail?.();
-      else if (f.name === "session_event" && f.data) {
+      else if (f.name === "host" && f.data) {
+        stop();
+        h.onHost?.((JSON.parse(f.data) as { host: string }).host);
+      } else if (f.name === "session_event" && f.data) {
         if (f.id) last = f.id;
         h.onEvent(JSON.parse(f.data) as HeldSessionEvent);
       }
     },
   });
+  return stop;
 }
 
 // subscribeChat follows a Conversation stream, sending the last id it saw as

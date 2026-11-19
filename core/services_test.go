@@ -191,3 +191,17 @@ func (f failing) FactoryReports() ([]store.FactoryReports, error) {
 	}
 	return f.Services.FactoryReports()
 }
+
+func (f failing) PutTranscriptHolder(h store.TranscriptHolder) error {
+	if f.s.err != nil {
+		return f.s.err
+	}
+	return f.Services.PutTranscriptHolder(h)
+}
+
+func (f failing) TranscriptHolder(project string, ticket, claim int) (store.TranscriptHolder, bool, error) {
+	if f.s.err != nil {
+		return store.TranscriptHolder{}, false, f.s.err
+	}
+	return f.Services.TranscriptHolder(project, ticket, claim)
+}

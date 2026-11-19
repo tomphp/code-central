@@ -302,6 +302,7 @@ func (c *Core) WatchFactoryStatus(ctx context.Context, ticks <-chan time.Time, c
 				changed(p)
 			}
 			c.watchChats()
+			c.pruneTranscriptHolders()
 		}
 	}
 }
