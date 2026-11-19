@@ -35,7 +35,7 @@ func refusedChat(t *testing.T, f fixture) *core.Error {
 }
 
 // chatBeat is an Online Heartbeat with Chat support from cc on box.
-func chatBeat(t *testing.T, f fixture) {
+func chatBeat(f fixture, t *testing.T) {
 	t.Helper()
 	if _, err := f.core.ReportHeartbeat(ctx, "acme", core.ReportHeartbeatInput{Factory: "cc", Host: "box", State: core.HeartbeatOnline, IntervalSeconds: 10, Chat: true}); err != nil {
 		t.Fatal(err)
@@ -50,7 +50,7 @@ func TestChatIsOfferedOnlyWhereAChatFactoryReportsAndNamedElsewhere(t *testing.T
 		}
 	}
 	tick := watchFactories(t, desktop)
-	chatBeat(t, laptop)
+	chatBeat(laptop, t)
 	tick()
 
 	if v := chatOn(t, desktop); v.Availability != core.ChatNone || v.RunsOn != "laptop" {
@@ -104,11 +104,12 @@ func TestChatNamesNoHostWhenNoLiveServiceHasAChatFactory(t *testing.T) {
 			t.Fatal(err)
 		}
 		tick := watchFactories(t, desktop)
-		chatBeat(t, laptop)
+		chatBeat(laptop, t)
 		tick()
 		if err := laptop.core.Deregister(ctx); err != nil {
 			t.Fatal(err)
 		}
+		tick()
 		if v := chatOn(t, desktop); v.RunsOn != "" {
 			t.Fatalf("the desktop's Chat runs on %q, a service that stopped", v.RunsOn)
 		}

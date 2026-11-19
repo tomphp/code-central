@@ -104,9 +104,10 @@ func (c *Core) LoadFactories() {
 
 // refreshFactories prunes the Heartbeats Offline for a day, here and in
 // the Store, and reads every Heartbeat and Factory report from the Store
-// into memory where it is newer than what this service has. It returns the
-// Projects whose Factories changed in a way the human sees, as
-// ReportHeartbeat, ReportBase and ReportRepositories would have noticed.
+// into memory where it is newer than what this service has, and the live
+// services, for Chat to name where it runs. It returns the Projects whose
+// Factories changed in a way the human sees, as ReportHeartbeat,
+// ReportBase and ReportRepositories would have noticed.
 // What it can't read is logged, and memory stands.
 func (c *Core) refreshFactories() []string {
 	now := c.now()
@@ -121,6 +122,10 @@ func (c *Core) refreshFactories() []string {
 	reports, rerr := services.FactoryReports()
 	if rerr != nil {
 		c.logf("cannot read the base and clone reports: %v", rerr)
+	}
+	regs, gerr := services.Registrations(now)
+	if gerr != nil {
+		c.logf("cannot read the services: %v", gerr)
 	}
 
 	var changed []string
@@ -171,6 +176,12 @@ func (c *Core) refreshFactories() []string {
 		hs.reportsAt[r.Project] = doc.At
 		setOrDelete(hs.base, r.Project, doc.Bases)
 		setOrDelete(hs.clones, r.Project, doc.Clones)
+	}
+	if gerr == nil {
+		clear(hs.live)
+		for _, r := range regs {
+			hs.live[r.ID] = r.Host
+		}
 	}
 	return changed
 }

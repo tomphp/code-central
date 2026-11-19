@@ -642,38 +642,33 @@ func (c *Core) chatFactories(key string) map[heartbeatKey]FactoryView {
 // chatRunsOn is the host Chat runs on when no Factory of the Project's fs,
 // those reporting here, can take a Conversation: the first, by host, of
 // the live services an Online Factory with Chat support reports to. It is
-// empty when one here can, or none on a live service can. A Store it
-// can't read is logged, and names none.
+// empty when one here can, or none on a live service can. It reads memory
+// only, the services as the watch last read them.
 func (c *Core) chatRunsOn(key string, fs map[heartbeatKey]FactoryView) string {
 	for _, f := range fs {
 		if answers(f) {
 			return ""
 		}
 	}
-	now := c.clock.Now()
-	hs := c.heartbeats
+	return c.heartbeats.chatHost(key, c.clock.Now())
+}
+
+// chatHost is the first, by host, of the live services other than this
+// one that an Online Factory of the Project with Chat support reports to,
+// or "" when there is none.
+func (hs *heartbeats) chatHost(key string, now time.Time) string {
 	hs.mu.Lock()
-	elsewhere := map[string]bool{}
+	defer hs.mu.Unlock()
+	first := ""
 	for k, h := range hs.all {
-		if k.project == key && h.service != hs.self && h.chat && h.status(now) == FactoryOnline {
-			elsewhere[h.service] = true
+		if k.project != key || h.service == hs.self || !h.chat || h.status(now) != FactoryOnline {
+			continue
+		}
+		if host, ok := hs.live[h.service]; ok && (first == "" || host < first) {
+			first = host
 		}
 	}
-	hs.mu.Unlock()
-	if len(elsewhere) == 0 {
-		return ""
-	}
-	regs, err := c.store.Services().Registrations(now)
-	if err != nil {
-		c.logf("cannot read the services to say where %s's Chat runs: %v", key, err)
-		return ""
-	}
-	for _, r := range regs {
-		if elsewhere[r.ID] {
-			return r.Host
-		}
-	}
-	return ""
+	return first
 }
 
 // answers says whether f can answer a Conversation now.

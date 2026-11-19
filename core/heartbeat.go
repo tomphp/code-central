@@ -123,6 +123,9 @@ type heartbeats struct {
 	// self is this service's ID: a Factory whose Reporting Service is
 	// another lists that service's host.
 	self string
+	// live is each live service's host by ID, as the watch last read the
+	// Store's Registrations, so Chat can name where it runs without a read.
+	live map[string]string
 }
 
 // deadline is how long after h a Factory with no newer Heartbeat goes

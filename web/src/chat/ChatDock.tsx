@@ -1,8 +1,9 @@
 // Chat in the lower right corner of a Project-scoped view (Spec
-// code-central-633): the floating icon, shown only when Chat is available
-// for the Project, here or on another service sharing the Store, where
-// the pop-up says it runs, and the pop-up it opens. The pop-up follows the
-// Conversation and, once open, stays open if Chat stops being available.
+// code-central-633): the floating icon and the pop-up it opens. The icon
+// shows only when Chat is available for the Project, here or on another
+// service sharing the Store, whose host the pop-up then names. The pop-up
+// follows the Conversation and, once open, stays open if Chat stops being
+// available.
 import { useState } from "react";
 import type { ApiError, FactoryView, ModelRow, ProjectRow } from "../api/types";
 import { Button } from "../controls/Button";

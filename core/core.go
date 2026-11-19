@@ -85,7 +85,7 @@ func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
 	c.latestNotices = &latestNotices{sent: map[markKey]time.Time{}, pending: map[markKey]bool{}}
 	c.watchers = &watchers{all: map[watcherKey]watcherStatus{}, leases: map[string]store.Lease{}}
 	c.heartbeats = &heartbeats{all: map[heartbeatKey]heartbeat{}, seen: map[string]string{}, base: map[string]map[string]BaseView{}, clones: map[string]map[string]CloneView{},
-		reportsAt: map[string]time.Time{}}
+		reportsAt: map[string]time.Time{}, live: map[string]string{}}
 	c.chats = newChats()
 	return c
 }
