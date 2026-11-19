@@ -4,33 +4,24 @@ import (
 	"context"
 	"embed"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
-// A Project's mode (store.Mode) says where init puts its files: committed
+// A Project's mode (domain.Mode) says where init puts its files: committed
 // to the repository, or kept local to one checkout (`init --local`).
-const (
-	ModeCommitted = domain.ModeCommitted
-	ModeLocal     = domain.ModeLocal
-)
-
-func invalidMode(m domain.Mode) *Error {
-	return invalid("mode", "mode %q is neither %q nor %q", m, ModeCommitted, ModeLocal)
-}
-
-// SetProjectModeInput is set_project_mode's input.
-type SetProjectModeInput struct {
-	Mode domain.Mode `json:"mode"`
+func invalidMode(m domain.Mode) *api.Error {
+	return invalid("mode", "mode %q is neither %q nor %q", m, domain.ModeCommitted, domain.ModeLocal)
 }
 
 // SetProjectMode is set_project_mode(key, mode): init calls it when the
 // human agrees to switch a Project between committed and local.
-func (c *Core) SetProjectMode(_ context.Context, key string, in SetProjectModeInput) (ProjectView, error) {
+func (c *Core) SetProjectMode(_ context.Context, key string, in api.SetProjectModeInput) (api.ProjectView, error) {
 	if !in.Mode.Valid() {
-		return ProjectView{}, invalidMode(in.Mode)
+		return api.ProjectView{}, invalidMode(in.Mode)
 	}
-	var v ProjectView
+	var v api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err

@@ -2,19 +2,20 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"os"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
 // factories is the Project's Factory Status, read as the human.
-func factories(t *testing.T, h *factorytest.Harness) core.FactoryStatusView {
+func factories(t *testing.T, h *factorytest.Harness) api.FactoryStatusView {
 	t.Helper()
 	p, err := h.Human().GetProject(context.Background(), h.Project)
 	if err != nil {
@@ -26,7 +27,7 @@ func factories(t *testing.T, h *factorytest.Harness) core.FactoryStatusView {
 // wantFactory fails the test unless the Factory shows status with a note
 // containing note, and returns its Factory Status. A test settles the
 // Factory first: a Heartbeat it has queued is busy work until posted.
-func wantFactory(t *testing.T, h *factorytest.Harness, status core.FactoryStatusName, note string) core.FactoryStatusView {
+func wantFactory(t *testing.T, h *factorytest.Harness, status api.FactoryStatusName, note string) api.FactoryStatusView {
 	t.Helper()
 	fs := factories(t, h)
 	if fs.Status != status || len(fs.Factories) != 1 || !strings.Contains(fs.Factories[0].Note, note) {
@@ -41,7 +42,7 @@ func TestEachPollSendsAnOnlineHeartbeatWithTheTurnsRunning(t *testing.T) {
 	id := h.ReadyTicket("Long job")
 	h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start("--parallel", "2", "--poll", "20s")
-	fs := wantFactory(t, h, core.FactoryOnline, "1 of 2 turns running")
+	fs := wantFactory(t, h, api.FactoryOnline, "1 of 2 turns running")
 	f := fs.Factories[0]
 	host, _ := os.Hostname()
 	if f.Name != "code-central-factory" || f.Host != host || f.IntervalSeconds != 20 {
@@ -54,14 +55,14 @@ func TestEachPollSendsAnOnlineHeartbeatWithTheTurnsRunning(t *testing.T) {
 	r.Settle()
 	h.WantState(id, domain.InReview)
 	r.Poll()
-	wantFactory(t, h, core.FactoryOnline, "0 of 2 turns running")
+	wantFactory(t, h, api.FactoryOnline, "0 of 2 turns running")
 }
 
 func TestNoChatReportsNoChatSupport(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	h.Start("--no-chat")
-	fs := wantFactory(t, h, core.FactoryOnline, "turns running")
+	fs := wantFactory(t, h, api.FactoryOnline, "turns running")
 	if fs.Factories[0].Chat {
 		t.Errorf("Factory %+v, want no Chat support with --no-chat", fs.Factories[0])
 	}
@@ -75,7 +76,7 @@ func TestAnOutagePauseStaysOnlineAndSaysWhenItResumes(t *testing.T) {
 	r := h.Start()
 	r.WantOutput("waiting on rate_limit")
 	r.Poll()
-	fs := wantFactory(t, h, core.FactoryOnline, "paused: ")
+	fs := wantFactory(t, h, api.FactoryOnline, "paused: ")
 	if n := fs.Factories[0].Note; !strings.Contains(n, "rate_limit") || !strings.Contains(n, "; next resume at ") {
 		t.Errorf("note %q, want the reason and when it resumes", n)
 	}
@@ -91,7 +92,7 @@ func TestTheFirstCtrlCSendsDrainingAndTheDrainKeepsSendingIt(t *testing.T) {
 
 	r.Interrupt()
 	r.Settle()
-	first := wantFactory(t, h, core.FactoryDraining, "draining: waiting on 1 running turn(s)").Factories[0].LastHeartbeat
+	first := wantFactory(t, h, api.FactoryDraining, "draining: waiting on 1 running turn(s)").Factories[0].LastHeartbeat
 	h.Server.Clock.Advance(time.Second)
 	r.Tick()
 	r.Settle()
@@ -101,7 +102,7 @@ func TestTheFirstCtrlCSendsDrainingAndTheDrainKeepsSendingIt(t *testing.T) {
 
 	h.Continue(id)
 	r.Exited()
-	wantFactory(t, h, core.FactoryOffline, "stopped: drained")
+	wantFactory(t, h, api.FactoryOffline, "stopped: drained")
 }
 
 func TestASecondCtrlCSendsAStoppingHeartbeatNamingTheSignal(t *testing.T) {
@@ -113,11 +114,11 @@ func TestASecondCtrlCSendsAStoppingHeartbeatNamingTheSignal(t *testing.T) {
 	h.WantCalls(1)
 	r.Interrupt()
 	r.Settle()
-	wantFactory(t, h, core.FactoryDraining, "draining")
+	wantFactory(t, h, api.FactoryDraining, "draining")
 	r.Interrupt()
 	r.PassKillGrace()
 	r.Exited()
-	wantFactory(t, h, core.FactoryOffline, "stopped on interrupt")
+	wantFactory(t, h, api.FactoryOffline, "stopped on interrupt")
 }
 
 func TestSIGTERMSendsAStoppingHeartbeatNamingTheSignal(t *testing.T) {
@@ -130,7 +131,7 @@ func TestSIGTERMSendsAStoppingHeartbeatNamingTheSignal(t *testing.T) {
 	r.Signal(syscall.SIGTERM)
 	r.PassKillGrace()
 	r.Exited()
-	wantFactory(t, h, core.FactoryOffline, "stopped on terminated")
+	wantFactory(t, h, api.FactoryOffline, "stopped on terminated")
 }
 
 func TestAStopForSendsAStoppingHeartbeatWithItsReason(t *testing.T) {
@@ -140,7 +141,7 @@ func TestAStopForSendsAStoppingHeartbeatWithItsReason(t *testing.T) {
 	h.Script(expired, factorytest.APIError("authentication_failed"), factorytest.Result("success"), factorytest.Exit(1))
 	r := h.Start()
 	r.Exited()
-	wantFactory(t, h, core.FactoryOffline, "stopped: claude's login has expired")
+	wantFactory(t, h, api.FactoryOffline, "stopped: claude's login has expired")
 }
 
 func TestAFactoryThatRefusesToStartSendsNoHeartbeat(t *testing.T) {
@@ -170,5 +171,5 @@ func TestARefusedHeartbeatIsWarnedOnceAndNeverStopsThePoll(t *testing.T) {
 
 	h.SetFailing("")
 	r.Poll()
-	wantFactory(t, h, core.FactoryOnline, "turns running")
+	wantFactory(t, h, api.FactoryOnline, "turns running")
 }

@@ -5,20 +5,16 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
 // The Pull Request Watcher's check mode and status (code-central-389).
 
-// PullRequestCheck runs the Pull Request Watcher once in its check mode.
-// The service makes no external calls itself (ADR 0002, ADR 0004), so the
-// check runs in the watcher's process. It never creates a pull request.
-type PullRequestCheck func(ctx context.Context, in PullRequestCheckInput) WatcherCheckResult
-
 // SetPullRequestCheck makes c run check when Pull Request is turned on.
 // Call it before serving; without it, nothing is checked.
-func (c *Core) SetPullRequestCheck(check PullRequestCheck) { c.pullRequestCheck = check }
+func (c *Core) SetPullRequestCheck(check api.PullRequestCheck) { c.pullRequestCheck = check }
 
 // checkPullRequest runs the Pull Request check on each Repository that
 // change, a change of the Project's Default Landing, brings under Pull
@@ -30,7 +26,7 @@ func (c *Core) SetPullRequestCheck(check PullRequestCheck) { c.pullRequestCheck 
 // before the check runs, with or without one.
 func (c *Core) checkPullRequest(ctx context.Context, key string, change func(domain.Project) domain.Project) error {
 	var url, ghPath, patEnv string
-	var repositories []RepositoryView
+	var repositories []api.RepositoryView
 	var homeUnder, single bool
 	var localOnly error
 	err := c.store.View(func(r store.Reader) error {
@@ -68,20 +64,20 @@ func (c *Core) checkPullRequest(ctx context.Context, key string, change func(dom
 	if c.pullRequestCheck == nil {
 		return nil
 	}
-	in := PullRequestCheckInput{GHPath: ghPath, PATEnv: patEnv}
+	in := api.PullRequestCheckInput{GHPath: ghPath, PATEnv: patEnv}
 	if single {
 		in.CodeHost, in.Repository = codeHostOf(url)
 		return checkRefusal(c.pullRequestCheck(ctx, in), "method")
 	}
-	var unsupported []RepositoryProblem
+	var unsupported []api.RepositoryProblem
 	for _, rv := range repositories {
 		host, repository := codeHostOf(rv.CloneURL)
-		if host == CodeHostNone {
-			unsupported = append(unsupported, RepositoryProblem{Repository: rv.Name, Problem: ProblemCheckFailed,
+		if host == api.CodeHostNone {
+			unsupported = append(unsupported, api.RepositoryProblem{Repository: rv.Name, Problem: api.ProblemCheckFailed,
 				Message: rv.CloneURL + " is on a host Pull Request doesn't support; it supports GitHub and Azure Repos", Fix: "point " + rv.Name + "'s Clone URL at GitHub or Azure Repos, or use Merge or Branch"})
 			continue
 		}
-		in.Repositories = append(in.Repositories, PullRequestCheckRepository{Name: rv.Name, CodeHost: host, Repository: repository})
+		in.Repositories = append(in.Repositories, api.PullRequestCheckRepository{Name: rv.Name, CodeHost: host, Repository: repository})
 	}
 	res := c.pullRequestCheck(ctx, in)
 	if res.Problem != "" && len(res.Repositories) == 0 {
@@ -98,7 +94,7 @@ func (c *Core) checkPullRequest(ctx context.Context, key string, change func(dom
 
 // localOnlyUnderPullRequestFix is how to put right the local-only
 // Repository rv under Pull Request: another Landing, or a Clone URL.
-func localOnlyUnderPullRequestFix(rv RepositoryView) string {
+func localOnlyUnderPullRequestFix(rv api.RepositoryView) string {
 	if rv.OwnLanding {
 		return "give " + rv.Name + " a Clone URL, or another Landing such as Merge"
 	}
@@ -118,7 +114,7 @@ func refuseLocalOnlyUnderPullRequest(p domain.Project, name string, landing bool
 			if landing {
 				field = "landing"
 			}
-			return &Error{Code: Invalid, Field: field, Message: name + " is local-only, with no Clone URL, so it can't land by Pull Request", Fix: localOnlyUnderPullRequestFix(rv)}
+			return &api.Error{Code: api.Invalid, Field: field, Message: name + " is local-only, with no Clone URL, so it can't land by Pull Request", Fix: localOnlyUnderPullRequestFix(rv)}
 		}
 	}
 	return nil
@@ -130,10 +126,10 @@ func refuseLocalOnlyUnderPullRequest(p domain.Project, name string, landing bool
 // a Home that lost its remote can be, isn't refused again.
 func refuseLocalOnlyFollowers(p, next domain.Project) error {
 	was := landingPolicies(p)
-	var ps []RepositoryProblem
+	var ps []api.RepositoryProblem
 	for _, rv := range repositoriesView(next) {
 		if rv.LocalOnlyUnderPullRequest && !was.In(rv.Name).NeedsCloneURL() {
-			ps = append(ps, RepositoryProblem{Repository: rv.Name, Problem: ProblemCheckFailed,
+			ps = append(ps, api.RepositoryProblem{Repository: rv.Name, Problem: api.ProblemCheckFailed,
 				Message: "local-only, with no Clone URL, and following the Default Landing, so it can't land by Pull Request", Fix: localOnlyUnderPullRequestFix(rv)})
 		}
 	}
@@ -143,7 +139,7 @@ func refuseLocalOnlyFollowers(p, next domain.Project) error {
 // SumRepositoryProblems is one check result naming each of ps, the
 // failing Repositories, with its reason and its fix: its Problem is the
 // first one's.
-func SumRepositoryProblems(ps []RepositoryProblem) WatcherCheckResult {
+func SumRepositoryProblems(ps []api.RepositoryProblem) api.WatcherCheckResult {
 	var reasons, fixes []string
 	for _, p := range ps {
 		reasons = append(reasons, p.Repository+": "+p.Message)
@@ -151,7 +147,7 @@ func SumRepositoryProblems(ps []RepositoryProblem) WatcherCheckResult {
 			fixes = append(fixes, p.Repository+": "+p.Fix)
 		}
 	}
-	r := WatcherCheckResult{Reason: strings.Join(reasons, "; "), Fix: strings.Join(fixes, "; "), Repositories: ps}
+	r := api.WatcherCheckResult{Reason: strings.Join(reasons, "; "), Fix: strings.Join(fixes, "; "), Repositories: ps}
 	if len(ps) > 0 {
 		r.Problem = ps[0].Problem
 	}
@@ -164,19 +160,19 @@ func SumRepositoryProblems(ps []RepositoryProblem) WatcherCheckResult {
 // checkRefusal is a failed check's refusal, with its reason and fix, on
 // field, or on pat_env for a problem with the PAT; nil for a check that
 // passed.
-func checkRefusal(res WatcherCheckResult, field string) error {
+func checkRefusal(res api.WatcherCheckResult, field string) error {
 	if res.Problem == "" {
 		return nil
 	}
 	switch res.Problem {
-	case ProblemPATMissing, ProblemPATRejected, ProblemPATScope:
+	case api.ProblemPATMissing, api.ProblemPATRejected, api.ProblemPATScope:
 		field = "pat_env"
 	}
-	return &Error{Code: Invalid, Field: field, Message: res.Reason, Fix: res.Fix}
+	return &api.Error{Code: api.Invalid, Field: field, Message: res.Reason, Fix: res.Fix}
 }
 
 // ReportPullRequestWatcherStatus is report_pull_request_watcher_status:
 // the Pull Request Watcher reports its status on every poll.
-func (c *Core) ReportPullRequestWatcherStatus(_ context.Context, key string, in ReportWatcherStatusInput) (Written[ProjectView], error) {
-	return c.reportWatcherStatus(WatcherPullRequests, key, in)
+func (c *Core) ReportPullRequestWatcherStatus(_ context.Context, key string, in api.ReportWatcherStatusInput) (api.Written[api.ProjectView], error) {
+	return c.reportWatcherStatus(api.WatcherPullRequests, key, in)
 }

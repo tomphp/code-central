@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/tomoram/code-central/domain"
 	"net/url"
 	"slices"
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/internal/fakegh"
 )
 
@@ -74,7 +75,7 @@ func (w *watching) openIssues(label string, page int, issues ...issue) {
 }
 
 // watch is acme's get_issue_watch.
-func (w *watching) watch() core.IssueWatch {
+func (w *watching) watch() api.IssueWatch {
 	w.t.Helper()
 	watch, err := w.srv.Core.GetIssueWatch(context.Background(), "acme")
 	if err != nil {
@@ -98,9 +99,9 @@ func (w *watching) incoming() []string {
 }
 
 // linked is every Spec and Ticket in acme linked by github, detached too.
-func (w *watching) linked() []core.LinkedRow {
+func (w *watching) linked() []api.LinkedRow {
 	w.t.Helper()
-	rows, err := w.srv.Core.FindLinked(context.Background(), "acme", core.FindLinkedInput{Integration: "github"})
+	rows, err := w.srv.Core.FindLinked(context.Background(), "acme", api.FindLinkedInput{Integration: "github"})
 	if err != nil {
 		w.t.Fatal(err)
 	}
@@ -158,7 +159,7 @@ func TestOpenIssuesArriveAsDraftIncomingIssuesButPullRequestsDont(t *testing.T) 
 	none := issue{Number: 4, Title: "Issue 4", HTMLURL: "https://github.com/acme/web/issues/4"}
 	w.openIssues("", 1, openIssue(1), pullRequest(2), openIssue(3), none)
 	w.start(w.h.Bin)
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 
 	want := []string{issueLine(1), issueLine(3), "acme/web#4 https://github.com/acme/web/issues/4 Issue 4: "}
 	if got := w.incoming(); !slices.Equal(got, want) {
@@ -169,7 +170,7 @@ func TestOpenIssuesArriveAsDraftIncomingIssuesButPullRequestsDont(t *testing.T) 
 		t.Fatal(err)
 	}
 	for _, i := range watch.Issues {
-		got, err := w.srv.Core.GetTicket(context.Background(), "acme", core.GetTicketInput{Ticket: core.Ref(i.Ticket)})
+		got, err := w.srv.Core.GetTicket(context.Background(), "acme", api.GetTicketInput{Ticket: api.Ref(i.Ticket)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -198,20 +199,20 @@ func TestEveryPageOfOpenIssuesArrives(t *testing.T) {
 	w.openIssues("", 1, first...)
 	w.openIssues("", 2, openIssue(101))
 	w.start(w.h.Bin)
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	wantIncoming(t, w, append(want, 101)...)
 }
 
 // With a filter label, only the issues GitHub lists with it arrive.
 func TestWithAFilterLabelOnlyLabelledIssuesArrive(t *testing.T) {
 	w := newWatching(t)
-	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}, Label: "good first issue"}); err != nil {
+	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", api.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}, Label: "good first issue"}); err != nil {
 		t.Fatal(err)
 	}
 	w.openIssues("", 1, openIssue(1), openIssue(2))
 	w.openIssues("good first issue", 1, openIssue(2))
 	w.start(w.h.Bin)
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	wantIncoming(t, w, 2)
 }
 
@@ -221,7 +222,7 @@ func TestARestartedIssueWatcherCreatesNoDuplicates(t *testing.T) {
 	w := newWatching(t)
 	w.openIssues("", 1, openIssue(1), openIssue(2))
 	w.start(w.h.Bin)
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	w.polled()
 	wantIncoming(t, w, 1, 2)
 
@@ -238,14 +239,14 @@ func TestTurningGitHubIssuesOffAndOnCreatesNoDuplicates(t *testing.T) {
 	w := newWatching(t)
 	w.openIssues("", 1, openIssue(1))
 	w.start(w.h.Bin)
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	for _, on := range []bool{false, true} {
-		if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: on, Repositories: []string{"acme/web"}}); err != nil {
+		if _, err := w.srv.Core.SetGitHubIssues(human, "acme", api.SetGitHubIssuesInput{On: on, Repositories: []string{"acme/web"}}); err != nil {
 			t.Fatal(err)
 		}
 		w.polled()
 	}
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	wantIncoming(t, w, 1)
 }
 
@@ -255,12 +256,12 @@ func TestADetachedLinkStopsAnIssueComingInAgain(t *testing.T) {
 	w := newWatching(t)
 	w.openIssues("", 1, openIssue(1))
 	w.start(w.h.Bin)
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	rows := w.linked()
 	if len(rows) != 1 {
 		t.Fatalf("linked %v, want issue 1's Ticket", rows)
 	}
-	if _, err := w.srv.Core.Unlink(human, "acme", core.UnlinkInput{Target: core.Ref(rows[0].ID)}); err != nil {
+	if _, err := w.srv.Core.Unlink(human, "acme", api.UnlinkInput{Target: api.Ref(rows[0].ID)}); err != nil {
 		t.Fatal(err)
 	}
 	w.polled()

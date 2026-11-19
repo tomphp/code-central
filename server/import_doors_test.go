@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // payload reads a testdata payload, for the MCP and HTTP calls; the CLI
@@ -54,7 +54,7 @@ func init() {
 			http: httpCall{"POST", "/api/p/acme/import", body(map[string]any{"payload": bad, "dry_run": true})},
 			cli:  []string{"--dry-run", "--file", "testdata/import-bad.json"},
 		},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 	cases["get_import_guide"] = opCase{
 		ok: call{
@@ -72,7 +72,7 @@ func init() {
 			http: httpCall{"GET", "/api/p/acme/import-guide?ticket=2", ""},
 			cli:  []string{"2"},
 		},
-		code:     core.Invalid,
+		code:     api.Invalid,
 		cliUsage: true,
 	}
 }

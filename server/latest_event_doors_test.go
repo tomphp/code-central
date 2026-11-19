@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // The latest Session Event on reads (ticket 107): computed on read, the
@@ -16,16 +16,16 @@ func TestLatestEventThroughEveryDoor(t *testing.T) {
 	srv := newServer(t, func(t *testing.T, srv *codecentraltest.Server) {
 		ctx := context.Background()
 		must(t, func() error {
-			_, err := srv.Core.Claim(ctx, "acme", core.ClaimInput{SessionID: "s1"})
+			_, err := srv.Core.Claim(ctx, "acme", api.ClaimInput{SessionID: "s1"})
 			return err
 		})
 		// acme-2 is claimed too, but posts nothing.
-		must(t, func() error { _, err := srv.Core.Approve(ctx, "acme", core.TicketInput{Ticket: "2"}); return err })
+		must(t, func() error { _, err := srv.Core.Approve(ctx, "acme", api.TicketInput{Ticket: "2"}); return err })
 		must(t, func() error {
-			_, err := srv.Core.Claim(ctx, "acme", core.ClaimInput{SessionID: "s2"})
+			_, err := srv.Core.Claim(ctx, "acme", api.ClaimInput{SessionID: "s2"})
 			return err
 		})
-		srv.Core.PostSessionEvents(ctx, "s1", []core.SessionEvent{
+		srv.Core.PostSessionEvents(ctx, "s1", []api.SessionEvent{
 			{Time: time.Date(2026, 11, 7, 9, 0, 4, 0, time.UTC), Kind: "text", Text: "Planning."},
 			{Time: time.Date(2026, 11, 7, 9, 0, 5, 0, time.UTC), Kind: "tool_call", Text: "Bash: go test ./...", Tool: "Bash", ToolUseID: "tu1"},
 		})

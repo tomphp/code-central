@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
@@ -18,11 +19,11 @@ func TestSubmittingARequirementCreatesItsSpecAndThreeChainedStages(t *testing.T)
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Existing") // acme-1, so the Requirement starts at acme-2
-	res, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode})
+	res, err := f.core.SubmitRequirement(ctx, "acme", api.SubmitRequirementInput{Text: darkMode})
 	if err != nil {
 		t.Fatalf("submit_requirement: %v", err)
 	}
-	sp, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-2"})
+	sp, err := f.core.GetSpec(ctx, "acme", api.GetSpecInput{Spec: "acme-2"})
 	if err != nil {
 		t.Fatalf("get_spec: %v", err)
 	}
@@ -41,7 +42,7 @@ func TestSubmittingARequirementCreatesItsSpecAndThreeChainedStages(t *testing.T)
 		t.Fatalf("stages %+v", res.Stages)
 	}
 	for i, w := range want {
-		tk, err := f.core.GetTicket(ctx, "acme", whole(core.Ref(w.id)))
+		tk, err := f.core.GetTicket(ctx, "acme", whole(api.Ref(w.id)))
 		if err != nil {
 			t.Fatalf("get_ticket %s: %v", w.id, err)
 		}
@@ -63,11 +64,11 @@ func TestARequirementIsWrittenAsTheHumanWhoeverSubmitsIt(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	// No Actor in the context is the agent, as over MCP and the CLI.
-	if _, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode}); err != nil {
+	if _, err := f.core.SubmitRequirement(ctx, "acme", api.SubmitRequirementInput{Text: darkMode}); err != nil {
 		t.Fatalf("submit_requirement: %v", err)
 	}
 	for _, id := range []string{"acme-2", "acme-3", "acme-4"} {
-		tk, _ := f.core.GetTicket(ctx, "acme", whole(core.Ref(id)))
+		tk, _ := f.core.GetTicket(ctx, "acme", whole(api.Ref(id)))
 		if len(tk.Moves) != 1 || tk.Moves[0].Actor != "human" || tk.Moves[0].To != domain.Ready || tk.Moves[0].Via != "submit_requirement" {
 			t.Fatalf("%s moves %+v", id, tk.Moves)
 		}
@@ -78,8 +79,8 @@ func TestARequirementNeedsText(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	for _, text := range []string{"", "  \n\t\n"} {
-		_, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: text})
-		wantCode(t, err, core.Invalid, "text")
+		_, err := f.core.SubmitRequirement(ctx, "acme", api.SubmitRequirementInput{Text: text})
+		wantCode(t, err, api.Invalid, "text")
 	}
 	f.store.View(func(r store.Reader) error {
 		if len(r.FindSpecs("acme", store.SpecFilter{})) != 0 || len(r.FindTickets("acme", store.TicketFilter{})) != 0 {
@@ -94,29 +95,29 @@ func TestOnlyTheThreeStageNamesMayUseTheReservedStagePrefix(t *testing.T) {
 	f.project(t, "acme")
 	f.spec(t, "acme", "Login") // acme-1
 
-	_, err := f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", Labels: []string{"ui", "stage:build"}})
-	wantCode(t, err, core.Invalid, "labels")
-	tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", Labels: []string{"stages", "backstage:x"}})
+	_, err := f.core.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "Form", Labels: []string{"ui", "stage:build"}})
+	wantCode(t, err, api.Invalid, "labels")
+	tk := f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Form", Labels: []string{"stages", "backstage:x"}})
 
-	_, err = f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: core.Ref(tk.ID), Labels: []string{"stage:"}})
-	wantCode(t, err, core.Invalid, "labels")
-	_, err = f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: "acme-1", Labels: []string{"stage:implementation"}})
-	wantCode(t, err, core.Invalid, "labels")
-	if _, err := f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: core.Ref(tk.ID), Labels: []string{"stage:grilling"}}); err != nil {
+	_, err = f.core.AddLabels(ctx, "acme", api.LabelsInput{Target: api.Ref(tk.ID), Labels: []string{"stage:"}})
+	wantCode(t, err, api.Invalid, "labels")
+	_, err = f.core.AddLabels(ctx, "acme", api.LabelsInput{Target: "acme-1", Labels: []string{"stage:implementation"}})
+	wantCode(t, err, api.Invalid, "labels")
+	if _, err := f.core.AddLabels(ctx, "acme", api.LabelsInput{Target: api.Ref(tk.ID), Labels: []string{"stage:grilling"}}); err != nil {
 		t.Fatalf("add_labels with known Stage names: %v", err)
 	}
 
 	p := scratch()
 	p.Tickets[1].Labels = []string{"backend", "stage:review"}
-	_, err = f.core.Import(ctx, "acme", core.ImportInput{Payload: p, DryRun: true})
-	wantCode(t, err, core.Invalid, "tickets[1].labels[1]")
+	_, err = f.core.Import(ctx, "acme", api.ImportInput{Payload: p, DryRun: true})
+	wantCode(t, err, api.Invalid, "tickets[1].labels[1]")
 	p = scratch()
 	p.Specs[0].Labels = []string{"stage:x"}
-	_, err = f.core.Import(ctx, "acme", core.ImportInput{Payload: p, DryRun: true})
-	wantCode(t, err, core.Invalid, "specs[0].labels[0]")
+	_, err = f.core.Import(ctx, "acme", api.ImportInput{Payload: p, DryRun: true})
+	wantCode(t, err, api.Invalid, "specs[0].labels[0]")
 	p = scratch()
 	p.Tickets[0].Labels = []string{"stage:grilling"}
-	if _, err := f.core.Import(ctx, "acme", core.ImportInput{Payload: p, DryRun: true}); err != nil {
+	if _, err := f.core.Import(ctx, "acme", api.ImportInput{Payload: p, DryRun: true}); err != nil {
 		t.Fatalf("import with a known Stage Label: %v", err)
 	}
 }
@@ -125,7 +126,7 @@ func TestARequirementsTitleIsItsFirstLine(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	text := "\n# Dark mode  \nMore.\n"
-	res, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: text, Full: true})
+	res, err := f.core.SubmitRequirement(ctx, "acme", api.SubmitRequirementInput{Text: text, Full: true})
 	if err != nil || res.Spec.Record.Title != "Dark mode" || res.Spec.Record.Body != text {
 		t.Fatalf("spec %+v, %v", res.Spec, err)
 	}
@@ -134,7 +135,7 @@ func TestARequirementsTitleIsItsFirstLine(t *testing.T) {
 func TestSubmittingARequirementAcknowledgesItsSpecAndStages(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	res, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode})
+	res, err := f.core.SubmitRequirement(ctx, "acme", api.SubmitRequirementInput{Text: darkMode})
 	if err != nil {
 		t.Fatalf("submit_requirement: %v", err)
 	}
@@ -153,7 +154,7 @@ func TestSubmittingARequirementAcknowledgesItsSpecAndStages(t *testing.T) {
 func TestSubmittingARequirementWithFullReturnsTheSpecAndStages(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	res, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode, Full: true})
+	res, err := f.core.SubmitRequirement(ctx, "acme", api.SubmitRequirementInput{Text: darkMode, Full: true})
 	if err != nil {
 		t.Fatalf("submit_requirement: %v", err)
 	}
@@ -177,7 +178,7 @@ func TestSubmittingARequirementWithFullReturnsTheSpecAndStages(t *testing.T) {
 func TestStraightToSpecCreatesOnlyTheSpecAndTicketsStages(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	res, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode, SkipGrilling: true, Full: true})
+	res, err := f.core.SubmitRequirement(ctx, "acme", api.SubmitRequirementInput{Text: darkMode, SkipGrilling: true, Full: true})
 	if err != nil {
 		t.Fatalf("submit_requirement: %v", err)
 	}
@@ -195,7 +196,7 @@ func TestStraightToSpecCreatesOnlyTheSpecAndTicketsStages(t *testing.T) {
 	if spec.Description != want {
 		t.Fatalf("description %q, want %q", spec.Description, want)
 	}
-	sp, _ := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-1"})
+	sp, _ := f.core.GetSpec(ctx, "acme", api.GetSpecInput{Spec: "acme-1"})
 	if _, ok := sp.Tags[core.MapTag]; ok {
 		t.Fatalf("tags %v", sp.Tags)
 	}
@@ -204,9 +205,9 @@ func TestStraightToSpecCreatesOnlyTheSpecAndTicketsStages(t *testing.T) {
 func TestStraightToSpecCannotBeGivenWithAMap(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	_, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode, SkipGrilling: true, Map: "acme-1"})
-	var e *core.Error
-	if !errors.As(err, &e) || e.Code != core.Invalid || !strings.Contains(e.Message, "map") {
+	_, err := f.core.SubmitRequirement(ctx, "acme", api.SubmitRequirementInput{Text: darkMode, SkipGrilling: true, Map: "acme-1"})
+	var e *api.Error
+	if !errors.As(err, &e) || e.Code != api.Invalid || !strings.Contains(e.Message, "map") {
 		t.Fatalf("err %v", err)
 	}
 }
@@ -214,7 +215,7 @@ func TestStraightToSpecCannotBeGivenWithAMap(t *testing.T) {
 func TestADraftRequirementsStageTicketsAreAllDraft(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	res, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: "Offline mode\n", Draft: true})
+	res, err := f.core.SubmitRequirement(ctx, "acme", api.SubmitRequirementInput{Text: "Offline mode\n", Draft: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +223,7 @@ func TestADraftRequirementsStageTicketsAreAllDraft(t *testing.T) {
 		t.Fatalf("stages %+v", res.Stages)
 	}
 	for _, s := range res.Stages {
-		if tk := f.get(t, core.Ref(s.ID)); tk.State != domain.Draft || len(tk.Moves) != 0 {
+		if tk := f.get(t, api.Ref(s.ID)); tk.State != domain.Draft || len(tk.Moves) != 0 {
 			t.Fatalf("stage %+v", tk)
 		}
 	}
@@ -231,7 +232,7 @@ func TestADraftRequirementsStageTicketsAreAllDraft(t *testing.T) {
 func TestWriteTheSpecIsReadyOnly(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	_, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: "x\n", Map: "acme-1", Draft: true})
+	_, err := f.core.SubmitRequirement(ctx, "acme", api.SubmitRequirementInput{Text: "x\n", Map: "acme-1", Draft: true})
 	if err == nil || !strings.Contains(err.Error(), "Ready only") {
 		t.Fatalf("err %v", err)
 	}

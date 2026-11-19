@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/tomoram/code-central/domain"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakeazdo"
@@ -37,7 +39,7 @@ func (w *watching) url(id int, project string) string {
 }
 
 // watch is acme's get_work_item_watch.
-func (w *watching) watch() core.WorkItemWatch {
+func (w *watching) watch() api.WorkItemWatch {
 	w.t.Helper()
 	watch, err := w.srv.Core.GetWorkItemWatch(context.Background(), "acme")
 	if err != nil {
@@ -63,9 +65,9 @@ func (w *watching) line(id int, project string) string {
 }
 
 // linked is every Spec and Ticket in acme linked by azure-boards.
-func (w *watching) linked() []core.LinkedRow {
+func (w *watching) linked() []api.LinkedRow {
 	w.t.Helper()
-	rows, err := w.srv.Core.FindLinked(context.Background(), "acme", core.FindLinkedInput{Integration: core.IntegrationAzureBoards})
+	rows, err := w.srv.Core.FindLinked(context.Background(), "acme", api.FindLinkedInput{Integration: core.IntegrationAzureBoards})
 	if err != nil {
 		w.t.Fatal(err)
 	}
@@ -97,16 +99,16 @@ func (w *watching) arrived(ids ...int) {
 	}
 	w.fake.SavedQuery(queryID, ids...)
 	w.start()
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	wantIncoming(w.t, w, ids...)
 }
 
 // ticketOf is the Ticket linked to work item id.
-func (w *watching) ticketOf(id int) core.TicketView {
+func (w *watching) ticketOf(id int) api.TicketView {
 	w.t.Helper()
 	for _, row := range w.linked() {
 		if row.Link.ID == linkID(id) {
-			got, err := w.srv.Core.GetTicket(context.Background(), "acme", core.GetTicketInput{Ticket: core.Ref(row.ID), Parts: []string{core.PartEdits}})
+			got, err := w.srv.Core.GetTicket(context.Background(), "acme", api.GetTicketInput{Ticket: api.Ref(row.ID), Parts: []string{api.PartEdits}})
 			if err != nil {
 				w.t.Fatal(err)
 			}
@@ -114,7 +116,7 @@ func (w *watching) ticketOf(id int) core.TicketView {
 		}
 	}
 	w.t.Fatalf("no Ticket linked to %s", linkID(id))
-	return core.TicketView{}
+	return api.TicketView{}
 }
 
 // wantExternal checks the Incoming Issue linked to work item id is still
@@ -162,7 +164,7 @@ func TestMatchingWorkItemsArriveAsDraftIncomingIssuesOnTheAzureBoardsSpec(t *tes
 	w.arrived(1, 2)
 	watch := w.watch()
 	for _, i := range watch.Issues {
-		got, err := w.srv.Core.GetTicket(context.Background(), "acme", core.GetTicketInput{Ticket: core.Ref(i.Ticket)})
+		got, err := w.srv.Core.GetTicket(context.Background(), "acme", api.GetTicketInput{Ticket: api.Ref(i.Ticket)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -191,7 +193,7 @@ func TestTheBodyIsTheTypeAndStateLineThenEachFilledInFieldAsMarkdown(t *testing.
 	w.fake.PutWorkItems(bug)
 	w.fake.SavedQuery(queryID, 7)
 	w.start()
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 
 	want := "**Bug** · Committed · [View in Azure Boards](" + w.url(7, fakeazdo.Project) + ")\n\n" +
 		"The **login** form fails.\n\n[screen](" + attachment + ")\n\nSee [log.txt](https://dev.azure.com/acme/_apis/wit/attachments/1a2b?fileName=log.txt).\n\n" +
@@ -284,14 +286,14 @@ func TestChangingTheQueryOrTheModeMovesWorkItemsInAndOutOfScope(t *testing.T) {
 	const otherQuery = "11111111-2222-3333-4444-555555555555"
 	w.fake.PutWorkItems(item(3))
 	w.fake.SavedQuery(otherQuery, 2, 3)
-	w.setBoards(core.SetAzureBoardsInput{On: true, QueryURL: w.queryURL(otherQuery)})
+	w.setBoards(api.SetAzureBoardsInput{On: true, QueryURL: w.queryURL(otherQuery)})
 	w.polled()
 	wantExternal(t, w, 1, domain.ExternalOutOfScope)
 	wantExternal(t, w, 2, domain.ExternalOpen)
 	wantExternal(t, w, 3, domain.ExternalOpen)
 
 	w.fake.Filter("[System.AssignedTo] = @Me", 1)
-	w.setBoards(core.SetAzureBoardsInput{On: true, Mode: "wiql", QueryURL: w.queryURL(otherQuery), ProjectURL: w.fake.ProjectURL(), Where: "[System.AssignedTo] = @Me"})
+	w.setBoards(api.SetAzureBoardsInput{On: true, Mode: "wiql", QueryURL: w.queryURL(otherQuery), ProjectURL: w.fake.ProjectURL(), Where: "[System.AssignedTo] = @Me"})
 	w.polled()
 	wantExternal(t, w, 1, domain.ExternalOpen)
 	wantExternal(t, w, 2, domain.ExternalOutOfScope)
@@ -332,7 +334,7 @@ func TestAWorkItemMovedToAnotherProjectIsNotADuplicate(t *testing.T) {
 func TestAWorkItemThatBecameARequirementIsUnaffectedByTheQuery(t *testing.T) {
 	w := newWatching(t)
 	w.arrived(1, 2)
-	if _, err := w.srv.Core.ToRequirement(human, "acme", core.ToRequirementInput{Ticket: core.Ref(w.ticketOf(1).ID)}); err != nil {
+	if _, err := w.srv.Core.ToRequirement(human, "acme", api.ToRequirementInput{Ticket: api.Ref(w.ticketOf(1).ID)}); err != nil {
 		t.Fatal(err)
 	}
 	from := len(w.fake.Requests())

@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // helpTimeout bounds claude --help. It is on real time, not the Factory's
@@ -68,7 +68,7 @@ func (f *factory) checkEffortFlag() error {
 // reportModels reports what claude accepts with the Factory's flags. It
 // reports whether Code Central took it; if not, the next poll tries again.
 func (f *factory) reportModels(ctx context.Context) bool {
-	in := core.ReportModelsInput{EffortLevels: f.accepts.levels, Aliases: f.accepts.aliases, ModelFlag: f.o.model, EffortFlag: f.o.effort}
+	in := api.ReportModelsInput{EffortLevels: f.accepts.levels, Aliases: f.accepts.aliases, ModelFlag: f.o.model, EffortFlag: f.o.effort}
 	if _, err := f.client.ReportModels(ctx, f.project, in); err != nil {
 		if ctx.Err() == nil {
 			f.printf("warning: can't report what claude accepts to Code Central: %v", err)

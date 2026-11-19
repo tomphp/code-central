@@ -77,6 +77,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/codecentraltest"
@@ -234,7 +235,7 @@ func New(t testing.TB) *Harness {
 	}
 	h.install("claude")
 
-	if _, err := h.Server.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: h.Project}); err != nil {
+	if _, err := h.Server.Client.CreateProject(context.Background(), api.CreateProjectInput{Key: h.Project}); err != nil {
 		t.Fatal(err)
 	}
 	seed, err := seedRepo()
@@ -759,7 +760,7 @@ func (h *Harness) ReadyTicket(title string) string {
 // StageTicket creates a Ready Stage Ticket, marked by stage's Label, on
 // the same shared Spec, and returns its ID. A spec Stage's script, until
 // a test sets its own, finishes it recommending split.
-func (h *Harness) StageTicket(stage core.StageName, title string) string {
+func (h *Harness) StageTicket(stage domain.StageName, title string) string {
 	h.t.Helper()
 	id := h.readyTicket(title, core.StageLabel(stage))
 	if stage == "spec" {
@@ -786,9 +787,9 @@ func (h *Harness) sharedSpec() {
 	}
 	ctx := context.Background()
 	c := h.Server.Client
-	s, err := c.CreateSpec(ctx, h.Project, core.CreateSpecInput{Title: "Work"})
+	s, err := c.CreateSpec(ctx, h.Project, api.CreateSpecInput{Title: "Work"})
 	must(h.t, err)
-	_, err = c.AddLabels(ctx, h.Project, core.LabelsInput{Target: core.Ref(s.ID), Labels: []string{core.LongLivedLabel}})
+	_, err = c.AddLabels(ctx, h.Project, api.LabelsInput{Target: api.Ref(s.ID), Labels: []string{core.LongLivedLabel}})
 	must(h.t, err)
 	h.spec = s.ID
 }
@@ -798,21 +799,21 @@ func (h *Harness) sharedSpec() {
 func (h *Harness) MakePlainSpec() {
 	h.t.Helper()
 	h.sharedSpec()
-	_, err := h.Server.Client.RemoveLabels(context.Background(), h.Project, core.LabelsInput{Target: core.Ref(h.spec), Labels: []string{core.LongLivedLabel}})
+	_, err := h.Server.Client.RemoveLabels(context.Background(), h.Project, api.LabelsInput{Target: api.Ref(h.spec), Labels: []string{core.LongLivedLabel}})
 	must(h.t, err)
 }
 
 func (h *Harness) readyTicket(title string, labels ...string) string {
 	h.t.Helper()
-	return h.NewTicket(core.CreateTicketInput{Title: title, State: domain.Ready, Labels: labels})
+	return h.NewTicket(api.CreateTicketInput{Title: title, State: domain.Ready, Labels: labels})
 }
 
 // NewTicket creates the Ticket in describes, such as a Draft one or one
 // with Blockers, on the same shared Spec, and returns its ID.
-func (h *Harness) NewTicket(in core.CreateTicketInput) string {
+func (h *Harness) NewTicket(in api.CreateTicketInput) string {
 	h.t.Helper()
 	h.sharedSpec()
-	in.Spec = core.Ref(h.spec)
+	in.Spec = api.Ref(h.spec)
 	tk, err := h.Server.Client.CreateTicket(context.Background(), h.Project, in)
 	must(h.t, err)
 	return tk.ID
@@ -825,7 +826,7 @@ func (h *Harness) MakeRequirement() {
 	ctx := context.Background()
 	c := h.Server.Client
 	h.MakePlainSpec()
-	_, err := c.CreateTicket(ctx, h.Project, core.CreateTicketInput{Spec: core.Ref(h.spec), Title: "Stage", State: domain.Draft, Labels: []string{core.StageLabel("grilling")}})
+	_, err := c.CreateTicket(ctx, h.Project, api.CreateTicketInput{Spec: api.Ref(h.spec), Title: "Stage", State: domain.Draft, Labels: []string{core.StageLabel("grilling")}})
 	must(h.t, err)
 }
 
@@ -833,23 +834,23 @@ func (h *Harness) MakeRequirement() {
 func (h *Harness) SpecID() string { return h.spec }
 
 // Ticket reads a Ticket from Code Central.
-func (h *Harness) Ticket(id string) core.TicketView {
+func (h *Harness) Ticket(id string) api.TicketView {
 	h.t.Helper()
-	tk, err := h.Server.Client.GetTicket(context.Background(), h.Project, core.Ref(id))
+	tk, err := h.Server.Client.GetTicket(context.Background(), h.Project, api.Ref(id))
 	must(h.t, err)
 	return tk
 }
 
 // Transcript reads the Transcript of ticket's Claim number claim.
-func (h *Harness) Transcript(ticket string, claim int) core.TranscriptView {
+func (h *Harness) Transcript(ticket string, claim int) api.TranscriptView {
 	h.t.Helper()
-	tr, err := h.Server.Client.Transcript(context.Background(), h.Project, core.Ref(ticket), claim)
+	tr, err := h.Server.Client.Transcript(context.Background(), h.Project, api.Ref(ticket), claim)
 	must(h.t, err)
 	return tr
 }
 
 // Usage reads Usage for the Project over the default range.
-func (h *Harness) Usage() core.UsageView {
+func (h *Harness) Usage() api.UsageView {
 	h.t.Helper()
 	u, err := h.Server.Client.Usage(context.Background(), h.Project, 0)
 	must(h.t, err)
@@ -857,7 +858,7 @@ func (h *Harness) Usage() core.UsageView {
 }
 
 // Chat reads the Project's current Conversation, as the human.
-func (h *Harness) Chat() core.ConversationView {
+func (h *Harness) Chat() api.ConversationView {
 	h.t.Helper()
 	cv, err := h.Human().GetChat(context.Background(), h.Project)
 	must(h.t, err)
@@ -871,16 +872,16 @@ func (h *Harness) SendChat(text string) {
 	h.t.Helper()
 	var last error
 	h.WaitForDescribed(func() string { return fmt.Sprintf("send_chat_message to be taken (last refused: %v)", last) }, func() bool {
-		_, last = h.Human().SendChatMessage(context.Background(), h.Project, core.SendChatMessageInput{Text: text})
+		_, last = h.Human().SendChatMessage(context.Background(), h.Project, api.SendChatMessageInput{Text: text})
 		return last == nil
 	})
 }
 
 // WaitForReply waits for the Conversation's last Chat Message, Claude's
 // reply, to end, and returns the Conversation.
-func (h *Harness) WaitForReply() core.ConversationView {
+func (h *Harness) WaitForReply() api.ConversationView {
 	h.t.Helper()
-	var cv core.ConversationView
+	var cv api.ConversationView
 	h.WaitForDescribed(func() string { return fmt.Sprintf("the Chat reply to end; the Conversation is %+v", cv) }, func() bool {
 		cv = h.Chat()
 		n := len(cv.Messages)
@@ -891,13 +892,13 @@ func (h *Harness) WaitForReply() core.ConversationView {
 
 // SessionUsage reads one Usage session of the Project, agent being ""
 // for the main session.
-func (h *Harness) SessionUsage(session, agent string) core.SessionUsageView {
+func (h *Harness) SessionUsage(session, agent string) api.SessionUsageView {
 	h.t.Helper()
 	q := url.Values{"project": {h.Project}, "session": {session}, "agent": {agent}}
 	resp, err := http.Get(h.Server.URL + "/api/usage/session?" + q.Encode())
 	must(h.t, err)
 	defer resp.Body.Close()
-	var v core.SessionUsageView
+	var v api.SessionUsageView
 	must(h.t, json.NewDecoder(resp.Body).Decode(&v))
 	return v
 }
@@ -905,7 +906,7 @@ func (h *Harness) SessionUsage(session, agent string) core.SessionUsageView {
 // Human is a client of the harness's Code Central acting as the human.
 func (h *Harness) Human() *client.Client {
 	c := client.New(h.Server.URL)
-	c.Actor = core.Human
+	c.Actor = api.Human
 	return c
 }
 
@@ -915,7 +916,7 @@ func (h *Harness) Answer(ticket, text string) {
 	for _, r := range h.Ticket(ticket).Rounds {
 		for _, q := range r.Questions {
 			if q.Status == domain.QuestionOpen {
-				_, err := h.Human().Answer(context.Background(), h.Project, core.AnswerInput{Ticket: core.Ref(ticket), Question: q.Number, Text: text})
+				_, err := h.Human().Answer(context.Background(), h.Project, api.AnswerInput{Ticket: api.Ref(ticket), Question: q.Number, Text: text})
 				must(h.t, err)
 			}
 		}
@@ -947,7 +948,7 @@ func (h *Harness) WaitForDescribed(what func() string, cond func() bool) {
 // WantState reads the Ticket and fails the test unless it is in state,
 // with its latest Failure Report if it has one. A test settles the
 // Factory first.
-func (h *Harness) WantState(id string, state domain.State) core.TicketView {
+func (h *Harness) WantState(id string, state domain.State) api.TicketView {
 	h.t.Helper()
 	tk := h.Ticket(id)
 	if tk.State != state {
@@ -958,7 +959,7 @@ func (h *Harness) WantState(id string, state domain.State) core.TicketView {
 
 // lastFailure is tk's latest Failure Report, for a failing test to show;
 // empty when it has none.
-func lastFailure(tk core.TicketView) string {
+func lastFailure(tk api.TicketView) string {
 	if len(tk.FailureReports) == 0 {
 		return ""
 	}
@@ -969,23 +970,23 @@ func lastFailure(tk core.TicketView) string {
 // Finished claims ticket outside the Factory and finishes it with this
 // branch and commit, and the work in any other repositories, so it is In
 // Review with work to land.
-func (h *Harness) Finished(ticket, branch, commit string, repositories ...core.RepositoryWork) {
+func (h *Harness) Finished(ticket, branch, commit string, repositories ...api.RepositoryWork) {
 	h.t.Helper()
 	ctx := context.Background()
 	c := h.Server.Client
-	res, err := c.Claim(ctx, h.Project, core.ClaimInput{Ticket: core.Ref(ticket)})
+	res, err := c.Claim(ctx, h.Project, api.ClaimInput{Ticket: api.Ref(ticket)})
 	must(h.t, err)
-	_, err = c.Finish(ctx, h.Project, core.FinishInput{Ticket: core.Ref(ticket), ClaimID: res.ClaimID, Summary: "Done.", Branch: branch, Commit: commit, Repositories: repositories})
+	_, err = c.Finish(ctx, h.Project, api.FinishInput{Ticket: api.Ref(ticket), ClaimID: res.ClaimID, Summary: "Done.", Branch: branch, Commit: commit, Repositories: repositories})
 	must(h.t, err)
 }
 
 // NeedsMeItems is the Project's Needs Me items of reason, in Needs Me's
 // order.
-func (h *Harness) NeedsMeItems(reason core.NeedsMeReason) []core.NeedsMeRow {
+func (h *Harness) NeedsMeItems(reason api.NeedsMeReason) []api.NeedsMeRow {
 	h.t.Helper()
 	v, err := h.Human().NeedsMe(context.Background())
 	must(h.t, err)
-	var out []core.NeedsMeRow
+	var out []api.NeedsMeRow
 	for _, g := range v.Groups {
 		for _, row := range g.Tickets {
 			if g.Reason == reason && row.Project == h.Project {
@@ -999,12 +1000,12 @@ func (h *Harness) NeedsMeItems(reason core.NeedsMeReason) []core.NeedsMeRow {
 // Accept accepts ticket as the human.
 func (h *Harness) Accept(ticket string) {
 	h.t.Helper()
-	_, err := h.Human().Accept(context.Background(), h.Project, core.TicketInput{Ticket: core.Ref(ticket)})
+	_, err := h.Human().Accept(context.Background(), h.Project, api.TicketInput{Ticket: api.Ref(ticket)})
 	must(h.t, err)
 }
 
 // SetLandingMethod sets the Project's Landing Method as the human.
-func (h *Harness) SetLandingMethod(in core.SetLandingMethodInput) {
+func (h *Harness) SetLandingMethod(in api.SetLandingMethodInput) {
 	h.t.Helper()
 	_, err := h.Human().SetLandingMethod(context.Background(), h.Project, in)
 	must(h.t, err)
@@ -1105,7 +1106,7 @@ func (r *Repository) Worktree(ticket string) string {
 func (h *Harness) AddRepository(name string) *Repository {
 	h.t.Helper()
 	r := h.MakeRepository(name)
-	if _, err := h.Human().AddRepository(context.Background(), h.Project, core.AddRepositoryInput{Name: name, CloneURL: r.CloneURL}); err != nil {
+	if _, err := h.Human().AddRepository(context.Background(), h.Project, api.AddRepositoryInput{Name: name, CloneURL: r.CloneURL}); err != nil {
 		h.t.Fatalf("add_repository %s: %v", name, err)
 	}
 	return r
@@ -1140,7 +1141,7 @@ func (h *Harness) AddLocalRepository(name string) *Repository {
 	must(h.t, os.WriteFile(filepath.Join(r.Path, "README.md"), []byte(name+"\n"), 0o644))
 	h.GitIn(r.Path, "add", "README.md")
 	h.GitIn(r.Path, "commit", "-q", "-m", "Start "+name)
-	if _, err := h.Human().AddRepository(context.Background(), h.Project, core.AddRepositoryInput{Name: name, LocalPath: r.Path}); err != nil {
+	if _, err := h.Human().AddRepository(context.Background(), h.Project, api.AddRepositoryInput{Name: name, LocalPath: r.Path}); err != nil {
 		h.t.Fatalf("add_repository %s: %v", name, err)
 	}
 	return r

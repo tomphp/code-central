@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -15,7 +15,7 @@ func TestSubmittingAPrototypeCreatesAReadyPrototypeTicketOnTheSpec(t *testing.T)
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Dark mode") // acme-1
-	res, err := f.core.SubmitPrototype(ctx, "acme", core.SubmitPrototypeInput{Spec: "acme-1", Text: themePicker})
+	res, err := f.core.SubmitPrototype(ctx, "acme", api.SubmitPrototypeInput{Spec: "acme-1", Text: themePicker})
 	if err != nil {
 		t.Fatalf("submit_prototype: %v", err)
 	}
@@ -38,10 +38,10 @@ func TestSubmittingAPrototypeCreatesAReadyPrototypeTicketOnTheSpec(t *testing.T)
 func TestAPrototypeMayBeOnARequirement(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	if _, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode}); err != nil {
+	if _, err := f.core.SubmitRequirement(ctx, "acme", api.SubmitRequirementInput{Text: darkMode}); err != nil {
 		t.Fatal(err)
 	}
-	res, err := f.core.SubmitPrototype(ctx, "acme", core.SubmitPrototypeInput{Spec: "1", Text: themePicker, Full: true})
+	res, err := f.core.SubmitPrototype(ctx, "acme", api.SubmitPrototypeInput{Spec: "1", Text: themePicker, Full: true})
 	if err != nil {
 		t.Fatalf("submit_prototype: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestSubmittingAPrototypeAcknowledgesItsTicket(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Dark mode")
-	res, err := f.core.SubmitPrototype(ctx, "acme", core.SubmitPrototypeInput{Spec: "acme-1", Text: themePicker})
+	res, err := f.core.SubmitPrototype(ctx, "acme", api.SubmitPrototypeInput{Spec: "acme-1", Text: themePicker})
 	if err != nil {
 		t.Fatalf("submit_prototype: %v", err)
 	}
@@ -67,13 +67,13 @@ func TestAPrototypeNeedsTextAndAKnownSpec(t *testing.T) {
 	f.project(t, "acme")
 	f.spec(t, "acme", "Dark mode")
 	for _, text := range []string{"", "  \n\t\n"} {
-		_, err := f.core.SubmitPrototype(ctx, "acme", core.SubmitPrototypeInput{Spec: "acme-1", Text: text})
-		wantCode(t, err, core.Invalid, "text")
+		_, err := f.core.SubmitPrototype(ctx, "acme", api.SubmitPrototypeInput{Spec: "acme-1", Text: text})
+		wantCode(t, err, api.Invalid, "text")
 	}
-	_, err := f.core.SubmitPrototype(ctx, "acme", core.SubmitPrototypeInput{Text: themePicker})
-	wantCode(t, err, core.Invalid, "spec")
-	_, err = f.core.SubmitPrototype(ctx, "acme", core.SubmitPrototypeInput{Spec: "acme-9", Text: themePicker})
-	wantCode(t, err, core.Invalid, "spec")
+	_, err := f.core.SubmitPrototype(ctx, "acme", api.SubmitPrototypeInput{Text: themePicker})
+	wantCode(t, err, api.Invalid, "spec")
+	_, err = f.core.SubmitPrototype(ctx, "acme", api.SubmitPrototypeInput{Spec: "acme-9", Text: themePicker})
+	wantCode(t, err, api.Invalid, "spec")
 	f.store.View(func(r store.Reader) error {
 		if len(r.FindTickets("acme", store.TicketFilter{})) != 0 {
 			t.Fatal("a rejected Prototype wrote something")

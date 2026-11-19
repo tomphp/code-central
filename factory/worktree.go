@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -98,7 +98,7 @@ func (ws worktreeSet) about(w repositoryWorktree, what string) string {
 // to the Base's tip first. The first that fails is the Claim's failure,
 // naming its Repository when there are several; those set up before it
 // stay.
-func (rs *repositories) setUpWorktrees(tk core.TicketView, ws worktreeSet) *failure {
+func (rs *repositories) setUpWorktrees(tk api.TicketView, ws worktreeSet) *failure {
 	for _, w := range ws {
 		var err error
 		if w.branch != "" {
@@ -126,8 +126,8 @@ func (rs *repositories) setUpWorktrees(tk core.TicketView, ws worktreeSet) *fail
 // its pull request there merged (ADR 0050). It moves it only when its
 // worktree, if any, is clean and the branch holds nothing the base
 // doesn't besides the work that landed; otherwise it leaves it as it is.
-func (rs *repositories) moveLandedBranch(r *repository, tk core.TicketView, branch, wt string) {
-	i := slices.IndexFunc(tk.Repositories, func(v core.ChangedRepositoryView) bool { return v.Name == r.name })
+func (rs *repositories) moveLandedBranch(r *repository, tk api.TicketView, branch, wt string) {
+	i := slices.IndexFunc(tk.Repositories, func(v api.ChangedRepositoryView) bool { return v.Name == r.name })
 	if i < 0 || tk.Repositories[i].Landed == nil {
 		return
 	}
@@ -183,7 +183,7 @@ func (rs *repositories) baseTipOf(r *repository) string {
 // new branch is cut from r's base's tip, or for a Spec-landed Ticket from
 // its Spec Branch's tip in r, which its fork ref records; an existing
 // branch is reused as it is.
-func (rs *repositories) cutBranchWorktree(r *repository, tk core.TicketView, branch, wt string) error {
+func (rs *repositories) cutBranchWorktree(r *repository, tk api.TicketView, branch, wt string) error {
 	from, fork := rs.baseOf(r), ""
 	if tk.SpecLanded {
 		if _, err := r.git.commit("refs/heads/" + branch); err != nil {
@@ -270,7 +270,7 @@ func (rs *repositories) stageWorktree(r *repository, wt string) error {
 		return wrongWorktree(wt, gitWorktree{wt, left.branch}, "detached")
 	}
 	head, _ := rs.gitOut(wt, "rev-parse", "--short", "HEAD")
-	return &failure{core.ReportFailureInput{
+	return &failure{api.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("The Stage's worktree is dirty, so the Factory can't start the Stage. Changed files:\n\n%s", left.dirty),
 		Why:             fmt.Sprintf("A Stage writes nothing to the repository, but %s has uncommitted changes, most likely written by an earlier Claim's session. The Factory moves a Stage's worktree to %s's tip at each new Claim only when it is clean.", wt, rs.baseOf(r)),
 		WhatToFix:       fmt.Sprintf("Look at the changes in %s and keep anything worth keeping elsewhere (a Stage's output belongs in Code Central). Then clean the worktree and send the Ticket back.", wt),
@@ -335,8 +335,8 @@ func (rs *repositories) prune(r *repository) {
 // when the Ticket never used it (sweepsBranch, sweepUnusedBranch); with
 // the Home Repository alone, branches are never deleted. Anything else is
 // kept, the Chat worktrees among it.
-func (l *lander) sweep(ctx context.Context, policies core.LandingPolicies) {
-	tickets := map[string]*core.TicketView{}
+func (l *lander) sweep(ctx context.Context, policies api.LandingPolicies) {
+	tickets := map[string]*api.TicketView{}
 	for _, r := range l.repos.ready() {
 		if ctx.Err() != nil {
 			return
@@ -347,7 +347,7 @@ func (l *lander) sweep(ctx context.Context, policies core.LandingPolicies) {
 
 // sweepIn is sweep's work in r. tickets holds each Ticket the sweep has
 // read, by ID, nil for one it couldn't, so each is read once.
-func (l *lander) sweepIn(ctx context.Context, r *repository, policies core.LandingPolicies, tickets map[string]*core.TicketView) {
+func (l *lander) sweepIn(ctx context.Context, r *repository, policies api.LandingPolicies, tickets map[string]*api.TicketView) {
 	policy := r.policy(policies)
 	list, err := r.git.worktrees()
 	if err != nil {
@@ -407,7 +407,7 @@ func (l *lander) sweepIn(ctx context.Context, r *repository, policies core.Landi
 // Repositories, as a Project with the Home Repository alone never has,
 // and only once tk is Done or Cancelled or names another branch, since
 // landing reads the branch a Ticket names.
-func (l *lander) sweepsBranch(r *repository, tk core.TicketView, branch string) bool {
+func (l *lander) sweepsBranch(r *repository, tk api.TicketView, branch string) bool {
 	switch {
 	case !r.home:
 		return true
@@ -419,11 +419,11 @@ func (l *lander) sweepsBranch(r *repository, tk core.TicketView, branch string) 
 
 // sweptTicket is the Ticket id for the sweep, or nil when it can't be
 // read: a worktree named like no Ticket is no Ticket's.
-func (l *lander) sweptTicket(ctx context.Context, id string) *core.TicketView {
-	tk, err := l.client.GetTicket(ctx, l.project, core.Ref(id))
+func (l *lander) sweptTicket(ctx context.Context, id string) *api.TicketView {
+	tk, err := l.client.GetTicket(ctx, l.project, api.Ref(id))
 	if err != nil {
-		var ce *core.Error
-		if ctx.Err() == nil && !(errors.As(err, &ce) && ce.Code == core.NotFound) {
+		var ce *api.Error
+		if ctx.Err() == nil && !(errors.As(err, &ce) && ce.Code == api.NotFound) {
 			l.printf("%s: get_ticket: %v", id, err)
 		}
 		return nil
@@ -438,7 +438,7 @@ func (l *lander) sweptTicket(ctx context.Context, id string) *core.TicketView {
 // its work replayed onto its Spec Branch under Rebase (replayedTip), on
 // that line too, until tk is Done or Cancelled: landing reads it till
 // then. Its fork ref goes with it.
-func (l *lander) sweepUnusedBranch(r *repository, tk core.TicketView, branch string) {
+func (l *lander) sweepUnusedBranch(r *repository, tk api.TicketView, branch string) {
 	if branch == "" {
 		return
 	}
@@ -464,7 +464,7 @@ func (l *lander) sweepUnusedBranch(r *repository, tk core.TicketView, branch str
 // sweepForkPoints deletes, in r, the fork ref of each Ticket that is Done
 // or Cancelled: its branch is cleaned up, so nothing replays it again.
 // tickets is sweepIn's.
-func (l *lander) sweepForkPoints(ctx context.Context, r *repository, tickets map[string]*core.TicketView) {
+func (l *lander) sweepForkPoints(ctx context.Context, r *repository, tickets map[string]*api.TicketView) {
 	ids, err := r.git.forkPoints()
 	if err != nil {
 		l.printf("warning: can't list the fork points%s: %v", r.where(), err)
@@ -509,7 +509,7 @@ func onFirstParentLine(g repo, commit, rev string) bool {
 
 // doneWithWorktree reports whether the Factory is done with the worktree
 // of tk, under the Landing Policy of the worktree's Repository.
-func doneWithWorktree(tk core.TicketView, policy domain.LandingPolicy) bool {
+func doneWithWorktree(tk api.TicketView, policy domain.LandingPolicy) bool {
 	switch tk.State {
 	case domain.Done, domain.Cancelled:
 		return true
@@ -524,7 +524,7 @@ func doneWithWorktree(tk core.TicketView, policy domain.LandingPolicy) bool {
 // setUpFailed is the failure for an error setting up the worktree at wt
 // that isn't already one, such as a git command failing.
 func setUpFailed(wt string, err error) *failure {
-	return &failure{core.ReportFailureInput{
+	return &failure{api.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("The Factory couldn't set up this Ticket's worktree at %s: %v", wt, err),
 		Why:             "A git command the Factory runs to set up the worktree failed, so no session could start.",
 		WhatToFix:       "Read the git error above, fix what it names in the repository (a stale lock file, a bad base, a full disk), then send the Ticket back.",
@@ -535,7 +535,7 @@ func setUpFailed(wt string, err error) *failure {
 // strayDirectory is the failure for something that isn't a worktree at
 // wt, a worktree path in r.
 func strayDirectory(r *repository, wt string) error {
-	return &failure{core.ReportFailureInput{
+	return &failure{api.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("Something that isn't a git worktree is at this Ticket's worktree path, %s, so the Factory can't set up the worktree.", wt),
 		Why:             fmt.Sprintf("Each Ticket's worktree is at %s/<ticket-id>. %s exists but `git worktree list` doesn't list it, and the Factory never deletes or overwrites what it doesn't recognise.", r.worktrees, wt),
 		WhatToFix:       fmt.Sprintf("Look at %s, keep anything worth keeping elsewhere, and remove or move it. Then send the Ticket back.", wt),
@@ -550,7 +550,7 @@ func wrongWorktree(wt string, w gitWorktree, want string) error {
 	if w.branch != "" {
 		on = "on branch " + w.branch
 	}
-	return &failure{core.ReportFailureInput{
+	return &failure{api.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("The worktree at %s is %s, not %s, so the Factory can't use it.", wt, on, want),
 		Why:             fmt.Sprintf("This Ticket's worktree must be %s. The Factory never switches or removes a worktree it doesn't recognise.", want),
 		WhatToFix:       fmt.Sprintf("Look at %s, keep anything worth keeping, and remove it with `git worktree remove` (or switch it %s). Then send the Ticket back.", wt, want),
@@ -561,7 +561,7 @@ func wrongWorktree(wt string, w gitWorktree, want string) error {
 // branchElsewhere is the failure for branch being checked out at
 // elsewhere when the Ticket's worktree at wt needs it.
 func branchElsewhere(branch, wt, elsewhere string) error {
-	return &failure{core.ReportFailureInput{
+	return &failure{api.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("Branch %s is checked out at %s, so the Factory can't add this Ticket's worktree at %s on it.", branch, elsewhere, wt),
 		Why:             "git checks a branch out in one worktree at a time, and the Factory never switches a worktree it doesn't own.",
 		WhatToFix:       fmt.Sprintf("Switch %s off branch %s (or remove that worktree), then send the Ticket back.", elsewhere, branch),

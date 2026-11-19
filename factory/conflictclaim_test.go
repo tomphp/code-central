@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -69,7 +69,7 @@ func TestATicketSentBackForAnotherReasonStartsAsAnOrdinaryClaim(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	id, _ := accepted(h, "Change the readme", "README", "theirs\n")
-	if _, err := h.Human().SendBack(context.Background(), h.Project, core.SendBackInput{Ticket: core.Ref(id), Note: "Rename it."}); err != nil {
+	if _, err := h.Human().SendBack(context.Background(), h.Project, api.SendBackInput{Ticket: api.Ref(id), Note: "Rename it."}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -84,7 +84,7 @@ func TestATicketWhoseBranchNoLongerConflictsStartsAsAnOrdinaryClaim(t *testing.T
 	h := factorytest.New(t)
 	id, _ := accepted(h, "Change the readme", "README", "theirs\n")
 	h.CommitOn("main", "OTHER", "ours\n")
-	if _, err := h.Human().SendBack(context.Background(), h.Project, core.SendBackInput{Ticket: core.Ref(id), Note: "Merge the base."}); err != nil {
+	if _, err := h.Human().SendBack(context.Background(), h.Project, api.SendBackInput{Ticket: api.Ref(id), Note: "Merge the base."}); err != nil {
 		t.Fatal(err)
 	}
 

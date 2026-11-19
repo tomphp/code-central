@@ -3,13 +3,14 @@ package server_test
 import (
 	"context"
 	"encoding/json"
-	"github.com/tomoram/code-central/domain"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // Send back to fix and New fix Ticket (code-central-264): the failure
@@ -26,7 +27,7 @@ func init() {
 			field("state", "Ready")(t, out)
 		},
 		bad:  call{http: newFixTicket("2", fixNote)},
-		code: core.ActionNotAllowed,
+		code: api.ActionNotAllowed,
 	}
 }
 
@@ -46,7 +47,7 @@ func quote(s string) string {
 }
 
 func TestACIFailedTicketIsOfferedBothFixesUnderMergeAndBranch(t *testing.T) {
-	for method, want := range map[string][]core.CIFailureOption{
+	for method, want := range map[string][]api.CIFailureOption{
 		`{"method":"merge","push":true,"remote":"origin"}`:  {"rerun_ci", "land_anyway", "send_back", "new_fix_ticket"},
 		`{"method":"branch","push":true,"remote":"origin"}`: {"rerun_ci", "send_back", "new_fix_ticket"},
 	} {
@@ -64,10 +65,10 @@ func TestTheHumanSendsACIFailedTicketBackToFix(t *testing.T) {
 	ticketAcknowledgement("acme-3", "Ready", "state", "ci_item", "ci_failure_options", "comments", "moves", "claimable", "needs_me_reason")(t, out)
 
 	tk := ticket3(t, srv)
-	if m := tk.Moves[len(tk.Moves)-1]; m.From != domain.Accepted || m.To != domain.Ready || m.Actor != string(core.Human) {
+	if m := tk.Moves[len(tk.Moves)-1]; m.From != domain.Accepted || m.To != domain.Ready || m.Actor != string(api.Human) {
 		t.Fatalf("move %+v, want the human's Accepted to Ready", m)
 	}
-	if c := tk.Comments[len(tk.Comments)-1]; c.Body != fixNote || c.Actor != string(core.Human) {
+	if c := tk.Comments[len(tk.Comments)-1]; c.Body != fixNote || c.Actor != string(api.Human) {
 		t.Fatalf("comment %+v, want the human's note", c)
 	}
 	if row, ok := needsMeRowOf(t, srv, "acme-3"); ok {
@@ -82,7 +83,7 @@ func TestTheHumanSendsACIFailedTicketBackToFix(t *testing.T) {
 
 func TestTheHumansSendBackFromAcceptedNeedsANote(t *testing.T) {
 	srv := newServer(t, failedCI)
-	httpRejected(t, srv, sendBack("3", " "), core.Invalid)
+	httpRejected(t, srv, sendBack("3", " "), api.Invalid)
 	if s := ticket3(t, srv).State; s != domain.Accepted {
 		t.Fatalf("%s, want it left Accepted", s)
 	}
@@ -101,9 +102,9 @@ func TestTheWorkflowHasTheHumansSendBackFromAccepted(t *testing.T) {
 			continue
 		}
 		switch a.Who {
-		case core.HumanActor:
+		case api.HumanActor:
 			human = append(human, a.From)
-		case core.AgentActor:
+		case api.AgentActor:
 			agent = append(agent, a.From)
 			if !strings.Contains(a.Requires, "conflict") {
 				t.Errorf("agent row requires %q, want the conflict row", a.Requires)
@@ -149,14 +150,14 @@ func TestNewFixTicketIsOfferedUnderBranchToo(t *testing.T) {
 	srv := newServer(t, failedCI)
 	httpOK(t, srv, setLandingMethod(`{"method":"branch","push":true,"remote":"origin"}`))
 	httpOK(t, srv, newFixTicket("3", fixNote))
-	if tk := ticket3(t, srv); tk.NeedsMeReason == core.ReasonCIFailed {
+	if tk := ticket3(t, srv); tk.NeedsMeReason == api.ReasonCIFailed {
 		t.Fatal("still CI failed after New fix Ticket under Branch")
 	}
 }
 
 func TestNewFixTicketNeedsANoteAndAFailedCIResult(t *testing.T) {
 	srv := newServer(t, failedCI)
-	httpRejected(t, srv, newFixTicket("3", " "), core.Invalid)
+	httpRejected(t, srv, newFixTicket("3", " "), api.Invalid)
 	for name, setup := range map[string]func(*testing.T, *codecentraltest.Server){
 		"running": pushedAccepted,
 		"chosen already": func(t *testing.T, srv *codecentraltest.Server) {
@@ -166,7 +167,7 @@ func TestNewFixTicketNeedsANoteAndAFailedCIResult(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			srv := newServer(t, setup)
-			httpRejected(t, srv, newFixTicket("3", fixNote), core.ActionNotAllowed)
+			httpRejected(t, srv, newFixTicket("3", fixNote), api.ActionNotAllowed)
 			if _, err := srv.Client.GetTicket(context.Background(), "acme", "acme-4"); err == nil {
 				t.Fatal("a fix Ticket was opened on a refused call")
 			}
@@ -176,8 +177,8 @@ func TestNewFixTicketNeedsANoteAndAFailedCIResult(t *testing.T) {
 
 func TestNewFixTicketIsRejectedForAnAgent(t *testing.T) {
 	srv := newServer(t, failedCI)
-	status, b := httpDoAs(t, srv, core.Agent, newFixTicket("3", fixNote))
-	errorJSON(t, b, core.ActionNotAllowed)
+	status, b := httpDoAs(t, srv, api.Agent, newFixTicket("3", fixNote))
+	errorJSON(t, b, api.ActionNotAllowed)
 	if status == 200 || ticket3(t, srv).LandAnyway {
 		t.Fatal("an agent's New fix Ticket was recorded")
 	}

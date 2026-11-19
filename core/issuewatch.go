@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -12,52 +13,16 @@ import (
 // Unlike the CI Watcher, it writes as the integration Actor, and its
 // status report is accepted from that Actor only. Its status is kept with every kind of Watcher's, in watcher.go.
 
-// IssueWatch is get_issue_watch: everything the Issue Watcher needs on
-// each poll, so it keeps no state of its own. The gh path Option is read
-// on every poll, so changing it needs no restart.
-type IssueWatch struct {
-	Project string `json:"project"`
-	On      bool   `json:"on"`
-	// Repositories are the GitHub repositories to poll, each as owner/name.
-	Repositories []string `json:"repositories"`
-	// Label is the filter label; empty lets every issue in.
-	Label  string `json:"label"`
-	GHPath string `json:"gh_path"`
-	// Spec is the Issues Spec's ID, left out until GitHub Issues is first
-	// turned on.
-	Spec string `json:"spec,omitempty"`
-	// Issues are the Incoming Issues, in number order, so the Issue
-	// Watcher sees which issues it has and which have changed.
-	Issues []IncomingIssue `json:"issues"`
-	// Writes are the items, Incoming Issues and outbound Specs, whose
-	// GitHub issues have writes due, in number order (writeback.go).
-	Writes []IssueWrites `json:"writes"`
-}
-
-// IncomingIssue is a Ticket on an Integration's inbox Spec, linked
-// through it, that isn't finished and whose Link isn't detached, as
-// get_issue_watch and get_work_item_watch list it.
-type IncomingIssue struct {
-	Ticket      string   `json:"ticket"`
-	Link        LinkView `json:"link"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-}
-
-// WatchInput is the input of the Issue Watcher's and the Work Item Watcher's
-// read, which takes nothing.
-type WatchInput struct{}
-
 // GetIssueWatch is the Issue Watcher's get_issue_watch.
-func (c *Core) GetIssueWatch(_ context.Context, key string) (IssueWatch, error) {
-	var out IssueWatch
+func (c *Core) GetIssueWatch(_ context.Context, key string) (api.IssueWatch, error) {
+	var out api.IssueWatch
 	err := c.store.View(func(r store.Reader) error {
 		p, ok := r.Project(key)
 		if !ok {
 			return unknownProject(key)
 		}
-		g := githubIssuesView(key, p.GitHubIssues, WatcherView{})
-		out = IssueWatch{Project: key, On: g.On, Repositories: g.Repositories, Label: g.Label, GHPath: r.Options().GHPath, Spec: g.Spec,
+		g := githubIssuesView(key, p.GitHubIssues, api.WatcherView{})
+		out = api.IssueWatch{Project: key, On: g.On, Repositories: g.Repositories, Label: g.Label, GHPath: r.Options().GHPath, Spec: g.Spec,
 			Issues: incomingIssues(r, key, IntegrationGitHub), Writes: c.integrationWrites(r, key, IntegrationGitHub, false)}
 		return nil
 	})
@@ -67,15 +32,15 @@ func (c *Core) GetIssueWatch(_ context.Context, key string) (IssueWatch, error) 
 // incomingIssues are the Tickets on integration's inbox Spec, linked
 // through it, that aren't finished and whose Link isn't detached, in
 // number order, as its Watcher's watch lists them.
-func incomingIssues(r store.Reader, key, integration string) []IncomingIssue {
-	out := []IncomingIssue{}
+func incomingIssues(r store.Reader, key, integration string) []api.IncomingIssue {
+	out := []api.IncomingIssue{}
 	in := inboxOf(r, key, integration)
 	if in.spec == 0 {
 		return out
 	}
 	for _, t := range r.FindTickets(key, store.TicketFilter{Spec: []int{in.spec}, States: unfinished, Link: &store.LinkFilter{Integration: integration}}) {
 		if t.Link.Owned() {
-			out = append(out, IncomingIssue{Ticket: DisplayID(key, t.Number), Link: *linkView(t.Link), Title: t.Title, Description: t.Description})
+			out = append(out, api.IncomingIssue{Ticket: DisplayID(key, t.Number), Link: *linkView(t.Link), Title: t.Title, Description: t.Description})
 		}
 	}
 	return out
@@ -83,9 +48,9 @@ func incomingIssues(r store.Reader, key, integration string) []IncomingIssue {
 
 // ReportIssueWatcherStatus is report_issue_watcher_status: the Issue
 // Watcher reports its status on every poll, as the integration Actor.
-func (c *Core) ReportIssueWatcherStatus(ctx context.Context, key string, in ReportWatcherStatusInput) (Written[ProjectView], error) {
-	if err := requireActor(ctx, "report_issue_watcher_status", Integration); err != nil {
-		return Written[ProjectView]{}, err
+func (c *Core) ReportIssueWatcherStatus(ctx context.Context, key string, in api.ReportWatcherStatusInput) (api.Written[api.ProjectView], error) {
+	if err := requireActor(ctx, "report_issue_watcher_status", api.Integration); err != nil {
+		return api.Written[api.ProjectView]{}, err
 	}
-	return c.reportWatcherStatus(WatcherIssues, key, in)
+	return c.reportWatcherStatus(api.WatcherIssues, key, in)
 }

@@ -2,11 +2,12 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -18,9 +19,9 @@ import (
 // setLanding has the human give the Repository name the Own Landing
 // landing, or with core.RepositoryLandingDefault, have it follow the
 // Default Landing.
-func setLanding(t *testing.T, h *factorytest.Harness, name string, landing core.RepositoryLanding) {
+func setLanding(t *testing.T, h *factorytest.Harness, name string, landing api.RepositoryLanding) {
 	t.Helper()
-	if _, err := h.Human().EditRepository(context.Background(), h.Project, core.EditRepositoryInput{Name: name, Landing: &landing}); err != nil {
+	if _, err := h.Human().EditRepository(context.Background(), h.Project, api.EditRepositoryInput{Name: name, Landing: &landing}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -31,19 +32,19 @@ func setLanding(t *testing.T, h *factorytest.Harness, name string, landing core.
 // harness's Repositories don't have.)
 func pullRequestBesideAMergedHome(t *testing.T, h *factorytest.Harness) {
 	t.Helper()
-	setLanding(t, h, h.Project, core.RepositoryLandingMerge)
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin"})
+	setLanding(t, h, h.Project, api.RepositoryLandingMerge)
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin"})
 }
 
 func TestATicketLandsByMergeInTheHomeAndByItsPullRequestInARepositoryUnderPullRequest(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	api := h.AddRepository("api")
+	apiRepo := h.AddRepository("api")
 	pullRequestBesideAMergedHome(t, h)
 	id := inTwo(h, "Add an endpoint")
 	r := h.Start()
 	h.WantState(id, domain.InReview)
-	apiBase := h.GitIn(api.Path, "rev-parse", "main")
+	apiBase := h.GitIn(apiRepo.Path, "rev-parse", "main")
 
 	h.Accept(id)
 	r.Poll()
@@ -54,10 +55,10 @@ func TestATicketLandsByMergeInTheHomeAndByItsPullRequestInARepositoryUnderPullRe
 		t.Fatalf("partly landed %v %+v, want it merged and landed in the Home at %s alone", tk.PartlyLanded, tk.Repositories, homeMerge)
 	}
 	apiHead := wantPushedIn(t, h, "api", id)
-	if got := api.Remote("origin").Git("rev-parse", id); got != apiHead {
+	if got := apiRepo.Remote("origin").Git("rev-parse", id); got != apiHead {
 		t.Errorf("api's origin has %s at %q, want its work %s pushed for its pull request", id, got, apiHead)
 	}
-	if got := h.GitIn(api.Path, "rev-parse", "main"); got != apiBase {
+	if got := h.GitIn(apiRepo.Path, "rev-parse", "main"); got != apiBase {
 		t.Errorf("api's main moved to %s: under Pull Request the Factory merges nothing there", got)
 	}
 	if work := pushedWorkIn(t, h, h.Project); len(work) != 0 {
@@ -69,7 +70,7 @@ func TestATicketLandsByMergeInTheHomeAndByItsPullRequestInARepositoryUnderPullRe
 	r.WantOutput(id + ": pushed " + id + " to origin in Repository api\n")
 
 	// The human merges api's pull request on the host.
-	h.GitIn(api.Path, "push", "-q", "origin", id+":refs/heads/main")
+	h.GitIn(apiRepo.Path, "push", "-q", "origin", id+":refs/heads/main")
 	reportPullRequestIn(t, h, "api", id, 4, apiHead)
 	r.Poll()
 
@@ -82,7 +83,7 @@ func TestATicketLandsByMergeInTheHomeAndByItsPullRequestInARepositoryUnderPullRe
 func TestAConflictInTheHomeSendsTheTicketBackBeforeItsBranchIsPushedForAPullRequestElsewhere(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	api := h.AddRepository("api")
+	apiRepo := h.AddRepository("api")
 	pullRequestBesideAMergedHome(t, h)
 	id := inTwo(h, "Add an endpoint")
 	r := h.Start()
@@ -98,7 +99,7 @@ func TestAConflictInTheHomeSendsTheTicketBackBeforeItsBranchIsPushedForAPullRequ
 	if tk := h.Ticket(id); !movedTo(tk, domain.Accepted, domain.Ready) {
 		t.Fatalf("%s wasn't sent back: %+v", id, tk.Moves)
 	}
-	if got := api.Remote("origin").Git("branch", "--list", id); got != "" {
+	if got := apiRepo.Remote("origin").Git("branch", "--list", id); got != "" {
 		t.Errorf("api's origin holds %q, want nothing pushed: every Repository is checked before the Ticket lands in any", got)
 	}
 	if work := pushedWorkIn(t, h, "api"); len(work) != 0 {
@@ -109,12 +110,12 @@ func TestAConflictInTheHomeSendsTheTicketBackBeforeItsBranchIsPushedForAPullRequ
 func TestASpecLandsByMergeInTheHomeAndByItsPullRequestInARepositoryUnderPullRequest(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	api, id := specInTwo(h)
+	apiRepo, id := specInTwo(h)
 	pullRequestBesideAMergedHome(t, h)
 	branch := "spec/" + h.SpecID()
 	r := h.Start()
 	h.WantState(id, domain.InReview)
-	apiBase := h.GitIn(api.Path, "rev-parse", "main")
+	apiBase := h.GitIn(apiRepo.Path, "rev-parse", "main")
 
 	h.Accept(id)
 	r.Poll()
@@ -128,10 +129,10 @@ func TestASpecLandsByMergeInTheHomeAndByItsPullRequestInARepositoryUnderPullRequ
 		t.Fatalf("partly landed %v %+v, want it landed in the Home alone, at the Spec's merge %s", tk.PartlyLanded, tk.Repositories, homeMerge)
 	}
 	apiTip := wantPushedIn(t, h, "api", branch)
-	if got := api.Remote("origin").Git("rev-parse", branch); got != apiTip || apiTip != h.GitIn(api.Path, "rev-parse", branch) {
+	if got := apiRepo.Remote("origin").Git("rev-parse", branch); got != apiTip || apiTip != h.GitIn(apiRepo.Path, "rev-parse", branch) {
 		t.Errorf("api's origin has %s at %q, want its Spec Branch %s pushed for the Spec's pull request", branch, got, apiTip)
 	}
-	if got := h.GitIn(api.Path, "rev-parse", "main"); got != apiBase {
+	if got := h.GitIn(apiRepo.Path, "rev-parse", "main"); got != apiBase {
 		t.Errorf("api's main moved to %s: under Pull Request the Factory merges nothing there", got)
 	}
 	if work := pushedWorkIn(t, h, h.Project); len(work) != 0 {
@@ -140,7 +141,7 @@ func TestASpecLandsByMergeInTheHomeAndByItsPullRequestInARepositoryUnderPullRequ
 	r.WantOutput(h.SpecID() + ": pushed " + branch + " to origin in Repository api\n")
 
 	// The human merges the Spec's pull request in api.
-	h.GitIn(api.Path, "push", "-q", "origin", branch+":refs/heads/main")
+	h.GitIn(apiRepo.Path, "push", "-q", "origin", branch+":refs/heads/main")
 	reportPullRequestIn(t, h, "api", branch, 4, apiTip)
 	r.Poll()
 
@@ -153,15 +154,15 @@ func TestASpecLandsByMergeInTheHomeAndByItsPullRequestInARepositoryUnderPullRequ
 func TestUnderBranchInARepositoryASpecsTicketsLandThereOneByOneWhileTheSpecMergesInTheHome(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	api, both := specInTwo(h)
-	setLanding(t, h, "api", core.RepositoryLandingBranch)
+	apiRepo, both := specInTwo(h)
+	setLanding(t, h, "api", api.RepositoryLandingBranch)
 	// Its own file, so its commit in api is never the other's.
 	only := h.ReadyTicket("Add another endpoint")
 	h.Script(only, append(factorytest.CommitIn("api", "other.go", "package api\n"), factorytest.FinishIn("Done.", false, "api"), factorytest.Result("success"))...)
 	r := h.Start()
 	h.WantState(both, domain.InReview)
 	h.WantState(only, domain.InReview)
-	apiBase := h.GitIn(api.Path, "rev-parse", "main")
+	apiBase := h.GitIn(apiRepo.Path, "rev-parse", "main")
 
 	h.Accept(both)
 	h.Accept(only)
@@ -177,25 +178,25 @@ func TestUnderBranchInARepositoryASpecsTicketsLandThereOneByOneWhileTheSpecMerge
 	if !tk.PartlyLanded || landedIn(tk, h.Project) != homeMerge || landedIn(tk, "api") != "" {
 		t.Fatalf("partly landed %v %+v, want %s landed in the Home alone, at the Spec's merge %s", tk.PartlyLanded, tk.Repositories, both, homeMerge)
 	}
-	if got := h.GitIn(api.Path, "rev-parse", "main"); got != apiBase {
+	if got := h.GitIn(apiRepo.Path, "rev-parse", "main"); got != apiBase {
 		t.Errorf("api's main moved to %s: under Branch the human merges there", got)
 	}
 	r.WantOutput(both + ": Accepted under the Branch Landing Method: merge " + both + " into main in Repository api and the Factory lands it\n")
 	r.WantOutput(only + ": Accepted under the Branch Landing Method: merge " + only + " into main in Repository api and the Factory lands it\n")
 
 	// The human merges the api-only Ticket there: it lands on its own.
-	h.GitIn(api.Path, "merge", "-q", "--no-ff", "-m", "Merge "+only, only)
+	h.GitIn(apiRepo.Path, "merge", "-q", "--no-ff", "-m", "Merge "+only, only)
 	r.Poll()
-	if tk := h.WantState(only, domain.Done); landedIn(tk, "api") != h.GitIn(api.Path, "rev-parse", "refs/heads/"+only) {
+	if tk := h.WantState(only, domain.Done); landedIn(tk, "api") != h.GitIn(apiRepo.Path, "rev-parse", "refs/heads/"+only) {
 		t.Fatalf("Changed Repositories %+v, want %s landed in api at its work", tk.Repositories, only)
 	}
 	h.WantState(both, domain.Accepted)
 
 	// Then the other.
-	h.GitIn(api.Path, "merge", "-q", "--no-ff", "-m", "Merge "+both, both)
+	h.GitIn(apiRepo.Path, "merge", "-q", "--no-ff", "-m", "Merge "+both, both)
 	r.Poll()
 	tk = h.WantState(both, domain.Done)
-	if landedIn(tk, "api") != h.GitIn(api.Path, "rev-parse", "refs/heads/"+both) || landedIn(tk, h.Project) != homeMerge {
+	if landedIn(tk, "api") != h.GitIn(apiRepo.Path, "rev-parse", "refs/heads/"+both) || landedIn(tk, h.Project) != homeMerge {
 		t.Fatalf("Changed Repositories %+v, want %s landed in api at its work and the Home's landing kept", tk.Repositories, both)
 	}
 }
@@ -204,13 +205,13 @@ func TestAChangedOwnLandingWithWorkInFlightAppliesFromTheNextLandingStepThereAlo
 	t.Parallel()
 	h := factorytest.New(t)
 	home := h.AddRemote("origin")
-	api := h.AddRepository("api")
+	apiRepo := h.AddRepository("api")
 	mergeAndPush(h, "origin")
-	setLanding(t, h, "api", core.RepositoryLandingBranch)
+	setLanding(t, h, "api", api.RepositoryLandingBranch)
 	id := inTwo(h, "Add an endpoint")
 	r := h.Start()
 	h.WantState(id, domain.InReview)
-	apiBase := h.GitIn(api.Path, "rev-parse", "main")
+	apiBase := h.GitIn(apiRepo.Path, "rev-parse", "main")
 
 	h.Accept(id)
 	r.Poll()
@@ -223,20 +224,20 @@ func TestAChangedOwnLandingWithWorkInFlightAppliesFromTheNextLandingStepThereAlo
 	if got := home.Git("rev-parse", "main"); got != homeMerge {
 		t.Errorf("the Home's origin's main is at %s, want its merge %s pushed under Merge + Push", got, homeMerge)
 	}
-	if got := h.GitIn(api.Path, "rev-parse", "main"); got != apiBase {
+	if got := h.GitIn(apiRepo.Path, "rev-parse", "main"); got != apiBase {
 		t.Fatalf("api's main moved to %s: under Branch the human merges there", got)
 	}
 
 	// api follows the Default Landing, Merge + Push, from now on.
-	setLanding(t, h, "api", core.RepositoryLandingDefault)
+	setLanding(t, h, "api", api.RepositoryLandingDefault)
 	r.Poll()
 
 	tk = h.WantState(id, domain.Done)
-	apiMerge := h.GitIn(api.Path, "rev-parse", "main")
-	if got, want := subject(h, api.Path, apiMerge), "Merge "+id+": Add an endpoint"; got != want || landedIn(tk, "api") != apiMerge {
+	apiMerge := h.GitIn(apiRepo.Path, "rev-parse", "main")
+	if got, want := subject(h, apiRepo.Path, apiMerge), "Merge "+id+": Add an endpoint"; got != want || landedIn(tk, "api") != apiMerge {
 		t.Fatalf("api's main is at %q, landed at %q; want the Factory's merge %q, landed there", got, landedIn(tk, "api"), want)
 	}
-	if got := api.Remote("origin").Git("rev-parse", "main"); got != apiMerge {
+	if got := apiRepo.Remote("origin").Git("rev-parse", "main"); got != apiMerge {
 		t.Errorf("api's origin's main is at %s, want its merge %s pushed", got, apiMerge)
 	}
 	if landedIn(tk, h.Project) != homeMerge || h.Git("rev-parse", "main") != homeMerge {
@@ -247,7 +248,7 @@ func TestAChangedOwnLandingWithWorkInFlightAppliesFromTheNextLandingStepThereAlo
 func TestASpecBranchConflictInTheHomeHoldsBackTheSpecsPullRequestElsewhere(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	api, id := specInTwo(h)
+	apiRepo, id := specInTwo(h)
 	pullRequestBesideAMergedHome(t, h)
 	release := holdTicketsStage(t, h)
 	fix := "acme-5"
@@ -268,7 +269,7 @@ func TestASpecBranchConflictInTheHomeHoldsBackTheSpecsPullRequestElsewhere(t *te
 	if got := h.Git("rev-parse", "main"); got != homeBase {
 		t.Errorf("the Home's main moved to %s: nothing lands while any Repository's Spec Branch conflicts", got)
 	}
-	if got := api.Remote("origin").Git("branch", "--list", branch); got != "" {
+	if got := apiRepo.Remote("origin").Git("branch", "--list", branch); got != "" {
 		t.Errorf("api's origin holds %q, want no Spec Branch pushed for a pull request while the Home's conflicts", got)
 	}
 	if work := pushedWorkIn(t, h, "api"); len(work) != 0 {
@@ -283,8 +284,8 @@ func TestASpecBranchConflictInTheHomeHoldsBackTheSpecsPullRequestElsewhere(t *te
 func TestARepositoryGivenALandingWithLandPerSpecWhileASpecsTicketWaitsMergesItIntoItsSpecBranchThere(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	api, id := specInTwo(h)
-	setLanding(t, h, "api", core.RepositoryLandingBranch)
+	apiRepo, id := specInTwo(h)
+	setLanding(t, h, "api", api.RepositoryLandingBranch)
 	release := holdTicketsStage(t, h)
 	branch := "spec/" + h.SpecID()
 	r := h.Start()
@@ -294,11 +295,11 @@ func TestARepositoryGivenALandingWithLandPerSpecWhileASpecsTicketWaitsMergesItIn
 	// Merged into the Home's Spec Branch alone: under Branch in api the
 	// human merges it.
 	r.WantOutput(id + ": merged into " + branch + " at ")
-	apiWork := h.GitIn(api.Path, "rev-parse", "refs/heads/"+id)
+	apiWork := h.GitIn(apiRepo.Path, "rev-parse", "refs/heads/"+id)
 
 	// api follows the Default Landing, Merge with Land per Spec, from now
 	// on: the Ticket goes through its Spec Branch there too.
-	setLanding(t, h, "api", core.RepositoryLandingDefault)
+	setLanding(t, h, "api", api.RepositoryLandingDefault)
 	r.Poll()
 	r.WantOutput(id + ": merged into " + branch + " at ")
 	r.WantOutput(" in Repository api\n")
@@ -307,11 +308,11 @@ func TestARepositoryGivenALandingWithLandPerSpecWhileASpecsTicketWaitsMergesItIn
 	r.Poll()
 
 	tk := h.WantState(id, domain.Done)
-	apiMerge := h.GitIn(api.Path, "rev-parse", "main")
-	if got, want := subject(h, api.Path, apiMerge), "Merge spec "+h.SpecID()+": Work"; got != want || landedIn(tk, "api") != apiMerge {
+	apiMerge := h.GitIn(apiRepo.Path, "rev-parse", "main")
+	if got, want := subject(h, apiRepo.Path, apiMerge), "Merge spec "+h.SpecID()+": Work"; got != want || landedIn(tk, "api") != apiMerge {
 		t.Fatalf("api's main is at %q, landed at %q; want the Spec Branch merged there, %q, landed there", got, landedIn(tk, "api"), want)
 	}
-	if !strings.Contains(h.GitIn(api.Path, "branch", "--contains", apiWork, "--list", "main"), "main") {
+	if !strings.Contains(h.GitIn(apiRepo.Path, "branch", "--contains", apiWork, "--list", "main"), "main") {
 		t.Fatalf("api's main doesn't hold %s's work there, %s", id, apiWork)
 	}
 }

@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/azdo"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
@@ -38,7 +38,7 @@ type AzurePipelines struct {
 // lists one build. Azure DevOps throttling it is a *ratelimit.Error,
 // not a problem. The execute scope can't be confirmed without retrying a
 // run, so it isn't checked.
-func (a *AzurePipelines) CheckAccess(ctx context.Context) (core.WatcherCheckResult, error) {
+func (a *AzurePipelines) CheckAccess(ctx context.Context) (api.WatcherCheckResult, error) {
 	c, r, err := a.access().Ready(a.ProjectURL)
 	switch {
 	case err != nil:
@@ -52,19 +52,19 @@ func (a *AzurePipelines) CheckAccess(ctx context.Context) (core.WatcherCheckResu
 	if _, err := c.Builds(ctx, azdo.BuildQuery{Top: 1}); err != nil {
 		return a.refused(err)
 	}
-	return core.WatcherCheckResult{}, nil
+	return api.WatcherCheckResult{}, nil
 }
 
 // refused is the check's answer to err from a call.
-func (a *AzurePipelines) refused(err error) (core.WatcherCheckResult, error) {
+func (a *AzurePipelines) refused(err error) (api.WatcherCheckResult, error) {
 	var limit *ratelimit.Error
 	switch {
 	case errors.As(err, &limit):
-		return core.WatcherCheckResult{}, limit
+		return api.WatcherCheckResult{}, limit
 	case errors.Is(err, azdo.ErrPATRejected):
 		return a.access().Rejected(), nil
 	case errors.Is(err, azdo.ErrMissingScope):
-		return core.WatcherCheckResult{Problem: core.ProblemPATScope,
+		return api.WatcherCheckResult{Problem: api.ProblemPATScope,
 			Reason: fmt.Sprintf("The PAT in %s can't read builds in %s.", a.access().PATVariable(), a.ProjectURL),
 			Fix:    "The PAT needs " + buildScope + ". Make a new PAT with that scope, and set it for the service."}, nil
 	}
@@ -81,8 +81,8 @@ func (a *AzurePipelines) access() azdo.Access {
 }
 
 // unreadable is the project not found, or its host not reached.
-func unreadable(projectURL string, err error) core.WatcherCheckResult {
-	return core.WatcherCheckResult{Problem: core.ProblemProjectUnreadable,
+func unreadable(projectURL string, err error) api.WatcherCheckResult {
+	return api.WatcherCheckResult{Problem: api.ProblemProjectUnreadable,
 		Reason: fmt.Sprintf("Code Central can't read the Azure DevOps project %s: %v", projectURL, err),
 		Fix:    "Check the project URL is the one the browser shows, such as https://dev.azure.com/acme/web, and that the PAT's organization can see it."}
 }
@@ -191,7 +191,7 @@ func (a *AzurePipelines) run(ctx context.Context, b azdo.Build) (Run, error) {
 			attempt = max(attempt, r.Attempt)
 		}
 	}
-	run := Run{Updated: b.LastChanged, CIRunView: core.CIRunView{ID: int64(b.ID), Attempt: attempt, Workflow: b.Definition.Name, Name: b.BuildNumber,
+	run := Run{Updated: b.LastChanged, CIRunView: api.CIRunView{ID: int64(b.ID), Attempt: attempt, Workflow: b.Definition.Name, Name: b.BuildNumber,
 		Branch: strings.TrimPrefix(b.SourceBranch, azureBranchPrefix), Commit: b.SourceVersion, Status: azureStatus(b.Status), URL: b.Links.Web.Href}}
 	if run.Status == domain.CICompleted {
 		run.Conclusion = azureConclusion(b.Result)
@@ -235,7 +235,7 @@ func (a *AzurePipelines) timeline(ctx context.Context, b azdo.Build) ([]azdo.Tim
 
 // Jobs lists the build's Job records, each at its latest attempt, from
 // the timeline run read, with the job's logs link.
-func (a *AzurePipelines) Jobs(ctx context.Context, id int64, attempt int) ([]core.CIJobView, error) {
+func (a *AzurePipelines) Jobs(ctx context.Context, id int64, attempt int) ([]api.CIJobView, error) {
 	a.mu.Lock()
 	t, ok := a.timelines[int(id)]
 	a.mu.Unlock()
@@ -254,12 +254,12 @@ func (a *AzurePipelines) Jobs(ctx context.Context, id int64, attempt int) ([]cor
 	if t.url != "" {
 		base = t.url
 	}
-	jobs := []core.CIJobView{}
+	jobs := []api.CIJobView{}
 	for _, r := range t.records {
 		if r.Type != "Job" {
 			continue
 		}
-		job := core.CIJobView{Name: r.Name, URL: base + "&view=logs&j=" + r.ID}
+		job := api.CIJobView{Name: r.Name, URL: base + "&view=logs&j=" + r.ID}
 		if r.State == "completed" {
 			job.Conclusion = azureJobConclusion(r.Result)
 		}

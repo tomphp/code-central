@@ -1,10 +1,11 @@
 package factory_test
 
 import (
-	"github.com/tomoram/code-central/domain"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -17,7 +18,7 @@ func TestUnderBranchHandMergingInBothRepositoriesLandsTheTicket(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	h.SetLandingMethod(branchLanding)
-	api := h.AddRepository("api")
+	apiRepo := h.AddRepository("api")
 	id := inTwo(h, "Add an endpoint")
 	r := h.Start()
 	h.WantState(id, domain.InReview)
@@ -27,11 +28,11 @@ func TestUnderBranchHandMergingInBothRepositoriesLandsTheTicket(t *testing.T) {
 	r.WantOutput(id + ": Accepted under the Branch Landing Method: merge " + id + " into main in Repository api and the Factory lands it")
 
 	// Merged in api alone: Partly landed.
-	h.GitIn(api.Path, "merge", "-q", "--no-ff", "-m", "Merge "+id, id)
+	h.GitIn(apiRepo.Path, "merge", "-q", "--no-ff", "-m", "Merge "+id, id)
 	r.Poll()
 
 	tk := h.WantState(id, domain.Accepted)
-	apiWork := h.GitIn(api.Path, "rev-parse", "refs/heads/"+id)
+	apiWork := h.GitIn(apiRepo.Path, "rev-parse", "refs/heads/"+id)
 	if !tk.PartlyLanded || landedIn(tk, "api") != apiWork || landedIn(tk, h.Project) != "" {
 		t.Fatalf("partly landed %v %+v, want it landed in api alone, at its work %s", tk.PartlyLanded, tk.Repositories, apiWork)
 	}
@@ -51,8 +52,8 @@ func TestUnderBranchAndPushAcceptPushesTheBranchInEachChangedRepository(t *testi
 	t.Parallel()
 	h := factorytest.New(t)
 	home := h.AddRemote("origin")
-	api := h.AddRepository("api")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
+	apiRepo := h.AddRepository("api")
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 	id := inTwo(h, "Add an endpoint")
 	r := h.Start()
 	h.WantState(id, domain.InReview)
@@ -63,10 +64,10 @@ func TestUnderBranchAndPushAcceptPushesTheBranchInEachChangedRepository(t *testi
 	if got, want := home.Git("rev-parse", "refs/heads/"+id), h.Git("rev-parse", "refs/heads/"+id); got != want {
 		t.Errorf("the Home Repository's remote %s is at %q, want %s", id, got, want)
 	}
-	if got, want := api.Remote("origin").Git("rev-parse", "refs/heads/"+id), h.GitIn(api.Path, "rev-parse", "refs/heads/"+id); got != want {
+	if got, want := apiRepo.Remote("origin").Git("rev-parse", "refs/heads/"+id), h.GitIn(apiRepo.Path, "rev-parse", "refs/heads/"+id); got != want {
 		t.Errorf("api's remote %s is at %q, want %s", id, got, want)
 	}
-	if out := api.Remote("origin").Git("rev-parse", "main"); out != h.GitIn(api.Path, "rev-parse", "origin/main") {
+	if out := apiRepo.Remote("origin").Git("rev-parse", "main"); out != h.GitIn(apiRepo.Path, "rev-parse", "origin/main") {
 		t.Errorf("api's base was pushed under Branch: its remote's main is at %s", out)
 	}
 	r.WantOutput(id + ": pushed " + id + " to origin in Repository api")

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/azdourl"
 	"github.com/tomoram/code-central/codehost"
 	"github.com/tomoram/code-central/domain"
@@ -20,12 +21,12 @@ import (
 // GitHub repository, or from an Azure Repos Push remote the Azure DevOps
 // project URL.
 
-func ciView(p domain.Project, watcher WatcherView) CIView {
+func ciView(p domain.Project, watcher api.WatcherView) api.CIView {
 	key, c := p.Key, p.CI
-	v := CIView{Tracking: c.Tracking, PATEnv: patEnvOf(c),
-		IgnoredWorkflows: orEmpty(c.IgnoredWorkflows), PushRemoteURL: c.PushRemoteURL, Rules: []CIRuleView{}, Watcher: watcher, AutoFix: autoFixView(c.AutoFix)}
+	v := api.CIView{Tracking: c.Tracking, PATEnv: patEnvOf(c),
+		IgnoredWorkflows: orEmpty(c.IgnoredWorkflows), PushRemoteURL: c.PushRemoteURL, Rules: []api.CIRuleView{}, Watcher: watcher, AutoFix: autoFixView(c.AutoFix)}
 	for _, r := range c.Rules {
-		v.Rules = append(v.Rules, CIRuleView{Spec: DisplayID(key, r.Spec), Workflow: r.Workflow, Branch: r.Branch, State: r.State, Created: r.Created})
+		v.Rules = append(v.Rules, api.CIRuleView{Spec: DisplayID(key, r.Spec), Workflow: r.Workflow, Branch: r.Branch, State: r.State, Created: r.Created})
 	}
 	home, _ := storedCIEntry(p, key)
 	v.Provider, v.Repository, v.ProjectURL = providerOrDefault(home.Provider), home.Repository, home.ProjectURL
@@ -93,17 +94,17 @@ func checkWorkflow(providers []domain.CIProvider, name string) (example string, 
 // an older client the Home Repository's CI entry. Turning it on checks
 // each watched Repository's CI entry. The Push remote URL the Factory
 // reported, the CI Rules and the other CI entries are kept.
-func (c *Core) SetCITracking(ctx context.Context, key string, in SetCITrackingInput) (Written[ProjectView], error) {
+func (c *Core) SetCITracking(ctx context.Context, key string, in api.SetCITrackingInput) (api.Written[api.ProjectView], error) {
 	if err := humanOnly(ctx, "set_ci_tracking"); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	home, err := olderClientsHomeCI(key, in)
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	patEnv := strings.TrimSpace(in.PATEnv)
 	if err := checkPATEnv(patEnv); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	// change is the write, on p's CI settings ci.
 	change := func(p domain.Project, ci *domain.CI) error {
@@ -136,14 +137,14 @@ func (c *Core) SetCITracking(ctx context.Context, key string, in SetCITrackingIn
 		return nil
 	})
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	next := p
 	if err := change(p, &next.CI); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	if err := c.checkCI(ctx, p, next, opts); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	return c.updateCIResetting(key, in.Full, func(p domain.Project, ci *domain.CI) (bool, error) {
 		next := p
@@ -161,7 +162,7 @@ func (c *Core) SetCITracking(ctx context.Context, key string, in SetCITrackingIn
 // older client's set_ci_tracking names it, checked as it was before the
 // Home had a CI entry: what to watch is needed only to turn CI Tracking
 // on. It is nil when in names no provider, repository or project URL.
-func olderClientsHomeCI(key string, in SetCITrackingInput) (*domain.CIRepository, error) {
+func olderClientsHomeCI(key string, in api.SetCITrackingInput) (*domain.CIRepository, error) {
 	e := domain.CIRepository{Name: key, Provider: in.Provider, Repository: strings.TrimSpace(in.Repository), ProjectURL: strings.TrimSpace(in.ProjectURL)}
 	if e.Provider == "" && e.Repository == "" && e.ProjectURL == "" {
 		return nil, nil
@@ -227,14 +228,9 @@ func watchesAnother(p, next domain.Project) bool {
 	return patEnvOf(p.CI) != patEnvOf(next.CI) || !slices.Equal(ciTargets(p), ciTargets(next))
 }
 
-// CICheck runs the CI Watcher once in its check mode. The service makes
-// no external calls itself (ADR 0002, ADR 0004), so the check runs in the
-// CI Watcher's process.
-type CICheck func(ctx context.Context, in CICheckInput) WatcherCheckResult
-
 // SetCICheck makes c run check when CI Tracking is turned on. Call it
 // before serving; without it, nothing is checked.
-func (c *Core) SetCICheck(check CICheck) { c.ciCheck = check }
+func (c *Core) SetCICheck(check api.CICheck) { c.ciCheck = check }
 
 // checkCI runs the CI check for the watched Repositories' CI entries in
 // next, p with other CI settings, while next has CI Tracking on: each one
@@ -277,7 +273,7 @@ func (c *Core) checkCI(ctx context.Context, p, next domain.Project, opts domain.
 // none (Spec code-central-890). None clears the Home's Clone URL and
 // makes it local-only; a Home that wasn't local-only starts Not watched.
 // A URL makes it pushed again, and leaves its CI entry as it was.
-func (c *Core) ReportPushRemote(_ context.Context, key string, in ReportPushRemoteInput) (Written[ProjectView], error) {
+func (c *Core) ReportPushRemote(_ context.Context, key string, in api.ReportPushRemoteInput) (api.Written[api.ProjectView], error) {
 	url := strings.TrimSpace(in.URL)
 	return c.updateCIResetting(key, in.Full, func(_ domain.Project, p *domain.CI) (bool, error) {
 		// What the CI Watcher said may have been about the Home.
@@ -304,20 +300,20 @@ func withoutLogin(url string) string {
 
 // updateCI changes a Project's CI settings with change, writing nothing
 // when they come out the same.
-func (c *Core) updateCI(key string, full bool, change func(*domain.CI) error) (Written[ProjectView], error) {
+func (c *Core) updateCI(key string, full bool, change func(*domain.CI) error) (api.Written[api.ProjectView], error) {
 	return c.updateCIIn(key, full, func(_ domain.Project, ci *domain.CI) error { return change(ci) })
 }
 
 // updateCIIn is updateCI with the Project as the write reads it.
-func (c *Core) updateCIIn(key string, full bool, change func(domain.Project, *domain.CI) error) (Written[ProjectView], error) {
+func (c *Core) updateCIIn(key string, full bool, change func(domain.Project, *domain.CI) error) (api.Written[api.ProjectView], error) {
 	return c.updateCIResetting(key, full, func(p domain.Project, ci *domain.CI) (bool, error) { return false, change(p, ci) })
 }
 
 // updateCIResetting is updateCIIn whose change also says whether what the
 // CI Watcher said was about the old settings: its status is then reset
 // once the write commits, as the result shows.
-func (c *Core) updateCIResetting(key string, full bool, change func(domain.Project, *domain.CI) (bool, error)) (Written[ProjectView], error) {
-	var before ProjectView
+func (c *Core) updateCIResetting(key string, full bool, change func(domain.Project, *domain.CI) (bool, error)) (api.Written[api.ProjectView], error) {
+	var before api.ProjectView
 	var p domain.Project
 	var reset bool
 	err := c.store.Update(func(w store.Writer) error {
@@ -341,10 +337,10 @@ func (c *Core) updateCIResetting(key string, full bool, change func(domain.Proje
 		return w.PutProject(p)
 	})
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	if reset {
-		c.watchers.reset(watcherKey{WatcherCI, key})
+		c.watchers.reset(watcherKey{api.WatcherCI, key})
 	}
 	after := c.projectView(p)
 	// A CI write never changes the Landing or the Repositories; only what
@@ -364,9 +360,9 @@ const globChars = "*?[]"
 // which its Tickets will open, titled like "CI: ci.yml on main". An
 // update writes one record, so the Spec is written first and the rule
 // second: a rule never names a missing Spec.
-func (c *Core) AddCIRule(ctx context.Context, key string, in CIRuleInput) (Written[ProjectView], error) {
+func (c *Core) AddCIRule(ctx context.Context, key string, in api.CIRuleInput) (api.Written[api.ProjectView], error) {
 	if err := humanOnly(ctx, "add_ci_rule"); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	if in.State == "" {
 		in.State = domain.Draft
@@ -389,7 +385,7 @@ func (c *Core) AddCIRule(ctx context.Context, key string, in CIRuleInput) (Writt
 		return w.PutSpec(key, domain.Spec{Number: r.Spec, Title: ciRuleTitle(r), Body: ciRuleSpecBody, Labels: []string{LongLivedLabel}, Created: r.Created, Updated: r.Created})
 	})
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	return c.updateCI(key, in.Full, func(ci *domain.CI) error {
 		if err := ruleIsNew(key, ci.Rules, r, 0); err != nil {
@@ -403,13 +399,13 @@ func (c *Core) AddCIRule(ctx context.Context, key string, in CIRuleInput) (Writt
 // EditCIRule is the human's edit_ci_rule: the rule keeps its Spec and
 // when it was created. The Spec's title follows the rule unless the human
 // has changed it, in a second write after the rule's.
-func (c *Core) EditCIRule(ctx context.Context, key string, in CIRuleInput) (Written[ProjectView], error) {
+func (c *Core) EditCIRule(ctx context.Context, key string, in api.CIRuleInput) (api.Written[api.ProjectView], error) {
 	if err := humanOnly(ctx, "edit_ci_rule"); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	n, err := refNumber(in.Spec, key, "spec")
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	var old, r domain.CIRule
 	v, err := c.updateCIIn(key, in.Full, func(p domain.Project, ci *domain.CI) error {
@@ -441,13 +437,13 @@ func (c *Core) EditCIRule(ctx context.Context, key string, in CIRuleInput) (Writ
 
 // RemoveCIRule is the human's remove_ci_rule. The rule's Spec stays, as
 // the record of its Tickets.
-func (c *Core) RemoveCIRule(ctx context.Context, key string, in RemoveCIRuleInput) (Written[ProjectView], error) {
+func (c *Core) RemoveCIRule(ctx context.Context, key string, in api.RemoveCIRuleInput) (api.Written[api.ProjectView], error) {
 	if err := humanOnly(ctx, "remove_ci_rule"); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	n, err := refNumber(in.Spec, key, "spec")
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	return c.updateCI(key, in.Full, func(ci *domain.CI) error {
 		i, err := ruleOn(key, ci.Rules, n)
@@ -461,7 +457,7 @@ func (c *Core) RemoveCIRule(ctx context.Context, key string, in RemoveCIRuleInpu
 
 // checkCIRule is in's rule for a Project on providers, trimmed, or why it
 // isn't one.
-func checkCIRule(providers []domain.CIProvider, in CIRuleInput) (domain.CIRule, error) {
+func checkCIRule(providers []domain.CIProvider, in api.CIRuleInput) (domain.CIRule, error) {
 	r := domain.CIRule{Workflow: strings.TrimSpace(in.Workflow), Branch: strings.TrimSpace(in.Branch), State: in.State}
 	if example, ok := checkWorkflow(providers, r.Workflow); r.Workflow != domain.AnyWorkflow && !ok {
 		return r, invalid("workflow", "%q isn't %s, or %s for any workflow", r.Workflow, example, domain.AnyWorkflow)
@@ -507,7 +503,7 @@ func (c *Core) followRule(ctx context.Context, key string, old, r domain.CIRule)
 			return nil
 		}
 		s.Updated = c.now()
-		s.Edits = append(s.Edits, domain.Edit{Number: len(s.Edits) + 1, Actor: string(ActorOf(ctx)), Time: s.Updated, Previous: map[string]string{"title": s.Title}})
+		s.Edits = append(s.Edits, domain.Edit{Number: len(s.Edits) + 1, Actor: string(api.ActorOf(ctx)), Time: s.Updated, Previous: map[string]string{"title": s.Title}})
 		s.Title = ciRuleTitle(r)
 		return w.PutSpec(key, s)
 	})

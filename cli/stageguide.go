@@ -3,7 +3,7 @@ package cli
 import (
 	"context"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/ops"
 )
 
@@ -27,7 +27,7 @@ func runStageGuide(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	g, err := sc.client.GetStageGuide(ctx, sc.project, core.StageGuideInput{Stage: pos[0]})
+	g, err := sc.client.GetStageGuide(ctx, sc.project, api.StageGuideInput{Stage: pos[0]})
 	if err != nil {
 		return err
 	}

@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -20,11 +21,11 @@ import (
 // commit's response keeps the item out of Needs Me, as for a manual one.
 
 // autoFixMarkView is m's view in p, nil for none.
-func autoFixMarkView(p domain.Project, m *domain.AutoFixMark) *AutoFixMarkView {
+func autoFixMarkView(p domain.Project, m *domain.AutoFixMark) *api.AutoFixMarkView {
 	if m == nil {
 		return nil
 	}
-	v := &AutoFixMarkView{Attempt: m.Attempt, Commit: m.Commit, Covers: displayIDs(p.Key, m.Covers)}
+	v := &api.AutoFixMarkView{Attempt: m.Attempt, Commit: m.Commit, Covers: displayIDs(p.Key, m.Covers)}
 	if severalRepositories(p) {
 		v.Repository = recordRepository(p.Key, m.Repository)
 	}
@@ -98,13 +99,13 @@ func (c *Core) sweepAutoFix(ctx context.Context, key string) error {
 	if err != nil {
 		return err
 	}
-	ctx = WithActor(ctx, Integration)
+	ctx = api.WithActor(ctx, api.Integration)
 	for _, k := range ready {
 		// An item a Ticket's move changed under the sweep is skipped; a
 		// fix Ticket it opened by then is recorded once its item is ready
 		// again.
-		var e *Error
-		if err := c.autoFixItem(ctx, key, k); err != nil && !(errors.As(err, &e) && e.Code == ActionNotAllowed) {
+		var e *api.Error
+		if err := c.autoFixItem(ctx, key, k); err != nil && !(errors.As(err, &e) && e.Code == api.ActionNotAllowed) {
 			return err
 		}
 	}
@@ -162,7 +163,7 @@ func autoFixActs(p domain.Project) bool {
 // limit.
 func (e *evaluation) planAutoFix(it ciItem) (autoFixPlan, autoFixStatus) {
 	p := e.p
-	if !autoFixActs(p) || it.reason != ReasonCIFailed || !slices.Contains(ciItemOptions(e.r, p, it), OptionNewFixTicket) || landingPolicyIn(p, it.repository).LandsByPullRequest() {
+	if !autoFixActs(p) || it.reason != api.ReasonCIFailed || !slices.Contains(ciItemOptions(e.r, p, it), api.OptionNewFixTicket) || landingPolicyIn(p, it.repository).LandsByPullRequest() {
 		return autoFixPlan{}, autoFixLeaves
 	}
 	record := recordName(p.Key, it.repository)

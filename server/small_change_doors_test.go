@@ -3,7 +3,7 @@ package server_test
 import (
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // Submitting a Small Change (code-central-479). The Project's Small Changes
@@ -31,6 +31,6 @@ func init() {
 			http: httpCall{"POST", "/api/p/acme/submit_small_change", `{"text":"  "}`},
 			cli:  []string{"--text", "  "},
 		},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }

@@ -2,12 +2,14 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
@@ -29,10 +31,10 @@ func chatCalls(h *factorytest.Harness) []factorytest.Call {
 func chatWorktree(h *factorytest.Harness) string { return h.Worktree("chat") }
 
 // reply is the Conversation's last Chat Message, Claude's reply.
-func reply(cv core.ConversationView) core.ChatMessageView { return cv.Messages[len(cv.Messages)-1] }
+func reply(cv api.ConversationView) api.ChatMessageView { return cv.Messages[len(cv.Messages)-1] }
 
 // itemsOf is the kinds and texts of the reply's items, as "kind: text".
-func itemsOf(m core.ChatMessageView) []string {
+func itemsOf(m api.ChatMessageView) []string {
 	var out []string
 	for _, it := range m.Items {
 		out = append(out, string(it.Kind)+": "+it.Text)
@@ -107,7 +109,7 @@ func TestAChatMessageStartsANewSessionInTheChatWorktreeDetachedAtTheBase(t *test
 		t.Errorf("Resume Command %q, want %q", cv.ResumeCommand, want)
 	}
 	r := reply(cv)
-	if r.Outcome != core.ChatDone || r.Error != "" {
+	if r.Outcome != api.ChatDone || r.Error != "" {
 		t.Errorf("reply ended %q (%q), want done", r.Outcome, r.Error)
 	}
 	if got, want := itemsOf(r), []string{"text: " + factorytest.ChatReply}; !slicesEqual(got, want) {
@@ -121,7 +123,7 @@ func TestAChatTurnUsesTheConversationsModelAndEffort(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	h.Start("--model", "opus", "--effort", "high")
-	if _, err := h.Human().StartConversation(context.Background(), h.Project, core.StartConversationInput{Model: "sonnet", Effort: "low"}); err != nil {
+	if _, err := h.Human().StartConversation(context.Background(), h.Project, api.StartConversationInput{Model: "sonnet", Effort: "low"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -157,7 +159,7 @@ func TestTheChatTurnsItemsReachGetChatAsTheyArrive(t *testing.T) {
 	h.Continue(factorytest.Chat)
 	r := reply(h.WaitForReply())
 
-	if r.Outcome != core.ChatDone {
+	if r.Outcome != api.ChatDone {
 		t.Errorf("reply ended %q (%q), want done", r.Outcome, r.Error)
 	}
 	kinds := []string{}
@@ -196,7 +198,7 @@ func TestASecondChatMessageResumesTheSession(t *testing.T) {
 	if !strings.Contains(c.SystemPrompt, "a Chat from the Code Central UI") {
 		t.Errorf("resume's system prompt %q, want the Chat instructions", c.SystemPrompt)
 	}
-	if cv.SessionID != first.SessionID || reply(cv).Outcome != core.ChatDone {
+	if cv.SessionID != first.SessionID || reply(cv).Outcome != api.ChatDone {
 		t.Errorf("Conversation %+v, want the same session and a done reply", cv)
 	}
 }
@@ -215,7 +217,7 @@ func TestAChatPostThatFailsIsDroppedAndTheTurnGoesOn(t *testing.T) {
 	cv := h.WaitForReply()
 
 	r := reply(cv)
-	if r.Outcome != core.ChatDone {
+	if r.Outcome != api.ChatDone {
 		t.Errorf("reply ended %q (%q), want done", r.Outcome, r.Error)
 	}
 	if got, want := itemsOf(r), []string{"text: Kept."}; !slicesEqual(got, want) {
@@ -235,7 +237,7 @@ func TestAChatTurnsPermissionDenialsArePostedAsAnItemBeforeTheOutcome(t *testing
 	h.SendChat("Clean up")
 	r := reply(h.WaitForReply())
 
-	if r.Outcome != core.ChatDone {
+	if r.Outcome != api.ChatDone {
 		t.Errorf("reply ended %q (%q), want done", r.Outcome, r.Error)
 	}
 	if n := len(r.Items); n != 2 || r.Items[1].Kind != "permission_denials" || !strings.Contains(r.Items[1].Text, "Bash(rm -rf build)") {
@@ -262,7 +264,7 @@ func TestAFailingChatTurnEndsFailedWithNoFailureReport(t *testing.T) {
 			cv := h.WaitForReply()
 
 			got := reply(cv)
-			if got.Outcome != core.ChatFailed || !strings.Contains(got.Error, tc.want) {
+			if got.Outcome != api.ChatFailed || !strings.Contains(got.Error, tc.want) {
 				t.Errorf("reply ended %q (%q), want failed naming %q", got.Outcome, got.Error, tc.want)
 			}
 			if items := itemsOf(got); len(items) != 1 || items[0] != "text: Partway." {
@@ -271,7 +273,7 @@ func TestAFailingChatTurnEndsFailedWithNoFailureReport(t *testing.T) {
 			// It goes on taking Chat Messages.
 			h.Script(factorytest.Chat, factorytest.DefaultChatScript...)
 			h.SendChat("Again")
-			if again := reply(h.WaitForReply()); again.Outcome != core.ChatDone {
+			if again := reply(h.WaitForReply()); again.Outcome != api.ChatDone {
 				t.Errorf("next reply ended %q (%q), want done", again.Outcome, again.Error)
 			}
 			r.Settle()
@@ -292,7 +294,7 @@ func TestAChatReplyCutOffByAnOutageEndsFailedAndTheFactoryGoesOn(t *testing.T) {
 	got := reply(h.WaitForReply())
 	r.Settle()
 
-	if got.Outcome != core.ChatFailed || !strings.Contains(got.Error, "claude hit an Outage (`rate_limit`)") || !strings.Contains(got.Error, "Send the message again later.") {
+	if got.Outcome != api.ChatFailed || !strings.Contains(got.Error, "claude hit an Outage (`rate_limit`)") || !strings.Contains(got.Error, "Send the message again later.") {
 		t.Errorf("reply ended %q (%q), want failed with the Outage text naming rate_limit", got.Outcome, got.Error)
 	}
 	if out := r.Stdout(); strings.Contains(out, "report_failure") || strings.Contains(out, ": Failed: ") {
@@ -318,7 +320,7 @@ func TestAChatReplyWithAnExpiredLoginEndsFailedAndTheFactoryKeepsRunning(t *test
 	got := reply(h.WaitForReply())
 	r.Settle()
 
-	if got.Outcome != core.ChatFailed || !strings.Contains(got.Error, "(authentication_failed)") || !strings.Contains(got.Error, "`claude /login`") {
+	if got.Outcome != api.ChatFailed || !strings.Contains(got.Error, "(authentication_failed)") || !strings.Contains(got.Error, "`claude /login`") {
 		t.Errorf("reply ended %q (%q), want failed with the login text naming claude /login", got.Outcome, got.Error)
 	}
 	if out := r.Stdout(); strings.Contains(out, "report_failure") || strings.Contains(out, ": Failed: ") {
@@ -327,7 +329,7 @@ func TestAChatReplyWithAnExpiredLoginEndsFailedAndTheFactoryKeepsRunning(t *test
 	// The Factory keeps running: it answers the next message.
 	h.Script(factorytest.Chat, factorytest.DefaultChatScript...)
 	h.SendChat("Again")
-	if again := reply(h.WaitForReply()); again.Outcome != core.ChatDone {
+	if again := reply(h.WaitForReply()); again.Outcome != api.ChatDone {
 		t.Errorf("next reply ended %q (%q), want done", again.Outcome, again.Error)
 	}
 }
@@ -337,7 +339,7 @@ func TestARejectedChatModelEndsFailedNamingTheModel(t *testing.T) {
 	h := factorytest.New(t)
 	h.Script(factorytest.Chat, factorytest.ModelNotFound("claude-nope")...)
 	h.Start()
-	if _, err := h.Human().StartConversation(context.Background(), h.Project, core.StartConversationInput{Model: "claude-nope"}); err != nil {
+	if _, err := h.Human().StartConversation(context.Background(), h.Project, api.StartConversationInput{Model: "claude-nope"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -345,7 +347,7 @@ func TestARejectedChatModelEndsFailedNamingTheModel(t *testing.T) {
 	cv := h.WaitForReply()
 
 	r := reply(cv)
-	if r.Outcome != core.ChatFailed || !strings.Contains(r.Error, "claude rejected the model `claude-nope`") {
+	if r.Outcome != api.ChatFailed || !strings.Contains(r.Error, "claude rejected the model `claude-nope`") {
 		t.Errorf("reply ended %q (%q), want failed naming claude-nope", r.Outcome, r.Error)
 	}
 }
@@ -354,7 +356,7 @@ func TestAChatEffortClaudeDoesntAcceptEndsFailedWithNoTurn(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	// Set while the seeded levels allow it; this claude doesn't.
-	if _, err := h.Human().StartConversation(context.Background(), h.Project, core.StartConversationInput{Effort: "xhigh"}); err != nil {
+	if _, err := h.Human().StartConversation(context.Background(), h.Project, api.StartConversationInput{Effort: "xhigh"}); err != nil {
 		t.Fatal(err)
 	}
 	h.ClaudeHelp(fewerLevels)
@@ -364,7 +366,7 @@ func TestAChatEffortClaudeDoesntAcceptEndsFailedWithNoTurn(t *testing.T) {
 	cv := h.WaitForReply()
 
 	r := reply(cv)
-	if r.Outcome != core.ChatFailed || !strings.Contains(r.Error, "`xhigh`") || !strings.Contains(r.Error, "low, medium, high") {
+	if r.Outcome != api.ChatFailed || !strings.Contains(r.Error, "`xhigh`") || !strings.Contains(r.Error, "low, medium, high") {
 		t.Errorf("reply ended %q (%q), want failed naming xhigh and the levels claude accepts", r.Outcome, r.Error)
 	}
 	if n := len(chatCalls(h)); n != 0 {
@@ -384,7 +386,7 @@ func TestADirtyChatWorktreeFailsTheFirstTurnNamingTheFiles(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(chatWorktree(h), "notes.txt"), []byte("mine"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.Human().StartConversation(context.Background(), h.Project, core.StartConversationInput{}); err != nil {
+	if _, err := h.Human().StartConversation(context.Background(), h.Project, api.StartConversationInput{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -392,7 +394,7 @@ func TestADirtyChatWorktreeFailsTheFirstTurnNamingTheFiles(t *testing.T) {
 	cv := h.WaitForReply()
 
 	r := reply(cv)
-	if r.Outcome != core.ChatFailed {
+	if r.Outcome != api.ChatFailed {
 		t.Fatalf("reply ended %q, want failed", r.Outcome)
 	}
 	for _, want := range []string{chatWorktree(h), "notes.txt", "git -C " + chatWorktree(h) + " clean"} {
@@ -426,11 +428,11 @@ func TestANewConversationMovesACleanChatWorktreeToTheBasesTip(t *testing.T) {
 		t.Errorf("a later turn moved the Chat worktree to %s, want it left as it was", tip)
 	}
 
-	if _, err := h.Human().StartConversation(context.Background(), h.Project, core.StartConversationInput{}); err != nil {
+	if _, err := h.Human().StartConversation(context.Background(), h.Project, api.StartConversationInput{}); err != nil {
 		t.Fatal(err)
 	}
 	h.SendChat("New conversation")
-	if r := reply(h.WaitForReply()); r.Outcome != core.ChatDone {
+	if r := reply(h.WaitForReply()); r.Outcome != api.ChatDone {
 		t.Fatalf("reply ended %q (%q), want done", r.Outcome, r.Error)
 	}
 	if head := h.GitIn(chatWorktree(h), "rev-parse", "HEAD"); head != tip {
@@ -447,7 +449,7 @@ func TestAChatTurnRunsWhileEveryClaimSlotIsFull(t *testing.T) {
 	h.WantCalls(1)
 
 	h.SendChat("Hi")
-	if r := reply(h.WaitForReply()); r.Outcome != core.ChatDone {
+	if r := reply(h.WaitForReply()); r.Outcome != api.ChatDone {
 		t.Errorf("reply ended %q (%q), want done while the slot is full", r.Outcome, r.Error)
 	}
 	run.Settle()
@@ -471,7 +473,7 @@ func TestAChatTurnsUsageIsPostedWithKindChat(t *testing.T) {
 	h.SendChat("Hi")
 	cv := h.WaitForReply()
 
-	var got []core.UsageSession
+	var got []api.UsageSession
 	r.PollUntil("the Chat turn's usage", func() bool {
 		got = nil
 		for _, s := range h.Usage().Sessions {

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 )
 
@@ -28,7 +28,7 @@ func init() {
 			}
 		},
 		bad:  call{http: toRequirement("2", `{}`)},
-		code: core.ActionNotAllowed,
+		code: api.ActionNotAllowed,
 	}
 }
 
@@ -116,13 +116,13 @@ func TestToRequirementCancelsTheIncomingIssueWithTheGrillingStageAsItsReplacemen
 // the Spec as if it weren't linked, and the Integration can't.
 func TestAnOutboundSpecIsEditedByTheHumanAndAgentsAndNotTheIntegration(t *testing.T) {
 	srv := newServer(t, requirementFromIssue)
-	for _, actor := range []core.Actor{core.Human, core.Agent} {
+	for _, actor := range []api.Actor{api.Human, api.Agent} {
 		status, b := httpDoAs(t, srv, actor, httpCall{"POST", "/api/p/acme/specs/6/edit_spec", `{"body":"Rewritten by ` + string(actor) + `"}`})
 		if status != 200 {
 			t.Fatalf("edit_spec as %s: status %d: %s", actor, status, b)
 		}
 	}
-	e := httpRejected(t, srv, httpCall{"POST", "/api/p/acme/integration/specs/6/update_linked_spec", `{"title":"From GitHub"}`}, core.ActionNotAllowed)
+	e := httpRejected(t, srv, httpCall{"POST", "/api/p/acme/integration/specs/6/update_linked_spec", `{"title":"From GitHub"}`}, api.ActionNotAllowed)
 	if !strings.Contains(e.Message, "acme-6") || !strings.Contains(e.Message, "outbound") {
 		t.Fatalf("message %q, want acme-6 named as outbound", e.Message)
 	}
@@ -207,7 +207,7 @@ func TestAnOutboundSpecsStagesAreNeverClosedExternally(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, g := range rows.Groups {
-		if g.Reason == core.ReasonClosedExternally {
+		if g.Reason == api.ReasonClosedExternally {
 			t.Fatalf("group %+v is closed externally, want none", g)
 		}
 	}
@@ -230,7 +230,7 @@ func TestToRequirementIsRefusedOnAnythingButAnIncomingIssue(t *testing.T) {
 		"7": "unlinked",
 		"8": "Cancelled",
 	} {
-		e := httpRejected(t, srv, toRequirement(n, `{}`), core.ActionNotAllowed)
+		e := httpRejected(t, srv, toRequirement(n, `{}`), api.ActionNotAllowed)
 		if !strings.Contains(e.Message, "acme-"+n) || !strings.Contains(e.Message, why) {
 			t.Errorf("acme-%s: message %q, want it named and %q", n, e.Message, why)
 		}
@@ -242,8 +242,8 @@ func TestToRequirementIsRefusedOnAnythingButAnIncomingIssue(t *testing.T) {
 
 func TestToRequirementIsRejectedForAnAgent(t *testing.T) {
 	srv := newServer(t, newIssue)
-	status, b := httpDoAs(t, srv, core.Agent, toRequirement("5", `{}`))
-	if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
+	status, b := httpDoAs(t, srv, api.Agent, toRequirement("5", `{}`))
+	if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
 		t.Fatalf("status %d; message %q, want the human's", status, e.Message)
 	}
 	field("state", "Draft")(t, ticket5(t, srv))

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/usage"
 )
 
@@ -64,9 +64,9 @@ func newUsageReader(kind string, now func() time.Time) *usageReader {
 // comes: claude prints a response with several content blocks as several
 // lines, each with the same ID and usage. It also remembers msg's Agent
 // calls, so their subagents' responses get their kind.
-func (u *usageReader) read(msg streamMessage) (core.UsageResponse, bool) {
+func (u *usageReader) read(msg streamMessage) (api.UsageResponse, bool) {
 	if msg.Type != "assistant" {
-		return core.UsageResponse{}, false
+		return api.UsageResponse{}, false
 	}
 	for _, c := range msg.Message.Content {
 		if c.Type == "tool_use" && (c.Name == "Agent" || c.Name == "Task") {
@@ -80,14 +80,14 @@ func (u *usageReader) read(msg streamMessage) (core.UsageResponse, bool) {
 	}
 	m := msg.Message
 	if m.ID == "" || m.Usage == nil || u.seen[m.ID] {
-		return core.UsageResponse{}, false
+		return api.UsageResponse{}, false
 	}
 	u.seen[m.ID] = true
 	model := m.Model
 	if model == syntheticModel {
 		model = ""
 	}
-	return core.UsageResponse{
+	return api.UsageResponse{
 		Time:        u.now(),
 		Agent:       msg.ParentToolUseID,
 		AgentType:   u.agents[msg.ParentToolUseID].agentType,

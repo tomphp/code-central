@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/ops"
 )
 
@@ -28,7 +28,7 @@ type Client struct {
 	HTTP    *http.Client
 	// Actor is sent with every request; empty means agent, which is how
 	// every code-central command writes.
-	Actor core.Actor
+	Actor api.Actor
 	// Version, when set, is this client's version, sent on every request
 	// as ClientVersionHeader.
 	Version string
@@ -49,73 +49,73 @@ func New(baseURL string) *Client {
 }
 
 // CreateProject is create_project.
-func (c *Client) CreateProject(ctx context.Context, in core.CreateProjectInput) (core.ProjectView, error) {
+func (c *Client) CreateProject(ctx context.Context, in api.CreateProjectInput) (api.ProjectView, error) {
 	return call(ctx, c, ops.CreateProject, "", in)
 }
 
 // GetProject is get_project.
-func (c *Client) GetProject(ctx context.Context, key string) (core.ProjectView, error) {
+func (c *Client) GetProject(ctx context.Context, key string) (api.ProjectView, error) {
 	return call(ctx, c, ops.GetProject, key, struct{}{})
 }
 
 // CreateSpec is create_spec.
-func (c *Client) CreateSpec(ctx context.Context, key string, in core.CreateSpecInput) (core.Written[core.SpecView], error) {
+func (c *Client) CreateSpec(ctx context.Context, key string, in api.CreateSpecInput) (api.Written[api.SpecView], error) {
 	return written(ctx, c, ops.CreateSpec, key, in, in.Full)
 }
 
 // CreateTicket is create_ticket.
-func (c *Client) CreateTicket(ctx context.Context, key string, in core.CreateTicketInput) (core.Written[core.TicketView], error) {
+func (c *Client) CreateTicket(ctx context.Context, key string, in api.CreateTicketInput) (api.Written[api.TicketView], error) {
 	return written(ctx, c, ops.CreateTicket, key, in, in.Full)
 }
 
 // GetTicket is get_ticket with the parts named, or the whole Ticket with
 // none, as the HTTP API returns it.
-func (c *Client) GetTicket(ctx context.Context, key string, ref core.Ref, parts ...string) (core.TicketView, error) {
-	return call(ctx, c, ops.GetTicket, key, core.GetTicketInput{Ticket: ref, Parts: parts})
+func (c *Client) GetTicket(ctx context.Context, key string, ref api.Ref, parts ...string) (api.TicketView, error) {
+	return call(ctx, c, ops.GetTicket, key, api.GetTicketInput{Ticket: ref, Parts: parts})
 }
 
 // FindTickets is find_tickets.
-func (c *Client) FindTickets(ctx context.Context, key string, in core.FindTicketsInput) ([]core.TicketRow, error) {
+func (c *Client) FindTickets(ctx context.Context, key string, in api.FindTicketsInput) ([]api.TicketRow, error) {
 	in.Full, in.Parts = false, nil
-	var out []core.TicketRow
+	var out []api.TicketRow
 	return out, request(ctx, c, ops.FindTickets, key, in, &out)
 }
 
 // FindTicketViews is find_tickets with full: each Ticket as GetTicket
 // returns it, with the parts named, or whole with none, from one read.
-func (c *Client) FindTicketViews(ctx context.Context, key string, in core.FindTicketsInput, parts ...string) ([]core.TicketView, error) {
+func (c *Client) FindTicketViews(ctx context.Context, key string, in api.FindTicketsInput, parts ...string) ([]api.TicketView, error) {
 	in.Full, in.Parts = true, parts
-	var out []core.TicketView
+	var out []api.TicketView
 	return out, request(ctx, c, ops.FindTickets, key, in, &out)
 }
 
 // Claim is claim.
-func (c *Client) Claim(ctx context.Context, key string, in core.ClaimInput) (core.ClaimResult, error) {
+func (c *Client) Claim(ctx context.Context, key string, in api.ClaimInput) (api.ClaimResult, error) {
 	return call(ctx, c, ops.Claim, key, in)
 }
 
 // Finish is finish.
-func (c *Client) Finish(ctx context.Context, key string, in core.FinishInput) (core.FinishResult, error) {
+func (c *Client) Finish(ctx context.Context, key string, in api.FinishInput) (api.FinishResult, error) {
 	return call(ctx, c, ops.Finish, key, in)
 }
 
 // Accept is the human's accept; set Actor to human.
-func (c *Client) Accept(ctx context.Context, key string, in core.TicketInput) (core.Written[core.TicketView], error) {
+func (c *Client) Accept(ctx context.Context, key string, in api.TicketInput) (api.Written[api.TicketView], error) {
 	return written(ctx, c, ops.Accept, key, in, in.Full)
 }
 
 // Reject is the human's reject; set Actor to human.
-func (c *Client) Reject(ctx context.Context, key string, in core.RejectInput) (core.Written[core.TicketView], error) {
+func (c *Client) Reject(ctx context.Context, key string, in api.RejectInput) (api.Written[api.TicketView], error) {
 	return written(ctx, c, ops.Reject, key, in, in.Full)
 }
 
 // SetSession is set_session.
-func (c *Client) SetSession(ctx context.Context, key string, in core.SetSessionInput) (core.Written[core.TicketView], error) {
+func (c *Client) SetSession(ctx context.Context, key string, in api.SetSessionInput) (api.Written[api.TicketView], error) {
 	return written(ctx, c, ops.SetSession, key, in, in.Full)
 }
 
 // Release is the human's release; set Actor to human.
-func (c *Client) Release(ctx context.Context, key string, in core.ReleaseInput) (core.Written[core.TicketView], error) {
+func (c *Client) Release(ctx context.Context, key string, in api.ReleaseInput) (api.Written[api.TicketView], error) {
 	return written(ctx, c, ops.Release, key, in, in.Full)
 }
 
@@ -128,10 +128,10 @@ func (c *Client) Ping(ctx context.Context, sessionID string) error {
 // PostSessionEvents is POST /api/session-events: it adds a batch of
 // Session Events to the newest Claim with this session ID. The service
 // always answers 204.
-func (c *Client) PostSessionEvents(ctx context.Context, sessionID string, events []core.SessionEvent) error {
+func (c *Client) PostSessionEvents(ctx context.Context, sessionID string, events []api.SessionEvent) error {
 	in := struct {
-		SessionID string              `json:"session_id"`
-		Events    []core.SessionEvent `json:"events"`
+		SessionID string             `json:"session_id"`
+		Events    []api.SessionEvent `json:"events"`
 	}{sessionID, events}
 	return c.do(ctx, "POST", "/api/session-events", in, nil)
 }
@@ -139,17 +139,17 @@ func (c *Client) PostSessionEvents(ctx context.Context, sessionID string, events
 // PostUsage is POST /api/usage: it records a batch of model responses'
 // token usage under the newest Claim with this session ID. The service
 // always answers 204; an older one, without the endpoint, 404.
-func (c *Client) PostUsage(ctx context.Context, sessionID string, responses []core.UsageResponse) error {
+func (c *Client) PostUsage(ctx context.Context, sessionID string, responses []api.UsageResponse) error {
 	in := struct {
-		SessionID string               `json:"session_id"`
-		Responses []core.UsageResponse `json:"responses"`
+		SessionID string              `json:"session_id"`
+		Responses []api.UsageResponse `json:"responses"`
 	}{sessionID, responses}
 	return c.do(ctx, "POST", "/api/usage", in, nil)
 }
 
 // Usage is GET /api/usage: Usage for one Project, or every Project when
 // key is "", over the last days local days (0 for the default).
-func (c *Client) Usage(ctx context.Context, key string, days int) (core.UsageView, error) {
+func (c *Client) Usage(ctx context.Context, key string, days int) (api.UsageView, error) {
 	q := url.Values{}
 	if key != "" {
 		q.Set("project", key)
@@ -161,27 +161,27 @@ func (c *Client) Usage(ctx context.Context, key string, days int) (core.UsageVie
 	if len(q) > 0 {
 		path += "?" + q.Encode()
 	}
-	var out core.UsageView
+	var out api.UsageView
 	return out, c.do(ctx, "GET", path, nil, &out)
 }
 
 // Transcript is GET /api/projects/{key}/tickets/{n}/claims/{c}/transcript:
 // the Session Events held for the Ticket's Claim number claim.
-func (c *Client) Transcript(ctx context.Context, key string, ticket core.Ref, claim int) (core.TranscriptView, error) {
-	var out core.TranscriptView
+func (c *Client) Transcript(ctx context.Context, key string, ticket api.Ref, claim int) (api.TranscriptView, error) {
+	var out api.TranscriptView
 	path := "/api/projects/" + url.PathEscape(key) + "/tickets/" + url.PathEscape(string(ticket)) + "/claims/" + strconv.Itoa(claim) + "/transcript"
 	return out, c.do(ctx, "GET", path, nil, &out)
 }
 
 // EditSpec is edit_spec.
-func (c *Client) EditSpec(ctx context.Context, key string, in core.EditSpecInput) (core.Written[core.SpecView], error) {
+func (c *Client) EditSpec(ctx context.Context, key string, in api.EditSpecInput) (api.Written[api.SpecView], error) {
 	return written(ctx, c, ops.EditSpec, key, in, in.Full)
 }
 
 // decodeWritten decodes an acknowledging write's result into the Record
 // when full was asked for, else into the Acknowledgement.
-func decodeWritten[V any](raw json.RawMessage, full bool) (core.Written[V], error) {
-	var out core.Written[V]
+func decodeWritten[V any](raw json.RawMessage, full bool) (api.Written[V], error) {
+	var out api.Written[V]
 	if full {
 		out.Record = new(V)
 		return out, json.Unmarshal(raw, out.Record)
@@ -190,61 +190,61 @@ func decodeWritten[V any](raw json.RawMessage, full bool) (core.Written[V], erro
 }
 
 // EditTicket is edit_ticket.
-func (c *Client) EditTicket(ctx context.Context, key string, in core.EditTicketInput) (core.Written[core.TicketView], error) {
+func (c *Client) EditTicket(ctx context.Context, key string, in api.EditTicketInput) (api.Written[api.TicketView], error) {
 	return written(ctx, c, ops.EditTicket, key, in, in.Full)
 }
 
 // AddLabels is add_labels.
-func (c *Client) AddLabels(ctx context.Context, key string, in core.LabelsInput) (core.TargetView, error) {
+func (c *Client) AddLabels(ctx context.Context, key string, in api.LabelsInput) (api.TargetView, error) {
 	return call(ctx, c, ops.AddLabels, key, in)
 }
 
 // RemoveLabels is remove_labels.
-func (c *Client) RemoveLabels(ctx context.Context, key string, in core.LabelsInput) (core.TargetView, error) {
+func (c *Client) RemoveLabels(ctx context.Context, key string, in api.LabelsInput) (api.TargetView, error) {
 	return call(ctx, c, ops.RemoveLabels, key, in)
 }
 
 // SetTags is set_tags.
-func (c *Client) SetTags(ctx context.Context, key string, in core.SetTagsInput) (core.TargetView, error) {
+func (c *Client) SetTags(ctx context.Context, key string, in api.SetTagsInput) (api.TargetView, error) {
 	return call(ctx, c, ops.SetTags, key, in)
 }
 
 // RemoveTags is remove_tags.
-func (c *Client) RemoveTags(ctx context.Context, key string, in core.RemoveTagsInput) (core.TargetView, error) {
+func (c *Client) RemoveTags(ctx context.Context, key string, in api.RemoveTagsInput) (api.TargetView, error) {
 	return call(ctx, c, ops.RemoveTags, key, in)
 }
 
 // Comment is comment.
-func (c *Client) Comment(ctx context.Context, key string, in core.CommentInput) (core.Written[core.TicketView], error) {
+func (c *Client) Comment(ctx context.Context, key string, in api.CommentInput) (api.Written[api.TicketView], error) {
 	return written(ctx, c, ops.Comment, key, in, in.Full)
 }
 
 // Approve is approve.
-func (c *Client) Approve(ctx context.Context, key string, in core.TicketInput) (core.Written[core.TicketView], error) {
+func (c *Client) Approve(ctx context.Context, key string, in api.TicketInput) (api.Written[api.TicketView], error) {
 	return written(ctx, c, ops.Approve, key, in, in.Full)
 }
 
 // Defer is defer.
-func (c *Client) Defer(ctx context.Context, key string, in core.DeferInput) (core.Written[core.TicketView], error) {
+func (c *Client) Defer(ctx context.Context, key string, in api.DeferInput) (api.Written[api.TicketView], error) {
 	return written(ctx, c, ops.Defer, key, in, in.Full)
 }
 
 // GetWorkflow is get_workflow.
-func (c *Client) GetWorkflow(ctx context.Context) (core.WorkflowView, error) {
-	var out core.WorkflowView
+func (c *Client) GetWorkflow(ctx context.Context) (api.WorkflowView, error) {
+	var out api.WorkflowView
 	return out, c.do(ctx, "GET", "/api/workflow", nil, &out)
 }
 
 // item is the path of an action on one Spec or Ticket. The path names
 // it, so the service ignores the ref in the body.
-func item(key, kind string, ref core.Ref, action string) string {
+func item(key, kind string, ref api.Ref, action string) string {
 	return scoped(key, kind+"/"+url.PathEscape(string(ref))+"/"+action)
 }
 
 func scoped(key, rest string) string { return "/api/p/" + url.PathEscape(key) + "/" + rest }
 
-// do sends one request. API errors come back as *core.Error; a service
-// that can't be reached is a *core.Error with code service_unavailable.
+// do sends one request. API errors come back as *api.Error; a service
+// that can't be reached is a *api.Error with code service_unavailable.
 func (c *Client) do(ctx context.Context, method, path string, in, out any) error {
 	var body io.Reader
 	if in != nil {
@@ -264,7 +264,7 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 	}
 	actor := c.Actor
 	if actor == "" {
-		actor = core.Agent
+		actor = api.Agent
 	}
 	req.Header.Set("X-Code-Central-Actor", string(actor))
 	if c.Version != "" {
@@ -275,8 +275,8 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		return &core.Error{
-			Code: core.ServiceUnavailable,
+		return &api.Error{
+			Code: api.ServiceUnavailable,
 			Message: fmt.Sprintf("cannot reach Code Central at %s: start it with `code-central serve`, "+
 				"or run it as a login item with `code-central service install`; "+
 				"from a sandbox or container, see `code-central help sandboxes`", c.BaseURL),
@@ -291,7 +291,7 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 		return fmt.Errorf("%s %s: reading the answer: %w", method, path, err)
 	}
 	if resp.StatusCode >= 400 {
-		var e core.Error
+		var e api.Error
 		if json.Unmarshal(data, &e) != nil || e.Code == "" {
 			return fmt.Errorf("%s %s: HTTP %d: %s", method, path, resp.StatusCode, bytes.TrimSpace(data))
 		}

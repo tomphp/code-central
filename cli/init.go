@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/client"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -46,9 +46,9 @@ func runInit(ctx context.Context, e Env, args []string) error {
 	case *localFlag && *committedFlag:
 		return usagef("--local and --committed can't both be given")
 	case *localFlag:
-		wantMode = core.ModeLocal
+		wantMode = domain.ModeLocal
 	case *committedFlag:
-		wantMode = core.ModeCommitted
+		wantMode = domain.ModeCommitted
 	}
 	root, inGit := repoRoot(e.Dir)
 	c := newClient(e)
@@ -78,7 +78,7 @@ func runInit(ctx context.Context, e Env, args []string) error {
 			}
 			fmt.Fprintf(e.Stdout, "%s already points at Project %s; refreshing the files init writes.\n", path, k)
 			return setUp(ctx, e, ask, c, setup{root: root, inGit: inGit, key: k, project: p, wantMode: wantMode})
-		case !isCode(err, core.UnknownProject):
+		case !isCode(err, api.UnknownProject):
 			return err
 		}
 		proposed = k
@@ -98,7 +98,7 @@ func runInit(ctx context.Context, e Env, args []string) error {
 			key = proposed
 		}
 	}
-	var project core.ProjectView
+	var project api.ProjectView
 	for {
 		p, err := c.GetProject(ctx, key)
 		if err == nil {
@@ -118,7 +118,7 @@ func runInit(ctx context.Context, e Env, args []string) error {
 			}
 			continue
 		}
-		if !isCode(err, core.UnknownProject) {
+		if !isCode(err, api.UnknownProject) {
 			return err
 		}
 		answer, err := ask(fmt.Sprintf("Create Project %s? [Y/n]: ", key))
@@ -128,10 +128,10 @@ func runInit(ctx context.Context, e Env, args []string) error {
 		if !yes(answer, true) {
 			return usagef("init cancelled; nothing was written")
 		}
-		created, err := c.CreateProject(ctx, core.CreateProjectInput{Key: key, Mode: wantMode})
+		created, err := c.CreateProject(ctx, api.CreateProjectInput{Key: key, Mode: wantMode})
 		if err != nil {
-			var ce *core.Error
-			if errors.As(err, &ce) && ce.Code == core.Invalid {
+			var ce *api.Error
+			if errors.As(err, &ce) && ce.Code == api.Invalid {
 				fmt.Fprintln(e.Stdout, ce.Message)
 				if key, err = ask("Choose another Project Key: "); err != nil {
 					return err
@@ -162,8 +162,8 @@ func yes(answer string, def bool) bool {
 	return false
 }
 
-func isCode(err error, code core.Code) bool {
-	var ce *core.Error
+func isCode(err error, code api.Code) bool {
+	var ce *api.Error
 	return errors.As(err, &ce) && ce.Code == code
 }
 

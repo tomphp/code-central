@@ -3,6 +3,7 @@ package server_test
 import (
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 )
 
@@ -31,7 +32,7 @@ func init() {
 			field("effort", "xhigh")(t, impl)
 		},
 		bad:  call{http: setModels(`{"chat":{"effort":"extreme"}}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 	// report_models is the Factory's, over HTTP only (code-central-311).
 	cases["report_models"] = opCase{
@@ -52,7 +53,7 @@ func init() {
 			}
 		},
 		bad:  call{http: reportModels(`{"aliases":["opus\nsonnet"]}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 

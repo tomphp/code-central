@@ -7,13 +7,14 @@ package ciwatcher_test
 import (
 	"context"
 	"fmt"
-	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/ciwatcher"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
 )
 
@@ -22,28 +23,28 @@ import (
 func (w *watching) pushed(commit string) string {
 	w.t.Helper()
 	ctx := context.Background()
-	human := core.WithActor(ctx, core.Human)
+	human := api.WithActor(ctx, api.Human)
 	c := w.srv.Core
 	must(w.t, func() error {
-		_, err := c.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"})
+		_, err := c.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"})
 		return err
 	})
-	must(w.t, func() error { _, err := c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"}); return err })
+	must(w.t, func() error { _, err := c.CreateSpec(ctx, "acme", api.CreateSpecInput{Title: "Login"}); return err })
 	must(w.t, func() error {
-		_, err := c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form", State: domain.Ready})
+		_, err := c.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "Login form", State: domain.Ready})
 		return err
 	})
-	res, err := c.Claim(ctx, "acme", core.ClaimInput{Ticket: "2"})
+	res, err := c.Claim(ctx, "acme", api.ClaimInput{Ticket: "2"})
 	if err != nil {
 		w.t.Fatal(err)
 	}
 	must(w.t, func() error {
-		_, err := c.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: res.ClaimID, Summary: "Done.", Branch: "acme-2", Commit: commit})
+		_, err := c.Finish(ctx, "acme", api.FinishInput{Ticket: "2", ClaimID: res.ClaimID, Summary: "Done.", Branch: "acme-2", Commit: commit})
 		return err
 	})
-	must(w.t, func() error { _, err := c.Accept(human, "acme", core.TicketInput{Ticket: "2"}); return err })
+	must(w.t, func() error { _, err := c.Accept(human, "acme", api.TicketInput{Ticket: "2"}); return err })
 	must(w.t, func() error {
-		_, err := w.srv.Client.ReportPushedCommit(ctx, "acme", core.ReportPushedCommitInput{Ticket: "acme-2", Commit: commit})
+		_, err := w.srv.Client.ReportPushedCommit(ctx, "acme", api.ReportPushedCommitInput{Ticket: "acme-2", Commit: commit})
 		return err
 	})
 	return "acme-2"
@@ -99,12 +100,12 @@ func (w *watching) jobsAnswer(id int64, attempt int, jobs ...[2]string) {
 
 // ciResult waits for ticket's CI result to be want, with runs reported,
 // and returns the Ticket.
-func (w *watching) ciResult(ticket string, want core.CIResult) core.TicketView {
+func (w *watching) ciResult(ticket string, want api.CIResult) api.TicketView {
 	w.t.Helper()
-	var tk core.TicketView
+	var tk api.TicketView
 	w.waitFor(fmt.Sprintf("%s's ci result %q with runs", ticket, want), func() bool {
 		var err error
-		if tk, err = w.srv.Client.GetTicket(context.Background(), "acme", core.Ref(ticket)); err != nil {
+		if tk, err = w.srv.Client.GetTicket(context.Background(), "acme", api.Ref(ticket)); err != nil {
 			w.t.Fatal(err)
 		}
 		return tk.CIResult == want && len(tk.CIRuns) > 0
@@ -132,14 +133,14 @@ func TestTheCIWatcherReportsAPushedCommitsRunsAgainstItsTicket(t *testing.T) {
 		listedRun{id: 12, attempt: 1, workflow: "nightly.yml", status: "completed", conclude: "failure", updated: "2026-01-05T09:04:00Z"})
 	w.jobsAnswer(11, 1, [2]string{"test", "success"}, [2]string{"lint", "skipped"})
 	w.jobsAnswer(12, 1, [2]string{"build", "failure"})
-	human := core.WithActor(context.Background(), core.Human)
+	human := api.WithActor(context.Background(), api.Human)
 	must(t, func() error {
-		_, err := w.srv.Core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Repository: "acme/web", IgnoredWorkflows: []string{"nightly.yml"}})
+		_, err := w.srv.Core.SetCITracking(human, "acme", api.SetCITrackingInput{Tracking: true, Repository: "acme/web", IgnoredWorkflows: []string{"nightly.yml"}})
 		return err
 	})
 	w.start(w.h.Bin)
 
-	tk := w.ciResult(id, core.CIPassed)
+	tk := w.ciResult(id, api.CIPassed)
 	if len(tk.CIRuns) != 2 {
 		t.Fatalf("runs = %+v, want both reported", tk.CIRuns)
 	}
@@ -149,7 +150,7 @@ func TestTheCIWatcherReportsAPushedCommitsRunsAgainstItsTicket(t *testing.T) {
 		ci.Started == nil || ci.Finished == nil || !ci.Finished.Equal(time.Date(2026, 1, 5, 9, 5, 0, 0, time.UTC)) || ci.Ignored {
 		t.Fatalf("ci.yml's run = %+v", ci)
 	}
-	if len(ci.Jobs) != 2 || ci.Jobs[0] != (core.CIJobView{Name: "test", Conclusion: domain.CISuccess, URL: "https://github.com/acme/web/actions/runs/11/job/1"}) ||
+	if len(ci.Jobs) != 2 || ci.Jobs[0] != (api.CIJobView{Name: "test", Conclusion: domain.CISuccess, URL: "https://github.com/acme/web/actions/runs/11/job/1"}) ||
 		ci.Jobs[1].Conclusion != domain.CISkipped {
 		t.Fatalf("ci.yml's jobs = %+v", ci.Jobs)
 	}
@@ -164,7 +165,7 @@ func TestTheCIWatcherReportsARunAgainOnlyOnceItChanges(t *testing.T) {
 	w.runsAnswer("abc123", listedRun{id: 11, attempt: 1, workflow: "ci.yml", status: "in_progress", updated: "2026-01-05T09:02:00Z"})
 	w.jobsAnswer(11, 1, [2]string{"test", ""})
 	w.start(w.h.Bin)
-	tk := w.ciResult(id, core.CIRunning)
+	tk := w.ciResult(id, api.CIRunning)
 	if tk.CIRuns[0].Status != domain.CIInProgress || tk.CIRuns[0].Jobs[0].Conclusion != "" {
 		t.Fatalf("run = %+v, want in progress with its job unfinished", tk.CIRuns[0])
 	}
@@ -179,7 +180,7 @@ func TestTheCIWatcherReportsARunAgainOnlyOnceItChanges(t *testing.T) {
 	w.runsAnswer("abc123", listedRun{id: 11, attempt: 1, workflow: "ci.yml", status: "completed", conclude: "failure", updated: "2026-01-05T09:06:00Z"})
 	w.jobsAnswer(11, 1, [2]string{"test", "failure"})
 	w.waitingPoll()
-	tk = w.ciResult(id, core.CIFailed)
+	tk = w.ciResult(id, api.CIFailed)
 	if tk.CIRuns[0].Jobs[0].Conclusion != domain.CIFailure {
 		t.Fatalf("run = %+v, want its job failed", tk.CIRuns[0])
 	}
@@ -199,7 +200,7 @@ func (w *watching) waitingPoll() {
 func TestTheCIWatcherPollsEvery30SecondsWhileAPushedCommitWaitsAnd2MinutesOtherwise(t *testing.T) {
 	w := newWatching(t)
 	w.start(w.h.Bin)
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 
 	// Nothing waits: 30 seconds on, the loop still waits.
 	w.srv.Clock.BlockUntil(1)

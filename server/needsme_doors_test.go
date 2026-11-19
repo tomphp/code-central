@@ -3,7 +3,7 @@ package server_test
 import (
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // Needs Me, moving by hand and Projects (ticket 32). All are the human's,
@@ -25,7 +25,7 @@ func init() {
 				field("summary", "Done.")(t, row)
 			},
 			bad:  call{http: httpCall{"GET", "/api/needs-me?project=acme", ""}},
-			code: core.Invalid,
+			code: api.Invalid,
 		},
 		"list_projects": {
 			ok: call{http: httpCall{"GET", "/api/projects", ""}},
@@ -40,14 +40,14 @@ func init() {
 				}
 			},
 			bad:  call{http: httpCall{"GET", "/api/projects?archived=true", ""}},
-			code: core.Invalid,
+			code: api.Invalid,
 		},
 		"move": {
 			ok:    call{http: httpCall{"POST", "/api/p/acme/tickets/2/move", `{"to_state":"Done"}`}},
 			check: ticketAcknowledgement("acme-2", "Done", "state", "moves"),
 			full:  field("state", "Done"),
 			bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/2/move", `{"to_state":"Failed"}`}},
-			code:  core.Invalid,
+			code:  api.Invalid,
 		},
 		"rename_project": {
 			ok: call{http: httpCall{"POST", "/api/p/acme/rename_project", `{"display_name":"Acme Web"}`}},
@@ -56,7 +56,7 @@ func init() {
 				field("display_name", "Acme Web")(t, out)
 			},
 			bad:  call{http: httpCall{"POST", "/api/p/nope/rename_project", `{"display_name":"X"}`}},
-			code: core.UnknownProject,
+			code: api.UnknownProject,
 		},
 	} {
 		cases[name] = c

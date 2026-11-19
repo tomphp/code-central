@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/events"
 )
 
@@ -23,17 +24,9 @@ const LatestEventLimit = 120
 // when it ends, so the last change is never lost.
 const LatestEventThrottle = 5 * time.Second
 
-// LatestEvent is a Claim's latest Session Event, shown short: its text is
-// one line, cut to LatestEventLimit. Computed on read, never stored.
-type LatestEvent struct {
-	Kind SessionEventKind `json:"kind"`
-	Text string           `json:"text"`
-	Time time.Time        `json:"time"`
-}
-
 // latestEvent is Claim number claim's latest event, or nil when its
 // Transcript holds none.
-func (c *Core) latestEvent(key string, ticket, claim int) *LatestEvent {
+func (c *Core) latestEvent(key string, ticket, claim int) *api.LatestEvent {
 	ts := c.transcripts
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
@@ -42,13 +35,13 @@ func (c *Core) latestEvent(key string, ticket, claim int) *LatestEvent {
 		return nil
 	}
 	e := tr.events[len(tr.events)-1]
-	return &LatestEvent{Kind: e.Kind, Text: cutLine(tr.line(e.SessionEvent)), Time: e.Time}
+	return &api.LatestEvent{Kind: e.Kind, Text: cutLine(tr.line(e.SessionEvent)), Time: e.Time}
 }
 
 // line is e as one line: a tool result as "<Tool> result" or "<Tool>
 // failed", naming the tool from the call it answers when it names none;
 // anything else as its first non-empty line.
-func (tr *transcript) line(e SessionEvent) string {
+func (tr *transcript) line(e api.SessionEvent) string {
 	if e.Kind != "tool_result" {
 		for l := range strings.Lines(e.Text) {
 			if l = strings.TrimSpace(l); l != "" {

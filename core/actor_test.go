@@ -4,14 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 func TestTheActorTravelsInTheContextAndDefaultsToAgent(t *testing.T) {
-	if got := core.ActorOf(context.Background()); got != core.Agent {
+	if got := api.ActorOf(context.Background()); got != api.Agent {
 		t.Fatalf("default Actor %q, want agent", got)
 	}
-	if got := core.ActorOf(core.WithActor(context.Background(), core.Human)); got != core.Human {
+	if got := api.ActorOf(api.WithActor(context.Background(), api.Human)); got != api.Human {
 		t.Fatalf("Actor %q, want human", got)
 	}
 }

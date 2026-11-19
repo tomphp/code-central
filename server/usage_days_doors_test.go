@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // Token usage per day (Spec code-central-201): GET /api/usage has a row
@@ -26,7 +26,7 @@ type tokens struct {
 }
 
 // dayTokens is u's days as each day's kinds, by day.
-func dayTokens(u core.UsageView) map[string][]tokens {
+func dayTokens(u api.UsageView) map[string][]tokens {
 	out := map[string][]tokens{}
 	for _, d := range u.Days {
 		var ks []tokens
@@ -85,11 +85,11 @@ func TestTokenUsageSplitsEachDayByKindAndTokenType(t *testing.T) {
 	srv := newServer(t)
 	ctx := context.Background()
 	must(t, func() error {
-		_, err := srv.Core.CreateSpec(ctx, "other", core.CreateSpecInput{Title: "S"})
+		_, err := srv.Core.CreateSpec(ctx, "other", api.CreateSpecInput{Title: "S"})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.CreateTicket(ctx, "other", core.CreateTicketInput{Spec: "1", Title: "T", State: "Ready"})
+		_, err := srv.Core.CreateTicket(ctx, "other", api.CreateTicketInput{Spec: "1", Title: "T", State: "Ready"})
 		return err
 	})
 	claim(t, srv, "acme", "a")

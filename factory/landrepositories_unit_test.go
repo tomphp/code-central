@@ -2,9 +2,11 @@ package factory
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
+
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 
 	"github.com/tomoram/code-central/core"
 )
@@ -18,13 +20,13 @@ import (
 // Repository, with a fake repo of its own as its clone, and returns it.
 func (w *landWorld) withAPI() *fakeRepo {
 	w.t.Helper()
-	if _, err := w.human.AddRepository(context.Background(), "acme", core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"}); err != nil {
+	if _, err := w.human.AddRepository(context.Background(), "acme", api.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"}); err != nil {
 		w.t.Fatal(err)
 	}
 	repo := newFakeRepo("/work/api")
-	api := &repository{name: "api", dir: "/work/api", git: repo, base: "main", worktrees: "/work/api.worktrees"}
-	w.l.repos.byName["api"] = api
-	w.l.repos.inOrder = []*repository{w.l.repos.home, api}
+	apiRepo := &repository{name: "api", dir: "/work/api", git: repo, base: "main", worktrees: "/work/api.worktrees"}
+	w.l.repos.byName["api"] = apiRepo
+	w.l.repos.inOrder = []*repository{w.l.repos.home, apiRepo}
 	return repo
 }
 
@@ -50,18 +52,18 @@ func (w *landWorld) pollRepositories() {
 // acceptedInTwo makes an Accepted Ticket with a commit on its branch in
 // the Home Repository and in api, finished with both, and returns its ID
 // and its commit in api.
-func (w *landWorld) acceptedInTwo(api *fakeRepo, title string) (id, apiWork string) {
+func (w *landWorld) acceptedInTwo(apiRepo *fakeRepo, title string) (id, apiWork string) {
 	w.t.Helper()
 	ctx := context.Background()
 	id = w.ready(title)
 	home := w.repo.commitOn(id, "Work on "+id)
-	apiWork = api.commitOn(id, "Work on "+id+" in api")
-	res, err := w.srv.Client.Claim(ctx, "acme", core.ClaimInput{Ticket: core.Ref(id)})
+	apiWork = apiRepo.commitOn(id, "Work on "+id+" in api")
+	res, err := w.srv.Client.Claim(ctx, "acme", api.ClaimInput{Ticket: api.Ref(id)})
 	if err != nil {
 		w.t.Fatal(err)
 	}
-	if _, err := w.srv.Client.Finish(ctx, "acme", core.FinishInput{Ticket: core.Ref(id), ClaimID: res.ClaimID, Summary: "Done.", Branch: id, Commit: home,
-		Repositories: []core.RepositoryWork{{Name: "api", Branch: id, Commit: apiWork}}}); err != nil {
+	if _, err := w.srv.Client.Finish(ctx, "acme", api.FinishInput{Ticket: api.Ref(id), ClaimID: res.ClaimID, Summary: "Done.", Branch: id, Commit: home,
+		Repositories: []api.RepositoryWork{{Name: "api", Branch: id, Commit: apiWork}}}); err != nil {
 		w.t.Fatal(err)
 	}
 	w.accept(id)
@@ -70,10 +72,10 @@ func (w *landWorld) acceptedInTwo(api *fakeRepo, title string) (id, apiWork stri
 
 func TestEveryRepositorysMergeIsCheckedBeforeAnyBaseMoves(t *testing.T) {
 	w := newLandWorld(t)
-	api := w.withAPI()
-	id, apiWork := w.acceptedInTwo(api, "Add an endpoint")
-	api.conflicts[apiWork] = []string{"endpoint.go"}
-	homeMain, apiMain := w.repo.tip("refs/heads/main"), api.tip("refs/heads/main")
+	apiRepo := w.withAPI()
+	id, apiWork := w.acceptedInTwo(apiRepo, "Add an endpoint")
+	apiRepo.conflicts[apiWork] = []string{"endpoint.go"}
+	homeMain, apiMain := w.repo.tip("refs/heads/main"), apiRepo.tip("refs/heads/main")
 
 	w.pollRepositories()
 
@@ -81,18 +83,18 @@ func TestEveryRepositorysMergeIsCheckedBeforeAnyBaseMoves(t *testing.T) {
 	if tk.State != domain.Ready || commentsSaying(tk, "- api: merging", "  - endpoint.go") != 1 {
 		t.Fatalf("%s %s %+v, want it sent back naming api's conflict", id, tk.State, tk.Comments)
 	}
-	if w.repo.tip("refs/heads/main") != homeMain || api.tip("refs/heads/main") != apiMain {
+	if w.repo.tip("refs/heads/main") != homeMain || apiRepo.tip("refs/heads/main") != apiMain {
 		t.Fatal("a base moved: nothing lands while any Repository conflicts")
 	}
 }
 
 func TestEachRepositoryLandsInTheLandingOrder(t *testing.T) {
 	w := newLandWorld(t)
-	api := w.withAPI()
-	if _, err := w.human.SetLandingOrder(context.Background(), "acme", core.SetLandingOrderInput{Names: []string{"api", "acme"}}); err != nil {
+	apiRepo := w.withAPI()
+	if _, err := w.human.SetLandingOrder(context.Background(), "acme", api.SetLandingOrderInput{Names: []string{"api", "acme"}}); err != nil {
 		t.Fatal(err)
 	}
-	id, _ := w.acceptedInTwo(api, "Add an endpoint")
+	id, _ := w.acceptedInTwo(apiRepo, "Add an endpoint")
 
 	w.pollRepositories()
 
@@ -100,7 +102,7 @@ func TestEachRepositoryLandsInTheLandingOrder(t *testing.T) {
 		t.Fatalf("%s %s, want Done once it has landed in both", id, tk.State)
 	}
 	out := w.out.String()
-	apiAt := strings.Index(out, id+": landed on main at "+short(api.tip("refs/heads/main"))+" in Repository api")
+	apiAt := strings.Index(out, id+": landed on main at "+short(apiRepo.tip("refs/heads/main"))+" in Repository api")
 	homeAt := strings.Index(out, id+": landed on main at "+short(w.repo.tip("refs/heads/main"))+"\n")
 	if apiAt < 0 || homeAt < apiAt {
 		t.Fatalf("stdout %q, want api landed before the Home Repository", out)
@@ -109,10 +111,10 @@ func TestEachRepositoryLandsInTheLandingOrder(t *testing.T) {
 
 func TestARepositoryTheTicketHasLandedInHoldsNothingBackWithoutItsClone(t *testing.T) {
 	w := newLandWorld(t)
-	api := w.withAPI()
-	id, apiWork := w.acceptedInTwo(api, "Add an endpoint")
+	apiRepo := w.withAPI()
+	id, apiWork := w.acceptedInTwo(apiRepo, "Add an endpoint")
 	// Landed in api on an earlier poll, whose clone has gone since.
-	if _, err := w.srv.Client.Land(context.Background(), "acme", core.LandInput{Ticket: core.Ref(id), Commit: apiWork, Repository: "api"}); err != nil {
+	if _, err := w.srv.Client.Land(context.Background(), "acme", api.LandInput{Ticket: api.Ref(id), Commit: apiWork, Repository: "api"}); err != nil {
 		t.Fatal(err)
 	}
 	w.l.repos.byName["api"].problem, w.l.repos.byName["api"].git = "it isn't a git repository", nil
@@ -132,18 +134,18 @@ func TestARepositoryTheTicketHasLandedInHoldsNothingBackWithoutItsClone(t *testi
 func (w *landWorld) holdSpec() (release func()) {
 	w.t.Helper()
 	ctx := context.Background()
-	s, err := w.srv.Client.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Work"})
+	s, err := w.srv.Client.CreateSpec(ctx, "acme", api.CreateSpecInput{Title: "Work"})
 	if err != nil {
 		w.t.Fatal(err)
 	}
 	w.spec = s.ID
-	stage, err := w.srv.Client.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: core.Ref(s.ID), Title: "Tickets", State: domain.Draft, Labels: []string{core.StageLabel("tickets")}})
+	stage, err := w.srv.Client.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: api.Ref(s.ID), Title: "Tickets", State: domain.Draft, Labels: []string{core.StageLabel("tickets")}})
 	if err != nil {
 		w.t.Fatal(err)
 	}
 	return func() {
 		w.t.Helper()
-		if _, err := w.human.Cancel(ctx, "acme", core.CancelInput{Ticket: core.Ref(stage.ID)}); err != nil {
+		if _, err := w.human.Cancel(ctx, "acme", api.CancelInput{Ticket: api.Ref(stage.ID)}); err != nil {
 			w.t.Fatal(err)
 		}
 	}
@@ -151,60 +153,60 @@ func (w *landWorld) holdSpec() (release func()) {
 
 func TestEveryRepositorysSpecBranchIsCheckedBeforeAnyBaseMoves(t *testing.T) {
 	w := newLandWorld(t)
-	api := w.withAPI()
+	apiRepo := w.withAPI()
 	release := w.holdSpec()
-	id, _ := w.acceptedInTwo(api, "Add an endpoint")
+	id, _ := w.acceptedInTwo(apiRepo, "Add an endpoint")
 	w.pollRepositories()
 	branch := "refs/heads/" + core.SpecBranch(w.spec, nil)
-	if w.repo.tip(branch) == "" || api.tip(branch) == "" {
+	if w.repo.tip(branch) == "" || apiRepo.tip(branch) == "" {
 		t.Fatalf("%s wasn't merged into its Spec Branch in both:\n%s", id, w.out)
 	}
 	// api's Spec Branch conflicts with its base.
-	api.conflicts[api.tip(branch)] = []string{"endpoint.go"}
-	homeMain, apiMain := w.repo.tip("refs/heads/main"), api.tip("refs/heads/main")
+	apiRepo.conflicts[apiRepo.tip(branch)] = []string{"endpoint.go"}
+	homeMain, apiMain := w.repo.tip("refs/heads/main"), apiRepo.tip("refs/heads/main")
 	release()
 
 	w.pollRepositories()
 
-	if w.repo.tip("refs/heads/main") != homeMain || api.tip("refs/heads/main") != apiMain {
+	if w.repo.tip("refs/heads/main") != homeMain || apiRepo.tip("refs/heads/main") != apiMain {
 		t.Fatal("a base moved: nothing lands while any Repository's Spec Branch conflicts")
 	}
 	if tk := w.ticket(id); tk.State != domain.Accepted {
 		t.Fatalf("%s is %s, want it still Accepted", id, tk.State)
 	}
-	rows, err := w.srv.Client.FindTickets(context.Background(), "acme", core.FindTicketsInput{Title: core.SpecMergeTitle(w.spec)})
+	rows, err := w.srv.Client.FindTickets(context.Background(), "acme", api.FindTicketsInput{Title: api.SpecMergeTitle(w.spec)})
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("Spec merge Tickets %+v (%v), want one", rows, err)
 	}
-	if fix := w.ticket(rows[0].ID); !strings.Contains(fix.Description, "- api: merging spec/"+w.spec+" at "+api.tip(branch)+" into main at "+apiMain+" conflicts in these files:\n  - endpoint.go\n") {
+	if fix := w.ticket(rows[0].ID); !strings.Contains(fix.Description, "- api: merging spec/"+w.spec+" at "+apiRepo.tip(branch)+" into main at "+apiMain+" conflicts in these files:\n  - endpoint.go\n") {
 		t.Fatalf("Spec merge Ticket %q, want it to name api's conflict", fix.Description)
 	}
 }
 
 func TestASpecLandsWithTheSameMergeSpecCommitInEachRepository(t *testing.T) {
 	w := newLandWorld(t)
-	api := w.withAPI()
+	apiRepo := w.withAPI()
 	release := w.holdSpec()
 	release()
-	id, apiWork := w.acceptedInTwo(api, "Add an endpoint")
+	id, apiWork := w.acceptedInTwo(apiRepo, "Add an endpoint")
 
 	w.pollRepositories()
 
 	tk := w.ticket(id)
-	homeMerge, apiMerge := w.repo.tip("refs/heads/main"), api.tip("refs/heads/main")
+	homeMerge, apiMerge := w.repo.tip("refs/heads/main"), apiRepo.tip("refs/heads/main")
 	want := "Merge spec " + w.spec + ": Work"
-	if tk.State != domain.Done || w.repo.messageOf(homeMerge) != want || api.messageOf(apiMerge) != want || !api.isAncestor(apiWork, apiMerge) {
-		t.Fatalf("%s is %s; main is at %q and %q, want it Done, landed by the Spec's merge in each", id, tk.State, w.repo.messageOf(homeMerge), api.messageOf(apiMerge))
+	if tk.State != domain.Done || w.repo.messageOf(homeMerge) != want || apiRepo.messageOf(apiMerge) != want || !apiRepo.isAncestor(apiWork, apiMerge) {
+		t.Fatalf("%s is %s; main is at %q and %q, want it Done, landed by the Spec's merge in each", id, tk.State, w.repo.messageOf(homeMerge), apiRepo.messageOf(apiMerge))
 	}
 }
 
 func TestATicketIsMergedIntoItsSpecBranchInEveryRepositoryOrNone(t *testing.T) {
 	w := newLandWorld(t)
-	api := w.withAPI()
+	apiRepo := w.withAPI()
 	w.holdSpec()
-	id, apiWork := w.acceptedInTwo(api, "Add an endpoint")
+	id, apiWork := w.acceptedInTwo(apiRepo, "Add an endpoint")
 	home := w.repo.tip("refs/heads/" + id)
-	api.conflicts[apiWork] = []string{"endpoint.go"}
+	apiRepo.conflicts[apiWork] = []string{"endpoint.go"}
 
 	w.pollRepositories()
 
@@ -220,10 +222,10 @@ func TestATicketIsMergedIntoItsSpecBranchInEveryRepositoryOrNone(t *testing.T) {
 func TestUnderBranchATicketLandsInEachRepositoryOnceMergedThereByHand(t *testing.T) {
 	w := newLandWorld(t)
 	w.setLanding(domain.LandingBranch, false, "")
-	api := w.withAPI()
-	id, _ := w.acceptedInTwo(api, "Add an endpoint")
+	apiRepo := w.withAPI()
+	id, _ := w.acceptedInTwo(apiRepo, "Add an endpoint")
 
-	api.mergeByHand(id)
+	apiRepo.mergeByHand(id)
 	w.pollRepositories()
 
 	tk := w.ticket(id)
@@ -241,22 +243,22 @@ func TestUnderBranchATicketLandsInEachRepositoryOnceMergedThereByHand(t *testing
 
 func TestARefusedPushIsTriedAgainThoughAnotherRepositorysSpecBranchNowConflicts(t *testing.T) {
 	w := newLandWorld(t)
-	api := w.withAPI()
+	apiRepo := w.withAPI()
 	w.repo.addRemote("origin")
-	api.addRemote("origin")
+	apiRepo.addRemote("origin")
 	w.setLanding(domain.LandingMerge, true, "origin")
 	release := w.holdSpec()
-	id, _ := w.acceptedInTwo(api, "Add an endpoint")
+	id, _ := w.acceptedInTwo(apiRepo, "Add an endpoint")
 	w.pollRepositories()
 	w.repo.setBroken("origin", true)
 	release()
 	w.pollRepositories()
 	homeMerge, branch := w.repo.tip("refs/heads/main"), "refs/heads/"+core.SpecBranch(w.spec, nil)
-	if w.repo.messageOf(homeMerge) != "Merge spec "+w.spec+": Work" || api.messageOf(api.tip("refs/heads/main")) == "Merge spec "+w.spec+": Work" {
+	if w.repo.messageOf(homeMerge) != "Merge spec "+w.spec+": Work" || apiRepo.messageOf(apiRepo.tip("refs/heads/main")) == "Merge spec "+w.spec+": Work" {
 		t.Fatalf("want the Spec merged in the Home Repository, its push refused, and api not merged yet:\n%s", w.out)
 	}
 	// Meanwhile api's Spec Branch comes to conflict with its base.
-	api.conflicts[api.tip(branch)] = []string{"endpoint.go"}
+	apiRepo.conflicts[apiRepo.tip(branch)] = []string{"endpoint.go"}
 	w.repo.setBroken("origin", false)
 
 	w.pollRepositories()
@@ -267,22 +269,22 @@ func TestARefusedPushIsTriedAgainThoughAnotherRepositorysSpecBranchNowConflicts(
 	if tk := w.ticket(id); !tk.PartlyLanded {
 		t.Fatalf("%s %+v, want it landed in the Home Repository alone", id, tk.Repositories)
 	}
-	if rows, _ := w.srv.Client.FindTickets(context.Background(), "acme", core.FindTicketsInput{Title: core.SpecMergeTitle(w.spec)}); len(rows) != 1 {
+	if rows, _ := w.srv.Client.FindTickets(context.Background(), "acme", api.FindTicketsInput{Title: api.SpecMergeTitle(w.spec)}); len(rows) != 1 {
 		t.Fatalf("Spec merge Tickets %+v, want one for api's conflict", rows)
 	}
 }
 
 func TestUnderPullRequestASpecTouchingARepositoryWithNoCloneIsPushedNowhere(t *testing.T) {
 	w := newLandWorld(t)
-	api := w.withAPI()
+	apiRepo := w.withAPI()
 	w.repo.addRemote("origin")
-	api.addRemote("origin")
-	if _, err := w.srv.Client.ReportPushRemote(context.Background(), "acme", core.ReportPushRemoteInput{URL: "https://github.com/acme/app.git", Base: "main"}); err != nil {
+	apiRepo.addRemote("origin")
+	if _, err := w.srv.Client.ReportPushRemote(context.Background(), "acme", api.ReportPushRemoteInput{URL: "https://github.com/acme/app.git", Base: "main"}); err != nil {
 		t.Fatal(err)
 	}
 	w.setLanding(domain.LandingPullRequest, false, "origin")
 	release := w.holdSpec()
-	w.acceptedInTwo(api, "Add an endpoint")
+	w.acceptedInTwo(apiRepo, "Add an endpoint")
 	w.pollRepositories()
 	if w.repo.tip("refs/heads/"+core.SpecBranch(w.spec, nil)) == "" {
 		t.Fatalf("not merged into the Spec Branch:\n%s", w.out)

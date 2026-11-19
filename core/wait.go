@@ -5,6 +5,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -14,22 +15,15 @@ import (
 // unchanged, on the injected clock.
 const WaitTimeout = 60 * time.Second
 
-// WaitResult is a Ticket's State when a Wait returns, with its last move.
-type WaitResult struct {
-	Ticket   string       `json:"ticket"`
-	State    domain.State `json:"state"`
-	LastMove *MoveView    `json:"last_move,omitempty"`
-}
-
 // Events is the bus core sends a change notice on after every write.
 func (c *Core) Events() *events.Bus { return c.events }
 
 // Wait holds until the Ticket is no longer in State from, for at most
 // WaitTimeout or until ctx ends, and returns its State. It returns at
 // once if the Ticket has already left from. It is a read: no Claim ID.
-func (c *Core) Wait(ctx context.Context, key string, ref Ref, from domain.State) (WaitResult, error) {
+func (c *Core) Wait(ctx context.Context, key string, ref api.Ref, from domain.State) (api.WaitResult, error) {
 	if !from.Valid() {
-		return WaitResult{}, invalid("from", "from must be a State, such as %q", domain.NeedsAnswer)
+		return api.WaitResult{}, invalid("from", "from must be a State, such as %q", domain.NeedsAnswer)
 	}
 	notices, stop := c.events.Subscribe()
 	defer stop()
@@ -57,8 +51,8 @@ func (c *Core) Wait(ctx context.Context, key string, ref Ref, from domain.State)
 	}
 }
 
-func (c *Core) waitResult(key string, ref Ref) (WaitResult, error) {
-	var res WaitResult
+func (c *Core) waitResult(key string, ref api.Ref) (api.WaitResult, error) {
+	var res api.WaitResult
 	err := c.store.View(func(r store.Reader) error {
 		if _, ok := r.Project(key); !ok {
 			return unknownProject(key)
@@ -67,7 +61,7 @@ func (c *Core) waitResult(key string, ref Ref) (WaitResult, error) {
 		if err != nil {
 			return err
 		}
-		res = WaitResult{Ticket: DisplayID(key, t.Number), State: t.State}
+		res = api.WaitResult{Ticket: DisplayID(key, t.Number), State: t.State}
 		if n := len(t.Moves); n > 0 {
 			m := t.Moves[n-1]
 			mv := moveView(m)

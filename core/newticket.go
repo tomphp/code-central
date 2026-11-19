@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -12,32 +13,20 @@ import (
 // Ticket on a Spec from free text, as a Small Change does on the Small
 // Changes Spec.
 
-// NewTicketInput is new_ticket's input: the Spec and the free text, whose
-// first line becomes the Ticket's title.
-type NewTicketInput struct {
-	Spec Ref    `json:"spec" desc:"The Spec to open the Ticket on." required:"true"`
-	Text string `json:"text" desc:"The work to do, in Markdown; its first line becomes the Ticket's title." required:"true"`
-	// Draft saves the Ticket as Draft, not Ready, so nothing is claimed
-	// until the human moves it to Ready.
-	Draft bool `json:"draft,omitempty" desc:"Save the Ticket as Draft instead of Ready, so nothing is claimed until the human moves it to Ready."`
-	// Full asks for the Ticket in place of its Acknowledgement.
-	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
-}
-
 // NewTicket is the human's new_ticket(spec, text, draft?). It writes a
 // Ready (or with draft, Draft) Ticket titled with the text's first line,
 // with the text as its description, on the Spec, with no Labels, Tags,
 // Blockers or Stages. It is action_not_allowed where whyNotNewTicket
 // says why.
-func (c *Core) NewTicket(ctx context.Context, key string, in NewTicketInput) (Written[TicketView], error) {
+func (c *Core) NewTicket(ctx context.Context, key string, in api.NewTicketInput) (api.Written[api.TicketView], error) {
 	if err := humanOnly(ctx, "new_ticket"); err != nil {
-		return Written[TicketView]{}, err
+		return api.Written[api.TicketView]{}, err
 	}
 	title := titleLine(in.Text)
 	if title == "" {
-		return Written[TicketView]{}, invalid("text", "a New Ticket needs text; its first line becomes the Ticket's title")
+		return api.Written[api.TicketView]{}, invalid("text", "a New Ticket needs text; its first line becomes the Ticket's title")
 	}
-	var v Written[TicketView]
+	var v api.Written[api.TicketView]
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -93,7 +82,7 @@ func whyNotNewTicket(p domain.Project, s domain.Spec, tickets []domain.Ticket) s
 // finishesStages reports whether t is a Requirement's tickets Stage that
 // finishes its Stages: Done, or Cancelled by Implement.
 func finishesStages(t domain.Ticket) bool {
-	if StageOf(t.Labels) != StageTickets {
+	if StageOf(t.Labels) != domain.StageTickets {
 		return false
 	}
 	if t.State == domain.Done {

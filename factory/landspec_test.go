@@ -2,11 +2,13 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
@@ -17,12 +19,12 @@ import (
 func holdTicketsStage(t *testing.T, h *factorytest.Harness) (release func()) {
 	t.Helper()
 	ctx := context.Background()
-	made, err := h.Server.Client.CreateTicket(ctx, h.Project, core.CreateTicketInput{Spec: core.Ref(h.SpecID()), Title: "Tickets", State: domain.Draft, Labels: []string{core.StageLabel("tickets")}})
+	made, err := h.Server.Client.CreateTicket(ctx, h.Project, api.CreateTicketInput{Spec: api.Ref(h.SpecID()), Title: "Tickets", State: domain.Draft, Labels: []string{core.StageLabel("tickets")}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return func() {
-		if _, err := h.Human().Cancel(ctx, h.Project, core.CancelInput{Ticket: core.Ref(made.ID)}); err != nil {
+		if _, err := h.Human().Cancel(ctx, h.Project, api.CancelInput{Ticket: api.Ref(made.ID)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -180,7 +182,7 @@ func TestASpecBranchThatConflictsWithTheBaseOpensOneConflictTicket(t *testing.T)
 	r.WantOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main in README: opened ")
 	r.Poll()
 
-	rows, err := h.Server.Client.FindTickets(context.Background(), h.Project, core.FindTicketsInput{Spec: core.Ref(h.SpecID()), Title: "Merge the base into the Spec Branch of " + h.SpecID()})
+	rows, err := h.Server.Client.FindTickets(context.Background(), h.Project, api.FindTicketsInput{Spec: api.Ref(h.SpecID()), Title: "Merge the base into the Spec Branch of " + h.SpecID()})
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("conflict Tickets %+v (%v), want exactly one", rows, err)
 	}
@@ -216,7 +218,7 @@ func TestASpecBranchConflictingWithAMovedBaseCommentsOnItsOpenSpecMergeTicket(t 
 	// not, so the moved base meets the same conflict.
 	h.CommitOn("main", "README", "base side again\n")
 	baseTip := h.Git("rev-parse", "main")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, LandPerSpec: off()})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, LandPerSpec: off()})
 	r.Poll()
 	r.WantOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main again: commented on " + fix)
 

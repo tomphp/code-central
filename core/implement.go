@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -28,8 +29,8 @@ const implementReason = "The human chose Implement: %s builds the Spec without t
 // Ticket as its Replacement. The result is finish's: the spec Stage's
 // Acknowledgement, or with full the Ticket, and a next step naming the
 // new Ticket.
-func (c *Core) Implement(ctx context.Context, key string, in TicketInput) (FinishResult, error) {
-	var res FinishResult
+func (c *Core) Implement(ctx context.Context, key string, in api.TicketInput) (api.FinishResult, error) {
+	var res api.FinishResult
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -39,7 +40,7 @@ func (c *Core) Implement(ctx context.Context, key string, in TicketInput) (Finis
 		if err != nil {
 			return err
 		}
-		var before TicketView
+		var before api.TicketView
 		if !in.Full {
 			before = c.ticketView(w, key, t)
 		}
@@ -54,7 +55,7 @@ func (c *Core) Implement(ctx context.Context, key string, in TicketInput) (Finis
 		if err != nil {
 			return err
 		}
-		res = FinishResult{Acknowledgement: &ack.Acknowledgement, Ticket: ack.Record,
+		res = api.FinishResult{Acknowledgement: &ack.Acknowledgement, Ticket: ack.Record,
 			NextStep: strings.ReplaceAll(nextStep("implement"), "<id>", done.newID)}
 		if ack.Record != nil {
 			res.Acknowledgement = nil
@@ -127,7 +128,7 @@ func (c *Core) implementStep(ctx context.Context, r store.Reader, key string, t 
 	build := domain.Ticket{
 		Number: n, Title: "Implement: " + spec.Title, State: state, Spec: t.Spec,
 		Created: now, Updated: now, Description: fmt.Sprintf(implementDescription, specID),
-		Moves: []domain.Move{{To: state, Actor: string(Human), Time: now, Via: implementVia}},
+		Moves: []domain.Move{{To: state, Actor: string(api.Human), Time: now, Via: implementVia}},
 	}
 
 	if err := transition(ctx, &tickets, key, "cancel", "", now); err != nil {
@@ -135,11 +136,11 @@ func (c *Core) implementStep(ctx context.Context, r store.Reader, key string, t 
 	}
 	tickets.Moves[len(tickets.Moves)-1].Via = implementVia
 	tickets.Replacements = []int{n}
-	addComment(&tickets, Human, now, 0, fmt.Sprintf(implementReason, newID))
+	addComment(&tickets, api.Human, now, 0, fmt.Sprintf(implementReason, newID))
 	tickets.Updated = now
 	return implemented{build: build, tickets: tickets, newID: newID}, nil
 }
 
 func notAllowed(format string, args ...any) error {
-	return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf(format, args...)}
+	return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf(format, args...)}
 }

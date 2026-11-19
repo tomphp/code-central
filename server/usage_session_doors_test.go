@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/usage"
 )
 
@@ -17,13 +17,13 @@ import (
 // for its line chart.
 
 // readSession reads GET /api/usage/session with query.
-func readSession(t *testing.T, srv *codecentraltest.Server, query string) core.SessionUsageView {
+func readSession(t *testing.T, srv *codecentraltest.Server, query string) api.SessionUsageView {
 	t.Helper()
 	status, b := httpDo(t, srv, httpCall{method: "GET", path: "/api/usage/session" + query})
 	if status != http.StatusOK {
 		t.Fatalf("GET /api/usage/session%s: status %d: %s", query, status, b)
 	}
-	var v core.SessionUsageView
+	var v api.SessionUsageView
 	if err := json.Unmarshal(b, &v); err != nil {
 		t.Fatalf("not the session shape: %v: %s", err, b)
 	}
@@ -31,7 +31,7 @@ func readSession(t *testing.T, srv *codecentraltest.Server, query string) core.S
 }
 
 // sizes is each response's Context Size, in order.
-func sizes(v core.SessionUsageView) []int {
+func sizes(v api.SessionUsageView) []int {
 	out := []int{}
 	for _, r := range v.Responses {
 		out = append(out, r.ContextSize)
@@ -54,7 +54,7 @@ func TestASessionsResponsesReadBackInOrderWithTheirContextSize(t *testing.T) {
 	)
 
 	main := readSession(t, srv, "?project=acme&session=s1")
-	want := []core.SessionUsageResponse{
+	want := []api.SessionUsageResponse{
 		{Time: at(-24 * 60), ContextSize: 20_005, Tokens: usage.Tokens{InputTokens: 5, CacheWriteTokens: 20_000, OutputTokens: 2_000}},
 		{Time: at(3), ContextSize: 61_005, Tokens: usage.Tokens{InputTokens: 5, CacheWriteTokens: 1_000, CacheReadTokens: 60_000, OutputTokens: 6_100}},
 		{Time: at(5), ContextSize: 61_307, Tokens: usage.Tokens{InputTokens: 7, CacheWriteTokens: 300, CacheReadTokens: 61_000, OutputTokens: 6_130}},
@@ -119,13 +119,13 @@ func TestASessionReadsOnlyItsOwnProjectAndAllTheKeptDays(t *testing.T) {
 
 func TestASessionReadRejectsAnUnknownProjectAndBadParameters(t *testing.T) {
 	srv := newServer(t)
-	httpRejected(t, srv, httpCall{method: "GET", path: "/api/usage/session?project=nope&session=s1"}, core.NotFound)
+	httpRejected(t, srv, httpCall{method: "GET", path: "/api/usage/session?project=nope&session=s1"}, api.NotFound)
 	for query, field := range map[string]string{
 		"?session=s1":                       "project",
 		"?project=acme":                     "session",
 		"?project=acme&session=s1&colour=1": "colour",
 	} {
-		if e := httpRejected(t, srv, httpCall{method: "GET", path: "/api/usage/session" + query}, core.Invalid); e.Field != field {
+		if e := httpRejected(t, srv, httpCall{method: "GET", path: "/api/usage/session" + query}, api.Invalid); e.Field != field {
 			t.Errorf("%s: field %q, want %s", query, e.Field, field)
 		}
 	}

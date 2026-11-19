@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // Context Size (Spec code-central-201): a Factory posts each model
@@ -67,12 +67,12 @@ func postResponses(t *testing.T, srv *codecentraltest.Server, session string, rs
 }
 
 // claim claims key's next Ready Ticket for session.
-func claim(t *testing.T, srv *codecentraltest.Server, key, session string) core.ClaimResult {
+func claim(t *testing.T, srv *codecentraltest.Server, key, session string) api.ClaimResult {
 	t.Helper()
-	var res core.ClaimResult
+	var res api.ClaimResult
 	must(t, func() error {
 		var err error
-		res, err = srv.Core.Claim(context.Background(), key, core.ClaimInput{SessionID: session})
+		res, err = srv.Core.Claim(context.Background(), key, api.ClaimInput{SessionID: session})
 		return err
 	})
 	return res
@@ -80,15 +80,15 @@ func claim(t *testing.T, srv *codecentraltest.Server, key, session string) core.
 
 // resume finishes first, acme-3, makes acme-2 Ready and claims it a
 // minute later in session, as a session resumed under a newer Claim.
-func resume(t *testing.T, srv *codecentraltest.Server, session string, first core.ClaimResult) {
+func resume(t *testing.T, srv *codecentraltest.Server, session string, first api.ClaimResult) {
 	t.Helper()
 	ctx := context.Background()
 	must(t, func() error {
-		_, err := srv.Core.Finish(ctx, "acme", core.FinishInput{Ticket: "3", ClaimID: first.ClaimID, Summary: "done"})
+		_, err := srv.Core.Finish(ctx, "acme", api.FinishInput{Ticket: "3", ClaimID: first.ClaimID, Summary: "done"})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.Approve(core.WithActor(ctx, core.Human), "acme", core.TicketInput{Ticket: "2"})
+		_, err := srv.Core.Approve(api.WithActor(ctx, api.Human), "acme", api.TicketInput{Ticket: "2"})
 		return err
 	})
 	srv.Clock.Advance(time.Minute)
@@ -127,10 +127,10 @@ func TestPostedUsageGoesToTheNewestClaimWithThatSession(t *testing.T) {
 	postResponses(t, srv, "s1", response{time: at(2), kind: "implementation", input: 10, write: 500, read: 3000})
 
 	got := readUsage(t, srv, "").Sessions
-	want := []core.UsageSession{{
+	want := []api.UsageSession{{
 		Project: "acme", Ticket: "acme-2", Claim: 1, SessionID: "s1", Kind: "implementation",
 		Started: at(1), Peak: 3510, Responses: 2, Models: []string{},
-		Tokens: 1111 + 3861, TotalTokens: new(1111 + 3861), Subagents: []core.UsageSession{},
+		Tokens: 1111 + 3861, TotalTokens: new(1111 + 3861), Subagents: []api.UsageSession{},
 	}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("sessions %+v, want %+v", got, want)
@@ -144,7 +144,7 @@ func TestPostingUsageCountsAsAPing(t *testing.T) {
 	posted := srv.Clock.Now()
 	postUsage(t, srv, `{"session_id":"s1","responses":[]}`)
 
-	var v core.TicketView
+	var v api.TicketView
 	_, b := httpDo(t, srv, httpCall{method: "GET", path: "/api/p/acme/tickets/3"})
 	if err := json.Unmarshal(b, &v); err != nil {
 		t.Fatal(err)
@@ -157,8 +157,8 @@ func TestPostingUsageCountsAsAPing(t *testing.T) {
 func TestContextSizeByKindWithSubagentsAsSessionsOfTheirOwn(t *testing.T) {
 	srv := newServer(t)
 	claim(t, srv, "acme", "impl")
-	ctx := core.WithActor(context.Background(), core.Human)
-	must(t, func() error { _, err := srv.Core.Approve(ctx, "acme", core.TicketInput{Ticket: "2"}); return err })
+	ctx := api.WithActor(context.Background(), api.Human)
+	must(t, func() error { _, err := srv.Core.Approve(ctx, "acme", api.TicketInput{Ticket: "2"}); return err })
 	claim(t, srv, "acme", "spec")
 
 	postResponses(t, srv, "impl",
@@ -173,7 +173,7 @@ func TestContextSizeByKindWithSubagentsAsSessionsOfTheirOwn(t *testing.T) {
 	postResponses(t, srv, "spec", response{time: at(8), kind: "spec", input: 2, write: 30_000, read: 0})
 
 	u := readUsage(t, srv, "")
-	want := []core.UsageKind{
+	want := []api.UsageKind{
 		{Kind: "spec", Sessions: 1, AveragePeak: 30_002, LargestPeak: 30_002},
 		{Kind: "implementation", Sessions: 1, AveragePeak: 61_005, LargestPeak: 61_005},
 		{Kind: "review", Sessions: 2, AveragePeak: 7_503, LargestPeak: 9_003},
@@ -224,7 +224,7 @@ func TestAMainSessionListsAllOfItsSubagents(t *testing.T) {
 		t.Fatalf("%d sessions from %+v, want s1 with all 60 Subagents", len(u.Sessions), u.Sessions)
 	}
 	// The kinds count every session.
-	if want := []core.UsageKind{{Kind: "subagent", Sessions: 60, AveragePeak: 31, LargestPeak: 60}}; !reflect.DeepEqual(u.Kinds, want) {
+	if want := []api.UsageKind{{Kind: "subagent", Sessions: 60, AveragePeak: 31, LargestPeak: 60}}; !reflect.DeepEqual(u.Kinds, want) {
 		t.Fatalf("kinds %+v, want %+v", u.Kinds, want)
 	}
 }
@@ -233,11 +233,11 @@ func TestContextSizeForOneProjectOrAllOfThemOverTheRange(t *testing.T) {
 	srv := newServer(t)
 	ctx := context.Background()
 	must(t, func() error {
-		_, err := srv.Core.CreateSpec(ctx, "other", core.CreateSpecInput{Title: "S"})
+		_, err := srv.Core.CreateSpec(ctx, "other", api.CreateSpecInput{Title: "S"})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.CreateTicket(ctx, "other", core.CreateTicketInput{Spec: "1", Title: "T", State: "Ready"})
+		_, err := srv.Core.CreateTicket(ctx, "other", api.CreateTicketInput{Spec: "1", Title: "T", State: "Ready"})
 		return err
 	})
 	claim(t, srv, "acme", "a")
@@ -263,7 +263,7 @@ func TestContextSizeForOneProjectOrAllOfThemOverTheRange(t *testing.T) {
 	if got := sessions("?project=other&days=30"); !reflect.DeepEqual(got, []string{"other-2/implementation", "other-2/review"}) {
 		t.Errorf("other over 30 days: %v", got)
 	}
-	want := []core.UsageKind{{Kind: "implementation", Sessions: 2, AveragePeak: 200, LargestPeak: 300}}
+	want := []api.UsageKind{{Kind: "implementation", Sessions: 2, AveragePeak: 200, LargestPeak: 300}}
 	if got := readUsage(t, srv, "").Kinds; !reflect.DeepEqual(got, want) {
 		t.Errorf("all kinds %+v, want %+v", got, want)
 	}

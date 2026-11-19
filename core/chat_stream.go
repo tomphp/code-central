@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -33,26 +34,6 @@ const (
 	// gone; the Conversation as it now stands follows it.
 	ChatEventReplaced = "replaced"
 )
-
-// ChatOutcomeEvent is the data of an outcome event.
-type ChatOutcomeEvent struct {
-	Outcome ChatOutcome `json:"outcome"`
-	Error   string      `json:"error,omitempty"`
-}
-
-// ChatSessionEvent is the data of a session event.
-type ChatSessionEvent struct {
-	SessionID     string `json:"session_id"`
-	ResumeCommand string `json:"resume_command"`
-}
-
-// ChatFrame is one event of the stream. ID is its sequence number, 0 for
-// one that has none (replaced).
-type ChatFrame struct {
-	ID    int
-	Event string
-	Data  any
-}
 
 // chatEvent is a change to a Conversation, as held for followers to
 // catch up on.
@@ -116,7 +97,7 @@ func (f *ChatFeed) Wake() <-chan struct{} { return f.wake }
 // held: a client resuming from an earlier Conversation is first told it
 // was replaced. Afterwards it gives each new event, or the Conversation
 // again when the events it missed are no longer held.
-func (f *ChatFeed) Next() []ChatFrame {
+func (f *ChatFeed) Next() []api.ChatFrame {
 	cs := f.c.chats
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
@@ -126,30 +107,30 @@ func (f *ChatFeed) Next() []ChatFrame {
 		if f.opened {
 			return nil
 		}
-		return []ChatFrame{f.snapshot(nil, fs)}
+		return []api.ChatFrame{f.snapshot(nil, fs)}
 	}
 	switch {
 	case !f.opened && f.after > 0 && f.after >= cv.base && f.after <= cv.evSeq && cv.holdsAfter(f.after):
 		// A resume the events held can serve.
 		f.opened, f.conv = true, cv.id
 	case !f.opened:
-		var frames []ChatFrame
+		var frames []api.ChatFrame
 		if f.after > 0 && f.after < cv.base {
-			frames = append(frames, ChatFrame{Event: ChatEventReplaced, Data: struct{}{}})
+			frames = append(frames, api.ChatFrame{Event: ChatEventReplaced, Data: struct{}{}})
 		}
 		return append(frames, f.snapshot(cv, fs))
 	case f.conv != cv.id:
 		if f.conv == "" {
-			return []ChatFrame{f.snapshot(cv, fs)}
+			return []api.ChatFrame{f.snapshot(cv, fs)}
 		}
-		return []ChatFrame{{Event: ChatEventReplaced, Data: struct{}{}}, f.snapshot(cv, fs)}
+		return []api.ChatFrame{{Event: ChatEventReplaced, Data: struct{}{}}, f.snapshot(cv, fs)}
 	case !cv.holdsAfter(f.after):
-		return []ChatFrame{f.snapshot(cv, fs)}
+		return []api.ChatFrame{f.snapshot(cv, fs)}
 	}
-	var frames []ChatFrame
+	var frames []api.ChatFrame
 	for _, e := range cv.log {
 		if e.seq > f.after {
-			frames = append(frames, ChatFrame{ID: e.seq, Event: e.event, Data: e.data})
+			frames = append(frames, api.ChatFrame{ID: e.seq, Event: e.event, Data: e.data})
 		}
 	}
 	f.after = cv.evSeq
@@ -157,9 +138,9 @@ func (f *ChatFeed) Next() []ChatFrame {
 }
 
 // snapshot is the Conversation as it stands, as the feed's next frame.
-func (f *ChatFeed) snapshot(cv *conversation, fs map[heartbeatKey]FactoryView) ChatFrame {
+func (f *ChatFeed) snapshot(cv *conversation, fs map[heartbeatKey]api.FactoryView) api.ChatFrame {
 	f.opened = true
-	fr := ChatFrame{Event: ChatEventConversation, Data: f.c.conversationView(cv, fs)}
+	fr := api.ChatFrame{Event: ChatEventConversation, Data: f.c.conversationView(cv, fs)}
 	if cv != nil {
 		f.conv, f.after, fr.ID = cv.id, cv.evSeq, cv.evSeq
 	}

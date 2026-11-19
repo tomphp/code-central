@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -28,7 +28,7 @@ import (
 // stops landing and new branches until a later poll finds it fixed. Each
 // Repository's base is synced apart, in r, with remote the name of its
 // own remote.
-func (l *lander) syncBase(ctx context.Context, r *repository, remote string, pushesBase bool, merged []core.TicketView) bool {
+func (l *lander) syncBase(ctx context.Context, r *repository, remote string, pushesBase bool, merged []api.TicketView) bool {
 	base := l.repos.baseOf(r)
 	if out, err := r.git.fetch(ctx, remote); err != nil {
 		if ctx.Err() == nil {
@@ -94,16 +94,16 @@ func (l *lander) noteBase(ctx context.Context, r *repository, diverged bool, loc
 // with the local and remote commits. A failed report is a warning once
 // until one goes through; the next poll reports again.
 func (l *lander) reportBase(ctx context.Context, r *repository, diverged bool, local, remote string) {
-	state := core.BaseCurrent
+	state := api.BaseCurrent
 	if diverged {
-		state = core.BaseDiverged
+		state = api.BaseDiverged
 	}
-	l.reportBaseState(ctx, r, core.ReportBaseInput{State: state, Local: local, Remote: remote})
+	l.reportBaseState(ctx, r, api.ReportBaseInput{State: state, Local: local, Remote: remote})
 }
 
 // reportBaseState sends one report_base, of r's base: the Home
 // Repository's names none, as a Factory from before Repositories did.
-func (l *lander) reportBaseState(ctx context.Context, r *repository, in core.ReportBaseInput) {
+func (l *lander) reportBaseState(ctx context.Context, r *repository, in api.ReportBaseInput) {
 	if !r.home {
 		in.Repository = r.name
 	}
@@ -123,7 +123,7 @@ func (l *lander) reportBaseState(ctx context.Context, r *repository, in core.Rep
 // pull request on. Under Rebase its branch holds its work rebased onto
 // the base, when it was (rebaseForPush), which is pushed with lease over
 // an older push.
-func (l *lander) landPullRequest(ctx context.Context, tk core.TicketView, p core.ProjectView) {
+func (l *lander) landPullRequest(ctx context.Context, tk api.TicketView, p api.ProjectView) {
 	if hasMerged(tk.PullRequest) {
 		l.landMerged(ctx, tk)
 		return
@@ -169,7 +169,7 @@ func (l *lander) inOldBase(commit string) bool {
 // landMerged lands tk, whose pull request is reported merged, at the merge
 // commit, once the fetched base holds it. Until then it waits for a later
 // poll.
-func (l *lander) landMerged(ctx context.Context, tk core.TicketView) {
+func (l *lander) landMerged(ctx context.Context, tk api.TicketView) {
 	merge := tk.PullRequest.MergeCommit
 	if !l.stateOf(l.repos.home).current || !l.inBase(merge) && !l.inOldBase(merge) {
 		key := tk.ID + "@" + merge
@@ -188,7 +188,7 @@ func (l *lander) landMerged(ctx context.Context, tk core.TicketView) {
 // a branch merged by hand does under Branch; each is held back only by
 // its own broken base. A Ticket in any other State whose pull request in
 // the Home Repository is merged gets a warning line and a comment, once.
-func (l *lander) detectMergedPullRequests(ctx context.Context, tk core.TicketView, policies core.LandingPolicies) {
+func (l *lander) detectMergedPullRequests(ctx context.Context, tk api.TicketView, policies api.LandingPolicies) {
 	if tk.State == domain.InReview && changedElsewhere(l.repos.home.name, tk) {
 		l.detectMergedPullRequestsIn(ctx, tk, policies)
 		return
@@ -207,7 +207,7 @@ func (l *lander) detectMergedPullRequests(ctx context.Context, tk core.TicketVie
 	l.warnedMerged[key] = true
 	l.printf("warning: %s is %s but its pull request %d is merged: only an In Review or Accepted Ticket lands", tk.ID, tk.State, tk.PullRequest.Number)
 	body := fmt.Sprintf("Its pull request %d was merged on the Code Host, but this Ticket is %s, so it doesn't land: only an In Review or Accepted Ticket lands.", tk.PullRequest.Number, tk.State)
-	if _, err := l.client.Comment(ctx, l.project, core.CommentInput{Ticket: core.Ref(tk.ID), Body: body}); err != nil && ctx.Err() == nil {
+	if _, err := l.client.Comment(ctx, l.project, api.CommentInput{Ticket: api.Ref(tk.ID), Body: body}); err != nil && ctx.Err() == nil {
 		l.printf("%s: comment: %v", tk.ID, err)
 	}
 }

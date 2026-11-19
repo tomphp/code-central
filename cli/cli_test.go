@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/ops"
 )
 
@@ -49,12 +49,12 @@ func decode[T any](t *testing.T, r result) T {
 	return v
 }
 
-func wantError(t *testing.T, r result, code core.Code) core.Error {
+func wantError(t *testing.T, r result, code api.Code) api.Error {
 	t.Helper()
 	if r.code != 2 {
 		t.Fatalf("exit %d, want 2 (stdout %q, stderr %q)", r.code, r.stdout, r.stderr)
 	}
-	var e core.Error
+	var e api.Error
 	if err := json.Unmarshal([]byte(r.stderr), &e); err != nil {
 		t.Fatalf("stderr is not JSON: %v\n%s", err, r.stderr)
 	}
@@ -67,32 +67,32 @@ func wantError(t *testing.T, r result, code core.Code) core.Error {
 func TestCreateAndReadSpecsAndTickets(t *testing.T) {
 	t.Parallel()
 	srv := codecentraltest.NewServer(t)
-	if _, err := srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"}); err != nil {
+	if _, err := srv.Client.CreateProject(context.Background(), api.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)
 	}
 	env := map[string]string{"CODE_CENTRAL_URL": srv.URL, "CODE_CENTRAL_PROJECT": "acme"}
 
-	spec := decode[core.SpecView](t, run(t, env, "# Login\n\nUsers log in.\n", "create-spec", "--title", "Login", "--file", "-", "--full"))
+	spec := decode[api.SpecView](t, run(t, env, "# Login\n\nUsers log in.\n", "create-spec", "--title", "Login", "--file", "-", "--full"))
 	if spec.ID != "acme-1" || spec.Body != "# Login\n\nUsers log in.\n" {
 		t.Fatalf("spec: %+v", spec)
 	}
 
-	tk := decode[core.TicketView](t, run(t, env, "", "create-ticket", "--spec", "acme-1", "--title", "Form",
+	tk := decode[api.TicketView](t, run(t, env, "", "create-ticket", "--spec", "acme-1", "--title", "Form",
 		"--state", "Ready", "--label", "ui", "--label", "auth", "--description", "Build it.", "--tag", "effort=high", "--tag", "area=web", "--full"))
 	if tk.ID != "acme-2" || tk.State != "Ready" || len(tk.Labels) != 2 || tk.Description != "Build it." || tk.Tags["effort"] != "high" || tk.Tags["area"] != "web" {
 		t.Fatalf("ticket: %+v", tk)
 	}
 
-	got := decode[core.TicketView](t, run(t, env, "", "get-ticket", "acme-2"))
+	got := decode[api.TicketView](t, run(t, env, "", "get-ticket", "acme-2"))
 	if got.Title != "Form" || got.Spec.Title != "Login" {
 		t.Fatalf("get-ticket: %+v", got)
 	}
 
-	rows := decode[[]core.TicketRow](t, run(t, env, "", "find-tickets", "--state", "Ready", "--label", "ui", "--title", "FORM", "--spec", "1"))
+	rows := decode[[]api.TicketRow](t, run(t, env, "", "find-tickets", "--state", "Ready", "--label", "ui", "--title", "FORM", "--spec", "1"))
 	if len(rows) != 1 || rows[0].ID != "acme-2" {
 		t.Fatalf("find-tickets: %+v", rows)
 	}
-	if rows := decode[[]core.TicketRow](t, run(t, env, "", "find-tickets", "--state", "Draft")); len(rows) != 0 {
+	if rows := decode[[]api.TicketRow](t, run(t, env, "", "find-tickets", "--state", "Draft")); len(rows) != 0 {
 		t.Fatalf("find-tickets Draft: %+v", rows)
 	}
 }
@@ -100,29 +100,29 @@ func TestCreateAndReadSpecsAndTickets(t *testing.T) {
 func TestProjectFlagBeatsEnvironment(t *testing.T) {
 	t.Parallel()
 	srv := codecentraltest.NewServer(t)
-	srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"})
+	srv.Client.CreateProject(context.Background(), api.CreateProjectInput{Key: "acme"})
 	env := map[string]string{"CODE_CENTRAL_URL": srv.URL, "CODE_CENTRAL_PROJECT": "other"}
-	spec := decode[core.SpecView](t, run(t, env, "", "create-spec", "--project", "acme", "--title", "S"))
+	spec := decode[api.SpecView](t, run(t, env, "", "create-spec", "--project", "acme", "--title", "S"))
 	if spec.ID != "acme-1" {
 		t.Fatalf("spec: %+v", spec)
 	}
 	// flags may follow positional arguments
-	decode[core.TicketView](t, run(t, env, "", "create-ticket", "--project", "acme", "--spec", "1", "--title", "T"))
-	decode[core.TicketView](t, run(t, env, "", "get-ticket", "2", "--project", "acme"))
+	decode[api.TicketView](t, run(t, env, "", "create-ticket", "--project", "acme", "--spec", "1", "--title", "T"))
+	decode[api.TicketView](t, run(t, env, "", "get-ticket", "2", "--project", "acme"))
 }
 
 func TestErrorsAreJSONOnStderrWithExitTwo(t *testing.T) {
 	t.Parallel()
 	srv := codecentraltest.NewServer(t)
-	srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"})
+	srv.Client.CreateProject(context.Background(), api.CreateProjectInput{Key: "acme"})
 	env := map[string]string{"CODE_CENTRAL_URL": srv.URL, "CODE_CENTRAL_PROJECT": "acme"}
 
-	wantError(t, run(t, env, "", "get-ticket", "9"), core.NotFound)
-	e := wantError(t, run(t, env, "", "create-ticket", "--spec", "1", "--title", "T"), core.Invalid)
+	wantError(t, run(t, env, "", "get-ticket", "9"), api.NotFound)
+	e := wantError(t, run(t, env, "", "create-ticket", "--spec", "1", "--title", "T"), api.Invalid)
 	if e.Field != "spec" {
 		t.Fatalf("field %q", e.Field)
 	}
-	wantError(t, run(t, map[string]string{"CODE_CENTRAL_URL": srv.URL}, "", "get-ticket", "1", "--project", "nope"), core.UnknownProject)
+	wantError(t, run(t, map[string]string{"CODE_CENTRAL_URL": srv.URL}, "", "get-ticket", "1", "--project", "nope"), api.UnknownProject)
 }
 
 func TestUsageErrorsExitOne(t *testing.T) {
@@ -162,7 +162,7 @@ func TestServiceUnavailableNamesHowToStartIt(t *testing.T) {
 	t.Parallel()
 	url := "http://" + freeAddr(t)
 	r := run(t, map[string]string{"CODE_CENTRAL_URL": url, "CODE_CENTRAL_PROJECT": "acme"}, "", "get-ticket", "1")
-	e := wantError(t, r, core.ServiceUnavailable)
+	e := wantError(t, r, api.ServiceUnavailable)
 	for _, want := range []string{url, "code-central serve", "code-central service install"} {
 		if !strings.Contains(e.Message, want) {
 			t.Errorf("message %q doesn't mention %q", e.Message, want)

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 )
 
@@ -26,7 +26,7 @@ func init() {
 			field("id", "acme-5")(t, out)
 		},
 		bad:  call{http: keepAsDraft("2")},
-		code: core.ActionNotAllowed,
+		code: api.ActionNotAllowed,
 	}
 }
 
@@ -68,7 +68,7 @@ func ticket5(t *testing.T, srv *codecentraltest.Server) map[string]any {
 func TestANewIncomingIssueWaitsInNeedsMeAsNewIssue(t *testing.T) {
 	srv := newServer(t, newIssue)
 	row, ok := needsMeRowOf(t, srv, "acme-5")
-	if !ok || row.Reason != core.ReasonNewIssue || !row.Since.Equal(codecentraltest.Start) {
+	if !ok || row.Reason != api.ReasonNewIssue || !row.Since.Equal(codecentraltest.Start) {
 		t.Fatalf("acme-5's row = %+v (%v), want New issue since its creation", row, ok)
 	}
 	if row.Link == nil || row.Link.URL != "https://github.com/acme/web/issues/7" {
@@ -86,7 +86,7 @@ func TestANewIssueSinceIsItsCreationNotItsLastWrite(t *testing.T) {
 	srv := newServer(t, newIssue)
 	srv.Clock.Advance(time.Hour)
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/integration/tickets/5/update_linked_ticket", `{"title":"Issue 7, edited"}`})
-	if row, _ := needsMeRowOf(t, srv, "acme-5"); row.Reason != core.ReasonNewIssue || !row.Since.Equal(codecentraltest.Start) {
+	if row, _ := needsMeRowOf(t, srv, "acme-5"); row.Reason != api.ReasonNewIssue || !row.Since.Equal(codecentraltest.Start) {
 		t.Fatalf("row = %+v, want New issue since its creation", row)
 	}
 }
@@ -129,19 +129,19 @@ func TestClosedExternallyTakesOverFromNewIssue(t *testing.T) {
 		httpOK(t, srv, httpCall{"POST", "/api/p/acme/integration/set_external_state", `{"target":"5","external_state":"` + state + `"}`})
 	}
 	setExternal("closed")
-	if row, _ := needsMeRowOf(t, srv, "acme-5"); row.Reason != core.ReasonClosedExternally {
+	if row, _ := needsMeRowOf(t, srv, "acme-5"); row.Reason != api.ReasonClosedExternally {
 		t.Fatalf("closed: reason %q, want closed externally", row.Reason)
 	}
 	// Open again, it is a New issue again: nobody triaged it.
 	setExternal("open")
-	if row, _ := needsMeRowOf(t, srv, "acme-5"); row.Reason != core.ReasonNewIssue {
+	if row, _ := needsMeRowOf(t, srv, "acme-5"); row.Reason != api.ReasonNewIssue {
 		t.Fatalf("reopened: reason %q, want New issue", row.Reason)
 	}
 }
 
 func TestNewIssueIsGroupedJustBeforeClosedExternally(t *testing.T) {
 	order := workflowNeedsMe(t)
-	n, c := slices.Index(order, core.ReasonNewIssue), slices.Index(order, core.ReasonClosedExternally)
+	n, c := slices.Index(order, api.ReasonNewIssue), slices.Index(order, api.ReasonClosedExternally)
 	if n < 0 || c != n+1 {
 		t.Fatalf("group order %v, want new_issue just before closed_externally", order)
 	}
@@ -202,21 +202,21 @@ func TestKeepAsDraftIsRefusedOnAnythingButAnIncomingIssue(t *testing.T) {
 		"7": "unlinked",
 		"8": "Cancelled",
 	} {
-		e := httpRejected(t, srv, keepAsDraft(n), core.ActionNotAllowed)
+		e := httpRejected(t, srv, keepAsDraft(n), api.ActionNotAllowed)
 		if !strings.Contains(e.Message, "acme-"+n) || !strings.Contains(e.Message, why) {
 			t.Errorf("acme-%s: message %q, want it named and %q", n, e.Message, why)
 		}
 	}
-	httpRejected(t, srv, keepAsDraft("99"), core.NotFound)
+	httpRejected(t, srv, keepAsDraft("99"), api.NotFound)
 }
 
 func TestKeepAsDraftIsRejectedForAnAgent(t *testing.T) {
 	srv := newServer(t, newIssue)
-	status, b := httpDoAs(t, srv, core.Agent, keepAsDraft("5"))
-	if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
+	status, b := httpDoAs(t, srv, api.Agent, keepAsDraft("5"))
+	if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
 		t.Fatalf("status %d; message %q, want the human's", status, e.Message)
 	}
-	if row, _ := needsMeRowOf(t, srv, "acme-5"); row.Reason != core.ReasonNewIssue {
+	if row, _ := needsMeRowOf(t, srv, "acme-5"); row.Reason != api.ReasonNewIssue {
 		t.Fatalf("reason %q, want still New issue", row.Reason)
 	}
 }

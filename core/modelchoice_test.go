@@ -6,26 +6,27 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
 // readyTicket is acme-2, a Ready implementation Ticket on Spec acme-1.
-func (f fixture) readyTicket(t *testing.T) core.TicketView {
+func (f fixture) readyTicket(t *testing.T) api.TicketView {
 	t.Helper()
 	return f.work(t, domain.Ready)[0]
 }
 
 func (f fixture) setTags(t *testing.T, target string, tags map[string]string) {
 	t.Helper()
-	if _, err := f.core.SetTags(ctx, "acme", core.SetTagsInput{Target: core.Ref(target), Tags: tags}); err != nil {
+	if _, err := f.core.SetTags(ctx, "acme", api.SetTagsInput{Target: api.Ref(target), Tags: tags}); err != nil {
 		t.Fatalf("set_tags: %v", err)
 	}
 }
 
-func (f fixture) modelChoice(t *testing.T, ticket string) core.ModelChoice {
+func (f fixture) modelChoice(t *testing.T, ticket string) api.ModelChoice {
 	t.Helper()
-	mc, err := f.core.GetModelChoice(ctx, "acme", core.GetModelChoiceInput{Ticket: core.Ref(ticket)})
+	mc, err := f.core.GetModelChoice(ctx, "acme", api.GetModelChoiceInput{Ticket: api.Ref(ticket)})
 	if err != nil {
 		t.Fatalf("get_model_choice: %v", err)
 	}
@@ -33,7 +34,7 @@ func (f fixture) modelChoice(t *testing.T, ticket string) core.ModelChoice {
 }
 
 // none is a Model Choice that sets neither model nor effort.
-var none = core.ModelChoice{Model: core.ChoiceValue{Source: core.SourceNone}, Effort: core.ChoiceValue{Source: core.SourceNone}}
+var none = api.ModelChoice{Model: api.ChoiceValue{Source: api.SourceNone}, Effort: api.ChoiceValue{Source: api.SourceNone}}
 
 func TestWithNoTagsTheModelChoiceSetsNothing(t *testing.T) {
 	f := newFixture(t)
@@ -41,7 +42,7 @@ func TestWithNoTagsTheModelChoiceSetsNothing(t *testing.T) {
 	if mc := f.modelChoice(t, "acme-2"); mc != none {
 		t.Errorf("model choice = %+v, want nothing set", mc)
 	}
-	if res := f.claim(t, core.ClaimInput{Ticket: "acme-2"}); res.ModelChoice == nil || *res.ModelChoice != none {
+	if res := f.claim(t, api.ClaimInput{Ticket: "acme-2"}); res.ModelChoice == nil || *res.ModelChoice != none {
 		t.Errorf("claim's model choice = %+v, want nothing set", res.ModelChoice)
 	}
 }
@@ -51,23 +52,23 @@ func TestATicketsModelAndEffortTagsSetTheModelChoiceEachOnItsOwn(t *testing.T) {
 	f.readyTicket(t)
 
 	f.setTags(t, "acme-2", map[string]string{"model": "opus"})
-	want := core.ModelChoice{Model: core.ChoiceValue{Value: "opus", Source: core.SourceTicketTag}, Effort: core.ChoiceValue{Source: core.SourceNone}}
+	want := api.ModelChoice{Model: api.ChoiceValue{Value: "opus", Source: api.SourceTicketTag}, Effort: api.ChoiceValue{Source: api.SourceNone}}
 	if mc := f.modelChoice(t, "acme-2"); mc != want {
 		t.Errorf("with a model Tag, model choice = %+v, want %+v", mc, want)
 	}
 
-	if _, err := f.core.RemoveTags(ctx, "acme", core.RemoveTagsInput{Target: "acme-2", Keys: []string{"model"}}); err != nil {
+	if _, err := f.core.RemoveTags(ctx, "acme", api.RemoveTagsInput{Target: "acme-2", Keys: []string{"model"}}); err != nil {
 		t.Fatal(err)
 	}
 	f.setTags(t, "acme-2", map[string]string{"effort": "high"})
-	want = core.ModelChoice{Model: core.ChoiceValue{Source: core.SourceNone}, Effort: core.ChoiceValue{Value: "high", Source: core.SourceTicketTag}}
+	want = api.ModelChoice{Model: api.ChoiceValue{Source: api.SourceNone}, Effort: api.ChoiceValue{Value: "high", Source: api.SourceTicketTag}}
 	if mc := f.modelChoice(t, "acme-2"); mc != want {
 		t.Errorf("with an effort Tag, model choice = %+v, want %+v", mc, want)
 	}
 
 	f.setTags(t, "acme-2", map[string]string{"model": "claude-opus-5-5"})
-	want.Model = core.ChoiceValue{Value: "claude-opus-5-5", Source: core.SourceTicketTag}
-	res := f.claim(t, core.ClaimInput{Ticket: "acme-2"})
+	want.Model = api.ChoiceValue{Value: "claude-opus-5-5", Source: api.SourceTicketTag}
+	res := f.claim(t, api.ClaimInput{Ticket: "acme-2"})
 	if res.ModelChoice == nil || *res.ModelChoice != want {
 		t.Errorf("claim's model choice = %+v, want %+v", res.ModelChoice, want)
 	}
@@ -76,9 +77,9 @@ func TestATicketsModelAndEffortTagsSetTheModelChoiceEachOnItsOwn(t *testing.T) {
 func TestATagChangedAfterTheClaimAppliesToTheNextTurn(t *testing.T) {
 	f := newFixture(t)
 	f.readyTicket(t)
-	f.claim(t, core.ClaimInput{Ticket: "acme-2"})
+	f.claim(t, api.ClaimInput{Ticket: "acme-2"})
 	f.setTags(t, "acme-2", map[string]string{"model": "fable", "effort": "max"})
-	want := core.ModelChoice{Model: core.ChoiceValue{Value: "fable", Source: core.SourceTicketTag}, Effort: core.ChoiceValue{Value: "max", Source: core.SourceTicketTag}}
+	want := api.ModelChoice{Model: api.ChoiceValue{Value: "fable", Source: api.SourceTicketTag}, Effort: api.ChoiceValue{Value: "max", Source: api.SourceTicketTag}}
 	if mc := f.modelChoice(t, "acme-2"); mc != want {
 		t.Errorf("model choice = %+v, want %+v", mc, want)
 	}
@@ -87,8 +88,8 @@ func TestATagChangedAfterTheClaimAppliesToTheNextTurn(t *testing.T) {
 func TestSetTagsRejectsAnEffortOutsideTheValidLevelsListingThem(t *testing.T) {
 	f := newFixture(t)
 	f.readyTicket(t)
-	_, err := f.core.SetTags(ctx, "acme", core.SetTagsInput{Target: "acme-2", Tags: map[string]string{"effort": "extreme"}})
-	wantCode(t, err, core.Invalid, "tags")
+	_, err := f.core.SetTags(ctx, "acme", api.SetTagsInput{Target: "acme-2", Tags: map[string]string{"effort": "extreme"}})
+	wantCode(t, err, api.Invalid, "tags")
 	if !strings.Contains(err.Error(), "low, medium, high, xhigh, max") {
 		t.Errorf("error %q doesn't list the valid levels", err)
 	}
@@ -127,9 +128,9 @@ func TestAgentsGetTicketLeavesTheModelChoiceOut(t *testing.T) {
 func TestTheUIsTicketReadCarriesTheModelChoiceWithSources(t *testing.T) {
 	f := newFixture(t)
 	f.readyTicket(t)
-	read := func() *core.ModelChoice {
+	read := func() *api.ModelChoice {
 		t.Helper()
-		v, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "acme-2", WithModelChoice: true})
+		v, err := f.core.GetTicket(ctx, "acme", api.GetTicketInput{Ticket: "acme-2", WithModelChoice: true})
 		if err != nil {
 			t.Fatalf("get_ticket: %v", err)
 		}
@@ -138,12 +139,12 @@ func TestTheUIsTicketReadCarriesTheModelChoiceWithSources(t *testing.T) {
 	if mc := read(); mc == nil || *mc != none {
 		t.Errorf("with nothing set, model choice = %+v, want nothing set", mc)
 	}
-	f.setModels(t, core.SetModelsInput{Default: row("sonnet", "low"), Kinds: []core.KindModelsView{kind("implementation", "opus", "")}})
-	if mc, want := read(), choice(fromKind("opus", "implementation"), set("low", core.SourceProjectDefault)); mc == nil || *mc != want {
+	f.setModels(t, api.SetModelsInput{Default: row("sonnet", "low"), Kinds: []api.KindModelsView{kind("implementation", "opus", "")}})
+	if mc, want := read(), choice(fromKind("opus", "implementation"), set("low", api.SourceProjectDefault)); mc == nil || *mc != want {
 		t.Errorf("with Models rows, model choice = %+v, want %+v", mc, want)
 	}
 	f.setTags(t, "acme-2", map[string]string{"effort": "max"})
-	if mc, want := read(), choice(fromKind("opus", "implementation"), set("max", core.SourceTicketTag)); mc == nil || *mc != want {
+	if mc, want := read(), choice(fromKind("opus", "implementation"), set("max", api.SourceTicketTag)); mc == nil || *mc != want {
 		t.Errorf("with an effort Tag, model choice = %+v, want %+v", mc, want)
 	}
 }
@@ -151,10 +152,10 @@ func TestTheUIsTicketReadCarriesTheModelChoiceWithSources(t *testing.T) {
 func TestReportModelChoiceRecordsTheLatestTurnOnTheClaim(t *testing.T) {
 	f := newFixture(t)
 	f.readyTicket(t)
-	res := f.claim(t, core.ClaimInput{Ticket: "acme-2"})
-	report := func(model, effort string) core.ClaimView {
+	res := f.claim(t, api.ClaimInput{Ticket: "acme-2"})
+	report := func(model, effort string) api.ClaimView {
 		t.Helper()
-		tk, err := record(f.core.ReportModelChoice(ctx, "acme", core.ReportModelChoiceInput{Ticket: "acme-2", ClaimID: res.ClaimID, Model: model, Effort: effort, Full: true}))
+		tk, err := record(f.core.ReportModelChoice(ctx, "acme", api.ReportModelChoiceInput{Ticket: "acme-2", ClaimID: res.ClaimID, Model: model, Effort: effort, Full: true}))
 		if err != nil {
 			t.Fatalf("report_model_choice: %v", err)
 		}
@@ -175,12 +176,12 @@ func TestReportModelChoiceRecordsTheLatestTurnOnTheClaim(t *testing.T) {
 func TestReportModelChoiceOnAnEndedClaimIsStale(t *testing.T) {
 	f := newFixture(t)
 	f.readyTicket(t)
-	res := f.claim(t, core.ClaimInput{Ticket: "acme-2"})
-	if _, err := f.core.Release(human, "acme", core.ReleaseInput{Ticket: "acme-2"}); err != nil {
+	res := f.claim(t, api.ClaimInput{Ticket: "acme-2"})
+	if _, err := f.core.Release(human, "acme", api.ReleaseInput{Ticket: "acme-2"}); err != nil {
 		t.Fatal(err)
 	}
-	_, err := f.core.ReportModelChoice(ctx, "acme", core.ReportModelChoiceInput{Ticket: "acme-2", ClaimID: res.ClaimID, Model: "opus"})
-	wantCode(t, err, core.StaleClaim, "")
+	_, err := f.core.ReportModelChoice(ctx, "acme", api.ReportModelChoiceInput{Ticket: "acme-2", ClaimID: res.ClaimID, Model: "opus"})
+	wantCode(t, err, api.StaleClaim, "")
 	if cl := f.get(t, "acme-2").Claims[0]; cl.Model != "" {
 		t.Errorf("claim = %+v, want nothing recorded", cl)
 	}
@@ -189,8 +190,8 @@ func TestReportModelChoiceOnAnEndedClaimIsStale(t *testing.T) {
 func TestAClaimsModelAndEffortSurviveAReload(t *testing.T) {
 	again := reloaded(t, func(f fixture) {
 		f.readyTicket(t)
-		res := f.claim(t, core.ClaimInput{Ticket: "acme-2"})
-		if _, err := f.core.ReportModelChoice(ctx, "acme", core.ReportModelChoiceInput{Ticket: "acme-2", ClaimID: res.ClaimID, Model: "opus", Effort: "xhigh"}); err != nil {
+		res := f.claim(t, api.ClaimInput{Ticket: "acme-2"})
+		if _, err := f.core.ReportModelChoice(ctx, "acme", api.ReportModelChoiceInput{Ticket: "acme-2", ClaimID: res.ClaimID, Model: "opus", Effort: "xhigh"}); err != nil {
 			t.Fatal(err)
 		}
 	}).core
@@ -207,19 +208,19 @@ func TestCreateTicketTakesTagsFromTheStart(t *testing.T) {
 	f := newFixture(t)
 	f.readyTicket(t)
 	tags := map[string]string{"model": "claude-opus-5-5", "effort": "high", "area": "web"}
-	if _, err := f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "tagged", Tags: tags}); err != nil {
+	if _, err := f.core.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "tagged", Tags: tags}); err != nil {
 		t.Fatalf("create_ticket: %v", err)
 	}
 	if got := f.get(t, "acme-3").Tags; !maps.Equal(got, tags) {
 		t.Errorf("tags = %v, want %v", got, tags)
 	}
-	rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{Tags: map[string]string{"effort": "high"}})
+	rows, err := f.core.FindTickets(ctx, "acme", api.FindTicketsInput{Tags: map[string]string{"effort": "high"}})
 	if err != nil || len(rows) != 1 || rows[0].ID != "acme-3" {
 		t.Errorf("find by Tag = %+v, %v", rows, err)
 	}
-	want := core.ModelChoice{
-		Model:  core.ChoiceValue{Value: "claude-opus-5-5", Source: core.SourceTicketTag},
-		Effort: core.ChoiceValue{Value: "high", Source: core.SourceTicketTag},
+	want := api.ModelChoice{
+		Model:  api.ChoiceValue{Value: "claude-opus-5-5", Source: api.SourceTicketTag},
+		Effort: api.ChoiceValue{Value: "high", Source: api.SourceTicketTag},
 	}
 	if mc := f.modelChoice(t, "acme-3"); mc != want {
 		t.Errorf("model choice = %+v, want %+v", mc, want)
@@ -235,13 +236,13 @@ func TestCreateTicketRejectsBadTagsAndCreatesNothing(t *testing.T) {
 		"empty":      {"area": " "},
 		"multi-line": {"area": "a\nb"},
 	} {
-		_, err := f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "t", Tags: tags})
-		wantCode(t, err, core.Invalid, "tags")
+		_, err := f.core.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "t", Tags: tags})
+		wantCode(t, err, api.Invalid, "tags")
 		if err != nil && name == "effort" && !strings.Contains(err.Error(), "low, medium, high, xhigh, max") {
 			t.Errorf("error %q doesn't list the valid levels", err)
 		}
 	}
-	rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{})
+	rows, err := f.core.FindTickets(ctx, "acme", api.FindTicketsInput{})
 	if err != nil || len(rows) != 1 {
 		t.Errorf("tickets = %+v, %v; want only the first", rows, err)
 	}
@@ -251,7 +252,7 @@ func TestCreateTicketWithEmptyTagsIsAsBefore(t *testing.T) {
 	f := newFixture(t)
 	f.readyTicket(t)
 	for _, tags := range []map[string]string{nil, {}} {
-		if _, err := f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "plain", Tags: tags}); err != nil {
+		if _, err := f.core.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "plain", Tags: tags}); err != nil {
 			t.Fatalf("create_ticket: %v", err)
 		}
 	}
@@ -263,29 +264,29 @@ func TestCreateTicketWithEmptyTagsIsAsBefore(t *testing.T) {
 func TestTheUIsTicketReadCarriesTheAutoAcceptKindAndTheMCPReadDoesNot(t *testing.T) {
 	f := specMergeWorld(t) // acme-1 with an implementation Ticket, acme-2
 	for _, stage := range []string{"grilling", "spec", "tickets"} {
-		f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: stage, Labels: []string{core.StagePrefix + stage}}) // acme-3 to acme-5
+		f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: stage, Labels: []string{domain.StagePrefix + stage}}) // acme-3 to acme-5
 	}
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Try", Labels: []string{core.PrototypeLabel}}) // acme-6
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Chart", Labels: []string{"wayfinder:chart"}}) // acme-7
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Try", Labels: []string{core.PrototypeLabel}}) // acme-6
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Chart", Labels: []string{"wayfinder:chart"}}) // acme-7
 	merge := f.openSpecMerge(t, "README").Ticket
-	m, err := f.core.SubmitMap(ctx, "acme", core.SubmitMapInput{Text: "# Offline mode\n\nbody\n"})
+	m, err := f.core.SubmitMap(ctx, "acme", api.SubmitMapInput{Text: "# Offline mode\n\nbody\n"})
 	if err != nil {
 		t.Fatalf("submit_map: %v", err)
 	}
-	mapTicket := f.ticket(t, "acme", core.CreateTicketInput{Spec: core.Ref(m.Spec.ID), Title: "In the map"}).ID
+	mapTicket := f.ticket(t, "acme", api.CreateTicketInput{Spec: api.Ref(m.Spec.ID), Title: "In the map"}).ID
 
 	for ticket, want := range map[string]domain.AutoAcceptKind{
 		"acme-2": "implementation", "acme-3": "grilling", "acme-4": "spec", "acme-5": "tickets",
 		merge: "merge", "acme-6": "", "acme-7": "", mapTicket: "",
 	} {
-		v, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: core.Ref(ticket), WithModelChoice: true})
+		v, err := f.core.GetTicket(ctx, "acme", api.GetTicketInput{Ticket: api.Ref(ticket), WithModelChoice: true})
 		if err != nil {
 			t.Fatalf("get_ticket %s: %v", ticket, err)
 		}
 		if v.AutoAcceptKind != want {
 			t.Errorf("%s: auto_accept_kind = %q, want %q", ticket, v.AutoAcceptKind, want)
 		}
-		plain, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: core.Ref(ticket)})
+		plain, err := f.core.GetTicket(ctx, "acme", api.GetTicketInput{Ticket: api.Ref(ticket)})
 		if err != nil {
 			t.Fatal(err)
 		}

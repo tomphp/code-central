@@ -2,15 +2,16 @@ package ciwatcher_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"io"
 	"reflect"
 	"runtime"
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/ciwatcher"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakeazdo"
 )
@@ -18,14 +19,14 @@ import (
 const secretPAT = "s3cret-pat-value"
 
 // checkAzure runs the check mode for the fake's project with environ.
-func checkAzure(srv *fakeazdo.Server, environ ...string) core.WatcherCheckResult {
-	in := core.CICheckInput{Provider: domain.CIAzurePipelines, ProjectURL: srv.ProjectURL(), PATEnv: "ADO_PAT"}
+func checkAzure(srv *fakeazdo.Server, environ ...string) api.WatcherCheckResult {
+	in := api.CICheckInput{Provider: domain.CIAzurePipelines, ProjectURL: srv.ProjectURL(), PATEnv: "ADO_PAT"}
 	return ciwatcher.Check(context.Background(), in, gh.Env{Environ: environ})
 }
 
 func TestAnAzureCheckWithAWorkingPATPassesAndSendsItAsBasicAuth(t *testing.T) {
 	srv := fakeazdo.New(t)
-	if r := checkAzure(srv, "ADO_PAT="+secretPAT); !reflect.DeepEqual(r, core.WatcherCheckResult{}) {
+	if r := checkAzure(srv, "ADO_PAT="+secretPAT); !reflect.DeepEqual(r, api.WatcherCheckResult{}) {
 		t.Fatalf("check = %+v, want no problem", r)
 	}
 	reqs := srv.Requests()
@@ -46,7 +47,7 @@ func TestAnUnsetOrEmptyPATVariableIsPATMissingWithThePerOSFix(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			srv := fakeazdo.New(t)
 			r := checkAzure(srv, environ...)
-			if r.Problem != core.ProblemPATMissing || !strings.Contains(r.Reason, "ADO_PAT") || !strings.Contains(r.Fix, "restart") {
+			if r.Problem != api.ProblemPATMissing || !strings.Contains(r.Reason, "ADO_PAT") || !strings.Contains(r.Fix, "restart") {
 				t.Fatalf("check = %+v, want pat_missing naming ADO_PAT and a restart", r)
 			}
 			want := map[string]string{"darwin": "launchctl setenv ADO_PAT", "linux": "systemctl --user set-environment", "windows": "user environment variable"}[runtime.GOOS]
@@ -63,22 +64,22 @@ func TestAnUnsetOrEmptyPATVariableIsPATMissingWithThePerOSFix(t *testing.T) {
 func TestARejectedPATIsPATRejected(t *testing.T) {
 	srv := fakeazdo.New(t, fakeazdo.Answer{Path: "/", Status: 401})
 	r := checkAzure(srv, "ADO_PAT="+secretPAT)
-	if r.Problem != core.ProblemPATRejected || !strings.Contains(r.Fix, "Build: Read & execute") || !strings.Contains(r.Fix, "ADO_PAT") {
+	if r.Problem != api.ProblemPATRejected || !strings.Contains(r.Fix, "Build: Read & execute") || !strings.Contains(r.Fix, "ADO_PAT") {
 		t.Fatalf("check = %+v, want pat_rejected naming the scope and ADO_PAT", r)
 	}
 }
 
 func TestAProjectNotFoundOrUnreachableIsProjectUnreadable(t *testing.T) {
 	srv := fakeazdo.New(t, fakeazdo.Answer{Path: "/", Status: 404})
-	if r := checkAzure(srv, "ADO_PAT="+secretPAT); r.Problem != core.ProblemProjectUnreadable || !strings.Contains(r.Reason, srv.ProjectURL()) {
+	if r := checkAzure(srv, "ADO_PAT="+secretPAT); r.Problem != api.ProblemProjectUnreadable || !strings.Contains(r.Reason, srv.ProjectURL()) {
 		t.Fatalf("404: check = %+v, want project_unreadable naming the project", r)
 	}
 	down := fakeazdo.New(t)
 	url := down.ProjectURL()
 	down.Close()
-	in := core.CICheckInput{Provider: domain.CIAzurePipelines, ProjectURL: url, PATEnv: "ADO_PAT"}
+	in := api.CICheckInput{Provider: domain.CIAzurePipelines, ProjectURL: url, PATEnv: "ADO_PAT"}
 	r := ciwatcher.Check(context.Background(), in, gh.Env{Environ: []string{"ADO_PAT=" + secretPAT}})
-	if r.Problem != core.ProblemProjectUnreadable {
+	if r.Problem != api.ProblemProjectUnreadable {
 		t.Fatalf("unreachable: check = %+v, want project_unreadable", r)
 	}
 }
@@ -86,7 +87,7 @@ func TestAProjectNotFoundOrUnreachableIsProjectUnreadable(t *testing.T) {
 func TestAPATWithoutTheBuildScopeIsPATScope(t *testing.T) {
 	srv := fakeazdo.New(t, fakeazdo.Answer{Path: fakeazdo.ProjectPath + "/_apis/build", Status: 403})
 	r := checkAzure(srv, "ADO_PAT="+secretPAT)
-	if r.Problem != core.ProblemPATScope || !strings.Contains(r.Fix, "Build: Read & execute") {
+	if r.Problem != api.ProblemPATScope || !strings.Contains(r.Fix, "Build: Read & execute") {
 		t.Fatalf("check = %+v, want pat_scope naming the scope", r)
 	}
 }
@@ -104,7 +105,7 @@ func TestNoCheckAnswerEverCarriesThePAT(t *testing.T) {
 func TestAnAzureCheckThrottledIsAFailedCheckWithWhenToTryAgain(t *testing.T) {
 	srv := fakeazdo.New(t, fakeazdo.Answer{Path: "/", Status: 429}.WithHeader("Retry-After", "60"))
 	r := checkAzure(srv, "ADO_PAT="+secretPAT)
-	if r.Problem != core.ProblemCheckFailed || !strings.Contains(r.Reason, "Azure DevOps") {
+	if r.Problem != api.ProblemCheckFailed || !strings.Contains(r.Reason, "Azure DevOps") {
 		t.Fatalf("check = %+v, want check_failed naming Azure DevOps", r)
 	}
 }
@@ -113,8 +114,8 @@ func TestAnAzureCheckThrottledIsAFailedCheckWithWhenToTryAgain(t *testing.T) {
 func watchingAzure(t *testing.T, srv *fakeazdo.Server, environ ...string) *watching {
 	t.Helper()
 	w := newWatching(t)
-	human := core.WithActor(context.Background(), core.Human)
-	if _, err := w.srv.Core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Provider: domain.CIAzurePipelines, ProjectURL: srv.ProjectURL(), PATEnv: "MY_PAT"}); err != nil {
+	human := api.WithActor(context.Background(), api.Human)
+	if _, err := w.srv.Core.SetCITracking(human, "acme", api.SetCITrackingInput{Tracking: true, Provider: domain.CIAzurePipelines, ProjectURL: srv.ProjectURL(), PATEnv: "MY_PAT"}); err != nil {
 		t.Fatal(err)
 	}
 	r, pw := io.Pipe()
@@ -128,7 +129,7 @@ func watchingAzure(t *testing.T, srv *fakeazdo.Server, environ ...string) *watch
 func TestTheCIWatcherReadsThePATFromItsOwnEnvironmentByTheVariableGetCIWatchNames(t *testing.T) {
 	srv := fakeazdo.New(t)
 	w := watchingAzure(t, srv, "MY_PAT="+secretPAT)
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	if auth := srv.Requests()[0].Authorization; auth != "Basic OnMzY3JldC1wYXQtdmFsdWU=" {
 		t.Fatalf("Authorization = %q, want the PAT from MY_PAT", auth)
 	}
@@ -137,8 +138,8 @@ func TestTheCIWatcherReadsThePATFromItsOwnEnvironmentByTheVariableGetCIWatchName
 func TestAMissingPATIsAnErrorTheWatcherReportsWithoutLeakingAnything(t *testing.T) {
 	srv := fakeazdo.New(t)
 	w := watchingAzure(t, srv)
-	got := w.status(core.WatcherError)
-	if got.Problem != core.ProblemPATMissing || !strings.Contains(got.Message, "MY_PAT") {
+	got := w.status(api.WatcherError)
+	if got.Problem != api.ProblemPATMissing || !strings.Contains(got.Message, "MY_PAT") {
 		t.Fatalf("status %+v, want pat_missing naming MY_PAT", got)
 	}
 }

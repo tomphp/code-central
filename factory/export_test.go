@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // The Turn runner's tests drive the factorytest claude shim, and
@@ -47,5 +47,5 @@ var StartWaiting = startWaiting
 
 // ReadTurn reads a started Turn's stream to its end, as the runner does.
 func ReadTurn(cmd *exec.Cmd, stdout io.Reader, dir string) turnEnd {
-	return readTurn(cmd, stdout, dir, time.Now, newUsageReader("implementation", time.Now), func(core.SessionEvent) {}, func(core.UsageResponse) {}, func(core.PlanLimits) {})
+	return readTurn(cmd, stdout, dir, time.Now, newUsageReader("implementation", time.Now), func(api.SessionEvent) {}, func(api.UsageResponse) {}, func(api.PlanLimits) {})
 }

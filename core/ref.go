@@ -5,12 +5,14 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/tomoram/code-central/api"
 )
 
 var refPattern = regexp.MustCompile(`^(?:(.+)-)?([1-9][0-9]*)$`)
 
 // refNumber resolves r within project key; field names the input for errors.
-func refNumber(r Ref, key, field string) (int, error) {
+func refNumber(r api.Ref, key, field string) (int, error) {
 	m := refPattern.FindStringSubmatch(strings.TrimSpace(string(r)))
 	if m == nil {
 		if strings.TrimSpace(string(r)) == "" {

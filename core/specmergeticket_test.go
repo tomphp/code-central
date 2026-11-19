@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
@@ -21,13 +22,13 @@ func specMergeWorld(t *testing.T) fixture {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Offline mode")
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "First", State: domain.Ready})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "First", State: domain.Ready})
 	return f
 }
 
-func (f fixture) openSpecMerge(t *testing.T, conflicts ...string) core.OpenSpecMergeResult {
+func (f fixture) openSpecMerge(t *testing.T, conflicts ...string) api.OpenSpecMergeResult {
 	t.Helper()
-	res, err := f.core.OpenSpecMerge(ctx, "acme", core.OpenSpecMergeInput{Spec: "acme-1", Conflicts: conflicts, BaseTip: "aaa111", SpecBranchTip: "bbb222"})
+	res, err := f.core.OpenSpecMerge(ctx, "acme", api.OpenSpecMergeInput{Spec: "acme-1", Conflicts: conflicts, BaseTip: "aaa111", SpecBranchTip: "bbb222"})
 	if err != nil {
 		t.Fatalf("open_spec_merge: %v", err)
 	}
@@ -39,7 +40,7 @@ func TestOpenSpecMergeOpensAReadyMarkedTicketWithTheConflictInItsDescription(t *
 
 	res := f.openSpecMerge(t, "README", "go.mod")
 
-	if res != (core.OpenSpecMergeResult{Ticket: "acme-3", Outcome: core.SpecMergeOpened}) {
+	if res != (api.OpenSpecMergeResult{Ticket: "acme-3", Outcome: api.SpecMergeOpened}) {
 		t.Fatalf("result %+v, want acme-3 opened", res)
 	}
 	tk := f.getTicket(t, "acme-3")
@@ -54,20 +55,20 @@ func TestOpenSpecMergeCommentsOnTheOpenMarkedTicketAndWritesNothingOnARepeat(t *
 	f := specMergeWorld(t)
 	f.openSpecMerge(t, "README")
 
-	if res := f.openSpecMerge(t, "README"); res != (core.OpenSpecMergeResult{Ticket: "acme-3", Outcome: core.SpecMergeUnchanged}) {
+	if res := f.openSpecMerge(t, "README"); res != (api.OpenSpecMergeResult{Ticket: "acme-3", Outcome: api.SpecMergeUnchanged}) {
 		t.Errorf("the same conflict again gave %+v, want acme-3 unchanged", res)
 	}
-	if res := f.openSpecMerge(t, "go.mod"); res != (core.OpenSpecMergeResult{Ticket: "acme-3", Outcome: core.SpecMergeCommented}) {
+	if res := f.openSpecMerge(t, "go.mod"); res != (api.OpenSpecMergeResult{Ticket: "acme-3", Outcome: api.SpecMergeCommented}) {
 		t.Errorf("a new conflict gave %+v, want acme-3 commented", res)
 	}
-	if res := f.openSpecMerge(t, "go.mod"); res.Outcome != core.SpecMergeUnchanged {
+	if res := f.openSpecMerge(t, "go.mod"); res.Outcome != api.SpecMergeUnchanged {
 		t.Errorf("the new conflict again gave %+v, want unchanged", res)
 	}
 	tk := f.getTicket(t, "acme-3")
 	if len(tk.Comments) != 1 || !strings.Contains(tk.Comments[0].Body, "- go.mod\n") {
 		t.Errorf("comments %+v, want one naming go.mod", tk.Comments)
 	}
-	rows, _ := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{Title: specMergeTitle})
+	rows, _ := f.core.FindTickets(ctx, "acme", api.FindTicketsInput{Title: specMergeTitle})
 	if len(rows) != 1 {
 		t.Errorf("Spec merge Tickets %+v, want one", rows)
 	}
@@ -78,19 +79,19 @@ func TestOpenSpecMergeOpensAnotherOnceTheLastIsDone(t *testing.T) {
 	f.openSpecMerge(t, "README")
 	f.moveTo(t, 3, domain.Done)
 
-	if res := f.openSpecMerge(t, "README"); res != (core.OpenSpecMergeResult{Ticket: "acme-4", Outcome: core.SpecMergeOpened}) {
+	if res := f.openSpecMerge(t, "README"); res != (api.OpenSpecMergeResult{Ticket: "acme-4", Outcome: api.SpecMergeOpened}) {
 		t.Errorf("result %+v, want acme-4 opened", res)
 	}
 }
 
 func TestOpenSpecMergeCommentsOnAnUnmarkedTicketWithItsTitleWithoutMarkingIt(t *testing.T) {
 	f := specMergeWorld(t)
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: specMergeTitle, Description: "Opened by an older Factory.\n", State: domain.Ready})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: specMergeTitle, Description: "Opened by an older Factory.\n", State: domain.Ready})
 
-	if res := f.openSpecMerge(t, "README"); res != (core.OpenSpecMergeResult{Ticket: "acme-3", Outcome: core.SpecMergeCommented}) {
+	if res := f.openSpecMerge(t, "README"); res != (api.OpenSpecMergeResult{Ticket: "acme-3", Outcome: api.SpecMergeCommented}) {
 		t.Fatalf("result %+v, want acme-3 commented", res)
 	}
-	if res := f.openSpecMerge(t, "README"); res.Outcome != core.SpecMergeUnchanged {
+	if res := f.openSpecMerge(t, "README"); res.Outcome != api.SpecMergeUnchanged {
 		t.Errorf("the same conflict again gave %+v, want unchanged", res)
 	}
 	tk := f.getTicket(t, "acme-3")
@@ -101,16 +102,16 @@ func TestOpenSpecMergeCommentsOnAnUnmarkedTicketWithItsTitleWithoutMarkingIt(t *
 
 func TestOpenSpecMergeRefusesALongLivedSpecAMapAndAFinishedSpec(t *testing.T) {
 	for name, setup := range map[string]func(f fixture){
-		"Long-lived": func(f fixture) { f.longLived(t, core.SpecView{ID: "acme-1"}) },
+		"Long-lived": func(f fixture) { f.longLived(t, api.SpecView{ID: "acme-1"}) },
 		"Map":        func(f fixture) { f.labelSpec(t, 1, core.MapLabel) },
 		"Finished":   func(f fixture) { f.moveTo(t, 2, domain.Done) },
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := specMergeWorld(t)
 			setup(f)
-			_, err := f.core.OpenSpecMerge(ctx, "acme", core.OpenSpecMergeInput{Spec: "acme-1", Conflicts: []string{"README"}, BaseTip: "aaa111", SpecBranchTip: "bbb222"})
-			wantCode(t, err, core.ActionNotAllowed, "")
-			if rows, _ := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{Title: specMergeTitle}); len(rows) != 0 {
+			_, err := f.core.OpenSpecMerge(ctx, "acme", api.OpenSpecMergeInput{Spec: "acme-1", Conflicts: []string{"README"}, BaseTip: "aaa111", SpecBranchTip: "bbb222"})
+			wantCode(t, err, api.ActionNotAllowed, "")
+			if rows, _ := f.core.FindTickets(ctx, "acme", api.FindTicketsInput{Title: specMergeTitle}); len(rows) != 0 {
 				t.Errorf("opened %+v", rows)
 			}
 		})
@@ -119,7 +120,7 @@ func TestOpenSpecMergeRefusesALongLivedSpecAMapAndAFinishedSpec(t *testing.T) {
 
 func TestATicketCreatedWithTheSpecMergeTitleIsUnmarked(t *testing.T) {
 	f := specMergeWorld(t)
-	if tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: specMergeTitle, State: domain.Ready}); tk.SpecMergeTicket {
+	if tk := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: specMergeTitle, State: domain.Ready}); tk.SpecMergeTicket {
 		t.Errorf("create_ticket made %+v, want an ordinary Ticket", tk)
 	}
 }
@@ -142,7 +143,7 @@ func TestTheSpecMergeMarkSurvivesReopeningTheStore(t *testing.T) {
 	f := reloaded(t, func(f fixture) {
 		f.project(t, "acme")
 		f.spec(t, "acme", "Offline mode")
-		f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "First"})
+		f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "First"})
 		f.openSpecMerge(t, "README")
 	})
 	if !f.getTicket(t, "acme-3").SpecMergeTicket {

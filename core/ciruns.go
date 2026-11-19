@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -56,9 +57,9 @@ func ciRunEnded(run domain.CIRun) time.Time {
 }
 
 // ciRunView is r as reads return it.
-func ciRunView(key string, r domain.CIRun) CIRunView {
-	v := CIRunView{Repository: r.Repository, ID: r.ID, Attempt: r.Attempt, Workflow: r.Workflow, Name: r.Name, Branch: r.Branch, Commit: r.Commit,
-		Status: r.Status, Conclusion: r.Conclusion, URL: r.URL, Jobs: []CIJobView{}, Ignored: r.Ignored}
+func ciRunView(key string, r domain.CIRun) api.CIRunView {
+	v := api.CIRunView{Repository: r.Repository, ID: r.ID, Attempt: r.Attempt, Workflow: r.Workflow, Name: r.Name, Branch: r.Branch, Commit: r.Commit,
+		Status: r.Status, Conclusion: r.Conclusion, URL: r.URL, Jobs: []api.CIJobView{}, Ignored: r.Ignored}
 	if !r.Started.IsZero() {
 		at := r.Started
 		v.Started = &at
@@ -68,7 +69,7 @@ func ciRunView(key string, r domain.CIRun) CIRunView {
 		v.Finished = &at
 	}
 	for _, j := range r.Jobs {
-		v.Jobs = append(v.Jobs, CIJobView{Name: j.Name, Conclusion: j.Conclusion, URL: j.URL})
+		v.Jobs = append(v.Jobs, api.CIJobView{Name: j.Name, Conclusion: j.Conclusion, URL: j.URL})
 	}
 	if r.Ticket != 0 {
 		v.Ticket = DisplayID(key, r.Ticket)
@@ -94,16 +95,16 @@ func countsFor(run domain.CIRun, commit string) bool { return run.Commit == comm
 // cancelled, a lone cancelled run included; passed otherwise,
 // skipped and neutral counting as passed. A re-run's latest attempt
 // replaces its earlier ones.
-func ciResultOf(commit string, runs []domain.CIRun) CIResult {
+func ciResultOf(commit string, runs []domain.CIRun) api.CIResult {
 	latest := countedRuns(commit, runs)
 	if len(latest) == 0 {
-		return CIRunning
+		return api.CIRunning
 	}
 	failed, cancelled := false, false
 	for _, run := range latest {
 		switch {
 		case run.Status != domain.CICompleted:
-			return CIRunning
+			return api.CIRunning
 		case run.Conclusion.Failed():
 			failed = true
 		case run.Conclusion.Cancelled():
@@ -111,12 +112,12 @@ func ciResultOf(commit string, runs []domain.CIRun) CIResult {
 		}
 	}
 	if failed {
-		return CIFailed
+		return api.CIFailed
 	}
 	if cancelled {
-		return CICancelled
+		return api.CICancelled
 	}
-	return CIPassed
+	return api.CIPassed
 }
 
 // failedRuns are the runs of commit, counted towards its CI result, that
@@ -167,10 +168,10 @@ func countedRuns(commit string, runs []domain.CIRun) map[int64]domain.CIRun {
 // is never recorded in a local-only Repository, whose Landing Policy has
 // Push off. A newer pushed commit in the Repository replaces the old one
 // as the one the Repository's CI result comes from.
-func (c *Core) ReportPushedCommit(ctx context.Context, key string, in ReportPushedCommitInput) (Written[TicketView], error) {
+func (c *Core) ReportPushedCommit(ctx context.Context, key string, in api.ReportPushedCommitInput) (api.Written[api.TicketView], error) {
 	commit := strings.TrimSpace(in.Commit)
 	if commit == "" {
-		return Written[TicketView]{}, invalid("commit", "report_pushed_commit needs the commit the Factory pushed")
+		return api.Written[api.TicketView]{}, invalid("commit", "report_pushed_commit needs the commit the Factory pushed")
 	}
 	// The Tickets already waiting on the commit get a change notice: its
 	// CI item lists one more (code-central-432).
@@ -178,7 +179,7 @@ func (c *Core) ReportPushedCommit(ctx context.Context, key string, in ReportPush
 	v, err := c.updateTicketIn(key, "report_pushed_commit", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
 		sharing = nil
 		if t.State != domain.Accepted && t.State != domain.InReview {
-			return false, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is %s: only an Accepted or In Review Ticket is pushed", DisplayID(key, t.Number), t.State)}
+			return false, &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s is %s: only an Accepted or In Review Ticket is pushed", DisplayID(key, t.Number), t.State)}
 		}
 		p, _ := r.Project(key)
 		name, err := repositoryOf(p, "repository", in.Repository)
@@ -200,14 +201,14 @@ func (c *Core) ReportPushedCommit(ctx context.Context, key string, in ReportPush
 		return true, nil
 	})
 	if err != nil {
-		return Written[TicketView]{}, err
+		return api.Written[api.TicketView]{}, err
 	}
 	for _, n := range sharing {
 		c.publishTicketChanged(key, n)
 	}
 	// Tickets riding onto a later commit can make its item Auto-fix ready.
 	if err := c.sweepAutoFix(ctx, key); err != nil {
-		return Written[TicketView]{}, err
+		return api.Written[api.TicketView]{}, err
 	}
 	return v, nil
 }
@@ -237,18 +238,18 @@ func notARepository(p domain.Project, field, name string) error {
 // ignored, and prunes the runs finished more than ciKeep ago. It needs
 // CI Tracking on. Every Ticket whose runs changed gets a change notice,
 // as the Project gets ci.changed, so the UI updates live.
-func (c *Core) ReportCIRuns(ctx context.Context, key string, in ReportCIRunsInput) (Written[CIRunsView], error) {
-	var reported CIRunsView
+func (c *Core) ReportCIRuns(ctx context.Context, key string, in api.ReportCIRunsInput) (api.Written[api.CIRunsView], error) {
+	var reported api.CIRunsView
 	var changed map[int]bool
 	var wrote bool
 	err := c.store.Update(func(w store.Writer) error {
-		reported, changed, wrote = CIRunsView{}, map[int]bool{}, false
+		reported, changed, wrote = api.CIRunsView{}, map[int]bool{}, false
 		if err := writable(w, key); err != nil {
 			return err
 		}
 		p, _ := w.Project(key)
 		if !landingPolicies(p).RunsCIWatcher() {
-			return &Error{Code: ActionNotAllowed, Message: "CI Tracking is off on " + key + ", so it tracks no CI Runs"}
+			return &api.Error{Code: api.ActionNotAllowed, Message: "CI Tracking is off on " + key + ", so it tracks no CI Runs"}
 		}
 		stored := w.CIRuns(key)
 		kept := keptCIRuns(slices.Clone(stored), c.now())
@@ -285,7 +286,7 @@ func (c *Core) ReportCIRuns(ctx context.Context, key string, in ReportCIRunsInpu
 		return w.PutCIRuns(key, runs)
 	})
 	if err != nil {
-		return Written[CIRunsView]{}, err
+		return api.Written[api.CIRunsView]{}, err
 	}
 	// In Ticket order, so what watches the events sees them the same way each time.
 	for _, n := range slices.Sorted(maps.Keys(changed)) {
@@ -293,19 +294,19 @@ func (c *Core) ReportCIRuns(ctx context.Context, key string, in ReportCIRunsInpu
 	}
 	// A failed result can make its commit's item Auto-fix ready.
 	if err := c.sweepAutoFix(ctx, key); err != nil {
-		return Written[CIRunsView]{}, err
+		return api.Written[api.CIRunsView]{}, err
 	}
 	if reported.Runs == nil {
-		reported.Runs = []CIRunView{}
+		reported.Runs = []api.CIRunView{}
 	}
 	if in.Full {
-		return Written[CIRunsView]{Record: &reported}, nil
+		return api.Written[api.CIRunsView]{Record: &reported}, nil
 	}
-	ack := Acknowledgement{ID: key, Updated: c.now(), Changed: []string{}}
+	ack := api.Acknowledgement{ID: key, Updated: c.now(), Changed: []string{}}
 	if wrote {
 		ack.Changed = []string{"runs"}
 	}
-	return Written[CIRunsView]{Acknowledgement: ack}, nil
+	return api.Written[api.CIRunsView]{Acknowledgement: ack}, nil
 }
 
 // markCIRunChanged adds to changed every Ticket that reads run: those
@@ -324,7 +325,7 @@ func markCIRunChanged(ci *ciState, changed map[int]bool, run domain.CIRun) {
 // ciRunOf is the run v reports in p, checked, as stored: for one of p's
 // Repositories, tracked against an existing Ticket or Spec, and ignored
 // when its workflow is.
-func (c *Core) ciRunOf(r store.Reader, p domain.Project, v CIRunView, field string) (domain.CIRun, error) {
+func (c *Core) ciRunOf(r store.Reader, p domain.Project, v api.CIRunView, field string) (domain.CIRun, error) {
 	key, ci := p.Key, p.CI
 	run := domain.CIRun{ID: v.ID, Attempt: v.Attempt, Workflow: strings.TrimSpace(v.Workflow), Name: v.Name, Branch: v.Branch,
 		Commit: strings.TrimSpace(v.Commit), Status: v.Status, Conclusion: v.Conclusion, URL: v.URL}
@@ -365,13 +366,13 @@ func (c *Core) ciRunOf(r store.Reader, p domain.Project, v CIRunView, field stri
 	case (v.Ticket == "") == (v.Rule == ""):
 		return run, invalid(field+".ticket", "a CI Run is tracked against one Ticket or one CI Rule")
 	case v.Ticket != "":
-		t, err := resolveTicket(r, key, "report_ci_runs", field+".ticket", Ref(v.Ticket))
+		t, err := resolveTicket(r, key, "report_ci_runs", field+".ticket", api.Ref(v.Ticket))
 		if err != nil {
 			return run, err
 		}
 		run.Ticket = t.Number
 	default:
-		n, err := refNumber(Ref(v.Rule), key, field+".rule")
+		n, err := refNumber(api.Ref(v.Rule), key, field+".rule")
 		if err != nil {
 			return run, err
 		}
@@ -400,8 +401,8 @@ func joinNames[T ~string](vs []T) string {
 // that was pushed, or asked to be re-run, in the last ciNewlyPushed. A
 // Cancelled Ticket's are left out, as is one pushed, or last asked to be
 // re-run, more than ciWaitLimit ago.
-func ciWaiting(ci *ciState, name string) []CIWaitingCommit {
-	out := []CIWaitingCommit{}
+func ciWaiting(ci *ciState, name string) []api.CIWaitingCommit {
+	out := []api.CIWaitingCommit{}
 	key := ci.p.Key
 	for _, t := range ci.r.FindTickets(key, store.TicketFilter{HasPushes: true}) {
 		if t.State == domain.Cancelled {
@@ -415,16 +416,16 @@ func ciWaiting(ci *ciState, name string) []CIWaitingCommit {
 			if !ci.watched(rc, pc) {
 				continue
 			}
-			w := CIWaitingCommit{Ticket: DisplayID(key, t.Number), Commit: pc.Commit, Pushed: pc.Pushed}
+			w := api.CIWaitingCommit{Ticket: DisplayID(key, t.Number), Commit: pc.Commit, Pushed: pc.Pushed}
 			if pr := pullRequestIn(key, t, name); pr != nil {
 				w.PullRequest = pr.Number
 			}
 			out = append(out, w)
 		}
 	}
-	slices.SortStableFunc(out, func(a, b CIWaitingCommit) int { return a.Pushed.Compare(b.Pushed) })
+	slices.SortStableFunc(out, func(a, b api.CIWaitingCommit) int { return a.Pushed.Compare(b.Pushed) })
 	seen := map[string]bool{}
-	return slices.DeleteFunc(out, func(w CIWaitingCommit) bool {
+	return slices.DeleteFunc(out, func(w api.CIWaitingCommit) bool {
 		dup := seen[w.Commit]
 		seen[w.Commit] = true
 		return dup

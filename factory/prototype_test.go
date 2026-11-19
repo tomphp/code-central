@@ -2,10 +2,12 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
@@ -87,7 +89,7 @@ func TestAPrototypeIsReusedOnItsBranchAtARedo(t *testing.T) {
 
 func TestAnAcceptedPrototypeIsDoneWithNothingPushedOrLandedUnderEveryLandingMethod(t *testing.T) {
 	t.Parallel()
-	for name, landing := range map[string]core.SetLandingMethodInput{
+	for name, landing := range map[string]api.SetLandingMethodInput{
 		"Merge":           {Method: domain.LandingMerge},
 		"Merge and Push":  {Method: domain.LandingMerge, Push: true, Remote: "origin"},
 		"Branch":          {Method: domain.LandingBranch},
@@ -184,7 +186,7 @@ func TestACancelledPrototypesWorktreeIsSweptAndItsBranchKept(t *testing.T) {
 	r := h.Start()
 	h.WantState(id, domain.InReview)
 	commit := h.Git("rev-parse", "prototype/"+id)
-	if _, err := h.Human().Cancel(context.Background(), h.Project, core.CancelInput{Ticket: core.Ref(id)}); err != nil {
+	if _, err := h.Human().Cancel(context.Background(), h.Project, api.CancelInput{Ticket: api.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
 	r.Poll()

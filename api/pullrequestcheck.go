@@ -1,5 +1,7 @@
 package api
 
+import "context"
+
 // PullRequestCheckInput is what the Pull Request Watcher's check mode
 // checks: that it can open and follow pull requests on the Code Host's
 // repository, or with Repositories, on each of theirs. On GitHub it goes
@@ -26,3 +28,8 @@ type PullRequestCheckRepository struct {
 	CodeHost   CodeHost `json:"code_host"`
 	Repository string   `json:"repository"`
 }
+
+// PullRequestCheck runs the Pull Request Watcher once in its check mode.
+// The service makes no external calls itself (ADR 0002, ADR 0004), so the
+// check runs in the watcher's process. It never creates a pull request.
+type PullRequestCheck func(ctx context.Context, in PullRequestCheckInput) WatcherCheckResult

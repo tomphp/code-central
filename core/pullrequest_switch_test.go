@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -12,16 +12,16 @@ import (
 // with an open pull request gets a comment, and the Landing Method section
 // notes the pull requests left open, with links.
 
-func (f fixture) switchTo(t *testing.T, m domain.LandingMethod) core.ProjectView {
+func (f fixture) switchTo(t *testing.T, m domain.LandingMethod) api.ProjectView {
 	t.Helper()
-	v, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: m, Remote: "origin"})
+	v, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: m, Remote: "origin"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return v
 }
 
-func (f fixture) openPullRequestsRead(t *testing.T) []core.OpenPullRequest {
+func (f fixture) openPullRequestsRead(t *testing.T) []api.OpenPullRequest {
 	t.Helper()
 	p, err := f.core.GetProject(human, "acme")
 	if err != nil {
@@ -33,10 +33,10 @@ func (f fixture) openPullRequestsRead(t *testing.T) []core.OpenPullRequest {
 func TestSwitchingAwayFromPullRequestCommentsOnEachAcceptedTicketWithAnOpenOne(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
-	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PROpen})
+	f.reportPR(t, api.ReportPullRequestInput{Branch: "acme-2", State: domain.PROpen})
 
 	v := f.switchTo(t, domain.LandingMerge)
-	want := []core.OpenPullRequest{{Ticket: "acme-2", Link: "https://github.com/acme/web/pull/7"}}
+	want := []api.OpenPullRequest{{Ticket: "acme-2", Link: "https://github.com/acme/web/pull/7"}}
 	if got := v.Landing.OpenPullRequests; len(got) != 1 || got[0] != want[0] {
 		t.Fatalf("notice = %+v, want %+v", got, want)
 	}
@@ -59,7 +59,7 @@ func TestSwitchingAwayLeavesNoNoticeForAClosedPullRequest(t *testing.T) {
 	for _, state := range []domain.PullRequestState{domain.PRClosed} {
 		f := newFixture(t)
 		f.pullRequestAccepted(t)
-		in := core.ReportPullRequestInput{Branch: "acme-2", State: state}
+		in := api.ReportPullRequestInput{Branch: "acme-2", State: state}
 		f.reportPR(t, in)
 		before := len(f.get(t, "2").Comments)
 		v := f.switchTo(t, domain.LandingBranch)
@@ -75,7 +75,7 @@ func TestSwitchingAwayLeavesNoNoticeForAClosedPullRequest(t *testing.T) {
 func TestTheNoticeIsNotShownUnderPullRequestOrOnceTheTicketLeavesAccepted(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
-	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PRConflicting})
+	f.reportPR(t, api.ReportPullRequestInput{Branch: "acme-2", State: domain.PRConflicting})
 	if got := f.openPullRequestsRead(t); len(got) != 0 {
 		t.Fatalf("under Pull Request: notice %+v, want none", got)
 	}

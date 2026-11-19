@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/factory/factorytest"
@@ -24,7 +25,7 @@ const taggedBranch = "feat/4242"
 // tagSpec gives the harness's Spec the branch Tag taggedBranch.
 func tagSpec(t *testing.T, h *factorytest.Harness) {
 	t.Helper()
-	if _, err := h.Human().SetTags(context.Background(), h.Project, core.SetTagsInput{Target: core.Ref(h.SpecID()), Tags: map[string]string{core.BranchTag: taggedBranch}}); err != nil {
+	if _, err := h.Human().SetTags(context.Background(), h.Project, api.SetTagsInput{Target: api.Ref(h.SpecID()), Tags: map[string]string{core.BranchTag: taggedBranch}}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -116,7 +117,7 @@ func TestATaggedSpecBranchConflictOpensTheSpecMergeTicketNamingTheTagsBranch(t *
 
 	// The Spec merge Ticket, its branch not cut yet, is checked at the
 	// Tag's branch, so it starts as a Conflict Claim.
-	rows, err := h.Server.Client.FindTickets(context.Background(), h.Project, core.FindTicketsInput{Title: core.SpecMergeTitle(h.SpecID())})
+	rows, err := h.Server.Client.FindTickets(context.Background(), h.Project, api.FindTicketsInput{Title: api.SpecMergeTitle(h.SpecID())})
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("Spec merge Tickets %+v (%v), want one", rows, err)
 	}
@@ -128,7 +129,7 @@ func TestATaggedSpecsTicketCutFromItsSpecBranchDoesntCountARepositoryItLeftAlone
 	t.Parallel()
 	h := factorytest.New(t)
 	h.MakeRequirement()
-	api := h.AddRepository("api")
+	apiRepo := h.AddRepository("api")
 	tagSpec(t, h)
 	first := inTwo(h, "Add an endpoint")
 	holdTicketsStage(t, h)
@@ -147,7 +148,7 @@ func TestATaggedSpecsTicketCutFromItsSpecBranchDoesntCountARepositoryItLeftAlone
 	if got := changed(h.Ticket(second)); len(got) != 1 || got[0] != "acme@"+home {
 		t.Errorf("Changed Repositories %v, want the Home's alone at %s: api's branch holds nothing beyond %s there", got, home, taggedBranch)
 	}
-	if got := h.GitIn(api.Path, "rev-parse", second); got != h.GitIn(api.Path, "rev-parse", taggedBranch) {
+	if got := h.GitIn(apiRepo.Path, "rev-parse", second); got != h.GitIn(apiRepo.Path, "rev-parse", taggedBranch) {
 		t.Errorf("api's branch is at %s, want %s's tip", got, taggedBranch)
 	}
 }
@@ -250,7 +251,7 @@ func TestATaggedTwoRepositorySpecLandsThroughABranchOfTheSameNameInEach(t *testi
 	h := factorytest.New(t)
 	h.AddRemote("origin")
 	h.MakeRequirement()
-	api := h.AddRepository("api")
+	apiRepo := h.AddRepository("api")
 	tagSpec(t, h)
 	id := inTwo(h, "Add an endpoint")
 	mergeAndPush(h, "origin")
@@ -263,7 +264,7 @@ func TestATaggedTwoRepositorySpecLandsThroughABranchOfTheSameNameInEach(t *testi
 	h.WantState(id, domain.Done)
 	r.WantOutput(h.SpecID() + ": merged " + taggedBranch + " into main at ")
 	r.WantOutput(" in Repository api\n")
-	for _, dir := range []string{h.Repo, api.Path} {
+	for _, dir := range []string{h.Repo, apiRepo.Path} {
 		tip := h.GitIn(dir, "rev-parse", taggedBranch)
 		if got := h.GitIn(dir, "log", "-1", "--format=%P", "main"); !strings.HasSuffix(got, " "+tip) {
 			t.Errorf("main in %s has parents %q, want %s's tip %s second", dir, got, taggedBranch, tip)
@@ -277,7 +278,7 @@ func TestUnderPullRequestATaggedTwoRepositorySpecBranchIsPushedUnderTheTagsNameI
 	h := factorytest.New(t)
 	home := h.AddRemote("origin")
 	h.MakeRequirement()
-	api := h.AddRepository("api")
+	apiRepo := h.AddRepository("api")
 	tagSpec(t, h)
 	id := inTwo(h, "Add an endpoint")
 	pullRequestOn(h, "origin")
@@ -289,7 +290,7 @@ func TestUnderPullRequestATaggedTwoRepositorySpecBranchIsPushedUnderTheTagsNameI
 
 	r.WantOutput(h.SpecID() + ": pushed " + taggedBranch + " to origin in Repository api")
 	apiTip, homeTip := wantPushedIn(t, h, "api", taggedBranch), wantPushedIn(t, h, h.Project, taggedBranch)
-	if got := api.Remote("origin").Git("rev-parse", taggedBranch); got != apiTip || apiTip != h.GitIn(api.Path, "rev-parse", taggedBranch) {
+	if got := apiRepo.Remote("origin").Git("rev-parse", taggedBranch); got != apiTip || apiTip != h.GitIn(apiRepo.Path, "rev-parse", taggedBranch) {
 		t.Errorf("api's remote %s is at %q, want its local Spec Branch %s", taggedBranch, got, apiTip)
 	}
 	if got := home.Git("rev-parse", taggedBranch); got != homeTip || homeTip != h.Git("rev-parse", taggedBranch) {
@@ -301,7 +302,7 @@ func TestWithLandPerSpecOffTheBranchTagChangesNothing(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	off := false
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, LandPerSpec: &off})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, LandPerSpec: &off})
 	taggedRequirement(t, h)
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
@@ -316,7 +317,7 @@ func TestWithLandPerSpecOffTheBranchTagChangesNothing(t *testing.T) {
 func TestUnderTheBranchMethodTheBranchTagChangesNothing(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch})
 	taggedRequirement(t, h)
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	h.Start()

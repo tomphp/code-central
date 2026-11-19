@@ -2,11 +2,12 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -51,9 +52,9 @@ func reportRun(t *testing.T, h *factorytest.Harness, id int64, ticket, commit st
 func reportAttempt(t *testing.T, h *factorytest.Harness, id int64, attempt int, ticket, commit string, status domain.CIRunStatus, conclusion domain.CIConclusion) {
 	t.Helper()
 	started := h.Clock.Now()
-	run := core.CIRunView{ID: id, Attempt: attempt, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: commit,
-		Status: status, Conclusion: conclusion, Started: &started, URL: "https://github.com/acme/web/actions/runs/1", Jobs: []core.CIJobView{}, Ticket: ticket}
-	if _, err := h.Server.Client.ReportCIRuns(context.Background(), h.Project, core.ReportCIRunsInput{Runs: []core.CIRunView{run}}); err != nil {
+	run := api.CIRunView{ID: id, Attempt: attempt, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: commit,
+		Status: status, Conclusion: conclusion, Started: &started, URL: "https://github.com/acme/web/actions/runs/1", Jobs: []api.CIJobView{}, Ticket: ticket}
+	if _, err := h.Server.Client.ReportCIRuns(context.Background(), h.Project, api.ReportCIRunsInput{Runs: []api.CIRunView{run}}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -120,7 +121,7 @@ func TestUnderTheCIGateATicketLandsAtAnEarlierPushedCommitThatPassedAfterALaterO
 	reportRun(t, h, 1, id, pushed, domain.CIInProgress, "")
 	later := h.CommitOn("later", "later.txt", "later\n")
 	h.Git("push", "-q", remote.Path, "later:refs/heads/main")
-	if _, err := h.Server.Client.ReportPushedCommit(context.Background(), h.Project, core.ReportPushedCommitInput{Ticket: core.Ref(id), Commit: later, Branch: "main"}); err != nil {
+	if _, err := h.Server.Client.ReportPushedCommit(context.Background(), h.Project, api.ReportPushedCommitInput{Ticket: api.Ref(id), Commit: later, Branch: "main"}); err != nil {
 		t.Fatal(err)
 	}
 	reportRun(t, h, 2, id, later, domain.CICompleted, domain.CIFailure)
@@ -144,7 +145,7 @@ func TestAfterLandAnywayAFailedTicketLandsOnTheNextPoll(t *testing.T) {
 	reportRun(t, h, 1, id, pushed, domain.CICompleted, domain.CIFailure)
 	stillAccepted(t, h, r, id, "with a failed CI result")
 
-	if _, err := h.Server.Core.LandAnyway(core.WithActor(context.Background(), core.Human), h.Project, core.CIResponseInput{Ticket: core.Ref(id)}); err != nil {
+	if _, err := h.Server.Core.LandAnyway(api.WithActor(context.Background(), api.Human), h.Project, api.CIResponseInput{Ticket: api.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
 	r.Poll()
@@ -160,7 +161,7 @@ func TestATicketBlockedByAGatedTicketStaysBlockedUntilItLands(t *testing.T) {
 	h, _, r := gatedHarness(t)
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
 	blocked := h.ReadyTicket("Build on the feature")
-	if _, err := h.Server.Client.AddBlocker(context.Background(), h.Project, core.BlockerInput{Ticket: core.Ref(blocked), Blocker: core.Ref(id)}); err != nil {
+	if _, err := h.Server.Client.AddBlocker(context.Background(), h.Project, api.BlockerInput{Ticket: api.Ref(blocked), Blocker: api.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
 	h.Script(blocked, factorytest.Wait())
@@ -181,15 +182,15 @@ func TestTheGateLiftingLandsAWaitingTicketOnTheNextPoll(t *testing.T) {
 	t.Parallel()
 	for name, lift := range map[string]func(*testing.T, *factorytest.Harness){
 		"ci tracking off": func(t *testing.T, h *factorytest.Harness) {
-			if _, err := h.Human().SetCITracking(context.Background(), h.Project, core.SetCITrackingInput{Tracking: false, Repository: "acme/web"}); err != nil {
+			if _, err := h.Human().SetCITracking(context.Background(), h.Project, api.SetCITrackingInput{Tracking: false, Repository: "acme/web"}); err != nil {
 				t.Fatal(err)
 			}
 		},
 		"push off": func(t *testing.T, h *factorytest.Harness) {
-			h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge})
+			h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge})
 		},
 		"branch": func(t *testing.T, h *factorytest.Harness) {
-			h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
+			h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -227,7 +228,7 @@ func TestUnderBranchAndPushTheHumansMergeLandsWhateverTheCIResult(t *testing.T) 
 	t.Parallel()
 	h := factorytest.New(t)
 	h.AddRemote("origin")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 	trackCI(t, h)
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
@@ -236,7 +237,7 @@ func TestUnderBranchAndPushTheHumansMergeLandsWhateverTheCIResult(t *testing.T) 
 	reportRun(t, h, 1, id, commit, domain.CICompleted, domain.CIFailure)
 	h.Git("merge", "-q", "--no-ff", "-m", "Merge "+id, id)
 	r.Poll()
-	if tk := h.WantState(id, domain.Done); tk.CIResult != core.CIFailed {
+	if tk := h.WantState(id, domain.Done); tk.CIResult != api.CIFailed {
 		t.Fatalf("ci result %q, want it landed with its failed CI result", tk.CIResult)
 	}
 }
@@ -295,7 +296,7 @@ func TestASentBackCIFailureIsFixedOnItsBranchAndItsNewPushedCommitDecides(t *tes
 		t.Fatalf("%s's pushed commit is %+v, want one newer than the failed %s", id, tk.PushedCommit, failed)
 	}
 	fixed := tk.PushedCommit.Commit
-	if tk.CIResult != core.CIRunning || remote.Git("rev-parse", "main") != fixed {
+	if tk.CIResult != api.CIRunning || remote.Git("rev-parse", "main") != fixed {
 		t.Fatalf("ci result %q, remote main %s: want the fix pushed as %s and its CI running", tk.CIResult, remote.Git("rev-parse", "main"), fixed)
 	}
 	stillAccepted(t, h, r, id, "while its new pushed commit's CI runs")
@@ -330,7 +331,7 @@ func sentBackCIFailure(t *testing.T, h *factorytest.Harness, r *factorytest.Runn
 	stillAccepted(t, h, r, id, "with a failed CI result")
 
 	note := "CI failed at " + failed[:12] + ": https://github.com/acme/web/actions/runs/1, failed jobs: test."
-	if _, err := h.Human().SendBack(context.Background(), h.Project, core.SendBackInput{Ticket: core.Ref(id), Note: note}); err != nil {
+	if _, err := h.Human().SendBack(context.Background(), h.Project, api.SendBackInput{Ticket: api.Ref(id), Note: note}); err != nil {
 		t.Fatal(err)
 	}
 	h.Script(id,
@@ -353,7 +354,7 @@ func TestAfterNewFixTicketTheFailedTicketKeepsWaiting(t *testing.T) {
 	reportRun(t, h, 1, id, pushed, domain.CICompleted, domain.CIFailure)
 	stillAccepted(t, h, r, id, "with a failed CI result")
 
-	res, err := h.Server.Core.NewFixTicket(core.WithActor(context.Background(), core.Human), h.Project, core.NewFixTicketInput{Ticket: core.Ref(id), Note: "Fix test."})
+	res, err := h.Server.Core.NewFixTicket(api.WithActor(context.Background(), api.Human), h.Project, api.NewFixTicketInput{Ticket: api.Ref(id), Note: "Fix test."})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -453,7 +454,7 @@ func TestUnderBranchAndPushALaterTipIsNotReportedToATicket(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	remote := h.AddRemote("origin")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 	trackCI(t, h)
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	r := h.Start()
@@ -478,7 +479,7 @@ func TestUnderTheCIGateARedBuildInAnotherRepositoryDoesNotHoldBackTheHomes(t *te
 	mergeAndPush(h, "origin")
 	trackCI(t, h)
 	h.AddRepository("api")
-	if _, err := h.Human().SetRepositoryCI(context.Background(), h.Project, core.SetRepositoryCIInput{Name: "api", RepositoryCI: core.RepositoryCI{Repository: "acme/api"}}); err != nil {
+	if _, err := h.Human().SetRepositoryCI(context.Background(), h.Project, api.SetRepositoryCIInput{Name: "api", RepositoryCI: api.RepositoryCI{Repository: "acme/api"}}); err != nil {
 		t.Fatal(err)
 	}
 	r := h.Start()
@@ -487,11 +488,11 @@ func TestUnderTheCIGateARedBuildInAnotherRepositoryDoesNotHoldBackTheHomes(t *te
 		t.Fatalf("the remote's main is at %q, want the pushed commit %s", got, pushed)
 	}
 	// Its commit in api, as pushed there, fails its CI.
-	if _, err := h.Server.Client.ReportPushedCommit(context.Background(), h.Project, core.ReportPushedCommitInput{Ticket: core.Ref(id), Commit: "def456", Branch: "main", Repository: "api"}); err != nil {
+	if _, err := h.Server.Client.ReportPushedCommit(context.Background(), h.Project, api.ReportPushedCommitInput{Ticket: api.Ref(id), Commit: "def456", Branch: "main", Repository: "api"}); err != nil {
 		t.Fatal(err)
 	}
 	reportRunIn(t, h, "api", 1, id, "def456", domain.CICompleted, domain.CIFailure)
-	if tk := h.Ticket(id); tk.NeedsMeReason != core.ReasonCIFailed || tk.CIItem == nil || tk.CIItem.Repository != "api" {
+	if tk := h.Ticket(id); tk.NeedsMeReason != api.ReasonCIFailed || tk.CIItem == nil || tk.CIItem.Repository != "api" {
 		t.Fatalf("reason %q, item %+v: want CI failed in api", tk.NeedsMeReason, tk.CIItem)
 	}
 
@@ -508,9 +509,9 @@ func TestUnderTheCIGateARedBuildInAnotherRepositoryDoesNotHoldBackTheHomes(t *te
 func reportRunIn(t *testing.T, h *factorytest.Harness, repo string, id int64, ticket, commit string, status domain.CIRunStatus, conclusion domain.CIConclusion) {
 	t.Helper()
 	started := h.Clock.Now()
-	run := core.CIRunView{Repository: repo, ID: id, Attempt: 1, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: commit,
-		Status: status, Conclusion: conclusion, Started: &started, Finished: &started, URL: "https://github.com/acme/" + repo + "/actions/runs/1", Jobs: []core.CIJobView{}, Ticket: ticket}
-	if _, err := h.Server.Client.ReportCIRuns(context.Background(), h.Project, core.ReportCIRunsInput{Runs: []core.CIRunView{run}}); err != nil {
+	run := api.CIRunView{Repository: repo, ID: id, Attempt: 1, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: commit,
+		Status: status, Conclusion: conclusion, Started: &started, Finished: &started, URL: "https://github.com/acme/" + repo + "/actions/runs/1", Jobs: []api.CIJobView{}, Ticket: ticket}
+	if _, err := h.Server.Client.ReportCIRuns(context.Background(), h.Project, api.ReportCIRunsInput{Runs: []api.CIRunView{run}}); err != nil {
 		t.Fatal(err)
 	}
 }

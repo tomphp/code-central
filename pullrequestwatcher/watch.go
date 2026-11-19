@@ -11,6 +11,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
@@ -31,9 +32,9 @@ const (
 // Client is what the Pull Request Watcher calls on Code Central;
 // *client.Client is one.
 type Client interface {
-	GetPullRequestWatch(ctx context.Context, key string) (core.PullRequestWatch, error)
-	ReportPullRequestWatcherStatus(ctx context.Context, key string, in core.ReportWatcherStatusInput) (core.Written[core.ProjectView], error)
-	ReportPullRequest(ctx context.Context, key string, in core.ReportPullRequestInput) (core.Written[core.PullRequestReport], error)
+	GetPullRequestWatch(ctx context.Context, key string) (api.PullRequestWatch, error)
+	ReportPullRequestWatcherStatus(ctx context.Context, key string, in api.ReportWatcherStatusInput) (api.Written[api.ProjectView], error)
+	ReportPullRequest(ctx context.Context, key string, in api.ReportPullRequestInput) (api.Written[api.PullRequestReport], error)
 }
 
 // Config wires the watch mode.
@@ -54,7 +55,7 @@ type Config struct {
 }
 
 // Kind is the Pull Request Watcher as the service's supervision runs it.
-var Kind = watchers.Kind{Kind: core.WatcherPullRequests, Args: WatchArgs}
+var Kind = watchers.Kind{Kind: api.WatcherPullRequests, Args: WatchArgs}
 
 // WatchArgs are the arguments that run program's Pull Request Watcher in
 // its watch mode for project, after the program itself.
@@ -84,7 +85,7 @@ func Watch(ctx context.Context, cfg Config) error {
 		}
 		wait, until := pace.Next(cfg.Clock.Now(), every, limit)
 		if reachable {
-			cfg.report(ctx, core.ReportWatcherStatusInput{State: core.WatcherWatching, RateLimitedUntil: until})
+			cfg.report(ctx, api.ReportWatcherStatusInput{State: api.WatcherWatching, RateLimitedUntil: until})
 		}
 		select {
 		case <-ctx.Done():
@@ -112,20 +113,20 @@ func (cfg Config) poll(ctx context.Context) (reachable, waiting bool, limit *rat
 	repositories := watch.Repositories
 	if len(repositories) == 0 {
 		// A service from before Repositories: the Home Repository alone.
-		repositories = []core.PullRequestRepositoryView{{CodeHost: watch.CodeHost, Repository: watch.Repository, Base: watch.Base}}
+		repositories = []api.PullRequestRepositoryView{{CodeHost: watch.CodeHost, Repository: watch.Repository, Base: watch.Base}}
 	}
 	several := len(repositories) > 1
 	hosts := map[string]Host{}
-	var problems []core.RepositoryProblem
+	var problems []api.RepositoryProblem
 	for _, rv := range repositories {
-		in := core.PullRequestCheckInput{CodeHost: rv.CodeHost, Repository: rv.Repository, GHPath: watch.GHPath, PATEnv: watch.PATEnv, ProjectURL: cfg.AzureProjectURL}
+		in := api.PullRequestCheckInput{CodeHost: rv.CodeHost, Repository: rv.Repository, GHPath: watch.GHPath, PATEnv: watch.PATEnv, ProjectURL: cfg.AzureProjectURL}
 		h, r, err := access(ctx, in, rv.Base, cfg.Env, false)
 		if ctx.Err() != nil {
 			// Stopped mid-poll: what failed is the stop, not the Code Host.
 			return false, false, nil
 		}
 		if r.Problem != "" {
-			problems = append(problems, core.RepositoryProblem{Repository: rv.Name, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
+			problems = append(problems, api.RepositoryProblem{Repository: rv.Name, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
 			continue
 		}
 		if errors.As(err, &limit) {
@@ -136,7 +137,7 @@ func (cfg Config) poll(ctx context.Context) (reachable, waiting bool, limit *rat
 	if len(problems) > 0 {
 		// A failing Repository is named, and the others are still watched
 		// (ADR 0050); one Repository alone reports as it always did.
-		in := core.ReportWatcherStatusInput{State: core.WatcherError, Problem: problems[0].Problem, Message: problems[0].Message, Fix: problems[0].Fix}
+		in := api.ReportWatcherStatusInput{State: api.WatcherError, Problem: problems[0].Problem, Message: problems[0].Message, Fix: problems[0].Fix}
 		if several {
 			sum := core.SumRepositoryProblems(problems)
 			in.Message, in.Fix, in.Repositories = sum.Reason, sum.Fix, problems
@@ -184,7 +185,7 @@ func (cfg Config) poll(ctx context.Context) (reachable, waiting bool, limit *rat
 // work, and an open pull request's body is edited to list its siblings as
 // they stand. It returns the pull request as reported, nil when there is
 // none.
-func (cfg Config) follow(ctx context.Context, g pullRequests, w core.PushedWorkView, several bool) (*pullRequest, error) {
+func (cfg Config) follow(ctx context.Context, g pullRequests, w api.PushedWorkView, several bool) (*pullRequest, error) {
 	prs, err := g.list(ctx, w.Branch)
 	if err != nil {
 		return nil, err
@@ -214,13 +215,13 @@ func (cfg Config) follow(ctx context.Context, g pullRequests, w core.PushedWorkV
 	if have := w.PullRequest; have != nil && have.Number == pr.Number && have.Link == pr.Link && have.State == state && have.MergeCommit == pr.mergeCommit() {
 		return pr, nil
 	}
-	_, err = cfg.Client.ReportPullRequest(ctx, cfg.Project, core.ReportPullRequestInput{Repository: w.Repository, Branch: w.Branch, Number: pr.Number, Link: pr.Link, State: state, MergeCommit: pr.mergeCommit()})
+	_, err = cfg.Client.ReportPullRequest(ctx, cfg.Project, api.ReportPullRequestInput{Repository: w.Repository, Branch: w.Branch, Number: pr.Number, Link: pr.Link, State: state, MergeCommit: pr.mergeCommit()})
 	return pr, err
 }
 
 // close closes c, a pull request marked to close, unless it is no longer
 // open, and reports how it stands, which clears the mark.
-func (cfg Config) close(ctx context.Context, g pullRequests, c core.PullRequestToClose) error {
+func (cfg Config) close(ctx context.Context, g pullRequests, c api.PullRequestToClose) error {
 	prs, err := g.list(ctx, c.Branch)
 	if err != nil {
 		return err
@@ -236,7 +237,7 @@ func (cfg Config) close(ctx context.Context, g pullRequests, c core.PullRequestT
 			return err
 		}
 	}
-	_, err = cfg.Client.ReportPullRequest(ctx, cfg.Project, core.ReportPullRequestInput{Repository: c.Repository, Branch: c.Branch, Number: pr.Number, Link: pr.Link, State: pr.state(), MergeCommit: pr.mergeCommit()})
+	_, err = cfg.Client.ReportPullRequest(ctx, cfg.Project, api.ReportPullRequestInput{Repository: c.Repository, Branch: c.Branch, Number: pr.Number, Link: pr.Link, State: pr.state(), MergeCommit: pr.mergeCommit()})
 	return err
 }
 
@@ -266,7 +267,7 @@ func choose(prs []*pullRequest) *pullRequest {
 }
 
 // report reports the Pull Request Watcher's status.
-func (cfg Config) report(ctx context.Context, in core.ReportWatcherStatusInput) {
+func (cfg Config) report(ctx context.Context, in api.ReportWatcherStatusInput) {
 	if _, err := cfg.Client.ReportPullRequestWatcherStatus(ctx, cfg.Project, in); err != nil && ctx.Err() == nil {
 		cfg.logf("report_pull_request_watcher_status: %v", err)
 	}

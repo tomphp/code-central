@@ -9,15 +9,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/client"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/ops"
 )
 
 // deriveInput has one field of each shape a derived command takes.
 type deriveInput struct {
-	Target core.Ref          `json:"target" required:"true" cli:"<id>"`
-	Others []core.Ref        `json:"others" required:"true" cli:"<other>..."`
+	Target api.Ref           `json:"target" required:"true" cli:"<id>"`
+	Others []api.Ref         `json:"others" required:"true" cli:"<other>..."`
 	Commit string            `json:"commit" required:"true" cli:"--commit <sha>"`
 	Name   string            `json:"name,omitempty" cli:"--name <n>"`
 	Labels []string          `json:"labels,omitempty" cli:"--label <l>"`
@@ -53,7 +53,7 @@ func runDerived(t *testing.T, c command, args ...string) (stdout string, err err
 
 func echo(_ *client.Client, _ context.Context, key string, in deriveInput) (deriveResult, error) {
 	if key != "acme" {
-		return deriveResult{}, &core.Error{Code: core.UnknownProject, Message: key}
+		return deriveResult{}, &api.Error{Code: api.UnknownProject, Message: key}
 	}
 	return deriveResult{Got: in}, nil
 }
@@ -83,7 +83,7 @@ func TestADerivedCommandFillsItsInputFromTheArguments(t *testing.T) {
 		t.Fatalf("%v: %s", err, out)
 	}
 	want := deriveInput{
-		Target: "x-1", Others: []core.Ref{"x-2", "x-3"}, Commit: "abc",
+		Target: "x-1", Others: []api.Ref{"x-2", "x-3"}, Commit: "abc",
 		Labels: []string{"a", "b"}, Tags: map[string]string{"k": "v"}, Full: true,
 	}
 	if !reflect.DeepEqual(got.Got, want) {
@@ -131,8 +131,8 @@ func TestADerivedCommandRefusesBadArgumentsAsUsageErrors(t *testing.T) {
 
 func TestADerivedCommandWithASecondPositionalTakesExactlyOne(t *testing.T) {
 	type in struct {
-		Ticket  core.Ref `json:"ticket" required:"true" cli:"<id>"`
-		Blocker core.Ref `json:"blocker" required:"true" cli:"<blocker-id>"`
+		Ticket  api.Ref `json:"ticket" required:"true" cli:"<id>"`
+		Blocker api.Ref `json:"blocker" required:"true" cli:"<blocker-id>"`
 	}
 	def := &ops.Definition[in, in]{Name: "link"}
 	c := derive(def, func(_ *client.Client, _ context.Context, _ string, i in) (in, error) { return i, nil }, "")

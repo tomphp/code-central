@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // The fixtures: small types, one or two per derivation rule.
@@ -14,7 +14,7 @@ import (
 type color string
 
 type shapes struct {
-	Ticket  core.Ref          `json:"ticket" desc:"The Ticket." required:"true"`
+	Ticket  api.Ref           `json:"ticket" desc:"The Ticket." required:"true"`
 	Title   string            `json:"title" desc:"A title." required:"true"`
 	Note    *string           `json:"note,omitempty" desc:"A note."`
 	Colour  color             `json:"colour,omitempty" desc:"Red or blue." enum:"red,blue"`
@@ -22,7 +22,7 @@ type shapes struct {
 	Open    *bool             `json:"open,omitempty" desc:"Open (true) or not (false)."`
 	Labels  []string          `json:"labels,omitempty" desc:"Some Labels."`
 	Colours []color           `json:"colours,omitempty" desc:"Some colours."`
-	Refs    []core.Ref        `json:"refs,omitempty" desc:"Some IDs."`
+	Refs    []api.Ref         `json:"refs,omitempty" desc:"Some IDs."`
 	Tags    map[string]string `json:"tags,omitempty" desc:"Some Tags."`
 	Rows    []row             `json:"rows,omitempty" desc:"Some rows."`
 	Local   []string          `json:"-"`
@@ -35,7 +35,7 @@ type row struct {
 }
 
 type base struct {
-	Ticket core.Ref `json:"ticket" desc:"The Ticket." required:"true"`
+	Ticket api.Ref `json:"ticket" desc:"The Ticket." required:"true"`
 }
 
 type embedded struct {

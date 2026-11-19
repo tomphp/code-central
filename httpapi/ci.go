@@ -3,7 +3,7 @@ package httpapi
 import (
 	"net/http"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/ops"
 )
 
@@ -24,5 +24,5 @@ func ciOverviewRead(s ops.Service, r *http.Request) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return s.CIOverview(r.Context(), core.CIOverviewInput{Project: q.Get("project"), Running: running != nil && *running})
+	return s.CIOverview(r.Context(), api.CIOverviewInput{Project: q.Get("project"), Running: running != nil && *running})
 }

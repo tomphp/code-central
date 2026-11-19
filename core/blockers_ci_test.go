@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -56,12 +56,12 @@ func (f fixture) noticesOf(t *testing.T, do func()) map[events.Event]bool {
 func (f fixture) reportRun(t *testing.T, ticket string, status domain.CIRunStatus, conclusion domain.CIConclusion) {
 	t.Helper()
 	started := f.clock.Now()
-	run := core.CIRunView{ID: 1, Attempt: 1, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: "abc123",
+	run := api.CIRunView{ID: 1, Attempt: 1, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: "abc123",
 		Status: status, Conclusion: conclusion, Started: &started, URL: "https://github.com/acme/web/actions/runs/1", Ticket: ticket}
 	if status == domain.CICompleted {
 		run.Finished = &started
 	}
-	if _, err := f.core.ReportCIRuns(ctx, "acme", core.ReportCIRunsInput{Runs: []core.CIRunView{run}}); err != nil {
+	if _, err := f.core.ReportCIRuns(ctx, "acme", api.ReportCIRunsInput{Runs: []api.CIRunView{run}}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -80,9 +80,9 @@ func TestATicketBlockedByAnAcceptedTicketStaysBlockedWhateverItsCIResult(t *test
 			t.Fatalf("blocked %v claimable %v, want acme-3 blocking with its run %s %s", v.Blocked, v.Claimable, c.status, c.conclusion)
 		}
 	}
-	_, err := f.core.Claim(ctx, "acme", core.ClaimInput{Ticket: "acme-2"})
-	var e *core.Error
-	if !errors.As(err, &e) || e.Code != core.ActionNotAllowed || !strings.Contains(e.Message, "acme-3 (Accepted)") {
+	_, err := f.core.Claim(ctx, "acme", api.ClaimInput{Ticket: "acme-2"})
+	var e *api.Error
+	if !errors.As(err, &e) || e.Code != api.ActionNotAllowed || !strings.Contains(e.Message, "acme-3 (Accepted)") {
 		t.Fatalf("claim: %v, want it refused naming acme-3 (Accepted)", err)
 	}
 }

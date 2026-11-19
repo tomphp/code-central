@@ -70,7 +70,7 @@ func enumOf[T ~string](list string, values []T) Enum {
 // Fields names a record view whose JSON names the UI lists: a write's
 // Acknowledgement names the fields it changed by them.
 type Fields struct {
-	// Type is the view, such as core.TicketView.
+	// Type is the view, such as api.TicketView.
 	Type reflect.Type
 	// List is the list's name, such as "TicketFields". Its
 	// SCREAMING_SNAKE_CASE form names the TypeScript array.

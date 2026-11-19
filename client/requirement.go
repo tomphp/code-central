@@ -4,29 +4,29 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/ops"
 )
 
 // SubmitRequirement is submit_requirement: the Spec and each Stage are
 // decoded as an acknowledging write's result.
-func (c *Client) SubmitRequirement(ctx context.Context, key string, in core.SubmitRequirementInput) (core.SubmitRequirementResult, error) {
+func (c *Client) SubmitRequirement(ctx context.Context, key string, in api.SubmitRequirementInput) (api.SubmitRequirementResult, error) {
 	var raw struct {
 		Spec   json.RawMessage   `json:"spec"`
 		Stages []json.RawMessage `json:"stages"`
 	}
 	if err := request(ctx, c, ops.SubmitRequirement, key, in, &raw); err != nil {
-		return core.SubmitRequirementResult{}, err
+		return api.SubmitRequirementResult{}, err
 	}
-	spec, err := decodeWritten[core.SpecView](raw.Spec, in.Full)
+	spec, err := decodeWritten[api.SpecView](raw.Spec, in.Full)
 	if err != nil {
-		return core.SubmitRequirementResult{}, err
+		return api.SubmitRequirementResult{}, err
 	}
-	out := core.SubmitRequirementResult{Spec: spec}
+	out := api.SubmitRequirementResult{Spec: spec}
 	for _, s := range raw.Stages {
-		stage, err := decodeWritten[core.TicketView](s, in.Full)
+		stage, err := decodeWritten[api.TicketView](s, in.Full)
 		if err != nil {
-			return core.SubmitRequirementResult{}, err
+			return api.SubmitRequirementResult{}, err
 		}
 		out.Stages = append(out.Stages, stage)
 	}

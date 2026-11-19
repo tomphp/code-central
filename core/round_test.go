@@ -5,18 +5,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
 // asking is acme-2 claimed as claim-1 (session sess-1) and asking a Round
 // of the given Questions at t0+1h.
-func (f fixture) asking(t *testing.T, qs ...core.QuestionInput) core.PostRoundResult {
+func (f fixture) asking(t *testing.T, qs ...api.QuestionInput) api.PostRoundResult {
 	t.Helper()
 	f.work(t, domain.Ready)
-	f.claim(t, core.ClaimInput{SessionID: "sess-1"})
+	f.claim(t, api.ClaimInput{SessionID: "sess-1"})
 	f.clock.Set(t0.Add(time.Hour))
-	res, err := f.core.PostRound(ctx, "acme", core.PostRoundInput{Ticket: "acme-2", ClaimID: "claim-1", Questions: qs})
+	res, err := f.core.PostRound(ctx, "acme", api.PostRoundInput{Ticket: "acme-2", ClaimID: "claim-1", Questions: qs})
 	if err != nil {
 		t.Fatalf("post_round: %v", err)
 	}
@@ -24,8 +24,8 @@ func (f fixture) asking(t *testing.T, qs ...core.QuestionInput) core.PostRoundRe
 }
 
 var (
-	qDB   = core.QuestionInput{Title: "Which database?", Body: "Postgres or SQLite?", Recommended: "SQLite"}
-	qName = core.QuestionInput{Title: "Name?", Body: "What is it called?"}
+	qDB   = api.QuestionInput{Title: "Which database?", Body: "Postgres or SQLite?", Recommended: "SQLite"}
+	qName = api.QuestionInput{Title: "Name?", Body: "What is it called?"}
 )
 
 func TestPostRoundStoresANumberedRoundAndMovesToNeedsAnswer(t *testing.T) {
@@ -45,7 +45,7 @@ func TestPostRoundStoresANumberedRoundAndMovesToNeedsAnswer(t *testing.T) {
 	if r.Number != 1 || r.Claim != 1 || r.SessionID != "sess-1" || !r.Posted.Equal(t0.Add(time.Hour)) {
 		t.Fatalf("round %+v: the session ID defaults to the Claim's", r)
 	}
-	wantQs := []core.QuestionView{
+	wantQs := []api.QuestionView{
 		{Number: 1, Title: "Which database?", Body: "Postgres or SQLite?", Recommended: "SQLite", Status: domain.QuestionOpen},
 		{Number: 2, Title: "Name?", Body: "What is it called?", Status: domain.QuestionOpen},
 	}
@@ -55,13 +55,13 @@ func TestPostRoundStoresANumberedRoundAndMovesToNeedsAnswer(t *testing.T) {
 	if c := v.Claims[0]; c.Ended != nil {
 		t.Fatalf("posting a Round keeps the Claim: %+v", c)
 	}
-	wantMove := core.MoveView{From: domain.InProgress, To: domain.NeedsAnswer, Actor: "agent", Time: t0.Add(time.Hour), Claim: 1}
+	wantMove := api.MoveView{From: domain.InProgress, To: domain.NeedsAnswer, Actor: "agent", Time: t0.Add(time.Hour), Claim: 1}
 	if m := v.Moves[len(v.Moves)-1]; m != wantMove {
 		t.Fatalf("move %+v, want %+v", m, wantMove)
 	}
 }
 
-func sameQuestion(a, b core.QuestionView) bool {
+func sameQuestion(a, b api.QuestionView) bool {
 	return a.Number == b.Number && a.Title == b.Title && a.Body == b.Body && a.Recommended == b.Recommended &&
 		a.Status == b.Status && a.Answer == b.Answer && (a.Closed == nil) == (b.Closed == nil) &&
 		(a.Closed == nil || a.Closed.Equal(*b.Closed))
@@ -70,13 +70,13 @@ func sameQuestion(a, b core.QuestionView) bool {
 func TestPostRoundRecordsAGivenSessionIDAndNumbersQuestionsAcrossRounds(t *testing.T) {
 	f := newFixture(t)
 	f.asking(t, qDB)
-	if _, err := f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite"}); err != nil {
+	if _, err := f.core.Answer(human, "acme", api.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.core.PickUpAnswers(ctx, "acme", core.PickUpAnswersInput{Ticket: "2", ClaimID: "claim-1"}); err != nil {
+	if _, err := f.core.PickUpAnswers(ctx, "acme", api.PickUpAnswersInput{Ticket: "2", ClaimID: "claim-1"}); err != nil {
 		t.Fatal(err)
 	}
-	res, err := f.core.PostRound(ctx, "acme", core.PostRoundInput{Ticket: "2", ClaimID: "claim-1", SessionID: "sess-2", Questions: []core.QuestionInput{qName}})
+	res, err := f.core.PostRound(ctx, "acme", api.PostRoundInput{Ticket: "2", ClaimID: "claim-1", SessionID: "sess-2", Questions: []api.QuestionInput{qName}})
 	if err != nil || res.Round != 2 {
 		t.Fatalf("got %+v, %v", res, err)
 	}
@@ -92,20 +92,20 @@ func TestPostRoundRecordsAGivenSessionIDAndNumbersQuestionsAcrossRounds(t *testi
 func TestPostRoundRejections(t *testing.T) {
 	cases := []struct {
 		name  string
-		in    core.PostRoundInput
-		code  core.Code
+		in    api.PostRoundInput
+		code  api.Code
 		field string
 	}{
-		{"no questions", core.PostRoundInput{ClaimID: "claim-1"}, core.Invalid, "questions"},
-		{"question without a title", core.PostRoundInput{ClaimID: "claim-1", Questions: []core.QuestionInput{qDB, {Body: "b"}}}, core.Invalid, "questions[1].title"},
-		{"question without a body", core.PostRoundInput{ClaimID: "claim-1", Questions: []core.QuestionInput{{Title: "t"}}}, core.Invalid, "questions[0].body"},
-		{"wrong Claim ID", core.PostRoundInput{ClaimID: "claim-9", Questions: []core.QuestionInput{qDB}}, core.StaleClaim, ""},
+		{"no questions", api.PostRoundInput{ClaimID: "claim-1"}, api.Invalid, "questions"},
+		{"question without a title", api.PostRoundInput{ClaimID: "claim-1", Questions: []api.QuestionInput{qDB, {Body: "b"}}}, api.Invalid, "questions[1].title"},
+		{"question without a body", api.PostRoundInput{ClaimID: "claim-1", Questions: []api.QuestionInput{{Title: "t"}}}, api.Invalid, "questions[0].body"},
+		{"wrong Claim ID", api.PostRoundInput{ClaimID: "claim-9", Questions: []api.QuestionInput{qDB}}, api.StaleClaim, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			f := newFixture(t)
 			f.work(t, domain.Ready)
-			f.claim(t, core.ClaimInput{})
+			f.claim(t, api.ClaimInput{})
 			c.in.Ticket = "2"
 			_, err := f.core.PostRound(ctx, "acme", c.in)
 			wantCode(t, err, c.code, c.field)
@@ -119,6 +119,6 @@ func TestPostRoundRejections(t *testing.T) {
 func TestPostRoundOnlyFromInProgress(t *testing.T) {
 	f := newFixture(t)
 	f.asking(t, qDB)
-	_, err := f.core.PostRound(ctx, "acme", core.PostRoundInput{Ticket: "2", ClaimID: "claim-1", Questions: []core.QuestionInput{qName}})
-	wantCode(t, err, core.ActionNotAllowed, "")
+	_, err := f.core.PostRound(ctx, "acme", api.PostRoundInput{Ticket: "2", ClaimID: "claim-1", Questions: []api.QuestionInput{qName}})
+	wantCode(t, err, api.ActionNotAllowed, "")
 }

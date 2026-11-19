@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // Commands for defining work: edits, comments and defer. Each takes the
@@ -13,7 +13,7 @@ import (
 
 // itemCommand parses args for a command on one item, returning the scope,
 // the item's ref and the remaining positional arguments.
-func itemCommand(e Env, fs *flag.FlagSet, args []string, minRest, maxRest int) (scope, core.Ref, []string, error) {
+func itemCommand(e Env, fs *flag.FlagSet, args []string, minRest, maxRest int) (scope, api.Ref, []string, error) {
 	project := addScope(fs)
 	pos, err := parse(fs, args)
 	if err != nil {
@@ -30,7 +30,7 @@ func itemCommand(e Env, fs *flag.FlagSet, args []string, minRest, maxRest int) (
 		return scope{}, "", nil, usagef("unexpected argument %q", rest[maxRest])
 	}
 	sc, err := resolveScope(e, *project)
-	return sc, core.Ref(pos[0]), rest, err
+	return sc, api.Ref(pos[0]), rest, err
 }
 
 // isSet reports whether the flag was given, so an empty value can be told
@@ -60,7 +60,7 @@ func runEditSpec(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	in := core.EditSpecInput{Spec: ref, Full: *full}
+	in := api.EditSpecInput{Spec: ref, Full: *full}
 	if isSet(fs, "title") {
 		in.Title = title
 	}
@@ -84,7 +84,7 @@ func runEditTicket(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	in := core.EditTicketInput{Ticket: ref, Full: *full}
+	in := api.EditTicketInput{Ticket: ref, Full: *full}
 	if isSet(fs, "title") {
 		in.Title = title
 	}
@@ -111,7 +111,7 @@ func runComment(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.Comment(ctx, sc.project, core.CommentInput{Ticket: ref, Body: text, Full: *full})
+	v, err := sc.client.Comment(ctx, sc.project, api.CommentInput{Ticket: ref, Body: text, Full: *full})
 	if err != nil {
 		return err
 	}
@@ -131,7 +131,7 @@ func runDefer(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.Defer(ctx, sc.project, core.DeferInput{Ticket: ref, Reason: text, Full: *full})
+	v, err := sc.client.Defer(ctx, sc.project, api.DeferInput{Ticket: ref, Reason: text, Full: *full})
 	if err != nil {
 		return err
 	}

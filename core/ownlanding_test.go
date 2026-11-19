@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -21,15 +21,15 @@ import (
 
 // landingIn is the Repository name's effective Landing, whether it is
 // its own, and its effective Push remote, as the Project shows them.
-func (f fixture) landingIn(t *testing.T, name string) (core.RepositoryLanding, bool, string) {
+func (f fixture) landingIn(t *testing.T, name string) (api.RepositoryLanding, bool, string) {
 	t.Helper()
 	r := repository(t, f.projectView(t, "acme"), name)
 	return r.Landing, r.OwnLanding, r.PushRemote
 }
 
-func (f fixture) editLanding(t *testing.T, name string, l core.RepositoryLanding) {
+func (f fixture) editLanding(t *testing.T, name string, l api.RepositoryLanding) {
 	t.Helper()
-	if _, err := f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: name, Landing: &l}); err != nil {
+	if _, err := f.core.EditRepository(human, "acme", api.EditRepositoryInput{Name: name, Landing: &l}); err != nil {
 		t.Fatalf("edit_repository %s landing %s: %v", name, l, err)
 	}
 }
@@ -38,8 +38,8 @@ func (f fixture) editLanding(t *testing.T, name string, l core.RepositoryLanding
 // fix that name the Repository name and a fix saying want.
 func wantRefusalNaming(t *testing.T, err error, field, name, want string) {
 	t.Helper()
-	wantFix(t, err, core.Invalid, field)
-	var e *core.Error
+	wantFix(t, err, api.Invalid, field)
+	var e *api.Error
 	errors.As(err, &e)
 	if !strings.Contains(e.Message, name) || !strings.Contains(e.Fix, name) || !strings.Contains(e.Fix, want) {
 		t.Fatalf("refusal %q, fix %q, want both to name %s and the fix to say %q", e.Message, e.Fix, name, want)
@@ -49,37 +49,37 @@ func wantRefusalNaming(t *testing.T, err error, field, name, want string) {
 func TestARepositoryFollowsTheDefaultLandingUntilItHasItsOwn(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git"})
+	f.addRepository(t, api.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git"})
 	for _, name := range []string{"acme", "web"} {
-		if l, own, remote := f.landingIn(t, name); l != core.RepositoryLandingMerge || own || remote != "origin" {
+		if l, own, remote := f.landingIn(t, name); l != api.RepositoryLandingMerge || own || remote != "origin" {
 			t.Fatalf("%s: landing %s, own %v, push remote %q; want the Default Landing, Merge, with origin", name, l, own, remote)
 		}
 	}
 
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "github"}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "github"}); err != nil {
 		t.Fatal(err)
 	}
-	if l, own, remote := f.landingIn(t, "web"); l != core.RepositoryLandingMergePush || own || remote != "github" {
+	if l, own, remote := f.landingIn(t, "web"); l != api.RepositoryLandingMergePush || own || remote != "github" {
 		t.Fatalf("web: landing %s, own %v, push remote %q; want it following the Default Landing, Merge + Push to github", l, own, remote)
 	}
 
-	branch, upstream := core.RepositoryLandingBranchPush, "upstream"
-	if _, err := f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "web", Landing: &branch, PushRemote: &upstream}); err != nil {
+	branch, upstream := api.RepositoryLandingBranchPush, "upstream"
+	if _, err := f.core.EditRepository(human, "acme", api.EditRepositoryInput{Name: "web", Landing: &branch, PushRemote: &upstream}); err != nil {
 		t.Fatal(err)
 	}
-	if l, own, remote := f.landingIn(t, "web"); l != core.RepositoryLandingBranchPush || !own || remote != "upstream" {
+	if l, own, remote := f.landingIn(t, "web"); l != api.RepositoryLandingBranchPush || !own || remote != "upstream" {
 		t.Fatalf("web: landing %s, own %v, push remote %q; want its Own Landing, Branch + Push to upstream", l, own, remote)
 	}
-	if l, own, _ := f.landingIn(t, "acme"); l != core.RepositoryLandingMergePush || own {
+	if l, own, _ := f.landingIn(t, "acme"); l != api.RepositoryLandingMergePush || own {
 		t.Fatalf("the Home: landing %s, own %v; want it still following the Default Landing", l, own)
 	}
 
-	f.editLanding(t, "web", core.RepositoryLandingDefault)
+	f.editLanding(t, "web", api.RepositoryLandingDefault)
 	none := ""
-	if _, err := f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "web", PushRemote: &none}); err != nil {
+	if _, err := f.core.EditRepository(human, "acme", api.EditRepositoryInput{Name: "web", PushRemote: &none}); err != nil {
 		t.Fatal(err)
 	}
-	if l, own, remote := f.landingIn(t, "web"); l != core.RepositoryLandingMergePush || own || remote != "github" {
+	if l, own, remote := f.landingIn(t, "web"); l != api.RepositoryLandingMergePush || own || remote != "github" {
 		t.Fatalf("web: landing %s, own %v, push remote %q; want it back on the Default Landing and the Project's remote", l, own, remote)
 	}
 }
@@ -87,25 +87,25 @@ func TestARepositoryFollowsTheDefaultLandingUntilItHasItsOwn(t *testing.T) {
 func TestTheHomeTakesAnOwnLandingAndPushRemoteButNothingElseItRefusedBefore(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	branch, upstream := core.RepositoryLandingBranch, "upstream"
-	if _, err := f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "acme", Landing: &branch, PushRemote: &upstream}); err != nil {
+	branch, upstream := api.RepositoryLandingBranch, "upstream"
+	if _, err := f.core.EditRepository(human, "acme", api.EditRepositoryInput{Name: "acme", Landing: &branch, PushRemote: &upstream}); err != nil {
 		t.Fatalf("edit the Home's landing and push remote: %v", err)
 	}
-	if l, own, remote := f.landingIn(t, "acme"); l != core.RepositoryLandingBranch || !own || remote != "upstream" {
+	if l, own, remote := f.landingIn(t, "acme"); l != api.RepositoryLandingBranch || !own || remote != "upstream" {
 		t.Fatalf("the Home: landing %s, own %v, push remote %q; want its Own Landing, Branch, with upstream", l, own, remote)
 	}
 	base := "develop"
-	_, err := f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "acme", Base: &base, Landing: &branch})
-	wantFix(t, err, core.Invalid, "base")
+	_, err := f.core.EditRepository(human, "acme", api.EditRepositoryInput{Name: "acme", Base: &base, Landing: &branch})
+	wantFix(t, err, api.Invalid, "base")
 }
 
 func TestEditAndAddRepositoryRefuseAnUnknownLandingOrPushRemote(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	_, err := f.core.AddRepository(human, "acme", core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git", Landing: "squash"})
-	wantFix(t, err, core.Invalid, "landing")
-	_, err = f.core.AddRepository(human, "acme", core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git", PushRemote: "my remote"})
-	wantFix(t, err, core.Invalid, "push_remote")
+	_, err := f.core.AddRepository(human, "acme", api.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git", Landing: "squash"})
+	wantFix(t, err, api.Invalid, "landing")
+	_, err = f.core.AddRepository(human, "acme", api.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git", PushRemote: "my remote"})
+	wantFix(t, err, api.Invalid, "push_remote")
 }
 
 func TestARepositorysOwnLandingDecidesItsLandingRules(t *testing.T) {
@@ -113,15 +113,15 @@ func TestARepositorysOwnLandingDecidesItsLandingRules(t *testing.T) {
 	f.changes(t, 5, "acme", "api")
 	f.pushedFor(t, "api", "acme-5", "def456")
 	f.ciRunIn(t, "api", 1, "def456", "acme-5", domain.CIInProgress, "")
-	if api := changedIn(t, f.getTicket(t, "acme-5"), "api"); api.NotLanded != "waiting on CI at def456" {
-		t.Fatalf("api %+v, want it waiting on its CI under the Default Landing, Merge + Push", api)
+	if apiRepo := changedIn(t, f.getTicket(t, "acme-5"), "api"); apiRepo.NotLanded != "waiting on CI at def456" {
+		t.Fatalf("api %+v, want it waiting on its CI under the Default Landing, Merge + Push", apiRepo)
 	}
 
-	f.editLanding(t, "api", core.RepositoryLandingMerge)
+	f.editLanding(t, "api", api.RepositoryLandingMerge)
 
 	v := f.getTicket(t, "acme-5")
-	if api := changedIn(t, v, "api"); api.NotLanded == "waiting on CI at def456" {
-		t.Fatalf("api %+v, want no CI gate under its Own Landing, Merge", api)
+	if apiRepo := changedIn(t, v, "api"); apiRepo.NotLanded == "waiting on CI at def456" {
+		t.Fatalf("api %+v, want no CI gate under its Own Landing, Merge", apiRepo)
 	}
 	if home := changedIn(t, v, "acme"); home.NotLanded != "waiting on CI at abc123" {
 		t.Fatalf("Home %+v, want it still gated by the Default Landing", home)
@@ -130,36 +130,36 @@ func TestARepositorysOwnLandingDecidesItsLandingRules(t *testing.T) {
 
 func TestATicketChangedOnlyInARepositoryUnderBranchIsToMerge(t *testing.T) {
 	f := twoRepoWorld(t)
-	f.editLanding(t, "api", core.RepositoryLandingBranch)
+	f.editLanding(t, "api", api.RepositoryLandingBranch)
 	f.changes(t, 8, "api")
 	f.changes(t, 5, "acme")
-	wantReason(t, f.get(t, "acme-8"), core.ReasonToMerge)
-	if v := f.get(t, "acme-5"); v.NeedsMeReason == core.ReasonToMerge {
+	wantReason(t, f.get(t, "acme-8"), api.ReasonToMerge)
+	if v := f.get(t, "acme-5"); v.NeedsMeReason == api.ReasonToMerge {
 		t.Fatalf("acme-5, changed only in the Home under Merge + Push, is To merge")
 	}
 }
 
 // prWorld is a Project whose Home reports a GitHub Push remote, with a
 // Pull Request check that passes, recording what it checks.
-func prWorld(t *testing.T) (fixture, *[]core.PullRequestCheckInput) {
+func prWorld(t *testing.T) (fixture, *[]api.PullRequestCheckInput) {
 	t.Helper()
 	f := newFixture(t)
 	f.project(t, "acme")
-	if _, err := f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/acme.git"}); err != nil {
+	if _, err := f.core.ReportPushRemote(ctx, "acme", api.ReportPushRemoteInput{URL: "git@github.com:acme/acme.git"}); err != nil {
 		t.Fatal(err)
 	}
-	checked := &[]core.PullRequestCheckInput{}
-	f.core.SetPullRequestCheck(func(_ context.Context, in core.PullRequestCheckInput) core.WatcherCheckResult {
+	checked := &[]api.PullRequestCheckInput{}
+	f.core.SetPullRequestCheck(func(_ context.Context, in api.PullRequestCheckInput) api.WatcherCheckResult {
 		*checked = append(*checked, in)
-		return core.WatcherCheckResult{}
+		return api.WatcherCheckResult{}
 	})
 	return f, checked
 }
 
 func TestThePullRequestWatcherRunsWhileAnyRepositoryIsUnderPullRequest(t *testing.T) {
 	f, checked := prWorld(t)
-	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "https://dev.azure.com/acme/shop/_git/web"})
-	watch := func() core.PullRequestWatch {
+	f.addRepository(t, api.AddRepositoryInput{Name: "web", CloneURL: "https://dev.azure.com/acme/shop/_git/web"})
+	watch := func() api.PullRequestWatch {
 		t.Helper()
 		w, err := f.core.GetPullRequestWatch(ctx, "acme")
 		if err != nil {
@@ -171,7 +171,7 @@ func TestThePullRequestWatcherRunsWhileAnyRepositoryIsUnderPullRequest(t *testin
 		t.Fatalf("the Pull Request Watcher runs, or the PAT variable is used, with no Repository under Pull Request")
 	}
 
-	f.editLanding(t, "web", core.RepositoryLandingPullRequest)
+	f.editLanding(t, "web", api.RepositoryLandingPullRequest)
 
 	if len(*checked) != 1 || (*checked)[0].Repositories[0].Name != "web" {
 		t.Fatalf("checked %+v, want web alone checked as it came under Pull Request", *checked)
@@ -183,8 +183,8 @@ func TestThePullRequestWatcherRunsWhileAnyRepositoryIsUnderPullRequest(t *testin
 	if !f.landingOf(t).UsesAzureReposPAT {
 		t.Fatalf("the PAT variable is unused with web, on Azure Repos, under Pull Request")
 	}
-	if v := f.projectView(t, "acme"); !slices.ContainsFunc(v.Repositories, func(r core.RepositoryView) bool {
-		return r.Name == "web" && r.Landing == core.RepositoryLandingPullRequest
+	if v := f.projectView(t, "acme"); !slices.ContainsFunc(v.Repositories, func(r api.RepositoryView) bool {
+		return r.Name == "web" && r.Landing == api.RepositoryLandingPullRequest
 	}) {
 		t.Fatalf("repositories %+v, want web under Pull Request", v.Repositories)
 	}
@@ -192,64 +192,64 @@ func TestThePullRequestWatcherRunsWhileAnyRepositoryIsUnderPullRequest(t *testin
 
 func TestPullRequestIsRefusedAsALocalOnlyRepositorysOwnLanding(t *testing.T) {
 	f, _ := prWorld(t)
-	pr := core.RepositoryLandingPullRequest
-	_, err := f.core.AddRepository(human, "acme", core.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes"), Landing: pr})
+	pr := api.RepositoryLandingPullRequest
+	_, err := f.core.AddRepository(human, "acme", api.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes"), Landing: pr})
 	wantRefusalNaming(t, err, "landing", "notes", "Clone URL")
 
-	f.addRepository(t, core.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes")})
-	_, err = f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "notes", Landing: &pr})
+	f.addRepository(t, api.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes")})
+	_, err = f.core.EditRepository(human, "acme", api.EditRepositoryInput{Name: "notes", Landing: &pr})
 	wantRefusalNaming(t, err, "landing", "notes", "Clone URL")
 }
 
 func TestTheDefaultLandingOfPullRequestIsRefusedWhileALocalOnlyRepositoryFollowsIt(t *testing.T) {
 	f, _ := prWorld(t)
-	f.addRepository(t, core.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes")})
-	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git"})
+	f.addRepository(t, api.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes")})
+	f.addRepository(t, api.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git"})
 
-	_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest})
+	_, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest})
 	wantRefusalNaming(t, err, "method", "notes", "Own Landing such as Merge")
 	if strings.Contains(err.Error(), "web") {
 		t.Fatalf("refusal %q names web, which has a Clone URL", err)
 	}
 
-	f.editLanding(t, "notes", core.RepositoryLandingMerge)
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest}); err != nil {
+	f.editLanding(t, "notes", api.RepositoryLandingMerge)
+	if _, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest}); err != nil {
 		t.Fatalf("Pull Request with the local-only notes on its Own Landing: %v", err)
 	}
-	if l, own, _ := f.landingIn(t, "notes"); l != core.RepositoryLandingMerge || !own {
+	if l, own, _ := f.landingIn(t, "notes"); l != api.RepositoryLandingMerge || !own {
 		t.Fatalf("notes: landing %s, own %v, want its Own Landing, Merge", l, own)
 	}
 
 	// Back on the Default Landing, notes would be under Pull Request.
-	def := core.RepositoryLandingDefault
-	_, err = f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "notes", Landing: &def})
+	def := api.RepositoryLandingDefault
+	_, err = f.core.EditRepository(human, "acme", api.EditRepositoryInput{Name: "notes", Landing: &def})
 	wantRefusalNaming(t, err, "landing", "notes", "Clone URL")
 }
 
 func TestAClonelessRepositoryUnderPullRequestIsRefused(t *testing.T) {
 	f, _ := prWorld(t)
-	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git", LocalPath: srcPath("web"), Landing: core.RepositoryLandingPullRequest})
+	f.addRepository(t, api.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git", LocalPath: srcPath("web"), Landing: api.RepositoryLandingPullRequest})
 	none := ""
-	_, err := f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "web", CloneURL: &none})
+	_, err := f.core.EditRepository(human, "acme", api.EditRepositoryInput{Name: "web", CloneURL: &none})
 	wantRefusalNaming(t, err, "clone_url", "web", "Clone URL")
 
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest}); err != nil {
 		t.Fatal(err)
 	}
-	_, err = f.core.AddRepository(human, "acme", core.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes")})
+	_, err = f.core.AddRepository(human, "acme", api.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes")})
 	wantRefusalNaming(t, err, "clone_url", "notes", "Own Landing such as Merge")
-	f.addRepository(t, core.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes"), Landing: core.RepositoryLandingBranch})
+	f.addRepository(t, api.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes"), Landing: api.RepositoryLandingBranch})
 }
 
 func TestAProjectWhoseOtherRepositoriesAreAllLocalOnlyIsNotRefusedPushOrCITracking(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	f.addRepository(t, core.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes")})
-	f.addRepository(t, core.AddRepositoryInput{Name: "docs", LocalPath: srcPath("docs")})
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"}); err != nil {
+	f.addRepository(t, api.AddRepositoryInput{Name: "notes", LocalPath: srcPath("notes")})
+	f.addRepository(t, api.AddRepositoryInput{Name: "docs", LocalPath: srcPath("docs")})
+	if _, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"}); err != nil {
 		t.Fatalf("Merge + Push: %v", err)
 	}
-	if _, err := f.core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Repository: "acme/acme"}); err != nil {
+	if _, err := f.core.SetCITracking(human, "acme", api.SetCITrackingInput{Tracking: true, Repository: "acme/acme"}); err != nil {
 		t.Fatalf("CI Tracking: %v", err)
 	}
 }
@@ -268,7 +268,7 @@ func TestARepositoryLocalOnlyUnderPullRequestIsShownAsSuchAndNotReRouted(t *test
 		t.Fatal(err)
 	}
 	r := repository(t, f.projectView(t, "acme"), "notes")
-	if !r.LocalOnlyUnderPullRequest || r.Landing != core.RepositoryLandingPullRequest {
+	if !r.LocalOnlyUnderPullRequest || r.Landing != api.RepositoryLandingPullRequest {
 		t.Fatalf("notes %+v, want it shown local-only under Pull Request, its Landing kept", r)
 	}
 	if home := repository(t, f.projectView(t, "acme"), "acme"); home.LocalOnlyUnderPullRequest {

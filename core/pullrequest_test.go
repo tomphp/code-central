@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -15,18 +15,18 @@ import (
 func (f fixture) pullRequestAccepted(t *testing.T) {
 	t.Helper()
 	f.accepted(t)
-	if _, err := f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/web.git", Base: "main"}); err != nil {
+	if _, err := f.core.ReportPushRemote(ctx, "acme", api.ReportPushRemoteInput{URL: "git@github.com:acme/web.git", Base: "main"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.core.ReportPushedCommit(ctx, "acme", core.ReportPushedCommitInput{Ticket: "2", Commit: "abc123", Branch: "acme-2"}); err != nil {
+	if _, err := f.core.ReportPushedCommit(ctx, "acme", api.ReportPushedCommitInput{Ticket: "2", Commit: "abc123", Branch: "acme-2"}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func (f fixture) watch(t *testing.T) core.PullRequestWatch {
+func (f fixture) watch(t *testing.T) api.PullRequestWatch {
 	t.Helper()
 	w, err := f.core.GetPullRequestWatch(ctx, "acme")
 	if err != nil {
@@ -35,7 +35,7 @@ func (f fixture) watch(t *testing.T) core.PullRequestWatch {
 	return w
 }
 
-func (f fixture) reportPR(t *testing.T, in core.ReportPullRequestInput) {
+func (f fixture) reportPR(t *testing.T, in api.ReportPullRequestInput) {
 	t.Helper()
 	if in.Link == "" {
 		in.Link = "https://github.com/acme/web/pull/7"
@@ -78,12 +78,12 @@ func TestThePullRequestWatchIsEmptyUnderAnotherLandingMethod(t *testing.T) {
 func TestReportingAPullRequestRecordsItOnTheTicketAndItsRowsAndReadsBack(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
-	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PROpen})
+	f.reportPR(t, api.ReportPullRequestInput{Branch: "acme-2", State: domain.PROpen})
 	v := f.get(t, "2")
 	if v.PullRequest == nil || v.PullRequest.Number != 7 || v.PullRequest.State != domain.PROpen || v.PullRequest.Link == "" {
 		t.Fatalf("pull request = %+v", v.PullRequest)
 	}
-	rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{})
+	rows, err := f.core.FindTickets(ctx, "acme", api.FindTicketsInput{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,11 +100,11 @@ func TestReportingAPullRequestRecordsItOnTheTicketAndItsRowsAndReadsBack(t *test
 func TestAMergedReportStoresTheMergeCommitAndOnlyAMergedReportMay(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
-	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PRMerged, MergeCommit: "def456"})
+	f.reportPR(t, api.ReportPullRequestInput{Branch: "acme-2", State: domain.PRMerged, MergeCommit: "def456"})
 	if pr := f.get(t, "2").PullRequest; pr == nil || pr.State != domain.PRMerged || pr.MergeCommit != "def456" {
 		t.Fatalf("pull request = %+v", pr)
 	}
-	for _, in := range []core.ReportPullRequestInput{
+	for _, in := range []api.ReportPullRequestInput{
 		{Branch: "acme-2", Number: 7, Link: "l", State: domain.PRMerged},
 		{Branch: "acme-2", Number: 7, Link: "l", State: domain.PROpen, MergeCommit: "def456"},
 		{Branch: "acme-2", Number: 7, Link: "l", State: "weird"},
@@ -119,9 +119,9 @@ func TestAMergedReportStoresTheMergeCommitAndOnlyAMergedReportMay(t *testing.T) 
 func TestAClosedPullRequestMayBeReportedOpenAgain(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
-	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PRClosed})
-	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PROpen})
-	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PRConflicting})
+	f.reportPR(t, api.ReportPullRequestInput{Branch: "acme-2", State: domain.PRClosed})
+	f.reportPR(t, api.ReportPullRequestInput{Branch: "acme-2", State: domain.PROpen})
+	f.reportPR(t, api.ReportPullRequestInput{Branch: "acme-2", State: domain.PRConflicting})
 	if pr := f.get(t, "2").PullRequest; pr == nil || pr.State != domain.PRConflicting {
 		t.Fatalf("pull request = %+v, want conflicting", pr)
 	}
@@ -130,8 +130,8 @@ func TestAClosedPullRequestMayBeReportedOpenAgain(t *testing.T) {
 func TestReportingAPullRequestForABranchNoTicketPushedIsNotFound(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
-	_, err := f.core.ReportPullRequest(ctx, "acme", core.ReportPullRequestInput{Branch: "nope", Number: 1, Link: "l", State: domain.PROpen})
-	if e, ok := err.(*core.Error); !ok || e.Code != core.NotFound {
+	_, err := f.core.ReportPullRequest(ctx, "acme", api.ReportPullRequestInput{Branch: "nope", Number: 1, Link: "l", State: domain.PROpen})
+	if e, ok := err.(*api.Error); !ok || e.Code != api.NotFound {
 		t.Fatalf("err = %#v, want NotFound", err)
 	}
 }
@@ -144,13 +144,13 @@ func TestPushedWorkStaysOnTheWatchWhileInReviewAfterItsPullRequestOpenedAndLeave
 		t.Fatalf("work = %+v, want none: no pull request was opened", w.Work)
 	}
 	f.move(t, "2", domain.Accepted)
-	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PROpen})
+	f.reportPR(t, api.ReportPullRequestInput{Branch: "acme-2", State: domain.PROpen})
 	f.move(t, "2", domain.InReview)
 	if w := f.watch(t); len(w.Work) != 1 {
 		t.Fatalf("work = %+v, want the branch kept while In Review", w.Work)
 	}
 	f.move(t, "2", domain.Accepted)
-	if _, err := f.core.Land(ctx, "acme", core.LandInput{Ticket: "2", Commit: "def456"}); err != nil {
+	if _, err := f.core.Land(ctx, "acme", api.LandInput{Ticket: "2", Commit: "def456"}); err != nil {
 		t.Fatal(err)
 	}
 	if w := f.watch(t); len(w.Work) != 0 {
@@ -173,10 +173,10 @@ func TestAPushReportCarriesItsBranchAndIsRecordedUnderPullRequestWithoutCITracki
 func TestGetCIWatchGivesThePullRequestNumberWithAWaitingCommitThatHasOne(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
-	if _, err := f.core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Provider: domain.CIAzurePipelines, ProjectURL: "https://dev.azure.com/acme/web", Repository: ""}); err != nil {
+	if _, err := f.core.SetCITracking(human, "acme", api.SetCITrackingInput{Tracking: true, Provider: domain.CIAzurePipelines, ProjectURL: "https://dev.azure.com/acme/web", Repository: ""}); err != nil {
 		t.Fatal(err)
 	}
-	waiting := func() core.CIWaitingCommit {
+	waiting := func() api.CIWaitingCommit {
 		t.Helper()
 		w, err := f.core.GetCIWatch(ctx, "acme")
 		if err != nil {
@@ -190,7 +190,7 @@ func TestGetCIWatchGivesThePullRequestNumberWithAWaitingCommitThatHasOne(t *test
 	if c := waiting(); c.Commit != "abc123" || c.PullRequest != 0 {
 		t.Fatalf("waiting = %+v, want no pull request number before one is reported", c)
 	}
-	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PROpen})
+	f.reportPR(t, api.ReportPullRequestInput{Branch: "acme-2", State: domain.PROpen})
 	if c := waiting(); c.Commit != "abc123" || c.PullRequest != 7 {
 		t.Fatalf("waiting = %+v, want pull request 7", c)
 	}

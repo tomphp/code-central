@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 )
 
@@ -34,7 +34,7 @@ func init() {
 			}
 		},
 		bad:  call{http: addRepository(`{"name":"Web","clone_url":"git@github.com:acme/web.git"}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 	cases["edit_repository"] = opCase{
 		setup: withRepository(`{"name":"web","clone_url":"git@github.com:acme/web.git"}`),
@@ -50,7 +50,7 @@ func init() {
 			}
 		},
 		bad:  call{http: editRepository(`{"name":"acme","base":"trunk"}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 	cases["remove_repository"] = opCase{
 		setup: withRepository(`{"name":"web","clone_url":"git@github.com:acme/web.git"}`),
@@ -61,7 +61,7 @@ func init() {
 		},
 		full: func(t *testing.T, out map[string]any) { repositories(t, out, "acme") },
 		bad:  call{http: removeRepository(`{"name":"acme"}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 	cases["set_landing_order"] = opCase{
 		setup: withRepository(`{"name":"web","clone_url":"git@github.com:acme/web.git"}`),
@@ -71,7 +71,7 @@ func init() {
 		},
 		full: func(t *testing.T, out map[string]any) { repositories(t, out, "web", "acme") },
 		bad:  call{http: setLandingOrder(`{"names":["web"]}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -127,10 +127,10 @@ func TestTheRepositoryOperationsAreRejectedForAnAgentAndAnIntegration(t *testing
 		removeRepository(`{"name":"web"}`),
 		setLandingOrder(`{"names":["acme"]}`),
 	} {
-		for _, actor := range []core.Actor{core.Agent, core.Integration} {
+		for _, actor := range []api.Actor{api.Agent, api.Integration} {
 			status, b := httpDoAs(t, srv, actor, c)
-			if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
-				t.Fatalf("%s as %s: status %d, want %d; message %q", c.path, actor, status, httpapi.Status(core.ActionNotAllowed), e.Message)
+			if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
+				t.Fatalf("%s as %s: status %d, want %d; message %q", c.path, actor, status, httpapi.Status(api.ActionNotAllowed), e.Message)
 			}
 		}
 	}
@@ -149,8 +149,8 @@ func TestARepositoryRefusalCarriesItsFix(t *testing.T) {
 	srv := newServer(t)
 	httpOK(t, srv, addRepository(`{"name":"web","clone_url":"git@github.com:acme/web.git"}`))
 	status, b := httpDo(t, srv, addRepository(`{"name":"api","clone_url":"https://github.com/acme/web"}`))
-	e := errorJSON(t, b, core.Invalid)
-	if status != httpapi.Status(core.Invalid) || e.Field != "clone_url" || !strings.Contains(e.Fix, "edit web") {
+	e := errorJSON(t, b, api.Invalid)
+	if status != httpapi.Status(api.Invalid) || e.Field != "clone_url" || !strings.Contains(e.Fix, "edit web") {
 		t.Fatalf("status %d, error %+v, want clone_url refused with a fix naming web", status, e)
 	}
 }

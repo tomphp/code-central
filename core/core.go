@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
@@ -39,16 +40,16 @@ type Core struct {
 	usage *usage.Recorder
 	// ciCheck is the CI Watcher's check mode, run when CI Tracking is
 	// turned on; nil checks nothing.
-	ciCheck CICheck
+	ciCheck api.CICheck
 	// issuesCheck is the Issue Watcher's check mode, run when GitHub
 	// Issues is turned on; nil checks nothing.
-	issuesCheck IssuesCheck
+	issuesCheck api.IssuesCheck
 	// azureBoardsCheck is the Azure Boards check, run when Azure Boards is
 	// turned on or what it runs changes while on; nil checks nothing.
-	azureBoardsCheck AzureBoardsCheck
+	azureBoardsCheck api.AzureBoardsCheck
 	// pullRequestCheck is the Pull Request Watcher's check mode, run when
 	// Pull Request is turned on; nil checks nothing.
-	pullRequestCheck PullRequestCheck
+	pullRequestCheck api.PullRequestCheck
 	// watchers holds each Project's Watchers' statuses, in memory only.
 	watchers *watchers
 	// heartbeats holds each Factory's latest Heartbeat, in memory only.
@@ -79,7 +80,7 @@ func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
 	c.transcripts = &transcripts{all: map[markKey]*transcript{}, feeds: map[markKey]map[*TranscriptFeed]struct{}{}}
 	c.latestNotices = &latestNotices{sent: map[markKey]time.Time{}, pending: map[markKey]bool{}}
 	c.watchers = &watchers{all: map[watcherKey]watcherStatus{}, leases: map[string]store.Lease{}}
-	c.heartbeats = &heartbeats{all: map[heartbeatKey]heartbeat{}, seen: map[string]string{}, base: map[string]map[string]BaseView{}, clones: map[string]map[string]CloneView{}}
+	c.heartbeats = &heartbeats{all: map[heartbeatKey]heartbeat{}, seen: map[string]string{}, base: map[string]map[string]api.BaseView{}, clones: map[string]map[string]api.CloneView{}}
 	c.chats = newChats()
 	return c
 }
@@ -87,360 +88,18 @@ func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
 // now is the current time as stored: UTC, whole seconds.
 func (c *Core) now() time.Time { return c.clock.Now().UTC().Truncate(time.Second) }
 
-// ProjectView is a Project as every read returns it.
-type ProjectView struct {
-	Key         string      `json:"key"`
-	DisplayName string      `json:"display_name"`
-	Created     time.Time   `json:"created"`
-	Mode        domain.Mode `json:"mode"`
-	Archived    bool        `json:"archived"`
-	// ArchivedAt is when the human archived the Project, while it is.
-	ArchivedAt *time.Time `json:"archived_at,omitempty"`
-	// Landing is how the Project's accepted work lands, always filled in:
-	// merge, push off, origin by default.
-	Landing LandingView `json:"landing"`
-	// CI is the Project's CI settings, always filled in: CI Tracking off
-	// by default.
-	CI CIView `json:"ci"`
-	// GitHubIssues is the Project's GitHub Issues settings, always filled
-	// in: GitHub Issues off by default.
-	GitHubIssues GitHubIssuesView `json:"github_issues"`
-	// AzureBoards is the Project's Azure Boards settings, always filled
-	// in: Azure Boards off by default.
-	AzureBoards AzureBoardsView `json:"azure_boards"`
-	// Models is the Project's Models rows, always filled in: every row at
-	// Default to begin with.
-	Models ModelsView `json:"models"`
-	// ReportedModels is what the Factory last reported its claude
-	// accepts, always filled in: no aliases or model IDs, and the seeded
-	// effort levels, until a Factory reports.
-	ReportedModels ReportedModelsView `json:"reported_models"`
-	// StageGuides is the Project's Stage Guides settings, always filled
-	// in: Subagent Exploration on by default.
-	StageGuides StageGuidesView `json:"stage_guides"`
-	// AutoAccept is the Project's Auto-accept setting, one entry per
-	// Auto-accept kind, always filled in: every kind off by default.
-	AutoAccept AutoAcceptView `json:"auto_accept"`
-	// FocusKinds is the Project's Focus Kinds, always filled in: every
-	// Needs Me reason on by default.
-	FocusKinds FocusKindsView `json:"focus_kinds"`
-	// FactoryStatus is whether the Project's Factories are online, from
-	// their Heartbeats, always filled in: offline, with no Factories,
-	// until one sends a Heartbeat.
-	FactoryStatus FactoryStatusView `json:"factory_status"`
-	// Repositories are the Project's Repositories in landing order, always
-	// filled in: the Home Repository alone until the human adds another.
-	Repositories []RepositoryView `json:"repositories"`
-}
-
-// SpecView is a Spec as every read returns it, and as its writes return
-// it with full.
-type SpecView struct {
-	ID      string            `json:"id"`
-	Title   string            `json:"title"`
-	Labels  []string          `json:"labels"`
-	Tags    map[string]string `json:"tags"`
-	Created time.Time         `json:"created"`
-	Updated time.Time         `json:"updated"`
-	Body    string            `json:"body"`
-	Edits   []EditView        `json:"edits"`
-	// Link is set on a linked Spec (ticket 42).
-	Link *LinkView `json:"link,omitempty"`
-}
-
-// SpecRef names a Ticket's Spec.
-type SpecRef struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-	// Branch is the Spec's Spec Branch: its branch Tag's value, else
-	// spec/<id>.
-	Branch string `json:"branch"`
-}
-
-// MoveView is one State move. An imported Ticket's one move has no From.
-type MoveView struct {
-	From  domain.State `json:"from,omitempty"`
-	To    domain.State `json:"to"`
-	Actor string       `json:"actor"`
-	Time  time.Time    `json:"time"`
-	Claim int          `json:"claim,omitempty"`
-	Via   string       `json:"via,omitempty"`
-	// Commit is the commit that put the work into the base, on a land.
-	Commit string `json:"commit,omitempty"`
-	// Cause is why an auto-accept made the Move (project, ticket-label or
-	// spec-label); left out on every other Move.
-	Cause domain.AutoAcceptCause `json:"cause,omitempty"`
-}
-
 // moveView is one Move as reads show it.
-func moveView(m domain.Move) MoveView {
-	return MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via, Commit: m.Commit, Cause: m.Cause}
-}
-
-// ClaimView is one Claim as reads show it: never with its Claim ID.
-type ClaimView struct {
-	Number    int    `json:"number"`
-	SessionID string `json:"session_id,omitempty"`
-	// WorkingDir and ResumeCommand are as the holder last set them, empty
-	// when unset: never a filled-in default.
-	WorkingDir    string `json:"working_dir,omitempty"`
-	ResumeCommand string `json:"resume_command,omitempty"`
-	// Model and Effort are what the Claim's latest turn ran with, empty
-	// meaning Claude Code's default.
-	Model   string    `json:"model,omitempty"`
-	Effort  string    `json:"effort,omitempty"`
-	Started time.Time `json:"started"`
-	// LastActivity is the latest write the Claim's agent made on the Ticket.
-	LastActivity time.Time  `json:"last_activity"`
-	Ended        *time.Time `json:"ended,omitempty"`
-	EndedBy      string     `json:"ended_by,omitempty"`
-	// LatestEvent is the Claim's latest Session Event, shown short; left
-	// out when it has none. Computed, never stored.
-	LatestEvent *LatestEvent `json:"latest_event,omitempty"`
-}
-
-// TicketView is the full view of one Ticket, as its writes return it with
-// full. A read (get_ticket, claim) may leave parts out: each part left out
-// is nil, so it has no key, and LeftOut counts what it had.
-type TicketView struct {
-	ID           string            `json:"id"`
-	Title        string            `json:"title"`
-	State        domain.State      `json:"state"`
-	Spec         SpecRef           `json:"spec"`
-	Labels       []string          `json:"labels"`
-	Tags         map[string]string `json:"tags"`
-	BlockedBy    []string          `json:"blocked_by"`
-	Blockers     []BlockerView     `json:"blockers"`
-	Replacements []string          `json:"replacements"`
-	Created      time.Time         `json:"created"`
-	Updated      time.Time         `json:"updated"`
-	Description  string            `json:"description"`
-	// Branch and Commit are the work's branch and head commit in the Home
-	// Repository, as the last finish naming them gave them. Work with a
-	// branch is Accepted, then lands.
-	Branch string `json:"branch,omitempty"`
-	Commit string `json:"commit,omitempty"`
-	// Repositories are the Ticket's Changed Repositories, in landing
-	// order: live while it is In Progress, as the Factory reports them,
-	// and settled by each finish. Left out while the Project has the Home
-	// Repository alone, whose work Branch and Commit give.
-	Repositories []ChangedRepositoryView `json:"repositories,omitempty"`
-	// PartlyLanded says the Ticket is Accepted and has landed in some of
-	// its Changed Repositories but not all. Computed on read.
-	PartlyLanded bool `json:"partly_landed,omitempty"`
-	// Recommendation is a spec Stage's Spec recommendation, as its last
-	// finish gave it: implement (Implement) or split (Split into
-	// Tickets); empty on any other Ticket.
-	Recommendation domain.Recommendation `json:"recommendation,omitempty"`
-	// PushedCommit is the latest commit the Factory pushed for the Ticket
-	// in the Home Repository while CI Tracking was on, and CICommit the
-	// pushed commit there the Home Repository's CI result comes from:
-	// under the CI gate one that passed, if any did, else the latest
-	// (code-central-430). CIResult is the Ticket's CI result, combined
-	// across its watched Repositories: running, else failed, else
-	// cancelled, else passed; each Repository's own is in Repositories.
-	// All are left out while it has none. CIRuns are every CI Run tracked
-	// against it, the Home Repository's first, each Repository's latest
-	// pushed commit's first. Computed on read.
-	PushedCommit *PushedCommitView `json:"pushed_commit,omitempty"`
-	// PullRequest is the pull request the Pull Request Watcher reported
-	// for the Ticket's pushed work; left out until it has one.
-	PullRequest *PullRequestView `json:"pull_request,omitempty"`
-	CIResult    CIResult         `json:"ci_result,omitempty"`
-	CICommit    string           `json:"ci_commit,omitempty"`
-	CIRuns      []CIRunView      `json:"ci_runs,omitempty"`
-	// LandAnyway says the human accepted the failed CI result of the
-	// latest pushed commit in the Home Repository, so the Factory lands it
-	// there (code-central-261), on this Ticket or on another sharing the
-	// commit (code-central-432).
-	LandAnyway bool `json:"land_anyway,omitempty"`
-	// CIAutoFix is what Auto-fix does about the Ticket's CI failure in the
-	// Home Repository: the auto fix Ticket fixing it, the one covering it,
-	// or the chain it stopped at the limit; left out while it does
-	// nothing. Each Repository's own is in Repositories. Computed on read.
-	CIAutoFix *CIAutoFixView `json:"ci_auto_fix,omitempty"`
-	// SpecLanded says Land per Spec covers the Ticket, and WaitingForSpec
-	// that it is Accepted and waits for its Spec to land (code-central-371).
-	// Computed on read.
-	SpecMerge  *SpecMergeView `json:"spec_merge,omitempty"`
-	SpecLanded bool           `json:"spec_landed,omitempty"`
-	// CIItem is the CI failed, CI cancelled or CI unavailable item that
-	// lists this Ticket, with every other Ticket waiting on its pushed
-	// commit (code-central-432); left out while none does. A Ticket listed
-	// in several Repositories has the first in landing order whose reason
-	// is its own here, and CIItems lists each one, but only while the
-	// Project has more than one Repository.
-	CIItem         *CIItemView  `json:"ci_item,omitempty"`
-	CIItems        []CIItemView `json:"ci_items,omitempty"`
-	WaitingForSpec bool         `json:"waiting_for_spec,omitempty"`
-	// CIFailureOptions are the failure options, each an operation's name,
-	// the human may choose on the Ticket's CI item while it is CI failed
-	// or CI cancelled, acting on every Ticket it lists; left out
-	// otherwise, and empty when none applies. Computed on read.
-	CIFailureOptions []CIFailureOption `json:"ci_failure_options,omitzero"`
-	// ToMergeOptions are the options, each an operation's name, the human
-	// may choose on the Ticket while it is Accepted under a Landing Method
-	// they merge (Branch or Pull Request), as send_back and new_fix_ticket
-	// would accept them; left out otherwise, and empty when none applies.
-	// Computed on read.
-	ToMergeOptions []ToMergeOption     `json:"to_merge_options,omitzero"`
-	Claims         []ClaimView         `json:"claims,omitzero"`
-	Rounds         []RoundView         `json:"rounds,omitzero"`
-	FailureReports []FailureReportView `json:"failure_reports,omitzero"`
-	Comments       []CommentView       `json:"comments,omitzero"`
-	Moves          []MoveView          `json:"moves,omitzero"`
-	Edits          []EditView          `json:"edits,omitzero"`
-	// LeftOut counts each part a read left out that has anything, by
-	// part name.
-	LeftOut   map[string]int `json:"left_out,omitempty"`
-	Blocked   bool           `json:"blocked"`
-	Claimable bool           `json:"claimable"`
-	// Editable says the UI offers Edit on the Ticket, and Retroable its
-	// Retro button, as ticketEditable and ticketRetroable decide them.
-	// Every read sets them. Computed on read.
-	Editable  bool `json:"editable"`
-	Retroable bool `json:"retroable"`
-	// SilentSince is set while the Ticket is a Silent Claim: In Progress
-	// with no activity for 30 minutes. It is the time of the last
-	// activity, so the quiet time is now minus it. Computed, never stored.
-	SilentSince *time.Time `json:"silent_since,omitempty"`
-	// NeedsMeReason says why the Ticket waits on the human, if it does.
-	NeedsMeReason NeedsMeReason `json:"needs_me_reason,omitempty"`
-	// Link is set on a linked Ticket (ticket 42).
-	Link *LinkView `json:"link,omitempty"`
-	// AwaitingTriage is set on an Incoming Issue that came in while New
-	// issues need me was on and that the human hasn't triaged yet.
-	AwaitingTriage bool `json:"awaiting_triage,omitempty"`
-	// SpecMergeTicket marks a Spec merge Ticket, one open_spec_merge
-	// opened; left out on any other Ticket.
-	SpecMergeTicket bool `json:"spec_merge_ticket,omitempty"`
-	// AutoFix is an auto fix Ticket's Auto-fix mark; left out on any
-	// other Ticket, a manual fix Ticket too.
-	AutoFix *AutoFixMarkView `json:"auto_fix,omitempty"`
-	// TriageActions are the triage actions, each an operation's name, the
-	// human may take on an Incoming Issue; left out on any other Ticket.
-	// Computed on read.
-	TriageActions []TriageAction `json:"triage_actions,omitzero"`
-	// TriageNotes say what each of TriageActions does to the linked issue
-	// or work item, as the UI shows it before the human confirms; left out
-	// on any other Ticket. Computed on read.
-	TriageNotes map[TriageAction]string `json:"triage_notes,omitzero"`
-	// ModelChoice is the model and effort the Ticket's next turn runs
-	// with, each with its source; only the UI's read carries it.
-	ModelChoice *ModelChoice `json:"model_choice,omitempty"`
-	// Retros are the Retros looking back on this Ticket, oldest first;
-	// left out when there are none. Only get_ticket sets it.
-	Retros []RetroView `json:"retros,omitempty"`
-	// AutoAcceptKind is the Ticket's Auto-accept kind (grilling, spec,
-	// tickets, implementation or merge); left out when it has none. Only
-	// the UI's read carries it.
-	AutoAcceptKind domain.AutoAcceptKind `json:"auto_accept_kind,omitempty"`
-}
-
-// TicketRow is one find_tickets result.
-type TicketRow struct {
-	ID      string       `json:"id"`
-	Title   string       `json:"title"`
-	State   domain.State `json:"state"`
-	Spec    string       `json:"spec"`
-	Labels  []string     `json:"labels"`
-	Blocked bool         `json:"blocked"`
-	Created time.Time    `json:"created"`
-	Updated time.Time    `json:"updated"`
-	Link    *LinkView    `json:"link,omitempty"`
-	// NodeType is the Ticket's type on a Map (see NodeTypeOf); left out
-	// for a Ticket on any other Spec.
-	NodeType NodeType `json:"node_type,omitempty"`
-	// BlockedBy is the Ticket's Blockers on a Map, the Map view's edges;
-	// left out for a Ticket on any other Spec.
-	BlockedBy []string `json:"blocked_by,omitempty"`
-	// LatestEvent is the latest Session Event of the Ticket's live Claim,
-	// shown short; left out when there is none.
-	LatestEvent *LatestEvent `json:"latest_event,omitempty"`
-	// CIResult is the Ticket's CI result, for its row's badge; left out
-	// for a Ticket never pushed while CI Tracking was on.
-	CIResult CIResult `json:"ci_result,omitempty"`
-	// PullRequest is the Ticket's pull request, for its row's badge; left
-	// out until the Pull Request Watcher reports one.
-	PullRequest *PullRequestView `json:"pull_request,omitempty"`
-	// WaitingForSpec says the Ticket is Accepted and waits for its Spec to
-	// land, for its badge (code-central-371).
-	WaitingForSpec bool `json:"waiting_for_spec,omitempty"`
-	// NeedsMeReason says why the Ticket waits on the human, if it does:
-	// the reason get_ticket gives, a CI item's for a Ticket it lists.
-	NeedsMeReason NeedsMeReason `json:"needs_me_reason,omitempty"`
-	// Repositories are the Names of the Ticket's Changed Repositories, in
-	// landing order, for its card's chips; left out while the Project has
-	// the Home Repository alone.
-	Repositories []string `json:"repositories,omitempty"`
-	// PartlyLanded says the Ticket is Accepted and has landed in some of
-	// its Changed Repositories but not all, for its card's badge.
-	PartlyLanded bool `json:"partly_landed,omitempty"`
-}
-
-// CreateProjectInput is create_project's input.
-type CreateProjectInput struct {
-	Key         string `json:"key"`
-	DisplayName string `json:"display_name,omitempty"`
-	// Mode is committed (the default) or local.
-	Mode domain.Mode `json:"mode,omitempty"`
-}
-
-// CreateSpecInput is create_spec's input.
-type CreateSpecInput struct {
-	Title string `json:"title" desc:"The Spec's title." required:"true"`
-	Body  string `json:"body" desc:"The Spec in Markdown."`
-	// Full asks for the Spec in place of the Acknowledgement.
-	Full bool `json:"full,omitempty" desc:"Return the whole Spec instead of the acknowledgement."`
-}
-
-// CreateTicketInput is create_ticket's input. State defaults to Draft.
-type CreateTicketInput struct {
-	Spec        Ref          `json:"spec" desc:"The Spec it belongs to." required:"true"`
-	Title       string       `json:"title" desc:"The Ticket's title." required:"true"`
-	Description string       `json:"description,omitempty" desc:"What to build, in Markdown."`
-	State       domain.State `json:"state,omitempty" desc:"Draft (the default) or Ready." enum:"Draft,Ready"`
-	Labels      []string     `json:"labels,omitempty" desc:"Labels to add."`
-	BlockedBy   []Ref        `json:"blocked_by,omitempty" desc:"Tickets it waits on until they are Done. IDs: <key>-<n> or <n>."`
-	// Tags are the Ticket's Tags from the start, checked as set_tags checks them.
-	Tags map[string]string `json:"tags,omitempty" desc:"Tags to set on it, as {key: value}; checked as set_tags checks them, so effort must be a valid level."`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
-}
-
-// FindTicketsInput is find_tickets' filters; every filter given must match.
-type FindTicketsInput struct {
-	State  []domain.State `json:"state,omitempty" desc:"Only Tickets in one of these States."`
-	Title  string         `json:"title,omitempty" desc:"Only Tickets whose title contains this text."`
-	Labels []string       `json:"labels,omitempty" query:"label" desc:"Only Tickets with all of these Labels."`
-	// Tags must all be present with exactly these values, or with any
-	// value for an empty one. Over HTTP each is a tag=<key>=<value>
-	// parameter, which DecodeQuery reads.
-	Tags map[string]string `json:"tags,omitempty" query:"tag" desc:"Only Tickets with all of these Tags, as {key: value}; an empty value matches any value."`
-	Spec Ref               `json:"spec,omitempty" desc:"Only Tickets in this Spec."`
-	// Claimable, when given, keeps only Tickets that are (or aren't) claimable.
-	Claimable *bool `json:"claimable,omitempty" desc:"Only Tickets that are (true) or aren't (false) claimable."`
-	// Full asks for full Ticket views, as get_ticket returns them, in
-	// place of rows; FindTicketViews answers it.
-	Full bool `json:"full,omitempty" desc:"Return each Ticket as get_ticket does, in place of the row."`
-	// Parts are the parts the views carry, as get_ticket's: the default
-	// parts, brief, when none are named. Only the HTTP API (as repeated
-	// part parameters) and the CLI name them; an agent's MCP read takes
-	// the default.
-	Parts []string `json:"-" query:"part"`
-	// WithModelChoice adds each Ticket's Model Choice and Auto-accept
-	// kind, as get_ticket's
-	// does for the UI's read over HTTP.
-	WithModelChoice bool `json:"-"`
+func moveView(m domain.Move) api.MoveView {
+	return api.MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via, Commit: m.Commit, Cause: m.Cause}
 }
 
 var keyPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
 // CreateProject is create_project(key, display_name). The display name
 // defaults to the key.
-func (c *Core) CreateProject(_ context.Context, in CreateProjectInput) (ProjectView, error) {
+func (c *Core) CreateProject(_ context.Context, in api.CreateProjectInput) (api.ProjectView, error) {
 	if !keyPattern.MatchString(in.Key) {
-		return ProjectView{}, invalid("key", "a Project Key is lowercase letters, digits, '.', '_' and '-', starting with a letter or digit")
+		return api.ProjectView{}, invalid("key", "a Project Key is lowercase letters, digits, '.', '_' and '-', starting with a letter or digit")
 	}
 	name := in.DisplayName
 	if name == "" {
@@ -448,10 +107,10 @@ func (c *Core) CreateProject(_ context.Context, in CreateProjectInput) (ProjectV
 	}
 	mode := in.Mode
 	if mode == "" {
-		mode = ModeCommitted
+		mode = domain.ModeCommitted
 	}
 	if !mode.Valid() {
-		return ProjectView{}, invalidMode(mode)
+		return api.ProjectView{}, invalidMode(mode)
 	}
 	p := domain.Project{Key: in.Key, DisplayName: name, Created: c.now(), Mode: mode}
 	err := c.store.Update(func(w store.Writer) error {
@@ -461,14 +120,14 @@ func (c *Core) CreateProject(_ context.Context, in CreateProjectInput) (ProjectV
 		return w.PutProject(p)
 	})
 	if err != nil {
-		return ProjectView{}, err
+		return api.ProjectView{}, err
 	}
 	return c.projectView(p), nil
 }
 
 // GetProject is get_project(key).
-func (c *Core) GetProject(_ context.Context, key string) (ProjectView, error) {
-	var v ProjectView
+func (c *Core) GetProject(_ context.Context, key string) (api.ProjectView, error) {
+	var v api.ProjectView
 	err := c.store.View(func(r store.Reader) error {
 		p, ok := r.Project(key)
 		if !ok {
@@ -483,11 +142,11 @@ func (c *Core) GetProject(_ context.Context, key string) (ProjectView, error) {
 }
 
 // CreateSpec is create_spec(title, body, full?).
-func (c *Core) CreateSpec(_ context.Context, key string, in CreateSpecInput) (Written[SpecView], error) {
+func (c *Core) CreateSpec(_ context.Context, key string, in api.CreateSpecInput) (api.Written[api.SpecView], error) {
 	if strings.TrimSpace(in.Title) == "" {
-		return Written[SpecView]{}, invalid("title", "a Spec needs a title")
+		return api.Written[api.SpecView]{}, invalid("title", "a Spec needs a title")
 	}
-	var v Written[SpecView]
+	var v api.Written[api.SpecView]
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -506,30 +165,30 @@ func (c *Core) CreateSpec(_ context.Context, key string, in CreateSpecInput) (Wr
 
 // CreateTicket is create_ticket(spec, title, description, state, labels,
 // blocked_by, tags?, full?).
-func (c *Core) CreateTicket(ctx context.Context, key string, in CreateTicketInput) (Written[TicketView], error) {
+func (c *Core) CreateTicket(ctx context.Context, key string, in api.CreateTicketInput) (api.Written[api.TicketView], error) {
 	if strings.TrimSpace(in.Title) == "" {
-		return Written[TicketView]{}, invalid("title", "a Ticket needs a title")
+		return api.Written[api.TicketView]{}, invalid("title", "a Ticket needs a title")
 	}
 	state := in.State
 	if state == "" {
 		state = domain.Draft
 	}
 	if state != domain.Draft && state != domain.Ready {
-		return Written[TicketView]{}, invalid("state", "a new Ticket is Draft or Ready, not %q", state)
+		return api.Written[api.TicketView]{}, invalid("state", "a new Ticket is Draft or Ready, not %q", state)
 	}
 	if in.Spec == "" {
-		return Written[TicketView]{}, invalid("spec", "every Ticket belongs to a Spec")
+		return api.Written[api.TicketView]{}, invalid("spec", "every Ticket belongs to a Spec")
 	}
 	if err := checkTicketLabels("labels", in.Labels); err != nil {
-		return Written[TicketView]{}, err
+		return api.Written[api.TicketView]{}, err
 	}
 	if err := checkHumanLabels(ctx, "labels", in.Labels); err != nil {
-		return Written[TicketView]{}, err
+		return api.Written[api.TicketView]{}, err
 	}
 	if err := checkTagSyntax(in.Tags); err != nil {
-		return Written[TicketView]{}, err
+		return api.Written[api.TicketView]{}, err
 	}
-	var v Written[TicketView]
+	var v api.Written[api.TicketView]
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -563,12 +222,12 @@ func (c *Core) CreateTicket(ctx context.Context, key string, in CreateTicketInpu
 
 // GetTicket is get_ticket(ticket, parts?): the Ticket with the parts asked
 // for, or its default parts.
-func (c *Core) GetTicket(_ context.Context, key string, in GetTicketInput) (TicketView, error) {
-	parts, err := in.parts()
+func (c *Core) GetTicket(_ context.Context, key string, in api.GetTicketInput) (api.TicketView, error) {
+	parts, err := ticketReadParts(in)
 	if err != nil {
-		return TicketView{}, err
+		return api.TicketView{}, err
 	}
-	var v TicketView
+	var v api.TicketView
 	err = c.store.View(func(r store.Reader) error {
 		p, ok := r.Project(key)
 		if !ok {
@@ -588,11 +247,11 @@ func (c *Core) GetTicket(_ context.Context, key string, in GetTicketInput) (Tick
 
 // shapeView is v as a read asking for the parts asked, which parts is as
 // a set, returns it: the default view when it names none.
-func shapeView(v TicketView, r store.Reader, p domain.Project, t domain.Ticket, asked []string, parts map[string]bool, withUIFields bool) TicketView {
+func shapeView(v api.TicketView, r store.Reader, p domain.Project, t domain.Ticket, asked []string, parts map[string]bool, withUIFields bool) api.TicketView {
 	if len(asked) == 0 {
 		v = defaultView(v)
 	} else {
-		v = v.only(parts)
+		v = v.Only(parts)
 	}
 	if withUIFields {
 		mc := modelChoice(p, t)
@@ -606,8 +265,8 @@ func shapeView(v TicketView, r store.Reader, p domain.Project, t domain.Ticket, 
 // FindTickets is find_tickets(state?, title?, labels?, tags?, spec?, claimable?). Done and
 // Cancelled Tickets are left out unless the State filter names them.
 // Rows are in claim order: created, then number.
-func (c *Core) FindTickets(_ context.Context, key string, in FindTicketsInput) ([]TicketRow, error) {
-	rows := []TicketRow{}
+func (c *Core) FindTickets(_ context.Context, key string, in api.FindTicketsInput) ([]api.TicketRow, error) {
+	rows := []api.TicketRow{}
 	err := c.store.View(func(r store.Reader) error {
 		e, tickets, err := c.findIn(r, key, in)
 		if err != nil {
@@ -631,12 +290,12 @@ func (c *Core) FindTickets(_ context.Context, key string, in FindTicketsInput) (
 // FindTicketViews is find_tickets with full: the Tickets find_tickets
 // would give as rows, each as get_ticket returns it, all read from one
 // evaluation of the Project.
-func (c *Core) FindTicketViews(_ context.Context, key string, in FindTicketsInput) ([]TicketView, error) {
-	parts, err := GetTicketInput{Parts: in.Parts}.parts()
+func (c *Core) FindTicketViews(_ context.Context, key string, in api.FindTicketsInput) ([]api.TicketView, error) {
+	parts, err := ticketReadParts(api.GetTicketInput{Parts: in.Parts})
 	if err != nil {
 		return nil, err
 	}
-	views := []TicketView{}
+	views := []api.TicketView{}
 	err = c.store.View(func(r store.Reader) error {
 		e, tickets, err := c.findIn(r, key, in)
 		if err != nil {
@@ -657,7 +316,7 @@ func (c *Core) FindTicketViews(_ context.Context, key string, in FindTicketsInpu
 
 // findIn is the Tickets of Project key matching in's filters, in claim
 // order, with the Project's evaluation they are read from.
-func (c *Core) findIn(r store.Reader, key string, in FindTicketsInput) (*evaluation, []domain.Ticket, error) {
+func (c *Core) findIn(r store.Reader, key string, in api.FindTicketsInput) (*evaluation, []domain.Ticket, error) {
 	for _, s := range in.State {
 		if !s.Valid() {
 			return nil, nil, invalid("state", "unknown State %q", s)
@@ -703,7 +362,7 @@ func (c *Core) findIn(r store.Reader, key string, in FindTicketsInput) (*evaluat
 
 // matches reports whether t matches in's filters that the Store's query
 // leaves to core: its title, Labels and Tags.
-func matches(t domain.Ticket, in FindTicketsInput) bool {
+func matches(t domain.Ticket, in api.FindTicketsInput) bool {
 	if in.Title != "" && !strings.Contains(strings.ToLower(t.Title), strings.ToLower(in.Title)) {
 		return false
 	}
@@ -730,9 +389,9 @@ func hasAll(labels []string, tags map[string]string, wantLabels []string, wantTa
 // ticketRow is t as a find_tickets row, its CI and reason read from its
 // Project's evaluation e; onMap says t is on a Map, so the row carries
 // its node type.
-func (c *Core) ticketRow(r store.Reader, e *evaluation, t domain.Ticket, onMap bool) TicketRow {
+func (c *Core) ticketRow(r store.Reader, e *evaluation, t domain.Ticket, onMap bool) api.TicketRow {
 	key := e.p.Key
-	row := TicketRow{
+	row := api.TicketRow{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
 		Labels: orEmpty(t.Labels), Blocked: c.blockRule(r, key).blocked(t), Created: t.Created, Updated: t.Updated, Link: linkView(t.Link),
 		CIResult: e.ci.ticket(t).result, PullRequest: pullRequestView(homePullRequest(key, t)),
@@ -755,11 +414,11 @@ func (c *Core) ticketRow(r store.Reader, e *evaluation, t domain.Ticket, onMap b
 
 func finished(s domain.State) bool { return s == domain.Done || s == domain.Cancelled }
 
-func (c *Core) projectView(p domain.Project) ProjectView {
+func (c *Core) projectView(p domain.Project) api.ProjectView {
 	now := c.now()
-	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
-		Landing: landingViewWith(p, c.watchers.view(watcherKey{WatcherPullRequests, p.Key}, now)), CI: ciView(p, c.watchers.view(watcherKey{WatcherCI, p.Key}, now)),
-		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key}, now)), AzureBoards: azureBoardsView(p, c.watchers.view(watcherKey{WatcherWorkItems, p.Key}, now)), Models: modelsView(p.Models),
+	v := api.ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
+		Landing: landingViewWith(p, c.watchers.view(watcherKey{api.WatcherPullRequests, p.Key}, now)), CI: ciView(p, c.watchers.view(watcherKey{api.WatcherCI, p.Key}, now)),
+		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{api.WatcherIssues, p.Key}, now)), AzureBoards: azureBoardsView(p, c.watchers.view(watcherKey{api.WatcherWorkItems, p.Key}, now)), Models: modelsView(p.Models),
 		ReportedModels: reportedModelsView(p.ReportedModels), StageGuides: stageGuidesView(p.StageGuides), AutoAccept: autoAcceptView(p),
 		FocusKinds: focusKindsView(p.FocusKindsOff), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now()), Repositories: repositoriesView(p)}
 	c.fillClones(p.Key, v.Repositories)
@@ -770,39 +429,39 @@ func (c *Core) projectView(p domain.Project) ProjectView {
 	return v
 }
 
-func specView(key string, s domain.Spec) SpecView {
-	return SpecView{
+func specView(key string, s domain.Spec) api.SpecView {
+	return api.SpecView{
 		ID: DisplayID(key, s.Number), Title: s.Title, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags),
 		Created: s.Created, Updated: s.Updated, Body: s.Body, Edits: editViews(s.Edits), Link: linkView(s.Link),
 	}
 }
 
-func (c *Core) ticketView(r store.Reader, key string, t domain.Ticket) TicketView {
+func (c *Core) ticketView(r store.Reader, key string, t domain.Ticket) api.TicketView {
 	pr, _ := r.Project(key)
 	// A write's view of t may come before t is stored.
 	return c.ticketViewIn(r, c.evaluateWith(r, pr, t), t)
 }
 
 // ticketViewIn is t's view, read from its Project's evaluation e.
-func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t domain.Ticket) TicketView {
+func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t domain.Ticket) api.TicketView {
 	key, pr := e.p.Key, e.p
 	sp, _ := r.Spec(key, t.Spec)
 	rule := e.rule
-	v := TicketView{
+	v := api.TicketView{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State,
-		Spec:   SpecRef{ID: DisplayID(key, t.Spec), Title: sp.Title, Branch: SpecBranch(DisplayID(key, t.Spec), sp.Tags)},
+		Spec:   api.SpecRef{ID: DisplayID(key, t.Spec), Title: sp.Title, Branch: SpecBranch(DisplayID(key, t.Spec), sp.Tags)},
 		Labels: orEmpty(t.Labels), Tags: orEmptyMap(t.Tags),
 		BlockedBy: displayIDs(key, t.BlockedBy), Replacements: displayIDs(key, t.Replacements),
 		Blockers: rule.blockerViews(t),
 		Created:  t.Created, Updated: t.Updated, Description: t.Description,
 		Branch: t.Branch, Commit: t.Commit, Recommendation: t.Recommendation,
-		Claims: []ClaimView{}, Rounds: roundViews(t.Rounds), FailureReports: failureReportViews(t.FailureReports),
-		Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
+		Claims: []api.ClaimView{}, Rounds: roundViews(t.Rounds), FailureReports: failureReportViews(t.FailureReports),
+		Comments: commentViews(t.Comments), Moves: []api.MoveView{}, Edits: editViews(t.Edits),
 		Blocked: rule.blocked(t), Link: linkView(t.Link),
 		Editable: ticketEditable(pr, t), Retroable: ticketRetroable(pr, t),
 	}
 	for _, cl := range t.Claims {
-		cv := ClaimView{Number: cl.Number, SessionID: cl.SessionID, WorkingDir: cl.WorkingDir, ResumeCommand: cl.ResumeCommand, Model: cl.Model, Effort: cl.Effort, Started: cl.Started, LastActivity: c.claimActivity(t, cl), EndedBy: cl.EndedBy,
+		cv := api.ClaimView{Number: cl.Number, SessionID: cl.SessionID, WorkingDir: cl.WorkingDir, ResumeCommand: cl.ResumeCommand, Model: cl.Model, Effort: cl.Effort, Started: cl.Started, LastActivity: c.claimActivity(t, cl), EndedBy: cl.EndedBy,
 			LatestEvent: c.latestEvent(key, t.Number, cl.Number)}
 		if !cl.Live() {
 			ended := cl.Ended
@@ -816,7 +475,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t domain.Ticket) Tick
 	v.PushedCommit, v.CIResult, v.CICommit, v.CIRuns = e.ci.view(t)
 	v.PullRequest = pullRequestView(homePullRequest(key, t))
 	if t.SpecMerge != nil {
-		v.SpecMerge = &SpecMergeView{Repository: t.SpecMerge.Repository, Commit: t.SpecMerge.Commit, Merged: t.SpecMerge.Merged, Counts: specMergeCounts(t)}
+		v.SpecMerge = &api.SpecMergeView{Repository: t.SpecMerge.Repository, Commit: t.SpecMerge.Commit, Merged: t.SpecMerge.Merged, Counts: specMergeCounts(t)}
 	}
 	v.SpecLanded = specLanded(r, pr, t)
 	v.WaitingForSpec = waitingForSpec(r, pr, t)
@@ -835,7 +494,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t domain.Ticket) Tick
 	v.PartlyLanded = partlyLanded(key, t)
 	if it, ok := e.itemOf(t); ok {
 		v.CIItem = e.ciItemView(it)
-		if it.reason != ReasonCIUnavailable {
+		if it.reason != api.ReasonCIUnavailable {
 			v.CIFailureOptions = v.CIItem.Options
 		}
 	}
@@ -878,24 +537,24 @@ func orEmptyMap(m map[string]string) map[string]string {
 
 // landingView is p's Landing with the Code Host worked out from the Push
 // remote URL. Push reads as off under Pull Request, which implies it.
-func landingView(p domain.Project) LandingView {
-	return landingViewWith(p, WatcherView{State: WatcherNotReported})
+func landingView(p domain.Project) api.LandingView {
+	return landingViewWith(p, api.WatcherView{State: api.WatcherNotReported})
 }
 
 // landingViewWith is landingView with the Pull Request Watcher's status.
-func landingViewWith(p domain.Project, watcher WatcherView) LandingView {
+func landingViewWith(p domain.Project, watcher api.WatcherView) api.LandingView {
 	host, repo := codeHostOf(p.CI.PushRemoteURL)
 	push := p.Landing.Normalized().Push
 	var azure []string
 	for _, rv := range repositoriesView(p) {
-		if rv.CodeHost == CodeHostAzureRepos {
+		if rv.CodeHost == api.CodeHostAzureRepos {
 			azure = append(azure, rv.Name)
 		}
 	}
 	ps := landingPolicies(p)
-	return LandingView{Method: p.Landing.Method, Push: push, Remote: p.Landing.Remote, LandPerSpec: p.Landing.LandPerSpec,
+	return api.LandingView{Method: p.Landing.Method, Push: push, Remote: p.Landing.Remote, LandPerSpec: p.Landing.LandPerSpec,
 		Rebase: p.Landing.Rebase, CodeHost: host, Repository: repo, PATEnv: patEnvOf(domain.CI{PATEnv: p.Landing.PATEnv}), UsesAzureReposPAT: ps.UsesAzureReposPAT(azure),
 		Methods: landingCapabilities(p, azure), RunsPullRequestWatcher: ps.RunsPullRequestWatcher(),
 		RepositoryLanding: repositoryLandingOf(p.Landing.Method, p.Landing.Push), PushesNothing: pushesNothing(p),
-		Base: p.Base(), Watcher: watcher, OpenPullRequests: []OpenPullRequest{}}
+		Base: p.Base(), Watcher: watcher, OpenPullRequests: []api.OpenPullRequest{}}
 }

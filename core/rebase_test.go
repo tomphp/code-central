@@ -3,7 +3,7 @@ package core_test
 import (
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -18,7 +18,7 @@ func TestRebaseIsOffUntilSetAndLeftOutKeepsTheStoredValue(t *testing.T) {
 	}
 
 	on, off := true, false
-	set := func(in core.SetLandingMethodInput) core.LandingView {
+	set := func(in api.SetLandingMethodInput) api.LandingView {
 		t.Helper()
 		in.Remote = "origin"
 		v, err := f.core.SetLandingMethod(human, "acme", in)
@@ -27,24 +27,24 @@ func TestRebaseIsOffUntilSetAndLeftOutKeepsTheStoredValue(t *testing.T) {
 		}
 		return v.Landing
 	}
-	if v := set(core.SetLandingMethodInput{Method: domain.LandingMerge, Rebase: &on}); !v.Rebase {
+	if v := set(api.SetLandingMethodInput{Method: domain.LandingMerge, Rebase: &on}); !v.Rebase {
 		t.Fatal("rebase off after setting it on")
 	}
-	if v := set(core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true}); !v.Rebase {
+	if v := set(api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true}); !v.Rebase {
 		t.Fatal("rebase off after a set_landing_method that left it out")
 	}
 	// Kept whatever the method: Branch keeps it, though not in force.
-	if v := set(core.SetLandingMethodInput{Method: domain.LandingBranch}); !v.Rebase {
+	if v := set(api.SetLandingMethodInput{Method: domain.LandingBranch}); !v.Rebase {
 		t.Fatal("rebase off after switching to Branch")
 	}
 	if !f.landingOf(t).Rebase {
 		t.Fatal("the landing view doesn't show rebase on")
 	}
-	if v := set(core.SetLandingMethodInput{Method: domain.LandingMerge, Rebase: &off}); v.Rebase {
+	if v := set(api.SetLandingMethodInput{Method: domain.LandingMerge, Rebase: &off}); v.Rebase {
 		t.Fatal("rebase on after setting it off")
 	}
 	// Land per Spec and Rebase are independent.
-	if v := set(core.SetLandingMethodInput{Method: domain.LandingMerge, Rebase: &on, LandPerSpec: &off}); !v.Rebase || v.LandPerSpec {
+	if v := set(api.SetLandingMethodInput{Method: domain.LandingMerge, Rebase: &on, LandPerSpec: &off}); !v.Rebase || v.LandPerSpec {
 		t.Fatalf("rebase %v, land per spec %v, want on and off", v.Rebase, v.LandPerSpec)
 	}
 }
@@ -60,7 +60,7 @@ func TestRebaseIsInForceUnderMergeAndPullRequestButNotBranch(t *testing.T) {
 		{domain.LandingBranch, false},
 		{domain.LandingPullRequest, true},
 	} {
-		v, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: c.method, Remote: "origin", Rebase: &on})
+		v, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: c.method, Remote: "origin", Rebase: &on})
 		if err != nil {
 			t.Fatalf("set_landing_method %s: %v", c.method, err)
 		}

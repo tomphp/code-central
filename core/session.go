@@ -3,29 +3,15 @@ package core
 import (
 	"context"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
-
-// SetSessionInput is set_session's input. The session ID is never
-// checked; it is only shown to the human for resuming the session. The
-// working directory and Resume Command are free-form and never parsed:
-// one that isn't given (nil) leaves the stored value alone, and one given
-// empty clears it.
-type SetSessionInput struct {
-	Ticket        Ref     `json:"ticket" path:"n" desc:"The Ticket." required:"true"`
-	ClaimID       string  `json:"claim_id" desc:"The Claim ID claim returned." required:"true"`
-	SessionID     string  `json:"session_id" desc:"Your session ID." required:"true"`
-	WorkingDir    *string `json:"working_dir,omitempty" desc:"The directory you work in now. Left out, the recorded one stays."`
-	ResumeCommand *string `json:"resume_command,omitempty" desc:"The command that resumes your session from working_dir. Left out, the recorded one stays."`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
-}
 
 // SetSession is set_session(ticket, claim_id, session_id, working_dir?,
 // resume_command?): the holder records the session now working its Claim,
 // in any State the Claim spans, and how to get back into it. Pings from
 // that session then count as the Claim's activity. The last write wins.
-func (c *Core) SetSession(_ context.Context, key string, in SetSessionInput) (Written[TicketView], error) {
+func (c *Core) SetSession(_ context.Context, key string, in api.SetSessionInput) (api.Written[api.TicketView], error) {
 	return c.updateTicket(key, "set_session", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		cl, err := holder(t, key, in.ClaimID)
 		if err != nil {
@@ -49,17 +35,9 @@ func setResume(cl *domain.Claim, workingDir, resumeCommand *string) {
 	}
 }
 
-// ReleaseInput is release's input; the note is optional.
-type ReleaseInput struct {
-	Ticket Ref    `json:"ticket" path:"n"`
-	Note   string `json:"note,omitempty"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
 // Release is the human's release(ticket, note?): In Progress or Answered
 // back to Ready, ending the Claim for good, so the released session's
 // next write is stale. Any note is stored as a comment.
-func (c *Core) Release(ctx context.Context, key string, in ReleaseInput) (Written[TicketView], error) {
+func (c *Core) Release(ctx context.Context, key string, in api.ReleaseInput) (api.Written[api.TicketView], error) {
 	return c.act(ctx, key, in.Ticket, in.Full, "release", "", in.Note)
 }

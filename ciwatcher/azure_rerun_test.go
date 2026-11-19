@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/internal/fakeazdo"
 )
 
@@ -34,10 +34,10 @@ func (a *azureWatching) failedAndRerun() string {
 	a.builds(azBuild{id: 11, pipeline: "CI", commit: "abc123", status: "completed", result: "failed", changed: "2026-01-05T09:05:00Z", finished: "2026-01-05T09:05:00Z"})
 	a.timeline(11, azRecord{"Job", "test", "failed", 1})
 	a.startAzure()
-	a.ciResult(id, core.CIFailed)
-	human := core.WithActor(context.Background(), core.Human)
+	a.ciResult(id, api.CIFailed)
+	human := api.WithActor(context.Background(), api.Human)
 	must(a.t, func() error {
-		_, err := a.srv.Core.RerunCI(human, "acme", core.CIResponseInput{Ticket: core.Ref(id)})
+		_, err := a.srv.Core.RerunCI(human, "acme", api.CIResponseInput{Ticket: api.Ref(id)})
 		return err
 	})
 	return id
@@ -49,12 +49,12 @@ func TestTheCIWatcherRetriesAnAzureBuildAndTheNewAttemptClearsTheRequest(t *test
 	a.builds(azBuild{id: 11, pipeline: "CI", commit: "abc123", status: "inProgress", changed: "2026-01-05T09:07:00Z"})
 	a.timeline(11, azRecord{"Job", "test", "", 2})
 	a.poll()
-	a.ciResult(id, core.CIRunning)
+	a.ciResult(id, api.CIRunning)
 
-	var tk core.TicketView
+	var tk api.TicketView
 	a.waitFor("attempt 2 reported", func() bool {
 		var err error
-		if tk, err = a.srv.Client.GetTicket(context.Background(), "acme", core.Ref(id)); err != nil {
+		if tk, err = a.srv.Client.GetTicket(context.Background(), "acme", api.Ref(id)); err != nil {
 			t.Fatal(err)
 		}
 		for _, r := range tk.CIRuns {
@@ -83,7 +83,7 @@ func TestTheCIWatcherRetriesAnAzureBuildAndTheNewAttemptClearsTheRequest(t *test
 	a.builds(azBuild{id: 11, pipeline: "CI", commit: "abc123", status: "completed", result: "succeeded", changed: "2026-01-05T09:09:00Z", finished: "2026-01-05T09:09:00Z"})
 	a.timeline(11, azRecord{"Job", "test", "succeeded", 2})
 	a.poll()
-	a.ciResult(id, core.CIPassed)
+	a.ciResult(id, api.CIPassed)
 }
 
 func TestAnAzureRetryTheServiceRefusesIsTriedAgainUntilTheRequestLapses(t *testing.T) {
@@ -92,15 +92,15 @@ func TestAnAzureRetryTheServiceRefusesIsTriedAgainUntilTheRequestLapses(t *testi
 	id := a.failedAndRerun()
 	a.poll()
 	a.waitFor("the first refused retry", func() bool { return len(a.retries()) == 1 })
-	a.ciResult(id, core.CIRunning)
+	a.ciResult(id, api.CIRunning)
 
 	a.poll()
 	a.waitFor("a retry on the next poll", func() bool { return len(a.retries()) == 2 })
-	a.ciResult(id, core.CIRunning)
+	a.ciResult(id, api.CIRunning)
 
 	a.srv.Clock.Advance(11 * time.Minute)
-	a.ciResult(id, core.CIFailed)
-	if p, err := a.srv.Client.GetProject(context.Background(), "acme"); err != nil || p.CI.Watcher.State != core.WatcherWatching {
+	a.ciResult(id, api.CIFailed)
+	if p, err := a.srv.Client.GetProject(context.Background(), "acme"); err != nil || p.CI.Watcher.State != api.WatcherWatching {
 		t.Fatalf("watcher = %+v, %v, want Watching: a refused retry isn't a watcher error", p.CI.Watcher, err)
 	}
 	for _, r := range a.azdo.Requests() {
@@ -131,7 +131,7 @@ func TestAThrottledAzureWatcherCallsNothingUntilRetryAfterThenResumes(t *testing
 			a.builds(azBuild{id: 11, pipeline: "CI", commit: "abc123", status: "completed", result: "succeeded", changed: "2026-01-05T09:05:00Z", finished: "2026-01-05T09:05:00Z"})
 			a.timeline(11, azRecord{"Job", "test", "succeeded", 1})
 			a.srv.Clock.Advance(time.Second)
-			a.ciResult(id, core.CIPassed)
+			a.ciResult(id, api.CIPassed)
 			a.rateLimitedUntil(time.Time{})
 			a.noErrors()
 		})

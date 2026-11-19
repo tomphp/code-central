@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // A Requirement's progress written back to its issue (code-central-291):
@@ -19,7 +19,7 @@ import (
 // asAgent is c made as the agent, which must succeed.
 func asAgent(t *testing.T, srv *codecentraltest.Server, c httpCall) map[string]any {
 	t.Helper()
-	status, b := httpDoAs(t, srv, core.Agent, c)
+	status, b := httpDoAs(t, srv, api.Agent, c)
 	if status != 200 {
 		t.Fatalf("%s %s as the agent: status %d: %s", c.method, c.path, status, b)
 	}

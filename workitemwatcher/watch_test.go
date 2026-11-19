@@ -2,7 +2,6 @@ package workitemwatcher_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"io"
 	"net/http"
 	"os"
@@ -12,9 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakeazdo"
 	"github.com/tomoram/code-central/watchers"
@@ -24,7 +25,7 @@ import (
 
 func TestMain(m *testing.M) { watchertest.Main(m) }
 
-var human = core.WithActor(context.Background(), core.Human)
+var human = api.WithActor(context.Background(), api.Human)
 
 // queryID is the saved query Azure Boards runs, and pat the PAT in
 // ADO_PAT.
@@ -51,12 +52,12 @@ type watching struct {
 func newWatching(t *testing.T) *watching {
 	t.Helper()
 	srv := codecentraltest.NewServer(t)
-	if _, err := srv.Core.CreateProject(human, core.CreateProjectInput{Key: "acme"}); err != nil {
+	if _, err := srv.Core.CreateProject(human, api.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)
 	}
 	w := &watching{t: t, fake: fakeazdo.New(t), srv: srv, environ: []string{"ADO_PAT=" + pat}}
 	w.fake.SavedQuery(queryID)
-	w.setBoards(core.SetAzureBoardsInput{On: true, QueryURL: w.queryURL(queryID)})
+	w.setBoards(api.SetAzureBoardsInput{On: true, QueryURL: w.queryURL(queryID)})
 	return w
 }
 
@@ -64,7 +65,7 @@ func newWatching(t *testing.T) *watching {
 func (w *watching) queryURL(id string) string { return w.fake.ProjectURL() + "/_queries/query/" + id }
 
 // setBoards is the human's set_azure_boards on acme.
-func (w *watching) setBoards(in core.SetAzureBoardsInput) {
+func (w *watching) setBoards(in api.SetAzureBoardsInput) {
 	w.t.Helper()
 	if _, err := w.srv.Core.SetAzureBoards(human, "acme", in); err != nil {
 		w.t.Fatal(err)
@@ -82,7 +83,7 @@ func (w *watching) start() {
 		pw.Close()
 	})
 	c := client.New(w.srv.URL)
-	c.Actor = core.Integration
+	c.Actor = api.Integration
 	go func() {
 		w.done <- workitemwatcher.Watch(ctx, workitemwatcher.Config{
 			Client: c, Project: "acme", Clock: w.srv.Clock, Stdin: r, Log: io.Discard, Env: gh.Env{Environ: w.environ},
@@ -91,7 +92,7 @@ func (w *watching) start() {
 }
 
 // settings is acme's Azure Boards settings, as the HTTP API reads them.
-func (w *watching) settings() core.AzureBoardsView {
+func (w *watching) settings() api.AzureBoardsView {
 	w.t.Helper()
 	p, err := w.srv.Client.GetProject(context.Background(), "acme")
 	if err != nil {
@@ -102,9 +103,9 @@ func (w *watching) settings() core.AzureBoardsView {
 
 // status waits for the Work Item Watcher's status to be state, and
 // returns it.
-func (w *watching) status(state core.WatcherState) core.WatcherView {
+func (w *watching) status(state api.WatcherState) api.WatcherView {
 	w.t.Helper()
-	var got core.WatcherView
+	var got api.WatcherView
 	codecentraltest.Eventually(w.t, func() bool {
 		got = w.settings().Watcher
 		return got.State == state
@@ -131,7 +132,7 @@ func (w *watching) polled() {
 // each one Notification.
 func (w *watching) errorCount() int {
 	for _, a := range w.srv.Core.WatcherAttention(context.Background()) {
-		if a.Kind == core.WatcherWorkItems && a.Project == "acme" {
+		if a.Kind == api.WatcherWorkItems && a.Project == "acme" {
 			return a.Errors
 		}
 	}
@@ -152,7 +153,7 @@ func (w *watching) queries() int {
 func TestTheWorkItemWatcherReportsWatchingAndRunsTheQueryEvery2Minutes(t *testing.T) {
 	w := newWatching(t)
 	w.start()
-	if got := w.status(core.WatcherWatching); got.Message != "" || got.Fix != "" || !got.RateLimitedUntil.IsZero() {
+	if got := w.status(api.WatcherWatching); got.Message != "" || got.Fix != "" || !got.RateLimitedUntil.IsZero() {
 		t.Fatalf("status %+v, want watching with no message", got)
 	}
 	if r := w.fake.Requests()[0]; r.Path != fakeazdo.ProjectPath+"/_apis/wit/wiql/"+queryID || r.Authorization == "" {
@@ -183,29 +184,29 @@ func TestEachErrorIsReportedWithItsFixUntilItIsFixed(t *testing.T) {
 	for _, c := range []struct {
 		name        string
 		cause       func(w *watching)
-		problem     core.WatcherProblem
+		problem     api.WatcherProblem
 		message, to string
 	}{
 		{"rejected PAT", func(w *watching) { w.failing("GET", savedQuery, http.StatusUnauthorized, "") },
-			core.ProblemPATRejected, "rejected the PAT in ADO_PAT", "Work Items: Read & write"},
+			api.ProblemPATRejected, "rejected the PAT in ADO_PAT", "Work Items: Read & write"},
 		{"missing scope", func(w *watching) { w.failing("GET", savedQuery, http.StatusForbidden, "") },
-			core.ProblemPATScope, "can't read work items", "Work Items: Read & write"},
+			api.ProblemPATScope, "can't read work items", "Work Items: Read & write"},
 		{"query not found", func(w *watching) {
 			w.failing("GET", savedQuery, http.StatusNotFound, "TF401243: The query does not exist.")
-		}, core.ProblemQueryUnusable, "can't find the saved query", "saved query's URL"},
+		}, api.ProblemQueryUnusable, "can't find the saved query", "saved query's URL"},
 		{"tree query", func(w *watching) {
 			a := fakeazdo.JSON("GET", savedQuery, 200, map[string]any{"queryType": "tree", "workItemRelations": []any{}})
 			a.Times = 3
 			w.fake.Script(a)
-		}, core.ProblemQueryUnusable, "a tree query", "flat list"},
+		}, api.ProblemQueryUnusable, "a tree query", "flat list"},
 		{"Azure DevOps failing", func(w *watching) { w.failing("GET", savedQuery, http.StatusInternalServerError, "Something broke") },
-			core.ProblemCheckFailed, "Something broke", "status"},
+			api.ProblemCheckFailed, "Something broke", "status"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWatching(t)
 			c.cause(w)
 			w.start()
-			got := w.status(core.WatcherError)
+			got := w.status(api.WatcherError)
 			if got.Problem != c.problem || !strings.Contains(got.Message, c.message) || !strings.Contains(got.Fix, c.to) {
 				t.Fatalf("status %+v, want %s, %q, with the fix %q", got, c.problem, c.message, c.to)
 			}
@@ -214,12 +215,12 @@ func TestEachErrorIsReportedWithItsFixUntilItIsFixed(t *testing.T) {
 			}
 			w.nextPoll()
 			w.nextPoll()
-			w.status(core.WatcherError)
+			w.status(api.WatcherError)
 			if n := w.errorCount(); n != 1 {
 				t.Fatalf("went into an error %d times, want once, for one Notification", n)
 			}
 			w.nextPoll()
-			w.status(core.WatcherWatching)
+			w.status(api.WatcherWatching)
 		})
 	}
 }
@@ -230,8 +231,8 @@ func TestAMissingPATIsAnErrorNamingItsVariable(t *testing.T) {
 	w := newWatching(t)
 	w.environ = []string{"OTHER=x"}
 	w.start()
-	got := w.status(core.WatcherError)
-	if got.Problem != core.ProblemPATMissing || !strings.Contains(got.Message, "ADO_PAT") || !strings.Contains(got.Fix, "Work Items: Read & write") || !strings.Contains(got.Fix, "restart") {
+	got := w.status(api.WatcherError)
+	if got.Problem != api.ProblemPATMissing || !strings.Contains(got.Message, "ADO_PAT") || !strings.Contains(got.Fix, "Work Items: Read & write") || !strings.Contains(got.Fix, "restart") {
 		t.Fatalf("status %+v, want pat_missing naming ADO_PAT, the scope and a restart", got)
 	}
 	if n := len(w.fake.Requests()); n != 0 {
@@ -243,25 +244,25 @@ func TestAMissingPATIsAnErrorNamingItsVariable(t *testing.T) {
 // Code Central brings the Work Item Watcher back to Watching.
 func TestAWIQLFilterAzureDevOpsRefusesIsAnErrorWithItsMessage(t *testing.T) {
 	w := newWatching(t)
-	w.setBoards(core.SetAzureBoardsInput{On: true, Mode: "wiql", ProjectURL: w.fake.ProjectURL(), Where: "[Nope] = 1"})
+	w.setBoards(api.SetAzureBoardsInput{On: true, Mode: "wiql", ProjectURL: w.fake.ProjectURL(), Where: "[Nope] = 1"})
 	w.start()
-	got := w.status(core.WatcherError)
-	if got.Problem != core.ProblemQueryUnusable || !strings.Contains(got.Message, "TF51005: The query references a field that does not exist.") || !strings.Contains(got.Fix, "WHERE clause") {
+	got := w.status(api.WatcherError)
+	if got.Problem != api.ProblemQueryUnusable || !strings.Contains(got.Message, "TF51005: The query references a field that does not exist.") || !strings.Contains(got.Fix, "WHERE clause") {
 		t.Fatalf("status %+v, want query_unusable with Azure DevOps' message", got)
 	}
 	w.fake.Filter("[System.State] = 'Approved'")
-	w.setBoards(core.SetAzureBoardsInput{On: true, Mode: "wiql", ProjectURL: w.fake.ProjectURL(), Where: "[System.State] = 'Approved'"})
+	w.setBoards(api.SetAzureBoardsInput{On: true, Mode: "wiql", ProjectURL: w.fake.ProjectURL(), Where: "[System.State] = 'Approved'"})
 	w.nextPoll()
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 }
 
 func TestAWIQLFiltersProjectNotFoundIsAnError(t *testing.T) {
 	w := newWatching(t)
-	w.setBoards(core.SetAzureBoardsInput{On: true, Mode: "wiql", ProjectURL: w.fake.ProjectURL(), Where: "[System.State] = 'Approved'"})
+	w.setBoards(api.SetAzureBoardsInput{On: true, Mode: "wiql", ProjectURL: w.fake.ProjectURL(), Where: "[System.State] = 'Approved'"})
 	w.failing("POST", fakeazdo.ProjectPath+"/_apis/wit/wiql", http.StatusNotFound, "TF200016: The project does not exist.")
 	w.start()
-	got := w.status(core.WatcherError)
-	if got.Problem != core.ProblemProjectUnreadable || !strings.Contains(got.Message, w.fake.ProjectURL()) || !strings.Contains(got.Fix, "project URL") {
+	got := w.status(api.WatcherError)
+	if got.Problem != api.ProblemProjectUnreadable || !strings.Contains(got.Message, w.fake.ProjectURL()) || !strings.Contains(got.Fix, "project URL") {
 		t.Fatalf("status %+v, want project_unreadable naming the project", got)
 	}
 }
@@ -279,8 +280,8 @@ func TestAQueryMatchingMoreThan1000WorkItemsIsAnErrorThatChangesNothing(t *testi
 	w.fake.SavedQuery(queryID, many...)
 	from := len(w.fake.Requests())
 	w.nextPoll()
-	got := w.status(core.WatcherError)
-	if got.Problem != core.ProblemTooManyWorkItems || !strings.Contains(got.Message, "1001") || !strings.Contains(got.Fix, "Narrow the query") {
+	got := w.status(api.WatcherError)
+	if got.Problem != api.ProblemTooManyWorkItems || !strings.Contains(got.Message, "1001") || !strings.Contains(got.Fix, "Narrow the query") {
 		t.Fatalf("status %+v, want too_many_work_items naming 1001 and to narrow the query", got)
 	}
 	w.srv.Clock.BlockUntil(1)
@@ -294,7 +295,7 @@ func TestAQueryMatchingMoreThan1000WorkItemsIsAnErrorThatChangesNothing(t *testi
 
 	w.fake.SavedQuery(queryID, 1, 2)
 	w.nextPoll()
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	w.srv.Clock.BlockUntil(1)
 	wantIncoming(t, w, 1, 2)
 }
@@ -303,10 +304,10 @@ func TestAQueryMatchingMoreThan1000WorkItemsIsAnErrorThatChangesNothing(t *testi
 // rate-limited until until.
 func (w *watching) rateLimitedUntil(until time.Time) {
 	w.t.Helper()
-	var got core.WatcherView
+	var got api.WatcherView
 	codecentraltest.Eventually(w.t, func() bool {
 		got = w.settings().Watcher
-		return got.State == core.WatcherWatching && got.RateLimitedUntil.Equal(until)
+		return got.State == api.WatcherWatching && got.RateLimitedUntil.Equal(until)
 	}, "the Work Item Watcher's status %+v, want Watching, rate-limited until %s", &got, until)
 }
 
@@ -358,13 +359,13 @@ func TestA503WithRetryAfterIsARateLimitToo(t *testing.T) {
 // the loop reports nothing and calls Azure DevOps for nothing.
 func TestTheWorkItemWatcherReportsNothingWithAzureBoardsOff(t *testing.T) {
 	w := newWatching(t)
-	w.setBoards(core.SetAzureBoardsInput{On: false, QueryURL: w.queryURL(queryID)})
+	w.setBoards(api.SetAzureBoardsInput{On: false, QueryURL: w.queryURL(queryID)})
 	w.start()
 	w.srv.Clock.BlockUntil(1)
 	if reqs := w.fake.Requests(); len(reqs) != 0 {
 		t.Fatalf("requests %+v with Azure Boards off, want none", reqs)
 	}
-	if got := w.settings().Watcher; got.State != core.WatcherNotReported {
+	if got := w.settings().Watcher; got.State != api.WatcherNotReported {
 		t.Fatalf("status %+v, want not reported", got)
 	}
 }
@@ -372,7 +373,7 @@ func TestTheWorkItemWatcherReportsNothingWithAzureBoardsOff(t *testing.T) {
 func TestTheWorkItemWatcherExitsWhenItsStdinCloses(t *testing.T) {
 	w := newWatching(t)
 	w.start()
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	w.stdin.Close()
 	select {
 	case err := <-w.done:
@@ -411,7 +412,7 @@ func TestTheWorkItemWatcherSubcommandWatchesAndExitsWhenItsStdinCloses(t *testin
 		cmd.Process.Kill()
 		<-done
 	})
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	stdin.Close()
 	select {
 	case <-done:

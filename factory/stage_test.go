@@ -2,11 +2,13 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
@@ -15,7 +17,7 @@ import (
 // guide is the Stage Guide Code Central serves for stage.
 func guide(t *testing.T, h *factorytest.Harness, stage string) string {
 	t.Helper()
-	g, err := h.Server.Client.GetStageGuide(context.Background(), "acme", core.StageGuideInput{Stage: stage})
+	g, err := h.Server.Client.GetStageGuide(context.Background(), "acme", api.StageGuideInput{Stage: stage})
 	if err != nil {
 		t.Fatal(err)
 	}

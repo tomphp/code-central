@@ -2,11 +2,12 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -39,7 +40,7 @@ func TestThePushRemoteReportedIsTheOneTheLandingMethodNames(t *testing.T) {
 	h.AddRemote("origin")
 	h.AddRemote("upstream")
 	h.Git("remote", "set-url", "upstream", "https://github.com/acme/web.git")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "upstream"})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "upstream"})
 
 	h.Start()
 	if got := pushRemoteURL(t, h); got != "https://github.com/acme/web.git" {
@@ -63,7 +64,7 @@ func TestAFactoryWithNoPushRemoteReportsNoURLAndStillStarts(t *testing.T) {
 // trackCI turns CI Tracking on for the harness's Project as the human.
 func trackCI(t *testing.T, h *factorytest.Harness) {
 	t.Helper()
-	if _, err := h.Human().SetCITracking(context.Background(), h.Project, core.SetCITrackingInput{Tracking: true, Repository: "acme/web"}); err != nil {
+	if _, err := h.Human().SetCITracking(context.Background(), h.Project, api.SetCITrackingInput{Tracking: true, Repository: "acme/web"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -83,7 +84,7 @@ func TestUnderMergeAndPushTheFactoryReportsThePushedBaseAsTheTicketsPushedCommit
 	if tk.PushedCommit == nil || tk.PushedCommit.Commit != merge {
 		t.Fatalf("pushed commit %+v, want the pushed merge %s", tk.PushedCommit, merge)
 	}
-	if tk.CIResult != core.CIRunning {
+	if tk.CIResult != api.CIRunning {
 		t.Fatalf("ci result %q, want running with no runs reported", tk.CIResult)
 	}
 }
@@ -92,7 +93,7 @@ func TestUnderBranchAndPushTheFactoryReportsThePushedBranchAsTheTicketsPushedCom
 	t.Parallel()
 	h := factorytest.New(t)
 	h.AddRemote("origin")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 	trackCI(t, h)
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
@@ -125,7 +126,7 @@ func TestABranchPushedBeforeCITrackingWasOnIsNotTracked(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	h.AddRemote("origin")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	r := h.Start()

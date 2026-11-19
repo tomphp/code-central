@@ -1,12 +1,13 @@
 package factory_test
 
 import (
-	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -52,7 +53,7 @@ func TestANewBranchStartsFromTheProjectsBase(t *testing.T) {
 	h.Git("checkout", "-q", "--detach")
 	releaseTip := h.Git("rev-parse", "release")
 	release := "release"
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Base: &release})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Base: &release})
 
 	r := h.Start()
 	r.WantOutput("base: release")

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // The repository command (Spec code-central-848) manages a Project's
@@ -68,7 +68,7 @@ func runRepository(ctx context.Context, e Env, args []string) error {
 		}
 		return usagef("repository %s takes one Repository Name", sub)
 	}
-	var l core.RepositoryLanding
+	var l api.RepositoryLanding
 	if set["landing"] {
 		if l, err = parseLanding(*landing); err != nil {
 			return err
@@ -78,8 +78,8 @@ func runRepository(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	sc.client.Actor = core.Human
-	var w core.Written[core.ProjectView]
+	sc.client.Actor = api.Human
+	var w api.Written[api.ProjectView]
 	switch sub {
 	case "list":
 		p, err := sc.client.GetProject(ctx, sc.project)
@@ -91,10 +91,10 @@ func runRepository(ctx context.Context, e Env, args []string) error {
 		if !set["clone-url"] && !set["local-path"] {
 			return usagef("repository add needs --clone-url or --local-path")
 		}
-		w, err = sc.client.AddRepository(ctx, sc.project, core.AddRepositoryInput{Name: pos[0], CloneURL: *cloneURL, Base: *base, LocalPath: *localPath,
+		w, err = sc.client.AddRepository(ctx, sc.project, api.AddRepositoryInput{Name: pos[0], CloneURL: *cloneURL, Base: *base, LocalPath: *localPath,
 			Landing: l, PushRemote: *pushRemote, Full: true})
 	case "edit":
-		in := core.EditRepositoryInput{Name: pos[0], Full: true}
+		in := api.EditRepositoryInput{Name: pos[0], Full: true}
 		if set["clone-url"] {
 			in.CloneURL = cloneURL
 		}
@@ -115,7 +115,7 @@ func runRepository(ctx context.Context, e Env, args []string) error {
 		}
 		w, err = sc.client.EditRepository(ctx, sc.project, in)
 	case "remove":
-		w, err = sc.client.RemoveRepository(ctx, sc.project, core.RemoveRepositoryInput{Name: pos[0], Full: true})
+		w, err = sc.client.RemoveRepository(ctx, sc.project, api.RemoveRepositoryInput{Name: pos[0], Full: true})
 	case "move":
 		if set["before"] == set["after"] {
 			return usagef("repository move needs one of --before or --after")
@@ -124,7 +124,7 @@ func runRepository(ctx context.Context, e Env, args []string) error {
 		if set["after"] {
 			anchor, offset = *after, 1
 		}
-		var p core.ProjectView
+		var p api.ProjectView
 		if p, err = sc.client.GetProject(ctx, sc.project); err != nil {
 			return err
 		}
@@ -132,7 +132,7 @@ func runRepository(ctx context.Context, e Env, args []string) error {
 		if names, err = moved(p, pos[0], anchor, offset); err != nil {
 			return err
 		}
-		w, err = sc.client.SetLandingOrder(ctx, sc.project, core.SetLandingOrderInput{Names: names, Full: true})
+		w, err = sc.client.SetLandingOrder(ctx, sc.project, api.SetLandingOrderInput{Names: names, Full: true})
 	}
 	if err != nil {
 		return err
@@ -142,14 +142,14 @@ func runRepository(ctx context.Context, e Env, args []string) error {
 
 // moved is p's landing order with name moved to anchor's place, offset 0
 // for before it and 1 for after.
-func moved(p core.ProjectView, name, anchor string, offset int) ([]string, error) {
+func moved(p api.ProjectView, name, anchor string, offset int) ([]string, error) {
 	var names []string
 	for _, r := range p.Repositories {
 		names = append(names, r.Name)
 	}
 	for _, n := range []string{name, anchor} {
 		if !slices.Contains(names, n) {
-			return nil, &core.Error{Code: core.NotFound, Field: "name", Message: fmt.Sprintf("Project %s has no Repository %q", p.Key, n),
+			return nil, &api.Error{Code: api.NotFound, Field: "name", Message: fmt.Sprintf("Project %s has no Repository %q", p.Key, n),
 				Fix: "name one of its Repositories: " + strings.Join(names, ", ")}
 		}
 	}
@@ -165,19 +165,19 @@ func moved(p core.ProjectView, name, anchor string, offset int) ([]string, error
 // with the Landing each names and how a list shows it.
 var cliLandings = []struct {
 	flag    string
-	landing core.RepositoryLanding
+	landing api.RepositoryLanding
 	shown   string
 }{
-	{"default", core.RepositoryLandingDefault, ""},
-	{"merge", core.RepositoryLandingMerge, "Merge"},
-	{"merge+push", core.RepositoryLandingMergePush, "Merge + Push"},
-	{"branch", core.RepositoryLandingBranch, "Branch"},
-	{"branch+push", core.RepositoryLandingBranchPush, "Branch + Push"},
-	{"pull-request", core.RepositoryLandingPullRequest, "Pull Request"},
+	{"default", api.RepositoryLandingDefault, ""},
+	{"merge", api.RepositoryLandingMerge, "Merge"},
+	{"merge+push", api.RepositoryLandingMergePush, "Merge + Push"},
+	{"branch", api.RepositoryLandingBranch, "Branch"},
+	{"branch+push", api.RepositoryLandingBranchPush, "Branch + Push"},
+	{"pull-request", api.RepositoryLandingPullRequest, "Pull Request"},
 }
 
 // parseLanding is the Landing a --landing value names.
-func parseLanding(s string) (core.RepositoryLanding, error) {
+func parseLanding(s string) (api.RepositoryLanding, error) {
 	var names []string
 	for _, l := range cliLandings {
 		if l.flag == s {
@@ -190,7 +190,7 @@ func parseLanding(s string) (core.RepositoryLanding, error) {
 
 // landingShown is how a list shows r's effective Landing: its name,
 // marked own or default.
-func landingShown(r core.RepositoryView) string {
+func landingShown(r api.RepositoryView) string {
 	name := string(r.Landing)
 	for _, l := range cliLandings {
 		if l.landing == r.Landing {
@@ -204,7 +204,7 @@ func landingShown(r core.RepositoryView) string {
 }
 
 // printRepositories prints p's Repositories in landing order, one a line.
-func printRepositories(e Env, p core.ProjectView) error {
+func printRepositories(e Env, p api.ProjectView) error {
 	w := tabwriter.NewWriter(e.Stdout, 0, 4, 2, ' ', 0)
 	fmt.Fprintln(w, "NAME\tCLONE URL\tBASE\tLOCAL PATH\tLANDING\tPUSH REMOTE")
 	for _, r := range p.Repositories {

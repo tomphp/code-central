@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -18,22 +19,6 @@ import (
 // awaiting triage, and waits in Needs Me as New issue until the human
 // triages it. The triage actions are the human's, offered on every
 // Incoming Issue, awaiting triage or not.
-
-// TriageAction is a triage action the human may take on an Incoming Issue
-// (Spec code-central-279), named for its operation.
-type TriageAction string
-
-// The triage actions.
-const (
-	OptionKeepAsDraft   TriageAction = "keep_as_draft"
-	OptionToRequirement TriageAction = "to_requirement"
-	OptionWontFix       TriageAction = "wont_fix"
-)
-
-// TriageActions are the triage actions in the order they are offered.
-func TriageActions() []TriageAction {
-	return []TriageAction{OptionKeepAsDraft, OptionToRequirement, OptionWontFix}
-}
 
 // awaitsTriage reports whether a Ticket created now on spec, in key, is
 // awaiting triage: it is on an Integration's inbox Spec while that
@@ -60,34 +45,34 @@ func whyNotIncoming(r store.Reader, key string, t domain.Ticket) string {
 
 // ticketTriageActions are the triage actions offered on t: every one on
 // an Incoming Issue, none otherwise.
-func ticketTriageActions(r store.Reader, key string, t domain.Ticket) []TriageAction {
+func ticketTriageActions(r store.Reader, key string, t domain.Ticket) []api.TriageAction {
 	if whyNotIncoming(r, key, t) != "" {
 		return nil
 	}
-	return TriageActions()
+	return api.TriageActions()
 }
 
 // triageNotes says what each triage action does to t, an Incoming Issue,
 // as the UI shows it before the human confirms: what is written back
 // depends on the Integration t is linked through, and Won't fix never
 // changes a work item's State.
-func triageNotes(t domain.Ticket) map[TriageAction]string {
+func triageNotes(t domain.Ticket) map[api.TriageAction]string {
 	leaves := "leaves it here as it is"
 	if t.AwaitingTriage {
 		leaves += ", out of Needs Me,"
 	}
 	if t.Link.Integration == IntegrationAzureBoards {
-		return map[TriageAction]string{
-			OptionKeepAsDraft:   "Keep as Draft " + leaves + " and adds nothing to the work item in Azure Boards.",
-			OptionToRequirement: "To Requirement makes a Requirement of the work item's title and body, Cancels this Ticket, and from then on only writes the work's progress to the work item.",
-			OptionWontFix: "Won't fix Cancels this Ticket and tags the work item " + LabelWontFix + ", with your reason as a comment. " +
+		return map[api.TriageAction]string{
+			api.OptionKeepAsDraft:   "Keep as Draft " + leaves + " and adds nothing to the work item in Azure Boards.",
+			api.OptionToRequirement: "To Requirement makes a Requirement of the work item's title and body, Cancels this Ticket, and from then on only writes the work's progress to the work item.",
+			api.OptionWontFix: "Won't fix Cancels this Ticket and tags the work item " + LabelWontFix + ", with your reason as a comment. " +
 				"It leaves the work item's State as it is: move it in Azure DevOps yourself.",
 		}
 	}
-	return map[TriageAction]string{
-		OptionKeepAsDraft:   "Keep as Draft " + leaves + " and adds nothing to the issue on GitHub.",
-		OptionToRequirement: "To Requirement makes a Requirement of the issue's title and body, Cancels this Ticket, and from then on only writes the work's progress to the issue.",
-		OptionWontFix:       "Won't fix Cancels this Ticket and closes the issue on GitHub as not planned, with your reason as a comment.",
+	return map[api.TriageAction]string{
+		api.OptionKeepAsDraft:   "Keep as Draft " + leaves + " and adds nothing to the issue on GitHub.",
+		api.OptionToRequirement: "To Requirement makes a Requirement of the issue's title and body, Cancels this Ticket, and from then on only writes the work's progress to the issue.",
+		api.OptionWontFix:       "Won't fix Cancels this Ticket and closes the issue on GitHub as not planned, with your reason as a comment.",
 	}
 }
 
@@ -107,13 +92,13 @@ func newIssue(r store.Reader, key string, t domain.Ticket) (time.Time, bool) {
 // Incoming Issue's awaiting triage, so it leaves Needs Me and the New
 // issue reason never comes back for it. It writes nothing to GitHub.
 // Keeping one that isn't awaiting triage changes nothing.
-func (c *Core) KeepAsDraft(ctx context.Context, key string, in TicketInput) (Written[TicketView], error) {
-	if err := humanOnly(ctx, string(OptionKeepAsDraft)); err != nil {
-		return Written[TicketView]{}, err
+func (c *Core) KeepAsDraft(ctx context.Context, key string, in api.TicketInput) (api.Written[api.TicketView], error) {
+	if err := humanOnly(ctx, string(api.OptionKeepAsDraft)); err != nil {
+		return api.Written[api.TicketView]{}, err
 	}
-	return c.updateTicketIn(key, string(OptionKeepAsDraft), in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
+	return c.updateTicketIn(key, string(api.OptionKeepAsDraft), in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
 		if why := whyNotIncoming(r, key, *t); why != "" {
-			return false, &Error{Code: ActionNotAllowed, Message: why}
+			return false, &api.Error{Code: api.ActionNotAllowed, Message: why}
 		}
 		if !t.AwaitingTriage {
 			return false, nil
@@ -121,14 +106,6 @@ func (c *Core) KeepAsDraft(ctx context.Context, key string, in TicketInput) (Wri
 		t.AwaitingTriage = false
 		return true, nil
 	})
-}
-
-// ToRequirementInput is the human's to_requirement(ticket, context?).
-type ToRequirementInput struct {
-	Ticket  Ref    `json:"ticket" path:"n"`
-	Context string `json:"context,omitempty"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
 }
 
 // contextHeading heads the human's context in a Requirement made by To
@@ -159,27 +136,27 @@ func requirementText(t domain.Ticket, extra string) string {
 // cleared. Its Move to Cancelled is via to_requirement,
 // so the context comment is due on the issue (writeback.go). Its result
 // is the Incoming Issue's, whose Replacement leads to the Requirement.
-func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementInput) (Written[TicketView], error) {
-	if err := humanOnly(ctx, string(OptionToRequirement)); err != nil {
-		return Written[TicketView]{}, err
+func (c *Core) ToRequirement(ctx context.Context, key string, in api.ToRequirementInput) (api.Written[api.TicketView], error) {
+	if err := humanOnly(ctx, string(api.OptionToRequirement)); err != nil {
+		return api.Written[api.TicketView]{}, err
 	}
-	var res Written[TicketView]
+	var res api.Written[api.TicketView]
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
 		}
 		// An Import rewrites it whole, so it is read whole.
-		t, err := resolveTicket(w, key, string(OptionToRequirement), "ticket", in.Ticket, whole...)
+		t, err := resolveTicket(w, key, string(api.OptionToRequirement), "ticket", in.Ticket, whole...)
 		if err != nil {
 			return err
 		}
 		if why := whyNotIncoming(w, key, t); why != "" {
-			return &Error{Code: ActionNotAllowed, Message: why}
+			return &api.Error{Code: api.ActionNotAllowed, Message: why}
 		}
 		if id, ok := linkedTo(w, key, t.Link, true); ok {
-			return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s %s is already linked to Spec %s", t.Link.Integration, t.Link.ID, id)}
+			return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s %s is already linked to Spec %s", t.Link.Integration, t.Link.ID, id)}
 		}
-		var before TicketView
+		var before api.TicketView
 		if !in.Full {
 			before = c.ticketView(w, key, t)
 		}
@@ -194,11 +171,11 @@ func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementIn
 		extra := strings.TrimSpace(in.Context)
 		link := t.Link
 		link.Outbound, link.Written = true, slices.Clone(t.Link.Written)
-		im, _, stageNs := c.requirementImport(w, key, domain.Spec{Title: t.Title, Body: requirementText(t, extra), Link: link, Tags: tags}, Stages(), "", false)
+		im, _, stageNs := c.requirementImport(w, key, domain.Spec{Title: t.Title, Body: requirementText(t, extra), Link: link, Tags: tags}, domain.Stages(), "", false)
 
 		// The grilling Stage is new and waits on nothing, so as the
 		// Replacement it can't make a cycle.
-		if err := c.triageCancel(ctx, key, &t, OptionToRequirement, extra); err != nil {
+		if err := c.triageCancel(ctx, key, &t, api.OptionToRequirement, extra); err != nil {
 			return err
 		}
 		t.Replacements = stageNs[:1]
@@ -217,25 +194,17 @@ func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementIn
 // triageCancel Cancels t, an Incoming Issue, via the triage action via,
 // with comment, if any, as the human's comment, and clears its awaiting
 // triage.
-func (c *Core) triageCancel(ctx context.Context, key string, t *domain.Ticket, via TriageAction, comment string) error {
+func (c *Core) triageCancel(ctx context.Context, key string, t *domain.Ticket, via api.TriageAction, comment string) error {
 	now := c.now()
 	if err := transition(ctx, t, key, "cancel", "", now); err != nil {
 		return err
 	}
 	t.Moves[len(t.Moves)-1].Via = string(via)
 	if comment = strings.TrimSpace(comment); comment != "" {
-		addComment(t, Human, now, 0, comment)
+		addComment(t, api.Human, now, 0, comment)
 	}
 	t.AwaitingTriage = false
 	return nil
-}
-
-// WontFixInput is the human's wont_fix(ticket, reason?).
-type WontFixInput struct {
-	Ticket Ref    `json:"ticket" path:"n"`
-	Reason string `json:"reason,omitempty"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
 }
 
 // WontFix is the human's wont_fix(ticket, reason?): it Cancels an
@@ -245,17 +214,17 @@ type WontFixInput struct {
 // given, as the wont-fix comment, and a GitHub issue is closed as not
 // planned; a work item's State is left for the human (writeback.go). Its
 // Link stays attached.
-func (c *Core) WontFix(ctx context.Context, key string, in WontFixInput) (Written[TicketView], error) {
-	if err := humanOnly(ctx, string(OptionWontFix)); err != nil {
-		return Written[TicketView]{}, err
+func (c *Core) WontFix(ctx context.Context, key string, in api.WontFixInput) (api.Written[api.TicketView], error) {
+	if err := humanOnly(ctx, string(api.OptionWontFix)); err != nil {
+		return api.Written[api.TicketView]{}, err
 	}
-	return c.updateTicketIn(key, string(OptionWontFix), in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
+	return c.updateTicketIn(key, string(api.OptionWontFix), in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
 		if why := whyNotIncoming(r, key, *t); why != "" {
-			return false, &Error{Code: ActionNotAllowed, Message: why}
+			return false, &api.Error{Code: api.ActionNotAllowed, Message: why}
 		}
 		if err := checkReplacements(r, key, *t, nil); err != nil {
 			return false, err
 		}
-		return true, c.triageCancel(ctx, key, t, OptionWontFix, in.Reason)
+		return true, c.triageCancel(ctx, key, t, api.OptionWontFix, in.Reason)
 	})
 }

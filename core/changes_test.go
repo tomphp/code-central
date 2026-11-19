@@ -3,6 +3,7 @@ package core_test
 import (
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
@@ -43,7 +44,7 @@ func TestAForeignChangeEndsAWaitOnTheTicketItChanged(t *testing.T) {
 	f, s := sharedFixture(t)
 	f.work(t, domain.Ready)
 	n := f.clock.Waiters()
-	done := make(chan core.WaitResult, 1)
+	done := make(chan api.WaitResult, 1)
 	go func() {
 		res, err := f.core.Wait(ctx, "acme", "2", domain.Ready)
 		if err != nil {
@@ -66,7 +67,7 @@ func TestAForeignProjectWideChangeEndsAWaitOnATicketThatMoved(t *testing.T) {
 	f, s := sharedFixture(t)
 	f.work(t, domain.Ready)
 	n := f.clock.Waiters()
-	done := make(chan core.WaitResult, 1)
+	done := make(chan api.WaitResult, 1)
 	go func() {
 		res, err := f.core.Wait(ctx, "acme", "2", domain.Ready)
 		if err != nil {

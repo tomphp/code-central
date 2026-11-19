@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // The Factory's clone report (Spec code-central-848): report_repositories,
@@ -15,7 +15,7 @@ import (
 
 // webRepository is the Repository the clone report tests add, beside the
 // Home Repository acme.
-var webRepository = core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git"}
+var webRepository = api.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git"}
 
 // twoRepositories is Project acme with Repository web added and a
 // Factory online.
@@ -24,23 +24,23 @@ func twoRepositories(t *testing.T) fixture {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.addRepository(t, webRepository)
-	beat(f, t, "cc", "box", core.HeartbeatOnline, 10)
+	beat(f, t, "cc", "box", api.HeartbeatOnline, 10)
 	return f
 }
 
-func (f fixture) reportRepositories(t *testing.T, rs ...core.RepositoryReport) {
+func (f fixture) reportRepositories(t *testing.T, rs ...api.RepositoryReport) {
 	t.Helper()
-	if _, err := f.core.ReportRepositories(ctx, "acme", core.ReportRepositoriesInput{Repositories: rs}); err != nil {
+	if _, err := f.core.ReportRepositories(ctx, "acme", api.ReportRepositoriesInput{Repositories: rs}); err != nil {
 		t.Fatal(err)
 	}
 }
 
 // missingRows are the Repository missing rows in Needs Me.
-func missingRows(t *testing.T, f fixture) []core.NeedsMeRow {
+func missingRows(t *testing.T, f fixture) []api.NeedsMeRow {
 	t.Helper()
-	var out []core.NeedsMeRow
+	var out []api.NeedsMeRow
 	for _, row := range f.needsMe(t) {
-		if row.Reason == core.ReasonRepositoryMissing {
+		if row.Reason == api.ReasonRepositoryMissing {
 			out = append(out, row)
 		}
 	}
@@ -48,9 +48,9 @@ func missingRows(t *testing.T, f fixture) []core.NeedsMeRow {
 }
 
 var (
-	homeReady  = core.RepositoryReport{Name: "acme", Path: "/src/acme", State: core.CloneReady}
-	webReady   = core.RepositoryReport{Name: "web", Path: "/src/web", State: core.CloneReady}
-	webMissing = core.RepositoryReport{Name: "web", Path: "/src/web", State: core.CloneMissing, Problem: "/src/web isn't a git repository"}
+	homeReady  = api.RepositoryReport{Name: "acme", Path: "/src/acme", State: api.CloneReady}
+	webReady   = api.RepositoryReport{Name: "web", Path: "/src/web", State: api.CloneReady}
+	webMissing = api.RepositoryReport{Name: "web", Path: "/src/web", State: api.CloneMissing, Problem: "/src/web isn't a git repository"}
 )
 
 func TestEachRepositoryShowsItsReportedCloneStatusAndPath(t *testing.T) {
@@ -62,10 +62,10 @@ func TestEachRepositoryShowsItsReportedCloneStatusAndPath(t *testing.T) {
 	f.reportRepositories(t, homeReady, webMissing)
 	p := f.projectView(t, "acme")
 	home, web := repository(t, p, "acme").Clone, repository(t, p, "web").Clone
-	if home == nil || home.State != core.CloneReady || home.Path != "/src/acme" {
+	if home == nil || home.State != api.CloneReady || home.Path != "/src/acme" {
 		t.Fatalf("Home clone %+v, want ready at /src/acme", home)
 	}
-	if web == nil || web.State != core.CloneMissing || web.Path != "/src/web" || web.Problem != webMissing.Problem {
+	if web == nil || web.State != api.CloneMissing || web.Path != "/src/web" || web.Problem != webMissing.Problem {
 		t.Fatalf("web clone %+v, want missing at /src/web with its problem", web)
 	}
 }
@@ -101,9 +101,9 @@ func TestAMissingLocalOnlyRepositorysItemHasNoCloneURLAndAFixToPutItThere(t *tes
 	f := newFixture(t)
 	f.project(t, "acme")
 	web := srcPath("web")
-	f.addRepository(t, core.AddRepositoryInput{Name: "web", LocalPath: web})
-	beat(f, t, "cc", "box", core.HeartbeatOnline, 10)
-	f.reportRepositories(t, homeReady, core.RepositoryReport{Name: "web", Path: web, State: core.CloneMissing, Problem: "nothing at " + web})
+	f.addRepository(t, api.AddRepositoryInput{Name: "web", LocalPath: web})
+	beat(f, t, "cc", "box", api.HeartbeatOnline, 10)
+	f.reportRepositories(t, homeReady, api.RepositoryReport{Name: "web", Path: web, State: api.CloneMissing, Problem: "nothing at " + web})
 
 	rows := missingRows(t, f)
 	if len(rows) != 1 || rows[0].RepositoryMissing == nil {
@@ -124,7 +124,7 @@ func TestAMissingRepositoryKeepsWaitingSinceItWasFirstReported(t *testing.T) {
 	f.reportRepositories(t, homeReady, webMissing)
 	since := missingRows(t, f)[0].Since
 	f.clock.Advance(5 * time.Second)
-	beat(f, t, "cc", "box", core.HeartbeatOnline, 10)
+	beat(f, t, "cc", "box", api.HeartbeatOnline, 10)
 	f.reportRepositories(t, homeReady, webMissing)
 	if got := missingRows(t, f)[0].Since; !got.Equal(since) {
 		t.Fatalf("since %v, want the first report's %v", got, since)
@@ -143,7 +143,7 @@ func TestARepositoryReportedReadyClearsTheItem(t *testing.T) {
 func TestARemovedRepositoryIsNoLongerMissing(t *testing.T) {
 	f := twoRepositories(t)
 	f.reportRepositories(t, homeReady, webMissing)
-	if _, err := f.core.RemoveRepository(human, "acme", core.RemoveRepositoryInput{Name: "web"}); err != nil {
+	if _, err := f.core.RemoveRepository(human, "acme", api.RemoveRepositoryInput{Name: "web"}); err != nil {
 		t.Fatal(err)
 	}
 	if rows := missingRows(t, f); len(rows) != 0 {
@@ -164,7 +164,7 @@ func TestTheCloneReportLapsesWithTheHeartbeat(t *testing.T) {
 	}
 
 	// A Factory that comes back starts clean, whatever the old one said.
-	beat(f, t, "cc", "box", core.HeartbeatOnline, 10)
+	beat(f, t, "cc", "box", api.HeartbeatOnline, 10)
 	if rows := missingRows(t, f); len(rows) != 0 {
 		t.Fatal("a restarted Factory inherited the old clone report")
 	}
@@ -173,7 +173,7 @@ func TestTheCloneReportLapsesWithTheHeartbeat(t *testing.T) {
 func TestAStoppingFactoryDropsTheCloneReport(t *testing.T) {
 	f := twoRepositories(t)
 	f.reportRepositories(t, homeReady, webMissing)
-	beat(f, t, "cc", "box", core.HeartbeatStopping, 10)
+	beat(f, t, "cc", "box", api.HeartbeatStopping, 10)
 	if rows := missingRows(t, f); len(rows) != 0 {
 		t.Fatal("Repository missing outlived a stopped Factory")
 	}
@@ -181,14 +181,14 @@ func TestAStoppingFactoryDropsTheCloneReport(t *testing.T) {
 
 func TestReportRepositoriesRefusesWhatIsntACloneReport(t *testing.T) {
 	f := twoRepositories(t)
-	for _, in := range [][]core.RepositoryReport{
-		{{Name: "", Path: "/src/web", State: core.CloneReady}},
-		{{Name: "web", Path: "", State: core.CloneReady}},
+	for _, in := range [][]api.RepositoryReport{
+		{{Name: "", Path: "/src/web", State: api.CloneReady}},
+		{{Name: "web", Path: "", State: api.CloneReady}},
 		{{Name: "web", Path: "/src/web", State: "sideways"}},
-		{{Name: "web", Path: "/src/web", State: core.CloneMissing}},
+		{{Name: "web", Path: "/src/web", State: api.CloneMissing}},
 		{webReady, webReady},
 	} {
-		if _, err := f.core.ReportRepositories(ctx, "acme", core.ReportRepositoriesInput{Repositories: in}); err == nil {
+		if _, err := f.core.ReportRepositories(ctx, "acme", api.ReportRepositoriesInput{Repositories: in}); err == nil {
 			t.Errorf("%+v accepted", in)
 		}
 	}

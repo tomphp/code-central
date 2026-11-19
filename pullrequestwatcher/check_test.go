@@ -2,14 +2,15 @@ package pullrequestwatcher_test
 
 import (
 	"errors"
-	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/pullrequestwatcher"
 	"github.com/tomoram/code-central/watchers/watchertest"
@@ -22,18 +23,18 @@ func checking(t *testing.T, h *watchertest.Harness, path ...string) *codecentral
 	t.Helper()
 	srv := codecentraltest.NewServer(t, codecentraltest.WithPullRequestCheck(pullrequestwatcher.Checker(h.CodeCentral, h.Environ(path...))))
 	must(t, func() error {
-		_, err := srv.Core.CreateProject(human, core.CreateProjectInput{Key: "acme"})
+		_, err := srv.Core.CreateProject(human, api.CreateProjectInput{Key: "acme"})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/web.git", Base: "main"})
+		_, err := srv.Core.ReportPushRemote(ctx, "acme", api.ReportPushRemoteInput{URL: "git@github.com:acme/web.git", Base: "main"})
 		return err
 	})
 	return srv
 }
 
 func turnOn(srv *codecentraltest.Server) error {
-	_, err := srv.Core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest})
+	_, err := srv.Core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest})
 	return err
 }
 
@@ -76,7 +77,7 @@ func TestEachFailedCheckRefusesPullRequestWithItsReasonAndFix(t *testing.T) {
 		reason, fix string
 	}{
 		{"gh missing", func(_ *watchertest.Harness, srv *codecentraltest.Server) {
-			if _, err := srv.Core.SetOptions(human, core.SetOptionsInput{GHPath: &noGH}); err != nil {
+			if _, err := srv.Core.SetOptions(human, api.SetOptionsInput{GHPath: &noGH}); err != nil {
 				t.Fatal(err)
 			}
 		}, "gh isn't there", "gh path Option"},
@@ -91,9 +92,9 @@ func TestEachFailedCheckRefusesPullRequestWithItsReasonAndFix(t *testing.T) {
 			h.Answer(fakegh.Answer{Args: []string{"api", repoPath}, Stdout: write})
 			srv := checking(t, h, h.Bin)
 			c.setup(h, srv)
-			var e *core.Error
+			var e *api.Error
 			err := turnOn(srv)
-			if !errors.As(err, &e) || e.Code != core.Invalid || e.Field != "method" {
+			if !errors.As(err, &e) || e.Code != api.Invalid || e.Field != "method" {
 				t.Fatalf("err = %v, want Pull Request refused", err)
 			}
 			if !strings.Contains(e.Message, c.reason) || !strings.Contains(e.Fix, c.fix) {
@@ -110,7 +111,7 @@ func TestThePushRemotesOwnRefusalsComeBeforeTheCheck(t *testing.T) {
 	h := watchertest.New(t)
 	srv := codecentraltest.NewServer(t, codecentraltest.WithPullRequestCheck(pullrequestwatcher.Checker(h.CodeCentral, h.Environ(h.Bin))))
 	must(t, func() error {
-		_, err := srv.Core.CreateProject(human, core.CreateProjectInput{Key: "acme"})
+		_, err := srv.Core.CreateProject(human, api.CreateProjectInput{Key: "acme"})
 		return err
 	})
 	if err := turnOn(srv); err == nil || !strings.Contains(err.Error(), "Push remote") {

@@ -1,8 +1,10 @@
 package api
 
 import (
-	"github.com/tomoram/code-central/domain"
+	"context"
 	"time"
+
+	"github.com/tomoram/code-central/domain"
 )
 
 // CIView is a Project's CI settings as every Project read returns them.
@@ -132,3 +134,8 @@ type RemoveCIRuleInput struct {
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
+
+// CICheck runs the CI Watcher once in its check mode. The service makes
+// no external calls itself (ADR 0002, ADR 0004), so the check runs in the
+// CI Watcher's process.
+type CICheck func(ctx context.Context, in CICheckInput) WatcherCheckResult

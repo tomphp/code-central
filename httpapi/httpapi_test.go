@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
@@ -41,15 +42,15 @@ func TestErrorStatusAndShape(t *testing.T) {
 	cases := []struct {
 		name, method, path, body string
 		status                   int
-		code                     core.Code
+		code                     api.Code
 		field                    string
 	}{
-		{"unknown project", "GET", "/api/projects/nope", "", 404, core.UnknownProject, ""},
-		{"unknown project, scoped", "GET", "/api/p/nope/tickets", "", 404, core.UnknownProject, ""},
-		{"not found", "GET", "/api/p/acme/tickets/7", "", 404, core.NotFound, ""},
-		{"invalid", "POST", "/api/p/acme/create_spec", `{"title":""}`, 422, core.Invalid, "title"},
-		{"unknown request field", "POST", "/api/p/acme/create_spec", `{"title":"S","colour":"red"}`, 422, core.Invalid, "colour"},
-		{"malformed JSON", "POST", "/api/p/acme/create_spec", `{`, 422, core.Invalid, ""},
+		{"unknown project", "GET", "/api/projects/nope", "", 404, api.UnknownProject, ""},
+		{"unknown project, scoped", "GET", "/api/p/nope/tickets", "", 404, api.UnknownProject, ""},
+		{"not found", "GET", "/api/p/acme/tickets/7", "", 404, api.NotFound, ""},
+		{"invalid", "POST", "/api/p/acme/create_spec", `{"title":""}`, 422, api.Invalid, "title"},
+		{"unknown request field", "POST", "/api/p/acme/create_spec", `{"title":"S","colour":"red"}`, 422, api.Invalid, "colour"},
+		{"malformed JSON", "POST", "/api/p/acme/create_spec", `{`, 422, api.Invalid, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -79,7 +80,7 @@ func TestFindTicketsQueryParameters(t *testing.T) {
 	do(h, "POST", "/api/p/acme/create_ticket", `{"spec":"acme-1","title":"B"}`)
 
 	rec := do(h, "GET", "/api/p/acme/tickets?state=Ready&state=Draft&label=x&label=y&title=a&spec=1", "")
-	var rows []core.TicketRow
+	var rows []api.TicketRow
 	json.Unmarshal(rec.Body.Bytes(), &rows)
 	if rec.Code != 200 || len(rows) != 1 || rows[0].ID != "acme-2" {
 		t.Fatalf("%d %s", rec.Code, rec.Body)

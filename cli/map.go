@@ -3,7 +3,7 @@ package cli
 import (
 	"context"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/ops"
 )
 
@@ -34,7 +34,7 @@ func runSubmitMap(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.SubmitMap(ctx, sc.project, core.SubmitMapInput{Text: text, Draft: *draft, Full: *full})
+	v, err := sc.client.SubmitMap(ctx, sc.project, api.SubmitMapInput{Text: text, Draft: *draft, Full: *full})
 	if err != nil {
 		return err
 	}

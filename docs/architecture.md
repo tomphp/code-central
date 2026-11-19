@@ -31,8 +31,8 @@ flowchart TB
     API["httpapi<br/>REST /api"]
     MCP["mcp<br/>/p/key/mcp"]
     OPS["ops<br/>ops.All(): every operation, bound to *core.Core"]
-    CORE["core<br/>*Core: workflow, landing, CI, chat, views<br/>+ the wire types not yet moved"]
-    WIRE["api<br/>the wire contract (so far: foundations, CI, landing, runtime, Watcher status)"]
+    CORE["core<br/>*Core: workflow, landing, CI, chat, read models"]
+    WIRE["api<br/>the wire contract: inputs, views, rows, results, errors, Ref, Actor, Decode"]
     DOMAIN["domain<br/>records, enums, Landing Policy"]
     STORE["store<br/>Files · SQLite · Postgres"]
     SUP["watchers.Supervise"]
@@ -56,10 +56,12 @@ flowchart TB
   FAC --> GIT
   FAC -.spawns.-> AGENT
   CIW & ISW & PRW & WIW --> EXT
-  CL -.imports wire types and ops from.-> CORE
+  CL & FAC & CIW & ISW & PRW & WIW -.import the wire types from.-> WIRE
+  CL -.imports ops, which imports core, from.-> OPS
+  FAC & ISW & PRW & WIW -.call a few core rules in process.-> CORE
 ```
 
-The dotted edge from `client` to `core` is the one the run-time picture hides: see [weakness 1](#1-the-wire-contract-lives-in-core).
+The dotted edges are the ones the run-time picture hides. The wire types are in `api` (weakness 1, fixed), so no client needs `core` for them. But `client` imports `ops` (weakness 4), and the Factory and three of the Watchers still call a few `core` functions (weakness 3), so they link `core` and `store` all the same.
 
 A second, test-only composition exists: `world/` + `cmd/corewasm` build the real Core, `httpapi` and `mcp` over an in-memory store to WebAssembly (built by `go run ./internal/corewasm`), and the UI's tests and stories run against that instead of a hand-written fake (ADR 0060, 0044).
 
@@ -67,7 +69,8 @@ A second, test-only composition exists: `world/` + `cmd/corewasm` build the real
 
 | Module | Owns | Its contract |
 |---|---|---|
-| `core` | The workflow and every rule over it: Claims, Rounds, triage, Requirements, landing, CI, pull requests, issue and work-item links, chat, usage, the read models. Also the wire types not yet moved to `api` (`*Input`, `*View`, `*Row`, `*Result`), and temporary aliases for those that have (`core/aliases.go`, among them the error codes, `Ref`, `Actor` and `Decode`). | `*core.Core`'s 150 exported methods; no interface. |
+| `core` | The workflow and every rule over it: Claims, Rounds, triage, Requirements, landing, CI, pull requests, issue and work-item links, chat, usage, the read models. It names the wire types (`*Input`, `*View`, `*Row`, `*Result`, the error codes, `Ref`, `Actor`, `Decode`) as `api.X`; it declares none, and has no alias for one. | `*core.Core`'s 150 exported methods; no interface. |
+| `api` | The wire contract (ADR 0072): every input, view, row and result of an operation, the error codes, `Ref`, `Actor`, `Decode`, the Watcher status contract, and the rules that belong to one of those types (`TicketView.Brief`, `ProjectView.LandingPolicies`, `FindTicketsInput.EncodeQuery`). It imports only `domain` and `internal/fieldwalk`. | The exported types; `internal/wiretypes` generates `wire.gen.ts` from them. |
 | `ops` | The one list of operations (`ops.All()`, ADR 0063): name, audience, route, input and output types, and the `Call` that binds each to a `*core.Core` method. `ops.Serve` adapts the Core to `ops.Service`, which `httpapi` needs, and `ops.Dispatcher`, which `mcp` needs (ADR 0065). | `ops.Service`, `ops.Dispatcher`, `ops.Definitions()`. |
 | `httpapi`, `mcp` | The two doors: routes and tools derived from `ops`, plus the HTTP API's reads and streams that aren't operations (`Wait`, transcripts, chat feed, usage, Factory posts). | HTTP routes and MCP tools; checked by the cross-door suite in `server/*_test.go`. |
 | `server` | The service's one handler: MCP, HTTP API and the embedded UI behind the Host/Origin Guard, with `server.Calls` wrapping each door's dispatch to set the Actor and record Usage. | `server.Handler`. |
@@ -89,14 +92,14 @@ There is no separate issue-tracker module: Specs and Tickets live in `core`, and
 
 ### What `core` contains
 
-`core` is about 22.7k non-test lines in 96 files, with 318 exported types and a `*Core` with 150 exported methods. By file grouping:
+`core` is about 18.1k non-test lines in 95 files, with a `*Core` of 150 exported methods and 6 exported types (the wire types went to `api`). By file grouping:
 
 - workflow and claims (claim, round, failure, blockers, triage, requirement, map, prototype, retro, small change, auto-accept, auto-fix…)
 - landing (landing policy, land per spec, spec merge, repositories, changed repositories, base, branch format)
 - CI and code host (ci*, pull request, GitHub issues, Azure Boards, links, write-back, watcher status)
 - agent runtime (chat, transcript, heartbeat, models, plan limits, usage, stage guides, Factory wake)
 - read models (`*View` types, needs-me, attention)
-- the wire contract (about 200 `*Input`, `*View`, `*Row` and `*Result` types, errors, `Decode`)
+- the builders of the wire contract's views (`*View`, `*Row` and `*Result` are in `api`)
 
 ## Dependency rules (as intended and as found)
 
@@ -105,29 +108,31 @@ Intended: `clients → client → HTTP → server → httpapi/mcp → ops → co
 Found:
 
 - **No import cycles**, and `core` never imports a door, `ops`, `factory`, `gh` or `azdo`.
-- **Direct imports hold, transitive ones don't.** `internal/importguard` keeps `client`, `httpapi`, `mcp`, `factory` and the Watchers from importing `store` directly, and they don't. But each of them imports `core` (for the wire types) or `ops`, and `core` imports `store`, so `client`, `gh`, every Watcher and the Factory binary all link `store` and its 16 database driver packages. That the Factory and the Watchers never touch the Store is kept by discipline, not by the compiler.
+- **Direct imports hold, transitive ones don't.** `internal/importguard` keeps `client`, `httpapi`, `mcp`, `factory` and the Watchers from importing `store` directly, and they don't. But `client` imports `ops`, and the Factory, `issuewatcher`, `pullrequestwatcher` and `workitemwatcher` import `core` (for a few rules, no longer for the wire types), and `core` imports `store`, so `client`, those three Watchers and the Factory binary all link `store` and its 16 database driver packages. `ciwatcher`, `gh`, `azdo`, `ratelimit`, `watchers` and `notify` link neither `core` nor `store`. That the Factory and the Watchers never touch the Store is kept by discipline, not by the compiler.
 - **The leaves are leaves.** `gh`, `azdo` and `ratelimit` import `api` (the Watcher status contract) and not `core`.
+- **`api` is a leaf over `domain`.** It imports only `domain` and `internal/fieldwalk`, and `core`, `ops`, the doors and the clients import it.
 
 | Package | Imports of Code Central (non-test) |
 |---|---|
-| `client` | core, domain, ops, internal/fieldwalk |
-| `factory` | client, clock, core, domain, home, usage |
-| `ciwatcher`, `pullrequestwatcher` | azdo, clock, core, domain, gh, ratelimit, watchers |
-| `issuewatcher` | clock, core, domain, gh, ratelimit, watchers |
-| `workitemwatcher` | azdo, azdourl, clock, core, domain, gh, ratelimit, watchers |
+| `client` | api, domain, ops, internal/fieldwalk |
+| `factory` | api, client, clock, core, domain, home, usage |
+| `ciwatcher` | api, azdo, clock, domain, gh, ratelimit, watchers |
+| `pullrequestwatcher` | api, azdo, clock, core, domain, gh, ratelimit, watchers |
+| `issuewatcher` | api, clock, core, domain, gh, ratelimit, watchers |
+| `workitemwatcher` | api, azdo, azdourl, clock, core, domain, gh, ratelimit, watchers |
 | `usage` | api, clock |
-| `api` | domain, internal/fieldwalk (so far the foundations, the CI, landing and runtime types and the Watcher status contract are in it) |
+| `api` | domain, internal/fieldwalk |
 | `gh` | api, ratelimit |
 | `azdo` | api, azdourl, domain, ratelimit |
 | `ratelimit` | api |
 | `watchers` | api, clock, events, ratelimit |
-| `ops` | core, domain, events, internal/fieldwalk |
-| `httpapi` | core, domain, ops, internal/fieldwalk |
-| `mcp` | core, ops, internal/fieldwalk |
-| `server` | core, httpapi, mcp, ops, usage |
+| `ops` | api, core, domain, events, internal/fieldwalk |
+| `httpapi` | api, core, domain, ops, internal/fieldwalk |
+| `mcp` | api, core, ops, internal/fieldwalk |
+| `server` | api, core, httpapi, mcp, ops, usage |
 | `core` | api, azdourl, clock, codehost, domain, events, ids, store, usage, internal/fieldwalk |
 | `store` | domain, events, home, usage |
-| `cli` | app, ciwatcher, client, clock, core, domain, gh, home, issuewatcher, notify, ops, pullrequestwatcher, store, workitemwatcher, internal/fieldwalk |
+| `cli` | api, app, ciwatcher, client, clock, core, domain, gh, home, issuewatcher, notify, ops, pullrequestwatcher, store, workitemwatcher, internal/fieldwalk |
 
 ### The Store
 
@@ -152,21 +157,15 @@ Found:
 
 Ordered by how much they cost. Each recommendation would be its own Ticket.
 
-### 1. The wire contract lives in `core`
+### 1. The wire contract lives in `core` (fixed)
 
-About 200 of `core`'s 318 exported types were the wire contract: inputs, views, rows, results, `Ref`, `Actor`, the error codes and `Decode`. Every client imports `core` for them: `client` names 131 different `core` symbols, `factory` 96, each Watcher about 30.
+About 200 of `core`'s 318 exported types were the wire contract: inputs, views, rows, results, `Ref`, `Actor`, the error codes and `Decode`, and every client imported `core` for them. They are now in `api` (Spec code-central-1111, ADR 0072), which imports only `domain` and `internal/fieldwalk`. `core` names them as `api.X`, with no alias left, and `internal/wiretypes` generates `wire.gen.ts` from `api` alone. A change to the wire is now a change to `api`, and one to an internal type in `core` is not.
 
-**Progress (Spec code-central-1111, ADR 0072):** the foundations (`Error` and its codes, `Ref`, `Actor`, `Decode`, the `Part*` constants) and the CI, landing and runtime types (CI, Repositories, pull requests, Base, Clone, Factory and Models, Usage, Storage, Needs Me reasons) are now in `api`. `core` keeps temporary aliases (`core/aliases.go`) so its callers still compile; the last part of the move drops them. The Ticket, Spec, Project and Chat types are still in `core`, and the clients still import `core` until then. So:
-
-- every client links the whole Core, the Store and the database drivers (see above);
-- nothing but review stops a client calling `core.New` or a Core method in process;
-- the contract has no edge: a change to an internal type in `core` and a change to the wire look the same in a diff, and `internal/wiretypes` has to walk `core` to find what is wire.
-
-**Recommendation:** move the wire types, the error codes, `Ref`, `Actor` and `Decode` into their own package (say `api`) that imports only `domain`. `core`, `ops`, the doors and the clients import `api`; extend `internal/importguard` so that no client (`client`, `factory`, the Watchers, `gh`, `azdo`, `ratelimit`, `watchers`, `notify`) imports `core` or `store`, checked on the transitive imports (`go list -deps`), not the direct ones. This also gives `wiretypes` one package to generate from. It is mechanical but wide: about 1,850 references to `core.` in non-test code outside `core`, and many more in tests.
+What is left of the problem is that nothing yet *stops* a client linking `core`: `client` imports `ops` (weakness 4), and the Factory and three Watchers call `core` rules (weakness 3), so each still links the whole Core, the Store and the database drivers. The next slice of the Spec extends `internal/importguard` so that no client imports `core` or `store`, checked on the transitive imports (`go list -deps`) rather than the direct ones.
 
 ### 2. The code-host leaves import `core` (fixed)
 
-`gh`, `azdo`, `ratelimit` and `watchers` used to import `core` for the Watcher status contract. It is now in `api` (ADR 0072), and none of the four links `core` or `store`. The rest of the wire contract is still in `core` (weakness 1).
+`gh`, `azdo`, `ratelimit` and `watchers` used to import `core` for the Watcher status contract. It is now in `api` (ADR 0072), and none of the four links `core` or `store`. The rest of the wire contract has moved there too (weakness 1).
 
 ### 3. Clients run Core logic, not just Core types
 

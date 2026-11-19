@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/ids"
@@ -42,7 +43,7 @@ func watch(t *testing.T, f fixture) (tick func() []change) {
 	}
 }
 
-func wantSilentSince(t *testing.T, v core.TicketView, want time.Time) {
+func wantSilentSince(t *testing.T, v api.TicketView, want time.Time) {
 	t.Helper()
 	if want.IsZero() {
 		if v.SilentSince != nil {
@@ -59,7 +60,7 @@ func TestAClaimTurnsSilentAfterThirtyMinutesWithoutActivity(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
 	claimed := f.clock.Now()
-	f.claim(t, core.ClaimInput{SessionID: "s1"})
+	f.claim(t, api.ClaimInput{SessionID: "s1"})
 
 	f.clock.Advance(30*time.Minute - time.Second)
 	wantSilentSince(t, f.get(t, "acme-2"), time.Time{})
@@ -71,11 +72,11 @@ func TestAClaimTurnsSilentAfterThirtyMinutesWithoutActivity(t *testing.T) {
 func TestAnyWriteToTheTicketClearsSilent(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
-	f.claim(t, core.ClaimInput{})
+	f.claim(t, api.ClaimInput{})
 	f.clock.Advance(45 * time.Minute)
 
 	written := f.clock.Now()
-	if _, err := f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: "still here"}); err != nil {
+	if _, err := f.core.Comment(ctx, "acme", api.CommentInput{Ticket: "2", Body: "still here"}); err != nil {
 		t.Fatal(err)
 	}
 	wantSilentSince(t, f.get(t, "acme-2"), time.Time{})
@@ -86,7 +87,7 @@ func TestAnyWriteToTheTicketClearsSilent(t *testing.T) {
 func TestAPingClearsSilentAndIsThrottledToOncePerMinutePerSession(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
-	f.claim(t, core.ClaimInput{SessionID: "s1"})
+	f.claim(t, api.ClaimInput{SessionID: "s1"})
 
 	f.clock.Advance(40 * time.Minute)
 	pinged := f.clock.Now()
@@ -117,10 +118,10 @@ func TestAPingMarksEveryLiveClaimWithThatSessionInAnyProject(t *testing.T) {
 	f.work(t, domain.Ready, domain.Ready) // acme-2, acme-3
 	f.project(t, "web")
 	f.spec(t, "web", "Site")
-	f.ticket(t, "web", core.CreateTicketInput{Spec: "1", Title: "Page", State: domain.Ready})
-	f.claim(t, core.ClaimInput{Ticket: "2", SessionID: "s1"})
-	f.claim(t, core.ClaimInput{Ticket: "3", SessionID: "s2"})
-	if _, err := f.core.Claim(ctx, "web", core.ClaimInput{SessionID: "s1"}); err != nil {
+	f.ticket(t, "web", api.CreateTicketInput{Spec: "1", Title: "Page", State: domain.Ready})
+	f.claim(t, api.ClaimInput{Ticket: "2", SessionID: "s1"})
+	f.claim(t, api.ClaimInput{Ticket: "3", SessionID: "s2"})
+	if _, err := f.core.Claim(ctx, "web", api.ClaimInput{SessionID: "s1"}); err != nil {
 		t.Fatal(err)
 	}
 	claimed := f.clock.Now()
@@ -142,11 +143,11 @@ func TestAPingMarksEveryLiveClaimWithThatSessionInAnyProject(t *testing.T) {
 func TestAClaimWhoseSessionKeepsPostingSessionEventsNeverGoesSilent(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
-	f.claim(t, core.ClaimInput{SessionID: "s1"})
+	f.claim(t, api.ClaimInput{SessionID: "s1"})
 
 	for range 12 { // three hours, posting every quarter of an hour
 		f.clock.Advance(15 * time.Minute)
-		f.core.PostSessionEvents(ctx, "s1", []core.SessionEvent{{Time: f.clock.Now(), Kind: "tool_call", Text: "Bash: go test ./..."}})
+		f.core.PostSessionEvents(ctx, "s1", []api.SessionEvent{{Time: f.clock.Now(), Kind: "tool_call", Text: "Bash: go test ./..."}})
 		wantSilentSince(t, f.get(t, "acme-2"), time.Time{})
 	}
 	posted := f.clock.Now()
@@ -157,8 +158,8 @@ func TestAClaimWhoseSessionKeepsPostingSessionEventsNeverGoesSilent(t *testing.T
 func TestOnlyInProgressIsEverSilent(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready, domain.Ready)
-	f.claim(t, core.ClaimInput{Ticket: "2"})
-	f.claim(t, core.ClaimInput{Ticket: "3"})
+	f.claim(t, api.ClaimInput{Ticket: "2"})
+	f.claim(t, api.ClaimInput{Ticket: "3"})
 	// Rounds arrive with ticket 29; put the Tickets in Needs Answer and
 	// Answered (Claim still live) directly.
 	for n, s := range map[int]domain.State{2: domain.NeedsAnswer, 3: domain.Answered} {
@@ -179,7 +180,7 @@ func TestOnlyInProgressIsEverSilent(t *testing.T) {
 func TestAfterARestartLastActivityCountsFromServiceStart(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
-	f.claim(t, core.ClaimInput{SessionID: "s1"})
+	f.claim(t, api.ClaimInput{SessionID: "s1"})
 	f.core.Ping(ctx, "s1")
 
 	f.clock.Advance(2 * time.Hour)
@@ -196,9 +197,9 @@ func TestAfterARestartLastActivityCountsFromServiceStart(t *testing.T) {
 func TestTheWatchSendsTicketChangedWhenAClaimTurnsSilentOrStopsBeingSilent(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready, domain.Ready)
-	f.claim(t, core.ClaimInput{Ticket: "2", SessionID: "s1"})
+	f.claim(t, api.ClaimInput{Ticket: "2", SessionID: "s1"})
 	f.clock.Advance(10 * time.Minute)
-	f.claim(t, core.ClaimInput{Ticket: "3", SessionID: "s2"})
+	f.claim(t, api.ClaimInput{Ticket: "3", SessionID: "s2"})
 
 	tick := watch(t, f)
 

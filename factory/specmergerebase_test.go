@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/factory/factorytest"
 )
@@ -62,8 +62,8 @@ func TestUnderRebaseASpecBranchConflictOpensTheRebaseTicketAndAcceptingItReplace
 	spec := "spec/" + h.SpecID()
 
 	tk := h.WantState(fix, domain.InReview)
-	if tk.Title != core.SpecMergeRebaseTitle(h.SpecID()) || !tk.SpecMergeTicket || !strings.Contains(tk.Description, "Rebase this branch onto the base") {
-		t.Fatalf("%s is %+v, want it marked, titled %q and saying to rebase", fix, tk, core.SpecMergeRebaseTitle(h.SpecID()))
+	if tk.Title != api.SpecMergeRebaseTitle(h.SpecID()) || !tk.SpecMergeTicket || !strings.Contains(tk.Description, "Rebase this branch onto the base") {
+		t.Fatalf("%s is %+v, want it marked, titled %q and saying to rebase", fix, tk, api.SpecMergeRebaseTitle(h.SpecID()))
 	}
 	oldTip, rebased, baseTip := h.Git("rev-parse", spec), h.Git("rev-parse", fix), h.Git("rev-parse", "main")
 	if descends(h, h.Repo, rebased, oldTip) || !descends(h, h.Repo, rebased, baseTip) {
@@ -234,7 +234,7 @@ func TestAnUnmarkedTicketWithTheRebaseTitleIsRecognisedAsASpecMergeTicket(t *tes
 	h.CommitOn("main", "README", "base side\n")
 	// Opened before the mark existed: unmarked, with no branch yet, so
 	// the Spec Branch is what is checked against the base.
-	if got := h.ReadyTicket(core.SpecMergeRebaseTitle(h.SpecID())); got != legacy {
+	if got := h.ReadyTicket(api.SpecMergeRebaseTitle(h.SpecID())); got != legacy {
 		t.Fatalf("the unmarked Ticket is %s, want %s", got, legacy)
 	}
 	r.Poll()
@@ -286,10 +286,10 @@ func TestUnderRebaseAMergeTheSpecBranchGainedWhileRebaseWasOffIsRemadeOnTheRebas
 // the Spec Branch conflicts in both and the Factory opened the Spec
 // merge Ticket fix, whose session ran script. It returns the Factory,
 // api and the Ticket.
-func specMergeOpenedInTwo(t *testing.T, h *factorytest.Harness, fix string, script ...factorytest.Step) (r *factorytest.Running, api *factorytest.Repository, id string) {
+func specMergeOpenedInTwo(t *testing.T, h *factorytest.Harness, fix string, script ...factorytest.Step) (r *factorytest.Running, apiRepo *factorytest.Repository, id string) {
 	t.Helper()
 	h.MakeRequirement()
-	api = h.AddRepository("api")
+	apiRepo = h.AddRepository("api")
 	id = h.ReadyTicket("Add an endpoint")
 	// other.go too, so a rebase that keeps the base's endpoint.go still
 	// keeps a commit of the Ticket's in api.
@@ -307,11 +307,11 @@ func specMergeOpenedInTwo(t *testing.T, h *factorytest.Harness, fix string, scri
 	r.Poll()
 	r.WantOutput(id + ": replayed onto spec/" + h.SpecID())
 	h.CommitOn("main", "client.go", "package base\n")
-	api.CommitOn("main", "endpoint.go", "package other\n")
+	apiRepo.CommitOn("main", "endpoint.go", "package other\n")
 	release()
 	r.Poll()
 	r.WantOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with the base in " + h.Project + ", api: opened " + fix + " to rebase it onto the base")
-	return r, api, id
+	return r, apiRepo, id
 }
 
 // rebaseInTwo is a Spec merge Ticket's session that rebases its branch
@@ -330,10 +330,10 @@ func TestUnderRebaseAcceptingTheSpecMergeTicketMovesTheSpecBranchInEachRepositor
 	t.Parallel()
 	h := factorytest.New(t)
 	fix := "acme-5"
-	r, api, id := specMergeOpenedInTwo(t, h, fix, rebaseInTwo("theirs")...)
+	r, apiRepo, id := specMergeOpenedInTwo(t, h, fix, rebaseInTwo("theirs")...)
 	spec := "spec/" + h.SpecID()
 	h.WantState(fix, domain.InReview)
-	homeRebased, apiRebased := h.Git("rev-parse", fix), h.GitIn(api.Path, "rev-parse", fix)
+	homeRebased, apiRebased := h.Git("rev-parse", fix), h.GitIn(apiRepo.Path, "rev-parse", fix)
 	// A Ticket accepted meanwhile moves the Spec Branch on in the Home
 	// Repository alone: api's stays at the fork point.
 	b, _ := acceptedOnSpecBranch(h, "Second", "two.txt", "2\n")
@@ -351,10 +351,10 @@ func TestUnderRebaseAcceptingTheSpecMergeTicketMovesTheSpecBranchInEachRepositor
 	if tip := h.Git("rev-parse", spec); h.Git("rev-parse", tip+"^") != homeRebased || subject(h, h.Repo, tip) != "Change two.txt" {
 		t.Errorf("the Home Repository's %s is at %s %q, want b's commit replayed on the rebased result %s", spec, tip, subject(h, h.Repo, tip), homeRebased)
 	}
-	if tip := h.GitIn(api.Path, "rev-parse", spec); tip != apiRebased {
+	if tip := h.GitIn(apiRepo.Path, "rev-parse", spec); tip != apiRebased {
 		t.Errorf("api's %s is at %s, want the rebased result %s", spec, tip, apiRebased)
 	}
-	if h.Git("show", "main:client.go") != "package acme" || h.GitIn(api.Path, "show", "main:endpoint.go") != "package api" {
+	if h.Git("show", "main:client.go") != "package acme" || h.GitIn(apiRepo.Path, "show", "main:endpoint.go") != "package api" {
 		t.Error("a base doesn't hold the Spec Branch's side: the Spec didn't land its rebased result in each")
 	}
 }
@@ -364,24 +364,24 @@ func TestUnderRebaseASpecMergeTicketConflictingInOneRepositoryMovesTheSpecBranch
 	h := factorytest.New(t)
 	fix := "acme-5"
 	// In api the session keeps the base's side of endpoint.go.
-	r, api, id := specMergeOpenedInTwo(t, h, fix, rebaseInTwo("ours")...)
+	r, apiRepo, id := specMergeOpenedInTwo(t, h, fix, rebaseInTwo("ours")...)
 	spec := "spec/" + h.SpecID()
 	h.WantState(fix, domain.InReview)
-	apiHead := h.GitIn(api.Path, "rev-parse", fix)
-	homeFork, apiFork := h.Git("rev-parse", spec), h.GitIn(api.Path, "rev-parse", spec)
+	apiHead := h.GitIn(apiRepo.Path, "rev-parse", fix)
+	homeFork, apiFork := h.Git("rev-parse", spec), h.GitIn(apiRepo.Path, "rev-parse", spec)
 	// A Ticket accepted meanwhile changes endpoint.go on api's Spec Branch,
 	// which doesn't replay onto the base's side, and two.txt in the Home
 	// Repository, which does.
 	b := h.ReadyTicket("Second")
 	h.Git("branch", b, spec)
-	h.GitIn(api.Path, "branch", b, spec)
+	h.GitIn(apiRepo.Path, "branch", b, spec)
 	homeCommit := h.CommitOn(b, "two.txt", "2\n")
-	apiCommit := api.CommitOn(b, "endpoint.go", "package b\n")
-	h.Finished(b, b, homeCommit, core.RepositoryWork{Name: "api", Branch: b, Commit: apiCommit})
+	apiCommit := apiRepo.CommitOn(b, "endpoint.go", "package b\n")
+	h.Finished(b, b, homeCommit, api.RepositoryWork{Name: "api", Branch: b, Commit: apiCommit})
 	h.Accept(b)
 	r.Poll()
 	r.WantOutput(b + ": replayed onto " + spec + " at ")
-	homeTip, apiTip := h.Git("rev-parse", spec), h.GitIn(api.Path, "rev-parse", spec)
+	homeTip, apiTip := h.Git("rev-parse", spec), h.GitIn(apiRepo.Path, "rev-parse", spec)
 
 	h.Accept(fix)
 	r.Poll()
@@ -390,7 +390,7 @@ func TestUnderRebaseASpecMergeTicketConflictingInOneRepositoryMovesTheSpecBranch
 	if !movedTo(tk, domain.Accepted, domain.Ready) {
 		t.Fatalf("%s was not sent back: %+v", fix, tk.Moves)
 	}
-	if h.Git("rev-parse", spec) != homeTip || h.GitIn(api.Path, "rev-parse", spec) != apiTip {
+	if h.Git("rev-parse", spec) != homeTip || h.GitIn(apiRepo.Path, "rev-parse", spec) != apiTip {
 		t.Error("a Spec Branch moved: a Spec merge Ticket conflicting in any Repository moves the Spec Branch in none")
 	}
 	if !commented(tk, "replaying the Spec Branch's later commits onto it conflicts in these Repositories, so it moved the Spec Branch in none of them",

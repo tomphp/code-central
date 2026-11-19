@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
@@ -21,7 +22,7 @@ import (
 // instructions.
 func (f fixture) autoFixOn(t *testing.T, limit int) {
 	t.Helper()
-	if _, err := f.core.SetAutoFix(human, "acme", core.SetAutoFixInput{On: true, FixInstructions: domain.DefaultFixInstructions, Limit: limit}); err != nil {
+	if _, err := f.core.SetAutoFix(human, "acme", api.SetAutoFixInput{On: true, FixInstructions: domain.DefaultFixInstructions, Limit: limit}); err != nil {
 		t.Fatalf("set_auto_fix: %v", err)
 	}
 }
@@ -38,11 +39,11 @@ func TestAutoFixOpensOneFixTicketForAnItemListingManyTicketsAndKeepsItOutOfNeeds
 	if fix.State != domain.Ready || fix.Spec.ID != "acme-9" || fix.Title != "Fix the CI failure of acme-5: First" {
 		t.Fatalf("fix Ticket %q %s on %q, want Ready on the CI Fixes Spec acme-9 naming acme-5", fix.Title, fix.State, fix.Spec.ID)
 	}
-	if _, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "acme-11"}); err == nil {
+	if _, err := f.core.GetTicket(ctx, "acme", api.GetTicketInput{Ticket: "acme-11"}); err == nil {
 		t.Fatal("acme-11 exists, want one fix Ticket for the item")
 	}
 	for _, id := range []string{"acme-5", "acme-8"} {
-		if tk := f.getTicket(t, id); tk.State != domain.Accepted || tk.NeedsMeReason != "" || tk.CIResult != core.CIFailed {
+		if tk := f.getTicket(t, id); tk.State != domain.Accepted || tk.NeedsMeReason != "" || tk.CIResult != api.CIFailed {
 			t.Errorf("%s: %s, reason %q, result %q, want Accepted, failed and out of Needs Me", id, tk.State, tk.NeedsMeReason, tk.CIResult)
 		}
 	}
@@ -54,7 +55,7 @@ func TestAnAutoFixTicketCarriesItsMarkTheRunSummaryAndTheAttemptAndItsCommentIsC
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 
 	fix := f.getTicket(t, "acme-10")
-	want := &core.AutoFixMarkView{Attempt: 1, Commit: "abc123", Covers: []string{"acme-5", "acme-8"}}
+	want := &api.AutoFixMarkView{Attempt: 1, Commit: "abc123", Covers: []string{"acme-5", "acme-8"}}
 	if !reflect.DeepEqual(fix.AutoFix, want) {
 		t.Fatalf("mark %+v, want %+v", fix.AutoFix, want)
 	}
@@ -69,7 +70,7 @@ func TestAnAutoFixTicketCarriesItsMarkTheRunSummaryAndTheAttemptAndItsCommentIsC
 		}
 	}
 	comments := f.getTicket(t, "acme-5").Comments
-	if len(comments) != 1 || comments[0].Actor != string(core.Integration) ||
+	if len(comments) != 1 || comments[0].Actor != string(api.Integration) ||
 		comments[0].Body != "New fix Ticket: acme-10 fixes this CI failure forward; acme-5 stays Accepted and lands when a later commit passes CI." {
 		t.Fatalf("acme-5 comments %+v, want the manual wording as integration", comments)
 	}
@@ -81,21 +82,21 @@ func TestAnAutoFixTicketCarriesItsMarkTheRunSummaryAndTheAttemptAndItsCommentIsC
 func TestAManualFixTicketHasNoMark(t *testing.T) {
 	f := itemWorld(t)
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
-	if _, err := f.core.NewFixTicket(human, "acme", core.NewFixTicketInput{Ticket: "acme-5", Note: "ci.yml failed"}); err != nil {
+	if _, err := f.core.NewFixTicket(human, "acme", api.NewFixTicketInput{Ticket: "acme-5", Note: "ci.yml failed"}); err != nil {
 		t.Fatal(err)
 	}
 	if fix := f.getTicket(t, "acme-10"); fix.AutoFix != nil {
 		t.Fatalf("mark %+v, want none on a manual fix Ticket", fix.AutoFix)
 	}
-	if c := f.getTicket(t, "acme-5").Comments; len(c) != 1 || c[0].Actor != string(core.Human) {
+	if c := f.getTicket(t, "acme-5").Comments; len(c) != 1 || c[0].Actor != string(api.Human) {
 		t.Fatalf("comments %+v, want the human's", c)
 	}
 }
 
 // noTicket fails unless the Ticket id doesn't exist.
-func (f fixture) noTicket(t *testing.T, id core.Ref) {
+func (f fixture) noTicket(t *testing.T, id api.Ref) {
 	t.Helper()
-	if v, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: id}); err == nil {
+	if v, err := f.core.GetTicket(ctx, "acme", api.GetTicketInput{Ticket: id}); err == nil {
 		t.Fatalf("%s exists (%q), want no fix Ticket", id, v.Title)
 	}
 }
@@ -103,7 +104,7 @@ func (f fixture) noTicket(t *testing.T, id core.Ref) {
 func TestAutoFixIsOffByDefaultSoTheItemWaitsInNeedsMe(t *testing.T) {
 	f := itemWorld(t)
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
-	f.theItem(t, core.ReasonCIFailed)
+	f.theItem(t, api.ReasonCIFailed)
 	f.noTicket(t, "acme-9")
 }
 
@@ -135,7 +136,7 @@ func TestAManualFixTicketLeavesTheCommitToTheHumanWhetherOpenDoneOrCancelled(t *
 	for _, state := range []domain.State{domain.Ready, domain.Done, domain.Cancelled} {
 		f := itemWorld(t)
 		f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
-		if _, err := f.core.NewFixTicket(human, "acme", core.NewFixTicketInput{Ticket: "acme-5", Note: "ci.yml failed"}); err != nil {
+		if _, err := f.core.NewFixTicket(human, "acme", api.NewFixTicketInput{Ticket: "acme-5", Note: "ci.yml failed"}); err != nil {
 			t.Fatal(err)
 		}
 		f.store.Update(func(w store.Writer) error {
@@ -146,7 +147,7 @@ func TestAManualFixTicketLeavesTheCommitToTheHumanWhetherOpenDoneOrCancelled(t *
 		f.autoFixOn(t, 3)
 		f.noTicket(t, "acme-11")
 		if state != domain.Ready {
-			f.theItem(t, core.ReasonCIFailed)
+			f.theItem(t, api.ReasonCIFailed)
 		}
 	}
 }
@@ -155,7 +156,7 @@ func TestTurningAutoFixOffStopsItOpeningAndLeavesItsFixTicketsOpen(t *testing.T)
 	f := itemWorld(t)
 	f.autoFixOn(t, 3)
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
-	if _, err := f.core.SetAutoFix(human, "acme", core.SetAutoFixInput{FixInstructions: domain.DefaultFixInstructions, Limit: 3}); err != nil {
+	if _, err := f.core.SetAutoFix(human, "acme", api.SetAutoFixInput{FixInstructions: domain.DefaultFixInstructions, Limit: 3}); err != nil {
 		t.Fatal(err)
 	}
 	if fix := f.getTicket(t, "acme-10"); fix.State != domain.Ready {
@@ -165,7 +166,7 @@ func TestTurningAutoFixOffStopsItOpeningAndLeavesItsFixTicketsOpen(t *testing.T)
 	f.pushed(t, "acme-6", "def456")
 	f.ciRun(t, 2, "ci.yml", "def456", "acme-6", domain.CICompleted, domain.CIFailure)
 	f.noTicket(t, "acme-11")
-	if it := f.theItem(t, core.ReasonCIFailed).CIItem; it.Commit != "def456" {
+	if it := f.theItem(t, api.ReasonCIFailed).CIItem; it.Commit != "def456" {
 		t.Fatalf("item %+v, want def456 waiting on the human", it)
 	}
 }
@@ -174,13 +175,13 @@ func TestAutoFixLeavesCICancelledAndCIUnavailableToTheHuman(t *testing.T) {
 	f := itemWorld(t)
 	f.autoFixOn(t, 3)
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CICancelled)
-	f.theItem(t, core.ReasonCICancelled)
+	f.theItem(t, api.ReasonCICancelled)
 
 	f = itemWorld(t)
 	f.autoFixOn(t, 3)
 	f.clock.Advance(core.CIUnavailableAfter + time.Minute)
 	f.pushed(t, "acme-5", "def456")
-	f.theItem(t, core.ReasonCIUnavailable)
+	f.theItem(t, api.ReasonCIUnavailable)
 	f.noTicket(t, "acme-9")
 }
 
@@ -188,22 +189,22 @@ func TestAutoFixLeavesAClosedPullRequestToTheHuman(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
 	f.withCITracking(t)
-	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PRClosed})
+	f.reportPR(t, api.ReportPullRequestInput{Branch: "acme-2", State: domain.PRClosed})
 	f.autoFixOn(t, 3)
-	wantReason(t, f.get(t, "2"), core.ReasonPullRequestClosed)
+	wantReason(t, f.get(t, "2"), api.ReasonPullRequestClosed)
 	f.noTicket(t, "acme-3")
 }
 
 func TestAutoFixOpensNothingForACIRulesFailure(t *testing.T) {
 	f := itemWorld(t)
 	f.autoFixOn(t, 3)
-	if _, err := f.core.AddCIRule(human, "acme", core.CIRuleInput{Workflow: "nightly.yml", Branch: "main"}); err != nil {
+	if _, err := f.core.AddCIRule(human, "acme", api.CIRuleInput{Workflow: "nightly.yml", Branch: "main"}); err != nil {
 		t.Fatal(err)
 	}
 	started := f.clock.Now()
-	run := core.CIRunView{ID: 7, Attempt: 1, Workflow: "nightly.yml", Name: "Nightly", Branch: "main", Commit: "fff000",
+	run := api.CIRunView{ID: 7, Attempt: 1, Workflow: "nightly.yml", Name: "Nightly", Branch: "main", Commit: "fff000",
 		Status: domain.CICompleted, Conclusion: domain.CIFailure, Started: &started, Finished: &started, URL: "https://github.com/acme/web/actions/runs/7", Rule: "acme-9"}
-	if _, err := f.core.ReportCIRuns(ctx, "acme", core.ReportCIRunsInput{Runs: []core.CIRunView{run}}); err != nil {
+	if _, err := f.core.ReportCIRuns(ctx, "acme", api.ReportCIRunsInput{Runs: []api.CIRunView{run}}); err != nil {
 		t.Fatal(err)
 	}
 	f.noTicket(t, "acme-10")
@@ -213,12 +214,12 @@ func TestConcurrentReportsOfTheSameFailureOpenOneFixTicket(t *testing.T) {
 	f := itemWorld(t)
 	f.autoFixOn(t, 3)
 	started := f.clock.Now()
-	run := core.CIRunView{ID: 1, Attempt: 1, Workflow: "ci.yml", Name: "ci.yml", Branch: "main", Commit: "abc123",
+	run := api.CIRunView{ID: 1, Attempt: 1, Workflow: "ci.yml", Name: "ci.yml", Branch: "main", Commit: "abc123",
 		Status: domain.CICompleted, Conclusion: domain.CIFailure, Started: &started, Finished: &started, URL: "https://github.com/acme/web/actions/runs/1", Ticket: "acme-5"}
 	var wg sync.WaitGroup
 	for range 10 {
 		wg.Go(func() {
-			if _, err := f.core.ReportCIRuns(ctx, "acme", core.ReportCIRunsInput{Runs: []core.CIRunView{run}}); err != nil {
+			if _, err := f.core.ReportCIRuns(ctx, "acme", api.ReportCIRunsInput{Runs: []api.CIRunView{run}}); err != nil {
 				t.Error(err)
 			}
 		})
@@ -258,7 +259,7 @@ func TestAnAutoFixTicketLeftUnrecordedByACrashIsRecordedNotOpenedAgain(t *testin
 		}
 		return nil
 	})
-	if c := f.getTicket(t, "acme-5").Comments; len(c) != 1 || !strings.HasPrefix(c[0].Body, "New fix Ticket: acme-9 fixes") || c[0].Actor != string(core.Integration) {
+	if c := f.getTicket(t, "acme-5").Comments; len(c) != 1 || !strings.HasPrefix(c[0].Body, "New fix Ticket: acme-9 fixes") || c[0].Actor != string(api.Integration) {
 		t.Fatalf("acme-5 comments %+v, want Auto-fix's naming acme-9", c)
 	}
 }
@@ -269,7 +270,7 @@ func TestAutoFixLeavesACIFailureUnderPullRequestToTheHuman(t *testing.T) {
 	f.withCITracking(t)
 	f.autoFixOn(t, 3)
 	f.reportRun(t, "acme-2", domain.CICompleted, domain.CIFailure)
-	wantReason(t, f.get(t, "2"), core.ReasonCIFailed)
+	wantReason(t, f.get(t, "2"), api.ReasonCIFailed)
 	f.noTicket(t, "acme-3")
 }
 
@@ -306,7 +307,7 @@ func TestTheFixTicketsOwnFailedPushIsTheNextAttempt(t *testing.T) {
 	f.ciRun(t, 2, "ci.yml", "def456", "acme-10", domain.CICompleted, domain.CIFailure)
 
 	fix := f.getTicket(t, "acme-11")
-	want := &core.AutoFixMarkView{Attempt: 2, Commit: "def456", Covers: []string{"acme-5", "acme-8", "acme-10"}, Previous: "acme-10"}
+	want := &api.AutoFixMarkView{Attempt: 2, Commit: "def456", Covers: []string{"acme-5", "acme-8", "acme-10"}, Previous: "acme-10"}
 	if !reflect.DeepEqual(fix.AutoFix, want) {
 		t.Fatalf("mark %+v, want %+v", fix.AutoFix, want)
 	}

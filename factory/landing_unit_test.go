@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
@@ -64,11 +65,11 @@ const fakeTop = "/work/repo"
 func newLandWorld(t *testing.T) *landWorld {
 	t.Helper()
 	srv := codecentraltest.NewServer(t)
-	if _, err := srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"}); err != nil {
+	if _, err := srv.Client.CreateProject(context.Background(), api.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)
 	}
 	human := client.New(srv.URL)
-	human.Actor = core.Human
+	human.Actor = api.Human
 	out := &lineBuffer{}
 	printf := func(format string, args ...any) { fmt.Fprintf(out, format+"\n", args...) }
 	repo := newFakeRepo(fakeTop)
@@ -91,7 +92,7 @@ func (w *landWorld) poll() { w.l.poll(context.Background()) }
 // setLanding sets the Project's Landing Method as the human.
 func (w *landWorld) setLanding(method domain.LandingMethod, push bool, remote string) {
 	w.t.Helper()
-	if _, err := w.human.SetLandingMethod(context.Background(), "acme", core.SetLandingMethodInput{Method: method, Push: push, Remote: remote}); err != nil {
+	if _, err := w.human.SetLandingMethod(context.Background(), "acme", api.SetLandingMethodInput{Method: method, Push: push, Remote: remote}); err != nil {
 		w.t.Fatal(err)
 	}
 }
@@ -101,17 +102,17 @@ func (w *landWorld) ready(title string) string {
 	w.t.Helper()
 	ctx := context.Background()
 	if w.spec == "" {
-		s, err := w.srv.Client.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Work"})
+		s, err := w.srv.Client.CreateSpec(ctx, "acme", api.CreateSpecInput{Title: "Work"})
 		if err != nil {
 			w.t.Fatal(err)
 		}
 		w.spec = s.ID
 		// Long-lived, so that its Tickets land one by one under the default Land per Spec.
-		if _, err := w.srv.Client.AddLabels(ctx, "acme", core.LabelsInput{Target: core.Ref(s.ID), Labels: []string{core.LongLivedLabel}}); err != nil {
+		if _, err := w.srv.Client.AddLabels(ctx, "acme", api.LabelsInput{Target: api.Ref(s.ID), Labels: []string{core.LongLivedLabel}}); err != nil {
 			w.t.Fatal(err)
 		}
 	}
-	tk, err := w.srv.Client.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: core.Ref(w.spec), Title: title, State: domain.Ready})
+	tk, err := w.srv.Client.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: api.Ref(w.spec), Title: title, State: domain.Ready})
 	if err != nil {
 		w.t.Fatal(err)
 	}
@@ -123,11 +124,11 @@ func (w *landWorld) ready(title string) string {
 func (w *landWorld) finished(id, branch, commit string) {
 	w.t.Helper()
 	ctx := context.Background()
-	res, err := w.srv.Client.Claim(ctx, "acme", core.ClaimInput{Ticket: core.Ref(id)})
+	res, err := w.srv.Client.Claim(ctx, "acme", api.ClaimInput{Ticket: api.Ref(id)})
 	if err != nil {
 		w.t.Fatal(err)
 	}
-	if _, err := w.srv.Client.Finish(ctx, "acme", core.FinishInput{Ticket: core.Ref(id), ClaimID: res.ClaimID, Summary: "Done.", Branch: branch, Commit: commit}); err != nil {
+	if _, err := w.srv.Client.Finish(ctx, "acme", api.FinishInput{Ticket: api.Ref(id), ClaimID: res.ClaimID, Summary: "Done.", Branch: branch, Commit: commit}); err != nil {
 		w.t.Fatal(err)
 	}
 }
@@ -153,14 +154,14 @@ func (w *landWorld) accepted(title string) (id, commit string) {
 
 func (w *landWorld) accept(id string) {
 	w.t.Helper()
-	if _, err := w.human.Accept(context.Background(), "acme", core.TicketInput{Ticket: core.Ref(id)}); err != nil {
+	if _, err := w.human.Accept(context.Background(), "acme", api.TicketInput{Ticket: api.Ref(id)}); err != nil {
 		w.t.Fatal(err)
 	}
 }
 
-func (w *landWorld) ticket(id string) core.TicketView {
+func (w *landWorld) ticket(id string) api.TicketView {
 	w.t.Helper()
-	tk, err := w.srv.Client.GetTicket(context.Background(), "acme", core.Ref(id))
+	tk, err := w.srv.Client.GetTicket(context.Background(), "acme", api.Ref(id))
 	if err != nil {
 		w.t.Fatal(err)
 	}
@@ -171,7 +172,7 @@ func (w *landWorld) ticket(id string) core.TicketView {
 func (w *landWorld) lines(s string) int { return strings.Count(w.out.String(), s) }
 
 // commentsSaying counts tk's comments that contain every part.
-func commentsSaying(tk core.TicketView, parts ...string) int {
+func commentsSaying(tk api.TicketView, parts ...string) int {
 	n := 0
 	for _, c := range tk.Comments {
 		all := true
@@ -186,9 +187,9 @@ func commentsSaying(tk core.TicketView, parts ...string) int {
 }
 
 // lastMove is tk's latest move.
-func lastMove(tk core.TicketView) core.MoveView { return tk.Moves[len(tk.Moves)-1] }
+func lastMove(tk api.TicketView) api.MoveView { return tk.Moves[len(tk.Moves)-1] }
 
-func movedTo(tk core.TicketView, from, to domain.State) bool {
+func movedTo(tk api.TicketView, from, to domain.State) bool {
 	for _, m := range tk.Moves {
 		if m.From == from && m.To == to {
 			return true
@@ -301,7 +302,7 @@ func TestATicketMergedWhileInAnotherStateGetsOnlyAWarningLine(t *testing.T) {
 	t.Parallel()
 	w := newLandWorld(t)
 	id, commit := w.reviewed("Rejected, then merged")
-	if _, err := w.human.Reject(context.Background(), "acme", core.RejectInput{Ticket: core.Ref(id), Comment: "Not yet."}); err != nil {
+	if _, err := w.human.Reject(context.Background(), "acme", api.RejectInput{Ticket: api.Ref(id), Comment: "Not yet."}); err != nil {
 		t.Fatal(err)
 	}
 	w.repo.mergeByHand(id)
@@ -787,7 +788,7 @@ func TestAPushedCommitWhoseReportFailedIsReportedAsItsOwnNotALaterTicketsPush(t 
 	w := newLandWorld(t)
 	w.repo.addRemote("origin")
 	w.setLanding(domain.LandingMerge, true, "origin")
-	if _, err := w.human.SetCITracking(context.Background(), "acme", core.SetCITrackingInput{Tracking: true, Repository: "acme/web"}); err != nil {
+	if _, err := w.human.SetCITracking(context.Background(), "acme", api.SetCITrackingInput{Tracking: true, Repository: "acme/web"}); err != nil {
 		t.Fatal(err)
 	}
 	first, _ := w.accepted("First")
@@ -833,7 +834,7 @@ func TestAPushedCommitWhoseReportFailedIsReportedAsItsOwnNotALaterTicketsPush(t 
 func TestASpecWhoseLastTicketIsAcceptedMidPollWaitsForItsMergeIntoTheSpecBranch(t *testing.T) {
 	t.Parallel()
 	w := newLandWorld(t)
-	s, err := w.srv.Client.CreateSpec(context.Background(), "acme", core.CreateSpecInput{Title: "Work"})
+	s, err := w.srv.Client.CreateSpec(context.Background(), "acme", api.CreateSpecInput{Title: "Work"})
 	if err != nil {
 		t.Fatal(err)
 	}

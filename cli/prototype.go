@@ -3,7 +3,7 @@ package cli
 import (
 	"context"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/ops"
 )
 
@@ -25,7 +25,7 @@ func runSubmitPrototype(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.SubmitPrototype(ctx, sc.project, core.SubmitPrototypeInput{Spec: spec, Text: text, Full: *full})
+	v, err := sc.client.SubmitPrototype(ctx, sc.project, api.SubmitPrototypeInput{Spec: spec, Text: text, Full: *full})
 	if err != nil {
 		return err
 	}

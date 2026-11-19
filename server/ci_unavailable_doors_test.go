@@ -2,9 +2,11 @@ package server_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"testing"
 	"time"
+
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
@@ -17,10 +19,10 @@ import (
 
 // wantCIUnavailable checks acme-3 is CI unavailable for cause since its
 // push at codecentraltest.Start.
-func wantCIUnavailable(t *testing.T, srv *codecentraltest.Server, cause core.CIUnavailableCause) core.NeedsMeRow {
+func wantCIUnavailable(t *testing.T, srv *codecentraltest.Server, cause api.CIUnavailableCause) api.NeedsMeRow {
 	t.Helper()
 	row, ok := needsMeRowOf(t, srv, "acme-3")
-	if !ok || row.Reason != core.ReasonCIUnavailable {
+	if !ok || row.Reason != api.ReasonCIUnavailable {
 		t.Fatalf("acme-3 in Needs Me %v as %+v, want ci_unavailable", ok, row)
 	}
 	if row.CIUnavailable == nil || row.CIUnavailable.Cause != cause || row.CIUnavailable.Commit != "abc123" {
@@ -40,7 +42,7 @@ func wantNotInNeedsMe(t *testing.T, srv *codecentraltest.Server, when string) {
 	}
 }
 
-func watcherReports(t *testing.T, srv *codecentraltest.Server, in core.ReportWatcherStatusInput) {
+func watcherReports(t *testing.T, srv *codecentraltest.Server, in api.ReportWatcherStatusInput) {
 	t.Helper()
 	must(t, func() error {
 		_, err := srv.Client.ReportCIWatcherStatus(context.Background(), "acme", in)
@@ -49,8 +51,8 @@ func watcherReports(t *testing.T, srv *codecentraltest.Server, in core.ReportWat
 }
 
 var (
-	watching   = core.ReportWatcherStatusInput{State: core.WatcherWatching}
-	loggedOut  = core.ReportWatcherStatusInput{State: core.WatcherError, Problem: core.ProblemLoggedOut, Message: "gh is logged out", Fix: "Run gh auth login."}
+	watching   = api.ReportWatcherStatusInput{State: api.WatcherWatching}
+	loggedOut  = api.ReportWatcherStatusInput{State: api.WatcherError, Problem: api.ProblemLoggedOut, Message: "gh is logged out", Fix: "Run gh auth login."}
 	runningRun = ciRun(1, "ci.yml", "abc123", domain.CIInProgress, "")
 )
 
@@ -62,7 +64,7 @@ func TestAGatedTicketWithNoCIRunsIsCIUnavailableAfterTenMinutes(t *testing.T) {
 	wantNotInNeedsMe(t, srv, "just under 10 minutes after its push")
 
 	srv.Clock.Advance(time.Millisecond)
-	row := wantCIUnavailable(t, srv, core.CINoRuns)
+	row := wantCIUnavailable(t, srv, api.CINoRuns)
 	if row.CIUnavailable.Message != "" {
 		t.Fatalf("with the CI Watcher Watching, message %q, want none", row.CIUnavailable.Message)
 	}
@@ -83,7 +85,7 @@ func TestAGatedTicketIsCIUnavailableWhileTheCIWatcherIsInError(t *testing.T) {
 	wantNotInNeedsMe(t, srv, "just under 10 minutes after its push")
 
 	srv.Clock.Advance(time.Millisecond)
-	row := wantCIUnavailable(t, srv, core.CIWatcherNotWatching)
+	row := wantCIUnavailable(t, srv, api.CIWatcherNotWatching)
 	if row.CIUnavailable.Message != "gh is logged out" {
 		t.Fatalf("message %q, want the CI Watcher's error", row.CIUnavailable.Message)
 	}
@@ -96,14 +98,14 @@ func TestACIWatcherThatHasntReportedIsNotWatching(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
 	reportRuns(t, srv, runningRun)
 	srv.Clock.Advance(core.CIUnavailableAfter)
-	wantCIUnavailable(t, srv, core.CIWatcherNotWatching)
+	wantCIUnavailable(t, srv, api.CIWatcherNotWatching)
 }
 
 func TestTheCIWatcherNotWatchingIsSaidBeforeNoCIRuns(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
 	watcherReports(t, srv, loggedOut)
 	srv.Clock.Advance(core.CIUnavailableAfter)
-	wantCIUnavailable(t, srv, core.CIWatcherNotWatching)
+	wantCIUnavailable(t, srv, api.CIWatcherNotWatching)
 }
 
 func TestOnlyIgnoredRunsAreNoCIRuns(t *testing.T) {
@@ -111,7 +113,7 @@ func TestOnlyIgnoredRunsAreNoCIRuns(t *testing.T) {
 	watcherReports(t, srv, watching)
 	reportRuns(t, srv, ciRun(1, "nightly.yml", "abc123", domain.CICompleted, domain.CISuccess))
 	srv.Clock.Advance(core.CIUnavailableAfter)
-	wantCIUnavailable(t, srv, core.CINoRuns)
+	wantCIUnavailable(t, srv, api.CINoRuns)
 }
 
 func TestRunsForAnOlderPushedCommitAreNoCIRuns(t *testing.T) {
@@ -124,7 +126,7 @@ func TestRunsForAnOlderPushedCommitAreNoCIRuns(t *testing.T) {
 
 	srv.Clock.Advance(core.CIUnavailableAfter)
 	row, _ := needsMeRowOf(t, srv, "acme-3")
-	if row.Reason != core.ReasonCIUnavailable || row.CIUnavailable.Cause != core.CINoRuns || row.CIUnavailable.Commit != "def456" {
+	if row.Reason != api.ReasonCIUnavailable || row.CIUnavailable.Cause != api.CINoRuns || row.CIUnavailable.Commit != "def456" {
 		t.Fatalf("10 minutes after the newer push, row %+v, want ci_unavailable, no CI Runs at def456", row)
 	}
 }
@@ -139,8 +141,8 @@ func TestCIUnavailableClearsWhenTheGateLifts(t *testing.T) {
 		}},
 		{"Push off", func(t *testing.T, srv *codecentraltest.Server) {
 			must(t, func() error {
-				_, err := srv.Core.SetLandingMethod(core.WithActor(context.Background(), core.Human), "acme",
-					core.SetLandingMethodInput{Method: domain.LandingMerge})
+				_, err := srv.Core.SetLandingMethod(api.WithActor(context.Background(), api.Human), "acme",
+					api.SetLandingMethodInput{Method: domain.LandingMerge})
 				return err
 			})
 		}},
@@ -148,11 +150,11 @@ func TestCIUnavailableClearsWhenTheGateLifts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := newServer(t, pushedAccepted)
 			srv.Clock.Advance(core.CIUnavailableAfter)
-			wantCIUnavailable(t, srv, core.CIWatcherNotWatching)
+			wantCIUnavailable(t, srv, api.CIWatcherNotWatching)
 
 			tc.lift(t, srv)
 			row, ok := needsMeRowOf(t, srv, "acme-3")
-			if ok && row.Reason == core.ReasonCIUnavailable {
+			if ok && row.Reason == api.ReasonCIUnavailable {
 				t.Fatalf("with the gate lifted, acme-3 is still CI unavailable: %+v", row)
 			}
 		})
@@ -165,7 +167,7 @@ func TestAGatedTicketWhoseCIPassedIsNotCIUnavailable(t *testing.T) {
 	srv.Clock.Advance(core.NotLandedAfter + time.Minute)
 	// The Factory lands a passed Ticket; if it hasn't, it isn't landing.
 	row, _ := needsMeRowOf(t, srv, "acme-3")
-	if row.Reason != core.ReasonAcceptedNotLanded {
+	if row.Reason != api.ReasonAcceptedNotLanded {
 		t.Fatalf("passed and still Accepted after 11 minutes, row %+v, want accepted_not_landed", row)
 	}
 }

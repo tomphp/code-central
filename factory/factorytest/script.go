@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // Step is one thing the fake claude does. In CLI and Git args, Write's
@@ -53,7 +53,7 @@ func Wait() Step { return Step{Wait: true} }
 
 // PostRound posts a Round of one Question under the run's Claim.
 func PostRound(title string) Step {
-	q, _ := json.Marshal([]core.QuestionInput{{Title: title, Body: title}})
+	q, _ := json.Marshal([]api.QuestionInput{{Title: title, Body: title}})
 	return CLI("post-round", "{{ticket}}", "--claim", "{{claim}}", "--session", "{{session}}", "--questions", string(q))
 }
 
@@ -164,9 +164,9 @@ func Finish(summary string) Step {
 // Ticket's branch at its worktree's head. home also records the Home
 // Repository's branch and head, as branch and commit.
 func FinishIn(summary string, home bool, repositories ...string) Step {
-	var list []core.RepositoryWork
+	var list []api.RepositoryWork
 	for _, r := range repositories {
-		list = append(list, core.RepositoryWork{Name: r, Branch: "{{ticket}}", Commit: "{{head:" + r + "}}"})
+		list = append(list, api.RepositoryWork{Name: r, Branch: "{{ticket}}", Commit: "{{head:" + r + "}}"})
 	}
 	b, _ := json.Marshal(list)
 	args := []string{"finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", summary, "--repositories", string(b)}

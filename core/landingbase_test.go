@@ -3,7 +3,7 @@ package core_test
 import (
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -33,13 +33,13 @@ func TestTheBaseReadsMainWhenNothingIsStoredOrReported(t *testing.T) {
 func TestSetLandingMethodStoresTheBaseAndKeepsItWhenLeftOut(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Base: strp("release/1.0")}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingMerge, Base: strp("release/1.0")}); err != nil {
 		t.Fatal(err)
 	}
 	if got := f.landingBase(t); got != "release/1.0" {
 		t.Fatalf("base = %q, want release/1.0", got)
 	}
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingBranch}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingBranch}); err != nil {
 		t.Fatal(err)
 	}
 	if got := f.landingBase(t); got != "release/1.0" {
@@ -51,12 +51,12 @@ func TestSetLandingMethodRejectsAnInvalidBase(t *testing.T) {
 	for _, bad := range []string{"a b", "-x", "a..b", "x.lock", "a/.b", "a//b", "/a", "a/", "a.", "@", "a@{b", "a~b", "a^b", "a:b", "a?b", "a*b", "a[b", "a\\b"} {
 		f := newFixture(t)
 		f.project(t, "acme")
-		_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Base: strp(bad)})
+		_, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingMerge, Base: strp(bad)})
 		if err == nil {
 			t.Errorf("base %q was accepted", bad)
 			continue
 		}
-		wantCode(t, err, core.Invalid, "base")
+		wantCode(t, err, api.Invalid, "base")
 		if got := f.landingBase(t); got != "main" {
 			t.Errorf("base %q was stored: %q", bad, got)
 		}
@@ -77,13 +77,13 @@ func TestTheBaseFallsBackToTheFrozenPushRemoteBaseAndReportPushRemoteLeavesItAlo
 	if got := f.landingBase(t); got != "trunk" {
 		t.Fatalf("base = %q, want the stored PushRemoteBase trunk", got)
 	}
-	if _, err := f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/web.git", Base: "develop"}); err != nil {
+	if _, err := f.core.ReportPushRemote(ctx, "acme", api.ReportPushRemoteInput{URL: "git@github.com:acme/web.git", Base: "develop"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := f.landingBase(t); got != "trunk" {
 		t.Fatalf("report_push_remote changed the base to %q", got)
 	}
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Base: strp("release")}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingMerge, Base: strp("release")}); err != nil {
 		t.Fatal(err)
 	}
 	if got := f.landingBase(t); got != "release" {

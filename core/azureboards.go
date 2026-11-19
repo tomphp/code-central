@@ -5,6 +5,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/azdourl"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
@@ -16,41 +17,9 @@ import (
 // first time it is turned on. Its work items are those a Saved query or a
 // WIQL filter returns.
 
-// AzureBoardsView is a Project's Azure Boards settings as every Project
-// read returns them.
-type AzureBoardsView struct {
-	On bool `json:"on"`
-	// Mode is how it picks its work items: saved_query or wiql.
-	Mode domain.AzureBoardsMode `json:"mode"`
-	// QueryURL is the Saved query's URL.
-	QueryURL string `json:"query_url"`
-	// ProjectURL is the Azure DevOps project a WIQL filter runs in, and
-	// Where its WHERE clause.
-	ProjectURL string `json:"project_url"`
-	Where      string `json:"where"`
-	// PATEnv is the name of the environment variable holding the Azure
-	// DevOps PAT: the Project's CI PAT variable, ADO_PAT unless it names
-	// another, unless Azure Boards names its own. The PAT itself is never
-	// kept.
-	PATEnv          string `json:"pat_env"`
-	NewIssuesNeedMe bool   `json:"new_issues_need_me"`
-	// HideCodeCentral is whether Write-back keeps Code Central out of what
-	// it writes to a work item.
-	HideCodeCentral bool `json:"hide_code_central"`
-	// BranchFormat names the Spec Branch of a Requirement To Requirement
-	// makes of a work item, with {id} for its ID, such as feat/{id};
-	// empty for none.
-	BranchFormat string `json:"branch_format"`
-	// Spec is the Azure Boards Spec's ID, left out until Azure Boards is
-	// first turned on.
-	Spec string `json:"spec,omitempty"`
-	// Watcher is the Work Item Watcher's status, as it last reported it.
-	Watcher WatcherView `json:"watcher"`
-}
-
-func azureBoardsView(p domain.Project, watcher WatcherView) AzureBoardsView {
+func azureBoardsView(p domain.Project, watcher api.WatcherView) api.AzureBoardsView {
 	a := p.AzureBoards
-	v := AzureBoardsView{On: a.On, Mode: azureBoardsModeOf(a), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
+	v := api.AzureBoardsView{On: a.On, Mode: azureBoardsModeOf(a), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
 		PATEnv: boardsPATEnvOf(p.CI, a), NewIssuesNeedMe: a.NewIssuesNeedMe, HideCodeCentral: a.HideCodeCentral, BranchFormat: a.BranchFormat, Watcher: watcher}
 	if a.Spec != 0 {
 		v.Spec = DisplayID(p.Key, a.Spec)
@@ -70,34 +39,6 @@ func boardsPATEnvOf(ci domain.CI, a domain.AzureBoards) string {
 	return cmp.Or(a.PATEnv, patEnvOf(ci))
 }
 
-// SetAzureBoardsInput is the human's set_azure_boards(on, mode, query_url,
-// project_url, where, pat_env, new_issues_need_me, hide_code_central,
-// branch_format, full?).
-type SetAzureBoardsInput struct {
-	On bool `json:"on"`
-	// Mode is saved_query when left out.
-	Mode domain.AzureBoardsMode `json:"mode"`
-	// QueryURL is the Saved query's URL, as the browser shows it.
-	QueryURL string `json:"query_url"`
-	// ProjectURL is the Azure DevOps project a WIQL filter runs in, as its
-	// URL, and Where the filter's WHERE clause, without the keyword.
-	ProjectURL string `json:"project_url"`
-	Where      string `json:"where"`
-	// PATEnv names the environment variable holding the Azure DevOps PAT;
-	// the Project's CI PAT variable when left out.
-	PATEnv          string `json:"pat_env"`
-	NewIssuesNeedMe bool   `json:"new_issues_need_me"`
-	// HideCodeCentral keeps Code Central out of what Write-back writes to a
-	// work item. It is no part of the Azure Boards check.
-	HideCodeCentral bool `json:"hide_code_central"`
-	// BranchFormat names the Spec Branch of a Requirement To Requirement
-	// makes of a work item, with {id} for its ID; empty for none. It is
-	// no part of the Azure Boards check.
-	BranchFormat string `json:"branch_format"`
-	// Full asks for the Project in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
 // SetAzureBoards is the human's set_azure_boards: Azure Boards on or off,
 // with its Mode and each Mode's settings, the PAT environment variable,
 // New issues need me, Hide Code Central and the Branch format. Turning it
@@ -109,15 +50,15 @@ type SetAzureBoardsInput struct {
 // settings so they never name a missing Spec. A change of the chosen
 // Mode's organization or project retitles the Azure Boards Spec unless
 // the human has changed its title. Turning it off touches no Link.
-func (c *Core) SetAzureBoards(ctx context.Context, key string, in SetAzureBoardsInput) (Written[ProjectView], error) {
+func (c *Core) SetAzureBoards(ctx context.Context, key string, in api.SetAzureBoardsInput) (api.Written[api.ProjectView], error) {
 	if err := humanOnly(ctx, "set_azure_boards"); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	a := domain.AzureBoards{On: in.On, Mode: in.Mode, QueryURL: strings.TrimSpace(in.QueryURL),
 		ProjectURL: strings.TrimSpace(in.ProjectURL), Where: strings.TrimSpace(in.Where), PATEnv: strings.TrimSpace(in.PATEnv), NewIssuesNeedMe: in.NewIssuesNeedMe, HideCodeCentral: in.HideCodeCentral,
 		BranchFormat: strings.TrimSpace(in.BranchFormat)}
 	if err := checkAzureBoardsSettings(&a); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	// Checked before the Azure Boards check and the Azure Boards Spec, so
 	// a refused format leaves nothing behind.
@@ -125,10 +66,10 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in SetAzureBoards
 		p, _ := r.Project(key)
 		return checkBranchFormat(p, "branch_format", a.BranchFormat)
 	}); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	if err := c.checkAzureBoards(ctx, key, a); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	created := 0
 	if a.On {
@@ -136,11 +77,11 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in SetAzureBoards
 		created, err = c.createIntegrationSpec(key, func(p domain.Project) int { return p.AzureBoards.Spec },
 			domain.Spec{Title: azureBoardsSpecTitle(a), Body: azureBoardsSpecBody})
 		if err != nil {
-			return Written[ProjectView]{}, err
+			return api.Written[api.ProjectView]{}, err
 		}
 	}
 	var was domain.AzureBoards
-	var before ProjectView
+	var before api.ProjectView
 	var p domain.Project
 	var resetWatcher bool
 	given := a
@@ -167,15 +108,15 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in SetAzureBoards
 		return w.PutProject(p)
 	})
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	if resetWatcher {
-		c.watchers.reset(watcherKey{WatcherWorkItems, key})
+		c.watchers.reset(watcherKey{api.WatcherWorkItems, key})
 	}
 	after := c.projectView(p)
 	if title := azureBoardsSpecTitle(a); was.Spec != 0 && title != "" && title != azureBoardsSpecTitle(was) {
 		if err := c.retitleIntegrationSpec(ctx, key, was.Spec, givenAzureBoardsSpecTitle, title); err != nil {
-			return Written[ProjectView]{}, err
+			return api.Written[api.ProjectView]{}, err
 		}
 	}
 	return acknowledgeProject(before, after, in.Full, c.now())
@@ -270,23 +211,10 @@ func givenAzureBoardsSpecTitle(title string) bool {
 const azureBoardsSpecBody = "This Spec holds the Project's Azure Boards Incoming Issues: each work item its query returns arrives on it as a linked Draft Ticket, to triage with Keep as Draft, To Requirement or Won't fix. " +
 	"Azure Boards is in the Azure Boards section of Project Options; turning it off leaves this Spec and its Tickets as they are.\n"
 
-// AzureBoardsCheckInput is what the Azure Boards check checks: that the
-// PAT in the environment variable PATEnv can run the chosen Mode's query,
-// the Saved query at QueryURL or the WHERE clause Where in the project at
-// ProjectURL, and write to its work items. Only the chosen Mode's
-// settings are given.
-type AzureBoardsCheckInput struct {
-	Mode       domain.AzureBoardsMode `json:"mode"`
-	QueryURL   string                 `json:"query_url,omitempty"`
-	ProjectURL string                 `json:"project_url,omitempty"`
-	Where      string                 `json:"where,omitempty"`
-	PATEnv     string                 `json:"pat_env"`
-}
-
 // azureBoardsCheckInput is what the check checks for a, in a Project
 // whose CI settings are ci.
-func azureBoardsCheckInput(ci domain.CI, a domain.AzureBoards) AzureBoardsCheckInput {
-	in := AzureBoardsCheckInput{Mode: azureBoardsModeOf(a), PATEnv: boardsPATEnvOf(ci, a)}
+func azureBoardsCheckInput(ci domain.CI, a domain.AzureBoards) api.AzureBoardsCheckInput {
+	in := api.AzureBoardsCheckInput{Mode: azureBoardsModeOf(a), PATEnv: boardsPATEnvOf(ci, a)}
 	if in.Mode == domain.AzureBoardsWIQL {
 		in.ProjectURL, in.Where = a.ProjectURL, a.Where
 	} else {
@@ -295,15 +223,10 @@ func azureBoardsCheckInput(ci domain.CI, a domain.AzureBoards) AzureBoardsCheckI
 	return in
 }
 
-// AzureBoardsCheck runs the Azure Boards check. The service makes no
-// external calls itself (ADR 0002, ADR 0004), so the check runs in the
-// Work Item Watcher's process.
-type AzureBoardsCheck func(ctx context.Context, in AzureBoardsCheckInput) WatcherCheckResult
-
 // SetAzureBoardsCheck makes c run check when Azure Boards is turned on or
 // what it runs changes while on. Call it before serving; without it,
 // nothing is checked.
-func (c *Core) SetAzureBoardsCheck(check AzureBoardsCheck) { c.azureBoardsCheck = check }
+func (c *Core) SetAzureBoardsCheck(check api.AzureBoardsCheck) { c.azureBoardsCheck = check }
 
 // checkAzureBoards runs the Azure Boards check when a turns Azure Boards
 // on, or changes what it runs while on, and refuses with the reason and
@@ -313,7 +236,7 @@ func (c *Core) checkAzureBoards(ctx context.Context, key string, a domain.AzureB
 	if !a.On || c.azureBoardsCheck == nil {
 		return nil
 	}
-	var was, now AzureBoardsCheckInput
+	var was, now api.AzureBoardsCheckInput
 	var wasOn bool
 	err := c.store.View(func(r store.Reader) error {
 		if err := writable(r, key); err != nil {
@@ -330,5 +253,5 @@ func (c *Core) checkAzureBoards(ctx context.Context, key string, a domain.AzureB
 	if res.Problem == "" {
 		return nil
 	}
-	return &Error{Code: Invalid, Field: "on", Message: res.Reason, Fix: res.Fix}
+	return &api.Error{Code: api.Invalid, Field: "on", Message: res.Reason, Fix: res.Fix}
 }

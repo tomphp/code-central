@@ -1,16 +1,17 @@
 package factory_test
 
 import (
-	"github.com/tomoram/code-central/domain"
 	"os"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
-var branchLanding = core.SetLandingMethodInput{Method: domain.LandingBranch}
+var branchLanding = api.SetLandingMethodInput{Method: domain.LandingBranch}
 
 // withWorktree makes an Accepted Ticket whose branch adds file, with the
 // worktree a Factory Claim would have left at its path.

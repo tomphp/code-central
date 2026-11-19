@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/ops"
 )
 
@@ -19,7 +19,7 @@ const ChatEventsPath = "POST /api/p/{key}/chat/events"
 
 func chatEvents(s ops.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var in core.PostChatEventsInput
+		var in api.PostChatEventsInput
 		if decodeBody(r, &in) == nil {
 			s.PostChatEvents(r.Context(), r.PathValue("key"), in)
 		}

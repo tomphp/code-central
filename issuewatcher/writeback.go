@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
@@ -45,7 +46,7 @@ func splitLinkID(id string) (repository string, n int, err error) {
 // again. It returns GitHub's rate limit, if it refused a call for it;
 // anything else that goes wrong for an issue is logged, and its writes are
 // tried again on the next poll.
-func (cfg Config) writeBack(ctx context.Context, watch core.IssueWatch, prog string, open map[string]ghIssue, skipped []string) *ratelimit.Error {
+func (cfg Config) writeBack(ctx context.Context, watch api.IssueWatch, prog string, open map[string]ghIssue, skipped []string) *ratelimit.Error {
 	for _, w := range watch.Writes {
 		if repository, _, err := splitLinkID(w.Link.ID); err == nil && slices.ContainsFunc(skipped, func(s string) bool { return strings.EqualFold(s, repository) }) {
 			continue
@@ -67,7 +68,7 @@ func (cfg Config) writeBack(ctx context.Context, watch core.IssueWatch, prog str
 // writeIssue carries out w's due writes on its issue: its comments, then
 // its label, then closing it. open are the repository's open issues, by
 // Link ID.
-func (cfg Config) writeIssue(ctx context.Context, prog string, w core.IssueWrites, open map[string]ghIssue) error {
+func (cfg Config) writeIssue(ctx context.Context, prog string, w api.IssueWrites, open map[string]ghIssue) error {
 	repository, n, err := splitLinkID(w.Link.ID)
 	if err != nil {
 		return err
@@ -99,13 +100,13 @@ func (cfg Config) writeIssue(ctx context.Context, prog string, w core.IssueWrite
 		}
 	}
 	// The issue is closed: its label and closing are no longer due.
-	_, err = cfg.Client.SetExternalState(ctx, cfg.Project, core.SetExternalStateInput{Target: core.Ref(w.Target), ExternalState: domain.ExternalClosed})
+	_, err = cfg.Client.SetExternalState(ctx, cfg.Project, api.SetExternalStateInput{Target: api.Ref(w.Target), ExternalState: domain.ExternalClosed})
 	return err
 }
 
 // writeComments posts each of w's comments due on the issue at path, unless
 // its marker shows it was posted before a crash, and reports each written.
-func (cfg Config) writeComments(ctx context.Context, prog, path string, w core.IssueWrites) error {
+func (cfg Config) writeComments(ctx context.Context, prog, path string, w api.IssueWrites) error {
 	if len(w.Comments) == 0 {
 		return nil
 	}
@@ -120,7 +121,7 @@ func (cfg Config) writeComments(ctx context.Context, prog, path string, w core.I
 				return apiError("posting the "+c.Key+" comment", msg, err)
 			}
 		}
-		if _, err := cfg.Client.ReportIssueWritten(ctx, cfg.Project, core.ReportIssueWrittenInput{Target: core.Ref(w.Target), Key: c.Key}); err != nil {
+		if _, err := cfg.Client.ReportIssueWritten(ctx, cfg.Project, api.ReportIssueWrittenInput{Target: api.Ref(w.Target), Key: c.Key}); err != nil {
 			return fmt.Errorf("report_issue_written %s: %w", c.Key, err)
 		}
 	}

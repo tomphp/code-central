@@ -3,7 +3,7 @@ package server_test
 import (
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // Submitting a Prototype (code-central-221).
@@ -27,6 +27,6 @@ func init() {
 			http: httpCall{"POST", "/api/p/acme/submit_prototype", `{"spec":"acme-1","text":"  "}`},
 			cli:  []string{"acme-1", "--text", "  "},
 		},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }

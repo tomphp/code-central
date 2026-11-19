@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -37,8 +38,8 @@ type activity struct {
 	started time.Time
 
 	mu    sync.Mutex
-	pings map[string]time.Time      // session ID -> last counted ping
-	marks map[markKey]NeedsMeReason // Silent, Long, CI unavailable or Accepted but not landed
+	pings map[string]time.Time          // session ID -> last counted ping
+	marks map[markKey]api.NeedsMeReason // Silent, Long, CI unavailable or Accepted but not landed
 }
 
 // markKey names what a timed reason, a Transcript or a latest event
@@ -52,7 +53,7 @@ type markKey struct {
 }
 
 func newActivity(started time.Time) *activity {
-	return &activity{started: started, pings: map[string]time.Time{}, marks: map[markKey]NeedsMeReason{}}
+	return &activity{started: started, pings: map[string]time.Time{}, marks: map[markKey]api.NeedsMeReason{}}
 }
 
 // Ping is POST /api/ping {session_id}: it marks activity on every live
@@ -188,7 +189,7 @@ func (c *Core) WatchTimedReasons(ctx context.Context, ticks <-chan time.Time, ch
 // that is a timed one, so a Ticket waiting for an earlier reason, such
 // as a CI item's, has none.
 func (c *Core) timedReasonChanges() []markKey {
-	now := map[markKey]NeedsMeReason{}
+	now := map[markKey]api.NeedsMeReason{}
 	c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
 			e := c.evaluate(r, p)
@@ -198,7 +199,7 @@ func (c *Core) timedReasonChanges() []markKey {
 					continue
 				}
 				k := markKey{p.Key, t.Number, 0}
-				if cl, ok := liveClaim(t); ok && (reason == ReasonSilentClaim || reason == ReasonLongClaim) {
+				if cl, ok := liveClaim(t); ok && (reason == api.ReasonSilentClaim || reason == api.ReasonLongClaim) {
 					k.claim = cl.Number
 				}
 				now[k] = reason

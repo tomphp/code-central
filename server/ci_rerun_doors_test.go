@@ -2,13 +2,14 @@ package server_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"slices"
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 )
 
@@ -23,7 +24,7 @@ func init() {
 		check: ticketAcknowledgement("acme-3", "Accepted", "ci_result", "ci_item", "ci_failure_options", "needs_me_reason"),
 		full:  field("ci_result", "running"),
 		bad:   call{http: rerunCI("2")},
-		code:  core.ActionNotAllowed,
+		code:  api.ActionNotAllowed,
 	}
 }
 
@@ -32,7 +33,7 @@ func rerunCI(n string) httpCall {
 }
 
 // ciWatch is acme's get_ci_watch, as the CI Watcher reads it.
-func ciWatch(t *testing.T, srv *codecentraltest.Server) core.CIWatch {
+func ciWatch(t *testing.T, srv *codecentraltest.Server) api.CIWatch {
 	t.Helper()
 	w, err := srv.Client.GetCIWatch(context.Background(), "acme")
 	if err != nil {
@@ -48,11 +49,11 @@ func TestRerunCIPutsACIFailedTicketBackToWaiting(t *testing.T) {
 		t.Fatalf("row %+v, want acme-3 out of Needs Me while its jobs re-run", row)
 	}
 	tk := ticket3(t, srv)
-	if tk.CIResult != core.CIRunning || tk.CIFailureOptions != nil || tk.LandAnyway {
+	if tk.CIResult != api.CIRunning || tk.CIFailureOptions != nil || tk.LandAnyway {
 		t.Fatalf("ci result %q, options %v, land anyway %v: want running with no options", tk.CIResult, tk.CIFailureOptions, tk.LandAnyway)
 	}
 	w := ciWatch(t, srv)
-	if !slices.Equal(w.Reruns, []core.CIRerun{{Ticket: "acme-3", Commit: "abc123", ID: 1, Attempt: 1, Requested: codecentraltest.Start}}) {
+	if !slices.Equal(w.Reruns, []api.CIRerun{{Ticket: "acme-3", Commit: "abc123", ID: 1, Attempt: 1, Requested: codecentraltest.Start}}) {
 		t.Fatalf("reruns = %+v, want ci.yml's failed run 1, attempt 1", w.Reruns)
 	}
 	if len(w.Waiting) != 1 || w.Waiting[0].Ticket != "acme-3" {
@@ -74,12 +75,12 @@ func TestReportingTheRunsNewAttemptClearsTheRerunRequest(t *testing.T) {
 	if w := ciWatch(t, srv); len(w.Reruns) != 0 {
 		t.Fatalf("reruns = %+v, want none once attempt 2 is reported", w.Reruns)
 	}
-	if tk := ticket3(t, srv); tk.CIResult != core.CIRunning {
+	if tk := ticket3(t, srv); tk.CIResult != api.CIRunning {
 		t.Fatalf("ci result %q, want running while attempt 2 runs", tk.CIResult)
 	}
 	again.Status, again.Conclusion = domain.CICompleted, domain.CISuccess
 	reportRuns(t, srv, again)
-	if tk := ticket3(t, srv); tk.CIResult != core.CIPassed {
+	if tk := ticket3(t, srv); tk.CIResult != api.CIPassed {
 		t.Fatalf("ci result %q, want passed once attempt 2 passed", tk.CIResult)
 	}
 }
@@ -93,7 +94,7 @@ func TestReportingTheFailedAttemptAgainKeepsTheRerunRequest(t *testing.T) {
 	if w := ciWatch(t, srv); len(w.Reruns) != 1 {
 		t.Fatalf("reruns = %+v, want run 1's still waiting", w.Reruns)
 	}
-	if tk := ticket3(t, srv); tk.CIResult != core.CIRunning {
+	if tk := ticket3(t, srv); tk.CIResult != api.CIRunning {
 		t.Fatalf("ci result %q, want running while the re-run waits", tk.CIResult)
 	}
 }
@@ -105,7 +106,7 @@ func TestAnUnansweredRerunRequestLapsesBackToCIFailed(t *testing.T) {
 	srv := newServer(t, failedCI)
 	httpOK(t, srv, rerunCI("3"))
 	srv.Clock.Advance(9 * time.Minute)
-	if tk := ticket3(t, srv); tk.CIResult != core.CIRunning {
+	if tk := ticket3(t, srv); tk.CIResult != api.CIRunning {
 		t.Fatalf("ci result %q 9 minutes on, want running", tk.CIResult)
 	}
 	srv.Clock.Advance(time.Minute)
@@ -113,7 +114,7 @@ func TestAnUnansweredRerunRequestLapsesBackToCIFailed(t *testing.T) {
 		t.Fatalf("reruns = %+v, want the request lapsed", w.Reruns)
 	}
 	tk := ticket3(t, srv)
-	if tk.CIResult != core.CIFailed || tk.NeedsMeReason != core.ReasonCIFailed || !slices.Contains(tk.CIFailureOptions, "rerun_ci") {
+	if tk.CIResult != api.CIFailed || tk.NeedsMeReason != api.ReasonCIFailed || !slices.Contains(tk.CIFailureOptions, "rerun_ci") {
 		t.Fatalf("ci result %q, reason %q, options %v: want CI failed again, offering Re-run", tk.CIResult, tk.NeedsMeReason, tk.CIFailureOptions)
 	}
 	httpOK(t, srv, rerunCI("3"))
@@ -133,7 +134,7 @@ func TestRerunCIAsksForEachFailedRun(t *testing.T) {
 		ciRun(3, "nightly.yml", "abc123", domain.CICompleted, domain.CIFailure))
 	httpOK(t, srv, rerunCI("3"))
 	at := codecentraltest.Start
-	want := []core.CIRerun{{Ticket: "acme-3", Commit: "abc123", ID: 1, Attempt: 1, Requested: at}, {Ticket: "acme-3", Commit: "abc123", ID: 5, Attempt: 2, Requested: at}}
+	want := []api.CIRerun{{Ticket: "acme-3", Commit: "abc123", ID: 1, Attempt: 1, Requested: at}, {Ticket: "acme-3", Commit: "abc123", ID: 5, Attempt: 2, Requested: at}}
 	if w := ciWatch(t, srv); !slices.Equal(w.Reruns, want) {
 		t.Fatalf("reruns = %+v, want %+v", w.Reruns, want)
 	}
@@ -142,15 +143,15 @@ func TestRerunCIAsksForEachFailedRun(t *testing.T) {
 // A Re-run request is offered under both Push Landing Methods.
 func TestRerunCIIsOfferedUnderMergeAndBranch(t *testing.T) {
 	srv := newServer(t, failedCI)
-	if tk := ticket3(t, srv); !slices.Equal(tk.CIFailureOptions, []core.CIFailureOption{"rerun_ci", "land_anyway", "send_back", "new_fix_ticket"}) {
+	if tk := ticket3(t, srv); !slices.Equal(tk.CIFailureOptions, []api.CIFailureOption{"rerun_ci", "land_anyway", "send_back", "new_fix_ticket"}) {
 		t.Fatalf("options %v under Merge + Push, want Re-run failed jobs, Land anyway and the fixes", tk.CIFailureOptions)
 	}
 	httpOK(t, srv, setLandingMethod(`{"method":"branch","push":true,"remote":"origin"}`))
-	if tk := ticket3(t, srv); !slices.Equal(tk.CIFailureOptions, []core.CIFailureOption{"rerun_ci", "send_back", "new_fix_ticket"}) {
+	if tk := ticket3(t, srv); !slices.Equal(tk.CIFailureOptions, []api.CIFailureOption{"rerun_ci", "send_back", "new_fix_ticket"}) {
 		t.Fatalf("options %v under Branch + Push, want Re-run failed jobs and the fixes", tk.CIFailureOptions)
 	}
 	httpOK(t, srv, rerunCI("3"))
-	if tk := ticket3(t, srv); tk.CIResult != core.CIRunning {
+	if tk := ticket3(t, srv); tk.CIResult != api.CIRunning {
 		t.Fatalf("ci result %q, want running", tk.CIResult)
 	}
 }
@@ -170,7 +171,7 @@ func TestRerunCINeedsAFailedCIResult(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			srv := newServer(t, setup)
-			httpRejected(t, srv, rerunCI("3"), core.ActionNotAllowed)
+			httpRejected(t, srv, rerunCI("3"), api.ActionNotAllowed)
 			if w := ciWatch(t, srv); len(w.Reruns) != 0 {
 				t.Fatalf("reruns = %+v, want none on a refused call", w.Reruns)
 			}
@@ -180,11 +181,11 @@ func TestRerunCINeedsAFailedCIResult(t *testing.T) {
 
 func TestRerunCIIsRejectedForAnAgent(t *testing.T) {
 	srv := newServer(t, failedCI)
-	status, b := httpDoAs(t, srv, core.Agent, rerunCI("3"))
-	if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) {
-		t.Fatalf("status %d, want %d for %s", status, httpapi.Status(core.ActionNotAllowed), e.Code)
+	status, b := httpDoAs(t, srv, api.Agent, rerunCI("3"))
+	if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) {
+		t.Fatalf("status %d, want %d for %s", status, httpapi.Status(api.ActionNotAllowed), e.Code)
 	}
-	if tk := ticket3(t, srv); tk.CIResult != core.CIFailed {
+	if tk := ticket3(t, srv); tk.CIResult != api.CIFailed {
 		t.Fatalf("ci result %q, want an agent's Re-run refused", tk.CIResult)
 	}
 }

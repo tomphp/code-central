@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
@@ -36,7 +37,7 @@ func TestAClaimOnOneServiceEndsAWaitOnAnother(t *testing.T) {
 	here, there := twoPostgresServices(t)
 	here.work(t, domain.Ready)
 	n := there.clock.Waiters()
-	done := make(chan core.WaitResult, 1)
+	done := make(chan api.WaitResult, 1)
 	go func() {
 		res, err := there.core.Wait(ctx, "acme", "2", domain.Ready)
 		if err != nil {
@@ -45,7 +46,7 @@ func TestAClaimOnOneServiceEndsAWaitOnAnother(t *testing.T) {
 		done <- res
 	}()
 	there.clock.BlockUntil(n + 1)
-	if _, err := here.core.Claim(ctx, "acme", core.ClaimInput{Ticket: "acme-2"}); err != nil {
+	if _, err := here.core.Claim(ctx, "acme", api.ClaimInput{Ticket: "acme-2"}); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
 	if res := within(t, done); res.State != domain.InProgress {
@@ -57,7 +58,7 @@ func TestNewWorkOnOneServiceWakesTheFactoriesOnAnother(t *testing.T) {
 	here, there := twoPostgresServices(t)
 	here.work(t)
 	call := there.wakeAsync("acme", "main")
-	here.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "New work", State: domain.Ready})
+	here.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "New work", State: domain.Ready})
 	if w := within(t, call); !w.Woken {
 		t.Fatal("next_factory_wake wasn't woken by new work on another service")
 	}

@@ -6,24 +6,24 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/events"
 )
 
-func beat(f fixture, t *testing.T, factory, host string, state core.HeartbeatState, interval int) {
+func beat(f fixture, t *testing.T, factory, host string, state api.HeartbeatState, interval int) {
 	t.Helper()
 	beatNote(f, t, factory, host, state, "", interval)
 }
 
-func beatNote(f fixture, t *testing.T, factory, host string, state core.HeartbeatState, note string, interval int) {
+func beatNote(f fixture, t *testing.T, factory, host string, state api.HeartbeatState, note string, interval int) {
 	t.Helper()
-	_, err := f.core.ReportHeartbeat(ctx, "acme", core.ReportHeartbeatInput{Factory: factory, Host: host, State: state, Note: note, IntervalSeconds: interval})
+	_, err := f.core.ReportHeartbeat(ctx, "acme", api.ReportHeartbeatInput{Factory: factory, Host: host, State: state, Note: note, IntervalSeconds: interval})
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func factoryStatus(f fixture, t *testing.T) core.FactoryStatusView {
+func factoryStatus(f fixture, t *testing.T) api.FactoryStatusView {
 	t.Helper()
 	p, err := f.core.GetProject(ctx, "acme")
 	if err != nil {
@@ -36,14 +36,14 @@ func TestAFreshCoreHasNoFactoriesAndIsOffline(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	fs := factoryStatus(f, t)
-	if fs.Status != core.FactoryOffline || fs.Factories == nil || len(fs.Factories) != 0 {
+	if fs.Status != api.FactoryOffline || fs.Factories == nil || len(fs.Factories) != 0 {
 		t.Fatalf("factory_status = %+v", fs)
 	}
 }
 
 func TestAFactoryIsOnlineDrainingOrOffline(t *testing.T) {
-	for state, want := range map[core.HeartbeatState]core.FactoryStatusName{
-		core.HeartbeatOnline: core.FactoryOnline, core.HeartbeatDraining: core.FactoryDraining, core.HeartbeatStopping: core.FactoryOffline,
+	for state, want := range map[api.HeartbeatState]api.FactoryStatusName{
+		api.HeartbeatOnline: api.FactoryOnline, api.HeartbeatDraining: api.FactoryDraining, api.HeartbeatStopping: api.FactoryOffline,
 	} {
 		f := newFixture(t)
 		f.project(t, "acme")
@@ -66,14 +66,14 @@ func TestAFactoryGoesOfflineAtThreeIntervalsWithA90SecondFloor(t *testing.T) {
 	}{{10, 90 * time.Second}, {30, 90 * time.Second}, {60, 180 * time.Second}} {
 		f := newFixture(t)
 		f.project(t, "acme")
-		beatNote(f, t, "cc", "box", core.HeartbeatOnline, "n", c.interval)
+		beatNote(f, t, "cc", "box", api.HeartbeatOnline, "n", c.interval)
 		f.clock.Set(t0.Add(c.deadline - time.Second))
-		if s := factoryStatus(f, t).Status; s != core.FactoryOnline {
+		if s := factoryStatus(f, t).Status; s != api.FactoryOnline {
 			t.Errorf("interval %d just before: %s", c.interval, s)
 		}
 		f.clock.Set(t0.Add(c.deadline))
 		fs := factoryStatus(f, t)
-		if fs.Status != core.FactoryOffline || fs.Factories[0].Note != "n" {
+		if fs.Status != api.FactoryOffline || fs.Factories[0].Note != "n" {
 			t.Errorf("interval %d at deadline: %+v", c.interval, fs)
 		}
 	}
@@ -82,9 +82,9 @@ func TestAFactoryGoesOfflineAtThreeIntervalsWithA90SecondFloor(t *testing.T) {
 func TestADrainingFactoryAlsoGoesOffline(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	beat(f, t, "cc", "box", core.HeartbeatDraining, 10)
+	beat(f, t, "cc", "box", api.HeartbeatDraining, 10)
 	f.clock.Set(t0.Add(90 * time.Second))
-	if s := factoryStatus(f, t).Status; s != core.FactoryOffline {
+	if s := factoryStatus(f, t).Status; s != api.FactoryOffline {
 		t.Fatalf("status %s", s)
 	}
 }
@@ -92,16 +92,16 @@ func TestADrainingFactoryAlsoGoesOffline(t *testing.T) {
 func TestTheCombinedStatusIsOnlineThenDrainingThenOffline(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	beat(f, t, "a", "h", core.HeartbeatStopping, 10)
-	if s := factoryStatus(f, t).Status; s != core.FactoryOffline {
+	beat(f, t, "a", "h", api.HeartbeatStopping, 10)
+	if s := factoryStatus(f, t).Status; s != api.FactoryOffline {
 		t.Fatalf("stopping only: %s", s)
 	}
-	beat(f, t, "b", "h", core.HeartbeatDraining, 10)
-	if s := factoryStatus(f, t).Status; s != core.FactoryDraining {
+	beat(f, t, "b", "h", api.HeartbeatDraining, 10)
+	if s := factoryStatus(f, t).Status; s != api.FactoryDraining {
 		t.Fatalf("draining: %s", s)
 	}
-	beat(f, t, "c", "h", core.HeartbeatOnline, 10)
-	if s := factoryStatus(f, t).Status; s != core.FactoryOnline {
+	beat(f, t, "c", "h", api.HeartbeatOnline, 10)
+	if s := factoryStatus(f, t).Status; s != api.FactoryOnline {
 		t.Fatalf("online: %s", s)
 	}
 }
@@ -109,11 +109,11 @@ func TestTheCombinedStatusIsOnlineThenDrainingThenOffline(t *testing.T) {
 func TestAFactoryIsIdentifiedByNameAndHostAndTheLatestReplaces(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	beat(f, t, "b", "z", core.HeartbeatOnline, 10)
-	beat(f, t, "b", "a", core.HeartbeatOnline, 10)
-	beat(f, t, "a", "z", core.HeartbeatOnline, 10)
+	beat(f, t, "b", "z", api.HeartbeatOnline, 10)
+	beat(f, t, "b", "a", api.HeartbeatOnline, 10)
+	beat(f, t, "a", "z", api.HeartbeatOnline, 10)
 	f.clock.Advance(5 * time.Second)
-	beatNote(f, t, " a ", " z ", core.HeartbeatDraining, "later", 20)
+	beatNote(f, t, " a ", " z ", api.HeartbeatDraining, "later", 20)
 	var got []string
 	for _, fv := range factoryStatus(f, t).Factories {
 		got = append(got, fv.Name+"@"+fv.Host+":"+string(fv.Status))
@@ -126,7 +126,7 @@ func TestAFactoryIsIdentifiedByNameAndHostAndTheLatestReplaces(t *testing.T) {
 func TestAHeartbeatsNoteIsTrimmedAndCutTo200Characters(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	beatNote(f, t, "cc", "box", core.HeartbeatOnline, "  "+strings.Repeat("é", 250), 10)
+	beatNote(f, t, "cc", "box", api.HeartbeatOnline, "  "+strings.Repeat("é", 250), 10)
 	if n := factoryStatus(f, t).Factories[0].Note; n != strings.Repeat("é", 200) {
 		t.Fatalf("note has %d runes", len([]rune(n)))
 	}
@@ -135,24 +135,24 @@ func TestAHeartbeatsNoteIsTrimmedAndCutTo200Characters(t *testing.T) {
 func TestAHeartbeatIsRefusedWithTheFieldNamed(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	ok := core.ReportHeartbeatInput{Factory: "f", Host: "h", State: core.HeartbeatOnline, IntervalSeconds: 10}
-	for field, mutate := range map[string]func(*core.ReportHeartbeatInput){
-		"factory":          func(in *core.ReportHeartbeatInput) { in.Factory = "  " },
-		"host":             func(in *core.ReportHeartbeatInput) { in.Host = "" },
-		"state":            func(in *core.ReportHeartbeatInput) { in.State = "asleep" },
-		"interval_seconds": func(in *core.ReportHeartbeatInput) { in.IntervalSeconds = 0 },
+	ok := api.ReportHeartbeatInput{Factory: "f", Host: "h", State: api.HeartbeatOnline, IntervalSeconds: 10}
+	for field, mutate := range map[string]func(*api.ReportHeartbeatInput){
+		"factory":          func(in *api.ReportHeartbeatInput) { in.Factory = "  " },
+		"host":             func(in *api.ReportHeartbeatInput) { in.Host = "" },
+		"state":            func(in *api.ReportHeartbeatInput) { in.State = "asleep" },
+		"interval_seconds": func(in *api.ReportHeartbeatInput) { in.IntervalSeconds = 0 },
 	} {
 		in := ok
 		mutate(&in)
 		_, err := f.core.ReportHeartbeat(ctx, "acme", in)
-		wantCode(t, err, core.Invalid, field)
+		wantCode(t, err, api.Invalid, field)
 	}
 	in := ok
 	in.IntervalSeconds = 86401
 	_, err := f.core.ReportHeartbeat(ctx, "acme", in)
-	wantCode(t, err, core.Invalid, "interval_seconds")
+	wantCode(t, err, api.Invalid, "interval_seconds")
 	_, err = f.core.ReportHeartbeat(ctx, "nope", ok)
-	wantCode(t, err, core.UnknownProject, "")
+	wantCode(t, err, api.UnknownProject, "")
 }
 
 func TestAHeartbeatSendsTheProjectsNoticeOnlyWhenWhatTheHumanSeesChanges(t *testing.T) {
@@ -171,19 +171,19 @@ func TestAHeartbeatSendsTheProjectsNoticeOnlyWhenWhatTheHumanSeesChanges(t *test
 		noNotice(t, notices)
 	}
 
-	beatNote(f, t, "cc", "box", core.HeartbeatOnline, "a", 10)
+	beatNote(f, t, "cc", "box", api.HeartbeatOnline, "a", 10)
 	expect("new Factory", true)
 	f.clock.Advance(10 * time.Second)
-	beatNote(f, t, "cc", "box", core.HeartbeatOnline, "a", 10)
+	beatNote(f, t, "cc", "box", api.HeartbeatOnline, "a", 10)
 	expect("repeat", false)
-	beatNote(f, t, "cc", "box", core.HeartbeatOnline, "b", 10)
+	beatNote(f, t, "cc", "box", api.HeartbeatOnline, "b", 10)
 	expect("new note", true)
-	beatNote(f, t, "cc", "box", core.HeartbeatDraining, "b", 10)
+	beatNote(f, t, "cc", "box", api.HeartbeatDraining, "b", 10)
 	expect("new status", true)
-	beatNote(f, t, "cc", "other", core.HeartbeatOnline, "b", 10)
+	beatNote(f, t, "cc", "other", api.HeartbeatOnline, "b", 10)
 	expect("another host", true)
 	f.clock.Advance(5 * time.Minute) // both are Offline by now
-	beatNote(f, t, "cc", "other", core.HeartbeatOnline, "b", 10)
+	beatNote(f, t, "cc", "other", api.HeartbeatOnline, "b", 10)
 	expect("back from Offline", true)
 }
 
@@ -194,7 +194,7 @@ func TestAChangeInChatSupportPublishesAndShowsInTheFactoryList(t *testing.T) {
 	defer stop()
 	send := func(chat bool) {
 		t.Helper()
-		_, err := f.core.ReportHeartbeat(ctx, "acme", core.ReportHeartbeatInput{Factory: "cc", Host: "box", State: core.HeartbeatOnline, IntervalSeconds: 10, Chat: chat})
+		_, err := f.core.ReportHeartbeat(ctx, "acme", api.ReportHeartbeatInput{Factory: "cc", Host: "box", State: api.HeartbeatOnline, IntervalSeconds: 10, Chat: chat})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -218,15 +218,15 @@ func TestAChangeInChatSupportPublishesAndShowsInTheFactoryList(t *testing.T) {
 func TestAHeartbeatAcknowledgesWithoutFactoryStatusNoise(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	w, err := f.core.ReportHeartbeat(ctx, "acme", core.ReportHeartbeatInput{Factory: "f", Host: "h", State: core.HeartbeatOnline, IntervalSeconds: 10})
+	w, err := f.core.ReportHeartbeat(ctx, "acme", api.ReportHeartbeatInput{Factory: "f", Host: "h", State: api.HeartbeatOnline, IntervalSeconds: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if w.Record != nil || w.ID != "acme" || len(w.Changed) != 0 {
 		t.Fatalf("acknowledgement = %+v", w)
 	}
-	full, err := f.core.ReportHeartbeat(ctx, "acme", core.ReportHeartbeatInput{Factory: "f", Host: "h", State: core.HeartbeatOnline, IntervalSeconds: 10, Full: true})
-	if err != nil || full.Record == nil || full.Record.FactoryStatus.Status != core.FactoryOnline {
+	full, err := f.core.ReportHeartbeat(ctx, "acme", api.ReportHeartbeatInput{Factory: "f", Host: "h", State: api.HeartbeatOnline, IntervalSeconds: 10, Full: true})
+	if err != nil || full.Record == nil || full.Record.FactoryStatus.Status != api.FactoryOnline {
 		t.Fatalf("full = %+v, %v", full, err)
 	}
 }
@@ -267,7 +267,7 @@ func TestTheWatchReportsAFactoryGoingOfflineOnceAndAnUnchangedProjectNever(t *te
 	if got := tick(); len(got) != 0 {
 		t.Fatalf("first tick reported %v", got)
 	}
-	beat(f, t, "cc", "box", core.HeartbeatOnline, 10)
+	beat(f, t, "cc", "box", api.HeartbeatOnline, 10)
 	if got := tick(); len(got) != 1 || got[0] != "acme" {
 		t.Fatalf("after a new Factory reported %v, want acme", got)
 	}

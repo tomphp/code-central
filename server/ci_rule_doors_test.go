@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 )
 
@@ -24,7 +24,7 @@ func init() {
 			ciRules(t, out, rule{"acme-4", "ci.yml", "main", "Ready"})
 		},
 		bad:  call{http: addCIRule(`{"workflow":"ci.yml","branch":"release/*"}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 	cases["edit_ci_rule"] = opCase{
 		setup: withCIRule(`{"workflow":"ci.yml","branch":"main"}`),
@@ -36,7 +36,7 @@ func init() {
 			ciRules(t, out, rule{"acme-4", "any", "main", "Ready"})
 		},
 		bad:  call{http: editCIRule(`{"spec":"acme-1","workflow":"any","branch":"main"}`)},
-		code: core.NotFound,
+		code: api.NotFound,
 	}
 	cases["remove_ci_rule"] = opCase{
 		setup: withCIRule(`{"workflow":"ci.yml","branch":"main"}`),
@@ -46,7 +46,7 @@ func init() {
 		},
 		full: func(t *testing.T, out map[string]any) { ciRules(t, out) },
 		bad:  call{http: removeCIRule(`{"spec":"acme-9"}`)},
-		code: core.NotFound,
+		code: api.NotFound,
 	}
 }
 
@@ -130,8 +130,8 @@ func TestRemovingACIRuleKeepsItsSpec(t *testing.T) {
 		t.Fatalf("the removed rule's Spec = %v, want it kept", spec)
 	}
 	// Removed, it is no rule to edit or remove again.
-	httpRejected(t, srv, removeCIRule(`{"spec":"acme-4"}`), core.NotFound)
-	httpRejected(t, srv, editCIRule(`{"spec":"acme-4","workflow":"ci.yml","branch":"main"}`), core.NotFound)
+	httpRejected(t, srv, removeCIRule(`{"spec":"acme-4"}`), api.NotFound)
+	httpRejected(t, srv, editCIRule(`{"spec":"acme-4","workflow":"ci.yml","branch":"main"}`), api.NotFound)
 }
 
 func TestEditingACIRuleKeepsItsSpecAndCreatedTimeAndRetitlesTheSpec(t *testing.T) {
@@ -159,13 +159,13 @@ func TestCIRulesAreRejectedForAnAgent(t *testing.T) {
 		editCIRule(`{"spec":"acme-4","workflow":"any","branch":"main"}`),
 		removeCIRule(`{"spec":"acme-4"}`),
 	} {
-		status, b := httpDoAs(t, srv, core.Agent, c)
-		if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
+		status, b := httpDoAs(t, srv, api.Agent, c)
+		if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
 			t.Fatalf("%s: status %d message %q, want a human action", c.path, status, e.Message)
 		}
 	}
 	ciRules(t, getAcme(t, srv), rule{"acme-4", "ci.yml", "main", "Draft"})
-	if _, err := srv.Core.GetSpec(context.Background(), "acme", core.GetSpecInput{Spec: "acme-5"}); err == nil {
+	if _, err := srv.Core.GetSpec(context.Background(), "acme", api.GetSpecInput{Spec: "acme-5"}); err == nil {
 		t.Fatal("an agent's add_ci_rule created a Spec")
 	}
 }
@@ -173,7 +173,7 @@ func TestCIRulesAreRejectedForAnAgent(t *testing.T) {
 func TestACIRuleNamesAWorkflowFileOrAny(t *testing.T) {
 	srv := newServer(t)
 	for _, w := range []string{"", " ", ".github/workflows/ci.yml", "ci", "CI build", "*.yml"} {
-		e := httpRejected(t, srv, addCIRule(`{"workflow":"`+w+`","branch":"main"}`), core.Invalid)
+		e := httpRejected(t, srv, addCIRule(`{"workflow":"`+w+`","branch":"main"}`), api.Invalid)
 		if e.Field != "workflow" || !strings.Contains(e.Message, "ci.yml") || !strings.Contains(e.Message, "any") {
 			t.Fatalf("%q: field %q message %q, want workflow with an example and any", w, e.Field, e.Message)
 		}
@@ -184,7 +184,7 @@ func TestACIRuleNamesAWorkflowFileOrAny(t *testing.T) {
 func TestACIRuleBranchIsAnExactName(t *testing.T) {
 	srv := newServer(t)
 	for _, b := range []string{"", "  ", "release/*", "feat-?", "[ab]", "my branch"} {
-		e := httpRejected(t, srv, addCIRule(`{"workflow":"ci.yml","branch":"`+b+`"}`), core.Invalid)
+		e := httpRejected(t, srv, addCIRule(`{"workflow":"ci.yml","branch":"`+b+`"}`), api.Invalid)
 		if e.Field != "branch" || !strings.Contains(e.Message, "glob") {
 			t.Fatalf("%q: field %q message %q, want branch saying no globs", b, e.Field, e.Message)
 		}
@@ -195,7 +195,7 @@ func TestACIRuleBranchIsAnExactName(t *testing.T) {
 func TestACIRuleOpensItsTicketsAsDraftOrReady(t *testing.T) {
 	srv := newServer(t)
 	for _, s := range []string{"In Progress", "Done", "ready"} {
-		e := httpRejected(t, srv, addCIRule(`{"workflow":"ci.yml","branch":"main","state":"`+s+`"}`), core.Invalid)
+		e := httpRejected(t, srv, addCIRule(`{"workflow":"ci.yml","branch":"main","state":"`+s+`"}`), api.Invalid)
 		if e.Field != "state" || !strings.Contains(e.Message, "Draft") || !strings.Contains(e.Message, "Ready") {
 			t.Fatalf("%q: field %q message %q, want state naming Draft and Ready", s, e.Field, e.Message)
 		}
@@ -209,7 +209,7 @@ func TestTwoCIRulesCannotWatchTheSameWorkflowAndBranch(t *testing.T) {
 		addCIRule(`{"workflow":"ci.yml","branch":"main","state":"Ready"}`),
 		editCIRule(`{"spec":"acme-5","workflow":"ci.yml","branch":"main"}`),
 	} {
-		e := httpRejected(t, srv, c, core.Invalid)
+		e := httpRejected(t, srv, c, api.Invalid)
 		if !strings.Contains(e.Message, "acme-4") {
 			t.Fatalf("%s: message %q, want it to name the rule's Spec acme-4", c.path, e.Message)
 		}
@@ -220,10 +220,10 @@ func TestTwoCIRulesCannotWatchTheSameWorkflowAndBranch(t *testing.T) {
 
 func TestAnArchivedProjectRejectsCIRules(t *testing.T) {
 	srv := newServer(t)
-	human := core.WithActor(context.Background(), core.Human)
+	human := api.WithActor(context.Background(), api.Human)
 	must(t, func() error { _, err := srv.Core.ArchiveProject(human, "other"); return err })
-	httpRejected(t, srv, httpCall{"POST", "/api/p/other/add_ci_rule", `{"workflow":"ci.yml","branch":"main"}`}, core.ActionNotAllowed)
-	httpRejected(t, srv, httpCall{"POST", "/api/p/nope/add_ci_rule", `{"workflow":"ci.yml","branch":"main"}`}, core.UnknownProject)
+	httpRejected(t, srv, httpCall{"POST", "/api/p/other/add_ci_rule", `{"workflow":"ci.yml","branch":"main"}`}, api.ActionNotAllowed)
+	httpRejected(t, srv, httpCall{"POST", "/api/p/nope/add_ci_rule", `{"workflow":"ci.yml","branch":"main"}`}, api.UnknownProject)
 }
 
 // Turning CI Tracking on or off keeps the rules.

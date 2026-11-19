@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/factory/factorytest"
 )
@@ -128,7 +128,7 @@ func TestUnderRebaseAMixedSpecBranchKeepsItsEarlierMergesAsMergesWhenRebasedOnto
 func TestUnderRebaseASpecBranchConflictingInOneRepositoryRebasesAndLandsNothingAnywhere(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	api, id := specInTwo(h)
+	apiRepo, id := specInTwo(h)
 	setRebase(h, true)
 	release := holdTicketsStage(t, h)
 	fix := "acme-5"
@@ -139,19 +139,19 @@ func TestUnderRebaseASpecBranchConflictingInOneRepositoryRebasesAndLandsNothingA
 	r.Poll()
 	r.WantOutput(id + ": replayed onto spec/" + h.SpecID())
 	spec := "spec/" + h.SpecID()
-	homeTip, apiTip := h.Git("rev-parse", spec), h.GitIn(api.Path, "rev-parse", spec)
+	homeTip, apiTip := h.Git("rev-parse", spec), h.GitIn(apiRepo.Path, "rev-parse", spec)
 	// The Home Repository's base moves on cleanly; api's conflicts.
 	homeBase := h.CommitOn("main", "base.txt", "base\n")
-	apiBase := api.CommitOn("main", "endpoint.go", "package other\n")
+	apiBase := apiRepo.CommitOn("main", "endpoint.go", "package other\n")
 
 	release()
 	r.Poll()
 
 	h.WantState(id, domain.Accepted)
-	if h.Git("rev-parse", "main") != homeBase || h.GitIn(api.Path, "rev-parse", "main") != apiBase {
+	if h.Git("rev-parse", "main") != homeBase || h.GitIn(apiRepo.Path, "rev-parse", "main") != apiBase {
 		t.Fatal("a base moved: nothing lands while any Repository's Spec Branch conflicts")
 	}
-	if h.Git("rev-parse", spec) != homeTip || h.GitIn(api.Path, "rev-parse", spec) != apiTip {
+	if h.Git("rev-parse", spec) != homeTip || h.GitIn(apiRepo.Path, "rev-parse", spec) != apiTip {
 		t.Fatal("a Spec Branch moved: none is rebased while any Repository's conflicts")
 	}
 	tk := h.Ticket(fix)
@@ -166,7 +166,7 @@ func TestUnderMergeAndPushTheBaseMoveStillRebuildsAfterARebaseLanding(t *testing
 	h := factorytest.New(t)
 	remote := h.AddRemote("origin")
 	on := true
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin", Rebase: &on})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin", Rebase: &on})
 	h.Git("push", "-q", remote.Path, "main:refs/heads/main")
 	h.MakeRequirement()
 	a, _ := accepted(h, "First", "one.txt", "1\n")

@@ -1,11 +1,12 @@
 package factory_test
 
 import (
-	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -20,7 +21,7 @@ func TestTurningLandPerSpecOffLandsTheWaitingTicketsAsAGroupAndLaterOnesSingly(t
 	r.WantOutput(b + ": merged into spec/" + h.SpecID())
 	oldMain := h.Git("rev-parse", "main")
 
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, LandPerSpec: off()})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, LandPerSpec: off()})
 	r.Poll()
 	h.WantState(a, domain.Done)
 	h.WantState(b, domain.Done)
@@ -45,12 +46,12 @@ func TestTurningLandPerSpecOnHoldsOnlyLaterTickets(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	h.MakeRequirement()
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, LandPerSpec: off()})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, LandPerSpec: off()})
 	a, _ := accepted(h, "First", "one.txt", "1\n")
 	r := h.Start()
 	h.WantState(a, domain.Done)
 
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, LandPerSpec: func() *bool { v := true; return &v }()})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, LandPerSpec: func() *bool { v := true; return &v }()})
 	release := holdTicketsStage(t, h)
 	b, _ := accepted(h, "Second", "two.txt", "2\n")
 	r.Poll()
@@ -67,12 +68,12 @@ func TestTurningLandPerSpecOnHoldsOnlyLaterTickets(t *testing.T) {
 // implementation Tickets keep it unfinished.
 func cancelDrafts(t *testing.T, h *factorytest.Harness) {
 	t.Helper()
-	rows, err := h.Server.Client.FindTickets(t.Context(), h.Project, core.FindTicketsInput{Spec: core.Ref(h.SpecID()), State: []domain.State{domain.Draft}})
+	rows, err := h.Server.Client.FindTickets(t.Context(), h.Project, api.FindTicketsInput{Spec: api.Ref(h.SpecID()), State: []domain.State{domain.Draft}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, r := range rows {
-		if _, err := h.Human().Cancel(t.Context(), h.Project, core.CancelInput{Ticket: core.Ref(r.ID)}); err != nil {
+		if _, err := h.Human().Cancel(t.Context(), h.Project, api.CancelInput{Ticket: api.Ref(r.ID)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -104,7 +105,7 @@ func TestAnUnmergedSpecBranchIsKeptWithOneLine(t *testing.T) {
 	release := holdTicketsStage(t, h)
 	r := h.Start()
 	r.WantOutput(a + ": merged into spec/" + h.SpecID())
-	if _, err := h.Human().Cancel(t.Context(), h.Project, core.CancelInput{Ticket: core.Ref(a)}); err != nil {
+	if _, err := h.Human().Cancel(t.Context(), h.Project, api.CancelInput{Ticket: api.Ref(a)}); err != nil {
 		t.Fatal(err)
 	}
 	release()

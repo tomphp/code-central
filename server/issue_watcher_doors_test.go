@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 )
 
@@ -27,7 +27,7 @@ func init() {
 			}
 		},
 		bad:  call{http: getIssueWatch("nope")},
-		code: core.UnknownProject,
+		code: api.UnknownProject,
 	}
 	cases["report_issue_watcher_status"] = opCase{
 		setup: githubIssuesOn,
@@ -39,7 +39,7 @@ func init() {
 			issueWatcher(t, out, "watching", "", "")
 		},
 		bad:  call{http: reportIssueWatcherStatus(`{"state":"asleep"}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -151,10 +151,10 @@ func TestGetIssueWatchListsTheIncomingIssuesThatArentFinishedOrDetached(t *testi
 // the human may make it.
 func TestReportIssueWatcherStatusIsRefusedFromAnyoneButTheIntegrationActor(t *testing.T) {
 	srv := newServer(t, githubIssuesOn)
-	for _, actor := range []core.Actor{core.Agent, core.Human} {
+	for _, actor := range []api.Actor{api.Agent, api.Human} {
 		status, b := httpDoAs(t, srv, actor, reportIssueWatcherStatus(`{"state":"watching"}`))
-		if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) || !strings.Contains(e.Message, "integration") {
-			t.Fatalf("as %s: status %d, want %d; message %q", actor, status, httpapi.Status(core.ActionNotAllowed), e.Message)
+		if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) || !strings.Contains(e.Message, "integration") {
+			t.Fatalf("as %s: status %d, want %d; message %q", actor, status, httpapi.Status(api.ActionNotAllowed), e.Message)
 		}
 	}
 	issueWatcher(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), "not_reported", "", "")
@@ -186,7 +186,7 @@ func TestTheIssueWatchersStatusShowsInGitHubIssues(t *testing.T) {
 func TestReportIssueWatcherStatusRefusesWhatIsntTheIssueWatchers(t *testing.T) {
 	srv := newServer(t)
 	status, b := httpDo(t, srv, reportIssueWatcherStatus(`{"state":"watching"}`))
-	if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) || !strings.Contains(e.Message, "GitHub Issues is off") {
+	if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) || !strings.Contains(e.Message, "GitHub Issues is off") {
 		t.Fatalf("status %d; message %q, want GitHub Issues off", status, e.Message)
 	}
 	githubIssuesOn(t, srv)
@@ -196,7 +196,7 @@ func TestReportIssueWatcherStatusRefusesWhatIsntTheIssueWatchers(t *testing.T) {
 		`{"state":"error","message":"no","rate_limited_until":"2026-01-05T10:15:00Z"}`,
 	} {
 		status, b := httpDo(t, srv, reportIssueWatcherStatus(body))
-		if errorJSON(t, b, core.Invalid); status != httpapi.Status(core.Invalid) {
+		if errorJSON(t, b, api.Invalid); status != httpapi.Status(api.Invalid) {
 			t.Fatalf("%s: status %d, want invalid", body, status)
 		}
 	}
@@ -223,7 +223,7 @@ func TestTheIssueWatchersErrorNamesTheListedRepositoriesItCantWatch(t *testing.T
 		`{"state":"watching","repositories":[{"repository":"acme/api","message":"no"}]}`,
 	} {
 		status, b := httpDo(t, srv, reportIssueWatcherStatus(body))
-		if errorJSON(t, b, core.Invalid); status != httpapi.Status(core.Invalid) {
+		if errorJSON(t, b, api.Invalid); status != httpapi.Status(api.Invalid) {
 			t.Fatalf("%s: status %d, want invalid", body, status)
 		}
 	}

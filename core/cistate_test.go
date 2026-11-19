@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
@@ -29,23 +30,23 @@ func TestTicketsSharingAPushedCommitReadTheSameCI(t *testing.T) {
 	f.ciRun(t, 2, "lint.yml", "abc123", "acme-8", domain.CICompleted, domain.CISuccess)
 	for _, id := range []string{"acme-5", "acme-8"} {
 		tk := f.getTicket(t, id)
-		if tk.CIResult != core.CIFailed || tk.CICommit != "abc123" || len(tk.CIRuns) != 2 {
+		if tk.CIResult != api.CIFailed || tk.CICommit != "abc123" || len(tk.CIRuns) != 2 {
 			t.Errorf("%s: result %q from %q with %d runs, want failed at abc123 with both runs", id, tk.CIResult, tk.CICommit, len(tk.CIRuns))
 		}
 		if tk.CIItem == nil || tk.CIItem.Commit != "abc123" || !slices.Equal(listed(tk.CIItem), []string{"acme-5", "acme-8"}) {
 			t.Errorf("%s: item %+v, want abc123's listing both", id, tk.CIItem)
 		}
 	}
-	rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: []domain.State{domain.Accepted}})
+	rows, err := f.core.FindTickets(ctx, "acme", api.FindTicketsInput{State: []domain.State{domain.Accepted}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, row := range rows {
-		if row.CIResult != core.CIFailed {
+		if row.CIResult != api.CIFailed {
 			t.Errorf("%s's row: result %q, want failed", row.ID, row.CIResult)
 		}
 	}
-	if row := f.theItem(t, core.ReasonCIFailed); row.CIResult != core.CIFailed || row.CIFailure == nil || !slices.Equal(row.CIFailure.Workflows, []string{"ci.yml"}) {
+	if row := f.theItem(t, api.ReasonCIFailed); row.CIResult != api.CIFailed || row.CIFailure == nil || !slices.Equal(row.CIFailure.Workflows, []string{"ci.yml"}) {
 		t.Fatalf("item row %+v, want failed in ci.yml", row)
 	}
 }
@@ -55,11 +56,11 @@ func TestTicketsSharingAPushedCommitReadTheSameCI(t *testing.T) {
 func TestAResponseOnTheProjectCoversEveryTicketOnTheCommit(t *testing.T) {
 	f := itemWorld(t)
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
-	if _, err := f.core.RerunCI(human, "acme", core.CIResponseInput{Ticket: "acme-5"}); err != nil {
+	if _, err := f.core.RerunCI(human, "acme", api.CIResponseInput{Ticket: "acme-5"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"acme-5", "acme-8"} {
-		if tk := f.getTicket(t, id); tk.CIResult != core.CIRunning || tk.NeedsMeReason != "" || tk.CIItem != nil {
+		if tk := f.getTicket(t, id); tk.CIResult != api.CIRunning || tk.NeedsMeReason != "" || tk.CIItem != nil {
 			t.Errorf("%s: result %q, reason %q, item %+v, want running on the commit's Re-run request", id, tk.CIResult, tk.NeedsMeReason, tk.CIItem)
 		}
 	}
@@ -115,7 +116,7 @@ func TestAResponseStoredOnAPushedCommitBeforeCIItemsKeepsItsEffectOnceMigrated(t
 			t.Errorf("%s: land anyway %v, reason %q, item %+v, want abc123 landed anyway", id, tk.LandAnyway, tk.NeedsMeReason, tk.CIItem)
 		}
 	}
-	if tk := f.getTicket(t, "acme-6"); tk.CIResult != core.CIRunning || tk.NeedsMeReason != "" {
+	if tk := f.getTicket(t, "acme-6"); tk.CIResult != api.CIRunning || tk.NeedsMeReason != "" {
 		t.Fatalf("acme-6: result %q, reason %q, want running on its Re-run request", tk.CIResult, tk.NeedsMeReason)
 	}
 	w, err := f.core.GetCIWatch(ctx, "acme")

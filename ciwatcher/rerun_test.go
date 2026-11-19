@@ -6,11 +6,12 @@ package ciwatcher_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"slices"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/internal/fakegh"
 )
 
@@ -27,15 +28,15 @@ func (w *watching) rerunCalls() []fakegh.Call {
 
 // attempt waits for ticket's latest pushed commit's run 11 to be reported
 // at attempt with status, and returns the Ticket.
-func (w *watching) attempt(ticket string, attempt int, status domain.CIRunStatus) core.TicketView {
+func (w *watching) attempt(ticket string, attempt int, status domain.CIRunStatus) api.TicketView {
 	w.t.Helper()
-	var tk core.TicketView
+	var tk api.TicketView
 	w.waitFor("run 11's attempt reported", func() bool {
 		var err error
-		if tk, err = w.srv.Client.GetTicket(context.Background(), "acme", core.Ref(ticket)); err != nil {
+		if tk, err = w.srv.Client.GetTicket(context.Background(), "acme", api.Ref(ticket)); err != nil {
 			w.t.Fatal(err)
 		}
-		return slices.ContainsFunc(tk.CIRuns, func(r core.CIRunView) bool { return r.ID == 11 && r.Attempt == attempt && r.Status == status })
+		return slices.ContainsFunc(tk.CIRuns, func(r api.CIRunView) bool { return r.ID == 11 && r.Attempt == attempt && r.Status == status })
 	})
 	return tk
 }
@@ -46,18 +47,18 @@ func TestTheCIWatcherRerunsTheFailedJobsAndReportsTheNewAttempt(t *testing.T) {
 	w.runsAnswer("abc123", listedRun{id: 11, attempt: 1, workflow: "ci.yml", status: "completed", conclude: "failure", updated: "2026-01-05T09:05:00Z"})
 	w.jobsAnswer(11, 1, [2]string{"test", "failure"})
 	w.start(w.h.Bin)
-	w.ciResult(id, core.CIFailed)
+	w.ciResult(id, api.CIFailed)
 
-	human := core.WithActor(context.Background(), core.Human)
+	human := api.WithActor(context.Background(), api.Human)
 	must(t, func() error {
-		_, err := w.srv.Core.RerunCI(human, "acme", core.CIResponseInput{Ticket: core.Ref(id)})
+		_, err := w.srv.Core.RerunCI(human, "acme", api.CIResponseInput{Ticket: api.Ref(id)})
 		return err
 	})
 	w.runsAnswer("abc123", listedRun{id: 11, attempt: 2, workflow: "ci.yml", status: "in_progress", updated: "2026-01-05T09:07:00Z"})
 	w.jobsAnswer(11, 2, [2]string{"test", ""})
 	w.waitingPoll()
 	tk := w.attempt(id, 2, domain.CIInProgress)
-	if tk.CIResult != core.CIRunning {
+	if tk.CIResult != api.CIRunning {
 		t.Fatalf("ci result %q, want running while attempt 2 runs", tk.CIResult)
 	}
 	calls := w.rerunCalls()
@@ -76,7 +77,7 @@ func TestTheCIWatcherRerunsTheFailedJobsAndReportsTheNewAttempt(t *testing.T) {
 	w.jobsAnswer(11, 2, [2]string{"test", "success"})
 	w.waitingPoll()
 	w.attempt(id, 2, domain.CICompleted)
-	if tk := w.ciResult(id, core.CIPassed); tk.NeedsMeReason == core.ReasonCIFailed {
+	if tk := w.ciResult(id, api.CIPassed); tk.NeedsMeReason == api.ReasonCIFailed {
 		t.Fatalf("reason %q, want acme-2 out of CI failed", tk.NeedsMeReason)
 	}
 	if n := len(w.rerunCalls()); n != 1 {
@@ -92,11 +93,11 @@ func TestTheCIWatcherAsksForAReRunOnce(t *testing.T) {
 	w.runsAnswer("abc123", listedRun{id: 11, attempt: 1, workflow: "ci.yml", status: "completed", conclude: "failure", updated: "2026-01-05T09:05:00Z"})
 	w.jobsAnswer(11, 1, [2]string{"test", "failure"})
 	w.start(w.h.Bin)
-	w.ciResult(id, core.CIFailed)
+	w.ciResult(id, api.CIFailed)
 
-	human := core.WithActor(context.Background(), core.Human)
+	human := api.WithActor(context.Background(), api.Human)
 	must(t, func() error {
-		_, err := w.srv.Core.RerunCI(human, "acme", core.CIResponseInput{Ticket: core.Ref(id)})
+		_, err := w.srv.Core.RerunCI(human, "acme", api.CIResponseInput{Ticket: api.Ref(id)})
 		return err
 	})
 	w.waitingPoll()
@@ -114,21 +115,21 @@ func TestTheCIWatcherRerunsACancelledRun(t *testing.T) {
 	w.runsAnswer("abc123", listedRun{id: 11, attempt: 1, workflow: "ci.yml", status: "completed", conclude: "cancelled", updated: "2026-01-05T09:05:00Z"})
 	w.jobsAnswer(11, 1, [2]string{"test", "cancelled"})
 	w.start(w.h.Bin)
-	w.ciResult(id, core.CICancelled)
+	w.ciResult(id, api.CICancelled)
 	if n := len(w.rerunCalls()); n != 0 {
 		t.Fatalf("%d re-run calls, want none from a cancellation", n)
 	}
 
-	human := core.WithActor(context.Background(), core.Human)
+	human := api.WithActor(context.Background(), api.Human)
 	must(t, func() error {
-		_, err := w.srv.Core.RerunCI(human, "acme", core.CIResponseInput{Ticket: core.Ref(id)})
+		_, err := w.srv.Core.RerunCI(human, "acme", api.CIResponseInput{Ticket: api.Ref(id)})
 		return err
 	})
 	w.runsAnswer("abc123", listedRun{id: 11, attempt: 2, workflow: "ci.yml", status: "completed", conclude: "success", updated: "2026-01-05T09:09:00Z"})
 	w.jobsAnswer(11, 2, [2]string{"test", "success"})
 	w.waitingPoll()
 	w.attempt(id, 2, domain.CICompleted)
-	w.ciResult(id, core.CIPassed)
+	w.ciResult(id, api.CIPassed)
 	if n := len(w.rerunCalls()); n != 1 {
 		t.Fatalf("%d re-run calls, want one", n)
 	}

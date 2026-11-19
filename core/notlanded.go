@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -41,7 +42,7 @@ func (c *Core) notLandedReason(p domain.Project, t domain.Ticket, name string, c
 	}
 	lead, since := cantLandLead+name+" yet: ", entered(t)
 	for i := len(t.Comments) - 1; i >= 0 && !t.Comments[i].Time.Before(since); i-- {
-		if why, ok := strings.CutPrefix(t.Comments[i].Body, lead); ok && t.Comments[i].Actor != string(Human) {
+		if why, ok := strings.CutPrefix(t.Comments[i].Body, lead); ok && t.Comments[i].Actor != string(api.Human) {
 			return strings.TrimSuffix(firstLine(why), ":")
 		}
 	}
@@ -63,9 +64,9 @@ func waitingIn(p domain.Project, t domain.Ticket, name string, ci *ciState) stri
 		return ""
 	}
 	switch rc.result {
-	case CIPassed:
+	case api.CIPassed:
 		return ""
-	case CIFailed, CICancelled:
+	case api.CIFailed, api.CICancelled:
 		return fmt.Sprintf("CI %s at %s", rc.result, shortCommit(rc.commit))
 	}
 	commit := rc.commit
@@ -92,19 +93,19 @@ func waitsOnCIAlone(p domain.Project, t domain.Ticket, a *ticketCI) bool {
 // notLandedView is t's NotLandedView, t being p's and Accepted but not
 // landed, with ci p's CI state; nil while p has the Home Repository
 // alone, or t has no Changed Repositories.
-func (c *Core) notLandedView(p domain.Project, t domain.Ticket, ci *ciState) *NotLandedView {
+func (c *Core) notLandedView(p domain.Project, t domain.Ticket, ci *ciState) *api.NotLandedView {
 	rs := changedRepositories(p.Key, t)
 	if !severalRepositories(p) || len(rs) == 0 {
 		return nil
 	}
 	rs = slices.Clone(rs)
 	inLandingOrder(p, rs, repositoryName)
-	v := &NotLandedView{Landed: []string{}, NotLanded: []NotLandedRepositoryView{}}
+	v := &api.NotLandedView{Landed: []string{}, NotLanded: []api.NotLandedRepositoryView{}}
 	for _, r := range rs {
 		if r.Landed != nil {
 			v.Landed = append(v.Landed, r.Name)
 		} else {
-			v.NotLanded = append(v.NotLanded, NotLandedRepositoryView{Name: r.Name, Reason: c.notLandedReason(p, t, r.Name, ci)})
+			v.NotLanded = append(v.NotLanded, api.NotLandedRepositoryView{Name: r.Name, Reason: c.notLandedReason(p, t, r.Name, ci)})
 		}
 	}
 	return v

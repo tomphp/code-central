@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // Usage (Spec code-central-201): Code Central records each agent MCP
@@ -21,13 +21,13 @@ import (
 // table. These drive MCP and the HTTP API of the running service and
 // assert only what the read returns.
 
-func readUsage(t *testing.T, srv *codecentraltest.Server, query string) core.UsageView {
+func readUsage(t *testing.T, srv *codecentraltest.Server, query string) api.UsageView {
 	t.Helper()
 	status, b := httpDo(t, srv, httpCall{method: "GET", path: "/api/usage" + query})
 	if status != http.StatusOK {
 		t.Fatalf("GET /api/usage%s: status %d: %s", query, status, b)
 	}
-	var u core.UsageView
+	var u api.UsageView
 	if err := json.Unmarshal(b, &u); err != nil {
 		t.Fatalf("not the usage shape: %v: %s", err, b)
 	}
@@ -39,14 +39,14 @@ func acmeServer(t *testing.T, opts ...codecentraltest.Option) *codecentraltest.S
 	t.Helper()
 	srv := codecentraltest.NewServer(t, opts...)
 	must(t, func() error {
-		_, err := srv.Core.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"})
+		_, err := srv.Core.CreateProject(context.Background(), api.CreateProjectInput{Key: "acme"})
 		return err
 	})
 	return srv
 }
 
 // operation is the row for op, failing the test when there is none.
-func operation(t *testing.T, u core.UsageView, op string) core.UsageOperation {
+func operation(t *testing.T, u api.UsageView, op string) api.UsageOperation {
 	t.Helper()
 	for _, row := range u.Operations {
 		if row.Op == op {
@@ -54,7 +54,7 @@ func operation(t *testing.T, u core.UsageView, op string) core.UsageOperation {
 		}
 	}
 	t.Fatalf("no row for %s in %+v", op, u.Operations)
-	return core.UsageOperation{}
+	return api.UsageOperation{}
 }
 
 func TestUsageCountsEachMCPCallWithItsSizes(t *testing.T) {
@@ -67,7 +67,7 @@ func TestUsageCountsEachMCPCallWithItsSizes(t *testing.T) {
 	got := operation(t, u, "get_ticket")
 	req := len(`{"ticket":2}`) + len(`{"ticket":"acme-3"}`)
 	resp := len(first) + len(second)
-	want := core.UsageOperation{
+	want := api.UsageOperation{
 		Op: "get_ticket", Calls: 2,
 		RequestBytes: req, AverageRequestBytes: (req + 1) / 2,
 		ResponseBytes: resp, AverageResponseBytes: (resp + 1) / 2,
@@ -86,8 +86,8 @@ func TestUsageCountsEachMCPCallWithItsSizes(t *testing.T) {
 func TestUsageCountsRejectedCallsAsErrors(t *testing.T) {
 	srv := newServer(t)
 	s := connect(t, srv, "acme")
-	mcpRejected(t, s, "get_ticket", map[string]any{"ticket": "acme-99"}, core.NotFound)
-	mcpRejected(t, s, "get_ticket", map[string]any{"nope": 1}, core.Invalid)
+	mcpRejected(t, s, "get_ticket", map[string]any{"ticket": "acme-99"}, api.NotFound)
+	mcpRejected(t, s, "get_ticket", map[string]any{"nope": 1}, api.Invalid)
 	mcpOK(t, s, "get_ticket", map[string]any{"ticket": 2})
 
 	if got := operation(t, readUsage(t, srv, ""), "get_ticket"); got.Calls != 3 || got.Errors != 2 {
@@ -97,8 +97,8 @@ func TestUsageCountsRejectedCallsAsErrors(t *testing.T) {
 
 func TestUsageLeavesOutCallsToAnUnknownProjectAndTheHTTPAPI(t *testing.T) {
 	srv := newServer(t)
-	mcpRejected(t, connect(t, srv, "nope"), "get_ticket", map[string]any{"ticket": 2}, core.UnknownProject)
-	mcpRejected(t, connect(t, srv, "nope"), "get_ticket", map[string]any{"nope": 1}, core.Invalid)
+	mcpRejected(t, connect(t, srv, "nope"), "get_ticket", map[string]any{"ticket": 2}, api.UnknownProject)
+	mcpRejected(t, connect(t, srv, "nope"), "get_ticket", map[string]any{"nope": 1}, api.Invalid)
 	httpOK(t, srv, httpCall{method: "GET", path: "/api/p/acme/tickets/2"})
 	httpOK(t, srv, httpCall{method: "GET", path: "/api/p/acme/tickets"})
 
@@ -117,10 +117,10 @@ func TestUsageReadsOneProjectOrAllOfThemArchivedOnesToo(t *testing.T) {
 	mcpOK(t, connect(t, srv, "acme"), "get_ticket", map[string]any{"ticket": 2})
 	mcpOK(t, connect(t, srv, "other"), "find_tickets", map[string]any{})
 	mcpOK(t, connect(t, srv, "other"), "find_tickets", map[string]any{})
-	ctx := core.WithActor(context.Background(), core.Human)
+	ctx := api.WithActor(context.Background(), api.Human)
 	must(t, func() error { _, err := srv.Core.ArchiveProject(ctx, "other"); return err })
 
-	ops := func(u core.UsageView) map[string]int {
+	ops := func(u api.UsageView) map[string]int {
 		m := map[string]int{}
 		for _, row := range u.Operations {
 			m[row.Op] = row.Calls
@@ -144,14 +144,14 @@ func TestUsageReadsOneProjectOrAllOfThemArchivedOnesToo(t *testing.T) {
 
 func TestUsageRejectsAnUnknownProjectAndAnyOtherRange(t *testing.T) {
 	srv := newServer(t)
-	httpRejected(t, srv, httpCall{method: "GET", path: "/api/usage?project=nope"}, core.NotFound)
+	httpRejected(t, srv, httpCall{method: "GET", path: "/api/usage?project=nope"}, api.NotFound)
 	for _, days := range []string{"0", "1", "14", "seven"} {
-		e := httpRejected(t, srv, httpCall{method: "GET", path: "/api/usage?days=" + days}, core.Invalid)
+		e := httpRejected(t, srv, httpCall{method: "GET", path: "/api/usage?days=" + days}, api.Invalid)
 		if e.Field != "days" {
 			t.Errorf("days=%s: field %q, want days", days, e.Field)
 		}
 	}
-	httpRejected(t, srv, httpCall{method: "GET", path: "/api/usage?colour=red"}, core.Invalid)
+	httpRejected(t, srv, httpCall{method: "GET", path: "/api/usage?colour=red"}, api.Invalid)
 	for _, days := range []string{"7", "30", "90"} {
 		readUsage(t, srv, "?days="+days)
 	}

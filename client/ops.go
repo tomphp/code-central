@@ -16,7 +16,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/internal/fieldwalk"
 	"github.com/tomoram/code-central/ops"
 )
@@ -66,10 +66,10 @@ func call[In, Out any](ctx context.Context, c *Client, def *ops.Definition[In, O
 
 // written is call for an acknowledging write: the record when full was
 // asked for, else the Acknowledgement.
-func written[In, V any](ctx context.Context, c *Client, def *ops.Definition[In, core.Written[V]], key string, in In, full bool) (core.Written[V], error) {
+func written[In, V any](ctx context.Context, c *Client, def *ops.Definition[In, api.Written[V]], key string, in In, full bool) (api.Written[V], error) {
 	var raw json.RawMessage
 	if err := request(ctx, c, def, key, in, &raw); err != nil {
-		return core.Written[V]{}, err
+		return api.Written[V]{}, err
 	}
 	return decodeWritten[V](raw, full)
 }

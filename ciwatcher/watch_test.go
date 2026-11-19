@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/ciwatcher"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/watchers/watchertest"
@@ -32,11 +32,11 @@ type watching struct {
 func newWatching(t *testing.T) *watching {
 	t.Helper()
 	srv := codecentraltest.NewServer(t)
-	human := core.WithActor(context.Background(), core.Human)
-	if _, err := srv.Core.CreateProject(human, core.CreateProjectInput{Key: "acme"}); err != nil {
+	human := api.WithActor(context.Background(), api.Human)
+	if _, err := srv.Core.CreateProject(human, api.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := srv.Core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Repository: "acme/web"}); err != nil {
+	if _, err := srv.Core.SetCITracking(human, "acme", api.SetCITrackingInput{Tracking: true, Repository: "acme/web"}); err != nil {
 		t.Fatal(err)
 	}
 	return &watching{t: t, h: watchertest.New(t), srv: srv}
@@ -62,9 +62,9 @@ func (w *watching) start(path ...string) {
 
 // status waits for the CI Watcher's status in acme's Project read to be
 // state, and returns it.
-func (w *watching) status(state core.WatcherState) core.WatcherView {
+func (w *watching) status(state api.WatcherState) api.WatcherView {
 	w.t.Helper()
-	var p core.ProjectView
+	var p api.ProjectView
 	w.waitFor("CI Watcher status "+string(state), func() bool {
 		var err error
 		if p, err = w.srv.Client.GetProject(context.Background(), "acme"); err != nil {
@@ -98,7 +98,7 @@ func (w *watching) nextPoll() {
 func TestTheCIWatcherReportsWatchingWhenItCanReachGitHub(t *testing.T) {
 	w := newWatching(t)
 	w.start(w.h.Bin)
-	if got := w.status(core.WatcherWatching); got.Message != "" || got.Fix != "" {
+	if got := w.status(api.WatcherWatching); got.Message != "" || got.Fix != "" {
 		t.Fatalf("status %+v, want watching with no message", got)
 	}
 }
@@ -107,31 +107,31 @@ func TestALoggedOutGHIsAnErrorUntilItLogsIn(t *testing.T) {
 	w := newWatching(t)
 	w.h.LoggedOut()
 	w.start(w.h.Bin)
-	got := w.status(core.WatcherError)
-	if got.Problem != core.ProblemLoggedOut || !strings.Contains(got.Message, "not logged into") || !strings.Contains(got.Fix, "gh auth login") {
+	got := w.status(api.WatcherError)
+	if got.Problem != api.ProblemLoggedOut || !strings.Contains(got.Message, "not logged into") || !strings.Contains(got.Fix, "gh auth login") {
 		t.Fatalf("status %+v, want logged out with gh auth login", got)
 	}
 
 	// It retries each poll, still in error, and recovers by itself.
 	w.nextPoll()
 	w.nextPoll()
-	w.status(core.WatcherError)
+	w.status(api.WatcherError)
 	w.h.Answer(fakegh.Answer{Args: []string{"auth", "status"}})
 	w.nextPoll()
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 }
 
 func TestAnUnreadableRepositoryIsAnErrorUntilItCanBeRead(t *testing.T) {
 	w := newWatching(t)
 	w.h.Unreadable("acme/web")
 	w.start(w.h.Bin)
-	got := w.status(core.WatcherError)
-	if got.Problem != core.ProblemRepositoryUnreadable || !strings.Contains(got.Message, "acme/web") || !strings.Contains(got.Fix, "owner/name") {
+	got := w.status(api.WatcherError)
+	if got.Problem != api.ProblemRepositoryUnreadable || !strings.Contains(got.Message, "acme/web") || !strings.Contains(got.Fix, "owner/name") {
 		t.Fatalf("status %+v, want the repository unreadable, naming it", got)
 	}
 	w.h.Answer(fakegh.Answer{Args: []string{"api", "repos/acme/web"}, Stdout: "acme/web\n"})
 	w.nextPoll()
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 }
 
 // The gh path Option is read on every poll, so setting it fixes a
@@ -139,23 +139,23 @@ func TestAnUnreadableRepositoryIsAnErrorUntilItCanBeRead(t *testing.T) {
 func TestAMissingGHIsAnErrorUntilTheGHPathOptionFindsIt(t *testing.T) {
 	w := newWatching(t)
 	w.start(t.TempDir())
-	got := w.status(core.WatcherError)
-	if got.Problem != core.ProblemGHMissing || !strings.Contains(got.Fix, "https://cli.github.com") {
+	got := w.status(api.WatcherError)
+	if got.Problem != api.ProblemGHMissing || !strings.Contains(got.Fix, "https://cli.github.com") {
 		t.Fatalf("status %+v, want gh missing with how to install it", got)
 	}
-	human := core.WithActor(context.Background(), core.Human)
+	human := api.WithActor(context.Background(), api.Human)
 	gh := w.h.Bin
-	if _, err := w.srv.Core.SetOptions(human, core.SetOptionsInput{GHPath: &gh}); err != nil {
+	if _, err := w.srv.Core.SetOptions(human, api.SetOptionsInput{GHPath: &gh}); err != nil {
 		t.Fatal(err)
 	}
 	w.nextPoll()
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 }
 
 func TestTheCIWatcherExitsWhenItsStdinCloses(t *testing.T) {
 	w := newWatching(t)
 	w.start(w.h.Bin)
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	w.stdin.Close()
 	select {
 	case err := <-w.done:
@@ -191,7 +191,7 @@ func TestTheCIWatcherSubcommandWatchesAndExitsWhenItsStdinCloses(t *testing.T) {
 		cmd.Process.Kill()
 		<-done
 	})
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	stdin.Close()
 	select {
 	case <-done:

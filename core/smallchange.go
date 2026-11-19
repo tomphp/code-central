@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -12,30 +13,19 @@ import (
 // implementation Ticket from the human's text, on the Project's Small
 // Changes Spec, a Long-lived Spec: it has no Stages and lands on its own.
 
-// SubmitSmallChangeInput is submit_small_change's input: the free text,
-// whose first line becomes the Ticket's title.
-type SubmitSmallChangeInput struct {
-	Text string `json:"text" desc:"The change to make, in Markdown; its first line becomes the Ticket's title." required:"true"`
-	// Draft saves every Ticket the submit writes as Draft, not Ready, so
-	// nothing is claimed until the human moves them to Ready.
-	Draft bool `json:"draft,omitempty" desc:"Save the Ticket as Draft instead of Ready, so nothing is claimed until the human moves it to Ready."`
-	// Full asks for the Ticket in place of its Acknowledgement.
-	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
-}
-
 // SubmitSmallChange is submit_small_change(text, draft?). It writes, as human
 // whoever calls, a Ready (or with draft, Draft) Ticket titled with the text's first line, with the
 // text as its description, on the Small Changes Spec.
-func (c *Core) SubmitSmallChange(_ context.Context, key string, in SubmitSmallChangeInput) (Written[TicketView], error) {
+func (c *Core) SubmitSmallChange(_ context.Context, key string, in api.SubmitSmallChangeInput) (api.Written[api.TicketView], error) {
 	title := titleLine(in.Text)
 	if title == "" {
-		return Written[TicketView]{}, invalid("text", "a Small Change needs text; its first line becomes the Ticket's title")
+		return api.Written[api.TicketView]{}, invalid("text", "a Small Change needs text; its first line becomes the Ticket's title")
 	}
 	spec, err := c.projectSpecNumber(key, smallChangesSpec)
 	if err != nil {
-		return Written[TicketView]{}, err
+		return api.Written[api.TicketView]{}, err
 	}
-	var v Written[TicketView]
+	var v api.Written[api.TicketView]
 	err = c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -69,7 +59,7 @@ func submitMoves(draft bool, now time.Time, via string) []domain.Move {
 	if draft {
 		return nil
 	}
-	return []domain.Move{{To: domain.Ready, Actor: string(Human), Time: now, Via: via}}
+	return []domain.Move{{To: domain.Ready, Actor: string(api.Human), Time: now, Via: via}}
 }
 
 // smallChangesSpecBody is the Small Changes Spec's body.

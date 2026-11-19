@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -15,44 +15,44 @@ import (
 func (f fixture) pullRequestProject(t *testing.T) {
 	t.Helper()
 	f.project(t, "acme")
-	if _, err := f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/web.git", Base: "main"}); err != nil {
+	if _, err := f.core.ReportPushRemote(ctx, "acme", api.ReportPushRemoteInput{URL: "git@github.com:acme/web.git", Base: "main"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest}); err != nil {
 		t.Fatal(err)
 	}
-	beat(f, t, "cc", "box", core.HeartbeatOnline, 10)
+	beat(f, t, "cc", "box", api.HeartbeatOnline, 10)
 }
 
-func (f fixture) reportBase(t *testing.T, in core.ReportBaseInput) {
+func (f fixture) reportBase(t *testing.T, in api.ReportBaseInput) {
 	t.Helper()
 	if _, err := f.core.ReportBase(ctx, "acme", in); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func baseRow(t *testing.T, f fixture) (core.NeedsMeRow, bool) {
+func baseRow(t *testing.T, f fixture) (api.NeedsMeRow, bool) {
 	t.Helper()
 	v, err := f.core.NeedsMe(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, g := range v.Groups {
-		if g.Reason == core.ReasonBaseDiverged {
+		if g.Reason == api.ReasonBaseDiverged {
 			if len(g.Tickets) != 1 {
 				t.Fatalf("group %+v, want one item per Project", g)
 			}
 			return g.Tickets[0], true
 		}
 	}
-	return core.NeedsMeRow{}, false
+	return api.NeedsMeRow{}, false
 }
 
 func TestADivergedBaseIsOneNeedsMeItemWithItsCommits(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestProject(t)
-	f.reportBase(t, core.ReportBaseInput{State: core.BaseDiverged, Local: "aaa111", Remote: "bbb222"})
-	f.reportBase(t, core.ReportBaseInput{State: core.BaseDiverged, Local: "aaa111", Remote: "bbb222"})
+	f.reportBase(t, api.ReportBaseInput{State: api.BaseDiverged, Local: "aaa111", Remote: "bbb222"})
+	f.reportBase(t, api.ReportBaseInput{State: api.BaseDiverged, Local: "aaa111", Remote: "bbb222"})
 
 	row, ok := baseRow(t, f)
 	if !ok || row.Project != "acme" || row.ID != "" || row.BaseDiverged == nil ||
@@ -62,7 +62,7 @@ func TestADivergedBaseIsOneNeedsMeItemWithItsCommits(t *testing.T) {
 	if v, _ := f.core.NeedsMe(ctx); v.Count != 1 {
 		t.Fatalf("count %d, want 1", v.Count)
 	}
-	if fs := factoryStatus(f, t); fs.Base == nil || fs.Base.State != core.BaseDiverged {
+	if fs := factoryStatus(f, t); fs.Base == nil || fs.Base.State != api.BaseDiverged {
 		t.Fatalf("factory_status.base = %+v, want diverged", fs.Base)
 	}
 }
@@ -70,8 +70,8 @@ func TestADivergedBaseIsOneNeedsMeItemWithItsCommits(t *testing.T) {
 func TestABaseReportedCurrentClearsTheItem(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestProject(t)
-	f.reportBase(t, core.ReportBaseInput{State: core.BaseDiverged, Local: "a", Remote: "b"})
-	f.reportBase(t, core.ReportBaseInput{State: core.BaseCurrent, Local: "b", Remote: "b"})
+	f.reportBase(t, api.ReportBaseInput{State: api.BaseDiverged, Local: "a", Remote: "b"})
+	f.reportBase(t, api.ReportBaseInput{State: api.BaseCurrent, Local: "b", Remote: "b"})
 	if _, ok := baseRow(t, f); ok {
 		t.Fatal("Base diverged still shows once the base is current")
 	}
@@ -80,10 +80,10 @@ func TestABaseReportedCurrentClearsTheItem(t *testing.T) {
 func TestReportBaseRefusesAnUnknownStateOrMissingCommits(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestProject(t)
-	for _, in := range []core.ReportBaseInput{
+	for _, in := range []api.ReportBaseInput{
 		{State: "sideways", Local: "a", Remote: "b"},
-		{State: core.BaseDiverged, Local: "", Remote: "b"},
-		{State: core.BaseDiverged, Local: "a", Remote: ""},
+		{State: api.BaseDiverged, Local: "", Remote: "b"},
+		{State: api.BaseDiverged, Local: "a", Remote: ""},
 	} {
 		if _, err := f.core.ReportBase(ctx, "acme", in); err == nil {
 			t.Errorf("%+v accepted", in)
@@ -94,7 +94,7 @@ func TestReportBaseRefusesAnUnknownStateOrMissingCommits(t *testing.T) {
 func TestTheBaseReportLapsesWithTheHeartbeat(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestProject(t)
-	f.reportBase(t, core.ReportBaseInput{State: core.BaseDiverged, Local: "a", Remote: "b"})
+	f.reportBase(t, api.ReportBaseInput{State: api.BaseDiverged, Local: "a", Remote: "b"})
 
 	f.clock.Advance(time.Hour)
 	if _, ok := baseRow(t, f); ok {
@@ -105,7 +105,7 @@ func TestTheBaseReportLapsesWithTheHeartbeat(t *testing.T) {
 	}
 
 	// A Factory that comes back starts clean, whatever the old one said.
-	beat(f, t, "cc", "box", core.HeartbeatOnline, 10)
+	beat(f, t, "cc", "box", api.HeartbeatOnline, 10)
 	if _, ok := baseRow(t, f); ok {
 		t.Fatal("a restarted Factory inherited the old base report")
 	}
@@ -114,8 +114,8 @@ func TestTheBaseReportLapsesWithTheHeartbeat(t *testing.T) {
 func TestAStoppingFactoryDropsTheBaseReport(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestProject(t)
-	f.reportBase(t, core.ReportBaseInput{State: core.BaseDiverged, Local: "a", Remote: "b"})
-	beat(f, t, "cc", "box", core.HeartbeatStopping, 10)
+	f.reportBase(t, api.ReportBaseInput{State: api.BaseDiverged, Local: "a", Remote: "b"})
+	beat(f, t, "cc", "box", api.HeartbeatStopping, 10)
 	if _, ok := baseRow(t, f); ok {
 		t.Fatal("Base diverged outlived a stopped Factory")
 	}
@@ -124,8 +124,8 @@ func TestAStoppingFactoryDropsTheBaseReport(t *testing.T) {
 func TestBaseDivergedOnlyShowsWhereTheFactoryKeepsTheBaseLevel(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestProject(t)
-	f.reportBase(t, core.ReportBaseInput{State: core.BaseDiverged, Local: "a", Remote: "b"})
-	for _, in := range []core.SetLandingMethodInput{
+	f.reportBase(t, api.ReportBaseInput{State: api.BaseDiverged, Local: "a", Remote: "b"})
+	for _, in := range []api.SetLandingMethodInput{
 		{Method: domain.LandingMerge},
 		{Method: domain.LandingBranch},
 	} {
@@ -141,10 +141,10 @@ func TestBaseDivergedOnlyShowsWhereTheFactoryKeepsTheBaseLevel(t *testing.T) {
 func TestBaseDivergedShowsUnderMergeWithPush(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestProject(t)
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"}); err != nil {
 		t.Fatal(err)
 	}
-	f.reportBase(t, core.ReportBaseInput{State: core.BaseDiverged, Local: "a", Remote: "b"})
+	f.reportBase(t, api.ReportBaseInput{State: api.BaseDiverged, Local: "a", Remote: "b"})
 	row, ok := baseRow(t, f)
 	if !ok || row.BaseDiverged.Local != "a" || row.BaseDiverged.Remote != "b" {
 		t.Fatalf("row %+v ok %v, want Base diverged with both commits", row, ok)
@@ -158,39 +158,39 @@ func TestBaseDivergedShowsUnderMergeWithPush(t *testing.T) {
 func TestBaseDivergedCountsInTheProjectsNeedsMe(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestProject(t)
-	f.reportBase(t, core.ReportBaseInput{State: core.BaseDiverged, Local: "a", Remote: "b"})
+	f.reportBase(t, api.ReportBaseInput{State: api.BaseDiverged, Local: "a", Remote: "b"})
 	rows, err := f.core.ListProjects(ctx)
 	if err != nil || len(rows) != 1 || rows[0].NeedsMe != 1 {
 		t.Fatalf("rows %+v err %v, want needs_me 1", rows, err)
 	}
 }
 
-func missingRow(t *testing.T, f fixture) (core.NeedsMeRow, bool) {
+func missingRow(t *testing.T, f fixture) (api.NeedsMeRow, bool) {
 	t.Helper()
 	v, err := f.core.NeedsMe(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, g := range v.Groups {
-		if g.Reason == core.ReasonBaseMissing {
+		if g.Reason == api.ReasonBaseMissing {
 			if len(g.Tickets) != 1 {
 				t.Fatalf("group %+v, want one item per Project", g)
 			}
 			return g.Tickets[0], true
 		}
 	}
-	return core.NeedsMeRow{}, false
+	return api.NeedsMeRow{}, false
 }
 
 func TestAMissingBaseShowsUnderEveryLandingMethod(t *testing.T) {
 	for _, method := range []domain.LandingMethod{domain.LandingMerge, domain.LandingBranch, domain.LandingPullRequest} {
 		f := newFixture(t)
 		f.pullRequestProject(t)
-		if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: method}); err != nil {
+		if _, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: method}); err != nil {
 			t.Fatal(err)
 		}
 		// local and remote are ignored with missing.
-		f.reportBase(t, core.ReportBaseInput{State: core.BaseMissing, Local: "ignored"})
+		f.reportBase(t, api.ReportBaseInput{State: api.BaseMissing, Local: "ignored"})
 		row, ok := missingRow(t, f)
 		if !ok || row.Project != "acme" || row.ID != "" || row.BaseMissing == nil || row.BaseMissing.Base != "main" {
 			t.Fatalf("%s: row %+v ok=%v, want Base missing naming main", method, row, ok)
@@ -201,7 +201,7 @@ func TestAMissingBaseShowsUnderEveryLandingMethod(t *testing.T) {
 		if rows, _ := f.core.ListProjects(ctx); len(rows) != 1 || rows[0].NeedsMe != 1 {
 			t.Fatalf("%s: rows %+v, want needs_me 1", method, rows)
 		}
-		f.reportBase(t, core.ReportBaseInput{State: core.BaseCurrent, Local: "a", Remote: "a"})
+		f.reportBase(t, api.ReportBaseInput{State: api.BaseCurrent, Local: "a", Remote: "a"})
 		if _, ok := missingRow(t, f); ok {
 			t.Fatalf("%s: Base missing still shows once the base is current", method)
 		}
@@ -211,7 +211,7 @@ func TestAMissingBaseShowsUnderEveryLandingMethod(t *testing.T) {
 func TestBaseMissingLapsesWithTheHeartbeat(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestProject(t)
-	f.reportBase(t, core.ReportBaseInput{State: core.BaseMissing})
+	f.reportBase(t, api.ReportBaseInput{State: api.BaseMissing})
 	f.clock.Advance(time.Hour)
 	if _, ok := missingRow(t, f); ok {
 		t.Fatal("Base missing outlived the Factory's heartbeat")
@@ -221,7 +221,7 @@ func TestBaseMissingLapsesWithTheHeartbeat(t *testing.T) {
 func TestBaseMissingStaysOffAnArchivedProject(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestProject(t)
-	f.reportBase(t, core.ReportBaseInput{State: core.BaseMissing})
+	f.reportBase(t, api.ReportBaseInput{State: api.BaseMissing})
 	if _, err := f.core.ArchiveProject(human, "acme"); err != nil {
 		t.Skipf("cannot archive: %v", err)
 	}

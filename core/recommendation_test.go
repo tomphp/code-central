@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -15,13 +15,13 @@ func (f fixture) specClaimed(t *testing.T) {
 	f.requirement(t)
 	f.setState(t, 3, domain.Done)
 	f.setState(t, 4, domain.Ready)
-	f.claim(t, core.ClaimInput{Ticket: "acme-4"})
+	f.claim(t, api.ClaimInput{Ticket: "acme-4"})
 }
 
 func TestFinishingASpecStageStoresItsRecommendation(t *testing.T) {
 	f := newFixture(t)
 	f.specClaimed(t)
-	if _, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-4", ClaimID: "claim-1", Summary: "Small Spec: implement.", Recommendation: "implement"}); err != nil {
+	if _, err := f.core.Finish(ctx, "acme", api.FinishInput{Ticket: "acme-4", ClaimID: "claim-1", Summary: "Small Spec: implement.", Recommendation: "implement"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := f.get(t, "acme-4"); got.State != domain.InReview || got.Recommendation != "implement" {
@@ -32,13 +32,13 @@ func TestFinishingASpecStageStoresItsRecommendation(t *testing.T) {
 func TestALaterFinishReplacesTheRecommendation(t *testing.T) {
 	f := newFixture(t)
 	f.specClaimed(t)
-	f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-4", ClaimID: "claim-1", Summary: "Small.", Recommendation: "implement"})
-	if _, err := f.core.Reject(human, "acme", core.RejectInput{Ticket: "acme-4", Comment: "It is bigger than that."}); err != nil {
+	f.core.Finish(ctx, "acme", api.FinishInput{Ticket: "acme-4", ClaimID: "claim-1", Summary: "Small.", Recommendation: "implement"})
+	if _, err := f.core.Reject(human, "acme", api.RejectInput{Ticket: "acme-4", Comment: "It is bigger than that."}); err != nil {
 		t.Fatal(err)
 	}
 	f.clock.Advance(time.Minute)
-	f.claim(t, core.ClaimInput{Ticket: "acme-4"})
-	if _, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-4", ClaimID: "claim-2", Summary: "Large: split.", Recommendation: "split"}); err != nil {
+	f.claim(t, api.ClaimInput{Ticket: "acme-4"})
+	if _, err := f.core.Finish(ctx, "acme", api.FinishInput{Ticket: "acme-4", ClaimID: "claim-2", Summary: "Large: split.", Recommendation: "split"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := f.get(t, "acme-4").Recommendation; got != "split" {
@@ -50,8 +50,8 @@ func TestASpecStageCannotFinishWithoutAValidRecommendation(t *testing.T) {
 	for _, rec := range []domain.Recommendation{"", "  ", "maybe"} {
 		f := newFixture(t)
 		f.specClaimed(t)
-		_, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-4", ClaimID: "claim-1", Summary: "Done.", Recommendation: rec})
-		wantCode(t, err, core.Invalid, "recommendation")
+		_, err := f.core.Finish(ctx, "acme", api.FinishInput{Ticket: "acme-4", ClaimID: "claim-1", Summary: "Done.", Recommendation: rec})
+		wantCode(t, err, api.Invalid, "recommendation")
 		if got := f.get(t, "acme-4"); got.State != domain.InProgress || got.Recommendation != "" {
 			t.Fatalf("recommendation %q: spec Stage %s with %q, want still In Progress with none", rec, got.State, got.Recommendation)
 		}
@@ -61,14 +61,14 @@ func TestASpecStageCannotFinishWithoutAValidRecommendation(t *testing.T) {
 func TestOnlyASpecStageTakesARecommendation(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
-	f.claim(t, core.ClaimInput{})
-	_, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-2", ClaimID: "claim-1", Summary: "Done.", Recommendation: "split"})
-	wantCode(t, err, core.Invalid, "recommendation")
+	f.claim(t, api.ClaimInput{})
+	_, err := f.core.Finish(ctx, "acme", api.FinishInput{Ticket: "acme-2", ClaimID: "claim-1", Summary: "Done.", Recommendation: "split"})
+	wantCode(t, err, api.Invalid, "recommendation")
 	if got := f.get(t, "acme-2"); got.State != domain.InProgress || got.Recommendation != "" {
 		t.Fatalf("Ticket %s with %q, want still In Progress with no recommendation", got.State, got.Recommendation)
 	}
 	// Without one, it finishes and reads no recommendation.
-	if _, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-2", ClaimID: "claim-1", Summary: "Done."}); err != nil {
+	if _, err := f.core.Finish(ctx, "acme", api.FinishInput{Ticket: "acme-2", ClaimID: "claim-1", Summary: "Done."}); err != nil {
 		t.Fatal(err)
 	}
 	if got := f.get(t, "acme-2").Recommendation; got != "" {

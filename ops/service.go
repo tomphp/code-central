@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
@@ -23,7 +24,7 @@ type Call struct {
 	Args []byte
 	// Actor is the Actor the request names, unchecked: the HTTP API's
 	// Actor header, "" when it sends none. MCP names agent.
-	Actor core.Actor
+	Actor api.Actor
 }
 
 // Dispatcher calls operations: all the MCP door needs.
@@ -37,17 +38,17 @@ type Service interface {
 	Dispatcher
 	// Events is the change feed.
 	Events() *events.Bus
-	Wait(ctx context.Context, key string, ref core.Ref, from domain.State) (core.WaitResult, error)
-	Transcript(ctx context.Context, key string, ticket core.Ref, claim int) (core.TranscriptView, error)
-	FollowTranscript(ctx context.Context, key string, ticket core.Ref, claim, after int) (*core.TranscriptFeed, error)
+	Wait(ctx context.Context, key string, ref api.Ref, from domain.State) (api.WaitResult, error)
+	Transcript(ctx context.Context, key string, ticket api.Ref, claim int) (api.TranscriptView, error)
+	FollowTranscript(ctx context.Context, key string, ticket api.Ref, claim, after int) (*core.TranscriptFeed, error)
 	FollowChat(ctx context.Context, key string, after int) (*core.ChatFeed, error)
-	Usage(ctx context.Context, in core.UsageInput) (core.UsageView, error)
-	SessionUsage(ctx context.Context, in core.SessionUsageInput) (core.SessionUsageView, error)
-	CIOverview(ctx context.Context, in core.CIOverviewInput) (core.CIOverview, error)
+	Usage(ctx context.Context, in api.UsageInput) (api.UsageView, error)
+	SessionUsage(ctx context.Context, in api.SessionUsageInput) (api.SessionUsageView, error)
+	CIOverview(ctx context.Context, in api.CIOverviewInput) (api.CIOverview, error)
 	Ping(ctx context.Context, sessionID string)
-	PostSessionEvents(ctx context.Context, sessionID string, events []core.SessionEvent)
-	PostChatEvents(ctx context.Context, key string, in core.PostChatEventsInput)
-	PostUsage(ctx context.Context, sessionID string, responses []core.UsageResponse)
+	PostSessionEvents(ctx context.Context, sessionID string, events []api.SessionEvent)
+	PostChatEvents(ctx context.Context, key string, in api.PostChatEventsInput)
+	PostUsage(ctx context.Context, sessionID string, responses []api.UsageResponse)
 }
 
 // Serve is c as a Service: the one adapter between core and the doors.
@@ -64,7 +65,7 @@ func (s served) Dispatch(ctx context.Context, call Call) (any, error) {
 	in := call.In
 	if in == nil {
 		in = call.Op.NewInput()
-		if err := core.Decode(ctx, call.Args, in); err != nil {
+		if err := api.Decode(ctx, call.Args, in); err != nil {
 			return nil, err
 		}
 	}

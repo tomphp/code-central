@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // Landing across Repositories (Spec code-central-848): land refuses a
@@ -27,12 +27,12 @@ func acceptedInTwo(t *testing.T, srv *codecentraltest.Server) {
 func acceptInTwo(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	must(t, func() error {
-		_, err := srv.Core.Finish(context.Background(), "acme", core.FinishInput{Ticket: "3", ClaimID: "claim-1", Summary: "Done.", Branch: "acme-3", Commit: "abc123",
-			Repositories: []core.RepositoryWork{{Name: "api", Branch: "acme-3", Commit: "def456"}}})
+		_, err := srv.Core.Finish(context.Background(), "acme", api.FinishInput{Ticket: "3", ClaimID: "claim-1", Summary: "Done.", Branch: "acme-3", Commit: "abc123",
+			Repositories: []api.RepositoryWork{{Name: "api", Branch: "acme-3", Commit: "def456"}}})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.Accept(core.WithActor(context.Background(), core.Human), "acme", core.TicketInput{Ticket: "3"})
+		_, err := srv.Core.Accept(api.WithActor(context.Background(), api.Human), "acme", api.TicketInput{Ticket: "3"})
 		return err
 	})
 }
@@ -42,7 +42,7 @@ func acceptInTwo(t *testing.T, srv *codecentraltest.Server) {
 func TestLandRefusesAnUnknownRepositoryThroughEveryDoor(t *testing.T) {
 	srv := newServer(t, acceptedInTwo)
 	_, b := httpDo(t, srv, httpCall{"POST", "/api/p/acme/tickets/3/land", `{"commit":"fff999","repository":"web"}`})
-	if e := errorJSON(t, b, core.Invalid); !strings.Contains(e.Message, "acme, api") {
+	if e := errorJSON(t, b, api.Invalid); !strings.Contains(e.Message, "acme, api") {
 		t.Fatalf("http refusal %+v, want it to name the Repositories", e)
 	}
 	res, mb := mcpCall(t, connect(t, srv, "acme"), "land", map[string]any{"ticket": "acme-3", "commit": "fff999", "repository": "web"})
@@ -65,7 +65,7 @@ func TestReportBaseTakesARepository(t *testing.T) {
 	srv := newServer(t, withAPI(func(*testing.T, *codecentraltest.Server) {}))
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/report_base", `{"state":"missing","repository":"api"}`})
 	_, b := httpDo(t, srv, httpCall{"POST", "/api/p/acme/report_base", `{"state":"missing","repository":"web"}`})
-	if e := errorJSON(t, b, core.Invalid); !strings.Contains(e.Message, "acme, api") {
+	if e := errorJSON(t, b, api.Invalid); !strings.Contains(e.Message, "acme, api") {
 		t.Fatalf("refusal %+v, want it to name the Repositories", e)
 	}
 }

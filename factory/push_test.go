@@ -1,16 +1,17 @@
 package factory_test
 
 import (
-	"github.com/tomoram/code-central/domain"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
 // mergeAndPush sets the Merge Landing Method with Push to remote.
 func mergeAndPush(h *factorytest.Harness, remote string) {
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: remote})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: remote})
 }
 
 func TestUnderMergeAndPushTheBaseIsPushedBeforeTheTicketLands(t *testing.T) {
@@ -51,7 +52,7 @@ func TestUnderBranchAndPushAnAcceptedTicketsBranchReachesABareRemote(t *testing.
 	t.Parallel()
 	h := factorytest.New(t)
 	remote := h.AddRemote("origin")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	r := h.Start()

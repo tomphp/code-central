@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
@@ -29,7 +29,7 @@ import (
 // configured are left as they are. It returns GitHub's rate limit, if it
 // refused a call for it; anything else that goes wrong is logged and
 // tried again on the next poll.
-func (cfg Config) follow(ctx context.Context, watch core.IssueWatch, repository string, a access, listed []ghIssue) *ratelimit.Error {
+func (cfg Config) follow(ctx context.Context, watch api.IssueWatch, repository string, a access, listed []ghIssue) *ratelimit.Error {
 	open := map[int]ghIssue{}
 	for _, i := range listed {
 		open[i.Number] = i
@@ -55,7 +55,7 @@ func (cfg Config) follow(ctx context.Context, watch core.IssueWatch, repository 
 			cfg.followText(ctx, incoming, *issue)
 		}
 		if state != incoming.Link.ExternalState {
-			_, err := cfg.Client.SetExternalState(ctx, cfg.Project, core.SetExternalStateInput{Target: core.Ref(incoming.Ticket), ExternalState: state})
+			_, err := cfg.Client.SetExternalState(ctx, cfg.Project, api.SetExternalStateInput{Target: api.Ref(incoming.Ticket), ExternalState: state})
 			if err != nil && ctx.Err() == nil {
 				cfg.logf("set_external_state for %s: %v", incoming.Link.ID, err)
 			}
@@ -78,8 +78,8 @@ func (cfg Config) issueOf(ctx context.Context, a access, label string, open map[
 
 // followText updates incoming to its issue's title and body when either
 // differs, and does nothing when neither does.
-func (cfg Config) followText(ctx context.Context, incoming core.IncomingIssue, issue ghIssue) {
-	up := core.UpdateLinkedTicketInput{Ticket: core.Ref(incoming.Ticket)}
+func (cfg Config) followText(ctx context.Context, incoming api.IncomingIssue, issue ghIssue) {
+	up := api.UpdateLinkedTicketInput{Ticket: api.Ref(incoming.Ticket)}
 	if issue.Title != incoming.Title {
 		up.Title = &issue.Title
 	}

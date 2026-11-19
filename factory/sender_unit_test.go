@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/clock"
-	"github.com/tomoram/code-central/core"
 )
 
 func TestAnOlderCodeCentralsNotFoundForUsageIsDroppedNeverRetried(t *testing.T) {
@@ -21,7 +21,7 @@ func TestAnOlderCodeCentralsNotFoundForUsageIsDroppedNeverRetried(t *testing.T) 
 	defer old.Close()
 	s := newSender(client.New(old.URL).PostUsage, clock.System{}, time.Millisecond, postTimeout, work{}, "token usage")
 	s.start()
-	s.add("s1", core.UsageResponse{Kind: "implementation"})
+	s.add("s1", api.UsageResponse{Kind: "implementation"})
 	for posts.Load() == 0 {
 		time.Sleep(time.Millisecond)
 	}

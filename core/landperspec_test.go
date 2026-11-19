@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
@@ -26,11 +27,11 @@ func landWorldOn(t *testing.T, f fixture, landPerSpec bool) fixture {
 	t.Helper()
 	f.project(t, "acme")
 	f.spec(t, "acme", "Requirement")
-	for _, stage := range core.Stages() {
-		f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: string(stage), Labels: []string{core.StageLabel(stage)}})
+	for _, stage := range domain.Stages() {
+		f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: string(stage), Labels: []string{core.StageLabel(stage)}})
 	}
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "First"})
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Second", BlockedBy: []core.Ref{"acme-5"}})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "First"})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Second", BlockedBy: []api.Ref{"acme-5"}})
 	f.landing(t, domain.Landing{Method: domain.LandingMerge, Remote: "origin", LandPerSpec: landPerSpec})
 	for n := 2; n <= 4; n++ {
 		f.moveTo(t, n, domain.Done)
@@ -65,9 +66,9 @@ func (f fixture) moveTo(t *testing.T, n int, state domain.State) {
 	}
 }
 
-func (f fixture) getTicket(t *testing.T, id string) core.TicketView {
+func (f fixture) getTicket(t *testing.T, id string) api.TicketView {
 	t.Helper()
-	v, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: core.Ref(id)})
+	v, err := f.core.GetTicket(ctx, "acme", api.GetTicketInput{Ticket: api.Ref(id)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,23 +77,23 @@ func (f fixture) getTicket(t *testing.T, id string) core.TicketView {
 
 func (f fixture) specMerge(t *testing.T, id, commit string) {
 	t.Helper()
-	if _, err := f.core.ReportSpecMerge(ctx, "acme", core.ReportSpecMergeInput{Ticket: core.Ref(id), Commit: commit}); err != nil {
+	if _, err := f.core.ReportSpecMerge(ctx, "acme", api.ReportSpecMergeInput{Ticket: api.Ref(id), Commit: commit}); err != nil {
 		t.Fatalf("report_spec_merge: %v", err)
 	}
 }
 
-func (f fixture) specStatus(t *testing.T, spec core.Ref) *core.LandPerSpecView {
+func (f fixture) specStatus(t *testing.T, spec api.Ref) *api.LandPerSpecView {
 	t.Helper()
-	v, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: spec})
+	v, err := f.core.GetSpec(ctx, "acme", api.GetSpecInput{Spec: spec})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return v.LandPerSpec
 }
 
-func (f fixture) landStatus(t *testing.T) *core.LandPerSpecView {
+func (f fixture) landStatus(t *testing.T) *api.LandPerSpecView {
 	t.Helper()
-	v, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-1"})
+	v, err := f.core.GetSpec(ctx, "acme", api.GetSpecInput{Spec: "acme-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,11 +127,11 @@ func TestNoTicketIsSpecLandedWithLandPerSpecOffOrUnderBranch(t *testing.T) {
 func TestPlainSpecsTicketsAreSpecLandedButLongLivedSpecsAndPrototypesAreNot(t *testing.T) {
 	f := landWorld(t, true)
 	f.spec(t, "acme", "Plain")
-	plain := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-7", Title: "Plain work"})
+	plain := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-7", Title: "Plain work"})
 	f.longLived(t, f.spec(t, "acme", "CI"))
-	long := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-9", Title: "Long work"})
-	proto := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Try", Labels: []string{core.PrototypeLabel}})
-	retro := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-7", Title: "Look back", Labels: []string{core.RetroLabel}})
+	long := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-9", Title: "Long work"})
+	proto := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Try", Labels: []string{core.PrototypeLabel}})
+	retro := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-7", Title: "Look back", Labels: []string{core.RetroLabel}})
 	for id, want := range map[string]bool{plain.ID: true, long.ID: false, proto.ID: false, retro.ID: false} {
 		if got := f.getTicket(t, id).SpecLanded; got != want {
 			t.Errorf("%s Spec-landed = %v, want %v", id, got, want)
@@ -164,12 +165,12 @@ func TestReportSpecMergeRecordsTheCommitOfAnAcceptedSpecLandedTicket(t *testing.
 
 func TestReportSpecMergeIsRejectedForATicketNotAcceptedOrNotSpecLanded(t *testing.T) {
 	f := landWorld(t, true)
-	_, err := f.core.ReportSpecMerge(ctx, "acme", core.ReportSpecMergeInput{Ticket: "acme-5", Commit: "def456"})
-	wantCode(t, err, core.ActionNotAllowed, "")
+	_, err := f.core.ReportSpecMerge(ctx, "acme", api.ReportSpecMergeInput{Ticket: "acme-5", Commit: "def456"})
+	wantCode(t, err, api.ActionNotAllowed, "")
 	f.landing(t, domain.Landing{Method: domain.LandingMerge, LandPerSpec: false})
 	f.moveTo(t, 5, domain.Accepted)
-	_, err = f.core.ReportSpecMerge(ctx, "acme", core.ReportSpecMergeInput{Ticket: "acme-5", Commit: "def456"})
-	wantCode(t, err, core.ActionNotAllowed, "")
+	_, err = f.core.ReportSpecMerge(ctx, "acme", api.ReportSpecMergeInput{Ticket: "acme-5", Commit: "def456"})
+	wantCode(t, err, api.ActionNotAllowed, "")
 }
 
 func TestASpecMergeNoLaterThanTheLastMoveBackToReadyDoesNotCount(t *testing.T) {
@@ -213,9 +214,9 @@ func TestASameSpecBlockerClearsOnceItsSpecMergeIsReported(t *testing.T) {
 func TestABlockerOnAnotherSpecDoesNotClearOnASpecMerge(t *testing.T) {
 	f := landWorld(t, true)
 	f.spec(t, "acme", "Other")
-	other := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-7", Title: "Other work"})
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-7", Title: "Stage", Labels: []string{core.StageLabel("grilling")}})
-	dependant := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Dependant", BlockedBy: []core.Ref{core.Ref(other.ID)}})
+	other := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-7", Title: "Other work"})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-7", Title: "Stage", Labels: []string{core.StageLabel("grilling")}})
+	dependant := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Dependant", BlockedBy: []api.Ref{api.Ref(other.ID)}})
 	f.moveTo(t, 8, domain.Accepted)
 	f.specMerge(t, other.ID, "def456")
 	if v := f.getTicket(t, dependant.ID); !v.Blocked || *v.Blockers[0].Cleared {
@@ -256,7 +257,7 @@ func TestACancelledTicketDoesNotHoldASpecBackButATicketAddedLaterDoes(t *testing
 	if st := f.landStatus(t); !st.Ready {
 		t.Fatalf("status = %+v, want ready", st)
 	}
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Later"})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Later"})
 	if st := f.landStatus(t); st.Ready {
 		t.Errorf("status with a Ticket added later = %+v, want not ready", st)
 	}
@@ -265,8 +266,8 @@ func TestACancelledTicketDoesNotHoldASpecBackButATicketAddedLaterDoes(t *testing
 func TestAPlainSpecIsReadyOnceEveryTicketIsFinishedAndOneIsMergedAndADraftHoldsItBack(t *testing.T) {
 	f := landWorld(t, true)
 	f.spec(t, "acme", "Plain") // acme-7
-	a := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-7", Title: "A"})
-	b := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-7", Title: "B"})
+	a := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-7", Title: "A"})
+	b := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-7", Title: "B"})
 	f.moveTo(t, 8, domain.Accepted)
 	f.specMerge(t, a.ID, "def456")
 	if st := f.specStatus(t, "acme-7"); st == nil || st.Ready || !slices.Equal(st.Waiting, []string{a.ID}) {
@@ -276,7 +277,7 @@ func TestAPlainSpecIsReadyOnceEveryTicketIsFinishedAndOneIsMergedAndADraftHoldsI
 	if st := f.specStatus(t, "acme-7"); !st.Ready {
 		t.Fatalf("status with every Ticket finished = %+v, want ready", st)
 	}
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-7", Title: "Late"})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-7", Title: "Late"})
 	if st := f.specStatus(t, "acme-7"); st.Ready {
 		t.Errorf("status with a Ticket added later = %+v, want not ready", st)
 	}
@@ -316,7 +317,7 @@ func TestAWaitingTicketIsFlaggedAndLeftOutOfAcceptedButNotLanded(t *testing.T) {
 	if r := f.getTicket(t, "acme-5").NeedsMeReason; r != "" {
 		t.Errorf("reason = %q, want none", r)
 	}
-	rows, _ := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: []domain.State{domain.Accepted}})
+	rows, _ := f.core.FindTickets(ctx, "acme", api.FindTicketsInput{State: []domain.State{domain.Accepted}})
 	if len(rows) != 1 || !rows[0].WaitingForSpec {
 		t.Errorf("find_tickets rows = %+v, want acme-5 waiting for the Spec", rows)
 	}
@@ -327,7 +328,7 @@ func TestAWaitingTicketIsFlaggedAndLeftOutOfAcceptedButNotLanded(t *testing.T) {
 	// Turned off, the same Ticket is plain Accepted but not landed.
 	f.landing(t, domain.Landing{Method: domain.LandingMerge, LandPerSpec: false})
 	tk := f.getTicket(t, "acme-5")
-	if tk.WaitingForSpec || tk.NeedsMeReason != core.ReasonAcceptedNotLanded {
+	if tk.WaitingForSpec || tk.NeedsMeReason != api.ReasonAcceptedNotLanded {
 		t.Errorf("acme-5 with the option off = waiting %v, reason %q", tk.WaitingForSpec, tk.NeedsMeReason)
 	}
 }

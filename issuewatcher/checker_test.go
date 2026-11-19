@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/issuewatcher"
 	"github.com/tomoram/code-central/watchers/watchertest"
@@ -33,10 +33,10 @@ func serviceWith(t *testing.T, h *watchertest.Harness, path ...string) *codecent
 func serviceRunning(t *testing.T, program string, environ []string) *codecentraltest.Server {
 	t.Helper()
 	srv := codecentraltest.NewServer(t, codecentraltest.WithIssuesCheck(issuewatcher.Checker(program, environ)))
-	if _, err := srv.Client.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}); err != nil {
+	if _, err := srv.Client.CreateProject(ctx, api.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)
 	}
-	srv.Client.Actor = core.Human
+	srv.Client.Actor = api.Human
 	return srv
 }
 
@@ -54,22 +54,22 @@ const (
 )
 
 func turnOn(srv *codecentraltest.Server) error {
-	_, err := srv.Client.SetGitHubIssues(ctx, "acme", core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}})
+	_, err := srv.Client.SetGitHubIssues(ctx, "acme", api.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}})
 	return err
 }
 
 // refusal is err as the refusal of turning GitHub Issues on.
-func refusal(t *testing.T, err error) *core.Error {
+func refusal(t *testing.T, err error) *api.Error {
 	t.Helper()
-	var e *core.Error
-	if !errors.As(err, &e) || e.Code != core.Invalid || (e.Field != "on" && e.Field != "repositories") {
+	var e *api.Error
+	if !errors.As(err, &e) || e.Code != api.Invalid || (e.Field != "on" && e.Field != "repositories") {
 		t.Fatalf("err = %v, want GitHub Issues refused", err)
 	}
 	return e
 }
 
 // settings is acme's GitHub Issues settings, as the HTTP API reads them.
-func settings(t *testing.T, srv *codecentraltest.Server) core.GitHubIssuesView {
+func settings(t *testing.T, srv *codecentraltest.Server) api.GitHubIssuesView {
 	t.Helper()
 	p, err := srv.Client.GetProject(ctx, "acme")
 	if err != nil {
@@ -90,7 +90,7 @@ func TestGitHubIssuesTurnsOnWhenTheCheckPasses(t *testing.T) {
 			if g := settings(t, srv); !g.On || g.Spec == "" {
 				t.Fatalf("settings = %+v, want on with its Issues Spec", g)
 			}
-			sp, err := srv.Client.GetSpec(ctx, "acme", core.GetSpecInput{Spec: core.Ref(settings(t, srv).Spec)})
+			sp, err := srv.Client.GetSpec(ctx, "acme", api.GetSpecInput{Spec: api.Ref(settings(t, srv).Spec)})
 			if err != nil || !slices.Contains(sp.Labels, "long-lived") {
 				t.Fatalf("the Issues Spec = %+v, %v; want the long-lived Label", sp, err)
 			}
@@ -114,22 +114,22 @@ func TestEachFailedCheckRefusesGitHubIssuesWithItsFix(t *testing.T) {
 	for _, c := range []struct {
 		name        string
 		setup       func(h *watchertest.Harness, srv *codecentraltest.Server)
-		problem     core.WatcherProblem
+		problem     api.WatcherProblem
 		reason, fix string
 	}{
 		{"gh missing", func(_ *watchertest.Harness, srv *codecentraltest.Server) {
-			if _, err := srv.Client.SetOptions(ctx, core.SetOptionsInput{GHPath: &noGH}); err != nil {
+			if _, err := srv.Client.SetOptions(ctx, api.SetOptionsInput{GHPath: &noGH}); err != nil {
 				t.Fatal(err)
 			}
-		}, core.ProblemGHMissing, "gh isn't there", "gh path Option"},
-		{"logged out", func(h *watchertest.Harness, _ *codecentraltest.Server) { h.LoggedOut() }, core.ProblemLoggedOut, "isn't logged in", "gh auth login"},
-		{"no read access", func(h *watchertest.Harness, _ *codecentraltest.Server) { h.Unreadable("acme/web") }, core.ProblemRepositoryUnreadable,
+		}, api.ProblemGHMissing, "gh isn't there", "gh path Option"},
+		{"logged out", func(h *watchertest.Harness, _ *codecentraltest.Server) { h.LoggedOut() }, api.ProblemLoggedOut, "isn't logged in", "gh auth login"},
+		{"no read access", func(h *watchertest.Harness, _ *codecentraltest.Server) { h.Unreadable("acme/web") }, api.ProblemRepositoryUnreadable,
 			"can't read the repository acme/web", "owner/name"},
-		{"issues disabled", func(h *watchertest.Harness, _ *codecentraltest.Server) { repository(h, false, write) }, core.ProblemIssuesDisabled,
+		{"issues disabled", func(h *watchertest.Harness, _ *codecentraltest.Server) { repository(h, false, write) }, api.ProblemIssuesDisabled,
 			"acme/web has its issues turned off", "Features"},
-		{"below triage", func(h *watchertest.Harness, _ *codecentraltest.Server) { repository(h, true, read) }, core.ProblemNoTriage,
+		{"below triage", func(h *watchertest.Harness, _ *codecentraltest.Server) { repository(h, true, read) }, api.ProblemNoTriage,
 			"can't triage the issues of acme/web", "triage permission"},
-		{"no permissions", func(h *watchertest.Harness, _ *codecentraltest.Server) { repository(h, true, "null") }, core.ProblemNoTriage,
+		{"no permissions", func(h *watchertest.Harness, _ *codecentraltest.Server) { repository(h, true, "null") }, api.ProblemNoTriage,
 			"can't triage the issues of acme/web", "triage permission"},
 	} {
 		t.Run(c.name, func(t *testing.T) {

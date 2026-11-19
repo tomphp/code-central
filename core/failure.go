@@ -6,74 +6,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
 // Failure Reports, giving up, and the human's way out of Failed (ticket 30).
 
-// ReportFailureInput is report_failure's input. Every field is required.
-type ReportFailureInput struct {
-	Ticket          Ref    `json:"ticket" path:"n" desc:"The Ticket." required:"true"`
-	ClaimID         string `json:"claim_id" desc:"The Claim ID claim returned." required:"true"`
-	WhatBroke       string `json:"what_broke" desc:"A headline plus the symptom, in Markdown." required:"true"`
-	Why             string `json:"why" desc:"Why it broke, in Markdown." required:"true"`
-	WhatToFix       string `json:"what_to_fix" desc:"What has to change before this Ticket can go on, in Markdown." required:"true"`
-	WhereWorkStands string `json:"where_work_stands" desc:"Where the work stands: branch, commits, what is done, in Markdown." required:"true"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
-}
-
-// GiveUpInput is give_up's input; the note is required.
-type GiveUpInput struct {
-	Ticket  Ref    `json:"ticket" path:"n" desc:"The Ticket." required:"true"`
-	ClaimID string `json:"claim_id" desc:"The Claim ID claim returned." required:"true"`
-	Note    string `json:"note" desc:"How far you got and why you are stopping, in Markdown." required:"true"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
-}
-
-// SendBackInput is send_back's input. From Failed (the human's) the note
-// is optional, and a send-back with no note means nothing has changed.
-// From Accepted (the agent's on a conflict, ticket 72, or the human's to
-// fix a CI failure, code-central-264) the note is required.
-type SendBackInput struct {
-	Ticket Ref    `json:"ticket" path:"n" desc:"The Ticket." required:"true"`
-	Note   string `json:"note,omitempty" desc:"Why it can't land: the base commit and the conflicting files, in Markdown." required:"true"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
-}
-
-// StopResult is the result of an action that ends the agent's work: the
-// Acknowledgement, or with full the Ticket, and the next step, "stop
-// working this Ticket".
-type StopResult = FinishResult
-
-// FailureReportView is one Failure Report as reads show it.
-type FailureReportView struct {
-	Number int `json:"number"`
-	Claim  int `json:"claim"`
-	// SessionID, WorkingDir and ResumeCommand are copies of the Claim's,
-	// made when the report was written.
-	SessionID       string    `json:"session_id,omitempty"`
-	WorkingDir      string    `json:"working_dir,omitempty"`
-	ResumeCommand   string    `json:"resume_command,omitempty"`
-	Actor           string    `json:"actor"`
-	Time            time.Time `json:"time"`
-	WhatBroke       string    `json:"what_broke"`
-	Why             string    `json:"why"`
-	WhatToFix       string    `json:"what_to_fix"`
-	WhereWorkStands string    `json:"where_work_stands"`
-}
-
 // ReportFailure is report_failure(ticket, claim_id, what_broke, why,
 // what_to_fix, where_work_stands): the holder posts a numbered, permanent
 // Failure Report, which moves In Progress to Failed and ends the Claim.
 // It and the Factory's fail_finish are the only ways into Failed.
-func (c *Core) ReportFailure(ctx context.Context, key string, in ReportFailureInput) (StopResult, error) {
+func (c *Core) ReportFailure(ctx context.Context, key string, in api.ReportFailureInput) (api.FinishResult, error) {
 	parts := domain.FailureReport{WhatBroke: in.WhatBroke, Why: in.Why, WhatToFix: in.WhatToFix, WhereWorkStands: in.WhereWorkStands}
 	if err := checkFailureReport(parts); err != nil {
-		return StopResult{}, err
+		return api.FinishResult{}, err
 	}
 	v, err := c.updateTicket(key, "report_failure", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		now := c.now()
@@ -82,26 +29,13 @@ func (c *Core) ReportFailure(ctx context.Context, key string, in ReportFailureIn
 			return false, err
 		}
 		// transition checked live is the holder's Claim.
-		addFailureReport(t, *live, ActorOf(ctx), now, parts)
+		addFailureReport(t, *live, api.ActorOf(ctx), now, parts)
 		return true, nil
 	})
 	if err != nil {
-		return StopResult{}, err
+		return api.FinishResult{}, err
 	}
 	return stopResult(v, "report_failure"), nil
-}
-
-// FailFinishInput is the Factory's fail_finish(ticket, what_broke, why,
-// what_to_fix, where_work_stands, full?): a Failure Report on a finish
-// the finish check found wrong. Every field is required.
-type FailFinishInput struct {
-	Ticket          Ref    `json:"ticket" path:"n"`
-	WhatBroke       string `json:"what_broke"`
-	Why             string `json:"why"`
-	WhatToFix       string `json:"what_to_fix"`
-	WhereWorkStands string `json:"where_work_stands"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
 }
 
 // failFinish is the Factory's workflow action that fails a finish.
@@ -112,14 +46,14 @@ const failFinish = "fail_finish"
 // names a commit that isn't its branch's head. It adds a Failure Report on
 // the finishing Claim, which has already ended, and moves the Ticket from
 // In Review, or from Accepted while it has landed nowhere, to Failed.
-func (c *Core) FailFinish(ctx context.Context, key string, in FailFinishInput) (Written[TicketView], error) {
+func (c *Core) FailFinish(ctx context.Context, key string, in api.FailFinishInput) (api.Written[api.TicketView], error) {
 	parts := domain.FailureReport{WhatBroke: in.WhatBroke, Why: in.Why, WhatToFix: in.WhatToFix, WhereWorkStands: in.WhereWorkStands}
 	if err := checkFailureReport(parts); err != nil {
-		return Written[TicketView]{}, err
+		return api.Written[api.TicketView]{}, err
 	}
 	return c.updateTicket(key, failFinish, in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		if t.State == domain.Accepted && landedSomewhere(key, *t) {
-			return false, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s has landed in some of its Changed Repositories, so its finish can't fail: land the rest, or send it back", DisplayID(key, t.Number))}
+			return false, &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s has landed in some of its Changed Repositories, so its finish can't fail: land the rest, or send it back", DisplayID(key, t.Number))}
 		}
 		// The Claim the finish ended; none for a Ticket moved there by hand.
 		var finishing domain.Claim
@@ -132,7 +66,7 @@ func (c *Core) FailFinish(ctx context.Context, key string, in FailFinishInput) (
 		if err := transition(ctx, t, key, failFinish, "", now); err != nil {
 			return false, err
 		}
-		addFailureReport(t, finishing, ActorOf(ctx), now, parts)
+		addFailureReport(t, finishing, api.ActorOf(ctx), now, parts)
 		return true, nil
 	})
 }
@@ -156,7 +90,7 @@ func checkFailureReport(parts domain.FailureReport) error {
 // addFailureReport adds parts, a Failure Report's four, to t as its next
 // Failure Report, made by actor at now on Claim cl, with copies of its
 // session, working directory and Resume Command.
-func addFailureReport(t *domain.Ticket, cl domain.Claim, actor Actor, now time.Time, parts domain.FailureReport) {
+func addFailureReport(t *domain.Ticket, cl domain.Claim, actor api.Actor, now time.Time, parts domain.FailureReport) {
 	parts.Number, parts.Claim = len(t.FailureReports)+1, cl.Number
 	parts.SessionID, parts.WorkingDir, parts.ResumeCommand = cl.SessionID, cl.WorkingDir, cl.ResumeCommand
 	parts.Actor, parts.Time = string(actor), now
@@ -166,13 +100,13 @@ func addFailureReport(t *domain.Ticket, cl domain.Claim, actor Actor, now time.T
 // GiveUp is give_up(ticket, claim_id, note): the holder, finding nothing
 // wrong but unable to finish, moves In Progress back to Ready with the
 // note stored as a comment.
-func (c *Core) GiveUp(ctx context.Context, key string, in GiveUpInput) (StopResult, error) {
+func (c *Core) GiveUp(ctx context.Context, key string, in api.GiveUpInput) (api.FinishResult, error) {
 	if strings.TrimSpace(in.Note) == "" {
-		return StopResult{}, invalid("note", "give_up needs a note saying how far you got and why you are stopping")
+		return api.FinishResult{}, invalid("note", "give_up needs a note saying how far you got and why you are stopping")
 	}
 	v, err := c.act(ctx, key, in.Ticket, in.Full, "give_up", in.ClaimID, in.Note)
 	if err != nil {
-		return StopResult{}, err
+		return api.FinishResult{}, err
 	}
 	return stopResult(v, "give_up"), nil
 }
@@ -187,10 +121,10 @@ func (c *Core) GiveUp(ctx context.Context, key string, in GiveUpInput) (StopResu
 // are marked for the Pull Request Watcher to close; once one has, the
 // Repositories it merged in keep their landed commits. A Spec-landed
 // Ticket's pull requests are its Spec's, so they are left open.
-func (c *Core) SendBack(ctx context.Context, key string, in SendBackInput) (Written[TicketView], error) {
-	if ActorOf(ctx) == Human {
+func (c *Core) SendBack(ctx context.Context, key string, in api.SendBackInput) (api.Written[api.TicketView], error) {
+	if api.ActorOf(ctx) == api.Human {
 		if err := c.refuseSendBackOfShared(key, in.Ticket); err != nil {
-			return Written[TicketView]{}, err
+			return api.Written[api.TicketView]{}, err
 		}
 	}
 	shared := false
@@ -218,7 +152,7 @@ func (c *Core) SendBack(ctx context.Context, key string, in SendBackInput) (Writ
 // in force, so there is nothing of its own to send back to fix, or whose
 // CI failed or CI cancelled item lists other Tickets too
 // (code-central-432), which the commit's fix must cover as well.
-func (c *Core) refuseSendBackOfShared(key string, ref Ref) error {
+func (c *Core) refuseSendBackOfShared(key string, ref api.Ref) error {
 	return c.store.View(func(r store.Reader) error {
 		t, err := resolveTicket(r, key, "send_back", "ticket", ref)
 		if err != nil || !sharedCandidate(t) {
@@ -244,29 +178,29 @@ func (e *evaluation) sharedSendBackRefusal(t domain.Ticket) error {
 	key := e.p.Key
 	id := DisplayID(key, t.Number)
 	if specLanded(e.r, e.p, t) && ticketLandingPolicies(e.p, t).LandPerSpecInForce() {
-		return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s's work is in the base with its Spec's, so there is no branch of its own to send back: land it anyway or open a fix Ticket", id)}
+		return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s's work is in the base with its Spec's, so there is no branch of its own to send back: land it anyway or open a fix Ticket", id)}
 	}
-	if it, ok := e.itemOf(t); ok && it.reason != ReasonCIUnavailable && len(it.tickets) > 1 {
+	if it, ok := e.itemOf(t); ok && it.reason != api.ReasonCIUnavailable && len(it.tickets) > 1 {
 		var others []string
 		for _, o := range it.tickets {
 			if o.Number != t.Number {
 				others = append(others, DisplayID(key, o.Number))
 			}
 		}
-		return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s waits on %s with %s, so there is no fix of its own to send back: re-run the failed jobs, land them anyway or open a fix Ticket", id, shortCommit(it.commit), strings.Join(others, ", "))}
+		return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s waits on %s with %s, so there is no fix of its own to send back: re-run the failed jobs, land them anyway or open a fix Ticket", id, shortCommit(it.commit), strings.Join(others, ", "))}
 	}
 	return nil
 }
 
 // ToDraft is the human's to_draft(ticket): Failed to Draft.
-func (c *Core) ToDraft(ctx context.Context, key string, in TicketInput) (Written[TicketView], error) {
+func (c *Core) ToDraft(ctx context.Context, key string, in api.TicketInput) (api.Written[api.TicketView], error) {
 	return c.act(ctx, key, in.Ticket, in.Full, "to_draft", "", "")
 }
 
-func failureReportViews(rs []domain.FailureReport) []FailureReportView {
-	out := []FailureReportView{}
+func failureReportViews(rs []domain.FailureReport) []api.FailureReportView {
+	out := []api.FailureReportView{}
 	for _, r := range rs {
-		out = append(out, FailureReportView{
+		out = append(out, api.FailureReportView{
 			Number: r.Number, Claim: r.Claim, SessionID: r.SessionID, WorkingDir: r.WorkingDir, ResumeCommand: r.ResumeCommand,
 			Actor: r.Actor, Time: r.Time,
 			WhatBroke: r.WhatBroke, Why: r.Why, WhatToFix: r.WhatToFix, WhereWorkStands: r.WhereWorkStands,
@@ -283,7 +217,7 @@ func failureReportViews(rs []domain.FailureReport) []FailureReportView {
 func lastActivity(t domain.Ticket, cl domain.Claim) time.Time {
 	last := cl.Started
 	during := func(actor string, at time.Time) bool {
-		return actor != string(Human) && !at.Before(cl.Started) && (cl.Live() || !at.After(cl.Ended))
+		return actor != string(api.Human) && !at.Before(cl.Started) && (cl.Live() || !at.After(cl.Ended))
 	}
 	see := func(at time.Time) {
 		if at.After(last) {
@@ -291,7 +225,7 @@ func lastActivity(t domain.Ticket, cl domain.Claim) time.Time {
 		}
 	}
 	for _, m := range t.Moves {
-		if m.Claim == cl.Number && m.Actor != string(Human) {
+		if m.Claim == cl.Number && m.Actor != string(api.Human) {
 			see(m.Time)
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -51,8 +52,8 @@ func storedCIEntry(p domain.Project, name string) (domain.CIRepository, bool) {
 }
 
 // ciEntryView is e as a Project read shows it.
-func ciEntryView(e domain.CIRepository) CIRepositoryView {
-	return CIRepositoryView{Name: e.Name, NotWatched: e.NotWatched, Provider: e.Provider, Repository: e.Repository, ProjectURL: e.ProjectURL}
+func ciEntryView(e domain.CIRepository) api.CIRepositoryView {
+	return api.CIRepositoryView{Name: e.Name, NotWatched: e.NotWatched, Provider: e.Provider, Repository: e.Repository, ProjectURL: e.ProjectURL}
 }
 
 // ciEntryFromCloneURL is the CI entry a Repository's Clone URL fills in:
@@ -61,9 +62,9 @@ func ciEntryView(e domain.CIRepository) CIRepositoryView {
 // and for none, a local-only Repository's.
 func ciEntryFromCloneURL(name, url string) domain.CIRepository {
 	switch host, repo := codeHostOf(url); host {
-	case CodeHostGitHub:
+	case api.CodeHostGitHub:
 		return domain.CIRepository{Name: name, Provider: domain.CIGitHubActions, Repository: repo}
-	case CodeHostAzureRepos:
+	case api.CodeHostAzureRepos:
 		parts := strings.Split(repo, "/")
 		return domain.CIRepository{Name: name, Provider: domain.CIAzurePipelines, ProjectURL: "https://dev.azure.com/" + parts[0] + "/" + parts[1]}
 	}
@@ -165,7 +166,7 @@ func landedIn(t domain.Ticket, name string) bool {
 // ciEntry is in as the CI entry of the Repository name, checked: a
 // watched one needs a CI Provider and what it watches. field prefixes
 // the field a refusal names.
-func ciEntry(name string, in RepositoryCI, field string) (domain.CIRepository, error) {
+func ciEntry(name string, in api.RepositoryCI, field string) (domain.CIRepository, error) {
 	e := domain.CIRepository{Name: name, NotWatched: in.NotWatched, Provider: in.Provider,
 		Repository: strings.TrimSpace(in.Repository), ProjectURL: strings.TrimSpace(in.ProjectURL)}
 	if e.NotWatched && e.Provider == "" {
@@ -178,7 +179,7 @@ func ciEntry(name string, in RepositoryCI, field string) (domain.CIRepository, e
 		return e, invalid(field+"provider", "CI Provider %q isn't %q or %q", e.Provider, domain.CIGitHubActions, domain.CIAzurePipelines)
 	}
 	if err := checkCITarget(&e); err != nil {
-		if ce, ok := err.(*Error); ok {
+		if ce, ok := err.(*api.Error); ok {
 			ce.Field = field + ce.Field
 		}
 		return e, err
@@ -206,7 +207,7 @@ func (c *Core) checkCIEntryOn(ctx context.Context, p domain.Project, opts domain
 		return nil
 	}
 	if err := checkCITarget(&e); err != nil {
-		if ce, ok := err.(*Error); ok {
+		if ce, ok := err.(*api.Error); ok {
 			ce.Field, ce.Message = field+ce.Field, lead+ce.Message
 		}
 		return err
@@ -214,7 +215,7 @@ func (c *Core) checkCIEntryOn(ctx context.Context, p domain.Project, opts domain
 	if c.ciCheck == nil {
 		return nil
 	}
-	in := CICheckInput{Provider: e.Provider, Repository: e.Repository, GHPath: opts.GHPath}
+	in := api.CICheckInput{Provider: e.Provider, Repository: e.Repository, GHPath: opts.GHPath}
 	if e.Provider == domain.CIAzurePipelines {
 		in.ProjectURL, in.PATEnv = e.ProjectURL, patEnvOf(p.CI)
 	}
@@ -224,26 +225,26 @@ func (c *Core) checkCIEntryOn(ctx context.Context, p domain.Project, opts domain
 	}
 	f := fallback
 	switch res.Problem {
-	case ProblemRepositoryUnreadable:
+	case api.ProblemRepositoryUnreadable:
 		f = "repository"
-	case ProblemProjectUnreadable:
+	case api.ProblemProjectUnreadable:
 		f = "project_url"
 	}
-	return &Error{Code: Invalid, Field: field + f, Message: lead + res.Reason, Fix: res.Fix}
+	return &api.Error{Code: api.Invalid, Field: field + f, Message: lead + res.Reason, Fix: res.Fix}
 }
 
 // SetRepositoryCI is the human's set_repository_ci: the CI entry of a
 // Repository, the Home included, its CI Provider and what it watches, or
 // Not watched. While CI Tracking is on, a watched entry that watches
 // something new must pass the CI Watcher's check first.
-func (c *Core) SetRepositoryCI(ctx context.Context, key string, in SetRepositoryCIInput) (Written[ProjectView], error) {
+func (c *Core) SetRepositoryCI(ctx context.Context, key string, in api.SetRepositoryCIInput) (api.Written[api.ProjectView], error) {
 	if err := humanOnly(ctx, "set_repository_ci"); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	name := strings.TrimSpace(in.Name)
 	e, err := ciEntry(name, in.RepositoryCI, "")
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	var p domain.Project
 	var opts domain.Options
@@ -257,10 +258,10 @@ func (c *Core) SetRepositoryCI(ctx context.Context, key string, in SetRepository
 		return err
 	})
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	if err := c.checkNewCIEntry(ctx, p, opts, e, ""); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	return c.updateCIIn(key, in.Full, func(p domain.Project, ci *domain.CI) error {
 		if _, err := ciEntryNamed(p, name); err != nil {

@@ -3,12 +3,14 @@ package pullrequestwatcher_test
 import (
 	"context"
 	"fmt"
-	"github.com/tomoram/code-central/domain"
 	"io"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
@@ -23,7 +25,7 @@ func TestMain(m *testing.M) { watchertest.Main(m) }
 
 var (
 	ctx   = context.Background()
-	human = core.WithActor(ctx, core.Human)
+	human = api.WithActor(ctx, api.Human)
 )
 
 const (
@@ -52,36 +54,36 @@ func newWatchingOn(t *testing.T, remote string) *watching {
 	t.Helper()
 	srv := codecentraltest.NewServer(t)
 	c := srv.Core
-	must(t, func() error { _, err := c.CreateProject(human, core.CreateProjectInput{Key: "acme"}); return err })
+	must(t, func() error { _, err := c.CreateProject(human, api.CreateProjectInput{Key: "acme"}); return err })
 	must(t, func() error {
-		_, err := c.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: remote, Base: "main"})
+		_, err := c.ReportPushRemote(ctx, "acme", api.ReportPushRemoteInput{URL: remote, Base: "main"})
 		return err
 	})
 	must(t, func() error {
-		_, err := c.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest})
+		_, err := c.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest})
 		return err
 	})
-	must(t, func() error { _, err := c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"}); return err })
+	must(t, func() error { _, err := c.CreateSpec(ctx, "acme", api.CreateSpecInput{Title: "Login"}); return err })
 	// Long-lived, so that its Ticket gets a pull request of its own.
 	must(t, func() error {
-		_, err := c.AddLabels(ctx, "acme", core.LabelsInput{Target: "acme-1", Labels: []string{core.LongLivedLabel}})
+		_, err := c.AddLabels(ctx, "acme", api.LabelsInput{Target: "acme-1", Labels: []string{core.LongLivedLabel}})
 		return err
 	})
 	must(t, func() error {
-		_, err := c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form", State: domain.Ready})
+		_, err := c.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "Login form", State: domain.Ready})
 		return err
 	})
-	res, err := c.Claim(ctx, "acme", core.ClaimInput{Ticket: "2"})
+	res, err := c.Claim(ctx, "acme", api.ClaimInput{Ticket: "2"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	must(t, func() error {
-		_, err := c.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: res.ClaimID, Summary: "Built the login form.", Branch: "acme-2", Commit: "abc123"})
+		_, err := c.Finish(ctx, "acme", api.FinishInput{Ticket: "2", ClaimID: res.ClaimID, Summary: "Built the login form.", Branch: "acme-2", Commit: "abc123"})
 		return err
 	})
-	must(t, func() error { _, err := c.Accept(human, "acme", core.TicketInput{Ticket: "2"}); return err })
+	must(t, func() error { _, err := c.Accept(human, "acme", api.TicketInput{Ticket: "2"}); return err })
 	must(t, func() error {
-		_, err := srv.Client.ReportPushedCommit(ctx, "acme", core.ReportPushedCommitInput{Ticket: "acme-2", Commit: "abc123", Branch: "acme-2"})
+		_, err := srv.Client.ReportPushedCommit(ctx, "acme", api.ReportPushedCommitInput{Ticket: "acme-2", Commit: "abc123", Branch: "acme-2"})
 		return err
 	})
 	h := watchertest.New(t)
@@ -138,9 +140,9 @@ func (w *watching) answerOne(n int, body string) {
 }
 
 // recorded is the pull request the Pull Request Watcher reported for acme-2.
-func (w *watching) recorded(state domain.PullRequestState) *core.PullRequestView {
+func (w *watching) recorded(state domain.PullRequestState) *api.PullRequestView {
 	w.t.Helper()
-	var got *core.PullRequestView
+	var got *api.PullRequestView
 	codecentraltest.Eventually(w.t, func() bool {
 		watch, err := w.srv.Core.GetPullRequestWatch(ctx, "acme")
 		if err != nil || len(watch.Work) != 1 {
@@ -153,9 +155,9 @@ func (w *watching) recorded(state domain.PullRequestState) *core.PullRequestView
 }
 
 // status waits for the Pull Request Watcher's status in acme's Project.
-func (w *watching) status(state core.WatcherState) core.WatcherView {
+func (w *watching) status(state api.WatcherState) api.WatcherView {
 	w.t.Helper()
-	var got core.WatcherView
+	var got api.WatcherView
 	codecentraltest.Eventually(w.t, func() bool {
 		p, err := w.srv.Client.GetProject(ctx, "acme")
 		if err != nil {
@@ -192,7 +194,7 @@ func (w *watching) nextPoll(d time.Duration) {
 // error, each one Notification.
 func (w *watching) errorCount() int {
 	for _, a := range w.srv.Core.WatcherAttention(ctx) {
-		if a.Kind == core.WatcherPullRequests && a.Project == "acme" {
+		if a.Kind == api.WatcherPullRequests && a.Project == "acme" {
 			return a.Errors
 		}
 	}
@@ -208,7 +210,7 @@ func TestItOpensAReadyPullRequestIntoTheBaseWithTheTicketsTitleAndSummaryAndRepo
 	if got.Number != 7 || got.Link != "https://github.com/acme/web/pull/7" {
 		t.Fatalf("recorded %+v, want pull request 7 and its link", got)
 	}
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	opened := w.opened()
 	if len(opened) != 1 {
 		t.Fatalf("opened %d pull requests, want one: %q", len(opened), opened)
@@ -350,7 +352,7 @@ func TestARateLimitedWatcherMakesNoCallsUntilTheResetThenResumesAndIsNeverAnErro
 		Stdout: "HTTP/2.0 403 Forbidden\r\nX-Ratelimit-Remaining: 0\r\n" + fmt.Sprintf("X-Ratelimit-Reset: %d\r\n", reset.Unix()) + "\r\n" + `{"message":"API rate limit exceeded"}`,
 		Stderr: "gh: API rate limit exceeded (HTTP 403)\n"})
 	w.start(w.h.Bin)
-	var got core.WatcherView
+	var got api.WatcherView
 	codecentraltest.Eventually(t, func() bool {
 		p, err := w.srv.Client.GetProject(ctx, "acme")
 		if err != nil {
@@ -359,7 +361,7 @@ func TestARateLimitedWatcherMakesNoCallsUntilTheResetThenResumesAndIsNeverAnErro
 		got = p.Landing.Watcher
 		return got.RateLimitedUntil.Equal(reset)
 	}, "status %+v, want Watching until %s", &got, reset)
-	if got.State != core.WatcherWatching {
+	if got.State != api.WatcherWatching {
 		t.Fatalf("status %+v, want Watching", got)
 	}
 	calls := len(w.h.Calls())
@@ -379,34 +381,34 @@ func TestEachErrorIsReportedWithItsFixOnceAndClearsWhenFixed(t *testing.T) {
 	for _, c := range []struct {
 		name       string
 		cause, fix func(h *watchertest.Harness)
-		problem    core.WatcherProblem
+		problem    api.WatcherProblem
 		fixText    string
 	}{
 		{"logged out", func(h *watchertest.Harness) { h.LoggedOut() }, func(h *watchertest.Harness) { h.Answer(fakegh.Answer{Args: []string{"auth", "status"}}) },
-			core.ProblemLoggedOut, "gh auth login"},
+			api.ProblemLoggedOut, "gh auth login"},
 		{"unreadable", func(h *watchertest.Harness) { h.Unreadable("acme/web") }, func(h *watchertest.Harness) {
 			h.Answer(fakegh.Answer{Args: []string{"api", repoPath}, Stdout: write})
 		},
-			core.ProblemRepositoryUnreadable, "owner/name"},
+			api.ProblemRepositoryUnreadable, "owner/name"},
 		{"no write access", func(h *watchertest.Harness) {
 			h.Answer(fakegh.Answer{Args: []string{"api", repoPath}, Stdout: readOnly})
 		},
 			func(h *watchertest.Harness) {
 				h.Answer(fakegh.Answer{Args: []string{"api", repoPath}, Stdout: write})
-			}, core.ProblemNoWrite, "write access"},
+			}, api.ProblemNoWrite, "write access"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			w := newWatching(t)
 			c.cause(w.h)
 			w.answerList(pr(4, "open", ""))
 			w.start(w.h.Bin)
-			got := w.status(core.WatcherError)
+			got := w.status(api.WatcherError)
 			if got.Problem != c.problem || !strings.Contains(got.Fix, c.fixText) {
 				t.Fatalf("status %+v, want %s with the fix %q", got, c.problem, c.fixText)
 			}
 			w.nextPoll(pullrequestwatcher.Interval)
 			w.nextPoll(pullrequestwatcher.Interval)
-			w.status(core.WatcherError)
+			w.status(api.WatcherError)
 			if n := w.errorCount(); n != 1 {
 				t.Fatalf("went into an error %d times, want once, for one Notification", n)
 			}
@@ -415,7 +417,7 @@ func TestEachErrorIsReportedWithItsFixOnceAndClearsWhenFixed(t *testing.T) {
 			}
 			c.fix(w.h)
 			w.nextPoll(pullrequestwatcher.Interval)
-			w.status(core.WatcherWatching)
+			w.status(api.WatcherWatching)
 			w.recorded(domain.PROpen)
 		})
 	}
@@ -424,8 +426,8 @@ func TestEachErrorIsReportedWithItsFixOnceAndClearsWhenFixed(t *testing.T) {
 func TestAMissingGHIsAnErrorWithHowToInstallIt(t *testing.T) {
 	w := newWatching(t)
 	w.start(t.TempDir())
-	got := w.status(core.WatcherError)
-	if got.Problem != core.ProblemGHMissing || !strings.Contains(got.Fix, "https://cli.github.com") {
+	got := w.status(api.WatcherError)
+	if got.Problem != api.ProblemGHMissing || !strings.Contains(got.Fix, "https://cli.github.com") {
 		t.Fatalf("status %+v, want gh missing with how to install it", got)
 	}
 }
@@ -449,7 +451,7 @@ func TestItExitsWhenItsStdinCloses(t *testing.T) {
 func TestItDoesNothingWhileTheLandingMethodIsNotPullRequest(t *testing.T) {
 	w := newWatching(t)
 	must(t, func() error {
-		_, err := w.srv.Core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
+		_, err := w.srv.Core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 		return err
 	})
 	w.start(w.h.Bin)

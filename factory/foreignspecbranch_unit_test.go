@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // pushWorld is a landWorld whose Home Repository pushes to origin, and
@@ -33,8 +33,8 @@ func (w *pushWorld) push(tip string, rebase bool, pushedIn ...string) {
 	if _, err := w.repo.fetch(context.Background(), "origin"); err != nil {
 		w.t.Fatal(err)
 	}
-	spec := core.SpecRef{ID: "acme-1", Branch: pushedSpecBranch}
-	w.l.pushSpecBranch(context.Background(), spec, pushedIn, core.LandingPolicies{}, specPlan{r: w.l.repos.home, tip: tip, rebase: rebase})
+	spec := api.SpecRef{ID: "acme-1", Branch: pushedSpecBranch}
+	w.l.pushSpecBranch(context.Background(), spec, pushedIn, api.LandingPolicies{}, specPlan{r: w.l.repos.home, tip: tip, rebase: rebase})
 }
 
 func TestUnderRebaseASpecBranchThisRunPushedIsForcePushedThoughItsReportFailed(t *testing.T) {
@@ -81,7 +81,7 @@ func TestASpecBranchDeletedFromTheRemoteSinceTheFetchIsPushedAndItsStaleTracking
 
 	// The fetch doesn't prune, so the tracking ref stays.
 	delete(w.remote.refs, pushedSpecBranch)
-	w.l.pushSpecBranch(context.Background(), core.SpecRef{ID: "acme-1", Branch: pushedSpecBranch}, nil, core.LandingPolicies{}, specPlan{r: w.l.repos.home, tip: tip, rebase: true})
+	w.l.pushSpecBranch(context.Background(), api.SpecRef{ID: "acme-1", Branch: pushedSpecBranch}, nil, api.LandingPolicies{}, specPlan{r: w.l.repos.home, tip: tip, rebase: true})
 	if got := w.repo.remoteTip("origin", pushedSpecBranch); got != tip {
 		t.Errorf("the remote's %s is at %q, want the Spec Branch %s once the hand-made one is gone:\n%s", pushedSpecBranch, got, tip, w.out)
 	}
@@ -96,7 +96,7 @@ func TestASpecBranchIsntPushedWhileTheRemoteCantBeAskedForIt(t *testing.T) {
 	w.push(tip, false) // fetches while the remote works
 	w.repo.setBroken("origin", true)
 
-	w.l.pushSpecBranch(context.Background(), core.SpecRef{ID: "acme-1", Branch: pushedSpecBranch}, nil, core.LandingPolicies{}, specPlan{r: w.l.repos.home, tip: tip, rebase: true})
+	w.l.pushSpecBranch(context.Background(), api.SpecRef{ID: "acme-1", Branch: pushedSpecBranch}, nil, api.LandingPolicies{}, specPlan{r: w.l.repos.home, tip: tip, rebase: true})
 	if w.repo.pushes != 0 {
 		t.Errorf("the Spec Branch was pushed %d times, want none while origin can't be asked", w.repo.pushes)
 	}

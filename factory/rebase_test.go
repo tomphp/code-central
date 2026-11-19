@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/factory/factorytest"
 )
@@ -18,7 +18,7 @@ import (
 
 // setRebase turns the Project's Rebase on or off, under Merge.
 func setRebase(h *factorytest.Harness, on bool) {
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Rebase: &on})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Rebase: &on})
 }
 
 // commitAs commits file with content on branch, made from main when it
@@ -278,7 +278,7 @@ func TestTurningRebaseOnPartWayLeavesEarlierMergesAndRebaseOffMergesLaterTickets
 func TestUnderRebaseTwoRepositoriesAreBothReplayedAndTheFinishCheckStillPasses(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	api, id := specInTwo(h)
+	apiRepo, id := specInTwo(h)
 	setRebase(h, true)
 	holdTicketsStage(t, h)
 	r := h.Start()
@@ -295,7 +295,7 @@ func TestUnderRebaseTwoRepositoriesAreBothReplayedAndTheFinishCheckStillPasses(t
 	if tk.State != domain.Accepted || tk.SpecMerge == nil || !tk.SpecMerge.Counts {
 		t.Fatalf("%s is %s with Spec merge %+v, want Accepted with it reported: the finish check passed the replayed branches", id, tk.State, tk.SpecMerge)
 	}
-	for _, dir := range []string{h.Repo, api.Path} {
+	for _, dir := range []string{h.Repo, apiRepo.Path} {
 		commits, merges := onSpecBranch(h, dir)
 		if len(commits) != 1 || len(merges) > 0 {
 			t.Errorf("the Spec Branch in %s holds %d commits with merges %v, want the one replayed", dir, len(commits), merges)
@@ -309,7 +309,7 @@ func TestUnderRebaseTwoRepositoriesAreBothReplayedAndTheFinishCheckStillPasses(t
 func TestUnderRebaseATicketConflictingInOneRepositoryIsReplayedIntoNeither(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	api, first := specInTwo(h)
+	apiRepo, first := specInTwo(h)
 	setRebase(h, true)
 	release := holdTicketsStage(t, h)
 	defer release()
@@ -324,7 +324,7 @@ func TestUnderRebaseATicketConflictingInOneRepositoryIsReplayedIntoNeither(t *te
 	h.Accept(first)
 	r.Poll()
 	spec := "spec/" + h.SpecID()
-	homeTip, apiTip := h.Git("rev-parse", spec), h.GitIn(api.Path, "rev-parse", spec)
+	homeTip, apiTip := h.Git("rev-parse", spec), h.GitIn(apiRepo.Path, "rev-parse", spec)
 	homeBranch := h.Git("rev-parse", second)
 	h.Script(second, factorytest.Wait())
 
@@ -335,7 +335,7 @@ func TestUnderRebaseATicketConflictingInOneRepositoryIsReplayedIntoNeither(t *te
 	if !movedTo(tk, domain.Accepted, domain.Ready) {
 		t.Fatalf("%s wasn't sent back: %+v", second, tk.Moves)
 	}
-	if h.Git("rev-parse", spec) != homeTip || h.GitIn(api.Path, "rev-parse", spec) != apiTip {
+	if h.Git("rev-parse", spec) != homeTip || h.GitIn(apiRepo.Path, "rev-parse", spec) != apiTip {
 		t.Fatal("a Spec Branch moved: a Ticket conflicting in any Repository is replayed into none")
 	}
 	if h.Git("rev-parse", second) != homeBranch {

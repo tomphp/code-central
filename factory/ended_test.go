@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -45,7 +46,7 @@ func TestAReleasedClaimsTurnIsStoppedAndDropped(t *testing.T) {
 	h.WantState(id, domain.InProgress)
 	h.WantCalls(1)
 
-	if _, err := h.Human().Release(context.Background(), h.Project, core.ReleaseInput{Ticket: core.Ref(id)}); err != nil {
+	if _, err := h.Human().Release(context.Background(), h.Project, api.ReleaseInput{Ticket: api.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
 	h.Script(id, factorytest.Finish("Done."), factorytest.Result("success"))
@@ -88,7 +89,7 @@ func TestACancelledClaimsTurnIsStoppedAndDropped(t *testing.T) {
 	r := h.Start()
 	h.WantCalls(1)
 
-	if _, err := h.Human().Cancel(context.Background(), h.Project, core.CancelInput{Ticket: core.Ref(id)}); err != nil {
+	if _, err := h.Human().Cancel(context.Background(), h.Project, api.CancelInput{Ticket: api.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
 	r.Poll()
@@ -113,7 +114,7 @@ func TestAReleasedTicketIsClaimedAfreshInItsWorktreeOnItsBranch(t *testing.T) {
 		t.Fatalf("the first turn didn't get as far as its commit: %v", err)
 	}
 
-	if _, err := h.Human().Release(context.Background(), h.Project, core.ReleaseInput{Ticket: core.Ref(id)}); err != nil {
+	if _, err := h.Human().Release(context.Background(), h.Project, api.ReleaseInput{Ticket: api.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
 	// The second turn is held, so the state file is read while its Claim

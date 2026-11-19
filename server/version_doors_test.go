@@ -13,9 +13,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 	"github.com/tomoram/code-central/server"
 )
@@ -38,13 +38,13 @@ func versionedServer(t *testing.T) *codecentraltest.Server {
 	t.Helper()
 	srv := codecentraltest.NewServer(t, codecentraltest.WithVersion("v1.8"))
 	must(t, func() error {
-		_, err := srv.Core.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"})
+		_, err := srv.Core.CreateProject(context.Background(), api.CreateProjectInput{Key: "acme"})
 		return err
 	})
 	return srv
 }
 
-func checkUnknownAddedLater(t *testing.T, e core.Error, want string) {
+func checkUnknownAddedLater(t *testing.T, e api.Error, want string) {
 	t.Helper()
 	// The accepted fields differ by tool: only the version hint is under test.
 	got := acceptedSection.ReplaceAllString(e.Message, "")
@@ -62,7 +62,7 @@ func TestMCPUnknownFieldsNameTheVersionsSentAsClientVersion(t *testing.T) {
 			if tc.client != "" {
 				args["client_version"] = tc.client
 			}
-			checkUnknownAddedLater(t, mcpRejected(t, s, "create_spec", args, core.Invalid), tc.want)
+			checkUnknownAddedLater(t, mcpRejected(t, s, "create_spec", args, api.Invalid), tc.want)
 		})
 	}
 	// client_version alone is accepted on every tool, and isn't advertised.
@@ -101,7 +101,7 @@ func TestMCPUnknownFieldsOnAHookedCallNameTheHooksVersion(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &hook); err != nil {
 		t.Fatalf("%v: %s", err, out.String())
 	}
-	e := mcpRejected(t, s, "claim", hook.HookSpecificOutput.UpdatedInput, core.Invalid)
+	e := mcpRejected(t, s, "claim", hook.HookSpecificOutput.UpdatedInput, api.Invalid)
 	checkUnknownAddedLater(t, e, versionCases[0].want)
 }
 
@@ -113,7 +113,7 @@ func TestHTTPUnknownFieldsNameTheVersionsSentAsTheHeader(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			req.Header.Set(httpapi.ActorHeader, string(core.Human))
+			req.Header.Set(httpapi.ActorHeader, string(api.Human))
 			if tc.client != "" {
 				req.Header.Set(server.ClientVersionHeader, tc.client)
 			}
@@ -123,7 +123,7 @@ func TestHTTPUnknownFieldsNameTheVersionsSentAsTheHeader(t *testing.T) {
 			}
 			defer resp.Body.Close()
 			b, _ := io.ReadAll(resp.Body)
-			checkUnknownAddedLater(t, errorJSON(t, b, core.Invalid), tc.want)
+			checkUnknownAddedLater(t, errorJSON(t, b, api.Invalid), tc.want)
 		})
 	}
 }
@@ -173,7 +173,7 @@ func TestCLIUnknownFieldsNameTheVersionsSentAsTheHeader(t *testing.T) {
 			}
 			// A different version also warns on stderr, before the error.
 			lines := strings.Split(strings.TrimSpace(errOut.String()), "\n")
-			checkUnknownAddedLater(t, errorJSON(t, []byte(lines[len(lines)-1]), core.Invalid), tc.want)
+			checkUnknownAddedLater(t, errorJSON(t, []byte(lines[len(lines)-1]), api.Invalid), tc.want)
 		})
 	}
 }

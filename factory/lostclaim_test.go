@@ -2,11 +2,12 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -74,7 +75,7 @@ func TestAClaimAnotherSessionTakesBeforeTheRetryIsDropped(t *testing.T) {
 	if n := h.Refused(claimPath); n != 1 {
 		t.Fatalf("%d claims cut before the other session claimed, want 1: the Factory waits to claim again", n)
 	}
-	if _, err := h.Server.Client.Claim(context.Background(), h.Project, core.ClaimInput{Ticket: core.Ref(id), SessionID: "elsewhere"}); err != nil {
+	if _, err := h.Server.Client.Claim(context.Background(), h.Project, api.ClaimInput{Ticket: api.Ref(id), SessionID: "elsewhere"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -191,7 +192,7 @@ func TestALostClaimRefusedAtALaterPollIsDropped(t *testing.T) {
 	a, b := h.ReadyTicket("Taken elsewhere"), h.ReadyTicket("Next")
 	h.LoseRequest("/claim", 4)
 	r := h.Start("--parallel", "1")
-	if _, err := h.Server.Client.Claim(context.Background(), h.Project, core.ClaimInput{Ticket: core.Ref(a), SessionID: "elsewhere"}); err != nil {
+	if _, err := h.Server.Client.Claim(context.Background(), h.Project, api.ClaimInput{Ticket: api.Ref(a), SessionID: "elsewhere"}); err != nil {
 		t.Fatal(err)
 	}
 

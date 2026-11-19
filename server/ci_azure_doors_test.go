@@ -1,13 +1,14 @@
 package server_test
 
 import (
-	"github.com/tomoram/code-central/domain"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // Azure Pipelines settings (code-central-364), through set_ci_tracking and
@@ -45,7 +46,7 @@ func TestEachProviderKeepsItsOwnFieldsWhenTheProviderIsSwitched(t *testing.T) {
 func TestTurningAzurePipelinesOnNeedsAProjectURL(t *testing.T) {
 	srv := newServer(t)
 	for _, body := range []string{`{"tracking":true,"provider":"azure_pipelines"}`, `{"tracking":true,"provider":"azure_pipelines","repository":"acme/web","project_url":" "}`} {
-		e := httpRejected(t, srv, setCITracking(body), core.Invalid)
+		e := httpRejected(t, srv, setCITracking(body), api.Invalid)
 		if e.Field != "project_url" || e.Message != "CI Tracking needs the Azure DevOps project to watch, as its URL" {
 			t.Fatalf("%s: field %q message %q", body, e.Field, e.Message)
 		}
@@ -58,7 +59,7 @@ func TestAProjectURLThatDoesNotParseIsRefusedOnProjectURL(t *testing.T) {
 	srv := newServer(t)
 	for _, u := range []string{"web", "https://dev.azure.com/acme", "https://dev.azure.com/", "ftp://dev.azure.com/acme/web"} {
 		for _, tracking := range []string{"true", "false"} {
-			e := httpRejected(t, srv, setCITracking(`{"tracking":`+tracking+`,"provider":"azure_pipelines","project_url":"`+u+`"}`), core.Invalid)
+			e := httpRejected(t, srv, setCITracking(`{"tracking":`+tracking+`,"provider":"azure_pipelines","project_url":"`+u+`"}`), api.Invalid)
 			if e.Field != "project_url" || !strings.Contains(e.Message, "Azure DevOps project URL") {
 				t.Fatalf("%q: field %q message %q, want project_url", u, e.Field, e.Message)
 			}
@@ -69,7 +70,7 @@ func TestAProjectURLThatDoesNotParseIsRefusedOnProjectURL(t *testing.T) {
 func TestAPATEnvironmentVariableIsANameAndIsRefusedOnPATEnvOtherwise(t *testing.T) {
 	srv := newServer(t)
 	for _, name := range []string{"1PAT", "MY-PAT", "my pat", "$PAT", "ghp_abc=def"} {
-		e := httpRejected(t, srv, setCITracking(`{"tracking":false,"provider":"azure_pipelines","pat_env":"`+name+`"}`), core.Invalid)
+		e := httpRejected(t, srv, setCITracking(`{"tracking":false,"provider":"azure_pipelines","pat_env":"`+name+`"}`), api.Invalid)
 		if e.Field != "pat_env" || !strings.Contains(e.Message, name) {
 			t.Fatalf("%q: field %q message %q, want pat_env naming it", name, e.Field, e.Message)
 		}
@@ -79,7 +80,7 @@ func TestAPATEnvironmentVariableIsANameAndIsRefusedOnPATEnvOtherwise(t *testing.
 
 func TestAnUnknownCIProviderIsRefusedNamingBoth(t *testing.T) {
 	srv := newServer(t)
-	e := httpRejected(t, srv, setCITracking(`{"tracking":true,"provider":"circleci","repository":"acme/web"}`), core.Invalid)
+	e := httpRejected(t, srv, setCITracking(`{"tracking":true,"provider":"circleci","repository":"acme/web"}`), api.Invalid)
 	if e.Field != "provider" || !strings.Contains(e.Message, `"github_actions"`) || !strings.Contains(e.Message, `"azure_pipelines"`) {
 		t.Fatalf("field %q message %q, want provider naming both", e.Field, e.Message)
 	}
@@ -92,8 +93,8 @@ func TestTheCheckRunsAgainWhenTheProviderProjectURLOrPATVariableChangesWhileOn(t
 		httpOK(t, srv, setCITracking(`{"tracking":true,"provider":"azure_pipelines","project_url":"https://dev.azure.com/acme/web"`+extra+`}`))
 	}
 	on(``)
-	want := core.CICheckInput{Provider: domain.CIAzurePipelines, ProjectURL: "https://dev.azure.com/acme/web", PATEnv: "ADO_PAT"}
-	if got := checks.ran(); !slices.Equal(got, []core.CICheckInput{want}) {
+	want := api.CICheckInput{Provider: domain.CIAzurePipelines, ProjectURL: "https://dev.azure.com/acme/web", PATEnv: "ADO_PAT"}
+	if got := checks.ran(); !slices.Equal(got, []api.CICheckInput{want}) {
 		t.Fatalf("checks = %+v, want %+v", got, want)
 	}
 	on(`,"pat_env":"ADO_PAT","ignored_workflows":["Nightly build"]`)
@@ -110,13 +111,13 @@ func TestTheCheckRunsAgainWhenTheProviderProjectURLOrPATVariableChangesWhileOn(t
 }
 
 func TestTheAzureCheckProblemsAreRefusedOnTheirFields(t *testing.T) {
-	for problem, field := range map[core.WatcherProblem]string{
-		core.ProblemPATMissing: "tracking", core.ProblemPATRejected: "tracking", core.ProblemPATScope: "tracking", core.ProblemProjectUnreadable: "project_url",
+	for problem, field := range map[api.WatcherProblem]string{
+		api.ProblemPATMissing: "tracking", api.ProblemPATRejected: "tracking", api.ProblemPATScope: "tracking", api.ProblemProjectUnreadable: "project_url",
 	} {
 		t.Run(string(problem), func(t *testing.T) {
-			checks := &ciChecks{result: core.WatcherCheckResult{Problem: problem, Reason: "azure says no", Fix: "Fix it."}}
+			checks := &ciChecks{result: api.WatcherCheckResult{Problem: problem, Reason: "azure says no", Fix: "Fix it."}}
 			srv := newCICheckServer(t, checks)
-			e := httpRejected(t, srv, setCITracking(`{"tracking":true,"provider":"azure_pipelines","project_url":"https://dev.azure.com/acme/web"}`), core.Invalid)
+			e := httpRejected(t, srv, setCITracking(`{"tracking":true,"provider":"azure_pipelines","project_url":"https://dev.azure.com/acme/web"}`), api.Invalid)
 			if e.Field != field || e.Message != "azure says no" || e.Fix != "Fix it." {
 				t.Fatalf("refusal = %+v, want the check's reason and fix on %s", e, field)
 			}
@@ -150,11 +151,11 @@ func TestIgnoredWorkflowsAndCIRulesAreValidatedByTheProjectsProvider(t *testing.
 	srv := newServer(t)
 	httpOK(t, srv, setCITracking(`{"tracking":false,"provider":"azure_pipelines"}`))
 	for _, w := range []string{"a/b", `a\b`, "build*", "x?", "[x]"} {
-		e := httpRejected(t, srv, setCITracking(`{"tracking":false,"provider":"azure_pipelines","ignored_workflows":["`+strings.ReplaceAll(w, `\`, `\\`)+`"]}`), core.Invalid)
+		e := httpRejected(t, srv, setCITracking(`{"tracking":false,"provider":"azure_pipelines","ignored_workflows":["`+strings.ReplaceAll(w, `\`, `\\`)+`"]}`), api.Invalid)
 		if e.Field != "ignored_workflows" || !strings.Contains(e.Message, "pipeline") {
 			t.Fatalf("%q: field %q message %q, want ignored_workflows asking for a pipeline's name", w, e.Field, e.Message)
 		}
-		e = httpRejected(t, srv, addCIRule(`{"workflow":"`+strings.ReplaceAll(w, `\`, `\\`)+`","branch":"main"}`), core.Invalid)
+		e = httpRejected(t, srv, addCIRule(`{"workflow":"`+strings.ReplaceAll(w, `\`, `\\`)+`","branch":"main"}`), api.Invalid)
 		if e.Field != "workflow" || !strings.Contains(e.Message, "pipeline") || !strings.Contains(e.Message, "any") {
 			t.Fatalf("%q: field %q message %q, want workflow asking for a pipeline's name or any", w, e.Field, e.Message)
 		}
@@ -166,13 +167,13 @@ func TestIgnoredWorkflowsAndCIRulesAreValidatedByTheProjectsProvider(t *testing.
 	httpOK(t, srv, addCIRule(`{"workflow":"Build and test","branch":"main"}`))
 	httpOK(t, srv, addCIRule(`{"workflow":"any","branch":"release"}`))
 	ciRules(t, getAcme(t, srv), rule{"acme-4", "Build and test", "main", "Draft"}, rule{"acme-5", "any", "release", "Draft"})
-	httpRejected(t, srv, editCIRule(`{"spec":"acme-4","workflow":"ci/x","branch":"main"}`), core.Invalid)
+	httpRejected(t, srv, editCIRule(`{"spec":"acme-4","workflow":"ci/x","branch":"main"}`), api.Invalid)
 	httpOK(t, srv, editCIRule(`{"spec":"acme-4","workflow":"Deploy web","branch":"main"}`))
 
 	// GitHub Actions keeps its workflow file pattern, and switching back
 	// leaves the Azure names alone.
 	httpOK(t, srv, setCITracking(`{"tracking":false,"provider":"github_actions","ignored_workflows":["ci.yml"]}`))
-	httpRejected(t, srv, addCIRule(`{"workflow":"Build and test","branch":"dev"}`), core.Invalid)
+	httpRejected(t, srv, addCIRule(`{"workflow":"Build and test","branch":"dev"}`), api.Invalid)
 	if rules := getAcme(t, srv)["ci"].(map[string]any)["rules"].([]any); len(rules) != 2 {
 		t.Fatalf("rules = %v, want both left alone", rules)
 	}
@@ -183,7 +184,7 @@ func TestAPartiallySucceededRunCountsAsPassedAndIsKeptAsPartiallySucceeded(t *te
 		pushedAccepted(t, srv)
 		reportRuns(t, srv, ciRun(1, "Build", "abc123", domain.CICompleted, domain.CIPartiallySucceeded))
 	})
-	if tk := ticket3(t, srv); tk.CIResult != core.CIPassed {
+	if tk := ticket3(t, srv); tk.CIResult != api.CIPassed {
 		t.Fatalf("ci result %q, want passed", tk.CIResult)
 	}
 	runs, err := srv.Client.GetTicket(t.Context(), "acme", "acme-3")

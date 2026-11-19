@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
@@ -19,9 +20,9 @@ func TestATicketAcceptedForMoreThanTenMinutesIsAcceptedNotLanded(t *testing.T) {
 	wantReason(t, f.get(t, "2"), "")
 
 	f.clock.Advance(time.Second)
-	wantReason(t, f.get(t, "2"), core.ReasonAcceptedNotLanded)
+	wantReason(t, f.get(t, "2"), api.ReasonAcceptedNotLanded)
 	row, ok := longRow(t, f, "acme-2")
-	if !ok || row.Reason != core.ReasonAcceptedNotLanded || !row.Since.Equal(acceptedAt) {
+	if !ok || row.Reason != api.ReasonAcceptedNotLanded || !row.Since.Equal(acceptedAt) {
 		t.Fatalf("Needs Me row %+v, want accepted_not_landed since the accept %s", row, acceptedAt)
 	}
 }
@@ -49,7 +50,7 @@ func TestAnAgentSendsAcceptedWorkBackToReadyWithANote(t *testing.T) {
 	f.accepted(t)
 	f.clock.Set(t0.Add(3 * time.Hour))
 	note := "Merging acme-2 into main at 9f8e7d conflicts in core/claim.go."
-	v, err := record(f.core.SendBack(ctx, "acme", core.SendBackInput{Ticket: "2", Note: note, Full: true}))
+	v, err := record(f.core.SendBack(ctx, "acme", api.SendBackInput{Ticket: "2", Note: note, Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,9 +67,9 @@ func TestAnAgentSendsAcceptedWorkBackToReadyWithANote(t *testing.T) {
 func TestSendingBackFromAcceptedNeedsANote(t *testing.T) {
 	f := newFixture(t)
 	f.accepted(t)
-	for _, actor := range []core.Actor{core.Agent, core.Human} {
-		_, err := f.core.SendBack(core.WithActor(ctx, actor), "acme", core.SendBackInput{Ticket: "2", Note: " "})
-		wantCode(t, err, core.Invalid, "note")
+	for _, actor := range []api.Actor{api.Agent, api.Human} {
+		_, err := f.core.SendBack(api.WithActor(ctx, actor), "acme", api.SendBackInput{Ticket: "2", Note: " "})
+		wantCode(t, err, api.Invalid, "note")
 	}
 	if v := f.get(t, "2"); v.State != domain.Accepted {
 		t.Fatalf("state %s, want still Accepted", v.State)
@@ -78,9 +79,9 @@ func TestSendingBackFromAcceptedNeedsANote(t *testing.T) {
 func TestTheHumansSendBackFromFailedIsUnchanged(t *testing.T) {
 	f := newFixture(t)
 	f.failed(t)
-	_, err := f.core.SendBack(ctx, "acme", core.SendBackInput{Ticket: "2", Note: "Try again."})
-	wantCode(t, err, core.ActionNotAllowed, "")
-	v, err := record(f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "2", Full: true}))
+	_, err := f.core.SendBack(ctx, "acme", api.SendBackInput{Ticket: "2", Note: "Try again."})
+	wantCode(t, err, api.ActionNotAllowed, "")
+	v, err := record(f.core.SendBack(human, "acme", api.SendBackInput{Ticket: "2", Full: true}))
 	if err != nil || v.State != domain.Ready {
 		t.Fatalf("state %s, err %v; the human sends back from Failed with no note", v.State, err)
 	}

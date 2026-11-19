@@ -1,13 +1,14 @@
 package factory_test
 
 import (
-	"github.com/tomoram/code-central/domain"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -20,8 +21,8 @@ type usageSession struct {
 }
 
 // everySession is each of u's main sessions and each of their Subagents.
-func everySession(u core.UsageView) []core.UsageSession {
-	var out []core.UsageSession
+func everySession(u api.UsageView) []api.UsageSession {
+	var out []api.UsageSession
 	for _, m := range u.Sessions {
 		out = append(append(out, m), m.Subagents...)
 	}
@@ -29,7 +30,7 @@ func everySession(u core.UsageView) []core.UsageSession {
 }
 
 // usageSessions are the Usage sessions of session, by agent.
-func usageSessions(u core.UsageView, session string) []usageSession {
+func usageSessions(u api.UsageView, session string) []usageSession {
 	var out []usageSession
 	for _, s := range everySession(u) {
 		if s.SessionID == session {
@@ -41,7 +42,7 @@ func usageSessions(u core.UsageView, session string) []usageSession {
 }
 
 // wantUsageSessions checks that u's sessions of session are want.
-func wantUsageSessions(t *testing.T, u core.UsageView, session string, want []usageSession) {
+func wantUsageSessions(t *testing.T, u api.UsageView, session string, want []usageSession) {
 	t.Helper()
 	if got := usageSessions(u, session); !reflect.DeepEqual(got, want) {
 		t.Errorf("Usage sessions\n got %+v\nwant %+v", got, want)
@@ -49,7 +50,7 @@ func wantUsageSessions(t *testing.T, u core.UsageView, session string, want []us
 }
 
 // responses is how many responses u holds in all.
-func responses(u core.UsageView) int {
+func responses(u api.UsageView) int {
 	n := 0
 	for _, s := range everySession(u) {
 		n += s.Responses
@@ -60,8 +61,8 @@ func responses(u core.UsageView) int {
 // waitForUsage polls until Usage holds n responses in all, and returns
 // it. It is for a turn that is still running: what it printed may reach a
 // later batch.
-func waitForUsage(h *factorytest.Harness, r *factorytest.Running, n int) core.UsageView {
-	var u core.UsageView
+func waitForUsage(h *factorytest.Harness, r *factorytest.Running, n int) api.UsageView {
+	var u api.UsageView
 	r.PollUntil("Usage to hold the responses", func() bool {
 		u = h.Usage()
 		return responses(u) >= n
@@ -72,7 +73,7 @@ func waitForUsage(h *factorytest.Harness, r *factorytest.Running, n int) core.Us
 // wantUsage polls once, which posts what the turns that have ended
 // printed, and returns Usage, failing the test unless it holds n responses
 // in all.
-func wantUsage(t *testing.T, h *factorytest.Harness, r *factorytest.Running, n int) core.UsageView {
+func wantUsage(t *testing.T, h *factorytest.Harness, r *factorytest.Running, n int) api.UsageView {
 	t.Helper()
 	r.Poll()
 	u := h.Usage()
