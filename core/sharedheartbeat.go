@@ -93,11 +93,14 @@ func (c *Core) recordReports(key string) {
 	}
 }
 
-// LoadFactories reads every Heartbeat and Factory report from the Store,
-// as serve does once before it serves, so a new service shows the
+// LoadFactories reads every Heartbeat, Factory report and ping from the
+// Store, as serve does once before it serves, so a new service shows the
 // Factories reporting to the others at once, and a Heartbeat reaching it
 // first doesn't take a Factory it already has for a new one.
-func (c *Core) LoadFactories() { c.refreshFactories() }
+func (c *Core) LoadFactories() {
+	c.refreshPings()
+	c.refreshFactories()
+}
 
 // refreshFactories prunes the Heartbeats Offline for a day, here and in
 // the Store, and reads every Heartbeat and Factory report from the Store

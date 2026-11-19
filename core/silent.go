@@ -11,8 +11,9 @@ import (
 
 // Silent Claims. A Ticket In Progress with no activity for SilentAfter
 // is a Silent Claim. Activity is any write to the Ticket (its updated
-// time) or a ping from the Claim's session. Pings live in memory only, so
-// after a restart last activity counts from service start.
+// time) or a ping from the Claim's session. Pings are written through to
+// the Store's Services side, so every service sharing the Store sees them
+// (once its Factory Status tick has read them), and read from memory.
 
 // SilentAfter is how long an In Progress Ticket may be quiet before its
 // Claim is Silent.
@@ -30,15 +31,22 @@ const NotLandedAfter = 10 * time.Minute
 // session.
 const PingThrottle = time.Minute
 
+// pingExpiry is how old a ping row is before every service, and the Store,
+// forget it. A Claim quiet for longer shows its last stored write as its
+// last activity.
+const pingExpiry = 7 * 24 * time.Hour
+
 // activity is the in-memory side of last activity: when the service
-// started, each session's last counted ping, and the timed reason the
+// started, each session's last counted ping (here, and on every service as
+// of the last tick), and the timed reason the
 // background watch last saw on each Claim and Accepted Ticket.
 type activity struct {
 	started time.Time
 
-	mu    sync.Mutex
-	pings map[string]time.Time      // session ID -> last counted ping
-	marks map[markKey]NeedsMeReason // Silent, Long, CI unavailable or Accepted but not landed
+	mu     sync.Mutex
+	pings  map[string]time.Time      // session ID -> last counted ping here: what the throttle goes by
+	shared map[string]time.Time      // session ID -> last ping any service counted, as the Store had it at the last tick
+	marks  map[markKey]NeedsMeReason // Silent, Long, CI unavailable or Accepted but not landed
 }
 
 // markKey names what a timed reason, a Transcript or a latest event
@@ -52,13 +60,16 @@ type markKey struct {
 }
 
 func newActivity(started time.Time) *activity {
-	return &activity{started: started, pings: map[string]time.Time{}, marks: map[markKey]NeedsMeReason{}}
+	return &activity{started: started, pings: map[string]time.Time{}, shared: map[string]time.Time{}, marks: map[markKey]NeedsMeReason{}}
 }
 
 // Ping is POST /api/ping {session_id}: it marks activity on every live
 // Claim with that session ID, in any Project. Pings within PingThrottle
-// of the session's last counted one are ignored, as is an empty or
-// unknown session ID. It never fails and writes nothing to the store.
+// of the session's last counted one here are ignored, as is an empty
+// session ID. A session ID no Claim has is harmless: it marks nothing. A
+// counted ping is written through to the Store, so about one row a minute
+// per session; a Store that can't be reached is logged and never fails the
+// ping.
 func (c *Core) Ping(_ context.Context, sessionID string) {
 	if sessionID == "" {
 		return
@@ -66,11 +77,38 @@ func (c *Core) Ping(_ context.Context, sessionID string) {
 	now := c.now()
 	a := c.activity
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	if last, ok := a.pings[sessionID]; ok && now.Sub(last) < PingThrottle {
+		a.mu.Unlock()
 		return
 	}
 	a.pings[sessionID] = now
+	a.mu.Unlock()
+	if err := c.store.Services().PutPing(store.Ping{Session: sessionID, At: now, Service: c.service.ID, ServiceHost: c.service.Host}); err != nil {
+		c.logf("cannot record a ping from session %s: %v", sessionID, err)
+	}
+}
+
+// refreshPings prunes the pings older than pingExpiry from the Store and
+// reads the rest, so a ping any service counted is seen here. What it
+// can't read is logged, and memory stands.
+func (c *Core) refreshPings() {
+	services := c.store.Services()
+	if err := services.PrunePings(c.now().Add(-pingExpiry)); err != nil {
+		c.logf("cannot prune the pings: %v", err)
+	}
+	rows, err := services.Pings()
+	if err != nil {
+		c.logf("cannot read the pings: %v", err)
+		return
+	}
+	shared := make(map[string]time.Time, len(rows))
+	for _, p := range rows {
+		shared[p.Session] = p.At
+	}
+	a := c.activity
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.shared = shared
 }
 
 // claimActivity is a Claim's last activity as reads show it: the latest
@@ -84,22 +122,37 @@ func (c *Core) claimActivity(t domain.Ticket, cl domain.Claim) time.Time {
 	return last
 }
 
-// lastPing is a live Claim's session's last counted ping; zero when there
-// is none or the Claim has ended.
+// lastPing is a live Claim's session's last counted ping, on this service
+// or, as of the last tick, any other sharing the Store; zero when there is
+// none or the Claim has ended.
 func (c *Core) lastPing(cl domain.Claim) time.Time {
 	if !cl.Live() || cl.SessionID == "" {
 		return time.Time{}
 	}
 	c.activity.mu.Lock()
 	defer c.activity.mu.Unlock()
-	return c.activity.pings[cl.SessionID]
+	return latest(c.activity.pings[cl.SessionID], c.activity.shared[cl.SessionID])
+}
+
+// latest is the later of a and b.
+func latest(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+	return a
 }
 
 // quietSince is when the Ticket last saw any activity on its live Claim:
-// the latest of service start (pings are not kept across a restart), any
-// write to the Ticket by anyone, and the Claim's own activity. Every write
-// that stores the Claim's activity also sets Updated, so it reads only
-// the Ticket's head and the Claim's pings, as the evaluation does.
+// the latest of service start, any write to the Ticket by anyone, and the
+// Claim's own activity. Every write that stores the Claim's activity also
+// sets Updated, so it reads only the Ticket's head and the Claim's pings,
+// as the evaluation does.
+//
+// Service start is a floor on every service, even on a Shared Store where
+// pings outlive a restart: a service started in the last 30 minutes can
+// lag the others in flagging a Claim as Silent, but never flags one
+// falsely. This is the one exception to "Silent on every service or on
+// none".
 func (c *Core) quietSince(t domain.Ticket, cl domain.Claim) time.Time {
 	last := c.activity.started
 	for _, at := range []time.Time{t.Updated, cl.Started, c.lastPing(cl)} {
