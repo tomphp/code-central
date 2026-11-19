@@ -279,8 +279,8 @@ func (s *ciState) unavailable(rc *repoCI) *CIUnavailableView {
 		return nil
 	}
 	view := &CIUnavailableView{Commit: rc.latest.Commit, Pushed: rc.latest.Pushed}
-	if w := s.c.watchers.view(watcherKey{WatcherCI, s.p.Key}, s.now); !w.watches(rc.name) {
-		view.Cause, view.Message = CIWatcherNotWatching, w.messageFor(rc.name)
+	if w := s.c.watchers.view(watcherKey{WatcherCI, s.p.Key}, s.now); !watcherWatches(w, rc.name) {
+		view.Cause, view.Message = CIWatcherNotWatching, watcherMessageFor(w, rc.name)
 		return view
 	}
 	if slices.ContainsFunc(rc.runs, func(run domain.CIRun) bool { return countsFor(run, rc.latest.Commit) }) {

@@ -31,8 +31,8 @@ flowchart TB
     API["httpapi<br/>REST /api"]
     MCP["mcp<br/>/p/key/mcp"]
     OPS["ops<br/>ops.All(): every operation, bound to *core.Core"]
-    CORE["core<br/>*Core: workflow, landing, CI, chat, views<br/>+ most of the wire types"]
-    WIRE["api<br/>the wire contract (so far the Watcher status contract)"]
+    CORE["core<br/>*Core: workflow, landing, CI, chat, views<br/>+ the wire types not yet moved"]
+    WIRE["api<br/>the wire contract (so far: foundations, CI, landing, runtime, Watcher status)"]
     DOMAIN["domain<br/>records, enums, Landing Policy"]
     STORE["store<br/>Files · SQLite · Postgres"]
     SUP["watchers.Supervise"]
@@ -67,7 +67,7 @@ A second, test-only composition exists: `world/` + `cmd/corewasm` build the real
 
 | Module | Owns | Its contract |
 |---|---|---|
-| `core` | The workflow and every rule over it: Claims, Rounds, triage, Requirements, landing, CI, pull requests, issue and work-item links, chat, usage, the read models. Also the wire types (`*Input`, `*View`, `*Row`, `*Result`), the error codes (`core.Error`, `Invalid`, `NotFound`…), `Ref`, `Actor` and `Decode`. | `*core.Core`'s 150 exported methods; no interface. |
+| `core` | The workflow and every rule over it: Claims, Rounds, triage, Requirements, landing, CI, pull requests, issue and work-item links, chat, usage, the read models. Also the wire types not yet moved to `api` (`*Input`, `*View`, `*Row`, `*Result`), and temporary aliases for those that have (`core/aliases.go`, among them the error codes, `Ref`, `Actor` and `Decode`). | `*core.Core`'s 150 exported methods; no interface. |
 | `ops` | The one list of operations (`ops.All()`, ADR 0063): name, audience, route, input and output types, and the `Call` that binds each to a `*core.Core` method. `ops.Serve` adapts the Core to `ops.Service`, which `httpapi` needs, and `ops.Dispatcher`, which `mcp` needs (ADR 0065). | `ops.Service`, `ops.Dispatcher`, `ops.Definitions()`. |
 | `httpapi`, `mcp` | The two doors: routes and tools derived from `ops`, plus the HTTP API's reads and streams that aren't operations (`Wait`, transcripts, chat feed, usage, Factory posts). | HTTP routes and MCP tools; checked by the cross-door suite in `server/*_test.go`. |
 | `server` | The service's one handler: MCP, HTTP API and the embedded UI behind the Host/Origin Guard, with `server.Calls` wrapping each door's dispatch to set the Actor and record Usage. | `server.Handler`. |
@@ -115,7 +115,8 @@ Found:
 | `ciwatcher`, `pullrequestwatcher` | azdo, clock, core, domain, gh, ratelimit, watchers |
 | `issuewatcher` | clock, core, domain, gh, ratelimit, watchers |
 | `workitemwatcher` | azdo, azdourl, clock, core, domain, gh, ratelimit, watchers |
-| `api` | domain, internal/fieldwalk (so far only the Watcher status contract is in it) |
+| `usage` | api, clock |
+| `api` | domain, internal/fieldwalk (so far the foundations, the CI, landing and runtime types and the Watcher status contract are in it) |
 | `gh` | api, ratelimit |
 | `azdo` | api, azdourl, domain, ratelimit |
 | `ratelimit` | api |
@@ -153,7 +154,9 @@ Ordered by how much they cost. Each recommendation would be its own Ticket.
 
 ### 1. The wire contract lives in `core`
 
-About 200 of `core`'s 318 exported types are the wire contract: inputs, views, rows, results, `Ref`, `Actor`, the error codes and `Decode`. Every client imports `core` for them: `client` names 131 different `core` symbols, `factory` 96, each Watcher about 30. So:
+About 200 of `core`'s 318 exported types were the wire contract: inputs, views, rows, results, `Ref`, `Actor`, the error codes and `Decode`. Every client imports `core` for them: `client` names 131 different `core` symbols, `factory` 96, each Watcher about 30.
+
+**Progress (Spec code-central-1111, ADR 0072):** the foundations (`Error` and its codes, `Ref`, `Actor`, `Decode`, the `Part*` constants) and the CI, landing and runtime types (CI, Repositories, pull requests, Base, Clone, Factory and Models, Usage, Storage, Needs Me reasons) are now in `api`. `core` keeps temporary aliases (`core/aliases.go`) so its callers still compile; the last part of the move drops them. The Ticket, Spec, Project and Chat types are still in `core`, and the clients still import `core` until then. So:
 
 - every client links the whole Core, the Store and the database drivers (see above);
 - nothing but review stops a client calling `core.New` or a Core method in process;

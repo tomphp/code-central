@@ -16,7 +16,7 @@ import (
 // resolveTicket reads the Ticket ref names as op's field, with the
 // History parts named.
 func resolveTicket(r store.Reader, key, op, field string, ref Ref, parts ...store.Part) (domain.Ticket, error) {
-	n, err := ref.number(key, field)
+	n, err := refNumber(ref, key, field)
 	if err != nil {
 		return domain.Ticket{}, err
 	}
@@ -36,7 +36,7 @@ func ticketNumbered(r store.Reader, key, op, field string, n int, parts ...store
 
 // resolveSpec reads the Spec ref names as op's field.
 func resolveSpec(r store.Reader, key, op, field string, ref Ref) (domain.Spec, error) {
-	n, err := ref.number(key, field)
+	n, err := refNumber(ref, key, field)
 	if err != nil {
 		return domain.Spec{}, err
 	}

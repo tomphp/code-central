@@ -409,7 +409,7 @@ func (c *Core) updateLink(ctx context.Context, key string, ref Ref, fn func(l *d
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		n, err := ref.number(key, "target")
+		n, err := refNumber(ref, key, "target")
 		if err != nil {
 			return err
 		}

@@ -106,47 +106,25 @@ var watcherKinds = map[WatcherKind]watcherKind{
 			ProblemTooManyWorkItems, ProblemCheckFailed}, watches: "Azure Boards", watched: func(domain.Project) []string { return nil }},
 }
 
-// WatcherView is a Project's Watcher's status, in its kind's settings.
-type WatcherView struct {
-	State WatcherState `json:"state"`
-	// Problem, Message and Fix say what is wrong, while in error.
-	Problem WatcherProblem `json:"problem,omitempty"`
-	Message string         `json:"message,omitempty"`
-	Fix     string         `json:"fix,omitempty"`
-	// Repositories are the Repositories it can't watch, each with its
-	// problem and fix, while in error about some of them only: it carries
-	// on watching the rest.
-	Repositories []RepositoryProblem `json:"repositories,omitempty"`
-	// RateLimitedUntil is when GitHub lets a rate-limited Watcher call it
-	// again; until then it is still Watching, not in error.
-	RateLimitedUntil time.Time `json:"rate_limited_until,omitzero"`
-	// Since is when the Watcher went into this state; nil until it
-	// reports.
-	Since *time.Time `json:"since,omitempty"`
-	// Host is the machine whose service holds the Project's Watcher
-	// Lease, and so runs the Watcher, once a Lease is known.
-	Host string `json:"host,omitempty"`
-}
-
-// equal reports whether v and w say the same, Since aside.
-func (v WatcherView) equal(w WatcherView) bool {
+// watcherViewsEqual reports whether v and w say the same, Since aside.
+func watcherViewsEqual(v, w WatcherView) bool {
 	return v.State == w.State && v.Problem == w.Problem && v.Message == w.Message && v.Fix == w.Fix &&
 		v.RateLimitedUntil.Equal(w.RateLimitedUntil) && slices.Equal(v.Repositories, w.Repositories)
 }
 
-// watches reports whether the Watcher watches the Repository name: it is
-// Watching, or in error only about other Repositories. One another
-// service runs is taken to watch it, as this service can't tell.
-func (v WatcherView) watches(name string) bool {
+// watcherWatches reports whether the Watcher v watches the Repository
+// name: it is Watching, or in error only about other Repositories. One
+// another service runs is taken to watch it, as this service can't tell.
+func watcherWatches(v WatcherView, name string) bool {
 	if v.State == WatcherWatching || v.State == WatcherElsewhere {
 		return true
 	}
 	return len(v.Repositories) > 0 && !slices.ContainsFunc(v.Repositories, func(p RepositoryProblem) bool { return p.Repository == name })
 }
 
-// messageFor is what the Watcher says about the Repository name while it
-// doesn't watch it: its own problem's message, or the Watcher's.
-func (v WatcherView) messageFor(name string) string {
+// watcherMessageFor is what the Watcher v says about the Repository name
+// while it doesn't watch it: its own problem's message, or the Watcher's.
+func watcherMessageFor(v WatcherView, name string) string {
 	if i := slices.IndexFunc(v.Repositories, func(p RepositoryProblem) bool { return p.Repository == name }); i >= 0 {
 		return v.Repositories[i].Message
 	}
@@ -277,7 +255,7 @@ func (w *watchers) set(k watcherKey, next WatcherView, now time.Time) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	s, ok := w.all[k]
-	if ok && s.view.equal(next) {
+	if ok && watcherViewsEqual(s.view, next) {
 		return false
 	}
 	was := s.view
@@ -293,27 +271,6 @@ func (w *watchers) set(k watcherKey, next WatcherView, now time.Time) bool {
 	s.view = next
 	w.all[k] = s
 	return true
-}
-
-// ReportWatcherStatusInput is a Watcher's status report: for the CI
-// Watcher, report_ci_watcher_status(state, problem?, message?, fix?,
-// rate_limited_until?, full?).
-type ReportWatcherStatusInput struct {
-	// State is watching or error.
-	State   WatcherState   `json:"state"`
-	Problem WatcherProblem `json:"problem,omitempty"`
-	// Message and Fix are an error's; watching drops them.
-	Message string `json:"message,omitempty"`
-	Fix     string `json:"fix,omitempty"`
-	// RateLimitedUntil is when GitHub lets a Watching Watcher call it
-	// again, while it is rate-limited.
-	RateLimitedUntil time.Time `json:"rate_limited_until,omitzero"`
-	// Repositories are the Repositories an error is about, each with its
-	// own problem and fix, while the Watcher carries on watching the
-	// others; an error with only these reads as the first one's.
-	Repositories []RepositoryProblem `json:"repositories,omitempty"`
-	// Full asks for the Project in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
 }
 
 // repositoryProblems is ps checked as a k Watcher's: each names a

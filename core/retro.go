@@ -82,7 +82,7 @@ type retroTarget struct {
 // resolveRetroTarget reads the finished work ref names: a Done or
 // Cancelled Ticket, or a Finished Spec that isn't Long-lived.
 func resolveRetroTarget(r store.Reader, key string, ref Ref) (retroTarget, error) {
-	n, err := ref.number(key, "target")
+	n, err := refNumber(ref, key, "target")
 	if err != nil {
 		return retroTarget{}, err
 	}

@@ -19,23 +19,6 @@ import (
 // acts on items already waiting too. Recording the fix Ticket on the
 // commit's response keeps the item out of Needs Me, as for a manual one.
 
-// AutoFixMarkView is an auto fix Ticket's Auto-fix mark as its view
-// carries it.
-type AutoFixMarkView struct {
-	// Attempt is its Auto-fix attempt, 1 for the first in its chain.
-	Attempt int `json:"attempt"`
-	// Repository is the Repository Name of the commit it was opened for,
-	// left out while the Project has the Home Repository alone.
-	Repository string `json:"repository,omitempty"`
-	Commit     string `json:"commit"`
-	// Covers are the Tickets its CI failed item listed when it was
-	// opened.
-	Covers []string `json:"covers"`
-	// Previous is the previous attempt's fix Ticket, left out for attempt
-	// 1.
-	Previous string `json:"previous,omitempty"`
-}
-
 // autoFixMarkView is m's view in p, nil for none.
 func autoFixMarkView(p domain.Project, m *domain.AutoFixMark) *AutoFixMarkView {
 	if m == nil {

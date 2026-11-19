@@ -17,20 +17,6 @@ import (
 // Factory's poll decides what to do. The open calls are held in memory
 // only, and a wake with no call open is not remembered.
 
-// FactoryWake is what next_factory_wake returns: Woken when a change the
-// Factory's poll acts on ended the call, and empty when it timed out, a
-// newer call replaced it or its request ended.
-type FactoryWake struct {
-	Woken bool `json:"woken,omitempty"`
-}
-
-// NextFactoryWakeInput is the Factory's next_factory_wake(factory, host),
-// named as its Heartbeat names it.
-type NextFactoryWakeInput struct {
-	Factory string `json:"-" query:"factory"`
-	Host    string `json:"-" query:"host"`
-}
-
 // longPoll is one open long-poll call: next_chat_work or
 // next_factory_wake. wake fires when there may be something for it;
 // replaced is closed when a newer call from the same Factory takes its

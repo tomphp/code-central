@@ -408,7 +408,7 @@ func (c *Core) updateTargetThen(key string, ref Ref, fn targetFn,
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		n, err := ref.number(key, "target")
+		n, err := refNumber(ref, key, "target")
 		if err != nil {
 			return err
 		}

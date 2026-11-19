@@ -16,24 +16,6 @@ import (
 // those that haven't with these reasons, and the Ticket's Repositories
 // section shows them, while the Project has several Repositories.
 
-// NotLandedView is an Accepted but not landed item's Repositories, while
-// the Project has several: those its Ticket has landed in, and those it
-// hasn't, each with why, in landing order.
-type NotLandedView struct {
-	Landed    []string                  `json:"landed"`
-	NotLanded []NotLandedRepositoryView `json:"not_landed"`
-}
-
-// NotLandedRepositoryView is a Changed Repository a Ticket hasn't landed
-// in, and why.
-type NotLandedRepositoryView struct {
-	Name string `json:"name"`
-	// Reason is why: its broken base, or what the Factory last said about
-	// it since the Ticket was accepted; left out when there's none to
-	// give.
-	Reason string `json:"reason,omitempty"`
-}
-
 // cantLandLead starts the Factory's comment that it can't land a Ticket's
 // work in a Repository yet.
 const cantLandLead = "The Factory can't land this in "

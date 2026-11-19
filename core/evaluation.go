@@ -105,7 +105,7 @@ func (e *evaluation) evaluated() *evaluation {
 			continue
 		}
 		e.reasons[t.Number] = ticketReason{reason, since}
-		if reason.isCIItem() {
+		if isCIItem(reason) {
 			listed = append(listed, t)
 		}
 	}
@@ -325,7 +325,7 @@ func (e *evaluation) items() []needsMeItem {
 		add(e.ciItemRow(it), 0, it.commit)
 	}
 	for _, t := range e.list {
-		if tr, ok := e.reasons[t.Number]; ok && !tr.reason.isCIItem() {
+		if tr, ok := e.reasons[t.Number]; ok && !isCIItem(tr.reason) {
 			add(e.row(t, tr), t.Number, "")
 		}
 	}

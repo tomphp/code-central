@@ -1,4 +1,4 @@
-package core
+package api
 
 import (
 	"bytes"
@@ -6,11 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/tomoram/code-central/internal/fieldwalk"
 	"reflect"
 	"regexp"
 	"strings"
-
-	"github.com/tomoram/code-central/internal/fieldwalk"
 )
 
 var unknownField = regexp.MustCompile(`unknown field "([^"]+)"`)
