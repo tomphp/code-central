@@ -17,26 +17,37 @@ async function seeded() {
   return { w, s, id };
 }
 
-async function renderPane(w: World, id: string) {
-  const r = await renderLive(w, <SpecPane spec={await w.api.getSpec("acme", id)} now={w.now()} select={() => {}} />);
-  return { ...r, reread: async () => r.rerender(<SpecPane spec={await w.api.getSpec("acme", id)} now={w.now()} select={() => {}} />) };
+// renderPane renders the pane on the Spec as read now; reread renders it
+// again on a fresh read, as the App does after a change.
+async function renderPane(w: World, id: string, archived?: boolean) {
+  const pane = async () => <SpecPane spec={await w.api.getSpec("acme", id)} archived={archived} now={w.now()} select={() => {}} />;
+  const r = await renderLive(w, await pane());
+  return { ...r, reread: async () => r.rerender(await pane()) };
 }
 
 const tags = () => screen.getByRole("region", { name: "Tags" });
 const row = (key: string) => within(tags()).getByRole("listitem", { name: key });
 const addForm = () => within(tags()).getByRole("form", { name: "Add a Tag" });
+const tagsOf = async (w: World, id: string) => (await w.api.getSpec("acme", id)).tags;
 
-async function add(key: string, value: string) {
+async function add(w: World, key: string, value: string) {
   await userEvent.type(within(addForm()).getByLabelText("Tag key"), key);
   await userEvent.type(within(addForm()).getByLabelText("Tag value"), value);
   await userEvent.click(within(addForm()).getByRole("button", { name: "Add" }));
+  await settle(w);
 }
 
-async function edit(key: string, value: string) {
+async function edit(w: World, key: string, value: string) {
   const input = within(row(key)).getByLabelText(`${key} Tag value`);
   await userEvent.clear(input);
   await userEvent.type(input, value);
   await userEvent.click(within(row(key)).getByRole("button", { name: `Save ${key}` }));
+  await settle(w);
+}
+
+async function remove(w: World, key: string) {
+  await userEvent.click(within(row(key)).getByRole("button", { name: `Remove ${key}` }));
+  await settle(w);
 }
 
 describe("the Spec pane's Tags", () => {
@@ -49,29 +60,26 @@ describe("the Spec pane's Tags", () => {
   it("adds a branch Tag, then edits and removes it", async () => {
     const { w, id } = await seeded();
     const { reread } = await renderPane(w, id);
-    await add("branch", "feat/4711");
-    await settle(w);
-    expect((await w.api.getSpec("acme", id)).tags).toEqual({ branch: "feat/4711" });
+    await add(w, "branch", "feat/4711");
+    expect(await tagsOf(w, id)).toEqual({ branch: "feat/4711" });
 
     await reread();
     expect(within(row("branch")).getByLabelText("branch Tag value")).toHaveValue("feat/4711");
-    await edit("branch", "feat/4712");
-    await settle(w);
-    expect((await w.api.getSpec("acme", id)).tags).toEqual({ branch: "feat/4712" });
+    await edit(w, "branch", "feat/4712");
+    expect(await tagsOf(w, id)).toEqual({ branch: "feat/4712" });
 
     await reread();
-    await userEvent.click(within(row("branch")).getByRole("button", { name: "Remove branch" }));
-    await settle(w);
-    expect((await w.api.getSpec("acme", id)).tags).toEqual({});
+    await remove(w, "branch");
+    expect(await tagsOf(w, id)).toEqual({});
   });
 
   it("shows a refused branch name beside the new Tag, and keeps the draft", async () => {
     const { w, id } = await seeded();
     await renderPane(w, id);
-    await add("branch", "spec/x");
+    await add(w, "branch", "spec/x");
     expect(within(addForm()).getByRole("alert")).toHaveTextContent(/spec\//);
     expect(within(addForm()).getByLabelText("Tag value")).toHaveValue("spec/x");
-    expect((await w.api.getSpec("acme", id)).tags).toEqual({});
+    expect(await tagsOf(w, id)).toEqual({});
   });
 
   it("shows a clash naming the other Spec beside the Tag", async () => {
@@ -80,7 +88,7 @@ describe("the Spec pane's Tags", () => {
     await w.api.setTags("acme", other, { branch: "feat/4711" });
     await w.api.setTags("acme", id, { branch: "feat/1" });
     await renderPane(w, id);
-    await edit("branch", "feat/4711");
+    await edit(w, "branch", "feat/4711");
     expect(within(row("branch")).getByRole("alert")).toHaveTextContent(other);
   });
 
@@ -89,8 +97,17 @@ describe("the Spec pane's Tags", () => {
     await w.api.setTags("acme", id, { branch: "feat/4711" });
     await s.ticket("acme", { title: "Add a page", spec: id, state: "In Progress" });
     await renderPane(w, id);
-    await userEvent.click(within(row("branch")).getByRole("button", { name: "Remove branch" }));
+    await remove(w, "branch");
     expect(within(row("branch")).getByRole("alert")).toHaveTextContent(/already exists/);
-    expect((await w.api.getSpec("acme", id)).tags).toEqual({ branch: "feat/4711" });
+    expect(await tagsOf(w, id)).toEqual({ branch: "feat/4711" });
+  });
+
+  it("offers no write while the Project is Archived", async () => {
+    const { w, id } = await seeded();
+    await w.api.setTags("acme", id, { area: "web" });
+    await renderPane(w, id, true);
+    expect(within(row("area")).getByLabelText("area Tag value")).toBeDisabled();
+    expect(within(row("area")).getByRole("button", { name: "Remove area" })).toBeDisabled();
+    expect(within(addForm()).getByLabelText("Tag key")).toBeDisabled();
   });
 });

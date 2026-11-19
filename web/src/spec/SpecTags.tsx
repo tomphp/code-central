@@ -7,6 +7,7 @@ import { useState, type FormEvent } from "react";
 import { projectOf } from "../api/api";
 import type { SpecDetail } from "../api/types";
 import { Button } from "../controls/Button";
+import { ErrorBanner } from "../controls/ErrorBanner";
 import { useApi } from "../live";
 import { useAct } from "../ticket/useAct";
 
@@ -27,25 +28,26 @@ export function SpecTags({ spec, archived }: SpecTagsProps) {
         <ul className="spec-tags-list">
           {/* Keyed on the value too, so the draft follows a change made elsewhere. */}
           {entries.map(([key, value]) => (
-            <TagRow key={`${key}=${value}`} spec={spec.id} tagKey={key} value={value} archived={archived} />
+            <TagRow key={`${key}=${value}`} id={spec.id} tagKey={key} value={value} archived={archived} />
           ))}
         </ul>
       )}
-      <AddTag spec={spec.id} archived={archived} />
+      <AddTag id={spec.id} archived={archived} />
     </section>
   );
 }
 
-function TagRow({ spec, tagKey, value, archived }: { spec: string; tagKey: string; value: string; archived?: boolean }) {
+// TagRow edits or removes the Tag tagKey of the Spec id.
+function TagRow({ id, tagKey, value, archived }: { id: string; tagKey: string; value: string; archived?: boolean }) {
   const api = useApi();
   const { busy, error, run } = useAct();
   const [draft, setDraft] = useState(value);
   const next = draft.trim();
   const save = (e: FormEvent) => {
     e.preventDefault();
-    void run(() => api.setTags(projectOf(spec), spec, { [tagKey]: next }));
+    void run(() => api.setTags(projectOf(id), id, { [tagKey]: next }));
   };
-  const remove = () => run(() => api.removeTags(projectOf(spec), spec, [tagKey]));
+  const remove = () => void run(() => api.removeTags(projectOf(id), id, [tagKey]));
   return (
     <li aria-label={tagKey}>
       <form className="spec-tag" onSubmit={save}>
@@ -58,16 +60,13 @@ function TagRow({ spec, tagKey, value, archived }: { spec: string; tagKey: strin
           Remove
         </Button>
       </form>
-      {error && (
-        <p role="alert" className="warning">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
     </li>
   );
 }
 
-function AddTag({ spec, archived }: { spec: string; archived?: boolean }) {
+// AddTag adds a Tag to the Spec id, or sets it if the Spec has one of that key.
+function AddTag({ id, archived }: { id: string; archived?: boolean }) {
   const api = useApi();
   const { busy, error, run } = useAct();
   const [key, setKey] = useState("");
@@ -76,7 +75,7 @@ function AddTag({ spec, archived }: { spec: string; archived?: boolean }) {
   const add = async (e: FormEvent) => {
     e.preventDefault();
     // A refusal keeps the draft, to correct it.
-    if (await run(() => api.setTags(projectOf(spec), spec, { [tag.key]: tag.value }))) {
+    if (await run(() => api.setTags(projectOf(id), id, { [tag.key]: tag.value }))) {
       setKey("");
       setValue("");
     }
@@ -90,11 +89,7 @@ function AddTag({ spec, archived }: { spec: string; archived?: boolean }) {
           Add
         </Button>
       </div>
-      {error && (
-        <p role="alert" className="warning">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
     </form>
   );
 }
