@@ -70,9 +70,9 @@ func (l *lander) landPullRequestIn(ctx context.Context, tk core.TicketView, poli
 	if branch == "" || onSpec {
 		return
 	}
-	head, _, err := l.workIn(r, tk)
+	head, what, err := l.workIn(r, tk)
 	if err != nil {
-		l.cantPushYet(ctx, tk, fmt.Sprintf("its work in %s, %s, isn't in that Repository.", r.name, rec.Commit))
+		l.cantPushYet(ctx, tk, what+" isn't in this repository.")
 		return
 	}
 	if rec.PullRequest == nil && !l.pushedAlreadyIn(r, branch) && l.baseHolds(r, head) {

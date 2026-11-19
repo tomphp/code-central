@@ -227,3 +227,38 @@ func TestUnderPullRequestWithRebaseASpecBranchConflictingWithTheFetchedBaseOpens
 		t.Errorf("the remote's %s is at %s, want it left at %s while it conflicts", branch, got, first)
 	}
 }
+
+func TestUnderPullRequestWithRebaseATicketConflictingInOneRepositoryIsRebasedAndPushedInNeither(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	home := h.AddRemote("origin")
+	api := h.AddRepository("api")
+	rebasePullRequestOn(h, "origin", false)
+	id := inTwo(h, "Add an endpoint")
+	r := h.Start()
+	h.WantState(id, domain.InReview)
+	// Both remote bases move on: the Home Repository's cleanly, api's in
+	// conflict.
+	moveRemoteBase(h, home, "base.txt", "base\n")
+	api.CommitOn("upstream", "endpoint.go", "package other\n")
+	h.GitIn(api.Path, "push", "-q", "origin", "upstream:refs/heads/main")
+	homeBranch, apiBranch := h.Git("rev-parse", id), h.GitIn(api.Path, "rev-parse", id)
+	h.Script(id, factorytest.Wait())
+
+	h.Accept(id)
+	r.Poll()
+
+	tk := h.Ticket(id)
+	if !movedTo(tk, domain.Accepted, domain.Ready) {
+		t.Fatalf("%s wasn't sent back: %+v", id, tk.Moves)
+	}
+	if h.Git("rev-parse", id) != homeBranch || h.GitIn(api.Path, "rev-parse", id) != apiBranch {
+		t.Error("a branch moved: a Ticket conflicting in any Repository is rebased in none")
+	}
+	if strings.TrimSpace(home.Git("branch", "--list", id)) != "" || strings.TrimSpace(api.Remote("origin").Git("branch", "--list", id)) != "" {
+		t.Error("a branch was pushed: a Ticket conflicting in any Repository is pushed in none")
+	}
+	if !commented(tk, "- api: replaying", "  - endpoint.go", "In each, rebase the branch onto its base") || commented(tk, "- "+h.Project+":") {
+		t.Fatalf("comments %+v, want the send-back note to name api and its file alone, and say to rebase", tk.Comments)
+	}
+}

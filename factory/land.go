@@ -151,7 +151,7 @@ func (l *lander) landEach(ctx context.Context, tk core.TicketView, p core.Projec
 	policies := p.LandingPolicies()
 	onSpec := l.waitsOnSpecBranch(tk)
 	routes := make([]domain.LandingRoute, len(ws))
-	var merges, specs, pulls []changedWork
+	var merges, specs, pullRequests []changedWork
 	for i, w := range ws {
 		routes[i] = w.r.policy(policies).Route(onSpec, pullRequestMergedIn(tk, w.r))
 		switch routes[i] {
@@ -160,7 +160,7 @@ func (l *lander) landEach(ctx context.Context, tk core.TicketView, p core.Projec
 		case domain.RouteSpecBranch:
 			specs = append(specs, w)
 		case domain.RoutePullRequest:
-			pulls = append(pulls, w)
+			pullRequests = append(pullRequests, w)
 		}
 	}
 	plans, conflicts, ok := l.planMerges(ctx, tk, policies, merges)
@@ -170,7 +170,7 @@ func (l *lander) landEach(ctx context.Context, tk core.TicketView, p core.Projec
 	var rebases map[*repository]pushRebase
 	if !onSpec {
 		var more []landConflict
-		if rebases, more, ok = l.planPushRebases(ctx, tk, policies, pulls); !ok {
+		if rebases, more, ok = l.planPushRebases(ctx, tk, policies, pullRequests); !ok {
 			return
 		}
 		conflicts = append(conflicts, more...)
