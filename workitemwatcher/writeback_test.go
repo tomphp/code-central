@@ -381,3 +381,59 @@ func (w *watching) implementation(spec, title string) string {
 	}
 	return out.Record.ID
 }
+
+// Under Hide Code Central, the Watcher posts each comment in the hidden
+// form and makes no tag call: the code-central: tag already on the work
+// item, and the human's own, stay as they are.
+func TestUnderHideCodeCentralTheHiddenCommentIsPostedAndNoTagIsWritten(t *testing.T) {
+	w := newWatching(t)
+	w.setBoards(core.SetAzureBoardsInput{On: true, QueryURL: w.queryURL(queryID), HideCodeCentral: true})
+	tagged := item(1)
+	tagged.Tags = "frontend; code-central:draft"
+	w.fake.PutWorkItems(tagged)
+	w.fake.SavedQuery(queryID, 1)
+	w.start()
+	w.status(core.WatcherWatching)
+	wantIncoming(t, w, 1)
+	spec := w.toRequirement(1, "  Seen on every login.  ")
+	w.polled()
+	if got, want := w.markdown(1), []string{core.OpaqueMarker(spec, core.CommentContext) + "\nSeen on every login."}; !slices.Equal(got, want) {
+		t.Fatalf("comments %q, want %q", got, want)
+	}
+	if got := w.patches(0); len(got) != 0 {
+		t.Fatalf("patches %q, want no tag call", got)
+	}
+	if got := w.tags(1); got != "frontend; code-central:draft" {
+		t.Fatalf("tags %q, want them left as they were", got)
+	}
+	if due := w.watch().Writes; len(due) != 0 {
+		t.Fatalf("writes due after = %+v, want the comment reported written", due)
+	}
+	w.wantNoStateChange()
+}
+
+// A comment is taken as posted if the work item has either its branded
+// or its opaque marker, whatever the setting, so a crash around a change
+// of the setting never posts it twice.
+func TestEitherMarkerOnTheWorkItemStopsTheCommentBeingPostedAgain(t *testing.T) {
+	for _, hide := range []bool{false, true} {
+		for name, marker := range map[string]func(target, key string) string{"branded": core.IssueMarker, "opaque": core.OpaqueMarker} {
+			t.Run(fmt.Sprintf("%s marker, hidden %t", name, hide), func(t *testing.T) {
+				w := newWatching(t)
+				w.setBoards(core.SetAzureBoardsInput{On: true, QueryURL: w.queryURL(queryID), HideCodeCentral: hide})
+				w.arrived(1)
+				spec := w.toRequirement(1, "Seen on every login.")
+				w.fake.PutComment(1, marker(spec, core.CommentContext)+"\nSeen on every login.")
+				w.polled()
+				if got := w.fake.Comments(1); len(got) != 1 {
+					t.Fatalf("comments %+v, want the one there already, not posted again", got)
+				}
+				for _, due := range w.watch().Writes {
+					if len(due.Comments) != 0 {
+						t.Fatalf("writes due %+v, want the comment reported written", due)
+					}
+				}
+			})
+		}
+	}
+}

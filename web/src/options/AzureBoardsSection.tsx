@@ -51,13 +51,14 @@ function azureDraft(project: ProjectRow): AzureBoardsChange {
     where: a.where,
     pat_env: a.pat_env,
     new_issues_need_me: a.new_issues_need_me,
+    hide_code_central: a.hide_code_central,
   };
 }
 
 // AzureBoardsSection is the Project's Azure Boards settings (Spec
 // code-central-894): the switch, the mode (a Saved query's URL, or a WIQL
 // filter's project URL and WHERE clause), the PAT variable and New issues
-// need me. Turning it on, or changing a setting while it is on, runs the
+// need me and Hide Code Central. Turning it on, or changing a setting while it is on, runs the
 // check, whose refusal shows in place with its fix; while it is on, the
 // Work Item Watcher's status shows below. Like the other sections it
 // follows the Project as read.
@@ -70,10 +71,10 @@ export function AzureBoardsSection({ project }: { project: ProjectRow }) {
   const [error, setError] = useState<ApiError>();
   const [saved, setSaved] = useState(false);
   const id = useId();
-  const { on, mode, query_url, project_url, where, pat_env, new_issues_need_me } = stored;
+  const { on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central } = stored;
   useEffect(
-    () => setDraft({ on, mode, query_url, project_url, where, pat_env, new_issues_need_me }),
-    [on, mode, query_url, project_url, where, pat_env, new_issues_need_me],
+    () => setDraft({ on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central }),
+    [on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central],
   );
 
   const edit = (patch: Partial<AzureBoardsChange>) => {
@@ -99,7 +100,8 @@ export function AzureBoardsSection({ project }: { project: ProjectRow }) {
     draft.project_url.trim() !== project_url ||
     draft.where.trim() !== where ||
     draft.pat_env.trim() !== pat_env ||
-    draft.new_issues_need_me !== new_issues_need_me;
+    draft.new_issues_need_me !== new_issues_need_me ||
+    draft.hide_code_central !== hide_code_central;
   const describedBy = (field: string, hint: string) =>
     error?.field === field ? `${hint} ${id}-error` : hint;
   const invalid = (field: string) => error?.field === field || undefined;
@@ -227,6 +229,22 @@ export function AzureBoardsSection({ project }: { project: ProjectRow }) {
           <p className="project-options-hint" id={`${id}-need-me`}>
             Each new Incoming Issue also shows in Needs Me and Focus Mode until
             you triage it.
+          </p>
+        </div>
+        <div className="project-options-choice">
+          <label>
+            <input
+              type="checkbox"
+              checked={draft.hide_code_central}
+              onChange={(e) => edit({ hide_code_central: e.target.checked })}
+              aria-describedby={`${id}-hide`}
+            />{" "}
+            Hide Code Central
+          </label>
+          <p className="project-options-hint" id={`${id}-hide`}>
+            Write-back still posts every comment, but writes no{" "}
+            <code>code-central:</code> tag, no link back and no Spec or Ticket
+            IDs. Tags and comments already on work items stay as they are.
           </p>
         </div>
         {azure.spec && <p className="muted">Incoming Issues arrive on {azure.spec}.</p>}

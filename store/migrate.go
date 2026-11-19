@@ -98,6 +98,7 @@ var migrations = []MigrationStep{
 	{From: 51, Name: "add a Project's Auto-fix setting"},
 	{From: 52, Name: "add an auto fix Ticket's Auto-fix mark"},
 	{From: 53, Name: "add a Project's Rebase landing option"},
+	{From: 54, Name: "add an Azure Boards setting Hide Code Central"},
 }
 
 // githubIssuesRepositoryBecomesAList is format 46 to 47 (Spec

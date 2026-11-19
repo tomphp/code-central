@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/url"
 	"slices"
@@ -95,7 +97,9 @@ type IssueWrites struct {
 
 // IssueComment is a comment due on an issue: its key, stable for the
 // item, and its Markdown body ready to post, which carries the hidden
-// marker IssueMarker gives and ends with a link back to the item.
+// marker IssueMarker gives and ends with a link back to the item. Under
+// Hide Code Central it carries the marker OpaqueMarker gives instead, and
+// no link back.
 type IssueComment struct {
 	Key  string `json:"key"`
 	Body string `json:"body"`
@@ -106,6 +110,15 @@ type IssueComment struct {
 // again after a crash.
 func IssueMarker(target, key string) string {
 	return fmt.Sprintf("<!-- code-central %s %s -->", target, key)
+}
+
+// OpaqueMarker is IssueMarker as Hide Code Central writes it: an HTML
+// comment holding only the first 12 hex digits of the SHA-256 of target
+// and key joined by a space, so it names neither Code Central nor the
+// item.
+func OpaqueMarker(target, key string) string {
+	sum := sha256.Sum256([]byte(target + " " + key))
+	return "<!-- " + hex.EncodeToString(sum[:])[:12] + " -->"
 }
 
 // SetUIURL makes url, such as http://localhost:7733, the UI's address
@@ -122,8 +135,11 @@ const (
 
 // issueComment is the comment key on target, with text, as it is posted.
 // Its link back opens target in the UI by open, ticketLink or
-// requirementLink.
-func (c *Core) issueComment(target, open, key, text string) IssueComment {
+// requirementLink. Hidden, it is the opaque marker and the text alone.
+func (c *Core) issueComment(hide bool, target, open, key, text string) IssueComment {
+	if hide {
+		return IssueComment{Key: key, Body: OpaqueMarker(target, key) + "\n" + strings.TrimSpace(text)}
+	}
 	link := fmt.Sprintf("[%s in Code Central](%s/?view=inbox&%s%s)", target, c.uiURL, open, url.QueryEscape(target))
 	return IssueComment{Key: key, Body: IssueMarker(target, key) + "\n" + strings.TrimSpace(text) + "\n\n" + link}
 }
@@ -150,8 +166,10 @@ func triageComment(t domain.Ticket, via TriageAction) (comment string, latest, o
 // integrationWrites is what is due on each of integration's Links in key,
 // in number order: on the Tickets on its inbox Spec, and on the Specs
 // with an outbound Link through it. There is none before the Integration
-// is first turned on.
-func (c *Core) integrationWrites(r store.Reader, key, integration string) []IssueWrites {
+// is first turned on. hide writes as Hide Code Central does: each comment
+// in the hidden form and no status label. The comments due are the same
+// either way.
+func (c *Core) integrationWrites(r store.Reader, key, integration string, hide bool) []IssueWrites {
 	out := []IssueWrites{}
 	in := inboxOf(r, key, integration)
 	if in.spec == 0 {
@@ -160,17 +178,20 @@ func (c *Core) integrationWrites(r store.Reader, key, integration string) []Issu
 	byNumber := map[int]IssueWrites{}
 	link := &store.LinkFilter{Integration: integration}
 	for _, s := range r.FindSpecs(key, store.SpecFilter{Link: link}) {
-		if w, ok := c.specIssueWrites(r, key, s); ok {
+		if w, ok := c.specIssueWrites(r, key, s, hide); ok {
 			byNumber[s.Number] = w
 		}
 	}
 	for _, t := range r.FindTickets(key, store.TicketFilter{Spec: []int{in.spec}, Link: link, Parts: []store.Part{store.Moves, store.Comments}}) {
-		if w, ok := c.ticketIssueWrites(key, t); ok {
+		if w, ok := c.ticketIssueWrites(r, key, t, hide); ok {
 			byNumber[t.Number] = w
 		}
 	}
 	for n := 1; n < r.NextNumber(key); n++ {
 		if w, ok := byNumber[n]; ok {
+			if hide {
+				w.Label = ""
+			}
 			out = append(out, w)
 		}
 	}
@@ -178,8 +199,9 @@ func (c *Core) integrationWrites(r store.Reader, key, integration string) []Issu
 }
 
 // ticketIssueWrites is what is due on the issue t, a Ticket on key's
-// inbox Spec, is linked to; ok is false when nothing is.
-func (c *Core) ticketIssueWrites(key string, t domain.Ticket) (w IssueWrites, ok bool) {
+// inbox Spec, is linked to, its comments hidden as hide asks; ok is false
+// when nothing is.
+func (c *Core) ticketIssueWrites(r store.Reader, key string, t domain.Ticket, hide bool) (w IssueWrites, ok bool) {
 	if !t.Link.Attached() {
 		return IssueWrites{}, false
 	}
@@ -188,7 +210,7 @@ func (c *Core) ticketIssueWrites(key string, t domain.Ticket) (w IssueWrites, ok
 	if reason, latest, _ := triageComment(t, OptionWontFix); latest {
 		w.Label, w.Close = LabelWontFix, CloseNotPlanned
 		if strings.TrimSpace(reason) != "" && !slices.Contains(t.Link.Written, CommentWontFix) {
-			w.Comments = append(w.Comments, c.issueComment(id, ticketLink, CommentWontFix, reason))
+			w.Comments = append(w.Comments, c.issueComment(hide, id, ticketLink, CommentWontFix, writtenText(r, key, reason, hide)))
 		}
 	} else if t.State == domain.Draft || t.State == domain.Ready {
 		w.Label = LabelDraft
@@ -197,14 +219,15 @@ func (c *Core) ticketIssueWrites(key string, t domain.Ticket) (w IssueWrites, ok
 }
 
 // specIssueWrites is what is due on the issue s, a Spec with an outbound
-// Link that isn't detached, is linked to; ok is false when nothing is.
+// Link that isn't detached, is linked to, its comments hidden as hide
+// asks; ok is false when nothing is.
 // The comments come due as the Requirement goes on: the context To
 // Requirement was given, the grilling resolution and the Spec's body as
 // their Stages are Done, each implementation Ticket as it is Done, and
 // what landed once the Spec is Finished. The label follows the work, and
 // the issue is closed once the Spec is Finished: as completed if
 // anything landed, as not planned if nothing did.
-func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec) (w IssueWrites, ok bool) {
+func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec, hide bool) (w IssueWrites, ok bool) {
 	if !s.Link.Attached() || !s.Link.Outbound {
 		return IssueWrites{}, false
 	}
@@ -212,10 +235,10 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec) (w Iss
 	w = IssueWrites{Target: id, Link: *linkView(s.Link), Comments: []IssueComment{}}
 	due := func(k, text string) {
 		if strings.TrimSpace(text) != "" && !slices.Contains(s.Link.Written, k) {
-			w.Comments = append(w.Comments, c.issueComment(id, requirementLink, k, text))
+			w.Comments = append(w.Comments, c.issueComment(hide, id, requirementLink, k, text))
 		}
 	}
-	due(CommentContext, requirementContext(r, key, s.Link))
+	due(CommentContext, writtenText(r, key, requirementContext(r, key, s.Link), hide))
 	tickets := specTickets(r, key, s.Number, store.Moves, store.Comments)
 	stages, stagesDone := map[StageName]domain.Ticket{}, true
 	var landed []domain.Ticket
@@ -228,16 +251,16 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec) (w Iss
 		}
 	}
 	if g, done := stages["grilling"]; done && g.State == domain.Done {
-		due(CommentGrilling, resolution(g))
+		due(CommentGrilling, writtenText(r, key, resolution(g), hide))
 	}
 	if sp, done := stages["spec"]; done && sp.State == domain.Done {
-		due(CommentSpec, bodyAt(s, doneMove(sp).Time))
+		due(CommentSpec, writtenText(r, key, bodyAt(s, doneMove(sp).Time), hide))
 	}
 	slices.SortStableFunc(landed, func(a, b domain.Ticket) int { return doneMove(a).Time.Compare(doneMove(b).Time) })
 	p, _ := r.Project(key)
 	var list []string
 	for _, t := range landed {
-		line := landedLine(p, t)
+		line := landedLine(r, p, t, hide)
 		due(CommentLanded+DisplayID(key, t.Number), "Landed "+line+".")
 		list = append(list, "- "+line)
 	}
@@ -317,9 +340,13 @@ func bodyAt(s domain.Spec, at time.Time) string {
 // landedLine is t, a Done implementation Ticket, as a write-back names
 // it: its title and ID, and its land commit if it has one. With several
 // Repositories it gives one commit per Changed Repository that landed,
-// in landing order, each as repositoryLabel@commit.
-func landedLine(p domain.Project, t domain.Ticket) string {
+// in landing order, each as repositoryLabel@commit. Hidden, it has no ID
+// and its title names other items by title as writtenText does.
+func landedLine(r store.Reader, p domain.Project, t domain.Ticket, hide bool) string {
 	line := fmt.Sprintf("**%s** (%s)", t.Title, DisplayID(p.Key, t.Number))
+	if hide {
+		line = fmt.Sprintf("**%s**", writtenText(r, p.Key, t.Title, true))
+	}
 	if !severalRepositories(p) {
 		if commit := doneMove(t).Commit; commit != "" {
 			line += " in " + commit

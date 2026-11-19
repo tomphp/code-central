@@ -43,6 +43,21 @@ describe("the Azure Boards section", () => {
     expect(within(boards()).queryByRole("region", { name: "Work Item Watcher" })).toBeNull();
   });
 
+  it("shows Hide Code Central off with its help text, and saves it, even while Azure Boards is off", async () => {
+    const { w } = await fresh();
+    await renderApp(w);
+
+    expect(toggle("Hide Code Central")).not.toBeChecked();
+    expect(within(boards()).getByText(/Write-back still posts every comment, but writes no/)).toHaveTextContent(
+      "Write-back still posts every comment, but writes no code-central: tag, no link back and no Spec or Ticket IDs. Tags and comments already on work items stay as they are.",
+    );
+    await userEvent.click(toggle("Hide Code Central"));
+    await save(w);
+
+    expect(toggle("Hide Code Central")).toBeChecked();
+    expect((await w.api.listProjects())[0].azure_boards).toMatchObject({ on: false, hide_code_central: true });
+  });
+
   it("switches to a WIQL filter's project URL and WHERE fields, and turns on with them", async () => {
     const { w } = await fresh();
     await renderApp(w);
@@ -122,7 +137,7 @@ describe("the Azure Boards section", () => {
   it("shows the Work Item Watcher's status while on, live", async () => {
     const { w, s } = await fresh();
     await renderApp(w);
-    await w.api.setAzureBoards("acme", { on: true, mode: "saved_query", query_url: QUERY, project_url: "", where: "", pat_env: "", new_issues_need_me: false });
+    await w.api.setAzureBoards("acme", { on: true, mode: "saved_query", query_url: QUERY, project_url: "", where: "", pat_env: "", new_issues_need_me: false, hide_code_central: false });
     await settle(w);
     expect(watcher()).toHaveTextContent("Work Item Watcher: Starting; it hasn't reported yet.");
 

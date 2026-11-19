@@ -58,7 +58,7 @@ func (c *Core) GetIssueWatch(_ context.Context, key string) (IssueWatch, error) 
 		}
 		g := githubIssuesView(key, p.GitHubIssues, WatcherView{})
 		out = IssueWatch{Project: key, On: g.On, Repositories: g.Repositories, Label: g.Label, GHPath: r.Options().GHPath, Spec: g.Spec,
-			Issues: incomingIssues(r, key, IntegrationGitHub), Writes: c.integrationWrites(r, key, IntegrationGitHub)}
+			Issues: incomingIssues(r, key, IntegrationGitHub), Writes: c.integrationWrites(r, key, IntegrationGitHub, false)}
 		return nil
 	})
 	return out, err
