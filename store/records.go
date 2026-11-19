@@ -150,6 +150,7 @@ type azureBoardsFile struct {
 	Where           string `yaml:"where,omitempty"`
 	PATEnv          string `yaml:"pat_env,omitempty"`
 	NewIssuesNeedMe bool   `yaml:"new_issues_need_me,omitempty"`
+	HideCodeCentral bool   `yaml:"hide_code_central,omitempty"`
 	Spec            int    `yaml:"spec,omitempty"`
 }
 
@@ -975,7 +976,7 @@ func encodeAzureBoards(a domain.AzureBoards) *azureBoardsFile {
 		return nil
 	}
 	return &azureBoardsFile{On: a.On, Mode: string(a.Mode), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
-		PATEnv: a.PATEnv, NewIssuesNeedMe: a.NewIssuesNeedMe, Spec: a.Spec}
+		PATEnv: a.PATEnv, NewIssuesNeedMe: a.NewIssuesNeedMe, HideCodeCentral: a.HideCodeCentral, Spec: a.Spec}
 }
 
 // encodeAutoAccept is the on kinds as project.yaml holds them.

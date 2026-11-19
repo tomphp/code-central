@@ -548,6 +548,9 @@ type AzureBoards struct {
 	Where           string
 	PATEnv          string
 	NewIssuesNeedMe bool
+	// HideCodeCentral keeps Code Central out of what Write-back writes to a
+	// work item.
+	HideCodeCentral bool
 	Spec            int
 }
 

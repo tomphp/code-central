@@ -230,6 +230,7 @@ export interface AzureBoardsChange {
   // Project's CI PAT variable.
   pat_env: string;
   new_issues_need_me: boolean;
+  hide_code_central: boolean;
 }
 
 // ---- Models and Factories ----

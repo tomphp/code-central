@@ -54,6 +54,7 @@ type boardsSettings struct {
 	where      string
 	patEnv     string
 	needMe     bool
+	hide       bool
 	spec       string
 }
 
@@ -66,7 +67,7 @@ func azureBoards(t *testing.T, project map[string]any, want boardsSettings) {
 	a, _ := project["azure_boards"].(map[string]any)
 	str := func(k string) string { s, _ := a[k].(string); return s }
 	got := boardsSettings{on: a["on"] == true, mode: str("mode"), queryURL: str("query_url"), projectURL: str("project_url"), where: str("where"),
-		patEnv: str("pat_env"), needMe: a["new_issues_need_me"] == true, spec: str("spec")}
+		patEnv: str("pat_env"), needMe: a["new_issues_need_me"] == true, hide: a["hide_code_central"] == true, spec: str("spec")}
 	if a == nil || got != want {
 		t.Fatalf("azure_boards = %v, want %+v", project["azure_boards"], want)
 	}
@@ -151,6 +152,44 @@ func TestTheSettingsOfTheModeNotChosenAreKept(t *testing.T) {
 	// Off, any mode's settings may be left empty, or kept for later.
 	httpOK(t, srv, setAzureBoards(`{"on":false,"mode":"wiql"}`))
 	acmeBoards(t, srv, boardsSettings{mode: "wiql", patEnv: "ADO_PAT", spec: "acme-4"})
+}
+
+func TestHideCodeCentralIsSavedShownAndKeptWhileAzureBoardsIsOff(t *testing.T) {
+	srv := newServer(t)
+	httpOK(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`","hide_code_central":true}`))
+	on := boardsSettings{on: true, mode: "saved_query", queryURL: webQuery, patEnv: "ADO_PAT", hide: true, spec: "acme-4"}
+	acmeBoards(t, srv, on)
+
+	// Off, it is kept with the other settings, and it saves with them.
+	httpOK(t, srv, setAzureBoards(`{"on":false,"query_url":"`+webQuery+`","hide_code_central":true}`))
+	on.on = false
+	acmeBoards(t, srv, on)
+	httpOK(t, srv, setAzureBoards(`{"on":false,"query_url":"`+webQuery+`"}`))
+	on.hide = false
+	acmeBoards(t, srv, on)
+}
+
+func TestChangingHideCodeCentralAloneRunsNoCheckAndKeepsTheWatchersStatus(t *testing.T) {
+	checks := &boardsChecks{}
+	srv := newBoardsCheckServer(t, checks)
+	project := func() map[string]any { return httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}) }
+	httpOK(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`"}`))
+	httpOK(t, srv, reportWorkItemWatcherStatus(`{"state":"error","problem":"pat_rejected","message":"Azure DevOps rejected the PAT","fix":"Renew it."}`))
+
+	httpOK(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`","hide_code_central":true}`))
+	if n := len(checks.ran()); n != 1 {
+		t.Fatalf("changing only Hide Code Central ran %d checks, want the 1 of turning on", n)
+	}
+	workItemWatcher(t, project(), "error", "Azure DevOps rejected the PAT", "Renew it.")
+	azureBoards(t, project(), boardsSettings{on: true, mode: "saved_query", queryURL: webQuery, patEnv: "ADO_PAT", hide: true, spec: "acme-4"})
+}
+
+func TestGitHubIssuesHasNoHideCodeCentral(t *testing.T) {
+	srv := newServer(t)
+	httpRejected(t, srv, httpCall{"POST", "/api/p/acme/set_github_issues", `{"on":false,"hide_code_central":true}`}, core.Invalid)
+	if _, ok := httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""})["github_issues"].(map[string]any)["hide_code_central"]; ok {
+		t.Fatal("github_issues carries hide_code_central")
+	}
 }
 
 func TestTheAzureBoardsPATVariableDefaultsToTheCIOne(t *testing.T) {

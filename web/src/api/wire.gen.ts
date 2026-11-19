@@ -1040,6 +1040,9 @@ export interface AzureBoardsView {
   // kept.
   pat_env: string;
   new_issues_need_me: boolean;
+  // HideCodeCentral is whether Write-back keeps Code Central out of what
+  // it writes to a work item.
+  hide_code_central: boolean;
   // Spec is the Azure Boards Spec's ID, left out until Azure Boards is
   // first turned on.
   spec?: string;
