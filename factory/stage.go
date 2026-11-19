@@ -156,7 +156,7 @@ func (f *factory) conflictFiles(r *repository, stage string, tk core.TicketView)
 		// A Spec merge Ticket, marked or one opened before the mark, has
 		// no branch yet: it is cut from the Spec Branch, which is what
 		// conflicts.
-		if !tk.SpecLanded || tk.Title != core.SpecMergeTitle(tk.Spec.ID) {
+		if !tk.SpecLanded || !tk.IsSpecMergeTicket() {
 			return nil
 		}
 		if head, err = f.repos.specBranchTip(r, tk.Spec.ID); err != nil {

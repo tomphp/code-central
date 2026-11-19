@@ -64,9 +64,41 @@ type OpenSpecMergeResult struct {
 }
 
 // SpecMergeTitle is the title of the Ticket that merges the base into the
-// Spec Branch of spec, a display ID.
+// Spec Branch of spec, a display ID: the Spec merge Ticket's title with
+// Rebase off.
 func SpecMergeTitle(spec string) string {
 	return fmt.Sprintf("Merge the base into the Spec Branch of %s", spec)
+}
+
+// SpecMergeRebaseTitle is the title of the Ticket that rebases the Spec
+// Branch of spec, a display ID, onto the base: the Spec merge Ticket's
+// title with Rebase in force in any conflicting Repository (ADR 0067).
+func SpecMergeRebaseTitle(spec string) string {
+	return fmt.Sprintf("Rebase the Spec Branch of %s onto the base", spec)
+}
+
+// isSpecMergeTitle reports whether title is either of the Spec merge
+// Ticket's titles for spec, a display ID, which is how an unmarked Spec
+// merge Ticket (one opened before the mark existed) is recognised.
+func isSpecMergeTitle(spec, title string) bool {
+	return title == SpecMergeTitle(spec) || title == SpecMergeRebaseTitle(spec)
+}
+
+// IsSpecMergeTicket reports whether v is its Spec's Spec merge Ticket:
+// marked, or unmarked (opened before the mark existed) with either of
+// the Spec merge titles.
+func (v TicketView) IsSpecMergeTicket() bool {
+	return v.SpecMergeTicket || isSpecMergeTitle(v.Spec.ID, v.Title)
+}
+
+// specMergeTitle is the Spec merge Ticket's title for spec, a display
+// ID, under the policies of its conflicting Repositories: the rebase
+// title with Rebase in force in any, else the merge title.
+func specMergeTitle(spec string, rebase bool) string {
+	if rebase {
+		return SpecMergeRebaseTitle(spec)
+	}
+	return SpecMergeTitle(spec)
 }
 
 // OpenSpecMerge is the Factory's open_spec_merge. It comments the
@@ -98,18 +130,25 @@ func (c *Core) OpenSpecMerge(ctx context.Context, key string, in OpenSpecMergeIn
 		if why := whyNoSpecMerge(sp, tickets); why != "" {
 			return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s %s, so it takes no Spec merge Ticket", id, why)}
 		}
-		title, body := SpecMergeTitle(id), ""
+		// The title and body follow the Landing Policy of the conflicting
+		// Repositories when the Ticket is opened (ADR 0067): to rebase
+		// with Rebase in force in any, else to merge.
+		var rebase bool
+		var body string
 		if len(in.Repositories) == 0 {
-			body = specMergeBody(id, p.Base(), in)
+			rebase = landingPolicyIn(p, p.Key).RebaseInForce()
+			body = specMergeBody(id, p.Base(), in, rebase)
 		} else {
 			cs, err := specMergeConflicts(p, in)
 			if err != nil {
 				return err
 			}
-			body = specMergeBodyPerRepository(p, id, cs)
+			rebase = slices.ContainsFunc(cs, func(c SpecMergeConflict) bool { return landingPolicyIn(p, c.Name).RebaseInForce() })
+			body = specMergeBodyPerRepository(p, id, cs, rebase)
 		}
+		title := specMergeTitle(id, rebase)
 		now := c.now()
-		if t, ok := openSpecMergeTicket(tickets, title); ok {
+		if t, ok := openSpecMergeTicket(tickets, id); ok {
 			res.Ticket = DisplayID(key, t.Number)
 			if t.Description == body || slices.ContainsFunc(t.Comments, func(cm domain.Comment) bool { return cm.Body == body }) {
 				res.Outcome = SpecMergeUnchanged
@@ -147,8 +186,9 @@ func whyNoSpecMerge(spec domain.Spec, tickets []domain.Ticket) string {
 
 // openSpecMergeTicket is the open Ticket among a Spec's tickets that
 // takes its Spec merge comments: the first open marked one, else the
-// first open unmarked one titled title.
-func openSpecMergeTicket(tickets []domain.Ticket, title string) (domain.Ticket, bool) {
+// first open unmarked one with either Spec merge title for spec, a
+// display ID.
+func openSpecMergeTicket(tickets []domain.Ticket, spec string) (domain.Ticket, bool) {
 	var legacy *domain.Ticket
 	for i, t := range tickets {
 		if finished(t.State) {
@@ -157,7 +197,7 @@ func openSpecMergeTicket(tickets []domain.Ticket, title string) (domain.Ticket, 
 		if t.SpecMergeTicket {
 			return t, true
 		}
-		if legacy == nil && t.Title == title {
+		if legacy == nil && isSpecMergeTitle(spec, t.Title) {
 			legacy = &tickets[i]
 		}
 	}
@@ -168,14 +208,20 @@ func openSpecMergeTicket(tickets []domain.Ticket, title string) (domain.Ticket, 
 }
 
 // specMergeBody is a Spec merge Ticket's description, and each comment it
-// takes: the conflicting files and both tips.
-func specMergeBody(spec, base string, in OpenSpecMergeInput) string {
+// takes: the conflicting files and both tips, then what to do, which is
+// to rebase this branch onto the base with rebase, else to merge the
+// base into it.
+func specMergeBody(spec, base string, in OpenSpecMergeInput, rebase bool) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "The Spec Branch spec/%s conflicts with the base, %s, in these files:\n\n", spec, base)
 	for _, f := range in.Conflicts {
 		fmt.Fprintf(&b, "- %s\n", f)
 	}
-	fmt.Fprintf(&b, "\nThe base's tip is %s and the Spec Branch's tip is %s. Merge the base into this branch and resolve the conflicts.\n", in.BaseTip, in.SpecBranchTip)
+	do := "Merge the base into this branch"
+	if rebase {
+		do = "Rebase this branch onto the base"
+	}
+	fmt.Fprintf(&b, "\nThe base's tip is %s and the Spec Branch's tip is %s. %s and resolve the conflicts.\n", in.BaseTip, in.SpecBranchTip, do)
 	return b.String()
 }
 
@@ -240,8 +286,10 @@ func (in OpenSpecMergeInput) homeGiven() bool {
 // specMergeBodyPerRepository is specMergeBody for a Spec Branch
 // conflicting in each of cs's Repositories, p's: one Spec merge Ticket
 // names each, with its base, both tips and its files (ADR 0049). Each of
-// cs names one of p's Repositories, as specMergeConflicts checked.
-func specMergeBodyPerRepository(p domain.Project, spec string, cs []SpecMergeConflict) string {
+// cs names one of p's Repositories, as specMergeConflicts checked. With
+// rebase it says to rebase this branch onto its base in each, else to
+// merge each base into it.
+func specMergeBodyPerRepository(p domain.Project, spec string, cs []SpecMergeConflict, rebase bool) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "The Spec Branch spec/%s conflicts with the base in these Repositories:\n\n", spec)
 	for _, c := range cs {
@@ -251,6 +299,10 @@ func specMergeBodyPerRepository(p domain.Project, spec string, cs []SpecMergeCon
 			fmt.Fprintf(&b, "  - %s\n", f)
 		}
 	}
-	b.WriteString("\nIn each, merge the base into this branch and resolve the conflicts.\n")
+	if rebase {
+		b.WriteString("\nIn each, rebase this branch onto its base and resolve the conflicts.\n")
+	} else {
+		b.WriteString("\nIn each, merge the base into this branch and resolve the conflicts.\n")
+	}
 	return b.String()
 }
