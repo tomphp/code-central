@@ -169,7 +169,7 @@ A SQLite Store at an older format is migrated at startup by the same chained ste
 
 ### A Postgres Store
 
-A **Postgres Store** keeps the records in a Postgres database, and several services, on several machines, may open it at once: it takes no lock, and the database orders their writes, and each Project's Watchers run on one of them. (In this release they don't yet hear each other's changes; that comes with the rest of the Shared Store.) Give the service a database of its own, empty, and put its URL, with the user and password, in the environment of the service, never in `settings.yaml`:
+A **Postgres Store** keeps the records in a Postgres database, and several services, on several machines, may open it at once: it takes no lock, and the database orders their writes, and each Project's Watchers run on one of them. A change one service commits reaches the others over Postgres's `LISTEN` and `NOTIFY`, so a write on one machine ends a `wait`, wakes the Factory and refreshes the UI on the rest. Give the service a database of its own, empty, and put its URL, with the user and password, in the environment of the service, never in `settings.yaml`:
 
 ```yaml
 store:
