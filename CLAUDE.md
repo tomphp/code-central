@@ -26,7 +26,7 @@ To learn a Go API, read `go doc ./<pkg> <Name>` before the source.
 
 ## Editing
 
-Change a file with Read (`offset` and `limit`) then Edit; a hook refuses `sed -i` and a python or perl replace on one file.
+Change a file with Read (`offset` and `limit`) then Edit; for a change in several places, make several Edit calls in one message. For a merge conflict, `git checkout --ours/--theirs <file>` then Edit.
 
 ## Checks
 
