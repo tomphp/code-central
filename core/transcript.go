@@ -75,8 +75,8 @@ type HeldSessionEvent struct {
 // TranscriptLimit, or it began after the Claim did, as none are kept
 // from before Code Central's last restart, or on another service before
 // its session moved here. Host is the host of another service on the
-// Store holding the Transcript, its Reporting Service, when there is
-// one: then Events is empty (see heldElsewhere).
+// Store holding the Transcript, its Reporting Service, while that service
+// is running: then Events is empty.
 type TranscriptView struct {
 	Events []HeldSessionEvent `json:"events"`
 	Tail   bool               `json:"tail"`

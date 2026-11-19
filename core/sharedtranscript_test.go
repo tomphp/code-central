@@ -15,11 +15,11 @@ import (
 // Transcript stays on the service its Session Events reach, and another
 // service, holding none, names that service's host while it is running.
 
-// claimedOnTwo is the laptop and the desktop on one Store, both
+// claimedOnTwo is the laptop and the desktop on Store s, both
 // registered, with acme-2 claimed by session s1, and acme-3 by s2.
-func claimedOnTwo(t *testing.T) (laptop, desktop fixture) {
+func claimedOnTwo(t *testing.T, s store.Store) (laptop, desktop fixture) {
 	t.Helper()
-	laptop, desktop = twoServices(t, store.NewMemory())
+	laptop, desktop = twoServices(t, s)
 	for _, f := range []fixture{laptop, desktop} {
 		if err := f.core.Register(ctx); err != nil {
 			t.Fatal(err)
@@ -62,7 +62,7 @@ func texts(v core.TranscriptView) []string {
 }
 
 func TestATranscriptOnAnotherServiceNamesItsHost(t *testing.T) {
-	laptop, desktop := claimedOnTwo(t)
+	laptop, desktop := claimedOnTwo(t, store.NewMemory())
 	post(laptop, "s1", "one", "two")
 
 	if v := transcriptOf(t, laptop, "2"); v.Host != "" || len(v.Events) != 2 || v.Tail {
@@ -76,7 +76,7 @@ func TestATranscriptOnAnotherServiceNamesItsHost(t *testing.T) {
 // A hand-run session posts no Session Events, so no service holds its
 // Transcript and none names a host.
 func TestAHandRunSessionsTranscriptNamesNoHost(t *testing.T) {
-	laptop, desktop := claimedOnTwo(t)
+	laptop, desktop := claimedOnTwo(t, store.NewMemory())
 	laptop.core.Ping(ctx, "s2")
 	for name, f := range map[string]fixture{"laptop": laptop, "desktop": desktop} {
 		if v := transcriptOf(t, f, "3"); v.Host != "" || len(v.Events) != 0 {
@@ -89,7 +89,7 @@ func TestAHandRunSessionsTranscriptNamesNoHost(t *testing.T) {
 // holds the rest of the session as a tail, and the laptop, holding the
 // start, names the desktop: it holds the newest events.
 func TestATranscriptFollowsItsFactoryToAnotherService(t *testing.T) {
-	laptop, desktop := claimedOnTwo(t)
+	laptop, desktop := claimedOnTwo(t, store.NewMemory())
 	post(laptop, "s1", "one")
 	post(desktop, "s1", "two", "three")
 
@@ -111,7 +111,7 @@ func TestATranscriptFollowsItsFactoryToAnotherService(t *testing.T) {
 
 // Following a Transcript another service holds ends at once, naming it.
 func TestFollowingATranscriptOnAnotherServiceNamesItsHost(t *testing.T) {
-	laptop, desktop := claimedOnTwo(t)
+	laptop, desktop := claimedOnTwo(t, store.NewMemory())
 	post(laptop, "s1", "one")
 	feed, err := desktop.core.FollowTranscript(ctx, "acme", "2", 1, 0)
 	if err != nil {
@@ -132,7 +132,7 @@ func TestFollowingATranscriptOnAnotherServiceNamesItsHost(t *testing.T) {
 // Once the service holding a Transcript stops, nobody holds it: another
 // service shows it empty rather than send the human to a dead host.
 func TestATranscriptOnAStoppedServiceNamesNoHost(t *testing.T) {
-	laptop, desktop := claimedOnTwo(t)
+	laptop, desktop := claimedOnTwo(t, store.NewMemory())
 	post(laptop, "s1", "one")
 	if err := laptop.core.Deregister(ctx); err != nil {
 		t.Fatal(err)
@@ -146,15 +146,7 @@ func TestATranscriptOnAStoppedServiceNamesNoHost(t *testing.T) {
 // events: the post and the read still work, as this service's own.
 func TestATranscriptHolderTheStoreCannotWriteIsLoggedOnly(t *testing.T) {
 	s := &failingServices{Store: store.NewMemory()}
-	laptop, desktop := twoServices(t, s)
-	for _, f := range []fixture{laptop, desktop} {
-		if err := f.core.Register(ctx); err != nil {
-			t.Fatal(err)
-		}
-	}
-	laptop.spec(t, "acme", "Login")
-	laptop.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Ta", State: domain.Ready})
-	laptop.claim(t, core.ClaimInput{Ticket: "2", SessionID: "s1"})
+	laptop, desktop := claimedOnTwo(t, s)
 
 	s.err = errors.New("connection refused")
 	post(laptop, "s1", "one")
@@ -170,7 +162,7 @@ func TestATranscriptHolderTheStoreCannotWriteIsLoggedOnly(t *testing.T) {
 // A Transcript holder is pruned once it is over a week old, on the tick,
 // as the pings are.
 func TestATranscriptHolderIsPrunedAfterAWeek(t *testing.T) {
-	laptop, desktop := claimedOnTwo(t)
+	laptop, desktop := claimedOnTwo(t, store.NewMemory())
 	tick := watchFactories(t, desktop)
 	post(laptop, "s1", "one")
 

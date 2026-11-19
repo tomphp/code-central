@@ -19,12 +19,8 @@ import (
 // held it before: the session has moved here, so what this service holds
 // is a tail.
 func (c *Core) startHolding(k markKey) (moved bool) {
-	services := c.store.Services()
-	prev, ok, err := services.TranscriptHolder(k.project, k.ticket, k.claim)
-	if err != nil {
-		c.logf("cannot read who holds %s's Claim %d's Transcript: %v", DisplayID(k.project, k.ticket), k.claim, err)
-	}
-	err = services.PutTranscriptHolder(store.TranscriptHolder{Project: k.project, Ticket: k.ticket, Claim: k.claim,
+	prev, ok := c.transcriptHolder(k)
+	err := c.store.Services().PutTranscriptHolder(store.TranscriptHolder{Project: k.project, Ticket: k.ticket, Claim: k.claim,
 		Service: c.service.ID, ServiceHost: c.service.Host, At: c.now()})
 	if err != nil {
 		c.logf("cannot record that this service holds %s's Claim %d's Transcript: %v", DisplayID(k.project, k.ticket), k.claim, err)
@@ -39,16 +35,11 @@ func (c *Core) startHolding(k markKey) (moved bool) {
 // none is recorded, as for a hand-run session, which posts no Session
 // Events, or when the holder has stopped, as nobody holds more.
 func (c *Core) heldElsewhere(k markKey) string {
-	services := c.store.Services()
-	h, ok, err := services.TranscriptHolder(k.project, k.ticket, k.claim)
-	if err != nil {
-		c.logf("cannot read who holds %s's Claim %d's Transcript: %v", DisplayID(k.project, k.ticket), k.claim, err)
-		return ""
-	}
+	h, ok := c.transcriptHolder(k)
 	if !ok || h.Service == c.service.ID {
 		return ""
 	}
-	regs, err := services.Registrations(c.now())
+	regs, err := c.store.Services().Registrations(c.now())
 	if err != nil {
 		c.logf("cannot read the services' Registrations: %v", err)
 		return ""
@@ -59,6 +50,17 @@ func (c *Core) heldElsewhere(k markKey) string {
 		}
 	}
 	return ""
+}
+
+// transcriptHolder is Claim k's Transcript holder, if one is recorded.
+// What the Store can't read is logged, as none recorded.
+func (c *Core) transcriptHolder(k markKey) (store.TranscriptHolder, bool) {
+	h, ok, err := c.store.Services().TranscriptHolder(k.project, k.ticket, k.claim)
+	if err != nil {
+		c.logf("cannot read who holds %s's Claim %d's Transcript: %v", DisplayID(k.project, k.ticket), k.claim, err)
+		return store.TranscriptHolder{}, false
+	}
+	return h, ok
 }
 
 // transcriptHolderLife is how long a Transcript holder stays in the Store
