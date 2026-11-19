@@ -265,7 +265,7 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec, hide b
 	p, _ := r.Project(key)
 	var list []string
 	for _, t := range landed {
-		line := landedLine(p, t)
+		line := landedLine(r, p, t, hide)
 		due(CommentLanded+DisplayID(key, t.Number), "Landed "+line+".")
 		list = append(list, "- "+line)
 	}
@@ -345,9 +345,13 @@ func bodyAt(s domain.Spec, at time.Time) string {
 // landedLine is t, a Done implementation Ticket, as a write-back names
 // it: its title and ID, and its land commit if it has one. With several
 // Repositories it gives one commit per Changed Repository that landed,
-// in landing order, each as repositoryLabel@commit.
-func landedLine(p domain.Project, t domain.Ticket) string {
+// in landing order, each as repositoryLabel@commit. Hidden, it has no ID
+// and its title names other items by title as writtenText does.
+func landedLine(r store.Reader, p domain.Project, t domain.Ticket, hide bool) string {
 	line := fmt.Sprintf("**%s** (%s)", t.Title, DisplayID(p.Key, t.Number))
+	if hide {
+		line = fmt.Sprintf("**%s**", writtenText(r, p.Key, t.Title, true))
+	}
 	if !severalRepositories(p) {
 		if commit := doneMove(t).Commit; commit != "" {
 			line += " in " + commit

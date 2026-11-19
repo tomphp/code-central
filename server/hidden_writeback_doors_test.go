@@ -1,11 +1,13 @@
 package server_test
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
@@ -234,4 +236,70 @@ func TestHiddenContextWontFixReasonAndResolutionNameItemsByTitle(t *testing.T) {
 func dueWorkItemComment(t *testing.T, got map[string]workItemWrites, target, key string) string {
 	t.Helper()
 	return dueComment(t, map[string]issueWrites{target: got[target].issueWrites}, target, key)
+}
+
+// hiddenLanded makes acme-6 a hidden Requirement with its Stages Done and
+// one implementation Ticket, acme-10, "Follow acme-5", finished with the
+// finish body fields, accepted and landed by each of lands.
+func hiddenLanded(t *testing.T, srv *codecentraltest.Server, finish string, lands ...string) workItemWrites {
+	t.Helper()
+	workItem(t, srv, "acme-4", 12) // acme-5
+	httpOK(t, srv, toRequirement("5", `{"context":"Seen."}`))
+	httpOK(t, srv, reportIssueWritten(`{"target":"acme-6","key":"context"}`))
+	for _, n := range []string{"7", "8", "9"} {
+		srv.Clock.Advance(time.Minute)
+		httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/" + n + "/move", `{"to_state":"Done"}`})
+	}
+	implementationTicket(t, srv, "Follow acme-5") // acme-10
+	claim := claimedByAgent(t, srv, "10")
+	srv.Clock.Advance(time.Minute)
+	asAgent(t, srv, httpCall{"POST", "/api/p/acme/tickets/10/finish", `{"claim_id":` + quote(claim) + `,"summary":"Fixed.",` + finish + `}`})
+	httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/10/accept", `{}`})
+	for _, l := range lands {
+		srv.Clock.Advance(time.Minute)
+		httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/10/land", l})
+	}
+	w := workItemWritesDue(t, srv)["acme-6"]
+	wantHidden(t, w)
+	return w
+}
+
+func commentBody(w workItemWrites, key string) string {
+	for _, c := range w.Comments {
+		if c.Key == key {
+			return c.Body
+		}
+	}
+	return ""
+}
+
+// Hidden, a landed line has no Ticket ID and its title names other items
+// by title, in each "Landed" comment and in the Finished list.
+func TestAHiddenLandedLineHasNoTicketID(t *testing.T) {
+	srv := newServer(t, boardsHidden(true, true)) // acme-4
+	w := hiddenLanded(t, srv, `"branch":"acme-10","commit":"h1"`, `{"commit":"hh"}`)
+	if got, want := commentBody(w, "landed:acme-10"), opaque("acme-6", "landed:acme-10")+"\nLanded **Follow \"Work item 12\"** in hh."; got != want {
+		t.Fatalf("landed comment = %q, want %q", got, want)
+	}
+	if got, want := commentBody(w, "closed"), opaque("acme-6", "closed")+"\nFinished. What landed:\n\n- **Follow \"Work item 12\"** in hh"; got != want {
+		t.Fatalf("closed comment = %q, want %q", got, want)
+	}
+}
+
+// With several Repositories the hidden line is Name@sha per Changed
+// Repository, and the Changed Repositories line is as branded.
+func TestAHiddenLandedLineWithSeveralRepositoriesHasNoTicketID(t *testing.T) {
+	srv := newServer(t, boardsHidden(true, true)) // acme-4
+	human := core.WithActor(context.Background(), core.Human)
+	if _, err := srv.Core.AddRepository(human, "acme", core.AddRepositoryInput{Name: "docs", CloneURL: "https://dev.azure.com/org/proj/_git/docs"}); err != nil {
+		t.Fatal(err)
+	}
+	w := hiddenLanded(t, srv, `"branch":"acme-10","commit":"h1","repositories":[{"name":"docs","branch":"acme-10","commit":"d1"}]`,
+		`{"commit":"dd","repository":"docs"}`, `{"commit":"hh","repository":"acme"}`)
+	if got, want := commentBody(w, "landed:acme-10"), opaque("acme-6", "landed:acme-10")+"\nLanded **Follow \"Work item 12\"** in acme@hh, docs@dd."; got != want {
+		t.Fatalf("landed comment = %q, want %q", got, want)
+	}
+	if got, want := commentBody(w, "closed"), opaque("acme-6", "closed")+"\nFinished. What landed:\n\n- **Follow \"Work item 12\"** in acme@hh, docs@dd\n\nChanged Repositories: acme, docs"; got != want {
+		t.Fatalf("closed comment = %q, want %q", got, want)
+	}
 }
