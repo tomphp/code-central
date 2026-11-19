@@ -224,6 +224,14 @@ func leadOf(g []domain.Ticket, t domain.Ticket) (lead, waiting bool) {
 	return g[0].Number == t.Number && pushed, true
 }
 
+// takesSpecFixTicket is whether new_fix_ticket on t opens a fix Ticket on
+// its Spec: t is its Spec's pull-request lead, and no CI item offers it
+// failure options, which decide instead.
+func (e *evaluation) takesSpecFixTicket(t domain.Ticket) bool {
+	lead, _ := e.evaluated().specPullRequestLead(t)
+	return lead && len(e.ciFailureOptions(t)) == 0
+}
+
 // newSpecFixTicket is new_fix_ticket on a Spec's lead Ticket while its
 // pull request is To merge or Pull request closed: it opens a Ready
 // Ticket on the Spec, whose accept merges into the Spec Branch and is
@@ -238,7 +246,8 @@ func (c *Core) newSpecFixTicket(ctx context.Context, key string, in NewFixTicket
 		if err != nil {
 			return nil // the CI failure path reports what is wrong
 		}
-		if isLead, _ := specPullRequestLead(r, key, t); !isLead || len(c.ciFailureOptions(r, key, t)) > 0 {
+		p, _ := r.Project(key)
+		if !c.evaluate(r, p).takesSpecFixTicket(t) {
 			return nil
 		}
 		lead, handled = t, true

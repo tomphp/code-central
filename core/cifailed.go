@@ -56,11 +56,8 @@ type CIFailureSummary struct {
 }
 
 // ciFailureOptions are the failure options the human may choose on t's
-// first CI item while t is CI failed or CI cancelled, nil otherwise, from
-// its Project's evaluation.
-func (c *Core) ciFailureOptions(r store.Reader, key string, t domain.Ticket) []CIFailureOption {
-	p, _ := r.Project(key)
-	e := c.evaluate(r, p)
+// first CI item while t is CI failed or CI cancelled, nil otherwise.
+func (e *evaluation) ciFailureOptions(t domain.Ticket) []CIFailureOption {
 	it, ok := e.itemOf(t)
 	if !ok {
 		return nil

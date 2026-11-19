@@ -50,6 +50,7 @@ list_projects	GET	/api/projects
 move	POST	/api/p/{key}/tickets/{n}/move
 needs_me	GET	/api/needs-me
 new_fix_ticket	POST	/api/p/{key}/tickets/{n}/new_fix_ticket
+new_ticket	POST	/api/p/{key}/new_ticket
 next_chat_work	GET	/api/p/{key}/chat/next-work
 next_factory_wake	GET	/api/p/{key}/factory/next-wake
 open_spec_merge	POST	/api/p/{key}/specs/{n}/open_spec_merge

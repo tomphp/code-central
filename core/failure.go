@@ -221,25 +221,41 @@ func (c *Core) SendBack(ctx context.Context, key string, in SendBackInput) (Writ
 func (c *Core) refuseSendBackOfShared(key string, ref Ref) error {
 	return c.store.View(func(r store.Reader) error {
 		t, err := resolveTicket(r, key, "send_back", "ticket", ref)
-		if err != nil || t.State != domain.Accepted || len(t.PushedCommits) == 0 {
+		if err != nil || !sharedCandidate(t) {
 			return nil // the send-back itself reports what is wrong
 		}
 		p, _ := r.Project(key)
-		id := DisplayID(key, t.Number)
-		if specLanded(r, p, t) && ticketLandingPolicies(p, t).LandPerSpecInForce() {
-			return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s's work is in the base with its Spec's, so there is no branch of its own to send back: land it anyway or open a fix Ticket", id)}
-		}
-		if it, ok := c.evaluate(r, p).itemOf(t); ok && it.reason != ReasonCIUnavailable && len(it.tickets) > 1 {
-			var others []string
-			for _, o := range it.tickets {
-				if o.Number != t.Number {
-					others = append(others, DisplayID(key, o.Number))
-				}
-			}
-			return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s waits on %s with %s, so there is no fix of its own to send back: re-run the failed jobs, land them anyway or open a fix Ticket", id, shortCommit(it.commit), strings.Join(others, ", "))}
-		}
-		return nil
+		return c.evaluate(r, p).sharedSendBackRefusal(t)
 	})
+}
+
+// sharedCandidate is whether refuseSendBackOfShared may refuse t at all:
+// it is Accepted and pushed.
+func sharedCandidate(t domain.Ticket) bool {
+	return t.State == domain.Accepted && len(t.PushedCommits) > 0
+}
+
+// sharedSendBackRefusal is refuseSendBackOfShared's refusal of t, or nil
+// when it allows the send-back.
+func (e *evaluation) sharedSendBackRefusal(t domain.Ticket) error {
+	if !sharedCandidate(t) {
+		return nil
+	}
+	key := e.p.Key
+	id := DisplayID(key, t.Number)
+	if specLanded(e.r, e.p, t) && ticketLandingPolicies(e.p, t).LandPerSpecInForce() {
+		return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s's work is in the base with its Spec's, so there is no branch of its own to send back: land it anyway or open a fix Ticket", id)}
+	}
+	if it, ok := e.itemOf(t); ok && it.reason != ReasonCIUnavailable && len(it.tickets) > 1 {
+		var others []string
+		for _, o := range it.tickets {
+			if o.Number != t.Number {
+				others = append(others, DisplayID(key, o.Number))
+			}
+		}
+		return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s waits on %s with %s, so there is no fix of its own to send back: re-run the failed jobs, land them anyway or open a fix Ticket", id, shortCommit(it.commit), strings.Join(others, ", "))}
+	}
+	return nil
 }
 
 // ToDraft is the human's to_draft(ticket): Failed to Draft.

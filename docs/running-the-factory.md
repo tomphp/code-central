@@ -679,7 +679,27 @@ acme-shop-2: deleted spec/acme-shop-2, which is in main
 
 An Accepted Ticket whose pull request is closed without merging shows **Pull request closed**, offering Send back and Cancel (for a Spec, New fix Ticket and Cancel). A merged pull request that is conflicting shows under **To merge** as conflicting. There is no CI gate and no Land anyway under Pull Request: CI Tracking only informs, and on Azure Pipelines it follows the builds of the pull request's merge.
 
-### Push
+### Follow-up work on a Spec under review
+
+**New Ticket** adds one implementation Ticket to a Spec from its Spec view, from a Requirement's view, or from a Lane header's Spec popup on the Board. It is Small Change's form: one box whose first line is the title and whose whole text is the description. **Submit ticket** opens the Ticket Ready on that Spec with no Stages, and selects it; **Save as Draft** opens it Draft until you release it. Over HTTP it is the human-only `new_ticket`, which answers like any write:
+
+```text
+POST /api/p/acme/new_ticket {"spec":"acme-1","text":"Rename the button\nCall it Save."}
+{"id":"acme-2","updated":"2026-11-19T00:19:24Z","changed":["title","state","spec","description","spec_landed","moves","claimable"],"state":"Ready"}
+```
+
+The Spec's `ticketable` field says whether the button shows. It is offered on a plain Spec, on a Requirement once its tickets Stage is Done or was Cancelled by Implement, on a Finished Spec, and under every Landing Method. It is hidden on a Map, on a Long-lived Spec, on a Requirement whose Stages are still running, and in an archived Project. Under Pull Request + Land per Spec, a Ticket added while the Spec's pull request is open holds the Spec back from landing until it is in.
+
+The Accepted panel's **To merge** options follow the Landing Method, from the Ticket's `to_merge_options`. Each needs a note:
+
+| Landing Method | To merge offers |
+| --- | --- |
+| Branch | **Send back to fix**: the next Claim reworks the Ticket on its own branch |
+| Branch + Push | **Send back to fix**, unless the CI item lists other Tickets too |
+| Pull Request, without Land per Spec | **Send back to fix**, as before |
+| Pull Request + Land per Spec | **New fix Ticket** on the Spec's lead Ticket, even if the pull request was closed; no Send back to fix, and nothing on the other Tickets waiting on the Spec |
+
+A refused action shows the core's message in the panel, and New fix Ticket shows a link to the Ticket it opened.
 
 Either Landing Method has a **Push** option, also on the Project Options page, which names a git remote (`origin` by default). Each Repository may name its own Push remote, and each is pushed to, fetched from and cloned under its own.
 

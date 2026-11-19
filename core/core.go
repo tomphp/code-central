@@ -323,13 +323,19 @@ type TicketView struct {
 	// the human may choose on the Ticket's CI item while it is CI failed
 	// or CI cancelled, acting on every Ticket it lists; left out
 	// otherwise, and empty when none applies. Computed on read.
-	CIFailureOptions []CIFailureOption   `json:"ci_failure_options,omitzero"`
-	Claims           []ClaimView         `json:"claims,omitzero"`
-	Rounds           []RoundView         `json:"rounds,omitzero"`
-	FailureReports   []FailureReportView `json:"failure_reports,omitzero"`
-	Comments         []CommentView       `json:"comments,omitzero"`
-	Moves            []MoveView          `json:"moves,omitzero"`
-	Edits            []EditView          `json:"edits,omitzero"`
+	CIFailureOptions []CIFailureOption `json:"ci_failure_options,omitzero"`
+	// ToMergeOptions are the options, each an operation's name, the human
+	// may choose on the Ticket while it is Accepted under a Landing Method
+	// they merge (Branch or Pull Request), as send_back and new_fix_ticket
+	// would accept them; left out otherwise, and empty when none applies.
+	// Computed on read.
+	ToMergeOptions []ToMergeOption     `json:"to_merge_options,omitzero"`
+	Claims         []ClaimView         `json:"claims,omitzero"`
+	Rounds         []RoundView         `json:"rounds,omitzero"`
+	FailureReports []FailureReportView `json:"failure_reports,omitzero"`
+	Comments       []CommentView       `json:"comments,omitzero"`
+	Moves          []MoveView          `json:"moves,omitzero"`
+	Edits          []EditView          `json:"edits,omitzero"`
 	// LeftOut counts each part a read left out that has anything, by
 	// part name.
 	LeftOut   map[string]int `json:"left_out,omitempty"`
@@ -886,6 +892,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t domain.Ticket) Tick
 			v.CIFailureOptions = v.CIItem.Options
 		}
 	}
+	v.ToMergeOptions = e.toMergeOptions(t)
 	v.LandAnyway = e.ci.landAnyway(e.ci.ticket(t).in(key))
 	v.CIAutoFix = e.ciAutoFix(t, key)
 	v.Claimable = t.State == domain.Ready && !v.Blocked

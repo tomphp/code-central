@@ -16,7 +16,7 @@ import { CISums } from "../ticket/CIBadge";
 import { LinkBadge } from "../ticket/LinkBadge";
 import { OpenExternal } from "../ticket/OpenExternal";
 import type { Link } from "../url";
-import { NewPrototype, NewRetro } from "./NewRequirement";
+import { NewPrototype, NewRetro, NewTicket } from "./NewRequirement";
 import { isStage, waitingNote } from "./progress";
 import { Strip } from "./Strip";
 import { SpecPaneHeader } from "../controls/SpecPaneHeader";
@@ -46,6 +46,7 @@ export function RequirementPane({ spec, archived, now, ticket, select, specLink 
       <RepositoryChips names={spec.repositories} />
       <div className="spec-actions">
         <NewPrototype spec={spec.id} onSubmitted={(t) => select(t.id)} />
+        {spec.ticketable && <NewTicket spec={spec.id} onSubmitted={(t) => select(t.id)} />}
         {spec.retroable && <NewRetro target={spec.id} onSubmitted={(t) => select(t.id)} />}
         {spec.link && <LinkBadge link={spec.link} />}
         <OpenExternal link={spec.link} />

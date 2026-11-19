@@ -64,3 +64,11 @@ var OpenSpecMerge = &Definition[core.OpenSpecMergeInput, core.OpenSpecMergeResul
 	Doc:  "Open the Ticket that merges the base into a conflicting Spec Branch.",
 	Call: (*core.Core).OpenSpecMerge,
 }
+
+// NewTicket is the human's new_ticket (Spec code-central-1067).
+var NewTicket = &Definition[core.NewTicketInput, core.Written[core.TicketView]]{
+	Name: "new_ticket", Audience: HumanOnly, Write: true,
+	HTTP: "POST /api/p/{key}/new_ticket",
+	Doc:  "Open a New Ticket on a Spec: a Ready implementation Ticket titled with the text's first line and carrying the text as its description; refused on a Map, a Long-lived Spec, a Requirement whose Stages aren't finished and in an Archived Project. Returns its acknowledgement, or the Ticket with full.",
+	Call: (*core.Core).NewTicket,
+}

@@ -128,7 +128,7 @@ The human's action on a finished Map (every Ticket Done or Cancelled) that creat
 _Avoid_: Promote, convert the Map
 
 **Spec view**:
-The UI's view of a plain Spec, one that is neither a Requirement nor a Map: its title, **New Prototype**, its body, collapsed, with **Edit** until it is Finished, and its Tickets with their States. It opens from the Spec's name in the Ticket panel.
+The UI's view of a plain Spec, one that is neither a Requirement nor a Map: its title, **New Prototype**, **New Ticket** where the Spec takes one, its body, collapsed, with **Edit** until it is Finished, and its Tickets with their States. It opens from the Spec's name in the Ticket panel.
 _Avoid_: Spec page, Spec board
 
 **Edit**:
@@ -166,6 +166,10 @@ _Avoid_: Quick change, task, hotfix
 **Small Changes Spec**:
 The Long-lived Spec, one per Project, that Small Changes open their Ticket on. Code Central creates it on first use, titled `Small Changes` and labelled `long-lived`, as it does the CI Fixes Spec, and finds it by its stored number, so retitling it breaks nothing.
 _Avoid_: Changes Spec, Tasks Spec
+
+**New Ticket**:
+The human's action on a Spec view, Requirement view or Spec popup, and also `new_ticket`. It opens one implementation Ticket on that Spec from free text: the first line is the title and the whole text the description. It opens Ready, or Draft when saved as Draft, with no Stages. It is offered on any Spec but a Map or a Long-lived Spec, on a Requirement only once its Stages are finished, and on a Finished Spec too. Under Land per Spec its Ticket is cut from the Spec Branch and joins the Spec's pending batch, or a second batch if the Spec has landed.
+_Avoid_: Add Ticket, follow-up Ticket, Request changes
 
 **Straight to Spec**:
 The human's choice, when submitting a Requirement, to have it start at the spec Stage, which works from the Requirement's text alone, with no grilling Stage. A Requirement with no grilling Stage that was not written from a Map shows its grilling Stage as skipped.
@@ -522,7 +526,7 @@ The Board view's popup for a Lane header's Spec. It shows the Spec's pane as the
 _Avoid_: lane popup
 
 **To merge**:
-The Needs Me reason of an Accepted Ticket under the Branch or Pull Request Landing Method, shown at once: the human merges its branch into the base, and the Factory lands it when it sees the merge. Under Pull Request it links the pull request and says conflicting while the Code Host reports so.
+The Needs Me reason of an Accepted Ticket under the Branch or Pull Request Landing Method, shown at once: the human merges its branch into the base, and the Factory lands it when it sees the merge. Under Pull Request it links the pull request and says conflicting while the Code Host reports so. Under Branch, and under Pull Request without Land per Spec, the human may send the Ticket back to fix with a note. For a Spec's pull request under Land per Spec, they may open a New fix Ticket.
 _Avoid_: Ready to merge, awaiting merge
 
 **CI cancelled**:
@@ -546,11 +550,11 @@ What Re-run failed jobs records for a pushed commit: the failed and cancelled CI
 _Avoid_: Rerun job, retry
 
 **Send back to fix**:
-The failure option by which the human sends a CI failed Ticket back to Ready with a note naming the failed run and jobs and their Repository, so the next Claim fixes it on the same branch; its re-accept's newer pushed commit in that Repository has its own CI result, and its other Repositories keep theirs. Offered under Merge + Push and Branch + Push, only when the item lists exactly one Ticket and that Ticket isn't Spec-landed.
+The failure option by which the human sends a CI failed Ticket back to Ready with a note naming the failed run and jobs and their Repository, so the next Claim fixes it on the same branch; its re-accept's newer pushed commit in that Repository has its own CI result, and its other Repositories keep theirs. Offered under Merge + Push and Branch + Push, only when the item lists exactly one Ticket and that Ticket isn't Spec-landed. It is also a To merge option, not only a failure option: there the note says what to change.
 _Avoid_: Revert, reject
 
 **New fix Ticket**:
-The failure option by which the human opens a Ready Ticket on the Project's CI Fixes Spec, carrying the note, which starts from the run summary and the Fix instructions, and stores it once on the commit's response. It doesn't accept the failed CI result: every Ticket the item lists stays Accepted, and lands in that commit's Repository when a later commit there containing the work passes CI, such as the fix's push. Its other Repositories keep their own CI result. Offered under Merge + Push and Branch + Push.
+The failure option by which the human opens a Ready Ticket on the Project's CI Fixes Spec, carrying the note, which starts from the run summary and the Fix instructions, and stores it once on the commit's response. It doesn't accept the failed CI result: every Ticket the item lists stays Accepted, and lands in that commit's Repository when a later commit there containing the work passes CI, such as the fix's push. Its other Repositories keep their own CI result. Offered under Merge + Push and Branch + Push. It is also the To merge option on a Spec's lead Ticket under Pull Request + Land per Spec, its pull request open or closed: there it opens a Ready Ticket on the Spec itself, carrying the note, and the Ticket's accept is pushed to the Spec's pull request.
 _Avoid_: Follow-up ticket, hotfix
 
 **CI Fixes Spec**:

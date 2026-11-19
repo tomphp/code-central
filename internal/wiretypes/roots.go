@@ -66,6 +66,7 @@ var enums = []Enum{
 	enumOf("RecordKinds", core.RecordKinds()),
 	enumOf("ExternalStates", domain.ExternalStates),
 	enumOf("CIFailureOptions", core.CIFailureOptions()),
+	enumOf("ToMergeOptions", core.ToMergeOptions()),
 	enumOf("CIUnavailableCauses", core.CIUnavailableCauses()),
 	enumOf("Stages", core.Stages()),
 	enumOf("SegmentStages", core.SegmentStages()),

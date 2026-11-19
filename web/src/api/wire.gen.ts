@@ -252,6 +252,14 @@ export const CI_FAILURE_OPTIONS = [
 ] as const;
 export type CIFailureOption = (typeof CI_FAILURE_OPTIONS)[number];
 
+// ToMergeOption is a To merge option: what the human may choose on an
+// Accepted Ticket they merge, an operation's name.
+export const TO_MERGE_OPTIONS = [
+  "send_back",
+  "new_fix_ticket",
+] as const;
+export type ToMergeOption = (typeof TO_MERGE_OPTIONS)[number];
+
 // CIUnavailableCause is why a Ticket is CI unavailable.
 export const CI_UNAVAILABLE_CAUSES = [
   "ci_watcher_not_watching",
@@ -418,6 +426,7 @@ export const TICKET_FIELDS = [
   "ci_items",
   "waiting_for_spec",
   "ci_failure_options",
+  "to_merge_options",
   "claims",
   "rounds",
   "failure_reports",
@@ -609,6 +618,12 @@ export interface TicketView {
   // or CI cancelled, acting on every Ticket it lists; left out
   // otherwise, and empty when none applies. Computed on read.
   ci_failure_options?: CIFailureOption[];
+  // ToMergeOptions are the options, each an operation's name, the human
+  // may choose on the Ticket while it is Accepted under a Landing Method
+  // they merge (Branch or Pull Request), as send_back and new_fix_ticket
+  // would accept them; left out otherwise, and empty when none applies.
+  // Computed on read.
+  to_merge_options?: ToMergeOption[];
   claims?: ClaimView[];
   rounds?: RoundView[];
   failure_reports?: FailureReportView[];
@@ -732,6 +747,10 @@ export interface SpecDetail {
   // read sets them.
   editable: boolean;
   retroable: boolean;
+  // Ticketable says the UI offers New Ticket on the Spec, as
+  // whyNotNewTicket decides it, the rule new_ticket refuses by. Every
+  // read sets it.
+  ticketable: boolean;
   // Repositories are the Spec's Changed Repositories, the union of its
   // Tickets', by Name in landing order; left out while the Project has
   // the Home Repository alone.

@@ -131,6 +131,9 @@ export interface Api {
   // submitSmallChange opens a Ready Ticket on the Project's Small Changes
   // Spec from the human's text, titled by its first line.
   submitSmallChange(project: string, text: string, draft?: boolean): Promise<TicketAcknowledgement>;
+  // newTicket opens a Ready Ticket on spec from the human's text, titled
+  // by its first line: New Ticket, offered where the Spec is ticketable.
+  newTicket(project: string, spec: string, text: string, draft?: boolean): Promise<TicketAcknowledgement>;
   // specQuestions rolls up a Spec's Questions: its Tickets' Rounds.
   specQuestions(project: string, spec: string): Promise<SpecQuestions>;
   act<A extends TicketAction>(
