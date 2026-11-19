@@ -169,12 +169,11 @@ About 200 of `core`'s 318 exported types are the wire contract: inputs, views, r
 
 The Factory and the Watchers call `core` functions, so the same rule runs on both sides of the HTTP boundary from one copy of the code, and a client is pinned to the service's version of it:
 
-- `factory`: `core.SpecBranch` and `BranchTag` (branch naming), `core.NormalCloneURL`, `core.Stages()`, `core.GuideNames`, the `LandingPolicies` type, the reserved labels and tags.
+- `factory`: `core.SpecBranch` and `BranchTag` (branch naming), `core.Stages()`, `core.GuideNames`, the `LandingPolicies` type, the reserved labels and tags.
 - `issuewatcher`, `workitemwatcher`: `core.IssueMarker`, `core.OpaqueMarker`, `core.StatusLabelPrefix`; `pullrequestwatcher`, `issuewatcher`: `core.SumRepositoryProblems`.
 - `cli`: `core.TeachingFiles()`, `core.DefaultTicketParts()`.
 
-Some of these are rules both sides must agree on (Spec Branch names, markers), which is fair, but they should be in `domain` or `codehost`, not in the 22k-line package. Provider knowledge is left in `core` too: `core.NormalCloneURL` belongs in `codehost`, `core/ci.go`'s `withoutLogin` duplicates `azdourl`'s, and `core/cirepositories.go`'s `ciEntryFromCloneURL` builds an Azure DevOps project URL by hand, which `azdourl` could do.
-
+Some of these are rules both sides must agree on (Spec Branch names, markers), which is fair, but they should be in `domain` or `codehost`, not in the 22k-line package.
 **Recommendation:** move each shared rule to `domain` (naming, markers, labels, Stages) or `codehost` (URLs). Where the rule is only the service's (Stage guide names, Landing Policies), have the service send the answer in a view rather than the client compute it.
 
 ### 4. `ops` binds every operation to the concrete `*core.Core`

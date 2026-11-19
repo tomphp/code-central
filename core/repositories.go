@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/tomoram/code-central/codehost"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -294,7 +295,7 @@ func (c *Core) EditRepository(ctx context.Context, key string, in EditRepository
 	}
 	// Only a Clone URL naming another repository needs the Pull Request
 	// check again, or a Landing bringing it under Pull Request.
-	w, err := c.updateRepositories(ctx, key, in.Full, r, repositoryChange{newCloneURL: NormalCloneURL(was) != NormalCloneURL(r.CloneURL), landing: in.Landing != nil}, nil, edit)
+	w, err := c.updateRepositories(ctx, key, in.Full, r, repositoryChange{newCloneURL: codehost.NormalCloneURL(was) != codehost.NormalCloneURL(r.CloneURL), landing: in.Landing != nil}, nil, edit)
 	if err == nil && in.Landing != nil {
 		// The Landing decides an Accepted Ticket's Needs Me reason (To
 		// merge, or Accepted but not landed), so each one changed
@@ -470,7 +471,7 @@ func refuseListed(p domain.Project, r domain.Repository, home string) error {
 		if o.Home {
 			url = p.CI.PushRemoteURL
 		}
-		if url != "" && r.CloneURL != "" && NormalCloneURL(url) == NormalCloneURL(r.CloneURL) {
+		if url != "" && r.CloneURL != "" && codehost.NormalCloneURL(url) == codehost.NormalCloneURL(r.CloneURL) {
 			return &Error{Code: Invalid, Field: "clone_url", Message: fmt.Sprintf("%s is already listed as Repository %s, at %s", r.CloneURL, o.Name, url),
 				Fix: "a repository is listed once: edit " + o.Name + " instead, or give this one's own Clone URL"}
 		}
@@ -669,33 +670,4 @@ func (c *Core) changeRepositories(key string, full bool, ci *domain.CIRepository
 		return Written[ProjectView]{}, err
 	}
 	return acknowledgeProject(before, after, full, c.now())
-}
-
-// NormalCloneURL is url as Clone URLs are compared: two that name one
-// repository normalise the same, whether ssh, scp-like or https, with or
-// without a user, a port, a trailing .git or a trailing slash, and with
-// the host and path in any case. A GitHub or Azure Repos URL normalises
-// to its Code Host's repository, so Azure's ssh and https forms match.
-func NormalCloneURL(url string) string {
-	url = strings.ToLower(strings.TrimSpace(url))
-	if host, repo := codeHostOf(url); host != CodeHostNone {
-		return string(host) + ":" + repo
-	}
-	// withoutUser is a host with any user@ dropped.
-	withoutUser := func(host string) string { return host[strings.LastIndex(host, "@")+1:] }
-	var host, path string
-	scheme, rest, isURL := strings.Cut(url, "://")
-	switch h, p, scp := strings.Cut(url, ":"); {
-	case isURL && scheme == "file":
-		path = rest
-	case isURL:
-		host, path, _ = strings.Cut(rest, "/")
-		host, _, _ = strings.Cut(withoutUser(host), ":")
-	case scp && !strings.ContainsAny(h, `/\`):
-		host, path = withoutUser(h), p
-	default:
-		path = url
-	}
-	path = strings.TrimRight(strings.TrimSuffix(strings.TrimRight(path, "/"), ".git"), "/")
-	return host + "/" + strings.TrimLeft(path, "/")
 }

@@ -117,6 +117,24 @@ func ParseQueryURL(text string) (string, error) {
 // guidPattern is a GUID, as Azure DevOps names a saved query.
 var guidPattern = regexp.MustCompile(`^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$`)
 
+// ProjectURL is the project URL of an Azure DevOps project on
+// dev.azure.com.
+func ProjectURL(organization, project string) string {
+	return "https://dev.azure.com/" + organization + "/" + project
+}
+
+// WithoutHTTPLogin is an HTTP(S) remote URL without the login it may
+// carry, such as a token, which Code Central never keeps. An SSH URL's
+// user (git@) is no secret, and stays.
+func WithoutHTTPLogin(remote string) string {
+	u, err := url.Parse(remote)
+	if err != nil || u.User == nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return remote
+	}
+	u.User = nil
+	return u.String()
+}
+
 // withoutLogin is text with any login taken out of it, for an error to
 // echo: a login may hold a secret.
 func withoutLogin(text string) string {
