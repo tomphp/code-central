@@ -16,6 +16,11 @@ import sys
 LIMIT = 300
 SOURCE = re.compile(r"\.(go|ts|tsx|js|mjs)$")
 SAVED_OUTPUT = re.compile(r"/tool-results/[^/]+\.txt$")
+OUTLINE_CAP = 60
+GO_FILE = re.compile(r"\.go$")
+GO_DECL = re.compile(r"(func|type|var|const)\b")
+TS_FILE = re.compile(r"\.(ts|tsx|js|mjs)$")
+TS_DECL = re.compile(r"export\b")
 
 
 def lines(path, cwd):
@@ -25,6 +30,30 @@ def lines(path, cwd):
             return sum(1 for _ in f)
     except OSError:
         return 0
+
+
+def outline(path, cwd):
+    """Top-level declarations as "line:text": Go func/type/var/const, or
+    exported TS/JS declarations. Capped at OUTLINE_CAP, then a "more" line."""
+    if GO_FILE.search(path):
+        decl = GO_DECL
+    elif TS_FILE.search(path):
+        decl = TS_DECL
+    else:
+        return []
+    p = path if os.path.isabs(path) else os.path.join(cwd, path)
+    out = []
+    try:
+        with open(p, encoding="utf-8", errors="replace") as f:
+            for i, line in enumerate(f, 1):
+                if decl.match(line):
+                    out.append(f"{i}:{line.rstrip()}")
+    except OSError:
+        return []
+    if len(out) > OUTLINE_CAP:
+        extra = len(out) - OUTLINE_CAP
+        out = out[:OUTLINE_CAP] + [f"... {extra} more"]
+    return out
 
 
 def watched(path):
@@ -61,13 +90,17 @@ def long_cats(command, cwd):
     return out
 
 
-def deny(found):
+def deny(found, cwd):
     files = ", ".join(f"{p} ({n} lines)" for p, n in found)
     reason = (
         f"Read refused: {files} is too long to read whole. Find what you need "
         "with `grep -n` (or `go doc ./pkg Name` for a Go API), then read just "
         "that range with `sed -n A,Bp` or Read with offset and limit."
     )
+    for p, _ in found:
+        o = outline(p, cwd)
+        if o:
+            reason += f"\n\nOutline of {p} (line:declaration):\n" + "\n".join(o)
     json.dump({"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
         "permissionDecision": "deny",
@@ -87,7 +120,7 @@ def main():
         if watched(path) and lines(path, cwd) > LIMIT:
             found = [(path, lines(path, cwd))]
     if found:
-        deny(found)
+        deny(found, cwd)
 
 
 if __name__ == "__main__":
