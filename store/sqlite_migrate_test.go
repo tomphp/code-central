@@ -121,7 +121,7 @@ func TestAnOlderSQLiteStoreIsMigratedThroughTheChainAndBackedUp(t *testing.T) {
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if got := siblings(t, path); fmt.Sprint(got) != "[code-central.db code-central.db.format-1.bak code-central.db.lock]" {
+	if got := siblings(t, path); fmt.Sprint(got) != "[code-central.db code-central.db.format-1.bak]" {
 		t.Fatalf("next to the database: %v (want no staging left)", got)
 	}
 	again := openSQLiteFormat(t, path, 2)
@@ -244,8 +244,8 @@ func TestAFailedSQLiteMigrationLeavesTheOriginalUntouched(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), c.want) {
 				t.Fatalf("open: %v, want an error naming %q", err, c.want)
 			}
-			if got := siblings(t, path); fmt.Sprint(got) != "[code-central.db code-central.db.lock]" {
-				t.Fatalf("next to the database: %v, want only it and its lock", got)
+			if got := siblings(t, path); fmt.Sprint(got) != "[code-central.db]" {
+				t.Fatalf("next to the database: %v, want only it", got)
 			}
 			again := openSQLiteFormat(t, path, 1)
 			if got := dump(t, again); got != before {
@@ -282,7 +282,7 @@ func TestANewerSQLiteStoreIsRefusedAndLeftAsItIs(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "code-central.db: unknown format 1 (this code-central understands format 0)") {
 		t.Fatalf("open by an older build: %v, want a refusal naming the database and both formats", err)
 	}
-	if got := siblings(t, path); fmt.Sprint(got) != "[code-central.db code-central.db.lock]" {
+	if got := siblings(t, path); fmt.Sprint(got) != "[code-central.db]" {
 		t.Fatalf("next to the database: %v, want no backup", got)
 	}
 	if got := ticketTitle(t, openSQLiteFormat(t, path, 1), 2); got != "Form" {
@@ -306,7 +306,7 @@ func TestASQLiteMigrationClearsWhatAnUnfinishedOneLeft(t *testing.T) {
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if got := siblings(t, path); fmt.Sprint(got) != "[code-central.db code-central.db.format-1.bak code-central.db.lock]" {
+	if got := siblings(t, path); fmt.Sprint(got) != "[code-central.db code-central.db.format-1.bak]" {
 		t.Fatalf("next to the database: %v (want nothing left of the unfinished Migration)", got)
 	}
 }

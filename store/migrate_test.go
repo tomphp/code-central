@@ -93,6 +93,10 @@ func siblings(t *testing.T, dir string) []string {
 	}
 	var out []string
 	for _, e := range entries {
+		// The SQLite Store's lock file exists on Unix only: Windows locks by a named mutex.
+		if strings.HasSuffix(e.Name(), ".lock") {
+			continue
+		}
 		out = append(out, e.Name())
 	}
 	return out
