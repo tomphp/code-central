@@ -1,6 +1,8 @@
-package core
+package api
 
-import "context"
+import (
+	"context"
+)
 
 // Actor is who makes a write: human, agent or integration. Front doors
 // put it in the context; MCP and the CLI always write as Agent.

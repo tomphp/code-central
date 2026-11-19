@@ -1,8 +1,6 @@
 package core
 
 import (
-	"slices"
-
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -16,31 +14,6 @@ type LandingPolicies struct {
 	// fallback is the Default Landing's policy, for a name not listed.
 	fallback domain.LandingPolicy
 }
-
-// RepositoryLanding is a Repository's Landing as the human chooses it:
-// the Project's Default Landing, or an Own Landing of a Landing Method
-// with its Push option. A Repository's view shows its effective one,
-// never RepositoryLandingDefault.
-type RepositoryLanding string
-
-// The Repository Landings.
-const (
-	RepositoryLandingDefault     RepositoryLanding = "default"
-	RepositoryLandingMerge       RepositoryLanding = "merge"
-	RepositoryLandingMergePush   RepositoryLanding = "merge_push"
-	RepositoryLandingBranch      RepositoryLanding = "branch"
-	RepositoryLandingBranchPush  RepositoryLanding = "branch_push"
-	RepositoryLandingPullRequest RepositoryLanding = "pull_request"
-)
-
-// RepositoryLandings lists every RepositoryLanding, the default first.
-func RepositoryLandings() []RepositoryLanding {
-	return []RepositoryLanding{RepositoryLandingDefault, RepositoryLandingMerge, RepositoryLandingMergePush,
-		RepositoryLandingBranch, RepositoryLandingBranchPush, RepositoryLandingPullRequest}
-}
-
-// Valid reports whether l is one of the RepositoryLandings.
-func (l RepositoryLanding) Valid() bool { return slices.Contains(RepositoryLandings(), l) }
 
 // repositoryLandingOf is the RepositoryLanding of a Landing Method with
 // its Push option, normalised: Pull Request implies Push.
@@ -60,7 +33,7 @@ func repositoryLandingOf(method domain.LandingMethod, push bool) RepositoryLandi
 
 // methodAndPush is l's Landing Method and Push option; Merge for the
 // default, which a view never holds.
-func (l RepositoryLanding) methodAndPush() (domain.LandingMethod, bool) {
+func methodAndPush(l RepositoryLanding) (domain.LandingMethod, bool) {
 	switch l {
 	case RepositoryLandingMergePush:
 		return domain.LandingMerge, true
@@ -75,11 +48,11 @@ func (l RepositoryLanding) methodAndPush() (domain.LandingMethod, bool) {
 }
 
 // ownLanding is l as a stored Own Landing: none for the default.
-func (l RepositoryLanding) ownLanding() domain.OwnLanding {
+func ownLanding(l RepositoryLanding) domain.OwnLanding {
 	if l == RepositoryLandingDefault {
 		return domain.OwnLanding{}
 	}
-	m, push := l.methodAndPush()
+	m, push := methodAndPush(l)
 	return domain.OwnLanding{Method: m, Push: push}
 }
 
@@ -102,7 +75,7 @@ func effectiveLanding(p domain.Project, r domain.Repository) (RepositoryLanding,
 func repositoryLandingPolicies(repositories []RepositoryView, method domain.LandingMethod, push, landPerSpec, rebase, ciTracking bool) LandingPolicies {
 	ps := LandingPolicies{byName: map[string]domain.LandingPolicy{}, fallback: domain.NewLandingPolicy(method, push, landPerSpec, rebase, ciTracking)}
 	for _, r := range repositories {
-		m, p := r.Landing.methodAndPush()
+		m, p := methodAndPush(r.Landing)
 		ps.byName[r.Name] = domain.NewLandingPolicy(m, p && !r.LocalOnly, landPerSpec, rebase, ciTracking)
 		ps.names = append(ps.names, r.Name)
 	}
@@ -209,34 +182,6 @@ func (ps LandingPolicies) RebaseInForce() bool {
 	return ps.Any(domain.LandingPolicy.RebaseInForce)
 }
 
-// LandingMethodCapabilities is what the Options form offers with one
-// Landing Method drafted as the Default Landing: its Landing
-// capabilities.
-type LandingMethodCapabilities struct {
-	// OffersPush is whether the Push checkbox is offered.
-	OffersPush bool `json:"offers_push"`
-	// OffersLandPerSpec is whether Land per Spec can be changed.
-	OffersLandPerSpec bool `json:"offers_land_per_spec"`
-	// OffersRebase is whether Rebase can be changed.
-	OffersRebase bool `json:"offers_rebase"`
-	// ShowsCodeHost is whether the Code Host worked out from the Push
-	// remote URL is shown.
-	ShowsCodeHost bool `json:"shows_code_host"`
-	// UsesAzureReposPAT is whether the PAT variable is used.
-	UsesAzureReposPAT bool `json:"uses_azure_repos_pat"`
-}
-
-// LandingMethodsCapabilities is the Landing capabilities of every Landing
-// Method, each as if it were the Default Landing.
-type LandingMethodsCapabilities struct {
-	// Merge is what the form offers with Merge drafted.
-	Merge LandingMethodCapabilities `json:"merge"`
-	// Branch is what the form offers with Leave as a branch drafted.
-	Branch LandingMethodCapabilities `json:"branch"`
-	// PullRequest is what the form offers with Pull Request drafted.
-	PullRequest LandingMethodCapabilities `json:"pull_request"`
-}
-
 // landingCapabilities is p's Landing capabilities for each Landing Method
 // as if it were the Default Landing, with p's other settings and every
 // Own Landing unchanged, given the Azure Repos Repositories' names.
@@ -263,7 +208,7 @@ func pushesNothing(p domain.Project) bool {
 		if !r.LocalOnly {
 			return false
 		}
-		m, push := r.Landing.methodAndPush()
+		m, push := methodAndPush(r.Landing)
 		needsRemote = needsRemote || domain.NewLandingPolicy(m, push, p.Landing.LandPerSpec, p.Landing.Rebase, p.CI.Tracking).NeedsPushRemote()
 	}
 	return needsRemote

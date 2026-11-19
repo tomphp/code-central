@@ -200,7 +200,7 @@ func (c *Core) claimKey(key, op string, ticket Ref, claim int) (markKey, error) 
 		if _, ok := r.Project(key); !ok {
 			return notFound("there is no Project %q", key)
 		}
-		n, err := ticket.number(key, "ticket")
+		n, err := refNumber(ticket, key, "ticket")
 		if err != nil {
 			return notFound("there is no Ticket %s", ticket)
 		}

@@ -157,3 +157,46 @@ type WatcherCrash struct {
 	// RestartAt is when the service restarts it.
 	RestartAt time.Time
 }
+
+// ReportWatcherStatusInput is a Watcher's status report: for the CI
+// Watcher, report_ci_watcher_status(state, problem?, message?, fix?,
+// rate_limited_until?, full?).
+type ReportWatcherStatusInput struct {
+	// State is watching or error.
+	State   WatcherState   `json:"state"`
+	Problem WatcherProblem `json:"problem,omitempty"`
+	// Message and Fix are an error's; watching drops them.
+	Message string `json:"message,omitempty"`
+	Fix     string `json:"fix,omitempty"`
+	// RateLimitedUntil is when GitHub lets a Watching Watcher call it
+	// again, while it is rate-limited.
+	RateLimitedUntil time.Time `json:"rate_limited_until,omitzero"`
+	// Repositories are the Repositories an error is about, each with its
+	// own problem and fix, while the Watcher carries on watching the
+	// others; an error with only these reads as the first one's.
+	Repositories []RepositoryProblem `json:"repositories,omitempty"`
+	// Full asks for the Project in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
+}
+
+// WatcherView is a Project's Watcher's status, in its kind's settings.
+type WatcherView struct {
+	State WatcherState `json:"state"`
+	// Problem, Message and Fix say what is wrong, while in error.
+	Problem WatcherProblem `json:"problem,omitempty"`
+	Message string         `json:"message,omitempty"`
+	Fix     string         `json:"fix,omitempty"`
+	// Repositories are the Repositories it can't watch, each with its
+	// problem and fix, while in error about some of them only: it carries
+	// on watching the rest.
+	Repositories []RepositoryProblem `json:"repositories,omitempty"`
+	// RateLimitedUntil is when GitHub lets a rate-limited Watcher call it
+	// again; until then it is still Watching, not in error.
+	RateLimitedUntil time.Time `json:"rate_limited_until,omitzero"`
+	// Since is when the Watcher went into this state; nil until it
+	// reports.
+	Since *time.Time `json:"since,omitempty"`
+	// Host is the machine whose service holds the Project's Watcher
+	// Lease, and so runs the Watcher, once a Lease is known.
+	Host string `json:"host,omitempty"`
+}

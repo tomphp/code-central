@@ -78,17 +78,6 @@ type GetSpecInput struct {
 	Sections []string `json:"sections,omitempty" query:"section" desc:"Only the body's Sections under these headings, matched case-insensitively at any level." cli:"--section <heading>"`
 }
 
-// The parts of a Spec a lighter get_spec can ask for. A Ticket has edits
-// too, so PartEdits names its edits part as well.
-const (
-	PartBody    = "body"
-	PartTickets = "tickets"
-	PartEdits   = "edits"
-	// PartOutline reads the outline alone: every read but the full one
-	// returns it, so naming it asks for nothing else.
-	PartOutline = "outline"
-)
-
 var specParts = []string{PartBody, PartTickets, PartEdits, PartOutline}
 
 // SpecRow is one find_specs result.

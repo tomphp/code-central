@@ -194,7 +194,7 @@ func (c *Core) timedReasonChanges() []markKey {
 			e := c.evaluate(r, p)
 			for _, t := range e.tickets() {
 				reason, _ := e.reason(t)
-				if !reason.timed() {
+				if !isTimed(reason) {
 					continue
 				}
 				k := markKey{p.Key, t.Number, 0}

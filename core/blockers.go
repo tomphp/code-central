@@ -76,7 +76,7 @@ func (c *Core) AddBlocker(_ context.Context, key string, in BlockerInput) (Writt
 // Replacements is unlinked by removing that Cancelled Blocker.
 func (c *Core) RemoveBlocker(_ context.Context, key string, in BlockerInput) (Written[TicketView], error) {
 	return c.updateTicketIn(key, "remove_blocker", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
-		b, err := in.Blocker.number(key, "blocker")
+		b, err := refNumber(in.Blocker, key, "blocker")
 		if err != nil {
 			return false, err
 		}

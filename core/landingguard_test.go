@@ -32,8 +32,8 @@ var guardedTypes = []string{
 	"github.com/tomoram/code-central/domain.Landing",
 	"github.com/tomoram/code-central/domain.OwnLanding",
 	"github.com/tomoram/code-central/domain.CI",
-	"github.com/tomoram/code-central/core.LandingView",
-	"github.com/tomoram/code-central/core.RepositoryView",
+	"github.com/tomoram/code-central/api.LandingView",
+	"github.com/tomoram/code-central/api.RepositoryView",
 }
 
 // guardAllow is a whole file, or one top-level function in it, that may
@@ -251,13 +251,14 @@ func guardFailure(allow []guardAllow, reads []landingRead) string {
 func TestNoLandingSettingIsReadOutsideThePolicy(t *testing.T) {
 	l := newGuardLoader(t)
 	domain := l.check(t, "github.com/tomoram/code-central/domain", l.parse(t, "domain"))
+	api := l.check(t, "github.com/tomoram/code-central/api", l.parse(t, "api"))
 	core := l.check(t, "github.com/tomoram/code-central/core", l.parse(t, "core"))
 	factory := l.check(t, "github.com/tomoram/code-central/factory", l.parse(t, "factory"))
 
-	if stale := staleEntries(landingGuardAllowlist, domain, core, factory); len(stale) > 0 {
+	if stale := staleEntries(landingGuardAllowlist, domain, api, core, factory); len(stale) > 0 {
 		t.Errorf("the allowlist names what isn't there:\n\t%s", strings.Join(stale, "\n\t"))
 	}
-	if msg := guardFailure(landingGuardAllowlist, slices.Concat(landingReads(domain), landingReads(core), landingReads(factory))); msg != "" {
+	if msg := guardFailure(landingGuardAllowlist, slices.Concat(landingReads(domain), landingReads(api), landingReads(core), landingReads(factory))); msg != "" {
 		t.Error(msg)
 	}
 }
@@ -267,7 +268,7 @@ func TestNoLandingSettingIsReadOutsideThePolicy(t *testing.T) {
 const guardFixture = `package fixture
 
 import (
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -286,7 +287,7 @@ func viaPointer(c *domain.CI) bool { return c.Tracking }
 
 func viaEmbedding(w wrapped) bool { return w.Push }
 
-func viaView(v core.LandingView) bool { return v.LandPerSpec }
+func viaView(v api.LandingView) bool { return v.LandPerSpec }
 `
 
 func checkGuardFixture(t *testing.T) guardedPackage {
@@ -308,7 +309,7 @@ func TestTheLandingGuardFlagsAReadOfALandingSetting(t *testing.T) {
 		"\tfixture/fixture.go:16: Method of github.com/tomoram/code-central/domain.Landing\n" +
 		"\tfixture/fixture.go:19: Tracking of github.com/tomoram/code-central/domain.CI\n" +
 		"\tfixture/fixture.go:21: Push of github.com/tomoram/code-central/domain.Landing\n" +
-		"\tfixture/fixture.go:23: LandPerSpec of github.com/tomoram/code-central/core.LandingView\n"
+		"\tfixture/fixture.go:23: LandPerSpec of github.com/tomoram/code-central/api.LandingView\n"
 	if msg != want {
 		t.Errorf("failure =\n%s\nwant\n%s", msg, want)
 	}

@@ -26,39 +26,6 @@ const (
 // reported its claude's, so effort can be set on a fresh store.
 var seededEffortLevels = []string{"low", "medium", "high", "xhigh", "max"}
 
-// ChoiceSource says which tier set a Model Choice value.
-type ChoiceSource string
-
-// The sources Code Central works out. SourceNone leaves the value to the
-// Factory: its flag, or else Claude Code's default.
-const (
-	SourceTicketTag      ChoiceSource = "ticket_tag"
-	SourceProjectKind    ChoiceSource = "project_kind"
-	SourceProjectDefault ChoiceSource = "project_default"
-	SourceNone           ChoiceSource = "none"
-)
-
-// ChoiceSources are the sources.
-func ChoiceSources() []ChoiceSource {
-	return []ChoiceSource{SourceTicketTag, SourceProjectKind, SourceProjectDefault, SourceNone}
-}
-
-// ChoiceValue is one of a Model Choice's values with its source; Value is
-// empty when the source is none. Kind names the kind of work whose
-// Models row set it, only when the source is project_kind.
-type ChoiceValue struct {
-	Value  string       `json:"value,omitempty"`
-	Source ChoiceSource `json:"source"`
-	Kind   string       `json:"kind,omitempty"`
-}
-
-// ModelChoice is the model and effort a Ticket's next turn runs with, as
-// far as Code Central sets them, each worked out on its own.
-type ModelChoice struct {
-	Model  ChoiceValue `json:"model"`
-	Effort ChoiceValue `json:"effort"`
-}
-
 // modelChoice works out the Model Choice of t, on Project p, highest
 // tier first: t's Tag, p's Models row for t's kind of work, then p's
 // default row. It is worked out afresh for every turn, never kept per
@@ -103,11 +70,6 @@ func checkEffort(r store.Reader, key, field, effort string) error {
 	return nil
 }
 
-// GetModelChoiceInput is the Factory's get_model_choice(ticket).
-type GetModelChoiceInput struct {
-	Ticket Ref `json:"ticket" path:"n"`
-}
-
 // GetModelChoice is the Factory's get_model_choice: the Model Choice for
 // the Ticket's next turn, which it reads before every resume.
 func (c *Core) GetModelChoice(_ context.Context, key string, in GetModelChoiceInput) (ModelChoice, error) {
@@ -125,18 +87,6 @@ func (c *Core) GetModelChoice(_ context.Context, key string, in GetModelChoiceIn
 		return nil
 	})
 	return mc, err
-}
-
-// ReportModelChoiceInput is the Factory's report_model_choice(ticket,
-// claim_id, model, effort, full?): what a turn was started with, after
-// the Factory's fallbacks, empty meaning Claude Code's default.
-type ReportModelChoiceInput struct {
-	Ticket  Ref    `json:"ticket" path:"n"`
-	ClaimID string `json:"claim_id"`
-	Model   string `json:"model,omitempty"`
-	Effort  string `json:"effort,omitempty"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
 }
 
 // ReportModelChoice is the Factory's report_model_choice: it records the
