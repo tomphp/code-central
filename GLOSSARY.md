@@ -301,7 +301,7 @@ A Merge and Pull Request option, off by default and kept whatever the method, sh
 _Avoid_: linear history, squash, fast-forward only
 
 **Spec Branch**:
-The local branch, `spec/<spec id>`, that a Spec's accepted implementation Tickets are merged into under Land per Spec. Each Repository has its own, cut from that Repository's Base, and each Ticket's branch in that Repository is cut from its tip; branch names are the same in every Repository. Once the Spec is ready to land, the Factory checks the Spec Branch of every one of the Spec's Changed Repositories against its base before any lands, then makes the same "Merge spec" commit in each, in the landing order. It is pushed only under Pull Request, where the Spec's one pull request is opened from it. Under Rebase, accepted Tickets are replayed onto it instead of merged into it, and it is rebased onto the base before it lands.
+The local branch that a Spec's accepted implementation Tickets are merged into under Land per Spec: `spec/<spec id>`, or the value of the Spec's `branch` Tag when it has one. The name is the same locally, as pushed, and in every Repository. Each Repository has its own, cut from that Repository's Base, and each Ticket's branch in that Repository is cut from its tip. Once the Spec is ready to land, the Factory checks the Spec Branch of every one of the Spec's Changed Repositories against its base before any lands, then makes the same "Merge spec" commit in each, in the landing order. It is pushed only under Pull Request, where the Spec's one pull request is opened from it. Under Rebase, accepted Tickets are replayed onto it instead of merged into it, and it is rebased onto the base before it lands.
 _Avoid_: Feature branch, integration branch, epic branch
 
 **Spec merge Ticket**:
@@ -724,7 +724,7 @@ A Ticket's type on a Map, as Spec reads show it: its Wayfinder Label's type (`ch
 _Avoid_: Ticket kind
 
 **Tag**:
-A free-form key and value on a Spec or Ticket, with no meaning to Code Central's workflow; the Factory reads the `guided` Tag on a Map and the `model` and `effort` Tags on a Ticket, and the read side the `prototype`, `research` and `map` Tags. The tickets Stage sets `model` and `effort` on the Tickets it creates when Model Assignment is on. `effort` is the one Tag whose value Code Central checks: on a Ticket it must be a valid effort level.
+A free-form key and value on a Spec or Ticket, with no meaning to Code Central's workflow; the Factory reads the `guided` Tag on a Map and the `model` and `effort` Tags on a Ticket, the `branch` Tag on a Spec, and the read side the `prototype`, `research` and `map` Tags. The tickets Stage sets `model` and `effort` on the Tickets it creates when Model Assignment is on. Code Central checks two Tags' values. On a Ticket, `effort` must be a valid effort level. On a Spec, `branch` must be a valid branch name, a value another unfinished Spec uses is refused, and any change is refused once one of the Spec's implementation Tickets has been claimed.
 _Avoid_: Label, attribute, property
 
 **Import**:
@@ -756,7 +756,7 @@ A Project's Long-lived Spec that the Incoming Issues from every listed repositor
 _Avoid_: Inbox Spec, triage Spec
 
 **Azure Boards**:
-A Project's opt-in, off by default, to link the work items an Azure DevOps query returns through an Integration. The human turns it on in the Azure Boards section of Project Options, choosing a Saved query or a WIQL filter, the environment variable holding the PAT (the Project's CI PAT variable unless it names its own), whether New issues need me, and Hide Code Central; the settings of the mode not chosen are kept. Turning it on, or changing what it runs while on, first runs the Work Item Watcher's check mode, and the first time it creates the Azure Boards Spec. Turning it off leaves every Link as it is. It is inbound only, and never changes a work item's State. It is the second Integration.
+A Project's opt-in, off by default, to link the work items an Azure DevOps query returns through an Integration. The human turns it on in the Azure Boards section of Project Options, choosing a Saved query or a WIQL filter, the environment variable holding the PAT (the Project's CI PAT variable unless it names its own), whether New issues need me, Hide Code Central, and the Branch format; the settings of the mode not chosen are kept. Turning it on, or changing what it runs while on, first runs the Work Item Watcher's check mode, and the first time it creates the Azure Boards Spec. Turning it off leaves every Link as it is. It is inbound only, and never changes a work item's State. It is the second Integration.
 _Avoid_: ADO integration, Azure DevOps Boards sync
 
 **Work item**:
@@ -803,12 +803,16 @@ _Avoid_: Notify on new issues
 A setting of Azure Boards, off by default, that the human sets in the Azure Boards section of Project Options. While it is on, Write-back to a work item still posts every comment, but nothing Code Central adds names Code Central, its Specs or its Tickets. It writes no Status label, drops the line linking back, leaves Ticket IDs out of landed lines, hides its marker as an opaque hash, and replaces this Project's IDs and ID Links in the written text with the items' titles, outside code. Comments and tags already on a work item stay as they are. Other prose is posted as written.
 _Avoid_: Anonymous mode, unbranded Write-back, stealth mode
 
+**Branch format**:
+An Integration's Project Option, empty by default, that To Requirement fills in with the linked item's ID to give the new Requirement's `branch` Tag, for example `feat/{id}`. `{id}` is its one placeholder, and it is required. Azure Boards has one for now.
+_Avoid_: branch template, branch pattern
+
 **Keep as Draft**:
 The human's triage action that leaves an Incoming Issue as it is, a Draft as it arrived, and clears its awaiting triage, taking it out of Needs Me for good, writing nothing to its issue or work item.
 _Avoid_: Park, snooze
 
 **To Requirement**:
-The human's triage action that makes a Requirement from an Incoming Issue, its title, then its body, then the human's optional extra context, moves the issue's or work item's Link to the Requirement's Spec as an Outbound Link, and Cancels the Incoming Issue with the grilling Stage Ticket as its Replacement.
+The human's triage action that makes a Requirement from an Incoming Issue, its title, then its body, then the human's optional extra context, moves the issue's or work item's Link to the Requirement's Spec as an Outbound Link, and Cancels the Incoming Issue with the grilling Stage Ticket as its Replacement. When the Integration's Branch format is set, it also sets the Requirement's `branch` Tag from it.
 _Avoid_: Promote, accept
 
 **Won't fix**:

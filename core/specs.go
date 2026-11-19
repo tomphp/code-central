@@ -170,9 +170,11 @@ func specClaimed(tickets []domain.Ticket) bool {
 type FindSpecsInput struct {
 	Title  string   `json:"title,omitempty" desc:"Only Specs whose title contains this text." cli:"--title <t>"`
 	Labels []string `json:"labels,omitempty" query:"label" desc:"Only Specs with all of these Labels." cli:"--label <l>"`
-	// Tags must all be present with exactly these values. Over HTTP each
-	// is a tag=<key>=<value> parameter, which DecodeQuery reads.
-	Tags map[string]string `json:"tags,omitempty" query:"tag" desc:"Only Specs with all of these Tags, as {key: value}." cli:"--tag <key>=<value>"`
+	// Tags must all be present with exactly these values, or with any
+	// value for an empty one: tag=branch= finds every Spec with a branch
+	// Tag. Over HTTP each is a tag=<key>=<value> parameter, which
+	// DecodeQuery reads.
+	Tags map[string]string `json:"tags,omitempty" query:"tag" desc:"Only Specs with all of these Tags, as {key: value}; an empty value matches any value." cli:"--tag <key>=<value>"`
 	// Finished includes finished Specs, which are otherwise left out.
 	Finished bool `json:"finished,omitempty" desc:"Include finished Specs."`
 	// Requirements keeps only Specs that are Requirements.

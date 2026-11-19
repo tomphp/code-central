@@ -1207,6 +1207,9 @@ export interface LinkView {
 export interface SpecRef {
   id: string;
   title: string;
+  // Branch is the Spec's Spec Branch: its branch Tag's value, else
+  // spec/<id>.
+  branch: string;
 }
 
 // BlockerView is one Blocker as get_ticket shows it, after following
