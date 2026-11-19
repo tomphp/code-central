@@ -60,9 +60,10 @@ function azureDraft(project: ProjectRow): AzureBoardsChange {
 // code-central-894): the switch, the mode (a Saved query's URL, or a WIQL
 // filter's project URL and WHERE clause), the PAT variable, New issues
 // need me, Hide Code Central and the Branch format. Turning it on, or
-// changing what it runs while it is on, runs the check, whose refusal shows in place with its fix; while it is on, the
-// Work Item Watcher's status shows below. Like the other sections it
-// follows the Project as read.
+// changing what it runs while it is on, runs the check; a refused save
+// shows its problem and fix in place. While it is on, the Work Item
+// Watcher's status shows below. Like the other sections it follows the
+// Project as read.
 export function AzureBoardsSection({ project }: { project: ProjectRow }) {
   const api = useApi();
   const azure = project.azure_boards;

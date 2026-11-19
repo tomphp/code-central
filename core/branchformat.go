@@ -20,8 +20,9 @@ const branchFormatID = "{id}"
 // sampleItemID fills a Branch format to check it when it is saved.
 const sampleItemID = "4711"
 
-// placeholder matches any {...} placeholder in a Branch format.
-var placeholder = regexp.MustCompile(`\{[^{}]*\}`)
+// branchFormatPlaceholder matches any {...} placeholder in a Branch
+// format.
+var branchFormatPlaceholder = regexp.MustCompile(`\{[^{}]*\}`)
 
 // fillBranchFormat is format filled in with the ID of the item linkID
 // names: what follows its last #, as in acme/web#12 or contoso#4711.
@@ -40,10 +41,13 @@ func checkBranchFormat(p domain.Project, field, format string) error {
 	if !strings.Contains(format, branchFormatID) {
 		return invalid(field, "a Branch format must contain %s, which To Requirement fills with the item's ID, such as feat/%s", branchFormatID, branchFormatID)
 	}
-	for _, m := range placeholder.FindAllString(format, -1) {
+	for _, m := range branchFormatPlaceholder.FindAllString(format, -1) {
 		if m != branchFormatID {
 			return invalid(field, "a Branch format can only fill in %s, not %s", branchFormatID, m)
 		}
+	}
+	if strings.ContainsAny(strings.ReplaceAll(format, branchFormatID, ""), "{}") {
+		return invalid(field, "a Branch format can only use { and } around %s", branchFormatID)
 	}
 	return checkBranchTagName(p, field, fillBranchFormat(format, sampleItemID))
 }

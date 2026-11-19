@@ -57,6 +57,8 @@ func TestABranchFormatThatCantNameASpecBranchIsRefused(t *testing.T) {
 		"feat/{id}-{title}": "{title}",
 		"feat/{ID}":         "must contain {id}",
 		"{id}/{ID}":         "{ID}",
+		"feat/{id}}":        "only use { and } around {id}",
+		"feat/{{id}":        "only use { and } around {id}",
 		"feat {id}":         "valid branch name",
 		"spec/{id}":         "starts with spec/",
 		"acme-{id}":         "shape of a Ticket ID",

@@ -35,8 +35,8 @@ type inbox struct {
 // Boards'.
 func inboxes(p domain.Project) []inbox {
 	return []inbox{
-		{IntegrationGitHub, p.GitHubIssues.Spec, p.GitHubIssues.NewIssuesNeedMe, ""},
-		{IntegrationAzureBoards, p.AzureBoards.Spec, p.AzureBoards.NewIssuesNeedMe, p.AzureBoards.BranchFormat},
+		{integration: IntegrationGitHub, spec: p.GitHubIssues.Spec, newIssuesNeedMe: p.GitHubIssues.NewIssuesNeedMe},
+		{integration: IntegrationAzureBoards, spec: p.AzureBoards.Spec, newIssuesNeedMe: p.AzureBoards.NewIssuesNeedMe, branchFormat: p.AzureBoards.BranchFormat},
 	}
 }
 

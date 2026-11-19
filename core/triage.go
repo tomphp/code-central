@@ -153,9 +153,10 @@ func requirementText(t domain.Ticket, extra string) string {
 // store update it makes an Incoming Issue a Requirement whose Spec has an
 // outbound Link to the same issue, carrying over the comment keys
 // written, and the branch Tag its Integration's Branch format names, if
-// any, refusing it all when that Tag would be refused; detaches the Incoming Issue's Link; and Cancels it with the
-// grilling Stage as its Replacement, the context as its comment, and its
-// awaiting triage cleared. Its Move to Cancelled is via to_requirement,
+// any, refusing it all when that Tag would be refused; detaches the
+// Incoming Issue's Link; and Cancels it with the grilling Stage as its
+// Replacement, the context as its comment, and its awaiting triage
+// cleared. Its Move to Cancelled is via to_requirement,
 // so the context comment is due on the issue (writeback.go). Its result
 // is the Incoming Issue's, whose Replacement leads to the Requirement.
 func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementInput) (Written[TicketView], error) {
