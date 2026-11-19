@@ -839,42 +839,57 @@ func firstLine(s string) string {
 // sendBack sends a Ticket whose work conflicts with the base back to
 // Ready, so a later Claim resolves the conflict and the human reviews it
 // again: under Rebase by rebasing its branch onto c.into, and otherwise
-// by merging c.into into its branch.
-func (l *lander) sendBack(ctx context.Context, tk core.TicketView, c landConflict) {
+// by merging c.into into its branch. A Spec merge Ticket whose Spec
+// Branch went on while it was open rebases those commits onto its branch
+// instead, since its branch already is the Spec Branch rebased, and the
+// Factory then takes the branch as holding them. It reports whether the
+// Ticket was sent back.
+func (l *lander) sendBack(ctx context.Context, tk core.TicketView, c landConflict) bool {
 	var b strings.Builder
 	fmt.Fprintf(&b, "The Factory couldn't land this: %s at %s conflicts in these files:\n\n", c.what(), short(c.tip))
 	for _, f := range c.files {
 		fmt.Fprintf(&b, "- %s\n", f)
 	}
-	if c.rebase {
+	switch {
+	case c.replacing:
+		fmt.Fprintf(&b, "\nRebase %s's commits since %s onto the branch, resolve the conflicts, and finish again. The Factory then takes the branch as holding them, and moves %s to it.", c.into, short(c.fork), c.into)
+	case c.rebase:
 		fmt.Fprintf(&b, "\nRebase the branch onto %s, resolve the conflicts, and finish again.", c.into)
-	} else {
+	default:
 		fmt.Fprintf(&b, "\nMerge %s into the branch, resolve the conflicts, and finish again.", c.into)
 	}
 	if _, err := l.client.SendBack(ctx, l.project, core.SendBackInput{Ticket: core.Ref(tk.ID), Note: b.String()}); err != nil {
 		if ctx.Err() == nil {
 			l.printf("%s: send_back: %v", tk.ID, err)
 		}
-		return
+		return false
 	}
 	l.printf("%s: conflicts with %s at %s in %s: sent back to Ready", tk.ID, c.into, short(c.tip), strings.Join(c.files, ", "))
+	return true
 }
 
 // landConflict is how merging a Ticket's work in r, head, into the
-// branch into at tip conflicts, or replaying it onto into: in files.
+// branch into at tip conflicts, or replaying it onto into, or, for a
+// Spec merge Ticket under Rebase, replaying into's commits since fork
+// onto head: in files.
 type landConflict struct {
-	r               *repository
-	head, into, tip string
-	files           []string
+	r                     *repository
+	head, into, tip, fork string
+	files                 []string
 	// rebase is whether Rebase is in force, so the Ticket is asked to
-	// rebase its branch, and replaying whether the Factory replayed it.
-	rebase, replaying bool
+	// rebase its branch, replaying whether the Factory replayed it, and
+	// replacing whether it replayed into's later commits onto head, to
+	// move into there.
+	rebase, replaying, replacing bool
 }
 
 // what is what the Factory tried that conflicts: merging head into into,
-// or replaying it onto into.
+// replaying it onto into, or replaying into's commits since fork onto it.
 func (c landConflict) what() string {
-	if c.replaying {
+	switch {
+	case c.replacing:
+		return fmt.Sprintf("replaying %s's commits since %s onto %s", c.into, short(c.fork), short(c.head))
+	case c.replaying:
 		return fmt.Sprintf("replaying %s onto %s", short(c.head), c.into)
 	}
 	return fmt.Sprintf("merging %s into %s", short(c.head), c.into)
@@ -885,18 +900,22 @@ func (c landConflict) what() string {
 // Repositories: one note names each, with its files (ADR 0049), and says
 // to rebase the branch in each when Rebase is in force in any of them,
 // and to merge otherwise. The Factory has merged it into none of them
-// this time. With the Home Repository alone it is sendBack.
-func (l *lander) sendBackConflicts(ctx context.Context, tk core.TicketView, onto string, conflicts []landConflict) {
+// this time. With the Home Repository alone it is sendBack. It reports
+// whether the Ticket was sent back.
+func (l *lander) sendBackConflicts(ctx context.Context, tk core.TicketView, onto string, conflicts []landConflict) bool {
 	if !l.repos.several() {
-		l.sendBack(ctx, tk, conflicts[0])
-		return
+		return l.sendBack(ctx, tk, conflicts[0])
 	}
 	var b strings.Builder
 	var names []string
 	rebase := slices.ContainsFunc(conflicts, func(c landConflict) bool { return c.rebase })
-	if slices.ContainsFunc(conflicts, func(c landConflict) bool { return c.replaying }) {
+	replacing := slices.ContainsFunc(conflicts, func(c landConflict) bool { return c.replacing })
+	switch {
+	case replacing:
+		fmt.Fprintf(&b, "The Factory couldn't land this: replaying the %s's later commits onto it conflicts in these Repositories, so it moved the %s in none of them:\n\n", onto, onto)
+	case slices.ContainsFunc(conflicts, func(c landConflict) bool { return c.replaying }):
 		fmt.Fprintf(&b, "The Factory couldn't land this: replaying it onto the %s conflicts in these Repositories, so it replayed it onto none of them:\n\n", onto)
-	} else {
+	default:
 		fmt.Fprintf(&b, "The Factory couldn't land this: merging it into the %s conflicts in these Repositories, so it merged it into none of them:\n\n", onto)
 	}
 	for _, c := range conflicts {
@@ -906,18 +925,22 @@ func (l *lander) sendBackConflicts(ctx context.Context, tk core.TicketView, onto
 			fmt.Fprintf(&b, "  - %s\n", file)
 		}
 	}
-	if rebase {
+	switch {
+	case replacing:
+		fmt.Fprintf(&b, "\nIn each, rebase its %s's commits since the fork point named above onto the branch, resolve the conflicts, and finish again. The Factory then takes the branch as holding them, and moves the %s to it.", onto, onto)
+	case rebase:
 		fmt.Fprintf(&b, "\nIn each, rebase the branch onto its %s, resolve the conflicts, and finish again.", onto)
-	} else {
+	default:
 		fmt.Fprintf(&b, "\nIn each, merge its %s into the branch, resolve the conflicts, and finish again.", onto)
 	}
 	if _, err := l.client.SendBack(ctx, l.project, core.SendBackInput{Ticket: core.Ref(tk.ID), Note: b.String()}); err != nil {
 		if ctx.Err() == nil {
 			l.printf("%s: send_back: %v", tk.ID, err)
 		}
-		return
+		return false
 	}
 	l.printf("%s: conflicts with the %s in %s: sent back to Ready", tk.ID, onto, strings.Join(names, ", "))
+	return true
 }
 
 // advanceBase fast-forwards r's base from old to merge. It returns why it
