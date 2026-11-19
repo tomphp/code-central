@@ -19,9 +19,9 @@ func specRefOf(spec core.SpecDetail) core.SpecRef {
 	return core.SpecRef{ID: spec.ID, Title: spec.Title, Branch: core.SpecBranch(spec.ID, spec.Tags)}
 }
 
-// pushedIn is the Repositories where the Factory pushed spec's Spec
-// Branch, as its Tickets' pushed commits say.
-func pushedIn(spec core.SpecDetail) []string {
+// specBranchPushedIn is the Repositories where the Factory pushed spec's
+// Spec Branch, as its Tickets' pushed commits say.
+func specBranchPushedIn(spec core.SpecDetail) []string {
 	if spec.LandPerSpec == nil {
 		return nil
 	}
@@ -401,6 +401,7 @@ func (l *lander) pushSpecBranch(ctx context.Context, spec core.SpecRef, pushedIn
 		return
 	}
 	if pushed {
+		l.pushedSpecBranches[pl.r.name+"@"+branch] = true
 		l.printf("%s: pushed %s to %s%s", id, branch, pl.r.remote, pl.r.where())
 	}
 	for _, tk := range pl.tickets {
@@ -411,8 +412,9 @@ func (l *lander) pushSpecBranch(ctx context.Context, spec core.SpecRef, pushedIn
 // foreignSpecBranch is why the Factory won't push the Spec Branch branch,
 // at tip, to r's Push remote: the remote has a branch of that name the
 // Factory didn't push, as none of the Spec's Tickets has a pushed commit
-// reported on it in r (pushedIn) and it isn't at tip, so a push would
-// replace, or under Rebase force over, someone else's work. The human
+// reported on it in r (pushedIn), this run didn't push it there, and it
+// isn't at tip, so a push would replace, or under Rebase force over,
+// someone else's work. The human
 // deletes or renames it there, as the Spec's branch Tag is locked by
 // now. A remote-tracking ref the remote's branch was deleted from since
 // is deleted too, and the push goes ahead. why is "" when the push can
@@ -421,7 +423,7 @@ func (l *lander) pushSpecBranch(ctx context.Context, spec core.SpecRef, pushedIn
 func (l *lander) foreignSpecBranch(ctx context.Context, r *repository, branch, tip string, pushedIn []string) (why string, ok bool) {
 	tracking := "refs/remotes/" + r.remote + "/" + branch
 	theirs, err := r.git.commit(tracking)
-	if err != nil || theirs == tip || slices.Contains(pushedIn, r.name) {
+	if err != nil || theirs == tip || slices.Contains(pushedIn, r.name) || l.pushedSpecBranches[r.name+"@"+branch] {
 		return "", true
 	}
 	has, err := r.git.remoteHas(ctx, r.remote, branch)
@@ -603,7 +605,7 @@ func (l *lander) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets []
 			// Nothing is merged or pushed while a Spec Branch conflicts, but
 			// a merge made already goes on to its push and land.
 		case pl.push:
-			l.pushSpecBranch(ctx, ref, pushedIn(spec), policies, pl)
+			l.pushSpecBranch(ctx, ref, specBranchPushedIn(spec), policies, pl)
 		case !l.landSpecIn(ctx, spec, p, pl):
 			return true
 		}

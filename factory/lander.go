@@ -91,13 +91,17 @@ type lander struct {
 	// report as the Ticket's pushed commit there failed, to report next
 	// poll.
 	unreported map[string]string
+	// pushedSpecBranches is "<Repository Name>@<Spec Branch>" of the Spec
+	// Branches this run pushed, so one whose report as the Tickets'
+	// pushed commit failed isn't taken for a branch it didn't push.
+	pushedSpecBranches map[string]bool
 }
 
 // newLander is the landing part of project's Factory over the registry
 // repos, reporting through c, with nothing found out yet: start sets the
 // .mcp.json state it finds.
 func newLander(repos *repositories, c *client.Client, project string, w work, printf func(format string, args ...any), h landerHooks) *lander {
-	return &lander{repos: repos, client: c, project: project, work: w, printf: printf, hooks: h, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, saidHeld: map[string]bool{}, bases: map[string]*baseState{}, saidLocalOnly: map[string]bool{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}}
+	return &lander{repos: repos, client: c, project: project, work: w, printf: printf, hooks: h, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, saidHeld: map[string]bool{}, bases: map[string]*baseState{}, saidLocalOnly: map[string]bool{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, pushedSpecBranches: map[string]bool{}}
 }
 
 // poll is a poll's landing: it reads the Landing Method and the

@@ -144,7 +144,10 @@ func specBranchPushedIn(key, branch string, tickets []domain.Ticket) []string {
 	var names []string
 	for _, t := range tickets {
 		for _, pc := range t.PushedCommits {
-			if name := recordRepository(key, pc.Repository); pc.Branch == branch && !slices.Contains(names, name) {
+			if pc.Branch != branch {
+				continue
+			}
+			if name := recordRepository(key, pc.Repository); !slices.Contains(names, name) {
 				names = append(names, name)
 			}
 		}
