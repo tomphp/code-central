@@ -14,7 +14,6 @@ import (
 
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/pullrequestwatcher"
@@ -66,7 +65,7 @@ func newWatchingOn(t *testing.T, remote string) *watching {
 	must(t, func() error { _, err := c.CreateSpec(ctx, "acme", api.CreateSpecInput{Title: "Login"}); return err })
 	// Long-lived, so that its Ticket gets a pull request of its own.
 	must(t, func() error {
-		_, err := c.AddLabels(ctx, "acme", api.LabelsInput{Target: "acme-1", Labels: []string{core.LongLivedLabel}})
+		_, err := c.AddLabels(ctx, "acme", api.LabelsInput{Target: "acme-1", Labels: []string{domain.LongLivedLabel}})
 		return err
 	})
 	must(t, func() error {

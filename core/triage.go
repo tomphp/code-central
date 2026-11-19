@@ -65,7 +65,7 @@ func triageNotes(t domain.Ticket) map[api.TriageAction]string {
 		return map[api.TriageAction]string{
 			api.OptionKeepAsDraft:   "Keep as Draft " + leaves + " and adds nothing to the work item in Azure Boards.",
 			api.OptionToRequirement: "To Requirement makes a Requirement of the work item's title and body, Cancels this Ticket, and from then on only writes the work's progress to the work item.",
-			api.OptionWontFix: "Won't fix Cancels this Ticket and tags the work item " + LabelWontFix + ", with your reason as a comment. " +
+			api.OptionWontFix: "Won't fix Cancels this Ticket and tags the work item " + domain.LabelWontFix + ", with your reason as a comment. " +
 				"It leaves the work item's State as it is: move it in Azure DevOps yourself.",
 		}
 	}
@@ -166,7 +166,7 @@ func (c *Core) ToRequirement(ctx context.Context, key string, in api.ToRequireme
 		}
 		var tags map[string]string
 		if branch != "" {
-			tags = map[string]string{BranchTag: branch}
+			tags = map[string]string{domain.BranchTag: branch}
 		}
 		extra := strings.TrimSpace(in.Context)
 		link := t.Link

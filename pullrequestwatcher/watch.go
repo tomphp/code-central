@@ -13,7 +13,6 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
@@ -139,7 +138,7 @@ func (cfg Config) poll(ctx context.Context) (reachable, waiting bool, limit *rat
 		// (ADR 0050); one Repository alone reports as it always did.
 		in := api.ReportWatcherStatusInput{State: api.WatcherError, Problem: problems[0].Problem, Message: problems[0].Message, Fix: problems[0].Fix}
 		if several {
-			sum := core.SumRepositoryProblems(problems)
+			sum := api.SumRepositoryProblems(problems)
 			in.Message, in.Fix, in.Repositories = sum.Reason, sum.Fix, problems
 		}
 		cfg.report(ctx, in)

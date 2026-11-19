@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -28,7 +27,7 @@ func (w *watching) branchTag(spec string) (string, bool) {
 	if err != nil {
 		w.t.Fatal(err)
 	}
-	name, ok := sp.Tags[core.BranchTag]
+	name, ok := sp.Tags[domain.BranchTag]
 	return name, ok
 }
 
@@ -121,7 +120,7 @@ func TestToRequirementWhoseBranchIsTakenIsRefusedWithNothingWritten(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := w.srv.Core.SetTags(human, "acme", api.SetTagsInput{Target: api.Ref(other.Record.ID), Tags: map[string]string{core.BranchTag: "feat/1"}}); err != nil {
+	if _, err := w.srv.Core.SetTags(human, "acme", api.SetTagsInput{Target: api.Ref(other.Record.ID), Tags: map[string]string{domain.BranchTag: "feat/1"}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := w.setFormat("feat/{id}"); err != nil {

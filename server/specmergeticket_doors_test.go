@@ -2,12 +2,12 @@ package server_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // Spec merge Tickets (code-central-542): the Factory's open_spec_merge,
@@ -35,7 +35,7 @@ func openSpecMerge(body string) httpCall {
 func notLongLived(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	must(t, func() error {
-		_, err := srv.Core.RemoveLabels(context.Background(), "acme", api.LabelsInput{Target: "acme-1", Labels: []string{core.LongLivedLabel}})
+		_, err := srv.Core.RemoveLabels(context.Background(), "acme", api.LabelsInput{Target: "acme-1", Labels: []string{domain.LongLivedLabel}})
 		return err
 	})
 }

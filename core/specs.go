@@ -21,7 +21,7 @@ func specKind(s domain.Spec, req *api.RequirementView) api.SpecKind {
 		return api.SpecKindRequirement
 	case isMap(s.Labels):
 		return api.SpecKindMap
-	case slices.Contains(s.Labels, LongLivedLabel):
+	case slices.Contains(s.Labels, domain.LongLivedLabel):
 		return api.SpecKindLongLived
 	}
 	return api.SpecKindSpec

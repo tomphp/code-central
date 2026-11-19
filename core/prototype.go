@@ -35,7 +35,7 @@ func (c *Core) SubmitPrototype(_ context.Context, key string, in api.SubmitProto
 		now := c.now()
 		t := domain.Ticket{
 			Number: w.NextNumber(key), Title: "Prototype: " + title, State: domain.Ready, Spec: sp.Number,
-			Labels: []string{PrototypeLabel}, Created: now, Updated: now, Description: in.Text,
+			Labels: []string{domain.PrototypeLabel}, Created: now, Updated: now, Description: in.Text,
 			Moves: []domain.Move{{To: domain.Ready, Actor: string(api.Human), Time: now, Via: "submit_prototype"}},
 		}
 		if err := whole.put(w, key, &t); err != nil {

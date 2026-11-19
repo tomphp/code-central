@@ -41,10 +41,10 @@ func (c *Core) SubmitMap(_ context.Context, key string, in api.SubmitMapInput) (
 		now := c.now()
 		specN = w.NextNumber(key)
 		return w.PutImport(key, store.Import{
-			Specs: []domain.Spec{{Number: specN, Title: title, Labels: []string{MapLabel}, Created: now, Updated: now, Body: mapBody(in.Text)}},
+			Specs: []domain.Spec{{Number: specN, Title: title, Labels: []string{domain.MapLabel}, Created: now, Updated: now, Body: mapBody(in.Text)}},
 			Tickets: []domain.Ticket{{
 				Number: specN + 1, Title: "Charting: " + title, State: submitState(in.Draft), Spec: specN,
-				Labels: []string{WayfinderPrefix + "chart"}, Created: now, Updated: now,
+				Labels: []string{domain.WayfinderPrefix + "chart"}, Created: now, Updated: now,
 				Description: fmt.Sprintf(chartingDescription, DisplayID(key, specN)),
 				Moves:       submitMoves(in.Draft, now, "submit_map"),
 			}},
@@ -79,15 +79,8 @@ func mapBody(text string) string {
 	return b.String()
 }
 
-// GuidedTag is the Tag that marks a Map as guided when its value is
-// GuidedOn; a missing Tag or any other value means off.
-const (
-	GuidedTag = "guided"
-	GuidedOn  = "on"
-)
-
 // isMap reports whether a Spec's Labels mark it as a Map.
-func isMap(labels []string) bool { return slices.Contains(labels, MapLabel) }
+func isMap(labels []string) bool { return slices.Contains(labels, domain.MapLabel) }
 
 // mapView is the Map block for Spec s with these Tickets, or nil when s
 // isn't a Map, reading their reasons from their Project's evaluation e.
@@ -97,7 +90,7 @@ func mapView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *api.MapView
 	}
 	key := e.p.Key
 	id := DisplayID(key, s.Number)
-	v := &api.MapView{Guided: s.Tags[GuidedTag] == GuidedOn, CanWriteSpec: true, Requirements: []string{}}
+	v := &api.MapView{Guided: s.Tags[domain.GuidedTag] == domain.GuidedOn, CanWriteSpec: true, Requirements: []string{}}
 	for _, sp := range e.r.FindSpecs(key, store.SpecFilter{Tag: &store.TagFilter{Key: MapTag, Values: []string{id}}}) {
 		v.Requirements = append(v.Requirements, DisplayID(key, sp.Number))
 	}
@@ -122,7 +115,7 @@ func mapView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *api.MapView
 func NodeTypeOf(labels []string) api.NodeType {
 	for _, l := range labels {
 		guide, _ := typeGuide(l)
-		if guide == PrototypeLabel {
+		if guide == domain.PrototypeLabel {
 			return api.NodePrototype
 		}
 		if name, ok := strings.CutPrefix(guide, mapGuidePrefix); ok {

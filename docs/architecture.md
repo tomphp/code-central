@@ -167,17 +167,19 @@ What is left of the problem is that nothing yet *stops* a client linking `core`:
 
 `gh`, `azdo`, `ratelimit` and `watchers` used to import `core` for the Watcher status contract. It is now in `api` (ADR 0072), and none of the four links `core` or `store`. The rest of the wire contract has moved there too (weakness 1).
 
-### 3. Clients run Core logic, not just Core types
+### 3. Clients run Core logic, not just Core types (partly fixed)
 
-The Factory and the Watchers call `core` functions, so the same rule runs on both sides of the HTTP boundary from one copy of the code, and a client is pinned to the service's version of it:
+The shared rules now live where a client can use them without `core`: `domain` has the Spec Branch name (`SpecBranch`, `BranchTag`), the issue markers (`IssueMarker`, `OpaqueMarker`), the status label prefix and the reserved labels and tags; `codehost` has `NormalCloneURL`; `api` has `SumRepositoryProblems` and `LandingPolicies` (with `ProjectView.LandingPolicies()`). The Factory's Stage names are `domain.Stages()`.
 
-- `factory`: `core.SpecBranch` and `BranchTag` (branch naming), `core.NormalCloneURL`, `domain.Stages()`, `core.GuideNames`, the `api.LandingPolicies` type, the reserved labels and tags.
-- `issuewatcher`, `workitemwatcher`: `core.IssueMarker`, `core.OpaqueMarker`, `core.StatusLabelPrefix`; `pullrequestwatcher`, `issuewatcher`: `core.SumRepositoryProblems`.
+What is left is a few `core` names the Factory, the Watchers and the CLI still call, so they still link `core` and `store`:
+
+- `factory`: `core.GuideName`, `core.ImplementationStage`, `core.StageLabel`, `core.StageOf`, `core.CantLandComment`, `core.SilentAfter`, `core.DefaultChatModel`, `core.WaitTimeout`.
+- `issuewatcher`, `workitemwatcher`: `core.IntegrationGitHub`, `core.IntegrationAzureBoards`, `core.CommentContext`, `core.CommentWontFix`.
 - `cli`: `core.TeachingFiles()`, `core.DefaultTicketParts()`.
 
-Some of these are rules both sides must agree on (Spec Branch names, markers), which is fair, but they should be in `domain` or `codehost`, not in the 22k-line package. Provider knowledge is left in `core` too: `core.NormalCloneURL` belongs in `codehost`, `core/ci.go`'s `withoutLogin` duplicates `azdourl`'s, and `core/cirepositories.go`'s `ciEntryFromCloneURL` builds an Azure DevOps project URL by hand, which `azdourl` could do.
+Provider knowledge is left in `core` too: `core/ci.go`'s `withoutLogin` duplicates `azdourl`'s, and `core/cirepositories.go`'s `ciEntryFromCloneURL` builds an Azure DevOps project URL by hand, which `azdourl` could do.
 
-**Recommendation:** move each shared rule to `domain` (naming, markers, labels, Stages) or `codehost` (URLs). Where the rule is only the service's (Stage guide names, Landing Policies), have the service send the answer in a view rather than the client compute it.
+**Recommendation:** move each remaining shared rule to `domain` (names, labels, Stages) or `codehost` (URLs). Where the rule is only the service's (Stage guide names), have the service send the answer in a view rather than the client compute it.
 
 ### 4. `ops` binds every operation to the concrete `*core.Core`
 

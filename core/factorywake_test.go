@@ -456,7 +456,7 @@ func (f fixture) guidedMap(t *testing.T, guided string) {
 
 func (f fixture) setGuided(t *testing.T, guided string) {
 	t.Helper()
-	if _, err := f.core.SetTags(ctx, "acme", api.SetTagsInput{Target: "1", Tags: map[string]string{core.GuidedTag: guided}}); err != nil {
+	if _, err := f.core.SetTags(ctx, "acme", api.SetTagsInput{Target: "1", Tags: map[string]string{domain.GuidedTag: guided}}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -465,7 +465,7 @@ func TestTurningAMapsGuidedTagOnWakesTheFactory(t *testing.T) {
 	f := newFixture(t)
 	f.guidedMap(t, "off")
 	if !f.wakes(t, func(f fixture) error {
-		_, err := f.core.SetTags(ctx, "acme", api.SetTagsInput{Target: "1", Tags: map[string]string{core.GuidedTag: core.GuidedOn}})
+		_, err := f.core.SetTags(ctx, "acme", api.SetTagsInput{Target: "1", Tags: map[string]string{domain.GuidedTag: domain.GuidedOn}})
 		return err
 	}) {
 		t.Fatal("next_factory_wake ended empty, want woken")
@@ -474,12 +474,12 @@ func TestTurningAMapsGuidedTagOnWakesTheFactory(t *testing.T) {
 
 func TestTurningAMapsGuidedTagOffOrRetaggingAGuidedMapDoesNotWakeTheFactory(t *testing.T) {
 	for name, tags := range map[string]map[string]string{
-		"off":     {core.GuidedTag: "off"},
-		"another": {core.GuidedTag: core.GuidedOn, "type": "map"},
+		"off":     {domain.GuidedTag: "off"},
+		"another": {domain.GuidedTag: domain.GuidedOn, "type": "map"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFixture(t)
-			f.guidedMap(t, core.GuidedOn)
+			f.guidedMap(t, domain.GuidedOn)
 			if f.wakes(t, func(f fixture) error {
 				_, err := f.core.SetTags(ctx, "acme", api.SetTagsInput{Target: "1", Tags: tags})
 				return err

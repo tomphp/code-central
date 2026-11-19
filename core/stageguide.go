@@ -36,7 +36,7 @@ var GuideNames = func() []string {
 	for _, t := range api.WayfinderTypes() {
 		names = append(names, mapGuidePrefix+string(t))
 	}
-	return append(names, PrototypeLabel, RetroLabel, ImplementationStage)
+	return append(names, domain.PrototypeLabel, domain.RetroLabel, ImplementationStage)
 }()
 
 //go:embed stageguides/*.md

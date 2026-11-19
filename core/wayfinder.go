@@ -7,7 +7,6 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
-	"github.com/tomoram/code-central/store"
 )
 
 // Wayfinder Labels (Spec 213, ADR 0057). A Map is a Spec labelled
@@ -15,22 +14,6 @@ import (
 // a Prototype is a Ticket labelled prototype. Like stage:, Code Central
 // reads them on the read side only: they choose a Ticket's Guide and
 // change no workflow rule.
-
-// WayfinderPrefix is the reserved Label prefix of the Wayfinder Labels.
-const WayfinderPrefix = "wayfinder:"
-
-// MapLabel marks a Spec as a Map.
-const MapLabel = WayfinderPrefix + "map"
-
-// PrototypeLabel marks a Ticket as a Prototype.
-const PrototypeLabel = "prototype"
-
-// RetroLabel marks a Ticket as a Retro (ADR 0061).
-const RetroLabel = "retro"
-
-// LongLivedLabel marks a Spec as a Long-lived Spec, one that never
-// finishes, such as a CI Rule's Spec or an Issues Spec.
-const LongLivedLabel = store.LongLivedLabel
 
 // wayfinderNames are every name the wayfinder: prefix allows.
 var wayfinderNames = func() []string {
@@ -46,7 +29,7 @@ var wayfinderNames = func() []string {
 var wayfinderLabelList = func() string {
 	ls := make([]string, len(wayfinderNames))
 	for i, n := range wayfinderNames {
-		ls[i] = WayfinderPrefix + n
+		ls[i] = domain.WayfinderPrefix + n
 	}
 	return strings.Join(ls[:len(ls)-1], ", ") + " and " + ls[len(ls)-1]
 }()
@@ -55,10 +38,10 @@ var wayfinderLabelList = func() string {
 // carries at most one: a Stage, a Map Ticket type or prototype. ok is
 // false for any other Label.
 func typeGuide(l string) (guide string, ok bool) {
-	if l == PrototypeLabel || l == RetroLabel {
+	if l == domain.PrototypeLabel || l == domain.RetroLabel {
 		return l, true
 	}
-	if name, ok := strings.CutPrefix(l, WayfinderPrefix); ok && slices.Contains(api.WayfinderTypes(), api.NodeType(name)) {
+	if name, ok := strings.CutPrefix(l, domain.WayfinderPrefix); ok && slices.Contains(api.WayfinderTypes(), api.NodeType(name)) {
 		return mapGuidePrefix + name, true
 	}
 	if name, ok := strings.CutPrefix(l, domain.StagePrefix); ok && slices.Contains(domain.Stages(), domain.StageName(name)) {
@@ -71,7 +54,7 @@ func typeGuide(l string) (guide string, ok bool) {
 // makes it a Prototype.
 func isWayfinderType(l string) bool {
 	g, ok := typeGuide(l)
-	return ok && (g == PrototypeLabel || strings.HasPrefix(g, mapGuidePrefix))
+	return ok && (g == domain.PrototypeLabel || strings.HasPrefix(g, mapGuidePrefix))
 }
 
 // isTypeLabel reports whether l is a reserved type Label.
@@ -88,9 +71,9 @@ func checkReservedNames(field string, labels []string) error {
 		return err
 	}
 	for _, l := range labels {
-		name, ok := strings.CutPrefix(l, WayfinderPrefix)
+		name, ok := strings.CutPrefix(l, domain.WayfinderPrefix)
 		if ok && !slices.Contains(wayfinderNames, name) {
-			return invalid(field, "%q uses the reserved %q prefix; the only Wayfinder Labels are %s", l, WayfinderPrefix, wayfinderLabelList)
+			return invalid(field, "%q uses the reserved %q prefix; the only Wayfinder Labels are %s", l, domain.WayfinderPrefix, wayfinderLabelList)
 		}
 	}
 	return nil
@@ -99,8 +82,8 @@ func checkReservedNames(field string, labels []string) error {
 // checkHumanLabels rejects the auto-accept Label named by anyone but the
 // human, who alone adds or removes it.
 func checkHumanLabels(ctx context.Context, field string, labels []string) error {
-	if slices.Contains(labels, AutoAcceptLabel) && api.ActorOf(ctx) != api.Human {
-		return invalid(field, "%q is reserved for the human, who alone adds or removes it", AutoAcceptLabel)
+	if slices.Contains(labels, domain.AutoAcceptLabel) && api.ActorOf(ctx) != api.Human {
+		return invalid(field, "%q is reserved for the human, who alone adds or removes it", domain.AutoAcceptLabel)
 	}
 	return nil
 }
@@ -111,16 +94,16 @@ func checkHumanLabels(ctx context.Context, field string, labels []string) error 
 func checkPlacement(field string, labels []string, onSpec bool) error {
 	for _, l := range labels {
 		switch {
-		case l == MapLabel && !onSpec:
+		case l == domain.MapLabel && !onSpec:
 			return invalid(field, "%q marks a Spec as a Map; a Ticket can't carry it", l)
-		case l == LongLivedLabel && !onSpec:
+		case l == domain.LongLivedLabel && !onSpec:
 			return invalid(field, "%q marks a Spec as long-lived; it goes on a Spec, not a Ticket", l)
-		case onSpec && l == PrototypeLabel:
+		case onSpec && l == domain.PrototypeLabel:
 			return invalid(field, "%q marks a Ticket as a Prototype; a Spec can't carry it", l)
-		case onSpec && l == RetroLabel:
+		case onSpec && l == domain.RetroLabel:
 			return invalid(field, "%q marks a Ticket as a Retro; a Spec can't carry it", l)
-		case onSpec && l != MapLabel && strings.HasPrefix(l, WayfinderPrefix):
-			return invalid(field, "%q marks a Map's Ticket; a Spec can only carry %q", l, MapLabel)
+		case onSpec && l != domain.MapLabel && strings.HasPrefix(l, domain.WayfinderPrefix):
+			return invalid(field, "%q marks a Map's Ticket; a Spec can only carry %q", l, domain.MapLabel)
 		}
 	}
 	return nil

@@ -1,10 +1,10 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -84,7 +84,7 @@ func TestUnderPullRequestWithRebaseASpecBranchIsntForcePushedOverABranchOfThatNa
 	remote := h.AddRemote("origin")
 	rebasePullRequestOn(h, "origin", true)
 	h.MakeRequirement()
-	branch := core.SpecBranch(h.SpecID(), nil)
+	branch := domain.SpecBranch(h.SpecID(), nil)
 	hand := handMadeOn(h, remote, branch)
 	a, _ := accepted(h, "First", "one.txt", "1\n")
 
@@ -108,7 +108,7 @@ func TestUnderPullRequestWithRebaseAFactoryPushedSpecBranchIsStillForcePushed(t 
 	remote := h.AddRemote("origin")
 	rebasePullRequestOn(h, "origin", true)
 	h.MakeRequirement()
-	branch := core.SpecBranch(h.SpecID(), nil)
+	branch := domain.SpecBranch(h.SpecID(), nil)
 	a, _ := accepted(h, "First", "one.txt", "1\n")
 
 	r := h.Start()

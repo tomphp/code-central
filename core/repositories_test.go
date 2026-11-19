@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -432,31 +431,5 @@ func TestUnderPullRequestAddingOrEditingALocalOnlyRepositoryIsRefusedBeforeTheCo
 	}
 	if got := repository(t, v, "web").CloneURL; got != "git@github.com:acme/web.git" {
 		t.Fatalf("web's Clone URL = %q after the refusal, want it kept", got)
-	}
-}
-
-func TestCloneURLsNormaliseAcrossSchemesAndSuffixes(t *testing.T) {
-	same := [][]string{
-		{"git@github.com:acme/web.git", "https://github.com/acme/web", "ssh://git@github.com/Acme/Web.git/", "https://user@GitHub.com/acme/web.git"},
-		{"git@ssh.dev.azure.com:v3/acme/shop/web", "https://acme@dev.azure.com/acme/shop/_git/web", "https://acme.visualstudio.com/shop/_git/web"},
-		{"git@gitlab.example.com:team/web.git", "https://gitlab.example.com/team/web", "ssh://git@gitlab.example.com:2222/team/web"},
-	}
-	for _, group := range same {
-		for _, u := range group[1:] {
-			if a, b := core.NormalCloneURL(group[0]), core.NormalCloneURL(u); a != b {
-				t.Errorf("%s normalises to %q and %s to %q, want the same", group[0], a, u, b)
-			}
-		}
-	}
-	for _, pair := range [][2]string{
-		{"git@github.com:acme/web.git", "git@github.com:acme/api.git"},
-		{"git@github.com:acme/web.git", "git@gitlab.com:acme/web.git"},
-	} {
-		if core.NormalCloneURL(pair[0]) == core.NormalCloneURL(pair[1]) {
-			t.Errorf("%s and %s normalise the same", pair[0], pair[1])
-		}
-	}
-	if got := core.NormalCloneURL(" /srv/git/web.git/ "); !strings.HasSuffix(got, "/srv/git/web") {
-		t.Errorf("a local path normalises to %q", got)
 	}
 }

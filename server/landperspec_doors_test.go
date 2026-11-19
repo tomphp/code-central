@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
@@ -32,7 +33,7 @@ func init() {
 func specLandedAccepted(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	must(t, func() error {
-		_, err := srv.Core.RemoveLabels(context.Background(), "acme", api.LabelsInput{Target: "acme-1", Labels: []string{core.LongLivedLabel}})
+		_, err := srv.Core.RemoveLabels(context.Background(), "acme", api.LabelsInput{Target: "acme-1", Labels: []string{domain.LongLivedLabel}})
 		return err
 	})
 	must(t, func() error {

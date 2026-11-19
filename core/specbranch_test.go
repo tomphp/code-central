@@ -30,12 +30,12 @@ func branchWorld(t *testing.T) fixture {
 }
 
 func (f fixture) setBranch(target, name string) error {
-	_, err := f.core.SetTags(ctx, "acme", api.SetTagsInput{Target: api.Ref(target), Tags: map[string]string{core.BranchTag: name}})
+	_, err := f.core.SetTags(ctx, "acme", api.SetTagsInput{Target: api.Ref(target), Tags: map[string]string{domain.BranchTag: name}})
 	return err
 }
 
 func (f fixture) removeBranch(target string) error {
-	_, err := f.core.RemoveTags(ctx, "acme", api.RemoveTagsInput{Target: api.Ref(target), Keys: []string{core.BranchTag}})
+	_, err := f.core.RemoveTags(ctx, "acme", api.RemoveTagsInput{Target: api.Ref(target), Keys: []string{domain.BranchTag}})
 	return err
 }
 
@@ -89,7 +89,7 @@ func TestABranchTagThatCantNameASpecBranchIsRefused(t *testing.T) {
 		wantCode(t, err, api.Invalid, "tags")
 		wantSays(t, err, says)
 	}
-	if sp := f.specRead(t, "acme-1"); sp.Tags[core.BranchTag] != "feat/acme-1" {
+	if sp := f.specRead(t, "acme-1"); sp.Tags[domain.BranchTag] != "feat/acme-1" {
 		t.Errorf("tags %v, want only the good name kept", sp.Tags)
 	}
 }
@@ -196,7 +196,7 @@ func TestAnImportChecksItsSpecsBranchTags(t *testing.T) {
 		t.Fatal(err)
 	}
 	spec := func(source, branch string) api.ImportSpec {
-		return api.ImportSpec{Source: source, Title: source, Tags: map[string]string{core.BranchTag: branch}}
+		return api.ImportSpec{Source: source, Title: source, Tags: map[string]string{domain.BranchTag: branch}}
 	}
 	for _, tc := range []struct {
 		specs []api.ImportSpec

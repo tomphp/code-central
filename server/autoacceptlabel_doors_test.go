@@ -2,11 +2,11 @@ package server_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 )
 
@@ -33,10 +33,10 @@ func TestTheAutoAcceptLabelIsTheHumansOnEveryDoor(t *testing.T) {
 
 	s := connect(t, srv, "acme")
 	for _, tool := range []string{"add_labels", "remove_labels"} {
-		reserved(t, "mcp "+tool, mcpRejected(t, s, tool, map[string]any{"target": "acme-3", "labels": []string{core.AutoAcceptLabel}}, api.Invalid))
+		reserved(t, "mcp "+tool, mcpRejected(t, s, tool, map[string]any{"target": "acme-3", "labels": []string{domain.AutoAcceptLabel}}, api.Invalid))
 	}
-	reserved(t, "mcp create_ticket", mcpRejected(t, s, "create_ticket", map[string]any{"spec": "acme-1", "title": "Mine", "labels": []string{core.AutoAcceptLabel}}, api.Invalid))
-	reserved(t, "cli add-labels", cliRejected(t, srv, []string{"add-labels", "acme-3", core.AutoAcceptLabel}, api.Invalid))
+	reserved(t, "mcp create_ticket", mcpRejected(t, s, "create_ticket", map[string]any{"spec": "acme-1", "title": "Mine", "labels": []string{domain.AutoAcceptLabel}}, api.Invalid))
+	reserved(t, "cli add-labels", cliRejected(t, srv, []string{"add-labels", "acme-3", domain.AutoAcceptLabel}, api.Invalid))
 	status, b := httpDoAs(t, srv, api.Agent, httpCall{"POST", "/api/p/acme/add_labels", `{"target":"acme-3","labels":["auto-accept"]}`})
 	if e := errorJSON(t, b, api.Invalid); status != httpapi.Status(api.Invalid) {
 		t.Fatalf("http as agent: status %d, %q", status, e.Message)

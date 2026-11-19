@@ -16,7 +16,6 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
@@ -115,7 +114,7 @@ func (cfg Config) writeComments(ctx context.Context, prog, path string, w api.Is
 		return err
 	}
 	for _, c := range w.Comments {
-		marker := core.IssueMarker(w.Target, c.Key)
+		marker := domain.IssueMarker(w.Target, c.Key)
 		if !slices.ContainsFunc(posted, func(p ghComment) bool { return strings.Contains(p.Body, marker) }) {
 			if _, msg, err := gh.API(ctx, cfg.Env, prog, path+"/comments", "--method", "POST", "-f", "body="+c.Body); err != nil {
 				return apiError("posting the "+c.Key+" comment", msg, err)
@@ -174,7 +173,7 @@ func (cfg Config) setLabel(ctx context.Context, prog, repository, path, label st
 		}
 	}
 	for _, l := range labels {
-		if l.Name != label && strings.HasPrefix(l.Name, core.StatusLabelPrefix) {
+		if l.Name != label && strings.HasPrefix(l.Name, domain.StatusLabelPrefix) {
 			if _, msg, err := gh.API(ctx, cfg.Env, prog, path+"/labels/"+url.PathEscape(l.Name), "--method", "DELETE"); err != nil && !notFound(err) {
 				return apiError("removing the label "+l.Name, msg, err)
 			}

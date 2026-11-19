@@ -158,7 +158,7 @@ func finishedMap(r store.Reader, key string, ref api.Ref) (domain.Spec, error) {
 	}
 	id := DisplayID(key, m.Number)
 	if !isMap(m.Labels) {
-		return domain.Spec{}, invalid("map", "%s isn't a Map: a Map is a Spec labelled %s", id, MapLabel)
+		return domain.Spec{}, invalid("map", "%s isn't a Map: a Map is a Spec labelled %s", id, domain.MapLabel)
 	}
 	var open []string
 	for _, t := range specTickets(r, key, m.Number) {

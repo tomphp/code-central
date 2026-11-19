@@ -18,11 +18,6 @@ import (
 // work of chosen kinds skip In Review. The Project's setting is one
 // switch per Auto-accept kind, which only the human sets, over HTTP.
 
-// AutoAcceptLabel is the reserved Label that, on a Ticket or its Spec,
-// turns every Auto-accept kind on for the Ticket. Only the human adds or
-// removes it.
-const AutoAcceptLabel = "auto-accept"
-
 // autoAcceptView is p's Auto-accept setting with every kind present.
 func autoAcceptView(p domain.Project) api.AutoAcceptView {
 	v := api.AutoAcceptView{}
@@ -105,9 +100,9 @@ func autoAcceptCause(p domain.Project, sp domain.Spec, t domain.Ticket) (domain.
 	switch {
 	case !ok || kind == domain.AutoAcceptSpec && t.Recommendation == "":
 		return "", false
-	case slices.Contains(t.Labels, AutoAcceptLabel):
+	case slices.Contains(t.Labels, domain.AutoAcceptLabel):
 		return domain.CauseTicketLabel, true
-	case slices.Contains(sp.Labels, AutoAcceptLabel):
+	case slices.Contains(sp.Labels, domain.AutoAcceptLabel):
 		return domain.CauseSpecLabel, true
 	case p.AutoAccepts(kind):
 		return domain.CauseProject, true

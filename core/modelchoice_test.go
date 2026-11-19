@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -266,8 +265,8 @@ func TestTheUIsTicketReadCarriesTheAutoAcceptKindAndTheMCPReadDoesNot(t *testing
 	for _, stage := range []string{"grilling", "spec", "tickets"} {
 		f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: stage, Labels: []string{domain.StagePrefix + stage}}) // acme-3 to acme-5
 	}
-	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Try", Labels: []string{core.PrototypeLabel}}) // acme-6
-	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Chart", Labels: []string{"wayfinder:chart"}}) // acme-7
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Try", Labels: []string{domain.PrototypeLabel}}) // acme-6
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Chart", Labels: []string{"wayfinder:chart"}})   // acme-7
 	merge := f.openSpecMerge(t, "README").Ticket
 	m, err := f.core.SubmitMap(ctx, "acme", api.SubmitMapInput{Text: "# Offline mode\n\nbody\n"})
 	if err != nil {

@@ -2,8 +2,6 @@ package core
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
@@ -89,7 +87,7 @@ func (c *Core) checkPullRequest(ctx context.Context, key string, change func(dom
 	if len(ps) == 0 {
 		return nil
 	}
-	return checkRefusal(SumRepositoryProblems(ps), "method")
+	return checkRefusal(api.SumRepositoryProblems(ps), "method")
 }
 
 // localOnlyUnderPullRequestFix is how to put right the local-only
@@ -133,28 +131,7 @@ func refuseLocalOnlyFollowers(p, next domain.Project) error {
 				Message: "local-only, with no Clone URL, and following the Default Landing, so it can't land by Pull Request", Fix: localOnlyUnderPullRequestFix(rv)})
 		}
 	}
-	return checkRefusal(SumRepositoryProblems(ps), "method")
-}
-
-// SumRepositoryProblems is one check result naming each of ps, the
-// failing Repositories, with its reason and its fix: its Problem is the
-// first one's.
-func SumRepositoryProblems(ps []api.RepositoryProblem) api.WatcherCheckResult {
-	var reasons, fixes []string
-	for _, p := range ps {
-		reasons = append(reasons, p.Repository+": "+p.Message)
-		if p.Fix != "" {
-			fixes = append(fixes, p.Repository+": "+p.Fix)
-		}
-	}
-	r := api.WatcherCheckResult{Reason: strings.Join(reasons, "; "), Fix: strings.Join(fixes, "; "), Repositories: ps}
-	if len(ps) > 0 {
-		r.Problem = ps[0].Problem
-	}
-	if len(ps) > 1 {
-		r.Reason = fmt.Sprintf("%d Repositories fail: %s", len(ps), r.Reason)
-	}
-	return r
+	return checkRefusal(api.SumRepositoryProblems(ps), "method")
 }
 
 // checkRefusal is a failed check's refusal, with its reason and fix, on

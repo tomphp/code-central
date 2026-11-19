@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -103,7 +102,7 @@ func TestOpenSpecMergeCommentsOnAnUnmarkedTicketWithItsTitleWithoutMarkingIt(t *
 func TestOpenSpecMergeRefusesALongLivedSpecAMapAndAFinishedSpec(t *testing.T) {
 	for name, setup := range map[string]func(f fixture){
 		"Long-lived": func(f fixture) { f.longLived(t, api.SpecView{ID: "acme-1"}) },
-		"Map":        func(f fixture) { f.labelSpec(t, 1, core.MapLabel) },
+		"Map":        func(f fixture) { f.labelSpec(t, 1, domain.MapLabel) },
 		"Finished":   func(f fixture) { f.moveTo(t, 2, domain.Done) },
 	} {
 		t.Run(name, func(t *testing.T) {

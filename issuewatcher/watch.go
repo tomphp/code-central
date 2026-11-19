@@ -13,7 +13,6 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
 	"github.com/tomoram/code-central/watchers"
@@ -181,7 +180,7 @@ func (cfg Config) poll(ctx context.Context) (reachable bool, limit *ratelimit.Er
 func (cfg Config) reportProblems(ctx context.Context, problems []api.RepositoryProblem, several bool) {
 	in := api.ReportWatcherStatusInput{State: api.WatcherError, Problem: problems[0].Problem, Message: problems[0].Message, Fix: problems[0].Fix}
 	if several {
-		sum := core.SumRepositoryProblems(problems)
+		sum := api.SumRepositoryProblems(problems)
 		in.Message, in.Fix, in.Repositories = sum.Reason, sum.Fix, problems
 	}
 	cfg.report(ctx, in)

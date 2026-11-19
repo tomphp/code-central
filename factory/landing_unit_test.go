@@ -18,7 +18,6 @@ import (
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -108,7 +107,7 @@ func (w *landWorld) ready(title string) string {
 		}
 		w.spec = s.ID
 		// Long-lived, so that its Tickets land one by one under the default Land per Spec.
-		if _, err := w.srv.Client.AddLabels(ctx, "acme", api.LabelsInput{Target: api.Ref(s.ID), Labels: []string{core.LongLivedLabel}}); err != nil {
+		if _, err := w.srv.Client.AddLabels(ctx, "acme", api.LabelsInput{Target: api.Ref(s.ID), Labels: []string{domain.LongLivedLabel}}); err != nil {
 			w.t.Fatal(err)
 		}
 	}

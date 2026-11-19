@@ -229,7 +229,7 @@ func projectWakesTheFactory(r store.Reader, p domain.Project) bool {
 // holds before the write, turns a Map's guided Tag on: the Factory then
 // starts its next decision.
 func specWakesTheFactory(r store.Reader, key string, s domain.Spec) bool {
-	guided := func(s domain.Spec) bool { return isMap(s.Labels) && s.Tags[GuidedTag] == GuidedOn }
+	guided := func(s domain.Spec) bool { return isMap(s.Labels) && s.Tags[domain.GuidedTag] == domain.GuidedOn }
 	was, found := r.Spec(key, s.Number)
 	return guided(s) && !(found && guided(was))
 }

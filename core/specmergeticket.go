@@ -60,7 +60,7 @@ func (c *Core) OpenSpecMerge(ctx context.Context, key string, in api.OpenSpecMer
 		// with Rebase in force in any, else to merge.
 		var rebase bool
 		var body string
-		branch := SpecBranch(id, sp.Tags)
+		branch := domain.SpecBranch(id, sp.Tags)
 		if len(in.Repositories) == 0 {
 			rebase = landingPolicyIn(p, p.Key).RebaseInForce()
 			body = specMergeBody(branch, p.Base(), in, rebase)
@@ -101,7 +101,7 @@ func (c *Core) OpenSpecMerge(ctx context.Context, key string, in api.OpenSpecMer
 // Ticket, or "" when it does.
 func whyNoSpecMerge(spec domain.Spec, tickets []domain.Ticket) string {
 	switch {
-	case slices.Contains(spec.Labels, LongLivedLabel):
+	case slices.Contains(spec.Labels, domain.LongLivedLabel):
 		return "is Long-lived: its Tickets land one by one, with no Spec Branch"
 	case isMap(spec.Labels):
 		return "is a Map, with no Spec Branch"

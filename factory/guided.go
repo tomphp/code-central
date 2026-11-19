@@ -9,7 +9,6 @@ import (
 	"context"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -17,7 +16,7 @@ import (
 // of each guided Map that is idle: at most one Ticket per Map per poll.
 func (f *factory) startGuidedMaps(ctx context.Context) {
 	maps, err := f.client.FindSpecs(ctx, f.project, api.FindSpecsInput{
-		Labels: []string{core.MapLabel}, Tags: map[string]string{core.GuidedTag: core.GuidedOn}})
+		Labels: []string{domain.MapLabel}, Tags: map[string]string{domain.GuidedTag: domain.GuidedOn}})
 	if err != nil {
 		if ctx.Err() == nil {
 			f.printf("warning: can't find the guided Maps: %v", err)

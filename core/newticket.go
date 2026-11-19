@@ -67,7 +67,7 @@ func whyNotNewTicket(p domain.Project, s domain.Spec, tickets []domain.Ticket) s
 		return archivedError(p.Key).Message
 	case isMap(s.Labels):
 		return id + " is a Map, which charts work rather than holding it, so it takes no New Ticket"
-	case slices.Contains(s.Labels, LongLivedLabel):
+	case slices.Contains(s.Labels, domain.LongLivedLabel):
 		return id + " is a Long-lived Spec, so it takes no New Ticket; its Tickets come from its own action"
 	}
 	if !slices.ContainsFunc(tickets, func(t domain.Ticket) bool { return StageOf(t.Labels) != "" }) {

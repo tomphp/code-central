@@ -399,7 +399,7 @@ func TestUnderHideCodeCentralTheHiddenCommentIsPostedAndNoTagIsWritten(t *testin
 	wantIncoming(t, w, 1)
 	spec := w.toRequirement(1, "  Seen on every login.  ")
 	w.polled()
-	if got, want := w.markdown(1), []string{core.OpaqueMarker(spec, core.CommentContext) + "\nSeen on every login."}; !slices.Equal(got, want) {
+	if got, want := w.markdown(1), []string{domain.OpaqueMarker(spec, core.CommentContext) + "\nSeen on every login."}; !slices.Equal(got, want) {
 		t.Fatalf("comments %q, want %q", got, want)
 	}
 	if got := w.patches(0); len(got) != 0 {
@@ -419,7 +419,7 @@ func TestUnderHideCodeCentralTheHiddenCommentIsPostedAndNoTagIsWritten(t *testin
 // of the setting never posts it twice.
 func TestEitherMarkerOnTheWorkItemStopsTheCommentBeingPostedAgain(t *testing.T) {
 	for _, hide := range []bool{false, true} {
-		for name, marker := range map[string]func(target, key string) string{"branded": core.IssueMarker, "opaque": core.OpaqueMarker} {
+		for name, marker := range map[string]func(target, key string) string{"branded": domain.IssueMarker, "opaque": domain.OpaqueMarker} {
 			t.Run(fmt.Sprintf("%s marker, hidden %t", name, hide), func(t *testing.T) {
 				w := newWatching(t)
 				w.setBoards(api.SetAzureBoardsInput{On: true, QueryURL: w.queryURL(queryID), HideCodeCentral: hide})

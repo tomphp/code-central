@@ -129,7 +129,7 @@ func (c *Core) createIntegrationSpec(key string, specOf func(domain.Project) int
 		}
 		now := c.now()
 		n = w.NextNumber(key)
-		spec.Number, spec.Labels, spec.Created, spec.Updated = n, []string{LongLivedLabel}, now, now
+		spec.Number, spec.Labels, spec.Created, spec.Updated = n, []string{domain.LongLivedLabel}, now, now
 		return w.PutSpec(key, spec)
 	})
 	return n, err

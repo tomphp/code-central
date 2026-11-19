@@ -27,11 +27,11 @@ func specLanded(r store.Reader, p domain.Project, t domain.Ticket) bool {
 	if !landingPolicies(p).LandPerSpecInForce() {
 		return false
 	}
-	if StageOf(t.Labels) != "" || isMap(t.Labels) || slices.Contains(t.Labels, PrototypeLabel) || slices.Contains(t.Labels, RetroLabel) {
+	if StageOf(t.Labels) != "" || isMap(t.Labels) || slices.Contains(t.Labels, domain.PrototypeLabel) || slices.Contains(t.Labels, domain.RetroLabel) {
 		return false
 	}
 	spec, ok := r.Spec(p.Key, t.Spec)
-	return ok && !isMap(spec.Labels) && !slices.Contains(spec.Labels, LongLivedLabel)
+	return ok && !isMap(spec.Labels) && !slices.Contains(spec.Labels, domain.LongLivedLabel)
 }
 
 // landsWithSpecIn is whether t's work in the Repository name lands with
@@ -81,7 +81,7 @@ func waitingForSpec(r store.Reader, p domain.Project, t domain.Ticket) bool {
 // a Long-lived Spec.
 func landPerSpecView(r store.Reader, key string, s domain.Spec, tickets []domain.Ticket) *api.LandPerSpecView {
 	p, _ := r.Project(key)
-	if !landingPolicies(p).LandPerSpecInForce() || slices.Contains(s.Labels, LongLivedLabel) {
+	if !landingPolicies(p).LandPerSpecInForce() || slices.Contains(s.Labels, domain.LongLivedLabel) {
 		return nil
 	}
 	v := &api.LandPerSpecView{Waiting: []string{}}
@@ -106,7 +106,7 @@ func landPerSpecView(r store.Reader, key string, s domain.Spec, tickets []domain
 		}
 	}
 	v.Ready = ready && merged
-	v.Pushed = specBranchPushedIn(key, SpecBranch(DisplayID(key, s.Number), s.Tags), tickets)
+	v.Pushed = specBranchPushedIn(key, domain.SpecBranch(DisplayID(key, s.Number), s.Tags), tickets)
 	return v
 }
 

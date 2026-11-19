@@ -3,12 +3,12 @@ package issuewatcher_test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
 )
 
@@ -168,7 +168,7 @@ func TestACommentAlreadyOnTheIssueIsReportedNotPostedAgain(t *testing.T) {
 	w := newWatching(t)
 	ticket := w.arrivedFirst(labelled(1, "code-central:wont-fix"))
 	w.wontFix(ticket, "Works as intended.")
-	w.commentsOn(1, "Me too.", core.IssueMarker(ticket, "wont-fix")+"\nWorks as intended.")
+	w.commentsOn(1, "Me too.", domain.IssueMarker(ticket, "wont-fix")+"\nWorks as intended.")
 	from := len(w.h.Calls())
 	w.polled()
 	w.wantWrites(from, "PATCH repos/acme/web/issues/1 state=closed state_reason=not_planned")

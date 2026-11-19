@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -35,7 +34,7 @@ func TestTheFirstSmallChangeCreatesALongLivedSmallChangesSpecAndAReadyTicketOnIt
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sp.Title != "Small Changes" || !slices.Equal(sp.Labels, []string{core.LongLivedLabel}) {
+	if sp.Title != "Small Changes" || !slices.Equal(sp.Labels, []string{domain.LongLivedLabel}) {
 		t.Fatalf("Spec %+v", sp)
 	}
 }

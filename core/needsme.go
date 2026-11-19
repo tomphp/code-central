@@ -51,7 +51,7 @@ func needsMeSpec(r store.Reader, key string, t domain.Ticket, req *api.NeedsMeRe
 		return nil
 	}
 	sp, _ := r.Spec(key, t.Spec)
-	isMap := slices.Contains(sp.Labels, MapLabel)
+	isMap := slices.Contains(sp.Labels, domain.MapLabel)
 	if !isMap && !slices.ContainsFunc(t.Labels, isWayfinderType) {
 		return nil
 	}
@@ -118,8 +118,8 @@ func (e *evaluation) row(t domain.Ticket, tr ticketReason) api.NeedsMeRow {
 	req := e.requirement(t)
 	row := api.NeedsMeRow{
 		Project: key, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: tr.reason, Since: tr.since, Link: linkView(t.Link),
-		Requirement: req, Spec: needsMeSpec(e.r, key, t, req), Prototype: slices.Contains(t.Labels, PrototypeLabel),
-		Retro:    slices.Contains(t.Labels, RetroLabel),
+		Requirement: req, Spec: needsMeSpec(e.r, key, t, req), Prototype: slices.Contains(t.Labels, domain.PrototypeLabel),
+		Retro:    slices.Contains(t.Labels, domain.RetroLabel),
 		CIResult: e.ci.ticket(t).result, PullRequest: pullRequestView(homePullRequest(key, t)),
 	}
 	switch tr.reason {
