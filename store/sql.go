@@ -313,13 +313,19 @@ func (d dialect) schema() []string {
 	}, servicesSchema...)
 }
 
-// servicesSchema is the services' tables, of Registrations and Watcher
-// Leases: they hold no records, so no format, and prepare makes them on
-// every open, so a Store made before them gains them.
+// servicesSchema is the services' tables, of Registrations, Watcher
+// Leases and the runtime state every service sharing the Store sees:
+// they hold no records, so no format, and prepare makes them on every
+// open, so a Store made before them gains them. A doc is TEXT, not the
+// dialect's JSON, so it reads back byte for byte.
 var servicesSchema = []string{
 	`CREATE TABLE IF NOT EXISTS registrations (id TEXT PRIMARY KEY, host TEXT NOT NULL, version TEXT NOT NULL, format INTEGER NOT NULL, renewed BIGINT NOT NULL)`,
 	`CREATE TABLE IF NOT EXISTS watcher_leases (project TEXT PRIMARY KEY, holder TEXT NOT NULL, expires BIGINT NOT NULL)`,
 	`CREATE INDEX IF NOT EXISTS watcher_leases_holder ON watcher_leases (holder)`,
+	`CREATE TABLE IF NOT EXISTS heartbeats (project TEXT NOT NULL, factory TEXT NOT NULL, factory_host TEXT NOT NULL, doc TEXT NOT NULL, service TEXT NOT NULL, service_host TEXT NOT NULL, expires BIGINT NOT NULL, PRIMARY KEY (project, factory, factory_host))`,
+	`CREATE TABLE IF NOT EXISTS factory_reports (project TEXT PRIMARY KEY, doc TEXT NOT NULL)`,
+	`CREATE TABLE IF NOT EXISTS pings (session_id TEXT PRIMARY KEY, pinged BIGINT NOT NULL, service TEXT NOT NULL, service_host TEXT NOT NULL)`,
+	`CREATE TABLE IF NOT EXISTS transcript_holders (project TEXT NOT NULL, ticket INTEGER NOT NULL, claim INTEGER NOT NULL, service TEXT NOT NULL, service_host TEXT NOT NULL, since BIGINT NOT NULL, PRIMARY KEY (project, ticket, claim))`,
 }
 
 // prepare checks the database's format and creates its schema, in one

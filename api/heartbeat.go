@@ -44,6 +44,10 @@ type FactoryView struct {
 	// Chat is Chat support: the Factory can run Conversations. Chat is
 	// available for the Project while an Online Factory has it.
 	Chat bool `json:"chat"`
+	// ReportsTo is the host of the Factory's Reporting Service, the
+	// service its Heartbeats reach, when that is another service sharing
+	// the Store; empty when it is this one.
+	ReportsTo string `json:"reports_to,omitempty"`
 }
 
 // ReportHeartbeatInput is the Factory's report_heartbeat(factory, host,

@@ -9,8 +9,8 @@ import (
 
 // Plan Limits (Spec code-central-861): the Claude account's 5-hour and
 // weekly limits, as a Factory last read them from its Turns and reports
-// them on each Heartbeat. Code Central keeps them with the Heartbeat, in
-// memory only, and the Project's Factory Status shows the most recently
+// them on each Heartbeat. Code Central keeps them with the Heartbeat, which
+// every service sharing the Store reads, and the Project's Factory Status shows the most recently
 // observed among its Factories that aren't Offline.
 
 // checkPlanLimits checks the Plan Limits a Heartbeat reports and returns

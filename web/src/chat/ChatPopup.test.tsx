@@ -202,6 +202,23 @@ describe("when the Conversation can't answer", () => {
     expect(send()).toBeDisabled();
   });
 
+  it("says the host Chat runs on when no Factory with Chat support reports to this service, and disables Send", async () => {
+    renderPopup(noConversation({ runs_on: "desktop" }), { chatAvailable: false });
+
+    expect(screen.getByRole("status")).toHaveTextContent("Chat runs on desktop: no Factory with Chat support reports to this service.");
+    await typeMessage("hello");
+    expect(send()).toBeDisabled();
+  });
+
+  it("says the host Chat runs on for a Conversation this service can't answer", () => {
+    renderPopup(conversation([human("hi")], { availability: "unavailable", factory: { name: "code-central-factory", host: "laptop" }, runs_on: "desktop" }), {
+      chatAvailable: false,
+    });
+
+    expect(screen.getByRole("status")).toHaveTextContent("Chat runs on desktop");
+    expect(send()).toBeDisabled();
+  });
+
   it("says it is loading until the Conversation first arrives", () => {
     renderPopup(undefined);
 

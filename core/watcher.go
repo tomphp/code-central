@@ -20,7 +20,7 @@ import (
 // service report about them: the CI Watcher, the Issue Watcher, the Pull
 // Request Watcher and the Work Item Watcher.
 //
-// The status lives in memory only, like pings: a Watcher is the service's
+// The status lives in memory only: a Watcher is the service's
 // child, so a restarted service has no status until its Watcher reports
 // again, and never shows a stale Watching.
 

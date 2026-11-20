@@ -11,3 +11,5 @@ The human wants to see what a Factory's agent is doing without `claude --resume`
 ## Consequences
 
 A Transcript is lost when Code Central restarts, and a Transcript begun after its Claim did is marked as a tail, as is one that has dropped its oldest events. A session run by hand, or a human entering a stuck Claim with `claude --resume`, posts no Session Events, so it has no Transcript, or its Transcript goes quiet while they work. Posting must never slow or fail an agent's turn, so the endpoint always answers 204 and the Factory drops what it can't send.
+
+Amended by [ADR 0072](0072-runtime-state-across-services-sharing-a-store.md): pings and the Heartbeats are kept in the Store too, so every service sharing one sees them; the Transcripts stay in their Reporting Service's memory, and the other services name its host.

@@ -26,6 +26,9 @@ type Service struct {
 // SetService names this service, before it registers or holds a Lease.
 func (c *Core) SetService(s Service) {
 	c.service = s
+	c.heartbeats.mu.Lock()
+	c.heartbeats.self = s.ID
+	c.heartbeats.mu.Unlock()
 	c.watchers.mu.Lock()
 	defer c.watchers.mu.Unlock()
 	c.watchers.self = s.ID

@@ -56,22 +56,36 @@ func (c *Core) PostSessionEvents(ctx context.Context, sessionID string, events [
 	if !ok {
 		return
 	}
-	c.hold(k, started, events)
+	moved := false
+	if !c.transcripts.holds(k) {
+		moved = c.startHolding(k)
+	}
+	c.hold(k, started, moved, events)
 	c.latestEventChanged(k.project, k.ticket)
 }
 
-// hold adds events to Claim k's Transcript, starting it if need be.
-func (c *Core) hold(k markKey, started time.Time, events []api.SessionEvent) {
+// holds says whether this service holds Claim k's Transcript.
+func (ts *transcripts) holds(k markKey) bool {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return ts.all[k] != nil
+}
+
+// hold adds events to Claim k's Transcript, starting it if need be: as a
+// tail when the Claim started before the service did, or moved is true.
+func (c *Core) hold(k markKey, started time.Time, moved bool, events []api.SessionEvent) {
 	ts := c.transcripts
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	tr := ts.all[k]
 	if tr == nil {
 		tr = &transcript{}
-		if started.Before(c.activity.started) {
-			// A Claim older than the service lost its earlier events. Its
-			// seqs start past any the last service gave, so a follower
-			// resuming from one of those misses none of the new ones.
+		if moved || started.Before(c.activity.started) {
+			// A Claim older than the service lost its earlier events, and
+			// one whose session moved here left them on another service.
+			// Its seqs start past any the last service gave, so a
+			// follower resuming from one of those misses none of the new
+			// ones, and past 1, so one from the start hears it is a tail.
 			tr.tail, tr.lastSeq = true, int(c.activity.started.UnixMilli())
 		}
 		ts.all[k] = tr
@@ -127,6 +141,9 @@ func (c *Core) Transcript(_ context.Context, key string, ticket api.Ref, claim i
 	if err != nil {
 		return api.TranscriptView{}, err
 	}
+	if host := c.heldElsewhere(k); host != "" {
+		return api.TranscriptView{Events: []api.HeldSessionEvent{}, Host: host}, nil
+	}
 	ts := c.transcripts
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
@@ -174,13 +191,16 @@ type TranscriptFeed struct {
 	k     markKey
 	wake  chan struct{}
 	after int
+	host  string
 }
 
 // FollowTranscript starts a feed of Claim number claim's Transcript after
 // seq after (0 for all of it), as a reconnect's Last-Event-ID asks. A seq
 // beyond the Transcript's newest is none it gave, so the feed starts from
 // the beginning. It stays open
-// after the Claim ends, because a late Factory line still arrives. An
+// after the Claim ends, because a late Factory line still arrives. When
+// another service holds the Transcript (see heldElsewhere), the feed has
+// ended already: Host names that service's host, and it never wakes. An
 // unknown Project, Ticket or Claim is not_found. Stop ends it.
 func (c *Core) FollowTranscript(_ context.Context, key string, ticket api.Ref, claim, after int) (*TranscriptFeed, error) {
 	k, err := c.claimKey(key, "follow_transcript", ticket, claim)
@@ -188,6 +208,9 @@ func (c *Core) FollowTranscript(_ context.Context, key string, ticket api.Ref, c
 		return nil, err
 	}
 	ts := c.transcripts
+	if host := c.heldElsewhere(k); host != "" {
+		return &TranscriptFeed{ts: ts, k: k, wake: make(chan struct{}), host: host}, nil
+	}
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	last := 0
@@ -208,6 +231,10 @@ func (c *Core) FollowTranscript(_ context.Context, key string, ticket api.Ref, c
 
 // Wake fires when Next may have events to give.
 func (f *TranscriptFeed) Wake() <-chan struct{} { return f.wake }
+
+// Host is the host of the service holding the Transcript when that is
+// another one, and the feed has ended; empty for a feed of this service's.
+func (f *TranscriptFeed) Host() string { return f.host }
 
 // Next gives the held events after the last it gave, oldest first, and
 // says whether a tail notice is due before them: when events between the
