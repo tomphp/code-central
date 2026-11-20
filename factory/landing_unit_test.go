@@ -72,7 +72,7 @@ func newLandWorld(t *testing.T) *landWorld {
 	out := &lineBuffer{}
 	printf := func(format string, args ...any) { fmt.Fprintf(out, format+"\n", args...) }
 	repo := newFakeRepo(fakeTop)
-	repos := newRepositories(nil, printf)
+	repos := newRepositories(printf)
 	repos.setBase("main")
 	// As start builds it: with the OS's separators.
 	repos.home = &repository{name: "acme", home: true, dir: fakeTop, git: repo, worktrees: filepath.FromSlash(fakeTop + ".worktrees")}

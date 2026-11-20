@@ -109,7 +109,7 @@ func (l *lander) locateBase(ctx context.Context, p api.ProjectView, r *repositor
 				l.printf("warning: can't fetch %s to look for the base, %s%s: %s", remote, base, r.where(), firstLine(out))
 			}
 		} else if theirs, rerr := r.git.Commit("refs/remotes/" + remote + "/" + base); rerr == nil {
-			if _, berr := l.repos.gitOut(r.dir, "branch", "--no-track", base, theirs); berr != nil {
+			if berr := r.git.CreateBranch(base, theirs); berr != nil {
 				l.printf("warning: can't create the base, %s, from %s/%s%s: %v", base, remote, base, r.where(), berr)
 			} else {
 				l.printf("base: created %s at %s from %s/%s%s", base, short(theirs), remote, base, r.where())
@@ -182,7 +182,7 @@ func (l *lander) checkMCP(base string) {
 // doesn't start. One it hasn't yet is left to checkMCP on each poll.
 func (l *lander) checkMCPAtStart() error {
 	base := l.repos.baseBranch()
-	if _, err := l.repos.gitOut(l.repos.home.dir, "rev-parse", "--verify", "-q", base+"^{commit}"); err != nil {
+	if _, err := l.repos.home.git.Commit(base); err != nil {
 		return nil
 	}
 	if !l.mcpCommitted() {
@@ -194,8 +194,7 @@ func (l *lander) checkMCPAtStart() error {
 
 // mcpCommitted is whether .mcp.json is committed on the base.
 func (l *lander) mcpCommitted() bool {
-	_, err := l.repos.gitOut(l.repos.home.dir, "cat-file", "-e", l.repos.baseBranch()+":.mcp.json")
-	return err == nil
+	return l.repos.home.git.HasFile(l.repos.baseBranch(), ".mcp.json")
 }
 
 // mcpMessage says that .mcp.json isn't committed on the base, and why it

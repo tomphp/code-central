@@ -104,14 +104,10 @@ func (r *repository) where() string {
 // setBase), and turns and the Chat loop read it from their own
 // goroutines, under its mutexes.
 type repositories struct {
-	// git is the Git port each Repository's clone is opened through;
-	// binary is the git binary and environ the environment every other
-	// git call of the Factory's runs with; printf writes the Factory's
-	// lines.
-	git     git.Git
-	binary  string
-	environ []string
-	printf  func(format string, args ...any)
+	// git is the Git port each Repository's clone is made and opened
+	// through; printf writes the Factory's lines.
+	git    git.Git
+	printf func(format string, args ...any)
 	// home is the Home Repository: the git top level the Factory starts
 	// in, its repo as landing and the sweep use it, and its worktree
 	// folder, <repo-parent>/<repo-dir>.worktrees. start sets it, and
@@ -129,15 +125,10 @@ type repositories struct {
 	base   string
 }
 
-// newRepositories is a registry with no Repository yet, whose git calls
-// run with environ and whose lines go to printf: start sets the rest.
-func newRepositories(environ []string, printf func(format string, args ...any)) *repositories {
-	return &repositories{environ: environ, printf: printf, byName: map[string]*repository{}}
-}
-
-// gitOut runs git in dir and returns its trimmed output.
-func (rs *repositories) gitOut(dir string, args ...string) (string, error) {
-	return gitOut(rs.binary, rs.environ, dir, args...)
+// newRepositories is a registry with no Repository yet, whose lines go
+// to printf: start sets the rest.
+func newRepositories(printf func(format string, args ...any)) *repositories {
+	return &repositories{printf: printf, byName: map[string]*repository{}}
 }
 
 // newRepository is the Repository name whose clone is at dir.
@@ -320,7 +311,7 @@ func (l *lander) cloneOf(ctx context.Context, v api.RepositoryView, taken map[st
 	case errors.Is(err, fs.ErrNotExist) && v.CloneURL == "":
 		return missing("nothing at %s", dir)
 	case errors.Is(err, fs.ErrNotExist):
-		if out, err := cloneRepository(ctx, l.repos.binary, l.repos.environ, remote, v.CloneURL, dir); err != nil {
+		if out, err := cloneRepository(ctx, l.repos.git, remote, v.CloneURL, dir); err != nil {
 			if out == "" {
 				out = err.Error()
 			}

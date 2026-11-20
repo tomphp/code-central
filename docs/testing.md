@@ -67,6 +67,7 @@ This is the pattern for testing a port against more than one implementation: wri
 Each fails when a rule about the code's shape is broken, rather than testing behaviour.
 
 - **Landing guard** (`core/landingguard_test.go`, ADR 0039): no code in domain, api, core or the Factory reads a landing setting to decide, outside the policy and the code that saves and shows the settings.
+- **Git guard** (`factory/gitguard_test.go`, Spec code-central-1148): the Factory's own files run no git; every git call goes through the Git port, `factory/git`. It allows only the processes it lists (claude and ps).
 - **Import guard** (`internal/importguard`): the clients of the domain model (httpapi, mcp, server, cli and others) do not import `store`; they name records through `domain`.
 - **Doc guard** (`internal/docguard`): `docs/agents/` names no Go identifier that no longer exists.
 

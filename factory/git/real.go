@@ -25,6 +25,18 @@ func (g Real) Open(dir string) Repo {
 	return realRepo{binary: g.Binary, dir: dir, environ: g.Environ}
 }
 
+func (g Real) Clone(ctx context.Context, remote, url, path string) (string, error) {
+	cmd := exec.CommandContext(ctx, g.Binary, "clone", "--quiet", "--origin", remote, url, path)
+	// A prompt for credentials would wait forever: nobody answers it.
+	cmd.Env = append(slices.Clone(g.Environ), "GIT_TERMINAL_PROMPT=0")
+	out, err := cmd.CombinedOutput()
+	return strings.TrimSpace(string(out)), err
+}
+
+func (g Real) TopLevel(dir string) (string, error) { return g.Open(dir).TopLevel() }
+
+func (g Real) Version() (string, error) { return run(g.Binary, g.Environ, "", "version") }
+
 // realRepo is the repository at dir, through the git binary.
 type realRepo struct {
 	binary  string
@@ -271,4 +283,53 @@ func (g realRepo) Status(dir string) (string, error) {
 func (g realRepo) RemoveWorktree(path string) error {
 	_, err := g.out("worktree", "remove", path)
 	return err
+}
+
+func (g realRepo) AddWorktree(path, branch string) error {
+	_, err := g.out("worktree", "add", "-q", path, branch)
+	return err
+}
+
+func (g realRepo) AddWorktreeOnNewBranch(path, branch, from string) error {
+	_, err := g.out("worktree", "add", "-q", "-b", branch, path, from)
+	return err
+}
+
+func (g realRepo) AddDetachedWorktree(path, rev string) error {
+	_, err := g.out("worktree", "add", "-q", "--detach", path, rev)
+	return err
+}
+
+func (g realRepo) CheckoutDetached(dir, rev string) error {
+	_, err := run(g.binary, g.environ, dir, "checkout", "-q", "--detach", rev)
+	return err
+}
+
+func (g realRepo) PruneWorktrees() error {
+	_, err := g.out("worktree", "prune")
+	return err
+}
+
+func (g realRepo) CreateBranch(branch, commit string) error {
+	_, err := g.out("branch", "--no-track", branch, commit)
+	return err
+}
+
+func (g realRepo) HasFile(rev, path string) bool {
+	_, err := g.out("cat-file", "-e", rev+":"+path)
+	return err == nil
+}
+
+func (g realRepo) CurrentBranch(dir string) (string, error) {
+	b, err := run(g.binary, g.environ, dir, "symbolic-ref", "--short", "-q", "HEAD")
+	if err == nil && b == "" {
+		return "", errors.New("git symbolic-ref: HEAD names no branch")
+	}
+	return b, err
+}
+
+func (g realRepo) LastCommit(dir string) (id, subject string, err error) {
+	out, err := run(g.binary, g.environ, dir, "log", "-1", "--format=%h %s")
+	id, subject, _ = strings.Cut(out, " ")
+	return id, subject, err
 }

@@ -27,6 +27,7 @@ type fakeRepo struct {
 	conflicts map[string][]string
 	list      []git.Worktree    // the repo's own checkout first
 	dirty     map[string]string // worktree path -> its status
+	detached  map[string]string // detached worktree path -> its commit
 	pushes    int
 	next      int
 }
@@ -40,7 +41,7 @@ type fakeRemote struct {
 
 // newFakeRepo is a repo whose checkout at dir is on main, at one commit.
 func newFakeRepo(dir string) *fakeRepo {
-	r := &fakeRepo{parents: map[string][]string{}, message: map[string]string{}, refs: map[string]string{}, remotes: map[string]*fakeRemote{}, conflicts: map[string][]string{}, dirty: map[string]string{}}
+	r := &fakeRepo{parents: map[string][]string{}, message: map[string]string{}, refs: map[string]string{}, remotes: map[string]*fakeRemote{}, conflicts: map[string][]string{}, dirty: map[string]string{}, detached: map[string]string{}}
 	r.refs["refs/heads/main"] = r.newCommit("Set up Code Central")
 	r.list = []git.Worktree{{Path: dir, Branch: "main"}}
 	return r
@@ -417,4 +418,130 @@ func (r *fakeRepo) RemoveWorktree(path string) error {
 	}
 	r.list = slices.DeleteFunc(r.list, func(w git.Worktree) bool { return w.Path == path })
 	return nil
+}
+
+// addListed lists a worktree at path on branch, failing when one is
+// there already.
+func (r *fakeRepo) addListed(path, branch string) error {
+	if _, ok := find(r.list, path); ok {
+		return fmt.Errorf("git worktree add: '%s' already exists", path)
+	}
+	r.list = append(r.list, git.Worktree{Path: path, Branch: branch})
+	return nil
+}
+
+func (r *fakeRepo) AddWorktree(path, branch string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.refs["refs/heads/"+branch]; !ok {
+		return fmt.Errorf("git worktree add: invalid reference: %s", branch)
+	}
+	return r.addListed(path, branch)
+}
+
+func (r *fakeRepo) AddWorktreeOnNewBranch(path, branch, from string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	ref := "refs/heads/" + branch
+	if _, ok := r.refs[ref]; ok {
+		return fmt.Errorf("git worktree add: a branch named '%s' already exists", branch)
+	}
+	c, ok := r.revision(from)
+	if !ok {
+		return fmt.Errorf("git worktree add: invalid reference: %s", from)
+	}
+	if err := r.addListed(path, branch); err != nil {
+		return err
+	}
+	r.refs[ref] = c
+	return nil
+}
+
+func (r *fakeRepo) AddDetachedWorktree(path, rev string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.revision(rev)
+	if !ok {
+		return fmt.Errorf("git worktree add: invalid reference: %s", rev)
+	}
+	if err := r.addListed(path, ""); err != nil {
+		return err
+	}
+	r.detached[path] = c
+	return nil
+}
+
+func (r *fakeRepo) CheckoutDetached(dir, rev string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.revision(rev)
+	if !ok {
+		return fmt.Errorf("git checkout: invalid reference: %s", rev)
+	}
+	i := slices.IndexFunc(r.list, func(w git.Worktree) bool { return w.Path == dir })
+	if i < 0 {
+		return fmt.Errorf("git checkout: %s isn't a worktree", dir)
+	}
+	r.list[i].Branch = ""
+	r.detached[dir] = c
+	return nil
+}
+
+func (r *fakeRepo) PruneWorktrees() error { return nil }
+
+func (r *fakeRepo) CreateBranch(branch, commit string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	ref := "refs/heads/" + branch
+	if _, ok := r.refs[ref]; ok {
+		return fmt.Errorf("git branch: a branch named '%s' already exists", branch)
+	}
+	c, ok := r.revision(commit)
+	if !ok {
+		return fmt.Errorf("git branch: not a valid object name: '%s'", commit)
+	}
+	r.refs[ref] = c
+	return nil
+}
+
+// HasFile has .mcp.json at every commit, as Code Central's set-up
+// commits it, and no other file.
+func (r *fakeRepo) HasFile(rev, path string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	_, ok := r.revision(rev)
+	return ok && path == ".mcp.json"
+}
+
+func (r *fakeRepo) CurrentBranch(dir string) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	w, ok := find(r.list, dir)
+	if !ok || w.Branch == "" {
+		return "", fmt.Errorf("git symbolic-ref: %s isn't on a branch", dir)
+	}
+	return w.Branch, nil
+}
+
+func (r *fakeRepo) LastCommit(dir string) (id, subject string, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	w, ok := find(r.list, dir)
+	if !ok {
+		return "", "", fmt.Errorf("git log: %s isn't a worktree", dir)
+	}
+	c := r.detached[dir]
+	if w.Branch != "" {
+		c = r.refs["refs/heads/"+w.Branch]
+	}
+	subject, _, _ = strings.Cut(r.message[c], "\n")
+	return c[:7], subject, nil
+}
+
+// revision resolves rev as git does a branch name or a commit.
+func (r *fakeRepo) revision(rev string) (string, bool) {
+	if c, ok := r.refs["refs/heads/"+rev]; ok {
+		return c, true
+	}
+	return r.resolve(rev)
 }
