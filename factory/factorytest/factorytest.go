@@ -192,7 +192,7 @@ type Harness struct {
 // opts choose the Fake git (FakeGit).
 func New(t testing.TB, opts ...Option) *Harness {
 	t.Helper()
-	fake := useFakeGit(t, opts)
+	onFakeGit := useFakeGit(t, opts)
 	// git reports real paths, so resolve macOS's /var -> /private/var.
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	must(t, err)
@@ -243,7 +243,7 @@ func New(t testing.TB, opts ...Option) *Harness {
 	if _, err := h.Server.Client.CreateProject(context.Background(), api.CreateProjectInput{Key: h.Project}); err != nil {
 		t.Fatal(err)
 	}
-	if fake {
+	if onFakeGit {
 		h.fake = git.NewFake(t)
 		h.fake.Init(h.Repo, map[string]string{".mcp.json": mcpJSON}, "Set up Code Central")
 		return h
@@ -734,7 +734,7 @@ func (h *Harness) Git(args ...string) string {
 func (h *Harness) GitIn(dir string, args ...string) string {
 	h.t.Helper()
 	if h.fake != nil {
-		h.t.Fatalf("factorytest: raw git (git %s) under the Fake git: use a typed helper (Tip, Exists, Log, Parents, File, RemoteTip, CommitOn, MergeByHand), or real git with factorytest.RealGit()", strings.Join(args, " "))
+		h.t.Fatalf("factorytest: raw git (git %s) under the Fake git: use a typed helper (%s), or real git with factorytest.RealGit()", strings.Join(args, " "), typedHelpers)
 	}
 	return h.git(dir, args...)
 }
@@ -1175,8 +1175,8 @@ func (h *Harness) MakeRepository(name string) *Repository {
 	root := filepath.Dir(filepath.Dir(h.Repo))
 	seed := filepath.Join(root, "seeds", name)
 	r := &Repository{Name: name, CloneURL: filepath.Join(root, "repositories", name+".git"), Path: filepath.Join(filepath.Dir(h.Repo), name), h: h}
+	h.startRepository(seed, name)
 	if h.fake != nil {
-		h.fake.Init(seed, map[string]string{"README.md": name + "\n"}, "Start "+name)
 		h.fake.InitBare(r.CloneURL)
 		h.fake.AddRemote(seed, "origin", r.CloneURL)
 		if out, err := h.fake.Open(seed).Push(context.Background(), "origin", "main", ""); err != nil {
@@ -1184,13 +1184,23 @@ func (h *Harness) MakeRepository(name string) *Repository {
 		}
 		return r
 	}
-	must(h.t, os.MkdirAll(seed, 0o755))
-	h.GitIn(seed, "init", "-q", "-b", "main")
-	must(h.t, os.WriteFile(filepath.Join(seed, "README.md"), []byte(name+"\n"), 0o644))
-	h.GitIn(seed, "add", "README.md")
-	h.GitIn(seed, "commit", "-q", "-m", "Start "+name)
 	h.GitIn(root, "clone", "-q", "--bare", seed, r.CloneURL)
 	return r
+}
+
+// startRepository makes a repository named name at dir, with one commit
+// "Start <name>" on main holding a README.md.
+func (h *Harness) startRepository(dir, name string) {
+	h.t.Helper()
+	if h.fake != nil {
+		h.fake.Init(dir, map[string]string{"README.md": name + "\n"}, "Start "+name)
+		return
+	}
+	must(h.t, os.MkdirAll(dir, 0o755))
+	h.GitIn(dir, "init", "-q", "-b", "main")
+	must(h.t, os.WriteFile(filepath.Join(dir, "README.md"), []byte(name+"\n"), 0o644))
+	h.GitIn(dir, "add", "README.md")
+	h.GitIn(dir, "commit", "-q", "-m", "Start "+name)
 }
 
 // AddLocalRepository makes a plain git repository named name beside the
@@ -1201,15 +1211,7 @@ func (h *Harness) MakeRepository(name string) *Repository {
 func (h *Harness) AddLocalRepository(name string) *Repository {
 	h.t.Helper()
 	r := &Repository{Name: name, Path: filepath.Join(filepath.Dir(h.Repo), name), h: h}
-	if h.fake != nil {
-		h.fake.Init(r.Path, map[string]string{"README.md": name + "\n"}, "Start "+name)
-	} else {
-		must(h.t, os.MkdirAll(r.Path, 0o755))
-		h.GitIn(r.Path, "init", "-q", "-b", "main")
-		must(h.t, os.WriteFile(filepath.Join(r.Path, "README.md"), []byte(name+"\n"), 0o644))
-		h.GitIn(r.Path, "add", "README.md")
-		h.GitIn(r.Path, "commit", "-q", "-m", "Start "+name)
-	}
+	h.startRepository(r.Path, name)
 	if _, err := h.Human().AddRepository(context.Background(), h.Project, api.AddRepositoryInput{Name: name, LocalPath: r.Path}); err != nil {
 		h.t.Fatalf("add_repository %s: %v", name, err)
 	}

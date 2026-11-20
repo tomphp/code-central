@@ -1,3 +1,6 @@
+// The Options choosing real git or the Fake git for a Harness, and the
+// typed git helpers on Harness, Repository and Remote that serve both.
+
 package factorytest
 
 import (
@@ -25,10 +28,14 @@ func RealGit() Option { return func(o *options) { o.fakeGit = false } }
 
 // FakeGit runs the Factory, and the harness's repositories, on the Fake
 // git (git.Fake): in memory, with no git process. The test reads and
-// changes them only through the typed helpers (Tip, Exists, Log, Parents,
-// File, RemoteTip, CommitOn, MergeByHand); raw git fails it. gitEnv set to
-// "real" runs it on real git all the same.
+// changes them only through the typedHelpers; raw git fails it. gitEnv set
+// to "real" runs it on real git all the same.
 func FakeGit() Option { return func(o *options) { o.fakeGit = true } }
+
+// typedHelpers are the helpers that serve real git and the Fake git alike.
+// They take branch names and commit IDs, not revision syntax like HEAD or
+// main^, which the Fake git doesn't model.
+const typedHelpers = "Tip, Exists, Log, Parents, File, RemoteTip, CommitOn, MergeByHand"
 
 // gitEnv, set to "real", runs every Harness on real git, even one whose
 // test chose FakeGit, to check a run on the Fake git against real git.
@@ -90,11 +97,12 @@ func (h *Harness) File(rev, path string) string {
 // its last fetch or push left it, failing the test when it has none.
 func (h *Harness) RemoteTip(remote, branch string) string {
 	h.t.Helper()
-	return h.ref(h.Repo, "refs/remotes/"+remote+"/"+branch, remote+"/"+branch)
+	return h.remoteTip(h.Repo, remote, branch)
 }
 
 // CommitOn commits file with content on branch, made from main when it
-// doesn't exist, and returns the commit. The repo is left on main.
+// doesn't exist, and returns the commit. The repo is on main, and left
+// there.
 func (h *Harness) CommitOn(branch, file, content string) string {
 	h.t.Helper()
 	return h.commitOn(h.Repo, branch, file, content)
@@ -103,7 +111,7 @@ func (h *Harness) CommitOn(branch, file, content string) string {
 // MergeByHand merges branch into into, as a human would outside the
 // Factory: a merge commit "Merge <branch>", or none when into has branch
 // already. It returns into's tip, failing the test on a conflict. The repo
-// is left on main.
+// is on main, and left there.
 func (h *Harness) MergeByHand(branch, into string) string {
 	h.t.Helper()
 	return h.mergeByHand(h.Repo, branch, into)
@@ -142,7 +150,7 @@ func (r *Repository) File(rev, path string) string {
 // RemoteTip is Harness.RemoteTip in r's clone at Path.
 func (r *Repository) RemoteTip(remote, branch string) string {
 	r.h.t.Helper()
-	return r.h.ref(r.Path, "refs/remotes/"+remote+"/"+branch, remote+"/"+branch)
+	return r.h.remoteTip(r.Path, remote, branch)
 }
 
 // CommitOn is Harness.CommitOn in r's clone at Path.
@@ -202,6 +210,12 @@ func (h *Harness) exists(dir, branch string) bool {
 	return ok
 }
 
+// remoteTip is RemoteTip in the clone at dir.
+func (h *Harness) remoteTip(dir, remote, branch string) string {
+	h.t.Helper()
+	return h.ref(dir, "refs/remotes/"+remote+"/"+branch, remote+"/"+branch)
+}
+
 // ref is the commit ref names in the repository at dir, failing the test,
 // as what, when there is none.
 func (h *Harness) ref(dir, ref, what string) string {
@@ -214,12 +228,11 @@ func (h *Harness) ref(dir, ref, what string) string {
 }
 
 // lookup is the commit the full ref names in the repository at dir, and
-// whether it names one.
+// whether it names one, failing the test when dir holds no repository.
 func (h *Harness) lookup(dir, ref string) (string, bool) {
 	h.t.Helper()
 	if h.fake != nil {
-		commit, err := h.fake.Open(dir).Commit(ref)
-		return commit, err == nil
+		return h.fake.Ref(dir, ref)
 	}
 	out, err := h.runGit(dir, "rev-parse", "--verify", "-q", ref+"^{commit}")
 	if exit := (*exec.ExitError)(nil); errors.As(err, &exit) && exit.ExitCode() == 1 {

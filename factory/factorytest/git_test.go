@@ -106,6 +106,32 @@ func TestARefusedPushAndItsRetryAreAlikeOnRealGitAndTheFakeGit(t *testing.T) {
 	})
 }
 
+func TestABrokenRemoteAndItsRestoreAreAlikeOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		remote := h.AddRemote("origin")
+		h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"})
+		id := h.ReadyTicket("Add a feature")
+		h.Finished(id, id, h.CommitOn(id, "feature.txt", "feature\n"))
+		h.Accept(id)
+		remote.Break()
+
+		r := h.Start()
+		r.WantOutput("warning: can't fetch origin")
+		if tk := h.Ticket(id); tk.State != domain.Accepted {
+			t.Errorf("%s is %s with the remote broken, want it left Accepted", id, tk.State)
+		}
+
+		remote.Restore()
+		r.Poll()
+		h.WantState(id, domain.Done)
+		if got, want := remote.Tip("main"), h.Tip("main"); got != want {
+			t.Errorf("the remote's main is at %s, want %s", got, want)
+		}
+	})
+}
+
 func TestAMergeByHandIsAlikeOnRealGitAndTheFakeGit(t *testing.T) {
 	t.Parallel()
 	onEachGit(t, func(t *testing.T, opt Option) {
@@ -217,7 +243,7 @@ func TestRawGitFailsUnderTheFakeGitNamingTheTypedHelpersAndRealGit(t *testing.T)
 		ft := &fatalT{TB: t}
 		h.t = ft
 		got := ft.failure(raw)
-		for _, want := range []string{"git rev-parse main", "Tip, Exists, Log, Parents, File, RemoteTip, CommitOn, MergeByHand", "RealGit()"} {
+		for _, want := range []string{"git rev-parse main", typedHelpers, "RealGit()"} {
 			if !strings.Contains(got, want) {
 				t.Errorf("%s under the Fake git failed with %q, want it to name %q", name, got, want)
 			}

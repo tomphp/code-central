@@ -237,10 +237,17 @@ func TestFakeGitIDsAreTheirContent(t *testing.T) {
 	}
 }
 
-func TestAFakeGitReadsBackACommitsSubjectAndFiles(t *testing.T) {
+func TestAFakeGitReadsBackARefAndACommitsSubjectAndFiles(t *testing.T) {
 	t.Parallel()
 	f, dir, first := newFake(t)
 	c := f.MakeCommit(dir, git.Change{Parents: []string{first}, Files: map[string]string{"d/a.txt": "one\n"}, Message: "Add\n  a file\n\nWhy it was added."})
+
+	if got, ok := f.Ref(dir, "refs/heads/main"); !ok || got != first {
+		t.Errorf("Ref(refs/heads/main) = %q, %v, want %s", got, ok, first)
+	}
+	if got, ok := f.Ref(dir, "refs/heads/none"); ok {
+		t.Errorf("Ref(refs/heads/none) = %q, want no commit", got)
+	}
 
 	if got := f.Subject(dir, c); got != "Add a file" {
 		t.Errorf("Subject = %q, want the first paragraph on one line, as %%s gives it", got)

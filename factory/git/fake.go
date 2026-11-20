@@ -1415,6 +1415,25 @@ func (f *Fake) File(dir, rev, path string) (content string, ok bool) {
 	return content, ok
 }
 
+// Ref is the commit rev names in the repository at dir, and whether it
+// names one, for a test to check. It fails the test when dir holds no
+// repository.
+func (f *Fake) Ref(dir, rev string) (commit string, ok bool) {
+	f.tb.Helper()
+	g := fakeRepo{f: f, dir: filepath.Clean(dir)}
+	r, unlock, err := g.lock()
+	if err == nil {
+		var missing error
+		commit, missing = g.resolve(r, rev)
+		ok = missing == nil
+	}
+	unlock()
+	if err != nil {
+		f.tb.Fatal(err)
+	}
+	return commit, ok
+}
+
 // reading calls read with the repository at dir and rev resolved there,
 // failing the test when either can't be.
 func (f *Fake) reading(dir, rev string, read func(r *fakeRepository, commit string)) {
