@@ -169,7 +169,7 @@ The human's action on a finished Map (every Ticket Done or Cancelled) that creat
 _Avoid_: Promote, convert the Map
 
 **Spec view**:
-The UI's view of a plain Spec, one that is neither a Requirement nor a Map: its title, **New Prototype**, **New Ticket** where the Spec takes one, its body, collapsed, with **Edit** until it is Finished, and its Tickets with their States. It opens from the Spec's name in the Ticket panel.
+The UI's view of a plain Spec, one that is neither a Requirement nor a Map: its title, **New Prototype**, **New Ticket** where the Spec takes one, its body, collapsed, with **Edit** until it is Finished, its Ticket graph above its Tickets with their States, shown when one of its Tickets blocks another. A Long-lived Spec's view lists no Tickets and no graph but keeps their CI sums. It opens from the Spec's name in the Ticket panel.
 _Avoid_: Spec page, Spec board
 
 **Edit**:
