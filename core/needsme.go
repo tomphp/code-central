@@ -41,7 +41,7 @@ func (e *evaluation) requirement(t domain.Ticket) *api.NeedsMeRequirement {
 	}
 	key := e.p.Key
 	sp, _ := e.r.Spec(key, t.Spec)
-	return &api.NeedsMeRequirement{Spec: DisplayID(key, t.Spec), Title: sp.Title, Stage: StageOf(t.Labels)}
+	return &api.NeedsMeRequirement{Spec: DisplayID(key, t.Spec), Title: sp.Title, Stage: domain.StageOf(t.Labels)}
 }
 
 // needsMeSpec is the Spec t is on when t is on a Map, or is a Map Ticket

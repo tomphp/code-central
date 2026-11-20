@@ -11,13 +11,12 @@ import (
 	"strconv"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
 )
 
 // Integration is the name every Link the Issue Watcher makes carries.
-const Integration = core.IntegrationGitHub
+const Integration = domain.IntegrationGitHub
 
 // LinkID is the Link ID of repository's issue n: owner/repo#n, so it
 // stays unique if the configured repository changes.

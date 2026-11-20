@@ -242,7 +242,7 @@ func TestAcceptedButNotLandedNamesTheRepositoriesLandedAndNotLandedWithWhy(t *te
 	f.acceptedInTwo(t)
 	f.landIn(t, api.LandInput{Repository: "api", Commit: "eee"})
 	why := "couldn't push main to origin:\n\n```\nrejected\n```"
-	if _, err := f.core.Comment(ctx, "acme", api.CommentInput{Ticket: "2", Body: core.CantLandComment("acme", why, domain.Accepted)}); err != nil {
+	if _, err := f.core.Comment(ctx, "acme", api.CommentInput{Ticket: "2", Body: api.CantLandComment("acme", why, domain.Accepted)}); err != nil {
 		t.Fatal(err)
 	}
 	f.clock.Advance(core.NotLandedAfter + time.Second)
@@ -276,7 +276,7 @@ func TestABrokenBaseIsWhyARepositoryHasntLanded(t *testing.T) {
 func TestAReasonFromBeforeTheTicketWasLastAcceptedIsntShown(t *testing.T) {
 	f := newFixture(t)
 	f.acceptedInTwo(t)
-	if _, err := f.core.Comment(ctx, "acme", api.CommentInput{Ticket: "2", Body: core.CantLandComment("api", "an old reason", domain.Accepted)}); err != nil {
+	if _, err := f.core.Comment(ctx, "acme", api.CommentInput{Ticket: "2", Body: api.CantLandComment("api", "an old reason", domain.Accepted)}); err != nil {
 		t.Fatal(err)
 	}
 	f.clock.Advance(time.Minute)
@@ -331,7 +331,7 @@ func TestAnOpenPullRequestIsWhyARepositoryHasntLanded(t *testing.T) {
 func TestARepositoryStuckWhileAnotherWaitsOnCIIsAcceptedButNotLanded(t *testing.T) {
 	f := twoRepoWorld(t)
 	f.changes(t, 5, "acme", "api")
-	if _, err := f.core.Comment(ctx, "acme", api.CommentInput{Ticket: "acme-5", Body: core.CantLandComment("api", "couldn't push main to origin", domain.Accepted)}); err != nil {
+	if _, err := f.core.Comment(ctx, "acme", api.CommentInput{Ticket: "acme-5", Body: api.CantLandComment("api", "couldn't push main to origin", domain.Accepted)}); err != nil {
 		t.Fatal(err)
 	}
 	f.clock.Advance(core.NotLandedAfter + time.Second)

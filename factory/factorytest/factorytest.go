@@ -81,7 +81,6 @@ import (
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/factory"
 )
@@ -762,7 +761,7 @@ func (h *Harness) ReadyTicket(title string) string {
 // a test sets its own, finishes it recommending split.
 func (h *Harness) StageTicket(stage domain.StageName, title string) string {
 	h.t.Helper()
-	id := h.readyTicket(title, core.StageLabel(stage))
+	id := h.readyTicket(title, domain.StageLabel(stage))
 	if stage == "spec" {
 		h.Script(id, FinishSpec("Done.", "split"), Result("success"))
 	}
@@ -826,7 +825,7 @@ func (h *Harness) MakeRequirement() {
 	ctx := context.Background()
 	c := h.Server.Client
 	h.MakePlainSpec()
-	_, err := c.CreateTicket(ctx, h.Project, api.CreateTicketInput{Spec: api.Ref(h.spec), Title: "Stage", State: domain.Draft, Labels: []string{core.StageLabel("grilling")}})
+	_, err := c.CreateTicket(ctx, h.Project, api.CreateTicketInput{Spec: api.Ref(h.spec), Title: "Stage", State: domain.Draft, Labels: []string{domain.StageLabel("grilling")}})
 	must(h.t, err)
 }
 

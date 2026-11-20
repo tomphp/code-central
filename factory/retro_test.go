@@ -1,11 +1,11 @@
 package factory_test
 
 import (
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -41,7 +41,7 @@ func TestARetroStartsTheRetroSkillReadOnlyInADetachedWorktreeAtTheBasesTip(t *te
 			t.Errorf("system prompt %q doesn't say %q", c.SystemPrompt, want)
 		}
 	}
-	if strings.Contains(c.SystemPrompt, guide(t, h, core.ImplementationStage)) {
+	if strings.Contains(c.SystemPrompt, guide(t, h, api.ImplementationStage)) {
 		t.Errorf("system prompt %q runs it as implementation", c.SystemPrompt)
 	}
 	if c.Dir != h.Worktree(id) {

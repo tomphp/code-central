@@ -15,9 +15,6 @@ import (
 // with Stage Tickets: the human submits its text, and Code Central
 // creates the Spec and its three Stages in one staged write.
 
-// StageLabel is the Label that marks a Ticket as the named Stage.
-func StageLabel(stage domain.StageName) string { return domain.StagePrefix + string(stage) }
-
 // checkStageLabels rejects a reserved stage:* Label that names no Stage.
 func checkStageLabels(field string, labels []string) error {
 	for _, l := range labels {
@@ -120,7 +117,7 @@ func (c *Core) requirementImport(r store.Reader, key string, sp domain.Spec, sta
 		}
 		im.Tickets = append(im.Tickets, domain.Ticket{
 			Number: n, Title: stageTickets[stage].title + ": " + sp.Title, State: submitState(draft), Spec: specN,
-			Labels: []string{StageLabel(stage)}, BlockedBy: blockedBy, Created: now, Updated: now,
+			Labels: []string{domain.StageLabel(stage)}, BlockedBy: blockedBy, Created: now, Updated: now,
 			Description: description,
 			Moves:       submitMoves(draft, now, "submit_requirement"),
 		})
@@ -186,24 +183,13 @@ func titleLine(text string) string {
 	return ""
 }
 
-// StageOf is the Stage a Ticket's Labels mark it as, or "" for an
-// implementation Ticket.
-func StageOf(labels []string) domain.StageName {
-	for _, l := range labels {
-		if name, ok := strings.CutPrefix(l, domain.StagePrefix); ok && slices.Contains(domain.Stages(), domain.StageName(name)) {
-			return domain.StageName(name)
-		}
-	}
-	return ""
-}
-
 // requirementView is the requirement block for Spec s with these Tickets
 // (in claim order), or nil when none of them is a Stage Ticket, reading
 // their reasons from their Project's evaluation e.
 func requirementView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *api.RequirementView {
 	var stages, build []domain.Ticket
 	for _, t := range tickets {
-		if StageOf(t.Labels) != "" {
+		if domain.StageOf(t.Labels) != "" {
 			stages = append(stages, t)
 		} else {
 			build = append(build, t)
@@ -213,7 +199,7 @@ func requirementView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *api
 		return nil
 	}
 	slices.SortStableFunc(stages, func(a, b domain.Ticket) int {
-		return slices.Index(domain.Stages(), StageOf(a.Labels)) - slices.Index(domain.Stages(), StageOf(b.Labels))
+		return slices.Index(domain.Stages(), domain.StageOf(a.Labels)) - slices.Index(domain.Stages(), domain.StageOf(b.Labels))
 	})
 	// claimable is a Ticket a Factory could claim now; one waiting on the
 	// human doesn't count.
@@ -222,13 +208,13 @@ func requirementView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *api
 		return t.State == domain.Ready && !e.rule.blocked(t) && reason == ""
 	}
 	v := &api.RequirementView{Stages: []api.StageView{}}
-	if StageOf(stages[0].Labels) != domain.StageGrilling {
+	if domain.StageOf(stages[0].Labels) != domain.StageGrilling {
 		v.Map = s.Tags[MapTag]
 	}
 	firstOpen := -1
 	for i, t := range stages {
 		reason, _ := e.reason(t)
-		v.Stages = append(v.Stages, api.StageView{Name: StageOf(t.Labels), Ticket: DisplayID(e.p.Key, t.Number), State: t.State, NeedsMeReason: reason})
+		v.Stages = append(v.Stages, api.StageView{Name: domain.StageOf(t.Labels), Ticket: DisplayID(e.p.Key, t.Number), State: t.State, NeedsMeReason: reason})
 		if firstOpen < 0 && !finished(t.State) {
 			firstOpen = i
 		}
@@ -267,12 +253,12 @@ func requirementSetStrip(v *api.RequirementView, e *evaluation, stages, build []
 	// One with neither was submitted Straight to Spec (ADR 0036).
 	if v.Map != "" {
 		v.Segments = append(v.Segments, api.Segment{Stage: api.SegmentStage(domain.StageGrilling), Progress: api.ProgressDone, Map: v.Map})
-	} else if StageOf(stages[0].Labels) != domain.StageGrilling {
+	} else if domain.StageOf(stages[0].Labels) != domain.StageGrilling {
 		v.Segments = append(v.Segments, api.Segment{Stage: api.SegmentStage(domain.StageGrilling), Progress: api.ProgressSkipped})
 	}
 	for i, t := range stages {
 		reason, _ := e.reason(t)
-		seg := api.Segment{Stage: api.SegmentStage(StageOf(t.Labels)), Ticket: id(t), Reason: reason}
+		seg := api.Segment{Stage: api.SegmentStage(domain.StageOf(t.Labels)), Ticket: id(t), Reason: reason}
 		switch {
 		case t.State == domain.Done:
 			seg.Progress = api.ProgressDone
@@ -289,7 +275,7 @@ func requirementSetStrip(v *api.RequirementView, e *evaluation, stages, build []
 		}
 		v.Segments = append(v.Segments, seg)
 		if reason != "" {
-			v.Needs = append(v.Needs, api.RequirementNeed{Ticket: seg.Ticket, Reason: reason, Stage: StageOf(t.Labels)})
+			v.Needs = append(v.Needs, api.RequirementNeed{Ticket: seg.Ticket, Reason: reason, Stage: domain.StageOf(t.Labels)})
 		}
 	}
 	stageNeeds := len(v.Needs)

@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -482,7 +481,7 @@ func (f *factory) nextRunnable(ctx context.Context) (id api.Ref, ok bool) {
 	}
 	for _, r := range rows {
 		lost := slices.ContainsFunc(f.lostClaims, func(in api.ClaimInput) bool { return in.Ticket == api.Ref(r.ID) })
-		if runs(core.GuideName(r.Labels)) && !lost && !f.heldBack(r.ID) {
+		if runs(api.GuideName(r.Labels)) && !lost && !f.heldBack(r.ID) {
 			return api.Ref(r.ID), true
 		}
 	}
@@ -556,7 +555,7 @@ func (f *factory) startClaimed(ctx context.Context, in api.ClaimInput, res api.C
 		return false
 	}
 	id := res.Ticket.ID
-	stage := core.GuideName(res.Ticket.Labels)
+	stage := api.GuideName(res.Ticket.Labels)
 	ws := f.repos.worktreesNamed(id, workBranch(stage, id))
 	conflicts := f.conflictsIn(ws, stage, *res.Ticket)
 	rebase := f.rebases(ctx, conflicts)

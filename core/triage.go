@@ -61,7 +61,7 @@ func triageNotes(t domain.Ticket) map[api.TriageAction]string {
 	if t.AwaitingTriage {
 		leaves += ", out of Needs Me,"
 	}
-	if t.Link.Integration == IntegrationAzureBoards {
+	if t.Link.Integration == domain.IntegrationAzureBoards {
 		return map[api.TriageAction]string{
 			api.OptionKeepAsDraft:   "Keep as Draft " + leaves + " and adds nothing to the work item in Azure Boards.",
 			api.OptionToRequirement: "To Requirement makes a Requirement of the work item's title and body, Cancels this Ticket, and from then on only writes the work's progress to the work item.",

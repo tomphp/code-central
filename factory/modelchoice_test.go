@@ -10,7 +10,6 @@ import (
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -78,7 +77,7 @@ func TestAKindsModelsRowReachesClaudeOverTheProjectDefaultAndTheFactorysFlags(t 
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Implement it")
 	setModels(t, h, api.SetModelsInput{Default: api.ModelRowView{Model: "opus", Effort: "medium"},
-		Kinds: []api.KindModelsView{{Kind: core.ImplementationStage, ModelRowView: api.ModelRowView{Effort: "xhigh"}}}})
+		Kinds: []api.KindModelsView{{Kind: api.ImplementationStage, ModelRowView: api.ModelRowView{Effort: "xhigh"}}}})
 	h.Start("--model", "sonnet", "--effort", "low")
 	h.WantState(id, domain.InReview)
 	ranWith(t, h, id, h.Calls()[0], "opus", "xhigh")

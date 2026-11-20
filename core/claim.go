@@ -84,7 +84,7 @@ func (c *Core) Claim(ctx context.Context, key string, in api.ClaimInput) (api.Cl
 func (c *Core) claimResult(r store.Reader, key string, t domain.Ticket, id string) api.ClaimResult {
 	v := defaultView(c.ticketView(r, key, t))
 	p, _ := r.Project(key)
-	g := stageGuide(GuideName(t.Labels), p)
+	g := stageGuide(api.GuideName(t.Labels), p)
 	mc := modelChoice(p, t)
 	return api.ClaimResult{ClaimID: id, Ticket: &v, StageGuide: &g, ModelChoice: &mc}
 }
@@ -165,7 +165,7 @@ func (c *Core) Finish(ctx context.Context, key string, in api.FinishInput) (api.
 		if err := c.actOn(ctx, &t, key, "finish", in.ClaimID, in.Summary, now); err != nil {
 			return err
 		}
-		spec := StageOf(t.Labels) == "spec"
+		spec := domain.StageOf(t.Labels) == "spec"
 		switch {
 		case spec && rec == "":
 			return invalid("recommendation", "finishing a spec Stage needs a recommendation: implement or split, with a one-line reason in the summary")

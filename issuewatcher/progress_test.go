@@ -7,8 +7,6 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
-
-	"github.com/tomoram/code-central/core"
 )
 
 // agent is the context an agent's writes are made in.
@@ -43,7 +41,7 @@ func (w *watching) workedDone(ticket, comment, commit string) {
 	}
 	if err == nil {
 		in := api.FinishInput{Ticket: api.Ref(ticket), ClaimID: c.ClaimID, Summary: "Finished " + ticket + ".", Branch: branch}
-		if core.StageOf(c.Ticket.Labels) == "spec" {
+		if domain.StageOf(c.Ticket.Labels) == "spec" {
 			in.Recommendation = domain.RecommendSplit
 		}
 		_, err = w.srv.Core.Finish(agent, "acme", in)

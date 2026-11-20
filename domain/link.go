@@ -48,3 +48,31 @@ func (l Link) Owned() bool { return l.Attached() && !l.Outbound }
 // Attached reports whether the Link is linked and not detached, so the
 // Integration still writes to the external item.
 func (l Link) Attached() bool { return l.Linked() && !l.Detached }
+
+// The Integrations' names, as a Link names them.
+const (
+	IntegrationGitHub      = "github"
+	IntegrationAzureBoards = "azure-boards"
+)
+
+// The keys of the comments written to an issue.
+const (
+	// CommentContext is the key of the comment with the context the human
+	// gave To Requirement.
+	CommentContext = "context"
+	// CommentWontFix is the key of the comment with the human's Won't fix
+	// reason.
+	CommentWontFix = "wont-fix"
+	// CommentGrilling is the key of the comment with the grilling
+	// Stage's resolution.
+	CommentGrilling = "grilling"
+	// CommentSpec is the key of the comment with the Spec's body as the
+	// spec Stage left it.
+	CommentSpec = "spec"
+	// CommentLanded starts the key of the comment for each implementation
+	// Ticket Done, such as landed:acme-12.
+	CommentLanded = "landed:"
+	// CommentClosed is the key of the comment listing what landed, once
+	// the Spec is Finished.
+	CommentClosed = "closed"
+)

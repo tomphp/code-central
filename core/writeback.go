@@ -24,28 +24,6 @@ import (
 // only what differs. Nothing is ever due from Rounds, answers, Failure
 // Reports, Transcripts or Claims.
 
-// The keys of the comments written to an issue.
-const (
-	// CommentContext is the key of the comment with the context the human
-	// gave To Requirement.
-	CommentContext = "context"
-	// CommentWontFix is the key of the comment with the human's Won't fix
-	// reason.
-	CommentWontFix = "wont-fix"
-	// CommentGrilling is the key of the comment with the grilling
-	// Stage's resolution.
-	CommentGrilling = "grilling"
-	// CommentSpec is the key of the comment with the Spec's body as the
-	// spec Stage left it.
-	CommentSpec = "spec"
-	// CommentLanded starts the key of the comment for each implementation
-	// Ticket Done, such as landed:acme-12.
-	CommentLanded = "landed:"
-	// CommentClosed is the key of the comment listing what landed, once
-	// the Spec is Finished.
-	CommentClosed = "closed"
-)
-
 // that a comment links back to. Call it before serving; without it,
 // the link is relative to the UI.
 func (c *Core) SetUIURL(url string) { c.uiURL = strings.TrimRight(url, "/") }
@@ -133,8 +111,8 @@ func (c *Core) ticketIssueWrites(r store.Reader, key string, t domain.Ticket, hi
 	w = api.IssueWrites{Target: id, Link: *linkView(t.Link), Comments: []api.IssueComment{}}
 	if reason, latest, _ := triageComment(t, api.OptionWontFix); latest {
 		w.Label, w.Close = domain.LabelWontFix, api.CloseNotPlanned
-		if strings.TrimSpace(reason) != "" && !slices.Contains(t.Link.Written, CommentWontFix) {
-			w.Comments = append(w.Comments, c.issueComment(hide, id, ticketLink, CommentWontFix, writtenText(r, key, reason, hide)))
+		if strings.TrimSpace(reason) != "" && !slices.Contains(t.Link.Written, domain.CommentWontFix) {
+			w.Comments = append(w.Comments, c.issueComment(hide, id, ticketLink, domain.CommentWontFix, writtenText(r, key, reason, hide)))
 		}
 	} else if t.State == domain.Draft || t.State == domain.Ready {
 		w.Label = domain.LabelDraft
@@ -162,12 +140,12 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec, hide b
 			w.Comments = append(w.Comments, c.issueComment(hide, id, requirementLink, k, text))
 		}
 	}
-	due(CommentContext, writtenText(r, key, requirementContext(r, key, s.Link), hide))
+	due(domain.CommentContext, writtenText(r, key, requirementContext(r, key, s.Link), hide))
 	tickets := specTickets(r, key, s.Number, store.Moves, store.Comments)
 	stages, stagesDone := map[domain.StageName]domain.Ticket{}, true
 	var landed []domain.Ticket
 	for _, t := range tickets {
-		if stage := StageOf(t.Labels); stage != "" {
+		if stage := domain.StageOf(t.Labels); stage != "" {
 			stages[stage] = t
 			stagesDone = stagesDone && (t.State == domain.Done || t.State == domain.Cancelled)
 		} else if t.State == domain.Done {
@@ -175,17 +153,17 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec, hide b
 		}
 	}
 	if g, done := stages["grilling"]; done && g.State == domain.Done {
-		due(CommentGrilling, writtenText(r, key, resolution(g), hide))
+		due(domain.CommentGrilling, writtenText(r, key, resolution(g), hide))
 	}
 	if sp, done := stages["spec"]; done && sp.State == domain.Done {
-		due(CommentSpec, writtenText(r, key, bodyAt(s, doneMove(sp).Time), hide))
+		due(domain.CommentSpec, writtenText(r, key, bodyAt(s, doneMove(sp).Time), hide))
 	}
 	slices.SortStableFunc(landed, func(a, b domain.Ticket) int { return doneMove(a).Time.Compare(doneMove(b).Time) })
 	p, _ := r.Project(key)
 	var list []string
 	for _, t := range landed {
 		line := landedLine(r, p, t, hide)
-		due(CommentLanded+DisplayID(key, t.Number), "Landed "+line+".")
+		due(domain.CommentLanded+DisplayID(key, t.Number), "Landed "+line+".")
 		list = append(list, "- "+line)
 	}
 	_, finishedSpec := summarise(tickets)
@@ -200,7 +178,7 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec, hide b
 				text += "\n\nChanged Repositories: " + strings.Join(names, ", ")
 			}
 		}
-		due(CommentClosed, text)
+		due(domain.CommentClosed, text)
 	}
 	w.Label, w.Close = requirementStatus(finishedSpec, len(landed) > 0, stagesDone)
 	return dueWhile(s.Link.ExternalState, w)

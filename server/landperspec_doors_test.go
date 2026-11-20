@@ -8,7 +8,6 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // Land per Spec (code-central-371): the Factory's report_spec_merge, over
@@ -37,7 +36,7 @@ func specLandedAccepted(t *testing.T, srv *codecentraltest.Server) {
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.CreateTicket(context.Background(), "acme", api.CreateTicketInput{Spec: "1", Title: "Grilling", Labels: []string{core.StageLabel("grilling")}})
+		_, err := srv.Core.CreateTicket(context.Background(), "acme", api.CreateTicketInput{Spec: "1", Title: "Grilling", Labels: []string{domain.StageLabel("grilling")}})
 		return err
 	})
 	acceptedTicket(t, srv)

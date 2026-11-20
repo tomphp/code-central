@@ -12,21 +12,10 @@ import (
 // Why an Accepted Ticket hasn't landed in each of its Changed
 // Repositories (Spec code-central-848, ADR 0049): a Repository whose base
 // is missing or diverged waits for it, and otherwise the Factory says why
-// in a comment naming the Repository (CantLandComment), once per reason.
+// in a comment naming the Repository (api.CantLandComment), once per reason.
 // Accepted but not landed names the Repositories that have landed and
 // those that haven't with these reasons, and the Ticket's Repositories
 // section shows them, while the Project has several Repositories.
-
-// cantLandLead starts the Factory's comment that it can't land a Ticket's
-// work in a Repository yet.
-const cantLandLead = "The Factory can't land this in "
-
-// CantLandComment is the Factory's comment that it can't land a Ticket's
-// work in the Repository name yet, and why, while the Ticket stays in
-// state. Core reads why's first line back as the Repository's reason.
-func CantLandComment(name, why string, state domain.State) string {
-	return fmt.Sprintf("%s%s yet: %s\n\nIt stays %s and the Factory tries again on every poll.", cantLandLead, name, why, state)
-}
 
 // notLandedReason is why t, p's, hasn't landed in the Repository name:
 // its base is missing or diverged; else what its work there waits on,
@@ -40,7 +29,7 @@ func (c *Core) notLandedReason(p domain.Project, t domain.Ticket, name string, c
 	if why := waitingIn(p, t, name, ci); why != "" {
 		return why
 	}
-	lead, since := cantLandLead+name+" yet: ", entered(t)
+	lead, since := api.CantLandLead+name+" yet: ", entered(t)
 	for i := len(t.Comments) - 1; i >= 0 && !t.Comments[i].Time.Before(since); i-- {
 		if why, ok := strings.CutPrefix(t.Comments[i].Body, lead); ok && t.Comments[i].Actor != string(api.Human) {
 			return strings.TrimSuffix(firstLine(why), ":")

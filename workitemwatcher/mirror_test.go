@@ -11,7 +11,6 @@ import (
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakeazdo"
 )
 
@@ -67,7 +66,7 @@ func (w *watching) line(id int, project string) string {
 // linked is every Spec and Ticket in acme linked by azure-boards.
 func (w *watching) linked() []api.LinkedRow {
 	w.t.Helper()
-	rows, err := w.srv.Core.FindLinked(context.Background(), "acme", api.FindLinkedInput{Integration: core.IntegrationAzureBoards})
+	rows, err := w.srv.Core.FindLinked(context.Background(), "acme", api.FindLinkedInput{Integration: domain.IntegrationAzureBoards})
 	if err != nil {
 		w.t.Fatal(err)
 	}
@@ -168,7 +167,7 @@ func TestMatchingWorkItemsArriveAsDraftIncomingIssuesOnTheAzureBoardsSpec(t *tes
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.State != domain.Draft || got.Spec.ID != watch.Spec || got.Link.Integration != core.IntegrationAzureBoards || got.Link.ExternalState != domain.ExternalOpen {
+		if got.State != domain.Draft || got.Spec.ID != watch.Spec || got.Link.Integration != domain.IntegrationAzureBoards || got.Link.ExternalState != domain.ExternalOpen {
 			t.Fatalf("%s is %s on %s, linked %+v, want Draft on the Azure Boards Spec %s, open on azure-boards", i.Ticket, got.State, got.Spec.ID, got.Link, watch.Spec)
 		}
 	}

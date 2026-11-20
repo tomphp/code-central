@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -29,7 +28,7 @@ func (f *factory) noteTicket(c claim, tk api.TicketView) {
 	if f.ended[c.ClaimID] {
 		return
 	}
-	f.info[c.ClaimID] = claimInfo{title: tk.Title, stage: core.GuideName(tk.Labels)}
+	f.info[c.ClaimID] = claimInfo{title: tk.Title, stage: api.GuideName(tk.Labels)}
 }
 
 // about is "(<stage>): "<title>"", naming c's Ticket in a line.
@@ -45,7 +44,7 @@ func (f *factory) claimInfo(c claim) claimInfo {
 	i, ok := f.info[c.ClaimID]
 	f.mu.Unlock()
 	if !ok {
-		i.stage = core.ImplementationStage
+		i.stage = api.ImplementationStage
 	}
 	return i
 }

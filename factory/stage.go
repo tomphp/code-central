@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -53,16 +52,16 @@ type guideSkill struct{ skill, alongside string }
 // is the only place that names upstream skills. A Ticket whose guide
 // isn't here is left unclaimed.
 var stageSkills = map[string]guideSkill{
-	"grilling":               {"grilling", "domain-modeling"},
-	"spec":                   {skill: "to-spec"},
-	"tickets":                {skill: "to-tickets"},
-	"map-chart":              {skill: "wayfinder"},
-	"map-grilling":           {"grilling", "domain-modeling"},
-	mapResearch:              {skill: "research"},
-	"map-task":               {},
-	domain.PrototypeLabel:    {skill: "prototype"},
-	domain.RetroLabel:        {skill: "retro"},
-	core.ImplementationStage: {skill: "implement"},
+	"grilling":              {"grilling", "domain-modeling"},
+	"spec":                  {skill: "to-spec"},
+	"tickets":               {skill: "to-tickets"},
+	"map-chart":             {skill: "wayfinder"},
+	"map-grilling":          {"grilling", "domain-modeling"},
+	mapResearch:             {skill: "research"},
+	"map-task":              {},
+	domain.PrototypeLabel:   {skill: "prototype"},
+	domain.RetroLabel:       {skill: "retro"},
+	api.ImplementationStage: {skill: "implement"},
 }
 
 // runs reports whether the Factory runs a Ticket with the named guide.
@@ -77,7 +76,7 @@ func runs(guide string) bool {
 // and never land. Any other guide works detached, on no branch.
 func workBranch(guide, ticket string) string {
 	switch guide {
-	case core.ImplementationStage:
+	case api.ImplementationStage:
 		return ticket
 	case domain.PrototypeLabel:
 		return domain.PrototypeLabel + "/" + ticket
@@ -150,7 +149,7 @@ func (f *factory) rebases(ctx context.Context, conflicts []conflict) bool {
 // checked at the Spec Branch), or when the merge is clean.
 func (f *factory) conflictFiles(r *repository, stage string, tk api.TicketView) []string {
 	branch := workBranch(stage, tk.ID)
-	if stage != core.ImplementationStage || branch == "" {
+	if stage != api.ImplementationStage || branch == "" {
 		return nil
 	}
 	head, err := r.git.commit("refs/heads/" + branch)
@@ -289,7 +288,7 @@ func claimIntro(c claim, stage, wt string) string {
 	fmt.Fprintf(&b, "Ticket: %s\nClaim: %s\n\n", c.Ticket, c.ClaimID)
 	claimed := fmt.Sprintf("The Factory has already claimed this Ticket for you: Claim %s is yours, so don't call claim, and pass %s as claim_id on every write that needs it.", c.ClaimID, c.ClaimID)
 	switch branch := workBranch(stage, c.Ticket); stage {
-	case core.ImplementationStage:
+	case api.ImplementationStage:
 		fmt.Fprintf(&b, "You are running under code-central-factory, in this Ticket's own worktree on branch %s. %s Commit on this branch only, with no push and no PR, and finish the Ticket when it is done.", branch, claimed)
 	case domain.PrototypeLabel:
 		fmt.Fprintf(&b, "You are running under code-central-factory, in this Ticket's own worktree, %s, on the local branch %s. %s Commit on this branch only, with no push and no PR. Record the prototype Tag as `%s@<commit> %s`, with the branch's head commit; open the first Round with a \"Try it\" Question; and finish with no branch, since a Prototype never lands.", wt, branch, claimed, branch, wt)

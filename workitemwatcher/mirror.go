@@ -15,13 +15,12 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/azdo"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/ratelimit"
 )
 
 // Integration is the name every Link the Work Item Watcher makes carries.
-const Integration = core.IntegrationAzureBoards
+const Integration = domain.IntegrationAzureBoards
 
 // LinkID is the Link ID of org's work item id: org#id, org lowercased.
 // Work item IDs are unique in an organization, so it stays the same when

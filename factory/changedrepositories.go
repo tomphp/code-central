@@ -8,7 +8,6 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/client"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -26,7 +25,7 @@ import (
 // order, each with its branch's head. A Stage, being detached, changes
 // none.
 func (rs *repositories) changedIn(tk api.TicketView) []api.RepositoryWork {
-	branch := workBranch(core.GuideName(tk.Labels), tk.ID)
+	branch := workBranch(api.GuideName(tk.Labels), tk.ID)
 	if branch == "" {
 		return nil
 	}
@@ -148,7 +147,7 @@ func (rs *repositories) finishProblems(tk api.TicketView) (problems, stands []st
 func (rs *repositories) recordProblem(r *repository, tk api.TicketView, rec api.ChangedRepositoryView, holdsWork bool) string {
 	branch := rec.Branch
 	if branch == "" {
-		branch = workBranch(core.GuideName(tk.Labels), tk.ID)
+		branch = workBranch(api.GuideName(tk.Labels), tk.ID)
 	}
 	if rec.Commit == "" || branch == "" {
 		return ""

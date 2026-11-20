@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -22,7 +21,7 @@ func branchWorld(t *testing.T) fixture {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Offline mode")
-	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "grilling", State: domain.Ready, Labels: []string{core.StageLabel(domain.StageGrilling)}})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "grilling", State: domain.Ready, Labels: []string{domain.StageLabel(domain.StageGrilling)}})
 	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "First", State: domain.Ready})
 	f.spec(t, "acme", "Dark mode")
 	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-4", Title: "Toggle", State: domain.Ready})

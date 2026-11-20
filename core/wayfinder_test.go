@@ -172,8 +172,8 @@ func TestTheGuideNameComesFromTheTicketsReservedTypeLabel(t *testing.T) {
 		{[]string{"wayfinder:task", "ui"}, "map-task"},
 		{[]string{"prototype"}, "prototype"},
 	} {
-		if got := core.GuideName(c.labels); got != c.want {
-			t.Errorf("GuideName(%q) = %q, want %q", c.labels, got, c.want)
+		if got := api.GuideName(c.labels); got != c.want {
+			t.Errorf("api.GuideName(%q) = %q, want %q", c.labels, got, c.want)
 		}
 	}
 }

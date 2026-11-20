@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -862,7 +861,7 @@ func (l *lander) cantLandIn(ctx context.Context, tk api.TicketView, r *repositor
 	if n := len(tk.Moves); n > 0 {
 		since = tk.Moves[n-1].Time
 	}
-	l.postOnce(ctx, tk, "can't land yet in "+r.name, why, core.CantLandComment(r.name, why, tk.State), since)
+	l.postOnce(ctx, tk, "can't land yet in "+r.name, why, api.CantLandComment(r.name, why, tk.State), since)
 }
 
 // cantPushYet leaves an Accepted Ticket whose branch couldn't be pushed

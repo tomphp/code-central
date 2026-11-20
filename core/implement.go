@@ -87,7 +87,7 @@ func (d implemented) records(t domain.Ticket) store.Import {
 // t is a spec Stage In Review whose tickets Stage can still run.
 func (c *Core) implementStep(ctx context.Context, r store.Reader, key string, t *domain.Ticket, cause domain.AutoAcceptCause, now time.Time) (implemented, error) {
 	id := DisplayID(key, t.Number)
-	if StageOf(t.Labels) != "spec" {
+	if domain.StageOf(t.Labels) != "spec" {
 		return implemented{}, notAllowed("%s is not a spec Stage, so implement is not allowed: only a Requirement's spec Stage is implemented", id)
 	}
 	if t.State != domain.InReview {
@@ -96,7 +96,7 @@ func (c *Core) implementStep(ctx context.Context, r store.Reader, key string, t 
 	var tickets domain.Ticket
 	found := false
 	for _, o := range r.FindTickets(key, store.TicketFilter{Spec: []int{t.Spec}}) {
-		if StageOf(o.Labels) == "tickets" {
+		if domain.StageOf(o.Labels) == "tickets" {
 			// It is rewritten whole.
 			tickets, found = r.Ticket(key, o.Number, whole...)
 			break

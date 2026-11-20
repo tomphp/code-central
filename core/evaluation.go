@@ -98,7 +98,7 @@ func (e *evaluation) evaluated() *evaluation {
 	e.reasons, e.listedBy, e.requirements, e.specWork = map[int]ticketReason{}, map[int][]int{}, map[int]bool{}, map[int][]domain.Ticket{}
 	var listed []domain.Ticket
 	for _, t := range e.list {
-		if StageOf(t.Labels) != "" {
+		if domain.StageOf(t.Labels) != "" {
 			e.requirements[t.Spec] = true
 		}
 		reason, since := e.chain(t)

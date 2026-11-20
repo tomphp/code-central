@@ -28,9 +28,7 @@ func goList(t *testing.T, pkg string) []string {
 // direct import of store would pull persistence into a client.
 func TestClientsDoNotImportStore(t *testing.T) {
 	for _, pkg := range []string{
-		"httpapi", "client", "mcp", "server", "internal/wiretypes",
-		"factory", "factory/factorytest", "cmd/code-central-factory",
-		"ciwatcher", "issuewatcher", "pullrequestwatcher", "workitemwatcher",
+		"httpapi", "mcp", "server", "internal/wiretypes",
 	} {
 		t.Run(pkg, func(t *testing.T) {
 			for _, imp := range goList(t, "../../"+pkg) {
@@ -121,4 +119,83 @@ func TestDomainImportsNothingOfCodeCentral(t *testing.T) {
 			t.Errorf("domain depends on %s; it may import nothing of Code Central", pkg)
 		}
 	}
+}
+
+// The clients of the service link neither core nor store, however
+// indirectly: they talk to the service over HTTP and name the wire
+// through api. factory/factorytest is not among them: it is test tooling
+// that composes the real service in process (codecentraltest), so it links
+// both by design.
+func TestClientsDoNotLinkCoreOrStore(t *testing.T) {
+	for _, pkg := range []string{
+		"client", "factory", "cmd/code-central-factory",
+		"ciwatcher", "issuewatcher", "pullrequestwatcher", "workitemwatcher",
+		"gh", "azdo", "ratelimit", "watchers", "notify",
+	} {
+		t.Run(pkg, func(t *testing.T) {
+			deps := goDeps(t, "../../"+pkg)
+			for _, banned := range []string{module + "/core", module + "/store"} {
+				if _, ok := deps[banned]; !ok {
+					continue
+				}
+				t.Errorf("%s links %s via %s", pkg, banned, strings.Join(importChain(deps, module+"/"+pkg, banned), " -> "))
+			}
+		})
+	}
+}
+
+// api is a near-leaf: it may import only domain and internal/fieldwalk.
+func TestAPIImportsOnlyDomainAndFieldwalk(t *testing.T) {
+	for pkg := range goDeps(t, "../../api") {
+		if !strings.HasPrefix(pkg, module+"/") {
+			continue
+		}
+		switch pkg {
+		case module + "/api", module + "/domain", module + "/internal/fieldwalk":
+		default:
+			t.Errorf("api depends on %s; it may import only domain and internal/fieldwalk", pkg)
+		}
+	}
+}
+
+// goDeps maps each package a package depends on, itself included, to
+// the packages it imports directly.
+func goDeps(t *testing.T, pkg string) map[string][]string {
+	t.Helper()
+	out, err := exec.Command("go", "list", "-deps", "-f", `{{.ImportPath}} {{join .Imports " "}}`, pkg).Output()
+	if err != nil {
+		t.Fatalf("go list -deps %s: %v", pkg, err)
+	}
+	deps := map[string][]string{}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if fields := strings.Fields(line); len(fields) > 0 {
+			deps[fields[0]] = fields[1:]
+		}
+	}
+	return deps
+}
+
+// importChain returns a shortest path of imports from one package to
+// another through deps.
+func importChain(deps map[string][]string, from, to string) []string {
+	prev := map[string]string{from: ""}
+	queue := []string{from}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		if cur == to {
+			var chain []string
+			for p := to; p != ""; p = prev[p] {
+				chain = append([]string{p}, chain...)
+			}
+			return chain
+		}
+		for _, next := range deps[cur] {
+			if _, seen := prev[next]; !seen {
+				prev[next] = cur
+				queue = append(queue, next)
+			}
+		}
+	}
+	return []string{from, to}
 }

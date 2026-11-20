@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -23,7 +24,7 @@ func (c *Core) GetIssueWatch(_ context.Context, key string) (api.IssueWatch, err
 		}
 		g := githubIssuesView(key, p.GitHubIssues, api.WatcherView{})
 		out = api.IssueWatch{Project: key, On: g.On, Repositories: g.Repositories, Label: g.Label, GHPath: r.Options().GHPath, Spec: g.Spec,
-			Issues: incomingIssues(r, key, IntegrationGitHub), Writes: c.integrationWrites(r, key, IntegrationGitHub, false)}
+			Issues: incomingIssues(r, key, domain.IntegrationGitHub), Writes: c.integrationWrites(r, key, domain.IntegrationGitHub, false)}
 		return nil
 	})
 	return out, err

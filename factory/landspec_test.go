@@ -10,7 +10,6 @@ import (
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -19,7 +18,7 @@ import (
 func holdTicketsStage(t *testing.T, h *factorytest.Harness) (release func()) {
 	t.Helper()
 	ctx := context.Background()
-	made, err := h.Server.Client.CreateTicket(ctx, h.Project, api.CreateTicketInput{Spec: api.Ref(h.SpecID()), Title: "Tickets", State: domain.Draft, Labels: []string{core.StageLabel("tickets")}})
+	made, err := h.Server.Client.CreateTicket(ctx, h.Project, api.CreateTicketInput{Spec: api.Ref(h.SpecID()), Title: "Tickets", State: domain.Draft, Labels: []string{domain.StageLabel("tickets")}})
 	if err != nil {
 		t.Fatal(err)
 	}
