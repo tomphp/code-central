@@ -7,7 +7,6 @@ import (
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -52,7 +51,7 @@ func TestAModelClaudeRejectsFailsTheClaimNamingWhereItWasSet(t *testing.T) {
 		},
 		"Project kind row": {
 			set: func(t *testing.T, h *factorytest.Harness, id string) {
-				setModels(t, h, api.SetModelsInput{Kinds: []api.KindModelsView{{Kind: core.ImplementationStage, ModelRowView: api.ModelRowView{Model: "opus-9"}}}})
+				setModels(t, h, api.SetModelsInput{Kinds: []api.KindModelsView{{Kind: api.ImplementationStage, ModelRowView: api.ModelRowView{Model: "opus-9"}}}})
 			},
 			from: "the Project's Models row for implementation",
 			fix:  "Models row for implementation",
@@ -111,7 +110,7 @@ func TestAnEffortClaudeDoesntAcceptFailsTheClaimWithNoTurnStarted(t *testing.T) 
 		},
 		"Project kind row": {
 			set: func(t *testing.T, h *factorytest.Harness, id string) {
-				setModels(t, h, api.SetModelsInput{Kinds: []api.KindModelsView{{Kind: core.ImplementationStage, ModelRowView: api.ModelRowView{Effort: "xhigh"}}}})
+				setModels(t, h, api.SetModelsInput{Kinds: []api.KindModelsView{{Kind: api.ImplementationStage, ModelRowView: api.ModelRowView{Effort: "xhigh"}}}})
 			},
 			from: "the Project's Models row for implementation",
 			fix:  "Models row for implementation",

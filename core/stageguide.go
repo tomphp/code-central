@@ -18,14 +18,6 @@ import (
 // the service, like the workflow prose, and name only Code Central
 // operations, so any agent on any door can follow them.
 
-// ImplementationStage names the Stage Guide for a Ticket with no
-// reserved type Label.
-const ImplementationStage = "implementation"
-
-// mapGuidePrefix starts the Guide name of each Map Ticket type, which
-// keeps the Map's grilling apart from the grilling Stage.
-const mapGuidePrefix = "map-"
-
 // GuideNames are the names with a guide: each Stage, each Map Ticket
 // type, prototype, retro, then implementation.
 var GuideNames = func() []string {
@@ -34,9 +26,9 @@ var GuideNames = func() []string {
 		names = append(names, string(s))
 	}
 	for _, t := range api.WayfinderTypes() {
-		names = append(names, mapGuidePrefix+string(t))
+		names = append(names, api.MapGuidePrefix+string(t))
 	}
-	return append(names, domain.PrototypeLabel, domain.RetroLabel, ImplementationStage)
+	return append(names, domain.PrototypeLabel, domain.RetroLabel, api.ImplementationStage)
 }()
 
 //go:embed stageguides/*.md
@@ -160,18 +152,6 @@ func modelAssignmentText(p domain.Project) string {
 		panic("core: model-assignment fragment: " + err.Error())
 	}
 	return b.String()
-}
-
-// GuideName names the guide for a Ticket with these Labels: its Stage,
-// map-<type> for a Map Ticket, prototype for a Prototype, or
-// ImplementationStage only when it has no reserved type Label.
-func GuideName(labels []string) string {
-	for _, l := range labels {
-		if g, ok := typeGuide(l); ok {
-			return g
-		}
-	}
-	return ImplementationStage
 }
 
 // SetSubagentExploration is the human's set_subagent_exploration:

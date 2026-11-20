@@ -27,7 +27,7 @@ func specLanded(r store.Reader, p domain.Project, t domain.Ticket) bool {
 	if !landingPolicies(p).LandPerSpecInForce() {
 		return false
 	}
-	if StageOf(t.Labels) != "" || isMap(t.Labels) || slices.Contains(t.Labels, domain.PrototypeLabel) || slices.Contains(t.Labels, domain.RetroLabel) {
+	if domain.StageOf(t.Labels) != "" || isMap(t.Labels) || slices.Contains(t.Labels, domain.PrototypeLabel) || slices.Contains(t.Labels, domain.RetroLabel) {
 		return false
 	}
 	spec, ok := r.Spec(p.Key, t.Spec)
@@ -87,11 +87,11 @@ func landPerSpecView(r store.Reader, key string, s domain.Spec, tickets []domain
 	v := &api.LandPerSpecView{Waiting: []string{}}
 	ready, merged := true, false
 	for _, t := range tickets {
-		if StageOf(t.Labels) == "tickets" {
+		if domain.StageOf(t.Labels) == "tickets" {
 			ready = ready && finished(t.State)
 			continue
 		}
-		if StageOf(t.Labels) != "" {
+		if domain.StageOf(t.Labels) != "" {
 			continue
 		}
 		switch t.State {

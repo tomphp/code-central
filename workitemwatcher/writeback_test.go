@@ -11,7 +11,6 @@ import (
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakeazdo"
 )
 
@@ -91,7 +90,7 @@ func (w *watching) comment(target, key, text string) string {
 // linkBack is the query that opens target in the UI: a Requirement for
 // the Requirement's comments, a Ticket for Won't fix.
 func linkBack(target, key string) string {
-	if key == core.CommentWontFix {
+	if key == domain.CommentWontFix {
 		return "ticket=" + target
 	}
 	return "list=requirements&requirement=" + target
@@ -224,7 +223,7 @@ func TestWontFixCommentsAndTagsTheWorkItemAndNeverChangesItsState(t *testing.T) 
 		t.Fatal(err)
 	}
 	w.polled()
-	if got, want := w.markdown(1), []string{w.comment(ticket, core.CommentWontFix, "Not for us.")}; !slices.Equal(got, want) {
+	if got, want := w.markdown(1), []string{w.comment(ticket, domain.CommentWontFix, "Not for us.")}; !slices.Equal(got, want) {
 		t.Fatalf("comments %q, want %q", got, want)
 	}
 	if got := w.tags(1); got != "code-central:wont-fix" {
@@ -261,7 +260,7 @@ func TestACommentAlreadyOnTheWorkItemIsNotPostedAgainAndIsReportedWritten(t *tes
 	w := newWatching(t)
 	w.arrived(1)
 	spec := w.toRequirement(1, "Seen on every login.")
-	posted := w.comment(spec, core.CommentContext, "Seen on every login.")
+	posted := w.comment(spec, domain.CommentContext, "Seen on every login.")
 	w.fake.PutComment(1, "A human's note.")
 	w.fake.PutComment(1, posted)
 	w.polled()
@@ -357,7 +356,7 @@ func (w *watching) workedDone(ticket, comment, commit string) {
 	}
 	if err == nil {
 		in := api.FinishInput{Ticket: api.Ref(ticket), ClaimID: c.ClaimID, Summary: "Finished " + ticket + ".", Branch: branch}
-		if core.StageOf(c.Ticket.Labels) == "spec" {
+		if domain.StageOf(c.Ticket.Labels) == "spec" {
 			in.Recommendation = domain.RecommendSplit
 		}
 		_, err = w.srv.Core.Finish(agent, "acme", in)
@@ -399,7 +398,7 @@ func TestUnderHideCodeCentralTheHiddenCommentIsPostedAndNoTagIsWritten(t *testin
 	wantIncoming(t, w, 1)
 	spec := w.toRequirement(1, "  Seen on every login.  ")
 	w.polled()
-	if got, want := w.markdown(1), []string{domain.OpaqueMarker(spec, core.CommentContext) + "\nSeen on every login."}; !slices.Equal(got, want) {
+	if got, want := w.markdown(1), []string{domain.OpaqueMarker(spec, domain.CommentContext) + "\nSeen on every login."}; !slices.Equal(got, want) {
 		t.Fatalf("comments %q, want %q", got, want)
 	}
 	if got := w.patches(0); len(got) != 0 {
@@ -425,7 +424,7 @@ func TestEitherMarkerOnTheWorkItemStopsTheCommentBeingPostedAgain(t *testing.T) 
 				w.setBoards(api.SetAzureBoardsInput{On: true, QueryURL: w.queryURL(queryID), HideCodeCentral: hide})
 				w.arrived(1)
 				spec := w.toRequirement(1, "Seen on every login.")
-				w.fake.PutComment(1, marker(spec, core.CommentContext)+"\nSeen on every login.")
+				w.fake.PutComment(1, marker(spec, domain.CommentContext)+"\nSeen on every login.")
 				w.polled()
 				if got := w.fake.Comments(1); len(got) != 1 {
 					t.Fatalf("comments %+v, want the one there already, not posted again", got)

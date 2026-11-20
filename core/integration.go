@@ -11,12 +11,6 @@ import (
 // need me, and its own Watcher, which writes back only to its own
 // Integration's Links.
 
-// The Integrations' names, as a Link names them.
-const (
-	IntegrationGitHub      = "github"
-	IntegrationAzureBoards = "azure-boards"
-)
-
 // inbox is an Integration's inbox Spec in a Project.
 type inbox struct {
 	// integration is the Integration whose inbox it is.
@@ -35,8 +29,8 @@ type inbox struct {
 // Boards'.
 func inboxes(p domain.Project) []inbox {
 	return []inbox{
-		{integration: IntegrationGitHub, spec: p.GitHubIssues.Spec, newIssuesNeedMe: p.GitHubIssues.NewIssuesNeedMe},
-		{integration: IntegrationAzureBoards, spec: p.AzureBoards.Spec, newIssuesNeedMe: p.AzureBoards.NewIssuesNeedMe, branchFormat: p.AzureBoards.BranchFormat},
+		{integration: domain.IntegrationGitHub, spec: p.GitHubIssues.Spec, newIssuesNeedMe: p.GitHubIssues.NewIssuesNeedMe},
+		{integration: domain.IntegrationAzureBoards, spec: p.AzureBoards.Spec, newIssuesNeedMe: p.AzureBoards.NewIssuesNeedMe, branchFormat: p.AzureBoards.BranchFormat},
 	}
 }
 

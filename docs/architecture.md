@@ -61,10 +61,9 @@ flowchart TB
   CIW & ISW & PRW & WIW --> EXT
   CL & FAC & CIW & ISW & PRW & WIW -.import the wire types from.-> WIRE
   CL -.derives its calls from.-> OPS
-  FAC & ISW & PRW & WIW -.call a few core rules in process.-> CORE
 ```
 
-The dotted edges are the ones the run-time picture hides. The wire types are in `api` (weakness 1, fixed), so no client needs `core` for them, and `ops` holds only the definitions (weakness 4, fixed), so `client` links neither `core` nor `store`. But the Factory and three of the Watchers still call a few `core` functions (weakness 3), so they link `core` and `store` all the same.
+The dotted edges are the ones the run-time picture hides. The wire types are in `api`, the shared rules are in `domain`, `api` and `codehost`, and `ops` holds only the definitions, so no client links `core` or `store`; `internal/importguard` checks that on the transitive imports.
 
 A second, test-only composition exists: `world/` + `cmd/corewasm` build the real Core, `httpapi` and `mcp` over an in-memory store to WebAssembly (built by `go run ./internal/corewasm`), and the UI's tests and stories run against that instead of a hand-written fake (ADR 0060, 0044).
 
@@ -112,18 +111,18 @@ Intended: `clients → client → HTTP → server → httpapi/mcp → ops ← op
 Found:
 
 - **No import cycles**, and `core` never imports a door, `ops`, `factory`, `gh` or `azdo`.
-- **Direct imports hold, transitive ones don't.** `internal/importguard` keeps `client`, `httpapi`, `mcp`, `factory` and the Watchers from importing `store` directly, and they don't. But the Factory, `issuewatcher`, `pullrequestwatcher` and `workitemwatcher` import `core` (for a few rules, no longer for the wire types), and `core` imports `store`, so those three Watchers and the Factory binary all link `store` and its 16 database driver packages. `client`, `ops`, `ciwatcher`, `gh`, `azdo`, `ratelimit`, `watchers` and `notify` link neither `core` nor `store`. That the Factory and the Watchers never touch the Store is kept by discipline, not by the compiler.
+- **No client links `core` or `store`, and a test says so.** `internal/importguard` runs `go list -deps` on `client`, `factory`, `cmd/code-central-factory`, `ciwatcher`, `issuewatcher`, `pullrequestwatcher`, `workitemwatcher`, `gh`, `azdo`, `ratelimit`, `watchers` and `notify`, and fails, naming the client and the chain of imports, when `core` or `store` is among them. `factory/factorytest` is left out: it is test tooling that composes the real service in process, so it links both. `httpapi`, `mcp`, `server` and `internal/wiretypes` legitimately reach `core` and are checked only for a direct import of `store`.
 - **The leaves are leaves.** `gh`, `azdo` and `ratelimit` import `api` (the Watcher status contract) and not `core`.
 - **`api` is a leaf over `domain`.** It imports only `domain` and `internal/fieldwalk`, and `core`, `ops`, the doors and the clients import it.
 
 | Package | Imports of Code Central (non-test) |
 |---|---|
 | `client` | api, domain, ops, internal/fieldwalk |
-| `factory` | api, client, clock, codehost, core, domain, home, usage |
+| `factory` | api, client, clock, codehost, domain, home, usage |
 | `ciwatcher` | api, azdo, clock, domain, gh, ratelimit, watchers |
-| `pullrequestwatcher` | api, azdo, clock, core, domain, gh, ratelimit, watchers |
-| `issuewatcher` | api, clock, core, domain, gh, ratelimit, watchers |
-| `workitemwatcher` | api, azdo, azdourl, clock, core, domain, gh, ratelimit, watchers |
+| `pullrequestwatcher` | api, azdo, clock, domain, gh, ratelimit, watchers |
+| `issuewatcher` | api, clock, domain, gh, ratelimit, watchers |
+| `workitemwatcher` | api, azdo, azdourl, clock, domain, gh, ratelimit, watchers |
 | `usage` | api, clock |
 | `api` | domain, internal/fieldwalk |
 | `gh` | api, ratelimit |
@@ -166,25 +165,17 @@ Ordered by how much they cost. Each recommendation would be its own Ticket.
 
 About 200 of `core`'s 318 exported types were the wire contract: inputs, views, rows, results, `Ref`, `Actor`, the error codes and `Decode`, and every client imported `core` for them. They are now in `api` (Spec code-central-1111, ADR 0072), which imports only `domain` and `internal/fieldwalk`. `core` names them as `api.X`, with no alias left, and `internal/wiretypes` generates `wire.gen.ts` from `api` alone. A change to the wire is now a change to `api`, and one to an internal type in `core` is not.
 
-What is left of the problem is that nothing yet *stops* a client linking `core`: `client` no longer does (weakness 4, fixed), but the Factory and three Watchers call `core` rules (weakness 3), so each still links the whole Core, the Store and the database drivers. The next slice of the Spec extends `internal/importguard` so that no client imports `core` or `store`, checked on the transitive imports (`go list -deps`) rather than the direct ones.
+`internal/importguard` now stops a client linking `core` or `store` again, on the transitive imports (`go list -deps`).
 
 ### 2. The code-host leaves import `core` (fixed)
 
 `gh`, `azdo`, `ratelimit` and `watchers` used to import `core` for the Watcher status contract. It is now in `api` (ADR 0072), and none of the four links `core` or `store`. The rest of the wire contract has moved there too (weakness 1).
 
-### 3. Clients run Core logic, not just Core types (partly fixed)
+### 3. Clients run Core logic, not just Core types (fixed)
 
-The shared rules now live where a client can use them without `core`: `domain` has the Spec Branch name (`SpecBranch`, `BranchTag`), the issue markers (`IssueMarker`, `OpaqueMarker`), the status label prefix and the reserved labels and tags; `codehost` has `NormalCloneURL`; `api` has `SumRepositoryProblems` and `LandingPolicies` (with `ProjectView.LandingPolicies()`). The Factory's Stage names are `domain.Stages()`.
+The shared rules live where a client can use them without `core`: `domain` has the Spec Branch name (`SpecBranch`, `BranchTag`), the issue markers and comment keys, the Integration names, the status label prefix, the reserved labels and tags, and the Stage names and Labels (`Stages()`, `StageLabel`, `StageOf`); `codehost` has `NormalCloneURL`; `api` has `SumRepositoryProblems`, `LandingPolicies` (with `ProjectView.LandingPolicies()`), the Stage Guide names (`GuideName`, `ImplementationStage`) and the Factory's can't-land comment (`CantLandComment`). `cli` still links `core` (`core.TeachingFiles()`) because it opens the Store for `serve` (weakness 8).
 
-What is left is a few `core` names the Factory, the Watchers and the CLI still call, so they still link `core` and `store`:
-
-- `factory`: `core.GuideName`, `core.ImplementationStage`, `core.StageLabel`, `core.StageOf`, `core.CantLandComment`, `core.SilentAfter`, `core.DefaultChatModel`, `core.WaitTimeout`.
-- `issuewatcher`, `workitemwatcher`: `core.IntegrationGitHub`, `core.IntegrationAzureBoards`, `core.CommentContext`, `core.CommentWontFix`.
-- `cli`: `core.TeachingFiles()`, `core.DefaultTicketParts()`.
-
-Provider knowledge is left in `core` too: `core/ci.go`'s `withoutLogin` duplicates `azdourl`'s, and `core/cirepositories.go`'s `ciEntryFromCloneURL` builds an Azure DevOps project URL by hand, which `azdourl` could do.
-
-**Recommendation:** move each remaining shared rule to `domain` (names, labels, Stages) or `codehost` (URLs). Where the rule is only the service's (Stage guide names), have the service send the answer in a view rather than the client compute it.
+Provider knowledge is left in `core`: `core/ci.go`'s `withoutLogin` duplicates `azdourl`'s, and `core/cirepositories.go`'s `ciEntryFromCloneURL` builds an Azure DevOps project URL by hand, which `azdourl` could do.
 
 ### 4. `ops` binds every operation to the concrete `*core.Core` (fixed)
 

@@ -28,7 +28,7 @@ func landWorldOn(t *testing.T, f fixture, landPerSpec bool) fixture {
 	f.project(t, "acme")
 	f.spec(t, "acme", "Requirement")
 	for _, stage := range domain.Stages() {
-		f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: string(stage), Labels: []string{core.StageLabel(stage)}})
+		f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: string(stage), Labels: []string{domain.StageLabel(stage)}})
 	}
 	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "First"})
 	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Second", BlockedBy: []api.Ref{"acme-5"}})
@@ -215,7 +215,7 @@ func TestABlockerOnAnotherSpecDoesNotClearOnASpecMerge(t *testing.T) {
 	f := landWorld(t, true)
 	f.spec(t, "acme", "Other")
 	other := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-7", Title: "Other work"})
-	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-7", Title: "Stage", Labels: []string{core.StageLabel("grilling")}})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-7", Title: "Stage", Labels: []string{domain.StageLabel("grilling")}})
 	dependant := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Dependant", BlockedBy: []api.Ref{api.Ref(other.ID)}})
 	f.moveTo(t, 8, domain.Accepted)
 	f.specMerge(t, other.ID, "def456")

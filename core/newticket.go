@@ -70,7 +70,7 @@ func whyNotNewTicket(p domain.Project, s domain.Spec, tickets []domain.Ticket) s
 	case slices.Contains(s.Labels, domain.LongLivedLabel):
 		return id + " is a Long-lived Spec, so it takes no New Ticket; its Tickets come from its own action"
 	}
-	if !slices.ContainsFunc(tickets, func(t domain.Ticket) bool { return StageOf(t.Labels) != "" }) {
+	if !slices.ContainsFunc(tickets, func(t domain.Ticket) bool { return domain.StageOf(t.Labels) != "" }) {
 		return ""
 	}
 	if !slices.ContainsFunc(tickets, finishesStages) {
@@ -82,7 +82,7 @@ func whyNotNewTicket(p domain.Project, s domain.Spec, tickets []domain.Ticket) s
 // finishesStages reports whether t is a Requirement's tickets Stage that
 // finishes its Stages: Done, or Cancelled by Implement.
 func finishesStages(t domain.Ticket) bool {
-	if StageOf(t.Labels) != domain.StageTickets {
+	if domain.StageOf(t.Labels) != domain.StageTickets {
 		return false
 	}
 	if t.State == domain.Done {

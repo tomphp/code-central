@@ -34,32 +34,16 @@ var wayfinderLabelList = func() string {
 	return strings.Join(ls[:len(ls)-1], ", ") + " and " + ls[len(ls)-1]
 }()
 
-// typeGuide is the guide a reserved type Label gives its Ticket, which
-// carries at most one: a Stage, a Map Ticket type or prototype. ok is
-// false for any other Label.
-func typeGuide(l string) (guide string, ok bool) {
-	if l == domain.PrototypeLabel || l == domain.RetroLabel {
-		return l, true
-	}
-	if name, ok := strings.CutPrefix(l, domain.WayfinderPrefix); ok && slices.Contains(api.WayfinderTypes(), api.NodeType(name)) {
-		return mapGuidePrefix + name, true
-	}
-	if name, ok := strings.CutPrefix(l, domain.StagePrefix); ok && slices.Contains(domain.Stages(), domain.StageName(name)) {
-		return name, true
-	}
-	return "", false
-}
-
 // isWayfinderType reports whether l gives a Ticket a Map Ticket type or
 // makes it a Prototype.
 func isWayfinderType(l string) bool {
-	g, ok := typeGuide(l)
-	return ok && (g == domain.PrototypeLabel || strings.HasPrefix(g, mapGuidePrefix))
+	g, ok := api.TypeGuide(l)
+	return ok && (g == domain.PrototypeLabel || strings.HasPrefix(g, api.MapGuidePrefix))
 }
 
 // isTypeLabel reports whether l is a reserved type Label.
 func isTypeLabel(l string) bool {
-	_, ok := typeGuide(l)
+	_, ok := api.TypeGuide(l)
 	return ok
 }
 

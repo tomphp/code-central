@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -24,8 +25,8 @@ func (c *Core) GetWorkItemWatch(_ context.Context, key string) (api.WorkItemWatc
 		}
 		a := azureBoardsView(p, api.WatcherView{})
 		out = api.WorkItemWatch{Project: key, On: a.On, Mode: a.Mode, QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where, PATEnv: a.PATEnv,
-			Spec: a.Spec, Issues: incomingIssues(r, key, IntegrationAzureBoards), Linked: linkIDs(r, key, IntegrationAzureBoards), Writes: []api.WorkItemWrites{}}
-		for _, w := range c.integrationWrites(r, key, IntegrationAzureBoards, p.AzureBoards.HideCodeCentral) {
+			Spec: a.Spec, Issues: incomingIssues(r, key, domain.IntegrationAzureBoards), Linked: linkIDs(r, key, domain.IntegrationAzureBoards), Writes: []api.WorkItemWrites{}}
+		for _, w := range c.integrationWrites(r, key, domain.IntegrationAzureBoards, p.AzureBoards.HideCodeCentral) {
 			if w.Label != "" || len(w.Comments) > 0 {
 				out.Writes = append(out.Writes, api.WorkItemWrites{Target: w.Target, Link: w.Link, Comments: w.Comments, Tag: w.Label})
 			}

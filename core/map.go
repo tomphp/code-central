@@ -114,11 +114,11 @@ func mapView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *api.MapView
 // WayfinderTypes, prototype, or ticket for a Ticket with neither.
 func NodeTypeOf(labels []string) api.NodeType {
 	for _, l := range labels {
-		guide, _ := typeGuide(l)
+		guide, _ := api.TypeGuide(l)
 		if guide == domain.PrototypeLabel {
 			return api.NodePrototype
 		}
-		if name, ok := strings.CutPrefix(guide, mapGuidePrefix); ok {
+		if name, ok := strings.CutPrefix(guide, api.MapGuidePrefix); ok {
 			return api.NodeType(name)
 		}
 	}

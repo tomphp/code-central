@@ -32,7 +32,7 @@ var seededEffortLevels = []string{"low", "medium", "high", "xhigh", "max"}
 // default row. It is worked out afresh for every turn, never kept per
 // Claim.
 func modelChoice(p domain.Project, t domain.Ticket) api.ModelChoice {
-	name := GuideName(t.Labels)
+	name := api.GuideName(t.Labels)
 	kind := p.Models.Kind(name)
 	return api.ModelChoice{
 		Model:  choose(t.Tags[ModelTag], name, kind.Model, p.Models.Default.Model),

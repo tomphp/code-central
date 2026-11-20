@@ -91,7 +91,7 @@ func checkBranchTagChange(r store.Reader, key, field string, n int, tags map[str
 // ever been claimed.
 func checkBranchTagLock(r store.Reader, key string, n int, tags map[string]string) error {
 	for _, t := range specTickets(r, key, n, store.Claims) {
-		if StageOf(t.Labels) == "" && len(t.Claims) > 0 {
+		if domain.StageOf(t.Labels) == "" && len(t.Claims) > 0 {
 			id := DisplayID(key, n)
 			return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf(
 				"the Spec Branch of %s already exists as %s, since %s has been claimed, so its branch Tag can't change or be removed",

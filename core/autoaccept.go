@@ -76,7 +76,7 @@ func autoAcceptKind(sp domain.Spec, t domain.Ticket) (domain.AutoAcceptKind, boo
 	if slices.ContainsFunc(t.Labels, isWayfinderType) || isMap(sp.Labels) {
 		return "", false
 	}
-	switch StageOf(t.Labels) {
+	switch domain.StageOf(t.Labels) {
 	case "grilling":
 		return domain.AutoAcceptGrilling, true
 	case "spec":

@@ -234,7 +234,7 @@ func TestModelsSurviveAReload(t *testing.T) {
 // guideLabels are Labels giving a Ticket the kind of work named guide.
 func guideLabels(guide string) []string {
 	switch {
-	case guide == core.ImplementationStage:
+	case guide == api.ImplementationStage:
 		return nil
 	case guide == domain.PrototypeLabel || guide == domain.RetroLabel:
 		return []string{guide}

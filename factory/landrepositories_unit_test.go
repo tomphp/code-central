@@ -7,8 +7,6 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
-
-	"github.com/tomoram/code-central/core"
 )
 
 // The landing step with a second Repository (Spec code-central-848, ADR
@@ -139,7 +137,7 @@ func (w *landWorld) holdSpec() (release func()) {
 		w.t.Fatal(err)
 	}
 	w.spec = s.ID
-	stage, err := w.srv.Client.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: api.Ref(s.ID), Title: "Tickets", State: domain.Draft, Labels: []string{core.StageLabel("tickets")}})
+	stage, err := w.srv.Client.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: api.Ref(s.ID), Title: "Tickets", State: domain.Draft, Labels: []string{domain.StageLabel("tickets")}})
 	if err != nil {
 		w.t.Fatal(err)
 	}
