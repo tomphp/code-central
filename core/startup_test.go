@@ -32,8 +32,12 @@ const (
 // A store of about 5,000 Tickets, most of them finished as a long-lived
 // store's are, loads and serves the UI's startup reads within the
 // budget, so slowness shows up in the fast suite rather than in use.
+//
+// Not parallel: a parallel test is timed alongside the package's others,
+// and the landing guard type-checks the module for most of a minute on a
+// CI runner, long enough to outlast every retry. A test that doesn't call
+// t.Parallel runs before any that does, so this one is timed alone.
 func TestAStoreOf5000TicketsStartsUpQuickly(t *testing.T) {
-	t.Parallel() // writing the files is most of its time
 	dir := filepath.Join(t.TempDir(), "code-central")
 	writeGeneratedStore(t, dir)
 
