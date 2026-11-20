@@ -5,7 +5,7 @@ TEST_BUDGET := 60
 # npm ci writes this; it is newer than the lockfile while node_modules is current.
 WEB_DEPS := web/node_modules/.package-lock.json
 
-.PHONY: test test-verbose typecheck lint vitestvitest-stress e2e scalebuild web clean hooks context-report ci-failures serve-components build-components corewasm wiretypes demo-store demo
+.PHONY: test test-verbose typecheck lint vitestvitest-stress e2e scale build web clean hooks context-report ci-failures serve-components build-components corewasm wiretypes demo-store demo
 
 # Every recipe is one command that runs the same under cmd.exe and POSIX
 # sh, so a Windows developer needs only GNU make. Binaries get .exe there.
