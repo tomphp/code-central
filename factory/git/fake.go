@@ -1,7 +1,6 @@
 package git
 
 import (
-	"context"
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
@@ -30,6 +29,8 @@ type Fake struct {
 	tb    testing.TB
 	mu    sync.Mutex
 	repos map[string]*fakeRepository
+	// version is what Version gives; "" is fakeVersion.
+	version string
 }
 
 // NewFake is a Fake with no repositories, failing tb on what it doesn't
@@ -48,8 +49,23 @@ type fakeRepository struct {
 	commits map[string]fakeCommit
 	trees   map[string]fakeTree
 	refs    map[string]string
-	// worktrees are its worktrees, the one in its own folder first.
+	// worktrees are its worktrees, the one in its own folder first; a
+	// bare repository's is its folder, with nothing checked out, and its
+	// HEAD.
 	worktrees []*fakeWorktree
+	// bare is whether it has no folder checked out; remotes are its
+	// remotes' URLs by name; broken is whether it can't be reached as a
+	// remote, and refusing whether it refuses pushes as one.
+	bare     bool
+	remotes  map[string]string
+	broken   bool
+	refusing bool
+}
+
+// newFakeRepository is a repository with no objects or refs in the folder
+// dir, resolved, with head its HEAD.
+func newFakeRepository(dir, head string) *fakeRepository {
+	return &fakeRepository{commits: map[string]fakeCommit{}, trees: map[string]fakeTree{}, refs: map[string]string{}, worktrees: []*fakeWorktree{{dir: dir, head: head}}}
 }
 
 // fakeWorktree is a worktree of a fakeRepository: a real folder, holding
@@ -149,8 +165,8 @@ func (f *Fake) Init(dir string, files map[string]string, msg string) string {
 	if f.repos[dir] != nil {
 		f.tb.Fatalf("fake git: %s holds a repository already", dir)
 	}
-	w := &fakeWorktree{dir: dir, head: "refs/heads/main"}
-	r := &fakeRepository{commits: map[string]fakeCommit{}, trees: map[string]fakeTree{}, refs: map[string]string{}, worktrees: []*fakeWorktree{w}}
+	r := newFakeRepository(dir, "refs/heads/main")
+	w := r.main()
 	tree := fakeTree(maps.Clone(files))
 	c := r.writeCommit(fakeCommit{tree: r.writeTree(tree), author: fakeAuthor, message: msg})
 	r.refs[w.head] = c
@@ -231,14 +247,6 @@ func (f *Fake) MakeCommit(dir string, c Change) string {
 }
 
 func (f *Fake) Open(dir string) Repo { return fakeRepo{f: f, dir: filepath.Clean(dir)} }
-
-func (f *Fake) Clone(ctx context.Context, remote, url, path string) (string, error) {
-	return "", f.notModelled("clone")
-}
-
-func (f *Fake) TopLevel(dir string) (string, error) { return "", f.notModelled("the top level") }
-
-func (f *Fake) Version() (string, error) { return "", f.notModelled("the version") }
 
 // notModelled fails the test on something the Fake doesn't model, and is
 // the error to return for it. It fails it with Errorf, not Fatalf: the
@@ -907,6 +915,9 @@ func (g fakeRepo) worktree(r *fakeRepository, dir string) (*fakeWorktree, error)
 	if w == nil {
 		return nil, g.f.notModelled("the folder %s, which isn't a worktree of the repository", dir)
 	}
+	if r.bare {
+		return nil, g.f.notModelled("a checkout in the bare repository %s", dir)
+	}
 	if _, err := os.Stat(w.dir); err != nil {
 		return nil, err
 	}
@@ -1014,32 +1025,14 @@ func (g fakeRepo) DeleteRef(ref, old string) error {
 	return nil
 }
 
-func (g fakeRepo) HasRemote(name string) bool {
-	g.f.notModelled("remotes")
-	return false
-}
-
-func (g fakeRepo) RemoteURL(name string) (string, error) { return "", g.f.notModelled("remotes") }
-
-func (g fakeRepo) TopLevel() (string, error) { return "", g.f.notModelled("the top level") }
-
-func (g fakeRepo) Push(ctx context.Context, remote, branch, lease string) (string, error) {
-	return "", g.f.notModelled("push")
-}
-
-func (g fakeRepo) Fetch(ctx context.Context, remote string) (string, error) {
-	return "", g.f.notModelled("fetch")
-}
-
-func (g fakeRepo) RemoteHas(ctx context.Context, remote, branch string) (bool, error) {
-	return false, g.f.notModelled("ls-remote")
-}
-
 func (g fakeRepo) Worktrees() ([]Worktree, error) {
 	r, unlock, err := g.lock()
 	defer unlock()
 	if err != nil {
 		return nil, err
+	}
+	if r.bare {
+		return nil, g.f.notModelled("the worktrees of the bare repository %s", g.dir)
 	}
 	var list []Worktree
 	for _, w := range r.worktrees {
@@ -1196,8 +1189,12 @@ func (g fakeRepo) AddDetachedWorktree(path, rev string) error {
 
 // addWorktree adds a worktree with head checked out at path, a folder
 // that is empty or doesn't exist. A relative path, or one inside or
-// around another worktree's folder, isn't modelled.
+// around another worktree's folder, or one of a bare repository, isn't
+// modelled.
 func (g fakeRepo) addWorktree(r *fakeRepository, path, head string) error {
+	if r.bare {
+		return g.f.notModelled("a worktree of the bare repository %s", g.dir)
+	}
 	if !filepath.IsAbs(path) {
 		return g.f.notModelled("a worktree at the relative path %s", path)
 	}

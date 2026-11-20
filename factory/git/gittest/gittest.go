@@ -32,6 +32,9 @@ type Setup struct {
 	// msg, as `git add -A` then `git commit` do, and returns the commit's
 	// ID. It fails when there is nothing to commit.
 	CommitAll func(dir, msg string) (string, error)
+	// Remote is the folder of an empty bare repository, with main its
+	// HEAD, that the repository at Dir has as its remote origin.
+	Remote string
 }
 
 // Run runs the contract suite, with newGit setting up each case's git.
@@ -46,6 +49,7 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 		repo := s.Git.Open(s.Dir)
 		return s, repo, must(repo.Commit("main"))(t)
 	}
+	remoteCases(t, open)
 
 	t.Run("a commit is found by its branch, its full ref, its ID and its short ID", func(t *testing.T) {
 		s, repo, first := open(t)
@@ -432,6 +436,25 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 			t.Error("AddWorktreeOnNewBranch in a worktree's folder succeeded, want an error")
 		}
 		checkBranch(t, repo, "other", first)
+	})
+
+	t.Run("the top level in a worktree is the worktree's folder, from it or a folder in it", func(t *testing.T) {
+		s, repo, first := open(t)
+		wt := filepath.Join(t.TempDir(), "topic")
+		noError(t, repo.AddWorktreeOnNewBranch(wt, "topic", first))
+		sub := filepath.Join(wt, "d")
+		if err := os.MkdirAll(sub, 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		for _, dir := range []string{wt, sub} {
+			if top := must(s.Git.TopLevel(dir))(t); !samePath(top, wt) {
+				t.Errorf("TopLevel(%s) = %s, want %s", dir, top, wt)
+			}
+		}
+		if top := must(s.Git.Open(wt).TopLevel())(t); !samePath(top, wt) {
+			t.Errorf("the worktree's TopLevel = %s, want %s", top, wt)
+		}
 	})
 
 	t.Run("a worktree added on an existing branch holds its files, and none is added where it can't be", func(t *testing.T) {

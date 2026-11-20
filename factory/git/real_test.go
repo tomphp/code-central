@@ -28,19 +28,24 @@ func TestRealGitContract(t *testing.T) {
 		}
 		r.git(nil, "", "add", "README.md")
 		r.git(nil, "", "commit", "-q", "-m", "First")
-		return gittest.Setup{Git: git.Real{Binary: binary, Environ: r.environ}, Dir: r.dir, Commit: r.commit, CommitAll: r.commitAll}
+		remote := filepath.Join(t.TempDir(), "remote.git")
+		r.git(nil, "", "init", "-q", "--bare", "-b", "main", remote)
+		r.git(nil, "", "remote", "add", "origin", remote)
+		return gittest.Setup{Git: git.Real{Binary: binary, Environ: r.environ}, Dir: r.dir, Commit: r.commit, CommitAll: r.commitAll, Remote: remote}
 	})
 }
 
 // realEnviron is git's environment for a contract case: no system or
-// global config, no background maintenance, and a fixed author,
-// committer and date, so that equal commits have equal IDs.
+// global config, no background maintenance, no repository found above
+// the case's temporary folders, and a fixed author, committer and date,
+// so that equal commits have equal IDs.
 func realEnviron(t *testing.T) []string {
 	global := filepath.Join(t.TempDir(), "gitconfig")
 	if err := os.WriteFile(global, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return append(os.Environ(),
+		"GIT_CEILING_DIRECTORIES="+filepath.Dir(filepath.Dir(global)),
 		"GIT_CONFIG_NOSYSTEM=1",
 		"GIT_CONFIG_GLOBAL="+global,
 		"GIT_CONFIG_COUNT=2",

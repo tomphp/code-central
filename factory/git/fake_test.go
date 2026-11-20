@@ -1,7 +1,6 @@
 package git_test
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,8 +16,8 @@ import (
 func TestFakeGitContract(t *testing.T) {
 	t.Parallel()
 	gittest.Run(t, func(t *testing.T) gittest.Setup {
-		f, dir, _ := newFake(t)
-		return gittest.Setup{Git: f, Dir: dir, Commit: func(c git.Change) string { return f.MakeCommit(dir, c) }, CommitAll: f.CommitAll}
+		f, dir, _, remote := newFakeWithRemote(t)
+		return gittest.Setup{Git: f, Dir: dir, Commit: func(c git.Change) string { return f.MakeCommit(dir, c) }, CommitAll: f.CommitAll, Remote: remote}
 	})
 }
 
@@ -96,10 +95,6 @@ func TestFakeGitFailsTheTestOnWhatItDoesntModel(t *testing.T) {
 		}},
 		{"revision syntax", func(t *testing.T, dir string, repo git.Repo, commit commitFunc) error {
 			_, err := repo.Commit("main^")
-			return err
-		}},
-		{"a push", func(t *testing.T, dir string, repo git.Repo, commit commitFunc) error {
-			_, err := repo.Push(context.Background(), "origin", "main", "")
 			return err
 		}},
 		{"a fast-forward in a folder that isn't a worktree", func(t *testing.T, dir string, repo git.Repo, commit commitFunc) error {
