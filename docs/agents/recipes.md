@@ -58,7 +58,7 @@ Do it in this order, and run `go build ./... && go vet ./...` after each step: t
 1. `git mv` the files into the new directory and change their `package` clause. Move a file's `_test.go` beside it.
 2. Export what the moved code needs from the old package: rename each helper with the `gopls rename` command in "Renaming across files", which updates every caller. Do this before the move if you can, so the rename still sees one package.
 3. Qualify the moved code's uses of what stayed behind (and the callers' uses of what moved) by shape, with `gofmt -r`, never by a regex such as `perl -pi 's/\bEnv\b/cli.Env/g'`. A regex also rewrites `gh.Env` selectors and `Env:` struct keys. `gofmt -r` matches expressions, so it is safe on a pattern with a shape and unsafe on a bare name. Checked in a scratch copy:
-   - `gofmt -w -r 'Env{} -> cli.Env{}' *.go` and `gofmt -w -r 'mk(x) -> cli.Mk(x)' *.go` leave `g.Env` and `Gh{Env: 1}` alone.
+   - `gofmt -w -r 'Env{} -> cli.Env{}' *.go` and `gofmt -w -r 'newClient(x) -> cli.NewClient(x)' *.go` leave `g.Env` and `Gh{Env: 1}` alone.
    - `gofmt -r 'Env -> cli.Env'` turns the key in `W{Env: 1}` into `W{cli.Env: 1}`. Don't use a bare name.
    - A bare name in a type position (`var e Env`, a field type, a parameter) is left to the compiler's errors: fix each with Edit.
 4. Add the imports with `go run golang.org/x/tools/cmd/goimports@v0.38.0 -w <files>`, which fetches it on first use and drops imports the move left unused. Run it again after hand edits rather than writing import lines with regexes. Neither `gopls` nor `goimports` is installed.

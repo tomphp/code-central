@@ -3,6 +3,7 @@ package core_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
@@ -64,6 +65,33 @@ func TestThePullRequestWatchListsAnAcceptedTicketsBranchWithWhatToOpenItWith(t *
 	}
 	if !strings.Contains(work.Body, "Done on acme-2.") || !strings.Contains(work.Body, "acme-2") {
 		t.Errorf("body = %q, want the finish summary and the Ticket ID", work.Body)
+	}
+}
+
+// The Factory comments on a finish that skipped code-review in the same
+// second as the finish (code-central-1178): the body keeps the summary.
+func TestThePullRequestBodyIsTheFinishSummaryNotACommentInTheSameSecond(t *testing.T) {
+	f := newFixture(t)
+	f.inReviewOnBranch(t)
+	if _, err := f.core.Comment(ctx, "acme", api.CommentInput{Ticket: "2", Body: "code-central-factory: this finish skipped the code-review skill."}); err != nil {
+		t.Fatal(err)
+	}
+	f.clock.Set(t0.Add(2 * time.Hour))
+	if _, err := f.core.Accept(human, "acme", api.TicketInput{Ticket: "2"}); err != nil {
+		t.Fatalf("accept: %v", err)
+	}
+	if _, err := f.core.ReportPushRemote(ctx, "acme", api.ReportPushRemoteInput{URL: "git@github.com:acme/web.git", Base: "main"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.core.ReportPushedCommit(ctx, "acme", api.ReportPushedCommitInput{Ticket: "2", Commit: "abc123", Branch: "acme-2"}); err != nil {
+		t.Fatal(err)
+	}
+	w := f.watch(t)
+	if len(w.Work) != 1 || !strings.HasPrefix(w.Work[0].Body, "Done on acme-2.") {
+		t.Errorf("work = %+v, want the body to start with the finish summary", w.Work)
 	}
 }
 

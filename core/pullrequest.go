@@ -346,14 +346,16 @@ func siblingsSection(p domain.Project, tickets []domain.Ticket, name string) str
 
 // lastFinishSummary is the comment stored with t's last move into In
 // Review, which stays its finish summary after t is accepted; "" when
-// that move had none.
+// that move had none. It is stored under the move's Claim, which tells
+// it from a comment made in the same second, such as the Factory's on a
+// finish that skipped code-review.
 func lastFinishSummary(t domain.Ticket) string {
 	for _, m := range slices.Backward(t.Moves) {
 		if m.To != domain.InReview {
 			continue
 		}
 		for _, cm := range slices.Backward(t.Comments) {
-			if cm.Time.Equal(m.Time) && cm.Actor != string(api.Human) {
+			if cm.Time.Equal(m.Time) && cm.Claim == m.Claim && cm.Actor != string(api.Human) {
 				return strings.TrimSpace(cm.Body)
 			}
 		}
