@@ -48,6 +48,72 @@ func (f *Fake) AddRemote(dir, name, url string) {
 	})
 }
 
+// RemoveRemote removes the remote name from the repository at dir, as git
+// remote remove does, with its remote-tracking branches. It fails the test
+// when dir holds no repository, or one without the remote.
+func (f *Fake) RemoveRemote(dir, name string) {
+	f.tb.Helper()
+	f.withRepository(dir, func(r *fakeRepository) {
+		if _, ok := r.remotes[name]; !ok {
+			f.tb.Fatalf("fake git: %s has no remote %s", dir, name)
+		}
+		delete(r.remotes, name)
+		for ref := range r.refs {
+			if strings.HasPrefix(ref, "refs/remotes/"+name+"/") {
+				delete(r.refs, ref)
+			}
+		}
+	})
+}
+
+// SetRemoteBranch puts the remote's branch of the repository at dir at
+// commit, a commit in that repository, with its history, as a push from
+// elsewhere would: the repository's own refs, remote-tracking ones too,
+// are left for a fetch. It fails the test when the remote isn't one the
+// Fake models.
+func (f *Fake) SetRemoteBranch(dir, remote, branch, commit string) {
+	f.tb.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	g := fakeRepo{f: f, dir: filepath.Clean(dir)}
+	r, err := g.repository()
+	if err != nil {
+		f.tb.Fatal(err)
+	}
+	url, ok := r.remotes[remote]
+	if !ok {
+		f.tb.Fatalf("fake git: %s has no remote %s", dir, remote)
+	}
+	to, _, err := f.reach(url)
+	if err != nil {
+		f.tb.Fatal(err)
+	}
+	id, err := g.resolve(r, commit)
+	if err != nil {
+		f.tb.Fatal(err)
+	}
+	copyObjects(r, to, id)
+	to.refs["refs/heads/"+branch] = id
+}
+
+// MessageOf is the message of commit in the repository at dir, without
+// its closing newline. It fails the test when there is no such commit.
+func (f *Fake) MessageOf(dir, commit string) string {
+	f.tb.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	g := fakeRepo{f: f, dir: filepath.Clean(dir)}
+	r, err := g.repository()
+	if err != nil {
+		f.tb.Fatal(err)
+	}
+	c, ok := r.commits[commit]
+	if !ok {
+		f.tb.Fatalf("fake git: %s has no commit %s", dir, commit)
+	}
+	return strings.TrimSuffix(c.message, "\n")
+}
+
 // BreakRemote makes the repository at path unreachable as a remote, as
 // though it were gone: pushes, fetches, ls-remote and clones of it fail
 // until RestoreRemote.

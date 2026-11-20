@@ -2,6 +2,7 @@ package factory
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -10,19 +11,21 @@ import (
 )
 
 // The landing step with a second Repository (Spec code-central-848, ADR
-// 0049), on one fake repo per Repository: every Changed Repository's
-// merge is checked before any base moves, and each lands in the landing
-// order.
+// 0049), on one git.Fake repository per Repository: every Changed
+// Repository's merge is checked before any base moves, and each lands in
+// the landing order.
 
 // withAPI adds the Repository api to the Project, after the Home
-// Repository, with a fake repo of its own as its clone, and returns it.
-func (w *landWorld) withAPI() *fakeRepo {
+// Repository, with a repository of its own in the Fake as its clone, and
+// returns it.
+func (w *landWorld) withAPI() *testRepo {
 	w.t.Helper()
 	if _, err := w.human.AddRepository(context.Background(), "acme", api.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"}); err != nil {
 		w.t.Fatal(err)
 	}
-	repo := newFakeRepo("/work/api")
-	apiRepo := &repository{name: "api", dir: "/work/api", git: repo, base: "main", worktrees: "/work/api.worktrees"}
+	dir := filepath.Join(w.root, "api")
+	repo := newTestRepo(w.t, w.fake, dir)
+	apiRepo := &repository{name: "api", dir: dir, git: repo, base: "main", worktrees: dir + ".worktrees"}
 	w.l.repos.byName["api"] = apiRepo
 	w.l.repos.inOrder = []*repository{w.l.repos.home, apiRepo}
 	return repo
@@ -49,13 +52,17 @@ func (w *landWorld) pollRepositories() {
 
 // acceptedInTwo makes an Accepted Ticket with a commit on its branch in
 // the Home Repository and in api, finished with both, and returns its ID
-// and its commit in api.
-func (w *landWorld) acceptedInTwo(apiRepo *fakeRepo, title string) (id, apiWork string) {
+// and its commit in api. The commit in api writes each of the files named,
+// so that a base writing one of them differently conflicts with it.
+func (w *landWorld) acceptedInTwo(apiRepo *testRepo, title string, files ...string) (id, apiWork string) {
 	w.t.Helper()
 	ctx := context.Background()
 	id = w.ready(title)
 	home := w.repo.commitOn(id, "Work on "+id)
 	apiWork = apiRepo.commitOn(id, "Work on "+id+" in api")
+	for _, f := range files {
+		apiWork = apiRepo.commitFileOn(id, "Work on "+id+" in api", f, "the branch's "+f+"\n")
+	}
 	res, err := w.srv.Client.Claim(ctx, "acme", api.ClaimInput{Ticket: api.Ref(id)})
 	if err != nil {
 		w.t.Fatal(err)
@@ -71,8 +78,8 @@ func (w *landWorld) acceptedInTwo(apiRepo *fakeRepo, title string) (id, apiWork 
 func TestEveryRepositorysMergeIsCheckedBeforeAnyBaseMoves(t *testing.T) {
 	w := newLandWorld(t)
 	apiRepo := w.withAPI()
-	id, apiWork := w.acceptedInTwo(apiRepo, "Add an endpoint")
-	apiRepo.conflicts[apiWork] = []string{"endpoint.go"}
+	id, _ := w.acceptedInTwo(apiRepo, "Add an endpoint", "endpoint.go")
+	apiRepo.commitFileOn("main", "The base's endpoint", "endpoint.go", "the base's endpoint.go\n")
 	homeMain, apiMain := w.repo.tip("refs/heads/main"), apiRepo.tip("refs/heads/main")
 
 	w.pollRepositories()
@@ -153,14 +160,14 @@ func TestEveryRepositorysSpecBranchIsCheckedBeforeAnyBaseMoves(t *testing.T) {
 	w := newLandWorld(t)
 	apiRepo := w.withAPI()
 	release := w.holdSpec()
-	id, _ := w.acceptedInTwo(apiRepo, "Add an endpoint")
+	id, _ := w.acceptedInTwo(apiRepo, "Add an endpoint", "endpoint.go")
 	w.pollRepositories()
 	branch := "refs/heads/" + domain.SpecBranch(w.spec, nil)
 	if w.repo.tip(branch) == "" || apiRepo.tip(branch) == "" {
 		t.Fatalf("%s wasn't merged into its Spec Branch in both:\n%s", id, w.out)
 	}
 	// api's Spec Branch conflicts with its base.
-	apiRepo.conflicts[apiRepo.tip(branch)] = []string{"endpoint.go"}
+	apiRepo.commitFileOn("main", "The base's endpoint", "endpoint.go", "the base's endpoint.go\n")
 	homeMain, apiMain := w.repo.tip("refs/heads/main"), apiRepo.tip("refs/heads/main")
 	release()
 
@@ -202,9 +209,9 @@ func TestATicketIsMergedIntoItsSpecBranchInEveryRepositoryOrNone(t *testing.T) {
 	w := newLandWorld(t)
 	apiRepo := w.withAPI()
 	w.holdSpec()
-	id, apiWork := w.acceptedInTwo(apiRepo, "Add an endpoint")
+	id, _ := w.acceptedInTwo(apiRepo, "Add an endpoint", "endpoint.go")
 	home := w.repo.tip("refs/heads/" + id)
-	apiRepo.conflicts[apiWork] = []string{"endpoint.go"}
+	apiRepo.commitFileOn("main", "The base's endpoint", "endpoint.go", "the base's endpoint.go\n")
 
 	w.pollRepositories()
 
@@ -246,18 +253,18 @@ func TestARefusedPushIsTriedAgainThoughAnotherRepositorysSpecBranchNowConflicts(
 	apiRepo.addRemote("origin")
 	w.setLanding(domain.LandingMerge, true, "origin")
 	release := w.holdSpec()
-	id, _ := w.acceptedInTwo(apiRepo, "Add an endpoint")
+	id, _ := w.acceptedInTwo(apiRepo, "Add an endpoint", "endpoint.go")
 	w.pollRepositories()
-	w.repo.setBroken("origin", true)
+	w.repo.setRefusing("origin", true)
 	release()
 	w.pollRepositories()
-	homeMerge, branch := w.repo.tip("refs/heads/main"), "refs/heads/"+domain.SpecBranch(w.spec, nil)
+	homeMerge := w.repo.tip("refs/heads/main")
 	if w.repo.messageOf(homeMerge) != "Merge spec "+w.spec+": Work" || apiRepo.messageOf(apiRepo.tip("refs/heads/main")) == "Merge spec "+w.spec+": Work" {
 		t.Fatalf("want the Spec merged in the Home Repository, its push refused, and api not merged yet:\n%s", w.out)
 	}
 	// Meanwhile api's Spec Branch comes to conflict with its base.
-	apiRepo.conflicts[apiRepo.tip(branch)] = []string{"endpoint.go"}
-	w.repo.setBroken("origin", false)
+	apiRepo.commitFileOn("main", "The base's endpoint", "endpoint.go", "the base's endpoint.go\n")
+	w.repo.setRefusing("origin", false)
 
 	w.pollRepositories()
 

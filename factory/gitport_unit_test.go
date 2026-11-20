@@ -1,7 +1,6 @@
 package factory
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -45,21 +44,8 @@ func TestAnEnvWithNoGitAndNoGitOnPathHasNoGitPort(t *testing.T) {
 // PATH needed.
 func TestAnEnvsOwnGitIsTheFactorys(t *testing.T) {
 	t.Parallel()
-	own := &fakeGit{}
+	own := git.NewFake(t)
 	if got, err := (Env{Git: own}).gitPort(); got != own || err != nil {
 		t.Errorf("the Git port is %#v, %v, want the Env's own", got, err)
 	}
 }
-
-// fakeGit is a Git that opens fakeRepos.
-type fakeGit struct{}
-
-func (*fakeGit) Open(dir string) git.Repo { return newFakeRepo(dir) }
-
-func (*fakeGit) Clone(ctx context.Context, remote, url, path string) (string, error) {
-	panic("fakeGit doesn't clone")
-}
-
-func (*fakeGit) TopLevel(dir string) (string, error) { return dir, nil }
-
-func (*fakeGit) Version() (string, error) { return "git version 2.50.0", nil }
