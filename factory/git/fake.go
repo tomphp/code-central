@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -19,8 +20,10 @@ import (
 
 // Fake is git in memory, for tests: one world of repositories, each known
 // by its folder, whose commits and trees are real data with
-// content-addressed IDs. It merges by the whole-file rule (Fake.merge),
-// and fails the test it was made with on whatever it doesn't model,
+// content-addressed IDs. Its worktrees are real folders: checking out
+// writes a commit's files there, and status and CommitAll read them back.
+// It merges by the whole-file rule (Fake.merge), and fails the test it
+// was made with on whatever it doesn't model,
 // rather than quietly doing something real git wouldn't.
 type Fake struct {
 	tb    testing.TB
@@ -41,14 +44,15 @@ const fakeAuthor = "Factory Test <factory@example.com>"
 
 // fakeRepository is one repository in a Fake.
 type fakeRepository struct {
-	// dir is its folder, where the ref head is checked out.
-	dir  string
-	head string
 	// commits and trees are its objects by ID, and refs each ref's
 	// commit by its full name.
 	commits map[string]fakeCommit
 	trees   map[string]fakeTree
 	refs    map[string]string
+	// worktrees are its worktrees, the one in its own folder first; a
+	// bare repository's is its folder, with nothing checked out, and its
+	// HEAD.
+	worktrees []*fakeWorktree
 	// bare is whether it has no folder checked out; remotes are its
 	// remotes' URLs by name; broken is whether it can't be reached as a
 	// remote, and refusing whether it refuses pushes as one.
@@ -59,9 +63,62 @@ type fakeRepository struct {
 }
 
 // newFakeRepository is a repository with no objects or refs in the folder
-// dir, with head its HEAD.
+// dir, resolved, with head its HEAD.
 func newFakeRepository(dir, head string) *fakeRepository {
-	return &fakeRepository{dir: dir, head: head, commits: map[string]fakeCommit{}, trees: map[string]fakeTree{}, refs: map[string]string{}}
+	return &fakeRepository{commits: map[string]fakeCommit{}, trees: map[string]fakeTree{}, refs: map[string]string{}, worktrees: []*fakeWorktree{{dir: dir, head: head}}}
+}
+
+// fakeWorktree is a worktree of a fakeRepository: a real folder, holding
+// the files of what is checked out there and whatever else is written
+// to it.
+type fakeWorktree struct {
+	// dir is its folder, with its symbolic links resolved, as git
+	// reports it.
+	dir string
+	// head is the full name of the branch checked out there, or the
+	// commit when it is detached.
+	head string
+}
+
+// branch is the name of the branch checked out in w, or "" when it is
+// detached.
+func (w *fakeWorktree) branch() string {
+	if b, ok := strings.CutPrefix(w.head, "refs/heads/"); ok {
+		return b
+	}
+	return ""
+}
+
+// at is the commit checked out in w.
+func (r *fakeRepository) at(w *fakeWorktree) string {
+	if w.branch() != "" {
+		return r.refs[w.head]
+	}
+	return w.head
+}
+
+// setAt moves the branch checked out in w to commit, or, when it is
+// detached, w itself.
+func (r *fakeRepository) setAt(w *fakeWorktree, commit string) {
+	if w.branch() != "" {
+		r.refs[w.head] = commit
+	} else {
+		w.head = commit
+	}
+}
+
+// main is r's worktree in its own folder: git's main worktree, which is
+// no Home worktree.
+func (r *fakeRepository) main() *fakeWorktree { return r.worktrees[0] }
+
+// worktree is r's worktree in the folder dir, resolved, or nil.
+func (r *fakeRepository) worktree(dir string) *fakeWorktree {
+	for _, w := range r.worktrees {
+		if w.dir == dir {
+			return w
+		}
+	}
+	return nil
 }
 
 // fakeTree is a tree: each file's content by its slash-separated path.
@@ -97,24 +154,61 @@ type Change struct {
 
 // Init makes a repository in the folder dir, with main checked out there
 // at a root commit of files with the message msg, and returns that
-// commit. It fails the test when dir holds a repository already.
+// commit. It fails the test when dir is, is in or holds a worktree
+// already.
 func (f *Fake) Init(dir string, files map[string]string, msg string) string {
 	f.tb.Helper()
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	dir = filepath.Clean(dir)
-	if f.repos[dir] != nil {
-		f.tb.Fatalf("fake git: %s holds a repository already", dir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		f.tb.Fatal(err)
+	}
+	dir = realPath(dir)
+	if w := f.overlapping(dir); w != nil {
+		f.tb.Fatalf("fake git: %s is, is in or holds the worktree %s already", dir, w.dir)
 	}
 	r := newFakeRepository(dir, "refs/heads/main")
+	w := r.main()
 	tree := fakeTree(maps.Clone(files))
 	c := r.writeCommit(fakeCommit{tree: r.writeTree(tree), author: fakeAuthor, message: msg})
-	r.refs[r.head] = c
-	if err := r.checkOut(fakeTree{}, tree); err != nil {
+	r.refs[w.head] = c
+	if err := checkOut(dir, fakeTree{}, tree); err != nil {
 		f.tb.Fatal(err)
 	}
 	f.repos[dir] = r
 	return c
+}
+
+// CommitAll commits what the worktree dir's folder holds, untracked files
+// included, onto what is checked out there, with the message msg, as `git
+// add -A` then `git commit` do, and returns the commit's ID. It fails, as
+// git does, when there is nothing to commit or msg is empty.
+func (f *Fake) CommitAll(dir, msg string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	g := fakeRepo{f: f, dir: filepath.Clean(dir)}
+	r, err := g.repository()
+	if err != nil {
+		return "", err
+	}
+	w, err := g.worktree(r, dir)
+	if err != nil {
+		return "", err
+	}
+	folder, err := f.folderTree(w.dir)
+	if err != nil {
+		return "", err
+	}
+	parent := r.at(w)
+	switch {
+	case maps.Equal(folder, r.treeOf(parent)):
+		return "", errors.New("nothing to commit, working tree clean")
+	case strings.TrimSpace(msg) == "":
+		return "", errors.New("Aborting commit due to empty commit message.")
+	}
+	c := r.writeCommit(fakeCommit{tree: r.writeTree(folder), parents: []string{parent}, author: fakeAuthor, message: msg})
+	r.setAt(w, c)
+	return c, nil
 }
 
 // MakeCommit makes c in the repository at dir and returns its ID. It
@@ -160,10 +254,13 @@ func (f *Fake) Open(dir string) Repo { return fakeRepo{f: f, dir: filepath.Clean
 // the error to return for it. It fails it with Errorf, not Fatalf: the
 // Factory calls git from goroutines of its own.
 func (f *Fake) notModelled(what string, args ...any) error {
-	err := fmt.Errorf("fake git: not modelled: "+what, args...)
+	err := fmt.Errorf("%w: "+what, append([]any{errNotModelled}, args...)...)
 	f.tb.Errorf("%v", err)
 	return err
 }
+
+// errNotModelled is what every error of notModelled wraps.
+var errNotModelled = errors.New("fake git: not modelled")
 
 // fakeID is the ID of the object of kind made of fields: a SHA-1 of them,
 // each length-prefixed, so that equal objects have equal IDs, with no
@@ -236,16 +333,16 @@ func (r *fakeRepository) mergeBases(a, b string) []string {
 	return best
 }
 
-// moveTo moves the branch checked out in the folder to commit, as the git
-// command does: it writes into the folder only the files that differ
+// moveTo moves what is checked out in the worktree w to commit, as the git
+// command does: it writes into its folder only the files that differ
 // between the two commits, and refuses, with git's account of why, when
 // one of them has a change of its own or is untracked where commit adds
 // it. A tracked file that is missing isn't a change.
-func (r *fakeRepository) moveTo(commit, command string) (string, error) {
-	was, now := r.treeOf(r.refs[r.head]), r.treeOf(commit)
+func (r *fakeRepository) moveTo(w *fakeWorktree, commit, command string) (string, error) {
+	was, now := r.treeOf(r.at(w)), r.treeOf(commit)
 	var changed, untracked []string
 	for _, p := range touched(was, now) {
-		content, err := os.ReadFile(filepath.Join(r.dir, filepath.FromSlash(p)))
+		content, err := os.ReadFile(filepath.Join(w.dir, filepath.FromSlash(p)))
 		old, tracked := was[p]
 		switch {
 		case errors.Is(err, fs.ErrNotExist):
@@ -263,10 +360,10 @@ func (r *fakeRepository) moveTo(commit, command string) (string, error) {
 	case untracked != nil:
 		return gitFailed("error: The following untracked working tree files would be overwritten by %s:\n\t%s\nPlease move or remove them before you %s.\nAborting", command, strings.Join(untracked, "\n\t"), command)
 	}
-	if err := r.checkOut(was, now); err != nil {
+	if err := checkOut(w.dir, was, now); err != nil {
 		return "", err
 	}
-	r.refs[r.head] = commit
+	r.setAt(w, commit)
 	return "", nil
 }
 
@@ -287,25 +384,25 @@ func touched(was, now fakeTree) []string {
 	return paths
 }
 
-// checkOut writes the files that differ from was to now into the folder,
-// removing those now hasn't, with any folder that leaves empty.
-func (r *fakeRepository) checkOut(was, now fakeTree) error {
+// checkOut writes the files that differ from was to now into the folder
+// dir, removing those now hasn't, with any folder that leaves empty.
+func checkOut(dir string, was, now fakeTree) error {
 	for p := range was {
 		if _, ok := now[p]; ok {
 			continue
 		}
-		name := filepath.Join(r.dir, filepath.FromSlash(p))
+		name := filepath.Join(dir, filepath.FromSlash(p))
 		if err := os.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return err
 		}
-		for d := filepath.Dir(name); d != r.dir && os.Remove(d) == nil; d = filepath.Dir(d) {
+		for d := filepath.Dir(name); d != dir && os.Remove(d) == nil; d = filepath.Dir(d) {
 		}
 	}
 	for p, content := range now {
 		if old, ok := was[p]; ok && old == content {
 			continue
 		}
-		name := filepath.Join(r.dir, filepath.FromSlash(p))
+		name := filepath.Join(dir, filepath.FromSlash(p))
 		if err := os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
 			return err
 		}
@@ -314,6 +411,82 @@ func (r *fakeRepository) checkOut(was, now fakeTree) error {
 		}
 	}
 	return nil
+}
+
+// folderTree is what the worktree folder dir holds, as `git add -A` would
+// stage it. What git would treat in ways the Fake doesn't model, an
+// ignore file, a nested repository, a link, an executable or a path
+// status would quote, isn't modelled.
+func (f *Fake) folderTree(dir string) (fakeTree, error) {
+	tree := fakeTree{}
+	err := filepath.WalkDir(dir, func(name string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(dir, name)
+		if err != nil {
+			return err
+		}
+		p := filepath.ToSlash(rel)
+		switch {
+		case name == dir:
+			return nil
+		case p == ".git":
+			return skip(d)
+		case d.Name() == ".git":
+			return f.notModelled("the repository %s, inside the worktree %s", name, dir)
+		case d.Name() == ".gitignore":
+			return f.notModelled("the ignore file %s", name)
+		case strings.Trim(p, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/-") != "":
+			return f.notModelled("the path %q, which status quotes", p)
+		case d.IsDir():
+			return nil
+		case !d.Type().IsRegular():
+			return f.notModelled("%s, which isn't a file or a folder", name)
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if info.Mode()&0o111 != 0 && runtime.GOOS != "windows" {
+			return f.notModelled("the executable %s", name)
+		}
+		content, err := os.ReadFile(name)
+		if err != nil {
+			return err
+		}
+		tree[p] = string(content)
+		return nil
+	})
+	return tree, err
+}
+
+// skip skips what WalkDir is at, a folder and what is in it or a file.
+func skip(d fs.DirEntry) error {
+	if d.IsDir() {
+		return filepath.SkipDir
+	}
+	return nil
+}
+
+// realPath is p with its symbolic links resolved, as git reports a
+// worktree's path, as far as they exist: a path that doesn't is its
+// folder's real path and its name.
+func realPath(p string) string {
+	p = filepath.Clean(p)
+	if real, err := filepath.EvalSymlinks(p); err == nil {
+		return real
+	}
+	parent := filepath.Dir(p)
+	if parent == p {
+		return p
+	}
+	return filepath.Join(realPath(parent), filepath.Base(p))
+}
+
+// within is whether the path p is the folder dir or in it.
+func within(p, dir string) bool {
+	return p == dir || strings.HasPrefix(p, strings.TrimSuffix(dir, string(filepath.Separator))+string(filepath.Separator))
 }
 
 // gitFailed is the output and error of a git command that failed with
@@ -353,11 +526,44 @@ func (g fakeRepo) lock() (*fakeRepository, func(), error) {
 	return r, g.f.mu.Unlock, err
 }
 
+// repository is the repository whose folder, or one of whose worktrees'
+// folders, is dir. A folder inside one isn't modelled.
 func (g fakeRepo) repository() (*fakeRepository, error) {
-	if r := g.f.repos[g.dir]; r != nil {
-		return r, nil
+	dir := realPath(g.dir)
+	r, w := g.f.holding(dir)
+	switch {
+	case r == nil:
+		return nil, fmt.Errorf("fatal: not a git repository: %s", g.dir)
+	case w.dir != dir:
+		return nil, g.f.notModelled("the repository opened in %s, inside the worktree %s", g.dir, w.dir)
 	}
-	return nil, fmt.Errorf("fatal: not a git repository: %s", g.dir)
+	return r, nil
+}
+
+// holding is the repository with a worktree whose folder is dir, resolved,
+// or holds it, with that worktree, or nil when there is none.
+func (f *Fake) holding(dir string) (*fakeRepository, *fakeWorktree) {
+	for _, r := range f.repos {
+		for _, w := range r.worktrees {
+			if within(dir, w.dir) {
+				return r, w
+			}
+		}
+	}
+	return nil, nil
+}
+
+// overlapping is a worktree, of any repository, whose folder is dir,
+// resolved, holds it or is in it, or nil when there is none.
+func (f *Fake) overlapping(dir string) *fakeWorktree {
+	for _, r := range f.repos {
+		for _, w := range r.worktrees {
+			if within(dir, w.dir) || within(w.dir, dir) {
+				return w
+			}
+		}
+	}
+	return nil
 }
 
 // resolve resolves rev to a commit, as rev-parse does for the forms the
@@ -682,21 +888,22 @@ func (g fakeRepo) FastForward(dir, commit string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := g.inFolder(r, dir); err != nil {
+	w, err := g.worktree(r, dir)
+	if err != nil {
 		return "", err
 	}
 	to, err := g.resolve(r, commit)
 	if err != nil {
 		return gitFailed("merge: %s - not something we can merge", commit)
 	}
-	at := r.refs[r.head]
+	at := r.at(w)
 	switch {
 	case r.ancestors(at)[to]:
 		return "", nil
 	case !r.ancestors(to)[at]:
 		return gitFailed("fatal: Not possible to fast-forward, aborting.")
 	}
-	return r.moveTo(to, "merge")
+	return r.moveTo(w, to, "merge")
 }
 
 func (g fakeRepo) Reset(dir, commit, old string) (string, error) {
@@ -705,21 +912,22 @@ func (g fakeRepo) Reset(dir, commit, old string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := g.inFolder(r, dir); err != nil {
+	w, err := g.worktree(r, dir)
+	if err != nil {
 		return "", err
 	}
 	to, err := g.resolve(r, commit)
 	if err != nil {
 		return gitFailed("fatal: ambiguous argument '%s': unknown revision or path not in the working tree.", commit)
 	}
-	was := r.refs[r.head]
-	if out, err := r.moveTo(to, "reset"); err != nil {
+	was := r.at(w)
+	if out, err := r.moveTo(w, to, "reset"); err != nil {
 		return out, err
 	}
 	// As Real's does, a reset of a branch that moved since the caller
 	// looked puts it back.
 	if was != old {
-		if out, err := r.moveTo(was, "reset"); err != nil {
+		if out, err := r.moveTo(w, was, "reset"); err != nil {
 			return out, fmt.Errorf("the branch moved to %s meanwhile, and can't be put back: %w", was, err)
 		}
 		return "", fmt.Errorf("the branch moved to %s meanwhile", was)
@@ -727,16 +935,36 @@ func (g fakeRepo) Reset(dir, commit, old string) (string, error) {
 	return "", nil
 }
 
-// inFolder fails unless dir is the repository's own folder: worktrees
-// aren't modelled.
-func (g fakeRepo) inFolder(r *fakeRepository, dir string) error {
-	if filepath.Clean(dir) != r.dir {
-		return g.f.notModelled("the worktree %s", dir)
+// worktree is r's worktree in the folder dir. A folder that isn't one
+// isn't modelled; one whose folder is gone fails as git would in it.
+func (g fakeRepo) worktree(r *fakeRepository, dir string) (*fakeWorktree, error) {
+	if err := g.notBare(r, "a checkout"); err != nil {
+		return nil, err
 	}
-	if r.bare {
-		return g.f.notModelled("a checkout in the bare repository %s", dir)
+	w := r.worktree(realPath(dir))
+	if w == nil {
+		return nil, g.f.notModelled("the folder %s, which isn't a worktree of the repository", dir)
 	}
-	return nil
+	if _, err := os.Stat(w.dir); err != nil {
+		return nil, err
+	}
+	if _, err := g.gone(r, w); err != nil {
+		return nil, err
+	}
+	return w, nil
+}
+
+// gone is whether the worktree w's folder is gone. A worktree whose
+// folder is there but whose .git file isn't, which git would prune,
+// isn't modelled.
+func (g fakeRepo) gone(r *fakeRepository, w *fakeWorktree) (bool, error) {
+	if _, err := os.Lstat(w.dir); errors.Is(err, fs.ErrNotExist) {
+		return true, nil
+	}
+	if _, err := os.Lstat(filepath.Join(w.dir, ".git")); w != r.main() && errors.Is(err, fs.ErrNotExist) {
+		return false, g.f.notModelled("the worktree %s, whose .git file is gone", w.dir)
+	}
+	return false, nil
 }
 
 func (g fakeRepo) UpdateRef(ref, new, old string) error {
@@ -824,23 +1052,269 @@ func (g fakeRepo) DeleteRef(ref, old string) error {
 	return nil
 }
 
-func (g fakeRepo) Worktrees() ([]Worktree, error) { return nil, g.f.notModelled("worktrees") }
-
-func (g fakeRepo) Status(dir string) (string, error) { return "", g.f.notModelled("status") }
-
-func (g fakeRepo) RemoveWorktree(path string) error { return g.f.notModelled("worktrees") }
-
-func (g fakeRepo) AddWorktree(path, branch string) error { return g.f.notModelled("worktrees") }
-
-func (g fakeRepo) AddWorktreeOnNewBranch(path, branch, from string) error {
-	return g.f.notModelled("worktrees")
+func (g fakeRepo) Worktrees() ([]Worktree, error) {
+	r, unlock, err := g.lock()
+	defer unlock()
+	if err != nil {
+		return nil, err
+	}
+	if err := g.notBare(r, "worktrees"); err != nil {
+		return nil, err
+	}
+	var list []Worktree
+	for _, w := range r.worktrees {
+		list = append(list, Worktree{Path: w.dir, Branch: w.branch()})
+	}
+	return list, nil
 }
 
-func (g fakeRepo) AddDetachedWorktree(path, rev string) error { return g.f.notModelled("worktrees") }
+// Status is what status --porcelain reports of the folder dir against
+// what is checked out there: each changed or deleted file, sorted, then
+// each untracked one, sorted.
+func (g fakeRepo) Status(dir string) (string, error) {
+	r, unlock, err := g.lock()
+	defer unlock()
+	if err != nil {
+		return "", err
+	}
+	w, err := g.worktree(r, dir)
+	if err != nil {
+		return "", err
+	}
+	return g.status(r, w)
+}
 
-func (g fakeRepo) CheckoutDetached(dir, rev string) error { return g.f.notModelled("checkout") }
+// status is Status of the worktree w.
+func (g fakeRepo) status(r *fakeRepository, w *fakeWorktree) (string, error) {
+	folder, err := g.f.folderTree(w.dir)
+	if err != nil {
+		return "", err
+	}
+	tree := r.treeOf(r.at(w))
+	var changed, untracked []string
+	for _, p := range touched(tree, folder) {
+		_, tracked := tree[p]
+		_, present := folder[p]
+		switch {
+		case !tracked:
+			untracked = append(untracked, "?? "+p)
+		case !present:
+			changed = append(changed, " D "+p)
+		default:
+			changed = append(changed, " M "+p)
+		}
+	}
+	return strings.TrimSpace(strings.Join(append(changed, untracked...), "\n")), nil
+}
 
-func (g fakeRepo) PruneWorktrees() error { return g.f.notModelled("worktrees") }
+// RemoveWorktree removes the worktree at path and its folder, as git does:
+// not the repository's own, nor one with changes or untracked files. One
+// whose folder is gone is forgotten.
+func (g fakeRepo) RemoveWorktree(path string) error {
+	r, unlock, err := g.lock()
+	defer unlock()
+	if err != nil {
+		return err
+	}
+	w := r.worktree(realPath(path))
+	switch {
+	case w == nil:
+		return fmt.Errorf("fatal: '%s' is not a working tree", path)
+	case w == r.main():
+		return fmt.Errorf("fatal: '%s' is a main working tree", path)
+	}
+	switch gone, err := g.gone(r, w); {
+	case err != nil:
+		return err
+	case gone:
+		r.forget(w)
+		return nil
+	}
+	status, err := g.status(r, w)
+	switch {
+	case err != nil:
+		return err
+	case status != "":
+		return fmt.Errorf("fatal: '%s' contains modified or untracked files, use --force to delete it", path)
+	}
+	if err := os.RemoveAll(w.dir); err != nil {
+		return err
+	}
+	r.forget(w)
+	return nil
+}
+
+// forget drops the worktree w from r.
+func (r *fakeRepository) forget(w *fakeWorktree) {
+	r.worktrees = slices.DeleteFunc(r.worktrees, func(o *fakeWorktree) bool { return o == w })
+}
+
+// AddWorktree adds a worktree at path with branch checked out there, as
+// git does, unless it is checked out in another. A rev that isn't a
+// branch, which git would check out detached, isn't modelled.
+func (g fakeRepo) AddWorktree(path, branch string) error {
+	r, unlock, err := g.lock()
+	defer unlock()
+	if err != nil {
+		return err
+	}
+	if err := g.notBare(r, "a worktree"); err != nil {
+		return err
+	}
+	ref := "refs/heads/" + branch
+	if _, ok := r.refs[ref]; !ok {
+		_, err := g.resolve(r, branch)
+		switch {
+		case err == nil:
+			return g.f.notModelled("a worktree on %s, which isn't a branch", branch)
+		case errors.Is(err, errNotModelled):
+			return err
+		}
+		return fmt.Errorf("fatal: invalid reference: %s", branch)
+	}
+	for _, w := range r.worktrees {
+		if w.head == ref {
+			return fmt.Errorf("fatal: '%s' is already used by worktree at '%s'", branch, w.dir)
+		}
+	}
+	return g.addWorktree(r, path, ref)
+}
+
+// AddWorktreeOnNewBranch creates the branch, then adds its worktree, as
+// git does: a branch that exists already stops it, but a path that can't
+// be its worktree leaves the branch made.
+func (g fakeRepo) AddWorktreeOnNewBranch(path, branch, from string) error {
+	r, unlock, err := g.lock()
+	defer unlock()
+	if err != nil {
+		return err
+	}
+	if err := g.notBare(r, "a worktree"); err != nil {
+		return err
+	}
+	ref := "refs/heads/" + branch
+	if _, ok := r.refs[ref]; ok {
+		return fmt.Errorf("fatal: a branch named '%s' already exists", branch)
+	}
+	commit, err := g.resolve(r, from)
+	if err != nil {
+		return err
+	}
+	if err := g.checkRef(r, ref, ""); err != nil {
+		return err
+	}
+	r.refs[ref] = commit
+	return g.addWorktree(r, path, ref)
+}
+
+func (g fakeRepo) AddDetachedWorktree(path, rev string) error {
+	r, unlock, err := g.lock()
+	defer unlock()
+	if err != nil {
+		return err
+	}
+	if err := g.notBare(r, "a worktree"); err != nil {
+		return err
+	}
+	commit, err := g.resolve(r, rev)
+	if err != nil {
+		return err
+	}
+	return g.addWorktree(r, path, commit)
+}
+
+// notBare is nil, or, in a bare repository, which has nothing checked
+// out, the failure of what, which isn't modelled there.
+func (g fakeRepo) notBare(r *fakeRepository, what string) error {
+	if r.bare {
+		return g.f.notModelled("%s in the bare repository %s", what, g.dir)
+	}
+	return nil
+}
+
+// addWorktree adds a worktree with head checked out at path, a folder
+// that is empty or doesn't exist. A relative path, or one inside or
+// around another worktree's folder, isn't modelled.
+func (g fakeRepo) addWorktree(r *fakeRepository, path, head string) error {
+	if !filepath.IsAbs(path) {
+		return g.f.notModelled("a worktree at the relative path %s", path)
+	}
+	if entries, err := os.ReadDir(path); err == nil && len(entries) > 0 || err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("fatal: '%s' already exists", path)
+	}
+	dir := realPath(path)
+	switch w := g.f.overlapping(dir); {
+	case w == nil:
+	case w.dir == dir:
+		return fmt.Errorf("fatal: '%s' is a missing but already registered worktree;\nuse 'add -f' to override, or 'prune' or 'remove' to clear", path)
+	default:
+		return g.f.notModelled("a worktree at %s, with the worktree %s inside or around it", path, w.dir)
+	}
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		return err
+	}
+	w := &fakeWorktree{dir: realPath(path), head: head}
+	// As git's, it holds a .git file, for the worktree that loses it.
+	if err := os.WriteFile(filepath.Join(w.dir, ".git"), []byte("gitdir: fake\n"), 0o644); err != nil {
+		return err
+	}
+	if err := checkOut(w.dir, fakeTree{}, r.treeOf(r.at(w))); err != nil {
+		return err
+	}
+	r.worktrees = append(r.worktrees, w)
+	slices.SortFunc(r.worktrees[1:], func(a, b *fakeWorktree) int { return strings.Compare(a.dir, b.dir) })
+	return nil
+}
+
+// CheckoutDetached detaches the worktree dir, then checks out rev there,
+// as checkout --detach does.
+func (g fakeRepo) CheckoutDetached(dir, rev string) error {
+	r, unlock, err := g.lock()
+	defer unlock()
+	if err != nil {
+		return err
+	}
+	w, err := g.worktree(r, dir)
+	if err != nil {
+		return err
+	}
+	commit, err := g.resolve(r, rev)
+	if err != nil {
+		return err
+	}
+	// Detached, moveTo moves w itself, not its branch; refused, w is back
+	// on its branch.
+	was := w.head
+	w.head = r.at(w)
+	if out, err := r.moveTo(w, commit, "checkout"); err != nil {
+		w.head = was
+		return fmt.Errorf("%w: %s", err, out)
+	}
+	return nil
+}
+
+// PruneWorktrees forgets each worktree whose folder is gone.
+func (g fakeRepo) PruneWorktrees() error {
+	r, unlock, err := g.lock()
+	defer unlock()
+	if err != nil {
+		return err
+	}
+	var gone []*fakeWorktree
+	for _, w := range r.worktrees[1:] {
+		isGone, err := g.gone(r, w)
+		if err != nil {
+			return err
+		}
+		if isGone {
+			gone = append(gone, w)
+		}
+	}
+	for _, w := range gone {
+		r.forget(w)
+	}
+	return nil
+}
 
 func (g fakeRepo) CreateBranch(branch, commit string) error {
 	r, unlock, err := g.lock()
@@ -879,9 +1353,39 @@ func (g fakeRepo) HasFile(rev, path string) bool {
 }
 
 func (g fakeRepo) CurrentBranch(dir string) (string, error) {
-	return "", g.f.notModelled("the current branch")
+	r, unlock, err := g.lock()
+	defer unlock()
+	if err != nil {
+		return "", err
+	}
+	w, err := g.worktree(r, dir)
+	if err != nil {
+		return "", err
+	}
+	if w.branch() == "" {
+		return "", errors.New("git symbolic-ref: HEAD names no branch")
+	}
+	return w.branch(), nil
 }
 
+// LastCommit is the abbreviated ID and the subject of what is checked out
+// in the worktree dir: its message's first paragraph on one line, as %s
+// is.
 func (g fakeRepo) LastCommit(dir string) (id, subject string, err error) {
-	return "", "", g.f.notModelled("the last commit")
+	r, unlock, err := g.lock()
+	defer unlock()
+	if err != nil {
+		return "", "", err
+	}
+	w, err := g.worktree(r, dir)
+	if err != nil {
+		return "", "", err
+	}
+	commit := r.at(w)
+	paragraph, _, _ := strings.Cut(strings.TrimLeft(r.commits[commit].message, "\n"), "\n\n")
+	lines := strings.Split(strings.TrimSpace(paragraph), "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimSpace(line)
+	}
+	return commit[:7], strings.Join(lines, " "), nil
 }

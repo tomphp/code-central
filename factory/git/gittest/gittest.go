@@ -5,6 +5,7 @@
 package gittest
 
 import (
+	"errors"
 	"io/fs"
 	"maps"
 	"os"
@@ -26,6 +27,11 @@ type Setup struct {
 	// Commit makes c in the repository at Dir and returns its ID. It
 	// moves no ref and touches no folder.
 	Commit func(c git.Change) string
+	// CommitAll commits what the worktree dir's folder holds, untracked
+	// files included, onto what is checked out there, with the message
+	// msg, as `git add -A` then `git commit` do, and returns the commit's
+	// ID. It fails when there is nothing to commit.
+	CommitAll func(dir, msg string) (string, error)
 	// Remote is the folder of an empty bare repository, with main its
 	// HEAD, that the repository at Dir has as its remote origin.
 	Remote string
@@ -404,6 +410,236 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 			}
 		}
 	})
+
+	t.Run("a worktree added on a new branch holds its commit's files, on that branch", func(t *testing.T) {
+		s, repo, first := open(t)
+		next := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n", "d/b.txt": "b\n"}})
+		wt := filepath.Join(t.TempDir(), "topic")
+
+		noError(t, repo.AddWorktreeOnNewBranch(wt, "topic", next))
+		checkBranch(t, repo, "topic", next)
+		checkBranch(t, repo, "main", first)
+		checkFolder(t, wt, map[string]string{"README.md": "Hello\n", "a.txt": "one\n", "d/b.txt": "b\n"})
+		checkWorktrees(t, repo, git.Worktree{Path: s.Dir, Branch: "main"}, git.Worktree{Path: wt, Branch: "topic"})
+		if got := must(repo.CurrentBranch(wt))(t); got != "topic" {
+			t.Errorf("CurrentBranch = %q, want topic", got)
+		}
+		checkStatus(t, repo, wt, "")
+		again := filepath.Join(t.TempDir(), "again")
+		if err := repo.AddWorktreeOnNewBranch(again, "topic", first); err == nil {
+			t.Error("AddWorktreeOnNewBranch on an existing branch succeeded, want an error")
+		}
+		checkNoFolder(t, again)
+		checkBranch(t, repo, "topic", next)
+		// git makes the branch before it looks at the folder.
+		if err := repo.AddWorktreeOnNewBranch(wt, "other", first); err == nil {
+			t.Error("AddWorktreeOnNewBranch in a worktree's folder succeeded, want an error")
+		}
+		checkBranch(t, repo, "other", first)
+	})
+
+	t.Run("the top level in a worktree is the worktree's folder, from it or a folder in it", func(t *testing.T) {
+		s, repo, first := open(t)
+		wt := filepath.Join(t.TempDir(), "topic")
+		noError(t, repo.AddWorktreeOnNewBranch(wt, "topic", first))
+		sub := filepath.Join(wt, "d")
+		if err := os.MkdirAll(sub, 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		for _, dir := range []string{wt, sub} {
+			if top := must(s.Git.TopLevel(dir))(t); !samePath(top, wt) {
+				t.Errorf("TopLevel(%s) = %s, want %s", dir, top, wt)
+			}
+		}
+		if top := must(s.Git.Open(wt).TopLevel())(t); !samePath(top, wt) {
+			t.Errorf("the worktree's TopLevel = %s, want %s", top, wt)
+		}
+	})
+
+	t.Run("a worktree added on an existing branch holds its files, and none is added where it can't be", func(t *testing.T) {
+		s, repo, first := open(t)
+		next := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n"}})
+		noError(t, repo.CreateBranch("topic", next))
+		noError(t, repo.CreateBranch("other", first))
+		parent := t.TempDir()
+		wt := filepath.Join(parent, "a")
+
+		noError(t, repo.AddWorktree(wt, "topic"))
+		checkFolder(t, wt, map[string]string{"README.md": "Hello\n", "a.txt": "one\n"})
+		// A branch checked out in a worktree, or in the repository's own
+		// folder, and one that doesn't exist.
+		for _, c := range []struct{ name, branch string }{{"b", "topic"}, {"c", "main"}, {"d", "missing"}} {
+			path := filepath.Join(parent, c.name)
+			if err := repo.AddWorktree(path, c.branch); err == nil {
+				t.Errorf("AddWorktree on %s succeeded, want an error", c.branch)
+			}
+			checkNoFolder(t, path)
+		}
+		stray := filepath.Join(parent, "e")
+		writeFile(t, stray, "f.txt", "stray\n")
+		if err := repo.AddWorktree(stray, "other"); err == nil {
+			t.Error("AddWorktree on a folder with files in it succeeded, want an error")
+		}
+		checkFolder(t, stray, map[string]string{"f.txt": "stray\n"})
+		empty := filepath.Join(parent, "f")
+		if err := os.Mkdir(empty, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		noError(t, repo.AddWorktree(empty, "other"))
+		checkWorktrees(t, repo, git.Worktree{Path: s.Dir, Branch: "main"}, git.Worktree{Path: wt, Branch: "topic"}, git.Worktree{Path: empty, Branch: "other"})
+	})
+
+	t.Run("a detached worktree is on no branch, and checks out other commits detached", func(t *testing.T) {
+		s, repo, first := open(t)
+		next := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n"}, Message: "Add a.txt\nover two lines\n\nWith a body."})
+		parent := t.TempDir()
+		stage, topic := filepath.Join(parent, "stage"), filepath.Join(parent, "topic")
+
+		noError(t, repo.AddDetachedWorktree(stage, "main"))
+		noError(t, repo.CheckoutDetached(stage, next))
+		checkFolder(t, stage, map[string]string{"README.md": "Hello\n", "a.txt": "one\n"})
+		if got, err := repo.CurrentBranch(stage); err == nil {
+			t.Errorf("CurrentBranch of a detached worktree = %q, want an error", got)
+		}
+		checkLastCommit(t, repo, stage, next, "Add a.txt over two lines")
+		checkLastCommit(t, repo, s.Dir, first, "First")
+		if got := must(repo.CurrentBranch(s.Dir))(t); got != "main" {
+			t.Errorf("CurrentBranch of the repository's folder = %q, want main", got)
+		}
+		// A worktree on a branch is detached from it, which stays.
+		noError(t, repo.AddWorktreeOnNewBranch(topic, "topic", first))
+		noError(t, repo.CheckoutDetached(topic, next))
+		checkBranch(t, repo, "topic", first)
+		checkBranch(t, repo, "main", first)
+		checkWorktrees(t, repo, git.Worktree{Path: s.Dir, Branch: "main"}, git.Worktree{Path: stage}, git.Worktree{Path: topic})
+	})
+
+	t.Run("a checkout in a worktree keeps changes it doesn't touch, and is stopped by changes in its way", func(t *testing.T) {
+		s, repo, first := open(t)
+		next := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n", "d/b.txt": "b\n"}})
+		other := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "other\n"}})
+		wt := filepath.Join(t.TempDir(), "stage")
+		noError(t, repo.AddDetachedWorktree(wt, next))
+		writeFile(t, wt, "README.md", "Changed\n")
+		writeFile(t, wt, "u.txt", "untracked\n")
+
+		noError(t, repo.CheckoutDetached(wt, other))
+		checkFolder(t, wt, map[string]string{"README.md": "Changed\n", "u.txt": "untracked\n", "a.txt": "other\n"})
+		writeFile(t, wt, "a.txt", "changed\n")
+		if err := repo.CheckoutDetached(wt, first); err == nil {
+			t.Error("CheckoutDetached with a.txt changed succeeded, want an error")
+		}
+		checkFolder(t, wt, map[string]string{"README.md": "Changed\n", "u.txt": "untracked\n", "a.txt": "changed\n"})
+		checkLastCommit(t, repo, wt, other, "")
+	})
+
+	t.Run("status is each changed, deleted and untracked file, and nothing once they are put back", func(t *testing.T) {
+		s, repo, first := open(t)
+		next := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n", "d/b.txt": "b\n"}})
+		wt := filepath.Join(t.TempDir(), "topic")
+		noError(t, repo.AddWorktreeOnNewBranch(wt, "topic", next))
+		writeFile(t, wt, "README.md", "Changed\n")
+		removeFile(t, wt, "a.txt")
+		writeFile(t, wt, "e/u.txt", "untracked\n")
+		if err := os.Mkdir(filepath.Join(wt, "empty"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		// git's porcelain status, trimmed: the first line's leading space
+		// goes.
+		checkStatus(t, repo, wt, "M README.md\n D a.txt\n?? e/u.txt")
+		checkStatus(t, repo, s.Dir, "")
+		writeFile(t, wt, "README.md", "Hello\n")
+		writeFile(t, wt, "a.txt", "one\n")
+		removeFile(t, wt, "e/u.txt")
+		checkStatus(t, repo, wt, "")
+	})
+
+	t.Run("removing a worktree deletes its folder, but not one with changes or untracked files, nor the repository's own", func(t *testing.T) {
+		s, repo, first := open(t)
+		wt := filepath.Join(t.TempDir(), "topic")
+		noError(t, repo.AddWorktreeOnNewBranch(wt, "topic", first))
+
+		writeFile(t, wt, "u.txt", "untracked\n")
+		if err := repo.RemoveWorktree(wt); err == nil {
+			t.Error("RemoveWorktree with an untracked file succeeded, want an error")
+		}
+		removeFile(t, wt, "u.txt")
+		writeFile(t, wt, "README.md", "Changed\n")
+		if err := repo.RemoveWorktree(wt); err == nil {
+			t.Error("RemoveWorktree with a changed file succeeded, want an error")
+		}
+		checkFolder(t, wt, map[string]string{"README.md": "Changed\n"})
+		writeFile(t, wt, "README.md", "Hello\n")
+		noError(t, repo.RemoveWorktree(wt))
+		checkNoFolder(t, wt)
+		checkWorktrees(t, repo, git.Worktree{Path: s.Dir, Branch: "main"})
+		checkBranch(t, repo, "topic", first)
+		if err := repo.RemoveWorktree(s.Dir); err == nil {
+			t.Error("RemoveWorktree of the repository's own folder succeeded, want an error")
+		}
+		if err := repo.RemoveWorktree(filepath.Join(t.TempDir(), "none")); err == nil {
+			t.Error("RemoveWorktree of a folder that is no worktree succeeded, want an error")
+		}
+	})
+
+	t.Run("a worktree whose folder is gone is listed until pruned or removed, and its branch is then free", func(t *testing.T) {
+		s, repo, first := open(t)
+		parent := t.TempDir()
+		a, b, c := filepath.Join(parent, "a"), filepath.Join(parent, "b"), filepath.Join(parent, "c")
+		for _, wt := range []string{a, b, c} {
+			noError(t, repo.AddWorktreeOnNewBranch(wt, filepath.Base(wt), first))
+		}
+		for _, wt := range []string{a, b} {
+			if err := os.RemoveAll(wt); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		noError(t, repo.RemoveWorktree(b))
+		checkWorktrees(t, repo, git.Worktree{Path: s.Dir, Branch: "main"}, git.Worktree{Path: a, Branch: "a"}, git.Worktree{Path: c, Branch: "c"})
+		noError(t, repo.PruneWorktrees())
+		checkWorktrees(t, repo, git.Worktree{Path: s.Dir, Branch: "main"}, git.Worktree{Path: c, Branch: "c"})
+		noError(t, repo.AddWorktree(a, "a"))
+		checkFolder(t, a, map[string]string{"README.md": "Hello\n"})
+	})
+
+	t.Run("a commit of a worktree's folder holds what is in it, untracked files included, on what is checked out there", func(t *testing.T) {
+		s, repo, first := open(t)
+		parent := t.TempDir()
+		topic, stage := filepath.Join(parent, "topic"), filepath.Join(parent, "stage")
+		noError(t, repo.AddWorktreeOnNewBranch(topic, "topic", first))
+		writeFile(t, topic, "a.txt", "one\n")
+		writeFile(t, topic, "d/b.txt", "b\n")
+		removeFile(t, topic, "README.md")
+
+		made := must(s.CommitAll(topic, "Add a and b"))(t)
+		want := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n", "d/b.txt": "b\n"}, Removed: []string{"README.md"}, Message: "Add a and b"})
+		if made != want {
+			t.Errorf("CommitAll = %s, want %s, the commit of the folder's files", made, want)
+		}
+		checkBranch(t, repo, "topic", made)
+		checkBranch(t, repo, "main", first)
+		checkStatus(t, repo, topic, "")
+		if got, err := s.CommitAll(topic, "Nothing"); err == nil {
+			t.Errorf("CommitAll of a clean worktree = %s, want an error", got)
+		}
+		writeFile(t, topic, "a.txt", "two\n")
+		if got, err := s.CommitAll(topic, ""); err == nil {
+			t.Errorf("CommitAll with no message = %s, want an error", got)
+		}
+		checkBranch(t, repo, "topic", made)
+
+		noError(t, repo.AddDetachedWorktree(stage, "topic"))
+		writeFile(t, stage, "a.txt", "two\n")
+		again := must(s.CommitAll(stage, "Change a"))(t)
+		checkLastCommit(t, repo, stage, again, "Change a")
+		if got := must(repo.ParentsOf(again))(t); !slices.Equal(got, []string{made}) {
+			t.Errorf("the detached commit's parents = %q, want %s", got, made)
+		}
+		checkBranch(t, repo, "topic", made)
+	})
 }
 
 // fastForward fast-forwards the branch checked out at dir to commit,
@@ -445,9 +681,10 @@ func checkFolder(t *testing.T, dir string, want map[string]string) {
 		switch {
 		case err != nil:
 			return err
-		case d.IsDir() && d.Name() == ".git":
+		// A worktree's .git is a file.
+		case d.Name() == ".git" && d.IsDir():
 			return filepath.SkipDir
-		case d.IsDir():
+		case d.Name() == ".git", d.IsDir():
 			return nil
 		}
 		content, err := os.ReadFile(name)
@@ -460,6 +697,69 @@ func checkFolder(t *testing.T, dir string, want map[string]string) {
 	}
 	if !maps.Equal(got, want) {
 		t.Errorf("the folder holds %q, want %q", got, want)
+	}
+}
+
+// removeFile removes the file at the slash-separated path in dir.
+func removeFile(t *testing.T, dir, path string) {
+	t.Helper()
+	if err := os.Remove(filepath.Join(dir, filepath.FromSlash(path))); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// checkNoFolder fails t unless there is nothing at path.
+func checkNoFolder(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Lstat(path); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("%s is there, want nothing: %v", path, err)
+	}
+}
+
+// checkWorktrees fails t unless the repository's worktrees are want, in
+// order, each path compared once its symbolic links are resolved, as git
+// reports it.
+func checkWorktrees(t *testing.T, repo git.Repo, want ...git.Worktree) {
+	t.Helper()
+	got := must(repo.Worktrees())(t)
+	resolve := func(list []git.Worktree) []git.Worktree {
+		var out []git.Worktree
+		for _, w := range list {
+			out = append(out, git.Worktree{Path: resolved(t, w.Path), Branch: w.Branch})
+		}
+		return out
+	}
+	if got, want := resolve(got), resolve(want); !slices.Equal(got, want) {
+		t.Errorf("Worktrees = %+v, want %+v", got, want)
+	}
+}
+
+// resolved is path with its symbolic links resolved, or, when it is gone,
+// its folder's.
+func resolved(t *testing.T, path string) string {
+	t.Helper()
+	if p, err := filepath.EvalSymlinks(path); err == nil {
+		return p
+	}
+	dir := must(filepath.EvalSymlinks(filepath.Dir(path)))(t)
+	return filepath.Join(dir, filepath.Base(path))
+}
+
+// checkStatus fails t unless the worktree dir's status is want.
+func checkStatus(t *testing.T, repo git.Repo, dir, want string) {
+	t.Helper()
+	if got := must(repo.Status(dir))(t); got != want {
+		t.Errorf("Status(%s) = %q, want %q", dir, got, want)
+	}
+}
+
+// checkLastCommit fails t unless the worktree dir has commit checked out,
+// with this subject.
+func checkLastCommit(t *testing.T, repo git.Repo, dir, commit, subject string) {
+	t.Helper()
+	id, got, err := repo.LastCommit(dir)
+	if err != nil || id != commit[:7] || got != subject {
+		t.Errorf("LastCommit(%s) = %s, %q, %v, want %s, %q", dir, id, got, err, commit[:7], subject)
 	}
 }
 
