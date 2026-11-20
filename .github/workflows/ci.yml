@@ -1,14 +1,20 @@
-# Builds and tests on each OS in the matrix: the Go tests, the Vite build
-# the binaries embed, and both end-to-end suites. These are the steps
-# `make test` and `make e2e` run, called directly rather than through
-# make (its 60-second budget would trip on a cold runner, and each step
-# gets its own log). Every step runs under bash, so the
-# commands are identical on every OS and a red run on one OS is a real
-# platform difference. The web checks that don't depend on the OS
-# (vitest, tsc, ESLint, the Storybook build) run once, in the web job on
-# Linux. A separate job checks the commit messages since
-# the latest tag, and another runs the store and cli tests again on Linux
-# against a Postgres service container, which no other runner can give.
+# Builds and tests on Linux, macOS and Windows, in jobs that run side by
+# side. The Go tests are split into Shards, one test job each: the tests
+# internal/testshard hashes to that Shard, untagged and against the
+# committed placeholder page, so a Shard needs no Node and no Vite build.
+# The test job's matrix sets how many Shards each OS gets. The e2e job on
+# each OS builds core.wasm, the Vite build the binaries embed and the
+# binaries, then runs both end-to-end suites. These are the steps `make
+# test` and `make e2e` run, called directly rather than through make (its
+# 60-second budget would trip on a cold runner, and each step gets its own
+# log). Every step runs under bash, so the commands are identical on every
+# OS and a red run on one OS is a real platform difference. Every Windows
+# job shares one setup, the local windows-setup action. The checks that
+# don't depend on the OS run once, on Linux: gofmt in its own job, and
+# vitest, tsc, ESLint and the Storybook build in the web job. A separate
+# job checks the commit messages since the latest tag, and another runs
+# the store and cli tests again on Linux against a Postgres service
+# container, which no other runner can give.
 name: CI
 
 on:
@@ -153,67 +159,89 @@ jobs:
         working-directory: web
         run: npm exec -- storybook build
 
+  # gofmt -l exits zero whatever it finds, so fail on any output. Once, on
+  # Linux: what it checks doesn't depend on the OS.
+  gofmt:
+    name: gofmt
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      # gofmt needs no modules or build cache.
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files aren't gofmt'd:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+  # The Go tests, one Shard per job. The Shard counts are matrix values, so
+  # they can be retuned from measured times without touching the split
+  # tool. With one Shard, Linux runs every test, through the same path.
   test:
-    name: test (${{ matrix.os }})
+    name: test (${{ matrix.os }}, shard ${{ matrix.shard }}/${{ matrix.shards }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - { os: ubuntu-latest, shard: 1, shards: 1 }
+          - { os: macos-latest, shard: 1, shards: 2 }
+          - { os: macos-latest, shard: 2, shards: 2 }
+          - { os: windows-latest, shard: 1, shards: 4 }
+          - { os: windows-latest, shard: 2, shards: 4 }
+          - { os: windows-latest, shard: 3, shards: 4 }
+          - { os: windows-latest, shard: 4, shards: 4 }
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 20
     defaults:
       run:
         shell: bash
 
     steps:
-      # Before checkout, so Windows gets the repository's bytes, not CRLF.
-      # .gitattributes says eol=lf too; this keeps it explicit.
-      - name: No CRLF conversion
-        if: runner.os == 'Windows'
-        run: git config --global core.autocrlf false
-
-      # Experiment (code-central-1141): Go tests that start git and write
-      # files run 10-15x slower on Windows than on Linux, and Defender's
-      # on-access scanning of the workspace, TEMP and the Go caches is a
-      # likely cause. This saves that scanning. The runner's TEMP and the
-      # Go caches are excluded by their default paths, since the Dev Drive
-      # step below moves them.
-      - name: Exclude build paths from Defender
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $paths = @(
-            $env:GITHUB_WORKSPACE,
-            $env:RUNNER_TEMP,
-            $env:TEMP,
-            "$env:LOCALAPPDATA\go-build",
-            "$env:USERPROFILE\go"
-          )
-          foreach ($p in $paths) { Add-MpPreference -ExclusionPath $p }
-
-      # TEMP and the Go caches on a ReFS Dev Drive, which skips the NTFS
-      # filter overhead on many small files. Before setup-go, so its cache
-      # restore lands on the drive; the env-mapping reaches later steps.
-      - name: Dev Drive for TEMP and the Go caches
-        if: runner.os == 'Windows'
-        uses: samypr100/setup-dev-drive@v3
-        with:
-          drive-size: 8GB
-          env-mapping: |
-            TMP,{{ DEV_DRIVE }}/tmp
-            TEMP,{{ DEV_DRIVE }}/tmp
-            GOTMPDIR,{{ DEV_DRIVE }}/gotmp
-            GOCACHE,{{ DEV_DRIVE }}/go-build
-            GOMODCACHE,{{ DEV_DRIVE }}/go-mod
-
-      # The env-mapping names the directories but does not create them, and
-      # go will not start without GOTMPDIR.
-      - name: Create TEMP and GOTMPDIR on the Dev Drive
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: New-Item -ItemType Directory -Force -Path $env:TEMP, $env:GOTMPDIR
-
       - uses: actions/checkout@v6
+
+      - uses: ./.github/actions/windows-setup
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Against the committed placeholder page, so no Vite build is needed.
+      # The tool runs go test -v, so the log lists every skipped test with
+      # its reason: the Postgres cases among them, which the test-postgres
+      # job runs.
+      - name: go test
+        run: go run ./internal/testshard -shard ${{ matrix.shard }} -of ${{ matrix.shards }}
+
+  # What the binaries need and what runs on them, on each OS, alongside
+  # the Shards: core.wasm, the Vite build they embed, the binaries, and
+  # the Go and UI e2e suites.
+  e2e:
+    name: e2e (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ./.github/actions/windows-setup
 
       - uses: actions/setup-go@v6
         with:
@@ -240,29 +268,11 @@ jobs:
         working-directory: web
         run: npm ci
 
-      # gofmt -l exits zero whatever it finds, so fail on any output.
-      - name: gofmt
-        shell: bash
-        run: |
-          unformatted=$(gofmt -l .)
-          if [ -n "$unformatted" ]; then
-            echo "These files aren't gofmt'd:"
-            echo "$unformatted"
-            exit 1
-          fi
-
-      # Against the committed placeholder page, so no Vite build is needed.
-      # -v so the log lists every skipped test with its reason: the
-      # Postgres cases among them, which the test-postgres job runs.
-      - name: go test
-        run: go test -v ./...
-
       # The WASM Core the UI e2e config's shared test setup loads, as `make
       # corewasm` builds it. A failing js build fails the run here.
       - name: core.wasm
         run: go run ./internal/corewasm web/src/api/core
 
-      # After go test, which runs against the committed placeholder page.
       # The binaries below embed web/dist, and the UI e2e tests serve it.
       - name: Vite build
         working-directory: web
@@ -299,12 +309,7 @@ jobs:
           PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.ms-playwright
         run: npx playwright-core install chromium
 
-      # Windows takes ~25s to migrate a 10,000-Ticket store, mostly in
-      # creating the staged files. A workaround until that is fixed: a
-      # 1-minute startup budget there instead of 10s.
       - name: Go e2e
-        env:
-          CODE_CENTRAL_E2E_STARTUP_BUDGET: ${{ runner.os == 'Windows' && '1m' || '' }}
         run: go test -v -tags e2e -count=1 ./e2e/
 
       # PLAYWRIGHT_CHANNEL set but empty: the Chromium installed above, not
