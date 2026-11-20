@@ -19,22 +19,26 @@ import (
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/factory/git"
 )
 
 // These tests drive a poll's landing step (the lander's poll) against a
-// fake repo and a real in-process Code Central, so each Landing Method's
+// git.Fake repository and a real in-process Code Central, so each Landing Method's
 // decisions run without git, a claude or the session part. What only
 // real git shows (a merge-tree conflict, a push to a bare remote, a
 // remote that is ahead or gone, a dirty base checkout) is tested through
 // factorytest.
 
-// landWorld is the landing part with a fake repo, ready to land, and the
+// landWorld is the landing part with a repository in a git.Fake, ready to land, and the
 // Code Central it lands in. Its hooks are stubs, saying the Factory never
 // stops and runs no turn, which a test may change.
 type landWorld struct {
 	t     *testing.T
 	l     *lander
-	repo  *fakeRepo
+	repo  *testRepo
+	fake  *git.Fake
+	root  string // the folder holding every repository, and its worktrees
+	top   string // the Home Repository's folder
 	srv   *codecentraltest.Server
 	human *client.Client
 	out   *lineBuffer
@@ -59,8 +63,6 @@ func (b *lineBuffer) String() string {
 	return b.b.String()
 }
 
-const fakeTop = "/work/repo"
-
 func newLandWorld(t *testing.T) *landWorld {
 	t.Helper()
 	srv := codecentraltest.NewServer(t)
@@ -71,18 +73,20 @@ func newLandWorld(t *testing.T) *landWorld {
 	human.Actor = api.Human
 	out := &lineBuffer{}
 	printf := func(format string, args ...any) { fmt.Fprintf(out, format+"\n", args...) }
-	repo := newFakeRepo(fakeTop)
+	fake := git.NewFake(t)
+	root := scratchDir(t)
+	top := filepath.Join(root, "repo")
+	repo := newTestRepo(t, fake, top)
 	repos := newRepositories(printf)
 	repos.setBase("main")
-	// As start builds it: with the OS's separators.
-	repos.home = &repository{name: "acme", home: true, dir: fakeTop, git: repo, worktrees: filepath.FromSlash(fakeTop + ".worktrees")}
+	repos.home = &repository{name: "acme", home: true, dir: top, git: repo, worktrees: top + ".worktrees"}
 	repos.byName = map[string]*repository{"acme": repos.home}
 	hooks := landerHooks{
 		stopped:       func(context.Context) bool { return false },
 		turnRunningOn: func(string) bool { return false },
 	}
 	l := newLander(repos, srv.Client, "acme", work{}, printf, hooks)
-	return &landWorld{t: t, l: l, repo: repo, srv: srv, human: human, out: out}
+	return &landWorld{t: t, l: l, repo: repo, fake: fake, root: root, top: top, srv: srv, human: human, out: out}
 }
 
 // poll runs a poll's landing step.
@@ -224,7 +228,8 @@ func TestACleanMergeBlockedByUncommittedChangesStaysAcceptedAndIsRetriedEachPoll
 	t.Parallel()
 	w := newLandWorld(t)
 	id, commit := w.accepted("Add a feature")
-	w.repo.setDirty(fakeTop, " M feature.txt")
+	feature := w.repo.fileOf(id)
+	w.repo.makeDirty(w.top, feature)
 	base := w.repo.tip("refs/heads/main")
 
 	w.poll()
@@ -234,11 +239,11 @@ func TestACleanMergeBlockedByUncommittedChangesStaysAcceptedAndIsRetriedEachPoll
 	if tk.State != domain.Accepted || w.repo.tip("refs/heads/main") != base {
 		t.Fatalf("%s is %s and main at %s; want it left Accepted with main unmoved", id, tk.State, w.repo.tip("refs/heads/main"))
 	}
-	if n := commentsSaying(tk, cantLandYet, "uncommitted changes in "+fakeTop, "feature.txt", "It stays Accepted"); n != 1 || commentsSaying(tk, cantLandYet) != 1 {
-		t.Fatalf("want one comment naming feature.txt over three polls, got %+v", tk.Comments)
+	if n := commentsSaying(tk, cantLandYet, "uncommitted changes in "+w.top, feature, "It stays Accepted"); n != 1 || commentsSaying(tk, cantLandYet) != 1 {
+		t.Fatalf("want one comment naming %s over three polls, got %+v", feature, tk.Comments)
 	}
 
-	w.repo.setDirty(fakeTop, "")
+	w.repo.makeClean(w.top, feature)
 	w.poll()
 	tk = w.ticket(id)
 	merge := w.repo.tip("refs/heads/main")
@@ -253,7 +258,7 @@ func TestACleanMergeBlockedByUncommittedChangesStaysAcceptedAndIsRetriedEachPoll
 func TestABaseThatIsNotCheckedOutIsMovedByRef(t *testing.T) {
 	t.Parallel()
 	w := newLandWorld(t)
-	w.repo.list[0].Branch = "elsewhere"
+	w.repo.detach()
 	id, commit := w.accepted("Add a feature")
 
 	w.poll()
@@ -393,7 +398,8 @@ func TestUnderMergeAnAcceptedTicketsWorktreeIsKeptUntilItLands(t *testing.T) {
 	w.repo.addWorktree(wt, id)
 	// Uncommitted changes in the base checkout hold the merge, so the
 	// Ticket is still Accepted when the sweep runs.
-	w.repo.setDirty(fakeTop, " M feature.txt")
+	feature := w.repo.fileOf(id)
+	w.repo.makeDirty(w.top, feature)
 
 	w.poll()
 	if s := w.ticket(id).State; s != domain.Accepted {
@@ -403,7 +409,7 @@ func TestUnderMergeAnAcceptedTicketsWorktreeIsKeptUntilItLands(t *testing.T) {
 		t.Error("the worktree of an Accepted Ticket was removed under Merge")
 	}
 
-	w.repo.setDirty(fakeTop, "")
+	w.repo.makeClean(w.top, feature)
 	w.poll()
 	if s := w.ticket(id).State; s != domain.Done {
 		t.Fatalf("%s is %s, want it landed", id, s)
@@ -453,8 +459,11 @@ func TestUnderBranchAConflictingBranchIsNeverSentBack(t *testing.T) {
 	t.Parallel()
 	w := newLandWorld(t)
 	w.setLanding(domain.LandingBranch, false, "")
-	id, commit := w.accepted("Change the readme")
-	w.repo.conflicts[commit] = []string{"README"}
+	id := w.ready("Change the readme")
+	w.finished(id, id, w.repo.commitFileOn(id, "Work on "+id, "README", "The branch's readme\n"))
+	w.accept(id)
+	// The base changes the same line.
+	w.repo.commitFileOn("main", "Change the readme in the base", "README", "The base's readme\n")
 	base := w.repo.tip("refs/heads/main")
 
 	w.poll()
@@ -477,7 +486,7 @@ func TestUnderBranchADirtyWorktreeOfAnAcceptedTicketIsWarnedAboutAndLeft(t *test
 	id, _ := w.accepted("Add a feature")
 	wt := w.l.repos.worktree(id)
 	w.repo.addWorktree(wt, id)
-	w.repo.setDirty(wt, "?? notes.txt")
+	w.repo.makeDirty(wt, "notes.txt")
 
 	w.poll()
 	w.poll()
@@ -489,7 +498,7 @@ func TestUnderBranchADirtyWorktreeOfAnAcceptedTicketIsWarnedAboutAndLeft(t *test
 	}
 
 	// Cleaned, it is removed, and warned of again should it get dirty.
-	w.repo.setDirty(wt, "")
+	w.repo.makeClean(wt, "notes.txt")
 	w.poll()
 	if w.repo.hasWorktree(wt) {
 		t.Error("the clean worktree of an Accepted Ticket is still there under Branch")
@@ -539,7 +548,7 @@ func TestUnderMergeAndPushAFailedPushIsCommentedOnceAndRetried(t *testing.T) {
 	t.Parallel()
 	w := newLandWorld(t)
 	w.repo.addRemote("origin")
-	w.repo.setBroken("origin", true)
+	w.repo.setRefusing("origin", true)
 	w.setLanding(domain.LandingMerge, true, "origin")
 	id, _ := w.accepted("Add a feature")
 
@@ -553,14 +562,14 @@ func TestUnderMergeAndPushAFailedPushIsCommentedOnceAndRetried(t *testing.T) {
 	if got := w.repo.messageOf(merge); got != "Merge "+id+": Add a feature" {
 		t.Errorf("main's tip is %q, want the Factory's merge", got)
 	}
-	if n := commentsSaying(tk, cantLandYet); n != 1 || commentsSaying(tk, "couldn't push main to origin", "does not appear to be a git repository", "It stays Accepted") != 1 {
+	if n := commentsSaying(tk, cantLandYet); n != 1 || commentsSaying(tk, "couldn't push main to origin", "pre-receive hook declined", "It stays Accepted") != 1 {
 		t.Errorf("want one comment quoting the failed push, got %+v", tk.Comments)
 	}
 	if got := w.lines(id + ": can't land yet: couldn't push main to origin"); got != 1 {
 		t.Errorf("want one can't-land line over two polls, got %d in %q", got, w.out)
 	}
 
-	w.repo.setBroken("origin", false)
+	w.repo.setRefusing("origin", false)
 	w.poll()
 	tk = w.ticket(id)
 	if tk.State != domain.Done {
@@ -589,8 +598,8 @@ func TestUnderMergeAndPushTheBaseIsNotPushedAgainOnceTheRemoteHasIt(t *testing.T
 	if s := w.ticket(id).State; s != domain.Done {
 		t.Fatalf("%s is %s, want it landed", id, s)
 	}
-	if w.repo.pushes != 1 || w.lines("pushed main") != 0 {
-		t.Errorf("pushed %d times (%q); want the base left as the remote has it", w.repo.pushes, w.out)
+	if w.repo.pushes.Load() != 1 || w.lines("pushed main") != 0 {
+		t.Errorf("pushed %d times (%q); want the base left as the remote has it", w.repo.pushes.Load(), w.out)
 	}
 }
 
@@ -598,7 +607,7 @@ func TestUnderMergeAndPushAnInReviewTicketMergedByHandLandsOnceTheBaseIsPushed(t
 	t.Parallel()
 	w := newLandWorld(t)
 	w.repo.addRemote("origin")
-	w.repo.setBroken("origin", true)
+	w.repo.setRefusing("origin", true)
 	w.setLanding(domain.LandingMerge, true, "origin")
 	id, commit := w.reviewed("Merged by hand")
 	w.repo.mergeByHand(id)
@@ -612,7 +621,7 @@ func TestUnderMergeAndPushAnInReviewTicketMergedByHandLandsOnceTheBaseIsPushed(t
 		t.Errorf("want a comment on the failed push, got %+v", tk.Comments)
 	}
 
-	w.repo.setBroken("origin", false)
+	w.repo.setRefusing("origin", false)
 	w.poll()
 	tk = w.ticket(id)
 	if m := lastMove(tk); tk.State != domain.Done || m.From != domain.InReview || m.Commit != commit {
@@ -639,7 +648,7 @@ func (w *landWorld) homeLocalOnly() bool {
 func TestAMissingHomePushRemoteIsReportedAsLocalOnlyAndStopsNothing(t *testing.T) {
 	t.Parallel()
 	w := newLandWorld(t)
-	origin := w.repo.addRemote("origin")
+	w.repo.addRemote("origin")
 	w.setLanding(domain.LandingMerge, true, "nowhere")
 	id, _ := w.accepted("Add a feature")
 	reviewed, _ := w.reviewed("Merged by hand")
@@ -655,8 +664,8 @@ func TestAMissingHomePushRemoteIsReportedAsLocalOnlyAndStopsNothing(t *testing.T
 			t.Errorf("%s is %s, want it landed on merge, with nothing pushed", tk, s)
 		}
 	}
-	if len(origin.refs) != 0 || strings.Contains(w.out.String(), "nothing lands") {
-		t.Errorf("origin holds %v and the lines say %q, want nothing pushed and nothing stopped", origin.refs, w.out)
+	if got := w.repo.remoteTip("origin", "main"); got != "" || strings.Contains(w.out.String(), "nothing lands") {
+		t.Errorf("origin's main is at %q and the lines say %q, want nothing pushed and nothing stopped", got, w.out)
 	}
 
 	// Renamed to one its clone has: reported, and pushed again.
@@ -707,8 +716,8 @@ func TestUnderBranchAndPushTheBranchReachesTheRemoteOnAcceptAndNotWhileInReview(
 	}
 
 	w.poll()
-	if got := w.lines(id + ": pushed " + id + " to origin"); got != 1 || w.repo.pushes != 1 {
-		t.Errorf("want the branch pushed once, got %d lines and %d pushes in %q", got, w.repo.pushes, w.out)
+	if got := w.lines(id + ": pushed " + id + " to origin"); got != 1 || w.repo.pushes.Load() != 1 {
+		t.Errorf("want the branch pushed once, got %d lines and %d pushes in %q", got, w.repo.pushes.Load(), w.out)
 	}
 
 	w.repo.mergeByHand(id)
@@ -722,7 +731,7 @@ func TestUnderBranchAndPushAFailedPushIsCommentedOnceAndRetried(t *testing.T) {
 	t.Parallel()
 	w := newLandWorld(t)
 	w.repo.addRemote("origin")
-	w.repo.setBroken("origin", true)
+	w.repo.setRefusing("origin", true)
 	w.setLanding(domain.LandingBranch, true, "origin")
 	id, commit := w.accepted("Add a feature")
 
@@ -739,7 +748,7 @@ func TestUnderBranchAndPushAFailedPushIsCommentedOnceAndRetried(t *testing.T) {
 		t.Errorf("want one can't-push line over two polls, got %d in %q", got, w.out)
 	}
 
-	w.repo.setBroken("origin", false)
+	w.repo.setRefusing("origin", false)
 	w.poll()
 	if got := w.repo.remoteTip("origin", id); got != commit {
 		t.Errorf("the remote's %s is at %q, want the finish commit %s", id, got, commit)
@@ -763,9 +772,9 @@ func TestTheSweepRemovesOnlyCleanWorktreesOfFinishedTickets(t *testing.T) {
 	for _, id := range []string{landed, review} {
 		w.repo.addWorktree(w.l.repos.worktree(id), id)
 	}
-	stray := filepath.Join(fakeTop+".worktrees", "acme-999")
+	stray := filepath.Join(w.top+".worktrees", "acme-999")
 	w.repo.addWorktree(stray, "acme-999")
-	elsewhere := "/somewhere/else"
+	elsewhere := filepath.Join(w.root, "elsewhere")
 	w.repo.addWorktree(elsewhere, "other")
 
 	w.poll()
@@ -811,9 +820,11 @@ func TestAPushedCommitWhoseReportFailedIsReportedAsItsOwnNotALaterTicketsPush(t 
 	w.l.client = client.New(proxy.URL)
 
 	w.poll()
-	w.repo.mu.Lock()
-	firstMerge := w.repo.parents[w.repo.refs["refs/heads/main"]][0]
-	w.repo.mu.Unlock()
+	parents, err := w.repo.ParentsOf(w.repo.tip("refs/heads/main"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstMerge := parents[0]
 	if tk := w.ticket(first); tk.State != domain.Accepted || tk.PushedCommit != nil {
 		t.Fatalf("%s is %s with pushed commit %+v, want it Accepted with its report refused", first, tk.State, tk.PushedCommit)
 	}

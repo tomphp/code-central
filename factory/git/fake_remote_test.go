@@ -227,3 +227,22 @@ func TestFakeGitFailsTheTestOnRemotesItDoesntModel(t *testing.T) {
 		})
 	}
 }
+
+func TestAFakeRemoteCanBeRemovedAndABranchSetOnItAsAPushFromElsewhere(t *testing.T) {
+	t.Parallel()
+	f, dir, first, remote := newFakeWithRemote(t)
+	next := moveMain(t, f, dir, first)
+
+	f.SetRemoteBranch(dir, "origin", "main", next)
+	if c, err := f.Open(remote).Commit("main"); err != nil || c != next {
+		t.Fatalf("the remote's main = %s, %v; want %s", c, err, next)
+	}
+	if m := f.MessageOf(dir, next); m != "" {
+		t.Errorf("MessageOf = %q, want the empty message the commit was made with", m)
+	}
+
+	f.RemoveRemote(dir, "origin")
+	if f.Open(dir).HasRemote("origin") {
+		t.Error("the repository still has origin")
+	}
+}
