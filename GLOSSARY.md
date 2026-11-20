@@ -48,6 +48,14 @@ _Avoid_: Deleted, closed, inactive
 The short, permanent name that identifies a Project to anything connecting to Code Central.
 _Avoid_: Slug, Project ID
 
+**Project picker**:
+The Projects menu at the top left of the Board, Activity, CI and Usage views. It lists All Projects, the current Projects, then the Archived ones under a heading, each with its Factory Status dot and Project ribbon.
+_Avoid_: project selector, project dropdown
+
+**Project ribbon**:
+A Project's colour bar, whose colour is fixed by the Project's Key, so a Project has the same colour wherever it is shown.
+_Avoid_: colour bar, project colour
+
 **Project Options**:
 The page where the human sets a Project's settings, such as its Landing Method, CI Tracking, GitHub Issues, Models, Stage Guides, Auto-accept and Focus, with Auto-fix in its CI section, and its Repositories section, where the human adds and removes the Project's Repositories (the CLI does the same) and, in each Repository's row, sets its Own Landing, Push remote and CI choice. Unlike an Option, what it sets belongs to one Project.
 _Avoid_: Project settings, preferences, config
@@ -653,7 +661,7 @@ The Project setting naming which Needs Me reasons are Focus Items for that Proje
 _Avoid_: focus filter, muted kinds
 
 **Activity Dashboard**:
-What Focus Mode shows when nothing needs the human, unless the human has chosen All clear. The Inbox's Activity link, in its Admin section, also opens it in a view of its own, whatever needs the human, for the Project the Inbox has chosen (All Projects when none) and with a Project selector and a Back button. It shows how many Tickets are Ready and In Progress, and lists the In Progress Tickets, each entry showing its Ticket's Short ID. When a Project in its scope that isn't Archived has CI Tracking on, a CI Running block also counts the CI Runs still going that count towards a Ticket's CI result, and a CI Running list below the In Progress Tickets lists them, or says "No CI Runs running.". Each entry shows the run's workflow, Ticket (as its Short ID), branch, short commit, its status as a badge, as every CI Run display does, and how long it has been going, opens its Ticket in the Inbox and carries the run's GitHub link. A count pulses when it changes, and an entry pulses when its Ticket changes.
+What Focus Mode shows when nothing needs the human, unless the human has chosen All clear. The Inbox's Activity link, in its Admin section, also opens it in a view of its own, whatever needs the human, for the Project the Inbox has chosen (All Projects when none) and with the Project picker and a Back button. It shows how many Tickets are Ready and In Progress, and lists the In Progress Tickets, each entry showing its Ticket's Short ID. When a Project in its scope that isn't Archived has CI Tracking on, a CI Running block also counts the CI Runs still going that count towards a Ticket's CI result, and a CI Running list below the In Progress Tickets lists them, or says "No CI Runs running.". Each entry shows the run's workflow, Ticket (as its Short ID), branch, short commit, its status as a badge, as every CI Run display does, and how long it has been going, opens its Ticket in the Inbox and carries the run's GitHub link. A count pulses when it changes, and an entry pulses when its Ticket changes.
 _Avoid_: Status board, overview, monitor
 
 **Option**:

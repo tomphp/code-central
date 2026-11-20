@@ -6,7 +6,7 @@ import { type World } from "../api/core/core";
 import type { UsageResponse } from "../api/types";
 import { bytes, count } from "../format";
 import { settle } from "../worldTesting";
-import { projects, calls, world, renderApp, usage, table, scope, range, column, ops, openTab, claimed } from "./Usage.testutil";
+import { projects, calls, world, renderApp, usage, table, chooseScope, range, column, ops, openTab, claimed } from "./Usage.testutil";
 
 describe("the Code Central calls table", () => {
   // The calls are real ones, so their sizes are the ones Core counts; the
@@ -212,8 +212,7 @@ describe("Token usage", () => {
     expect(bars()).toHaveLength(7);
     await userEvent.selectOptions(kind(), "review");
     await settle(world);
-    expect(within(scope()).getAllByRole("option")).toHaveLength(4);
-    await userEvent.selectOptions(scope(), "Beta");
+    await chooseScope("Beta");
 
     await settle(world);
     expect(

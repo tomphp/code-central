@@ -44,11 +44,13 @@ describe("end-to-end: the human opens Usage's Storage tab", () => {
 
     // Beta alone, then All Projects.
     const records = usage.getByRole("table", { name: "Projects' records" }).getByRole("row");
-    const scope = usage.getByRole("combobox", { name: "Projects" });
-    await scope.selectOption("beta");
+    const scope = usage.getByRole("button", { name: /^Projects/ });
+    await scope.click();
+    await page.getByRole("listbox", { name: "Projects" }).getByRole("option", { name: "Beta" }).click();
     await page.waitForURL(/project=beta/);
     expect(await records.allTextContents()).toEqual(["ProjectSpecsTicketsUsage days", "Beta000"]);
-    await scope.selectOption("");
+    await scope.click();
+    await page.getByRole("listbox", { name: "Projects" }).getByRole("option", { name: "All Projects" }).click();
     await records.nth(2).waitFor();
     expect(await records.allTextContents()).toEqual(["ProjectSpecsTicketsUsage days", "Acme110", "Beta000"]);
   }, 30_000);

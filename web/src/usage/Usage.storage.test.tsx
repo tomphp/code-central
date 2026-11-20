@@ -1,12 +1,11 @@
 // Usage view tests: the Storage tab (Spec code-central-1032).
 import { screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { Api } from "../api/api";
 import type { StorageView } from "../api/types";
 import { bytes } from "../format";
 import { settle } from "../worldTesting";
-import { projects, world, renderApp, usage, scope, openTab, tab } from "./Usage.testutil";
+import { projects, world, renderApp, usage, chooseScope, openTab, tab } from "./Usage.testutil";
 
 const storageTable = (name: string) => within(usage()).getByRole("table", { name });
 // rows is each body row of the table named, its cells' text joined by " | ".
@@ -73,7 +72,7 @@ describe("the Storage tab", () => {
     const { api, reads } = counting(w.api);
     await renderApp(w, "/?view=usage&tab=storage", api);
     expect(reads()).toBe(1);
-    await userEvent.selectOptions(scope(), "beta");
+    await chooseScope("Beta");
     await settle(world);
     expect(rows("Projects' records")).toEqual(["Beta | 2 | 2 | 0"]);
     expect(storageTable("Memory")).toBeInTheDocument();

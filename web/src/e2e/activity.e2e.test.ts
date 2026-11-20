@@ -42,7 +42,7 @@ describe("end-to-end: the human opens the Activity Dashboard from the Inbox", ()
     const activity = page.getByRole("main", { name: "Activity" });
     const dashboard = activity.getByRole("region", { name: "Activity Dashboard" });
     await dashboard.waitFor();
-    expect(await activity.getByRole("combobox", { name: "Projects" }).inputValue()).toBe("acme");
+    expect(await activity.getByRole("button", { name: /^Projects/ }).textContent()).toContain("Acme");
     const entries = dashboard.getByRole("list", { name: "In Progress" }).getByRole("listitem");
     await entries.getByText("Login form").waitFor();
     expect(await dashboard.getByRole("region", { name: "All clear" }).count()).toBe(0);
