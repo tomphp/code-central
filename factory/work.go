@@ -86,13 +86,16 @@ func (w work) rest(name ...string) (end func()) {
 }
 
 // after is clk.After(d), telling of the wait as resting work named by
-// name's parts until the timer fires; end ends the wait.
+// name's parts until the timer fires; end ends the wait. The timer is made
+// before the time is read, so a clock moving between them leaves the wait
+// due no earlier than its timer: due earlier, a harness would wait for a
+// timer that only the clock moving fires.
 func (w work) after(clk clock.Clock, d time.Duration, name ...string) (fired <-chan time.Time, end func()) {
 	if w.hook == nil {
 		return clk.After(d), noop
 	}
-	at := clk.Now().Add(d)
-	return clk.After(d), w.hook.Rest(strings.Join(name, ""), at)
+	fired = clk.After(d)
+	return fired, w.hook.Rest(strings.Join(name, ""), clk.Now().Add(d))
 }
 
 // pollWait is the poll loop's after: its wait for its next poll.
@@ -100,8 +103,8 @@ func (w work) pollWait(clk clock.Clock, d time.Duration) (fired <-chan time.Time
 	if w.hook == nil {
 		return clk.After(d), noop
 	}
-	at := clk.Now().Add(d)
-	return clk.After(d), w.hook.PollWait(at)
+	fired = clk.After(d)
+	return fired, w.hook.PollWait(clk.Now().Add(d))
 }
 
 // stint is one goroutine's line of work, told piece by piece: each piece
