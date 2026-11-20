@@ -101,6 +101,18 @@ func scriptCases(t *testing.T, open func(t *testing.T) (Setup, git.Repo, string)
 		checkStatus(t, repo, s.Dir, "?? a.txt")
 	})
 
+	t.Run("a Script's add of . or -A in an emptied worktree stages the removals", func(t *testing.T) {
+		for _, args := range [][]string{{"add", "."}, {"add", "-A"}} {
+			t.Run(args[1], func(t *testing.T) {
+				s, repo, _ := open(t)
+				removeFile(t, s.Dir, "README.md")
+
+				script(t, s, s.Dir, args...)
+				checkStatus(t, repo, s.Dir, "D  README.md")
+			})
+		}
+	})
+
 	t.Run("a Script's rm removes a file from the folder and the next commit", func(t *testing.T) {
 		s, repo, _ := open(t)
 		writeFile(t, s.Dir, "a.txt", "a\n")

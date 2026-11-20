@@ -1112,22 +1112,22 @@ func (g fakeRepo) status(r *fakeRepository, w *fakeWorktree) (string, error) {
 				continue
 			}
 		}
-		x, y := ' ', ' '
+		indexColumn, folderColumn := ' ', ' '
 		switch {
 		case !tracked:
-			x = 'A'
+			indexColumn = 'A'
 		case !staged:
-			x = 'D'
+			indexColumn = 'D'
 		case tree[p] != index[p]:
-			x = 'M'
+			indexColumn = 'M'
 		}
 		switch {
 		case staged && !present:
-			y = 'D'
+			folderColumn = 'D'
 		case staged && folder[p] != index[p]:
-			y = 'M'
+			folderColumn = 'M'
 		}
-		changed = append(changed, string([]rune{x, y, ' '})+p)
+		changed = append(changed, string([]rune{indexColumn, folderColumn, ' '})+p)
 	}
 	return strings.TrimSpace(strings.Join(append(changed, untracked...), "\n")), nil
 }
@@ -1206,12 +1206,21 @@ func (g fakeRepo) AddWorktree(path, branch string) error {
 		}
 		return fmt.Errorf("fatal: invalid reference: %s", branch)
 	}
-	for _, w := range r.worktrees {
-		if w.head == ref {
-			return fmt.Errorf("fatal: '%s' is already used by worktree at '%s'", branch, w.dir)
-		}
+	if w := r.usedBy(ref); w != nil {
+		return fmt.Errorf("fatal: '%s' is already used by worktree at '%s'", branch, w.dir)
 	}
 	return g.addWorktree(r, path, ref)
+}
+
+// usedBy is the worktree of r with ref, a branch's full name, checked
+// out, or nil.
+func (r *fakeRepository) usedBy(ref string) *fakeWorktree {
+	for _, w := range r.worktrees {
+		if w.head == ref {
+			return w
+		}
+	}
+	return nil
 }
 
 // AddWorktreeOnNewBranch creates the branch, then adds its worktree, as

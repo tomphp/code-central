@@ -36,8 +36,7 @@ func RealGit() Option { return func(o *options) { o.fakeGit = false } }
 // git (git.Fake): in memory, with no git process. The test reads and
 // changes them only through the typedHelpers; raw git fails it. A fake
 // claude's Git Script steps run on the Fake through the relay
-// (relayPath). gitEnv set
-// to "real" runs it on real git all the same.
+// (relayPath). gitEnv set to "real" runs it on real git all the same.
 func FakeGit() Option { return func(o *options) { o.fakeGit = true } }
 
 // typedHelpers are the helpers that serve real git and the Fake git alike.
@@ -444,7 +443,7 @@ func relayGit(url, dir string, args []string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	resp, err := http.Post(url, "application/json", bytes.NewReader(b))
+	resp, err := (&http.Client{Timeout: Timeout}).Post(url, "application/json", bytes.NewReader(b))
 	if err != nil {
 		return "", err
 	}

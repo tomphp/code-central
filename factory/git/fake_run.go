@@ -134,7 +134,8 @@ func (s scriptRun) add() (string, error) {
 	paths := slices.Collect(maps.Keys(folder))
 	paths = slices.AppendSeq(paths, maps.Keys(index))
 	for i, spec := range specs {
-		if !slices.ContainsFunc(paths, func(p string) bool { return under(p, spec) }) {
+		// The worktree itself always matches, even empty.
+		if spec != "" && !slices.ContainsFunc(paths, func(p string) bool { return under(p, spec) }) {
 			return gitFailed("fatal: pathspec '%s' did not match any files", operands[i])
 		}
 	}
@@ -164,8 +165,8 @@ func (s scriptRun) stage(index fakeTree) {
 }
 
 // rm removes the files staged under each pathspec from the index and the
-// folder, as rm does. Removing a file with changes, which git refuses,
-// isn't modelled.
+// folder, as rm does. Removing a file with changes, or one staged but not
+// committed, which git refuses, isn't modelled.
 func (s scriptRun) rm() (string, error) {
 	opts, operands, ok := s.options([]string{"-q", "-r"}, nil, true)
 	if !ok || len(operands) == 0 {
@@ -189,7 +190,8 @@ func (s scriptRun) rm() (string, error) {
 				continue
 			}
 			found = true
-			if was, ok := folder[p]; ok && was != content || tree[p] != content {
+			was, inFolder := folder[p]
+			if committed, inTree := tree[p]; (inFolder && was != content) || !inTree || committed != content {
 				return "", s.g.f.notModelled("the command git %s, removing %s, which has changes", strings.Join(s.args, " "), p)
 			}
 			gone[p] = content
@@ -292,14 +294,11 @@ func (s scriptRun) checkout() (string, error) {
 	if !ok {
 		return s.notModelled()
 	}
-	for _, w := range s.r.worktrees {
-		switch {
-		case w.head != ref:
-		case w == s.w:
-			return fmt.Sprintf("Already on '%s'", operands[0]), nil
-		default:
-			return gitFailed("fatal: '%s' is already used by worktree at '%s'", operands[0], w.dir)
-		}
+	switch w := s.r.usedBy(ref); {
+	case w == s.w:
+		return fmt.Sprintf("Already on '%s'", operands[0]), nil
+	case w != nil:
+		return gitFailed("fatal: '%s' is already used by worktree at '%s'", operands[0], w.dir)
 	}
 	return s.g.switchTo(s.r, s.w, commit, ref)
 }

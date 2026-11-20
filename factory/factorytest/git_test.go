@@ -339,30 +339,11 @@ func TestAScriptsGitStepsCommitAndTheFactoryLandsThemOnRealGitAndTheFakeGit(t *t
 	})
 }
 
-// errorfT is a testing.TB that records what fails the test with Errorf,
-// from any goroutine, rather than failing it.
-type errorfT struct {
-	testing.TB
-	mu     sync.Mutex
-	errors []string
-}
-
-func (e *errorfT) Helper() {}
-func (e *errorfT) Errorf(format string, args ...any) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.errors = append(e.errors, fmt.Sprintf(format, args...))
-}
-func (e *errorfT) failed() string {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return strings.Join(e.errors, "\n")
-}
-
 func TestAScriptsGitStepTheFakeGitDoesntModelFailsTheTestNamingTheCommand(t *testing.T) {
 	t.Parallel()
-	et := &errorfT{TB: t}
-	h := New(et, FakeGit())
+	ft := &fakeT{TB: t}
+	defer ft.finish()
+	h := New(ft, FakeGit())
 	if h.fake == nil {
 		t.Skip(gitEnv + "=real runs every Harness on real git")
 	}
@@ -370,8 +351,35 @@ func TestAScriptsGitStepTheFakeGitDoesntModelFailsTheTestNamingTheCommand(t *tes
 	h.Script(id, Git("stash", "push"), Result("success"))
 
 	h.Start()
-	h.WaitFor("the Fake git to fail the test", func() bool { return et.failed() != "" })
-	if got := et.failed(); !strings.Contains(got, "not modelled") || !strings.Contains(got, "git stash push") {
+	h.WaitFor("the Fake git to fail the test", func() bool { return ft.failed() != "" })
+	if got := ft.failed(); !strings.Contains(got, "not modelled") || !strings.Contains(got, "git stash push") {
 		t.Errorf("the step failed the test with %q, want it to name git stash push as not modelled", got)
 	}
+}
+
+func TestAScriptsGitStepsInASecondRepositoryCommitInItsWorktreeOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		repo := h.AddLocalRepository("api")
+		id := h.ReadyTicket("Add an endpoint")
+		h.Script(id, append(CommitIn("api", "endpoint.go", "package api\n"),
+			FinishIn("Done.", false, "api"), Result("success"))...)
+
+		h.Start()
+		tk := h.WantState(id, domain.InReview)
+		commit := repo.Tip(id)
+		if len(tk.Repositories) != 1 || tk.Repositories[0].Commit != commit {
+			t.Errorf("finished with %+v, want api at the Script's commit %s", tk.Repositories, commit)
+		}
+		if got, want := repo.Log(commit), []string{"Change endpoint.go", "Start api"}; !slices.Equal(got, want) {
+			t.Errorf("api's Log(%s) = %q, want %q", commit, got, want)
+		}
+		if got := repo.File(commit, "endpoint.go"); got != "package api\n" {
+			t.Errorf("api's endpoint.go is %q", got)
+		}
+		if h.Exists(id) && h.Tip(id) != h.Tip("main") {
+			t.Errorf("the Script committed on %s in the Home Repository", id)
+		}
+	})
 }

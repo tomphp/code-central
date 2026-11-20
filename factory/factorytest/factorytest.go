@@ -324,7 +324,8 @@ var seedRepo = sync.OnceValues(func() (string, error) {
 // startProxy starts the proxy in front of Server and returns its URL.
 // While the harness is down it drops every connection, as a stopped Code
 // Central would refuse it. Under the Fake git it serves the relay
-// (relayPath) itself, down or not.
+// (relayPath) itself, down or not: the relay stands in for git, which a
+// Code Central outage doesn't stop.
 func (h *Harness) startProxy() string {
 	fake := h.fake
 	target, err := url.Parse(h.Server.URL)

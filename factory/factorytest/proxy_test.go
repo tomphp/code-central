@@ -22,12 +22,14 @@ import (
 	"github.com/tomoram/code-central/codecentraltest"
 )
 
-// fakeT is a testing.TB that records what the test logs and runs its
-// cleanups when finish is called.
+// fakeT is a testing.TB that records what the test logs and what fails it
+// with Errorf, from any goroutine, and runs its cleanups when finish is
+// called.
 type fakeT struct {
 	testing.TB
 	mu       sync.Mutex
 	lines    []string
+	errors   []string
 	cleanups []func()
 }
 
@@ -36,6 +38,16 @@ func (f *fakeT) Logf(format string, args ...any) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.lines = append(f.lines, fmt.Sprintf(format, args...))
+}
+func (f *fakeT) Errorf(format string, args ...any) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.errors = append(f.errors, fmt.Sprintf(format, args...))
+}
+func (f *fakeT) failed() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return strings.Join(f.errors, "\n")
 }
 func (f *fakeT) Cleanup(fn func()) { f.cleanups = append(f.cleanups, fn) }
 func (f *fakeT) logged() string {

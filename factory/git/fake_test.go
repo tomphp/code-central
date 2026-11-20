@@ -220,6 +220,23 @@ func TestFakeGitsRunFailsTheTestOnWhatItDoesntModelNamingTheCommand(t *testing.T
 	}
 }
 
+func TestFakeGitsRunFailsTheTestOnAnRmOfAFileStagedButNotCommitted(t *testing.T) {
+	t.Parallel()
+	rec := &recorder{TB: t}
+	f, dir, _ := newFake(rec)
+	writeFile(t, filepath.Join(dir, "empty.txt"), "")
+	if _, err := f.Run(dir, "add", "empty.txt"); err != nil {
+		t.Fatal(err)
+	}
+
+	if out, err := f.Run(dir, "rm", "-q", "empty.txt"); err == nil {
+		t.Errorf("it succeeded with %q, want an error", out)
+	}
+	if len(rec.failures) != 1 || !strings.Contains(rec.failures[0], "not modelled") || !strings.Contains(rec.failures[0], "git rm -q empty.txt") {
+		t.Errorf("the test's failures = %q, want one that git rm -q empty.txt isn't modelled", rec.failures)
+	}
+}
+
 func TestFakeGitFailsTheTestOnAMoveWithChangesStaged(t *testing.T) {
 	t.Parallel()
 	rec := &recorder{TB: t}

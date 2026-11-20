@@ -237,8 +237,9 @@ var headPlaceholder = regexp.MustCompile(`\{\{head(?::([^}]+))?\}\}`)
 
 // headIn is the head commit of the worktree of the Repository named
 // repository in the run c, or of the run's own for "": what a session
-// reads to finish with. It is "" when it can't be read, which the
-// finish then refuses.
+// reads to finish with, read as a Git step does (runGit, with the data
+// folder data). It is "" when it can't be read, which the finish then
+// refuses.
 func headIn(data string, c Call, repository string) string {
 	dir, err := stepDir(Step{In: repository}, c)
 	if err != nil {
@@ -258,7 +259,7 @@ func headIn(data string, c Call, repository string) string {
 // Fake git when the data folder names one (relayFile), else on real git,
 // passing on what git prints to stderr.
 func runGit(data, dir string, args []string) (string, error) {
-	url, err := os.ReadFile(filepath.Join(data, relayFile))
+	relay, err := os.ReadFile(filepath.Join(data, relayFile))
 	switch {
 	case err == nil:
 		if dir == "" {
@@ -266,7 +267,7 @@ func runGit(data, dir string, args []string) (string, error) {
 				return "", err
 			}
 		}
-		return relayGit(string(url), dir, args)
+		return relayGit(string(relay), dir, args)
 	case !os.IsNotExist(err):
 		return "", err
 	}
