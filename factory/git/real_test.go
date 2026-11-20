@@ -27,7 +27,10 @@ func TestRealGitContract(t *testing.T) {
 		}
 		r.git(nil, "", "add", "README.md")
 		r.git(nil, "", "commit", "-q", "-m", "First")
-		return gittest.Setup{Git: git.Real{Binary: binary, Environ: r.environ}, Dir: r.dir, Commit: r.commit}
+		remote := filepath.Join(t.TempDir(), "remote.git")
+		r.git(nil, "", "init", "-q", "--bare", "-b", "main", remote)
+		r.git(nil, "", "remote", "add", "origin", remote)
+		return gittest.Setup{Git: git.Real{Binary: binary, Environ: r.environ}, Dir: r.dir, Commit: r.commit, Remote: remote}
 	})
 }
 

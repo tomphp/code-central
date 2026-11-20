@@ -1,7 +1,6 @@
 package git
 
 import (
-	"context"
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
@@ -27,6 +26,8 @@ type Fake struct {
 	tb    testing.TB
 	mu    sync.Mutex
 	repos map[string]*fakeRepository
+	// version is what Version gives; "" is fakeVersion.
+	version string
 }
 
 // NewFake is a Fake with no repositories, failing tb on what it doesn't
@@ -48,6 +49,13 @@ type fakeRepository struct {
 	commits map[string]fakeCommit
 	trees   map[string]fakeTree
 	refs    map[string]string
+	// bare is whether it has no folder checked out; remotes are its
+	// remotes' URLs by name; broken is whether it can't be reached as a
+	// remote, and refusing whether it refuses pushes as one.
+	bare     bool
+	remotes  map[string]string
+	broken   bool
+	refusing bool
 }
 
 // fakeTree is a tree: each file's content by its slash-separated path.
@@ -141,14 +149,6 @@ func (f *Fake) MakeCommit(dir string, c Change) string {
 }
 
 func (f *Fake) Open(dir string) Repo { return fakeRepo{f: f, dir: filepath.Clean(dir)} }
-
-func (f *Fake) Clone(ctx context.Context, remote, url, path string) (string, error) {
-	return "", f.notModelled("clone")
-}
-
-func (f *Fake) TopLevel(dir string) (string, error) { return "", f.notModelled("the top level") }
-
-func (f *Fake) Version() (string, error) { return "", f.notModelled("the version") }
 
 // notModelled fails the test on something the Fake doesn't model, and is
 // the error to return for it. It fails it with Errorf, not Fatalf: the
@@ -727,6 +727,9 @@ func (g fakeRepo) inFolder(r *fakeRepository, dir string) error {
 	if filepath.Clean(dir) != r.dir {
 		return g.f.notModelled("the worktree %s", dir)
 	}
+	if r.bare {
+		return g.f.notModelled("a checkout in the bare repository %s", dir)
+	}
 	return nil
 }
 
@@ -813,27 +816,6 @@ func (g fakeRepo) DeleteRef(ref, old string) error {
 	}
 	delete(r.refs, ref)
 	return nil
-}
-
-func (g fakeRepo) HasRemote(name string) bool {
-	g.f.notModelled("remotes")
-	return false
-}
-
-func (g fakeRepo) RemoteURL(name string) (string, error) { return "", g.f.notModelled("remotes") }
-
-func (g fakeRepo) TopLevel() (string, error) { return "", g.f.notModelled("the top level") }
-
-func (g fakeRepo) Push(ctx context.Context, remote, branch, lease string) (string, error) {
-	return "", g.f.notModelled("push")
-}
-
-func (g fakeRepo) Fetch(ctx context.Context, remote string) (string, error) {
-	return "", g.f.notModelled("fetch")
-}
-
-func (g fakeRepo) RemoteHas(ctx context.Context, remote, branch string) (bool, error) {
-	return false, g.f.notModelled("ls-remote")
 }
 
 func (g fakeRepo) Worktrees() ([]Worktree, error) { return nil, g.f.notModelled("worktrees") }

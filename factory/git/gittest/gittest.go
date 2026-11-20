@@ -26,6 +26,9 @@ type Setup struct {
 	// Commit makes c in the repository at Dir and returns its ID. It
 	// moves no ref and touches no folder.
 	Commit func(c git.Change) string
+	// Remote is the folder of an empty bare repository, with main its
+	// HEAD, that the repository at Dir has as its remote origin.
+	Remote string
 }
 
 // Run runs the contract suite, with newGit setting up each case's git.
@@ -40,6 +43,7 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 		repo := s.Git.Open(s.Dir)
 		return s, repo, must(repo.Commit("main"))(t)
 	}
+	remoteCases(t, open)
 
 	t.Run("a commit is found by its branch, its full ref, its ID and its short ID", func(t *testing.T) {
 		s, repo, first := open(t)

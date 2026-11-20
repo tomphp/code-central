@@ -1,0 +1,360 @@
+package git
+
+import (
+	"context"
+	"fmt"
+	"maps"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+)
+
+// fakeVersion is the version a Fake gives until SetVersion.
+const fakeVersion = "git version 2.47.0"
+
+// InitBare makes an empty bare repository in the folder path, with main
+// its HEAD, for repositories in the Fake to have as their remote. It fails
+// the test when path holds a repository already.
+func (f *Fake) InitBare(path string) {
+	f.tb.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	path = filepath.Clean(path)
+	if f.repos[path] != nil {
+		f.tb.Fatalf("fake git: %s holds a repository already", path)
+	}
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		f.tb.Fatal(err)
+	}
+	f.repos[path] = &fakeRepository{dir: path, head: "refs/heads/main", commits: map[string]fakeCommit{}, trees: map[string]fakeTree{}, refs: map[string]string{}, bare: true}
+}
+
+// AddRemote gives the repository at dir the remote name at url, as git
+// remote add does. It fails the test when dir holds no repository, or
+// one with a remote name already.
+func (f *Fake) AddRemote(dir, name, url string) {
+	f.tb.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r := f.repos[filepath.Clean(dir)]
+	if r == nil {
+		f.tb.Fatalf("fake git: %s holds no repository", dir)
+	}
+	if _, ok := r.remotes[name]; ok {
+		f.tb.Fatalf("fake git: %s has a remote %s already", dir, name)
+	}
+	if r.remotes == nil {
+		r.remotes = map[string]string{}
+	}
+	r.remotes[name] = url
+}
+
+// BreakRemote makes the repository at path unreachable as a remote, as
+// though it were gone: pushes, fetches, ls-remote and clones of it fail
+// until RestoreRemote.
+func (f *Fake) BreakRemote(path string) {
+	f.tb.Helper()
+	f.change(path, func(r *fakeRepository) { r.broken = true })
+}
+
+// RestoreRemote undoes BreakRemote.
+func (f *Fake) RestoreRemote(path string) {
+	f.tb.Helper()
+	f.change(path, func(r *fakeRepository) { r.broken = false })
+}
+
+// RefusePushes makes the repository at path refuse every push, as a
+// pre-receive hook would, while still serving fetches.
+func (f *Fake) RefusePushes(path string) {
+	f.tb.Helper()
+	f.change(path, func(r *fakeRepository) { r.refusing = true })
+}
+
+// AcceptPushes undoes RefusePushes.
+func (f *Fake) AcceptPushes(path string) {
+	f.tb.Helper()
+	f.change(path, func(r *fakeRepository) { r.refusing = false })
+}
+
+// change changes the repository at path with do, under the Fake's lock,
+// failing the test when there is none.
+func (f *Fake) change(path string, do func(r *fakeRepository)) {
+	f.tb.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r := f.repos[filepath.Clean(path)]
+	if r == nil {
+		f.tb.Fatalf("fake git: %s holds no repository", path)
+	}
+	do(r)
+}
+
+// SetVersion makes v what Version gives, as git version would print it.
+func (f *Fake) SetVersion(v string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.version = v
+}
+
+func (f *Fake) Version() (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.version == "" {
+		return fakeVersion, nil
+	}
+	return f.version, nil
+}
+
+func (f *Fake) TopLevel(dir string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.topLevel(dir)
+}
+
+// topLevel is the folder of the repository holding dir: dir or the
+// nearest folder above it with a repository.
+func (f *Fake) topLevel(dir string) (string, error) {
+	if _, err := os.Stat(dir); err != nil {
+		return "", err
+	}
+	for d := filepath.Clean(dir); ; d = filepath.Dir(d) {
+		if r := f.repos[d]; r != nil {
+			if r.bare {
+				return "", f.notModelled("the top level of the bare repository %s", d)
+			}
+			return d, nil
+		}
+		if filepath.Dir(d) == d {
+			return gitFailed("fatal: not a git repository (or any of the parent directories): .git")
+		}
+	}
+}
+
+func (f *Fake) Clone(ctx context.Context, remote, url, path string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	path = filepath.Clean(path)
+	if entries, err := os.ReadDir(path); err == nil && len(entries) > 0 || f.repos[path] != nil {
+		return gitFailed("fatal: destination path '%s' already exists and is not an empty directory.", path)
+	}
+	from, out, err := f.reach(url)
+	if err != nil {
+		return out, err
+	}
+	head, ok := from.refs[from.head]
+	if !ok {
+		return "", f.notModelled("a clone of %s, whose HEAD is no branch it has", url)
+	}
+	r := &fakeRepository{dir: path, head: from.head, commits: map[string]fakeCommit{}, trees: map[string]fakeTree{}, refs: map[string]string{}, remotes: map[string]string{remote: url}}
+	if err := f.fetchInto(r, from, remote); err != nil {
+		return "", err
+	}
+	r.refs[r.head] = head
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		return "", err
+	}
+	if err := r.checkOut(fakeTree{}, r.treeOf(head)); err != nil {
+		return "", err
+	}
+	f.repos[path] = r
+	return "", nil
+}
+
+// reach is the repository at url, as a remote, or git's output and error
+// when it can't be reached. Only a folder holding a repository in the
+// Fake is modelled.
+func (f *Fake) reach(url string) (*fakeRepository, string, error) {
+	if !filepath.IsAbs(url) {
+		return nil, "", f.notModelled("the remote URL %q", url)
+	}
+	to := f.repos[filepath.Clean(url)]
+	switch {
+	case to == nil:
+		return nil, "", f.notModelled("a remote outside the Fake, %s", url)
+	case to.broken:
+		out, err := unreachable(url)
+		return nil, out, err
+	}
+	return to, "", nil
+}
+
+// unreachable is git's failure to reach the remote remote.
+func unreachable(remote string) (string, error) {
+	return gitFailed("fatal: '%s' does not appear to be a git repository\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.", remote)
+}
+
+// fetchInto copies the branches of from, with their commits, to r as its
+// remote-tracking branches for remote, as a fetch with the refspec
+// git remote add and git clone configure does. It doesn't prune. Tags
+// aren't modelled.
+func (f *Fake) fetchInto(r, from *fakeRepository, remote string) error {
+	for _, ref := range slices.Sorted(maps.Keys(from.refs)) {
+		if strings.HasPrefix(ref, "refs/tags/") {
+			return f.notModelled("fetching the tag %s", ref)
+		}
+		if branch, ok := strings.CutPrefix(ref, "refs/heads/"); ok {
+			copyObjects(from, r, from.refs[ref])
+			r.refs["refs/remotes/"+remote+"/"+branch] = from.refs[ref]
+		}
+	}
+	return nil
+}
+
+// copyObjects copies commit, and its ancestors and their trees, from from
+// to to.
+func copyObjects(from, to *fakeRepository, commit string) {
+	for c := range from.ancestors(commit) {
+		fc := from.commits[c]
+		to.commits[c] = fc
+		to.trees[fc.tree] = from.trees[fc.tree]
+	}
+}
+
+func (g fakeRepo) HasRemote(name string) bool {
+	_, err := g.RemoteURL(name)
+	return err == nil
+}
+
+func (g fakeRepo) RemoteURL(name string) (string, error) {
+	r, unlock, err := g.lock()
+	defer unlock()
+	if err != nil {
+		return "", err
+	}
+	url, ok := r.remotes[name]
+	if !ok {
+		return "", fmt.Errorf("error: No such remote '%s'", name)
+	}
+	return url, nil
+}
+
+func (g fakeRepo) TopLevel() (string, error) {
+	g.f.mu.Lock()
+	defer g.f.mu.Unlock()
+	return g.f.topLevel(g.dir)
+}
+
+// remote is the repository remote names, as one of r's remotes or as a
+// URL, its URL and whether it is one of r's remotes; or git's output and
+// error when it can't be reached.
+func (g fakeRepo) remote(r *fakeRepository, remote string) (to *fakeRepository, url string, named bool, out string, err error) {
+	url, named = r.remotes[remote]
+	if !named {
+		if !filepath.IsAbs(remote) && !strings.ContainsAny(remote, `:/\`) {
+			out, err := unreachable(remote)
+			return nil, "", false, out, err
+		}
+		url = remote
+	}
+	to, out, err = g.f.reach(url)
+	return to, url, named, out, err
+}
+
+func (g fakeRepo) Push(ctx context.Context, remote, branch, lease string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	r, unlock, err := g.lock()
+	defer unlock()
+	if err != nil {
+		return "", err
+	}
+	if branch == "" || branch == "HEAD" || strings.HasPrefix(branch, "refs/") || strings.ContainsAny(branch, ":+^~ *?[\\") {
+		return "", g.f.notModelled("the push of %q", branch)
+	}
+	to, url, named, out, err := g.remote(r, remote)
+	if err != nil {
+		return out, err
+	}
+	if !to.bare {
+		return "", g.f.notModelled("a push to %s, which isn't bare", url)
+	}
+	ref := "refs/heads/" + branch
+	ours, ok := r.refs[ref]
+	if !ok {
+		return gitFailed("error: src refspec %s does not match any\nerror: failed to push some refs to '%s'", branch, url)
+	}
+	rejected := func(why string) (string, error) {
+		return gitFailed("To %s\n ! [rejected]        %s -> %s (%s)\nerror: failed to push some refs to '%s'", url, branch, branch, why, url)
+	}
+	theirs, exists := to.refs[ref]
+	forced := false
+	switch {
+	case lease != "":
+		want, err := g.resolve(r, lease)
+		if err != nil {
+			want = lease
+		}
+		if !exists || theirs != want {
+			return rejected("stale info")
+		}
+		forced = true
+	case exists && theirs != ours && !r.ancestors(ours)[theirs]:
+		if _, ok := r.commits[theirs]; !ok {
+			return rejected("fetch first")
+		}
+		return rejected("non-fast-forward")
+	}
+	track := func() {
+		if named {
+			r.refs["refs/remotes/"+remote+"/"+branch] = ours
+		}
+	}
+	if exists && theirs == ours {
+		track()
+		return "Everything up-to-date", nil
+	}
+	if to.refusing {
+		return gitFailed("remote: pushes are refused\nTo %s\n ! [remote rejected] %s -> %s (pre-receive hook declined)\nerror: failed to push some refs to '%s'", url, branch, branch, url)
+	}
+	copyObjects(r, to, ours)
+	to.refs[ref] = ours
+	track()
+	switch {
+	case !exists:
+		return fmt.Sprintf("To %s\n * [new branch]      %s -> %s", url, branch, branch), nil
+	case forced && !r.ancestors(ours)[theirs]:
+		return fmt.Sprintf("To %s\n + %s...%s %s -> %s (forced update)", url, theirs[:7], ours[:7], branch, branch), nil
+	}
+	return fmt.Sprintf("To %s\n   %s..%s  %s -> %s", url, theirs[:7], ours[:7], branch, branch), nil
+}
+
+func (g fakeRepo) Fetch(ctx context.Context, remote string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	r, unlock, err := g.lock()
+	defer unlock()
+	if err != nil {
+		return "", err
+	}
+	from, url, named, out, err := g.remote(r, remote)
+	if err != nil {
+		return out, err
+	}
+	if !named {
+		return "", g.f.notModelled("a fetch from %s, which isn't a remote of %s", url, g.dir)
+	}
+	return "", g.f.fetchInto(r, from, remote)
+}
+
+func (g fakeRepo) RemoteHas(ctx context.Context, remote, branch string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	r, unlock, err := g.lock()
+	defer unlock()
+	if err != nil {
+		return false, err
+	}
+	to, _, _, out, err := g.remote(r, remote)
+	if err != nil {
+		return false, fmt.Errorf("git ls-remote --heads %s refs/heads/%s: %v: %s", remote, branch, err, out)
+	}
+	_, ok := to.refs["refs/heads/"+branch]
+	return ok, nil
+}
