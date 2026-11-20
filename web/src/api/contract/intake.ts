@@ -215,7 +215,7 @@ export function intakeContract(driver: () => Driver) {
     expect(rows.find((t) => t.id === r.charting.id)?.node_type).toBe("chart");
   });
 
-  it("gives a Map's Ticket rows their Blockers, the Map view's edges, and no other row", async () => {
+  it("gives a Map's Ticket rows their Blockers, the Map view's edges, and find_tickets rows off a Map none", async () => {
     await d.createProject("acme", "Acme");
     const a = await d.createTicket("acme", "Not on a Map", "Ready");
     const b = await d.createTicket("acme", "Nor this", "Ready");
@@ -228,6 +228,9 @@ export function intakeContract(driver: () => Driver) {
     const rows = await d.api.findTickets("acme");
     expect(rows.find((t) => t.id === b)?.blocked_by).toBeUndefined();
     expect(rows.find((t) => t.id === r.charting.id)?.blocked_by).toEqual([a]);
+    // A get_spec read of a plain Spec carries Blockers too.
+    const plainSpec = await d.api.getSpec("acme", (await d.api.getTicket("acme", b)).spec.id);
+    expect(plainSpec.tickets!.find((t) => t.id === b)?.blocked_by).toEqual([a]);
   });
 
   it("approves a Draft Ticket to Ready, and refuses one that isn't Draft", async () => {
