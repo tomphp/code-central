@@ -242,11 +242,9 @@ func (rs *repositories) branchWorktree(r *repository, branch, wt, from string) e
 				return branchElsewhere(branch, wt, w.Path)
 			}
 		}
-		_, err := rs.gitOut(r.dir, "worktree", "add", "-q", wt, branch)
-		return err
+		return r.git.AddWorktree(wt, branch)
 	}
-	_, err = rs.gitOut(r.dir, "worktree", "add", "-q", "-b", branch, wt, from)
-	return err
+	return r.git.AddWorktreeOnNewBranch(wt, branch, from)
 }
 
 // stageWorktree gives a Stage Ticket its worktree at wt in r: detached at
@@ -264,7 +262,7 @@ func (rs *repositories) stageWorktree(r *repository, wt string) error {
 	case left.branch != "":
 		return wrongWorktree(wt, git.Worktree{Path: wt, Branch: left.branch}, "detached")
 	}
-	head, _ := rs.gitOut(wt, "rev-parse", "--short", "HEAD")
+	head, _, _ := r.git.LastCommit(wt)
 	return &failure{api.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("The Stage's worktree is dirty, so the Factory can't start the Stage. Changed files:\n\n%s", left.dirty),
 		Why:             fmt.Sprintf("A Stage writes nothing to the repository, but %s has uncommitted changes, most likely written by an earlier Claim's session. The Factory moves a Stage's worktree to %s's tip at each new Claim only when it is clean.", wt, rs.baseOf(r)),
@@ -295,8 +293,7 @@ func (rs *repositories) detachAtBase(r *repository, wt string) (*leftAsItWas, er
 		if _, err := os.Stat(wt); err == nil {
 			return &leftAsItWas{stray: true}, nil
 		}
-		_, err := rs.gitOut(r.dir, "worktree", "add", "-q", "--detach", wt, rs.baseOf(r))
-		return nil, err
+		return nil, r.git.AddDetachedWorktree(wt, rs.baseOf(r))
 	}
 	if w.Branch != "" {
 		return &leftAsItWas{branch: w.Branch}, nil
@@ -308,14 +305,13 @@ func (rs *repositories) detachAtBase(r *repository, wt string) (*leftAsItWas, er
 	if status != "" {
 		return &leftAsItWas{dirty: status}, nil
 	}
-	_, err = rs.gitOut(wt, "checkout", "-q", "--detach", rs.baseOf(r))
-	return nil, err
+	return nil, r.git.CheckoutDetached(wt, rs.baseOf(r))
 }
 
 // prune runs `git worktree prune` in r, dropping worktrees whose folders
 // are gone.
 func (rs *repositories) prune(r *repository) {
-	if _, err := rs.gitOut(r.dir, "worktree", "prune"); err != nil {
+	if err := r.git.PruneWorktrees(); err != nil {
 		rs.printf("warning: %v", err)
 	}
 }

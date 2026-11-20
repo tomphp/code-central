@@ -10,6 +10,15 @@ import "context"
 type Git interface {
 	// Open is the repository whose folder is dir.
 	Open(dir string) Repo
+	// Clone clones url to path, naming its remote remote; out is git's
+	// output when it fails. A stop (ctx) kills it.
+	Clone(ctx context.Context, remote, url, path string) (out string, err error)
+	// TopLevel is the top level of the git repository holding dir, failing
+	// when none does.
+	TopLevel(dir string) (string, error)
+	// Version is what `git version` reports, as "git version 2.39.3
+	// (Apple Git-146)".
+	Version() (string, error)
 }
 
 // Repo is one git repository as landing and the sweep use it: the seam
@@ -89,6 +98,29 @@ type Repo interface {
 	Status(dir string) (string, error)
 	// RemoveWorktree removes the clean worktree at path.
 	RemoveWorktree(path string) error
+	// AddWorktree adds a worktree at path with the existing branch checked
+	// out.
+	AddWorktree(path, branch string) error
+	// AddWorktreeOnNewBranch adds a worktree at path on branch, a new
+	// branch made at from.
+	AddWorktreeOnNewBranch(path, branch, from string) error
+	// AddDetachedWorktree adds a worktree at path, detached at rev.
+	AddDetachedWorktree(path, rev string) error
+	// CheckoutDetached checks rev out, detached, in the worktree dir.
+	CheckoutDetached(dir, rev string) error
+	// PruneWorktrees forgets the worktrees whose folders are gone.
+	PruneWorktrees() error
+	// CreateBranch makes branch at commit, tracking nothing, failing when
+	// it exists.
+	CreateBranch(branch, commit string) error
+	// HasFile reports whether path is committed at rev.
+	HasFile(rev, path string) bool
+	// CurrentBranch is the branch checked out in the worktree dir, failing
+	// when it is detached.
+	CurrentBranch(dir string) (string, error)
+	// LastCommit is the short ID and the subject of the commit checked out
+	// in the worktree dir.
+	LastCommit(dir string) (id, subject string, err error)
 }
 
 // Worktree is one entry of `git worktree list`.
