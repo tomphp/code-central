@@ -50,3 +50,17 @@ No `gopls`, `gorename` or `eg` is installed, and none is needed.
 
 - **An expression or call**: `gofmt -w -r 'x.m -> x.repos.m' *.go` rewrites every match in the files you name. Single-letter names in the pattern are wildcards, so it can't rename a variable or a receiver such as `f` to `l`.
 - **An identifier, method, field or receiver**: `go run golang.org/x/tools/gopls@v0.24.0 rename -w <file>:#<byte offset> <new name>`, which fetches gopls on first use. The offset is of the name in the file: `grep -b 'func (f \*factory) run' factory/x.go` gives the line's offset, and the name is a few bytes in. It follows the type checker, so it renames every use across the package and leaves look-alikes alone. A receiver is renamed per method, so repeat it for each method. Run `go build ./...` afterwards. It was checked on a receiver rename in a scratch copy of `factory/`.
+
+## Moving Go code to another package
+
+Do it in this order, and run `go build ./... && go vet ./...` after each step: the compiler's `undefined:` errors are the to-do list.
+
+1. `git mv` the files into the new directory and change their `package` clause. Move a file's `_test.go` beside it.
+2. Export what the moved code needs from the old package: rename each helper with the `gopls rename` command in "Renaming across files", which updates every caller. Do this before the move if you can, so the rename still sees one package.
+3. Qualify the moved code's uses of what stayed behind (and the callers' uses of what moved) by shape, with `gofmt -r`, never by a regex such as `perl -pi 's/\bEnv\b/cli.Env/g'`. A regex also rewrites `gh.Env` selectors and `Env:` struct keys. `gofmt -r` matches expressions, so it is safe on a pattern with a shape and unsafe on a bare name. Checked in a scratch copy:
+   - `gofmt -w -r 'Env{} -> cli.Env{}' *.go` and `gofmt -w -r 'mk(x) -> cli.Mk(x)' *.go` leave `g.Env` and `Gh{Env: 1}` alone.
+   - `gofmt -r 'Env -> cli.Env'` turns the key in `W{Env: 1}` into `W{cli.Env: 1}`. Don't use a bare name.
+   - A bare name in a type position (`var e Env`, a field type, a parameter) is left to the compiler's errors: fix each with Edit.
+4. Add the imports with `go run golang.org/x/tools/cmd/goimports@v0.38.0 -w <files>`, which fetches it on first use and drops imports the move left unused. Run it again after hand edits rather than writing import lines with regexes. Neither `gopls` nor `goimports` is installed.
+5. Move the test hooks and helpers. An `export_test.go` hook is visible only to its own package's tests, so move each hook with the code it reaches into, to the new package's `export_test.go`; a test left behind that needed the hook must export the symbol instead or move too. A helper shared by tests in both packages goes into a non-`_test` helper package such as `factorytest`, since one package's `_test.go` files can't be imported by another's.
+6. Run `go build ./... && go vet ./...`, then `make test` once at the end.
