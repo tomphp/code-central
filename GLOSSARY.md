@@ -349,7 +349,7 @@ The Azure Pipelines setting that names the environment variable holding the Azur
 _Avoid_: PAT setting, token variable
 
 **Heartbeat**:
-The signal a running Factory sends Code Central on each poll, naming its Project, itself and its host, its state, its note and when the next is due. It also carries the Factory's Plan Limits, when it has any. Code Central keeps only the latest of each Factory, in memory.
+The signal a running Factory sends Code Central on each poll, naming its Project, itself and its host, its state, its note and when the next is due. It also carries the Factory's Plan Limits, when it has any. Code Central keeps only the latest of each Factory, and every service sharing the Store reads it.
 _Avoid_: ping, keepalive, check-in ("Ping" is already the session activity hook)
 
 **Plan Limits**:
@@ -365,7 +365,7 @@ Talking to Claude about a Project from the UI, outside any Ticket, through a flo
 _Avoid_: chatbot, assistant, console
 
 **Conversation**:
-One Chat session, from its first Chat Message until the human starts a new one. Each message resumes the same session. A Project has at most one current Conversation, held by one Factory.
+One Chat session, from its first Chat Message until the human starts a new one. Each message resumes the same session. A Project has at most one current Conversation, held by one Factory. Only Factories reporting to this service can take one here; on another service sharing the Store, Chat says where it runs.
 _Avoid_: thread, chat session
 
 **Chat Message**:
@@ -381,7 +381,7 @@ A Repository's worktree for the Factory's Conversations: `<home>.worktrees/chat`
 _Avoid_: chat checkout, chat directory
 
 **Factory Status**:
-Whether a Project's Factories are **Online**, **Draining** (claiming nothing new while it finishes running turns) or **Offline** (no Heartbeat for three of its intervals, at least 90 seconds, or a stopping Heartbeat), as Code Central reads it from their Heartbeats. A Project's combined status is Online if any Factory is, else Draining if any is, else Offline, which is also a Project with no Heartbeat since Code Central started.
+Whether a Project's Factories are **Online**, **Draining** (claiming nothing new while it finishes running turns) or **Offline** (no Heartbeat for three of its intervals, at least 90 seconds, or a stopping Heartbeat), as Code Central reads it from their Heartbeats. A Project's combined status is Online if any Factory is, else Draining if any is, else Offline, which is also a Project with no Heartbeat in the Store's record.
 _Avoid_: health, presence, liveness
 
 **Watcher**:
@@ -453,7 +453,7 @@ The command that brings a session back: a Claim's, given by whoever claims, from
 _Avoid_: Resume string, attach command
 
 **Silent Claim**:
-A Claim on a Ticket in progress with no recent activity, which may mean its session has died.
+A Claim on a Ticket in progress with no recent activity, which may mean its session has died. Pings count on every service sharing the Store.
 _Avoid_: Stale, stalled, lost
 
 **Long Claim**:
@@ -465,7 +465,7 @@ One thing a Claim's session did, as posted to Code Central: agent text, a tool c
 _Avoid_: Log entry, message, activity
 
 **Transcript**:
-The Session Events of one Claim, in order, as Code Central holds them. It may be only the tail of the session.
+The Session Events of one Claim, in order, as Code Central holds them. It may be only the tail of the session. The Reporting Service holds it; another service sharing the Store names that service's host instead.
 _Avoid_: Log, stream
 
 **Context Report**:
