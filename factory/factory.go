@@ -75,6 +75,7 @@ import (
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/factory/git"
 	"github.com/tomoram/code-central/home"
 )
 
@@ -119,6 +120,11 @@ type Env struct {
 	// Work, if set, hears of the Factory's work in flight, so that a test
 	// knows when it has settled. The binary sets none.
 	Work Work
+	// Git is the Git port the Factory opens each Repository's clone
+	// through. Nil means git.Real, with the git on the environment's PATH
+	// and Environ. The Factory still needs that git either way: cloning,
+	// worktrees and its other checks don't go through the port yet.
+	Git git.Git
 }
 
 func (e Env) getenv(key string) string {
@@ -142,6 +148,15 @@ func (e Env) killGrace() time.Duration {
 // home is where the state file is found.
 func (e Env) home() home.Lookup {
 	return home.Lookup{Getenv: e.getenv, UserHomeDir: e.UserHomeDir}
+}
+
+// gitPort is the Git the Factory opens each Repository's clone through:
+// the Env's own, else real git through binary, the git on PATH.
+func (e Env) gitPort(binary string) git.Git {
+	if e.Git != nil {
+		return e.Git
+	}
+	return git.Real{Binary: binary, Environ: e.Environ}
 }
 
 // lookPath finds name on the environment's PATH.
@@ -453,11 +468,12 @@ func (f *factory) hooks() landerHooks {
 // start makes every start-up check, refusing with the reason.
 func start(e Env, o options) (*factory, error) {
 	f := newFactory(e, o)
-	git, ok := e.lookPath("git")
+	binary, ok := e.lookPath("git")
 	if !ok {
 		return nil, errors.New("git isn't on PATH")
 	}
-	f.repos.git = git
+	f.repos.binary = binary
+	f.repos.git = e.gitPort(binary)
 	top, err := f.gitOut(e.Dir, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return nil, fmt.Errorf("not in a git repository (%s)", e.Dir)

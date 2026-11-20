@@ -12,6 +12,7 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/factory/git"
 )
 
 // The Factory's Repositories (Spec code-central-848): a registry of the
@@ -33,7 +34,13 @@ type repository struct {
 	// level the Factory starts in.
 	dir string
 	// git is the seam for every git call in the clone; nil while missing.
-	git repo
+	//
+	// Landing's helpers (inBase, inOldBase, pushedBase, pushedAlreadyIn,
+	// remoteTip, mergedOnOldBase) each wrap it with a different ref, or
+	// with a Ticket's or the Factory's own record, not a different git
+	// question, so they stay separate rather than being gathered into a
+	// Git facts module.
+	git git.Repo
 	// worktrees is the folder of its worktrees, beside the clone:
 	// <dir>.worktrees for the Home Repository, and <dir's
 	// parent>/<name>.worktrees for each other one.
@@ -97,9 +104,12 @@ func (r *repository) where() string {
 // setBase), and turns and the Chat loop read it from their own
 // goroutines, under its mutexes.
 type repositories struct {
-	// git is the git binary and environ the environment every git call of
-	// the Factory's runs with; printf writes the Factory's lines.
-	git     string
+	// git is the Git port each Repository's clone is opened through;
+	// binary is the git binary and environ the environment every other
+	// git call of the Factory's runs with; printf writes the Factory's
+	// lines.
+	git     git.Git
+	binary  string
 	environ []string
 	printf  func(format string, args ...any)
 	// home is the Home Repository: the git top level the Factory starts
@@ -127,12 +137,12 @@ func newRepositories(environ []string, printf func(format string, args ...any)) 
 
 // gitOut runs git in dir and returns its trimmed output.
 func (rs *repositories) gitOut(dir string, args ...string) (string, error) {
-	return gitOut(rs.git, rs.environ, dir, args...)
+	return gitOut(rs.binary, rs.environ, dir, args...)
 }
 
 // newRepository is the Repository name whose clone is at dir.
 func (rs *repositories) newRepository(name, dir string) *repository {
-	return &repository{name: name, dir: dir, git: gitRepo{git: rs.git, dir: dir, environ: rs.environ}, worktrees: filepath.Join(filepath.Dir(dir), filepath.Base(dir)+".worktrees")}
+	return &repository{name: name, dir: dir, git: rs.git.Open(dir), worktrees: filepath.Join(filepath.Dir(dir), filepath.Base(dir)+".worktrees")}
 }
 
 // replace makes byName and inOrder the Repositories, as a sync found
@@ -214,7 +224,7 @@ func (rs *repositories) baseOf(r *repository) string {
 
 // inBaseOf reports whether commit is in r's base.
 func (rs *repositories) inBaseOf(r *repository, commit string) bool {
-	return r.git.isAncestor(commit, "refs/heads/"+rs.baseOf(r))
+	return r.git.IsAncestor(commit, "refs/heads/"+rs.baseOf(r))
 }
 
 // syncRepositories rebuilds the registry from p's Repositories: it
@@ -310,7 +320,7 @@ func (l *lander) cloneOf(ctx context.Context, v api.RepositoryView, taken map[st
 	case errors.Is(err, fs.ErrNotExist) && v.CloneURL == "":
 		return missing("nothing at %s", dir)
 	case errors.Is(err, fs.ErrNotExist):
-		if out, err := cloneRepository(ctx, l.repos.git, l.repos.environ, remote, v.CloneURL, dir); err != nil {
+		if out, err := cloneRepository(ctx, l.repos.binary, l.repos.environ, remote, v.CloneURL, dir); err != nil {
 			if out == "" {
 				out = err.Error()
 			}
@@ -321,7 +331,7 @@ func (l *lander) cloneOf(ctx context.Context, v api.RepositoryView, taken map[st
 	case err != nil:
 		return missing("can't read %s: %v", dir, err)
 	}
-	top, err := r.git.topLevel()
+	top, err := r.git.TopLevel()
 	if err != nil {
 		return missing("%s isn't a git repository", dir)
 	}
@@ -331,7 +341,7 @@ func (l *lander) cloneOf(ctx context.Context, v api.RepositoryView, taken map[st
 	if v.CloneURL == "" {
 		return r
 	}
-	url, err := r.git.remoteURL(remote)
+	url, err := r.git.RemoteURL(remote)
 	if err != nil {
 		return missing("%s has no remote %s, the Push remote", dir, remote)
 	}

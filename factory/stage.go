@@ -152,7 +152,7 @@ func (f *factory) conflictFiles(r *repository, stage string, tk api.TicketView) 
 	if stage != api.ImplementationStage || branch == "" {
 		return nil
 	}
-	head, err := r.git.commit("refs/heads/" + branch)
+	head, err := r.git.Commit("refs/heads/" + branch)
 	if err != nil {
 		// A Spec merge Ticket, marked or one opened before the mark, has
 		// no branch yet: it is cut from the Spec Branch, which is what
@@ -165,11 +165,11 @@ func (f *factory) conflictFiles(r *repository, stage string, tk api.TicketView) 
 		}
 	}
 	base := f.repos.baseOf(r)
-	baseTip, err := r.git.commit("refs/heads/" + base)
+	baseTip, err := r.git.Commit("refs/heads/" + base)
 	if err != nil {
 		return nil
 	}
-	_, conflicts, err := r.git.mergeTree(baseTip, head)
+	_, conflicts, err := r.git.MergeTree(baseTip, head)
 	if err != nil {
 		f.printf("warning: %s: can't check the branch against %s%s: %v", tk.ID, base, r.where(), err)
 		return nil

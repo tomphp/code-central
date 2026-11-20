@@ -30,7 +30,7 @@ import (
 // own remote.
 func (l *lander) syncBase(ctx context.Context, r *repository, remote string, pushesBase bool, merged []api.TicketView) bool {
 	base := l.repos.baseOf(r)
-	if out, err := r.git.fetch(ctx, remote); err != nil {
+	if out, err := r.git.Fetch(ctx, remote); err != nil {
 		if ctx.Err() == nil {
 			if r.home {
 				l.printf("warning: can't fetch %s, so nothing lands this poll: %s", remote, firstLine(out))
@@ -40,22 +40,22 @@ func (l *lander) syncBase(ctx context.Context, r *repository, remote string, pus
 		}
 		return false
 	}
-	local, err := r.git.commit("refs/heads/" + base)
+	local, err := r.git.Commit("refs/heads/" + base)
 	if err != nil {
 		l.printf("warning: the base, %s, isn't a branch%s, so the Factory can't keep it level with %s", base, r.where(), remote)
 		return false
 	}
-	theirs, err := r.git.commit("refs/remotes/" + remote + "/" + base)
+	theirs, err := r.git.Commit("refs/remotes/" + remote + "/" + base)
 	if err != nil {
 		// The remote has no base yet: nothing to catch up with.
 		l.stateOf(r).diverged = false
 		return true
 	}
 	switch {
-	case local == theirs, pushesBase && r.git.isAncestor(theirs, local):
+	case local == theirs, pushesBase && r.git.IsAncestor(theirs, local):
 		l.noteBase(ctx, r, false, local, theirs)
 		return true
-	case r.git.isAncestor(local, theirs):
+	case r.git.IsAncestor(local, theirs):
 		l.noteBase(ctx, r, false, local, theirs)
 		if why := l.advanceBase(r, local, theirs); why != "" {
 			l.printf("warning: can't fast-forward %s%s to %s yet: %s", base, r.where(), remote, firstLine(why))
@@ -159,7 +159,7 @@ func (l *lander) landPullRequest(ctx context.Context, tk api.TicketView, p api.P
 // keeps its target when the base changes, so it merges there.
 func (l *lander) inOldBase(commit string) bool {
 	for _, b := range l.oldBases {
-		if l.repos.home.git.isAncestor(commit, "refs/remotes/"+l.repos.home.remote+"/"+b) {
+		if l.repos.home.git.IsAncestor(commit, "refs/remotes/"+l.repos.home.remote+"/"+b) {
 			return true
 		}
 	}

@@ -245,7 +245,7 @@ func TestACleanMergeBlockedByUncommittedChangesStaysAcceptedAndIsRetriedEachPoll
 	if tk.State != domain.Done || lastMove(tk).Commit != merge {
 		t.Fatalf("%s is %s with move %+v; want it landed at the merge %s", id, tk.State, lastMove(tk), merge)
 	}
-	if !w.repo.isAncestor(commit, merge) || !w.repo.isAncestor(base, merge) {
+	if !w.repo.IsAncestor(commit, merge) || !w.repo.IsAncestor(base, merge) {
 		t.Errorf("main's tip %s doesn't hold both the base %s and the work %s", merge, base, commit)
 	}
 }
@@ -253,7 +253,7 @@ func TestACleanMergeBlockedByUncommittedChangesStaysAcceptedAndIsRetriedEachPoll
 func TestABaseThatIsNotCheckedOutIsMovedByRef(t *testing.T) {
 	t.Parallel()
 	w := newLandWorld(t)
-	w.repo.list[0].branch = "elsewhere"
+	w.repo.list[0].Branch = "elsewhere"
 	id, commit := w.accepted("Add a feature")
 
 	w.poll()
@@ -261,7 +261,7 @@ func TestABaseThatIsNotCheckedOutIsMovedByRef(t *testing.T) {
 	if tk := w.ticket(id); tk.State != domain.Done || lastMove(tk).Commit != merge {
 		t.Fatalf("%s is %s; want it landed at main's new tip %s", id, tk.State, merge)
 	}
-	if !w.repo.isAncestor(commit, merge) {
+	if !w.repo.IsAncestor(commit, merge) {
 		t.Errorf("main's tip %s doesn't hold the work %s", merge, commit)
 	}
 }
@@ -581,7 +581,7 @@ func TestUnderMergeAndPushTheBaseIsNotPushedAgainOnceTheRemoteHasIt(t *testing.T
 	w.setLanding(domain.LandingMerge, true, "origin")
 	id, _ := w.reviewed("Merged and pushed by hand")
 	w.repo.mergeByHand(id)
-	if _, err := w.repo.push(context.Background(), "origin", "main", ""); err != nil {
+	if _, err := w.repo.Push(context.Background(), "origin", "main", ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -860,7 +860,7 @@ func TestASpecWhoseLastTicketIsAcceptedMidPollWaitsForItsMergeIntoTheSpecBranch(
 
 	w.poll()
 	merge := w.repo.tip("refs/heads/main")
-	if !w.repo.isAncestor(commit, merge) {
+	if !w.repo.IsAncestor(commit, merge) {
 		t.Errorf("main's tip %s doesn't hold %s's work %s", merge, second, commit)
 	}
 	for _, id := range []string{first, second} {

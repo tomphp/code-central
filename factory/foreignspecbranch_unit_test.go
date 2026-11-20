@@ -30,7 +30,7 @@ func (w *pushWorld) push(tip string, rebase bool, pushedIn ...string) {
 	w.repo.mu.Lock()
 	w.repo.refs["refs/heads/"+pushedSpecBranch] = tip
 	w.repo.mu.Unlock()
-	if _, err := w.repo.fetch(context.Background(), "origin"); err != nil {
+	if _, err := w.repo.Fetch(context.Background(), "origin"); err != nil {
 		w.t.Fatal(err)
 	}
 	spec := api.SpecRef{ID: "acme-1", Branch: pushedSpecBranch}

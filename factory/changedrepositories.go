@@ -43,14 +43,14 @@ func (rs *repositories) changedIn(tk api.TicketView) []api.RepositoryWork {
 // While r's Base is missing nothing can be said to be beyond it, so r
 // counts as unchanged until it is back (Base missing).
 func (rs *repositories) changedHead(r *repository, tk api.TicketView, branch string) (string, bool) {
-	head, err := r.git.commit("refs/heads/" + branch)
+	head, err := r.git.Commit("refs/heads/" + branch)
 	if err != nil || rs.inBaseOf(r, head) {
 		return "", false
 	}
-	if _, err := r.git.commit("refs/heads/" + rs.baseOf(r)); err != nil {
+	if _, err := r.git.Commit("refs/heads/" + rs.baseOf(r)); err != nil {
 		return "", false
 	}
-	if tk.SpecLanded && r.git.isAncestor(head, "refs/heads/"+tk.Spec.Branch) {
+	if tk.SpecLanded && r.git.IsAncestor(head, "refs/heads/"+tk.Spec.Branch) {
 		return "", false
 	}
 	return head, true
@@ -152,7 +152,7 @@ func (rs *repositories) recordProblem(r *repository, tk api.TicketView, rec api.
 	if rec.Commit == "" || branch == "" {
 		return ""
 	}
-	commit, err := r.git.commit(rec.Commit)
+	commit, err := r.git.Commit(rec.Commit)
 	if err == nil && !holdsWork && rs.inBaseOf(r, commit) {
 		return ""
 	}
@@ -168,7 +168,7 @@ func (rs *repositories) recordProblem(r *repository, tk api.TicketView, rec api.
 			return ""
 		}
 	}
-	head, herr := r.git.commit("refs/heads/" + branch)
+	head, herr := r.git.Commit("refs/heads/" + branch)
 	switch {
 	case herr != nil:
 		return fmt.Sprintf("%s's branch %s isn't in the Repository", r.name, branch)

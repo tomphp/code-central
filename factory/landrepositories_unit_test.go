@@ -193,7 +193,7 @@ func TestASpecLandsWithTheSameMergeSpecCommitInEachRepository(t *testing.T) {
 	tk := w.ticket(id)
 	homeMerge, apiMerge := w.repo.tip("refs/heads/main"), apiRepo.tip("refs/heads/main")
 	want := "Merge spec " + w.spec + ": Work"
-	if tk.State != domain.Done || w.repo.messageOf(homeMerge) != want || apiRepo.messageOf(apiMerge) != want || !apiRepo.isAncestor(apiWork, apiMerge) {
+	if tk.State != domain.Done || w.repo.messageOf(homeMerge) != want || apiRepo.messageOf(apiMerge) != want || !apiRepo.IsAncestor(apiWork, apiMerge) {
 		t.Fatalf("%s is %s; main is at %q and %q, want it Done, landed by the Spec's merge in each", id, tk.State, w.repo.messageOf(homeMerge), apiRepo.messageOf(apiMerge))
 	}
 }
@@ -212,7 +212,7 @@ func TestATicketIsMergedIntoItsSpecBranchInEveryRepositoryOrNone(t *testing.T) {
 	if tk.State != domain.Ready || commentsSaying(tk, "merging it into the Spec Branch conflicts", "- api: merging", "  - endpoint.go") != 1 {
 		t.Fatalf("%s %s %+v, want it sent back naming api's conflict with its Spec Branch", id, tk.State, tk.Comments)
 	}
-	if spec := w.repo.tip("refs/heads/" + domain.SpecBranch(w.spec, nil)); w.repo.isAncestor(home, spec) {
+	if spec := w.repo.tip("refs/heads/" + domain.SpecBranch(w.spec, nil)); w.repo.IsAncestor(home, spec) {
 		t.Fatal("the Home Repository's Spec Branch holds the Ticket's work: a Ticket conflicting in any Repository is merged into none")
 	}
 }

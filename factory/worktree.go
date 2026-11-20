@@ -11,6 +11,7 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/factory/git"
 )
 
 // chatWorktreeName is the folder of each Repository's Chat worktree,
@@ -132,7 +133,7 @@ func (rs *repositories) moveLandedBranch(r *repository, tk api.TicketView, branc
 		return
 	}
 	rec := tk.Repositories[i]
-	head, err := r.git.commit("refs/heads/" + branch)
+	head, err := r.git.Commit("refs/heads/" + branch)
 	if err != nil || rec.Commit != "" && head != rec.Commit {
 		// Gone, or holding work beyond what landed: nothing to move.
 		return
@@ -141,21 +142,21 @@ func (rs *repositories) moveLandedBranch(r *repository, tk api.TicketView, branc
 	if tip == "" || head == tip {
 		return
 	}
-	list, err := r.git.worktrees()
+	list, err := r.git.Worktrees()
 	if err != nil {
 		return
 	}
-	if w, ok := find(list, wt); ok && w.branch == branch {
-		if status, err := r.git.status(wt); err != nil || status != "" {
+	if w, ok := find(list, wt); ok && w.Branch == branch {
+		if status, err := r.git.Status(wt); err != nil || status != "" {
 			return
 		}
-		if _, err := r.git.reset(wt, tip, head); err != nil {
+		if _, err := r.git.Reset(wt, tip, head); err != nil {
 			rs.printf("warning: can't move %s%s to %s's tip: %v", branch, r.where(), rs.baseOf(r), err)
 			return
 		}
-	} else if slices.ContainsFunc(list, func(w gitWorktree) bool { return w.branch == branch }) {
+	} else if slices.ContainsFunc(list, func(w git.Worktree) bool { return w.Branch == branch }) {
 		return
-	} else if err := r.git.updateRef("refs/heads/"+branch, tip, head); err != nil {
+	} else if err := r.git.UpdateRef("refs/heads/"+branch, tip, head); err != nil {
 		rs.printf("warning: can't move %s%s to %s's tip: %v", branch, r.where(), rs.baseOf(r), err)
 		return
 	}
@@ -167,9 +168,9 @@ func (rs *repositories) moveLandedBranch(r *repository, tk api.TicketView, branc
 // holds the local base, else the local base's; "" when there is neither.
 // A local-only Repository's is always the local base's.
 func (rs *repositories) baseTipOf(r *repository) string {
-	local, lerr := r.git.commit("refs/heads/" + rs.baseOf(r))
+	local, lerr := r.git.Commit("refs/heads/" + rs.baseOf(r))
 	if r.remote != "" && !r.localOnly {
-		if theirs, err := r.git.commit("refs/remotes/" + r.remote + "/" + rs.baseOf(r)); err == nil && (lerr != nil || r.git.isAncestor(local, theirs)) {
+		if theirs, err := r.git.Commit("refs/remotes/" + r.remote + "/" + rs.baseOf(r)); err == nil && (lerr != nil || r.git.IsAncestor(local, theirs)) {
 			return theirs
 		}
 	}
@@ -186,7 +187,7 @@ func (rs *repositories) baseTipOf(r *repository) string {
 func (rs *repositories) cutBranchWorktree(r *repository, tk api.TicketView, branch, wt string) error {
 	from, fork := rs.baseOf(r), ""
 	if tk.SpecLanded {
-		if _, err := r.git.commit("refs/heads/" + branch); err != nil {
+		if _, err := r.git.Commit("refs/heads/" + branch); err != nil {
 			tip, err := rs.specBranchTip(r, tk.Spec.Branch)
 			if err != nil {
 				return specBranchFailed(wt, err)
@@ -205,20 +206,14 @@ func (rs *repositories) cutBranchWorktree(r *repository, tk api.TicketView, bran
 	return nil
 }
 
-// gitWorktree is one entry of `git worktree list`.
-type gitWorktree struct {
-	path   string
-	branch string // "" when detached
-}
-
 // find is the worktree at path.
-func find(list []gitWorktree, path string) (gitWorktree, bool) {
+func find(list []git.Worktree, path string) (git.Worktree, bool) {
 	for _, w := range list {
-		if w.path == path {
+		if w.Path == path {
 			return w, true
 		}
 	}
-	return gitWorktree{}, false
+	return git.Worktree{}, false
 }
 
 // branchWorktree gives a Ticket its worktree at wt in r on branch, its
@@ -228,12 +223,12 @@ func find(list []gitWorktree, path string) (gitWorktree, bool) {
 // or branch checked out elsewhere, is a failure, and nothing is
 // touched.
 func (rs *repositories) branchWorktree(r *repository, branch, wt, from string) error {
-	list, err := r.git.worktrees()
+	list, err := r.git.Worktrees()
 	if err != nil {
 		return err
 	}
 	if w, ok := find(list, wt); ok {
-		if w.branch == branch {
+		if w.Branch == branch {
 			return nil
 		}
 		return wrongWorktree(wt, w, "on branch "+branch)
@@ -241,10 +236,10 @@ func (rs *repositories) branchWorktree(r *repository, branch, wt, from string) e
 	if _, err := os.Stat(wt); err == nil {
 		return strayDirectory(r, wt)
 	}
-	if _, err := r.git.commit("refs/heads/" + branch); err == nil {
+	if _, err := r.git.Commit("refs/heads/" + branch); err == nil {
 		for _, w := range list {
-			if w.branch == branch {
-				return branchElsewhere(branch, wt, w.path)
+			if w.Branch == branch {
+				return branchElsewhere(branch, wt, w.Path)
 			}
 		}
 		_, err := rs.gitOut(r.dir, "worktree", "add", "-q", wt, branch)
@@ -267,7 +262,7 @@ func (rs *repositories) stageWorktree(r *repository, wt string) error {
 	case left.stray:
 		return strayDirectory(r, wt)
 	case left.branch != "":
-		return wrongWorktree(wt, gitWorktree{wt, left.branch}, "detached")
+		return wrongWorktree(wt, git.Worktree{Path: wt, Branch: left.branch}, "detached")
 	}
 	head, _ := rs.gitOut(wt, "rev-parse", "--short", "HEAD")
 	return &failure{api.ReportFailureInput{
@@ -291,7 +286,7 @@ type leftAsItWas struct {
 // when it isn't there, and moved to the current tip when it is a clean
 // detached one. Anything else is left as it was, and returned saying why.
 func (rs *repositories) detachAtBase(r *repository, wt string) (*leftAsItWas, error) {
-	list, err := r.git.worktrees()
+	list, err := r.git.Worktrees()
 	if err != nil {
 		return nil, err
 	}
@@ -303,10 +298,10 @@ func (rs *repositories) detachAtBase(r *repository, wt string) (*leftAsItWas, er
 		_, err := rs.gitOut(r.dir, "worktree", "add", "-q", "--detach", wt, rs.baseOf(r))
 		return nil, err
 	}
-	if w.branch != "" {
-		return &leftAsItWas{branch: w.branch}, nil
+	if w.Branch != "" {
+		return &leftAsItWas{branch: w.Branch}, nil
 	}
-	status, err := r.git.status(wt)
+	status, err := r.git.Status(wt)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +344,7 @@ func (l *lander) sweep(ctx context.Context, policies api.LandingPolicies) {
 // read, by ID, nil for one it couldn't, so each is read once.
 func (l *lander) sweepIn(ctx context.Context, r *repository, policies api.LandingPolicies, tickets map[string]*api.TicketView) {
 	policy := r.policy(policies)
-	list, err := r.git.worktrees()
+	list, err := r.git.Worktrees()
 	if err != nil {
 		l.printf("warning: can't list the worktrees%s: %v", r.where(), err)
 		return
@@ -358,10 +353,10 @@ func (l *lander) sweepIn(ctx context.Context, r *repository, policies api.Landin
 		if ctx.Err() != nil {
 			return
 		}
-		if filepath.Dir(w.path) != r.worktrees {
+		if filepath.Dir(w.Path) != r.worktrees {
 			continue
 		}
-		id := filepath.Base(w.path)
+		id := filepath.Base(w.Path)
 		// The Chat worktree is no Ticket's, and stays so that a copied
 		// Resume Command keeps working.
 		if id == chatWorktreeName || l.hooks.turnRunningOn(id) {
@@ -375,26 +370,26 @@ func (l *lander) sweepIn(ctx context.Context, r *repository, policies api.Landin
 		if tk == nil || !doneWithWorktree(*tk, policy) {
 			continue
 		}
-		status, err := r.git.status(w.path)
+		status, err := r.git.Status(w.Path)
 		if err != nil {
-			l.printf("warning: %s: can't read the worktree %s: %v", id, w.path, err)
+			l.printf("warning: %s: can't read the worktree %s: %v", id, w.Path, err)
 			continue
 		}
 		if status != "" {
-			if !l.warned[w.path] {
-				l.warned[w.path] = true
-				l.printf("warning: %s is %s but its worktree %s has uncommitted changes: left in place", id, tk.State, w.path)
+			if !l.warned[w.Path] {
+				l.warned[w.Path] = true
+				l.printf("warning: %s is %s but its worktree %s has uncommitted changes: left in place", id, tk.State, w.Path)
 			}
 			continue
 		}
-		if err := r.git.removeWorktree(w.path); err != nil {
-			l.printf("warning: %s: can't remove the worktree %s: %v", id, w.path, err)
+		if err := r.git.RemoveWorktree(w.Path); err != nil {
+			l.printf("warning: %s: can't remove the worktree %s: %v", id, w.Path, err)
 			continue
 		}
-		delete(l.warned, w.path)
-		l.printf("%s: %s: removed its worktree %s", id, tk.State, w.path)
-		if l.sweepsBranch(r, *tk, w.branch) {
-			l.sweepUnusedBranch(r, *tk, w.branch)
+		delete(l.warned, w.Path)
+		l.printf("%s: %s: removed its worktree %s", id, tk.State, w.Path)
+		if l.sweepsBranch(r, *tk, w.Branch) {
+			l.sweepUnusedBranch(r, *tk, w.Branch)
 		}
 	}
 	l.sweepForkPoints(ctx, r, tickets)
@@ -443,7 +438,7 @@ func (l *lander) sweepUnusedBranch(r *repository, tk api.TicketView, branch stri
 		return
 	}
 	ref := "refs/heads/" + branch
-	tip, err := r.git.commit(ref)
+	tip, err := r.git.Commit(ref)
 	if err != nil {
 		return
 	}
@@ -453,7 +448,7 @@ func (l *lander) sweepUnusedBranch(r *repository, tk api.TicketView, branch stri
 	if _, replayed := replayedTip(r, tk.ID, branch); replayed && tk.State != domain.Done && tk.State != domain.Cancelled {
 		return
 	}
-	if err := r.git.deleteRef(ref, tip); err != nil {
+	if err := r.git.DeleteRef(ref, tip); err != nil {
 		l.printf("warning: %s: can't delete its unused branch %s%s: %v", tk.ID, branch, r.where(), err)
 		return
 	}
@@ -465,7 +460,7 @@ func (l *lander) sweepUnusedBranch(r *repository, tk api.TicketView, branch stri
 // or Cancelled: its branch is cleaned up, so nothing replays it again.
 // tickets is sweepIn's.
 func (l *lander) sweepForkPoints(ctx context.Context, r *repository, tickets map[string]*api.TicketView) {
-	ids, err := r.git.forkPoints()
+	ids, err := r.git.ForkPoints()
 	if err != nil {
 		l.printf("warning: can't list the fork points%s: %v", r.where(), err)
 		return
@@ -488,22 +483,22 @@ func (l *lander) sweepForkPoints(ctx context.Context, r *repository, tickets map
 // onFirstParentLine reports whether commit is rev's tip or one of the
 // commits its first parents lead back through in g: rev's own line, not
 // a branch merged into it.
-func onFirstParentLine(g repo, commit, rev string) bool {
-	tip, err := g.commit(rev)
+func onFirstParentLine(g git.Repo, commit, rev string) bool {
+	tip, err := g.Commit(rev)
 	if err != nil {
 		return false
 	}
 	if tip == commit {
 		return true
 	}
-	if !g.isAncestor(commit, tip) {
+	if !g.IsAncestor(commit, tip) {
 		return false
 	}
-	after, err := g.firstParents(tip, commit)
+	after, err := g.FirstParents(tip, commit)
 	if err != nil || len(after) == 0 {
 		return false
 	}
-	parents, err := g.parentsOf(after[0])
+	parents, err := g.ParentsOf(after[0])
 	return err == nil && len(parents) > 0 && parents[0] == commit
 }
 
@@ -545,10 +540,10 @@ func strayDirectory(r *repository, wt string) error {
 
 // wrongWorktree is the failure for the worktree w at wt being other than
 // want: on another branch, or detached.
-func wrongWorktree(wt string, w gitWorktree, want string) error {
+func wrongWorktree(wt string, w git.Worktree, want string) error {
 	on := "detached"
-	if w.branch != "" {
-		on = "on branch " + w.branch
+	if w.Branch != "" {
+		on = "on branch " + w.Branch
 	}
 	return &failure{api.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("The worktree at %s is %s, not %s, so the Factory can't use it.", wt, on, want),
