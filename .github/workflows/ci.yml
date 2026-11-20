@@ -192,6 +192,13 @@ jobs:
             GOCACHE,{{ DEV_DRIVE }}/go-build
             GOMODCACHE,{{ DEV_DRIVE }}/go-mod
 
+      # The env-mapping names the directories but does not create them, and
+      # go will not start without GOTMPDIR.
+      - name: Create TEMP and GOTMPDIR on the Dev Drive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path $env:TEMP, $env:GOTMPDIR
+
       - uses: actions/checkout@v6
 
       - uses: actions/setup-go@v6
