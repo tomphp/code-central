@@ -2,9 +2,9 @@
 // title, submitted time, New Prototype, Retro), its Changed Repositories'
 // chips while the Project has several, the clickable Stage strip (its
 // Map segment linking to the Map it was made from, if any), what it waits
-// for, its body (the text, then the Spec) collapsed, its Tags, and under Build the sums of its implementation Tickets' CI badges
-// and those Tickets with their States, above them their Ticket graph when
-// one Build Ticket blocks another.
+// for, its body (the text, then the Spec) collapsed, its Tags, and under Build the sums of its implementation Tickets' CI
+// badges, their Ticket graph when one blocks another, and those Tickets
+// with their States.
 import type { SpecDetail } from "../api/types";
 import { RepositoryChips } from "../controls/RepositoryChips";
 import { useApi } from "../live";
