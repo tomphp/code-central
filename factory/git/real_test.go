@@ -1,6 +1,7 @@
 package git_test
 
 import (
+	"fmt"
 	"maps"
 	"os"
 	"os/exec"
@@ -27,7 +28,7 @@ func TestRealGitContract(t *testing.T) {
 		}
 		r.git(nil, "", "add", "README.md")
 		r.git(nil, "", "commit", "-q", "-m", "First")
-		return gittest.Setup{Git: git.Real{Binary: binary, Environ: r.environ}, Dir: r.dir, Commit: r.commit}
+		return gittest.Setup{Git: git.Real{Binary: binary, Environ: r.environ}, Dir: r.dir, Commit: r.commit, CommitAll: r.commitAll}
 	})
 }
 
@@ -93,6 +94,24 @@ func (r realRepository) commit(c git.Change) string {
 		author = []string{"GIT_AUTHOR_NAME=" + name, "GIT_AUTHOR_EMAIL=" + email}
 	}
 	return r.git(author, "", args...)
+}
+
+// commitAll commits everything in the worktree dir, as gittest.Setup's
+// CommitAll does: the commit is what the last command, rev-parse,
+// reports.
+func (r realRepository) commitAll(dir, msg string) (string, error) {
+	var commit string
+	for _, args := range [][]string{{"add", "-A"}, {"commit", "-q", "-m", msg}, {"rev-parse", "HEAD"}} {
+		cmd := exec.Command(r.binary, args...)
+		cmd.Dir = dir
+		cmd.Env = r.environ
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return "", fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, out)
+		}
+		commit = strings.TrimSpace(string(out))
+	}
+	return commit, nil
 }
 
 // git runs git in the repository with env added to its environment and
