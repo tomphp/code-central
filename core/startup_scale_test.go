@@ -1,3 +1,5 @@
+//go:build scale
+
 package core_test
 
 import (
@@ -17,10 +19,10 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// startupBudget is generous on purpose: the fast suite runs many tests
-// at once. A real slowdown in loading or in the reads the UI makes on
-// every notice blows well past it (5,000 Tickets load in a few hundred
-// milliseconds here).
+// startupBudget is what a store of 5,000 Tickets may take to load and serve
+// the UI's startup reads. A real slowdown in loading or in the reads the UI
+// makes on every notice blows well past it (5,000 Tickets load in a few
+// hundred milliseconds here).
 const startupBudget = 3 * time.Second
 
 const (
@@ -29,15 +31,15 @@ const (
 	genTicketsPerSpec  = 50 // 5 × 20 × 50 = 5,000 Tickets
 )
 
-// A store of about 5,000 Tickets, most of them finished as a long-lived
-// store's are, loads and serves the UI's startup reads within the
-// budget, so slowness shows up in the fast suite rather than in use.
+// TestScaleAStoreOf5000TicketsStartsUpQuickly holds a store of about 5,000
+// Tickets, most of them finished as a long-lived store's are, to loading
+// and serving the UI's startup reads within startupBudget. It is a scale
+// test, built only with -tags scale and run by `make scale`: generating
+// and timing a store this size is too slow and too load-sensitive for the
+// fast suite.
 //
-// Not parallel: a parallel test is timed alongside the package's others,
-// and the landing guard type-checks the module for most of a minute on a
-// CI runner, long enough to outlast every retry. A test that doesn't call
-// t.Parallel runs before any that does, so this one is timed alone.
-func TestAStoreOf5000TicketsStartsUpQuickly(t *testing.T) {
+// Not parallel, so it is timed alone rather than beside the package's others.
+func TestScaleAStoreOf5000TicketsStartsUpQuickly(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
 	writeGeneratedStore(t, dir)
 
