@@ -4,9 +4,9 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { newWorld } from "../api/core/core";
-import { scenario } from "../api/scenario";
+import type { World } from "../api/core/core";
 import { RequirementPane } from "../requirement/RequirementPane";
-import { renderLive } from "../worldTesting";
+import { renderLive, scenario } from "../worldTesting";
 import { SpecPane } from "./SpecPane";
 
 const link = () => ({ href: "#", onClick: () => {} });
@@ -37,11 +37,28 @@ describe("SpecPane", () => {
   });
 
   describe("Ticket graph", () => {
-    async function specWithEdge() {
+    // specIn is a Spec in a fresh world, with the labels given.
+    async function specIn(labels?: string[]) {
       const w = await newWorld();
       const s = scenario(w);
       await s.project("acme", "Acme");
-      const id = await s.spec("acme", { title: "Sign-in" });
+      return { w, s, id: await s.spec("acme", { title: "Sign-in", labels }) };
+    }
+
+    // renderSpec renders the Spec's pane as the app does, selecting ticket.
+    async function renderSpec(w: World, id: string, props: { select?: (t: string) => void; ticket?: string } = {}) {
+      const spec = await w.api.getSpec("acme", id);
+      const pane = (p: typeof props) => <SpecPane spec={spec} now={w.now()} select={p.select ?? (() => {})} ticket={p.ticket} />;
+      const r = await renderLive(w, pane(props));
+      return { rerender: (p: typeof props) => r.rerender(pane({ ...props, ...p })) };
+    }
+
+    const graphNode = (graph: HTMLElement, ticket: string) => graph.querySelector<HTMLElement>(`[data-id="${ticket}"]`)!;
+
+    // specWithEdge is a Spec whose Done Ticket "Add a store" blocks "Add a
+    // page", and with a Cancelled one beside them.
+    async function specWithEdge() {
+      const { w, s, id } = await specIn();
       const store = await s.ticket("acme", { title: "Add a store", spec: id, state: "Done" });
       const page = await s.ticket("acme", { title: "Add a page", spec: id });
       const dropped = await s.ticket("acme", { title: "Try a cache", spec: id, state: "Cancelled" });
@@ -51,26 +68,24 @@ describe("SpecPane", () => {
 
     it("shows the graph above the Tickets list, with the edge, progress, State chip and no type line", async () => {
       const { w, id, ids } = await specWithEdge();
-      await renderLive(w, <SpecPane spec={await w.api.getSpec("acme", id)} now={w.now()} select={() => {}} />);
+      await renderSpec(w, id);
       const graph = screen.getByRole("list", { name: "Ticket graph" });
       const tickets = screen.getByRole("list", { name: "Tickets" });
       expect(graph.compareDocumentPosition(tickets) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      const node = (n: string) => graph.querySelector<HTMLElement>(`[data-id="${n}"]`)!;
       expect([...graph.querySelectorAll<SVGElement>("[data-edge]")].map((e) => e.dataset.edge)).toEqual([`${ids.store}>${ids.page}`]);
-      expect(node(ids.store).dataset.progress).toBe("done");
-      expect(node(ids.page).dataset.progress).toBe("queued");
-      expect(node(ids.page)).toHaveTextContent("Ready");
-      expect(node(ids.page)).not.toHaveTextContent("ticket");
+      expect(graphNode(graph, ids.store).dataset.progress).toBe("done");
+      expect(graphNode(graph, ids.page).dataset.progress).toBe("queued");
+      expect(graphNode(graph, ids.page)).toHaveTextContent("Ready");
+      expect(graphNode(graph, ids.page)).not.toHaveTextContent("ticket");
     });
 
     it("draws Done and Cancelled Tickets as nodes, the Cancelled one struck through", async () => {
       const { w, id, ids } = await specWithEdge();
-      await renderLive(w, <SpecPane spec={await w.api.getSpec("acme", id)} now={w.now()} select={() => {}} />);
+      await renderSpec(w, id);
       const graph = screen.getByRole("list", { name: "Ticket graph" });
-      const node = (n: string) => graph.querySelector<HTMLElement>(`[data-id="${n}"]`)!;
-      expect(node(ids.store)).not.toBeNull();
-      expect(node(ids.dropped).querySelector(".cancelled")).not.toBeNull();
-      expect(node(ids.store).querySelector(".cancelled")).toBeNull();
+      expect(graphNode(graph, ids.store)).not.toBeNull();
+      expect(graphNode(graph, ids.dropped).querySelector(".cancelled")).not.toBeNull();
+      expect(graphNode(graph, ids.store).querySelector(".cancelled")).toBeNull();
     });
 
     it("draws no node or edge for a Blocker on another Spec", async () => {
@@ -78,46 +93,39 @@ describe("SpecPane", () => {
       const other = await s.spec("acme", { title: "Billing" });
       const away = await s.ticket("acme", { title: "Bill", spec: other });
       await s.addBlocker("acme", ids.dropped, away);
-      await renderLive(w, <SpecPane spec={await w.api.getSpec("acme", id)} now={w.now()} select={() => {}} />);
+      await renderSpec(w, id);
       const graph = screen.getByRole("list", { name: "Ticket graph" });
-      expect(graph.querySelector(`[data-id="${away}"]`)).toBeNull();
+      expect(graphNode(graph, away)).toBeNull();
       expect(graph.querySelectorAll("[data-edge]")).toHaveLength(1);
     });
 
     it("selects a node's Ticket on click and marks it current", async () => {
       const { w, id, ids } = await specWithEdge();
       const select = vi.fn();
-      const spec = await w.api.getSpec("acme", id);
-      const { rerender } = await renderLive(w, <SpecPane spec={spec} now={w.now()} select={select} />);
+      const { rerender } = await renderSpec(w, id, { select });
       await userEvent.click(within(screen.getByRole("list", { name: "Ticket graph" })).getByRole("button", { name: /Add a page/ }));
       expect(select).toHaveBeenCalledWith(ids.page);
-      rerender(<SpecPane spec={spec} now={w.now()} ticket={ids.page} select={select} />);
+      rerender({ ticket: ids.page });
       expect(within(screen.getByRole("list", { name: "Ticket graph" })).getByRole("button", { name: /Add a page/ })).toHaveAttribute("aria-current", "true");
     });
 
     it("shows no graph while no Ticket blocks another", async () => {
-      const w = await newWorld();
-      const s = scenario(w);
-      await s.project("acme", "Acme");
-      const id = await s.spec("acme", { title: "Sign-in" });
+      const { w, s, id } = await specIn();
       await s.ticket("acme", { title: "One", spec: id });
       await s.ticket("acme", { title: "Two", spec: id });
-      await renderLive(w, <SpecPane spec={await w.api.getSpec("acme", id)} now={w.now()} select={() => {}} />);
+      await renderSpec(w, id);
       expect(screen.queryByRole("list", { name: "Ticket graph" })).toBeNull();
       expect(screen.getByRole("list", { name: "Tickets" })).toBeInTheDocument();
     });
 
     it("lists no Tickets and no graph for a Long-lived Spec, but keeps the CI sums", async () => {
-      const w = await newWorld();
-      const s = scenario(w);
-      await s.project("acme", "Acme");
-      const id = await s.spec("acme", { title: "Chores", labels: ["long-lived"] });
-      const a = await s.ticket("acme", { title: "Sweep", spec: id, state: "Accepted" });
+      const { w, s, id } = await specIn(["long-lived"]);
+      const a =await s.ticket("acme", { title: "Sweep", spec: id, state: "Accepted" });
       const b = await s.ticket("acme", { title: "Mop", spec: id });
       await s.addBlocker("acme", b, a);
       await s.pushed("acme", a);
       await s.ci("acme", a, "passed");
-      await renderLive(w, <SpecPane spec={await w.api.getSpec("acme", id)} now={w.now()} select={() => {}} />);
+      await renderSpec(w, id);
       expect(screen.queryByRole("list", { name: "Ticket graph" })).toBeNull();
       expect(screen.queryByRole("list", { name: "Tickets" })).toBeNull();
       expect(screen.queryByText("No Tickets yet.")).toBeNull();
