@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -78,27 +79,45 @@ type guardedPackage struct {
 
 // guardLoader parses and type-checks packages of the repository at root
 // with the standard library alone. Its packages share one source
-// importer, so each import is compiled once.
+// importer, so each import is compiled once, and so do the tests: the
+// importer isn't safe for concurrent use, so check holds mu.
 type guardLoader struct {
 	root string
 	fset *token.FileSet
 	imp  types.Importer
+	mu   sync.Mutex
 }
 
-func newGuardLoader(t *testing.T) guardLoader {
+var (
+	sharedGuardLoader     *guardLoader
+	sharedGuardLoaderErr  error
+	sharedGuardLoaderOnce sync.Once
+)
+
+// newGuardLoader is the one loader every test in the package shares.
+func newGuardLoader(t *testing.T) *guardLoader {
 	t.Helper()
-	root, err := filepath.Abs("..")
-	if err != nil {
-		t.Fatal(err)
+	sharedGuardLoaderOnce.Do(func() {
+		root, err := filepath.Abs("..")
+		if err != nil {
+			sharedGuardLoaderErr = err
+			return
+		}
+		fset := token.NewFileSet()
+		sharedGuardLoader = &guardLoader{root: root, fset: fset, imp: importer.ForCompiler(fset, "source", nil)}
+	})
+	if sharedGuardLoaderErr != nil {
+		t.Fatal(sharedGuardLoaderErr)
 	}
-	fset := token.NewFileSet()
-	return guardLoader{root: root, fset: fset, imp: importer.ForCompiler(fset, "source", nil)}
+	return sharedGuardLoader
 }
 
 // check type-checks the files as the package at path. Each file's imports
 // resolve from the directory its name is in.
-func (l guardLoader) check(t *testing.T, path string, files map[string]*ast.File) guardedPackage {
+func (l *guardLoader) check(t *testing.T, path string, files map[string]*ast.File) guardedPackage {
 	t.Helper()
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	info := &types.Info{Selections: map[*ast.SelectorExpr]*types.Selection{}}
 	var list []*ast.File
 	for _, name := range slices.Sorted(maps.Keys(files)) {
@@ -112,7 +131,7 @@ func (l guardLoader) check(t *testing.T, path string, files map[string]*ast.File
 
 // parse parses the non-test Go files of dir, under root, that build on
 // this platform.
-func (l guardLoader) parse(t *testing.T, dir string) map[string]*ast.File {
+func (l *guardLoader) parse(t *testing.T, dir string) map[string]*ast.File {
 	t.Helper()
 	abs := filepath.Join(l.root, dir)
 	entries, err := os.ReadDir(abs)
@@ -250,6 +269,7 @@ func guardFailure(allow []guardAllow, reads []landingRead) string {
 }
 
 func TestNoLandingSettingIsReadOutsideThePolicy(t *testing.T) {
+	t.Parallel()
 	l := newGuardLoader(t)
 	domain := l.check(t, "github.com/tomoram/code-central/domain", l.parse(t, "domain"))
 	api := l.check(t, "github.com/tomoram/code-central/api", l.parse(t, "api"))
@@ -303,6 +323,7 @@ func checkGuardFixture(t *testing.T) guardedPackage {
 }
 
 func TestTheLandingGuardFlagsAReadOfALandingSetting(t *testing.T) {
+	t.Parallel()
 	pkg := checkGuardFixture(t)
 	msg := guardFailure(landingGuardAllowlist, landingReads(pkg))
 	want := "these read a landing setting to decide; ask the Landing Policy instead " +
@@ -328,6 +349,7 @@ func TestTheLandingGuardFlagsAReadOfALandingSetting(t *testing.T) {
 }
 
 func TestTheLandingGuardFailsOnAStaleAllowlistEntry(t *testing.T) {
+	t.Parallel()
 	pkg := checkGuardFixture(t)
 	got := staleEntries([]guardAllow{
 		{file: "fixture/fixture.go", fn: "decides"},
