@@ -300,3 +300,86 @@ func TestGitVersionSetsTheFakeGitsVersion(t *testing.T) {
 		t.Errorf("the Fake git's version is %q, %v", v, err)
 	}
 }
+
+func TestAScriptsGitStepsCommitAndTheFactoryLandsThemOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		id := h.ReadyTicket("Add a feature")
+		h.Script(id,
+			WriteFile("feature.txt", "feature\n"),
+			Git("add", "feature.txt"),
+			Git("commit", "-q", "-m", "Add a feature"),
+			CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", "Added.", "--branch", "{{ticket}}", "--commit", "{{head}}"),
+			Result("success"))
+		oldMain := h.Tip("main")
+
+		r := h.Start()
+		tk := h.WantState(id, domain.InReview)
+		commit := h.Tip(id)
+		if tk.Commit != commit {
+			t.Errorf("finished with %q, want the Script's commit %s", tk.Commit, commit)
+		}
+		if got, want := h.Parents(commit), []string{oldMain}; !slices.Equal(got, want) {
+			t.Errorf("the Script's commit has parents %q, want %q", got, want)
+		}
+		h.Accept(id)
+		r.Poll()
+		h.WantState(id, domain.Done)
+
+		if got, want := h.Parents(h.Tip("main")), []string{oldMain, commit}; !slices.Equal(got, want) {
+			t.Errorf("main's tip has parents %q, want %q", got, want)
+		}
+		if got, want := h.Log(commit), []string{"Add a feature", "Set up Code Central"}; !slices.Equal(got, want) {
+			t.Errorf("Log(%s) = %q, want %q", commit, got, want)
+		}
+		if got := h.File("main", "feature.txt"); got != "feature\n" {
+			t.Errorf("main's feature.txt is %q", got)
+		}
+	})
+}
+
+func TestAScriptsGitStepTheFakeGitDoesntModelFailsTheTestNamingTheCommand(t *testing.T) {
+	t.Parallel()
+	ft := &fakeT{TB: t}
+	defer ft.finish()
+	h := New(ft, FakeGit())
+	if h.fake == nil {
+		t.Skip(gitEnv + "=real runs every Harness on real git")
+	}
+	id := h.ReadyTicket("Add a feature")
+	h.Script(id, Git("stash", "push"), Result("success"))
+
+	h.Start()
+	h.WaitFor("the Fake git to fail the test", func() bool { return ft.failed() != "" })
+	if got := ft.failed(); !strings.Contains(got, "not modelled") || !strings.Contains(got, "git stash push") {
+		t.Errorf("the step failed the test with %q, want it to name git stash push as not modelled", got)
+	}
+}
+
+func TestAScriptsGitStepsInASecondRepositoryCommitInItsWorktreeOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		repo := h.AddLocalRepository("api")
+		id := h.ReadyTicket("Add an endpoint")
+		h.Script(id, append(CommitIn("api", "endpoint.go", "package api\n"),
+			FinishIn("Done.", false, "api"), Result("success"))...)
+
+		h.Start()
+		tk := h.WantState(id, domain.InReview)
+		commit := repo.Tip(id)
+		if len(tk.Repositories) != 1 || tk.Repositories[0].Commit != commit {
+			t.Errorf("finished with %+v, want api at the Script's commit %s", tk.Repositories, commit)
+		}
+		if got, want := repo.Log(commit), []string{"Change endpoint.go", "Start api"}; !slices.Equal(got, want) {
+			t.Errorf("api's Log(%s) = %q, want %q", commit, got, want)
+		}
+		if got := repo.File(commit, "endpoint.go"); got != "package api\n" {
+			t.Errorf("api's endpoint.go is %q", got)
+		}
+		if h.Exists(id) && h.Tip(id) != h.Tip("main") {
+			t.Errorf("the Script committed on %s in the Home Repository", id)
+		}
+	})
+}

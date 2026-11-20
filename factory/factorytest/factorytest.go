@@ -221,7 +221,14 @@ func New(t testing.TB, opts ...Option) *Harness {
 	for _, d := range []string{h.Home, h.Bin, template, filepath.Join(h.data, "scripts"), filepath.Join(h.data, "calls"), filepath.Join(h.data, "continue"), filepath.Join(h.data, "signals"), filepath.Join(h.data, "waiting")} {
 		must(t, os.MkdirAll(d, 0o755))
 	}
+	if onFakeGit {
+		// Before the proxy starts: it relays to the Fake git.
+		h.fake = git.NewFake(t)
+	}
 	h.URL = h.startProxy()
+	if onFakeGit {
+		must(t, os.WriteFile(filepath.Join(h.data, relayFile), []byte(h.URL+relayPath), 0o644))
+	}
 	gitPath, err := realGit()
 	must(t, err)
 	h.env = map[string]string{
@@ -244,7 +251,6 @@ func New(t testing.TB, opts ...Option) *Harness {
 		t.Fatal(err)
 	}
 	if onFakeGit {
-		h.fake = git.NewFake(t)
 		h.fake.Init(h.Repo, map[string]string{".mcp.json": mcpJSON}, "Set up Code Central")
 		return h
 	}
@@ -317,8 +323,11 @@ var seedRepo = sync.OnceValues(func() (string, error) {
 
 // startProxy starts the proxy in front of Server and returns its URL.
 // While the harness is down it drops every connection, as a stopped Code
-// Central would refuse it.
+// Central would refuse it. Under the Fake git it serves the relay
+// (relayPath) itself, down or not: the relay stands in for git, which a
+// Code Central outage doesn't stop.
 func (h *Harness) startProxy() string {
+	fake := h.fake
 	target, err := url.Parse(h.Server.URL)
 	must(h.t, err)
 	rp := httputil.NewSingleHostReverseProxy(target)
@@ -343,6 +352,10 @@ func (h *Harness) startProxy() string {
 		w.WriteHeader(http.StatusBadGateway)
 	}
 	ps := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if fake != nil && r.URL.Path == relayPath {
+			serveRelay(fake, w, r)
+			return
+		}
 		if suffix, _ := h.failing.Load().(string); suffix != "" && strings.HasSuffix(r.URL.Path, suffix) {
 			h.refuse(w, r, http.StatusInternalServerError, `{"code":"internal","message":"failing for the test"}`)
 			return

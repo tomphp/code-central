@@ -24,7 +24,9 @@ type Step struct {
 	CLI []string `json:"cli,omitempty"`
 	// Write writes a file in the worktree.
 	Write *File `json:"write,omitempty"`
-	// Git runs git on PATH with these args in the worktree.
+	// Git runs git with these args in the worktree: git on PATH under
+	// real git, and under the Fake git the Fake's git.Fake.Run, through
+	// the harness's relay (relayPath).
 	Git []string `json:"git,omitempty"`
 	// Need fails the run unless this file is in the worktree.
 	Need string `json:"need,omitempty"`
@@ -130,7 +132,8 @@ func CLI(args ...string) Step { return Step{CLI: args} }
 // WriteFile writes name in the worktree with content.
 func WriteFile(name, content string) Step { return Step{Write: &File{Name: name, Content: content}} }
 
-// Git runs git with args in the worktree.
+// Git runs git with args in the worktree. Under the Fake git, a command
+// it doesn't model (git.Fake.Run) fails the test, naming it.
 func Git(args ...string) Step { return Step{Git: args} }
 
 // NeedFile fails the run unless name is in the worktree.

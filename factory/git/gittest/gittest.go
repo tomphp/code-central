@@ -32,6 +32,11 @@ type Setup struct {
 	// msg, as `git add -A` then `git commit` do, and returns the commit's
 	// ID. It fails when there is nothing to commit.
 	CommitAll func(dir, msg string) (string, error)
+	// Script runs git with args in the worktree dir, as a fake claude's
+	// Script step does, and returns git's output; the error says why it
+	// failed. Its cases use only the commands the Fake git relays for a
+	// Script (git.Fake.Run).
+	Script func(dir string, args ...string) (string, error)
 	// Remote is the folder of an empty bare repository, with main its
 	// HEAD, that the repository at Dir has as its remote origin.
 	Remote string
@@ -50,6 +55,7 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 		return s, repo, must(repo.Commit("main"))(t)
 	}
 	remoteCases(t, open)
+	scriptCases(t, open)
 
 	t.Run("a commit is found by its branch, its full ref, its ID and its short ID", func(t *testing.T) {
 		s, repo, first := open(t)
