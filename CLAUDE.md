@@ -30,6 +30,8 @@ Change a file with Read (`offset` and `limit`) then Edit; for a change in severa
 
 ## Checks
 
+How the tests and CI are organised, and where to put a new test: see `docs/testing.md`.
+
 While working, run `make typecheck` (tsc only: it runs no Vitest; after changing a Go wire type, a doc comment on one, or an operation's route, Audience or input type, `make wiretypes` regenerates the UI's types, then run all of `make vitest`) `make lint F=<file>` (ESLint on one file, or all of `web/`) and `make vitest F=<file>` (they install web dependencies first in a fresh worktree); `make e2e F=web/src/e2e/<file>` builds what `make e2e` builds and runs that one web end-to-end file; `make vitest-stress F=<file>` repeats one file under load to show a flake (`N=`, `LOAD=`); run `make test` once at the end, bare (a hook refuses a pipe): its output is already trimmed and its exit status is the result. It prints only what failed, then one `FAIL <suite> <file or test>` line per failure, and on a failure keeps the whole output in `$TMPDIR/code-central-test-<worktree>-<hash>.log` and prints its path last, so read that file rather than rerunning; failed Vitest files and Go tests killed under load are rerun once serially, and a pass there prints "passed on serial rerun: flaky under load" with exit 0; failures print the load average, and a budget overrun under a load above the core count is a warning; `make test-verbose` prints everything). `make ci-failures RUN=<id>` shows what failed in a CI run.
 
 ## Context report
