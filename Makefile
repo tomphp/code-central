@@ -5,7 +5,7 @@ TEST_BUDGET := 60
 # npm ci writes this; it is newer than the lockfile while node_modules is current.
 WEB_DEPS := web/node_modules/.package-lock.json
 
-.PHONY: test test-verbose typecheck lint vitestvitest-stress e2e scale build web clean hooks context-report ci-failures serve-components build-components corewasm wiretypes demo-store demo
+.PHONY: test test-verbose typecheck lint vitest vitest-stress e2e e2e-run scale build web clean hooks context-report ci-failures serve-components build-components corewasm wiretypes demo-store demo
 
 # Every recipe is one command that runs the same under cmd.exe and POSIX
 # sh, so a Windows developer needs only GNU make. Binaries get .exe there.
@@ -21,11 +21,15 @@ endif
 # happen before the clock starts. It prints one line per passing job and
 # the output of a failing one; test-verbose prints every job's whole
 # output.
+#
+# Heavy suites (make test, make e2e, make vitest without F=) take a
+# machine-wide lock first (internal/heavylock), so sessions that overlap
+# run them one at a time. The budget's clock starts once the lock is held.
 test: $(WEB_DEPS) hooks corewasm
-	@go run ./internal/testrun -budget $(TEST_BUDGET)s
+	@go run ./internal/heavylock -name "make test" -- go run ./internal/testrun -budget $(TEST_BUDGET)s
 
 test-verbose: $(WEB_DEPS) hooks corewasm
-	@go run ./internal/testrun -budget $(TEST_BUDGET)s -v
+	@go run ./internal/heavylock -name "make test-verbose" -- go run ./internal/testrun -budget $(TEST_BUDGET)s -v
 
 # The inner loop while working on the UI: the TypeScript type check, and
 # vitest on one file (F=src/...) or on all of them. Both install web
@@ -40,7 +44,11 @@ lint: $(WEB_DEPS) hooks
 	cd web && node node_modules/eslint/bin/eslint.js $(or $(F:web/%=%),.)
 
 vitest: $(WEB_DEPS) hooks corewasm
+ifeq ($(F),)
+	@go run ./internal/heavylock -name "make vitest" -dir web -- node node_modules/vitest/vitest.mjs run
+else
 	cd web && node node_modules/vitest/vitest.mjs run $(F:web/%=%)
+endif
 
 # Shows a flaky web test: vitest on one file (F=) N times (default 20)
 # while LOAD busy workers (default 4, 0 for none) take the CPU, the way a
@@ -95,10 +103,13 @@ build: web hooks
 # e2e config shares the test setup, so it needs core.wasm too. With
 # F=web/src/e2e/<file> only that web e2e file runs (web's dependencies are
 # installed first); the Go end-to-end tests are skipped.
-e2e: export CODE_CENTRAL_BIN := $(CURDIR)/bin/code-central$(EXE)
-e2e: export CODE_CENTRAL_FACTORY_BIN := $(CURDIR)/bin/code-central-factory$(EXE)
-e2e: export CODE_CENTRAL_FAKE_GH_BIN := $(CURDIR)/bin/fake-gh$(EXE)
-e2e: build corewasm $(if $(F),$(WEB_DEPS))
+e2e:
+	@go run ./internal/heavylock -name "make e2e" -- $(MAKE) --no-print-directory e2e-run $(if $(F),F=$(F))
+
+e2e-run: export CODE_CENTRAL_BIN := $(CURDIR)/bin/code-central$(EXE)
+e2e-run: export CODE_CENTRAL_FACTORY_BIN := $(CURDIR)/bin/code-central-factory$(EXE)
+e2e-run: export CODE_CENTRAL_FAKE_GH_BIN := $(CURDIR)/bin/fake-gh$(EXE)
+e2e-run: build corewasm $(if $(F),$(WEB_DEPS))
 	go build -o bin/fake-gh$(EXE) ./internal/fakegh/gh
 ifeq ($(F),)
 	go test -tags e2e -count=1 ./e2e/
