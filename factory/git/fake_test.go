@@ -12,13 +12,23 @@ import (
 )
 
 func TestFakeGitContract(t *testing.T) {
+	t.Parallel()
 	gittest.Run(t, func(t *testing.T) gittest.Setup {
-		f := git.NewFake(t)
-		dir := t.TempDir()
-		f.Init(dir, map[string]string{"README.md": "Hello\n"}, "First")
+		f, dir, _ := newFake(t)
 		return gittest.Setup{Git: f, Dir: dir, Commit: func(c git.Change) string { return f.MakeCommit(dir, c) }}
 	})
 }
+
+// newFake is a Fake failing tb, with a repository whose main holds
+// README.md, and that repository's folder and first commit.
+func newFake(tb testing.TB) (*git.Fake, string, string) {
+	f := git.NewFake(tb)
+	dir := tb.TempDir()
+	return f, dir, f.Init(dir, map[string]string{"README.md": "Hello\n"}, "First")
+}
+
+// commitFunc makes a commit in a case's repository and returns its ID.
+type commitFunc func(git.Change) string
 
 // recorder is a test's testing.TB that records the failures it is given
 // with Errorf, rather than failing the test.
@@ -32,46 +42,47 @@ func (r *recorder) Errorf(format string, args ...any) {
 }
 
 func TestFakeGitFailsTheTestOnWhatItDoesntModel(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		// do does it in a repository whose main holds README.md.
-		do func(repo git.Repo, commit func(git.Change) string) error
+		do func(t *testing.T, repo git.Repo, commit commitFunc) error
 	}{
-		{"a change of several lines on both sides, merged", func(repo git.Repo, commit func(git.Change) string) error {
+		{"a change of several lines on both sides, merged", func(t *testing.T, repo git.Repo, commit commitFunc) error {
 			ours, theirs := bothSides(commit, map[string]string{"a.txt": "one\ntwo\n"}, map[string]string{"a.txt": "one\nours\n"}, map[string]string{"a.txt": "one\ntheirs\n"})
 			_, _, err := repo.MergeTree(ours, theirs)
 			return err
 		}},
-		{"a change of several lines on both sides, replayed", func(repo git.Repo, commit func(git.Change) string) error {
+		{"a change of several lines on both sides, replayed", func(t *testing.T, repo git.Repo, commit commitFunc) error {
 			ours, theirs := bothSides(commit, map[string]string{"a.txt": "one\ntwo\n"}, map[string]string{"a.txt": "one\nours\n"}, map[string]string{"a.txt": "one\ntheirs\n"})
 			_, _, err := repo.ReplayTree(ours, theirs)
 			return err
 		}},
-		{"an empty file changed on both sides", func(repo git.Repo, commit func(git.Change) string) error {
+		{"an empty file changed on both sides", func(t *testing.T, repo git.Repo, commit commitFunc) error {
 			ours, theirs := bothSides(commit, map[string]string{"a.txt": ""}, map[string]string{"a.txt": "ours\n"}, map[string]string{"a.txt": "theirs\n"})
 			_, _, err := repo.MergeTree(ours, theirs)
 			return err
 		}},
-		{"a file renamed on one side and changed on the other", func(repo git.Repo, commit func(git.Change) string) error {
+		{"a file renamed on one side and changed on the other", func(t *testing.T, repo git.Repo, commit commitFunc) error {
 			base := commit(git.Change{Files: map[string]string{"a.txt": "one\n"}})
 			ours := commit(git.Change{Parents: []string{base}, Files: map[string]string{"b.txt": "one\n"}, Removed: []string{"a.txt"}})
 			theirs := commit(git.Change{Parents: []string{base}, Files: map[string]string{"a.txt": "two\n"}})
 			_, _, err := repo.MergeTree(ours, theirs)
 			return err
 		}},
-		{"a folder renamed on one side and added to on the other", func(repo git.Repo, commit func(git.Change) string) error {
+		{"a folder renamed on one side and added to on the other", func(t *testing.T, repo git.Repo, commit commitFunc) error {
 			base := commit(git.Change{Files: map[string]string{"d/a.txt": "one\n"}})
 			ours := commit(git.Change{Parents: []string{base}, Files: map[string]string{"e/a.txt": "one\n"}, Removed: []string{"d/a.txt"}})
 			theirs := commit(git.Change{Parents: []string{base}, Files: map[string]string{"d/b.txt": "b\n"}})
 			_, _, err := repo.MergeTree(ours, theirs)
 			return err
 		}},
-		{"a file on one side where the other has a folder", func(repo git.Repo, commit func(git.Change) string) error {
+		{"a file on one side where the other has a folder", func(t *testing.T, repo git.Repo, commit commitFunc) error {
 			ours, theirs := bothSides(commit, map[string]string{"a.txt": "one\n"}, map[string]string{"p": "file\n"}, map[string]string{"p/q.txt": "q\n"})
 			_, _, err := repo.MergeTree(ours, theirs)
 			return err
 		}},
-		{"several merge bases", func(repo git.Repo, commit func(git.Change) string) error {
+		{"several merge bases", func(t *testing.T, repo git.Repo, commit commitFunc) error {
 			base := commit(git.Change{Files: map[string]string{"a.txt": "one\n"}})
 			x := commit(git.Change{Parents: []string{base}, Files: map[string]string{"x.txt": "x\n"}})
 			y := commit(git.Change{Parents: []string{base}, Files: map[string]string{"y.txt": "y\n"}})
@@ -80,26 +91,25 @@ func TestFakeGitFailsTheTestOnWhatItDoesntModel(t *testing.T) {
 			_, _, err := repo.MergeTree(xy, yx)
 			return err
 		}},
-		{"revision syntax", func(repo git.Repo, commit func(git.Change) string) error {
+		{"revision syntax", func(t *testing.T, repo git.Repo, commit commitFunc) error {
 			_, err := repo.Commit("main^")
 			return err
 		}},
-		{"a push", func(repo git.Repo, commit func(git.Change) string) error {
+		{"a push", func(t *testing.T, repo git.Repo, commit commitFunc) error {
 			_, err := repo.Push(context.Background(), "origin", "main", "")
 			return err
 		}},
-		{"a fast-forward in a worktree", func(repo git.Repo, commit func(git.Change) string) error {
+		{"a fast-forward in a worktree", func(t *testing.T, repo git.Repo, commit commitFunc) error {
 			_, err := repo.FastForward(t.TempDir(), "main")
 			return err
 		}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			rec := &recorder{TB: t}
-			f := git.NewFake(rec)
-			dir := t.TempDir()
-			f.Init(dir, map[string]string{"README.md": "Hello\n"}, "First")
+			f, dir, _ := newFake(rec)
 
-			err := c.do(f.Open(dir), func(change git.Change) string { return f.MakeCommit(dir, change) })
+			err := c.do(t, f.Open(dir), func(change git.Change) string { return f.MakeCommit(dir, change) })
 			if err == nil {
 				t.Error("it succeeded, want an error")
 			}
@@ -112,16 +122,16 @@ func TestFakeGitFailsTheTestOnWhatItDoesntModel(t *testing.T) {
 
 // bothSides commits base, and ours and theirs on it, returning ours and
 // theirs.
-func bothSides(commit func(git.Change) string, base, ours, theirs map[string]string) (string, string) {
+func bothSides(commit commitFunc, base, ours, theirs map[string]string) (string, string) {
 	b := commit(git.Change{Files: base})
 	return commit(git.Change{Parents: []string{b}, Files: ours}), commit(git.Change{Parents: []string{b}, Files: theirs})
 }
 
 func TestFakeGitIDsAreTheirContent(t *testing.T) {
+	t.Parallel()
+	fortyHex := regexp.MustCompile(`^[0-9a-f]{40}$`)
 	commits := func(msg string) (*git.Fake, string, string) {
-		f := git.NewFake(t)
-		dir := t.TempDir()
-		first := f.Init(dir, map[string]string{"README.md": "Hello\n"}, "First")
+		f, dir, first := newFake(t)
 		return f, dir, f.MakeCommit(dir, git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n"}, Message: msg})
 	}
 	f, dir, c := commits("Second")
@@ -129,7 +139,7 @@ func TestFakeGitIDsAreTheirContent(t *testing.T) {
 	_, _, other := commits("Other")
 	repo := f.Open(dir)
 
-	if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(c) {
+	if !fortyHex.MatchString(c) {
 		t.Errorf("ID %q isn't 40 hex digits", c)
 	}
 	if again != c {
@@ -145,7 +155,7 @@ func TestFakeGitIDsAreTheirContent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(tree) || tree == c {
+	if !fortyHex.MatchString(tree) || tree == c {
 		t.Errorf("tree ID %q isn't 40 hex digits of its own", tree)
 	}
 }

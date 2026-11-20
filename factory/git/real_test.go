@@ -14,6 +14,7 @@ import (
 )
 
 func TestRealGitContract(t *testing.T) {
+	t.Parallel()
 	binary, err := exec.LookPath("git")
 	if err != nil {
 		t.Fatal(err)
@@ -64,6 +65,7 @@ type realRepository struct {
 	environ []string
 }
 
+// commit makes c and returns its ID, as gittest.Setup's Commit does.
 func (r realRepository) commit(c git.Change) string {
 	r.t.Helper()
 	index := []string{"GIT_INDEX_FILE=" + filepath.Join(r.t.TempDir(), "index")}

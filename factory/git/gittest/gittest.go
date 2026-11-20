@@ -29,13 +29,22 @@ type Setup struct {
 }
 
 // Run runs the contract suite, with newGit setting up each case's git.
+// The cases run in parallel.
 func Run(t *testing.T, newGit func(t *testing.T) Setup) {
-	t.Run("a commit is found by its branch, its full ref, its ID and its short ID", func(t *testing.T) {
+	// open sets up a case's git, running the case in parallel with the
+	// others, and opens its repository, returning it with the commit
+	// main is at.
+	open := func(t *testing.T) (Setup, git.Repo, string) {
+		t.Parallel()
 		s := newGit(t)
 		repo := s.Git.Open(s.Dir)
-		main := must(repo.Commit("refs/heads/main"))(t)
-		c := s.Commit(git.Change{Parents: []string{main}, Files: map[string]string{"a.txt": "one\n"}})
-		ok(t, repo.UpdateRef("refs/heads/topic", c, ""))
+		return s, repo, must(repo.Commit("main"))(t)
+	}
+
+	t.Run("a commit is found by its branch, its full ref, its ID and its short ID", func(t *testing.T) {
+		s, repo, first := open(t)
+		c := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n"}})
+		noError(t, repo.UpdateRef("refs/heads/topic", c, ""))
 
 		for _, rev := range []string{"topic", "refs/heads/topic", c, c[:7]} {
 			if got := must(repo.Commit(rev))(t); got != c {
@@ -48,86 +57,63 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 	})
 
 	t.Run("a one-line change on both sides conflicts on merge", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
+		s, repo, _ := open(t)
 		base := s.Commit(git.Change{Files: map[string]string{"a.txt": "one\n", "b.txt": "b\n"}})
 		ours := s.Commit(git.Change{Parents: []string{base}, Files: map[string]string{"a.txt": "ours\n"}})
 		theirs := s.Commit(git.Change{Parents: []string{base}, Files: map[string]string{"a.txt": "theirs\n", "b.txt": "theirs\n"}})
 
-		if _, conflicts := mergeTree(t, repo, ours, theirs); !slices.Equal(conflicts, []string{"a.txt"}) {
-			t.Errorf("conflicts = %q, want a.txt", conflicts)
-		}
+		checkConflicts(t, repo, ours, theirs)
 	})
 
 	t.Run("a file added on both sides with different lines conflicts on merge", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
+		s, repo, _ := open(t)
 		base := s.Commit(git.Change{Files: map[string]string{"b.txt": "b\n"}})
 		ours := s.Commit(git.Change{Parents: []string{base}, Files: map[string]string{"a.txt": "ours\n"}})
 		theirs := s.Commit(git.Change{Parents: []string{base}, Files: map[string]string{"a.txt": "theirs\n"}})
 
-		if _, conflicts := mergeTree(t, repo, ours, theirs); !slices.Equal(conflicts, []string{"a.txt"}) {
-			t.Errorf("conflicts = %q, want a.txt", conflicts)
-		}
+		checkConflicts(t, repo, ours, theirs)
 	})
 
 	t.Run("a file changed on one side and deleted on the other conflicts on merge", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
+		s, repo, _ := open(t)
 		base := s.Commit(git.Change{Files: map[string]string{"a.txt": "one\n", "b.txt": "b\n"}})
 		ours := s.Commit(git.Change{Parents: []string{base}, Files: map[string]string{"a.txt": "ours\n"}})
 		theirs := s.Commit(git.Change{Parents: []string{base}, Removed: []string{"a.txt"}})
 
-		if _, conflicts := mergeTree(t, repo, ours, theirs); !slices.Equal(conflicts, []string{"a.txt"}) {
-			t.Errorf("conflicts = %q, want a.txt", conflicts)
-		}
+		checkConflicts(t, repo, ours, theirs)
 	})
 
 	t.Run("a change on one side merges cleanly, whichever side made it", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
+		s, repo, _ := open(t)
 		base := s.Commit(git.Change{Files: map[string]string{"a.txt": "one\n", "b.txt": "b\n"}})
 		changed := s.Commit(git.Change{Parents: []string{base}, Files: map[string]string{"a.txt": "two\nlines\n"}, Removed: []string{"b.txt"}})
 		other := s.Commit(git.Change{Parents: []string{base}, Message: "Nothing changed"})
 
-		want := must(repo.TreeOf(changed))(t)
-		for _, sides := range [][2]string{{changed, other}, {other, changed}} {
-			if tree, conflicts := mergeTree(t, repo, sides[0], sides[1]); conflicts != nil || tree != want {
-				t.Errorf("MergeTree(%s, %s) = %s, %q, want %s and no conflicts", sides[0], sides[1], tree, conflicts, want)
-			}
-		}
+		checkMerge(t, repo, changed, other, changed)
+		checkMerge(t, repo, other, changed, changed)
 	})
 
 	t.Run("the same change on both sides merges cleanly", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
+		s, repo, _ := open(t)
 		base := s.Commit(git.Change{Files: map[string]string{"a.txt": "one\n", "b.txt": "b\n"}})
 		ours := s.Commit(git.Change{Parents: []string{base}, Files: map[string]string{"a.txt": "two\nlines\n", "c.txt": "new\n"}, Message: "Ours"})
 		theirs := s.Commit(git.Change{Parents: []string{base}, Files: map[string]string{"a.txt": "two\nlines\n", "c.txt": "new\n"}, Message: "Theirs"})
 
-		tree, conflicts := mergeTree(t, repo, ours, theirs)
-		if want := must(repo.TreeOf(ours))(t); conflicts != nil || tree != want {
-			t.Errorf("MergeTree = %s, %q, want %s and no conflicts", tree, conflicts, want)
-		}
+		checkMerge(t, repo, ours, theirs, ours)
 	})
 
 	t.Run("changes to different files on each side merge cleanly into both", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
+		s, repo, _ := open(t)
 		base := s.Commit(git.Change{Files: map[string]string{"a.txt": "one\n", "b.txt": "b\n", "c.txt": "c\n"}})
 		ours := s.Commit(git.Change{Parents: []string{base}, Files: map[string]string{"a.txt": "ours\n", "d/new.txt": "new\n"}})
 		theirs := s.Commit(git.Change{Parents: []string{base}, Files: map[string]string{"b.txt": "theirs\n"}, Removed: []string{"c.txt"}})
 		both := s.Commit(git.Change{Parents: []string{ours}, Files: map[string]string{"b.txt": "theirs\n"}, Removed: []string{"c.txt"}})
 
-		tree, conflicts := mergeTree(t, repo, ours, theirs)
-		if want := must(repo.TreeOf(both))(t); conflicts != nil || tree != want {
-			t.Errorf("MergeTree = %s, %q, want %s and no conflicts", tree, conflicts, want)
-		}
+		checkMerge(t, repo, ours, theirs, both)
 	})
 
 	t.Run("a commit replays onto a base with only its own change, from its parent", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
+		s, repo, _ := open(t)
 		fork := s.Commit(git.Change{Files: map[string]string{"a.txt": "one\n", "b.txt": "b\n"}})
 		earlier := s.Commit(git.Change{Parents: []string{fork}, Files: map[string]string{"b.txt": "branch\n"}})
 		commit := s.Commit(git.Change{Parents: []string{earlier}, Files: map[string]string{"a.txt": "commit\n"}})
@@ -135,45 +121,41 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 		want := s.Commit(git.Change{Parents: []string{base}, Files: map[string]string{"a.txt": "commit\n"}})
 
 		tree, conflicts, err := repo.ReplayTree(base, commit)
-		ok(t, err)
+		noError(t, err)
 		if want := must(repo.TreeOf(want))(t); conflicts != nil || tree != want {
 			t.Errorf("ReplayTree = %s, %q, want %s and no conflicts", tree, conflicts, want)
 		}
 	})
 
 	t.Run("a commit replayed onto a base that changed its line conflicts", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
+		s, repo, _ := open(t)
 		fork := s.Commit(git.Change{Files: map[string]string{"a.txt": "one\n", "b.txt": "b\n"}})
 		earlier := s.Commit(git.Change{Parents: []string{fork}, Files: map[string]string{"b.txt": "branch\n"}})
 		commit := s.Commit(git.Change{Parents: []string{earlier}, Files: map[string]string{"a.txt": "commit\n"}})
 		base := s.Commit(git.Change{Parents: []string{fork}, Files: map[string]string{"a.txt": "base\n"}})
 
 		_, conflicts, err := repo.ReplayTree(base, commit)
-		ok(t, err)
+		noError(t, err)
 		if !slices.Equal(conflicts, []string{"a.txt"}) {
 			t.Errorf("conflicts = %q, want a.txt", conflicts)
 		}
 	})
 
 	t.Run("a root commit doesn't replay", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
+		s, repo, first := open(t)
 		root := s.Commit(git.Change{Files: map[string]string{"a.txt": "one\n"}})
 
-		if tree, _, err := repo.ReplayTree(must(repo.Commit("main"))(t), root); err == nil {
+		if tree, _, err := repo.ReplayTree(first, root); err == nil {
 			t.Errorf("ReplayTree of a root commit = %s, want an error", tree)
 		}
 	})
 
 	t.Run("a fast-forward moves the checked-out branch and its files, keeping changes it doesn't touch", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
-		first := must(repo.Commit("main"))(t)
+		s, repo, first := open(t)
 		next := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n", "d/b.txt": "b\n"}})
 		last := s.Commit(git.Change{Parents: []string{next}, Files: map[string]string{"a.txt": "two\n"}, Removed: []string{"d/b.txt"}})
-		write(t, s.Dir, "README.md", "Changed\n")
-		write(t, s.Dir, "u.txt", "untracked\n")
+		writeFile(t, s.Dir, "README.md", "Changed\n")
+		writeFile(t, s.Dir, "u.txt", "untracked\n")
 
 		fastForward(t, repo, s.Dir, next)
 		checkFolder(t, s.Dir, map[string]string{"README.md": "Changed\n", "u.txt": "untracked\n", "a.txt": "one\n", "d/b.txt": "b\n"})
@@ -185,9 +167,7 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 	})
 
 	t.Run("a fast-forward is refused when the branch has diverged, and moves nothing", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
-		first := must(repo.Commit("main"))(t)
+		s, repo, first := open(t)
 		ours := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "ours\n"}})
 		theirs := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "theirs\n"}})
 		fastForward(t, repo, s.Dir, ours)
@@ -200,32 +180,31 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 	})
 
 	t.Run("a fast-forward stopped by changes in its way moves nothing", func(t *testing.T) {
+		t.Parallel()
 		// A change to a file it changes, and an untracked file where it
 		// adds one.
 		for _, path := range []string{"README.md", "a.txt"} {
-			s := newGit(t)
-			repo := s.Git.Open(s.Dir)
-			first := must(repo.Commit("main"))(t)
-			next := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"README.md": "Bye\n", "a.txt": "one\n"}})
-			write(t, s.Dir, path, "in the way\n")
-			want := map[string]string{"README.md": "Hello\n", path: "in the way\n"}
+			t.Run(path, func(t *testing.T) {
+				s, repo, first := open(t)
+				next := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"README.md": "Bye\n", "a.txt": "one\n"}})
+				writeFile(t, s.Dir, path, "in the way\n")
+				want := map[string]string{"README.md": "Hello\n", path: "in the way\n"}
 
-			if out, err := repo.FastForward(s.Dir, next); err == nil {
-				t.Errorf("FastForward with %s in the way = %q, want an error", path, out)
-			}
-			checkBranch(t, repo, "main", first)
-			checkFolder(t, s.Dir, want)
+				if out, err := repo.FastForward(s.Dir, next); err == nil {
+					t.Errorf("FastForward with %s in the way = %q, want an error", path, out)
+				}
+				checkBranch(t, repo, "main", first)
+				checkFolder(t, s.Dir, want)
+			})
 		}
 	})
 
 	t.Run("a reset moves the branch and its files, keeping changes it doesn't touch", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
-		first := must(repo.Commit("main"))(t)
+		s, repo, first := open(t)
 		next := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n", "d/b.txt": "b\n"}})
 		fastForward(t, repo, s.Dir, next)
-		write(t, s.Dir, "README.md", "Changed\n")
-		write(t, s.Dir, "u.txt", "untracked\n")
+		writeFile(t, s.Dir, "README.md", "Changed\n")
+		writeFile(t, s.Dir, "u.txt", "untracked\n")
 
 		if out, err := repo.Reset(s.Dir, first, next); err != nil {
 			t.Fatalf("Reset: %v: %s", err, out)
@@ -235,12 +214,10 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 	})
 
 	t.Run("a reset stopped by changes in its way moves nothing", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
-		first := must(repo.Commit("main"))(t)
+		s, repo, first := open(t)
 		next := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n"}})
 		fastForward(t, repo, s.Dir, next)
-		write(t, s.Dir, "a.txt", "changed\n")
+		writeFile(t, s.Dir, "a.txt", "changed\n")
 
 		if out, err := repo.Reset(s.Dir, first, next); err == nil {
 			t.Errorf("Reset with a.txt changed = %q, want an error", out)
@@ -250,9 +227,7 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 	})
 
 	t.Run("a reset puts back a branch that moved since the caller looked", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
-		first := must(repo.Commit("main"))(t)
+		s, repo, first := open(t)
 		moved := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n"}})
 		other := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"b.txt": "b\n"}})
 		fastForward(t, repo, s.Dir, moved)
@@ -265,13 +240,11 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 	})
 
 	t.Run("a diverged branch's merge base is where it forked", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
-		first := must(repo.Commit("main"))(t)
+		s, repo, first := open(t)
 		fork := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n"}})
 		ours := s.Commit(git.Change{Parents: []string{fork}, Files: map[string]string{"b.txt": "ours\n"}})
 		theirs := s.Commit(git.Change{Parents: []string{fork}, Files: map[string]string{"c.txt": "theirs\n"}})
-		ok(t, repo.UpdateRef("refs/heads/topic", theirs, ""))
+		noError(t, repo.UpdateRef("refs/heads/topic", theirs, ""))
 
 		if got := must(repo.MergeBase(ours, "topic"))(t); got != fork {
 			t.Errorf("MergeBase = %s, want %s", got, fork)
@@ -287,8 +260,7 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 	})
 
 	t.Run("histories with no common ancestor have no merge base, and don't merge", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
+		s, repo, _ := open(t)
 		unrelated := s.Commit(git.Change{Files: map[string]string{"a.txt": "one\n"}})
 
 		if got, err := repo.MergeBase("main", unrelated); err == nil {
@@ -300,12 +272,10 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 	})
 
 	t.Run("updateRef moves a ref only from the old value it is given", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
-		first := must(repo.Commit("main"))(t)
+		s, repo, first := open(t)
 		one := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n"}})
 		two := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "two\n"}})
-		ok(t, repo.UpdateRef("refs/heads/topic", one, ""))
+		noError(t, repo.UpdateRef("refs/heads/topic", one, ""))
 
 		if err := repo.UpdateRef("refs/heads/topic", two, ""); err == nil {
 			t.Error("UpdateRef of an existing ref, as new, succeeded, want an error")
@@ -317,16 +287,14 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 			t.Error("UpdateRef of a missing ref from an old value succeeded, want an error")
 		}
 		checkBranch(t, repo, "topic", one)
-		ok(t, repo.UpdateRef("refs/heads/topic", two, one))
+		noError(t, repo.UpdateRef("refs/heads/topic", two, one))
 		checkBranch(t, repo, "topic", two)
 	})
 
 	t.Run("deleteRef deletes a ref only at the old value it is given", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
-		first := must(repo.Commit("main"))(t)
+		s, repo, first := open(t)
 		one := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n"}})
-		ok(t, repo.UpdateRef("refs/code-central/fork/x", one, ""))
+		noError(t, repo.UpdateRef("refs/code-central/fork/x", one, ""))
 
 		if err := repo.DeleteRef("refs/code-central/fork/x", first); err == nil {
 			t.Error("DeleteRef at the wrong old value succeeded, want an error")
@@ -335,19 +303,17 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 			t.Error("DeleteRef of a missing ref succeeded, want an error")
 		}
 		checkBranch(t, repo, "refs/code-central/fork/x", one)
-		ok(t, repo.DeleteRef("refs/code-central/fork/x", one))
+		noError(t, repo.DeleteRef("refs/code-central/fork/x", one))
 		if got, err := repo.Commit("refs/code-central/fork/x"); err == nil {
 			t.Errorf("the deleted ref = %s, want an error", got)
 		}
 	})
 
 	t.Run("createBranch makes a branch only where there is none", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
-		first := must(repo.Commit("main"))(t)
+		s, repo, first := open(t)
 		one := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n"}})
 
-		ok(t, repo.CreateBranch("topic", one))
+		noError(t, repo.CreateBranch("topic", one))
 		if err := repo.CreateBranch("topic", first); err == nil {
 			t.Error("CreateBranch of an existing branch succeeded, want an error")
 		}
@@ -355,14 +321,12 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 	})
 
 	t.Run("firstParents is the first-parent line from a commit back to what another reaches, oldest first", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
-		first := must(repo.Commit("main"))(t)
+		s, repo, first := open(t)
 		side := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"s.txt": "side\n"}})
 		one := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n"}})
 		merge := s.Commit(git.Change{Parents: []string{one, side}, Files: map[string]string{"s.txt": "side\n"}})
 		last := s.Commit(git.Change{Parents: []string{merge}, Files: map[string]string{"a.txt": "last\n"}})
-		ok(t, repo.UpdateRef("refs/heads/topic", last, ""))
+		noError(t, repo.UpdateRef("refs/heads/topic", last, ""))
 
 		for _, c := range []struct {
 			exclude string
@@ -381,9 +345,7 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 	})
 
 	t.Run("commitTreeLike keeps the author and message of the commit it is like", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
-		first := must(repo.Commit("main"))(t)
+		s, repo, first := open(t)
 		msg := "Add a.txt\n\nWith a body\nof two lines."
 		like := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n"}, Message: msg, Author: "Ada Lovelace <ada@example.com>"})
 		plain := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n"}, Message: msg})
@@ -406,9 +368,7 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 	})
 
 	t.Run("specBranches are the branches under spec/, and forkPoints the refs under the fork refs", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
-		first := must(repo.Commit("main"))(t)
+		_, repo, first := open(t)
 
 		if got := must(repo.SpecBranches())(t); len(got) != 0 {
 			t.Errorf("SpecBranches = %q, want none", got)
@@ -417,7 +377,7 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 			t.Errorf("ForkPoints = %q, want none", got)
 		}
 		for _, ref := range []string{"refs/heads/spec/b", "refs/heads/spec/a", "refs/heads/specs", "refs/heads/topic", git.ForkRefs + "y", git.ForkRefs + "x", "refs/code-central/other"} {
-			ok(t, repo.UpdateRef(ref, first, ""))
+			noError(t, repo.UpdateRef(ref, first, ""))
 		}
 		if got := must(repo.SpecBranches())(t); !slices.Equal(got, []string{"spec/a", "spec/b"}) {
 			t.Errorf("SpecBranches = %q, want spec/a and spec/b", got)
@@ -428,9 +388,7 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 	})
 
 	t.Run("hasFile reports whether a commit holds a file", func(t *testing.T) {
-		s := newGit(t)
-		repo := s.Git.Open(s.Dir)
-		first := must(repo.Commit("main"))(t)
+		s, repo, first := open(t)
 		one := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"d/a.txt": "one\n"}})
 
 		for _, c := range []struct {
@@ -461,8 +419,9 @@ func checkBranch(t *testing.T, repo git.Repo, branch, commit string) {
 	}
 }
 
-// write writes content to the file at the slash-separated path in dir.
-func write(t *testing.T, dir, path, content string) {
+// writeFile writes content to the file at the slash-separated path in
+// dir.
+func writeFile(t *testing.T, dir, path, content string) {
 	t.Helper()
 	name := filepath.Join(dir, filepath.FromSlash(path))
 	if err := os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
@@ -500,6 +459,25 @@ func checkFolder(t *testing.T, dir string, want map[string]string) {
 	}
 }
 
+// checkMerge fails t unless merging base and head gives commit's tree,
+// with no conflicts.
+func checkMerge(t *testing.T, repo git.Repo, base, head, commit string) {
+	t.Helper()
+	tree, conflicts := mergeTree(t, repo, base, head)
+	if want := must(repo.TreeOf(commit))(t); conflicts != nil || tree != want {
+		t.Errorf("MergeTree(%s, %s) = %s, %q, want %s and no conflicts", base, head, tree, conflicts, want)
+	}
+}
+
+// checkConflicts fails t unless merging base and head conflicts on a.txt
+// alone.
+func checkConflicts(t *testing.T, repo git.Repo, base, head string) {
+	t.Helper()
+	if _, conflicts := mergeTree(t, repo, base, head); !slices.Equal(conflicts, []string{"a.txt"}) {
+		t.Errorf("MergeTree(%s, %s) conflicts on %q, want a.txt", base, head, conflicts)
+	}
+}
+
 // mergeTree is MergeTree of base and head, failing t on an error.
 func mergeTree(t *testing.T, repo git.Repo, base, head string) (string, []string) {
 	t.Helper()
@@ -522,8 +500,8 @@ func must[T any](v T, err error) func(t *testing.T) T {
 	}
 }
 
-// ok fails t on err.
-func ok(t *testing.T, err error) {
+// noError fails t on err.
+func noError(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)

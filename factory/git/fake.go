@@ -40,9 +40,11 @@ const fakeAuthor = "Factory Test <factory@example.com>"
 
 // fakeRepository is one repository in a Fake.
 type fakeRepository struct {
-	// dir is its folder, where branch is checked out.
-	dir     string
-	branch  string
+	// dir is its folder, where the ref head is checked out.
+	dir  string
+	head string
+	// commits and trees are its objects by ID, and refs each ref's
+	// commit by its full name.
 	commits map[string]fakeCommit
 	trees   map[string]fakeTree
 	refs    map[string]string
@@ -51,6 +53,8 @@ type fakeRepository struct {
 // fakeTree is a tree: each file's content by its slash-separated path.
 type fakeTree map[string]string
 
+// fakeCommit is a commit: its tree's ID, its parents' IDs, first parent
+// first, and its author, as "Name <email>", and message.
 type fakeCommit struct {
 	tree    string
 	parents []string
@@ -88,10 +92,10 @@ func (f *Fake) Init(dir string, files map[string]string, msg string) string {
 	if f.repos[dir] != nil {
 		f.tb.Fatalf("fake git: %s holds a repository already", dir)
 	}
-	r := &fakeRepository{dir: dir, branch: "refs/heads/main", commits: map[string]fakeCommit{}, trees: map[string]fakeTree{}, refs: map[string]string{}}
+	r := &fakeRepository{dir: dir, head: "refs/heads/main", commits: map[string]fakeCommit{}, trees: map[string]fakeTree{}, refs: map[string]string{}}
 	tree := fakeTree(maps.Clone(files))
 	c := r.writeCommit(fakeCommit{tree: r.writeTree(tree), author: fakeAuthor, message: msg})
-	r.refs[r.branch] = c
+	r.refs[r.head] = c
 	if err := r.checkOut(fakeTree{}, tree); err != nil {
 		f.tb.Fatal(err)
 	}
@@ -118,7 +122,7 @@ func (f *Fake) MakeCommit(dir string, c Change) string {
 			f.tb.Fatal(err)
 		}
 		if i == 0 {
-			tree = maps.Clone(r.trees[r.commits[id].tree])
+			tree = maps.Clone(r.treeOf(id))
 		}
 		parents = append(parents, id)
 	}
@@ -232,7 +236,7 @@ func (r *fakeRepository) mergeBases(a, b string) []string {
 // one of them has a change of its own or is untracked where commit adds
 // it. A tracked file that is missing isn't a change.
 func (r *fakeRepository) moveTo(commit, command string) (string, error) {
-	was, now := r.treeOf(r.refs[r.branch]), r.treeOf(commit)
+	was, now := r.treeOf(r.refs[r.head]), r.treeOf(commit)
 	var changed, untracked []string
 	for _, p := range touched(was, now) {
 		content, err := os.ReadFile(filepath.Join(r.dir, filepath.FromSlash(p)))
@@ -256,7 +260,7 @@ func (r *fakeRepository) moveTo(commit, command string) (string, error) {
 	if err := r.checkOut(was, now); err != nil {
 		return "", err
 	}
-	r.refs[r.branch] = commit
+	r.refs[r.head] = commit
 	return "", nil
 }
 
@@ -422,16 +426,16 @@ func (g fakeRepo) MergeBase(a, b string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	bases, err := g.mergeBases(r, a, b)
+	bases, err := g.mergeBase(r, a, b)
 	if err != nil {
 		return "", err
 	}
 	return bases, nil
 }
 
-// mergeBases is a and b's one best common ancestor, failing when they
+// mergeBase is a and b's one best common ancestor, failing when they
 // have none; several aren't modelled.
-func (g fakeRepo) mergeBases(r *fakeRepository, a, b string) (string, error) {
+func (g fakeRepo) mergeBase(r *fakeRepository, a, b string) (string, error) {
 	ca, err := g.resolve(r, a)
 	if err != nil {
 		return "", err
@@ -456,7 +460,7 @@ func (g fakeRepo) MergeTree(base, head string) (tree string, conflicts []string,
 	if err != nil {
 		return "", nil, err
 	}
-	mb, err := g.mergeBases(r, base, head)
+	mb, err := g.mergeBase(r, base, head)
 	if err != nil {
 		return "", nil, fmt.Errorf("fatal: refusing to merge unrelated histories: %w", err)
 	}
@@ -679,7 +683,7 @@ func (g fakeRepo) FastForward(dir, commit string) (string, error) {
 	if err != nil {
 		return gitFailed("merge: %s - not something we can merge", commit)
 	}
-	at := r.refs[r.branch]
+	at := r.refs[r.head]
 	switch {
 	case r.ancestors(at)[to]:
 		return "", nil
@@ -702,7 +706,7 @@ func (g fakeRepo) Reset(dir, commit, old string) (string, error) {
 	if err != nil {
 		return gitFailed("fatal: ambiguous argument '%s': unknown revision or path not in the working tree.", commit)
 	}
-	was := r.refs[r.branch]
+	was := r.refs[r.head]
 	if out, err := r.moveTo(to, "reset"); err != nil {
 		return out, err
 	}
