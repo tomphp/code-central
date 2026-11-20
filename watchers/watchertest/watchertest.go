@@ -27,6 +27,7 @@ import (
 
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/internal/fakegh"
+	_ "github.com/tomoram/code-central/wire"
 )
 
 // fakeEnv names the harness's data folder to a test binary run as a fake.

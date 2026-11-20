@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/azdourl"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -65,7 +66,7 @@ func ciEntryFromCloneURL(name, url string) domain.CIRepository {
 		return domain.CIRepository{Name: name, Provider: domain.CIGitHubActions, Repository: repo}
 	case CodeHostAzureRepos:
 		parts := strings.Split(repo, "/")
-		return domain.CIRepository{Name: name, Provider: domain.CIAzurePipelines, ProjectURL: "https://dev.azure.com/" + parts[0] + "/" + parts[1]}
+		return domain.CIRepository{Name: name, Provider: domain.CIAzurePipelines, ProjectURL: azdourl.ProjectURL(parts[0], parts[1])}
 	}
 	return domain.CIRepository{Name: name, NotWatched: true}
 }
