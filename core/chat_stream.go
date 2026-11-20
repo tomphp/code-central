@@ -159,7 +159,7 @@ func (f *ChatFeed) Next() []ChatFrame {
 // snapshot is the Conversation as it stands, as the feed's next frame.
 func (f *ChatFeed) snapshot(cv *conversation, fs map[heartbeatKey]FactoryView) ChatFrame {
 	f.opened = true
-	fr := ChatFrame{Event: ChatEventConversation, Data: f.c.conversationView(cv, fs)}
+	fr := ChatFrame{Event: ChatEventConversation, Data: f.c.conversationView(f.key, cv, fs)}
 	if cv != nil {
 		f.conv, f.after, fr.ID = cv.id, cv.evSeq, cv.evSeq
 	}

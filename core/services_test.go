@@ -205,3 +205,24 @@ func (f failing) TranscriptHolder(project string, ticket, claim int) (store.Tran
 	}
 	return f.Services.TranscriptHolder(project, ticket, claim)
 }
+
+func (f failing) PutPing(p store.Ping) error {
+	if f.s.err != nil {
+		return f.s.err
+	}
+	return f.Services.PutPing(p)
+}
+
+func (f failing) Pings() ([]store.Ping, error) {
+	if f.s.err != nil {
+		return nil, f.s.err
+	}
+	return f.Services.Pings()
+}
+
+func (f failing) PrunePings(before time.Time) error {
+	if f.s.err != nil {
+		return f.s.err
+	}
+	return f.Services.PrunePings(before)
+}

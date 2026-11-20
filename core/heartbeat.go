@@ -123,6 +123,9 @@ type heartbeats struct {
 	// self is this service's ID: a Factory whose Reporting Service is
 	// another lists that service's host.
 	self string
+	// live is each live service's host by ID, as the watch last read the
+	// Store's Registrations, so Chat can name where it runs without a read.
+	live map[string]string
 }
 
 // deadline is how long after h a Factory with no newer Heartbeat goes
@@ -277,10 +280,10 @@ func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeat
 }
 
 // WatchFactoryStatus is the background ticker behind Going Offline with no
-// write. On each tick it reads every Heartbeat and Factory report from the
-// Store, so it sees those other services received (see refreshFactories),
-// then compares every Project's
-// Factory Status, combined and per Factory, with what it saw last time and
+// write. On each tick it reads every ping (see refreshPings), Heartbeat and
+// Factory report from the Store, so it sees those other services received
+// (see refreshFactories), then compares every Project's Factory Status,
+// combined and per Factory, with what it saw last time and
 // calls changed(project) for each Project that differs, or whose Factories
 // another service changed, so live views refetch. It also settles each
 // Conversation (see settleChat), which sends its own chat.changed. The
@@ -292,6 +295,7 @@ func (c *Core) WatchFactoryStatus(ctx context.Context, ticks <-chan time.Time, c
 		case <-ctx.Done():
 			return
 		case <-ticks:
+			c.refreshPings()
 			refreshed := c.refreshFactories()
 			for _, p := range c.factoryStatusChanges() {
 				if !slices.Contains(refreshed, p) {

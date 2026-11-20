@@ -906,6 +906,11 @@ export interface ConversationView {
   session_id?: string;
   resume_command?: string;
   messages: ChatMessageView[];
+  // RunsOn is the host of another live service sharing the Store that
+  // an Online Factory with Chat support reports to, when none reports
+  // to this one: Chat runs there (Spec code-central-1107). Empty when
+  // Chat runs here, or nowhere.
+  runs_on?: string;
 }
 
 // OptionsView is the Options as every front door shows them.
