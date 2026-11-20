@@ -3,11 +3,14 @@
 // chips while the Project has several, the clickable Stage strip (its
 // Map segment linking to the Map it was made from, if any), what it waits
 // for, its body (the text, then the Spec) collapsed, its Tags, and under Build the sums of its implementation Tickets' CI badges
-// and those Tickets with their States.
+// and those Tickets with their States, above them their Ticket graph when
+// one Build Ticket blocks another.
 import type { SpecDetail } from "../api/types";
 import { RepositoryChips } from "../controls/RepositoryChips";
 import { useApi } from "../live";
 import { BodySection } from "../edit/BodySection";
+import { hasEdge } from "../graph/edges";
+import { TicketGraph } from "../graph/TicketGraph";
 import { LandPerSpec } from "../spec/LandPerSpec";
 import { SpecAutoAccept } from "../spec/SpecAutoAccept";
 import { SpecTags } from "../spec/SpecTags";
@@ -70,6 +73,7 @@ export function RequirementPane({ spec, archived, now, ticket, select, specLink 
       <BodySection api={api} spec={spec} heading={specDone ? "Spec" : "Requirement's text"} />
       <SpecTags spec={spec} archived={archived} />
       <CISums tickets={build} />
+      {hasEdge(build) && <TicketGraph tickets={build} label="Build graph" ticket={ticket} select={select} />}
       {build.length > 0 && <TicketList label="Build" tickets={build} now={now} ticket={ticket} select={select} />}
       <RetroList retros={spec.retros} select={select} />
     </section>
