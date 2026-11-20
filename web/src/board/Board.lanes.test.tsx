@@ -263,7 +263,7 @@ describe("the Board's Spec popup", () => {
     await renderApp(fake, bySpec);
     loaded();
     await openLane("Login");
-    await click(within(popup()).getByRole("button", { name: /Login form/ }));
+    await click(within(within(popup()).getByRole("list", { name: "Tickets" })).getByRole("button", { name: /Login form/ }));
     const ticket = screen.getByRole("dialog", { name: "Ticket popup" });
     expect(within(ticket).getByRole("heading", { name: /Login form/ })).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Spec popup" })).toBeNull();
