@@ -300,3 +300,78 @@ func TestGitVersionSetsTheFakeGitsVersion(t *testing.T) {
 		t.Errorf("the Fake git's version is %q, %v", v, err)
 	}
 }
+
+func TestAScriptsGitStepsCommitAndTheFactoryLandsThemOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		id := h.ReadyTicket("Add a feature")
+		h.Script(id,
+			WriteFile("feature.txt", "feature\n"),
+			Git("add", "feature.txt"),
+			Git("commit", "-q", "-m", "Add a feature"),
+			CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", "Added.", "--branch", "{{ticket}}", "--commit", "{{head}}"),
+			Result("success"))
+		oldMain := h.Tip("main")
+
+		r := h.Start()
+		tk := h.WantState(id, domain.InReview)
+		commit := h.Tip(id)
+		if tk.Commit != commit {
+			t.Errorf("finished with %q, want the Script's commit %s", tk.Commit, commit)
+		}
+		if got, want := h.Parents(commit), []string{oldMain}; !slices.Equal(got, want) {
+			t.Errorf("the Script's commit has parents %q, want %q", got, want)
+		}
+		h.Accept(id)
+		r.Poll()
+		h.WantState(id, domain.Done)
+
+		if got, want := h.Parents(h.Tip("main")), []string{oldMain, commit}; !slices.Equal(got, want) {
+			t.Errorf("main's tip has parents %q, want %q", got, want)
+		}
+		if got, want := h.Log(commit), []string{"Add a feature", "Set up Code Central"}; !slices.Equal(got, want) {
+			t.Errorf("Log(%s) = %q, want %q", commit, got, want)
+		}
+		if got := h.File("main", "feature.txt"); got != "feature\n" {
+			t.Errorf("main's feature.txt is %q", got)
+		}
+	})
+}
+
+// errorfT is a testing.TB that records what fails the test with Errorf,
+// from any goroutine, rather than failing it.
+type errorfT struct {
+	testing.TB
+	mu     sync.Mutex
+	errors []string
+}
+
+func (e *errorfT) Helper() {}
+func (e *errorfT) Errorf(format string, args ...any) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.errors = append(e.errors, fmt.Sprintf(format, args...))
+}
+func (e *errorfT) failed() string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return strings.Join(e.errors, "\n")
+}
+
+func TestAScriptsGitStepTheFakeGitDoesntModelFailsTheTestNamingTheCommand(t *testing.T) {
+	t.Parallel()
+	et := &errorfT{TB: t}
+	h := New(et, FakeGit())
+	if h.fake == nil {
+		t.Skip(gitEnv + "=real runs every Harness on real git")
+	}
+	id := h.ReadyTicket("Add a feature")
+	h.Script(id, Git("stash", "push"), Result("success"))
+
+	h.Start()
+	h.WaitFor("the Fake git to fail the test", func() bool { return et.failed() != "" })
+	if got := et.failed(); !strings.Contains(got, "not modelled") || !strings.Contains(got, "git stash push") {
+		t.Errorf("the step failed the test with %q, want it to name git stash push as not modelled", got)
+	}
+}

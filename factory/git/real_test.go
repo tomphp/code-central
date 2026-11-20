@@ -31,7 +31,7 @@ func TestRealGitContract(t *testing.T) {
 		remote := filepath.Join(t.TempDir(), "remote.git")
 		r.git(nil, "", "init", "-q", "--bare", "-b", "main", remote)
 		r.git(nil, "", "remote", "add", "origin", remote)
-		return gittest.Setup{Git: git.Real{Binary: binary, Environ: r.environ}, Dir: r.dir, Commit: r.commit, CommitAll: r.commitAll, Remote: remote}
+		return gittest.Setup{Git: git.Real{Binary: binary, Environ: r.environ}, Dir: r.dir, Commit: r.commit, CommitAll: r.commitAll, Script: r.script, Remote: remote}
 	})
 }
 
@@ -114,6 +114,12 @@ func (r realRepository) commitAll(dir, msg string) (string, error) {
 		commit = out
 	}
 	return commit, nil
+}
+
+// script runs git with args in the worktree dir, as gittest.Setup's
+// Script does.
+func (r realRepository) script(dir string, args ...string) (string, error) {
+	return r.run(dir, nil, "", args...)
 }
 
 // git runs git in the repository with env added to its environment and

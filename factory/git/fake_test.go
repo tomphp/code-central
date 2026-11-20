@@ -17,7 +17,7 @@ func TestFakeGitContract(t *testing.T) {
 	t.Parallel()
 	gittest.Run(t, func(t *testing.T) gittest.Setup {
 		f, dir, _, remote := newFakeWithRemote(t)
-		return gittest.Setup{Git: f, Dir: dir, Commit: func(c git.Change) string { return f.MakeCommit(dir, c) }, CommitAll: f.CommitAll, Remote: remote}
+		return gittest.Setup{Git: f, Dir: dir, Commit: func(c git.Change) string { return f.MakeCommit(dir, c) }, CommitAll: f.CommitAll, Script: f.Run, Remote: remote}
 	})
 }
 
@@ -186,6 +186,62 @@ func TestFakeGitFailsTheTestOnARepositoryOpenedInsideAWorktree(t *testing.T) {
 	}
 	if len(rec.failures) != 1 || !strings.Contains(rec.failures[0], "not modelled") {
 		t.Errorf("the test's failures = %q, want one that it isn't modelled", rec.failures)
+	}
+}
+
+func TestFakeGitsRunFailsTheTestOnWhatItDoesntModelNamingTheCommand(t *testing.T) {
+	t.Parallel()
+	for _, args := range [][]string{
+		nil,
+		{"stash"},
+		{"rev-parse", "main"},
+		{"commit", "--amend", "-m", "Again"},
+		{"commit", "-a", "-m", "All"},
+		{"commit", "-qm", "Both"},
+		{"add", "-p"},
+		{"add", "*.md"},
+		{"add", "../outside.txt"},
+		{"rm", "--cached", "README.md"},
+		{"checkout", "--", "README.md"},
+		{"checkout", "nothing"},
+	} {
+		t.Run(strings.Join(append([]string{"git"}, args...), " "), func(t *testing.T) {
+			t.Parallel()
+			rec := &recorder{TB: t}
+			f, dir, _ := newFake(rec)
+
+			if out, err := f.Run(dir, args...); err == nil {
+				t.Errorf("it succeeded with %q, want an error", out)
+			}
+			if want := strings.TrimSpace("git " + strings.Join(args, " ")); len(rec.failures) != 1 || !strings.Contains(rec.failures[0], "not modelled") || !strings.Contains(rec.failures[0], want) {
+				t.Errorf("the test's failures = %q, want one that %s isn't modelled", rec.failures, want)
+			}
+		})
+	}
+}
+
+func TestFakeGitFailsTheTestOnAMoveWithChangesStaged(t *testing.T) {
+	t.Parallel()
+	rec := &recorder{TB: t}
+	f, dir, first := newFake(rec)
+	repo := f.Open(dir)
+	next := f.MakeCommit(dir, git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "a\n"}})
+	writeFile(t, filepath.Join(dir, "b.txt"), "b\n")
+	if _, err := f.Run(dir, "add", "b.txt"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := repo.FastForward(dir, next); err == nil {
+		t.Error("it succeeded, want an error")
+	}
+	if _, err := f.Run(dir, "checkout", "-q", "--detach"); err == nil {
+		t.Error("checkout succeeded, want an error")
+	}
+	if len(rec.failures) != 2 || !strings.Contains(rec.failures[0], "not modelled") || !strings.Contains(rec.failures[0], "staged") {
+		t.Errorf("the test's failures = %q, want two that a move with changes staged isn't modelled", rec.failures)
+	}
+	if got, err := repo.Commit("main"); err != nil || got != first {
+		t.Errorf("main = %s, %v, want it left at %s", got, err, first)
 	}
 }
 

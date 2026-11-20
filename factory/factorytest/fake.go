@@ -173,7 +173,7 @@ func runFakeClaude(data string, args []string) int {
 
 	fill := func(s string) string {
 		s = strings.NewReplacer("{{ticket}}", c.Ticket, "{{claim}}", c.Claim, "{{session}}", c.Session).Replace(s)
-		return headPlaceholder.ReplaceAllStringFunc(s, func(m string) string { return headIn(c, headPlaceholder.FindStringSubmatch(m)[1]) })
+		return headPlaceholder.ReplaceAllStringFunc(s, func(m string) string { return headIn(data, c, headPlaceholder.FindStringSubmatch(m)[1]) })
 	}
 	fillAll := func(args []string) []string {
 		var filled []string
@@ -206,10 +206,11 @@ func runFakeClaude(data string, args []string) int {
 			}
 		case s.Git != nil:
 			filled := fillAll(s.Git)
-			cmd := exec.Command("git", filled...)
-			cmd.Dir = dir
-			cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
-			if err := cmd.Run(); err != nil {
+			out, err := runGit(data, dir, filled)
+			if out != "" {
+				fmt.Fprintln(os.Stderr, out)
+			}
+			if err != nil {
 				fmt.Fprintf(os.Stderr, "fake claude: git %s: %v\n", strings.Join(filled, " "), err)
 				return 70
 			}
@@ -238,20 +239,42 @@ var headPlaceholder = regexp.MustCompile(`\{\{head(?::([^}]+))?\}\}`)
 // repository in the run c, or of the run's own for "": what a session
 // reads to finish with. It is "" when it can't be read, which the
 // finish then refuses.
-func headIn(c Call, repository string) string {
+func headIn(data string, c Call, repository string) string {
 	dir, err := stepDir(Step{In: repository}, c)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fake claude:", err)
 		return ""
 	}
-	cmd := exec.Command("git", "rev-parse", "HEAD")
-	cmd.Dir = dir
-	out, err := cmd.Output()
+	out, err := runGit(data, dir, []string{"rev-parse", "HEAD"})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fake claude: git rev-parse HEAD:", err)
 		return ""
 	}
-	return strings.TrimSpace(string(out))
+	return out
+}
+
+// runGit runs git with args in dir, or the run's working directory for
+// "", and returns its trimmed output: through the harness's relay to the
+// Fake git when the data folder names one (relayFile), else on real git,
+// passing on what git prints to stderr.
+func runGit(data, dir string, args []string) (string, error) {
+	url, err := os.ReadFile(filepath.Join(data, relayFile))
+	switch {
+	case err == nil:
+		if dir == "" {
+			if dir, err = os.Getwd(); err != nil {
+				return "", err
+			}
+		}
+		return relayGit(string(url), dir, args)
+	case !os.IsNotExist(err):
+		return "", err
+	}
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Stderr = os.Stderr
+	out, err := cmd.Output()
+	return strings.TrimSpace(string(out)), err
 }
 
 // stepDir is where s runs in the run c: the worktree of the Repository

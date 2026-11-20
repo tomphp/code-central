@@ -4,7 +4,12 @@
 package factorytest
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,12 +28,15 @@ type options struct {
 
 // RealGit runs the Factory, and the harness's repositories, on real git,
 // as New does by default; a test that needs raw git (Git, GitIn,
-// Remote.Git, a fake claude's Git Script steps) names it.
+// Remote.Git, or a fake claude's Git Script steps beyond what the Fake
+// git models) names it.
 func RealGit() Option { return func(o *options) { o.fakeGit = false } }
 
 // FakeGit runs the Factory, and the harness's repositories, on the Fake
 // git (git.Fake): in memory, with no git process. The test reads and
-// changes them only through the typedHelpers; raw git fails it. gitEnv set
+// changes them only through the typedHelpers; raw git fails it. A fake
+// claude's Git Script steps run on the Fake through the relay
+// (relayPath). gitEnv set
 // to "real" runs it on real git all the same.
 func FakeGit() Option { return func(o *options) { o.fakeGit = true } }
 
@@ -384,4 +392,73 @@ func (h *Harness) moveBranch(dir, branch, commit, old string) {
 		return
 	}
 	must(h.t, g.UpdateRef("refs/heads/"+branch, commit, old))
+}
+
+// relayPath is the harness-only route on the proxy, there only under the
+// Fake git, that a fake claude posts its Git Script steps to (relayStep)
+// for the harness to run on the Fake git (relayResult). The proxy never
+// forwards it to Code Central.
+const relayPath = "/factorytest/git"
+
+// relayFile, in the data folder, holds the relay's URL under the Fake git:
+// a fake claude runs its Git steps there rather than on real git.
+const relayFile = "relay.txt"
+
+// relayStep is a Git Script step a fake claude posts to the relay: git's
+// args, to run in the worktree dir, an absolute path.
+type relayStep struct {
+	Dir  string   `json:"dir"`
+	Args []string `json:"args"`
+}
+
+// relayResult is the relay's answer to a relayStep: git's trimmed output,
+// and why it failed, if it did.
+type relayResult struct {
+	Output string `json:"output"`
+	Error  string `json:"error,omitempty"`
+}
+
+// serveRelay runs the relayStep r posts on the Fake git fake and answers
+// with its relayResult. A step the Fake git doesn't model fails the test,
+// naming the command, as well as the step.
+func serveRelay(fake *git.Fake, w http.ResponseWriter, r *http.Request) {
+	var step relayStep
+	if err := json.NewDecoder(r.Body).Decode(&step); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	var res relayResult
+	out, err := fake.Run(step.Dir, step.Args...)
+	res.Output = out
+	if err != nil {
+		res.Error = err.Error()
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(res)
+}
+
+// relayGit runs a Git Script step through the relay at url, for a fake
+// claude under the Fake git: git's args in dir, an absolute path.
+func relayGit(url, dir string, args []string) (string, error) {
+	b, err := json.Marshal(relayStep{Dir: dir, Args: args})
+	if err != nil {
+		return "", err
+	}
+	resp, err := http.Post(url, "application/json", bytes.NewReader(b))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("relay: %s: %s", resp.Status, bytes.TrimSpace(body))
+	}
+	var res relayResult
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return "", fmt.Errorf("relay: %w", err)
+	}
+	if res.Error != "" {
+		return res.Output, errors.New(res.Error)
+	}
+	return res.Output, nil
 }

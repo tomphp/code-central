@@ -1,17 +1,22 @@
 package factorytest
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/factory/git"
 
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
@@ -176,4 +181,64 @@ func TestLoseAnswerLogsTheCutNamingTheRequest(t *testing.T) {
 		t.Fatalf("second request: %v, want it through", err)
 	}
 	resp.Body.Close()
+}
+
+// postRelay posts a step to run rev-parse HEAD in dir to the relay of the
+// proxy at url and returns the answer's status and body.
+func postRelay(t *testing.T, url, dir string) (int, string) {
+	t.Helper()
+	b, err := json.Marshal(relayStep{Dir: dir, Args: []string{"rev-parse", "HEAD"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.Post(url+relayPath, "application/json", bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(body)
+}
+
+func TestTheProxyRunsTheRelayOnTheFakeGitAndNeverForwardsIt(t *testing.T) {
+	var forwarded atomic.Int64
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { forwarded.Add(1) }))
+	t.Cleanup(up.Close)
+	ft := &fakeT{TB: t}
+	defer ft.finish()
+	fake := git.NewFake(t)
+	dir := t.TempDir()
+	head := fake.Init(dir, map[string]string{"README.md": "Hello\n"}, "First")
+	h := &Harness{t: ft, Server: &codecentraltest.Server{URL: up.URL}, refused: map[string]int64{}, fake: fake}
+	url := h.startProxy()
+
+	status, body := postRelay(t, url, dir)
+	var res relayResult
+	if err := json.Unmarshal([]byte(body), &res); status != http.StatusOK || err != nil || res != (relayResult{Output: head}) {
+		t.Errorf("the relay answered %d %s, want 200 with the output %s", status, body, head)
+	}
+	if n := forwarded.Load(); n != 0 {
+		t.Errorf("Code Central saw %d requests, want the relay never forwarded", n)
+	}
+}
+
+func TestTheProxyHasNoRelayUnderRealGit(t *testing.T) {
+	var paths []string
+	var mu sync.Mutex
+	ft, url := proxyTo(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		paths = append(paths, r.URL.Path)
+		mu.Unlock()
+		http.NotFound(w, r)
+	}))
+	defer ft.finish()
+
+	if status, body := postRelay(t, url, t.TempDir()); status != http.StatusNotFound {
+		t.Errorf("the relay answered %d %s, want Code Central's 404", status, body)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if !slices.Equal(paths, []string{relayPath}) {
+		t.Errorf("Code Central saw %q, want the relay's path forwarded to it", paths)
+	}
 }

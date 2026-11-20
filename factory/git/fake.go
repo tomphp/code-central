@@ -78,6 +78,9 @@ type fakeWorktree struct {
 	// head is the full name of the branch checked out there, or the
 	// commit when it is detached.
 	head string
+	// staged is its index when a Script's add or rm (Fake.Run) has
+	// staged a change there; nil is the tree of what is checked out.
+	staged fakeTree
 }
 
 // branch is the name of the branch checked out in w, or "" when it is
@@ -208,6 +211,7 @@ func (f *Fake) CommitAll(dir, msg string) (string, error) {
 	}
 	c := r.writeCommit(fakeCommit{tree: r.writeTree(folder), parents: []string{parent}, author: fakeAuthor, message: msg})
 	r.setAt(w, c)
+	w.staged = nil
 	return c, nil
 }
 
@@ -337,8 +341,12 @@ func (r *fakeRepository) mergeBases(a, b string) []string {
 // command does: it writes into its folder only the files that differ
 // between the two commits, and refuses, with git's account of why, when
 // one of them has a change of its own or is untracked where commit adds
-// it. A tracked file that is missing isn't a change.
-func (r *fakeRepository) moveTo(w *fakeWorktree, commit, command string) (string, error) {
+// it. A tracked file that is missing isn't a change. A move with changes
+// staged isn't modelled.
+func (g fakeRepo) moveTo(r *fakeRepository, w *fakeWorktree, commit, command string) (string, error) {
+	if w.staged != nil {
+		return "", g.f.notModelled("a %s in %s, with changes staged", command, w.dir)
+	}
 	was, now := r.treeOf(r.at(w)), r.treeOf(commit)
 	var changed, untracked []string
 	for _, p := range touched(was, now) {
@@ -903,7 +911,7 @@ func (g fakeRepo) FastForward(dir, commit string) (string, error) {
 	case !r.ancestors(to)[at]:
 		return gitFailed("fatal: Not possible to fast-forward, aborting.")
 	}
-	return r.moveTo(w, to, "merge")
+	return g.moveTo(r, w, to, "merge")
 }
 
 func (g fakeRepo) Reset(dir, commit, old string) (string, error) {
@@ -921,13 +929,13 @@ func (g fakeRepo) Reset(dir, commit, old string) (string, error) {
 		return gitFailed("fatal: ambiguous argument '%s': unknown revision or path not in the working tree.", commit)
 	}
 	was := r.at(w)
-	if out, err := r.moveTo(w, to, "reset"); err != nil {
+	if out, err := g.moveTo(r, w, to, "reset"); err != nil {
 		return out, err
 	}
 	// As Real's does, a reset of a branch that moved since the caller
 	// looked puts it back.
 	if was != old {
-		if out, err := r.moveTo(w, was, "reset"); err != nil {
+		if out, err := g.moveTo(r, w, was, "reset"); err != nil {
 			return out, fmt.Errorf("the branch moved to %s meanwhile, and can't be put back: %w", was, err)
 		}
 		return "", fmt.Errorf("the branch moved to %s meanwhile", was)
@@ -1084,27 +1092,53 @@ func (g fakeRepo) Status(dir string) (string, error) {
 	return g.status(r, w)
 }
 
-// status is Status of the worktree w.
+// status is Status of the worktree w: each changed path's two columns,
+// what is staged against what is checked out, then the folder against
+// what is staged, as porcelain gives them, then what is untracked.
 func (g fakeRepo) status(r *fakeRepository, w *fakeWorktree) (string, error) {
 	folder, err := g.f.folderTree(w.dir)
 	if err != nil {
 		return "", err
 	}
-	tree := r.treeOf(r.at(w))
+	tree, index := r.treeOf(r.at(w)), r.index(w)
 	var changed, untracked []string
-	for _, p := range touched(tree, folder) {
+	for _, p := range slices.Compact(slices.Sorted(slices.Values(append(touched(tree, index), touched(index, folder)...)))) {
 		_, tracked := tree[p]
+		_, staged := index[p]
 		_, present := folder[p]
+		if !staged && present {
+			untracked = append(untracked, "?? "+p)
+			if !tracked {
+				continue
+			}
+		}
+		x, y := ' ', ' '
 		switch {
 		case !tracked:
-			untracked = append(untracked, "?? "+p)
-		case !present:
-			changed = append(changed, " D "+p)
-		default:
-			changed = append(changed, " M "+p)
+			x = 'A'
+		case !staged:
+			x = 'D'
+		case tree[p] != index[p]:
+			x = 'M'
 		}
+		switch {
+		case staged && !present:
+			y = 'D'
+		case staged && folder[p] != index[p]:
+			y = 'M'
+		}
+		changed = append(changed, string([]rune{x, y, ' '})+p)
 	}
 	return strings.TrimSpace(strings.Join(append(changed, untracked...), "\n")), nil
+}
+
+// index is the worktree w's index: what is staged there, or else the
+// tree of what is checked out.
+func (r *fakeRepository) index(w *fakeWorktree) fakeTree {
+	if w.staged != nil {
+		return w.staged
+	}
+	return r.treeOf(r.at(w))
 }
 
 // RemoveWorktree removes the worktree at path and its folder, as git does:
@@ -1282,12 +1316,7 @@ func (g fakeRepo) CheckoutDetached(dir, rev string) error {
 	if err != nil {
 		return err
 	}
-	// Detached, moveTo moves w itself, not its branch; refused, w is back
-	// on its branch.
-	was := w.head
-	w.head = r.at(w)
-	if out, err := r.moveTo(w, commit, "checkout"); err != nil {
-		w.head = was
+	if out, err := g.switchTo(r, w, commit, ""); err != nil {
 		return fmt.Errorf("%w: %s", err, out)
 	}
 	return nil
