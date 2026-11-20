@@ -2,11 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"net/url"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/tomoram/code-central/ops"
 )
 
 // The fixtures: small Go types, one or two per mapping rule.
@@ -128,7 +131,7 @@ func generate(t *testing.T, roots []reflect.Type, enums ...Enum) string {
 // generateWith is generate with field lists too.
 func generateWith(t *testing.T, roots []reflect.Type, enums []Enum, fields []Fields) string {
 	t.Helper()
-	out, err := Generate(roots, enums, fields)
+	out, err := Generate(roots, enums, fields, nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -146,7 +149,7 @@ func contains(t *testing.T, out string, want ...string) {
 
 func fails(t *testing.T, roots []reflect.Type, enums []Enum, want ...string) {
 	t.Helper()
-	out, err := Generate(roots, enums, nil)
+	out, err := Generate(roots, enums, nil, nil)
 	if err == nil {
 		t.Fatalf("Generate succeeded, want an error; output:\n%s", out)
 	}
@@ -343,7 +346,7 @@ const wireGen = "../../web/src/api/wire.gen.ts"
 // generate, so a Go view can't change without the UI's types changing
 // with it (ADR 0042).
 func TestTheCommittedWireTypesAreCurrent(t *testing.T) {
-	want, err := Generate(roots, enums, fields)
+	want, err := Generate(roots, enums, fields, ops.Definitions())
 	if err != nil {
 		t.Fatalf("make wiretypes would fail; give each typed string a value list and register it in roots.go:\n%v", err)
 	}
@@ -353,5 +356,117 @@ func TestTheCommittedWireTypesAreCurrent(t *testing.T) {
 	}
 	if string(got) != want {
 		t.Fatal("web/src/api/wire.gen.ts isn't what the Go types generate: run `make wiretypes` and commit the result.")
+	}
+}
+
+// fakeOp is a test-only operation definition.
+type fakeOp struct {
+	name     string
+	audience ops.Audience
+	method   string
+	pattern  string
+	input    reflect.Type
+}
+
+func (f fakeOp) Op() ops.Op                             { return ops.Op{Name: f.name, Audience: f.audience} }
+func (f fakeOp) Route() (string, string)                { return f.method, f.pattern }
+func (f fakeOp) Description() string                    { return "" }
+func (f fakeOp) Input() reflect.Type                    { return f.input }
+func (f fakeOp) NewInput() any                          { return reflect.New(f.input).Interface() }
+func (f fakeOp) FieldDescription(string) (string, bool) { return "", false }
+func (f fakeOp) FieldEnum(string) ([]string, bool)      { return nil, false }
+func (f fakeOp) ApplyHTTPDefaults(any)                  {}
+
+// CommentInput is a POST input: a path-bound field, a required one and
+// an optional one.
+type CommentInput struct {
+	Ticket string `json:"ticket" path:"n"`
+	Text   string `json:"text" required:"true"`
+	Draft  bool   `json:"draft"`
+}
+
+// FindInput is a GET input: a field under another query name, a
+// json:"-" query field, and a map only EncodeQuery can encode.
+type FindInput struct {
+	Labels []string          `json:"labels,omitempty" query:"label"`
+	Parts  []string          `json:"-" query:"part"`
+	Hidden string            `json:"-"`
+	Tags   map[string]string `json:"-"`
+	Match  map[string]string `json:"match" query:"match"`
+}
+
+func (FindInput) EncodeQuery(url.Values) {}
+
+type unbound struct {
+	Text string `json:"text"`
+}
+
+func table1(t *testing.T, defs ...ops.Operation) string {
+	t.Helper()
+	out, err := Generate(nil, nil, nil, defs)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	return out
+}
+
+func TestAnOperationsEntryCarriesItsMethodPatternBindingsAndQueryNames(t *testing.T) {
+	out := table1(t,
+		fakeOp{"comment", ops.AgentAndHuman, "POST", "/api/p/{key}/tickets/{n}/comment", reflect.TypeFor[CommentInput]()},
+		fakeOp{"find", ops.HumanOnly, "GET", "/api/p/{key}/finds", reflect.TypeFor[FindInput]()},
+		fakeOp{"ping", ops.HumanOnly, "GET", "/api/ping", reflect.TypeFor[struct{}]()},
+	)
+	contains(t, out,
+		"comment: {\n    method: \"POST\",\n    path: \"/api/p/{key}/tickets/{n}/comment\",\n    bind: { n: \"ticket\" },\n    query: {},\n    input: \"CommentInput\",",
+		"find: {\n    method: \"GET\",\n    path: \"/api/p/{key}/finds\",\n    bind: {},\n    query: { labels: \"label\", part: \"part\" },\n    input: \"FindInput\",",
+		"ping: {", "input: \"EmptyInput\"", "export type EmptyInput = Record<string, never>;",
+		"export type OperationName = keyof typeof OPERATIONS;", "  comment: CommentInput;\n  find: FindInput;\n  ping: EmptyInput;\n")
+}
+
+func TestFactoryOnlyAndIntegrationOnlyOperationsAreLeftOut(t *testing.T) {
+	out := table1(t,
+		fakeOp{"shown", ops.AgentAndHuman, "POST", "/api/p/{key}/shown", reflect.TypeFor[Base]()},
+		fakeOp{"factory", ops.FactoryOnly, "POST", "/api/p/{key}/factory", reflect.TypeFor[Row]()},
+		fakeOp{"integration", ops.IntegrationOnly, "POST", "/api/p/{key}/integration", reflect.TypeFor[Other]()},
+	)
+	if !strings.Contains(out, "shown: {") || strings.Contains(out, "factory") || strings.Contains(out, "integration") ||
+		strings.Contains(out, "interface Row") || strings.Contains(out, "interface Other") {
+		t.Errorf("only the shown operation belongs in the table:\n%s", out)
+	}
+}
+
+func TestAnInputsRequiredFieldsAreItsRequiredAndPathBoundOnes(t *testing.T) {
+	out := table1(t, fakeOp{"comment", ops.HumanOnly, "POST", "/api/p/{key}/tickets/{n}/comment", reflect.TypeFor[CommentInput]()})
+	contains(t, out,
+		"// CommentInput is a POST input: a path-bound field, a required one and\n// an optional one.\nexport interface CommentInput {\n  ticket: string;\n  text: string;\n  draft?: boolean;\n}")
+}
+
+func TestAHiddenQueryFieldIsUnderItsQueryNameAndAnEncodeQueryOnlyFieldIsLeftOut(t *testing.T) {
+	out := table1(t, fakeOp{"find", ops.HumanOnly, "GET", "/api/p/{key}/finds", reflect.TypeFor[FindInput]()})
+	contains(t, out, "export interface FindInput {\n  labels?: string[];\n  part?: string[];\n}")
+	for _, left := range []string{"Hidden", "tags", "match"} {
+		if strings.Contains(out, left) {
+			t.Errorf("%s should be left out:\n%s", left, out)
+		}
+	}
+}
+
+func TestAPlaceholderWithNoBoundFieldFailsNamingTheOperation(t *testing.T) {
+	_, err := Generate(nil, nil, nil, []ops.Operation{fakeOp{"orphan", ops.HumanOnly, "POST", "/api/p/{key}/things/{n}/orphan", reflect.TypeFor[unbound]()}})
+	if err == nil || !strings.Contains(err.Error(), "orphan") || !strings.Contains(err.Error(), "{n}") {
+		t.Fatalf("want an error naming the operation and placeholder, got %v", err)
+	}
+}
+
+func TestTheTableIsByteIdenticalAcrossRuns(t *testing.T) {
+	defs := []ops.Operation{
+		fakeOp{"comment", ops.HumanOnly, "POST", "/api/p/{key}/tickets/{n}/comment", reflect.TypeFor[CommentInput]()},
+		fakeOp{"find", ops.HumanOnly, "GET", "/api/p/{key}/finds", reflect.TypeFor[FindInput]()},
+	}
+	first := table1(t, defs...)
+	for range 5 {
+		if again := table1(t, defs...); again != first {
+			t.Fatalf("a second run differs:\n%s\n--- first:\n%s", again, first)
+		}
 	}
 }

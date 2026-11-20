@@ -46,6 +46,16 @@ export function ciContract(driver: () => Driver) {
     expect(withoutHost((await d.api.listProjects())[0].ci.watcher)).toEqual({ state: "not_reported" });
   });
 
+  it("sets Auto-fix and reads it back, once CI Tracking is on", async () => {
+    await d.createProject("acme", "Acme");
+    const refused = await d.api.setAutoFix("acme", { on: true, fix_instructions: "Fix the failing run.", limit: 3 }).catch((e) => e);
+    expect(refused).toMatchObject({ message: expect.stringContaining("CI Tracking") });
+    await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+    const set = await d.api.setAutoFix("acme", { on: true, fix_instructions: "Fix the failing run.", limit: 3 });
+    expect(set.ci.auto_fix).toMatchObject({ on: true, fix_instructions: "Fix the failing run.", limit: 3 });
+    expect((await d.api.listProjects())[0].ci.auto_fix).toMatchObject({ on: true, limit: 3 });
+  });
+
   it("records a pull request on every Ticket its pushed work covers, and keeps the merge commit", async () => {
     await d.createProject("acme", "Acme");
     const id = await d.createTicket("acme", "Login page", "Ready");

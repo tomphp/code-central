@@ -4,6 +4,10 @@ A local coordination point for AI agent-driven software delivery across many rep
 
 ## Language
 
+**Operation Table**:
+The table `OPERATIONS` in the UI's generated `wire.gen.ts`: for each operation the UI may call (Audience AgentAndHuman or HumanOnly), its method, path, the input fields that fill the path and the query, and its input type. `http.ts` builds every call from it; `go run ./internal/wiretypes` (`make wiretypes`) writes it from `ops.Definitions()`.
+_Avoid_: route map, API client
+
 **Project**:
 A body of work tracked here, with its Specs, Tickets and settings, spanning one or more Repositories, one of which is its Home Repository.
 _Avoid_: workspace, monorepo
