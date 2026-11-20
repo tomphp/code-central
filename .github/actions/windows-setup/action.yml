@@ -1,0 +1,59 @@
+# The Windows setup every Windows job that runs Go tests or builds shares:
+# the test Shards, the e2e job and the Scale tier. Run it after checkout
+# (a local action needs the repository) and before setup-go (so its cache
+# restore lands on the Dev Drive). The steps are no-ops off Windows, so a
+# job whose matrix spans every OS can call it unconditionally.
+name: Windows setup
+description: No CRLF conversion, Defender exclusions and a Dev Drive for TEMP and the Go caches.
+
+runs:
+  using: composite
+  steps:
+    # So the git the tests start writes the bytes it is given, not CRLF.
+    # The checkout before this already has LF: .gitattributes says
+    # eol=lf, which outranks core.autocrlf.
+    - name: No CRLF conversion
+      if: runner.os == 'Windows'
+      shell: bash
+      run: git config --global core.autocrlf false
+
+    # Experiment (code-central-1141): Go tests that start git and write
+    # files run 10-15x slower on Windows than on Linux, and Defender's
+    # on-access scanning of the workspace, TEMP and the Go caches is a
+    # likely cause. This saves that scanning. The runner's TEMP and the Go caches are
+    # excluded by their default paths, since the Dev Drive step below
+    # moves them.
+    - name: Exclude build paths from Defender
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $paths = @(
+          $env:GITHUB_WORKSPACE,
+          $env:RUNNER_TEMP,
+          $env:TEMP,
+          "$env:LOCALAPPDATA\go-build",
+          "$env:USERPROFILE\go"
+        )
+        foreach ($p in $paths) { Add-MpPreference -ExclusionPath $p }
+
+    # TEMP and the Go caches on a ReFS Dev Drive, which skips the NTFS
+    # filter overhead on many small files. The env-mapping reaches the
+    # job's later steps.
+    - name: Dev Drive for TEMP and the Go caches
+      if: runner.os == 'Windows'
+      uses: samypr100/setup-dev-drive@v3
+      with:
+        drive-size: 8GB
+        env-mapping: |
+          TMP,{{ DEV_DRIVE }}/tmp
+          TEMP,{{ DEV_DRIVE }}/tmp
+          GOTMPDIR,{{ DEV_DRIVE }}/gotmp
+          GOCACHE,{{ DEV_DRIVE }}/go-build
+          GOMODCACHE,{{ DEV_DRIVE }}/go-mod
+
+    # The env-mapping names the directories but does not create them, and
+    # go will not start without GOTMPDIR.
+    - name: Create TEMP and GOTMPDIR on the Dev Drive
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: New-Item -ItemType Directory -Force -Path $env:TEMP, $env:GOTMPDIR
