@@ -74,6 +74,10 @@ export interface TranscriptHandlers {
   // lost to a restart) before they could be sent, so the follower holds
   // only the tail of the session.
   onTail?(): void;
+  // onHost is called, in place of any event, when another service on a
+  // Shared Store holds the Transcript, with its host: the stream has
+  // ended, and stopping the subscription releases it.
+  onHost?(host: string): void;
   // onOpen is called each time the stream is live: first with
   // reconnect=false, then reconnect=true after every reconnect.
   onOpen?(info: { reconnect: boolean }): void;

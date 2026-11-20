@@ -1,10 +1,11 @@
 // The Factory Status dot in the left pane and the Factories section of
 // Project Options, on the WASM Core (code-central-324).
-import { screen, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { newWorld } from "../api/core/core";
 import { renderApp, scenario, settle } from "../worldTesting";
+import { FactoryList } from "./FactoryStatus";
 
 const nav = () => screen.getByRole("navigation", { name: "Filters" });
 const beat = { factory: "code-central-factory", host: "laptop", interval_seconds: 30 } as const;
@@ -93,6 +94,26 @@ describe("Project Options Factories section", () => {
     const group = screen.getByRole("group", { name: "Factories" });
     expect(group).toHaveTextContent("code-central-factory on laptop: Online, last Heartbeat just now · Chat support");
     expect(group).toHaveTextContent("other on laptop: Online, last Heartbeat just now · no Chat support");
+  });
+
+  it("shows the service a Factory reports to when it is another", () => {
+    const factory = { host: "box", status: "online", note: "", last_heartbeat: "2026-01-01T00:00:00Z", interval_seconds: 30, chat: false } as const;
+    render(
+      <FactoryList
+        now={new Date("2026-01-01T00:00:00Z")}
+        status={{
+          status: "online",
+          factories: [
+            { ...factory, name: "here" },
+            { ...factory, name: "there", reports_to: "desktop" },
+          ],
+        }}
+      />,
+    );
+    const [here, there] = screen.getAllByRole("listitem");
+    expect(here).toHaveTextContent("here on box: Online, last Heartbeat just now · no Chat support");
+    expect(here).not.toHaveTextContent("reports to");
+    expect(there).toHaveTextContent("there on box: Online, last Heartbeat just now · no Chat support · reports to desktop");
   });
 
   it("shows the empty line with links to the guides", async () => {

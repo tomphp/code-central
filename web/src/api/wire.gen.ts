@@ -820,10 +820,14 @@ export interface NeedsMeView {
 // events, oldest first. Tail is true when it holds only part of the
 // session: events were dropped from its front, as it keeps the last
 // TranscriptLimit, or it began after the Claim did, as none are kept
-// from before Code Central's last restart.
+// from before Code Central's last restart, or on another service before
+// its session moved here. Host is the host of another service on the
+// Store holding the Transcript, its Reporting Service, while that service
+// is running: then Events is empty.
 export interface TranscriptView {
   events: HeldSessionEvent[];
   tail: boolean;
+  host?: string;
 }
 
 // CIOverview is the CI view: the CI Watchers' statuses, then the runs,
@@ -902,6 +906,11 @@ export interface ConversationView {
   session_id?: string;
   resume_command?: string;
   messages: ChatMessageView[];
+  // RunsOn is the host of another live service sharing the Store that
+  // an Online Factory with Chat support reports to, when none reports
+  // to this one: Chat runs there (Spec code-central-1107). Empty when
+  // Chat runs here, or nowhere.
+  runs_on?: string;
 }
 
 // OptionsView is the Options as every front door shows them.
@@ -1810,6 +1819,10 @@ export interface FactoryView {
   // Chat is Chat support: the Factory can run Conversations. Chat is
   // available for the Project while an Online Factory has it.
   chat: boolean;
+  // ReportsTo is the host of the Factory's Reporting Service, the
+  // service its Heartbeats reach, when that is another service sharing
+  // the Store; empty when it is this one.
+  reports_to?: string;
 }
 
 // BaseView is a Project's reported base, as its Factory Status carries it;

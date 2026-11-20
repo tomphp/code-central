@@ -10,7 +10,8 @@ const LABELS: Record<FactoryStatusName, string> = { online: "Online", draining: 
 export const NO_HEARTBEATS = "No Factory has sent a Heartbeat since Code Central started.";
 
 // FactoryList lists each Factory as name on host, its status, its last
-// Heartbeat as a relative time and its note.
+// Heartbeat as a relative time, its note, its Chat support and, when its
+// Heartbeats reach another service sharing the Store, that service's host.
 export function FactoryList({ status, now }: { status: FactoryStatus; now: Date }) {
   if (status.factories.length === 0) return <p className="factory-empty">{NO_HEARTBEATS}</p>;
   return (
@@ -23,6 +24,7 @@ export function FactoryList({ status, now }: { status: FactoryStatus; now: Date 
           : {LABELS[f.status]}, last Heartbeat {ago(now, f.last_heartbeat)}
           {f.note && <span className="muted"> ({f.note})</span>}
           <span className="muted"> · {f.chat ? "Chat support" : "no Chat support"}</span>
+          {f.reports_to && <span className="muted"> · reports to {f.reports_to}</span>}
         </li>
       ))}
     </ul>

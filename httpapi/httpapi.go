@@ -58,8 +58,8 @@ func Register(mux *http.ServeMux, s ops.Service) {
 }
 
 // ping is POST /api/ping {session_id}. It is not one of core's
-// operations: it updates memory only, and always answers 204, even for an
-// unknown session or a body it can't read, so a hook never fails on it.
+// operations: it records the ping in runtime state, and always answers 204, even for
+// an unknown session or a body it can't read, so a hook never fails on it.
 func ping(s ops.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var in struct {

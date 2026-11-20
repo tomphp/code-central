@@ -16,8 +16,8 @@ import (
 // Merge + Push (code-central-425): on each poll it fetches the Push
 // remote and brings the local base level with the remote's, then says
 // whether the base is current or has diverged. Code Central
-// keeps the latest report of each Project in memory only, like the
-// Heartbeat, and drops it when the Project's Factories all go offline.
+// keeps the latest report of each Project with the Heartbeat, where every
+// service sharing the Store reads it, and drops it when the Project's Factories all go offline.
 // With several Repositories (Spec code-central-848) it reports each
 // Repository's base apart, and keeps the latest report of each.
 
@@ -83,7 +83,7 @@ type ReportBaseInput struct {
 }
 
 // ReportBase is the Factory's report_base. The report replaces the
-// Repository's earlier one, in memory only, each Repository's base kept
+// Repository's earlier one, in the runtime state a Store shares, each Repository's base kept
 // apart; Base diverged and Base missing show in Needs Me, one item per
 // Repository, while the latest says so and a Factory is still online.
 func (c *Core) ReportBase(_ context.Context, key string, in ReportBaseInput) (Written[ProjectView], error) {
@@ -124,7 +124,9 @@ func (c *Core) ReportBase(_ context.Context, key string, in ReportBaseInput) (Wr
 	}
 	prev, seen := hs.base[key][repository.Name]
 	hs.base[key][repository.Name] = BaseView{State: in.State, Local: local, Remote: remote, Branch: baseOfRepository(project, repository), At: now}
+	hs.reportsAt[key] = now
 	hs.mu.Unlock()
+	c.recordReports(key)
 	if !seen || prev.State != in.State || prev.Local != local || prev.Remote != remote {
 		c.events.Publish(events.Event{Type: events.ProjectChanged, Project: key})
 	}

@@ -43,6 +43,8 @@ type World struct {
 	mu       sync.Mutex
 	requests map[*request]struct{}
 	dropped  bool
+	// others are the other services on the world's Store, by host.
+	others map[string]*core.Core
 	// The answers the stand-in checks give; the zero one passes.
 	ciCheck, issuesCheck, azureBoardsCheck, pullRequestCheck core.WatcherCheckResult
 }
@@ -84,6 +86,7 @@ func New(start time.Time) *World {
 		clock:    clk,
 		handler:  server.Versioned(server.Handler(c, nil, nil), Version),
 		requests: map[*request]struct{}{},
+		others:   map[string]*core.Core{},
 	}
 	c.SetCICheck(func(context.Context, core.CICheckInput) core.WatcherCheckResult { return w.answer(&w.ciCheck) })
 	c.SetIssuesCheck(func(context.Context, core.IssuesCheckInput) core.WatcherCheckResult { return w.answer(&w.issuesCheck) })
@@ -151,12 +154,36 @@ func (w *World) ReportWatcherCrash(kind core.WatcherKind, key string, crash core
 func (w *World) HoldWatcherLease(key, host string) {
 	ctx := context.Background()
 	if host != Host {
-		other := core.New(w.store, w.clock, &ids.Sequence{})
-		other.SetService(core.Service{ID: host, Host: host, Version: Version})
-		other.Register(ctx)
-		other.HoldWatcherLease(ctx, key)
+		w.service(host).HoldWatcherLease(ctx, key)
 	}
 	w.core.HoldWatcherLease(ctx, key)
+}
+
+// PostSessionEventsOn posts a session's Session Events to the service on
+// host, as a Factory reporting to it does: the world's own service on
+// Host, or another service on the same Store, which then holds the
+// Transcript, so the world's own names its host.
+func (w *World) PostSessionEventsOn(host, sessionID string, events []core.SessionEvent) {
+	c := w.core
+	if host != Host {
+		c = w.service(host)
+	}
+	c.PostSessionEvents(context.Background(), sessionID, events)
+}
+
+// service is the other service on host, on the world's Store: made the
+// first time, and registered, or its Registration renewed, each time.
+func (w *World) service(host string) *core.Core {
+	w.mu.Lock()
+	other := w.others[host]
+	if other == nil {
+		other = core.New(w.store, w.clock, &ids.Sequence{})
+		other.SetService(core.Service{ID: host, Host: host, Version: Version})
+		w.others[host] = other
+	}
+	w.mu.Unlock()
+	other.Register(context.Background())
+	return other
 }
 
 // DropStreams ends every open stream, change notices and Transcript
