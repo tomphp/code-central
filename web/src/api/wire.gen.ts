@@ -954,6 +954,744 @@ export interface SpecView {
   link?: LinkView;
 }
 
+// CreateProjectInput is create_project's input.
+export interface CreateProjectInput {
+  key?: string;
+  display_name?: string;
+  // Mode is committed (the default) or local.
+  mode?: Mode;
+}
+
+// CreateSpecInput is create_spec's input.
+export interface CreateSpecInput {
+  title: string;
+  body?: string;
+  // Full asks for the Spec in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// CreateTicketInput is create_ticket's input. State defaults to Draft.
+export interface CreateTicketInput {
+  spec: string;
+  title: string;
+  description?: string;
+  state?: State;
+  labels?: string[];
+  blocked_by?: string[];
+  // Tags are the Ticket's Tags from the start, checked as set_tags checks them.
+  tags?: Record<string, string>;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// GetTicketInput is get_ticket's input. With no Parts, the read is the
+// default: DefaultTicketParts, brief (ADR 0015, code-central-320).
+export interface GetTicketInput {
+  ticket: string;
+  // Parts are any of TicketParts: the read returns the Ticket's other
+  // fields and only these parts.
+  parts?: string[];
+}
+
+// FindTicketsInput is find_tickets' filters; every filter given must match.
+export interface FindTicketsInput {
+  state?: State[];
+  title?: string;
+  labels?: string[];
+  spec?: string;
+  // Claimable, when given, keeps only Tickets that are (or aren't) claimable.
+  claimable?: boolean;
+  // Full asks for full Ticket views, as get_ticket returns them, in
+  // place of rows; FindTicketViews answers it.
+  full?: boolean;
+  // Parts are the parts the views carry, as get_ticket's: the default
+  // parts, brief, when none are named. Only the HTTP API (as repeated
+  // part parameters) and the CLI name them; an agent's MCP read takes
+  // the default.
+  part?: string[];
+}
+
+// EditSpecInput is edit_spec's input. A field left out is unchanged; a
+// body given replaces the old one whole.
+export interface EditSpecInput {
+  spec: string;
+  title?: string;
+  body?: string;
+  // Full asks for the Spec in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// EditTicketInput is edit_ticket's input. A field left out is unchanged.
+export interface EditTicketInput {
+  ticket: string;
+  title?: string;
+  description?: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// LabelsInput is add_labels' and remove_labels' input. Each Label is
+// added or removed by name; the rest of the list is left alone, so two
+// writers don't overwrite each other.
+export interface LabelsInput {
+  target: string;
+  // Labels to add or remove; the operation's definition words it.
+  labels: string[];
+}
+
+// SetTagsInput is set_tags' input.
+export interface SetTagsInput {
+  target: string;
+  tags: Record<string, string>;
+}
+
+// RemoveTagsInput is remove_tags' input.
+export interface RemoveTagsInput {
+  target: string;
+  keys: string[];
+}
+
+// CommentInput is comment's input.
+export interface CommentInput {
+  ticket: string;
+  body: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// TicketInput names one Ticket, for actions that need nothing else.
+export interface TicketInput {
+  ticket: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// DeferInput is defer's input; the reason is required.
+export interface DeferInput {
+  ticket: string;
+  reason: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// ClaimInput is claim's input: narrow to a Spec or name a Ticket, not both.
+export interface ClaimInput {
+  spec?: string;
+  ticket?: string;
+  session_id?: string;
+  // WorkingDir and ResumeCommand are free-form and never parsed; nil
+  // leaves them unset.
+  working_dir?: string;
+  resume_command?: string;
+}
+
+// FinishInput is finish's input.
+export interface FinishInput {
+  ticket: string;
+  claim_id: string;
+  summary: string;
+  // Branch and Commit name the work's branch and its head commit in the
+  // Home Repository. Both are optional and free-form; one left out keeps
+  // the stored value. A Ticket with a branch is Accepted, not Done, when
+  // the human accepts it.
+  branch?: string;
+  commit?: string;
+  // Repositories are the branch and head commit in each other
+  // Repository the work changed (Spec code-central-848); the Home
+  // Repository may be given here instead of in Branch and Commit, not
+  // in both. The finish replaces the Ticket's Changed Repositories.
+  repositories?: RepositoryWork[];
+  // Recommendation is the Spec recommendation, implement or split:
+  // required on a spec Stage and refused on any other Ticket. It
+  // replaces the one an earlier finish gave.
+  recommendation?: Recommendation;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// RejectInput is reject's input.
+export interface RejectInput {
+  ticket: string;
+  comment?: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// SetSessionInput is set_session's input. The session ID is never
+// checked; it is only shown to the human for resuming the session. The
+// working directory and Resume Command are free-form and never parsed:
+// one that isn't given (nil) leaves the stored value alone, and one given
+// empty clears it.
+export interface SetSessionInput {
+  ticket: string;
+  claim_id: string;
+  session_id: string;
+  working_dir?: string;
+  resume_command?: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// ReleaseInput is release's input; the note is optional.
+export interface ReleaseInput {
+  ticket: string;
+  note?: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// BlockerInput is add_blocker's and remove_blocker's input: ticket waits
+// on blocker.
+export interface BlockerInput {
+  ticket: string;
+  blocker: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// CancelInput is cancel's input. An agent must name at least one
+// Replacement; the human may name none. The reason is stored as a comment.
+export interface CancelInput {
+  ticket: string;
+  replacements: string[];
+  reason?: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// GetSpecInput is get_spec's input. With neither Parts nor Sections, the
+// read is the full Spec; with Sections and no Parts, it is only the body.
+export interface GetSpecInput {
+  spec: string;
+  // Parts are any of body, tickets, edits and outline; all three when empty, or
+  // only body when Sections are given.
+  parts?: string[];
+  // Sections are heading texts: the body returned is only those Sections.
+  sections?: string[];
+}
+
+// FindSpecsInput is find_specs' filters; every filter given must match.
+export interface FindSpecsInput {
+  title?: string;
+  labels?: string[];
+  // Finished includes finished Specs, which are otherwise left out.
+  finished?: boolean;
+  // Requirements keeps only Specs that are Requirements.
+  requirements?: boolean;
+}
+
+// ReportFailureInput is report_failure's input. Every field is required.
+export interface ReportFailureInput {
+  ticket: string;
+  claim_id: string;
+  what_broke: string;
+  why: string;
+  what_to_fix: string;
+  where_work_stands: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// GiveUpInput is give_up's input; the note is required.
+export interface GiveUpInput {
+  ticket: string;
+  claim_id: string;
+  note: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// SendBackInput is send_back's input. From Failed (the human's) the note
+// is optional, and a send-back with no note means nothing has changed.
+// From Accepted (the agent's on a conflict, ticket 72, or the human's to
+// fix a CI failure, code-central-264) the note is required.
+export interface SendBackInput {
+  ticket: string;
+  note: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// SetProjectModeInput is set_project_mode's input.
+export interface SetProjectModeInput {
+  mode?: Mode;
+}
+
+// PostRoundInput is post_round's input.
+export interface PostRoundInput {
+  ticket: string;
+  claim_id: string;
+  session_id?: string;
+  questions: QuestionInput[];
+  // Full asks for the Round number and the next step without the
+  // Acknowledgement: post_round's record is its Round, not the Ticket.
+  full?: boolean;
+}
+
+// PickUpAnswersInput is pick_up_answers' input.
+export interface PickUpAnswersInput {
+  ticket: string;
+  claim_id: string;
+}
+
+// AnswerInput is the human's answer(question, text). Questions are
+// numbered across their Ticket.
+export interface AnswerInput {
+  ticket: string;
+  question?: number;
+  text?: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// AcceptRecommendedInput is the human's accept_recommended(round).
+export interface AcceptRecommendedInput {
+  ticket: string;
+  round?: number;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// DismissQuestionInput is the human's dismiss_question(question).
+export interface DismissQuestionInput {
+  ticket: string;
+  question?: number;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// SpecInput names one Spec, for reads that need nothing else.
+export interface SpecInput {
+  spec: string;
+}
+
+// MoveInput is the human's move(ticket, to_state).
+export interface MoveInput {
+  ticket: string;
+  to_state?: State;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// RenameProjectInput is the human's rename_project(display_name).
+export interface RenameProjectInput {
+  display_name?: string;
+}
+
+// SetLandingMethodInput is the human's set_landing_method(method, push,
+// remote, land_per_spec, rebase).
+export interface SetLandingMethodInput {
+  method?: LandingMethod;
+  push?: boolean;
+  remote?: string;
+  // LandPerSpec, when left out, keeps the stored value.
+  land_per_spec?: boolean;
+  // Rebase, when left out, keeps the stored value.
+  rebase?: boolean;
+  // PATEnv names the environment variable holding the Azure Repos PAT
+  // under Pull Request; left out, it keeps the stored name.
+  pat_env?: string;
+  // Base is the branch work is cut from and lands on; left out, it keeps
+  // the stored one. Only its name is checked, never whether it exists.
+  base?: string;
+}
+
+// SetSubagentExplorationInput is the human's
+// set_subagent_exploration(on, full?).
+export interface SetSubagentExplorationInput {
+  on?: boolean;
+  // Full asks for the Project in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// SetModelAssignmentInput is the human's set_model_assignment(on, full?).
+export interface SetModelAssignmentInput {
+  on?: boolean;
+  // Full asks for the Project in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// SetAutoAcceptInput is the human's set_auto_accept(kinds, full?).
+export interface SetAutoAcceptInput {
+  // Kinds is on or off per Auto-accept kind; a kind left out keeps its
+  // value.
+  kinds?: Partial<Record<AutoAcceptKind, boolean>>;
+  // Full asks for the Project in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// SetFocusKindsInput is the human's set_focus_kinds(off, full?).
+export interface SetFocusKindsInput {
+  // Off is the whole list of Needs Me reasons to turn off; every other
+  // reason is on.
+  off?: NeedsMeReason[];
+  // Full asks for the Project in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// AddRepositoryInput is the human's add_repository(name, clone_url?,
+// base?, local_path?, ci?, landing?, push_remote?, full?): it needs
+// clone_url, local_path or both.
+export interface AddRepositoryInput {
+  // Name is the Repository Name, fixed once added.
+  name?: string;
+  // CloneURL left out makes the Repository local-only: the Factory
+  // never clones or pushes it, and adopts the clone at LocalPath.
+  clone_url?: string;
+  // Base is main when left out.
+  base?: string;
+  // LocalPath is an absolute path to an existing clone; left out, the
+  // Factory clones it beside the Home Repository.
+  local_path?: string;
+  // CI is the Repository's CI entry; left out, it is filled in from the
+  // Clone URL, Not watched for none or a host no CI Provider is on.
+  ci?: RepositoryCI;
+  // Landing is its Own Landing; left out or default, it follows the
+  // Project's Default Landing.
+  landing?: RepositoryLanding;
+  // PushRemote names the git remote it is pushed to; left out, the
+  // Project's.
+  push_remote?: string;
+  // Full asks for the Project in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// EditRepositoryInput is the human's edit_repository(name, clone_url?,
+// base?, local_path?, landing?, push_remote?, full?): each field left out
+// keeps its value. The name only finds the Repository: a Repository Name
+// never changes. The Home Repository takes the landing and push_remote
+// alone.
+export interface EditRepositoryInput {
+  name?: string;
+  // CloneURL, set empty, clears it, making the Repository local-only.
+  clone_url?: string;
+  base?: string;
+  // LocalPath, set empty, puts the clone back beside the Home
+  // Repository. A Repository keeps a Clone URL or a local path.
+  local_path?: string;
+  // Landing, set default, has it follow the Project's Default Landing;
+  // any other value is its Own Landing.
+  landing?: RepositoryLanding;
+  // PushRemote, set empty, has it use the Project's.
+  push_remote?: string;
+  // Full asks for the Project in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// RemoveRepositoryInput is the human's remove_repository(name, full?).
+export interface RemoveRepositoryInput {
+  name?: string;
+  // Full asks for the Project in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// SetLandingOrderInput is the human's set_landing_order(names, full?):
+// every Repository Name once, in the new landing order.
+export interface SetLandingOrderInput {
+  names?: string[];
+  // Full asks for the Project in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// UnlinkInput is the human's unlink(target).
+export interface UnlinkInput {
+  target?: string;
+}
+
+// ImportInput is import's input.
+export interface ImportInput {
+  payload: ImportPayload;
+  // DryRun runs every check and returns the plan, writing nothing.
+  dry_run?: boolean;
+}
+
+// SubmitRequirementInput is submit_requirement's input: the Requirement's
+// free text, whose first line becomes the Spec's title.
+export interface SubmitRequirementInput {
+  text: string;
+  // Map is the finished Map the Requirement is written from, if any
+  // (Write the Spec): its Decisions take the grilling Stage's place.
+  map?: string;
+  // SkipGrilling is Straight to Spec: no grilling Stage, so the spec
+  // Stage works from the text alone. It can't be given with Map.
+  skip_grilling?: boolean;
+  // Full asks for the Spec and Stage Tickets in place of their
+  // Acknowledgements.
+  full?: boolean;
+  // Draft saves every Ticket the submit writes as Draft, not Ready, so
+  // nothing is claimed until the human moves them to Ready.
+  draft?: boolean;
+}
+
+// LandInput is land's input: the commit that put the work into the base
+// of one of the Ticket's Changed Repositories.
+export interface LandInput {
+  ticket: string;
+  commit: string;
+  // Repository is the Repository Name of the base the work landed in;
+  // blank for the Home Repository.
+  repository?: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// StageGuideInput is get_stage_guide's input.
+export interface StageGuideInput {
+  stage: string;
+}
+
+// SubmitMapInput is submit_map's input: the Map's free text, whose first
+// line becomes the Spec's title.
+export interface SubmitMapInput {
+  text: string;
+  // Draft saves every Ticket the submit writes as Draft, not Ready, so
+  // nothing is claimed until the human moves them to Ready.
+  draft?: boolean;
+  // Full asks for the Spec and Charting Ticket in place of their
+  // Acknowledgements.
+  full?: boolean;
+}
+
+// SubmitPrototypeInput is submit_prototype's input: the Spec it is on and
+// the Prototype's free text, whose first line becomes its title.
+export interface SubmitPrototypeInput {
+  spec: string;
+  text: string;
+  // Full asks for the Ticket in place of its Acknowledgement.
+  full?: boolean;
+}
+
+// SubmitSmallChangeInput is submit_small_change's input: the free text,
+// whose first line becomes the Ticket's title.
+export interface SubmitSmallChangeInput {
+  text: string;
+  // Draft saves every Ticket the submit writes as Draft, not Ready, so
+  // nothing is claimed until the human moves them to Ready.
+  draft?: boolean;
+  // Full asks for the Ticket in place of its Acknowledgement.
+  full?: boolean;
+}
+
+// NewTicketInput is new_ticket's input: the Spec and the free text, whose
+// first line becomes the Ticket's title.
+export interface NewTicketInput {
+  spec: string;
+  text: string;
+  // Draft saves the Ticket as Draft, not Ready, so nothing is claimed
+  // until the human moves it to Ready.
+  draft?: boolean;
+  // Full asks for the Ticket in place of its Acknowledgement.
+  full?: boolean;
+}
+
+// SubmitRetroInput is submit_retro's input: the finished work, a Ticket or
+// a Spec, and the human's optional note.
+export interface SubmitRetroInput {
+  target: string;
+  note?: string;
+  // Full asks for the Ticket in place of its Acknowledgement.
+  full?: boolean;
+}
+
+// SetOptionsInput is the Options to change; each left out stays as it is.
+export interface SetOptionsInput {
+  focus_clear?: FocusClear;
+  focus_popup?: FocusPopup;
+  limits_popup?: LimitsPopup;
+  // GHPath is an absolute path, or "" to clear it.
+  gh_path?: string;
+}
+
+// GetStorageInput is a Storage read: one Project's counts, or every
+// Project's (Archived ones too) when Project is "". The Store, the memory
+// and the services are whole either way.
+export interface GetStorageInput {
+  project?: string;
+}
+
+// SetCITrackingInput is the human's set_ci_tracking(tracking, pat_env,
+// ignored_workflows, full?), and an older client's provider, repository
+// and project_url.
+export interface SetCITrackingInput {
+  tracking?: boolean;
+  // Provider, Repository and ProjectURL are the Home Repository's CI
+  // entry as an older client sets it here (Spec code-central-890), as
+  // set_repository_ci on the Home would, when they name what to watch:
+  // Repository for GitHub Actions, ProjectURL for Azure Pipelines.
+  // Otherwise they are ignored, and the Home's entry kept. Provider is
+  // github_actions when left out.
+  provider?: CIProvider;
+  repository?: string;
+  // ProjectURL is the Azure DevOps project, as its URL.
+  project_url?: string;
+  // PATEnv names the environment variable holding the Azure DevOps PAT;
+  // ADO_PAT when left out.
+  pat_env?: string;
+  ignored_workflows?: string[];
+  // Full asks for the Project in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// SetAutoFixInput is the human's set_auto_fix(on, fix_instructions,
+// limit, full?).
+export interface SetAutoFixInput {
+  on?: boolean;
+  // FixInstructions is the text appended to every fix Ticket's
+  // description; it may not be empty.
+  fix_instructions?: string;
+  // Limit is the most Auto-fix attempts per failure chain, 1 to 10.
+  limit?: number;
+  // Full asks for the Project in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// SetRepositoryCIInput is the human's set_repository_ci(name,
+// not_watched?, provider?, repository?, project_url?, full?).
+export interface SetRepositoryCIInput {
+  // Name is the Repository's, the Home Repository's included.
+  name?: string;
+  not_watched?: boolean;
+  provider?: CIProvider;
+  repository?: string;
+  project_url?: string;
+  // Full asks for the Project in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// CIRuleInput is the human's add_ci_rule(workflow, branch, state, full?)
+// and, with the rule's Spec, edit_ci_rule.
+export interface CIRuleInput {
+  // Spec names the rule to edit; add_ci_rule leaves it out.
+  spec?: string;
+  // Workflow is a workflow file's base name, such as ci.yml, or any.
+  workflow?: string;
+  // Branch is an exact branch name, with no globs.
+  branch?: string;
+  // State is Draft or Ready: Draft when add_ci_rule leaves it out, and
+  // the rule's own when edit_ci_rule does.
+  state?: State;
+  // Full asks for the Project in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// RemoveCIRuleInput is the human's remove_ci_rule(spec, full?).
+export interface RemoveCIRuleInput {
+  spec?: string;
+  // Full asks for the Project in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// CIResponseInput is land_anyway's and rerun_ci's input: the Ticket, and
+// the Repository whose CI item to act on.
+export interface CIResponseInput {
+  ticket: string;
+  // Repository is the Repository Name of the CI item to act on; left
+  // out, the Ticket's only CI item's.
+  repository?: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// NewFixTicketInput is new_fix_ticket's input: the CI failed Ticket and
+// the note, which is required.
+export interface NewFixTicketInput {
+  ticket: string;
+  note?: string;
+  // Repository is the Repository Name of the CI item to fix; left out,
+  // the Ticket's only CI item's.
+  repository?: string;
+  // Full asks for the fix Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// SetGitHubIssuesInput is the human's set_github_issues(on, repositories,
+// label, new_issues_need_me, full?).
+export interface SetGitHubIssuesInput {
+  on?: boolean;
+  repositories?: string[];
+  // Label is the filter label; empty lets every issue in.
+  label?: string;
+  new_issues_need_me?: boolean;
+  // Full asks for the Project in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// WontFixInput is the human's wont_fix(ticket, reason?).
+export interface WontFixInput {
+  ticket: string;
+  reason?: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// ToRequirementInput is the human's to_requirement(ticket, context?).
+export interface ToRequirementInput {
+  ticket: string;
+  context?: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// SetAzureBoardsInput is the human's set_azure_boards(on, mode, query_url,
+// project_url, where, pat_env, new_issues_need_me, hide_code_central,
+// branch_format, full?).
+export interface SetAzureBoardsInput {
+  on?: boolean;
+  // Mode is saved_query when left out.
+  mode?: AzureBoardsMode;
+  // QueryURL is the Saved query's URL, as the browser shows it.
+  query_url?: string;
+  // ProjectURL is the Azure DevOps project a WIQL filter runs in, as its
+  // URL, and Where the filter's WHERE clause, without the keyword.
+  project_url?: string;
+  where?: string;
+  // PATEnv names the environment variable holding the Azure DevOps PAT;
+  // the Project's CI PAT variable when left out.
+  pat_env?: string;
+  new_issues_need_me?: boolean;
+  // HideCodeCentral keeps Code Central out of what Write-back writes to a
+  // work item. It is no part of the Azure Boards check.
+  hide_code_central?: boolean;
+  // BranchFormat names the Spec Branch of a Requirement To Requirement
+  // makes of a work item, with {id} for its ID; empty for none. It is
+  // no part of the Azure Boards check.
+  branch_format?: string;
+  // Full asks for the Project in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// SetModelsInput is the human's set_models(default, chat, kinds, full?).
+export interface SetModelsInput {
+  default?: ModelRowView;
+  // Chat is the Chat row's model and effort.
+  chat?: ModelRowView;
+  // Kinds are the rows for kinds of work; a kind left out, or a row
+  // setting nothing, sets nothing.
+  kinds?: KindModelsView[];
+  // Full asks for the Project in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// GetChatInput is the human's get_chat(), which takes nothing.
+export interface GetChatInput {
+}
+
+// StartConversationInput is the human's start_conversation(model?,
+// effort?): either left empty takes the Chat row's.
+export interface StartConversationInput {
+  model?: string;
+  effort?: string;
+}
+
+// SendChatMessageInput is the human's send_chat_message(text).
+export interface SendChatMessageInput {
+  text?: string;
+}
+
+// StopChatReplyInput is the human's stop_chat_reply(), which takes nothing.
+export interface StopChatReplyInput {
+}
+
 // LandingView is a Project's Landing Method with its Push option and the
 // remote it uses.
 export interface LandingView {
@@ -1720,6 +2458,54 @@ export interface ChatMessageView {
   error?: string;
 }
 
+// RepositoryWork is a Ticket's branch and its head commit in one
+// Repository, as finish and report_changed_repositories take them.
+export interface RepositoryWork {
+  name: string;
+  branch: string;
+  commit: string;
+}
+
+// QuestionInput is one Question of a Round being posted.
+export interface QuestionInput {
+  title: string;
+  body: string;
+  recommended?: string;
+}
+
+// RepositoryCI is a Repository's CI entry as add_repository and
+// set_repository_ci take it: Not watched, or a CI Provider, GitHub
+// Actions when left out, with what it watches.
+export interface RepositoryCI {
+  not_watched?: boolean;
+  provider?: CIProvider;
+  // Repository is the GitHub repository GitHub Actions watches, as
+  // owner/name.
+  repository?: string;
+  // ProjectURL is the Azure DevOps project Azure Pipelines watches, as
+  // its URL.
+  project_url?: string;
+}
+
+// ImportPayload is a whole .scratch/ folder: one Spec per feature folder,
+// and every Ticket in it. Items refer to each other by source path.
+export interface ImportPayload {
+  specs: ImportSpec[];
+  tickets: ImportTicket[];
+}
+
+// ModelRowView is one Models row's model and effort, each empty when the
+// row leaves it to the tier below.
+export interface ModelRowView {
+  model: string;
+  effort: string;
+}
+
+// KindModelsView is the Models row for one kind of work, a guide name.
+export interface KindModelsView extends ModelRowView {
+  kind: string;
+}
+
 // LandingMethodsCapabilities is the Landing capabilities of every Landing
 // Method, each as if it were the Default Landing.
 export interface LandingMethodsCapabilities {
@@ -1792,18 +2578,6 @@ export interface AutoFixView {
   // Limit is the Auto-fix limit: the most Auto-fix attempts per failure
   // chain, 1 to 10.
   limit: number;
-}
-
-// ModelRowView is one Models row's model and effort, each empty when the
-// row leaves it to the tier below.
-export interface ModelRowView {
-  model: string;
-  effort: string;
-}
-
-// KindModelsView is the Models row for one kind of work, a guide name.
-export interface KindModelsView extends ModelRowView {
-  kind: string;
 }
 
 // FactoryView is one Factory as the Project view lists it, from its last
@@ -2067,6 +2841,31 @@ export interface Tokens {
   output_tokens: number;
 }
 
+// ImportSpec is one feature folder. Source becomes the Spec's source Tag.
+export interface ImportSpec {
+  source: string;
+  title: string;
+  body?: string;
+  labels?: string[];
+  tags?: Record<string, string>;
+}
+
+// ImportTicket is one Scratch file. Spec is its Spec's source; BlockedBy
+// and Replacements are other Tickets' sources in the same payload. State
+// defaults to Draft; Comment, when given, is stored as one comment.
+export interface ImportTicket {
+  source: string;
+  spec: string;
+  title: string;
+  state?: State;
+  description?: string;
+  labels?: string[];
+  tags?: Record<string, string>;
+  blocked_by?: string[];
+  replacements?: string[];
+  comment?: string;
+}
+
 // LandingMethodCapabilities is what the Options form offers with one
 // Landing Method drafted as the Default Landing: its Landing
 // capabilities.
@@ -2193,4 +2992,715 @@ export interface NotLandedRepositoryView {
   // it since the Ticket was accepted; left out when there's none to
   // give.
   reason?: string;
+}
+
+// EmptyInput is the input of an operation that takes none.
+export type EmptyInput = Record<string, never>;
+
+// OPERATIONS are the operations the UI may call, in the order ops lists
+// them: each one's method, its path pattern, the input fields that fill
+// the path's placeholders (bind) and, for a GET, go out as query
+// parameters (query), and the name of its input type.
+export const OPERATIONS = {
+  create_project: {
+    method: "POST",
+    path: "/api/projects/create_project",
+    bind: {},
+    query: {},
+    input: "CreateProjectInput",
+  },
+  get_project: {
+    method: "GET",
+    path: "/api/projects/{key}",
+    bind: {},
+    query: {},
+    input: "EmptyInput",
+  },
+  create_spec: {
+    method: "POST",
+    path: "/api/p/{key}/create_spec",
+    bind: {},
+    query: {},
+    input: "CreateSpecInput",
+  },
+  create_ticket: {
+    method: "POST",
+    path: "/api/p/{key}/create_ticket",
+    bind: {},
+    query: {},
+    input: "CreateTicketInput",
+  },
+  get_ticket: {
+    method: "GET",
+    path: "/api/p/{key}/tickets/{n}",
+    bind: { n: "ticket" },
+    query: { parts: "part" },
+    input: "GetTicketInput",
+  },
+  find_tickets: {
+    method: "GET",
+    path: "/api/p/{key}/tickets",
+    bind: {},
+    query: { state: "state", title: "title", labels: "label", spec: "spec", claimable: "claimable", full: "full", part: "part" },
+    input: "FindTicketsInput",
+  },
+  edit_spec: {
+    method: "POST",
+    path: "/api/p/{key}/specs/{n}/edit_spec",
+    bind: { n: "spec" },
+    query: {},
+    input: "EditSpecInput",
+  },
+  edit_ticket: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/edit_ticket",
+    bind: { n: "ticket" },
+    query: {},
+    input: "EditTicketInput",
+  },
+  add_labels: {
+    method: "POST",
+    path: "/api/p/{key}/add_labels",
+    bind: {},
+    query: {},
+    input: "LabelsInput",
+  },
+  remove_labels: {
+    method: "POST",
+    path: "/api/p/{key}/remove_labels",
+    bind: {},
+    query: {},
+    input: "LabelsInput",
+  },
+  set_tags: {
+    method: "POST",
+    path: "/api/p/{key}/set_tags",
+    bind: {},
+    query: {},
+    input: "SetTagsInput",
+  },
+  remove_tags: {
+    method: "POST",
+    path: "/api/p/{key}/remove_tags",
+    bind: {},
+    query: {},
+    input: "RemoveTagsInput",
+  },
+  comment: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/comment",
+    bind: { n: "ticket" },
+    query: {},
+    input: "CommentInput",
+  },
+  approve: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/approve",
+    bind: { n: "ticket" },
+    query: {},
+    input: "TicketInput",
+  },
+  defer: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/defer",
+    bind: { n: "ticket" },
+    query: {},
+    input: "DeferInput",
+  },
+  claim: {
+    method: "POST",
+    path: "/api/p/{key}/claim",
+    bind: {},
+    query: {},
+    input: "ClaimInput",
+  },
+  finish: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/finish",
+    bind: { n: "ticket" },
+    query: {},
+    input: "FinishInput",
+  },
+  accept: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/accept",
+    bind: { n: "ticket" },
+    query: {},
+    input: "TicketInput",
+  },
+  implement: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/implement",
+    bind: { n: "ticket" },
+    query: {},
+    input: "TicketInput",
+  },
+  reject: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/reject",
+    bind: { n: "ticket" },
+    query: {},
+    input: "RejectInput",
+  },
+  set_session: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/set_session",
+    bind: { n: "ticket" },
+    query: {},
+    input: "SetSessionInput",
+  },
+  release: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/release",
+    bind: { n: "ticket" },
+    query: {},
+    input: "ReleaseInput",
+  },
+  add_blocker: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/add_blocker",
+    bind: { n: "ticket" },
+    query: {},
+    input: "BlockerInput",
+  },
+  remove_blocker: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/remove_blocker",
+    bind: { n: "ticket" },
+    query: {},
+    input: "BlockerInput",
+  },
+  cancel: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/cancel",
+    bind: { n: "ticket" },
+    query: {},
+    input: "CancelInput",
+  },
+  get_spec: {
+    method: "GET",
+    path: "/api/p/{key}/specs/{n}",
+    bind: { n: "spec" },
+    query: { parts: "part", sections: "section" },
+    input: "GetSpecInput",
+  },
+  find_specs: {
+    method: "GET",
+    path: "/api/p/{key}/specs",
+    bind: {},
+    query: { title: "title", labels: "label", finished: "finished", requirements: "requirements" },
+    input: "FindSpecsInput",
+  },
+  report_failure: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/report_failure",
+    bind: { n: "ticket" },
+    query: {},
+    input: "ReportFailureInput",
+  },
+  give_up: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/give_up",
+    bind: { n: "ticket" },
+    query: {},
+    input: "GiveUpInput",
+  },
+  send_back: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/send_back",
+    bind: { n: "ticket" },
+    query: {},
+    input: "SendBackInput",
+  },
+  to_draft: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/to_draft",
+    bind: { n: "ticket" },
+    query: {},
+    input: "TicketInput",
+  },
+  set_project_mode: {
+    method: "POST",
+    path: "/api/projects/{key}/set_project_mode",
+    bind: {},
+    query: {},
+    input: "SetProjectModeInput",
+  },
+  get_workflow: {
+    method: "GET",
+    path: "/api/workflow",
+    bind: {},
+    query: {},
+    input: "EmptyInput",
+  },
+  post_round: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/post_round",
+    bind: { n: "ticket" },
+    query: {},
+    input: "PostRoundInput",
+  },
+  pick_up_answers: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/pick_up_answers",
+    bind: { n: "ticket" },
+    query: {},
+    input: "PickUpAnswersInput",
+  },
+  answer: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/answer",
+    bind: { n: "ticket" },
+    query: {},
+    input: "AnswerInput",
+  },
+  accept_recommended: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/accept_recommended",
+    bind: { n: "ticket" },
+    query: {},
+    input: "AcceptRecommendedInput",
+  },
+  dismiss_question: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/dismiss_question",
+    bind: { n: "ticket" },
+    query: {},
+    input: "DismissQuestionInput",
+  },
+  get_spec_questions: {
+    method: "GET",
+    path: "/api/p/{key}/specs/{n}/questions",
+    bind: { n: "spec" },
+    query: {},
+    input: "SpecInput",
+  },
+  needs_me: {
+    method: "GET",
+    path: "/api/needs-me",
+    bind: {},
+    query: {},
+    input: "EmptyInput",
+  },
+  list_projects: {
+    method: "GET",
+    path: "/api/projects",
+    bind: {},
+    query: {},
+    input: "EmptyInput",
+  },
+  move: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/move",
+    bind: { n: "ticket" },
+    query: {},
+    input: "MoveInput",
+  },
+  rename_project: {
+    method: "POST",
+    path: "/api/p/{key}/rename_project",
+    bind: {},
+    query: {},
+    input: "RenameProjectInput",
+  },
+  set_landing_method: {
+    method: "POST",
+    path: "/api/p/{key}/set_landing_method",
+    bind: {},
+    query: {},
+    input: "SetLandingMethodInput",
+  },
+  set_subagent_exploration: {
+    method: "POST",
+    path: "/api/p/{key}/set_subagent_exploration",
+    bind: {},
+    query: {},
+    input: "SetSubagentExplorationInput",
+  },
+  set_model_assignment: {
+    method: "POST",
+    path: "/api/p/{key}/set_model_assignment",
+    bind: {},
+    query: {},
+    input: "SetModelAssignmentInput",
+  },
+  set_auto_accept: {
+    method: "POST",
+    path: "/api/p/{key}/set_auto_accept",
+    bind: {},
+    query: {},
+    input: "SetAutoAcceptInput",
+  },
+  set_focus_kinds: {
+    method: "POST",
+    path: "/api/p/{key}/set_focus_kinds",
+    bind: {},
+    query: {},
+    input: "SetFocusKindsInput",
+  },
+  add_repository: {
+    method: "POST",
+    path: "/api/p/{key}/add_repository",
+    bind: {},
+    query: {},
+    input: "AddRepositoryInput",
+  },
+  edit_repository: {
+    method: "POST",
+    path: "/api/p/{key}/edit_repository",
+    bind: {},
+    query: {},
+    input: "EditRepositoryInput",
+  },
+  remove_repository: {
+    method: "POST",
+    path: "/api/p/{key}/remove_repository",
+    bind: {},
+    query: {},
+    input: "RemoveRepositoryInput",
+  },
+  set_landing_order: {
+    method: "POST",
+    path: "/api/p/{key}/set_landing_order",
+    bind: {},
+    query: {},
+    input: "SetLandingOrderInput",
+  },
+  unlink: {
+    method: "POST",
+    path: "/api/p/{key}/unlink",
+    bind: {},
+    query: {},
+    input: "UnlinkInput",
+  },
+  get_import_guide: {
+    method: "GET",
+    path: "/api/p/{key}/import-guide",
+    bind: {},
+    query: {},
+    input: "EmptyInput",
+  },
+  import: {
+    method: "POST",
+    path: "/api/p/{key}/import",
+    bind: {},
+    query: {},
+    input: "ImportInput",
+  },
+  archive_project: {
+    method: "POST",
+    path: "/api/p/{key}/archive_project",
+    bind: {},
+    query: {},
+    input: "EmptyInput",
+  },
+  unarchive_project: {
+    method: "POST",
+    path: "/api/p/{key}/unarchive_project",
+    bind: {},
+    query: {},
+    input: "EmptyInput",
+  },
+  submit_requirement: {
+    method: "POST",
+    path: "/api/p/{key}/submit_requirement",
+    bind: {},
+    query: {},
+    input: "SubmitRequirementInput",
+  },
+  land: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/land",
+    bind: { n: "ticket" },
+    query: {},
+    input: "LandInput",
+  },
+  get_stage_guide: {
+    method: "GET",
+    path: "/api/p/{key}/stage-guides/{stage}",
+    bind: { stage: "stage" },
+    query: {},
+    input: "StageGuideInput",
+  },
+  submit_map: {
+    method: "POST",
+    path: "/api/p/{key}/submit_map",
+    bind: {},
+    query: {},
+    input: "SubmitMapInput",
+  },
+  submit_prototype: {
+    method: "POST",
+    path: "/api/p/{key}/submit_prototype",
+    bind: {},
+    query: {},
+    input: "SubmitPrototypeInput",
+  },
+  submit_small_change: {
+    method: "POST",
+    path: "/api/p/{key}/submit_small_change",
+    bind: {},
+    query: {},
+    input: "SubmitSmallChangeInput",
+  },
+  new_ticket: {
+    method: "POST",
+    path: "/api/p/{key}/new_ticket",
+    bind: {},
+    query: {},
+    input: "NewTicketInput",
+  },
+  submit_retro: {
+    method: "POST",
+    path: "/api/p/{key}/submit_retro",
+    bind: {},
+    query: {},
+    input: "SubmitRetroInput",
+  },
+  get_options: {
+    method: "GET",
+    path: "/api/options",
+    bind: {},
+    query: {},
+    input: "EmptyInput",
+  },
+  set_options: {
+    method: "POST",
+    path: "/api/set_options",
+    bind: {},
+    query: {},
+    input: "SetOptionsInput",
+  },
+  get_storage: {
+    method: "GET",
+    path: "/api/storage",
+    bind: {},
+    query: { project: "project" },
+    input: "GetStorageInput",
+  },
+  set_ci_tracking: {
+    method: "POST",
+    path: "/api/p/{key}/set_ci_tracking",
+    bind: {},
+    query: {},
+    input: "SetCITrackingInput",
+  },
+  set_auto_fix: {
+    method: "POST",
+    path: "/api/p/{key}/set_auto_fix",
+    bind: {},
+    query: {},
+    input: "SetAutoFixInput",
+  },
+  set_repository_ci: {
+    method: "POST",
+    path: "/api/p/{key}/set_repository_ci",
+    bind: {},
+    query: {},
+    input: "SetRepositoryCIInput",
+  },
+  add_ci_rule: {
+    method: "POST",
+    path: "/api/p/{key}/add_ci_rule",
+    bind: {},
+    query: {},
+    input: "CIRuleInput",
+  },
+  edit_ci_rule: {
+    method: "POST",
+    path: "/api/p/{key}/edit_ci_rule",
+    bind: {},
+    query: {},
+    input: "CIRuleInput",
+  },
+  remove_ci_rule: {
+    method: "POST",
+    path: "/api/p/{key}/remove_ci_rule",
+    bind: {},
+    query: {},
+    input: "RemoveCIRuleInput",
+  },
+  land_anyway: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/land_anyway",
+    bind: { n: "ticket" },
+    query: {},
+    input: "CIResponseInput",
+  },
+  rerun_ci: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/rerun_ci",
+    bind: { n: "ticket" },
+    query: {},
+    input: "CIResponseInput",
+  },
+  new_fix_ticket: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/new_fix_ticket",
+    bind: { n: "ticket" },
+    query: {},
+    input: "NewFixTicketInput",
+  },
+  set_github_issues: {
+    method: "POST",
+    path: "/api/p/{key}/set_github_issues",
+    bind: {},
+    query: {},
+    input: "SetGitHubIssuesInput",
+  },
+  keep_as_draft: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/keep_as_draft",
+    bind: { n: "ticket" },
+    query: {},
+    input: "TicketInput",
+  },
+  wont_fix: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/wont_fix",
+    bind: { n: "ticket" },
+    query: {},
+    input: "WontFixInput",
+  },
+  to_requirement: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/to_requirement",
+    bind: { n: "ticket" },
+    query: {},
+    input: "ToRequirementInput",
+  },
+  set_azure_boards: {
+    method: "POST",
+    path: "/api/p/{key}/set_azure_boards",
+    bind: {},
+    query: {},
+    input: "SetAzureBoardsInput",
+  },
+  set_models: {
+    method: "POST",
+    path: "/api/p/{key}/set_models",
+    bind: {},
+    query: {},
+    input: "SetModelsInput",
+  },
+  get_chat: {
+    method: "GET",
+    path: "/api/p/{key}/chat",
+    bind: {},
+    query: {},
+    input: "GetChatInput",
+  },
+  start_conversation: {
+    method: "POST",
+    path: "/api/p/{key}/start_conversation",
+    bind: {},
+    query: {},
+    input: "StartConversationInput",
+  },
+  send_chat_message: {
+    method: "POST",
+    path: "/api/p/{key}/send_chat_message",
+    bind: {},
+    query: {},
+    input: "SendChatMessageInput",
+  },
+  stop_chat_reply: {
+    method: "POST",
+    path: "/api/p/{key}/stop_chat_reply",
+    bind: {},
+    query: {},
+    input: "StopChatReplyInput",
+  },
+} as const;
+export type OperationName = keyof typeof OPERATIONS;
+
+// OperationInputs maps each operation to its input type.
+export interface OperationInputs {
+  create_project: CreateProjectInput;
+  get_project: EmptyInput;
+  create_spec: CreateSpecInput;
+  create_ticket: CreateTicketInput;
+  get_ticket: GetTicketInput;
+  find_tickets: FindTicketsInput;
+  edit_spec: EditSpecInput;
+  edit_ticket: EditTicketInput;
+  add_labels: LabelsInput;
+  remove_labels: LabelsInput;
+  set_tags: SetTagsInput;
+  remove_tags: RemoveTagsInput;
+  comment: CommentInput;
+  approve: TicketInput;
+  defer: DeferInput;
+  claim: ClaimInput;
+  finish: FinishInput;
+  accept: TicketInput;
+  implement: TicketInput;
+  reject: RejectInput;
+  set_session: SetSessionInput;
+  release: ReleaseInput;
+  add_blocker: BlockerInput;
+  remove_blocker: BlockerInput;
+  cancel: CancelInput;
+  get_spec: GetSpecInput;
+  find_specs: FindSpecsInput;
+  report_failure: ReportFailureInput;
+  give_up: GiveUpInput;
+  send_back: SendBackInput;
+  to_draft: TicketInput;
+  set_project_mode: SetProjectModeInput;
+  get_workflow: EmptyInput;
+  post_round: PostRoundInput;
+  pick_up_answers: PickUpAnswersInput;
+  answer: AnswerInput;
+  accept_recommended: AcceptRecommendedInput;
+  dismiss_question: DismissQuestionInput;
+  get_spec_questions: SpecInput;
+  needs_me: EmptyInput;
+  list_projects: EmptyInput;
+  move: MoveInput;
+  rename_project: RenameProjectInput;
+  set_landing_method: SetLandingMethodInput;
+  set_subagent_exploration: SetSubagentExplorationInput;
+  set_model_assignment: SetModelAssignmentInput;
+  set_auto_accept: SetAutoAcceptInput;
+  set_focus_kinds: SetFocusKindsInput;
+  add_repository: AddRepositoryInput;
+  edit_repository: EditRepositoryInput;
+  remove_repository: RemoveRepositoryInput;
+  set_landing_order: SetLandingOrderInput;
+  unlink: UnlinkInput;
+  get_import_guide: EmptyInput;
+  import: ImportInput;
+  archive_project: EmptyInput;
+  unarchive_project: EmptyInput;
+  submit_requirement: SubmitRequirementInput;
+  land: LandInput;
+  get_stage_guide: StageGuideInput;
+  submit_map: SubmitMapInput;
+  submit_prototype: SubmitPrototypeInput;
+  submit_small_change: SubmitSmallChangeInput;
+  new_ticket: NewTicketInput;
+  submit_retro: SubmitRetroInput;
+  get_options: EmptyInput;
+  set_options: SetOptionsInput;
+  get_storage: GetStorageInput;
+  set_ci_tracking: SetCITrackingInput;
+  set_auto_fix: SetAutoFixInput;
+  set_repository_ci: SetRepositoryCIInput;
+  add_ci_rule: CIRuleInput;
+  edit_ci_rule: CIRuleInput;
+  remove_ci_rule: RemoveCIRuleInput;
+  land_anyway: CIResponseInput;
+  rerun_ci: CIResponseInput;
+  new_fix_ticket: NewFixTicketInput;
+  set_github_issues: SetGitHubIssuesInput;
+  keep_as_draft: TicketInput;
+  wont_fix: WontFixInput;
+  to_requirement: ToRequirementInput;
+  set_azure_boards: SetAzureBoardsInput;
+  set_models: SetModelsInput;
+  get_chat: GetChatInput;
+  start_conversation: StartConversationInput;
+  send_chat_message: SendChatMessageInput;
+  stop_chat_reply: StopChatReplyInput;
 }

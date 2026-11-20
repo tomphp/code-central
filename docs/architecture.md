@@ -89,7 +89,7 @@ A second, test-only composition exists: `world/` + `cmd/corewasm` build the real
 | `gh`, `azdo`, `azdourl`, `codehost`, `ratelimit` | Reaching a code host: `gh.Ready` and `azdo.Access` check access, `codehost` and `azdourl` parse remote URLs and repository names, `ratelimit` holds `RateLimitError` and `FirstLine`. | Functions; leaves that import only `api` for the Watcher status contract (ADR 0072). |
 | `notify` | OS notifications for what needs the human. | Reads through a four-method `Source` interface. |
 | `clock`, `events`, `ids`, `home`, `usage` | Small injectable leaves: time, the in-memory change bus, IDs, XDG paths (ADR 0056), Usage records and the Recorder. | Small types. |
-| `web/` | The React UI, embedded by `web/web.go`. All its reads, actions and the live feed go through one `Api` (`web/src/api/api.ts`); the production `fetch` is in `web/src/api/http.ts` alone. | `Api`; wire types generated from Go into `wire.gen.ts` (ADR 0042); `web/src/api/contract/` pins `createHttpApi` on the WASM Core and on a real service. |
+| `web/` | The React UI, embedded by `web/web.go`. All its reads, actions and the live feed go through one `Api` (`web/src/api/api.ts`); the production `fetch` is in `web/src/api/http.ts` alone, which builds every operation's call from the generated Operation Table. | `Api`; wire types and the Operation Table generated from Go into `wire.gen.ts` (ADR 0042); `web/src/api/contract/` pins `createHttpApi` on the WASM Core and on a real service. |
 | Test and wasm tooling | `world`, `cmd/corewasm`, `codecentraltest`, `store/storetest`, `factory/factorytest`, `watchers/watchertest`, `internal/*` (fakes, guards, wire-type generation, test runners). | |
 
 There is no separate issue-tracker module: Specs and Tickets live in `core`, and the inbound trackers are `issuewatcher` and `workitemwatcher`.
@@ -175,33 +175,27 @@ About 200 of `core`'s 318 exported types were the wire contract: inputs, views, 
 
 ### 3. Clients run Core logic, not just Core types (fixed)
 
-The shared rules live where a client can use them without `core`: `domain` has the Spec Branch name (`SpecBranch`, `BranchTag`), the issue markers and comment keys, the Integration names, the status label prefix, the reserved labels and tags, and the Stage names and Labels (`Stages()`, `StageLabel`, `StageOf`); `codehost` has `NormalCloneURL`; `api` has `SumRepositoryProblems`, `LandingPolicies` (with `ProjectView.LandingPolicies()`), the Stage Guide names (`GuideName`, `ImplementationStage`) and the Factory's can't-land comment (`CantLandComment`). `cli` still links `core` (`core.TeachingFiles()`); `wire` is the one package that opens the Store for `serve` (weakness 8).
+The shared rules live where a client can use them without `core`: `domain` has the Spec Branch name (`SpecBranch`, `BranchTag`), the issue markers and comment keys, the Integration names, the status label prefix, the reserved labels and tags, and the Stage names and Labels (`Stages()`, `StageLabel`, `StageOf`); `codehost` has `NormalCloneURL`; `api` has `SumRepositoryProblems`, `LandingPolicies` (with `ProjectView.LandingPolicies()`), the Stage Guide names (`GuideName`, `ImplementationStage`) and the Factory's can't-land comment (`CantLandComment`). `cli` still links `core` (`core.TeachingFiles()`); `wire` is the one package that opens the Store for `serve` (weakness 7).
 
 Provider knowledge is left in `core`: `core/ci.go`'s `withoutLogin` duplicates `azdourl`'s. `ciEntryFromCloneURL` now builds the Azure DevOps project URL with `azdourl.ProjectURL`.
 
 ### 4. `ops` binds every operation to the concrete `*core.Core` (fixed)
 
-Each operation's `Call` was a `func(c *core.Core, …)` in its definition, and `client` imported `ops` to derive its calls, so it got the bindings, and with them `core` and `store`, as well as the definitions. Now `ops` holds only the definitions (name, audience, route, input and output types from `api`; what `client`, `cli`, `mcp` and the UI generator need) and imports no `core`, and the bindings (each operation's Core call, and `bind.Serve`, the dispatch side) are in the service-only `ops/bind`, which `server` composes with the definitions (Spec code-central-1111, ADR 0072). The cross-door suite's `TestEveryDefinitionHasExactlyOneBinding` keeps the two lists in step. A split of `*Core` (weakness 6) now rewrites only the bindings.
+Each operation's `Call` was a `func(c *core.Core, …)` in its definition, and `client` imported `ops` to derive its calls, so it got the bindings, and with them `core` and `store`, as well as the definitions. Now `ops` holds only the definitions (name, audience, route, input and output types from `api`; what `client`, `cli`, `mcp` and the UI generator need) and imports no `core`, and the bindings (each operation's Core call, and `bind.Serve`, the dispatch side) are in the service-only `ops/bind`, which `server` composes with the definitions (Spec code-central-1111, ADR 0072). The cross-door suite's `TestEveryDefinitionHasExactlyOneBinding` keeps the two lists in step. A split of `*Core` (weakness 5) now rewrites only the bindings.
 
-### 5. The UI's HTTP client is written by hand
-
-`web/src/api/http.ts` writes every route, method and request body by hand (`call("POST", \`${p(project)}/set_azure_boards\`, { on, mode, … })`). The types are generated, but not which operation lives at which path or which fields it takes, so a renamed route or a new input field is caught only by the cases in `web/src/api/contract/`, and only for operations those cases cover. The Go client derives the same thing from `ops`.
-
-**Recommendation:** generate an operation table (name, method, path, input type) from `ops.Definitions()` into `wire.gen.ts` beside the types, and have `http.ts` build its calls from it, as `client` does. The `Api` interface stays hand-written: it is the UI's own vocabulary.
-
-### 6. `*core.Core` is a god object
+### 5. `*core.Core` is a god object
 
 One type with 150 methods and 20 fields, mixing the persisted workflow with in-memory runtime (`heartbeats`, `transcripts`, `chats`, `activity`, `factoryWakes`, `watchers`, `latestNotices`), the Watcher check modes and Usage. Every file is a method on `*Core`, so nothing inside `core` has a boundary, and any rule can reach any other's state.
 
 **Recommendation:** with weaknesses 1 and 4 done, split along the file groupings above, starting where the seam is already clean: the agent runtime (heartbeats, transcripts, chat, plan limits, Factory wake) holds its own state and barely touches the Store, and the CI and code-host area talks to the rest through Tickets and Watcher status. Each becomes a type with its own narrow interface that the bindings in `ops/bind` call, with `*Core` shrinking to the workflow.
 
-### 7. Runtime state is per service, but the Store can be shared
+### 6. Runtime state is per service, but the Store can be shared
 
 Heartbeats, Transcripts, chats and Watcher status live in one service's memory ("in memory only, never in the store", `core/heartbeat.go`; ADR 0008). Since ADR 0068, several services can share a Postgres Store and hear each other's Changes, but not each other's runtime state: a Factory reporting to one service is Offline in the UI of another, and its Transcript is blank there. Nothing in the docs says whether that is intended.
 
 **Recommendation:** decide it and record the decision in an ADR, either "a Factory and the UI that watches it use the same service" (and say so where a shared Store is set up), or move the state that must be seen everywhere (at least Heartbeats) into the Store's `Services()` side, outside any View or Update, as Registrations and Leases already are.
 
-### 8. `cli` is still wide
+### 7. `cli` is still wide
 
 `cli` imports 15 Code Central packages, `store` and all four Watchers among them: `serve`'s Store location (`cli/serve.go`), the Watchers' subcommands and Store Move live beside the commands that are only HTTP clients. That is why `factory/factorytest` and `watchers/watchertest`, which re-run `cli.Run` as a fake binary, link everything too.
 
