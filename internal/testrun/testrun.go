@@ -207,11 +207,40 @@ func failuresLines(output []byte) []string {
 	return items
 }
 
+// goFiles lists the .go files of the module at root, as go test ./... sees
+// them: it skips any directory below root with its own go.mod (a nested
+// module such as an agent worktree), and .git and node_modules.
+func goFiles(root string) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if path == root {
+				return nil
+			}
+			if d.Name() == ".git" || d.Name() == "node_modules" {
+				return filepath.SkipDir
+			}
+			if _, err := os.Stat(filepath.Join(path, "go.mod")); err == nil {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(path, ".go") {
+			files = append(files, path)
+		}
+		return nil
+	})
+	return files, err
+}
+
 // suite is the fast suite. The web jobs run their tools through node
 // rather than node_modules/.bin, whose shims differ by OS.
 var suite = []job{
 	{Name: "go test", Args: []string{"go", "test", "./..."}, Rerun: rerunGo, Failures: failuresGo},
-	{Name: "gofmt", Args: []string{"gofmt", "-l", "."}, FailOnOutput: true, Failures: failuresLines},
+	{Name: "gofmt", Args: []string{"gofmt", "-l"}, FailOnOutput: true, Failures: failuresLines},
 	{Name: "vitest", Dir: "web", Args: []string{"node", "node_modules/vitest/vitest.mjs", "run"}, Rerun: rerunVitest, Failures: failuresVitest},
 	{Name: "tsc", Dir: "web", Args: []string{"node", "node_modules/typescript/bin/tsc", "--noEmit"}, Failures: failuresTsc},
 	{Name: "eslint", Dir: "web", Args: []string{"node", "node_modules/eslint/bin/eslint.js", "."}},
@@ -223,6 +252,16 @@ func main() {
 	verbose := flag.Bool("v", false, "print every job's whole output, not only the failures'")
 	flag.Parse()
 	wd, _ := os.Getwd()
+	files, err := goFiles(".")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	for i := range suite {
+		if suite[i].Name == "gofmt" && len(files) > 0 {
+			suite[i].Args = append(suite[i].Args, files...)
+		}
+	}
 	if !run(suite, *budget, *verbose, logPath(wd), os.Stdout) {
 		os.Exit(1)
 	}
