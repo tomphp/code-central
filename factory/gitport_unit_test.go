@@ -14,6 +14,7 @@ import (
 // An Env with no Git goes through real git: the git binary found on
 // PATH, run with the Env's environment.
 func TestAnEnvWithNoGitGoesThroughRealGit(t *testing.T) {
+	t.Parallel()
 	bin := t.TempDir()
 	name := "git"
 	if runtime.GOOS == "windows" {
@@ -33,6 +34,7 @@ func TestAnEnvWithNoGitGoesThroughRealGit(t *testing.T) {
 
 // An Env with no Git and no git on PATH has no Git port.
 func TestAnEnvWithNoGitAndNoGitOnPathHasNoGitPort(t *testing.T) {
+	t.Parallel()
 	e := Env{Environ: []string{"PATH=" + t.TempDir()}}
 	if _, err := e.gitPort(); err == nil || err.Error() != "git isn't on PATH" {
 		t.Errorf("the Git port fails with %v, want git isn't on PATH", err)
@@ -42,6 +44,7 @@ func TestAnEnvWithNoGitAndNoGitOnPathHasNoGitPort(t *testing.T) {
 // An Env's own Git is the one the Factory goes through, with no git on
 // PATH needed.
 func TestAnEnvsOwnGitIsTheFactorys(t *testing.T) {
+	t.Parallel()
 	own := &fakeGit{}
 	if got, err := (Env{Git: own}).gitPort(); got != own || err != nil {
 		t.Errorf("the Git port is %#v, %v, want the Env's own", got, err)

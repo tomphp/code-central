@@ -498,10 +498,11 @@ func start(e Env, o options) (*factory, error) {
 	// The Home Repository is named by the Project Key.
 	home.name = project
 	f.repos.replace(map[string]*repository{project: home}, []*repository{home})
-	var ok bool
-	if f.claude, ok = e.lookPath("claude"); !ok {
+	claude, ok := e.lookPath("claude")
+	if !ok {
 		return nil, errors.New("claude isn't on PATH")
 	}
+	f.claude = claude
 	if err := refuseClaudeShim(f.claude); err != nil {
 		return nil, err
 	}
