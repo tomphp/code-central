@@ -309,6 +309,8 @@ type turnEnd struct {
 	// "authentication_failed" or "model_not_found"; empty when there was
 	// none.
 	APIError string
+	// ReviewCalled is whether the Turn called the code-review skill.
+	ReviewCalled bool
 }
 
 func (t turnEnd) String() string {
@@ -492,6 +494,11 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, now func() time.Time,
 		case "assistant":
 			if msg.Error != "" {
 				end.APIError = msg.Error
+			}
+			for _, c := range msg.Message.Content {
+				if c.Type == "tool_use" && calledReview(c.Name, c.Input) {
+					end.ReviewCalled = true
+				}
 			}
 		case "result":
 			var r result

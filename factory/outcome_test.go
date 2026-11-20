@@ -358,3 +358,62 @@ func stateAllowedTools(t *testing.T, h *factorytest.Harness, claimID string) []s
 	t.Fatalf("the state file doesn't hold Claim %s: %s", claimID, b)
 	return nil
 }
+
+func finishWithBranch(summary string) factorytest.Step {
+	return factorytest.CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", summary, "--branch", "{{ticket}}", "--commit", "{{head}}")
+}
+
+func reviewSkippedComment(tk api.TicketView) bool {
+	for _, c := range tk.Comments {
+		if strings.Contains(c.Body, "skipped the code-review skill") {
+			return true
+		}
+	}
+	return false
+}
+
+func commitFile(name string) []factorytest.Step {
+	return []factorytest.Step{
+		factorytest.WriteFile(name, "x\n"),
+		factorytest.Git("add", name),
+		factorytest.Git("commit", "-q", "-m", "Change "+name),
+	}
+}
+
+func TestAnImplementationFinishWithCodeChangesAndNoCodeReviewGetsAComment(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	id := h.ReadyTicket("No review")
+	h.Script(id, append(commitFile("main.go"), finishWithBranch("Done."))...)
+	h.Start()
+	tk := h.WantState(id, domain.InReview)
+	if !reviewSkippedComment(tk) {
+		t.Errorf("no comment says the review was skipped: %+v", tk.Comments)
+	}
+}
+
+func TestAnImplementationFinishThatCalledCodeReviewGetsNoComment(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	id := h.ReadyTicket("Reviewed")
+	h.Script(id, append(append(commitFile("main.go"),
+		factorytest.ToolUse("Skill", `{"skill":"mattpocock-skills:code-review"}`)),
+		finishWithBranch("Done."))...)
+	h.Start()
+	tk := h.WantState(id, domain.InReview)
+	if reviewSkippedComment(tk) {
+		t.Errorf("a reviewed finish got a comment: %+v", tk.Comments)
+	}
+}
+
+func TestADocsOnlyImplementationFinishWithNoCodeReviewGetsNoComment(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	id := h.ReadyTicket("Docs")
+	h.Script(id, append(commitFile("NOTES.md"), finishWithBranch("Done."))...)
+	h.Start()
+	tk := h.WantState(id, domain.InReview)
+	if reviewSkippedComment(tk) {
+		t.Errorf("a docs-only finish got a comment: %+v", tk.Comments)
+	}
+}
