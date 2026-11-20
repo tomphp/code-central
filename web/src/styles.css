@@ -303,6 +303,19 @@ a.filter { text-decoration: none; }
 .archived-group .filter { opacity: .7; }
 .count { color: var(--muted); font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 500; }
 .count.loud { color: color-mix(in srgb, var(--r-answer) 55%, var(--text)); font-weight: 700; }
+/* A popover under its button, as Columns ▾ and the Project picker have: the
+   wrapper anchors it, popover-left aligns it to the button's left edge, and a
+   row is a label or an option, with hover and the active row. */
+.popover-wrap { position: relative; }
+.popover-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 12rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgb(0 0 0 / .14); padding: 4px; display: flex; flex-direction: column; }
+.popover-menu[hidden] { display: none; }
+.popover-menu.popover-left { right: auto; left: 0; }
+.popover-menu:focus-visible { outline: none; }
+.view-head .popover-menu label, .popover-menu [role="option"] { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 5px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+.popover-menu label:hover, .popover-menu [role="option"]:hover, .popover-menu [role="option"].active { background: var(--surface-2); }
+.popover-menu .check { margin-left: auto; width: 1em; }
+.popover-heading { padding: 6px 8px 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.project-choice { display: inline-flex; align-items: center; gap: 6px; }
 /* A Project's ribbon: a short bar in its own colour (a bar, never a ring,
    so it never reads as a State). The palette is the rail's, in both themes. */
 :root { --ribbon-1: #f08a6c; --ribbon-2: #5aa9f0; --ribbon-3: #e8bf4a; --ribbon-4: #6cc77f; --ribbon-5: #c18ae6; --ribbon-6: #5fd0cb; }
@@ -667,7 +680,7 @@ a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
    midnight enamel, with the roundel before the view's name. */
 .view-head { display: flex; align-items: center; gap: 16px; min-height: 56px; padding: 10px 20px; background: var(--rail); color: var(--rail-text); box-shadow: inset 0 -1px var(--rail-rule); }
 .view-head h1 { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 800; margin: 0; }
-.view-head label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.view-head label, .view-head .view-picker { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .view-picker-label, .view-head > .muted, .view-head .focus-left, .view-head .btn .muted, .view-head .focus-project .muted, .view-head > .count { color: var(--rail-muted); }
 .view-head a.btn { text-decoration: none; }
 .view-head .btn, .view-head select { background: transparent; color: var(--rail-text); border: 1px solid color-mix(in srgb, var(--rail-text) 30%, transparent); }
@@ -681,7 +694,7 @@ a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
 .view-head .bs-toggle button { color: var(--rail-muted); }
 .view-head .bs-toggle button + button { border-left-color: color-mix(in srgb, var(--rail-text) 30%, transparent); }
 .view-head .bs-toggle button[aria-pressed="true"] { background: #f4f2ec; color: #12224a; }
-.view-head .new-menu, .view-head .board-columns-menu, .view-head .menu { color: var(--text); }
+.view-head .new-menu, .view-head .popover-menu, .view-head .menu { color: var(--text); }
 .view-head :focus-visible { outline-color: #f4f2ec; }
 .inbox-nav :focus-visible { outline-color: #f4f2ec; }
 .view-head-spacer { margin-left: auto; }

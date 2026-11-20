@@ -2,7 +2,7 @@
 // renames (story 92), opens its Project Options page or archives it, and
 // Archived ones in a collapsed group at the bottom, each with a menu that
 // unarchives it (ticket 39).
-import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
 import type { ApiError, ProjectRow } from "../api/types";
 import { useApi } from "../live";
 import { FactoryStatusDot } from "../factory/FactoryStatus";
@@ -10,6 +10,7 @@ import { useNeedsMe } from "../needsme/context";
 import { Button } from "../controls/Button";
 import { More } from "../controls/Icon";
 import { Count } from "../controls/Count";
+import { ProjectRibbon } from "../controls/ProjectRibbon";
 
 export interface ProjectFilterProps {
   project: ProjectRow;
@@ -18,14 +19,6 @@ export interface ProjectFilterProps {
   onSelect(): void;
   // projectOptions links to the Project's Project Options page.
   projectOptions?: { href: string; onClick(e: MouseEvent): void };
-}
-
-// ribbonOf is a Project's ribbon colour, fixed by its Key, so a Project
-// keeps the same one wherever it is shown.
-export function ribbonOf(key: string): string {
-  let h = 0;
-  for (const c of key) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return `var(--ribbon-${(h % 6) + 1})`;
 }
 
 // ProjectFilter is one Project's row: the filter button, then its menu.
@@ -80,7 +73,7 @@ export function ProjectFilter({ project: p, now, on, onSelect, projectOptions }:
         onClick={onSelect}
       >
         <span className="filter-label">
-          <span className="ribbon" style={{ "--ribbon": ribbonOf(p.key) } as CSSProperties} aria-hidden="true" />
+          <ProjectRibbon projectKey={p.key} />
           {p.display_name}
         </span>{" "}
         <Count n={needsMe} loud={needsMe > 0} />

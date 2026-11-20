@@ -5,6 +5,7 @@
 // order and fields, ignored runs, and a run that changes pulsing.
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { chooseProject, projectPicker } from "../testPickers";
 import { describe, expect, it } from "vitest";
 import { newWorld, SERVICE_LIFE_MS, WORLD_HOST, type World } from "../api/core/core";
 import type { Scenario } from "../api/scenario";
@@ -83,7 +84,7 @@ const renderApp = ({ w }: Fake, url = "/") => renderWorldApp(w, url);
 
 const ci = () => screen.getByRole("main", { name: "CI" });
 const nav = () => screen.getByRole("navigation", { name: "Filters" });
-const scope = () => within(ci()).getByRole("combobox", { name: "Projects" });
+const scope = () => projectPicker(ci());
 const watchers = () =>
   within(ci()).getByRole("region", { name: "CI Watchers" });
 const table = () => within(ci()).getByRole("table", { name: "CI Runs" });
@@ -113,7 +114,7 @@ describe("opening and leaving the CI view", () => {
 
     await userEvent.click(link);
     expect(ci()).toBeInTheDocument();
-    expect(scope()).toHaveValue("acme");
+    expect(scope()).toHaveTextContent("Acme");
 
     await userEvent.click(
       within(ci()).getByRole("button", { name: "Back to the Inbox" }),
@@ -130,13 +131,12 @@ describe("opening and leaving the CI view", () => {
       "?view=ci",
     );
     await userEvent.click(within(nav()).getByRole("link", { name: "CI" }));
-    expect(scope()).toHaveValue("");
+    expect(scope()).toHaveTextContent("All Projects");
   });
 
   it("changes scope with the Projects picker, keeping the address", async () => {
     await renderApp(await world(),"/?view=ci");
-    within(scope()).getByRole("option", { name: "Beta" });
-    await userEvent.selectOptions(scope(), "beta");
+    await chooseProject(ci(), "Beta");
     expect(window.location.search).toBe("?view=ci&project=beta");
   });
 });

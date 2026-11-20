@@ -31,6 +31,12 @@ export function FactoryList({ status, now }: { status: FactoryStatus; now: Date 
   );
 }
 
+// FactoryStatusMark is the dot as a plain mark, for inside an option: named
+// for its status, not focusable, with no tooltip.
+export function FactoryStatusMark({ status }: { status: FactoryStatus }) {
+  return <span className={`factory-dot ${status.status}`} role="img" aria-label={`Factory Status: ${LABELS[status.status]}`} />;
+}
+
 // FactoryStatusDot is the small dot before an active Project's name. It is
 // focusable and named for its status, so colour is not the only signal; hover
 // or focus shows the tooltip.

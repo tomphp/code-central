@@ -3,6 +3,7 @@ import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { failCI } from "../ciTesting";
+import { chooseProject } from "../testPickers";
 import { MINUTE, world, renderApp, settled, click, needing, boardLink, board, heads, column, cards, titles, columnsButton, loaded } from "./Board.testutil";
 
 beforeEach(() => localStorage.clear());
@@ -165,7 +166,7 @@ describe("the Board's Needs Me column", () => {
     await renderApp(fake, "/?view=board&needs=1");
     within(board()).getByRole("link", { name: /Beta export/ });
     expect(needsTitles()).toEqual(["Sign-up page", "Beta export"]);
-    await userEvent.selectOptions(within(board()).getByRole("combobox", { name: "Projects" }), "acme");
+    await chooseProject(board(), "Acme");
     await settled();
     expect(needsTitles()).toEqual(["Sign-up page"]);
   });

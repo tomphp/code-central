@@ -8,12 +8,7 @@
 .board-new { position: relative; }
 .board-new .new-menu { left: auto; min-width: 16rem; }
 
-/* Columns ▾ and its popover of checkboxes. */
-.board-columns { position: relative; }
-.board-columns-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 12rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgb(0 0 0 / .14); padding: 4px; display: flex; flex-direction: column; }
-.board-columns-menu[hidden] { display: none; }
-.view-head .board-columns-menu label { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 5px; cursor: pointer; font-size: 13px; }
-.board-columns-menu label:hover { background: var(--surface-2); }
+/* Columns ▾'s swatch, in its popover of checkboxes (.popover-menu). */
 .board-swatch { width: 11px; height: 11px; border-radius: 50%; box-sizing: border-box; border: 3px solid var(--st); background: var(--surface); flex: none; }
 
 /* A brief note under the header, as Focus Mode's. */

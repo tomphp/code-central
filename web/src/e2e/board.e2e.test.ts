@@ -37,7 +37,7 @@ describe("end-to-end: the human opens the Board from the Inbox", () => {
     const board = page.getByRole("main", { name: "Board" });
     const inProgress = board.getByRole("region", { name: "In Progress" });
     await inProgress.getByRole("link", { name: /Login form/ }).waitFor();
-    expect(await board.getByRole("combobox", { name: "Projects" }).inputValue()).toBe("acme");
+    expect(await board.getByRole("button", { name: /^Projects/ }).textContent()).toContain("Acme");
     expect(await board.getByRole("region", { name: "Ready" }).getByRole("link", { name: /Sign-up page/ }).count()).toBe(1);
     const boardAddress = page.url();
 

@@ -4,6 +4,7 @@
 // its Projects picker and Back, and that it shows whatever needs the human.
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { chooseProject, projectPicker } from "../testPickers";
 import { describe, expect, it } from "vitest";
 import { newWorld, type World } from "../api/core/core";
 import { loadedDashboard } from "../focus/worldTesting";
@@ -60,7 +61,7 @@ describe("the Activity view", () => {
   it("opens from the link on the sidebar's Project and Back returns to the Inbox as it was", async () => {
     await renderApp((await projects()).w,"/?view=inbox&project=acme&state=Accepted");
     await userEvent.click(within(nav()).getByRole("link", { name: "Activity" }));
-    expect(within(activity()).getByRole("combobox", { name: "Projects" })).toHaveValue("acme");
+    expect(projectPicker(activity())).toHaveTextContent("Acme");
 
     await userEvent.click(within(activity()).getByRole("button", { name: "Back to the Inbox" }));
     expect(window.location.search).toBe("?view=inbox&project=acme&state=Accepted");
@@ -69,9 +70,7 @@ describe("the Activity view", () => {
   it("changes scope with the Projects picker, keeping the address", async () => {
     const { w } = await projects();
     await renderApp(w, "/?view=activity");
-    const picker = within(activity()).getByRole("combobox", { name: "Projects" });
-    within(picker).getByRole("option", { name: "Beta" });
-    await userEvent.selectOptions(picker, "beta");
+    await chooseProject(activity(), "Beta");
     expect(window.location.search).toBe("?view=activity&project=beta");
     const d = await dashboard(w);
     expect(d).toHaveTextContent("Beta export");

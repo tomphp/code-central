@@ -6,6 +6,7 @@ import type { Scenario } from "../api/scenario";
 import type { Api } from "../api/api";
 import type { UsageResponse } from "../api/types";
 import { scenario, settle } from "../worldTesting";
+import { chooseProject, projectPicker } from "../testPickers";
 
 export async function projects() {
   const w = await newWorld();
@@ -42,7 +43,9 @@ export async function renderApp(w: World, url = "/", api: Api = w.api) {
 
 export const usage = () => screen.getByRole("main", { name: "Usage" });
 export const table = () => within(usage()).getByRole("table", { name: "Code Central calls" });
-export const scope = () => within(usage()).getByRole("combobox", { name: "Projects" });
+// scope is the Project picker's button; chooseScope picks a Project by its shown name.
+export const scope = () => projectPicker(usage());
+export const chooseScope = (name: string) => chooseProject(usage(), name);
 export const range = () => within(usage()).getByRole("combobox", { name: "Range" });
 // column is the text of each body row's cell under the header named.
 export function column(name: string): string[] {

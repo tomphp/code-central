@@ -4,6 +4,7 @@
 // the address changing. On a WASM Core world.
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { openProjectPicker, projectChoices, projectPicker } from "./testPickers";
 import { describe, expect, it, vi } from "vitest";
 import { newWorld, type World } from "./api/core/core";
 import { renderApp, scenario, settle } from "./focus/worldTesting";
@@ -24,8 +25,6 @@ async function world(...more: string[]) {
 }
 
 const nav = () => screen.getByRole("navigation", { name: "Filters" });
-const picker = () => screen.getByRole("combobox", { name: "Projects" });
-const optionNames = (select: HTMLElement) => within(select).getAllByRole("option").map((o) => o.textContent);
 const address = () => window.location.search;
 
 describe("the Inbox with a Sole Project", () => {
@@ -93,16 +92,16 @@ describe("the full-width views with a Sole Project", () => {
   it.each(["board", "ci", "activity", "usage"])("%s: the picker shows the Sole Project, lists the Archived one and has no All Projects", async (view) => {
     const { w } = await world();
     await renderApp(w, `/?view=${view}`);
-    const select = picker();
-    expect(select).toHaveValue("acme");
-    expect(optionNames(select)).toEqual(["Acme", "Old App (Archived)"]);
+    const main = screen.getByRole("main");
+    expect(projectPicker(main)).toHaveTextContent("Acme");
+    expect(projectChoices(await openProjectPicker(main))).toEqual(["Acme", "Old App"]);
     expect(address()).toBe(`?view=${view}`);
   });
 
   it("offers All Projects with two active Projects", async () => {
     const { w } = await world("beta");
     await renderApp(w, "/?view=board");
-    expect(optionNames(picker())[0]).toBe("All Projects");
+    expect(projectChoices(await openProjectPicker(screen.getByRole("main")))[0]).toBe("All Projects");
   });
 
   it("the Board scopes to it with Short IDs on its cards", async () => {
