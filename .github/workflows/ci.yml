@@ -225,7 +225,9 @@ jobs:
 
   # What the binaries need and what runs on them, on each OS, alongside
   # the Shards: core.wasm, the Vite build they embed, the binaries, and
-  # the Go and UI e2e suites.
+  # the Go and UI e2e suites. A longer timeout than the Shards', since a
+  # cold Windows runner installs and builds everything before the suites
+  # run.
   e2e:
     name: e2e (${{ matrix.os }})
     strategy:
@@ -233,7 +235,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     defaults:
       run:
         shell: bash

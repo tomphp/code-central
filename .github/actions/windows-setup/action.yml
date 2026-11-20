@@ -17,10 +17,10 @@ runs:
       shell: bash
       run: git config --global core.autocrlf false
 
-    # Go tests that start git and write files run 10-15x slower on Windows
-    # than on Linux, and Defender's on-access scanning of the workspace,
-    # TEMP and the Go caches is a likely cause (code-central-1141). This
-    # saves that scanning. The runner's TEMP and the Go caches are
+    # Experiment (code-central-1141): Go tests that start git and write
+    # files run 10-15x slower on Windows than on Linux, and Defender's
+    # on-access scanning of the workspace, TEMP and the Go caches is a
+    # likely cause. This saves that scanning. The runner's TEMP and the Go caches are
     # excluded by their default paths, since the Dev Drive step below
     # moves them.
     - name: Exclude build paths from Defender
