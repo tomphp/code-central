@@ -120,6 +120,9 @@ func remoteCases(t *testing.T, open func(t *testing.T) (Setup, git.Repo, string)
 		push(t, repo, "topic", theirs)
 		checkBranch(t, remote, "topic", ours)
 		checkBranch(t, repo, "origin/topic", ours)
+		// A push that changes nothing is up to date before its lease is
+		// checked, so a stale lease doesn't refuse it.
+		push(t, repo, "topic", first)
 	})
 
 	t.Run("remoteHas asks the remote, so a branch deleted there since the last fetch isn't counted", func(t *testing.T) {

@@ -35,14 +35,16 @@ func TestRealGitContract(t *testing.T) {
 }
 
 // realEnviron is git's environment for a contract case: no system or
-// global config, no background maintenance, and a fixed author,
-// committer and date, so that equal commits have equal IDs.
+// global config, no background maintenance, no repository found above
+// the case's temporary folders, and a fixed author, committer and date,
+// so that equal commits have equal IDs.
 func realEnviron(t *testing.T) []string {
 	global := filepath.Join(t.TempDir(), "gitconfig")
 	if err := os.WriteFile(global, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return append(os.Environ(),
+		"GIT_CEILING_DIRECTORIES="+filepath.Dir(filepath.Dir(global)),
 		"GIT_CONFIG_NOSYSTEM=1",
 		"GIT_CONFIG_GLOBAL="+global,
 		"GIT_CONFIG_COUNT=2",

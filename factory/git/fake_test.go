@@ -2,7 +2,6 @@ package git_test
 
 import (
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -14,10 +13,7 @@ import (
 func TestFakeGitContract(t *testing.T) {
 	t.Parallel()
 	gittest.Run(t, func(t *testing.T) gittest.Setup {
-		f, dir, _ := newFake(t)
-		remote := filepath.Join(t.TempDir(), "remote.git")
-		f.InitBare(remote)
-		f.AddRemote(dir, "origin", remote)
+		f, dir, _, remote := newFakeWithRemote(t)
 		return gittest.Setup{Git: f, Dir: dir, Commit: func(c git.Change) string { return f.MakeCommit(dir, c) }, Remote: remote}
 	})
 }

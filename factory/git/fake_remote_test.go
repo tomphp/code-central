@@ -21,6 +21,17 @@ func newFakeWithRemote(tb testing.TB) (f *git.Fake, dir, first, remote string) {
 	return f, dir, first, remote
 }
 
+// moveMain moves main in the repository at dir from first to a commit on
+// it, and returns that commit.
+func moveMain(t *testing.T, f *git.Fake, dir, first string) string {
+	t.Helper()
+	next := f.MakeCommit(dir, git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n"}})
+	if err := f.Open(dir).UpdateRef("refs/heads/main", next, first); err != nil {
+		t.Fatal(err)
+	}
+	return next
+}
+
 func TestAFakeRemoteBrokenFailsEverythingAskingItUntilRestored(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -53,10 +64,7 @@ func TestAFakeRemoteBrokenFailsEverythingAskingItUntilRestored(t *testing.T) {
 	if has, err := repo.RemoteHas(ctx, "origin", "main"); err != nil || !has {
 		t.Errorf("RemoteHas(main) once restored = %t, %v; want true", has, err)
 	}
-	next := f.MakeCommit(dir, git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n"}})
-	if err := repo.UpdateRef("refs/heads/main", next, first); err != nil {
-		t.Fatal(err)
-	}
+	moveMain(t, f, dir, first)
 	if out, err := repo.Push(ctx, "origin", "main", ""); err != nil {
 		t.Errorf("Push once restored: %v: %s", err, out)
 	}
@@ -73,10 +81,7 @@ func TestAFakeRemoteRefusingPushesStillServesFetchesUntilItAcceptsThem(t *testin
 	if out, err := repo.Push(ctx, "origin", "main", ""); err != nil {
 		t.Fatalf("Push: %v: %s", err, out)
 	}
-	next := f.MakeCommit(dir, git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n"}})
-	if err := repo.UpdateRef("refs/heads/main", next, first); err != nil {
-		t.Fatal(err)
-	}
+	next := moveMain(t, f, dir, first)
 
 	f.RefusePushes(remote)
 	out, err := repo.Push(ctx, "origin", "main", "")
@@ -110,6 +115,7 @@ func TestAFakeGitsVersionIsOneTheFactoryRunsWithUntilSet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// 2.38 is minGit in factory/factory.go.
 	m := regexp.MustCompile(`^git version (\d+)\.(\d+)\.\d+$`).FindStringSubmatch(v)
 	if m == nil {
 		t.Fatalf("Version = %q, want git version and a number", v)

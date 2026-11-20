@@ -58,6 +58,12 @@ type fakeRepository struct {
 	refusing bool
 }
 
+// newFakeRepository is a repository with no objects or refs in the folder
+// dir, with head its HEAD.
+func newFakeRepository(dir, head string) *fakeRepository {
+	return &fakeRepository{dir: dir, head: head, commits: map[string]fakeCommit{}, trees: map[string]fakeTree{}, refs: map[string]string{}}
+}
+
 // fakeTree is a tree: each file's content by its slash-separated path.
 type fakeTree map[string]string
 
@@ -100,7 +106,7 @@ func (f *Fake) Init(dir string, files map[string]string, msg string) string {
 	if f.repos[dir] != nil {
 		f.tb.Fatalf("fake git: %s holds a repository already", dir)
 	}
-	r := &fakeRepository{dir: dir, head: "refs/heads/main", commits: map[string]fakeCommit{}, trees: map[string]fakeTree{}, refs: map[string]string{}}
+	r := newFakeRepository(dir, "refs/heads/main")
 	tree := fakeTree(maps.Clone(files))
 	c := r.writeCommit(fakeCommit{tree: r.writeTree(tree), author: fakeAuthor, message: msg})
 	r.refs[r.head] = c

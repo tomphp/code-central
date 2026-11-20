@@ -27,7 +27,9 @@ func (f *Fake) InitBare(path string) {
 	if err := os.MkdirAll(path, 0o755); err != nil {
 		f.tb.Fatal(err)
 	}
-	f.repos[path] = &fakeRepository{dir: path, head: "refs/heads/main", commits: map[string]fakeCommit{}, trees: map[string]fakeTree{}, refs: map[string]string{}, bare: true}
+	r := newFakeRepository(path, "refs/heads/main")
+	r.bare = true
+	f.repos[path] = r
 }
 
 // AddRemote gives the repository at dir the remote name at url, as git
@@ -35,19 +37,15 @@ func (f *Fake) InitBare(path string) {
 // one with a remote name already.
 func (f *Fake) AddRemote(dir, name, url string) {
 	f.tb.Helper()
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	r := f.repos[filepath.Clean(dir)]
-	if r == nil {
-		f.tb.Fatalf("fake git: %s holds no repository", dir)
-	}
-	if _, ok := r.remotes[name]; ok {
-		f.tb.Fatalf("fake git: %s has a remote %s already", dir, name)
-	}
-	if r.remotes == nil {
-		r.remotes = map[string]string{}
-	}
-	r.remotes[name] = url
+	f.withRepository(dir, func(r *fakeRepository) {
+		if _, ok := r.remotes[name]; ok {
+			f.tb.Fatalf("fake git: %s has a remote %s already", dir, name)
+		}
+		if r.remotes == nil {
+			r.remotes = map[string]string{}
+		}
+		r.remotes[name] = url
+	})
 }
 
 // BreakRemote makes the repository at path unreachable as a remote, as
@@ -55,31 +53,31 @@ func (f *Fake) AddRemote(dir, name, url string) {
 // until RestoreRemote.
 func (f *Fake) BreakRemote(path string) {
 	f.tb.Helper()
-	f.change(path, func(r *fakeRepository) { r.broken = true })
+	f.withRepository(path, func(r *fakeRepository) { r.broken = true })
 }
 
 // RestoreRemote undoes BreakRemote.
 func (f *Fake) RestoreRemote(path string) {
 	f.tb.Helper()
-	f.change(path, func(r *fakeRepository) { r.broken = false })
+	f.withRepository(path, func(r *fakeRepository) { r.broken = false })
 }
 
 // RefusePushes makes the repository at path refuse every push, as a
 // pre-receive hook would, while still serving fetches.
 func (f *Fake) RefusePushes(path string) {
 	f.tb.Helper()
-	f.change(path, func(r *fakeRepository) { r.refusing = true })
+	f.withRepository(path, func(r *fakeRepository) { r.refusing = true })
 }
 
 // AcceptPushes undoes RefusePushes.
 func (f *Fake) AcceptPushes(path string) {
 	f.tb.Helper()
-	f.change(path, func(r *fakeRepository) { r.refusing = false })
+	f.withRepository(path, func(r *fakeRepository) { r.refusing = false })
 }
 
-// change changes the repository at path with do, under the Fake's lock,
-// failing the test when there is none.
-func (f *Fake) change(path string, do func(r *fakeRepository)) {
+// withRepository calls do with the repository at path, under the Fake's
+// lock, failing the test when there is none.
+func (f *Fake) withRepository(path string, do func(r *fakeRepository)) {
 	f.tb.Helper()
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -131,6 +129,9 @@ func (f *Fake) topLevel(dir string) (string, error) {
 	}
 }
 
+// Clone clones the repository at url into path as git clone does: the
+// clone has url's branches as remote-tracking branches under remote, and
+// url's HEAD branch checked out in path.
 func (f *Fake) Clone(ctx context.Context, remote, url, path string) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
@@ -149,7 +150,8 @@ func (f *Fake) Clone(ctx context.Context, remote, url, path string) (string, err
 	if !ok {
 		return "", f.notModelled("a clone of %s, whose HEAD is no branch it has", url)
 	}
-	r := &fakeRepository{dir: path, head: from.head, commits: map[string]fakeCommit{}, trees: map[string]fakeTree{}, refs: map[string]string{}, remotes: map[string]string{remote: url}}
+	r := newFakeRepository(path, from.head)
+	r.remotes = map[string]string{remote: url}
 	if err := f.fetchInto(r, from, remote); err != nil {
 		return "", err
 	}
@@ -238,10 +240,10 @@ func (g fakeRepo) TopLevel() (string, error) {
 	return g.f.topLevel(g.dir)
 }
 
-// remote is the repository remote names, as one of r's remotes or as a
-// URL, its URL and whether it is one of r's remotes; or git's output and
-// error when it can't be reached.
-func (g fakeRepo) remote(r *fakeRepository, remote string) (to *fakeRepository, url string, named bool, out string, err error) {
+// resolveRemote is the repository remote names, as one of r's remotes or
+// as a URL, its URL and whether it is one of r's remotes; or git's output
+// and error when it can't be reached.
+func (g fakeRepo) resolveRemote(r *fakeRepository, remote string) (to *fakeRepository, url string, named bool, out string, err error) {
 	url, named = r.remotes[remote]
 	if !named {
 		if !filepath.IsAbs(remote) && !strings.ContainsAny(remote, `:/\`) {
@@ -254,6 +256,10 @@ func (g fakeRepo) remote(r *fakeRepository, remote string) (to *fakeRepository, 
 	return to, url, named, out, err
 }
 
+// Push pushes branch to remote as git push does, with lease as
+// --force-with-lease, rejecting a push that isn't a fast-forward or
+// misses its lease with git's output, and moving remote's
+// remote-tracking branch when remote is one of the repository's remotes.
 func (g fakeRepo) Push(ctx context.Context, remote, branch, lease string) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
@@ -266,7 +272,7 @@ func (g fakeRepo) Push(ctx context.Context, remote, branch, lease string) (strin
 	if branch == "" || branch == "HEAD" || strings.HasPrefix(branch, "refs/") || strings.ContainsAny(branch, ":+^~ *?[\\") {
 		return "", g.f.notModelled("the push of %q", branch)
 	}
-	to, url, named, out, err := g.remote(r, remote)
+	to, url, named, out, err := g.resolveRemote(r, remote)
 	if err != nil {
 		return out, err
 	}
@@ -282,6 +288,15 @@ func (g fakeRepo) Push(ctx context.Context, remote, branch, lease string) (strin
 		return gitFailed("To %s\n ! [rejected]        %s -> %s (%s)\nerror: failed to push some refs to '%s'", url, branch, branch, why, url)
 	}
 	theirs, exists := to.refs[ref]
+	track := func() {
+		if named {
+			r.refs["refs/remotes/"+remote+"/"+branch] = ours
+		}
+	}
+	if exists && theirs == ours {
+		track()
+		return "Everything up-to-date", nil
+	}
 	forced := false
 	switch {
 	case lease != "":
@@ -298,15 +313,6 @@ func (g fakeRepo) Push(ctx context.Context, remote, branch, lease string) (strin
 			return rejected("fetch first")
 		}
 		return rejected("non-fast-forward")
-	}
-	track := func() {
-		if named {
-			r.refs["refs/remotes/"+remote+"/"+branch] = ours
-		}
-	}
-	if exists && theirs == ours {
-		track()
-		return "Everything up-to-date", nil
 	}
 	if to.refusing {
 		return gitFailed("remote: pushes are refused\nTo %s\n ! [remote rejected] %s -> %s (pre-receive hook declined)\nerror: failed to push some refs to '%s'", url, branch, branch, url)
@@ -332,7 +338,7 @@ func (g fakeRepo) Fetch(ctx context.Context, remote string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	from, url, named, out, err := g.remote(r, remote)
+	from, url, named, out, err := g.resolveRemote(r, remote)
 	if err != nil {
 		return out, err
 	}
@@ -351,7 +357,7 @@ func (g fakeRepo) RemoteHas(ctx context.Context, remote, branch string) (bool, e
 	if err != nil {
 		return false, err
 	}
-	to, _, _, out, err := g.remote(r, remote)
+	to, _, _, out, err := g.resolveRemote(r, remote)
 	if err != nil {
 		return false, fmt.Errorf("git ls-remote --heads %s refs/heads/%s: %v: %s", remote, branch, err, out)
 	}
