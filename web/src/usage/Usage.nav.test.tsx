@@ -4,7 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { Api } from "../api/api";
 import { settle } from "../worldTesting";
-import { projects, calls, world, renderApp, usage, scope, range, ops, tab, back, openTab } from "./Usage.testutil";
+import { projects, calls, world, renderApp, usage, scope, chooseScope, range, ops, tab, back, openTab } from "./Usage.testutil";
+import { openProjectPicker, projectChoices } from "../testPickers";
 
 describe("opening and leaving Usage", () => {
   it("opens from the Inbox's Admin section on All Projects and 7 days, and returns to the Inbox with its filter and Ticket", async () => {
@@ -14,8 +15,7 @@ describe("opening and leaving Usage", () => {
     await userEvent.click(within(nav).getByRole("link", { name: "Usage" }));
 
     expect(usage()).toBeInTheDocument();
-    expect(scope()).toHaveValue("");
-    expect(within(scope()).getByRole("option", { selected: true })).toHaveTextContent("All Projects");
+    expect(scope()).toHaveAccessibleName("Projects All Projects");
     expect(range()).toHaveValue("7");
     expect(new URLSearchParams(window.location.search).get("project")).toBeNull();
 
@@ -27,7 +27,7 @@ describe("opening and leaving Usage", () => {
 
   it("returns to Focus Mode with its Project when the address names it", async () => {
     await renderApp((await projects()).w, "/?view=usage&back=view%3Dfocus%26project%3Dacme");
-    expect(scope()).toHaveValue("");
+    expect(scope()).toHaveTextContent("All Projects");
     await userEvent.click(within(usage()).getByRole("button", { name: "Back to Focus Mode" }));
     expect(window.location.search).toBe("?view=focus&project=acme");
     expect(screen.getByRole("main", { name: "Focus Mode" })).toBeInTheDocument();
@@ -51,15 +51,13 @@ describe("opening and leaving Usage", () => {
 });
 
 describe("scope and range", () => {
-  it("lists All Projects and every Project, Archived ones marked", async () => {
+  it("lists All Projects and every Project, Archived ones under their heading", async () => {
     await renderApp((await projects()).w, "/?view=usage");
     await settle(world);
-    expect(within(scope()).getAllByRole("option")).toHaveLength(4);
-    expect(
-      within(scope())
-        .getAllByRole("option")
-        .map((o) => o.textContent),
-    ).toEqual(["All Projects", "Acme", "Beta", "Old (Archived)"]);
+    const listbox = await openProjectPicker(usage());
+    expect(projectChoices(listbox)).toEqual(["All Projects", "Acme", "Beta", "Old"]);
+    expect(within(within(listbox).getByRole("group", { name: "Archived" })).getAllByRole("option")).toHaveLength(1);
+    await userEvent.keyboard("{Escape}");
     expect(
       within(range())
         .getAllByRole("option")
@@ -81,8 +79,7 @@ describe("scope and range", () => {
     expect(ops()).toEqual(["find_tickets", "get_ticket"]);
 
     await settle(world);
-    expect(within(scope()).getAllByRole("option")).toHaveLength(4);
-    await userEvent.selectOptions(scope(), "Acme");
+    await chooseScope("Acme");
     expect(window.location.search).toBe("?view=usage&project=acme&tab=calls&back=view%3Dinbox%26state%3DReady");
     await settle(world);
     expect(ops()).toEqual(["get_ticket"]);
@@ -94,7 +91,7 @@ describe("scope and range", () => {
 
     unmount();
     await renderApp(w, window.location.search);
-    expect(scope()).toHaveValue("acme");
+    expect(scope()).toHaveTextContent("Acme");
     expect(range()).toHaveValue("30");
     expect(tab("Code Central calls")).toHaveAttribute("aria-selected", "true");
     await settle(world);
@@ -105,8 +102,8 @@ describe("scope and range", () => {
 
   it("goes back to All Projects and 7 days, leaving them out of the address", async () => {
     await renderApp((await projects()).w, "/?view=usage&project=acme&days=90");
-    expect(scope()).toHaveValue("acme");
-    await userEvent.selectOptions(scope(), "All Projects");
+    expect(scope()).toHaveTextContent("Acme");
+    await chooseScope("All Projects");
     await userEvent.selectOptions(range(), "Last 7 days");
     expect(window.location.search).toBe("?view=usage");
   });
@@ -214,7 +211,7 @@ describe("tabs", () => {
     await openTab("Token usage");
 
     expect(window.location.search).toBe("?view=usage&project=acme&days=30");
-    expect(scope()).toHaveValue("acme");
+    expect(scope()).toHaveTextContent("Acme");
     expect(range()).toHaveValue("30");
     expect(reads()).toBe(1);
   });

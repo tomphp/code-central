@@ -106,7 +106,7 @@ describe("the Session popup", () => {
     await renderApp(w, "/?view=usage&project=beta&session_project=acme&session=sess-impl");
     await settle(world);
     expect(points()).toHaveLength(3);
-    expect(scope()).toHaveValue("beta");
+    expect(scope()).toHaveTextContent("Beta");
     expect(w.calls.filter((c) => c === "sessionUsage")).toHaveLength(1);
   });
 

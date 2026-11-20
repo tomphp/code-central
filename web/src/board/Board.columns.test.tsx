@@ -1,8 +1,8 @@
 // Board view tests: the Board link, the columns and the cards.
 import { within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { STATES } from "../api/types";
+import { chooseProject, projectPicker } from "../testPickers";
 import { MINUTE, world, renderApp, settled, click, nav, boardLink, board, heads, column, cards, titles, card, columnsButton, loaded } from "./Board.testutil";
 
 beforeEach(() => localStorage.clear());
@@ -46,7 +46,7 @@ describe("the Board link", () => {
   it("opens the Board on the Inbox's Project, and Back to the Inbox returns to the Inbox as it was", async () => {
     await renderApp(await world(), "/?view=inbox&project=acme&state=Ready");
     await click(boardLink());
-    expect(within(board()).getByRole("combobox", { name: "Projects" })).toHaveValue("acme");
+    expect(projectPicker(board())).toHaveTextContent("Acme");
     expect(loaded()).toBeInTheDocument();
 
     await click(within(board()).getByRole("button", { name: "Back to the Inbox" }));
@@ -135,8 +135,7 @@ describe("the Board's columns", () => {
     await renderApp(await world(), "/?view=board");
     loaded();
     expect(titles("In Progress")).toEqual(["Beta export", "Sign-up page"]);
-    const picker = within(board()).getByRole("combobox", { name: "Projects" });
-    await userEvent.selectOptions(picker, "beta");
+    await chooseProject(board(), "Beta");
     await settled();
     expect(window.location.search).toBe("?view=board&project=beta");
     expect(titles("In Progress")).toEqual(["Beta export"]);
