@@ -31,7 +31,7 @@ const byName = (a: ProjectRow, b: ProjectRow) =>
 
 // pickerEntries orders the picker's options: All Projects, the current
 // Projects, the Archived ones, then the chosen key when no Project has it.
-export function pickerEntries(projects: ProjectRow[], value: string | undefined, withoutAll: boolean | undefined) {
+function pickerEntries(projects: ProjectRow[], value: string | undefined, withoutAll: boolean | undefined) {
   const entry = (p: ProjectRow): PickerEntry => ({ key: p.key, name: p.display_name, project: p });
   return {
     all: withoutAll ? [] : [{ key: undefined, name: "All Projects" }],
@@ -47,7 +47,7 @@ export function ProjectPicker({ projects, value, onChange, withoutAll }: Project
   const buttonId = useId();
   const listId = useId();
   const list = useRef<HTMLDivElement>(null);
-  const groups = pickerEntries([...projects], value, withoutAll);
+  const groups = pickerEntries(projects, value, withoutAll);
   const entries = [...groups.all, ...groups.current, ...groups.archived, ...groups.unknown];
   const chosen = entries.findIndex((e) => e.key === value);
   const [active, setActive] = useState(0);
