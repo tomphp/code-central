@@ -28,7 +28,7 @@ func goList(t *testing.T, pkg string) []string {
 // direct import of store would pull persistence into a client.
 func TestClientsDoNotImportStore(t *testing.T) {
 	for _, pkg := range []string{
-		"httpapi", "mcp", "server", "internal/wiretypes",
+		"httpapi", "mcp", "server", "internal/wiretypes", "cli", "factory/factorytest",
 	} {
 		t.Run(pkg, func(t *testing.T) {
 			for _, imp := range goList(t, "../../"+pkg) {
@@ -80,31 +80,6 @@ func storeSelectors(t *testing.T, file string) []string {
 		return true
 	})
 	return uses
-}
-
-// In cli only the commands that open the store (serve, service, and
-// store move, ADR 0070) import it.
-func TestOnlyServeCommandsImportStoreInCLI(t *testing.T) {
-	opens := map[string]bool{"serve.go": true, "service.go": true, "store.go": true}
-	files, err := filepath.Glob("../../cli/*.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, file := range files {
-		if strings.HasSuffix(file, "_test.go") {
-			continue
-		}
-		src, err := parser.ParseFile(token.NewFileSet(), file, nil, parser.ImportsOnly)
-		if err != nil {
-			t.Fatal(err)
-		}
-		base := filepath.Base(file)
-		for _, imp := range src.Imports {
-			if strings.Trim(imp.Path.Value, `"`) == module+"/store" && !opens[base] {
-				t.Errorf("cli/%s imports store; only serve.go, service.go and store.go may", base)
-			}
-		}
-	}
 }
 
 // domain is a leaf: any client may import it, so it may import no

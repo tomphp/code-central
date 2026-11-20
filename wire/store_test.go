@@ -1,4 +1,4 @@
-package cli_test
+package wire_test
 
 import (
 	"os"
@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/store/storetest"
+	"github.com/tomoram/code-central/wire"
 )
 
 // moveHome is a home whose settings hold other keys, with a File Store
@@ -201,7 +201,7 @@ func TestAStoreMoveRefusesASourceAServiceHasOpen(t *testing.T) {
 // Not parallel: the copy it breaks is the package's.
 func TestAStoreMoveWhoseCountsDifferStopsAndLeavesTheSettings(t *testing.T) {
 	env, _, _ := moveHome(t)
-	cli.AddATicketOnMove(t)
+	wire.AddATicketOnMove(t)
 	db := filepath.Join(t.TempDir(), "central.db")
 	refused(t, env, []string{"acme: 4 Tickets in the source, 5 in the target", "remove"}, "--to", "sqlite:"+db)
 }
