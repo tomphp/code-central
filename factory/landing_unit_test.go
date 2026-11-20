@@ -664,7 +664,7 @@ func TestAMissingHomePushRemoteIsReportedAsLocalOnlyAndStopsNothing(t *testing.T
 			t.Errorf("%s is %s, want it landed on merge, with nothing pushed", tk, s)
 		}
 	}
-	if got := w.repo.remoteTip("origin", "main"); got != "" || strings.Contains(w.out.String(), "nothing lands") {
+	if got := w.repo.remoteTip("origin", "main"); got != "" || w.repo.pushes.Load() != 0 || strings.Contains(w.out.String(), "nothing lands") {
 		t.Errorf("origin's main is at %q and the lines say %q, want nothing pushed and nothing stopped", got, w.out)
 	}
 
