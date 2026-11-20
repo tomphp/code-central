@@ -172,6 +172,23 @@ func TestFakeGitFailsTheTestOnWhatItDoesntModel(t *testing.T) {
 	}
 }
 
+func TestFakeGitFailsTheTestOnARepositoryOpenedInsideAWorktree(t *testing.T) {
+	t.Parallel()
+	rec := &recorder{TB: t}
+	f, dir, _ := newFake(rec)
+	sub := filepath.Join(dir, "d")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := f.Open(sub).Commit("main"); err == nil {
+		t.Error("it succeeded, want an error")
+	}
+	if len(rec.failures) != 1 || !strings.Contains(rec.failures[0], "not modelled") {
+		t.Errorf("the test's failures = %q, want one that it isn't modelled", rec.failures)
+	}
+}
+
 // writeFile writes content to the file name.
 func writeFile(t *testing.T, name, content string) {
 	t.Helper()

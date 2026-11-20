@@ -107,7 +107,8 @@ func (r *fakeRepository) setAt(w *fakeWorktree, commit string) {
 	}
 }
 
-// main is r's worktree in its own folder.
+// main is r's worktree in its own folder: git's main worktree, which is
+// no Home worktree.
 func (r *fakeRepository) main() *fakeWorktree { return r.worktrees[0] }
 
 // worktree is r's worktree in the folder dir, resolved, or nil.
@@ -153,7 +154,8 @@ type Change struct {
 
 // Init makes a repository in the folder dir, with main checked out there
 // at a root commit of files with the message msg, and returns that
-// commit. It fails the test when dir holds a repository already.
+// commit. It fails the test when dir is, is in or holds a worktree
+// already.
 func (f *Fake) Init(dir string, files map[string]string, msg string) string {
 	f.tb.Helper()
 	f.mu.Lock()
@@ -162,8 +164,8 @@ func (f *Fake) Init(dir string, files map[string]string, msg string) string {
 		f.tb.Fatal(err)
 	}
 	dir = realPath(dir)
-	if f.repos[dir] != nil {
-		f.tb.Fatalf("fake git: %s holds a repository already", dir)
+	if w := f.overlapping(dir); w != nil {
+		f.tb.Fatalf("fake git: %s is, is in or holds the worktree %s already", dir, w.dir)
 	}
 	r := newFakeRepository(dir, "refs/heads/main")
 	w := r.main()
@@ -525,18 +527,43 @@ func (g fakeRepo) lock() (*fakeRepository, func(), error) {
 }
 
 // repository is the repository whose folder, or one of whose worktrees'
-// folders, is dir.
+// folders, is dir. A folder inside one isn't modelled.
 func (g fakeRepo) repository() (*fakeRepository, error) {
 	dir := realPath(g.dir)
-	if r := g.f.repos[dir]; r != nil {
-		return r, nil
+	r, w := g.f.holding(dir)
+	switch {
+	case r == nil:
+		return nil, fmt.Errorf("fatal: not a git repository: %s", g.dir)
+	case w.dir != dir:
+		return nil, g.f.notModelled("the repository opened in %s, inside the worktree %s", g.dir, w.dir)
 	}
-	for _, r := range g.f.repos {
-		if r.worktree(dir) != nil {
-			return r, nil
+	return r, nil
+}
+
+// holding is the repository with a worktree whose folder is dir, resolved,
+// or holds it, with that worktree, or nil when there is none.
+func (f *Fake) holding(dir string) (*fakeRepository, *fakeWorktree) {
+	for _, r := range f.repos {
+		for _, w := range r.worktrees {
+			if within(dir, w.dir) {
+				return r, w
+			}
 		}
 	}
-	return nil, fmt.Errorf("fatal: not a git repository: %s", g.dir)
+	return nil, nil
+}
+
+// overlapping is a worktree, of any repository, whose folder is dir,
+// resolved, holds it or is in it, or nil when there is none.
+func (f *Fake) overlapping(dir string) *fakeWorktree {
+	for _, r := range f.repos {
+		for _, w := range r.worktrees {
+			if within(dir, w.dir) || within(w.dir, dir) {
+				return w
+			}
+		}
+	}
+	return nil
 }
 
 // resolve resolves rev to a commit, as rev-parse does for the forms the
@@ -911,12 +938,12 @@ func (g fakeRepo) Reset(dir, commit, old string) (string, error) {
 // worktree is r's worktree in the folder dir. A folder that isn't one
 // isn't modelled; one whose folder is gone fails as git would in it.
 func (g fakeRepo) worktree(r *fakeRepository, dir string) (*fakeWorktree, error) {
+	if err := g.notBare(r, "a checkout"); err != nil {
+		return nil, err
+	}
 	w := r.worktree(realPath(dir))
 	if w == nil {
 		return nil, g.f.notModelled("the folder %s, which isn't a worktree of the repository", dir)
-	}
-	if r.bare {
-		return nil, g.f.notModelled("a checkout in the bare repository %s", dir)
 	}
 	if _, err := os.Stat(w.dir); err != nil {
 		return nil, err
@@ -1031,8 +1058,8 @@ func (g fakeRepo) Worktrees() ([]Worktree, error) {
 	if err != nil {
 		return nil, err
 	}
-	if r.bare {
-		return nil, g.f.notModelled("the worktrees of the bare repository %s", g.dir)
+	if err := g.notBare(r, "worktrees"); err != nil {
+		return nil, err
 	}
 	var list []Worktree
 	for _, w := range r.worktrees {
@@ -1131,6 +1158,9 @@ func (g fakeRepo) AddWorktree(path, branch string) error {
 	if err != nil {
 		return err
 	}
+	if err := g.notBare(r, "a worktree"); err != nil {
+		return err
+	}
 	ref := "refs/heads/" + branch
 	if _, ok := r.refs[ref]; !ok {
 		_, err := g.resolve(r, branch)
@@ -1159,6 +1189,9 @@ func (g fakeRepo) AddWorktreeOnNewBranch(path, branch, from string) error {
 	if err != nil {
 		return err
 	}
+	if err := g.notBare(r, "a worktree"); err != nil {
+		return err
+	}
 	ref := "refs/heads/" + branch
 	if _, ok := r.refs[ref]; ok {
 		return fmt.Errorf("fatal: a branch named '%s' already exists", branch)
@@ -1180,6 +1213,9 @@ func (g fakeRepo) AddDetachedWorktree(path, rev string) error {
 	if err != nil {
 		return err
 	}
+	if err := g.notBare(r, "a worktree"); err != nil {
+		return err
+	}
 	commit, err := g.resolve(r, rev)
 	if err != nil {
 		return err
@@ -1187,14 +1223,19 @@ func (g fakeRepo) AddDetachedWorktree(path, rev string) error {
 	return g.addWorktree(r, path, commit)
 }
 
+// notBare is nil, or, in a bare repository, which has nothing checked
+// out, the failure of what, which isn't modelled there.
+func (g fakeRepo) notBare(r *fakeRepository, what string) error {
+	if r.bare {
+		return g.f.notModelled("%s in the bare repository %s", what, g.dir)
+	}
+	return nil
+}
+
 // addWorktree adds a worktree with head checked out at path, a folder
 // that is empty or doesn't exist. A relative path, or one inside or
-// around another worktree's folder, or one of a bare repository, isn't
-// modelled.
+// around another worktree's folder, isn't modelled.
 func (g fakeRepo) addWorktree(r *fakeRepository, path, head string) error {
-	if r.bare {
-		return g.f.notModelled("a worktree of the bare repository %s", g.dir)
-	}
 	if !filepath.IsAbs(path) {
 		return g.f.notModelled("a worktree at the relative path %s", path)
 	}
@@ -1202,15 +1243,12 @@ func (g fakeRepo) addWorktree(r *fakeRepository, path, head string) error {
 		return fmt.Errorf("fatal: '%s' already exists", path)
 	}
 	dir := realPath(path)
-	for _, other := range g.f.repos {
-		for _, w := range other.worktrees {
-			switch {
-			case w.dir == dir:
-				return fmt.Errorf("fatal: '%s' is a missing but already registered worktree;\nuse 'add -f' to override, or 'prune' or 'remove' to clear", path)
-			case within(dir, w.dir), within(w.dir, dir):
-				return g.f.notModelled("a worktree at %s, with the worktree %s inside or around it", path, w.dir)
-			}
-		}
+	switch w := g.f.overlapping(dir); {
+	case w == nil:
+	case w.dir == dir:
+		return fmt.Errorf("fatal: '%s' is a missing but already registered worktree;\nuse 'add -f' to override, or 'prune' or 'remove' to clear", path)
+	default:
+		return g.f.notModelled("a worktree at %s, with the worktree %s inside or around it", path, w.dir)
 	}
 	if err := os.MkdirAll(path, 0o755); err != nil {
 		return err

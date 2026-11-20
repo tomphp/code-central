@@ -188,6 +188,27 @@ func TestFakeGitFailsTheTestOnRemotesItDoesntModel(t *testing.T) {
 			_, err := f.TopLevel(remote)
 			return err
 		}},
+		{"a worktree of a bare repository on its HEAD", func(t *testing.T, f *git.Fake, dir, remote string) error {
+			return f.Open(remote).AddWorktree(filepath.Join(t.TempDir(), "wt"), "main")
+		}},
+		{"a worktree of a bare repository on a new branch", func(t *testing.T, f *git.Fake, dir, remote string) error {
+			return f.Open(remote).AddWorktreeOnNewBranch(filepath.Join(t.TempDir(), "wt"), "topic", "main")
+		}},
+		{"a detached worktree of a bare repository", func(t *testing.T, f *git.Fake, dir, remote string) error {
+			return f.Open(remote).AddDetachedWorktree(filepath.Join(t.TempDir(), "wt"), "main")
+		}},
+		{"the worktrees of a bare repository", func(t *testing.T, f *git.Fake, dir, remote string) error {
+			_, err := f.Open(remote).Worktrees()
+			return err
+		}},
+		{"the status of a bare repository", func(t *testing.T, f *git.Fake, dir, remote string) error {
+			_, err := f.Open(remote).Status(remote)
+			return err
+		}},
+		{"a clone into a worktree's folder", func(t *testing.T, f *git.Fake, dir, remote string) error {
+			_, err := f.Clone(ctx, "origin", remote, filepath.Join(dir, "clone"))
+			return err
+		}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

@@ -15,7 +15,7 @@ const fakeVersion = "git version 2.47.0"
 
 // InitBare makes an empty bare repository in the folder path, with main
 // its HEAD, for repositories in the Fake to have as their remote. It fails
-// the test when path holds a repository already.
+// the test when path is, is in or holds a worktree already.
 func (f *Fake) InitBare(path string) {
 	f.tb.Helper()
 	f.mu.Lock()
@@ -24,8 +24,8 @@ func (f *Fake) InitBare(path string) {
 		f.tb.Fatal(err)
 	}
 	path = realPath(path)
-	if f.repos[path] != nil {
-		f.tb.Fatalf("fake git: %s holds a repository already", path)
+	if w := f.overlapping(path); w != nil {
+		f.tb.Fatalf("fake git: %s is, is in or holds the worktree %s already", path, w.dir)
 	}
 	r := newFakeRepository(path, "refs/heads/main")
 	r.bare = true
@@ -110,32 +110,26 @@ func (f *Fake) TopLevel(dir string) (string, error) {
 	return f.topLevel(dir)
 }
 
-// topLevel is the folder of the worktree holding dir, resolved: dir or
-// the nearest folder above it that is a repository's or one of its
-// worktrees'.
+// topLevel is the folder, resolved, of the worktree holding dir: a
+// repository's own folder or one of its linked worktrees'.
 func (f *Fake) topLevel(dir string) (string, error) {
 	if _, err := os.Stat(dir); err != nil {
 		return "", err
 	}
-	for d := realPath(dir); ; d = filepath.Dir(d) {
-		for _, r := range f.repos {
-			if r.worktree(d) == nil {
-				continue
-			}
-			if r.bare {
-				return "", f.notModelled("the top level of the bare repository %s", d)
-			}
-			return d, nil
-		}
-		if filepath.Dir(d) == d {
-			return gitFailed("fatal: not a git repository (or any of the parent directories): .git")
-		}
+	r, w := f.holding(realPath(dir))
+	switch {
+	case r == nil:
+		return gitFailed("fatal: not a git repository (or any of the parent directories): .git")
+	case r.bare:
+		return "", f.notModelled("the top level of the bare repository %s", w.dir)
 	}
+	return w.dir, nil
 }
 
 // Clone clones the repository at url into path as git clone does: the
 // clone has url's branches as remote-tracking branches under remote, and
-// url's HEAD branch checked out in path.
+// url's HEAD branch checked out in path. A path in or around a worktree
+// isn't modelled.
 func (f *Fake) Clone(ctx context.Context, remote, url, path string) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
@@ -146,6 +140,9 @@ func (f *Fake) Clone(ctx context.Context, remote, url, path string) (string, err
 	dir := realPath(path)
 	if entries, err := os.ReadDir(path); err == nil && len(entries) > 0 || f.repos[dir] != nil {
 		return gitFailed("fatal: destination path '%s' already exists and is not an empty directory.", path)
+	}
+	if w := f.overlapping(dir); w != nil {
+		return "", f.notModelled("a clone at %s, with the worktree %s inside or around it", path, w.dir)
 	}
 	from, out, err := f.reach(url)
 	if err != nil {
