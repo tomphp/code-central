@@ -157,15 +157,19 @@ A Map whose `guided` Tag is `on`. Whenever it is idle, with every Ticket on it b
 _Avoid_: Autopilot, auto-advance
 
 **Map view**:
-The UI's view of a Map: its Destination, **New Prototype**, its Tickets as a left-to-right graph with Blockers as edges and **Start** on each frontier Ticket, a fog node at the right edge for what is not yet specified, and its Decisions so far and Out of scope beside the graph. Its header has **Write the Spec** once the Map is finished, and links the Requirements written from it.
+The UI's view of a Map: its Destination, **New Prototype**, its Ticket graph with the Map's own additions, **Start** on each frontier Ticket and a fog node at the right edge for what is not yet specified, and its Decisions so far and Out of scope beside the graph. Its header has **Write the Spec** once the Map is finished, and links the Requirements written from it.
 _Avoid_: Map board, roadmap
+
+**Ticket graph**:
+A Spec's Tickets laid out left to right, with Blockers as edges, each Ticket coloured by its progress; choosing one opens it. It shows on the Map view, the Spec view and a Requirement's view, never on a Long-lived Spec (a Requirement labelled `long-lived` is a Requirement, so it still shows one). A Requirement's view draws it for its Build Tickets only, above the Build list, and only when one Build Ticket blocks another: Stage Tickets are never nodes.
+_Avoid_: DAG, dependency graph, Map graph
 
 **Write the Spec**:
 The human's action on a finished Map (every Ticket Done or Cancelled) that creates a new Requirement with no grilling Stage, whose `map` Tag names the Map; its spec Stage works from the Map's Decisions so far and the resolutions they link. The Map stays as the record.
 _Avoid_: Promote, convert the Map
 
 **Spec view**:
-The UI's view of a plain Spec, one that is neither a Requirement nor a Map: its title, **New Prototype**, **New Ticket** where the Spec takes one, its body, collapsed, with **Edit** until it is Finished, and its Tickets with their States. It opens from the Spec's name in the Ticket panel.
+The UI's view of a plain Spec, one that is neither a Requirement nor a Map: its title, **New Prototype**, **New Ticket** where the Spec takes one, its body, collapsed, with **Edit** until it is Finished, its Ticket graph above its Tickets with their States, shown when one of its Tickets blocks another. A Long-lived Spec's view lists no Tickets and no graph but keeps their CI sums. It opens from the Spec's name in the Ticket panel.
 _Avoid_: Spec page, Spec board
 
 **Edit**:
@@ -557,7 +561,7 @@ What kind of Spec a Spec is, as its badge on a Spec row, a Lane header and a Tic
 _Avoid_: Spec type, Spec badge
 
 **Stage strip**:
-A Requirement's progress on its Spec row and its view: a grilling segment (a Map for a Requirement written from a Map, skipped for one submitted Straight to Spec), a spec and a tickets segment, and Build, each done, skipped (a Cancelled Stage, passed over as a done one is), needs (waiting on the human), queued (waiting for a Factory), running (a Factory is on it) or waiting (behind an earlier segment). A Stage segment is done when its Ticket is Done and skipped when Cancelled; otherwise needs when its Ticket waits on the human, queued when it is the first open Stage and a Factory could claim it, waiting while Ready or Draft, and running otherwise. Build is done when it has Tickets, all Done and none waiting on the human; otherwise needs when any Build Ticket waits on the human, queued when no Stage is open and a Factory could claim one, running when no Stage is open and it has Tickets, and waiting otherwise. The current segment is the first not done or skipped, else Build. Its needs are every Ticket waiting on the human, Stage Tickets first in Stage order, then Build Tickets in claim order. The Requirement opens on the first of its needs, else the current Stage's Ticket, else its first unfinished Build Ticket, else its last Build Ticket, else its last Stage Ticket. The service works all of this out on a Requirement's view; the UI names the segments and words the headline.
+A Requirement's progress on its Spec row and its view: a grilling segment (a Map for a Requirement written from a Map, skipped for one submitted Straight to Spec), a spec and a tickets segment, and Build, each done, skipped (a Cancelled Stage, passed over as a done one is), needs (waiting on the human), queued (waiting for a Factory), running (a Factory is on it) or waiting (behind an earlier segment). A Stage segment is done when its Ticket is Done and skipped when Cancelled; otherwise needs when its Ticket waits on the human, queued when it is the first open Stage and a Factory could claim it, waiting while Ready or Draft, and running otherwise. Build is done when it has Tickets, all Done and none waiting on the human; otherwise needs when any Build Ticket waits on the human, queued when no Stage is open and a Factory could claim one, running when no Stage is open and it has Tickets, and waiting otherwise. The current segment is the first not done or skipped, else Build. Its needs are every Ticket waiting on the human, Stage Tickets first in Stage order, then Build Tickets in claim order. The Requirement opens on the first of its needs, else the current Stage's Ticket, else its first unfinished Build Ticket, else its last Build Ticket, else its last Stage Ticket. The service works all of this out on a Requirement's view; the UI names the segments and words the headline. A Requirement's view shows its Build Tickets' Ticket graph after the CI sums.
 _Avoid_: Progress bar, Stage bar
 
 **Lane header**:

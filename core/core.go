@@ -283,7 +283,7 @@ func (c *Core) FindTickets(_ context.Context, key string, in api.FindTicketsInpu
 			maps[s.Number] = true
 		}
 		for _, t := range tickets {
-			rows = append(rows, c.ticketRow(r, e, t, maps[t.Spec]))
+			rows = append(rows, c.ticketRow(r, e, t, maps[t.Spec], maps[t.Spec]))
 		}
 		return nil
 	})
@@ -394,8 +394,8 @@ func hasAll(labels []string, tags map[string]string, wantLabels []string, wantTa
 
 // ticketRow is t as a find_tickets row, its CI and reason read from its
 // Project's evaluation e; onMap says t is on a Map, so the row carries
-// its node type.
-func (c *Core) ticketRow(r store.Reader, e *evaluation, t domain.Ticket, onMap bool) api.TicketRow {
+// its node type, and withBlockers says the row carries its Blockers.
+func (c *Core) ticketRow(r store.Reader, e *evaluation, t domain.Ticket, onMap, withBlockers bool) api.TicketRow {
 	key := e.p.Key
 	row := api.TicketRow{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
@@ -406,6 +406,8 @@ func (c *Core) ticketRow(r store.Reader, e *evaluation, t domain.Ticket, onMap b
 	row.NeedsMeReason, _ = e.reason(t)
 	if onMap {
 		row.NodeType = NodeTypeOf(t.Labels)
+	}
+	if withBlockers {
 		row.BlockedBy = displayIDs(key, t.BlockedBy)
 	}
 	if cl, ok := liveClaim(t); ok {

@@ -1,10 +1,13 @@
 // The plain Spec pane, for a Spec that is neither a Requirement nor a Map,
 // above the shared Ticket pane: the header (ID, title, submitted time, New
 // Prototype, New Ticket when ticketable, Retro), its Changed Repositories' chips while the Project has
-// several, its body, collapsed, its Tags, the sums of its Tickets' CI badges, then the Spec's Tickets
-// with their States.
+// several, its body, collapsed, its Tags, the sums of its Tickets' CI badges, then the Spec's Ticket
+// graph (only when one Ticket blocks another) and its Tickets with their States. A Long-lived Spec
+// lists no Tickets but keeps the CI sums.
 import type { SpecDetail } from "../api/types";
 import { RepositoryChips } from "../controls/RepositoryChips";
+import { hasEdge } from "../graph/edges";
+import { TicketGraph } from "../graph/TicketGraph";
 import { useApi } from "../live";
 import { BodySection } from "../edit/BodySection";
 import { SpecPaneHeader } from "../controls/SpecPaneHeader";
@@ -51,11 +54,15 @@ export function SpecPane({ spec, archived, now, ticket, select }: SpecPaneProps)
       <BodySection api={api} spec={spec} heading="Body" />
       <SpecTags spec={spec} archived={archived} />
       <CISums tickets={tickets} />
-      {tickets.length === 0 ? (
-        <p className="muted">No Tickets yet.</p>
-      ) : (
-        <TicketList label="Tickets" tickets={tickets} now={now} ticket={ticket} select={select} />
-      )}
+      {spec.kind !== "long_lived" &&
+        (tickets.length === 0 ? (
+          <p className="muted">No Tickets yet.</p>
+        ) : (
+          <>
+            {hasEdge(tickets) && <TicketGraph tickets={tickets} label="Ticket graph" ticket={ticket} select={select} />}
+            <TicketList label="Tickets" tickets={tickets} now={now} ticket={ticket} select={select} />
+          </>
+        ))}
       <RetroList retros={spec.retros} select={select} />
     </section>
   );

@@ -14,8 +14,8 @@ async function world(state: PullRequestState = "open") {
   await allClear(w);
   const s = scenario(w);
   await s.project("acme", "Acme");
-  // A long-lived Spec's Tickets land one by one, each with a pull request.
-  const spec = await s.spec("acme", { title: "Login", labels: ["long-lived"] });
+  // A plain Spec, whose view lists its Tickets (a Long-lived Spec's lists none).
+  const spec = await s.spec("acme", { title: "Login" });
   const ticket = await s.ticket("acme", { title: "Login form", state: "Accepted", spec });
   await s.pullRequest("acme", ticket, state);
   return { w, spec, ticket };

@@ -288,6 +288,48 @@ describe("the Requirement pane", () => {
   });
 });
 
+describe("a Requirement's Ticket graph", () => {
+  const graph = () => within(pane()).queryByRole("list", { name: "Build graph" });
+
+  it("draws Build Tickets that block one another above the Build list, and never a Stage Ticket", async () => {
+    const { w, s } = await building();
+    await s.addBlocker("acme", "acme-6", "acme-5"); // Build blocks Build
+    await s.addBlocker("acme", "acme-5", "acme-2"); // a Stage blocks Build: no edge, no node
+    await renderApp(w, "/?view=inbox&requirement=acme-1");
+
+    const g = graph()!;
+    expect(g).toBeInTheDocument();
+    expect([...g.querySelectorAll("[data-edge]")].map((e) => e.getAttribute("data-edge"))).toEqual(["acme-5>acme-6"]);
+    expect(within(g).getAllByRole("listitem").map((n) => n.getAttribute("data-id"))).toEqual(["acme-5", "acme-6", "acme-7", "acme-8"]);
+    const list = within(pane()).getByRole("list", { name: "Build" });
+    expect(g.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("draws none when only a Stage blocks a Build Ticket", async () => {
+    const { w, s } = await building();
+    await s.addBlocker("acme", "acme-5", "acme-2");
+    await renderApp(w, "/?view=inbox&requirement=acme-1");
+    expect(within(pane()).getByRole("list", { name: "Build" })).toBeInTheDocument();
+    expect(graph()).toBeNull();
+  });
+
+  it("draws none with no Build Tickets yet", async () => {
+    const { w } = await acme();
+    await w.api.submitRequirement("acme", "Fresh");
+    await renderApp(w, "/?view=inbox&requirement=acme-1");
+    expect(pane()).toBeInTheDocument();
+    expect(graph()).toBeNull();
+  });
+
+  it("still draws for a long-lived Requirement", async () => {
+    const { w, s } = await building();
+    await s.addBlocker("acme", "acme-6", "acme-5");
+    await w.api.addLabels("acme", "acme-1", ["long-lived"]);
+    await renderApp(w, "/?view=inbox&requirement=acme-1");
+    expect(graph()).toBeInTheDocument();
+  });
+});
+
 describe("the Requirements view", () => {
   it("lists every Requirement with its strip, finished ones included, and opens one", async () => {
     const { w, s } = await building(); // acme-1
