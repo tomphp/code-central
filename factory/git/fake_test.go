@@ -236,3 +236,27 @@ func TestFakeGitIDsAreTheirContent(t *testing.T) {
 		t.Errorf("tree ID %q isn't 40 hex digits of its own", tree)
 	}
 }
+
+func TestAFakeGitReadsBackACommitsSubjectAndFiles(t *testing.T) {
+	t.Parallel()
+	f, dir, first := newFake(t)
+	c := f.MakeCommit(dir, git.Change{Parents: []string{first}, Files: map[string]string{"d/a.txt": "one\n"}, Message: "Add\n  a file\n\nWhy it was added."})
+
+	if got := f.Subject(dir, c); got != "Add a file" {
+		t.Errorf("Subject = %q, want the first paragraph on one line, as %%s gives it", got)
+	}
+	if got := f.Subject(dir, "main"); got != "First" {
+		t.Errorf("Subject(main) = %q, want First", got)
+	}
+	if got, ok := f.File(dir, c, "d/a.txt"); !ok || got != "one\n" {
+		t.Errorf("File(d/a.txt) = %q, %v, want its content", got, ok)
+	}
+	if got, ok := f.File(dir, c, "README.md"); !ok || got != "Hello\n" {
+		t.Errorf("File(README.md) = %q, %v, want the first parent's", got, ok)
+	}
+	for _, p := range []string{"b.txt", "d"} {
+		if got, ok := f.File(dir, c, p); ok {
+			t.Errorf("File(%s) = %q, want no file", p, got)
+		}
+	}
+}

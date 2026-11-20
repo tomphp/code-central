@@ -83,6 +83,7 @@ import (
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/factory"
+	"github.com/tomoram/code-central/factory/git"
 )
 
 // fakeEnv names the harness's data folder to a test binary run as a
@@ -137,7 +138,8 @@ type Harness struct {
 	// Home is the Factory's HOME and its profile folder, so its state file
 	// is under it even with HOME unset.
 	Home string
-	// Bin is the folder on PATH holding the fake claude (and FakeGit's git).
+	// Bin is the folder on PATH holding the fake claude (and GitVersion's
+	// git).
 	Bin string
 	// Backoff is the Factory's first wait before resuming turns an outage
 	// cut off; set it before Start. New makes it a millisecond.
@@ -181,12 +183,16 @@ type Harness struct {
 	data     string // scripts/, calls/, continue/, signals/ and waiting/
 	env      map[string]string
 	spec     string
+	// fake is the Factory's git under FakeGit; nil under real git.
+	fake *git.Fake
 }
 
 // New starts a Code Central with Project "acme" and a git repo on branch
-// main whose one commit holds a .mcp.json naming it.
-func New(t testing.TB) *Harness {
+// main whose one commit holds a .mcp.json naming it, on real git unless
+// opts choose the Fake git (FakeGit).
+func New(t testing.TB, opts ...Option) *Harness {
 	t.Helper()
+	fake := useFakeGit(t, opts)
 	// git reports real paths, so resolve macOS's /var -> /private/var.
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	must(t, err)
@@ -237,6 +243,11 @@ func New(t testing.TB) *Harness {
 	if _, err := h.Server.Client.CreateProject(context.Background(), api.CreateProjectInput{Key: h.Project}); err != nil {
 		t.Fatal(err)
 	}
+	if fake {
+		h.fake = git.NewFake(t)
+		h.fake.Init(h.Repo, map[string]string{".mcp.json": mcpJSON}, "Set up Code Central")
+		return h
+	}
 	seed, err := seedRepo()
 	must(t, err)
 	must(t, os.CopyFS(h.Repo, os.DirFS(seed)))
@@ -263,6 +274,9 @@ var gitIdentity = map[string]string{
 	"GIT_COMMITTER_EMAIL": "factory@example.com",
 }
 
+// mcpJSON is the .mcp.json the repo's one commit holds, naming the Project.
+const mcpJSON = `{"mcpServers":{"code-central":{"type":"http","url":"${CODE_CENTRAL_URL:-http://localhost:7733}/p/` + project + `/mcp"}}}` + "\n"
+
 // seedDir holds seedRepo's repo; Main removes it.
 var seedDir string
 
@@ -284,8 +298,7 @@ var seedRepo = sync.OnceValues(func() (string, error) {
 			return "", err
 		}
 	}
-	mcp := `{"mcpServers":{"code-central":{"type":"http","url":"${CODE_CENTRAL_URL:-http://localhost:7733}/p/` + project + `/mcp"}}}` + "\n"
-	if err := os.WriteFile(filepath.Join(repo, ".mcp.json"), []byte(mcp), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(repo, ".mcp.json"), []byte(mcpJSON), 0o644); err != nil {
 		return "", err
 	}
 	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"add", ".mcp.json"}, {"commit", "-q", "-m", "Set up Code Central"}} {
@@ -684,36 +697,69 @@ func (h *Harness) HoldSession(session string) (release func()) {
 	return release
 }
 
-// fakeGit is what the fake git reads from the data folder.
-type fakeGit struct {
+// versionGit is what the version git reads from the data folder.
+type versionGit struct {
 	// Version is the version it reports.
 	Version string `json:"version"`
 	// Git is the real git it runs for everything else.
 	Git string `json:"git"`
 }
 
-// FakeGit puts a git on PATH that reports version and otherwise runs the
-// real git.
-func (h *Harness) FakeGit(version string) {
+// GitVersion makes the Factory's git report version, such as "2.37.9":
+// under real git it puts a git on PATH that reports it and otherwise runs
+// the real git; under the Fake git it sets the Fake's.
+func (h *Harness) GitVersion(version string) {
+	if h.fake != nil {
+		h.fake.SetVersion("git version " + version)
+		return
+	}
 	real, err := realGit()
 	must(h.t, err)
-	b, err := json.Marshal(fakeGit{Version: version, Git: real})
+	b, err := json.Marshal(versionGit{Version: version, Git: real})
 	must(h.t, err)
 	must(h.t, os.WriteFile(filepath.Join(h.data, "git.json"), b, 0o644))
 	h.install("git")
 }
 
-// Git runs the real git in the repo and returns its trimmed output.
-func (h *Harness) Git(args ...string) string { return h.GitIn(h.Repo, args...) }
+// Git runs the real git in the repo and returns its trimmed output. It
+// fails the test under the Fake git, as GitIn does.
+func (h *Harness) Git(args ...string) string {
+	h.t.Helper()
+	return h.GitIn(h.Repo, args...)
+}
 
-// GitIn runs the real git in dir and returns its trimmed output.
+// GitIn runs the real git in dir and returns its trimmed output. Under the
+// Fake git there is no real repository to run it in, so it fails the test:
+// such a test uses the typed helpers, or real git with RealGit.
 func (h *Harness) GitIn(dir string, args ...string) string {
 	h.t.Helper()
-	git, err := realGit()
-	must(h.t, err)
+	if h.fake != nil {
+		h.t.Fatalf("factorytest: raw git (git %s) under the Fake git: use a typed helper (Tip, Exists, Log, Parents, File, RemoteTip, CommitOn, MergeByHand), or real git with factorytest.RealGit()", strings.Join(args, " "))
+	}
+	return h.git(dir, args...)
+}
+
+// git is GitIn without the Fake git's check, for the typed helpers under
+// real git.
+func (h *Harness) git(dir string, args ...string) string {
+	h.t.Helper()
+	out, err := h.runGit(dir, args...)
+	if err != nil {
+		h.t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
+	return strings.TrimSpace(out)
+}
+
+// runGit runs the real git in dir and returns its output, untrimmed, with
+// its error.
+func (h *Harness) runGit(dir string, args ...string) (string, error) {
+	bin, err := realGit()
+	if err != nil {
+		return "", err
+	}
 	var out []byte
 	for attempt := 0; ; attempt++ {
-		cmd := exec.Command(git, args...)
+		cmd := exec.Command(bin, args...)
 		cmd.Dir = dir
 		cmd.Env = h.Environ()
 		out, err = cmd.CombinedOutput()
@@ -722,10 +768,7 @@ func (h *Harness) GitIn(dir string, args ...string) string {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if err != nil {
-		h.t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
-	}
-	return strings.TrimSpace(string(out))
+	return string(out), err
 }
 
 // failedToStart reports whether err is Windows failing to initialise the
@@ -1025,6 +1068,11 @@ type Remote struct {
 func (h *Harness) AddRemote(name string) *Remote {
 	h.t.Helper()
 	path := filepath.Join(filepath.Dir(filepath.Dir(h.Repo)), "remotes", name+".git")
+	if h.fake != nil {
+		h.fake.InitBare(path)
+		h.fake.AddRemote(h.Repo, name, path)
+		return &Remote{h: h, Name: name, Path: path}
+	}
 	must(h.t, os.MkdirAll(path, 0o755))
 	h.GitIn(path, "init", "-q", "--bare", "-b", "main")
 	h.Git("remote", "add", name, path)
@@ -1032,7 +1080,7 @@ func (h *Harness) AddRemote(name string) *Remote {
 }
 
 // Git runs the real git in the bare repository and returns its trimmed
-// output.
+// output. It fails the test under the Fake git, as GitIn does.
 func (r *Remote) Git(args ...string) string {
 	r.h.t.Helper()
 	return r.h.GitIn(r.Path, args...)
@@ -1041,12 +1089,20 @@ func (r *Remote) Git(args ...string) string {
 // Break makes every push to the remote fail, until Restore.
 func (r *Remote) Break() {
 	r.h.t.Helper()
+	if r.h.fake != nil {
+		r.h.fake.BreakRemote(r.Path)
+		return
+	}
 	must(r.h.t, os.Rename(r.Path, r.Path+".broken"))
 }
 
 // Restore undoes Break.
 func (r *Remote) Restore() {
 	r.h.t.Helper()
+	if r.h.fake != nil {
+		r.h.fake.RestoreRemote(r.Path)
+		return
+	}
 	must(r.h.t, os.Rename(r.Path+".broken", r.Path))
 }
 
@@ -1054,6 +1110,10 @@ func (r *Remote) Restore() {
 // until AcceptPushes.
 func (r *Remote) RefusePushes() {
 	r.h.t.Helper()
+	if r.h.fake != nil {
+		r.h.fake.RefusePushes(r.Path)
+		return
+	}
 	hook := filepath.Join(r.Path, "hooks", "pre-receive")
 	must(r.h.t, os.MkdirAll(filepath.Dir(hook), 0o755))
 	must(r.h.t, os.WriteFile(hook, []byte("#!/bin/sh\necho 'pushes are refused' >&2\nexit 1\n"), 0o755))
@@ -1062,6 +1122,10 @@ func (r *Remote) RefusePushes() {
 // AcceptPushes undoes RefusePushes.
 func (r *Remote) AcceptPushes() {
 	r.h.t.Helper()
+	if r.h.fake != nil {
+		r.h.fake.AcceptPushes(r.Path)
+		return
+	}
 	must(r.h.t, os.Remove(filepath.Join(r.Path, "hooks", "pre-receive")))
 }
 
@@ -1077,13 +1141,6 @@ type Repository struct {
 	// at <Repo's parent>/<Name>.
 	Path string
 	h    *Harness
-}
-
-// CommitOn commits file with content on branch in r's clone at Path, as
-// Harness.CommitOn does in the Home Repository, and returns the commit.
-func (r *Repository) CommitOn(branch, file, content string) string {
-	r.h.t.Helper()
-	return r.h.commitOn(r.Path, branch, file, content)
 }
 
 // Remote is r's bare remote, its Clone URL, as the remote name of the
@@ -1117,12 +1174,21 @@ func (h *Harness) MakeRepository(name string) *Repository {
 	h.t.Helper()
 	root := filepath.Dir(filepath.Dir(h.Repo))
 	seed := filepath.Join(root, "seeds", name)
+	r := &Repository{Name: name, CloneURL: filepath.Join(root, "repositories", name+".git"), Path: filepath.Join(filepath.Dir(h.Repo), name), h: h}
+	if h.fake != nil {
+		h.fake.Init(seed, map[string]string{"README.md": name + "\n"}, "Start "+name)
+		h.fake.InitBare(r.CloneURL)
+		h.fake.AddRemote(seed, "origin", r.CloneURL)
+		if out, err := h.fake.Open(seed).Push(context.Background(), "origin", "main", ""); err != nil {
+			h.t.Fatalf("push %s's seed: %v\n%s", name, err, out)
+		}
+		return r
+	}
 	must(h.t, os.MkdirAll(seed, 0o755))
 	h.GitIn(seed, "init", "-q", "-b", "main")
 	must(h.t, os.WriteFile(filepath.Join(seed, "README.md"), []byte(name+"\n"), 0o644))
 	h.GitIn(seed, "add", "README.md")
 	h.GitIn(seed, "commit", "-q", "-m", "Start "+name)
-	r := &Repository{Name: name, CloneURL: filepath.Join(root, "repositories", name+".git"), Path: filepath.Join(filepath.Dir(h.Repo), name), h: h}
 	h.GitIn(root, "clone", "-q", "--bare", seed, r.CloneURL)
 	return r
 }
@@ -1135,38 +1201,19 @@ func (h *Harness) MakeRepository(name string) *Repository {
 func (h *Harness) AddLocalRepository(name string) *Repository {
 	h.t.Helper()
 	r := &Repository{Name: name, Path: filepath.Join(filepath.Dir(h.Repo), name), h: h}
-	must(h.t, os.MkdirAll(r.Path, 0o755))
-	h.GitIn(r.Path, "init", "-q", "-b", "main")
-	must(h.t, os.WriteFile(filepath.Join(r.Path, "README.md"), []byte(name+"\n"), 0o644))
-	h.GitIn(r.Path, "add", "README.md")
-	h.GitIn(r.Path, "commit", "-q", "-m", "Start "+name)
+	if h.fake != nil {
+		h.fake.Init(r.Path, map[string]string{"README.md": name + "\n"}, "Start "+name)
+	} else {
+		must(h.t, os.MkdirAll(r.Path, 0o755))
+		h.GitIn(r.Path, "init", "-q", "-b", "main")
+		must(h.t, os.WriteFile(filepath.Join(r.Path, "README.md"), []byte(name+"\n"), 0o644))
+		h.GitIn(r.Path, "add", "README.md")
+		h.GitIn(r.Path, "commit", "-q", "-m", "Start "+name)
+	}
 	if _, err := h.Human().AddRepository(context.Background(), h.Project, api.AddRepositoryInput{Name: name, LocalPath: r.Path}); err != nil {
 		h.t.Fatalf("add_repository %s: %v", name, err)
 	}
 	return r
-}
-
-// CommitOn commits file with content on branch, made from main when it
-// doesn't exist, and returns the commit. The repo is left on main.
-func (h *Harness) CommitOn(branch, file, content string) string {
-	h.t.Helper()
-	return h.commitOn(h.Repo, branch, file, content)
-}
-
-// commitOn is CommitOn in the clone at dir.
-func (h *Harness) commitOn(dir, branch, file, content string) string {
-	h.t.Helper()
-	if branch != "main" {
-		if !strings.Contains(h.GitIn(dir, "branch", "--list", branch), branch) {
-			h.GitIn(dir, "branch", branch, "main")
-		}
-		h.GitIn(dir, "checkout", "-q", branch)
-		defer h.GitIn(dir, "checkout", "-q", "main")
-	}
-	must(h.t, os.WriteFile(filepath.Join(dir, file), []byte(content), 0o644))
-	h.GitIn(dir, "add", file)
-	h.GitIn(dir, "commit", "-q", "-m", "Change "+file)
-	return h.GitIn(dir, "rev-parse", "HEAD")
 }
 
 // Running is a Factory running in-process.
@@ -1219,6 +1266,9 @@ func (h *Harness) launch(dir string, args ...string) *Running {
 		EventPostTimeout: Timeout,
 		Signals:          r.signals,
 		Work:             r.track,
+	}
+	if h.fake != nil {
+		env.Git = h.fake
 	}
 	h.runMu.Lock()
 	h.runs = append(h.runs, r)

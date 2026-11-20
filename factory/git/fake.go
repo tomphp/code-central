@@ -1382,10 +1382,53 @@ func (g fakeRepo) LastCommit(dir string) (id, subject string, err error) {
 		return "", "", err
 	}
 	commit := r.at(w)
-	paragraph, _, _ := strings.Cut(strings.TrimLeft(r.commits[commit].message, "\n"), "\n\n")
+	return commit[:7], subjectOf(r.commits[commit].message), nil
+}
+
+// subjectOf is message's first paragraph on one line, as %s gives it.
+func subjectOf(message string) string {
+	paragraph, _, _ := strings.Cut(strings.TrimLeft(message, "\n"), "\n\n")
 	lines := strings.Split(strings.TrimSpace(paragraph), "\n")
 	for i, line := range lines {
 		lines[i] = strings.TrimSpace(line)
 	}
-	return commit[:7], strings.Join(lines, " "), nil
+	return strings.Join(lines, " ")
+}
+
+// Subject is the subject of the commit rev in the repository at dir, as
+// `git log --format=%s` gives it, for a test to check. It fails the test
+// when dir holds no repository or rev is no commit there.
+func (f *Fake) Subject(dir, rev string) string {
+	f.tb.Helper()
+	var s string
+	f.reading(dir, rev, func(r *fakeRepository, commit string) { s = subjectOf(r.commits[commit].message) })
+	return s
+}
+
+// File is the content of the file path at the commit rev in the
+// repository at dir, and whether one is committed there, for a test to
+// check. It fails the test when dir holds no repository or rev is no
+// commit there.
+func (f *Fake) File(dir, rev, path string) (content string, ok bool) {
+	f.tb.Helper()
+	f.reading(dir, rev, func(r *fakeRepository, commit string) { content, ok = r.treeOf(commit)[path] })
+	return content, ok
+}
+
+// reading calls read with the repository at dir and rev resolved there,
+// failing the test when either can't be.
+func (f *Fake) reading(dir, rev string, read func(r *fakeRepository, commit string)) {
+	f.tb.Helper()
+	g := fakeRepo{f: f, dir: filepath.Clean(dir)}
+	r, unlock, err := g.lock()
+	if err == nil {
+		var commit string
+		if commit, err = g.resolve(r, rev); err == nil {
+			read(r, commit)
+		}
+	}
+	unlock()
+	if err != nil {
+		f.tb.Fatal(err)
+	}
 }

@@ -27,7 +27,7 @@ func runFake(data string, args []string) int {
 	case "claude":
 		return runFakeClaude(data, args[1:])
 	case "git":
-		return runFakeGit(data, args[1:])
+		return runVersionGit(data, args[1:])
 	case holdName:
 		// Long enough for any test; HoldSession's release kills it sooner.
 		time.Sleep(time.Minute)
@@ -43,10 +43,10 @@ var (
 	claimLine  = regexp.MustCompile(`(?m)^Claim: (\S+)$`)
 )
 
-// runFakeGit is the fake git: it reports the version FakeGit set and runs
-// the real git for everything else.
-func runFakeGit(data string, args []string) int {
-	var g fakeGit
+// runVersionGit is the version git: it reports the version GitVersion set
+// and runs the real git for everything else.
+func runVersionGit(data string, args []string) int {
+	var g versionGit
 	b, err := os.ReadFile(filepath.Join(data, "git.json"))
 	if err == nil {
 		err = json.Unmarshal(b, &g)

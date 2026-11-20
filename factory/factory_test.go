@@ -78,7 +78,7 @@ func TestTheFactoryRefusesToStartWhenClaudeIsOnlyTheNpmCmdShim(t *testing.T) {
 func TestTheFactoryRefusesToStartWithGitOlderThan2_38(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	h.FakeGit("2.37.9")
+	h.GitVersion("2.37.9")
 	refuses(t, h, h.Repo, "git 2.37.9 is older than 2.38")
 }
 
