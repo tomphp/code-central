@@ -8,6 +8,9 @@ How the project tests, what each tier catches, and where a new test goes. The Ma
 | --- | --- | --- |
 | `make test` | `go test ./...`, gofmt, vitest, tsc, ESLint and the hooks' test, in parallel (`internal/testrun`), against a 60s wall-clock budget | Logic, type and style errors, and the guard tests. Run it once at the end of a change. |
 | `make e2e` | Builds the binaries, then the Go end-to-end tests (`e2e/`, tag `e2e`) and the UI's Playwright tests (`web/src/e2e`) | Whole-system behaviour: real binaries, a real store in a temporary folder, never port 7733. |
+| `make scale` | Builds what `make e2e` builds, then the **Scale tests** (`TestScale…`, tag `scale`): `go test -tags scale -run '^TestScale' ./...`, then the same with tags `e2e scale` over `e2e/` | Slowdowns only a large store shows, such as loading and serving 5,000 or 10,000 Tickets. Nightly in CI (`scale.yml`); run it by hand when you change what loads or serves a large store. |
+
+The **Scale tier** is the tests too big for the per-push suite. `make test` and `make e2e` leave them out, because they build without the `scale` tag.
 
 `make test` runs Go against the committed placeholder page, so it needs no Vite build. Installing web dependencies and building `core.wasm` happen before the clock starts. A failing job's output is kept in a log file whose path prints last; failed vitest files and Go tests killed under load rerun once serially, and a pass there prints "passed on serial rerun: flaky under load".
 
@@ -15,28 +18,39 @@ CI does not call `make test`: its 60s budget would trip on a cold runner, and ea
 
 ## CI's jobs
 
+A **Shard** is one job's share of the Go tests. `internal/testshard` lists each package's tests, puts each in Shard `FNV-1a(import path, 0, name) mod N`, and runs that Shard's tests with `go test -v`. It keeps no list of tests or timings, so a new test or package lands in some Shard by itself. The Shard counts are matrix values in `ci.yml`, so they can be retuned from measured times without touching the tool; with one Shard it runs every test. To see what a Shard would run: `go run ./internal/testshard -shard 2 -of 4 -dry-run`.
+
 | Job | Runs on | What |
 | --- | --- | --- |
+| `test (<os>, shard <i>/<n>)` | Linux (1 Shard), macOS (2), Windows (4) | One Shard of `go test -v`, untagged and against the committed placeholder page, so it needs no Node and no Vite build |
+| `e2e (<os>)` | Linux, macOS, Windows | `core.wasm`, the Vite build, the binaries, the Go e2e tests, the UI e2e tests. It has 30 minutes, since a cold Windows runner installs and builds everything first. |
 | `web` | Linux | vitest, tsc, ESLint, the Vite build, the Storybook build |
-| `test (<os>)` | Linux, macOS, Windows | gofmt, `go test -v ./...`, the Vite build, the binaries, the Go e2e tests, the UI e2e tests |
+| `gofmt` | Linux | `gofmt -l .`, failing on any output |
 | `test (postgres)` | Linux | `go test -v ./store/... ./cli/... ./core/... ./app/...` against a Postgres 17 service container |
 | `conventional commits` | Linux | `cog check` of every commit since the latest tag, to catch a message that bypassed the commit-msg hook |
 
-There is no scale or performance tier yet.
+`scale.yml` is a separate workflow, nightly (and on `workflow_dispatch`), with one `scale (<os>)` job on Linux, macOS and Windows. It builds what the `e2e` job builds, then runs the steps `make scale` runs, with a 60-minute timeout. It is not part of `ci.yml`, so no pull request waits on it.
+
+Two Project settings, which the human sets in Code Central and which live nowhere in the repository, go with it:
+
+- **`scale.yml` in Ignored workflows** (CI Tracking, see [Watching CI](setting-up-a-project.md#watching-ci)), so a nightly run never counts towards a Ticket's CI result.
+- **A CI Rule that opens a Ticket when `scale.yml` fails on `main`**, so a nightly failure is picked up like any other.
 
 ### Why each OS runs what it runs
 
-- **Web checks run once, on Linux.** vitest runs in jsdom, and tsc and ESLint are pure analysis: none depends on the OS, so three copies add time and no signal.
+- **Web checks and gofmt run once, on Linux.** vitest runs in jsdom, and tsc, ESLint and gofmt are pure analysis: none depends on the OS, so three copies add time and no signal.
 - **Go tests and both e2e suites run on every OS.** Process handling, file locking, flushing and path rules differ (`store/lock_*.go`, `flush_*.go`, `e2e/process_*.go`), and only a real run finds a difference. Every step runs under bash so commands are identical and a red run on one OS is a real platform difference.
 - **Postgres runs only on Linux**, the one runner that gives a service container. The other jobs skip those cases, and `-v` lists the skip with its reason.
 
 ### The Windows setup
 
-Go tests that start git and write many small files ran 10-15x slower on Windows than on Linux. The Windows job therefore:
+Go tests that start git and write many small files ran 10-15x slower on Windows than on Linux. Every Windows job (the Shards, `e2e` and `scale`) therefore calls one local action, `.github/actions/windows-setup`, after checkout and before `setup-go`; its steps do nothing off Windows. It:
 
 - excludes the workspace, TEMP and the Go caches from Defender's on-access scanning;
 - puts TEMP, GOTMPDIR and the Go caches on a ReFS Dev Drive (`samypr100/setup-dev-drive`), which skips NTFS filter overhead; the drive is created before `setup-go` so its cache restores onto it;
-- raises the Go e2e startup budget to 1m (`CODE_CENTRAL_E2E_STARTUP_BUDGET`), because migrating a 10,000-Ticket store takes ~25s there.
+- turns off CRLF conversion, so the git the tests start writes the bytes it is given.
+
+The Go e2e startup budget is not in the action: `scale.yml` raises it to 1m on Windows (`CODE_CENTRAL_E2E_STARTUP_BUDGET`), because migrating a 10,000-Ticket store takes ~25s there. That test is a Scale test, so `ci.yml` has no override.
 
 The Defender step is an experiment (code-central-1141): check the timings before treating it as settled.
 
@@ -63,7 +77,7 @@ The landing guard type-checks the packages once and shares the result across its
 Find a hotspot before changing a test.
 
 - **One package's tests:** `go test -v ./<pkg>` prints each test's time. `go test -json` gives the same for sorting.
-- **A CI run:** `make ci-failures RUN=<id>` (id from `gh run list`) shows what failed. For timings, `gh run view <id> --log` of a `go test -v` step lists `ok <pkg> <seconds>` per package and `--- PASS: <test> (<seconds>)` per test; sort those by seconds to rank packages and tests.
+- **A CI run:** `make ci-failures RUN=<id>` (id from `gh run list`) shows what failed, each failing job and step under a header such as `== test (windows-latest, shard 2/4) / go test`. For timings, `gh run view <id> --log` of a Shard's `go test` step lists `ok <pkg> <seconds>` per package and `--- PASS: <test> (<seconds>)` per test; sort those by seconds to rank tests. A package's timings are spread over the Shard jobs of an OS, since its tests hash to different Shards, so add them up across those jobs to rank packages.
 - **A flaky web test:** `make vitest-stress F=<file>` runs it N times under CPU load (`N=`, `LOAD=`); `WITH="go test ./factory"` adds the Go suite's load.
 - **The fast suite as a whole:** `make test-verbose` prints each job's output, and `make test` names the budget overrun.
 
@@ -74,6 +88,6 @@ Known costs: tests that start git or write many files (Windows especially), the 
 1. **Pick the tier.** A rule about one package's logic goes in that package's Go test or a vitest file, and runs in `make test`. Behaviour that needs the real binaries, a real process or a browser goes in `e2e/` or `web/src/e2e`. A rule about the code's shape is a guard test.
 2. **Call `t.Parallel()`** unless the test changes process-wide state (environment, working directory, a fixed port).
 3. **Share expensive fixtures per package.** `factorytest.Main` seeds one repository once for the package's tests; copy that shape rather than building the fixture in each test.
-4. **Keep a scale test out of the per-push suite.** It belongs in a tier of its own once one exists; until then, flag it in the ticket instead of adding it to `make test`.
+4. **Keep a scale test out of the per-push suite.** A test is a scale test when its cost grows with the size of the data (thousands of Tickets, say) and it would add noticeable time to `make test`'s 60s. Mark it four ways, which `internal/scaleguard` checks: a `//go:build scale` constraint (`e2e && scale` for an end-to-end one), a file named `*_scale_test.go`, a name starting `TestScale`, and a doc comment saying what it guards and its budget. Run it with `make scale`; CI runs it nightly in `scale.yml`.
 5. **Test a port through its contract suite** when it has more than one implementation.
 6. **Keep the budget.** `make test` has 60s; a test that adds noticeable time needs a reason.

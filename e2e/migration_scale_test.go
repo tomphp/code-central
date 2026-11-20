@@ -1,4 +1,4 @@
-//go:build e2e
+//go:build e2e && scale
 
 package e2e
 
@@ -29,11 +29,14 @@ const (
 	synthTicketsPerSpec  = 50 // 10 × 20 × 50 = 10,000 Tickets
 )
 
-// 3. Upgrades: a synthetic store of 10,000 Tickets with long histories
-// loads within the budget, then a build one format ahead (a migrationtest
-// build, whose test-only step is additive) migrates and loads it within
-// the same budget.
-func TestA10000TicketStoreLoadsAndMigratesWithinTheBudget(t *testing.T) {
+// TestScaleA10000TicketStoreLoadsAndMigratesWithinTheBudget holds a
+// synthetic store of 10,000 Tickets with long histories to startupBudget:
+// it loads within it, then a build one format ahead (a migrationtest build,
+// whose test-only step is additive) migrates and loads it within the same
+// budget. It is a scale test, built only with -tags 'e2e scale' and run by
+// `make scale`: writing and migrating a store this size takes too long for
+// `make e2e`.
+func TestScaleA10000TicketStoreLoadsAndMigratesWithinTheBudget(t *testing.T) {
 	if b := os.Getenv("CODE_CENTRAL_E2E_STARTUP_BUDGET"); b != "" {
 		d, err := time.ParseDuration(b)
 		if err != nil {
