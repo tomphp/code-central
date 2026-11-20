@@ -1,7 +1,8 @@
 // The Chat pop-up (Spec code-central-633): the Project's current
 // Conversation with its header (model, effort, Copy resume command, New
 // conversation), the Chat Messages, the notice for a Conversation or Chat
-// that can't answer, and the input with Send and Stop. It is presentational:
+// that can't answer here, naming the host Chat runs on when that is
+// another service, and the input with Send and Stop. It is presentational:
 // the Conversation and the actions come in as props.
 import { useEffect, useId, useState, type FormEvent } from "react";
 import type { ApiError, Conversation, ModelRow, ReportedModels } from "../api/types";
@@ -20,9 +21,9 @@ export interface ChatPopupProps {
   // conversation is the Conversation as followed; undefined until the
   // stream first sends it.
   conversation?: Conversation;
-  // chatAvailable is whether Chat is available for the Project: an Online
-  // Factory with Chat support. A Conversation open when it turns false
-  // stays, with the reason.
+  // chatAvailable is whether Chat is available for the Project here: an
+  // Online Factory with Chat support reporting to this service. A
+  // Conversation open when it turns false stays, with the reason.
   chatAvailable: boolean;
   // chatRow and reported fill New conversation's pickers.
   chatRow: ModelRow;
@@ -51,7 +52,7 @@ export function ChatPopup(p: ChatPopupProps) {
   // with none yet, when no Factory could start one.
   const noFactory = !exists && !p.chatAvailable;
   const cannotSend = !c || unavailable || noFactory;
-  const reason = unavailable ? unavailableReason(c) : noFactory ? NO_CHAT_FACTORY : undefined;
+  const reason = unavailable || noFactory ? cannotAnswerReason(c) : undefined;
   // A new Conversation has not been copied.
   useEffect(() => setCopied(false), [c?.id]);
 
@@ -152,10 +153,12 @@ export function ChatPopup(p: ChatPopupProps) {
   );
 }
 
-// unavailableReason says why an unavailable Conversation can't answer: its
-// Factory, or before one took it, that no Factory could.
-function unavailableReason(c: Conversation): string {
-  return c.factory
+// cannotAnswerReason says why Chat can't answer here: that it runs on
+// another service, or an unavailable Conversation's Factory, or that no
+// Factory could.
+function cannotAnswerReason(c: Conversation | undefined): string {
+  if (c?.runs_on) return `Chat runs on ${c.runs_on}: no Factory with Chat support reports to this service.`;
+  return c?.availability === "unavailable" && c.factory
     ? `This Conversation's Factory, ${c.factory.name} on ${c.factory.host}, isn't Online. Start a new conversation, or wait for it to come back.`
     : NO_CHAT_FACTORY;
 }

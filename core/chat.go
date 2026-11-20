@@ -18,8 +18,8 @@ import (
 
 // Chat (Spec code-central-633, ADR 0040): the human talks to Claude about
 // a Project from the UI. Each Project has at most one current
-// Conversation, held in memory only, beside Transcripts and Heartbeats,
-// never in the store. A Factory with Chat support takes each turn on the
+// Conversation, held in memory only, beside Transcripts, never in the
+// store. A Factory with Chat support takes each turn on the
 // next_chat_work long-poll and posts the reply's items back with
 // PostChatEvents. Chat writes change only memory, so they add no Move,
 // Edit or Comment, and send chat.changed rather than a store notice.
@@ -103,7 +103,7 @@ func (c *Core) GetChat(_ context.Context, key string, _ api.GetChatInput) (api.C
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	fs := c.settleChat(key)
-	return c.conversationView(cs.all[key], fs), nil
+	return c.conversationView(key, cs.all[key], fs), nil
 }
 
 // StartConversation is the human's start_conversation: it replaces the
@@ -142,7 +142,7 @@ func (c *Core) StartConversation(ctx context.Context, key string, in api.StartCo
 	defer cs.mu.Unlock()
 	c.settleChat(key)
 	cv := c.newConversation(key, row, model, in.Effort)
-	return c.conversationView(cv, c.chatFactories(key)), nil
+	return c.conversationView(key, cv, c.chatFactories(key)), nil
 }
 
 // SendChatMessage is the human's send_chat_message. With no current
@@ -178,7 +178,7 @@ func (c *Core) SendChatMessage(ctx context.Context, key string, in api.SendChatM
 	cv := cs.all[key]
 	if cv == nil {
 		if chatAvailability(&conversation{}, fs) != api.ChatAvailable {
-			return api.ConversationView{}, unavailableChat(key, nil, fs)
+			return api.ConversationView{}, c.unavailableChat(key, nil, fs)
 		}
 		cv = c.newConversation(key, row, "", "")
 	}
@@ -187,7 +187,7 @@ func (c *Core) SendChatMessage(ctx context.Context, key string, in api.SendChatM
 		return api.ConversationView{}, &api.Error{Code: api.ActionNotAllowed, AllowedActions: []string{"stop_chat_reply"},
 			Message: "a reply is running; wait for it to end, or stop it, before sending another Chat Message"}
 	case chatAvailability(cv, fs) != api.ChatAvailable:
-		return api.ConversationView{}, unavailableChat(key, cv.factory, fs)
+		return api.ConversationView{}, c.unavailableChat(key, cv.factory, fs)
 	}
 	now := c.now()
 	cv.messages = append(cv.messages,
@@ -199,7 +199,7 @@ func (c *Core) SendChatMessage(ctx context.Context, key string, in api.SendChatM
 	cv.bound()
 	c.chatChanged(key)
 	cs.wake(key)
-	return c.conversationView(cv, fs), nil
+	return c.conversationView(key, cv, fs), nil
 }
 
 // StopChatReply is the human's stop_chat_reply: it asks the
@@ -221,7 +221,7 @@ func (c *Core) StopChatReply(ctx context.Context, key string, _ api.StopChatRepl
 	if cv != nil && cv.running {
 		c.stopReply(key, cv)
 	}
-	return c.conversationView(cv, fs), nil
+	return c.conversationView(key, cv, fs), nil
 }
 
 // NextChatWork is the Factory's next_chat_work long-poll. It holds until
@@ -467,21 +467,59 @@ func (c *Core) settleChat(key string) map[heartbeatKey]api.FactoryView {
 	return fs
 }
 
-// chatFactories is the Project's Factories as their Heartbeats stand now.
+// chatFactories is the Project's Factories reporting to this service, as
+// their Heartbeats stand now: only they can take its Conversations, which
+// are held here.
 func (c *Core) chatFactories(key string) map[heartbeatKey]api.FactoryView {
 	fs := map[heartbeatKey]api.FactoryView{}
 	for _, f := range c.heartbeats.view(key, c.clock.Now()).Factories {
-		fs[heartbeatKey{key, f.Name, f.Host}] = f
+		if f.ReportsTo == "" {
+			fs[heartbeatKey{key, f.Name, f.Host}] = f
+		}
 	}
 	return fs
 }
+
+// chatRunsOn is the host Chat runs on when no Factory of the Project's fs,
+// those reporting here, can take a Conversation: the first, by host, of
+// the live services an Online Factory with Chat support reports to. It is
+// empty when one here can, or none on a live service can. It reads memory
+// only, the services as the watch last read them.
+func (c *Core) chatRunsOn(key string, fs map[heartbeatKey]api.FactoryView) string {
+	for _, f := range fs {
+		if answers(f) {
+			return ""
+		}
+	}
+	return c.heartbeats.chatHost(key, c.clock.Now())
+}
+
+// chatHost is the first, by host, of the live services other than this
+// one that an Online Factory of the Project with Chat support reports to,
+// or "" when there is none.
+func (hs *heartbeats) chatHost(key string, now time.Time) string {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	first := ""
+	for k, h := range hs.all {
+		if k.project != key || h.service == hs.self || !h.chat || h.status(now) != api.FactoryOnline {
+			continue
+		}
+		if host, ok := hs.live[h.service]; ok && (first == "" || host < first) {
+			first = host
+		}
+	}
+	return first
+}
+
+// answers says whether f can answer a Conversation now.
+func answers(f api.FactoryView) bool { return f.Status == api.FactoryOnline && f.Chat }
 
 // chatAvailability is cv's availability among the Project's Factories fs.
 func chatAvailability(cv *conversation, fs map[heartbeatKey]api.FactoryView) api.ChatAvailability {
 	if cv == nil {
 		return api.ChatNone
 	}
-	answers := func(f api.FactoryView) bool { return f.Status == api.FactoryOnline && f.Chat }
 	if cv.factory != nil {
 		if f, ok := fs[*cv.factory]; ok && answers(f) {
 			return api.ChatAvailable
@@ -497,9 +535,15 @@ func chatAvailability(cv *conversation, fs map[heartbeatKey]api.FactoryView) api
 }
 
 // unavailableChat is send_chat_message's refusal while the Conversation,
-// held by factory or by none yet, is unavailable.
-func unavailableChat(key string, factory *heartbeatKey, fs map[heartbeatKey]api.FactoryView) *api.Error {
+// held by factory or by none yet, is unavailable: it names where Chat
+// runs when that is another service.
+func (c *Core) unavailableChat(key string, factory *heartbeatKey, fs map[heartbeatKey]api.FactoryView) *api.Error {
 	e := &api.Error{Code: api.ActionNotAllowed, AllowedActions: []string{"start_conversation"}}
+	if host := c.chatRunsOn(key, fs); host != "" {
+		e.AllowedActions = nil
+		e.Message = fmt.Sprintf("Chat runs on %s: no Online Factory of %s with Chat support reports to this service; send the Chat Message there", host, key)
+		return e
+	}
 	if factory == nil {
 		e.AllowedActions = nil
 		e.Message = fmt.Sprintf("no Online Factory of %s has Chat support; start code-central-factory without --no-chat", key)
@@ -515,9 +559,10 @@ func unavailableChat(key string, factory *heartbeatKey, fs map[heartbeatKey]api.
 	return e
 }
 
-// conversationView is cv as reads return it.
-func (c *Core) conversationView(cv *conversation, fs map[heartbeatKey]api.FactoryView) api.ConversationView {
-	v := api.ConversationView{Availability: chatAvailability(cv, fs), Messages: []api.ChatMessageView{}}
+// conversationView is the Project key's current Conversation cv as reads
+// return it.
+func (c *Core) conversationView(key string, cv *conversation, fs map[heartbeatKey]api.FactoryView) api.ConversationView {
+	v := api.ConversationView{Availability: chatAvailability(cv, fs), Messages: []api.ChatMessageView{}, RunsOn: c.chatRunsOn(key, fs)}
 	if cv == nil {
 		return v
 	}

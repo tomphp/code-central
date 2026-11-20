@@ -323,6 +323,7 @@ func Run(t *testing.T, f Factory) {
 	runUsage(t, f)
 	runMove(t, f)
 	runServices(t, f)
+	runRuntime(t, f)
 	runStorage(t, f)
 	runConcurrency(t, f)
 	runChanges(t, f)

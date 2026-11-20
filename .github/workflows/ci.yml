@@ -104,12 +104,26 @@ jobs:
           cache: true
 
       - uses: actions/setup-node@v6
+        id: node
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      # web/node_modules, keyed on the OS, the exact Node version and the
+      # lockfile, so a lockfile change misses and installs fresh. On a hit
+      # npm ci is skipped; on a miss it runs as ever, so the lockfile is
+      # still enforced. setup-node's cache above holds only ~/.npm, which
+      # still leaves npm ci unpacking every package.
+      - name: Cache node_modules
+        id: node-modules
+        uses: actions/cache@v5
+        with:
+          path: web/node_modules
+          key: node-modules-${{ runner.os }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('web/package-lock.json') }}
+
       - name: npm ci
+        if: steps.node-modules.outputs.cache-hit != 'true'
         working-directory: web
         run: npm ci
 
@@ -158,6 +172,47 @@ jobs:
         if: runner.os == 'Windows'
         run: git config --global core.autocrlf false
 
+      # Experiment (code-central-1141): Go tests that start git and write
+      # files run 10-15x slower on Windows than on Linux, and Defender's
+      # on-access scanning of the workspace, TEMP and the Go caches is a
+      # likely cause. This saves that scanning. The runner's TEMP and the
+      # Go caches are excluded by their default paths, since the Dev Drive
+      # step below moves them.
+      - name: Exclude build paths from Defender
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $paths = @(
+            $env:GITHUB_WORKSPACE,
+            $env:RUNNER_TEMP,
+            $env:TEMP,
+            "$env:LOCALAPPDATA\go-build",
+            "$env:USERPROFILE\go"
+          )
+          foreach ($p in $paths) { Add-MpPreference -ExclusionPath $p }
+
+      # TEMP and the Go caches on a ReFS Dev Drive, which skips the NTFS
+      # filter overhead on many small files. Before setup-go, so its cache
+      # restore lands on the drive; the env-mapping reaches later steps.
+      - name: Dev Drive for TEMP and the Go caches
+        if: runner.os == 'Windows'
+        uses: samypr100/setup-dev-drive@v3
+        with:
+          drive-size: 8GB
+          env-mapping: |
+            TMP,{{ DEV_DRIVE }}/tmp
+            TEMP,{{ DEV_DRIVE }}/tmp
+            GOTMPDIR,{{ DEV_DRIVE }}/gotmp
+            GOCACHE,{{ DEV_DRIVE }}/go-build
+            GOMODCACHE,{{ DEV_DRIVE }}/go-mod
+
+      # The env-mapping names the directories but does not create them, and
+      # go will not start without GOTMPDIR.
+      - name: Create TEMP and GOTMPDIR on the Dev Drive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path $env:TEMP, $env:GOTMPDIR
+
       - uses: actions/checkout@v6
 
       - uses: actions/setup-go@v6
@@ -166,12 +221,22 @@ jobs:
           cache: true
 
       - uses: actions/setup-node@v6
+        id: node
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      # As in the web job: skip npm ci on a hit, run it on a miss.
+      - name: Cache node_modules
+        id: node-modules
+        uses: actions/cache@v5
+        with:
+          path: web/node_modules
+          key: node-modules-${{ runner.os }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('web/package-lock.json') }}
+
       - name: npm ci
+        if: steps.node-modules.outputs.cache-hit != 'true'
         working-directory: web
         run: npm ci
 
@@ -217,8 +282,21 @@ jobs:
           echo "CODE_CENTRAL_FACTORY_BIN=$GITHUB_WORKSPACE/bin/code-central-factory$exe" >> "$GITHUB_ENV"
           echo "CODE_CENTRAL_FAKE_GH_BIN=$GITHUB_WORKSPACE/bin/fake-gh$exe" >> "$GITHUB_ENV"
 
+      # Chromium is cached in the workspace, the same path on every OS,
+      # keyed on the lockfile (which pins the playwright-core version). On
+      # a hit the install is skipped.
+      - name: Cache Chromium
+        id: chromium
+        uses: actions/cache@v5
+        with:
+          path: .ms-playwright
+          key: chromium-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}
+
       - name: Install Chromium
+        if: steps.chromium.outputs.cache-hit != 'true'
         working-directory: web
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.ms-playwright
         run: npx playwright-core install chromium
 
       # Windows takes ~25s to migrate a 10,000-Ticket store, mostly in
@@ -233,4 +311,6 @@ jobs:
       # the system Chrome the suite defaults to.
       - name: UI e2e
         working-directory: web
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.ms-playwright
         run: PLAYWRIGHT_CHANNEL= npm run test:e2e

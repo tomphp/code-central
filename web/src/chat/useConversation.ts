@@ -1,7 +1,7 @@
 // Follows a Project's current Conversation while active: the stream sends it
 // as it stands and then each message, item and outcome, and the rereads a
-// change notice prompts bring its availability, Factory and tail up to date,
-// which the stream doesn't carry.
+// change notice prompts bring its availability, Factory, tail and the host
+// Chat runs on up to date, which the stream doesn't carry.
 import { useEffect, useState } from "react";
 import type { ChatMessage, Conversation } from "../api/types";
 import { useApi, useVersion } from "../live";
@@ -48,7 +48,7 @@ export function useConversation(project: string, active: boolean): Conversation 
         current &&
         setConversation((c) =>
           // Only for the Conversation held: a new one arrives on the stream.
-          c && c.id === fresh.id ? { ...c, availability: fresh.availability, factory: fresh.factory, tail: fresh.tail } : c,
+          c && c.id === fresh.id ? { ...c, availability: fresh.availability, factory: fresh.factory, tail: fresh.tail, runs_on: fresh.runs_on } : c,
         ),
       () => {},
     );

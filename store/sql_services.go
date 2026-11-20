@@ -3,18 +3,22 @@
 package store
 
 import (
+	"cmp"
 	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
 	"time"
 )
 
-// sqlServices are a database Store's Services: a row per Registration
-// and per Watcher Lease, each written in a statement of its own, on the
-// pool's connections, outside every Update. On SQLite the one service
-// holding the lock is the only one registered; on Postgres every service
-// sharing the Store is.
+// sqlServices are a database Store's Services: a row per Registration,
+// per Watcher Lease and per piece of runtime state, each written in a
+// statement of its own, on the pool's connections, outside every Update.
+// On SQLite the one service holding the lock is the only one registered;
+// on Postgres every service sharing the Store is.
 type sqlServices struct{ s *SQLStore }
 
 func (v sqlServices) exec(q string, args ...any) error {
@@ -78,6 +82,146 @@ func (v sqlServices) HoldLease(project, id string, now time.Time) (Lease, error)
 	}
 	l.Expires = fromUnixNanos(expires)
 	return l, nil
+}
+
+// The runtime state's rows are each written whole in one statement, the
+// newest write winning, and listed sorted here, as the engines' collations
+// would order them apart.
+
+func (v sqlServices) PutHeartbeat(h Heartbeat) error {
+	if err := v.exec(`INSERT INTO heartbeats (project, factory, factory_host, doc, service, service_host, expires) VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (project, factory, factory_host) DO UPDATE SET doc = excluded.doc, service = excluded.service, service_host = excluded.service_host, expires = excluded.expires`,
+		h.Project, h.Factory, h.FactoryHost, string(h.Doc), h.Service, h.ServiceHost, unixNanos(h.Expires)); err != nil {
+		return fmt.Errorf("%s: writing %s's heartbeat: %w", v.s.path, h.Factory, err)
+	}
+	return nil
+}
+
+func (v sqlServices) Heartbeats() ([]Heartbeat, error) {
+	out, err := queryRows(v, `SELECT project, factory, factory_host, doc, service, service_host, expires FROM heartbeats`,
+		func(rows *sql.Rows) (Heartbeat, error) {
+			var h Heartbeat
+			var doc string
+			var expires int64
+			err := rows.Scan(&h.Project, &h.Factory, &h.FactoryHost, &doc, &h.Service, &h.ServiceHost, &expires)
+			h.Doc, h.Expires = json.RawMessage(doc), fromUnixNanos(expires)
+			return h, err
+		})
+	if err != nil {
+		return nil, fmt.Errorf("%s: reading the heartbeats: %w", v.s.path, err)
+	}
+	slices.SortFunc(out, byHeartbeat)
+	return out, nil
+}
+
+func (v sqlServices) PruneHeartbeats(now time.Time) error {
+	if err := v.exec(`DELETE FROM heartbeats WHERE expires <= ?`, unixNanos(now)); err != nil {
+		return fmt.Errorf("%s: pruning the heartbeats: %w", v.s.path, err)
+	}
+	return nil
+}
+
+func (v sqlServices) PutFactoryReports(r FactoryReports) error {
+	if err := v.exec(`INSERT INTO factory_reports (project, doc) VALUES (?, ?) ON CONFLICT (project) DO UPDATE SET doc = excluded.doc`,
+		r.Project, string(r.Doc)); err != nil {
+		return fmt.Errorf("%s: writing %s's factory reports: %w", v.s.path, r.Project, err)
+	}
+	return nil
+}
+
+func (v sqlServices) FactoryReports() ([]FactoryReports, error) {
+	out, err := queryRows(v, `SELECT project, doc FROM factory_reports`, func(rows *sql.Rows) (FactoryReports, error) {
+		var r FactoryReports
+		var doc string
+		err := rows.Scan(&r.Project, &doc)
+		r.Doc = json.RawMessage(doc)
+		return r, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%s: reading the factory reports: %w", v.s.path, err)
+	}
+	slices.SortFunc(out, func(a, b FactoryReports) int { return cmp.Compare(a.Project, b.Project) })
+	return out, nil
+}
+
+func (v sqlServices) PutPing(p Ping) error {
+	if err := v.exec(`INSERT INTO pings (session_id, pinged, service, service_host) VALUES (?, ?, ?, ?)
+		ON CONFLICT (session_id) DO UPDATE SET pinged = excluded.pinged, service = excluded.service, service_host = excluded.service_host`,
+		p.Session, unixNanos(p.At), p.Service, p.ServiceHost); err != nil {
+		return fmt.Errorf("%s: writing %s's ping: %w", v.s.path, p.Session, err)
+	}
+	return nil
+}
+
+func (v sqlServices) Pings() ([]Ping, error) {
+	out, err := queryRows(v, `SELECT session_id, pinged, service, service_host FROM pings`, func(rows *sql.Rows) (Ping, error) {
+		var p Ping
+		var at int64
+		err := rows.Scan(&p.Session, &at, &p.Service, &p.ServiceHost)
+		p.At = fromUnixNanos(at)
+		return p, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%s: reading the pings: %w", v.s.path, err)
+	}
+	slices.SortFunc(out, func(a, b Ping) int { return cmp.Compare(a.Session, b.Session) })
+	return out, nil
+}
+
+func (v sqlServices) PrunePings(before time.Time) error {
+	if err := v.exec(`DELETE FROM pings WHERE pinged < ?`, unixNanos(before)); err != nil {
+		return fmt.Errorf("%s: pruning the pings: %w", v.s.path, err)
+	}
+	return nil
+}
+
+func (v sqlServices) PutTranscriptHolder(h TranscriptHolder) error {
+	if err := v.exec(`INSERT INTO transcript_holders (project, ticket, claim, service, service_host, since) VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT (project, ticket, claim) DO UPDATE SET service = excluded.service, service_host = excluded.service_host, since = excluded.since`,
+		h.Project, h.Ticket, h.Claim, h.Service, h.ServiceHost, unixNanos(h.At)); err != nil {
+		return fmt.Errorf("%s: writing %s-%d claim %d's transcript holder: %w", v.s.path, h.Project, h.Ticket, h.Claim, err)
+	}
+	return nil
+}
+
+func (v sqlServices) TranscriptHolder(project string, ticket, claim int) (TranscriptHolder, bool, error) {
+	h := TranscriptHolder{Project: project, Ticket: ticket, Claim: claim}
+	var at int64
+	err := v.s.db.QueryRowContext(context.Background(), v.s.d.rebind(`SELECT service, service_host, since FROM transcript_holders
+		WHERE project = ? AND ticket = ? AND claim = ?`), project, ticket, claim).Scan(&h.Service, &h.ServiceHost, &at)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return TranscriptHolder{}, false, nil
+	case err != nil:
+		return TranscriptHolder{}, false, fmt.Errorf("%s: reading %s-%d claim %d's transcript holder: %w", v.s.path, project, ticket, claim, err)
+	}
+	h.At = fromUnixNanos(at)
+	return h, true, nil
+}
+
+func (v sqlServices) PruneTranscriptHolders(before time.Time) error {
+	if err := v.exec(`DELETE FROM transcript_holders WHERE since < ?`, unixNanos(before)); err != nil {
+		return fmt.Errorf("%s: pruning the transcript holders: %w", v.s.path, err)
+	}
+	return nil
+}
+
+// queryRows runs q on v's pool and scans each row it returns.
+func queryRows[T any](v sqlServices, q string, scan func(*sql.Rows) (T, error)) ([]T, error) {
+	rows, err := v.s.db.QueryContext(context.Background(), v.s.d.rebind(q))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []T{}
+	for rows.Next() {
+		x, err := scan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, x)
+	}
+	return out, rows.Err()
 }
 
 // liveRegistrations reads the Registrations q's database holds live at

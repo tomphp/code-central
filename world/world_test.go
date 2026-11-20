@@ -148,6 +148,16 @@ func TestAFactorysUsageAndSessionEventsAreFiledUnderItsClaim(t *testing.T) {
 	}
 }
 
+// Session Events a Factory posts to another service on the Store stay on
+// that service, and the world's own service names its host.
+func TestSessionEventsPostedToAnotherServiceAreHeldThere(t *testing.T) {
+	w := claimedWorld(t)
+	w.PostSessionEventsOn("desktop", "s1", []api.SessionEvent{{Time: w.Now(), Kind: api.EventText, Text: "Reading the Spec"}})
+	if b := ok(t, w, "", "GET", "/api/projects/acme/tickets/2/claims/1/transcript", ""); b != `{"events":[],"tail":false,"host":"desktop"}`+"\n" {
+		t.Errorf("Transcript: %s, want none, on the desktop", b)
+	}
+}
+
 func TestAdvanceMovesCoresClock(t *testing.T) {
 	w := newWorld(t)
 	ok(t, w, "", "POST", "/api/projects/create_project", `{"key":"acme"}`)

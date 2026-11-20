@@ -52,9 +52,11 @@ type Service interface {
 
 // A TranscriptFeed follows one Claim's Transcript: the stream read
 // (GET .../transcript/stream) sends what Next gives each time Wake fires,
-// until Stop.
+// until Stop. Host is the host of another service holding the Transcript,
+// when it does: then the feed has ended and the stream sends only that.
 type TranscriptFeed interface {
 	Wake() <-chan struct{}
+	Host() string
 	Next() (tail bool, events []api.HeldSessionEvent)
 	Stop()
 }

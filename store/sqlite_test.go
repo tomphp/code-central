@@ -58,7 +58,7 @@ func TestSQLiteRefusesAnUnknownFormat(t *testing.T) {
 }
 
 // A SQLite Store made before the services' tables gains them when it is
-// opened, so its service can register.
+// opened, so its service can register and keep its runtime state.
 func TestASQLiteStoreMadeBeforeTheServicesTablesGainsThem(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "code-central.db")
 	if err := openSQLite(t, path).Close(); err != nil {
@@ -66,18 +66,43 @@ func TestASQLiteStoreMadeBeforeTheServicesTablesGainsThem(t *testing.T) {
 	}
 	store.DropSQLiteServiceTables(t, path)
 
-	mustRegisterAndHoldALease(t, openSQLite(t, path))
+	mustUseTheServicesTables(t, openSQLite(t, path))
 }
 
-// mustRegisterAndHoldALease registers a service on s and has it hold
-// acme's Watcher Lease.
-func mustRegisterAndHoldALease(t *testing.T, s store.Store) {
+// mustUseTheServicesTables registers a service on s, has it hold acme's
+// Watcher Lease and writes and reads each kind of runtime state.
+func mustUseTheServicesTables(t *testing.T, s store.Store) {
 	t.Helper()
-	if err := s.Services().Register(store.Registration{ID: "a", Host: "laptop", Version: "v1", Format: store.Format, Renewed: t0}); err != nil {
+	v := s.Services()
+	if err := v.Register(store.Registration{ID: "a", Host: "laptop", Version: "v1", Format: store.Format, Renewed: t0}); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	if l, err := s.Services().HoldLease("acme", "a", t0); err != nil || l.Holder != "a" {
+	if l, err := v.HoldLease("acme", "a", t0); err != nil || l.Holder != "a" {
 		t.Fatalf("hold acme's Watcher Lease: %+v, %v", l, err)
+	}
+	if err := v.PutHeartbeat(store.Heartbeat{Project: "acme", Factory: "factory", FactoryHost: "laptop", Doc: []byte(`{}`), Service: "a", ServiceHost: "laptop", Expires: t0}); err != nil {
+		t.Fatalf("put a heartbeat: %v", err)
+	}
+	if hs, err := v.Heartbeats(); err != nil || len(hs) != 1 {
+		t.Fatalf("heartbeats: %+v, %v", hs, err)
+	}
+	if err := v.PutFactoryReports(store.FactoryReports{Project: "acme", Doc: []byte(`{}`)}); err != nil {
+		t.Fatalf("put factory reports: %v", err)
+	}
+	if rs, err := v.FactoryReports(); err != nil || len(rs) != 1 {
+		t.Fatalf("factory reports: %+v, %v", rs, err)
+	}
+	if err := v.PutPing(store.Ping{Session: "s1", At: t0, Service: "a", ServiceHost: "laptop"}); err != nil {
+		t.Fatalf("put a ping: %v", err)
+	}
+	if ps, err := v.Pings(); err != nil || len(ps) != 1 {
+		t.Fatalf("pings: %+v, %v", ps, err)
+	}
+	if err := v.PutTranscriptHolder(store.TranscriptHolder{Project: "acme", Ticket: 2, Claim: 1, Service: "a", ServiceHost: "laptop", At: t0}); err != nil {
+		t.Fatalf("put a transcript holder: %v", err)
+	}
+	if _, ok, err := v.TranscriptHolder("acme", 2, 1); err != nil || !ok {
+		t.Fatalf("transcript holder: %v, %v", ok, err)
 	}
 }
 

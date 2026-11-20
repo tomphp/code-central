@@ -8,6 +8,7 @@ package core
 
 import (
 	"context"
+	"io"
 	"maps"
 	"regexp"
 	"slices"
@@ -52,7 +53,8 @@ type Core struct {
 	pullRequestCheck api.PullRequestCheck
 	// watchers holds each Project's Watchers' statuses, in memory only.
 	watchers *watchers
-	// heartbeats holds each Factory's latest Heartbeat, in memory only.
+	// heartbeats holds each Factory's latest Heartbeat, in memory, read
+	// from and written through to the Store.
 	heartbeats *heartbeats
 	// chats holds each Project's current Conversation, in memory only.
 	chats *chats
@@ -68,6 +70,9 @@ type Core struct {
 	// service is this service as the Store's record of the services
 	// running on it names it.
 	service Service
+	// log is where c logs what it can't write to or read from the Store,
+	// and carries on without; nil logs nothing.
+	log io.Writer
 }
 
 // New returns a Core persisting through s, telling time with clk and
@@ -80,7 +85,8 @@ func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
 	c.transcripts = &transcripts{all: map[markKey]*transcript{}, feeds: map[markKey]map[*TranscriptFeed]struct{}{}}
 	c.latestNotices = &latestNotices{sent: map[markKey]time.Time{}, pending: map[markKey]bool{}}
 	c.watchers = &watchers{all: map[watcherKey]watcherStatus{}, leases: map[string]store.Lease{}}
-	c.heartbeats = &heartbeats{all: map[heartbeatKey]heartbeat{}, seen: map[string]string{}, base: map[string]map[string]api.BaseView{}, clones: map[string]map[string]api.CloneView{}}
+	c.heartbeats = &heartbeats{all: map[heartbeatKey]heartbeat{}, seen: map[string]string{}, base: map[string]map[string]api.BaseView{}, clones: map[string]map[string]api.CloneView{},
+		reportsAt: map[string]time.Time{}, live: map[string]string{}}
 	c.chats = newChats()
 	return c
 }

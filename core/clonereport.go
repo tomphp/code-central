@@ -17,12 +17,12 @@ import (
 // The Factory's clone report (Spec code-central-848): on each poll the
 // Factory clones each Repository it has no clone of, adopts a matching
 // one, and reports each Repository's clone as ready or missing. Code
-// Central keeps the latest report of each Project in memory only, like
-// the base report, and drops it when the Project's Factories all go
-// offline.
+// Central keeps the latest report of each Project with the base report,
+// where every service sharing the Store reads it, and drops it when the
+// Project's Factories all go offline.
 
 // ReportRepositories is the Factory's report_repositories. The report
-// replaces the Project's earlier one, in memory only; a missing
+// replaces the Project's earlier one, in the runtime state a Store shares; a missing
 // Repository shows in Needs Me while the latest says so and a Factory is
 // still online.
 func (c *Core) ReportRepositories(_ context.Context, key string, in api.ReportRepositoriesInput) (api.Written[api.ProjectView], error) {
@@ -71,7 +71,9 @@ func (c *Core) ReportRepositories(_ context.Context, key string, in api.ReportRe
 		}
 	}
 	hs.clones[key] = report
+	hs.reportsAt[key] = now
 	hs.mu.Unlock()
+	c.recordReports(key)
 	if !maps.Equal(prev, report) {
 		c.events.Publish(events.Event{Type: events.ProjectChanged, Project: key})
 	}

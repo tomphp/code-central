@@ -196,6 +196,17 @@ describe("the Live section", () => {
     expect(within(log).queryByText("This Claim has no Transcript.")).not.toBeInTheDocument();
   });
 
+  it("names the host of another service holding the Transcript, in place of the empty state, and stops following", async () => {
+    const { w, id } = await seeded();
+    w.postSessionEventsOn("desktop", "s-new", [{ time: at(w, 1), kind: "text", text: "On the desktop." }]);
+    const log = transcript((await renderDetail(w, id))[0]);
+
+    expect(within(log).getByText("This Transcript is on desktop.")).toBeInTheDocument();
+    expect(within(log).queryByText("This Claim has no Transcript.")).not.toBeInTheDocument();
+    expect(within(log).queryByText("On the desktop.")).not.toBeInTheDocument();
+    expect(w.transcriptStreams()).toBe(0);
+  });
+
   it("picks up after a dropped connection with no event lost or repeated", async () => {
     const { w, s, id } = await seeded();
     await s.postSessionEvents("s-new", [{ time: at(w, 3), kind: "text", text: "one" }]);

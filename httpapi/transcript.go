@@ -27,7 +27,9 @@ const TranscriptPath = "GET /api/projects/{key}/tickets/{n}/claims/{c}/transcrip
 // comes before events that follow a gap: ones dropped from the Transcript
 // (or lost to a restart) before the stream could send them, so the client
 // holds only the tail of the session. The stream stays open after the
-// Claim ends.
+// Claim ends. On a Shared Store, when another running service holds the
+// Transcript, it sends instead one host event (data {"host": ...}) naming
+// that service's host, and ends.
 // Like the Transcript read, it is outside core's operations and MCP.
 const TranscriptStreamPath = "GET /api/projects/{key}/tickets/{n}/claims/{c}/transcript/stream"
 
@@ -92,6 +94,12 @@ func transcriptStream(s ops.Service) http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 		// The opening comment tells the client the stream is live.
 		fmt.Fprint(w, ": connected\n\n")
+		if host := feed.Host(); host != "" {
+			data, _ := json.Marshal(map[string]string{"host": host})
+			fmt.Fprintf(w, "event: host\ndata: %s\n\n", data)
+			flusher.Flush()
+			return
+		}
 		flusher.Flush()
 		for {
 			select {

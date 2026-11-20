@@ -71,6 +71,11 @@ type ConversationView struct {
 	SessionID     string            `json:"session_id,omitempty"`
 	ResumeCommand string            `json:"resume_command,omitempty"`
 	Messages      []ChatMessageView `json:"messages"`
+	// RunsOn is the host of another live service sharing the Store that
+	// an Online Factory with Chat support reports to, when none reports
+	// to this one: Chat runs there (Spec code-central-1107). Empty when
+	// Chat runs here, or nowhere.
+	RunsOn string `json:"runs_on,omitempty"`
 }
 
 // ChatFactory names the Factory holding a Conversation, by its

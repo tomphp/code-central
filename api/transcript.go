@@ -51,8 +51,12 @@ type HeldSessionEvent struct {
 // events, oldest first. Tail is true when it holds only part of the
 // session: events were dropped from its front, as it keeps the last
 // TranscriptLimit, or it began after the Claim did, as none are kept
-// from before Code Central's last restart.
+// from before Code Central's last restart, or on another service before
+// its session moved here. Host is the host of another service on the
+// Store holding the Transcript, its Reporting Service, while that service
+// is running: then Events is empty.
 type TranscriptView struct {
 	Events []HeldSessionEvent `json:"events"`
 	Tail   bool               `json:"tail"`
+	Host   string             `json:"host,omitempty"`
 }
