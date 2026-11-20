@@ -320,8 +320,10 @@ type TicketRow struct {
 	// NodeType is the Ticket's type on a Map (see NodeTypeOf); left out
 	// for a Ticket on any other Spec.
 	NodeType NodeType `json:"node_type,omitempty"`
-	// BlockedBy is the Ticket's Blockers on a Map, the Map view's edges;
-	// left out for a Ticket on any other Spec.
+	// BlockedBy is the Ticket's Blockers, including any on another Spec: on
+	// a find_tickets row only for a Ticket on a Map (the Map view's edges),
+	// on a get_spec row for every Spec kind except Long-lived. Left out
+	// otherwise.
 	BlockedBy []string `json:"blocked_by,omitempty"`
 	// LatestEvent is the latest Session Event of the Ticket's live Claim,
 	// shown short; left out when there is none.

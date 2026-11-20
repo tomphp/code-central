@@ -99,9 +99,9 @@ func (c *Core) GetSpec(_ context.Context, key string, in api.GetSpecInput) (api.
 		}
 		if parts[api.PartTickets] {
 			v.Tickets = []api.TicketRow{}
-			onMap := isMap(s.Labels)
+			onMap, withBlockers := isMap(s.Labels), v.Kind != api.SpecKindLongLived
 			for _, t := range tickets {
-				v.Tickets = append(v.Tickets, c.ticketRow(r, e, t, onMap))
+				v.Tickets = append(v.Tickets, c.ticketRow(r, e, t, onMap, withBlockers))
 			}
 		}
 		return nil
