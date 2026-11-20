@@ -365,3 +365,24 @@ func TestAFailedRunEndsWithOneFailLinePerFailureBeforeTheLogPath(t *testing.T) {
 		t.Errorf("the log path isn't last:\n%s", out.String())
 	}
 }
+
+func TestGoFilesSkipsNestedModules(t *testing.T) {
+	root := t.TempDir()
+	for _, f := range []string{"go.mod", "a.go", "pkg/b.go", "nested/go.mod", "nested/c.go", "nested/deep/d.go", ".claude/worktrees/w/go.mod", ".claude/worktrees/w/e.go"} {
+		path := filepath.Join(root, f)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := goFiles(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{filepath.Join(root, "a.go"), filepath.Join(root, "pkg", "b.go")}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("goFiles = %q, want %q", got, want)
+	}
+}
