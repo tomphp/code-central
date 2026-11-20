@@ -157,8 +157,12 @@ A Map whose `guided` Tag is `on`. Whenever it is idle, with every Ticket on it b
 _Avoid_: Autopilot, auto-advance
 
 **Map view**:
-The UI's view of a Map: its Destination, **New Prototype**, its Tickets as a left-to-right graph with Blockers as edges and **Start** on each frontier Ticket, a fog node at the right edge for what is not yet specified, and its Decisions so far and Out of scope beside the graph. Its header has **Write the Spec** once the Map is finished, and links the Requirements written from it.
+The UI's view of a Map: its Destination, **New Prototype**, its Ticket graph with the Map's own additions, **Start** on each frontier Ticket and a fog node at the right edge for what is not yet specified, and its Decisions so far and Out of scope beside the graph. Its header has **Write the Spec** once the Map is finished, and links the Requirements written from it.
 _Avoid_: Map board, roadmap
+
+**Ticket graph**:
+A Spec's Tickets laid out left to right, with Blockers as edges, each Ticket coloured by its progress; choosing one opens it. It shows on the Map view, the Spec view and a Requirement's view, never on a Long-lived Spec.
+_Avoid_: DAG, dependency graph, Map graph
 
 **Write the Spec**:
 The human's action on a finished Map (every Ticket Done or Cancelled) that creates a new Requirement with no grilling Stage, whose `map` Tag names the Map; its spec Stage works from the Map's Decisions so far and the resolutions they link. The Map stays as the record.
