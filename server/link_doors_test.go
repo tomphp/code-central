@@ -1,27 +1,28 @@
 package server_test
 
 import (
-	"github.com/tomoram/code-central/domain"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // linkedItems adds linked Spec acme-4 and, under it, linked Ticket acme-5,
 // closed externally.
 func linkedItems(t *testing.T, srv *codecentraltest.Server) {
-	as := core.WithActor(t.Context(), core.Integration)
+	as := api.WithActor(t.Context(), api.Integration)
 	must(t, func() error {
-		_, err := srv.Core.CreateLinkedSpec(as, "acme", core.CreateLinkedSpecInput{Title: "Epic", Link: core.LinkInput{Integration: "github", ID: "1"}})
+		_, err := srv.Core.CreateLinkedSpec(as, "acme", api.CreateLinkedSpecInput{Title: "Epic", Link: api.LinkInput{Integration: "github", ID: "1"}})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.CreateLinkedTicket(as, "acme", core.CreateLinkedTicketInput{Spec: "4", Title: "Issue", Link: core.LinkInput{Integration: "github", ID: "2"}})
+		_, err := srv.Core.CreateLinkedTicket(as, "acme", api.CreateLinkedTicketInput{Spec: "4", Title: "Issue", Link: api.LinkInput{Integration: "github", ID: "2"}})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.SetExternalState(as, "acme", core.SetExternalStateInput{Target: "5", ExternalState: domain.ExternalClosed})
+		_, err := srv.Core.SetExternalState(as, "acme", api.SetExternalStateInput{Target: "5", ExternalState: domain.ExternalClosed})
 		return err
 	})
 }
@@ -38,7 +39,7 @@ func init() {
 				field("external_state", "open")(t, out["link"].(map[string]any))
 			},
 			bad:  call{http: httpCall{"POST", "/api/p/acme/integration/create_linked_spec", `{"title":"Epic","link":{"integration":"github"}}`}},
-			code: core.Invalid,
+			code: api.Invalid,
 		},
 		"create_linked_ticket": {
 			ok:    call{http: httpCall{"POST", "/api/p/acme/integration/create_linked_ticket", `{"spec":"1","title":"Issue","state":"Ready","link":{"integration":"github","id":"2"}}`}},
@@ -48,7 +49,7 @@ func init() {
 				field("id", "2")(t, out["link"].(map[string]any))
 			},
 			bad:  call{http: httpCall{"POST", "/api/p/acme/integration/create_linked_ticket", `{"spec":"1","title":"Issue","state":"Done","link":{"integration":"github","id":"2"}}`}},
-			code: core.Invalid,
+			code: api.Invalid,
 		},
 		"update_linked_spec": {
 			setup: linkedItems,
@@ -56,7 +57,7 @@ func init() {
 			check: acknowledgement("acme-4", "title", "edits"),
 			full:  field("title", "Epic 2"),
 			bad:   call{http: httpCall{"POST", "/api/p/acme/integration/specs/1/update_linked_spec", `{"title":"Not linked"}`}},
-			code:  core.ActionNotAllowed,
+			code:  api.ActionNotAllowed,
 		},
 		"update_linked_ticket": {
 			setup: linkedItems,
@@ -64,7 +65,7 @@ func init() {
 			check: ticketAcknowledgement("acme-5", "Draft", "spec", "spec_landed", "edits"),
 			full:  func(t *testing.T, out map[string]any) { field("id", "acme-1")(t, out["spec"].(map[string]any)) },
 			bad:   call{http: httpCall{"POST", "/api/p/acme/integration/tickets/2/update_linked_ticket", `{"title":"Not linked"}`}},
-			code:  core.ActionNotAllowed,
+			code:  api.ActionNotAllowed,
 		},
 		"set_external_state": {
 			setup: linkedItems,
@@ -74,7 +75,7 @@ func init() {
 				field("external_state", "open")(t, out["link"].(map[string]any))
 			},
 			bad:  call{http: httpCall{"POST", "/api/p/acme/integration/set_external_state", `{"target":"5","external_state":"gone"}`}},
-			code: core.Invalid,
+			code: api.Invalid,
 		},
 		"find_linked": {
 			setup: linkedItems,
@@ -87,7 +88,7 @@ func init() {
 				field("id", "acme-5")(t, rows[0].(map[string]any))
 			},
 			bad:  call{http: httpCall{"GET", "/api/p/acme/integration/linked", ""}},
-			code: core.Invalid,
+			code: api.Invalid,
 		},
 		"unlink": {
 			setup: linkedItems,
@@ -98,7 +99,7 @@ func init() {
 				}
 			},
 			bad:  call{http: httpCall{"POST", "/api/p/acme/unlink", `{"target":"acme-2"}`}},
-			code: core.Invalid,
+			code: api.Invalid,
 		},
 	} {
 		cases[name] = c

@@ -14,7 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/httpapi"
 )
 
@@ -116,7 +116,7 @@ func serverRequest(r *http.Request) *http.Request {
 	}
 	r.RequestURI = r.URL.RequestURI()
 	if r.Header.Get(httpapi.ActorHeader) == "" {
-		r.Header.Set(httpapi.ActorHeader, string(core.Human))
+		r.Header.Set(httpapi.ActorHeader, string(api.Human))
 	}
 	return r
 }

@@ -3,19 +3,19 @@ package issuewatcher_test
 import (
 	"context"
 	"fmt"
-	"github.com/tomoram/code-central/domain"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 )
 
 // agent is the context an agent's writes are made in.
-var agent = core.WithActor(context.Background(), core.Agent)
+var agent = api.WithActor(context.Background(), api.Agent)
 
 // stages are the Stage Tickets of Requirement spec, in Stage order.
 func (w *watching) stages(spec string) []string {
 	w.t.Helper()
-	sp, err := w.srv.Core.GetSpec(context.Background(), "acme", core.GetSpecInput{Spec: core.Ref(spec)})
+	sp, err := w.srv.Core.GetSpec(context.Background(), "acme", api.GetSpecInput{Spec: api.Ref(spec)})
 	if err != nil {
 		w.t.Fatal(err)
 	}
@@ -31,26 +31,26 @@ func (w *watching) stages(spec string) []string {
 // with it.
 func (w *watching) workedDone(ticket, comment, commit string) {
 	w.t.Helper()
-	c, err := w.srv.Core.Claim(agent, "acme", core.ClaimInput{Ticket: core.Ref(ticket)})
+	c, err := w.srv.Core.Claim(agent, "acme", api.ClaimInput{Ticket: api.Ref(ticket)})
 	if err == nil && comment != "" {
-		_, err = w.srv.Core.Comment(agent, "acme", core.CommentInput{Ticket: core.Ref(ticket), Body: comment})
+		_, err = w.srv.Core.Comment(agent, "acme", api.CommentInput{Ticket: api.Ref(ticket), Body: comment})
 	}
 	branch := ""
 	if commit != "" {
 		branch = ticket
 	}
 	if err == nil {
-		in := core.FinishInput{Ticket: core.Ref(ticket), ClaimID: c.ClaimID, Summary: "Finished " + ticket + ".", Branch: branch}
-		if core.StageOf(c.Ticket.Labels) == "spec" {
+		in := api.FinishInput{Ticket: api.Ref(ticket), ClaimID: c.ClaimID, Summary: "Finished " + ticket + ".", Branch: branch}
+		if domain.StageOf(c.Ticket.Labels) == "spec" {
 			in.Recommendation = domain.RecommendSplit
 		}
 		_, err = w.srv.Core.Finish(agent, "acme", in)
 	}
 	if err == nil {
-		_, err = w.srv.Core.Accept(human, "acme", core.TicketInput{Ticket: core.Ref(ticket)})
+		_, err = w.srv.Core.Accept(human, "acme", api.TicketInput{Ticket: api.Ref(ticket)})
 	}
 	if err == nil && commit != "" {
-		_, err = w.srv.Core.Land(agent, "acme", core.LandInput{Ticket: core.Ref(ticket), Commit: commit})
+		_, err = w.srv.Core.Land(agent, "acme", api.LandInput{Ticket: api.Ref(ticket), Commit: commit})
 	}
 	if err != nil {
 		w.t.Fatal(err)
@@ -61,7 +61,7 @@ func (w *watching) workedDone(ticket, comment, commit string) {
 // spec, returning its ID.
 func (w *watching) implementation(spec, title string) string {
 	w.t.Helper()
-	out, err := w.srv.Core.CreateTicket(agent, "acme", core.CreateTicketInput{Spec: core.Ref(spec), Title: title, State: "Ready", Full: true})
+	out, err := w.srv.Core.CreateTicket(agent, "acme", api.CreateTicketInput{Spec: api.Ref(spec), Title: title, State: "Ready", Full: true})
 	if err != nil {
 		w.t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestARequirementFinishedWithNothingLandedClosesItsIssueAsNotPlanned(t *test
 	w := newWatching(t)
 	spec := w.toRequirement(w.arrivedFirst(labelled(1, "code-central:requirement")), "")
 	for _, s := range w.stages(spec) {
-		if _, err := w.srv.Core.Move(human, "acme", core.MoveInput{Ticket: core.Ref(s), ToState: "Cancelled"}); err != nil {
+		if _, err := w.srv.Core.Move(human, "acme", api.MoveInput{Ticket: api.Ref(s), ToState: "Cancelled"}); err != nil {
 			t.Fatal(err)
 		}
 	}

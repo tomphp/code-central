@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"slices"
 	"strings"
-	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -21,54 +21,6 @@ import (
 // Ticket stored without them, with a branch or a commit, reads as the
 // Home Repository's, so there is no migration. Reads show them only while
 // the Project has more than one Repository.
-
-// RepositoryWork is a Ticket's branch and its head commit in one
-// Repository, as finish and report_changed_repositories take them.
-type RepositoryWork struct {
-	Name   string `json:"name" desc:"The Repository Name." required:"true"`
-	Branch string `json:"branch" desc:"The branch the work is on there." required:"true"`
-	Commit string `json:"commit" desc:"The branch's head commit there." required:"true"`
-}
-
-// ChangedRepositoryView is one of a Ticket's Changed Repositories as
-// reads show it, in landing order.
-type ChangedRepositoryView struct {
-	Name   string `json:"name"`
-	Branch string `json:"branch,omitempty"`
-	Commit string `json:"commit,omitempty"`
-	// Landed is the commit that put the work into the Repository's base;
-	// left out until it lands.
-	Landed *LandedView `json:"landed,omitempty"`
-	// NotLanded is why an Accepted Ticket hasn't landed in the Repository
-	// yet: its broken base, or what the Factory last said; left out once
-	// it lands, or while there's none to give.
-	NotLanded string `json:"not_landed,omitempty"`
-	// PushedCommit is the latest commit the Factory pushed for the Ticket
-	// in the Repository; left out while it has pushed none.
-	PushedCommit *PushedCommitView `json:"pushed_commit,omitempty"`
-	// PullRequest is the Ticket's pull request in the Repository; left
-	// out until the Pull Request Watcher reports one.
-	PullRequest *PullRequestView `json:"pull_request,omitempty"`
-	// CIResult is the Repository's CI result, from the pushed commit
-	// CICommit; both are left out while it has none. CINotWatched says CI
-	// Tracking never watches the Repository: it has no CI result.
-	CIResult     CIResult `json:"ci_result,omitempty"`
-	CICommit     string   `json:"ci_commit,omitempty"`
-	CINotWatched bool     `json:"ci_not_watched,omitempty"`
-	// LandAnyway says the human accepted the failed CI result of the
-	// latest pushed commit there, so the Factory lands it there.
-	LandAnyway bool `json:"land_anyway,omitempty"`
-	// CIAutoFix is what Auto-fix does about the Ticket's CI failure
-	// there; left out while it does nothing.
-	CIAutoFix *CIAutoFixView `json:"ci_auto_fix,omitempty"`
-}
-
-// LandedView is the commit that put a Ticket's work into a Repository's
-// base, and when Code Central heard of it.
-type LandedView struct {
-	Commit string    `json:"commit"`
-	Time   time.Time `json:"time"`
-}
 
 // severalRepositories reports whether p has more than one Repository:
 // only then do reads name Repositories (the visibility rule).
@@ -180,7 +132,7 @@ func repositoryName(r domain.ChangedRepository) string { return r.Name }
 // checkRepositoryWork is ws as Changed Repositories of p, refusing a
 // name that isn't one of p's Repositories, a name given twice and an
 // entry without its branch or commit. field names the list.
-func checkRepositoryWork(p domain.Project, field string, ws []RepositoryWork) ([]domain.ChangedRepository, error) {
+func checkRepositoryWork(p domain.Project, field string, ws []api.RepositoryWork) ([]domain.ChangedRepository, error) {
 	names := repositoryNames(p.RepositoryList())
 	var out []domain.ChangedRepository
 	for i, w := range ws {
@@ -231,7 +183,7 @@ func setChangedRepositories(p domain.Project, t *domain.Ticket, rs []domain.Chan
 // branch and commit keep meaning it: one left out keeps its stored value.
 // The finish then replaces t's Changed Repositories with the Home
 // Repository's, when it has a branch or commit, and the others it names.
-func settleFinish(p domain.Project, t *domain.Ticket, in FinishInput) error {
+func settleFinish(p domain.Project, t *domain.Ticket, in api.FinishInput) error {
 	rs, err := checkRepositoryWork(p, "repositories", in.Repositories)
 	if err != nil {
 		return err
@@ -271,15 +223,15 @@ func dropsRepositories(home string, t domain.Ticket, was []string) bool {
 // changedRepositoryViews is t's Changed Repositories as t's view in p
 // shows them: each with its landed commit, latest pushed commit, pull
 // request, and from ci, p's CI state, its CI result there.
-func changedRepositoryViews(p domain.Project, t domain.Ticket, s *ciState) []ChangedRepositoryView {
+func changedRepositoryViews(p domain.Project, t domain.Ticket, s *ciState) []api.ChangedRepositoryView {
 	ci := s.ticket(t)
 	rs := slices.Clone(changedRepositories(p.Key, t))
 	inLandingOrder(p, rs, repositoryName)
-	out := []ChangedRepositoryView{}
+	out := []api.ChangedRepositoryView{}
 	for _, r := range rs {
-		rv := ChangedRepositoryView{Name: r.Name, Branch: r.Branch, Commit: r.Commit, PushedCommit: latestPushedIn(p.Key, t, r.Name)}
+		rv := api.ChangedRepositoryView{Name: r.Name, Branch: r.Branch, Commit: r.Commit, PushedCommit: latestPushedIn(p.Key, t, r.Name)}
 		if r.Landed != nil {
-			rv.Landed = &LandedView{Commit: r.Landed.Commit, Time: r.Landed.Time}
+			rv.Landed = &api.LandedView{Commit: r.Landed.Commit, Time: r.Landed.Time}
 		}
 		if rc := ci.in(r.Name); rc != nil {
 			rv.CIResult, rv.CICommit, rv.LandAnyway = rc.result, rc.commit, s.landAnyway(rc)
@@ -308,10 +260,10 @@ func recordRepository(home, name string) string {
 
 // latestPushedIn is the latest commit the Factory pushed for t in the
 // Repository name; nil when it pushed none there.
-func latestPushedIn(home string, t domain.Ticket, name string) *PushedCommitView {
+func latestPushedIn(home string, t domain.Ticket, name string) *api.PushedCommitView {
 	for i := len(t.PushedCommits) - 1; i >= 0; i-- {
 		if pc := t.PushedCommits[i]; recordRepository(home, pc.Repository) == name {
-			return &PushedCommitView{Commit: pc.Commit, Pushed: pc.Pushed}
+			return &api.PushedCommitView{Commit: pc.Commit, Pushed: pc.Pushed}
 		}
 	}
 	return nil
@@ -320,12 +272,12 @@ func latestPushedIn(home string, t domain.Ticket, name string) *PushedCommitView
 // landedByMove is the commit a Done t landed at, from its land, for a
 // Ticket that landed before landed commits were recorded per Repository;
 // nil when its last Move isn't a land with a commit.
-func landedByMove(t domain.Ticket) *LandedView {
+func landedByMove(t domain.Ticket) *api.LandedView {
 	if t.State != domain.Done || len(t.Moves) == 0 {
 		return nil
 	}
 	if m := t.Moves[len(t.Moves)-1]; m.Via == "merge" && m.Commit != "" {
-		return &LandedView{Commit: m.Commit, Time: m.Time}
+		return &api.LandedView{Commit: m.Commit, Time: m.Time}
 	}
 	return nil
 }
@@ -344,29 +296,17 @@ func specRepositories(p domain.Project, tickets []domain.Ticket) []string {
 	return namesInLandingOrder(p, names)
 }
 
-// ReportChangedRepositoriesInput is the Factory's
-// report_changed_repositories(ticket, claim_id, repositories, full?): the
-// Repositories whose branch holds the Ticket's work so far, each with its
-// branch and head commit.
-type ReportChangedRepositoriesInput struct {
-	Ticket       Ref              `json:"ticket" path:"n"`
-	ClaimID      string           `json:"claim_id"`
-	Repositories []RepositoryWork `json:"repositories"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
 // ReportChangedRepositories is the Factory's report_changed_repositories:
 // from the live Claim, while the Ticket is In Progress, it records the
 // Repositories as the Ticket's live Changed Repositories, replacing the
 // last report's. A report the same as the record writes nothing.
-func (c *Core) ReportChangedRepositories(ctx context.Context, key string, in ReportChangedRepositoriesInput) (Written[TicketView], error) {
+func (c *Core) ReportChangedRepositories(ctx context.Context, key string, in api.ReportChangedRepositoriesInput) (api.Written[api.TicketView], error) {
 	return c.updateTicketIn(key, "report_changed_repositories", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
 		if _, err := holder(t, key, in.ClaimID); err != nil {
 			return false, err
 		}
 		if t.State != domain.InProgress {
-			return false, &Error{Code: ActionNotAllowed, AllowedActions: allowedActions(t.State, ActorOf(ctx)), Message: fmt.Sprintf(
+			return false, &api.Error{Code: api.ActionNotAllowed, AllowedActions: allowedActions(t.State, api.ActorOf(ctx)), Message: fmt.Sprintf(
 				"%s is %s: its Changed Repositories are reported only while it is In Progress, and its finish settles them", DisplayID(key, t.Number), t.State)}
 		}
 		p, _ := r.Project(key)

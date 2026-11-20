@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/httpapi"
 )
 
@@ -25,7 +25,7 @@ func init() {
 			}
 		},
 		bad:  call{http: setAutoFix(`{"on":false,"fix_instructions":"Fix it.","limit":0}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -35,10 +35,10 @@ func setAutoFix(body string) httpCall {
 
 func TestSetAutoFixIsRejectedForAnAgentAndAnIntegration(t *testing.T) {
 	srv := newServer(t)
-	for _, actor := range []core.Actor{core.Agent, core.Integration} {
+	for _, actor := range []api.Actor{api.Agent, api.Integration} {
 		status, b := httpDoAs(t, srv, actor, setAutoFix(`{"on":false,"fix_instructions":"Fix it.","limit":5}`))
-		if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
-			t.Fatalf("as %s: status %d, want %d; message %q", actor, status, httpapi.Status(core.ActionNotAllowed), e.Message)
+		if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
+			t.Fatalf("as %s: status %d, want %d; message %q", actor, status, httpapi.Status(api.ActionNotAllowed), e.Message)
 		}
 	}
 }

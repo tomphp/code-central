@@ -3,6 +3,7 @@ package core_test
 import (
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
@@ -15,10 +16,10 @@ import (
 // ticketFlags is Ticket ref's editable and retroable, as get_ticket's
 // default read gives them, after checking a read asking for one part and
 // the whole read agree.
-func (f fixture) ticketFlags(t *testing.T, ref core.Ref) (editable, retroable bool) {
+func (f fixture) ticketFlags(t *testing.T, ref api.Ref) (editable, retroable bool) {
 	t.Helper()
 	var got [][2]bool
-	for _, in := range []core.GetTicketInput{{Ticket: ref}, {Ticket: ref, Parts: []string{core.PartComments}}, whole(ref)} {
+	for _, in := range []api.GetTicketInput{{Ticket: ref}, {Ticket: ref, Parts: []string{api.PartComments}}, whole(ref)} {
 		v, err := f.core.GetTicket(ctx, "acme", in)
 		if err != nil {
 			t.Fatalf("get_ticket %+v: %v", in, err)
@@ -33,20 +34,20 @@ func (f fixture) ticketFlags(t *testing.T, ref core.Ref) (editable, retroable bo
 
 // specRead is Spec ref as get_spec's full read gives it, after checking
 // its lighter read and its find_specs row agree on what both carry.
-func (f fixture) specRead(t *testing.T, ref core.Ref) core.SpecDetail {
+func (f fixture) specRead(t *testing.T, ref api.Ref) api.SpecDetail {
 	t.Helper()
-	full, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: ref})
+	full, err := f.core.GetSpec(ctx, "acme", api.GetSpecInput{Spec: ref})
 	if err != nil {
 		t.Fatalf("get_spec %s: %v", ref, err)
 	}
-	light, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: ref, Parts: []string{core.PartOutline}})
+	light, err := f.core.GetSpec(ctx, "acme", api.GetSpecInput{Spec: ref, Parts: []string{api.PartOutline}})
 	if err != nil {
 		t.Fatalf("get_spec %s outline: %v", ref, err)
 	}
 	if light.Editable != full.Editable || light.Retroable != full.Retroable || light.Ticketable != full.Ticketable || light.Kind != full.Kind || light.Need != full.Need || light.Claimed != full.Claimed {
 		t.Fatalf("get_spec %s: lighter read %+v, full read %+v; every read sets the derived fields alike", ref, light, full)
 	}
-	rows, err := f.core.FindSpecs(ctx, "acme", core.FindSpecsInput{Finished: true})
+	rows, err := f.core.FindSpecs(ctx, "acme", api.FindSpecsInput{Finished: true})
 	if err != nil {
 		t.Fatalf("find_specs: %v", err)
 	}
@@ -70,9 +71,9 @@ func (f fixture) plainSpec(t *testing.T, states ...domain.State) {
 	f.project(t, "acme")
 	f.spec(t, "acme", "Login")
 	for _, s := range states {
-		tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Work"})
+		tk := f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Work"})
 		if s != domain.Draft {
-			f.move(t, core.Ref(tk.ID), s)
+			f.move(t, api.Ref(tk.ID), s)
 		}
 		f.clock.Advance(1)
 	}
@@ -83,8 +84,8 @@ func (f fixture) plainSpec(t *testing.T, states ...domain.State) {
 func (f fixture) detach(t *testing.T) {
 	t.Helper()
 	f.setExternal(t, "2", domain.ExternalClosed)
-	for _, target := range []core.Ref{"2", "1"} {
-		if _, err := f.core.Unlink(human, "acme", core.UnlinkInput{Target: target}); err != nil {
+	for _, target := range []api.Ref{"2", "1"} {
+		if _, err := f.core.Unlink(human, "acme", api.UnlinkInput{Target: target}); err != nil {
 			t.Fatalf("unlink %s: %v", target, err)
 		}
 	}
@@ -93,11 +94,11 @@ func (f fixture) detach(t *testing.T) {
 // outbound is linked Spec acme-1 with its Ticket acme-2 an Incoming Issue
 // that To Requirement turns into Requirement acme-3, whose Spec has an
 // Outbound Link.
-func (f fixture) outbound(t *testing.T) core.Ref {
+func (f fixture) outbound(t *testing.T) api.Ref {
 	t.Helper()
 	f.linked(t)
 	f.incomingIssue(t, 1, 2)
-	if _, err := f.core.ToRequirement(human, "acme", core.ToRequirementInput{Ticket: "acme-2"}); err != nil {
+	if _, err := f.core.ToRequirement(human, "acme", api.ToRequirementInput{Ticket: "acme-2"}); err != nil {
 		t.Fatalf("to_requirement: %v", err)
 	}
 	sp := f.specRead(t, "3")
@@ -111,7 +112,7 @@ func (f fixture) outbound(t *testing.T) core.Ref {
 func (f fixture) aMap(t *testing.T) {
 	t.Helper()
 	f.project(t, "acme")
-	if _, err := f.core.SubmitMap(ctx, "acme", core.SubmitMapInput{Text: "Offline mode"}); err != nil {
+	if _, err := f.core.SubmitMap(ctx, "acme", api.SubmitMapInput{Text: "Offline mode"}); err != nil {
 		t.Fatalf("submit_map: %v", err)
 	}
 }
@@ -156,20 +157,20 @@ func TestEditIsOfferedOnADraftTicketWhoseDefinitionIsCodeCentralsInAProjectThatT
 // own its definition and its Project isn't Archived.
 func TestEditIsOfferedOnASpecThatIsNeitherFinishedNorAMapWhoseDefinitionIsCodeCentrals(t *testing.T) {
 	for name, c := range map[string]struct {
-		setup func(f fixture, t *testing.T) core.Ref
+		setup func(f fixture, t *testing.T) api.Ref
 		want  bool
 	}{
-		"an unfinished Spec":                    {func(f fixture, t *testing.T) core.Ref { f.plainSpec(t, domain.Ready); return "1" }, true},
-		"a Spec with no Tickets isn't Finished": {func(f fixture, t *testing.T) core.Ref { f.plainSpec(t); return "1" }, true},
-		"a Finished Spec": {func(f fixture, t *testing.T) core.Ref {
+		"an unfinished Spec":                    {func(f fixture, t *testing.T) api.Ref { f.plainSpec(t, domain.Ready); return "1" }, true},
+		"a Spec with no Tickets isn't Finished": {func(f fixture, t *testing.T) api.Ref { f.plainSpec(t); return "1" }, true},
+		"a Finished Spec": {func(f fixture, t *testing.T) api.Ref {
 			f.plainSpec(t, domain.Done, domain.Cancelled)
 			return "1"
 		}, false},
-		"a Map":                                {func(f fixture, t *testing.T) core.Ref { f.aMap(t); return "1" }, false},
-		"an owned Link defines the Spec":       {func(f fixture, t *testing.T) core.Ref { f.linked(t); return "1" }, false},
-		"a detached Link no longer defines it": {func(f fixture, t *testing.T) core.Ref { f.linked(t); f.detach(t); return "1" }, true},
-		"an Outbound Link is Code Central's":   {func(f fixture, t *testing.T) core.Ref { return f.outbound(t) }, true},
-		"an Archived Project takes no edits":   {func(f fixture, t *testing.T) core.Ref { f.archivedWork(t); return "3" }, false},
+		"a Map":                                {func(f fixture, t *testing.T) api.Ref { f.aMap(t); return "1" }, false},
+		"an owned Link defines the Spec":       {func(f fixture, t *testing.T) api.Ref { f.linked(t); return "1" }, false},
+		"a detached Link no longer defines it": {func(f fixture, t *testing.T) api.Ref { f.linked(t); f.detach(t); return "1" }, true},
+		"an Outbound Link is Code Central's":   {func(f fixture, t *testing.T) api.Ref { return f.outbound(t) }, true},
+		"an Archived Project takes no edits":   {func(f fixture, t *testing.T) api.Ref { f.archivedWork(t); return "3" }, false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFixture(t)
@@ -217,22 +218,22 @@ func TestTheRetroButtonIsOfferedOnAFinishedTicketInAProjectThatTakesWrites(t *te
 // too, in a Project that isn't Archived.
 func TestTheRetroButtonIsOfferedOnAFinishedSpecThatIsNotLongLived(t *testing.T) {
 	for name, c := range map[string]struct {
-		setup func(f fixture, t *testing.T) core.Ref
+		setup func(f fixture, t *testing.T) api.Ref
 		want  bool
 	}{
-		"a Finished Spec":    {func(f fixture, t *testing.T) core.Ref { f.plainSpec(t, domain.Done, domain.Cancelled); return "1" }, true},
-		"an unfinished Spec": {func(f fixture, t *testing.T) core.Ref { f.plainSpec(t, domain.Done, domain.Ready); return "1" }, false},
-		"a Finished Long-lived Spec": {func(f fixture, t *testing.T) core.Ref {
+		"a Finished Spec":    {func(f fixture, t *testing.T) api.Ref { f.plainSpec(t, domain.Done, domain.Cancelled); return "1" }, true},
+		"an unfinished Spec": {func(f fixture, t *testing.T) api.Ref { f.plainSpec(t, domain.Done, domain.Ready); return "1" }, false},
+		"a Finished Long-lived Spec": {func(f fixture, t *testing.T) api.Ref {
 			f.plainSpec(t, domain.Done)
-			f.longLived(t, core.SpecView{ID: "acme-1"})
+			f.longLived(t, api.SpecView{ID: "acme-1"})
 			return "1"
 		}, false},
-		"a finished Map": {func(f fixture, t *testing.T) core.Ref {
+		"a finished Map": {func(f fixture, t *testing.T) api.Ref {
 			f.aMap(t)
 			f.move(t, "2", domain.Done)
 			return "1"
 		}, true},
-		"an Archived Project takes no Retro": {func(f fixture, t *testing.T) core.Ref { f.archivedWork(t); return "1" }, false},
+		"an Archived Project takes no Retro": {func(f fixture, t *testing.T) api.Ref { f.archivedWork(t); return "1" }, false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFixture(t)
@@ -247,32 +248,32 @@ func TestTheRetroButtonIsOfferedOnAFinishedSpecThatIsNotLongLived(t *testing.T) 
 // Spec kind: a Requirement, else a Map, else a Long-lived Spec, else a
 // Spec, so a Spec that is two of them reads as the first.
 func TestASpecsKindIsRequirementThenMapThenLongLivedThenSpec(t *testing.T) {
-	requirement := func(f fixture, t *testing.T) core.Ref {
+	requirement := func(f fixture, t *testing.T) api.Ref {
 		f.requirement(t)
 		return "2"
 	}
 	for name, c := range map[string]struct {
-		setup func(f fixture, t *testing.T) core.Ref
-		want  core.SpecKind
+		setup func(f fixture, t *testing.T) api.Ref
+		want  api.SpecKind
 	}{
-		"a Requirement": {requirement, core.SpecKindRequirement},
-		"a Map":         {func(f fixture, t *testing.T) core.Ref { f.aMap(t); return "1" }, core.SpecKindMap},
-		"a Long-lived Spec": {func(f fixture, t *testing.T) core.Ref {
+		"a Requirement": {requirement, api.SpecKindRequirement},
+		"a Map":         {func(f fixture, t *testing.T) api.Ref { f.aMap(t); return "1" }, api.SpecKindMap},
+		"a Long-lived Spec": {func(f fixture, t *testing.T) api.Ref {
 			f.plainSpec(t)
-			f.longLived(t, core.SpecView{ID: "acme-1"})
+			f.longLived(t, api.SpecView{ID: "acme-1"})
 			return "1"
-		}, core.SpecKindLongLived},
-		"a plain Spec": {func(f fixture, t *testing.T) core.Ref { f.plainSpec(t); return "1" }, core.SpecKindSpec},
-		"a Long-lived Requirement is a Requirement": {func(f fixture, t *testing.T) core.Ref {
+		}, api.SpecKindLongLived},
+		"a plain Spec": {func(f fixture, t *testing.T) api.Ref { f.plainSpec(t); return "1" }, api.SpecKindSpec},
+		"a Long-lived Requirement is a Requirement": {func(f fixture, t *testing.T) api.Ref {
 			ref := requirement(f, t)
-			f.longLived(t, core.SpecView{ID: "acme-2"})
+			f.longLived(t, api.SpecView{ID: "acme-2"})
 			return ref
-		}, core.SpecKindRequirement},
-		"a Long-lived Map is a Map": {func(f fixture, t *testing.T) core.Ref {
+		}, api.SpecKindRequirement},
+		"a Long-lived Map is a Map": {func(f fixture, t *testing.T) api.Ref {
 			f.aMap(t)
-			f.longLived(t, core.SpecView{ID: "acme-1"})
+			f.longLived(t, api.SpecView{ID: "acme-1"})
 			return "1"
-		}, core.SpecKindMap},
+		}, api.SpecKindMap},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFixture(t)
@@ -295,16 +296,16 @@ func TestASpecsNeedIsTheReasonOfItsFirstTicketInClaimOrderThatNeedsTheHuman(t *t
 	}
 	// acme-4 fails first, then acme-3 goes to In Review: acme-3 comes
 	// first in claim order, though Needs Me lists Failed first.
-	f.claim(t, core.ClaimInput{Ticket: "4"})
+	f.claim(t, api.ClaimInput{Ticket: "4"})
 	if _, err := f.core.ReportFailure(ctx, "acme", report("4", "claim-1")); err != nil {
 		t.Fatalf("report_failure: %v", err)
 	}
-	if got := f.specRead(t, "1").Need; got != core.ReasonFailed {
-		t.Fatalf("need %q, want %q", got, core.ReasonFailed)
+	if got := f.specRead(t, "1").Need; got != api.ReasonFailed {
+		t.Fatalf("need %q, want %q", got, api.ReasonFailed)
 	}
 	f.move(t, "3", domain.InReview)
-	if got := f.specRead(t, "1").Need; got != core.ReasonInReview {
-		t.Fatalf("need %q, want acme-3's %q", got, core.ReasonInReview)
+	if got := f.specRead(t, "1").Need; got != api.ReasonInReview {
+		t.Fatalf("need %q, want acme-3's %q", got, api.ReasonInReview)
 	}
 }
 
@@ -317,15 +318,15 @@ func TestASpecIsClaimedWhileAnyOfItsTicketsHoldsALiveClaim(t *testing.T) {
 	if f.specRead(t, "1").Claimed {
 		t.Fatal("claimed with no Claim")
 	}
-	f.claim(t, core.ClaimInput{Ticket: "3"})
+	f.claim(t, api.ClaimInput{Ticket: "3"})
 	if !f.specRead(t, "1").Claimed {
 		t.Fatal("not claimed while acme-3 holds a live Claim")
 	}
 	f.clock.Advance(core.SilentAfter)
-	if sp := f.specRead(t, "1"); !sp.Claimed || sp.Need != core.ReasonSilentClaim {
-		t.Fatalf("claimed %v, need %q while acme-3's Claim is Silent, want claimed and %q", sp.Claimed, sp.Need, core.ReasonSilentClaim)
+	if sp := f.specRead(t, "1"); !sp.Claimed || sp.Need != api.ReasonSilentClaim {
+		t.Fatalf("claimed %v, need %q while acme-3's Claim is Silent, want claimed and %q", sp.Claimed, sp.Need, api.ReasonSilentClaim)
 	}
-	if _, err := f.core.Release(human, "acme", core.ReleaseInput{Ticket: "3"}); err != nil {
+	if _, err := f.core.Release(human, "acme", api.ReleaseInput{Ticket: "3"}); err != nil {
 		t.Fatalf("release: %v", err)
 	}
 	if f.specRead(t, "1").Claimed {

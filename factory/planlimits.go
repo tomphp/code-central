@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // rateLimitInfo is the part of a rate_limit_event's rate_limit_info the
@@ -34,23 +34,23 @@ type rateLimitWindow struct {
 
 // readPlanLimits gives msg's Plan Limits, observed at now, if msg is a
 // rate_limit_event with a five_hour or seven_day window.
-func readPlanLimits(msg streamMessage, now time.Time) (core.PlanLimits, bool) {
+func readPlanLimits(msg streamMessage, now time.Time) (api.PlanLimits, bool) {
 	var info rateLimitInfo
 	if msg.Type != "rate_limit_event" || json.Unmarshal(msg.RateLimitInfo, &info) != nil {
-		return core.PlanLimits{}, false
+		return api.PlanLimits{}, false
 	}
 	windows := info.UnifiedWindows
-	pl := core.PlanLimits{ObservedAt: now, FiveHour: windows.FiveHour.planLimitWindow(), Weekly: windows.SevenDay.planLimitWindow()}
+	pl := api.PlanLimits{ObservedAt: now, FiveHour: windows.FiveHour.planLimitWindow(), Weekly: windows.SevenDay.planLimitWindow()}
 	return pl, pl.FiveHour != nil || pl.Weekly != nil
 }
 
 // planLimitWindow is w as a Plan Limits window, or nil when w is missing
 // or lacks either figure.
-func (w *rateLimitWindow) planLimitWindow() *core.PlanLimitWindow {
+func (w *rateLimitWindow) planLimitWindow() *api.PlanLimitWindow {
 	if w == nil || w.Utilization == nil || w.ResetsAt == nil {
 		return nil
 	}
-	return &core.PlanLimitWindow{UsedPercent: usedPercent(*w.Utilization), ResetsAt: time.Unix(int64(*w.ResetsAt), 0).UTC()}
+	return &api.PlanLimitWindow{UsedPercent: usedPercent(*w.Utilization), ResetsAt: time.Unix(int64(*w.ResetsAt), 0).UTC()}
 }
 
 // usedPercent is utilization as a percentage to a hundredth, clamped to
@@ -65,17 +65,17 @@ func usedPercent(utilization float64) float64 {
 // whole; nothing clears them while the Factory runs.
 type latestPlanLimits struct {
 	mu     sync.Mutex
-	limits *core.PlanLimits
+	limits *api.PlanLimits
 }
 
-func (l *latestPlanLimits) set(pl core.PlanLimits) {
+func (l *latestPlanLimits) set(pl api.PlanLimits) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.limits = &pl
 }
 
 // get is the latest Plan Limits, or nil before the first.
-func (l *latestPlanLimits) get() *core.PlanLimits {
+func (l *latestPlanLimits) get() *api.PlanLimits {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.limits

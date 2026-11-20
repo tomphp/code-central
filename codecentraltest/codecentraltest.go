@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
@@ -49,10 +50,10 @@ type options struct {
 	usageDir         string
 	location         *time.Location
 	start            time.Time
-	ciCheck          core.CICheck
-	issuesCheck      core.IssuesCheck
-	azureBoardsCheck core.AzureBoardsCheck
-	pullRequestCheck core.PullRequestCheck
+	ciCheck          api.CICheck
+	issuesCheck      api.IssuesCheck
+	azureBoardsCheck api.AzureBoardsCheck
+	pullRequestCheck api.PullRequestCheck
 	wrapStore        func(store.Store) store.Store
 }
 
@@ -84,24 +85,24 @@ func WithStart(t time.Time) Option { return func(o *options) { o.start = t } }
 
 // WithPullRequestCheck makes check the server's Pull Request Watcher check
 // mode, run when Pull Request is turned on.
-func WithPullRequestCheck(check core.PullRequestCheck) Option {
+func WithPullRequestCheck(check api.PullRequestCheck) Option {
 	return func(o *options) { o.pullRequestCheck = check }
 }
 
 // WithCICheck makes check the server's CI Watcher check mode, run when
 // CI Tracking is turned on; without it, nothing is checked.
-func WithCICheck(check core.CICheck) Option { return func(o *options) { o.ciCheck = check } }
+func WithCICheck(check api.CICheck) Option { return func(o *options) { o.ciCheck = check } }
 
 // WithIssuesCheck makes check the server's Issue Watcher check mode, run
 // when GitHub Issues is turned on; without it, nothing is checked.
-func WithIssuesCheck(check core.IssuesCheck) Option {
+func WithIssuesCheck(check api.IssuesCheck) Option {
 	return func(o *options) { o.issuesCheck = check }
 }
 
 // WithAzureBoardsCheck makes check the server's Azure Boards check, run
 // when Azure Boards is turned on or what it runs changes while on;
 // without it, nothing is checked.
-func WithAzureBoardsCheck(check core.AzureBoardsCheck) Option {
+func WithAzureBoardsCheck(check api.AzureBoardsCheck) Option {
 	return func(o *options) { o.azureBoardsCheck = check }
 }
 

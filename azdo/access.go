@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -39,23 +39,23 @@ func (a Access) PATVariable() string {
 // Ready is a client for projectURL, or the PAT missing problem when the
 // PAT's variable is unset or empty. A projectURL that doesn't parse is
 // the error, which each Watcher reports as what it couldn't read.
-func (a Access) Ready(projectURL string) (*Client, core.WatcherCheckResult, error) {
+func (a Access) Ready(projectURL string) (*Client, api.WatcherCheckResult, error) {
 	c, err := New(a.Environ, a.PATVariable(), projectURL, nil)
 	switch {
 	case errors.Is(err, ErrNoPAT):
-		return nil, core.WatcherCheckResult{Problem: core.ProblemPATMissing,
+		return nil, api.WatcherCheckResult{Problem: api.ProblemPATMissing,
 			Reason: fmt.Sprintf("The environment variable %s is not set, or is empty, in the %s's environment.", a.PATVariable(), a.Watcher),
 			Fix:    PATMissingFix(runtime.GOOS, a.PATVariable(), a.Scope)}, nil
 	case err != nil:
-		return nil, core.WatcherCheckResult{}, err
+		return nil, api.WatcherCheckResult{}, err
 	}
-	return c, core.WatcherCheckResult{}, nil
+	return c, api.WatcherCheckResult{}, nil
 }
 
 // Rejected is the problem of Azure DevOps refusing the PAT, an
 // ErrPATRejected from a call.
-func (a Access) Rejected() core.WatcherCheckResult {
-	return core.WatcherCheckResult{Problem: core.ProblemPATRejected,
+func (a Access) Rejected() api.WatcherCheckResult {
+	return api.WatcherCheckResult{Problem: api.ProblemPATRejected,
 		Reason: fmt.Sprintf("Azure DevOps rejected the PAT in %s: it may have expired or been revoked.", a.PATVariable()),
 		Fix:    fmt.Sprintf("Make a new PAT with %s, and set it in %s for the service.", a.Scope, a.PATVariable())}
 }

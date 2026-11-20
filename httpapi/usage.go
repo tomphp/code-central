@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/ops"
 )
 
@@ -19,11 +19,11 @@ func usageRead(s ops.Service, r *http.Request) (any, error) {
 	if err := onlyParams(q, "project", "days"); err != nil {
 		return nil, err
 	}
-	in := core.UsageInput{Project: q.Get("project")}
+	in := api.UsageInput{Project: q.Get("project")}
 	if d := q.Get("days"); d != "" {
 		n, err := strconv.Atoi(d)
 		if err != nil || n == 0 {
-			return nil, &core.Error{Code: core.Invalid, Field: "days", Message: "days must be 7, 30 or 90, not " + strconv.Quote(d)}
+			return nil, &api.Error{Code: api.Invalid, Field: "days", Message: "days must be 7, 30 or 90, not " + strconv.Quote(d)}
 		}
 		in.Days = n
 	}
@@ -41,7 +41,7 @@ func sessionUsageRead(s ops.Service, r *http.Request) (any, error) {
 	if err := onlyParams(q, "project", "session", "agent"); err != nil {
 		return nil, err
 	}
-	return s.SessionUsage(r.Context(), core.SessionUsageInput{Project: q.Get("project"), Session: q.Get("session"), Agent: q.Get("agent")})
+	return s.SessionUsage(r.Context(), api.SessionUsageInput{Project: q.Get("project"), Session: q.Get("session"), Agent: q.Get("agent")})
 }
 
 // PostUsagePath is where a Factory posts its sessions' model responses'
@@ -53,8 +53,8 @@ const PostUsagePath = "POST /api/usage"
 func postUsage(s ops.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			SessionID string               `json:"session_id"`
-			Responses []core.UsageResponse `json:"responses"`
+			SessionID string              `json:"session_id"`
+			Responses []api.UsageResponse `json:"responses"`
 		}
 		if decodeBody(r, &in) == nil {
 			s.PostUsage(r.Context(), in.SessionID, in.Responses)

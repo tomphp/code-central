@@ -8,7 +8,7 @@ import (
 	"crypto/rand"
 	"fmt"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -22,8 +22,8 @@ func (f *factory) startTurn(ctx context.Context, c claim, in turnInput) {
 	in.Session = c.SessionID
 	in.AllowedTools, in.SystemPrompt, in.AddDirs = c.AllowedTools, c.SystemPrompt, c.AddDirs
 	in.UsageKind = f.claimInfo(c).stage
-	in.OnEvent = func(e core.SessionEvent) { f.events.add(c.SessionID, e) }
-	in.OnUsage = func(r core.UsageResponse) { f.usage.add(c.SessionID, r) }
+	in.OnEvent = func(e api.SessionEvent) { f.events.add(c.SessionID, e) }
+	in.OnUsage = func(r api.UsageResponse) { f.usage.add(c.SessionID, r) }
 	in.OnPlanLimits = f.planLimits.set
 	in.Linef = func(format string, args ...any) {
 		f.claimf(c, "%s: %s", c.Ticket, fmt.Sprintf(format, args...))

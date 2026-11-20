@@ -4,13 +4,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
-func (f fixture) move(t *testing.T, ref core.Ref, to domain.State) core.TicketView {
+func (f fixture) move(t *testing.T, ref api.Ref, to domain.State) api.TicketView {
 	t.Helper()
-	v, err := record(f.core.Move(human, "acme", core.MoveInput{Ticket: ref, ToState: to, Full: true}))
+	v, err := record(f.core.Move(human, "acme", api.MoveInput{Ticket: ref, ToState: to, Full: true}))
 	if err != nil {
 		t.Fatalf("move %s to %s: %v", ref, to, err)
 	}
@@ -30,28 +30,28 @@ func TestTheHumanMovesATicketToAnyStateButFailedAndNeedsAnswer(t *testing.T) {
 	}
 	// Failed and Needs Answer are entered only by a Failure Report or a Round.
 	for _, to := range []domain.State{domain.Failed, domain.NeedsAnswer} {
-		_, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: to})
-		wantCode(t, err, core.Invalid, "to_state")
+		_, err := f.core.Move(human, "acme", api.MoveInput{Ticket: "2", ToState: to})
+		wantCode(t, err, api.Invalid, "to_state")
 	}
 	for _, to := range []domain.State{"", "Nope", domain.Ready} { // Ready: it is already there
-		_, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: to})
-		wantCode(t, err, core.Invalid, "to_state")
+		_, err := f.core.Move(human, "acme", api.MoveInput{Ticket: "2", ToState: to})
+		wantCode(t, err, api.Invalid, "to_state")
 	}
 }
 
 func TestMoveIsTheHumansAlone(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Draft)
-	_, err := f.core.Move(ctx, "acme", core.MoveInput{Ticket: "2", ToState: domain.Ready})
-	wantCode(t, err, core.ActionNotAllowed, "")
-	_, err = f.core.Move(human, "acme", core.MoveInput{Ticket: "9", ToState: domain.Ready})
-	wantCode(t, err, core.NotFound, "")
+	_, err := f.core.Move(ctx, "acme", api.MoveInput{Ticket: "2", ToState: domain.Ready})
+	wantCode(t, err, api.ActionNotAllowed, "")
+	_, err = f.core.Move(human, "acme", api.MoveInput{Ticket: "9", ToState: domain.Ready})
+	wantCode(t, err, api.NotFound, "")
 }
 
 func TestMovingOutOfAClaimStateEndsTheClaim(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
-	f.claim(t, core.ClaimInput{})
+	f.claim(t, api.ClaimInput{})
 	f.clock.Advance(time.Hour)
 	v := f.move(t, "2", domain.InReview)
 	if c := v.Claims[0]; c.Ended == nil || !c.Ended.Equal(f.clock.Now()) || c.EndedBy != "move" {
@@ -65,7 +65,7 @@ func TestMovingOutOfAClaimStateEndsTheClaim(t *testing.T) {
 func TestMovingWithinTheClaimStatesKeepsTheClaim(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
-	f.claim(t, core.ClaimInput{})
+	f.claim(t, api.ClaimInput{})
 	v := f.move(t, "2", domain.Answered)
 	if v.Claims[0].Ended != nil {
 		t.Fatalf("claim %+v, want still live", v.Claims[0])
@@ -75,7 +75,7 @@ func TestMovingWithinTheClaimStatesKeepsTheClaim(t *testing.T) {
 func TestRenameProjectChangesTheDisplayNameNeverTheKey(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
-	p, err := f.core.RenameProject(human, "acme", core.RenameProjectInput{DisplayName: "Acme Web"})
+	p, err := f.core.RenameProject(human, "acme", api.RenameProjectInput{DisplayName: "Acme Web"})
 	if err != nil || p.Key != "acme" || p.DisplayName != "Acme Web" || !p.Created.Equal(t0) {
 		t.Fatalf("got %+v, %v", p, err)
 	}
@@ -85,12 +85,12 @@ func TestRenameProjectChangesTheDisplayNameNeverTheKey(t *testing.T) {
 	if v := f.get(t, "acme-2"); v.ID != "acme-2" {
 		t.Fatalf("Ticket IDs keep the key: %s", v.ID)
 	}
-	_, err = f.core.RenameProject(human, "acme", core.RenameProjectInput{DisplayName: "  "})
-	wantCode(t, err, core.Invalid, "display_name")
-	_, err = f.core.RenameProject(human, "nope", core.RenameProjectInput{DisplayName: "X"})
-	wantCode(t, err, core.UnknownProject, "")
-	_, err = f.core.RenameProject(ctx, "acme", core.RenameProjectInput{DisplayName: "X"})
-	wantCode(t, err, core.ActionNotAllowed, "")
+	_, err = f.core.RenameProject(human, "acme", api.RenameProjectInput{DisplayName: "  "})
+	wantCode(t, err, api.Invalid, "display_name")
+	_, err = f.core.RenameProject(human, "nope", api.RenameProjectInput{DisplayName: "X"})
+	wantCode(t, err, api.UnknownProject, "")
+	_, err = f.core.RenameProject(ctx, "acme", api.RenameProjectInput{DisplayName: "X"})
+	wantCode(t, err, api.ActionNotAllowed, "")
 }
 
 func TestListProjectsListsEveryProjectWithItsNeedsMeCount(t *testing.T) {

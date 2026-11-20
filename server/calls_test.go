@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/httpapi"
 	"github.com/tomoram/code-central/ops"
 	"github.com/tomoram/code-central/server"
@@ -18,13 +18,13 @@ import (
 // answer and err; any other method panics.
 type fakeService struct {
 	ops.Service
-	actors []core.Actor
+	actors []api.Actor
 	answer any
 	err    error
 }
 
 func (s *fakeService) Dispatch(ctx context.Context, _ ops.Call) (any, error) {
-	s.actors = append(s.actors, core.ActorOf(ctx))
+	s.actors = append(s.actors, api.ActorOf(ctx))
 	return s.answer, s.err
 }
 
@@ -45,7 +45,7 @@ func (r *fakeRecorder) RecordCall(key string, call usage.Call) {
 func TestCallsActAsTheActorTheCallNamesDefaultingToAgent(t *testing.T) {
 	next := &fakeService{}
 	h := server.Calls(next, &fakeRecorder{}, nil, server.Door{Name: "http"})
-	for named, want := range map[core.Actor]core.Actor{"": core.Agent, "agent": core.Agent, "human": core.Human, "integration": core.Integration} {
+	for named, want := range map[api.Actor]api.Actor{"": api.Agent, "agent": api.Agent, "human": api.Human, "integration": api.Integration} {
 		next.actors = nil
 		if _, err := h.Dispatch(context.Background(), ops.Call{Op: ops.Comment, Key: "acme", Actor: named}); err != nil {
 			t.Fatal(err)
@@ -57,8 +57,8 @@ func TestCallsActAsTheActorTheCallNamesDefaultingToAgent(t *testing.T) {
 
 	next.actors = nil
 	_, err := h.Dispatch(context.Background(), ops.Call{Op: ops.Comment, Key: "acme", Actor: "robot"})
-	var e *core.Error
-	if !errors.As(err, &e) || e.Code != core.Invalid || e.Field != httpapi.ActorHeader || len(next.actors) != 0 {
+	var e *api.Error
+	if !errors.As(err, &e) || e.Code != api.Invalid || e.Field != httpapi.ActorHeader || len(next.actors) != 0 {
 		t.Fatalf("unknown Actor: err %v, dispatched %d", err, len(next.actors))
 	}
 }
@@ -72,11 +72,11 @@ func TestCallsRecordUsageAndLogOnlyForADoorThatRecordsIt(t *testing.T) {
 	mcpDoor := server.Calls(next, rec, log, server.Door{Name: "mcp", Usage: true})
 
 	args := []byte(`{"title":"Search"}`)
-	if _, err := mcpDoor.Dispatch(context.Background(), ops.Call{Op: ops.CreateSpec, Key: "acme", Actor: core.Agent, Args: args}); err != nil {
+	if _, err := mcpDoor.Dispatch(context.Background(), ops.Call{Op: ops.CreateSpec, Key: "acme", Actor: api.Agent, Args: args}); err != nil {
 		t.Fatal(err)
 	}
-	next.answer, next.err = nil, &core.Error{Code: core.NotFound, Message: "No Ticket acme-99."}
-	_, _ = mcpDoor.Dispatch(context.Background(), ops.Call{Op: ops.GetTicket, Key: "acme", Actor: core.Agent, Args: []byte(`{"ticket":99}`)})
+	next.answer, next.err = nil, &api.Error{Code: api.NotFound, Message: "No Ticket acme-99."}
+	_, _ = mcpDoor.Dispatch(context.Background(), ops.Call{Op: ops.GetTicket, Key: "acme", Actor: api.Agent, Args: []byte(`{"ticket":99}`)})
 
 	created, rejected := len(`{"id":"acme-4"}`), len(`{"code":"not_found","message":"No Ticket acme-99."}`)
 	want := []recorded{

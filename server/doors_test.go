@@ -18,11 +18,14 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/httpapi"
 	"github.com/tomoram/code-central/ops"
+	"github.com/tomoram/code-central/ops/bind"
 	_ "github.com/tomoram/code-central/wire"
 )
 
@@ -47,7 +50,7 @@ type opCase struct {
 	// the same call returns with full.
 	full func(t *testing.T, out map[string]any)
 	bad  call
-	code core.Code
+	code api.Code
 	// cliUsage says the CLI's rejected call is a usage error (exit 1):
 	// the operation takes no input the service could reject.
 	cliUsage bool
@@ -60,13 +63,13 @@ var cases = map[string]opCase{
 		ok:    call{http: httpCall{"POST", "/api/projects/create_project", `{"key":"new","display_name":"New"}`}},
 		check: field("key", "new"),
 		bad:   call{http: httpCall{"POST", "/api/projects/create_project", `{"key":"Bad Key"}`}},
-		code:  core.Invalid,
+		code:  api.Invalid,
 	},
 	"get_project": {
 		ok:    call{http: httpCall{"GET", "/api/projects/acme", ""}},
 		check: field("key", "acme"),
 		bad:   call{http: httpCall{"GET", "/api/projects/nope", ""}},
-		code:  core.UnknownProject,
+		code:  api.UnknownProject,
 	},
 	"create_spec": {
 		ok: call{
@@ -84,7 +87,7 @@ var cases = map[string]opCase{
 			http: httpCall{"POST", "/api/p/acme/create_spec", `{"title":""}`},
 			cli:  []string{"--title", ""},
 		},
-		code: core.Invalid,
+		code: api.Invalid,
 	},
 	"create_ticket": {
 		ok: call{
@@ -104,7 +107,7 @@ var cases = map[string]opCase{
 			http: httpCall{"POST", "/api/p/acme/create_ticket", `{"spec":"acme-9","title":"Form"}`},
 			cli:  []string{"--spec", "acme-9", "--title", "Form"},
 		},
-		code: core.Invalid,
+		code: api.Invalid,
 	},
 	"get_ticket": {
 		ok: call{
@@ -118,7 +121,7 @@ var cases = map[string]opCase{
 			http: httpCall{"GET", "/api/p/acme/tickets/9", ""},
 			cli:  []string{"9"},
 		},
-		code: core.NotFound,
+		code: api.NotFound,
 	},
 	"find_tickets": {
 		ok: call{
@@ -137,7 +140,7 @@ var cases = map[string]opCase{
 			http: httpCall{"GET", "/api/p/acme/tickets?spec=other-1", ""},
 			cli:  []string{"--spec", "other-1"},
 		},
-		code: core.Invalid,
+		code: api.Invalid,
 	},
 
 	"claim": {
@@ -161,7 +164,7 @@ var cases = map[string]opCase{
 			http: httpCall{"POST", "/api/p/acme/claim", `{"spec":1,"ticket":3}`},
 			cli:  []string{"--spec", "1", "--ticket", "3"},
 		},
-		code: core.Invalid,
+		code: api.Invalid,
 	},
 	"finish": {
 		setup: claimedTicket,
@@ -183,7 +186,7 @@ var cases = map[string]opCase{
 			http: httpCall{"POST", "/api/p/acme/tickets/3/finish", `{"claim_id":"claim-9","summary":"Done."}`},
 			cli:  []string{"acme-3", "--claim", "claim-9", "--summary", "Done."},
 		},
-		code: core.StaleClaim,
+		code: api.StaleClaim,
 	},
 	"accept": {
 		setup: ticketInReview,
@@ -191,7 +194,7 @@ var cases = map[string]opCase{
 		check: ticketAcknowledgement("acme-3", "Done", "state", "moves", "needs_me_reason"),
 		full:  field("state", "Done"),
 		bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/3/accept", `{}`}},
-		code:  core.ActionNotAllowed,
+		code:  api.ActionNotAllowed,
 	},
 	"reject": {
 		setup: ticketInReview,
@@ -199,7 +202,7 @@ var cases = map[string]opCase{
 		check: ticketAcknowledgement("acme-3", "Ready", "state", "comments", "moves", "claimable", "needs_me_reason"),
 		full:  field("state", "Ready"),
 		bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/3/reject", `{"comment":""}`}},
-		code:  core.Invalid,
+		code:  api.Invalid,
 	},
 }
 
@@ -207,7 +210,7 @@ var cases = map[string]opCase{
 func readyTicket(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	must(t, func() error {
-		_, err := srv.Core.CreateTicket(context.Background(), "acme", core.CreateTicketInput{Spec: "1", Title: "Logout", State: "Ready"})
+		_, err := srv.Core.CreateTicket(context.Background(), "acme", api.CreateTicketInput{Spec: "1", Title: "Logout", State: "Ready"})
 		return err
 	})
 }
@@ -215,7 +218,7 @@ func readyTicket(t *testing.T, srv *codecentraltest.Server) {
 // claimedTicket claims acme-3 as claim-1.
 func claimedTicket(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
-	must(t, func() error { _, err := srv.Core.Claim(context.Background(), "acme", core.ClaimInput{}); return err })
+	must(t, func() error { _, err := srv.Core.Claim(context.Background(), "acme", api.ClaimInput{}); return err })
 }
 
 // ticketInReview claims acme-3 and finishes it.
@@ -223,7 +226,7 @@ func ticketInReview(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	claimedTicket(t, srv)
 	must(t, func() error {
-		_, err := srv.Core.Finish(context.Background(), "acme", core.FinishInput{Ticket: "3", ClaimID: "claim-1", Summary: "Done."})
+		_, err := srv.Core.Finish(context.Background(), "acme", api.FinishInput{Ticket: "3", ClaimID: "claim-1", Summary: "Done."})
 		return err
 	})
 }
@@ -250,7 +253,7 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/specs/2/edit_spec", `{"title":"X"}`},
 				cli:  []string{"2", "--title", "X"},
 			},
-			code: core.NotFound,
+			code: api.NotFound,
 		},
 		"edit_ticket": {
 			ok: call{
@@ -268,7 +271,7 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/2/edit_ticket", `{"title":""}`},
 				cli:  []string{"2", "--title", ""},
 			},
-			code: core.Invalid,
+			code: api.Invalid,
 		},
 		"add_labels": {
 			ok: call{
@@ -282,7 +285,7 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/add_labels", `{"target":9,"labels":["ui"]}`},
 				cli:  []string{"9", "ui"},
 			},
-			code: core.NotFound,
+			code: api.NotFound,
 		},
 		"remove_labels": {
 			ok: call{
@@ -293,14 +296,14 @@ func init() {
 			check: func(t *testing.T, out map[string]any) {
 				field("id", "acme-1")(t, out)
 				field("kind", "spec")(t, out)
-				labels(core.LongLivedLabel)(t, out)
+				labels(domain.LongLivedLabel)(t, out)
 			},
 			bad: call{
 				mcp:  map[string]any{"target": 1, "labels": []string{""}},
 				http: httpCall{"POST", "/api/p/acme/remove_labels", `{"target":1,"labels":[""]}`},
 				cli:  []string{"1", ""},
 			},
-			code: core.Invalid,
+			code: api.Invalid,
 		},
 		"set_tags": {
 			ok: call{
@@ -318,7 +321,7 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/set_tags", `{"target":2,"tags":{"Area":"web"}}`},
 				cli:  []string{"2", "Area=web"},
 			},
-			code: core.Invalid,
+			code: api.Invalid,
 		},
 		"remove_tags": {
 			ok: call{
@@ -332,7 +335,7 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/remove_tags", `{"target":2,"keys":["Area"]}`},
 				cli:  []string{"2", "Area"},
 			},
-			code: core.Invalid,
+			code: api.Invalid,
 		},
 		"comment": {
 			ok: call{
@@ -352,7 +355,7 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/3/comment", `{"body":""}`},
 				cli:  []string{"3", "--body", ""},
 			},
-			code: core.Invalid,
+			code: api.Invalid,
 		},
 		"approve": {
 			ok: call{
@@ -367,7 +370,7 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/3/approve", ``},
 				cli:  []string{"3"},
 			},
-			code: core.ActionNotAllowed,
+			code: api.ActionNotAllowed,
 		},
 		"defer": {
 			ok: call{
@@ -382,7 +385,7 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/3/defer", `{}`},
 				cli:  []string{"3"},
 			},
-			code: core.Invalid,
+			code: api.Invalid,
 		},
 	} {
 		cases[name] = c
@@ -409,7 +412,7 @@ func init() {
 			http: httpCall{"GET", "/api/workflow?ticket=2", ""},
 			cli:  []string{"2"},
 		},
-		code:     core.Invalid,
+		code:     api.Invalid,
 		cliUsage: true,
 	}
 }
@@ -464,23 +467,23 @@ func newServerWith(t *testing.T, opts []codecentraltest.Option, setups ...func(*
 	t.Helper()
 	srv := codecentraltest.NewServer(t, opts...)
 	ctx := context.Background()
-	must(t, func() error { _, err := srv.Core.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}); return err })
-	must(t, func() error { _, err := srv.Core.CreateProject(ctx, core.CreateProjectInput{Key: "other"}); return err })
+	must(t, func() error { _, err := srv.Core.CreateProject(ctx, api.CreateProjectInput{Key: "acme"}); return err })
+	must(t, func() error { _, err := srv.Core.CreateProject(ctx, api.CreateProjectInput{Key: "other"}); return err })
 	must(t, func() error {
-		_, err := srv.Core.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"})
+		_, err := srv.Core.CreateSpec(ctx, "acme", api.CreateSpecInput{Title: "Login"})
 		return err
 	})
 	// Long-lived, so that its Tickets land one by one under the default Land per Spec.
 	must(t, func() error {
-		_, err := srv.Core.AddLabels(ctx, "acme", core.LabelsInput{Target: "acme-1", Labels: []string{core.LongLivedLabel}})
+		_, err := srv.Core.AddLabels(ctx, "acme", api.LabelsInput{Target: "acme-1", Labels: []string{domain.LongLivedLabel}})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form"})
+		_, err := srv.Core.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "Login form"})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login API", State: "Ready"})
+		_, err := srv.Core.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "Login API", State: "Ready"})
 		return err
 	})
 	for _, setup := range setups {
@@ -521,6 +524,28 @@ func TestEveryOperationHasACase(t *testing.T) {
 			if cl.http.path == "" || agent != (cl.mcp != nil) || agent != (cl.cli != nil) {
 				t.Errorf("operation %s: a call does not cover exactly its doors", op.Name)
 			}
+		}
+	}
+}
+
+// Every definition has exactly one binding, the Core call that serves it,
+// and every binding serves a definition, so an operation defined in ops
+// and never bound fails here, not at run time.
+func TestEveryDefinitionHasExactlyOneBinding(t *testing.T) {
+	bound := map[ops.Operation]int{}
+	for _, op := range bind.Bound() {
+		bound[op]++
+	}
+	defined := map[ops.Operation]bool{}
+	for _, op := range ops.Definitions() {
+		defined[op] = true
+		if n := bound[op]; n != 1 {
+			t.Errorf("operation %s has %d bindings, want 1", op.Op().Name, n)
+		}
+	}
+	for op := range bound {
+		if !defined[op] {
+			t.Errorf("operation %s is bound but not in ops.Definitions", op.Op().Name)
 		}
 	}
 }
@@ -614,7 +639,7 @@ func TestMCPOnAnUnknownProjectRejectsEveryTool(t *testing.T) {
 	srv := newServer(t)
 	s := connect(t, srv, "nope")
 	for _, name := range agentOps() {
-		e := mcpRejected(t, s, name, cases[name].ok.mcp, core.UnknownProject)
+		e := mcpRejected(t, s, name, cases[name].ok.mcp, api.UnknownProject)
 		if !strings.Contains(e.Message, `"nope"`) || !strings.Contains(e.Message, "code-central init") {
 			t.Errorf("%s: message %q should name the key and say to run code-central init", name, e.Message)
 		}
@@ -624,15 +649,15 @@ func TestMCPOnAnUnknownProjectRejectsEveryTool(t *testing.T) {
 func TestAnUnknownFieldIsRejectedNamingTheFieldsTheOperationAccepts(t *testing.T) {
 	srv := newServer(t)
 	s := connect(t, srv, "acme")
-	e := mcpRejected(t, s, "get_ticket", map[string]any{"id": 5}, core.Invalid)
+	e := mcpRejected(t, s, "get_ticket", map[string]any{"id": 5}, api.Invalid)
 	if e.Field != "id" || !strings.Contains(e.Message, "accepted fields are ticket, parts") {
 		t.Errorf("got %q field %q, want the accepted fields ticket and parts", e.Message, e.Field)
 	}
-	e = mcpRejected(t, s, "get_ticket", map[string]any{"ticket_id": 5}, core.Invalid)
+	e = mcpRejected(t, s, "get_ticket", map[string]any{"ticket_id": 5}, api.Invalid)
 	if !strings.Contains(e.Message, "did you mean `ticket`?") {
 		t.Errorf("got %q, want a suggestion of ticket", e.Message)
 	}
-	e = mcpRejected(t, s, "get_ticket", map[string]any{"ticket": ""}, core.Invalid)
+	e = mcpRejected(t, s, "get_ticket", map[string]any{"ticket": ""}, api.Invalid)
 	if e.Field != "ticket" || !strings.Contains(e.Message, "ticket is empty") {
 		t.Errorf("got %q field %q, want ticket named as empty", e.Message, e.Field)
 	}
@@ -641,9 +666,9 @@ func TestAnUnknownFieldIsRejectedNamingTheFieldsTheOperationAccepts(t *testing.T
 func TestIDsFromAnotherProjectAreRejectedNamingTheConnectionsProject(t *testing.T) {
 	srv := newServer(t)
 	s := connect(t, srv, "acme")
-	for _, e := range []core.Error{
-		mcpRejected(t, s, "get_ticket", map[string]any{"ticket": "other-2"}, core.Invalid),
-		cliRejected(t, srv, []string{"get-ticket", "other-2"}, core.Invalid),
+	for _, e := range []api.Error{
+		mcpRejected(t, s, "get_ticket", map[string]any{"ticket": "other-2"}, api.Invalid),
+		cliRejected(t, srv, []string{"get-ticket", "other-2"}, api.Invalid),
 	} {
 		if !strings.Contains(e.Message, `"acme"`) {
 			t.Errorf("message %q does not name Project acme", e.Message)
@@ -659,16 +684,16 @@ func TestIDsFromAnotherProjectAreRejectedNamingTheConnectionsProject(t *testing.
 func TestIDsOfTheWrongKindAreRejectedNamingTheOperationToUse(t *testing.T) {
 	srv := newServer(t) // acme-1 is a Spec, acme-2 a Ticket of it
 	s := connect(t, srv, "acme")
-	for want, errs := range map[string][]core.Error{
+	for want, errs := range map[string][]api.Error{
 		"acme-1 is a Spec; use get_spec": {
-			mcpRejected(t, s, "get_ticket", map[string]any{"ticket": "acme-1"}, core.NotFound),
-			httpRejected(t, srv, httpCall{"GET", "/api/p/acme/tickets/1", ""}, core.NotFound),
-			cliRejected(t, srv, []string{"get-ticket", "acme-1"}, core.NotFound),
+			mcpRejected(t, s, "get_ticket", map[string]any{"ticket": "acme-1"}, api.NotFound),
+			httpRejected(t, srv, httpCall{"GET", "/api/p/acme/tickets/1", ""}, api.NotFound),
+			cliRejected(t, srv, []string{"get-ticket", "acme-1"}, api.NotFound),
 		},
 		"acme-2 is a Ticket of Spec acme-1; use get_ticket": {
-			mcpRejected(t, s, "get_spec", map[string]any{"spec": "acme-2"}, core.NotFound),
-			httpRejected(t, srv, httpCall{"GET", "/api/p/acme/specs/2", ""}, core.NotFound),
-			cliRejected(t, srv, []string{"get-spec", "acme-2"}, core.NotFound),
+			mcpRejected(t, s, "get_spec", map[string]any{"spec": "acme-2"}, api.NotFound),
+			httpRejected(t, srv, httpCall{"GET", "/api/p/acme/specs/2", ""}, api.NotFound),
+			cliRejected(t, srv, []string{"get-spec", "acme-2"}, api.NotFound),
 		},
 	} {
 		for i, e := range errs {
@@ -683,10 +708,10 @@ func TestATicketGivenAsSpecIsRejectedNamingTheFieldAndItsSpec(t *testing.T) {
 	srv := newServer(t) // acme-1 is a Spec, acme-2 a Ticket of it
 	s := connect(t, srv, "acme")
 	want := "acme-2 is a Ticket of Spec acme-1; pass acme-1 as spec"
-	for i, e := range []core.Error{
-		mcpRejected(t, s, "create_ticket", map[string]any{"spec": "acme-2", "title": "Form"}, core.Invalid),
-		httpRejected(t, srv, httpCall{"POST", "/api/p/acme/create_ticket", `{"spec":"acme-2","title":"Form"}`}, core.Invalid),
-		cliRejected(t, srv, []string{"create-ticket", "--spec", "acme-2", "--title", "Form"}, core.Invalid),
+	for i, e := range []api.Error{
+		mcpRejected(t, s, "create_ticket", map[string]any{"spec": "acme-2", "title": "Form"}, api.Invalid),
+		httpRejected(t, srv, httpCall{"POST", "/api/p/acme/create_ticket", `{"spec":"acme-2","title":"Form"}`}, api.Invalid),
+		cliRejected(t, srv, []string{"create-ticket", "--spec", "acme-2", "--title", "Form"}, api.Invalid),
 	} {
 		if e.Field != "spec" || e.Message != want {
 			t.Errorf("%s: field %q message %q, want spec %q", []string{"mcp", "http", "cli"}[i], e.Field, e.Message, want)
@@ -696,7 +721,7 @@ func TestATicketGivenAsSpecIsRejectedNamingTheFieldAndItsSpec(t *testing.T) {
 
 func TestMCPRejectsUnknownArguments(t *testing.T) {
 	srv := newServer(t)
-	e := mcpRejected(t, connect(t, srv, "acme"), "create_spec", map[string]any{"title": "S", "project": "other"}, core.Invalid)
+	e := mcpRejected(t, connect(t, srv, "acme"), "create_spec", map[string]any{"title": "S", "project": "other"}, api.Invalid)
 	if e.Field != "project" {
 		t.Fatalf("field %q, want project", e.Field)
 	}
@@ -708,7 +733,7 @@ func TestMCPAndTheCLIAlwaysWriteAsTheAgent(t *testing.T) {
 	viaCLI := cliOK(t, srv, []string{"claim"})
 	for door, out := range map[string]map[string]any{"mcp": viaMCP, "cli": viaCLI} {
 		// claim's Ticket leaves its moves out, so read the whole Ticket.
-		tk, err := srv.Client.GetTicket(context.Background(), "acme", core.Ref(out["ticket"].(map[string]any)["id"].(string)))
+		tk, err := srv.Client.GetTicket(context.Background(), "acme", api.Ref(out["ticket"].(map[string]any)["id"].(string)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -724,15 +749,15 @@ func httpDo(t *testing.T, srv *codecentraltest.Server, c httpCall) (int, []byte)
 	t.Helper()
 	// The suite calls the HTTP API as the UI does, as the human, except
 	// for an Integration's operations (ticket 42).
-	actor := core.Human
+	actor := api.Human
 	if strings.Contains(c.path, "/integration/") {
-		actor = core.Integration
+		actor = api.Integration
 	}
 	return httpDoAs(t, srv, actor, c)
 }
 
 // httpDoAs calls the HTTP API as the given Actor.
-func httpDoAs(t *testing.T, srv *codecentraltest.Server, actor core.Actor, c httpCall) (int, []byte) {
+func httpDoAs(t *testing.T, srv *codecentraltest.Server, actor api.Actor, c httpCall) (int, []byte) {
 	t.Helper()
 	req, err := http.NewRequest(c.method, srv.URL+c.path, strings.NewReader(c.body))
 	if err != nil {
@@ -757,7 +782,7 @@ func httpOK(t *testing.T, srv *codecentraltest.Server, c httpCall) map[string]an
 	return object(t, b)
 }
 
-func httpRejected(t *testing.T, srv *codecentraltest.Server, c httpCall, code core.Code) core.Error {
+func httpRejected(t *testing.T, srv *codecentraltest.Server, c httpCall, code api.Code) api.Error {
 	t.Helper()
 	status, b := httpDo(t, srv, c)
 	e := errorJSON(t, b, code)
@@ -811,7 +836,7 @@ func mcpOK(t *testing.T, s *sdk.ClientSession, tool string, args map[string]any)
 	return object(t, b)
 }
 
-func mcpRejected(t *testing.T, s *sdk.ClientSession, tool string, args map[string]any, code core.Code) core.Error {
+func mcpRejected(t *testing.T, s *sdk.ClientSession, tool string, args map[string]any, code api.Code) api.Error {
 	t.Helper()
 	res, b := mcpCall(t, s, tool, args)
 	if !res.IsError {
@@ -842,7 +867,7 @@ func cliOK(t *testing.T, srv *codecentraltest.Server, args []string) map[string]
 	return object(t, out)
 }
 
-func cliRejected(t *testing.T, srv *codecentraltest.Server, args []string, code core.Code) core.Error {
+func cliRejected(t *testing.T, srv *codecentraltest.Server, args []string, code api.Code) api.Error {
 	t.Helper()
 	exit, out, errOut := cliRun(t, srv, args)
 	if exit != 2 || len(out) != 0 {
@@ -871,11 +896,11 @@ func object(t *testing.T, b []byte) map[string]any {
 }
 
 // errorJSON checks the one error shape {code, message, allowed_actions?, field?}.
-func errorJSON(t *testing.T, b []byte, code core.Code) core.Error {
+func errorJSON(t *testing.T, b []byte, code api.Code) api.Error {
 	t.Helper()
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
-	var e core.Error
+	var e api.Error
 	if err := dec.Decode(&e); err != nil {
 		t.Fatalf("not the error shape: %v: %s", err, b)
 	}

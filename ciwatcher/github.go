@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
@@ -33,7 +33,7 @@ type GitHubActions struct {
 // CheckAccess finds gh, checks its login with gh auth status, and reads
 // the repository. GitHub rate-limiting the read is a *ratelimit.Error,
 // not a problem.
-func (g *GitHubActions) CheckAccess(ctx context.Context) (core.WatcherCheckResult, error) {
+func (g *GitHubActions) CheckAccess(ctx context.Context) (api.WatcherCheckResult, error) {
 	prog, r, err := gh.Ready(ctx, g.Env, g.GHPath)
 	if r.Problem != "" || err != nil {
 		return r, err
@@ -41,15 +41,15 @@ func (g *GitHubActions) CheckAccess(ctx context.Context) (core.WatcherCheckResul
 	if _, msg, err := gh.API(ctx, g.Env, prog, "repos/"+g.Repository, "--jq", ".full_name"); err != nil {
 		var limit *ratelimit.Error
 		if errors.As(err, &limit) {
-			return core.WatcherCheckResult{}, limit
+			return api.WatcherCheckResult{}, limit
 		}
 		if r, ran := gh.DidntRun(prog, err); !ran {
 			return r, nil
 		}
-		return core.WatcherCheckResult{Problem: core.ProblemRepositoryUnreadable, Reason: fmt.Sprintf("gh can't read the repository %s: %s", g.Repository, msg),
+		return api.WatcherCheckResult{Problem: api.ProblemRepositoryUnreadable, Reason: fmt.Sprintf("gh can't read the repository %s: %s", g.Repository, msg),
 			Fix: "Check the repository is the owner/name GitHub shows, and that the account gh is logged in as can see it."}, nil
 	}
-	return core.WatcherCheckResult{}, nil
+	return api.WatcherCheckResult{}, nil
 }
 
 // ghRun is a workflow run as GitHub's REST API gives it.
@@ -109,7 +109,7 @@ func (g *GitHubActions) runs(ctx context.Context, path string) ([]Run, error) {
 	}
 	var runs []Run
 	for _, r := range out.Runs {
-		run := Run{Updated: r.Updated, CIRunView: core.CIRunView{ID: r.ID, Attempt: max(r.Attempt, 1), Workflow: workflowName(r.Path), Name: r.Name,
+		run := Run{Updated: r.Updated, CIRunView: api.CIRunView{ID: r.ID, Attempt: max(r.Attempt, 1), Workflow: workflowName(r.Path), Name: r.Name,
 			Branch: r.Branch, Commit: r.Commit, Status: runStatus(r.Status), URL: r.URL}}
 		if run.Status == domain.CICompleted {
 			run.Conclusion = conclusion(r.Conclusion)
@@ -128,16 +128,16 @@ func (g *GitHubActions) runs(ctx context.Context, path string) ([]Run, error) {
 }
 
 // Jobs lists the jobs of one attempt of a run.
-func (g *GitHubActions) Jobs(ctx context.Context, id int64, attempt int) ([]core.CIJobView, error) {
+func (g *GitHubActions) Jobs(ctx context.Context, id int64, attempt int) ([]api.CIJobView, error) {
 	var out struct {
 		Jobs []ghJob `json:"jobs"`
 	}
 	if err := g.api(ctx, fmt.Sprintf("repos/%s/actions/runs/%d/attempts/%d/jobs?per_page=100", g.Repository, id, attempt), &out); err != nil {
 		return nil, err
 	}
-	jobs := []core.CIJobView{}
+	jobs := []api.CIJobView{}
 	for _, j := range out.Jobs {
-		job := core.CIJobView{Name: j.Name, URL: j.URL}
+		job := api.CIJobView{Name: j.Name, URL: j.URL}
 		if runStatus(j.Status) == domain.CICompleted {
 			job.Conclusion = conclusion(j.Conclusion)
 		}

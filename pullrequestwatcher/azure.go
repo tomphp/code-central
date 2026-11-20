@@ -12,15 +12,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/azdo"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
 )
 
 // azureRepos is one Azure Repos repository's pull requests into one base.
 type azureRepos struct {
-	in   core.PullRequestCheckInput
+	in   api.PullRequestCheckInput
 	env  gh.Env
 	base string
 	// c is the client CheckAccess made, and repository the repository's
@@ -32,7 +32,7 @@ type azureRepos struct {
 // projectURLOf is the Azure DevOps project URL of a repository written
 // <organization>/<project>/<repository>, and the repository's name. in's
 // project URL, when set, is used instead.
-func projectURLOf(in core.PullRequestCheckInput) (projectURL, repository string, ok bool) {
+func projectURLOf(in api.PullRequestCheckInput) (projectURL, repository string, ok bool) {
 	org, project, repository, ok := azdo.SplitRepository(in.Repository)
 	if !ok {
 		return "", "", false
@@ -54,7 +54,7 @@ func (a *azureRepos) access() azdo.Access {
 
 // CheckAccess checks the PAT variable is set, the repository can be read,
 // and, on a full check, the PAT can contribute to pull requests.
-func (a *azureRepos) CheckAccess(ctx context.Context, full bool) (core.WatcherCheckResult, error) {
+func (a *azureRepos) CheckAccess(ctx context.Context, full bool) (api.WatcherCheckResult, error) {
 	projectURL, repository, ok := projectURLOf(a.in)
 	if !ok {
 		return unreadableRepository(a.in.Repository, errors.New("it isn't <organization>/<project>/<repository>")), nil
@@ -75,28 +75,28 @@ func (a *azureRepos) CheckAccess(ctx context.Context, full bool) (core.WatcherCh
 		}
 	}
 	a.c, a.repository = c, repository
-	return core.WatcherCheckResult{}, nil
+	return api.WatcherCheckResult{}, nil
 }
 
 // refused is the check's answer to err from a call. A rate limit is
 // returned as the error, not a problem.
-func (a *azureRepos) refused(err error) (core.WatcherCheckResult, error) {
+func (a *azureRepos) refused(err error) (api.WatcherCheckResult, error) {
 	var limit *ratelimit.Error
 	switch {
 	case errors.As(err, &limit):
-		return core.WatcherCheckResult{}, limit
+		return api.WatcherCheckResult{}, limit
 	case errors.Is(err, azdo.ErrPATRejected):
 		return a.access().Rejected(), nil
 	case errors.Is(err, azdo.ErrMissingScope):
-		return core.WatcherCheckResult{Problem: core.ProblemPATScope,
+		return api.WatcherCheckResult{Problem: api.ProblemPATScope,
 			Reason: fmt.Sprintf("The PAT in %s can't contribute to pull requests in %s.", a.access().PATVariable(), a.in.Repository),
 			Fix:    "The PAT needs " + codeScope + ". Make a new PAT with that scope, and set it for the service. It may share the variable with Azure Pipelines if it has both scopes."}, nil
 	}
 	return unreadableRepository(a.in.Repository, err), nil
 }
 
-func unreadableRepository(repository string, err error) core.WatcherCheckResult {
-	return core.WatcherCheckResult{Problem: core.ProblemRepositoryUnreadable,
+func unreadableRepository(repository string, err error) api.WatcherCheckResult {
+	return api.WatcherCheckResult{Problem: api.ProblemRepositoryUnreadable,
 		Reason: fmt.Sprintf("Code Central can't read the Azure Repos repository %s: %v", repository, err),
 		Fix:    "Check the Push remote is the repository's URL as Azure Repos shows it, and that the PAT's organization can see it."}
 }

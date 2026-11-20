@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codehost"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
@@ -18,26 +19,8 @@ import (
 // (Spec code-central-848): the filter label and New issues need me apply
 // to every one of them.
 
-// GitHubIssuesView is a Project's GitHub Issues settings as every Project
-// read returns them.
-type GitHubIssuesView struct {
-	On bool `json:"on"`
-	// Repositories are the GitHub repositories (owner/name) its issues
-	// come from, in the order the human listed them.
-	Repositories []string `json:"repositories"`
-	// Label is the filter label: only issues carrying it come in; empty
-	// lets every issue in.
-	Label           string `json:"label"`
-	NewIssuesNeedMe bool   `json:"new_issues_need_me"`
-	// Spec is the Issues Spec's ID, left out until GitHub Issues is first
-	// turned on.
-	Spec string `json:"spec,omitempty"`
-	// Watcher is the Issue Watcher's status, as it last reported it.
-	Watcher WatcherView `json:"watcher"`
-}
-
-func githubIssuesView(key string, g domain.GitHubIssues, watcher WatcherView) GitHubIssuesView {
-	v := GitHubIssuesView{On: g.On, Repositories: slices.Clone(g.Repositories), Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Watcher: watcher}
+func githubIssuesView(key string, g domain.GitHubIssues, watcher api.WatcherView) api.GitHubIssuesView {
+	v := api.GitHubIssuesView{On: g.On, Repositories: slices.Clone(g.Repositories), Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Watcher: watcher}
 	if v.Repositories == nil {
 		v.Repositories = []string{}
 	}
@@ -47,18 +30,6 @@ func githubIssuesView(key string, g domain.GitHubIssues, watcher WatcherView) Gi
 	return v
 }
 
-// SetGitHubIssuesInput is the human's set_github_issues(on, repositories,
-// label, new_issues_need_me, full?).
-type SetGitHubIssuesInput struct {
-	On           bool     `json:"on"`
-	Repositories []string `json:"repositories"`
-	// Label is the filter label; empty lets every issue in.
-	Label           string `json:"label"`
-	NewIssuesNeedMe bool   `json:"new_issues_need_me"`
-	// Full asks for the Project in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
 // SetGitHubIssues is the human's set_github_issues: GitHub Issues on or
 // off, with the repositories its issues come from, the filter label and
 // New issues need me. Turning it on needs a repository, and each
@@ -66,9 +37,9 @@ type SetGitHubIssuesInput struct {
 // creates the Issues Spec, written before the settings so they never name
 // a missing Spec. Changing the repositories retitles the Issues Spec
 // unless the human has changed its title. Turning it off touches no Link.
-func (c *Core) SetGitHubIssues(ctx context.Context, key string, in SetGitHubIssuesInput) (Written[ProjectView], error) {
+func (c *Core) SetGitHubIssues(ctx context.Context, key string, in api.SetGitHubIssuesInput) (api.Written[api.ProjectView], error) {
 	if err := humanOnly(ctx, "set_github_issues"); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	g := domain.GitHubIssues{On: in.On, Label: strings.TrimSpace(in.Label), NewIssuesNeedMe: in.NewIssuesNeedMe}
 	for _, repository := range in.Repositories {
@@ -77,17 +48,17 @@ func (c *Core) SetGitHubIssues(ctx context.Context, key string, in SetGitHubIssu
 		case repository == "":
 			continue
 		case !codehost.ValidGitHubRepository(repository):
-			return Written[ProjectView]{}, invalid("repositories", "%q isn't a GitHub repository as owner/name, such as acme/web", repository)
+			return api.Written[api.ProjectView]{}, invalid("repositories", "%q isn't a GitHub repository as owner/name, such as acme/web", repository)
 		case slices.ContainsFunc(g.Repositories, func(r string) bool { return strings.EqualFold(r, repository) }):
-			return Written[ProjectView]{}, invalid("repositories", "%s is listed twice: list each repository once", repository)
+			return api.Written[api.ProjectView]{}, invalid("repositories", "%s is listed twice: list each repository once", repository)
 		}
 		g.Repositories = append(g.Repositories, repository)
 	}
 	if len(g.Repositories) == 0 && g.On {
-		return Written[ProjectView]{}, invalid("repositories", "GitHub Issues needs the GitHub repositories its issues come from, as owner/name")
+		return api.Written[api.ProjectView]{}, invalid("repositories", "GitHub Issues needs the GitHub repositories its issues come from, as owner/name")
 	}
 	if err := c.checkIssues(ctx, key, g); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	created := 0
 	if g.On {
@@ -95,11 +66,11 @@ func (c *Core) SetGitHubIssues(ctx context.Context, key string, in SetGitHubIssu
 		created, err = c.createIntegrationSpec(key, func(p domain.Project) int { return p.GitHubIssues.Spec },
 			domain.Spec{Title: issuesSpecTitle(g.Repositories), Body: issuesSpecBody})
 		if err != nil {
-			return Written[ProjectView]{}, err
+			return api.Written[api.ProjectView]{}, err
 		}
 	}
 	var was domain.GitHubIssues
-	var before ProjectView
+	var before api.ProjectView
 	var p domain.Project
 	var resetWatcher bool
 	err := c.store.Update(func(w store.Writer) error {
@@ -121,15 +92,15 @@ func (c *Core) SetGitHubIssues(ctx context.Context, key string, in SetGitHubIssu
 		return w.PutProject(p)
 	})
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	if resetWatcher {
-		c.watchers.reset(watcherKey{WatcherIssues, key})
+		c.watchers.reset(watcherKey{api.WatcherIssues, key})
 	}
 	after := c.projectView(p)
 	if was.Spec != 0 && len(g.Repositories) > 0 && !slices.Equal(was.Repositories, g.Repositories) {
 		if err := c.retitleIntegrationSpec(ctx, key, was.Spec, givenIssuesSpecTitle, issuesSpecTitle(g.Repositories)); err != nil {
-			return Written[ProjectView]{}, err
+			return api.Written[api.ProjectView]{}, err
 		}
 	}
 	return acknowledgeProject(before, after, in.Full, c.now())
@@ -158,7 +129,7 @@ func (c *Core) createIntegrationSpec(key string, specOf func(domain.Project) int
 		}
 		now := c.now()
 		n = w.NextNumber(key)
-		spec.Number, spec.Labels, spec.Created, spec.Updated = n, []string{LongLivedLabel}, now, now
+		spec.Number, spec.Labels, spec.Created, spec.Updated = n, []string{domain.LongLivedLabel}, now, now
 		return w.PutSpec(key, spec)
 	})
 	return n, err
@@ -175,7 +146,7 @@ func (c *Core) retitleIntegrationSpec(ctx context.Context, key string, n int, gi
 			return nil
 		}
 		s.Updated = c.now()
-		s.Edits = append(s.Edits, domain.Edit{Number: len(s.Edits) + 1, Actor: string(ActorOf(ctx)), Time: s.Updated, Previous: map[string]string{"title": s.Title}})
+		s.Edits = append(s.Edits, domain.Edit{Number: len(s.Edits) + 1, Actor: string(api.ActorOf(ctx)), Time: s.Updated, Previous: map[string]string{"title": s.Title}})
 		s.Title = title
 		return w.PutSpec(key, s)
 	})
@@ -205,22 +176,9 @@ func givenIssuesSpecTitle(title string) bool {
 const issuesSpecBody = "This Spec holds the Project's Incoming Issues: each open GitHub issue arrives on it as a linked Draft Ticket, to triage with Keep as Draft, To Requirement or Won't fix. " +
 	"GitHub Issues is in the GitHub Issues section of Project Options; turning it off leaves this Spec and its Tickets as they are.\n"
 
-// IssuesCheckInput is what the Issue Watcher's check mode checks: that it
-// can work each of the repositories' issues, finding gh with the gh path
-// Option.
-type IssuesCheckInput struct {
-	Repositories []string `json:"repositories"`
-	GHPath       string   `json:"gh_path,omitempty"`
-}
-
-// IssuesCheck runs the Issue Watcher once in its check mode. The service
-// makes no external calls itself (ADR 0002, ADR 0004), so the check runs
-// in the Issue Watcher's process.
-type IssuesCheck func(ctx context.Context, in IssuesCheckInput) WatcherCheckResult
-
 // SetIssuesCheck makes c run check when GitHub Issues is turned on. Call
 // it before serving; without it, nothing is checked.
-func (c *Core) SetIssuesCheck(check IssuesCheck) { c.issuesCheck = check }
+func (c *Core) SetIssuesCheck(check api.IssuesCheck) { c.issuesCheck = check }
 
 // checkIssues runs the Issues check when g turns GitHub Issues on, or
 // adds a repository while on, on each repository that is new, and refuses
@@ -253,7 +211,7 @@ func (c *Core) checkIssues(ctx context.Context, key string, g domain.GitHubIssue
 	if len(added) == 0 {
 		return nil
 	}
-	res := c.issuesCheck(ctx, IssuesCheckInput{Repositories: added, GHPath: opts.GHPath})
+	res := c.issuesCheck(ctx, api.IssuesCheckInput{Repositories: added, GHPath: opts.GHPath})
 	if res.Problem == "" {
 		return nil
 	}
@@ -262,9 +220,9 @@ func (c *Core) checkIssues(ctx context.Context, key string, g domain.GitHubIssue
 		field = "repositories"
 	} else if len(added) == 1 {
 		switch res.Problem {
-		case ProblemRepositoryUnreadable, ProblemIssuesDisabled, ProblemNoTriage:
+		case api.ProblemRepositoryUnreadable, api.ProblemIssuesDisabled, api.ProblemNoTriage:
 			field = "repositories"
 		}
 	}
-	return &Error{Code: Invalid, Field: field, Message: res.Reason, Fix: res.Fix}
+	return &api.Error{Code: api.Invalid, Field: field, Message: res.Reason, Fix: res.Fix}
 }

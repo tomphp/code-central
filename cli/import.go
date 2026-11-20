@@ -3,7 +3,7 @@ package cli
 import (
 	"context"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/ops"
 )
 
@@ -59,8 +59,8 @@ func runImport(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	in := core.ImportInput{DryRun: *dryRun}
-	if err := core.Decode(ctx, []byte(text), &in.Payload); err != nil {
+	in := api.ImportInput{DryRun: *dryRun}
+	if err := api.Decode(ctx, []byte(text), &in.Payload); err != nil {
 		return err
 	}
 	v, err := sc.client.Import(ctx, sc.project, in)

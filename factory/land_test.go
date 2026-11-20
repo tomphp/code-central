@@ -1,13 +1,14 @@
 package factory_test
 
 import (
-	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -94,7 +95,7 @@ func TestUncommittedChangesInTheBaseCheckoutHoldACleanMergeAndAreLeftAlone(t *te
 }
 
 // movedTo reports whether tk ever moved from one State to another.
-func movedTo(tk core.TicketView, from, to domain.State) bool {
+func movedTo(tk api.TicketView, from, to domain.State) bool {
 	for _, m := range tk.Moves {
 		if m.From == from && m.To == to {
 			return true
@@ -104,7 +105,7 @@ func movedTo(tk core.TicketView, from, to domain.State) bool {
 }
 
 // commented reports whether one of tk's comments contains every part.
-func commented(tk core.TicketView, parts ...string) bool {
+func commented(tk api.TicketView, parts ...string) bool {
 	for _, c := range tk.Comments {
 		all := true
 		for _, p := range parts {
@@ -122,7 +123,7 @@ func TestAnAcceptedTicketIsMergedIntoTheBaseTheProjectNames(t *testing.T) {
 	h := factorytest.New(t)
 	h.Git("branch", "release")
 	base := "release"
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Base: &base})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Base: &base})
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	oldMain := h.Git("rev-parse", "main")
 	oldRelease := h.Git("rev-parse", "release")
@@ -141,7 +142,7 @@ func TestAnAcceptedTicketIsMergedIntoTheBaseTheProjectNames(t *testing.T) {
 	// Changing the base takes hold on the next poll.
 	h.Git("branch", "next")
 	next := "next"
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Base: &next})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Base: &next})
 	id2, commit2 := accepted(h, "Another feature", "other.txt", "other\n")
 	r.Poll()
 	h.WantState(id2, domain.Done)

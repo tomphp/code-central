@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -28,8 +28,8 @@ func wantCounts(t *testing.T, f fixture, count int, counts map[string]int) {
 func TestARequirementsStageTicketsCountOnceAsTheRequirement(t *testing.T) {
 	f := newFixture(t)
 	f.requirement(t)
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "2", Title: "Toggle", State: domain.Ready}) // acme-6
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", State: domain.Ready})   // acme-7
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "2", Title: "Toggle", State: domain.Ready}) // acme-6
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Form", State: domain.Ready})   // acme-7
 	for _, n := range []int{3, 4, 5, 6, 7} {
 		f.setState(t, n, domain.InReview)
 	}
@@ -43,19 +43,19 @@ func TestARequirementsStageTicketsCountOnceAsTheRequirement(t *testing.T) {
 func TestACIItemListingSeveralTicketsCountsOnce(t *testing.T) {
 	f := itemWorld(t)
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
-	f.theItem(t, core.ReasonCIFailed)
+	f.theItem(t, api.ReasonCIFailed)
 	wantCounts(t, f, 1, map[string]int{"acme": 1})
 }
 
 func TestBaseRowsCountOnceEach(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestProject(t)
-	f.reportBase(t, core.ReportBaseInput{State: core.BaseDiverged, Local: "a", Remote: "b"})
+	f.reportBase(t, api.ReportBaseInput{State: api.BaseDiverged, Local: "a", Remote: "b"})
 	wantCounts(t, f, 1, map[string]int{"acme": 1})
-	f.reportBase(t, core.ReportBaseInput{State: core.BaseMissing})
+	f.reportBase(t, api.ReportBaseInput{State: api.BaseMissing})
 	wantCounts(t, f, 1, map[string]int{"acme": 1})
 	f.spec(t, "acme", "Login")
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", State: domain.Ready})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Form", State: domain.Ready})
 	f.setState(t, 3, domain.InReview)
 	wantCounts(t, f, 2, map[string]int{"acme": 2})
 }
@@ -93,9 +93,9 @@ func TestFindTicketsRowsCarryTheReasonGetTicketGives(t *testing.T) {
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 	// acme-5 and acme-8 are listed by the CI item.
 	for _, id := range []string{"acme-5", "acme-8"} {
-		wantEverywhere(t, f, "acme", id, core.ReasonCIFailed)
+		wantEverywhere(t, f, "acme", id, api.ReasonCIFailed)
 	}
-	rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: domain.States})
+	rows, err := f.core.FindTickets(ctx, "acme", api.FindTicketsInput{State: domain.States})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,8 +108,8 @@ func TestFindTicketsRowsCarryTheReasonGetTicketGives(t *testing.T) {
 
 func TestTurningAReasonOffMarksItsRowsNotFocusItemsAndChangesNothingElse(t *testing.T) {
 	f := needsMeWorld(t)
-	focus := func() map[core.NeedsMeReason][]bool {
-		out := map[core.NeedsMeReason][]bool{}
+	focus := func() map[api.NeedsMeReason][]bool {
+		out := map[api.NeedsMeReason][]bool{}
 		for _, row := range f.needsMe(t) {
 			if row.Project == "acme" {
 				out[row.Reason] = append(out[row.Reason], row.FocusItem)
@@ -122,12 +122,12 @@ func TestTurningAReasonOffMarksItsRowsNotFocusItemsAndChangesNothingElse(t *test
 			t.Fatalf("%s has a row that isn't a Focus Item while every reason is on", reason)
 		}
 	}
-	reasons := func() map[string]core.NeedsMeReason {
-		rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: domain.States})
+	reasons := func() map[string]api.NeedsMeReason {
+		rows, err := f.core.FindTickets(ctx, "acme", api.FindTicketsInput{State: domain.States})
 		if err != nil {
 			t.Fatal(err)
 		}
-		out := map[string]core.NeedsMeReason{}
+		out := map[string]api.NeedsMeReason{}
 		for _, r := range rows {
 			out[r.ID] = r.NeedsMeReason
 		}
@@ -135,15 +135,15 @@ func TestTurningAReasonOffMarksItsRowsNotFocusItemsAndChangesNothingElse(t *test
 	}
 	before, beforeView, beforeReasons, beforeAttention := f.needsMe(t), mustNeedsMe(t, f), reasons(), f.core.Attention(ctx)
 
-	if _, err := f.core.SetFocusKinds(human, "acme", core.SetFocusKindsInput{Off: []core.NeedsMeReason{core.ReasonAnswered}}); err != nil {
+	if _, err := f.core.SetFocusKinds(human, "acme", api.SetFocusKindsInput{Off: []api.NeedsMeReason{api.ReasonAnswered}}); err != nil {
 		t.Fatal(err)
 	}
 	got := focus()
-	if flags := got[core.ReasonAnswered]; len(flags) == 0 || slices.Contains(flags, true) {
+	if flags := got[api.ReasonAnswered]; len(flags) == 0 || slices.Contains(flags, true) {
 		t.Fatalf("Answered rows' focus_item %v, want all false", flags)
 	}
 	for reason, flags := range got {
-		if reason != core.ReasonAnswered && slices.Contains(flags, false) {
+		if reason != api.ReasonAnswered && slices.Contains(flags, false) {
 			t.Fatalf("%s rows' focus_item %v, want true: only Answered is off", reason, flags)
 		}
 	}
@@ -165,7 +165,7 @@ func TestTurningAReasonOffMarksItsRowsNotFocusItemsAndChangesNothingElse(t *test
 	}
 }
 
-func mustNeedsMe(t *testing.T, f fixture) core.NeedsMeView {
+func mustNeedsMe(t *testing.T, f fixture) api.NeedsMeView {
 	t.Helper()
 	v, err := f.core.NeedsMe(ctx)
 	if err != nil {

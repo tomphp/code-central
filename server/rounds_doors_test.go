@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // askingTicket claims acme-3 as claim-1 and posts Round 1 with Question 1,
@@ -15,8 +15,8 @@ func askingTicket(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	claimedTicket(t, srv)
 	must(t, func() error {
-		_, err := srv.Core.PostRound(context.Background(), "acme", core.PostRoundInput{Ticket: "3", ClaimID: "claim-1",
-			Questions: []core.QuestionInput{{Title: "DB?", Body: "Which one?", Recommended: "SQLite"}}})
+		_, err := srv.Core.PostRound(context.Background(), "acme", api.PostRoundInput{Ticket: "3", ClaimID: "claim-1",
+			Questions: []api.QuestionInput{{Title: "DB?", Body: "Which one?", Recommended: "SQLite"}}})
 		return err
 	})
 }
@@ -26,7 +26,7 @@ func answeredTicket(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	askingTicket(t, srv)
 	must(t, func() error {
-		_, err := srv.Core.Answer(core.WithActor(context.Background(), core.Human), "acme", core.AnswerInput{Ticket: "3", Question: 1, Text: "SQLite"})
+		_, err := srv.Core.Answer(api.WithActor(context.Background(), api.Human), "acme", api.AnswerInput{Ticket: "3", Question: 1, Text: "SQLite"})
 		return err
 	})
 }
@@ -62,7 +62,7 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/3/post_round", `{"claim_id":"claim-1","questions":[]}`},
 				cli:  []string{"acme-3", "--claim", "claim-1", "--questions", `[]`},
 			},
-			code: core.Invalid,
+			code: api.Invalid,
 		},
 		"pick_up_answers": {
 			setup: answeredTicket,
@@ -81,7 +81,7 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/3/pick_up_answers", `{"claim_id":"claim-9"}`},
 				cli:  []string{"3", "--claim", "claim-9"},
 			},
-			code: core.StaleClaim,
+			code: api.StaleClaim,
 		},
 		"answer": {
 			setup: askingTicket,
@@ -89,7 +89,7 @@ func init() {
 			check: ticketAcknowledgement("acme-3", "Answered", "state", "rounds", "moves", "needs_me_reason"),
 			full:  answered,
 			bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/3/answer", `{"question":1,"text":""}`}},
-			code:  core.Invalid,
+			code:  api.Invalid,
 		},
 		"accept_recommended": {
 			setup: askingTicket,
@@ -97,7 +97,7 @@ func init() {
 			check: ticketAcknowledgement("acme-3", "Answered", "state", "rounds", "moves", "needs_me_reason"),
 			full:  answered,
 			bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/3/accept_recommended", `{"round":2}`}},
-			code:  core.NotFound,
+			code:  api.NotFound,
 		},
 		"dismiss_question": {
 			setup: askingTicket,
@@ -105,7 +105,7 @@ func init() {
 			check: ticketAcknowledgement("acme-3", "Answered", "state", "rounds", "moves", "needs_me_reason"),
 			full:  answered,
 			bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/3/dismiss_question", `{"question":9}`}},
-			code:  core.NotFound,
+			code:  api.NotFound,
 		},
 		"get_spec_questions": {
 			setup: askingTicket,
@@ -119,7 +119,7 @@ func init() {
 				field("id", "acme-3")(t, tickets[0].(map[string]any))
 			},
 			bad:  call{http: httpCall{"GET", "/api/p/acme/specs/9/questions", ""}},
-			code: core.NotFound,
+			code: api.NotFound,
 		},
 	} {
 		cases[name] = c

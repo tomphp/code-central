@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -26,26 +26,26 @@ func claimedOnTwo(t *testing.T, s store.Store) (laptop, desktop fixture) {
 		}
 	}
 	laptop.spec(t, "acme", "Login")
-	laptop.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Ta", State: domain.Ready})
-	laptop.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Tb", State: domain.Ready})
-	laptop.claim(t, core.ClaimInput{Ticket: "2", SessionID: "s1"})
-	laptop.claim(t, core.ClaimInput{Ticket: "3", SessionID: "s2"})
+	laptop.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Ta", State: domain.Ready})
+	laptop.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Tb", State: domain.Ready})
+	laptop.claim(t, api.ClaimInput{Ticket: "2", SessionID: "s1"})
+	laptop.claim(t, api.ClaimInput{Ticket: "3", SessionID: "s2"})
 	return laptop, desktop
 }
 
 // post posts Session Events with texts for session to f.
 func post(f fixture, session string, texts ...string) {
-	var events []core.SessionEvent
+	var events []api.SessionEvent
 	for _, text := range texts {
-		events = append(events, core.SessionEvent{Time: f.clock.Now(), Kind: core.EventText, Text: text})
+		events = append(events, api.SessionEvent{Time: f.clock.Now(), Kind: api.EventText, Text: text})
 	}
 	f.core.PostSessionEvents(ctx, session, events)
 }
 
 // transcriptOf is f's Transcript of acme-<ticket>'s first Claim.
-func transcriptOf(t *testing.T, f fixture, ticket string) core.TranscriptView {
+func transcriptOf(t *testing.T, f fixture, ticket string) api.TranscriptView {
 	t.Helper()
-	v, err := f.core.Transcript(ctx, "acme", core.Ref(ticket), 1)
+	v, err := f.core.Transcript(ctx, "acme", api.Ref(ticket), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func transcriptOf(t *testing.T, f fixture, ticket string) core.TranscriptView {
 }
 
 // texts is the texts of v's events.
-func texts(v core.TranscriptView) []string {
+func texts(v api.TranscriptView) []string {
 	out := []string{}
 	for _, e := range v.Events {
 		out = append(out, e.Text)

@@ -2,11 +2,12 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory"
 	"github.com/tomoram/code-central/factory/factorytest"
 )
@@ -27,10 +28,10 @@ func wakingHarness(t *testing.T) *factorytest.Harness {
 func TestAnApprovedTicketIsClaimedOnAWake(t *testing.T) {
 	t.Parallel()
 	h := wakingHarness(t)
-	id := h.NewTicket(core.CreateTicketInput{Title: "Approve me", State: domain.Draft})
+	id := h.NewTicket(api.CreateTicketInput{Title: "Approve me", State: domain.Draft})
 	r := h.Start()
 
-	if _, err := h.Human().Approve(context.Background(), h.Project, core.TicketInput{Ticket: core.Ref(id)}); err != nil {
+	if _, err := h.Human().Approve(context.Background(), h.Project, api.TicketInput{Ticket: api.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
 	r.Settle()
@@ -42,16 +43,16 @@ func TestAnApprovedTicketIsClaimedOnAWake(t *testing.T) {
 func TestATicketWhoseLastBlockerIsCancelledIsClaimedOnAWake(t *testing.T) {
 	t.Parallel()
 	h := wakingHarness(t)
-	blocker := h.NewTicket(core.CreateTicketInput{Title: "Not wanted", State: domain.Draft})
-	done := h.NewTicket(core.CreateTicketInput{Title: "Done instead", State: domain.Draft})
+	blocker := h.NewTicket(api.CreateTicketInput{Title: "Not wanted", State: domain.Draft})
+	done := h.NewTicket(api.CreateTicketInput{Title: "Done instead", State: domain.Draft})
 	ctx := context.Background()
-	if _, err := h.Human().Move(ctx, h.Project, core.MoveInput{Ticket: core.Ref(done), ToState: domain.Done}); err != nil {
+	if _, err := h.Human().Move(ctx, h.Project, api.MoveInput{Ticket: api.Ref(done), ToState: domain.Done}); err != nil {
 		t.Fatal(err)
 	}
-	id := h.NewTicket(core.CreateTicketInput{Title: "Waits", State: domain.Ready, BlockedBy: []core.Ref{core.Ref(blocker)}})
+	id := h.NewTicket(api.CreateTicketInput{Title: "Waits", State: domain.Ready, BlockedBy: []api.Ref{api.Ref(blocker)}})
 	r := h.Start()
 
-	if _, err := h.Human().Cancel(ctx, h.Project, core.CancelInput{Ticket: core.Ref(blocker), Replacements: []core.Ref{core.Ref(done)}}); err != nil {
+	if _, err := h.Human().Cancel(ctx, h.Project, api.CancelInput{Ticket: api.Ref(blocker), Replacements: []api.Ref{api.Ref(done)}}); err != nil {
 		t.Fatal(err)
 	}
 	r.Settle()
@@ -65,7 +66,7 @@ func TestAnAcceptedTicketLandsAndItsBlockedTicketIsClaimedOnWakes(t *testing.T) 
 	h := wakingHarness(t)
 	blocker := h.ReadyTicket("First")
 	h.Finished(blocker, blocker, h.CommitOn(blocker, "first.txt", "first\n"))
-	id := h.NewTicket(core.CreateTicketInput{Title: "Second", State: domain.Ready, BlockedBy: []core.Ref{core.Ref(blocker)}})
+	id := h.NewTicket(api.CreateTicketInput{Title: "Second", State: domain.Ready, BlockedBy: []api.Ref{api.Ref(blocker)}})
 	r := h.Start()
 
 	h.Accept(blocker)
@@ -108,7 +109,7 @@ func TestCancellingARunningClaimStopsItsTurnOnAWake(t *testing.T) {
 	r := h.Start()
 	h.WantCalls(1)
 
-	if _, err := h.Human().Cancel(context.Background(), h.Project, core.CancelInput{Ticket: core.Ref(id)}); err != nil {
+	if _, err := h.Human().Cancel(context.Background(), h.Project, api.CancelInput{Ticket: api.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
 	r.PassKillGrace()
@@ -143,7 +144,7 @@ func TestWhilePausedAWakeStillRunsThePoll(t *testing.T) {
 	r := h.Start()
 	r.WantOutput("waiting on rate_limit")
 
-	if _, err := h.Human().Cancel(context.Background(), h.Project, core.CancelInput{Ticket: core.Ref(cut)}); err != nil {
+	if _, err := h.Human().Cancel(context.Background(), h.Project, api.CancelInput{Ticket: api.Ref(cut)}); err != nil {
 		t.Fatal(err)
 	}
 	r.Settle()
@@ -163,7 +164,7 @@ func TestACommentOrSetSessionDoesNotWakeThePoll(t *testing.T) {
 	id := h.ReadyTicket("Claim on a poll")
 	other := h.ReadyTicket("Held elsewhere")
 	ctx := context.Background()
-	held, err := h.Server.Client.Claim(ctx, h.Project, core.ClaimInput{Ticket: core.Ref(other)})
+	held, err := h.Server.Client.Claim(ctx, h.Project, api.ClaimInput{Ticket: api.Ref(other)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,10 +176,10 @@ func TestACommentOrSetSessionDoesNotWakeThePoll(t *testing.T) {
 	h.Clock.Advance(factory.WakeRetry)
 	r.Settle()
 
-	if _, err := h.Human().Comment(ctx, h.Project, core.CommentInput{Ticket: core.Ref(id), Body: "Mind the tests."}); err != nil {
+	if _, err := h.Human().Comment(ctx, h.Project, api.CommentInput{Ticket: api.Ref(id), Body: "Mind the tests."}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.Server.Client.SetSession(ctx, h.Project, core.SetSessionInput{Ticket: core.Ref(other), ClaimID: held.ClaimID, SessionID: "elsewhere"}); err != nil {
+	if _, err := h.Server.Client.SetSession(ctx, h.Project, api.SetSessionInput{Ticket: api.Ref(other), ClaimID: held.ClaimID, SessionID: "elsewhere"}); err != nil {
 		t.Fatal(err)
 	}
 	if n := h.Server.Core.WaitingFactoryWakes(h.Project); n != 1 {

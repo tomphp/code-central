@@ -8,7 +8,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/mcp"
 	"github.com/tomoram/code-central/ops"
 )
@@ -49,12 +49,12 @@ func TestTheMCPDoorDispatchesEachToolCallThroughItsDispatcher(t *testing.T) {
 		t.Fatalf("%d calls, want 1", len(d.calls))
 	}
 	got := d.calls[0]
-	want := ops.Call{Op: ops.GetTicket, Key: "acme", Args: []byte(`{"ticket":2}`), Actor: core.Agent}
+	want := ops.Call{Op: ops.GetTicket, Key: "acme", Args: []byte(`{"ticket":2}`), Actor: api.Agent}
 	if got.Op != want.Op || got.Key != want.Key || got.In != nil || string(got.Args) != string(want.Args) || got.Actor != want.Actor {
 		t.Fatalf("call %+v, want %+v", got, want)
 	}
 
-	d.err = &core.Error{Code: core.NotFound, Message: "No Ticket acme-2."}
+	d.err = &api.Error{Code: api.NotFound, Message: "No Ticket acme-2."}
 	if text, isError := callTool(t, s, "get_ticket", map[string]any{"ticket": 2}); text != `{"code":"not_found","message":"No Ticket acme-2."}` || !isError {
 		t.Fatalf("error: text %s, isError %v", text, isError)
 	}

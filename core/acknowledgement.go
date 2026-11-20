@@ -7,7 +7,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/internal/fieldwalk"
 )
 
@@ -16,46 +16,15 @@ import (
 // (ADR 0009). acknowledge and acknowledgeCreate are the one place that
 // chooses between the two, and the one place changed is derived.
 
-// Acknowledgement is a write's short result: what it wrote, never the
-// values it wrote.
-type Acknowledgement struct {
-	ID      string    `json:"id"`
-	Updated time.Time `json:"updated"`
-	// Changed names the record's fields the write changed, in the record
-	// view's field order, never updated. Empty when nothing changed.
-	Changed []string `json:"changed"`
-	// Edit is the number of the edit the write recorded, if it recorded one.
-	Edit int `json:"edit,omitempty"`
-	// State is a Ticket's State after the write; a Spec has none.
-	State domain.State `json:"state,omitempty"`
-}
-
-// Written is an acknowledging write's result: its Acknowledgement, or
-// with full the record V. It marshals as one or the other.
-type Written[V any] struct {
-	Acknowledgement
-	// Record is set, in place of the Acknowledgement, when the write was
-	// asked for full.
-	Record *V
-}
-
-// MarshalJSON is the record when there is one, else the Acknowledgement.
-func (w Written[V]) MarshalJSON() ([]byte, error) {
-	if w.Record != nil {
-		return json.Marshal(w.Record)
-	}
-	return json.Marshal(w.Acknowledgement)
-}
-
 // acknowledge is a write's result from the record's full view before and
 // after it: after itself with full, else the Acknowledgement.
-func acknowledge[V any](before, after V, full bool) (Written[V], error) {
+func acknowledge[V any](before, after V, full bool) (api.Written[V], error) {
 	return written(before, after, full, "updated")
 }
 
 // acknowledgeCreate is a create's result, as acknowledge with the empty
 // record as before; the id and times every create sets aren't changed.
-func acknowledgeCreate[V any](empty, after V, full bool) (Written[V], error) {
+func acknowledgeCreate[V any](empty, after V, full bool) (api.Written[V], error) {
 	return written(empty, after, full, "id", "created", "updated")
 }
 
@@ -63,7 +32,7 @@ func acknowledgeCreate[V any](empty, after V, full bool) (Written[V], error) {
 // out factory_status, which time moves and no write sets. A
 // Project has no id or updated, so its Acknowledgement gives its key as
 // the id and the write's time as updated.
-func acknowledgeProject(before, after ProjectView, full bool, at time.Time) (Written[ProjectView], error) {
+func acknowledgeProject(before, after api.ProjectView, full bool, at time.Time) (api.Written[api.ProjectView], error) {
 	w, err := written(before, after, full, "factory_status")
 	if err == nil && w.Record == nil {
 		w.ID, w.Updated = after.Key, at
@@ -82,20 +51,20 @@ var offers = []string{"editable", "retroable"}
 // last of its edits when they changed, and a Ticket's state, by those
 // JSON names, which the Spec and Ticket views share (a Spec view has no
 // state).
-func written[V any](before, after V, full bool, unlisted ...string) (Written[V], error) {
+func written[V any](before, after V, full bool, unlisted ...string) (api.Written[V], error) {
 	if full {
-		return Written[V]{Record: &after}, nil
+		return api.Written[V]{Record: &after}, nil
 	}
 	unlisted = append(unlisted, offers...)
 	b, err := topLevel(before)
 	if err != nil {
-		return Written[V]{}, err
+		return api.Written[V]{}, err
 	}
 	a, err := topLevel(after)
 	if err != nil {
-		return Written[V]{}, err
+		return api.Written[V]{}, err
 	}
-	ack := Acknowledgement{Changed: []string{}}
+	ack := api.Acknowledgement{Changed: []string{}}
 	for _, name := range JSONNames(reflect.TypeFor[V]()) {
 		if !bytes.Equal(b[name], a[name]) && !slices.Contains(unlisted, name) {
 			ack.Changed = append(ack.Changed, name)
@@ -104,17 +73,17 @@ func written[V any](before, after V, full bool, unlisted ...string) (Written[V],
 	// A Project's view has neither; acknowledgeProject fills them in.
 	if id, ok := a["id"]; ok {
 		if err := json.Unmarshal(id, &ack.ID); err != nil {
-			return Written[V]{}, err
+			return api.Written[V]{}, err
 		}
 	}
 	if updated, ok := a["updated"]; ok {
 		if err := json.Unmarshal(updated, &ack.Updated); err != nil {
-			return Written[V]{}, err
+			return api.Written[V]{}, err
 		}
 	}
 	if state, ok := a["state"]; ok {
 		if err := json.Unmarshal(state, &ack.State); err != nil {
-			return Written[V]{}, err
+			return api.Written[V]{}, err
 		}
 	}
 	if slices.Contains(ack.Changed, "edits") {
@@ -122,13 +91,13 @@ func written[V any](before, after V, full bool, unlisted ...string) (Written[V],
 			Number int `json:"number"`
 		}
 		if err := json.Unmarshal(a["edits"], &edits); err != nil {
-			return Written[V]{}, err
+			return api.Written[V]{}, err
 		}
 		if len(edits) > 0 {
 			ack.Edit = edits[len(edits)-1].Number
 		}
 	}
-	return Written[V]{Acknowledgement: ack}, nil
+	return api.Written[V]{Acknowledgement: ack}, nil
 }
 
 // topLevel is v's JSON, field by top-level field.

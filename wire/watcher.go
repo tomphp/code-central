@@ -6,9 +6,9 @@ import (
 	"github.com/tomoram/code-central/cli"
 	"os"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/ciwatcher"
 	"github.com/tomoram/code-central/clock"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
 )
@@ -32,7 +32,7 @@ func runCIWatcher(ctx context.Context, e cli.Env, args []string) error {
 	fs := cli.FlagSet(ciwatcher.Command)
 	check := fs.Bool("check", false, "check access once and exit")
 	project := fs.String("project", "", "the Project to watch")
-	var in core.CICheckInput
+	var in api.CICheckInput
 	provider := fs.String("provider", string(domain.CIGitHubActions), "CI Provider")
 	fs.StringVar(&in.Repository, "repository", "", "GitHub repository, owner/name")
 	fs.StringVar(&in.ProjectURL, "project-url", "", "Azure DevOps project URL")

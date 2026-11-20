@@ -2,12 +2,13 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"slices"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -17,7 +18,7 @@ import (
 // the branches, after the finishing turn and before landing.
 
 // changed is tk's Changed Repositories as "name@commit", in order.
-func changed(tk core.TicketView) []string {
+func changed(tk api.TicketView) []string {
 	var out []string
 	for _, r := range tk.Repositories {
 		out = append(out, r.Name+"@"+r.Commit)
@@ -28,7 +29,7 @@ func changed(tk core.TicketView) []string {
 func TestTheFactoryReportsTheChangedRepositoriesLiveThenTheFinishSettlesThem(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	api := h.AddRepository("api")
+	apiRepo := h.AddRepository("api")
 	id := h.ReadyTicket("Add an endpoint")
 	h.Script(id, append(factorytest.CommitIn("api", "endpoint.go", "package api\n"),
 		factorytest.Wait(),
@@ -36,10 +37,10 @@ func TestTheFactoryReportsTheChangedRepositoriesLiveThenTheFinishSettlesThem(t *
 		factorytest.FinishIn("Done.", true, "api"), factorytest.Result("success"))...)
 	r := h.Start()
 
-	apiHead := h.GitIn(api.Path, "rev-parse", id)
+	apiHead := h.GitIn(apiRepo.Path, "rev-parse", id)
 	r.PollUntil("api's work to be reported live", func() bool { return slices.Equal(changed(h.Ticket(id)), []string{"api@" + apiHead}) })
 	tk := h.WantState(id, domain.InProgress)
-	rows, err := h.Server.Client.FindTickets(context.Background(), h.Project, core.FindTicketsInput{State: []domain.State{domain.InProgress}})
+	rows, err := h.Server.Client.FindTickets(context.Background(), h.Project, api.FindTicketsInput{State: []domain.State{domain.InProgress}})
 	if err != nil || len(rows) != 1 || !slices.Equal(rows[0].Repositories, []string{"api"}) {
 		t.Errorf("rows %+v (%v), want the card naming api", rows, err)
 	}
@@ -59,7 +60,7 @@ func TestTheFactoryReportsTheChangedRepositoriesLiveThenTheFinishSettlesThem(t *
 func TestAFinishThatLeavesOutARepositoryWithWorkFailsWithAFailureReport(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	api := h.AddRepository("api")
+	apiRepo := h.AddRepository("api")
 	id := h.ReadyTicket("Add an endpoint")
 	h.Script(id, append(factorytest.CommitIn("api", "endpoint.go", "package api\n"),
 		factorytest.Finish("Done."), factorytest.Result("success"))...)
@@ -70,7 +71,7 @@ func TestAFinishThatLeavesOutARepositoryWithWorkFailsWithAFailureReport(t *testi
 		t.Fatalf("Failure Reports %+v, want one", tk.FailureReports)
 	}
 	fr := tk.FailureReports[0]
-	head := h.GitIn(api.Path, "rev-parse", "--short=12", id)
+	head := h.GitIn(apiRepo.Path, "rev-parse", "--short=12", id)
 	if fr.Claim != 1 || !strings.Contains(fr.WhatBroke, "api is left out") || !strings.Contains(fr.WhereWorkStands, "api: branch "+id+" at "+head) {
 		t.Fatalf("Failure Report %+v, want it on Claim 1 naming api left out at %s", fr, head)
 	}
@@ -97,13 +98,13 @@ func TestAFinishNamingACommitThatIsntItsBranchsHeadFails(t *testing.T) {
 func TestTheFinishCheckRunsAgainBeforeLanding(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	api := h.AddRepository("api")
+	apiRepo := h.AddRepository("api")
 	id := h.ReadyTicket("Add an endpoint")
 	// Finished outside the Factory, so no turn of its checked it.
 	home := h.CommitOn(id, "client.go", "package acme\n")
 	h.Finished(id, id, home)
 	r := h.Start()
-	api.CommitOn(id, "endpoint.go", "package api\n")
+	apiRepo.CommitOn(id, "endpoint.go", "package api\n")
 	base := h.GitIn(h.Repo, "rev-parse", "main")
 	h.Accept(id)
 
@@ -121,12 +122,12 @@ func TestTheFinishCheckRunsAgainBeforeLanding(t *testing.T) {
 func TestAnInReviewTicketMergedByHandIsCheckedBeforeItLands(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	api := h.AddRepository("api")
+	apiRepo := h.AddRepository("api")
 	id := h.ReadyTicket("Add an endpoint")
 	home := h.CommitOn(id, "client.go", "package acme\n")
 	h.Finished(id, id, home)
 	r := h.Start()
-	api.CommitOn(id, "endpoint.go", "package api\n")
+	apiRepo.CommitOn(id, "endpoint.go", "package api\n")
 	h.GitIn(h.Repo, "merge", "-q", "--no-ff", "-m", "Merge "+id, id)
 
 	r.Poll()
@@ -140,7 +141,7 @@ func TestAnInReviewTicketMergedByHandIsCheckedBeforeItLands(t *testing.T) {
 func TestAFinishMergedByHandPassesTheCheckOnceItsBranchIsGone(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	api := h.AddRepository("api")
+	apiRepo := h.AddRepository("api")
 	id := h.ReadyTicket("Add an endpoint")
 	h.Script(id, append(factorytest.CommitIn("api", "endpoint.go", "package api\n"),
 		factorytest.WriteFile("client.go", "package acme\n"), factorytest.Git("add", "client.go"), factorytest.Git("commit", "-q", "-m", "Call it"),
@@ -149,9 +150,9 @@ func TestAFinishMergedByHandPassesTheCheckOnceItsBranchIsGone(t *testing.T) {
 	h.WantState(id, domain.InReview)
 	// The human merges the work by hand, and deletes api's branch.
 	h.GitIn(h.Repo, "merge", "-q", "--no-ff", "-m", "Merge "+id, id)
-	h.GitIn(api.Path, "merge", "-q", "--no-ff", "-m", "Merge "+id, id)
-	h.GitIn(api.Path, "worktree", "remove", api.Worktree(id))
-	h.GitIn(api.Path, "branch", "-D", id)
+	h.GitIn(apiRepo.Path, "merge", "-q", "--no-ff", "-m", "Merge "+id, id)
+	h.GitIn(apiRepo.Path, "worktree", "remove", apiRepo.Worktree(id))
+	h.GitIn(apiRepo.Path, "branch", "-D", id)
 
 	r.Poll()
 

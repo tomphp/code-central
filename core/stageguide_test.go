@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
@@ -17,7 +18,7 @@ func TestEachStageHasAGuide(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	for _, stage := range []string{"grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "retro", "implementation"} {
-		g, err := f.core.GetStageGuide(ctx, "acme", core.StageGuideInput{Stage: stage})
+		g, err := f.core.GetStageGuide(ctx, "acme", api.StageGuideInput{Stage: stage})
 		if err != nil {
 			t.Fatalf("get_stage_guide %s: %v", stage, err)
 		}
@@ -31,16 +32,16 @@ func TestAnUnknownStageHasNoGuide(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	for _, stage := range []string{"", "build", "stage:spec", "Spec", "map", "chart", "wayfinder:chart", "map-map", "research"} {
-		_, err := f.core.GetStageGuide(ctx, "acme", core.StageGuideInput{Stage: stage})
-		wantCode(t, err, core.Invalid, "stage")
+		_, err := f.core.GetStageGuide(ctx, "acme", api.StageGuideInput{Stage: stage})
+		wantCode(t, err, api.Invalid, "stage")
 	}
 }
 
 // guide is the named Stage's guide, failing the test if it can't be read.
 func guide(t *testing.T, f fixture, stage string) string {
 	t.Helper()
-	f.core.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}) // a second create is refused
-	g, err := f.core.GetStageGuide(ctx, "acme", core.StageGuideInput{Stage: stage})
+	f.core.CreateProject(ctx, api.CreateProjectInput{Key: "acme"}) // a second create is refused
+	g, err := f.core.GetStageGuide(ctx, "acme", api.StageGuideInput{Stage: stage})
 	if err != nil {
 		t.Fatalf("get_stage_guide %s: %v", stage, err)
 	}
@@ -127,7 +128,7 @@ func TestEveryGuideSaysWhatItProducesHowToFinishAndHowToRedo(t *testing.T) {
 
 func TestAStageNeverChangesRepositoryFiles(t *testing.T) {
 	f := newFixture(t)
-	for _, s := range core.Stages() {
+	for _, s := range domain.Stages() {
 		stage := string(s)
 		wantAll(t, stage, guide(t, f, stage),
 			"never changes repository files",
@@ -199,10 +200,10 @@ func TestTheImplementationGuideCommitsOnTheTicketBranchAndFinishesWithIt(t *test
 func TestClaimCarriesTheGuideForTheTicketsStage(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	if _, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode}); err != nil {
+	if _, err := f.core.SubmitRequirement(ctx, "acme", api.SubmitRequirementInput{Text: darkMode}); err != nil {
 		t.Fatal(err)
 	}
-	res, err := f.core.Claim(ctx, "acme", core.ClaimInput{}) // the grilling Stage, acme-2
+	res, err := f.core.Claim(ctx, "acme", api.ClaimInput{}) // the grilling Stage, acme-2
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,10 +212,10 @@ func TestClaimCarriesTheGuideForTheTicketsStage(t *testing.T) {
 		t.Fatalf("the grilling Stage's claim carried %+v", res.StageGuide)
 	}
 	// The tickets Stage (acme-4), unblocked by hand, gets its own guide.
-	if _, err := f.core.RemoveBlocker(ctx, "acme", core.BlockerInput{Ticket: "acme-4", Blocker: "acme-3"}); err != nil {
+	if _, err := f.core.RemoveBlocker(ctx, "acme", api.BlockerInput{Ticket: "acme-4", Blocker: "acme-3"}); err != nil {
 		t.Fatal(err)
 	}
-	res, err = f.core.Claim(ctx, "acme", core.ClaimInput{Ticket: "acme-4"})
+	res, err = f.core.Claim(ctx, "acme", api.ClaimInput{Ticket: "acme-4"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,8 +228,8 @@ func TestClaimCarriesTheRetroGuideForATicketLabelledRetro(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Retros")
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Look back", State: domain.Ready, Labels: []string{"retro"}})
-	res, err := f.core.Claim(ctx, "acme", core.ClaimInput{})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Look back", State: domain.Ready, Labels: []string{"retro"}})
+	res, err := f.core.Claim(ctx, "acme", api.ClaimInput{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,8 +245,8 @@ func TestClaimCarriesTheImplementationGuideForATicketWithNoStage(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Search")
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Index", State: domain.Ready, Labels: []string{"backend"}})
-	res, err := f.core.Claim(ctx, "acme", core.ClaimInput{})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Index", State: domain.Ready, Labels: []string{"backend"}})
+	res, err := f.core.Claim(ctx, "acme", api.ClaimInput{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +258,7 @@ func TestClaimCarriesTheImplementationGuideForATicketWithNoStage(t *testing.T) {
 func TestAClaimOfNothingCarriesNoGuide(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	res, err := f.core.Claim(ctx, "acme", core.ClaimInput{})
+	res, err := f.core.Claim(ctx, "acme", api.ClaimInput{})
 	if err != nil || res.Ticket != nil || res.StageGuide != nil {
 		t.Fatalf("claim of nothing: %+v, %v", res, err)
 	}
@@ -315,9 +316,9 @@ func TestGetWorkflowsTroubleRulesAreTheStageGuidesText(t *testing.T) {
 
 const subagentFragment = "ask an Explore subagent and keep its answer, not the files"
 
-func (f fixture) setSubagentExploration(t *testing.T, on bool) core.ProjectView {
+func (f fixture) setSubagentExploration(t *testing.T, on bool) api.ProjectView {
 	t.Helper()
-	w, err := f.core.SetSubagentExploration(human, "acme", core.SetSubagentExplorationInput{On: on, Full: true})
+	w, err := f.core.SetSubagentExploration(human, "acme", api.SetSubagentExplorationInput{On: on, Full: true})
 	if err != nil {
 		t.Fatalf("set_subagent_exploration: %v", err)
 	}
@@ -380,7 +381,7 @@ func TestASecondRepositoryAddsTheRepositoriesFinishToTheGuidesWhoseTicketsCommit
 			t.Errorf("the %s guide mentions `repositories` with the Home Repository alone", stage)
 		}
 	}
-	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
+	f.addRepository(t, api.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
 	for _, stage := range core.GuideNames {
 		g := guide(t, f, stage)
 		if !slices.Contains(severalRepositoriesGuides, stage) {
@@ -413,9 +414,9 @@ func TestClaimBuildsTheGuideFromTheTicketsProject(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Search")
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Index", State: domain.Ready})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Index", State: domain.Ready})
 	f.setSubagentExploration(t, false)
-	res, err := f.core.Claim(ctx, "acme", core.ClaimInput{})
+	res, err := f.core.Claim(ctx, "acme", api.ClaimInput{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,7 +431,7 @@ func TestSetSubagentExplorationSendsTheProjectsNoticeOnlyOnAChange(t *testing.T)
 	notices, stop := f.core.Events().Subscribe()
 	defer stop()
 
-	w, err := f.core.SetSubagentExploration(human, "acme", core.SetSubagentExplorationInput{On: false})
+	w, err := f.core.SetSubagentExploration(human, "acme", api.SetSubagentExplorationInput{On: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -441,7 +442,7 @@ func TestSetSubagentExplorationSendsTheProjectsNoticeOnlyOnAChange(t *testing.T)
 		t.Fatalf("got %+v, want the Project's notice", got)
 	}
 	noNotice(t, notices)
-	if _, err := f.core.SetSubagentExploration(human, "acme", core.SetSubagentExplorationInput{On: false}); err != nil {
+	if _, err := f.core.SetSubagentExploration(human, "acme", api.SetSubagentExplorationInput{On: false}); err != nil {
 		t.Fatal(err)
 	}
 	noNotice(t, notices)
@@ -450,14 +451,14 @@ func TestSetSubagentExplorationSendsTheProjectsNoticeOnlyOnAChange(t *testing.T)
 func TestAnAgentCannotSetSubagentExploration(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	_, err := f.core.SetSubagentExploration(ctx, "acme", core.SetSubagentExplorationInput{On: false})
-	wantCode(t, err, core.ActionNotAllowed, "")
+	_, err := f.core.SetSubagentExploration(ctx, "acme", api.SetSubagentExplorationInput{On: false})
+	wantCode(t, err, api.ActionNotAllowed, "")
 }
 
 func TestGetStageGuideOnAnUnknownProjectIsRefused(t *testing.T) {
 	f := newFixture(t)
-	_, err := f.core.GetStageGuide(ctx, "nope", core.StageGuideInput{Stage: "tickets"})
-	wantCode(t, err, core.UnknownProject, "")
+	_, err := f.core.GetStageGuide(ctx, "nope", api.StageGuideInput{Stage: "tickets"})
+	wantCode(t, err, api.UnknownProject, "")
 }
 
 // Model Assignment (code-central-471, ADR 0059).
@@ -476,7 +477,7 @@ func TestSetModelAssignmentTurnsItOnAndSendsTheNoticeOnlyOnAChange(t *testing.T)
 	notices, stop := f.core.Events().Subscribe()
 	defer stop()
 
-	w, err := f.core.SetModelAssignment(human, "acme", core.SetModelAssignmentInput{On: true})
+	w, err := f.core.SetModelAssignment(human, "acme", api.SetModelAssignmentInput{On: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -486,7 +487,7 @@ func TestSetModelAssignmentTurnsItOnAndSendsTheNoticeOnlyOnAChange(t *testing.T)
 	if got := <-notices; got != (events.Event{Type: events.ProjectChanged, Project: "acme"}) {
 		t.Fatalf("got %+v, want the Project's notice", got)
 	}
-	again, err := f.core.SetModelAssignment(human, "acme", core.SetModelAssignmentInput{On: true, Full: true})
+	again, err := f.core.SetModelAssignment(human, "acme", api.SetModelAssignmentInput{On: true, Full: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -499,14 +500,14 @@ func TestSetModelAssignmentTurnsItOnAndSendsTheNoticeOnlyOnAChange(t *testing.T)
 func TestAnAgentCannotSetModelAssignment(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	_, err := f.core.SetModelAssignment(ctx, "acme", core.SetModelAssignmentInput{On: true})
-	wantCode(t, err, core.ActionNotAllowed, "")
+	_, err := f.core.SetModelAssignment(ctx, "acme", api.SetModelAssignmentInput{On: true})
+	wantCode(t, err, api.ActionNotAllowed, "")
 }
 
 // The Model Assignment fragment (code-central-472, ADR 0059).
 func (f fixture) setModelAssignment(t *testing.T, on bool) {
 	t.Helper()
-	if _, err := f.core.SetModelAssignment(human, "acme", core.SetModelAssignmentInput{On: on}); err != nil {
+	if _, err := f.core.SetModelAssignment(human, "acme", api.SetModelAssignmentInput{On: on}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -528,7 +529,7 @@ func TestModelAssignmentOffLeavesNoModelTextNoGapAndNoPlaceholder(t *testing.T) 
 func TestModelAssignmentOnListsTheReportedAliasesAndLevels(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	f.reportModels(t, core.ReportModelsInput{Aliases: []string{"opus", "sonnet"}, EffortLevels: []string{"low", "high"}})
+	f.reportModels(t, api.ReportModelsInput{Aliases: []string{"opus", "sonnet"}, EffortLevels: []string{"low", "high"}})
 	f.setModelAssignment(t, true)
 	g := guide(t, f, "tickets")
 	for _, s := range []string{"`opus`, `sonnet`", "`low`, `high`", "`create_ticket`", "`tags`", "reason", "`set_tags`", "Give no Stage Label.\n- "} {

@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 )
 
@@ -66,28 +67,9 @@ type Response struct {
 	Tokens
 }
 
-// Tokens are a model response's four token counts.
-type Tokens struct {
-	InputTokens      int `json:"input_tokens"`
-	CacheWriteTokens int `json:"cache_write_tokens"`
-	CacheReadTokens  int `json:"cache_read_tokens"`
-	OutputTokens     int `json:"output_tokens"`
-}
-
-// Add adds o's counts to t's.
-func (t *Tokens) Add(o Tokens) {
-	t.InputTokens += o.InputTokens
-	t.CacheWriteTokens += o.CacheWriteTokens
-	t.CacheReadTokens += o.CacheReadTokens
-	t.OutputTokens += o.OutputTokens
-}
-
-// ContextSize is how many tokens the model read for the response: how
-// full the session's context window was.
-func (t Tokens) ContextSize() int { return t.InputTokens + t.CacheWriteTokens + t.CacheReadTokens }
-
-// Total is all four counts as one number: what the response used.
-func (t Tokens) Total() int { return t.ContextSize() + t.OutputTokens }
+// Tokens are a model response's four token counts. They are in api, which
+// the usage views embed (ADR 0072).
+type Tokens = api.Tokens
 
 // Records are the records a read found, oldest day first, and Days the
 // local days it read, oldest first, as YYYY-MM-DD. Skipped is where a

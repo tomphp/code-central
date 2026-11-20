@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -14,9 +14,9 @@ import (
 // that service offers Chat, and another names its host.
 
 // chatOn is the Project's Chat as f reads it.
-func chatOn(t *testing.T, f fixture) core.ConversationView {
+func chatOn(t *testing.T, f fixture) api.ConversationView {
 	t.Helper()
-	v, err := f.core.GetChat(ctx, "acme", core.GetChatInput{})
+	v, err := f.core.GetChat(ctx, "acme", api.GetChatInput{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,11 +24,11 @@ func chatOn(t *testing.T, f fixture) core.ConversationView {
 }
 
 // refusedChat is f's refusal of a Chat Message.
-func refusedChat(t *testing.T, f fixture) *core.Error {
+func refusedChat(t *testing.T, f fixture) *api.Error {
 	t.Helper()
-	_, err := f.core.SendChatMessage(human, "acme", core.SendChatMessageInput{Text: "What is acme?"})
-	var e *core.Error
-	if !errors.As(err, &e) || e.Code != core.ActionNotAllowed {
+	_, err := f.core.SendChatMessage(human, "acme", api.SendChatMessageInput{Text: "What is acme?"})
+	var e *api.Error
+	if !errors.As(err, &e) || e.Code != api.ActionNotAllowed {
 		t.Fatalf("send_chat_message = %v, want action_not_allowed", err)
 	}
 	return e
@@ -37,7 +37,7 @@ func refusedChat(t *testing.T, f fixture) *core.Error {
 // chatBeat is an Online Heartbeat with Chat support from cc on box.
 func chatBeat(f fixture, t *testing.T) {
 	t.Helper()
-	if _, err := f.core.ReportHeartbeat(ctx, "acme", core.ReportHeartbeatInput{Factory: "cc", Host: "box", State: core.HeartbeatOnline, IntervalSeconds: 10, Chat: true}); err != nil {
+	if _, err := f.core.ReportHeartbeat(ctx, "acme", api.ReportHeartbeatInput{Factory: "cc", Host: "box", State: api.HeartbeatOnline, IntervalSeconds: 10, Chat: true}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -53,17 +53,17 @@ func TestChatIsOfferedOnlyWhereAChatFactoryReportsAndNamedElsewhere(t *testing.T
 	chatBeat(laptop, t)
 	tick()
 
-	if v := chatOn(t, desktop); v.Availability != core.ChatNone || v.RunsOn != "laptop" {
+	if v := chatOn(t, desktop); v.Availability != api.ChatNone || v.RunsOn != "laptop" {
 		t.Fatalf("the desktop's Chat is %+v, want none, running on laptop", v)
 	}
 	if e := refusedChat(t, desktop); !strings.Contains(e.Message, "Chat runs on laptop") {
 		t.Fatalf("the desktop refused with %q, want it to name laptop", e.Message)
 	}
 	// A Conversation started on the desktop can't be answered there either.
-	if _, err := desktop.core.StartConversation(human, "acme", core.StartConversationInput{}); err != nil {
+	if _, err := desktop.core.StartConversation(human, "acme", api.StartConversationInput{}); err != nil {
 		t.Fatal(err)
 	}
-	if v := chatOn(t, desktop); v.Availability != core.ChatUnavailable || v.RunsOn != "laptop" {
+	if v := chatOn(t, desktop); v.Availability != api.ChatUnavailable || v.RunsOn != "laptop" {
 		t.Fatalf("the desktop's new Conversation is %+v, want unavailable, running on laptop", v)
 	}
 	if e := refusedChat(t, desktop); !strings.Contains(e.Message, "Chat runs on laptop") {
@@ -74,10 +74,10 @@ func TestChatIsOfferedOnlyWhereAChatFactoryReportsAndNamedElsewhere(t *testing.T
 	if v := chatOn(t, laptop); v.RunsOn != "" {
 		t.Fatalf("the laptop's Chat runs on %q, want here", v.RunsOn)
 	}
-	if v, err := laptop.core.SendChatMessage(human, "acme", core.SendChatMessageInput{Text: "What is acme?"}); err != nil || v.Availability != core.ChatAvailable || v.RunsOn != "" {
+	if v, err := laptop.core.SendChatMessage(human, "acme", api.SendChatMessageInput{Text: "What is acme?"}); err != nil || v.Availability != api.ChatAvailable || v.RunsOn != "" {
 		t.Fatalf("the laptop's send_chat_message = %+v, %v; want it available here", v, err)
 	}
-	if w, err := laptop.core.NextChatWork(ctx, "acme", core.NextChatWorkInput{Factory: "cc", Host: "box"}); err != nil || w.Turn == nil {
+	if w, err := laptop.core.NextChatWork(ctx, "acme", api.NextChatWorkInput{Factory: "cc", Host: "box"}); err != nil || w.Turn == nil {
 		t.Fatalf("next_chat_work on the laptop = %+v, %v; want the turn", w, err)
 	}
 }
@@ -89,7 +89,7 @@ func TestChatNamesNoHostWhenNoLiveServiceHasAChatFactory(t *testing.T) {
 			t.Fatal(err)
 		}
 		tick := watchFactories(t, desktop)
-		beat(laptop, t, "cc", "box", core.HeartbeatOnline, 10)
+		beat(laptop, t, "cc", "box", api.HeartbeatOnline, 10)
 		tick()
 		if v := chatOn(t, desktop); v.RunsOn != "" {
 			t.Fatalf("the desktop's Chat runs on %q, want nowhere", v.RunsOn)

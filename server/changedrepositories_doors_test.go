@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // A Ticket's Changed Repositories (Spec code-central-848): the Factory's
@@ -20,7 +20,7 @@ func init() {
 		check: ticketAcknowledgement("acme-3", "In Progress", "repositories"),
 		full:  func(t *testing.T, out map[string]any) { changedNames(t, out, "api") },
 		bad:   call{http: reportChanged(`{"claim_id":"claim-9","repositories":[]}`)},
-		code:  core.StaleClaim,
+		code:  api.StaleClaim,
 	}
 	cases["fail_finish"] = opCase{
 		setup: withAPI(ticketInReview),
@@ -33,7 +33,7 @@ func init() {
 			}
 		},
 		bad:  call{http: failFinishCall("2")},
-		code: core.ActionNotAllowed,
+		code: api.ActionNotAllowed,
 	}
 }
 
@@ -90,8 +90,8 @@ func TestFinishTakesRepositoriesThroughEveryDoor(t *testing.T) {
 			finish(t, srv)
 			tk := httpOK(t, srv, httpCall{"GET", "/api/p/acme/tickets/3", ""})
 			changedNames(t, tk, "acme", "api")
-			api := tk["repositories"].([]any)[1].(map[string]any)
-			if api["branch"] != "acme-3" || api["commit"] != "def456" || tk["branch"] != "acme-3" || tk["commit"] != "abc123" {
+			apiRepo := tk["repositories"].([]any)[1].(map[string]any)
+			if apiRepo["branch"] != "acme-3" || apiRepo["commit"] != "def456" || tk["branch"] != "acme-3" || tk["commit"] != "abc123" {
 				t.Fatalf("ticket %v, want the Home Repository's work in branch and commit and api's in repositories", tk)
 			}
 		})
@@ -103,7 +103,7 @@ func TestFinishTakesRepositoriesThroughEveryDoor(t *testing.T) {
 func TestFinishRefusesAnUnknownRepositoryThroughEveryDoor(t *testing.T) {
 	srv := newServer(t, withAPI(claimedTicket))
 	_, b := httpDo(t, srv, httpCall{"POST", "/api/p/acme/tickets/3/finish", `{"claim_id":"claim-1","summary":"Done.","repositories":[{"name":"web","branch":"b","commit":"c"}]}`})
-	if e := errorJSON(t, b, core.Invalid); !strings.Contains(e.Message, "acme, api") {
+	if e := errorJSON(t, b, api.Invalid); !strings.Contains(e.Message, "acme, api") {
 		t.Fatalf("http refusal %+v, want it to name the Repositories", e)
 	}
 	res, mb := mcpCall(t, connect(t, srv, "acme"), "finish", map[string]any{"ticket": "acme-3", "claim_id": "claim-1", "summary": "Done.",
@@ -116,7 +116,7 @@ func TestFinishRefusesAnUnknownRepositoryThroughEveryDoor(t *testing.T) {
 		t.Fatalf("cli: exit %d, %s, want the refusal naming the Repositories", code, errOut)
 	}
 	// The Claim is still the agent's, to finish again.
-	tk, err := srv.Core.GetTicket(context.Background(), "acme", core.GetTicketInput{Ticket: "acme-3"})
+	tk, err := srv.Core.GetTicket(context.Background(), "acme", api.GetTicketInput{Ticket: "acme-3"})
 	if err != nil || tk.State != "In Progress" {
 		t.Fatalf("ticket %s (%v), want it still In Progress", tk.State, err)
 	}

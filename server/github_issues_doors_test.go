@@ -11,8 +11,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 )
 
@@ -30,7 +30,7 @@ func init() {
 			githubIssues(t, out, issuesSettings{on: true, repositories: "acme/web", label: "triage", needMe: true, spec: "acme-4"})
 		},
 		bad:  call{http: setGitHubIssues(`{"on":true}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -75,9 +75,9 @@ func TestEveryProjectReadCarriesGitHubIssuesOff(t *testing.T) {
 
 func TestSetGitHubIssuesIsRejectedForAnAgent(t *testing.T) {
 	srv := newServer(t)
-	status, b := httpDoAs(t, srv, core.Agent, setGitHubIssues(`{"on":true,"repositories":["acme/web"]}`))
-	if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
-		t.Fatalf("status %d, want %d; message %q", status, httpapi.Status(core.ActionNotAllowed), e.Message)
+	status, b := httpDoAs(t, srv, api.Agent, setGitHubIssues(`{"on":true,"repositories":["acme/web"]}`))
+	if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
+		t.Fatalf("status %d, want %d; message %q", status, httpapi.Status(api.ActionNotAllowed), e.Message)
 	}
 	acmeIssues(t, srv, issuesSettings{})
 }
@@ -85,7 +85,7 @@ func TestSetGitHubIssuesIsRejectedForAnAgent(t *testing.T) {
 func TestTurningGitHubIssuesOnNeedsARepository(t *testing.T) {
 	srv := newServer(t)
 	for _, body := range []string{`{"on":true}`, `{"on":true,"repositories":["  "]}`} {
-		e := httpRejected(t, srv, setGitHubIssues(body), core.Invalid)
+		e := httpRejected(t, srv, setGitHubIssues(body), api.Invalid)
 		if e.Field != "repositories" || !strings.Contains(e.Message, "owner/name") {
 			t.Fatalf("%s: field %q message %q, want repository asking for owner/name", body, e.Field, e.Message)
 		}
@@ -99,7 +99,7 @@ func TestTurningGitHubIssuesOnNeedsARepository(t *testing.T) {
 func TestAGitHubIssuesRepositoryIsOwnerSlashName(t *testing.T) {
 	srv := newServer(t)
 	for _, repo := range []string{"web", "acme/", "acme/web/extra", "https://github.com/acme/web"} {
-		e := httpRejected(t, srv, setGitHubIssues(`{"on":true,"repositories":["`+repo+`"]}`), core.Invalid)
+		e := httpRejected(t, srv, setGitHubIssues(`{"on":true,"repositories":["`+repo+`"]}`), api.Invalid)
 		if e.Field != "repositories" || !strings.Contains(e.Message, repo) {
 			t.Fatalf("%q: field %q message %q, want repository naming it", repo, e.Field, e.Message)
 		}
@@ -109,10 +109,10 @@ func TestAGitHubIssuesRepositoryIsOwnerSlashName(t *testing.T) {
 
 func TestAnArchivedProjectRejectsSetGitHubIssues(t *testing.T) {
 	srv := newServer(t)
-	human := core.WithActor(context.Background(), core.Human)
+	human := api.WithActor(context.Background(), api.Human)
 	must(t, func() error { _, err := srv.Core.ArchiveProject(human, "other"); return err })
-	httpRejected(t, srv, httpCall{"POST", "/api/p/other/set_github_issues", `{"on":false}`}, core.ActionNotAllowed)
-	httpRejected(t, srv, httpCall{"POST", "/api/p/nope/set_github_issues", `{"on":false}`}, core.UnknownProject)
+	httpRejected(t, srv, httpCall{"POST", "/api/p/other/set_github_issues", `{"on":false}`}, api.ActionNotAllowed)
+	httpRejected(t, srv, httpCall{"POST", "/api/p/nope/set_github_issues", `{"on":false}`}, api.UnknownProject)
 }
 
 // issuesSpec is acme's Spec id as get_spec reads it.
@@ -210,18 +210,18 @@ func mapsEqual(a, b map[string]any) bool {
 // and answers with result.
 type issuesChecks struct {
 	mu     sync.Mutex
-	calls  []core.IssuesCheckInput
-	result core.WatcherCheckResult
+	calls  []api.IssuesCheckInput
+	result api.WatcherCheckResult
 }
 
-func (c *issuesChecks) check(_ context.Context, in core.IssuesCheckInput) core.WatcherCheckResult {
+func (c *issuesChecks) check(_ context.Context, in api.IssuesCheckInput) api.WatcherCheckResult {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.calls = append(c.calls, in)
 	return c.result
 }
 
-func (c *issuesChecks) ran() []core.IssuesCheckInput {
+func (c *issuesChecks) ran() []api.IssuesCheckInput {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return slices.Clone(c.calls)
@@ -238,22 +238,22 @@ func TestTurningGitHubIssuesOnRunsTheCheckWithTheGHPathOption(t *testing.T) {
 	gh := filepath.Join(t.TempDir(), "gh")
 	httpOK(t, srv, httpCall{"POST", "/api/set_options", `{"gh_path":` + strconv.Quote(gh) + `}`})
 	httpOK(t, srv, setGitHubIssues(`{"on":true,"repositories":["acme/web"]}`))
-	want := []core.IssuesCheckInput{{Repositories: []string{"acme/web"}, GHPath: gh}}
+	want := []api.IssuesCheckInput{{Repositories: []string{"acme/web"}, GHPath: gh}}
 	if got := checks.ran(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("checks = %+v, want %+v", got, want)
 	}
 }
 
 func TestAFailedIssuesCheckRefusesTurningGitHubIssuesOnWithItsFix(t *testing.T) {
-	for _, problem := range []core.WatcherProblem{core.ProblemGHMissing, core.ProblemLoggedOut, core.ProblemRepositoryUnreadable,
-		core.ProblemIssuesDisabled, core.ProblemNoTriage, core.ProblemCheckFailed} {
+	for _, problem := range []api.WatcherProblem{api.ProblemGHMissing, api.ProblemLoggedOut, api.ProblemRepositoryUnreadable,
+		api.ProblemIssuesDisabled, api.ProblemNoTriage, api.ProblemCheckFailed} {
 		t.Run(string(problem), func(t *testing.T) {
-			checks := &issuesChecks{result: core.WatcherCheckResult{Problem: problem, Reason: "gh says no", Fix: "Run gh auth login."}}
+			checks := &issuesChecks{result: api.WatcherCheckResult{Problem: problem, Reason: "gh says no", Fix: "Run gh auth login."}}
 			srv := newIssuesCheckServer(t, checks)
 			before := specCount(t, srv)
-			e := httpRejected(t, srv, setGitHubIssues(`{"on":true,"repositories":["acme/web"]}`), core.Invalid)
+			e := httpRejected(t, srv, setGitHubIssues(`{"on":true,"repositories":["acme/web"]}`), api.Invalid)
 			field := "on"
-			if problem == core.ProblemRepositoryUnreadable || problem == core.ProblemIssuesDisabled || problem == core.ProblemNoTriage {
+			if problem == api.ProblemRepositoryUnreadable || problem == api.ProblemIssuesDisabled || problem == api.ProblemNoTriage {
 				field = "repositories"
 			}
 			if e.Field != field || e.Message != "gh says no" || e.Fix != "Run gh auth login." {
@@ -285,7 +285,7 @@ func TestOnlyTurningGitHubIssuesOnOrChangingItsRepositoryRunsTheCheck(t *testing
 	}
 
 	// Turning off runs no check, even when the check would fail.
-	checks.result = core.WatcherCheckResult{Problem: core.ProblemLoggedOut, Reason: "logged out", Fix: "Run gh auth login."}
+	checks.result = api.WatcherCheckResult{Problem: api.ProblemLoggedOut, Reason: "logged out", Fix: "Run gh auth login."}
 	githubIssues(t, httpOK(t, srv, setGitHubIssues(`{"on":false,"repositories":["acme/site"],"full":true}`)),
 		issuesSettings{repositories: "acme/site", spec: "acme-4"})
 	if n := len(checks.ran()); n != 2 {
@@ -345,11 +345,11 @@ func TestMoreThanOneRepositoryTitlesTheIssuesSpecGitHubIssues(t *testing.T) {
 // issues need me are the one setting for every repository.
 func TestEachListedRepositoryIsOwnerSlashNameAndListedOnce(t *testing.T) {
 	srv := newServer(t)
-	e := httpRejected(t, srv, setGitHubIssues(`{"on":true,"repositories":["acme/web","acme/api","web"]}`), core.Invalid)
+	e := httpRejected(t, srv, setGitHubIssues(`{"on":true,"repositories":["acme/web","acme/api","web"]}`), api.Invalid)
 	if e.Field != "repositories" || !strings.Contains(e.Message, `"web"`) {
 		t.Fatalf("refusal = %+v, want the malformed repository named", e)
 	}
-	e = httpRejected(t, srv, setGitHubIssues(`{"on":true,"repositories":["acme/web","ACME/Web"]}`), core.Invalid)
+	e = httpRejected(t, srv, setGitHubIssues(`{"on":true,"repositories":["acme/web","ACME/Web"]}`), api.Invalid)
 	if e.Field != "repositories" || !strings.Contains(e.Message, "listed twice") {
 		t.Fatalf("refusal = %+v, want a repository listed twice refused", e)
 	}
@@ -364,7 +364,7 @@ func TestOnlyANewlyListedRepositoryIsChecked(t *testing.T) {
 	srv := newIssuesCheckServer(t, checks)
 	httpOK(t, srv, setGitHubIssues(`{"on":true,"repositories":["acme/web"]}`))
 	httpOK(t, srv, setGitHubIssues(`{"on":true,"repositories":["acme/web","acme/api","acme/site"]}`))
-	if got, want := checks.ran(), []core.IssuesCheckInput{{Repositories: []string{"acme/web"}}, {Repositories: []string{"acme/api", "acme/site"}}}; !reflect.DeepEqual(got, want) {
+	if got, want := checks.ran(), []api.IssuesCheckInput{{Repositories: []string{"acme/web"}}, {Repositories: []string{"acme/api", "acme/site"}}}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("checks = %+v, want %+v", got, want)
 	}
 	// Removing one runs no check.
@@ -373,9 +373,9 @@ func TestOnlyANewlyListedRepositoryIsChecked(t *testing.T) {
 		t.Fatalf("removing a repository ran a check: %d checks", n)
 	}
 
-	checks.result = core.WatcherCheckResult{Problem: core.ProblemNoTriage, Reason: "acme/new: no triage", Fix: "acme/new: grant triage",
-		Repositories: []core.RepositoryProblem{{Repository: "acme/new", Problem: core.ProblemNoTriage, Message: "no triage", Fix: "grant triage"}}}
-	e := httpRejected(t, srv, setGitHubIssues(`{"on":true,"repositories":["acme/web","acme/site","acme/new"]}`), core.Invalid)
+	checks.result = api.WatcherCheckResult{Problem: api.ProblemNoTriage, Reason: "acme/new: no triage", Fix: "acme/new: grant triage",
+		Repositories: []api.RepositoryProblem{{Repository: "acme/new", Problem: api.ProblemNoTriage, Message: "no triage", Fix: "grant triage"}}}
+	e := httpRejected(t, srv, setGitHubIssues(`{"on":true,"repositories":["acme/web","acme/site","acme/new"]}`), api.Invalid)
 	if e.Field != "repositories" || e.Message != "acme/new: no triage" || e.Fix != "acme/new: grant triage" {
 		t.Fatalf("refusal = %+v, want the failing repository's reason and fix on repositories", e)
 	}

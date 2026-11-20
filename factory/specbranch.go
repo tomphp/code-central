@@ -8,20 +8,20 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
 // specRefOf is spec as a Ticket names its Spec, with its Spec Branch, the
 // branch where its Spec-landed Tickets' work gathers under Land per Spec,
 // as core names it: its branch Tag's value, else spec/<id>.
-func specRefOf(spec core.SpecDetail) core.SpecRef {
-	return core.SpecRef{ID: spec.ID, Title: spec.Title, Branch: core.SpecBranch(spec.ID, spec.Tags)}
+func specRefOf(spec api.SpecDetail) api.SpecRef {
+	return api.SpecRef{ID: spec.ID, Title: spec.Title, Branch: domain.SpecBranch(spec.ID, spec.Tags)}
 }
 
 // specBranchPushedIn is the Repositories where the Factory pushed spec's
 // Spec Branch, as its Tickets' pushed commits say.
-func specBranchPushedIn(spec core.SpecDetail) []string {
+func specBranchPushedIn(spec api.SpecDetail) []string {
 	if spec.LandPerSpec == nil {
 		return nil
 	}
@@ -73,7 +73,7 @@ func inTheWayHint(branch string) string {
 // specBranchFailed is the failure for a Spec Branch the Factory can't
 // create or move at a Claim.
 func specBranchFailed(wt string, err error) *failure {
-	return &failure{core.ReportFailureInput{
+	return &failure{api.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("The Factory couldn't set up this Ticket's Spec Branch: %v", err),
 		Why:             "Under Land per Spec a Ticket's branch is cut from its Spec's Spec Branch, which the Factory creates and moves by ref, and git refused.",
 		WhatToFix:       "Read the git error above and fix what it names in the repository (a branch in the way of the Spec Branch's name, a stale lock file). Then send the Ticket back.",
@@ -117,7 +117,7 @@ type specBranchMerge struct {
 // out every merge first: a conflict in any merges it into none and sends
 // the Ticket back to Ready (ADR 0049). ok is false when it didn't merge
 // into every one, so the Ticket's other landing steps wait.
-func (l *lander) mergeIntoSpecBranch(ctx context.Context, tk core.TicketView, policies core.LandingPolicies, ws []changedWork) (ok bool) {
+func (l *lander) mergeIntoSpecBranch(ctx context.Context, tk api.TicketView, policies api.LandingPolicies, ws []changedWork) (ok bool) {
 	branch := tk.Spec.Branch
 	ref := "refs/heads/" + branch
 	var merges []specBranchMerge
@@ -233,7 +233,7 @@ func (l *lander) mergeIntoSpecBranch(ctx context.Context, tk core.TicketView, po
 // holds them, and only what the Spec Branch gains from here on is
 // replayed onto it. Otherwise the same commits would conflict again
 // however they were resolved.
-func (l *lander) takeSpecBranchAsBrought(tk core.TicketView, conflicts []landConflict) {
+func (l *lander) takeSpecBranchAsBrought(tk api.TicketView, conflicts []landConflict) {
 	for _, c := range conflicts {
 		if !c.replacing {
 			continue
@@ -246,8 +246,8 @@ func (l *lander) takeSpecBranchAsBrought(tk core.TicketView, conflicts []landCon
 
 // reportSpecMerge tells Code Central tk's work is in its Spec Branch in
 // each of merges' Repositories, naming the first's tip.
-func (l *lander) reportSpecMerge(ctx context.Context, tk core.TicketView, branch string, merges []specBranchMerge) {
-	in := core.ReportSpecMergeInput{Ticket: core.Ref(tk.ID), Commit: merges[0].tip}
+func (l *lander) reportSpecMerge(ctx context.Context, tk api.TicketView, branch string, merges []specBranchMerge) {
+	in := api.ReportSpecMergeInput{Ticket: api.Ref(tk.ID), Commit: merges[0].tip}
 	if r := merges[0].r; !r.home {
 		in.Repository = r.name
 	}
@@ -274,13 +274,13 @@ func (l *lander) reportSpecMerge(ctx context.Context, tk core.TicketView, branch
 // in every base yet (such as work accepted before Land per Spec was turned
 // on, which lands as plain Merge). Core makes a Ticket Spec-landed only
 // with Land per Spec in force.
-func (l *lander) waitsOnSpecBranch(tk core.TicketView) bool {
+func (l *lander) waitsOnSpecBranch(tk api.TicketView) bool {
 	return tk.SpecLanded && !l.workInEveryBase(tk)
 }
 
 // workInEveryBase reports whether tk's work is in the base of each of its
 // Changed Repositories it hasn't landed in.
-func (l *lander) workInEveryBase(tk core.TicketView) bool {
+func (l *lander) workInEveryBase(tk api.TicketView) bool {
 	ws, why := l.changedWorkOf(tk)
 	if why != "" {
 		return false
@@ -305,7 +305,7 @@ func (l *lander) workInEveryBase(tk core.TicketView) bool {
 // Branch, where Land per Spec has no effect, each Ticket lands once the
 // human merges it. A Spec's Tickets are the Accepted ones the Factory has
 // merged into its Spec Branch and not yet landed.
-func (l *lander) landSpecs(ctx context.Context, p core.ProjectView) {
+func (l *lander) landSpecs(ctx context.Context, p api.ProjectView) {
 	if !p.LandingPolicies().LandPerSpecInForce() {
 		return
 	}
@@ -336,8 +336,8 @@ func (l *lander) landSpecs(ctx context.Context, p core.ProjectView) {
 // rebased onto it first (rebaseSpecBranch), and a conflict there is the
 // plan's; one pushed already isn't rebased again as the base moves, so
 // its CI doesn't rerun on each move.
-func (l *lander) planSpecPush(spec core.SpecRef, r *repository, tickets []core.TicketView, policies core.LandingPolicies) (pl specPlan, push, ok bool) {
-	if slices.ContainsFunc(tickets, func(tk core.TicketView) bool { return pullRequestMergedIn(tk, r) }) {
+func (l *lander) planSpecPush(spec api.SpecRef, r *repository, tickets []api.TicketView, policies api.LandingPolicies) (pl specPlan, push, ok bool) {
+	if slices.ContainsFunc(tickets, func(tk api.TicketView) bool { return pullRequestMergedIn(tk, r) }) {
 		return pl, false, true
 	}
 	if l.held(r, policies) != "" || !l.stateOf(r).current {
@@ -384,7 +384,7 @@ func (l *lander) planSpecPush(spec core.SpecRef, r *repository, tickets []core.T
 // old one no longer count. It never pushes, forced or not, over a branch
 // of that name the Factory didn't push (foreignSpecBranch); pushedIn is
 // the Repositories where it did.
-func (l *lander) pushSpecBranch(ctx context.Context, spec core.SpecRef, pushedIn []string, policies core.LandingPolicies, pl specPlan) {
+func (l *lander) pushSpecBranch(ctx context.Context, spec api.SpecRef, pushedIn []string, policies api.LandingPolicies, pl specPlan) {
 	id, branch := spec.ID, spec.Branch
 	why, ok := l.foreignSpecBranch(ctx, pl.r, branch, pl.tip, pushedIn)
 	if !ok {
@@ -444,7 +444,7 @@ func (l *lander) foreignSpecBranch(ctx context.Context, r *repository, branch, t
 }
 
 // pullRequestMergedIn reports whether tk's pull request in r has merged.
-func pullRequestMergedIn(tk core.TicketView, r *repository) bool {
+func pullRequestMergedIn(tk api.TicketView, r *repository) bool {
 	v, _ := viewIn(tk, r)
 	return hasMerged(v.PullRequest)
 }
@@ -452,8 +452,8 @@ func pullRequestMergedIn(tk core.TicketView, r *repository) bool {
 // readySpec is the Spec id with its waiting Tickets, when Code Central
 // says it is ready to land; ok is false when it isn't, or it or one of
 // its Tickets can't be read.
-func (l *lander) readySpec(ctx context.Context, id string) (spec core.SpecDetail, tickets []core.TicketView, ok bool) {
-	spec, err := l.client.GetSpec(ctx, l.project, core.GetSpecInput{Spec: core.Ref(id), Parts: []string{"tickets"}})
+func (l *lander) readySpec(ctx context.Context, id string) (spec api.SpecDetail, tickets []api.TicketView, ok bool) {
+	spec, err := l.client.GetSpec(ctx, l.project, api.GetSpecInput{Spec: api.Ref(id), Parts: []string{"tickets"}})
 	if err != nil {
 		if ctx.Err() == nil {
 			l.printf("%s: get_spec: %v", id, err)
@@ -464,7 +464,7 @@ func (l *lander) readySpec(ctx context.Context, id string) (spec core.SpecDetail
 		return spec, nil, false
 	}
 	for _, w := range spec.LandPerSpec.Waiting {
-		tk, err := l.client.GetTicket(ctx, l.project, core.Ref(w))
+		tk, err := l.client.GetTicket(ctx, l.project, api.Ref(w))
 		if err != nil {
 			if ctx.Err() == nil {
 				l.printf("%s: get_ticket: %v", w, err)
@@ -477,7 +477,7 @@ func (l *lander) readySpec(ctx context.Context, id string) (spec core.SpecDetail
 }
 
 // landSpec lands one Spec when Code Central says it is ready.
-func (l *lander) landSpec(ctx context.Context, id string, p core.ProjectView) {
+func (l *lander) landSpec(ctx context.Context, id string, p api.ProjectView) {
 	spec, tickets, ok := l.readySpec(ctx, id)
 	if !ok {
 		return
@@ -495,16 +495,16 @@ func (l *lander) landSpec(ctx context.Context, id string, p core.ProjectView) {
 // anyUncloned reports whether one of tickets has a Changed Repository it
 // hasn't landed in with no clone, whose Spec Branch can't be checked: its
 // Spec waits, as the Ticket's own line says.
-func (l *lander) anyUncloned(tickets []core.TicketView) bool {
-	return slices.ContainsFunc(tickets, func(tk core.TicketView) bool {
+func (l *lander) anyUncloned(tickets []api.TicketView) bool {
+	return slices.ContainsFunc(tickets, func(tk api.TicketView) bool {
 		_, why := l.changedWorkOf(tk)
 		return why != ""
 	})
 }
 
 // ticketsIn is those of tickets that changed r and haven't landed there.
-func ticketsIn(tickets []core.TicketView, r *repository) []core.TicketView {
-	var out []core.TicketView
+func ticketsIn(tickets []api.TicketView, r *repository) []api.TicketView {
+	var out []api.TicketView
 	for _, tk := range tickets {
 		if v, ok := viewIn(tk, r); ok && v.Landed == nil {
 			out = append(out, tk)
@@ -526,7 +526,7 @@ func ticketsIn(tickets []core.TicketView, r *repository) []core.TicketView {
 // says Rebase is in force in r.
 type specPlan struct {
 	r                               *repository
-	tickets                         []core.TicketView
+	tickets                         []api.TicketView
 	old                             *mergeOn
 	tip, baseTip, tree, rebasedFrom string
 	inBase, push, rebase            bool
@@ -553,7 +553,7 @@ type specPlan struct {
 // means every Spec Branch and the Tickets' work in it is already in its
 // base (landsHere), or one can't be read, and the Tickets land through
 // the plain path, as their work is in the base.
-func (l *lander) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets []core.TicketView, p core.ProjectView, mergesThere func(domain.LandingPolicy) bool, pushes bool) (handled bool) {
+func (l *lander) mergeSpec(ctx context.Context, spec api.SpecDetail, tickets []api.TicketView, p api.ProjectView, mergesThere func(domain.LandingPolicy) bool, pushes bool) (handled bool) {
 	sort.SliceStable(tickets, func(i, j int) bool { return acceptedAt(tickets[i]).Before(acceptedAt(tickets[j])) })
 	policies, ref := p.LandingPolicies(), specRefOf(spec)
 	if l.anyUncloned(tickets) {
@@ -619,7 +619,7 @@ func (l *lander) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets []
 // conflict there is the plan's. ok is false when it can't, and then
 // handled is mergeSpec's answer: false when the Spec Branch can't be
 // read, true with a line saying why otherwise.
-func (l *lander) planSpec(spec core.SpecRef, r *repository, tickets []core.TicketView, rebase bool) (pl specPlan, handled, ok bool) {
+func (l *lander) planSpec(spec api.SpecRef, r *repository, tickets []api.TicketView, rebase bool) (pl specPlan, handled, ok bool) {
 	id, branch := spec.ID, spec.Branch
 	pl = specPlan{r: r, tickets: tickets, rebase: rebase}
 	tip, err := r.git.commit("refs/heads/" + branch)
@@ -669,7 +669,7 @@ func (l *lander) landsHere(pl specPlan) bool {
 	if pl.push || !pl.inBase {
 		return true
 	}
-	return slices.ContainsFunc(pl.tickets, func(tk core.TicketView) bool {
+	return slices.ContainsFunc(pl.tickets, func(tk api.TicketView) bool {
 		head, _, err := l.workIn(pl.r, tk)
 		return err == nil && !l.repos.inBaseOf(pl.r, head)
 	})
@@ -680,7 +680,7 @@ func (l *lander) landsHere(pl specPlan) bool {
 // from where it was, and reports whether every one moved. One that moved
 // meanwhile, or that git refuses, holds the Spec to the next poll, which
 // works it out again.
-func (l *lander) moveRebasedSpecBranches(spec core.SpecRef, plans []specPlan) bool {
+func (l *lander) moveRebasedSpecBranches(spec api.SpecRef, plans []specPlan) bool {
 	id, branch := spec.ID, spec.Branch
 	for _, pl := range plans {
 		if pl.rebasedFrom == "" {
@@ -698,7 +698,7 @@ func (l *lander) moveRebasedSpecBranches(spec core.SpecRef, plans []specPlan) bo
 // landSpecIn lands spec's Tickets in pl's Repository as pl says, making
 // the Spec's merge and advancing the base first when it needs one. It
 // reports whether landing can go on to the next Repository.
-func (l *lander) landSpecIn(ctx context.Context, spec core.SpecDetail, p core.ProjectView, pl specPlan) bool {
+func (l *lander) landSpecIn(ctx context.Context, spec api.SpecDetail, p api.ProjectView, pl specPlan) bool {
 	r, base := pl.r, l.repos.baseOf(pl.r)
 	switch {
 	case pl.old != nil:
@@ -723,7 +723,7 @@ func (l *lander) landSpecIn(ctx context.Context, spec core.SpecDetail, p core.Pr
 		}
 		return false
 	}
-	l.printf("%s: merged %s into %s at %s%s", spec.ID, core.SpecBranch(spec.ID, spec.Tags), base, short(merge), r.where())
+	l.printf("%s: merged %s into %s at %s%s", spec.ID, domain.SpecBranch(spec.ID, spec.Tags), base, short(merge), r.where())
 	l.printf("%s: landing its Tickets%s: %s", spec.ID, r.where(), joinIDs(pl.tickets))
 	for _, tk := range pl.tickets {
 		l.stateOf(r).mergedOn[tk.ID] = mergeOn{base, merge}
@@ -734,7 +734,7 @@ func (l *lander) landSpecIn(ctx context.Context, spec core.SpecDetail, p core.Pr
 // landEachAt lands each of tickets in r at commit, which is in r's base,
 // and reports whether landing can go on to the next Repository: every
 // one's push and land call went through.
-func (l *lander) landEachAt(ctx context.Context, tickets []core.TicketView, p core.ProjectView, r *repository, base, commit string) bool {
+func (l *lander) landEachAt(ctx context.Context, tickets []api.TicketView, p api.ProjectView, r *repository, base, commit string) bool {
 	ok := true
 	for _, tk := range tickets {
 		ok = l.landPushed(ctx, tk, p, r, base, commit) && ok
@@ -749,12 +749,12 @@ func (l *lander) landEachAt(ctx context.Context, tickets []core.TicketView, p co
 // the base, ready or not, and those Tickets land there as a group. It
 // returns the Tickets it handled, which the plain path leaves alone this
 // poll.
-func (l *lander) landSpecsOff(ctx context.Context, accepted []core.TicketView, p core.ProjectView) map[string]bool {
+func (l *lander) landSpecsOff(ctx context.Context, accepted []api.TicketView, p api.ProjectView) map[string]bool {
 	handled := map[string]bool{}
 	if !p.LandingPolicies().Any(domain.LandingPolicy.MergesLeftoverSpecBranches) {
 		return handled
 	}
-	groups := map[string][]core.TicketView{}
+	groups := map[string][]api.TicketView{}
 	var specs []string
 	for _, tk := range accepted {
 		if tk.SpecMerge == nil || !tk.SpecMerge.Counts {
@@ -775,7 +775,7 @@ func (l *lander) landSpecsOff(ctx context.Context, accepted []core.TicketView, p
 		if l.hooks.stopped(ctx) {
 			break
 		}
-		spec, err := l.client.GetSpec(ctx, l.project, core.GetSpecInput{Spec: core.Ref(id), Parts: []string{"tickets"}})
+		spec, err := l.client.GetSpec(ctx, l.project, api.GetSpecInput{Spec: api.Ref(id), Parts: []string{"tickets"}})
 		if err != nil {
 			if ctx.Err() == nil {
 				l.printf("%s: get_spec: %v", id, err)
@@ -794,7 +794,7 @@ func (l *lander) landSpecsOff(ctx context.Context, accepted []core.TicketView, p
 	return handled
 }
 
-func joinIDs(tickets []core.TicketView) string {
+func joinIDs(tickets []api.TicketView) string {
 	ids := make([]string, len(tickets))
 	for i, tk := range tickets {
 		ids[i] = tk.ID
@@ -806,13 +806,13 @@ func joinIDs(tickets []core.TicketView) string {
 // merges the base into the Spec Branch, or to comment the conflict on the
 // open one already there. With several Repositories it names each of
 // conflicts' Repositories, with its files and both tips.
-func (l *lander) openSpecConflict(ctx context.Context, spec core.SpecDetail, conflicts []specPlan) {
+func (l *lander) openSpecConflict(ctx context.Context, spec api.SpecDetail, conflicts []specPlan) {
 	several := l.repos.several()
-	in := core.OpenSpecMergeInput{Spec: core.Ref(spec.ID)}
+	in := api.OpenSpecMergeInput{Spec: api.Ref(spec.ID)}
 	var names []string
 	if several {
 		for _, pl := range conflicts {
-			in.Repositories = append(in.Repositories, core.SpecMergeConflict{Name: pl.r.name, Conflicts: pl.conflicts, BaseTip: pl.baseTip, SpecBranchTip: pl.tip})
+			in.Repositories = append(in.Repositories, api.SpecMergeConflict{Name: pl.r.name, Conflicts: pl.conflicts, BaseTip: pl.baseTip, SpecBranchTip: pl.tip})
 			names = append(names, pl.r.name)
 		}
 	} else {
@@ -827,7 +827,7 @@ func (l *lander) openSpecConflict(ctx context.Context, spec core.SpecDetail, con
 	}
 	// Where the Spec Branch conflicts: in each named Repository, or with
 	// the Home Repository alone, with the base in these files.
-	branch, with, again := core.SpecBranch(spec.ID, spec.Tags), l.repos.baseBranch()+" in "+strings.Join(in.Conflicts, ", "), l.repos.baseBranch()+" again"
+	branch, with, again := domain.SpecBranch(spec.ID, spec.Tags), l.repos.baseBranch()+" in "+strings.Join(in.Conflicts, ", "), l.repos.baseBranch()+" again"
 	if several {
 		with = "the base in " + strings.Join(names, ", ")
 		again = with + " again"
@@ -837,9 +837,9 @@ func (l *lander) openSpecConflict(ctx context.Context, spec core.SpecDetail, con
 		do = "rebase it onto the base"
 	}
 	switch res.Outcome {
-	case core.SpecMergeOpened:
+	case api.SpecMergeOpened:
 		l.printf("%s: %s conflicts with %s: opened %s to %s", spec.ID, branch, with, res.Ticket, do)
-	case core.SpecMergeCommented:
+	case api.SpecMergeCommented:
 		l.printf("%s: %s conflicts with %s: commented on %s", spec.ID, branch, again, res.Ticket)
 	}
 }
@@ -847,7 +847,7 @@ func (l *lander) openSpecConflict(ctx context.Context, spec core.SpecDetail, con
 // specLanded reports whether a Ticket of spec has landed, which under
 // Pull Request means its pull request merged: the Spec Branch then holds
 // nothing the base lacks, even after a squash merge.
-func (l *lander) specLanded(spec core.SpecDetail) bool {
+func (l *lander) specLanded(spec api.SpecDetail) bool {
 	for _, r := range spec.Tickets {
 		if r.State == domain.Done {
 			return true
@@ -861,8 +861,8 @@ func (l *lander) specLanded(spec core.SpecDetail) bool {
 // is Done or Cancelled. One not in the base, as when the whole Spec is
 // cancelled, is kept, with a line printed once. The branch a Spec's branch
 // Tag names is swept the same way.
-func (l *lander) sweepSpecBranches(ctx context.Context, policies core.LandingPolicies) {
-	specs := map[string]*core.SpecDetail{}
+func (l *lander) sweepSpecBranches(ctx context.Context, policies api.LandingPolicies) {
+	specs := map[string]*api.SpecDetail{}
 	for _, r := range l.repos.ready() {
 		branches, err := r.git.specBranches()
 		if err != nil {
@@ -889,17 +889,17 @@ func (l *lander) sweepSpecBranches(ctx context.Context, policies core.LandingPol
 // sweepTaggedSpecBranches is sweepSpecBranches' work for the Specs with a
 // branch Tag, finished ones included, in each Repository whose clone has
 // the branch the Tag names.
-func (l *lander) sweepTaggedSpecBranches(ctx context.Context, policies core.LandingPolicies) {
-	rows, err := l.client.FindSpecs(ctx, l.project, core.FindSpecsInput{Tags: map[string]string{core.BranchTag: ""}, Finished: true})
+func (l *lander) sweepTaggedSpecBranches(ctx context.Context, policies api.LandingPolicies) {
+	rows, err := l.client.FindSpecs(ctx, l.project, api.FindSpecsInput{Tags: map[string]string{domain.BranchTag: ""}, Finished: true})
 	if err != nil {
 		return
 	}
 	for _, row := range rows {
-		branch := row.Tags[core.BranchTag]
+		branch := row.Tags[domain.BranchTag]
 		if branch == "" {
 			continue
 		}
-		var spec *core.SpecDetail
+		var spec *api.SpecDetail
 		for _, r := range l.repos.ready() {
 			if ctx.Err() != nil {
 				return
@@ -919,8 +919,8 @@ func (l *lander) sweepTaggedSpecBranches(ctx context.Context, policies core.Land
 
 // finishedSpec is the Spec id when every Ticket on it is Done or
 // Cancelled, and nil when one isn't, it has none, or it can't be read.
-func (l *lander) finishedSpec(ctx context.Context, id string) *core.SpecDetail {
-	spec, err := l.client.GetSpec(ctx, l.project, core.GetSpecInput{Spec: core.Ref(id), Parts: []string{"tickets"}})
+func (l *lander) finishedSpec(ctx context.Context, id string) *api.SpecDetail {
+	spec, err := l.client.GetSpec(ctx, l.project, api.GetSpecInput{Spec: api.Ref(id), Parts: []string{"tickets"}})
 	if err != nil || len(spec.Tickets) == 0 {
 		return nil
 	}
@@ -934,7 +934,7 @@ func (l *lander) finishedSpec(ctx context.Context, id string) *core.SpecDetail {
 
 // sweepSpecBranch deletes branch, the Spec Branch of the finished spec in
 // r, when it is in r's base, and otherwise says once that it is kept.
-func (l *lander) sweepSpecBranch(r *repository, id, branch string, spec core.SpecDetail, policies core.LandingPolicies) {
+func (l *lander) sweepSpecBranch(r *repository, id, branch string, spec api.SpecDetail, policies api.LandingPolicies) {
 	policy := r.policy(policies)
 	base := l.repos.baseOf(r)
 	ref := "refs/heads/" + branch

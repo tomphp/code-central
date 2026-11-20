@@ -3,7 +3,7 @@ package server_test
 import (
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // A Factory's Heartbeat (Spec code-central-305): report_heartbeat, over
@@ -36,7 +36,7 @@ func init() {
 			}
 		},
 		bad:  call{http: reportHeartbeat(`{"factory":"f","host":"h","state":"asleep","interval_seconds":10}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -111,6 +111,6 @@ func init() {
 		ok:    call{http: httpCall{"POST", "/api/p/acme/report_base", `{"state":"diverged","local":"aaa","remote":"bbb"}`}},
 		check: acknowledgement("acme"),
 		bad:   call{http: httpCall{"POST", "/api/p/acme/report_base", `{"state":"sideways","local":"aaa","remote":"bbb"}`}},
-		code:  core.Invalid,
+		code:  api.Invalid,
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -17,19 +18,10 @@ import (
 // RetroOfTag is the Tag naming the work a Retro looks back on.
 const RetroOfTag = "retro-of"
 
-// SubmitRetroInput is submit_retro's input: the finished work, a Ticket or
-// a Spec, and the human's optional note.
-type SubmitRetroInput struct {
-	Target Ref    `json:"target" desc:"The finished Ticket or Spec the Retro looks back on." required:"true" cli:"<ticket|spec>"`
-	Note   string `json:"note,omitempty" desc:"What the human wants the Retro to look at, in Markdown; optional." cli:"--note <md>"`
-	// Full asks for the Ticket in place of its Acknowledgement.
-	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
-}
-
 // SubmitRetro is submit_retro(target, note?). It writes, as human whoever
 // calls, a Ready Retro titled "Retro: <target title>" on the Retros Spec,
 // whose description lists every Claim on the target to read.
-func (c *Core) SubmitRetro(_ context.Context, key string, in SubmitRetroInput) (Written[TicketView], error) {
+func (c *Core) SubmitRetro(_ context.Context, key string, in api.SubmitRetroInput) (api.Written[api.TicketView], error) {
 	// The target is checked before the Retros Spec is made, so a refused
 	// Retro writes nothing.
 	err := c.store.View(func(r store.Reader) error {
@@ -40,13 +32,13 @@ func (c *Core) SubmitRetro(_ context.Context, key string, in SubmitRetroInput) (
 		return err
 	})
 	if err != nil {
-		return Written[TicketView]{}, err
+		return api.Written[api.TicketView]{}, err
 	}
 	spec, err := c.projectSpecNumber(key, retrosSpec)
 	if err != nil {
-		return Written[TicketView]{}, err
+		return api.Written[api.TicketView]{}, err
 	}
-	var v Written[TicketView]
+	var v api.Written[api.TicketView]
 	err = c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -58,7 +50,7 @@ func (c *Core) SubmitRetro(_ context.Context, key string, in SubmitRetroInput) (
 		now := c.now()
 		t := domain.Ticket{
 			Number: w.NextNumber(key), Title: "Retro: " + target.title, State: domain.Ready, Spec: spec,
-			Labels: []string{RetroLabel}, Tags: map[string]string{RetroOfTag: target.id},
+			Labels: []string{domain.RetroLabel}, Tags: map[string]string{RetroOfTag: target.id},
 			Created: now, Updated: now, Description: target.description(in.Note),
 			Moves: submitMoves(false, now, "submit_retro"),
 		}
@@ -81,14 +73,14 @@ type retroTarget struct {
 
 // resolveRetroTarget reads the finished work ref names: a Done or
 // Cancelled Ticket, or a Finished Spec that isn't Long-lived.
-func resolveRetroTarget(r store.Reader, key string, ref Ref) (retroTarget, error) {
-	n, err := ref.number(key, "target")
+func resolveRetroTarget(r store.Reader, key string, ref api.Ref) (retroTarget, error) {
+	n, err := refNumber(ref, key, "target")
 	if err != nil {
 		return retroTarget{}, err
 	}
 	id := DisplayID(key, n)
 	if s, ok := r.Spec(key, n); ok {
-		if slices.Contains(s.Labels, LongLivedLabel) {
+		if slices.Contains(s.Labels, domain.LongLivedLabel) {
 			return retroTarget{}, invalid("target", "%s is a Long-lived Spec, which never finishes; start a Retro on each of its finished Tickets instead", id)
 		}
 		tickets := specTickets(r, key, n, store.Claims)
@@ -119,7 +111,7 @@ func ticketRetroable(p domain.Project, t domain.Ticket) bool {
 // too, and while its Project p takes writes, which writable refuses.
 // SpecDetail's retroable.
 func specRetroable(p domain.Project, s domain.Spec, specFinished bool) bool {
-	return specFinished && !slices.Contains(s.Labels, LongLivedLabel) && p.Archived.IsZero()
+	return specFinished && !slices.Contains(s.Labels, domain.LongLivedLabel) && p.Archived.IsZero()
 }
 
 // description is a Retro's description: the target as a link, the
@@ -168,19 +160,12 @@ const retrosSpecBody = "This Spec holds the Retros the human opens on finished w
 	"Each reads the sessions of that work's Claims and proposes changes to the agents' environment; " +
 	"the Tickets for the changes the human picks open here too.\n"
 
-// RetroView is a Retro as a read of its target lists it.
-type RetroView struct {
-	ID    string       `json:"id"`
-	Title string       `json:"title"`
-	State domain.State `json:"state"`
-}
-
 // retrosOf lists the Retros whose retro-of Tag names target, oldest first,
 // or nil when there are none.
-func retrosOf(r store.Reader, key, target string) []RetroView {
-	var out []RetroView
-	for _, t := range r.FindTickets(key, store.TicketFilter{Label: RetroLabel, Tag: &store.TagFilter{Key: RetroOfTag, Values: []string{target}}}) {
-		out = append(out, RetroView{ID: DisplayID(key, t.Number), Title: t.Title, State: t.State})
+func retrosOf(r store.Reader, key, target string) []api.RetroView {
+	var out []api.RetroView
+	for _, t := range r.FindTickets(key, store.TicketFilter{Label: domain.RetroLabel, Tag: &store.TagFilter{Key: RetroOfTag, Values: []string{target}}}) {
+		out = append(out, api.RetroView{ID: DisplayID(key, t.Number), Title: t.Title, State: t.State})
 	}
 	return out
 }

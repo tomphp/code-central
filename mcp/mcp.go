@@ -14,6 +14,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/ops"
 )
@@ -64,7 +65,7 @@ func newServer(d ops.Dispatcher, key string) *sdk.Server {
 		s.AddTool(&sdk.Tool{Name: op.Name, Description: t.description, InputSchema: t.schema},
 			func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
 				// The dispatch decodes the arguments strictly.
-				return result(d.Dispatch(ctx, ops.Call{Op: t.op, Key: key, Args: req.Params.Arguments, Actor: core.Agent}))
+				return result(d.Dispatch(ctx, ops.Call{Op: t.op, Key: key, Args: req.Params.Arguments, Actor: api.Agent}))
 			})
 	}
 	return s

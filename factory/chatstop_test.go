@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -34,7 +34,7 @@ func TestAStopEndsTheChatTurnAndTheNextMessageResumesTheSession(t *testing.T) {
 	r.PassKillGrace()
 	cv := h.WaitForReply()
 	r.Settle()
-	if r := reply(cv); r.Outcome != core.ChatStopped {
+	if r := reply(cv); r.Outcome != api.ChatStopped {
 		t.Errorf("reply ended %q (%q), want stopped", r.Outcome, r.Error)
 	}
 	// Stopped as a Claim's turn is.
@@ -52,7 +52,7 @@ func TestAStopEndsTheChatTurnAndTheNextMessageResumesTheSession(t *testing.T) {
 	if s, _ := calls[1].Flag("--resume"); s != cv.SessionID || cv.SessionID == "" {
 		t.Errorf("args %q, want a resume of session %q", calls[1].Args, cv.SessionID)
 	}
-	if r := reply(cv2); r.Outcome != core.ChatDone {
+	if r := reply(cv2); r.Outcome != api.ChatDone {
 		t.Errorf("second reply ended %q, want done", r.Outcome)
 	}
 }
@@ -65,7 +65,7 @@ func TestTheFirstCtrlCDrainsLettingTheChatReplyFinishAndTheConversationIsUnavail
 	r.Interrupt()
 	r.Settle()
 	r.WantOutput("draining")
-	if s := factories(t, h).Status; s != core.FactoryDraining {
+	if s := factories(t, h).Status; s != api.FactoryDraining {
 		t.Fatalf("the Factory reports %s, want Draining", s)
 	}
 
@@ -74,13 +74,13 @@ func TestTheFirstCtrlCDrainsLettingTheChatReplyFinishAndTheConversationIsUnavail
 		t.Errorf("exit code %d, want 0", code)
 	}
 	cv := h.Chat()
-	if m := reply(cv); m.Outcome != core.ChatDone {
+	if m := reply(cv); m.Outcome != api.ChatDone {
 		t.Errorf("reply ended %q (%q), want it left to finish: done", m.Outcome, m.Error)
 	}
 	if got := h.Signals(factorytest.Chat); len(got) != 0 {
 		t.Errorf("the draining reply got %q, want no signals", got)
 	}
-	if cv.Availability != core.ChatUnavailable {
+	if cv.Availability != api.ChatUnavailable {
 		t.Errorf("Conversation %+v, want it unavailable once the Factory has drained", cv)
 	}
 }
@@ -101,7 +101,7 @@ func TestStoppingStopsTheChatReplyPostsStoppedAndExits(t *testing.T) {
 	if got, want := h.Signals(factorytest.Chat), stopSignals(); !slices.Equal(got, want) {
 		t.Errorf("the reply's process got %q, want %q", got, want)
 	}
-	if m := reply(h.Chat()); m.Outcome != core.ChatStopped {
+	if m := reply(h.Chat()); m.Outcome != api.ChatStopped {
 		t.Errorf("reply ended %q (%q), want stopped", m.Outcome, m.Error)
 	}
 }
@@ -113,7 +113,7 @@ func TestNoChatNeverPollsForChatWork(t *testing.T) {
 	h.SetFailing("/chat/next-work")
 	h.Start("--no-chat")
 	fs := factories(t, h)
-	if fs.Status != core.FactoryOnline || len(fs.Factories) != 1 || !strings.Contains(fs.Factories[0].Note, "turns running") {
+	if fs.Status != api.FactoryOnline || len(fs.Factories) != 1 || !strings.Contains(fs.Factories[0].Note, "turns running") {
 		t.Fatalf("Factory Status %+v, want Online with its turns running", fs)
 	}
 	if fs.Factories[0].Chat {

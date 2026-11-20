@@ -5,6 +5,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -61,7 +62,7 @@ type evaluation struct {
 
 // ticketReason is why a Ticket waits on the human, and since when.
 type ticketReason struct {
-	reason NeedsMeReason
+	reason api.NeedsMeReason
 	since  time.Time
 }
 
@@ -97,7 +98,7 @@ func (e *evaluation) evaluated() *evaluation {
 	e.reasons, e.listedBy, e.requirements, e.specWork = map[int]ticketReason{}, map[int][]int{}, map[int]bool{}, map[int][]domain.Ticket{}
 	var listed []domain.Ticket
 	for _, t := range e.list {
-		if StageOf(t.Labels) != "" {
+		if domain.StageOf(t.Labels) != "" {
 			e.requirements[t.Spec] = true
 		}
 		reason, since := e.chain(t)
@@ -105,7 +106,7 @@ func (e *evaluation) evaluated() *evaluation {
 			continue
 		}
 		e.reasons[t.Number] = ticketReason{reason, since}
-		if reason.isCIItem() {
+		if isCIItem(reason) {
 			listed = append(listed, t)
 		}
 	}
@@ -124,19 +125,19 @@ func (e *evaluation) evaluated() *evaluation {
 // while Accepted. Any other Ticket, or one of those with none of its
 // reasons, waits for Blocked by a Cancelled Ticket, else Closed
 // externally, else New issue.
-func (e *evaluation) chain(t domain.Ticket) (NeedsMeReason, time.Time) {
+func (e *evaluation) chain(t domain.Ticket) (api.NeedsMeReason, time.Time) {
 	c, p, key := e.c, e.p, e.p.Key
 	switch t.State {
 	case domain.NeedsAnswer:
-		return ReasonNeedsAnswer, entered(t)
+		return api.ReasonNeedsAnswer, entered(t)
 	case domain.Answered:
-		return ReasonAnswered, entered(t)
+		return api.ReasonAnswered, entered(t)
 	case domain.InProgress, domain.Accepted:
 		a := e.ci.ticket(t)
 		if a.failed {
-			return ReasonCIFailed, a.since
+			return api.ReasonCIFailed, a.since
 		} else if a.cancelled {
-			return ReasonCICancelled, a.since
+			return api.ReasonCICancelled, a.since
 		}
 		if lead, waiting := e.specPullRequestLead(t); waiting && !lead {
 			// A Spec's pull request is one item, on its lead Ticket.
@@ -144,39 +145,39 @@ func (e *evaluation) chain(t domain.Ticket) (NeedsMeReason, time.Time) {
 		}
 		lp := ticketLandingPolicies(p, t)
 		if t.State == domain.Accepted && lp.Any(domain.LandingPolicy.LandsByPullRequest) && anyPullRequest(t, domain.PRClosed) {
-			return ReasonPullRequestClosed, entered(t)
+			return api.ReasonPullRequestClosed, entered(t)
 		}
 		if t.State == domain.Accepted && lp.Any(domain.LandingPolicy.LandsOnHumanMerge) {
-			return ReasonToMerge, entered(t)
+			return api.ReasonToMerge, entered(t)
 		}
 		if s := c.silentSince(t); s != nil {
-			return ReasonSilentClaim, *s
+			return api.ReasonSilentClaim, *s
 		}
 		if s := c.longSince(t); s != nil {
-			return ReasonLongClaim, *s
+			return api.ReasonLongClaim, *s
 		}
 		if a.unavailable != nil {
-			return ReasonCIUnavailable, a.unavailable.Pushed
+			return api.ReasonCIUnavailable, a.unavailable.Pushed
 		}
 		// One the CI gate holds on a running CI result in every Repository
 		// it hasn't landed in, or waiting for its Spec to land, is never
 		// Accepted but not landed: landing waits on them.
 		if s := c.notLandedSince(p, t); s != nil && !waitsOnCIAlone(p, t, a) && !waitingForSpec(e.r, p, t) {
-			return ReasonAcceptedNotLanded, *s
+			return api.ReasonAcceptedNotLanded, *s
 		}
 	case domain.Failed:
-		return ReasonFailed, entered(t)
+		return api.ReasonFailed, entered(t)
 	case domain.InReview:
-		return ReasonInReview, entered(t)
+		return api.ReasonInReview, entered(t)
 	}
 	if b, ok := cancelledBlocker(e.rule, t); ok {
-		return ReasonBlockedByCancelled, cancelledAt(e.r, key, b)
+		return api.ReasonBlockedByCancelled, cancelledAt(e.r, key, b)
 	}
 	if since, ok := closedExternally(t); ok {
-		return ReasonClosedExternally, since
+		return api.ReasonClosedExternally, since
 	}
 	if since, ok := newIssue(e.r, key, t); ok {
-		return ReasonNewIssue, since
+		return api.ReasonNewIssue, since
 	}
 	return "", time.Time{}
 }
@@ -218,14 +219,14 @@ func (e *evaluation) group(tickets []domain.Ticket) {
 
 // itemReason is the reason of the CI item listing a Ticket in rc's
 // Repository, and since when, or "" when none lists it there.
-func (rc *repoCI) itemReason() (NeedsMeReason, time.Time) {
+func (rc *repoCI) itemReason() (api.NeedsMeReason, time.Time) {
 	switch {
 	case rc.failure != nil:
-		return ReasonCIFailed, rc.since
+		return api.ReasonCIFailed, rc.since
 	case rc.cancelled:
-		return ReasonCICancelled, rc.since
+		return api.ReasonCICancelled, rc.since
 	case rc.unavailable != nil:
-		return ReasonCIUnavailable, rc.unavailable.Pushed
+		return api.ReasonCIUnavailable, rc.unavailable.Pushed
 	}
 	return "", time.Time{}
 }
@@ -249,7 +250,7 @@ func (e *evaluation) tickets() []domain.Ticket { return e.evaluated().list }
 
 // reason is t's reason and since, or "" when it doesn't wait on the
 // human. A Ticket a CI item lists has the item's reason.
-func (e *evaluation) reason(t domain.Ticket) (NeedsMeReason, time.Time) {
+func (e *evaluation) reason(t domain.Ticket) (api.NeedsMeReason, time.Time) {
 	tr := e.evaluated().reasons[t.Number]
 	return tr.reason, tr.since
 }
@@ -289,7 +290,7 @@ func (e *evaluation) itemIn(t domain.Ticket, name string) (ciItem, bool) {
 
 // baseRows are the Project's Base diverged, Base missing and Repository
 // missing rows, one per Repository each, while its Factory reports it.
-func (e *evaluation) baseRows() []NeedsMeRow {
+func (e *evaluation) baseRows() []api.NeedsMeRow {
 	out := e.c.baseDivergedRows(e.p)
 	out = append(out, e.c.baseMissingRows(e.p)...)
 	return append(out, e.c.repositoryMissingRows(e.p)...)
@@ -299,7 +300,7 @@ func (e *evaluation) baseRows() []NeedsMeRow {
 // what orders it after its reason and since (its Ticket's number, or a
 // CI item's pushed commit), and whether it is a Focus Item.
 type needsMeItem struct {
-	row    NeedsMeRow
+	row    api.NeedsMeRow
 	n      int
 	commit string
 	// focus says the Project's Focus Kinds leave its reason on. Focus
@@ -313,7 +314,7 @@ type needsMeItem struct {
 func (e *evaluation) items() []needsMeItem {
 	e.evaluated()
 	var out []needsMeItem
-	add := func(row NeedsMeRow, n int, commit string) {
+	add := func(row api.NeedsMeRow, n int, commit string) {
 		focus := focusItem(e.p, row.Reason)
 		row.FocusItem = focus
 		out = append(out, needsMeItem{row: row, n: n, commit: commit, focus: focus})
@@ -325,7 +326,7 @@ func (e *evaluation) items() []needsMeItem {
 		add(e.ciItemRow(it), 0, it.commit)
 	}
 	for _, t := range e.list {
-		if tr, ok := e.reasons[t.Number]; ok && !tr.reason.isCIItem() {
+		if tr, ok := e.reasons[t.Number]; ok && !isCIItem(tr.reason) {
 			add(e.row(t, tr), t.Number, "")
 		}
 	}

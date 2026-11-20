@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -14,58 +15,22 @@ import (
 // set_models. They are tiers 2 and 3 of the Model Choice, below a
 // Ticket's Tags and above the Factory's flags.
 
-// ModelsView is a Project's Models as every Project read returns them:
-// the Project default row, the Chat row, then one row for every kind of
-// work, in GuideNames order, each empty where it sets nothing. The Chat
-// row is not a kind of work (Spec code-central-633): Chat doesn't use the
-// default row, so a costly default doesn't make Chat costly.
-type ModelsView struct {
-	Default ModelRowView     `json:"default"`
-	Chat    ModelRowView     `json:"chat"`
-	Kinds   []KindModelsView `json:"kinds"`
-}
-
-// ModelRowView is one Models row's model and effort, each empty when the
-// row leaves it to the tier below.
-type ModelRowView struct {
-	Model  string `json:"model"`
-	Effort string `json:"effort"`
-}
-
-// KindModelsView is the Models row for one kind of work, a guide name.
-type KindModelsView struct {
-	Kind string `json:"kind"`
-	ModelRowView
-}
-
-func modelsView(m domain.Models) ModelsView {
-	v := ModelsView{Default: ModelRowView(m.Default), Chat: ModelRowView(m.Chat), Kinds: []KindModelsView{}}
+func modelsView(m domain.Models) api.ModelsView {
+	v := api.ModelsView{Default: api.ModelRowView(m.Default), Chat: api.ModelRowView(m.Chat), Kinds: []api.KindModelsView{}}
 	for _, g := range GuideNames {
-		v.Kinds = append(v.Kinds, KindModelsView{Kind: g, ModelRowView: ModelRowView(m.Kind(g))})
+		v.Kinds = append(v.Kinds, api.KindModelsView{Kind: g, ModelRowView: api.ModelRowView(m.Kind(g))})
 	}
 	return v
-}
-
-// SetModelsInput is the human's set_models(default, chat, kinds, full?).
-type SetModelsInput struct {
-	Default ModelRowView `json:"default"`
-	// Chat is the Chat row's model and effort.
-	Chat ModelRowView `json:"chat"`
-	// Kinds are the rows for kinds of work; a kind left out, or a row
-	// setting nothing, sets nothing.
-	Kinds []KindModelsView `json:"kinds"`
-	// Full asks for the Project in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
 }
 
 // SetModels is the human's set_models: it replaces the Project's Models
 // rows whole. Like the Project's other settings it adds no Move, Edit or
 // Comment; the Project's notice announces it.
-func (c *Core) SetModels(ctx context.Context, key string, in SetModelsInput) (Written[ProjectView], error) {
+func (c *Core) SetModels(ctx context.Context, key string, in api.SetModelsInput) (api.Written[api.ProjectView], error) {
 	if err := humanOnly(ctx, "set_models"); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
-	var before, after ProjectView
+	var before, after api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -85,14 +50,14 @@ func (c *Core) SetModels(ctx context.Context, key string, in SetModelsInput) (Wr
 		return w.PutProject(p)
 	})
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	return acknowledgeProject(before, after, in.Full, c.now())
 }
 
 // checkedModels checks in's rows and returns them as stored: only the rows that
 // set something, in GuideNames order.
-func checkedModels(r store.Reader, key string, in SetModelsInput) (domain.Models, error) {
+func checkedModels(r store.Reader, key string, in api.SetModelsInput) (domain.Models, error) {
 	var m domain.Models
 	var err error
 	if m.Default, err = modelRow(r, key, "default", "the Project default", in.Default); err != nil {
@@ -127,7 +92,7 @@ func checkedModels(r store.Reader, key string, in SetModelsInput) (domain.Models
 // modelRow checks one row, named for messages, whose fields start with
 // field: a model is one line that isn't blank, an effort one of the
 // Project's valid levels, and either may be empty to leave it unset.
-func modelRow(r store.Reader, key, field, name string, v ModelRowView) (domain.ModelRow, error) {
+func modelRow(r store.Reader, key, field, name string, v api.ModelRowView) (domain.ModelRow, error) {
 	model := strings.TrimSpace(v.Model)
 	switch {
 	case v.Model != "" && model == "":

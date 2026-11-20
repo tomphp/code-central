@@ -6,8 +6,8 @@ import (
 	"github.com/tomoram/code-central/cli"
 	"os"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/pullrequestwatcher"
 )
@@ -32,8 +32,8 @@ func runPullRequestWatcher(ctx context.Context, e cli.Env, args []string) error 
 	fs := cli.FlagSet(pullrequestwatcher.Command)
 	check := fs.Bool("check", false, "check access once and exit")
 	project := fs.String("project", "", "the Project to watch")
-	var in core.PullRequestCheckInput
-	codeHost := fs.String("code-host", string(core.CodeHostGitHub), "the Code Host")
+	var in api.PullRequestCheckInput
+	codeHost := fs.String("code-host", string(api.CodeHostGitHub), "the Code Host")
 	fs.StringVar(&in.Repository, "repository", "", "the repository on the Code Host")
 	fs.StringVar(&in.GHPath, "gh-path", "", "the gh path Option")
 	fs.StringVar(&in.PATEnv, "pat-env", "", "the environment variable holding the Azure Repos PAT")
@@ -42,7 +42,7 @@ func runPullRequestWatcher(ctx context.Context, e cli.Env, args []string) error 
 	if err != nil {
 		return err
 	}
-	in.CodeHost = core.CodeHost(*codeHost)
+	in.CodeHost = api.CodeHost(*codeHost)
 	if *repositories != "" {
 		if err := json.Unmarshal([]byte(*repositories), &in.Repositories); err != nil {
 			return cli.UsageError("--repositories isn't a JSON list of Repositories: %v", err)

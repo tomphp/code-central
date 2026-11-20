@@ -3,7 +3,7 @@ package server_test
 import (
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // The Storage tab (Spec code-central-1032): the human's, so HTTP only.
@@ -24,6 +24,6 @@ func init() {
 			}
 		},
 		bad:  call{http: httpCall{"GET", "/api/storage?project=nope", ""}},
-		code: core.NotFound,
+		code: api.NotFound,
 	}
 }

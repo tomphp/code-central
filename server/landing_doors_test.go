@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/httpapi"
 )
@@ -20,7 +20,7 @@ func init() {
 			landing(t, out, "branch", true, "upstream")
 		},
 		bad:  call{http: httpCall{"POST", "/api/p/acme/set_landing_method", `{"method":"squash"}`}},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -57,9 +57,9 @@ func TestASetLandingMethodIsReadBackByEveryProjectRead(t *testing.T) {
 
 func TestSetLandingMethodIsRejectedForAnAgent(t *testing.T) {
 	srv := newServer(t)
-	status, b := httpDoAs(t, srv, core.Agent, setLandingMethod(`{"method":"branch"}`))
-	if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) {
-		t.Fatalf("status %d, want %d for %s", status, httpapi.Status(core.ActionNotAllowed), e.Code)
+	status, b := httpDoAs(t, srv, api.Agent, setLandingMethod(`{"method":"branch"}`))
+	if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) {
+		t.Fatalf("status %d, want %d for %s", status, httpapi.Status(api.ActionNotAllowed), e.Code)
 	}
 	landing(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), "merge", false, "origin")
 }
@@ -67,7 +67,7 @@ func TestSetLandingMethodIsRejectedForAnAgent(t *testing.T) {
 func TestAnUnknownLandingMethodIsInvalidNamingBoth(t *testing.T) {
 	srv := newServer(t)
 	for _, body := range []string{`{"method":"squash"}`, `{"push":false}`} {
-		e := httpRejected(t, srv, setLandingMethod(body), core.Invalid)
+		e := httpRejected(t, srv, setLandingMethod(body), api.Invalid)
 		if e.Field != "method" || !strings.Contains(e.Message, `"merge"`) || !strings.Contains(e.Message, `"branch"`) {
 			t.Fatalf("%s: field %q message %q, want method naming merge and branch", body, e.Field, e.Message)
 		}
@@ -76,7 +76,7 @@ func TestAnUnknownLandingMethodIsInvalidNamingBoth(t *testing.T) {
 
 func TestTheRemoteIsTrimmedAndOnlyNeededWithPush(t *testing.T) {
 	srv := newServer(t)
-	e := httpRejected(t, srv, setLandingMethod(`{"method":"merge","push":true,"remote":"  "}`), core.Invalid)
+	e := httpRejected(t, srv, setLandingMethod(`{"method":"merge","push":true,"remote":"  "}`), api.Invalid)
 	if e.Field != "remote" {
 		t.Fatalf("field %q, want remote", e.Field)
 	}
@@ -88,10 +88,10 @@ func TestTheRemoteIsTrimmedAndOnlyNeededWithPush(t *testing.T) {
 
 func TestAnArchivedProjectRejectsSetLandingMethod(t *testing.T) {
 	srv := newServer(t)
-	human := core.WithActor(context.Background(), core.Human)
+	human := api.WithActor(context.Background(), api.Human)
 	must(t, func() error { _, err := srv.Core.ArchiveProject(human, "other"); return err })
-	httpRejected(t, srv, httpCall{"POST", "/api/p/other/set_landing_method", `{"method":"branch"}`}, core.ActionNotAllowed)
-	httpRejected(t, srv, httpCall{"POST", "/api/p/nope/set_landing_method", `{"method":"branch"}`}, core.UnknownProject)
+	httpRejected(t, srv, httpCall{"POST", "/api/p/other/set_landing_method", `{"method":"branch"}`}, api.ActionNotAllowed)
+	httpRejected(t, srv, httpCall{"POST", "/api/p/nope/set_landing_method", `{"method":"branch"}`}, api.UnknownProject)
 }
 
 // Every store write sends a notice, so none means nothing was written.

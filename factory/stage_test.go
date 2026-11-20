@@ -2,20 +2,21 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
 // guide is the Stage Guide Code Central serves for stage.
 func guide(t *testing.T, h *factorytest.Harness, stage string) string {
 	t.Helper()
-	g, err := h.Server.Client.GetStageGuide(context.Background(), "acme", core.StageGuideInput{Stage: stage})
+	g, err := h.Server.Client.GetStageGuide(context.Background(), "acme", api.StageGuideInput{Stage: stage})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,11 +27,11 @@ func TestEachSessionStartsItsStagesSkillWithItsStageGuide(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	ids := map[string]string{ // guide stage -> Ticket
-		"spec":                   h.StageTicket("spec", "Spec: Add a button"),
-		"tickets":                h.StageTicket("tickets", "Tickets: Add a button"),
-		core.ImplementationStage: h.ReadyTicket("Add a button"),
+		"spec":                  h.StageTicket("spec", "Spec: Add a button"),
+		"tickets":               h.StageTicket("tickets", "Tickets: Add a button"),
+		api.ImplementationStage: h.ReadyTicket("Add a button"),
 	}
-	skills := map[string]string{"spec": "/to-spec ", "tickets": "/to-tickets ", core.ImplementationStage: "/implement "}
+	skills := map[string]string{"spec": "/to-spec ", "tickets": "/to-tickets ", api.ImplementationStage: "/implement "}
 
 	h.Start()
 	for _, id := range ids {
@@ -59,8 +60,8 @@ func TestEachSystemPromptSaysTheTicketIsAlreadyClaimedAndNotToCallClaim(t *testi
 	t.Parallel()
 	h := factorytest.New(t)
 	ids := map[string]string{ // stage -> Ticket
-		"spec":                   h.StageTicket("spec", "Spec: Add a button"),
-		core.ImplementationStage: h.ReadyTicket("Add a button"),
+		"spec":                  h.StageTicket("spec", "Spec: Add a button"),
+		api.ImplementationStage: h.ReadyTicket("Add a button"),
 	}
 
 	h.Start()
@@ -79,7 +80,7 @@ func TestEachSystemPromptSaysTheTicketIsAlreadyClaimedAndNotToCallClaim(t *testi
 			t.Errorf("%s: system prompt %q doesn't say %q", stage, c.SystemPrompt, want)
 		}
 	}
-	impl := calls[ids[core.ImplementationStage]]
+	impl := calls[ids[api.ImplementationStage]]
 	if want := "in this Ticket's own worktree on branch " + impl.Ticket + ". The Factory has already claimed"; !strings.Contains(impl.SystemPrompt, want) {
 		t.Errorf("implementation system prompt %q doesn't say %q", impl.SystemPrompt, want)
 	}
@@ -224,7 +225,7 @@ func TestEachMapTicketStartsItsSkillWithItsGuideInADetachedWorktree(t *testing.T
 		if want := "The Stage Guide for " + name + " follows"; !strings.Contains(c.SystemPrompt, want) {
 			t.Errorf("%s: system prompt %q doesn't say %q", name, c.SystemPrompt, want)
 		}
-		if strings.Contains(c.SystemPrompt, guide(t, h, core.ImplementationStage)) {
+		if strings.Contains(c.SystemPrompt, guide(t, h, api.ImplementationStage)) {
 			t.Errorf("%s: system prompt %q runs it as implementation", name, c.SystemPrompt)
 		}
 		if c.Dir != h.Worktree(id) {

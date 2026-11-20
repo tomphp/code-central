@@ -6,6 +6,7 @@ import (
 	"maps"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -55,53 +56,17 @@ var stateMeanings = map[domain.State]string{
 	domain.Cancelled:   "Abandoned",
 }
 
-// WorkflowView is get_workflow's result: the table core enforces, as
-// data, plus the prose that explains how to work within it.
-type WorkflowView struct {
-	States  []StateView         `json:"states"`
-	Actions []ActionView        `json:"actions"`
-	NeedsMe []NeedsMeReasonView `json:"needs_me"`
-	Prose   string              `json:"prose"`
-}
-
-// NeedsMeReasonView is one Needs Me reason code, in group order, and
-// what it means.
-type NeedsMeReasonView struct {
-	Reason  NeedsMeReason `json:"reason"`
-	Meaning string        `json:"meaning"`
-}
-
-// StateView is one State and what it means.
-type StateView struct {
-	Name    domain.State `json:"name"`
-	Meaning string       `json:"meaning"`
-}
-
-// ActionView is one row of the action table. To is empty when the Actor
-// chooses it (move), among every State outside Except. ClaimID says the
-// action must send the live Claim ID.
-type ActionView struct {
-	Name     string         `json:"name"`
-	From     []domain.State `json:"from"`
-	To       domain.State   `json:"to,omitempty"`
-	Except   []domain.State `json:"except,omitempty"`
-	Who      Who            `json:"who"`
-	ClaimID  bool           `json:"claim_id"`
-	Requires string         `json:"requires,omitempty"`
-	NextStep string         `json:"next_step,omitempty"`
-}
-
 // GetWorkflow is get_workflow: the whole workflow, generated from the
 // same table every move is checked against, so the two can't drift.
-func (c *Core) GetWorkflow(context.Context) (WorkflowView, error) {
-	w := WorkflowView{NeedsMe: needsMeReasons, Prose: workflowProse}
+func (c *Core) GetWorkflow(context.Context) (api.WorkflowView, error) {
+	w := api.WorkflowView{NeedsMe: api.NeedsMeReasonViews, Prose: workflowProse}
 	for _, s := range domain.States {
-		w.States = append(w.States, StateView{Name: s, Meaning: stateMeanings[s]})
+		w.States = append(w.States, api.StateView{Name: s, Meaning: stateMeanings[s]})
 	}
 	for _, a := range Workflow {
-		w.Actions = append(w.Actions, ActionView{
+		w.Actions = append(w.Actions, api.ActionView{
 			Name: a.Name, From: a.From, To: a.To, Except: a.Except, Who: a.Who,
-			ClaimID: a.Who == Holder, Requires: a.Requires, NextStep: a.NextStep,
+			ClaimID: a.Who == api.Holder, Requires: a.Requires, NextStep: a.NextStep,
 		})
 	}
 	return w, nil

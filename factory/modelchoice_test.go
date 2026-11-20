@@ -2,26 +2,27 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
 // setTags sets tags on ticket, as the human.
 func setTags(t *testing.T, h *factorytest.Harness, ticket string, tags map[string]string) {
 	t.Helper()
-	if _, err := h.Human().SetTags(context.Background(), h.Project, core.SetTagsInput{Target: core.Ref(ticket), Tags: tags}); err != nil {
+	if _, err := h.Human().SetTags(context.Background(), h.Project, api.SetTagsInput{Target: api.Ref(ticket), Tags: tags}); err != nil {
 		t.Fatal(err)
 	}
 }
 
 // setModels sets the Project's Models rows, as the human.
-func setModels(t *testing.T, h *factorytest.Harness, in core.SetModelsInput) {
+func setModels(t *testing.T, h *factorytest.Harness, in api.SetModelsInput) {
 	t.Helper()
 	if _, err := h.Human().SetModels(context.Background(), h.Project, in); err != nil {
 		t.Fatal(err)
@@ -75,8 +76,8 @@ func TestAKindsModelsRowReachesClaudeOverTheProjectDefaultAndTheFactorysFlags(t 
 	t.Parallel()
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Implement it")
-	setModels(t, h, core.SetModelsInput{Default: core.ModelRowView{Model: "opus", Effort: "medium"},
-		Kinds: []core.KindModelsView{{Kind: core.ImplementationStage, ModelRowView: core.ModelRowView{Effort: "xhigh"}}}})
+	setModels(t, h, api.SetModelsInput{Default: api.ModelRowView{Model: "opus", Effort: "medium"},
+		Kinds: []api.KindModelsView{{Kind: api.ImplementationStage, ModelRowView: api.ModelRowView{Effort: "xhigh"}}}})
 	h.Start("--model", "sonnet", "--effort", "low")
 	h.WantState(id, domain.InReview)
 	ranWith(t, h, id, h.Calls()[0], "opus", "xhigh")

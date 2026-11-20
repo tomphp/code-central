@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 	"github.com/tomoram/code-central/ops"
 	"github.com/tomoram/code-central/server"
@@ -69,7 +69,7 @@ func TestGuardAllowsOnlyLocalHostsAndOrigins(t *testing.T) {
 // operation runs.
 func TestTheHTTPAPIActsAsTheActorItsHeaderNames(t *testing.T) {
 	srv := newServer(t)
-	for _, actor := range []core.Actor{"", core.Agent, core.Human, core.Integration} {
+	for _, actor := range []api.Actor{"", api.Agent, api.Human, api.Integration} {
 		status, b := httpDoAs(t, srv, actor, httpCall{method: "POST", path: "/api/p/acme/tickets/2/comment", body: `{"body":"Seen."}`})
 		if status != http.StatusOK {
 			t.Fatalf("Actor %q: status %d: %s", actor, status, b)
@@ -88,7 +88,7 @@ func TestTheHTTPAPIActsAsTheActorItsHeaderNames(t *testing.T) {
 	}
 
 	status, b := httpDoAs(t, srv, "robot", httpCall{method: "POST", path: "/api/p/acme/tickets/2/comment", body: `{"body":"Beep."}`})
-	if e := errorJSON(t, b, core.Invalid); status != http.StatusUnprocessableEntity || e.Field != httpapi.ActorHeader {
+	if e := errorJSON(t, b, api.Invalid); status != http.StatusUnprocessableEntity || e.Field != httpapi.ActorHeader {
 		t.Fatalf("unknown Actor: status %d: %s", status, b)
 	}
 	if tk, _ := srv.Client.GetTicket(context.Background(), "acme", "2"); len(tk.Comments) != len(got) {
@@ -119,7 +119,7 @@ func TestDockerHostReachesMCP(t *testing.T) {
 func TestGETNeverWrites(t *testing.T) {
 	srv := codecentraltest.NewServer(t)
 	ctx := context.Background()
-	if _, err := srv.Core.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}); err != nil {
+	if _, err := srv.Core.CreateProject(ctx, api.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)
 	}
 	paths := []string{"/p/acme/mcp"}
@@ -148,7 +148,7 @@ func TestGETNeverWrites(t *testing.T) {
 		t.Error("a GET created a Project")
 	}
 	// Nothing took a number in acme, so the next item is acme-1.
-	s, err := srv.Core.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "First"})
+	s, err := srv.Core.CreateSpec(ctx, "acme", api.CreateSpecInput{Title: "First"})
 	if err != nil || s.ID != "acme-1" {
 		t.Errorf("a GET wrote to acme: next ID %q, %v", s.ID, err)
 	}

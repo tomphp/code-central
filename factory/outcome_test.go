@@ -3,13 +3,14 @@ package factory_test
 import (
 	"context"
 	"encoding/json"
-	"github.com/tomoram/code-central/domain"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -96,7 +97,7 @@ func TestWhatTheHumanAllowsIsPassedAsAllowedToolsOnThatClaimsLaterRunsOnly(t *te
 	h.Script(id, factorytest.Wait(), factorytest.Finish("Installed."), factorytest.Result("success"))
 	for i, answer := range []string{"allow", "deny it wipes my cache", "Allow Bash(curl:*)"} {
 		q := tk.Rounds[0].Questions[i]
-		if _, err := h.Human().Answer(context.Background(), h.Project, core.AnswerInput{Ticket: core.Ref(id), Question: q.Number, Text: answer}); err != nil {
+		if _, err := h.Human().Answer(context.Background(), h.Project, api.AnswerInput{Ticket: api.Ref(id), Question: q.Number, Text: answer}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -238,7 +239,7 @@ func TestAPauseWithNothingLeftCutOffEndsAndClaimingCarriesOn(t *testing.T) {
 	r.WantOutput("waiting on rate_limit")
 
 	// Its Claim ends while cut off, so no resume will test the service.
-	if _, err := h.Human().Cancel(context.Background(), h.Project, core.CancelInput{Ticket: core.Ref(cut), Reason: "Not needed."}); err != nil {
+	if _, err := h.Human().Cancel(context.Background(), h.Project, api.CancelInput{Ticket: api.Ref(cut), Reason: "Not needed."}); err != nil {
 		t.Fatal(err)
 	}
 	next := h.ReadyTicket("Next")

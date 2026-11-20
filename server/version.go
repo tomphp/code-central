@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // VersionHeader carries the service's version on every response, so a
@@ -20,7 +20,7 @@ const ClientVersionHeader = "X-Code-Central-Client-Version"
 func Versioned(h http.Handler, version string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(VersionHeader, version)
-		ctx := core.WithVersions(r.Context(), version, r.Header.Get(ClientVersionHeader))
+		ctx := api.WithVersions(r.Context(), version, r.Header.Get(ClientVersionHeader))
 		h.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -17,18 +17,18 @@ import (
 // Ticket, so a restart fills it again from the first read.
 type claimInfo struct {
 	title string
-	stage string // the guide's name, one of core.GuideNames
+	stage string // the guide's name, a domain Stage name, or prototype, retro or implementation
 }
 
 // noteTicket keeps what the lines say of c's Ticket, as tk gives it,
 // unless c has ended.
-func (f *factory) noteTicket(c claim, tk core.TicketView) {
+func (f *factory) noteTicket(c claim, tk api.TicketView) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.ended[c.ClaimID] {
 		return
 	}
-	f.info[c.ClaimID] = claimInfo{title: tk.Title, stage: core.GuideName(tk.Labels)}
+	f.info[c.ClaimID] = claimInfo{title: tk.Title, stage: api.GuideName(tk.Labels)}
 }
 
 // about is "(<stage>): "<title>"", naming c's Ticket in a line.
@@ -44,7 +44,7 @@ func (f *factory) claimInfo(c claim) claimInfo {
 	i, ok := f.info[c.ClaimID]
 	f.mu.Unlock()
 	if !ok {
-		i.stage = core.ImplementationStage
+		i.stage = api.ImplementationStage
 	}
 	return i
 }
@@ -56,12 +56,12 @@ func (f *factory) claimInfo(c claim) claimInfo {
 func (f *factory) claimf(c claim, format string, args ...any) {
 	line := fmt.Sprintf(format, args...)
 	f.printf("%s", line)
-	f.events.add(c.SessionID, core.SessionEvent{Time: f.e.Clock.Now(), Kind: core.EventFactory, Text: line})
+	f.events.add(c.SessionID, api.SessionEvent{Time: f.e.Clock.Now(), Kind: api.EventFactory, Text: line})
 }
 
 // claimed prints the line for a new Claim on tk, once its Home worktree
 // wt and its Resume Command are known and before its turn starts.
-func (f *factory) claimed(c claim, tk core.TicketView, wt, resume string) {
+func (f *factory) claimed(c claim, tk api.TicketView, wt, resume string) {
 	f.claimf(c, "%s claimed %s in Spec %s; worktree %s; resume: %s", c.Ticket, f.about(c), tk.Spec.ID, wt, resume)
 }
 

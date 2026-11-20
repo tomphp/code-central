@@ -1,11 +1,12 @@
 package factory_test
 
 import (
-	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -50,14 +51,14 @@ func TestAModelClaudeRejectsFailsTheClaimNamingWhereItWasSet(t *testing.T) {
 		},
 		"Project kind row": {
 			set: func(t *testing.T, h *factorytest.Harness, id string) {
-				setModels(t, h, core.SetModelsInput{Kinds: []core.KindModelsView{{Kind: core.ImplementationStage, ModelRowView: core.ModelRowView{Model: "opus-9"}}}})
+				setModels(t, h, api.SetModelsInput{Kinds: []api.KindModelsView{{Kind: api.ImplementationStage, ModelRowView: api.ModelRowView{Model: "opus-9"}}}})
 			},
 			from: "the Project's Models row for implementation",
 			fix:  "Models row for implementation",
 		},
 		"Project default": {
 			set: func(t *testing.T, h *factorytest.Harness, id string) {
-				setModels(t, h, core.SetModelsInput{Default: core.ModelRowView{Model: "opus-9"}})
+				setModels(t, h, api.SetModelsInput{Default: api.ModelRowView{Model: "opus-9"}})
 			},
 			from: "the Project's default Models row",
 			fix:  "default Models row",
@@ -109,14 +110,14 @@ func TestAnEffortClaudeDoesntAcceptFailsTheClaimWithNoTurnStarted(t *testing.T) 
 		},
 		"Project kind row": {
 			set: func(t *testing.T, h *factorytest.Harness, id string) {
-				setModels(t, h, core.SetModelsInput{Kinds: []core.KindModelsView{{Kind: core.ImplementationStage, ModelRowView: core.ModelRowView{Effort: "xhigh"}}}})
+				setModels(t, h, api.SetModelsInput{Kinds: []api.KindModelsView{{Kind: api.ImplementationStage, ModelRowView: api.ModelRowView{Effort: "xhigh"}}}})
 			},
 			from: "the Project's Models row for implementation",
 			fix:  "Models row for implementation",
 		},
 		"Project default": {
 			set: func(t *testing.T, h *factorytest.Harness, id string) {
-				setModels(t, h, core.SetModelsInput{Default: core.ModelRowView{Effort: "xhigh"}})
+				setModels(t, h, api.SetModelsInput{Default: api.ModelRowView{Effort: "xhigh"}})
 			},
 			from: "the Project's default Models row",
 			fix:  "default Models row",

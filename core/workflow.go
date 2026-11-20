@@ -7,30 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
-)
-
-// Who says which Actor may take an Action.
-type Who string
-
-// The Who values of the action table.
-const (
-	// AnyActor is "Human or agent".
-	AnyActor Who = "human or agent"
-	// AgentActor is "Agent". The human can do everything agents can, so
-	// any Actor may take these.
-	AgentActor Who = "agent"
-	// Holder is "Agent (holder)": the agent must send the live Claim ID.
-	Holder Who = "agent (holder)"
-	// HumanActor is "Human": only the human Actor.
-	HumanActor Who = "human"
-	// Automatic moves are made by core itself, never asked for.
-	Automatic Who = "automatic"
-	// FactoryMove moves are the Factory's own, made through a FactoryOnly
-	// operation: no Actor takes them as an action, so none is offered
-	// them.
-	FactoryMove Who = "factory"
 )
 
 // Action is one row of the fixed workflow: from which States, to which,
@@ -43,7 +22,7 @@ type Action struct {
 	// (move), among every State outside Except.
 	To     domain.State
 	Except []domain.State
-	Who    Who
+	Who    api.Who
 	// Requires names the content the action takes, for the published
 	// workflow; "" means none beyond the Ticket (and the Claim ID for
 	// Holder actions).
@@ -58,97 +37,97 @@ var unfinished = []domain.State{domain.Draft, domain.Ready, domain.InProgress, d
 
 // Workflow is the one action table, in the spec's order.
 var Workflow = []Action{
-	{Name: "approve", From: []domain.State{domain.Draft}, To: domain.Ready, Who: AnyActor},
-	{Name: "defer", From: []domain.State{domain.Ready}, To: domain.Draft, Who: AnyActor,
+	{Name: "approve", From: []domain.State{domain.Draft}, To: domain.Ready, Who: api.AnyActor},
+	{Name: "defer", From: []domain.State{domain.Ready}, To: domain.Draft, Who: api.AnyActor,
 		Requires: "reason (required), stored as a comment"},
-	{Name: "claim", From: []domain.State{domain.Ready}, To: domain.InProgress, Who: AgentActor,
+	{Name: "claim", From: []domain.State{domain.Ready}, To: domain.InProgress, Who: api.AgentActor,
 		Requires: "spec or ticket to narrow it (optional), session_id, working_dir and resume_command (optional); returns the Claim ID"},
-	{Name: "give_up", From: []domain.State{domain.InProgress}, To: domain.Ready, Who: Holder,
+	{Name: "give_up", From: []domain.State{domain.InProgress}, To: domain.Ready, Who: api.Holder,
 		Requires: "note on where the work stands (required)",
 		NextStep: stopWorking},
-	{Name: "release", From: []domain.State{domain.InProgress, domain.Answered}, To: domain.Ready, Who: HumanActor,
+	{Name: "release", From: []domain.State{domain.InProgress, domain.Answered}, To: domain.Ready, Who: api.HumanActor,
 		Requires: "note (optional)"},
-	{Name: "post_round", From: []domain.State{domain.InProgress}, To: domain.NeedsAnswer, Who: Holder,
+	{Name: "post_round", From: []domain.State{domain.InProgress}, To: domain.NeedsAnswer, Who: api.Holder,
 		Requires: "Questions, each with a title, a body and an optional recommended answer",
 		NextStep: postRoundNextStep},
-	{Name: "answered", From: []domain.State{domain.NeedsAnswer}, To: domain.Answered, Who: Automatic,
+	{Name: "answered", From: []domain.State{domain.NeedsAnswer}, To: domain.Answered, Who: api.Automatic,
 		Requires: "made when the last open Question is answered or dismissed"},
-	{Name: "pick_up_answers", From: []domain.State{domain.Answered}, To: domain.InProgress, Who: Holder,
+	{Name: "pick_up_answers", From: []domain.State{domain.Answered}, To: domain.InProgress, Who: api.Holder,
 		Requires: "nothing; returns the latest Round with every answer and dismissal, and comments since"},
-	{Name: "report_failure", From: []domain.State{domain.InProgress}, To: domain.Failed, Who: Holder,
+	{Name: "report_failure", From: []domain.State{domain.InProgress}, To: domain.Failed, Who: api.Holder,
 		Requires: "what_broke, why, what_to_fix and where_work_stands (all required)",
 		NextStep: stopWorking},
-	{Name: "send_back", From: []domain.State{domain.Failed}, To: domain.Ready, Who: HumanActor,
+	{Name: "send_back", From: []domain.State{domain.Failed}, To: domain.Ready, Who: api.HumanActor,
 		Requires: "note (optional)"},
 	// An agent that can't land Accepted work (a merge conflict) sends it
 	// back for another agent to resolve (ticket 72).
-	{Name: "send_back", From: []domain.State{domain.Accepted}, To: domain.Ready, Who: AgentActor,
+	{Name: "send_back", From: []domain.State{domain.Accepted}, To: domain.Ready, Who: api.AgentActor,
 		Requires: "note (required): why it can't land, a merge conflict's base commit and files"},
 	// The human sends Accepted work whose CI failed back to fix it on its
 	// branch (code-central-264).
-	{Name: "send_back", From: []domain.State{domain.Accepted}, To: domain.Ready, Who: HumanActor,
+	{Name: "send_back", From: []domain.State{domain.Accepted}, To: domain.Ready, Who: api.HumanActor,
 		Requires: "note (required): what to fix, such as a failed CI run"},
-	{Name: "to_draft", From: []domain.State{domain.Failed}, To: domain.Draft, Who: HumanActor},
-	{Name: "finish", From: []domain.State{domain.InProgress}, To: domain.InReview, Who: Holder,
+	{Name: "to_draft", From: []domain.State{domain.Failed}, To: domain.Draft, Who: api.HumanActor},
+	{Name: "finish", From: []domain.State{domain.InProgress}, To: domain.InReview, Who: api.Holder,
 		Requires: "summary (required): what was done, where (branch or commit), what to check",
 		NextStep: stopWorking},
 	// accept has two rows: work whose finish named a branch, in any of
 	// its Changed Repositories, is Accepted and waits to land (ADR 0006);
 	// any other Ticket goes straight to Done.
-	{Name: "accept", From: []domain.State{domain.InReview}, To: domain.Accepted, Who: HumanActor,
+	{Name: "accept", From: []domain.State{domain.InReview}, To: domain.Accepted, Who: api.HumanActor,
 		Requires: "nothing; taken when the last finish named a branch"},
-	{Name: "accept", From: []domain.State{domain.InReview}, To: domain.Done, Who: HumanActor,
+	{Name: "accept", From: []domain.State{domain.InReview}, To: domain.Done, Who: api.HumanActor,
 		Requires: "nothing; taken when no finish named a branch"},
 	// The Factory fails a finish its finish check finds leaving out a
 	// Repository with work, or naming a commit that isn't its branch's
 	// head (Spec code-central-848, ADR 0048). The finishing Claim has
 	// ended, so it is the Factory's move, not the holder's.
-	{Name: failFinish, From: []domain.State{domain.InReview, domain.Accepted}, To: domain.Failed, Who: FactoryMove,
+	{Name: failFinish, From: []domain.State{domain.InReview, domain.Accepted}, To: domain.Failed, Who: api.FactoryMove,
 		Requires: "a Failure Report's four parts; from Accepted only while landed nowhere"},
 	// implement is the other way to accept a Requirement's spec Stage
 	// (ADR 0057): valid only on that Stage, which core checks.
-	{Name: "implement", From: []domain.State{domain.InReview}, To: domain.Done, Who: HumanActor,
+	{Name: "implement", From: []domain.State{domain.InReview}, To: domain.Done, Who: api.HumanActor,
 		Requires: "nothing; only on a spec Stage In Review: accepts it, creates one Ready implementation Ticket for the whole Spec and Cancels the tickets Stage with that Ticket as its Replacement",
 		NextStep: "The spec Stage is Done and the tickets Stage is Cancelled, and <id> now builds the whole Spec."},
-	{Name: "reject", From: []domain.State{domain.InReview}, To: domain.Ready, Who: HumanActor,
+	{Name: "reject", From: []domain.State{domain.InReview}, To: domain.Ready, Who: api.HumanActor,
 		Requires: "comment (required)"},
-	{Name: "land", From: []domain.State{domain.Accepted, domain.InReview}, To: domain.Done, Who: AnyActor,
+	{Name: "land", From: []domain.State{domain.Accepted, domain.InReview}, To: domain.Done, Who: api.AnyActor,
 		Requires: "commit (required) that put the work into the base, recorded on the Move with via merge"},
-	{Name: "cancel", From: []domain.State{domain.Draft, domain.Ready}, To: domain.Cancelled, Who: AgentActor,
+	{Name: "cancel", From: []domain.State{domain.Draft, domain.Ready}, To: domain.Cancelled, Who: api.AgentActor,
 		Requires: "replacements (required), reason (optional)"},
-	{Name: "cancel", From: unfinished, To: domain.Cancelled, Who: HumanActor,
+	{Name: "cancel", From: unfinished, To: domain.Cancelled, Who: api.HumanActor,
 		Requires: "replacements (optional)"},
 	// Needs Answer and Failed are entered only by posting a Round or a
 	// Failure Report, so move can't reach either.
-	{Name: "move", From: domain.States, Except: []domain.State{domain.NeedsAnswer, domain.Failed}, Who: HumanActor,
+	{Name: "move", From: domain.States, Except: []domain.State{domain.NeedsAnswer, domain.Failed}, Who: api.HumanActor,
 		Requires: "to_state: any State but the current one and those in except"},
 }
 
 // claimStates are the States a Claim spans. Any move out of them ends it.
 var claimStates = []domain.State{domain.InProgress, domain.NeedsAnswer, domain.Answered}
 
-// may reports whether actor may take an action with this Who. Holder
+// whoMay reports whether actor may take an action with this Who. Holder
 // actions also need the live Claim ID, which liveClaim checks.
-func (w Who) may(actor Actor) bool {
-	if actor == Integration {
+func whoMay(w api.Who, actor api.Actor) bool {
+	if actor == api.Integration {
 		// An Integration never moves State (ADR 0004).
 		return false
 	}
 	switch w {
-	case AnyActor, AgentActor, Holder:
+	case api.AnyActor, api.AgentActor, api.Holder:
 		return true
-	case HumanActor:
-		return actor == Human
+	case api.HumanActor:
+		return actor == api.Human
 	}
 	return false
 }
 
 // allowedActions names the actions actor may take from state, in table
 // order, each once.
-func allowedActions(state domain.State, actor Actor) []string {
+func allowedActions(state domain.State, actor api.Actor) []string {
 	out := []string{}
 	for _, a := range Workflow {
-		if slices.Contains(a.From, state) && a.Who.may(actor) && !slices.Contains(out, a.Name) {
+		if slices.Contains(a.From, state) && whoMay(a.Who, actor) && !slices.Contains(out, a.Name) {
 			out = append(out, a.Name)
 		}
 	}
@@ -159,16 +138,16 @@ func allowedActions(state domain.State, actor Actor) []string {
 // state, or returns action_not_allowed naming the allowed actions. When
 // to is set, a row with a fixed To elsewhere doesn't match: an action
 // with several rows from one State (accept) picks its row by target.
-func check(name string, state, to domain.State, actor Actor, ticketID string) (Action, error) {
+func check(name string, state, to domain.State, actor api.Actor, ticketID string) (Action, error) {
 	humanOnly := false
 	for _, a := range Workflow {
 		if a.Name != name || !slices.Contains(a.From, state) || (to != "" && a.To != "" && a.To != to) {
 			continue
 		}
-		if a.Who.may(actor) {
+		if whoMay(a.Who, actor) {
 			return a, nil
 		}
-		humanOnly = humanOnly || a.Who == HumanActor
+		humanOnly = humanOnly || a.Who == api.HumanActor
 	}
 	allowed := allowedActions(state, actor)
 	msg := fmt.Sprintf("%s is %s, so %s is not allowed", ticketID, state, name)
@@ -178,7 +157,7 @@ func check(name string, state, to domain.State, actor Actor, ticketID string) (A
 	if len(allowed) > 0 {
 		msg += "; allowed from " + string(state) + ": " + strings.Join(allowed, ", ")
 	}
-	return Action{}, &Error{Code: ActionNotAllowed, Message: msg, AllowedActions: allowed}
+	return Action{}, &api.Error{Code: api.ActionNotAllowed, Message: msg, AllowedActions: allowed}
 }
 
 // liveClaim returns the Ticket's live Claim, if any, from its head: a
@@ -203,7 +182,7 @@ func holder(t *domain.Ticket, key, claimID string) (*domain.Claim, error) {
 	if c, ok := claimToWrite(t); ok && claimID != "" && c.ID == claimID {
 		return c, nil
 	}
-	return nil, &Error{Code: StaleClaim, Message: fmt.Sprintf(
+	return nil, &api.Error{Code: api.StaleClaim, Message: fmt.Sprintf(
 		"that Claim ID is not the live Claim on %s: stop working this Ticket", DisplayID(key, t.Number))}
 }
 
@@ -220,7 +199,7 @@ func transition(ctx context.Context, t *domain.Ticket, key, name, claimID string
 // already checked to against the row's Except. For an action with a row
 // per target (accept), to picks the row.
 func transitionTo(ctx context.Context, t *domain.Ticket, key, name, claimID string, to domain.State, now time.Time) error {
-	actor := ActorOf(ctx)
+	actor := api.ActorOf(ctx)
 	id := DisplayID(key, t.Number)
 	if isHolderAction(name) {
 		if _, err := holder(t, key, claimID); err != nil {
@@ -270,7 +249,7 @@ const automaticAnswered = "answered"
 // automatic finds the Automatic row name from state.
 func automatic(name string, state domain.State) (Action, error) {
 	for _, a := range Workflow {
-		if a.Name == name && a.Who == Automatic && slices.Contains(a.From, state) {
+		if a.Name == name && a.Who == api.Automatic && slices.Contains(a.From, state) {
 			return a, nil
 		}
 	}
@@ -283,7 +262,7 @@ func automatic(name string, state domain.State) (Action, error) {
 func factoryMove(name string, state domain.State, ticketID string) (Action, error) {
 	var from []string
 	for _, a := range Workflow {
-		if a.Name != name || a.Who != FactoryMove {
+		if a.Name != name || a.Who != api.FactoryMove {
 			continue
 		}
 		if slices.Contains(a.From, state) {
@@ -293,12 +272,12 @@ func factoryMove(name string, state domain.State, ticketID string) (Action, erro
 			from = append(from, string(s))
 		}
 	}
-	return Action{}, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is %s, so %s is not allowed: it is made only from %s", ticketID, state, name, strings.Join(from, " or "))}
+	return Action{}, &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s is %s, so %s is not allowed: it is made only from %s", ticketID, state, name, strings.Join(from, " or "))}
 }
 
 func isHolderAction(name string) bool {
 	for _, a := range Workflow {
-		if a.Name == name && a.Who == Holder {
+		if a.Name == name && a.Who == api.Holder {
 			return true
 		}
 	}

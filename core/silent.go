@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -44,9 +45,9 @@ type activity struct {
 	started time.Time
 
 	mu     sync.Mutex
-	pings  map[string]time.Time      // session ID -> last counted ping here: what the throttle goes by
-	shared map[string]time.Time      // session ID -> last ping any service counted, as the Store had it at the last tick
-	marks  map[markKey]NeedsMeReason // Silent, Long, CI unavailable or Accepted but not landed
+	pings  map[string]time.Time          // session ID -> last counted ping here: what the throttle goes by
+	shared map[string]time.Time          // session ID -> last ping any service counted, as the Store had it at the last tick
+	marks  map[markKey]api.NeedsMeReason // Silent, Long, CI unavailable or Accepted but not landed
 }
 
 // markKey names what a timed reason, a Transcript or a latest event
@@ -60,7 +61,7 @@ type markKey struct {
 }
 
 func newActivity(started time.Time) *activity {
-	return &activity{started: started, pings: map[string]time.Time{}, shared: map[string]time.Time{}, marks: map[markKey]NeedsMeReason{}}
+	return &activity{started: started, pings: map[string]time.Time{}, shared: map[string]time.Time{}, marks: map[markKey]api.NeedsMeReason{}}
 }
 
 // Ping is POST /api/ping {session_id}: it marks activity on every live
@@ -241,17 +242,17 @@ func (c *Core) WatchTimedReasons(ctx context.Context, ticks <-chan time.Time, ch
 // that is a timed one, so a Ticket waiting for an earlier reason, such
 // as a CI item's, has none.
 func (c *Core) timedReasonChanges() []markKey {
-	now := map[markKey]NeedsMeReason{}
+	now := map[markKey]api.NeedsMeReason{}
 	c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
 			e := c.evaluate(r, p)
 			for _, t := range e.tickets() {
 				reason, _ := e.reason(t)
-				if !reason.timed() {
+				if !isTimed(reason) {
 					continue
 				}
 				k := markKey{p.Key, t.Number, 0}
-				if cl, ok := liveClaim(t); ok && (reason == ReasonSilentClaim || reason == ReasonLongClaim) {
+				if cl, ok := liveClaim(t); ok && (reason == api.ReasonSilentClaim || reason == api.ReasonLongClaim) {
 					k.claim = cl.Number
 				}
 				now[k] = reason

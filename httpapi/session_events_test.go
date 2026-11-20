@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/store"
@@ -45,7 +46,7 @@ func (f transcriptFixture) ok(t *testing.T, method, path, body string) []byte {
 // claim claims Ticket n for session and returns the Claim ID.
 func (f transcriptFixture) claim(t *testing.T, n int, session string) string {
 	t.Helper()
-	var res core.ClaimResult
+	var res api.ClaimResult
 	json.Unmarshal(f.ok(t, "POST", "/api/p/acme/claim", fmt.Sprintf(`{"ticket":%d,"session_id":%q}`, n, session)), &res)
 	return res.ClaimID
 }
@@ -106,7 +107,7 @@ func texts(tr transcript) []string {
 
 func (f transcriptFixture) lastActivity(t *testing.T, ticket, claim int) time.Time {
 	t.Helper()
-	var v core.TicketView
+	var v api.TicketView
 	json.Unmarshal(f.ok(t, "GET", fmt.Sprintf("/api/p/acme/tickets/%d", ticket), ""), &v)
 	return v.Claims[claim-1].LastActivity
 }
@@ -293,9 +294,9 @@ func TestTranscriptOfAnUnknownProjectTicketOrClaimIsNotFound(t *testing.T) {
 		"/api/projects/acme/tickets/2/claims/x/transcript",
 	} {
 		rec := do(f.h, "GET", path, "")
-		var e core.Error
+		var e api.Error
 		json.Unmarshal(rec.Body.Bytes(), &e)
-		if rec.Code != 404 || e.Code != core.NotFound {
+		if rec.Code != 404 || e.Code != api.NotFound {
 			t.Errorf("%s: %d %s, want 404 not_found", path, rec.Code, rec.Body)
 		}
 	}

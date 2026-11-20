@@ -3,7 +3,7 @@ package cli
 import (
 	"context"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/ops"
 )
 
@@ -36,7 +36,7 @@ func runSubmitRequirement(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.SubmitRequirement(ctx, sc.project, core.SubmitRequirementInput{Text: text, Map: core.Ref(*mapRef), SkipGrilling: *skip, Draft: *draft, Full: *full})
+	v, err := sc.client.SubmitRequirement(ctx, sc.project, api.SubmitRequirementInput{Text: text, Map: api.Ref(*mapRef), SkipGrilling: *skip, Draft: *draft, Full: *full})
 	if err != nil {
 		return err
 	}

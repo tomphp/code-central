@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -14,81 +15,6 @@ import (
 // Import (ticket 40). An agent maps a repository's whole .scratch/ folder
 // into one payload, following get_import_guide; core checks it strictly
 // and writes it all at once. The service never reads a repository.
-
-// ImportInput is import's input.
-type ImportInput struct {
-	Payload ImportPayload `json:"payload" required:"true"`
-	// DryRun runs every check and returns the plan, writing nothing.
-	DryRun bool `json:"dry_run,omitempty" desc:"Check everything and return the plan, writing nothing."`
-}
-
-// ImportPayload is a whole .scratch/ folder: one Spec per feature folder,
-// and every Ticket in it. Items refer to each other by source path.
-type ImportPayload struct {
-	Specs   []ImportSpec   `json:"specs" desc:"One Spec per feature folder." required:"true"`
-	Tickets []ImportTicket `json:"tickets" desc:"Every Ticket, in folder then file-number order."`
-}
-
-// ImportSpec is one feature folder. Source becomes the Spec's source Tag.
-type ImportSpec struct {
-	Source string            `json:"source" desc:"The spec.md, map.md or folder path from the repository root." required:"true"`
-	Title  string            `json:"title" desc:"The Spec's title." required:"true"`
-	Body   string            `json:"body,omitempty" desc:"The Spec's body, in Markdown."`
-	Labels []string          `json:"labels,omitempty" desc:"Labels."`
-	Tags   map[string]string `json:"tags,omitempty" desc:"Tags as {key: value}; source is set from source."`
-}
-
-// ImportTicket is one Scratch file. Spec is its Spec's source; BlockedBy
-// and Replacements are other Tickets' sources in the same payload. State
-// defaults to Draft; Comment, when given, is stored as one comment.
-type ImportTicket struct {
-	Source       string            `json:"source" desc:"The file's path from the repository root." required:"true"`
-	Spec         string            `json:"spec" desc:"Its Spec's source." required:"true"`
-	Title        string            `json:"title" desc:"The Ticket's title." required:"true"`
-	State        domain.State      `json:"state,omitempty" desc:"Defaults to Draft." enum:"Draft,Ready,Done,Cancelled"`
-	Description  string            `json:"description,omitempty" desc:"The description, in Markdown, without the header lines that became State, Blockers, Labels or Tags."`
-	Labels       []string          `json:"labels,omitempty" desc:"Labels."`
-	Tags         map[string]string `json:"tags,omitempty" desc:"Tags as {key: value}; source is set from source."`
-	BlockedBy    []string          `json:"blocked_by,omitempty" desc:"Sources of the Tickets it waits on, in this payload."`
-	Replacements []string          `json:"replacements,omitempty" desc:"For a Cancelled Ticket, sources of the Tickets that take over its work."`
-	Comment      string            `json:"comment,omitempty" desc:"A reason to keep as a comment (wontfix, Deferred)."`
-}
-
-// ImportResult is the plan (on a dry run, with provisional IDs) or what
-// was created, grouped by Spec, with a count per State.
-type ImportResult struct {
-	DryRun      bool                 `json:"dry_run"`
-	Specs       []ImportedSpec       `json:"specs"`
-	StateCounts map[domain.State]int `json:"state_counts"`
-	NextStep    string               `json:"next_step"`
-}
-
-// ImportedSpec is one Spec of an Import's plan or result.
-type ImportedSpec struct {
-	Source  string            `json:"source"`
-	ID      string            `json:"id"`
-	Title   string            `json:"title"`
-	Labels  []string          `json:"labels"`
-	Tags    map[string]string `json:"tags"`
-	Tickets []ImportedTicket  `json:"tickets"`
-}
-
-// ImportedTicket is one Ticket of an Import's plan or result.
-type ImportedTicket struct {
-	Source       string            `json:"source"`
-	ID           string            `json:"id"`
-	Title        string            `json:"title"`
-	State        domain.State      `json:"state"`
-	Labels       []string          `json:"labels"`
-	Tags         map[string]string `json:"tags"`
-	BlockedBy    []string          `json:"blocked_by"`
-	Replacements []string          `json:"replacements"`
-}
-
-// ImportGuideView is get_import_guide's result.
-type ImportGuideView struct {
-	Guide string `json:"guide"`
-}
 
 //go:embed import-guide.md
 var importGuide string
@@ -100,11 +26,11 @@ var importNextSteps = map[string]string{
 }
 
 // GetImportGuide is get_import_guide: how to map a .scratch/ folder.
-func (c *Core) GetImportGuide(ctx context.Context, key string) (ImportGuideView, error) {
+func (c *Core) GetImportGuide(ctx context.Context, key string) (api.ImportGuideView, error) {
 	if _, err := c.GetProject(ctx, key); err != nil {
-		return ImportGuideView{}, err
+		return api.ImportGuideView{}, err
 	}
-	return ImportGuideView{Guide: importGuide}, nil
+	return api.ImportGuideView{Guide: importGuide}, nil
 }
 
 // importStates are the States an Import may create a Ticket in. Only
@@ -113,12 +39,12 @@ var importStates = []domain.State{domain.Draft, domain.Ready, domain.Done, domai
 
 // Import is import(payload, dry_run?). It writes as agent whoever calls,
 // never creates a Project, and writes everything or nothing.
-func (c *Core) Import(ctx context.Context, key string, in ImportInput) (ImportResult, error) {
+func (c *Core) Import(ctx context.Context, key string, in api.ImportInput) (api.ImportResult, error) {
 	p := in.Payload
 	if err := checkImport(ctx, p); err != nil {
-		return ImportResult{}, err
+		return api.ImportResult{}, err
 	}
-	var res ImportResult
+	var res api.ImportResult
 	plan := func(r store.Reader) (store.Import, error) {
 		if err := writable(r, key); err != nil {
 			return store.Import{}, err
@@ -149,7 +75,7 @@ func (c *Core) Import(ctx context.Context, key string, in ImportInput) (ImportRe
 		res.NextStep = importNextSteps["import"]
 	}
 	if err != nil {
-		return ImportResult{}, err
+		return api.ImportResult{}, err
 	}
 	res.DryRun = in.DryRun
 	return res, nil
@@ -157,7 +83,7 @@ func (c *Core) Import(ctx context.Context, key string, in ImportInput) (ImportRe
 
 // checkImport validates the payload on its own, naming the first fault's
 // field path. Only the human may name the auto-accept Label.
-func checkImport(ctx context.Context, p ImportPayload) error {
+func checkImport(ctx context.Context, p api.ImportPayload) error {
 	if len(p.Specs) == 0 {
 		return invalid("specs", "an Import needs at least one Spec: one per feature folder")
 	}
@@ -274,7 +200,7 @@ func singleLine(s string) bool { return strings.TrimSpace(s) != "" && !strings.C
 
 // alreadyImported refuses an Import if any Spec or Ticket in the Project
 // already has a source Tag in the payload, listing every match.
-func alreadyImported(r store.Reader, key string, p ImportPayload) error {
+func alreadyImported(r store.Reader, key string, p api.ImportPayload) error {
 	var sources []string
 	for _, s := range p.Specs {
 		sources = append(sources, s.Source)
@@ -318,15 +244,15 @@ func alreadyImported(r store.Reader, key string, p ImportPayload) error {
 
 // importBranchTags checks each new Spec's branch Tag as set_tags checks
 // one, and that no two of them share one name.
-func importBranchTags(r store.Reader, key string, p ImportPayload) error {
+func importBranchTags(r store.Reader, key string, p api.ImportPayload) error {
 	pr, _ := r.Project(key)
 	first := map[string]string{} // name → the field that first gave it
 	for i, s := range p.Specs {
-		name, ok := s.Tags[BranchTag]
+		name, ok := s.Tags[domain.BranchTag]
 		if !ok {
 			continue
 		}
-		field := fmt.Sprintf("specs[%d].tags.%s", i, BranchTag)
+		field := fmt.Sprintf("specs[%d].tags.%s", i, domain.BranchTag)
 		if err := checkBranchTagName(pr, field, name); err != nil {
 			return err
 		}
@@ -343,7 +269,7 @@ func importBranchTags(r store.Reader, key string, p ImportPayload) error {
 
 // buildImport numbers every item from the counter in source order (each
 // Spec, then its Tickets) and builds the records and the plan.
-func (c *Core) buildImport(r store.Reader, key string, p ImportPayload) (store.Import, ImportResult) {
+func (c *Core) buildImport(r store.Reader, key string, p api.ImportPayload) (store.Import, api.ImportResult) {
 	now := c.now()
 	next := r.NextNumber(key)
 	numbers := map[string]int{}
@@ -377,15 +303,15 @@ func (c *Core) buildImport(r store.Reader, key string, p ImportPayload) (store.I
 	}
 
 	var im store.Import
-	res := ImportResult{StateCounts: map[domain.State]int{}}
+	res := api.ImportResult{StateCounts: map[domain.State]int{}}
 	bySpec := map[int]int{} // Spec number → index in res.Specs
 	for _, s := range p.Specs {
 		sp := domain.Spec{Number: numbers[s.Source], Title: s.Title, Labels: s.Labels, Tags: withSource(s.Tags, s.Source),
 			Created: now, Updated: now, Body: s.Body}
 		im.Specs = append(im.Specs, sp)
 		bySpec[sp.Number] = len(res.Specs)
-		res.Specs = append(res.Specs, ImportedSpec{Source: s.Source, ID: DisplayID(key, sp.Number), Title: sp.Title,
-			Labels: orEmpty(sp.Labels), Tags: sp.Tags, Tickets: []ImportedTicket{}})
+		res.Specs = append(res.Specs, api.ImportedSpec{Source: s.Source, ID: DisplayID(key, sp.Number), Title: sp.Title,
+			Labels: orEmpty(sp.Labels), Tags: sp.Tags, Tickets: []api.ImportedTicket{}})
 	}
 	for _, i := range order {
 		t := p.Tickets[i]
@@ -397,15 +323,15 @@ func (c *Core) buildImport(r store.Reader, key string, p ImportPayload) (store.I
 			Number: numbers[t.Source], Title: t.Title, State: state, Spec: numbers[t.Spec],
 			Labels: t.Labels, Tags: withSource(t.Tags, t.Source), BlockedBy: refs(t.BlockedBy), Replacements: refs(t.Replacements),
 			Created: now, Updated: now, Description: t.Description,
-			Moves: []domain.Move{{To: state, Actor: string(Agent), Time: now, Via: "import"}},
+			Moves: []domain.Move{{To: state, Actor: string(api.Agent), Time: now, Via: "import"}},
 		}
 		if t.Comment != "" {
-			addComment(&tk, Agent, now, 0, t.Comment)
+			addComment(&tk, api.Agent, now, 0, t.Comment)
 		}
 		im.Tickets = append(im.Tickets, tk)
 		res.StateCounts[state]++
 		g := &res.Specs[bySpec[tk.Spec]]
-		g.Tickets = append(g.Tickets, ImportedTicket{
+		g.Tickets = append(g.Tickets, api.ImportedTicket{
 			Source: t.Source, ID: DisplayID(key, tk.Number), Title: tk.Title, State: state,
 			Labels: orEmpty(tk.Labels), Tags: tk.Tags,
 			BlockedBy: displayIDs(key, tk.BlockedBy), Replacements: displayIDs(key, tk.Replacements),
@@ -428,7 +354,7 @@ func importCycles(r store.Reader, key string, im store.Import) error {
 			return cycleError(key, append([]int{t.Number}, path...))
 		}
 		if path := replacementPath(ov, key, t.Replacements, t.Number, map[int]bool{}); path != nil {
-			return &Error{Code: Cycle, Message: "the Replacements form a loop: " + strings.Join(displayIDs(key, append([]int{t.Number}, path...)), " → ") + " (each is replaced by the next)"}
+			return &api.Error{Code: api.Cycle, Message: "the Replacements form a loop: " + strings.Join(displayIDs(key, append([]int{t.Number}, path...)), " → ") + " (each is replaced by the next)"}
 		}
 	}
 	return nil

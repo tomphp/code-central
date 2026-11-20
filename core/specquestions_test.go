@@ -3,7 +3,7 @@ package core_test
 import (
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -12,7 +12,7 @@ import (
 func TestGetSpecQuestionsRollsUpItsTicketsRounds(t *testing.T) {
 	f := newFixture(t)
 	f.asking(t, qDB, qName) // Spec acme-1, Ticket acme-2 asking
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "No questions"})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "No questions"})
 	other := f.spec(t, "acme", "Other")
 
 	v, err := f.core.GetSpecQuestions(human, "acme", "acme-1")
@@ -30,12 +30,12 @@ func TestGetSpecQuestionsRollsUpItsTicketsRounds(t *testing.T) {
 		t.Fatalf("questions %+v", qs)
 	}
 
-	v, err = f.core.GetSpecQuestions(human, "acme", core.Ref(other.ID))
+	v, err = f.core.GetSpecQuestions(human, "acme", api.Ref(other.ID))
 	if err != nil || v.Tickets == nil || len(v.Tickets) != 0 {
 		t.Fatalf("a Spec without Questions: %+v, %v", v, err)
 	}
 	_, err = f.core.GetSpecQuestions(human, "acme", "acme-2")
-	wantCode(t, err, core.NotFound, "")
+	wantCode(t, err, api.NotFound, "")
 	_, err = f.core.GetSpecQuestions(human, "nope", "1")
-	wantCode(t, err, core.UnknownProject, "")
+	wantCode(t, err, api.UnknownProject, "")
 }

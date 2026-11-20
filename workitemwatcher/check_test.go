@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakeazdo"
 	"github.com/tomoram/code-central/watchers/watchertest"
 	"github.com/tomoram/code-central/workitemwatcher"
@@ -28,7 +28,7 @@ func newChecking(t *testing.T, environ ...string) *checking {
 	t.Helper()
 	h := watchertest.New(t)
 	srv := codecentraltest.NewServer(t, codecentraltest.WithAzureBoardsCheck(workitemwatcher.Checker(h.CodeCentral, append(h.Environ(), environ...))))
-	if _, err := srv.Core.CreateProject(human, core.CreateProjectInput{Key: "acme"}); err != nil {
+	if _, err := srv.Core.CreateProject(human, api.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)
 	}
 	c := &checking{t: t, fake: fakeazdo.New(t), srv: srv}
@@ -39,21 +39,21 @@ func newChecking(t *testing.T, environ ...string) *checking {
 
 // turnOn is the human turning Azure Boards on for the saved query.
 func (c *checking) turnOn() error {
-	_, err := c.srv.Core.SetAzureBoards(human, "acme", core.SetAzureBoardsInput{On: true, QueryURL: c.fake.ProjectURL() + "/_queries/query/" + queryID})
+	_, err := c.srv.Core.SetAzureBoards(human, "acme", api.SetAzureBoardsInput{On: true, QueryURL: c.fake.ProjectURL() + "/_queries/query/" + queryID})
 	return err
 }
 
 // refused is err as the check's refusal.
-func refused(t *testing.T, err error) *core.Error {
+func refused(t *testing.T, err error) *api.Error {
 	t.Helper()
-	var e *core.Error
-	if !errors.As(err, &e) || e.Code != core.Invalid || e.Field != "on" {
+	var e *api.Error
+	if !errors.As(err, &e) || e.Code != api.Invalid || e.Field != "on" {
 		t.Fatalf("err = %v, want Azure Boards refused by its check", err)
 	}
 	return e
 }
 
-func (c *checking) boards() core.AzureBoardsView {
+func (c *checking) boards() api.AzureBoardsView {
 	c.t.Helper()
 	p, err := c.srv.Client.GetProject(human, "acme")
 	if err != nil {
@@ -147,7 +147,7 @@ func TestEachFailedAzureBoardsCheckRefusesWithItsProblemAndFix(t *testing.T) {
 
 func TestAWIQLErrorRefusesWithAzureDevOpsOwnMessage(t *testing.T) {
 	c := newChecking(t, "ADO_PAT="+pat)
-	_, err := c.srv.Core.SetAzureBoards(human, "acme", core.SetAzureBoardsInput{On: true, Mode: "wiql", ProjectURL: c.fake.ProjectURL(), Where: "[Nope] = 1"})
+	_, err := c.srv.Core.SetAzureBoards(human, "acme", api.SetAzureBoardsInput{On: true, Mode: "wiql", ProjectURL: c.fake.ProjectURL(), Where: "[Nope] = 1"})
 	e := refused(t, err)
 	if !strings.Contains(e.Message, "TF51005: The query references a field that does not exist.") || !strings.Contains(e.Fix, "WHERE clause") {
 		t.Fatalf("refusal %q, fix %q; want Azure DevOps' own message and the WHERE clause to fix", e.Message, e.Fix)
@@ -158,7 +158,7 @@ func TestAWIQLFilterPassesTheCheckAndTheWriteCheckGoesToItsFirstResult(t *testin
 	c := newChecking(t, "ADO_PAT="+pat)
 	c.fake.PutWorkItems(fakeazdo.WorkItem{ID: 9, Title: "Nine", Type: "Bug", State: "Approved"})
 	c.fake.Filter("[System.State] = 'Approved'", 9, 7)
-	_, err := c.srv.Core.SetAzureBoards(human, "acme", core.SetAzureBoardsInput{On: true, Mode: "wiql", ProjectURL: c.fake.ProjectURL(), Where: "[System.State] = 'Approved'"})
+	_, err := c.srv.Core.SetAzureBoards(human, "acme", api.SetAzureBoardsInput{On: true, Mode: "wiql", ProjectURL: c.fake.ProjectURL(), Where: "[System.State] = 'Approved'"})
 	if err != nil {
 		t.Fatalf("turning on: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestAChangeWhileOnIsCheckedAndRefusedLeavingTheSettingsAsTheyWere(t *testin
 	if err := c.turnOn(); err != nil {
 		t.Fatal(err)
 	}
-	_, err := c.srv.Core.SetAzureBoards(human, "acme", core.SetAzureBoardsInput{On: true, QueryURL: c.fake.ProjectURL() + "/_queries/query/00000000-0000-0000-0000-000000000000"})
+	_, err := c.srv.Core.SetAzureBoards(human, "acme", api.SetAzureBoardsInput{On: true, QueryURL: c.fake.ProjectURL() + "/_queries/query/00000000-0000-0000-0000-000000000000"})
 	if e := refused(t, err); !strings.Contains(e.Message, "can't find the saved query") {
 		t.Fatalf("refusal %q, want the saved query not found", e.Message)
 	}
@@ -187,7 +187,7 @@ func TestThePATVariableDefaultsToADOPATAndCanBeNamed(t *testing.T) {
 	if e := refused(t, c.turnOn()); !strings.Contains(e.Message, "ADO_PAT") {
 		t.Fatalf("refusal %q, want ADO_PAT, the default, named", e.Message)
 	}
-	_, err := c.srv.Core.SetAzureBoards(human, "acme", core.SetAzureBoardsInput{On: true, PATEnv: "OTHER_PAT", QueryURL: c.fake.ProjectURL() + "/_queries/query/" + queryID})
+	_, err := c.srv.Core.SetAzureBoards(human, "acme", api.SetAzureBoardsInput{On: true, PATEnv: "OTHER_PAT", QueryURL: c.fake.ProjectURL() + "/_queries/query/" + queryID})
 	if err != nil {
 		t.Fatalf("with the variable named: %v", err)
 	}

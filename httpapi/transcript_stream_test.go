@@ -12,10 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 	"github.com/tomoram/code-central/ids"
-	"github.com/tomoram/code-central/ops"
+	"github.com/tomoram/code-central/ops/bind"
 )
 
 // frame is one SSE event on a Transcript stream.
@@ -255,9 +256,9 @@ func TestATranscriptStreamOfAnUnknownProjectTicketOrClaimIsNotFound(t *testing.T
 		"/api/projects/acme/tickets/2/claims/x/transcript/stream",
 	} {
 		rec := do(f.h, "GET", path, "")
-		var e core.Error
+		var e api.Error
 		json.Unmarshal(rec.Body.Bytes(), &e)
-		if rec.Code != 404 || e.Code != core.NotFound {
+		if rec.Code != 404 || e.Code != api.NotFound {
 			t.Errorf("%s: %d %s, want 404 not_found", path, rec.Code, rec.Body)
 		}
 	}
@@ -291,11 +292,11 @@ func TestATranscriptStreamOfATranscriptAnotherServiceHoldsNamesItsHostAndEnds(t 
 			t.Fatal(err)
 		}
 		if svc.Host == "laptop" {
-			c.PostSessionEvents(context.Background(), "s1", []core.SessionEvent{{Time: f.clock.Now(), Kind: core.EventText, Text: "one"}})
+			c.PostSessionEvents(context.Background(), "s1", []api.SessionEvent{{Time: f.clock.Now(), Kind: api.EventText, Text: "one"}})
 			continue
 		}
 		mux := http.NewServeMux()
-		httpapi.Register(mux, ops.Serve(c))
+		httpapi.Register(mux, bind.Serve(c))
 		desktop = mux
 	}
 

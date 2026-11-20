@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -14,66 +15,21 @@ import (
 // with Stage Tickets: the human submits its text, and Code Central
 // creates the Spec and its three Stages in one staged write.
 
-// StagePrefix is the reserved Label prefix that marks a Stage Ticket.
-const StagePrefix = "stage:"
-
-// StageName is a Stage's name, its Label's suffix.
-type StageName string
-
-// The Stages' names.
-const (
-	StageGrilling StageName = "grilling"
-	StageSpec     StageName = "spec"
-	StageTickets  StageName = "tickets"
-)
-
-// Stages are the three Stages in order.
-func Stages() []StageName { return []StageName{StageGrilling, StageSpec, StageTickets} }
-
-// StageLabel is the Label that marks a Ticket as the named Stage.
-func StageLabel(stage StageName) string { return StagePrefix + string(stage) }
-
 // checkStageLabels rejects a reserved stage:* Label that names no Stage.
 func checkStageLabels(field string, labels []string) error {
 	for _, l := range labels {
-		name, ok := strings.CutPrefix(l, StagePrefix)
-		if ok && !slices.Contains(Stages(), StageName(name)) {
-			return invalid(field, "%q uses the reserved %q prefix; the only Stage Labels are stage:grilling, stage:spec and stage:tickets", l, StagePrefix)
+		name, ok := strings.CutPrefix(l, domain.StagePrefix)
+		if ok && !slices.Contains(domain.Stages(), domain.StageName(name)) {
+			return invalid(field, "%q uses the reserved %q prefix; the only Stage Labels are stage:grilling, stage:spec and stage:tickets", l, domain.StagePrefix)
 		}
 	}
 	return nil
 }
 
-// SubmitRequirementInput is submit_requirement's input: the Requirement's
-// free text, whose first line becomes the Spec's title.
-type SubmitRequirementInput struct {
-	Text string `json:"text" desc:"The Requirement's text, in Markdown; its first line becomes the Spec's title." required:"true"`
-	// Map is the finished Map the Requirement is written from, if any
-	// (Write the Spec): its Decisions take the grilling Stage's place.
-	Map Ref `json:"map,omitempty" desc:"A Map with no unfinished Tickets to write the Spec from: the Requirement gets only the spec and tickets Stages, and a map Tag naming the Map."`
-	// SkipGrilling is Straight to Spec: no grilling Stage, so the spec
-	// Stage works from the text alone. It can't be given with Map.
-	SkipGrilling bool `json:"skip_grilling,omitempty" desc:"Straight to Spec: create no grilling Stage, so the spec Stage is written from the text alone. Can't be given with map."`
-	// Full asks for the Spec and Stage Tickets in place of their
-	// Acknowledgements.
-	Full bool `json:"full,omitempty" desc:"Return the whole Spec and Stage Tickets instead of their acknowledgements."`
-	// Draft saves every Ticket the submit writes as Draft, not Ready, so
-	// nothing is claimed until the human moves them to Ready.
-	Draft bool `json:"draft,omitempty" desc:"Save the Spec's Tickets as Draft instead of Ready, so nothing is claimed until the human moves them to Ready; not with map."`
-}
-
-// SubmitRequirementResult is the new Requirement: its Spec and its Stage
-// Tickets (three, or two when made from a Map), in order, each
-// acknowledged, or with full each the record.
-type SubmitRequirementResult struct {
-	Spec   Written[SpecView]     `json:"spec"`
-	Stages []Written[TicketView] `json:"stages"`
-}
-
 // stageTickets are what submit_requirement writes for each Stage: its
 // Ticket's title, before the Requirement's, and its description, given
 // the Spec's ID. Each Stage's guide is stageguides/<name>.md.
-var stageTickets = map[StageName]struct{ title, description string }{
+var stageTickets = map[domain.StageName]struct{ title, description string }{
 	"grilling": {"Grilling", "Grill the human on the Requirement in Spec [%[1]s](%[1]s), until every decision, new term and open point is settled.\n"},
 	"spec":     {"Spec", "Write the Spec for the Requirement in Spec [%[1]s](%[1]s), from its text and the grilling Ticket's Rounds and resolution.\n"},
 	"tickets":  {"Tickets", "Slice the Spec [%[1]s](%[1]s) into implementation Tickets.\n"},
@@ -94,32 +50,32 @@ const mapSpecDescription = "Write the Spec for the Requirement in Spec [%[1]s](%
 // SubmitRequirement is submit_requirement(text, map?, skip_grilling?). It writes as human
 // whoever calls, all its records or none. With map, the Requirement has
 // only the spec and tickets Stages, and its map Tag names the Map.
-func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequirementInput) (SubmitRequirementResult, error) {
+func (c *Core) SubmitRequirement(_ context.Context, key string, in api.SubmitRequirementInput) (api.SubmitRequirementResult, error) {
 	title := titleLine(in.Text)
 	if title == "" {
-		return SubmitRequirementResult{}, invalid("text", "a Requirement needs text; its first line becomes the Spec's title")
+		return api.SubmitRequirementResult{}, invalid("text", "a Requirement needs text; its first line becomes the Spec's title")
 	}
 	if in.SkipGrilling && in.Map != "" {
-		return SubmitRequirementResult{}, invalid("skip_grilling", "skip_grilling can't be given with map: a Requirement written from a Map has no grilling Stage already")
+		return api.SubmitRequirementResult{}, invalid("skip_grilling", "skip_grilling can't be given with map: a Requirement written from a Map has no grilling Stage already")
 	}
 	if in.Draft && in.Map != "" {
-		return SubmitRequirementResult{}, invalid("draft", "Write the Spec, a Requirement made from a Map, is saved as Ready only")
+		return api.SubmitRequirementResult{}, invalid("draft", "Write the Spec, a Requirement made from a Map, is saved as Ready only")
 	}
-	var res SubmitRequirementResult
+	var res api.SubmitRequirementResult
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		stages, mapID := Stages(), ""
+		stages, mapID := domain.Stages(), ""
 		if in.SkipGrilling {
-			stages = Stages()[1:]
+			stages = domain.Stages()[1:]
 		}
 		if in.Map != "" {
 			m, err := finishedMap(w, key, in.Map)
 			if err != nil {
 				return err
 			}
-			stages, mapID = Stages()[1:], DisplayID(key, m.Number)
+			stages, mapID = domain.Stages()[1:], DisplayID(key, m.Number)
 		}
 		sp := domain.Spec{Title: title, Body: in.Text}
 		if mapID != "" {
@@ -140,7 +96,7 @@ func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequire
 // body, Tags and Link, as a Requirement with these Stages, with the
 // Spec's number and its Stage Tickets'. mapID is the Map it is made
 // from, if any.
-func (c *Core) requirementImport(r store.Reader, key string, sp domain.Spec, stages []StageName, mapID string, draft bool) (store.Import, int, []int) {
+func (c *Core) requirementImport(r store.Reader, key string, sp domain.Spec, stages []domain.StageName, mapID string, draft bool) (store.Import, int, []int) {
 	now := c.now()
 	specN := r.NextNumber(key)
 	sp.Number, sp.Created, sp.Updated = specN, now, now
@@ -161,7 +117,7 @@ func (c *Core) requirementImport(r store.Reader, key string, sp domain.Spec, sta
 		}
 		im.Tickets = append(im.Tickets, domain.Ticket{
 			Number: n, Title: stageTickets[stage].title + ": " + sp.Title, State: submitState(draft), Spec: specN,
-			Labels: []string{StageLabel(stage)}, BlockedBy: blockedBy, Created: now, Updated: now,
+			Labels: []string{domain.StageLabel(stage)}, BlockedBy: blockedBy, Created: now, Updated: now,
 			Description: description,
 			Moves:       submitMoves(draft, now, "submit_requirement"),
 		})
@@ -172,8 +128,8 @@ func (c *Core) requirementImport(r store.Reader, key string, sp domain.Spec, sta
 
 // requirementResult acknowledges the Requirement requirementImport wrote,
 // or with full gives its records.
-func (c *Core) requirementResult(r store.Reader, key string, specN int, stageNs []int, full bool) (SubmitRequirementResult, error) {
-	var res SubmitRequirementResult
+func (c *Core) requirementResult(r store.Reader, key string, specN int, stageNs []int, full bool) (api.SubmitRequirementResult, error) {
+	var res api.SubmitRequirementResult
 	s, _ := r.Spec(key, specN)
 	var err error
 	if res.Spec, err = acknowledgeCreate(specView(key, domain.Spec{}), specView(key, s), full); err != nil {
@@ -192,14 +148,14 @@ func (c *Core) requirementResult(r store.Reader, key string, specN int, stageNs 
 
 // finishedMap reads the Map ref names as submit_requirement's map, which
 // must be labelled wayfinder:map and have no unfinished Tickets.
-func finishedMap(r store.Reader, key string, ref Ref) (domain.Spec, error) {
+func finishedMap(r store.Reader, key string, ref api.Ref) (domain.Spec, error) {
 	m, err := resolveSpec(r, key, "submit_requirement", "map", ref)
 	if err != nil {
 		return domain.Spec{}, err
 	}
 	id := DisplayID(key, m.Number)
 	if !isMap(m.Labels) {
-		return domain.Spec{}, invalid("map", "%s isn't a Map: a Map is a Spec labelled %s", id, MapLabel)
+		return domain.Spec{}, invalid("map", "%s isn't a Map: a Map is a Spec labelled %s", id, domain.MapLabel)
 	}
 	var open []string
 	for _, t := range specTickets(r, key, m.Number) {
@@ -208,7 +164,7 @@ func finishedMap(r store.Reader, key string, ref Ref) (domain.Spec, error) {
 		}
 	}
 	if len(open) > 0 {
-		return domain.Spec{}, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf(
+		return domain.Spec{}, &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf(
 			"Map %s still has unfinished Tickets, so its Spec can't be written until every one is Done or Cancelled: %s",
 			id, strings.Join(open, ", "))}
 	}
@@ -227,128 +183,13 @@ func titleLine(text string) string {
 	return ""
 }
 
-// RequirementView is the requirement block on a Spec read, present only
-// when the Spec is a Requirement: it has at least one Stage Ticket.
-// Nothing in it is stored.
-type RequirementView struct {
-	// Map is the Map the Requirement was made from, from its map Tag, set
-	// only when it has no grilling Stage.
-	Map string `json:"map,omitempty"`
-	// Stages are the Stage Tickets in Stage order.
-	Stages []StageView `json:"stages"`
-	// Build is how far the implementation Tickets have got.
-	Build BuildProgress `json:"build"`
-	// WaitingForFactory is whether the next Ticket can be claimed but
-	// nothing has claimed it.
-	WaitingForFactory bool `json:"waiting_for_factory"`
-	// Segments are the Stage strip's: one per Stage, then Build, with a
-	// first grilling segment for a Requirement made from a Map (done) or
-	// one submitted Straight to Spec (skipped).
-	Segments []Segment `json:"segments"`
-	// Current is the Stage of the first segment neither done nor skipped,
-	// else build.
-	Current SegmentStage `json:"current"`
-	// Needs are every Ticket of the Requirement waiting on the human: the
-	// Stage Tickets in Stage order, then the Build Tickets in claim order.
-	Needs []RequirementNeed `json:"needs"`
-	// DefaultTicket is the Ticket the Requirement opens on: the first of
-	// Needs, else the current segment's, else the first unfinished Build
-	// Ticket, else the last Build Ticket, else the last segment's with one.
-	DefaultTicket string `json:"default_ticket,omitempty"`
-}
-
-// SegmentStage is a Stage strip segment's Stage: a Stage's name, or build.
-type SegmentStage string
-
-// SegmentBuild is the Build segment's Stage.
-const SegmentBuild SegmentStage = "build"
-
-// SegmentStages are the segments' Stages in strip order.
-func SegmentStages() []SegmentStage {
-	return []SegmentStage{SegmentStage(StageGrilling), SegmentStage(StageSpec), SegmentStage(StageTickets), SegmentBuild}
-}
-
-// SegmentProgress is how far a Stage strip segment has got.
-type SegmentProgress string
-
-// The segments' progress values (the glossary's Stage strip).
-const (
-	// ProgressDone is finished.
-	ProgressDone SegmentProgress = "done"
-	// ProgressSkipped is a Cancelled Stage, or the grilling of a
-	// Requirement submitted Straight to Spec: passed over as a done one is.
-	ProgressSkipped SegmentProgress = "skipped"
-	// ProgressNeeds is waiting on the human.
-	ProgressNeeds SegmentProgress = "needs"
-	// ProgressQueued is claimable, waiting for a Factory.
-	ProgressQueued SegmentProgress = "queued"
-	// ProgressRunning is a Factory on it.
-	ProgressRunning SegmentProgress = "running"
-	// ProgressWaiting is not started, behind an earlier segment.
-	ProgressWaiting SegmentProgress = "waiting"
-)
-
-// SegmentProgresses are the segments' progress values.
-func SegmentProgresses() []SegmentProgress {
-	return []SegmentProgress{ProgressDone, ProgressSkipped, ProgressNeeds, ProgressQueued, ProgressRunning, ProgressWaiting}
-}
-
-// Segment is one segment of a Requirement's Stage strip.
-type Segment struct {
-	Stage    SegmentStage    `json:"stage"`
-	Progress SegmentProgress `json:"progress"`
-	// Ticket is the Stage Ticket; Build and a Map's segment have none.
-	Ticket string `json:"ticket,omitempty"`
-	// Map is the Map the Requirement was made from, on the segment that
-	// stands in for its grilling Stage.
-	Map string `json:"map,omitempty"`
-	// Reason is why the segment needs the human: its Stage Ticket's
-	// reason, or Build's first need's.
-	Reason NeedsMeReason `json:"reason,omitempty"`
-}
-
-// RequirementNeed is one Ticket of a Requirement waiting on the human,
-// with its Stage when it is a Stage Ticket.
-type RequirementNeed struct {
-	Ticket string        `json:"ticket"`
-	Reason NeedsMeReason `json:"reason"`
-	Stage  StageName     `json:"stage,omitempty"`
-}
-
-// StageView is one Stage Ticket: its Stage name, Ticket ID, State and
-// Needs Me reason, if any.
-type StageView struct {
-	Name          StageName     `json:"name"`
-	Ticket        string        `json:"ticket"`
-	State         domain.State  `json:"state"`
-	NeedsMeReason NeedsMeReason `json:"needs_me_reason,omitempty"`
-}
-
-// BuildProgress is the implementation Tickets Done over their total,
-// leaving out Cancelled ones.
-type BuildProgress struct {
-	Done  int `json:"done"`
-	Total int `json:"total"`
-}
-
-// StageOf is the Stage a Ticket's Labels mark it as, or "" for an
-// implementation Ticket.
-func StageOf(labels []string) StageName {
-	for _, l := range labels {
-		if name, ok := strings.CutPrefix(l, StagePrefix); ok && slices.Contains(Stages(), StageName(name)) {
-			return StageName(name)
-		}
-	}
-	return ""
-}
-
 // requirementView is the requirement block for Spec s with these Tickets
 // (in claim order), or nil when none of them is a Stage Ticket, reading
 // their reasons from their Project's evaluation e.
-func requirementView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *RequirementView {
+func requirementView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *api.RequirementView {
 	var stages, build []domain.Ticket
 	for _, t := range tickets {
-		if StageOf(t.Labels) != "" {
+		if domain.StageOf(t.Labels) != "" {
 			stages = append(stages, t)
 		} else {
 			build = append(build, t)
@@ -358,7 +199,7 @@ func requirementView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *Req
 		return nil
 	}
 	slices.SortStableFunc(stages, func(a, b domain.Ticket) int {
-		return slices.Index(Stages(), StageOf(a.Labels)) - slices.Index(Stages(), StageOf(b.Labels))
+		return slices.Index(domain.Stages(), domain.StageOf(a.Labels)) - slices.Index(domain.Stages(), domain.StageOf(b.Labels))
 	})
 	// claimable is a Ticket a Factory could claim now; one waiting on the
 	// human doesn't count.
@@ -366,14 +207,14 @@ func requirementView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *Req
 		reason, _ := e.reason(t)
 		return t.State == domain.Ready && !e.rule.blocked(t) && reason == ""
 	}
-	v := &RequirementView{Stages: []StageView{}}
-	if StageOf(stages[0].Labels) != StageGrilling {
+	v := &api.RequirementView{Stages: []api.StageView{}}
+	if domain.StageOf(stages[0].Labels) != domain.StageGrilling {
 		v.Map = s.Tags[MapTag]
 	}
 	firstOpen := -1
 	for i, t := range stages {
 		reason, _ := e.reason(t)
-		v.Stages = append(v.Stages, StageView{Name: StageOf(t.Labels), Ticket: DisplayID(e.p.Key, t.Number), State: t.State, NeedsMeReason: reason})
+		v.Stages = append(v.Stages, api.StageView{Name: domain.StageOf(t.Labels), Ticket: DisplayID(e.p.Key, t.Number), State: t.State, NeedsMeReason: reason})
 		if firstOpen < 0 && !finished(t.State) {
 			firstOpen = i
 		}
@@ -397,82 +238,82 @@ func requirementView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *Req
 			return claimed
 		})
 	}
-	v.setStrip(e, stages, build, firstOpen)
+	requirementSetStrip(v, e, stages, build, firstOpen)
 	return v
 }
 
-// setStrip sets v's Stage strip, its current segment, needs and default
+// requirementSetStrip sets v's Stage strip, its current segment, needs and default
 // Ticket from its Stage Tickets (in Stage order) and Build Tickets (in
 // claim order), firstOpen being the index of the first open Stage or -1,
 // and v's Map, Build and WaitingForFactory already set.
-func (v *RequirementView) setStrip(e *evaluation, stages, build []domain.Ticket, firstOpen int) {
+func requirementSetStrip(v *api.RequirementView, e *evaluation, stages, build []domain.Ticket, firstOpen int) {
 	id := func(t domain.Ticket) string { return DisplayID(e.p.Key, t.Number) }
-	v.Segments, v.Needs = []Segment{}, []RequirementNeed{}
+	v.Segments, v.Needs = []api.Segment{}, []api.RequirementNeed{}
 	// A Requirement made from a Map has no grilling Stage: the Map did that.
 	// One with neither was submitted Straight to Spec (ADR 0036).
 	if v.Map != "" {
-		v.Segments = append(v.Segments, Segment{Stage: SegmentStage(StageGrilling), Progress: ProgressDone, Map: v.Map})
-	} else if StageOf(stages[0].Labels) != StageGrilling {
-		v.Segments = append(v.Segments, Segment{Stage: SegmentStage(StageGrilling), Progress: ProgressSkipped})
+		v.Segments = append(v.Segments, api.Segment{Stage: api.SegmentStage(domain.StageGrilling), Progress: api.ProgressDone, Map: v.Map})
+	} else if domain.StageOf(stages[0].Labels) != domain.StageGrilling {
+		v.Segments = append(v.Segments, api.Segment{Stage: api.SegmentStage(domain.StageGrilling), Progress: api.ProgressSkipped})
 	}
 	for i, t := range stages {
 		reason, _ := e.reason(t)
-		seg := Segment{Stage: SegmentStage(StageOf(t.Labels)), Ticket: id(t), Reason: reason}
+		seg := api.Segment{Stage: api.SegmentStage(domain.StageOf(t.Labels)), Ticket: id(t), Reason: reason}
 		switch {
 		case t.State == domain.Done:
-			seg.Progress = ProgressDone
+			seg.Progress = api.ProgressDone
 		case t.State == domain.Cancelled:
-			seg.Progress = ProgressSkipped
+			seg.Progress = api.ProgressSkipped
 		case reason != "":
-			seg.Progress = ProgressNeeds
+			seg.Progress = api.ProgressNeeds
 		case i == firstOpen && v.WaitingForFactory:
-			seg.Progress = ProgressQueued
+			seg.Progress = api.ProgressQueued
 		case t.State == domain.Ready || t.State == domain.Draft:
-			seg.Progress = ProgressWaiting
+			seg.Progress = api.ProgressWaiting
 		default:
-			seg.Progress = ProgressRunning
+			seg.Progress = api.ProgressRunning
 		}
 		v.Segments = append(v.Segments, seg)
 		if reason != "" {
-			v.Needs = append(v.Needs, RequirementNeed{Ticket: seg.Ticket, Reason: reason, Stage: StageOf(t.Labels)})
+			v.Needs = append(v.Needs, api.RequirementNeed{Ticket: seg.Ticket, Reason: reason, Stage: domain.StageOf(t.Labels)})
 		}
 	}
 	stageNeeds := len(v.Needs)
 	for _, t := range build {
 		if reason, _ := e.reason(t); reason != "" {
-			v.Needs = append(v.Needs, RequirementNeed{Ticket: id(t), Reason: reason})
+			v.Needs = append(v.Needs, api.RequirementNeed{Ticket: id(t), Reason: reason})
 		}
 	}
 	buildNeeds := v.Needs[stageNeeds:]
-	seg := Segment{Stage: SegmentBuild}
+	seg := api.Segment{Stage: api.SegmentBuild}
 	inBuild := firstOpen < 0
 	switch {
 	case v.Build.Total > 0 && v.Build.Done == v.Build.Total && len(buildNeeds) == 0:
-		seg.Progress = ProgressDone
+		seg.Progress = api.ProgressDone
 	case len(buildNeeds) > 0:
-		seg.Progress, seg.Reason = ProgressNeeds, buildNeeds[0].Reason
+		seg.Progress, seg.Reason = api.ProgressNeeds, buildNeeds[0].Reason
 	case inBuild && v.WaitingForFactory:
-		seg.Progress = ProgressQueued
+		seg.Progress = api.ProgressQueued
 	case inBuild && v.Build.Total > 0:
-		seg.Progress = ProgressRunning
+		seg.Progress = api.ProgressRunning
 	default:
-		seg.Progress = ProgressWaiting
+		seg.Progress = api.ProgressWaiting
 	}
 	v.Segments = append(v.Segments, seg)
 
-	at := slices.IndexFunc(v.Segments, func(s Segment) bool { return s.Progress != ProgressDone && s.Progress != ProgressSkipped })
+	at := slices.IndexFunc(v.Segments, func(s api.Segment) bool { return s.Progress != api.ProgressDone && s.Progress != api.ProgressSkipped })
 	if at < 0 {
 		at = len(v.Segments) - 1
 	}
 	v.Current = v.Segments[at].Stage
-	v.DefaultTicket = v.defaultTicket(v.Segments[at], build, id)
+	v.DefaultTicket = requirementDefaultTicket(v, v.Segments[at], build, id)
 }
 
-// defaultTicket is the Ticket the Requirement opens on, given its current
+// requirementDefaultTicket is the Ticket the Requirement opens on, given its current
 // segment and its Build Tickets: the first of its needs, else the current
 // segment's, else the first unfinished Build Ticket, else the last of
 // them, else the last segment's with one; "" when there is none.
-func (v *RequirementView) defaultTicket(current Segment, build []domain.Ticket, id func(domain.Ticket) string) string {
+func requirementDefaultTicket(v *api.RequirementView, current api.Segment, build []domain.Ticket, id func(domain.Ticket) string) string {
 	if len(v.Needs) > 0 {
 		return v.Needs[0].Ticket
 	}

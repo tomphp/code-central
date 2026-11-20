@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -16,20 +17,6 @@ import (
 // instead of on its next --poll tick. The call carries no work: the
 // Factory's poll decides what to do. The open calls are held in memory
 // only, and a wake with no call open is not remembered.
-
-// FactoryWake is what next_factory_wake returns: Woken when a change the
-// Factory's poll acts on ended the call, and empty when it timed out, a
-// newer call replaced it or its request ended.
-type FactoryWake struct {
-	Woken bool `json:"woken,omitempty"`
-}
-
-// NextFactoryWakeInput is the Factory's next_factory_wake(factory, host),
-// named as its Heartbeat names it.
-type NextFactoryWakeInput struct {
-	Factory string `json:"-" query:"factory"`
-	Host    string `json:"-" query:"host"`
-}
 
 // longPoll is one open long-poll call: next_chat_work or
 // next_factory_wake. wake fires when there may be something for it;
@@ -153,10 +140,10 @@ func (c *Core) WaitingFactoryWakes(key string) int {
 // returns woken; or, for at most WaitTimeout on the injected clock or
 // until ctx ends, and then returns empty. A newer call from the same
 // Factory and host ends this one, empty.
-func (c *Core) NextFactoryWake(ctx context.Context, key string, in NextFactoryWakeInput) (FactoryWake, error) {
+func (c *Core) NextFactoryWake(ctx context.Context, key string, in api.NextFactoryWakeInput) (api.FactoryWake, error) {
 	k, err := c.longPollKey(key, in.Factory, in.Host)
 	if err != nil {
-		return FactoryWake{}, err
+		return api.FactoryWake{}, err
 	}
 	p := newLongPoll()
 	c.factoryWakes.open(k, p)
@@ -164,18 +151,18 @@ func (c *Core) NextFactoryWake(ctx context.Context, key string, in NextFactoryWa
 	timeout := c.clock.After(WaitTimeout)
 	select {
 	case <-p.wake:
-		return FactoryWake{Woken: true}, nil
+		return api.FactoryWake{Woken: true}, nil
 	case <-p.replaced:
 	case <-ctx.Done():
 	case <-timeout:
 		// A wake that came as the call timed out still counts.
 		select {
 		case <-p.wake:
-			return FactoryWake{Woken: true}, nil
+			return api.FactoryWake{Woken: true}, nil
 		default:
 		}
 	}
-	return FactoryWake{}, nil
+	return api.FactoryWake{}, nil
 }
 
 // wakingStates are the States a move into wakes the Factories: Ready
@@ -242,7 +229,7 @@ func projectWakesTheFactory(r store.Reader, p domain.Project) bool {
 // holds before the write, turns a Map's guided Tag on: the Factory then
 // starts its next decision.
 func specWakesTheFactory(r store.Reader, key string, s domain.Spec) bool {
-	guided := func(s domain.Spec) bool { return isMap(s.Labels) && s.Tags[GuidedTag] == GuidedOn }
+	guided := func(s domain.Spec) bool { return isMap(s.Labels) && s.Tags[domain.GuidedTag] == domain.GuidedOn }
 	was, found := r.Spec(key, s.Number)
 	return guided(s) && !(found && guided(was))
 }

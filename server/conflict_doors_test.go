@@ -6,8 +6,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -42,7 +42,7 @@ func conflictingServer(t *testing.T) (*codecentraltest.Server, *atomic.Bool) {
 func TestAConflictIsRefusedOverHTTPWith409(t *testing.T) {
 	srv, _ := conflictingServer(t)
 	status, b := httpDo(t, srv, httpCall{"POST", "/api/p/acme/claim", `{"ticket":"acme-3","session_id":"sess-1"}`})
-	e := errorJSON(t, b, core.Conflict)
+	e := errorJSON(t, b, api.Conflict)
 	if status != http.StatusConflict {
 		t.Fatalf("status %d, want 409", status)
 	}
@@ -54,7 +54,7 @@ func TestAConflictIsRefusedOverHTTPWith409(t *testing.T) {
 func TestAConflictIsAnMCPErrorThatSaysToTryAgain(t *testing.T) {
 	srv, _ := conflictingServer(t)
 	s := connect(t, srv, "acme")
-	e := mcpRejected(t, s, "claim", map[string]any{"ticket": "acme-3", "session_id": "sess-1"}, core.Conflict)
+	e := mcpRejected(t, s, "claim", map[string]any{"ticket": "acme-3", "session_id": "sess-1"}, api.Conflict)
 	if !strings.Contains(e.Message, "try again") {
 		t.Fatalf("message %q, want it to say to try again", e.Message)
 	}

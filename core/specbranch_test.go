@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -21,20 +21,20 @@ func branchWorld(t *testing.T) fixture {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Offline mode")
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "grilling", State: domain.Ready, Labels: []string{core.StageLabel(core.StageGrilling)}})
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "First", State: domain.Ready})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "grilling", State: domain.Ready, Labels: []string{domain.StageLabel(domain.StageGrilling)}})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "First", State: domain.Ready})
 	f.spec(t, "acme", "Dark mode")
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-4", Title: "Toggle", State: domain.Ready})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-4", Title: "Toggle", State: domain.Ready})
 	return f
 }
 
 func (f fixture) setBranch(target, name string) error {
-	_, err := f.core.SetTags(ctx, "acme", core.SetTagsInput{Target: core.Ref(target), Tags: map[string]string{core.BranchTag: name}})
+	_, err := f.core.SetTags(ctx, "acme", api.SetTagsInput{Target: api.Ref(target), Tags: map[string]string{domain.BranchTag: name}})
 	return err
 }
 
 func (f fixture) removeBranch(target string) error {
-	_, err := f.core.RemoveTags(ctx, "acme", core.RemoveTagsInput{Target: core.Ref(target), Keys: []string{core.BranchTag}})
+	_, err := f.core.RemoveTags(ctx, "acme", api.RemoveTagsInput{Target: api.Ref(target), Keys: []string{domain.BranchTag}})
 	return err
 }
 
@@ -65,7 +65,7 @@ func TestATicketsSpecRefNamesItsSpecBranchByTheBranchTagElseSpecSlashID(t *testi
 
 func TestABranchTagThatCantNameASpecBranchIsRefused(t *testing.T) {
 	f := branchWorld(t)
-	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git", Base: "develop"})
+	f.addRepository(t, api.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git", Base: "develop"})
 	for name, says := range map[string]string{
 		"feat 4711":   "valid branch name",
 		"feat..4711":  "valid branch name",
@@ -85,10 +85,10 @@ func TestABranchTagThatCantNameASpecBranchIsRefused(t *testing.T) {
 			}
 			continue
 		}
-		wantCode(t, err, core.Invalid, "tags")
+		wantCode(t, err, api.Invalid, "tags")
 		wantSays(t, err, says)
 	}
-	if sp := f.specRead(t, "acme-1"); sp.Tags[core.BranchTag] != "feat/acme-1" {
+	if sp := f.specRead(t, "acme-1"); sp.Tags[domain.BranchTag] != "feat/acme-1" {
 		t.Errorf("tags %v, want only the good name kept", sp.Tags)
 	}
 }
@@ -100,7 +100,7 @@ func TestABranchTagAnotherUnfinishedSpecHasIsRefusedNamingThatSpec(t *testing.T)
 	}
 
 	err := f.setBranch("acme-4", "feat/4711")
-	wantCode(t, err, core.Invalid, "tags")
+	wantCode(t, err, api.Invalid, "tags")
 	wantSays(t, err, "acme-1", "Offline mode")
 
 	// Once acme-1 is Finished, its name is free again.
@@ -120,18 +120,18 @@ func TestATicketsBranchTagIsNotChecked(t *testing.T) {
 
 func TestTheBranchTagIsLockedOnceAnImplementationTicketHasBeenClaimed(t *testing.T) {
 	f := branchWorld(t)
-	f.claim(t, core.ClaimInput{Ticket: "acme-2"}) // the grilling Stage
+	f.claim(t, api.ClaimInput{Ticket: "acme-2"}) // the grilling Stage
 	if err := f.setBranch("acme-1", "feat/4711"); err != nil {
 		t.Fatalf("a claimed Stage Ticket locked the Tag: %v", err)
 	}
 	f.moveTo(t, 2, domain.Done)
-	f.claim(t, core.ClaimInput{Ticket: "acme-3"})
+	f.claim(t, api.ClaimInput{Ticket: "acme-3"})
 
 	err := f.setBranch("acme-1", "feat/4712")
-	wantCode(t, err, core.ActionNotAllowed, "")
+	wantCode(t, err, api.ActionNotAllowed, "")
 	wantSays(t, err, "already exists as feat/4711")
 	err = f.removeBranch("acme-1")
-	wantCode(t, err, core.ActionNotAllowed, "")
+	wantCode(t, err, api.ActionNotAllowed, "")
 	wantSays(t, err, "already exists as feat/4711")
 	if err := f.setBranch("acme-1", "feat/4711"); err != nil {
 		t.Errorf("setting the same value was refused: %v", err)
@@ -143,10 +143,10 @@ func TestTheBranchTagIsLockedOnceAnImplementationTicketHasBeenClaimed(t *testing
 
 func TestATagOnASpecClaimedWithoutOneIsLockedToo(t *testing.T) {
 	f := branchWorld(t)
-	f.claim(t, core.ClaimInput{Ticket: "acme-5"})
+	f.claim(t, api.ClaimInput{Ticket: "acme-5"})
 
 	err := f.setBranch("acme-4", "feat/4711")
-	wantCode(t, err, core.ActionNotAllowed, "")
+	wantCode(t, err, api.ActionNotAllowed, "")
 	wantSays(t, err, "already exists as spec/acme-4")
 	if err := f.removeBranch("acme-4"); err != nil {
 		t.Errorf("removing a branch Tag the Spec hasn't got was refused: %v", err)
@@ -158,7 +158,7 @@ func TestFindSpecsWithAnEmptyTagValueFindsEverySpecWithThatTag(t *testing.T) {
 	if err := f.setBranch("acme-4", "feat/4711"); err != nil {
 		t.Fatal(err)
 	}
-	var in core.FindSpecsInput
+	var in api.FindSpecsInput
 	if err := in.DecodeQuery(url.Values{"tag": {"branch="}}); err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestASpecMergeTicketNamesTheTagsSpecBranch(t *testing.T) {
 	if err := f.setBranch("acme-4", "feat/4711"); err != nil {
 		t.Fatal(err)
 	}
-	res, err := f.core.OpenSpecMerge(ctx, "acme", core.OpenSpecMergeInput{Spec: "acme-4", Conflicts: []string{"README"}, BaseTip: "aaa111", SpecBranchTip: "bbb222"})
+	res, err := f.core.OpenSpecMerge(ctx, "acme", api.OpenSpecMergeInput{Spec: "acme-4", Conflicts: []string{"README"}, BaseTip: "aaa111", SpecBranchTip: "bbb222"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,23 +194,23 @@ func TestAnImportChecksItsSpecsBranchTags(t *testing.T) {
 	if err := f.setBranch("acme-1", "feat/4711"); err != nil {
 		t.Fatal(err)
 	}
-	spec := func(source, branch string) core.ImportSpec {
-		return core.ImportSpec{Source: source, Title: source, Tags: map[string]string{core.BranchTag: branch}}
+	spec := func(source, branch string) api.ImportSpec {
+		return api.ImportSpec{Source: source, Title: source, Tags: map[string]string{domain.BranchTag: branch}}
 	}
 	for _, tc := range []struct {
-		specs []core.ImportSpec
+		specs []api.ImportSpec
 		field string
 		says  string
 	}{
-		{[]core.ImportSpec{spec("a", "spec/a")}, "specs[0].tags.branch", "starts with spec/"},
-		{[]core.ImportSpec{spec("a", "feat/1"), spec("b", "feat/4711")}, "specs[1].tags.branch", "acme-1"},
-		{[]core.ImportSpec{spec("a", "feat/1"), spec("b", "feat/1")}, "specs[1].tags.branch", "specs[0]"},
+		{[]api.ImportSpec{spec("a", "spec/a")}, "specs[0].tags.branch", "starts with spec/"},
+		{[]api.ImportSpec{spec("a", "feat/1"), spec("b", "feat/4711")}, "specs[1].tags.branch", "acme-1"},
+		{[]api.ImportSpec{spec("a", "feat/1"), spec("b", "feat/1")}, "specs[1].tags.branch", "specs[0]"},
 	} {
-		_, err := f.core.Import(ctx, "acme", core.ImportInput{Payload: core.ImportPayload{Specs: tc.specs}})
-		wantCode(t, err, core.Invalid, tc.field)
+		_, err := f.core.Import(ctx, "acme", api.ImportInput{Payload: api.ImportPayload{Specs: tc.specs}})
+		wantCode(t, err, api.Invalid, tc.field)
 		wantSays(t, err, tc.says)
 	}
-	if _, err := f.core.Import(ctx, "acme", core.ImportInput{Payload: core.ImportPayload{Specs: []core.ImportSpec{spec("a", "feat/1")}}}); err != nil {
+	if _, err := f.core.Import(ctx, "acme", api.ImportInput{Payload: api.ImportPayload{Specs: []api.ImportSpec{spec("a", "feat/1")}}}); err != nil {
 		t.Errorf("a good branch Tag was refused: %v", err)
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/tomoram/code-central/domain"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -15,13 +14,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 )
 
-var human = core.WithActor(context.Background(), core.Human)
+var human = api.WithActor(context.Background(), api.Human)
 
 // asking starts a server with Ticket acme-2 claimed as claim-1 and asking
 // one Question.
@@ -30,11 +32,11 @@ func asking(t *testing.T) *codecentraltest.Server {
 	srv := codecentraltest.NewServer(t)
 	c, ctx := srv.Core, context.Background()
 	for _, err := range []error{
-		second(c.CreateProject(ctx, core.CreateProjectInput{Key: "acme"})),
-		second(c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"})),
-		second(c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", State: domain.Ready})),
-		second(c.Claim(ctx, "acme", core.ClaimInput{})),
-		second(c.PostRound(ctx, "acme", core.PostRoundInput{Ticket: "2", ClaimID: "claim-1", Questions: []core.QuestionInput{{Title: "DB?", Body: "Which?"}}})),
+		second(c.CreateProject(ctx, api.CreateProjectInput{Key: "acme"})),
+		second(c.CreateSpec(ctx, "acme", api.CreateSpecInput{Title: "Login"})),
+		second(c.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "Form", State: domain.Ready})),
+		second(c.Claim(ctx, "acme", api.ClaimInput{})),
+		second(c.PostRound(ctx, "acme", api.PostRoundInput{Ticket: "2", ClaimID: "claim-1", Questions: []api.QuestionInput{{Title: "DB?", Body: "Which?"}}})),
 	} {
 		if err != nil {
 			t.Fatal(err)
@@ -47,7 +49,7 @@ func second[T any](_ T, err error) error { return err }
 
 func answer(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
-	if _, err := srv.Core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite"}); err != nil {
+	if _, err := srv.Core.Answer(human, "acme", api.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -69,10 +71,10 @@ func startWait(url string, clk *clock.Fake, args ...string) <-chan result {
 }
 
 type waitOutput struct {
-	Ticket   string         `json:"ticket"`
-	State    domain.State   `json:"state"`
-	NextStep string         `json:"next_step"`
-	LastMove *core.MoveView `json:"last_move"`
+	Ticket   string        `json:"ticket"`
+	State    domain.State  `json:"state"`
+	NextStep string        `json:"next_step"`
+	LastMove *api.MoveView `json:"last_move"`
 }
 
 func TestWaitExitsZeroWhenTheTicketIsAnswered(t *testing.T) {
@@ -118,10 +120,10 @@ func TestWaitExitsThreeWhenTheTicketLeftForAnotherState(t *testing.T) {
 	srv := asking(t)
 	answer(t, srv)
 	ctx := context.Background()
-	if _, err := srv.Core.PickUpAnswers(ctx, "acme", core.PickUpAnswersInput{Ticket: "2", ClaimID: "claim-1"}); err != nil {
+	if _, err := srv.Core.PickUpAnswers(ctx, "acme", api.PickUpAnswersInput{Ticket: "2", ClaimID: "claim-1"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := srv.Core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: "Done."}); err != nil {
+	if _, err := srv.Core.Finish(ctx, "acme", api.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: "Done."}); err != nil {
 		t.Fatal(err)
 	}
 	r := <-startWait(srv.URL, clock.NewFake(codecentraltest.Start), "acme-2")
@@ -192,5 +194,5 @@ func TestWaitUsageAndErrors(t *testing.T) {
 	if r := run(t, env, "", "wait", "2", "--claim", "claim-1"); r.code != 1 {
 		t.Fatalf("wait takes no Claim ID: exit %d", r.code)
 	}
-	wantError(t, run(t, env, "", "wait", "9"), core.NotFound)
+	wantError(t, run(t, env, "", "wait", "9"), api.NotFound)
 }

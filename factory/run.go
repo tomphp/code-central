@@ -17,7 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -79,7 +79,7 @@ func (f *factory) watchSignals(ctx context.Context, s *stint) {
 					f.drainWork.give(f.work.busy("starting to drain"))
 					close(f.drainCh)
 				})
-				f.heartbeat(core.HeartbeatDraining, f.drainNote())
+				f.heartbeat(api.HeartbeatDraining, f.drainNote())
 				continue
 			}
 			f.stopMu.Lock()
@@ -163,7 +163,7 @@ func (f *factory) drain(ctx context.Context) {
 			return
 		case <-beat:
 			f.polling.busy("draining")
-			f.heartbeat(core.HeartbeatDraining, f.drainNote())
+			f.heartbeat(api.HeartbeatDraining, f.drainNote())
 		}
 	}
 }
@@ -193,7 +193,7 @@ func (f *factory) drainLostClaims(ctx context.Context) bool {
 			return false
 		case <-poll:
 			f.polling.busy(note)
-			f.heartbeat(core.HeartbeatDraining, note)
+			f.heartbeat(api.HeartbeatDraining, note)
 			f.claimLostAgain(ctx)
 		}
 	}
@@ -212,7 +212,7 @@ func (f *factory) setDrained() {
 func (f *factory) poll(ctx context.Context) {
 	defer func() {
 		if !f.halted(ctx) {
-			f.heartbeat(core.HeartbeatOnline, f.pollNote())
+			f.heartbeat(api.HeartbeatOnline, f.pollNote())
 		}
 	}()
 	answered := f.reconcile(ctx)
@@ -322,7 +322,7 @@ func (f *factory) turnRunningOn(ticket string) bool {
 func (f *factory) reconcile(ctx context.Context) []claim {
 	var answered []claim
 	for _, c := range f.heldClaims() {
-		tk, err := f.client.GetTicket(ctx, f.project, core.Ref(c.Ticket))
+		tk, err := f.client.GetTicket(ctx, f.project, api.Ref(c.Ticket))
 		if err != nil {
 			if ctx.Err() == nil {
 				f.claimf(c, "%s: get_ticket: %v", c.Ticket, err)
@@ -345,7 +345,7 @@ func (f *factory) reconcile(ctx context.Context) []claim {
 // claimEnded reports whether c is no longer the Ticket's live Claim, and
 // the action that ended it. Claim IDs aren't on reads, so the Claim is
 // found by its session ID, which the Factory makes for each Claim.
-func claimEnded(tk core.TicketView, c claim) (bool, string) {
+func claimEnded(tk api.TicketView, c claim) (bool, string) {
 	for _, v := range tk.Claims {
 		if v.SessionID == c.SessionID {
 			return v.Ended != nil, v.EndedBy
@@ -470,9 +470,9 @@ func (f *factory) stopPolling() {
 // whose guide the Factory runs, whose claim isn't lost and that isn't
 // held back: a claim lost before it reached Code Central leaves its
 // Ticket claimable. ok is false when there is none.
-func (f *factory) nextRunnable(ctx context.Context) (id core.Ref, ok bool) {
+func (f *factory) nextRunnable(ctx context.Context) (id api.Ref, ok bool) {
 	claimable := true
-	rows, err := f.client.FindTickets(ctx, f.project, core.FindTicketsInput{Claimable: &claimable})
+	rows, err := f.client.FindTickets(ctx, f.project, api.FindTicketsInput{Claimable: &claimable})
 	if err != nil {
 		if ctx.Err() == nil {
 			f.printf("find_tickets: %v", err)
@@ -480,9 +480,9 @@ func (f *factory) nextRunnable(ctx context.Context) (id core.Ref, ok bool) {
 		return "", false
 	}
 	for _, r := range rows {
-		lost := slices.ContainsFunc(f.lostClaims, func(in core.ClaimInput) bool { return in.Ticket == core.Ref(r.ID) })
-		if runs(core.GuideName(r.Labels)) && !lost && !f.heldBack(r.ID) {
-			return core.Ref(r.ID), true
+		lost := slices.ContainsFunc(f.lostClaims, func(in api.ClaimInput) bool { return in.Ticket == api.Ref(r.ID) })
+		if runs(api.GuideName(r.Labels)) && !lost && !f.heldBack(r.ID) {
+			return api.Ref(r.ID), true
 		}
 	}
 	return "", false
@@ -502,7 +502,7 @@ func (f *factory) claimNext(ctx context.Context) bool {
 	resume := "claude --resume " + session
 	// The worktree's path is fixed by the Ticket ID, which isn't known
 	// until the claim, so the claim names it afterwards (set_session).
-	in := core.ClaimInput{Ticket: next, SessionID: session, ResumeCommand: &resume}
+	in := api.ClaimInput{Ticket: next, SessionID: session, ResumeCommand: &resume}
 	res, err := f.claimRecovering(ctx, in)
 	switch {
 	case ctx.Err() != nil:
@@ -549,17 +549,17 @@ func (f *factory) claimLostAgain(ctx context.Context) {
 // records the Claim, names its worktrees, one in every Repository with
 // the Home worktree its session's, and starts its turn. It reports
 // whether there was a Claim.
-func (f *factory) startClaimed(ctx context.Context, in core.ClaimInput, res core.ClaimResult) bool {
+func (f *factory) startClaimed(ctx context.Context, in api.ClaimInput, res api.ClaimResult) bool {
 	session := in.SessionID
 	if res.Ticket == nil {
 		return false
 	}
 	id := res.Ticket.ID
-	stage := core.GuideName(res.Ticket.Labels)
+	stage := api.GuideName(res.Ticket.Labels)
 	ws := f.repos.worktreesNamed(id, workBranch(stage, id))
 	conflicts := f.conflictsIn(ws, stage, *res.Ticket)
 	rebase := f.rebases(ctx, conflicts)
-	var guide core.StageGuideView
+	var guide api.StageGuideView
 	if len(conflicts) == 0 {
 		guide = f.stageGuide(ctx, res.StageGuide, stage)
 	}
@@ -581,7 +581,7 @@ func (f *factory) startClaimed(ctx context.Context, in core.ClaimInput, res core
 	if err := f.addClaim(c); err != nil {
 		f.claimf(c, "%s: can't write the state file: %v", id, err)
 	}
-	if _, err := f.client.SetSession(ctx, f.project, core.SetSessionInput{Ticket: core.Ref(id), ClaimID: res.ClaimID, SessionID: session, WorkingDir: &wt, ResumeCommand: &resume}); err != nil {
+	if _, err := f.client.SetSession(ctx, f.project, api.SetSessionInput{Ticket: api.Ref(id), ClaimID: res.ClaimID, SessionID: session, WorkingDir: &wt, ResumeCommand: &resume}); err != nil {
 		f.claimf(c, "%s: set_session: %v", id, err)
 	}
 	f.claimed(c, *res.Ticket, wt, resume)
@@ -610,7 +610,7 @@ const (
 // The pause between tries is on the Factory's clock, as every other
 // timer is, and the poll rests on it. It stops trying when ctx ends or
 // the Factory drains.
-func (f *factory) claimRecovering(ctx context.Context, in core.ClaimInput) (core.ClaimResult, error) {
+func (f *factory) claimRecovering(ctx context.Context, in api.ClaimInput) (api.ClaimResult, error) {
 	res, err := f.client.Claim(ctx, f.project, in)
 	if !answerLost(err) || ctx.Err() != nil {
 		return res, err
@@ -639,14 +639,14 @@ func (f *factory) claimRecovering(ctx context.Context, in core.ClaimInput) (core
 }
 
 // answerLost reports whether err leaves unknown what Code Central did: it
-// couldn't be reached, or its answer was cut off. Any other *core.Error
+// couldn't be reached, or its answer was cut off. Any other *api.Error
 // is Code Central's answer.
 func answerLost(err error) bool {
 	if err == nil {
 		return false
 	}
-	var ce *core.Error
-	return !errors.As(err, &ce) || ce.Code == core.ServiceUnavailable
+	var ce *api.Error
+	return !errors.As(err, &ce) || ce.Code == api.ServiceUnavailable
 }
 
 // resumeAnswered picks up the answers to c's Round and resumes its
@@ -665,7 +665,7 @@ func (f *factory) resumeAnswered(ctx context.Context, c claim) {
 	if !ok {
 		return
 	}
-	res, err := f.client.PickUpAnswers(ctx, f.project, core.PickUpAnswersInput{Ticket: core.Ref(c.Ticket), ClaimID: c.ClaimID})
+	res, err := f.client.PickUpAnswers(ctx, f.project, api.PickUpAnswersInput{Ticket: api.Ref(c.Ticket), ClaimID: c.ClaimID})
 	if err != nil {
 		if ctx.Err() == nil {
 			f.claimf(c, "%s: pick_up_answers: %v", c.Ticket, err)
@@ -705,7 +705,7 @@ func (f *factory) sessionHolder(session string) (int, bool) {
 
 // answeredPrompt resumes a session whose Round the human has answered.
 // The Factory has already picked the answers up, so they are given here.
-func answeredPrompt(c claim, res core.PickUpAnswersResult) string {
+func answeredPrompt(c claim, res api.PickUpAnswersResult) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, `The human has answered your Round %d on %s. code-central-factory has already picked up the answers for you (don't call pick_up_answers again); they are below. Carry on from the answers, under the same Claim.
 

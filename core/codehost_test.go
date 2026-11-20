@@ -3,7 +3,7 @@ package core_test
 import (
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -12,12 +12,12 @@ import (
 
 func (f fixture) pushRemote(t *testing.T, url string) {
 	t.Helper()
-	if _, err := f.core.ReportPushRemote(human, "acme", core.ReportPushRemoteInput{URL: url}); err != nil {
+	if _, err := f.core.ReportPushRemote(human, "acme", api.ReportPushRemoteInput{URL: url}); err != nil {
 		t.Fatalf("report_push_remote: %v", err)
 	}
 }
 
-func (f fixture) landingOf(t *testing.T) core.LandingView {
+func (f fixture) landingOf(t *testing.T) api.LandingView {
 	t.Helper()
 	ps, err := f.core.ListProjects(human)
 	if err != nil {
@@ -29,9 +29,9 @@ func (f fixture) landingOf(t *testing.T) core.LandingView {
 func TestPullRequestIsRefusedWithAFixWhenNoPushRemoteURLWasReported(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest})
-	e, ok := err.(*core.Error)
-	if !ok || e.Code != core.Invalid || e.Field != "method" || e.Fix == "" {
+	_, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest})
+	e, ok := err.(*api.Error)
+	if !ok || e.Code != api.Invalid || e.Field != "method" || e.Fix == "" {
 		t.Fatalf("err = %#v, want Invalid on method with a fix", err)
 	}
 	if got := f.landingOf(t).Method; got != domain.LandingMerge {
@@ -44,8 +44,8 @@ func TestPullRequestIsRefusedForAnUnsupportedHost(t *testing.T) {
 		f := newFixture(t)
 		f.project(t, "acme")
 		f.pushRemote(t, url)
-		_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest})
-		if e, ok := err.(*core.Error); !ok || e.Code != core.Invalid || e.Fix == "" {
+		_, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest})
+		if e, ok := err.(*api.Error); !ok || e.Code != api.Invalid || e.Fix == "" {
 			t.Errorf("%s: err = %#v, want Invalid with a fix", url, err)
 		}
 	}
@@ -54,7 +54,7 @@ func TestPullRequestIsRefusedForAnUnsupportedHost(t *testing.T) {
 func TestPullRequestWorksOutTheCodeHostFromTheReportedURL(t *testing.T) {
 	for _, c := range []struct {
 		url  string
-		host core.CodeHost
+		host api.CodeHost
 		repo string
 	}{
 		{"git@github.com:acme/web.git", "github", "acme/web"},
@@ -69,7 +69,7 @@ func TestPullRequestWorksOutTheCodeHostFromTheReportedURL(t *testing.T) {
 		f := newFixture(t)
 		f.project(t, "acme")
 		f.pushRemote(t, c.url)
-		v, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest, Push: false, Remote: "origin"})
+		v, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest, Push: false, Remote: "origin"})
 		if err != nil {
 			t.Errorf("%s: %v", c.url, err)
 			continue
@@ -90,15 +90,15 @@ func TestThePATVariableDefaultsAndIsKeptAndValidated(t *testing.T) {
 	if got := f.landingOf(t).PATEnv; got != "ADO_PAT" {
 		t.Fatalf("default pat_env = %q", got)
 	}
-	v, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest, PATEnv: " REPOS_PAT "})
+	v, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest, PATEnv: " REPOS_PAT "})
 	if err != nil || v.Landing.PATEnv != "REPOS_PAT" {
 		t.Fatalf("set = %+v, %v", v.Landing, err)
 	}
-	v, err = f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest})
+	v, err = f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest})
 	if err != nil || v.Landing.PATEnv != "REPOS_PAT" {
 		t.Fatalf("left out should keep: %+v, %v", v.Landing, err)
 	}
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest, PATEnv: "not a name"}); err == nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest, PATEnv: "not a name"}); err == nil {
 		t.Fatal("a bad variable name was accepted")
 	}
 }
@@ -107,7 +107,7 @@ func TestPullRequestIgnoresTheStoredPushFlag(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.pushRemote(t, "git@github.com:acme/web.git")
-	v, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest, Push: true})
+	v, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest, Push: true})
 	if err != nil || v.Landing.Push {
 		t.Fatalf("landing = %+v, %v; want Push not stored", v.Landing, err)
 	}

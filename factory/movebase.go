@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // Under Merge + Push, when the local base and the remote's each hold
@@ -25,7 +25,7 @@ import (
 // Factory's. A merge that isn't the Factory's, or a conflict, leaves the
 // base as it was and reports it diverged; uncommitted changes in the way
 // of the move leave it for the next poll.
-func (l *lander) moveBase(ctx context.Context, repo *repository, remote, local, theirs string, merged []core.TicketView) bool {
+func (l *lander) moveBase(ctx context.Context, repo *repository, remote, local, theirs string, merged []api.TicketView) bool {
 	base, s := l.repos.baseOf(repo), l.stateOf(repo)
 	heads, err := l.mergeHeads(repo, theirs, merged)
 	cant := ""
@@ -127,7 +127,7 @@ func (l *lander) rebuildOnto(repo *repository, onto, from string, heads map[stri
 // may have gone on since. The Spec Branches are those under spec/ and
 // those an Accepted Spec-landed Ticket's Spec names by its branch Tag. A
 // Ticket whose work isn't in the repository has no merge to find.
-func (l *lander) mergeHeads(repo *repository, theirs string, merged []core.TicketView) (map[string]bool, error) {
+func (l *lander) mergeHeads(repo *repository, theirs string, merged []api.TicketView) (map[string]bool, error) {
 	heads := map[string]bool{}
 	for _, tk := range merged {
 		if head, _, err := l.workIn(repo, tk); err == nil {

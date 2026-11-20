@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -75,7 +76,7 @@ func requirementBranch(r store.Reader, key string, t domain.Ticket) (string, err
 // toRequirementBranchRefused is err, a refused branch Tag, as To
 // Requirement's refusal, with fix, if any, added.
 func toRequirementBranchRefused(err error, fix string) error {
-	var e *Error
+	var e *api.Error
 	if !errors.As(err, &e) {
 		return err
 	}
@@ -83,5 +84,5 @@ func toRequirementBranchRefused(err error, fix string) error {
 	if fix != "" {
 		msg += ": " + fix
 	}
-	return &Error{Code: ActionNotAllowed, Message: msg}
+	return &api.Error{Code: api.ActionNotAllowed, Message: msg}
 }

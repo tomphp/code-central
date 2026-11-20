@@ -3,11 +3,12 @@ package issuewatcher_test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"slices"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/internal/fakegh"
 )
 
@@ -77,7 +78,7 @@ func (w *watching) arrivedFirst(issues ...issue) string {
 	w.t.Helper()
 	w.openIssues("", 1, issues...)
 	w.start(w.h.Bin)
-	w.status(core.WatcherWatching)
+	w.status(api.WatcherWatching)
 	watch := w.watch()
 	if len(watch.Issues) == 0 {
 		w.t.Fatalf("get_issue_watch = %+v, want the issues arrived", watch)
@@ -88,13 +89,13 @@ func (w *watching) arrivedFirst(issues ...issue) string {
 // wontFix is the human's Won't fix on ticket with reason.
 func (w *watching) wontFix(ticket, reason string) {
 	w.t.Helper()
-	if _, err := w.srv.Core.WontFix(human, "acme", core.WontFixInput{Ticket: core.Ref(ticket), Reason: reason}); err != nil {
+	if _, err := w.srv.Core.WontFix(human, "acme", api.WontFixInput{Ticket: api.Ref(ticket), Reason: reason}); err != nil {
 		w.t.Fatal(err)
 	}
 }
 
 // writesDue is what get_issue_watch says is still due.
-func (w *watching) writesDue() []core.IssueWrites {
+func (w *watching) writesDue() []api.IssueWrites {
 	w.t.Helper()
 	return w.watch().Writes
 }
@@ -167,7 +168,7 @@ func TestACommentAlreadyOnTheIssueIsReportedNotPostedAgain(t *testing.T) {
 	w := newWatching(t)
 	ticket := w.arrivedFirst(labelled(1, "code-central:wont-fix"))
 	w.wontFix(ticket, "Works as intended.")
-	w.commentsOn(1, "Me too.", core.IssueMarker(ticket, "wont-fix")+"\nWorks as intended.")
+	w.commentsOn(1, "Me too.", domain.IssueMarker(ticket, "wont-fix")+"\nWorks as intended.")
 	from := len(w.h.Calls())
 	w.polled()
 	w.wantWrites(from, "PATCH repos/acme/web/issues/1 state=closed state_reason=not_planned")
@@ -198,7 +199,7 @@ func TestARestartedIssueWatcherPostsNothingTwice(t *testing.T) {
 func TestWritesDueWhileGitHubIssuesWasOffAreMadeWhenItIsBackOn(t *testing.T) {
 	w := newWatching(t)
 	ticket := w.arrivedFirst(labelled(1, "code-central:draft"))
-	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: false, Repositories: []string{"acme/web"}}); err != nil {
+	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", api.SetGitHubIssuesInput{On: false, Repositories: []string{"acme/web"}}); err != nil {
 		t.Fatal(err)
 	}
 	w.wontFix(ticket, "")
@@ -206,7 +207,7 @@ func TestWritesDueWhileGitHubIssuesWasOffAreMadeWhenItIsBackOn(t *testing.T) {
 	w.polled()
 	w.wantWrites(from)
 
-	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}}); err != nil {
+	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", api.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}}); err != nil {
 		t.Fatal(err)
 	}
 	w.polled()

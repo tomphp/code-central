@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -17,9 +17,9 @@ func (f fixture) specInReview(t *testing.T) {
 	f.setState(t, 4, domain.InReview)
 }
 
-func (f fixture) implement(t *testing.T, ref core.Ref) core.FinishResult {
+func (f fixture) implement(t *testing.T, ref api.Ref) api.FinishResult {
 	t.Helper()
-	res, err := f.core.Implement(human, "acme", core.TicketInput{Ticket: ref})
+	res, err := f.core.Implement(human, "acme", api.TicketInput{Ticket: ref})
 	if err != nil {
 		t.Fatalf("implement %s: %v", ref, err)
 	}
@@ -67,7 +67,7 @@ func TestImplementAcceptsTheSpecStageCreatesOneTicketAndCancelsTheTicketsStage(t
 func TestImplementWithFullReturnsTheSpecStage(t *testing.T) {
 	f := newFixture(t)
 	f.specInReview(t)
-	res, err := f.core.Implement(human, "acme", core.TicketInput{Ticket: "acme-4", Full: true})
+	res, err := f.core.Implement(human, "acme", api.TicketInput{Ticket: "acme-4", Full: true})
 	if err != nil || res.Ticket == nil || res.Ticket.ID != "acme-4" || res.Acknowledgement != nil {
 		t.Fatalf("result %+v, %v", res, err)
 	}
@@ -78,12 +78,12 @@ func TestAfterImplementTheBuildFollowsTheImplementationTicket(t *testing.T) {
 	f.specInReview(t)
 	f.implement(t, "acme-4")
 	r := f.requirementOf(t, "acme-2")
-	if r.Build != (core.BuildProgress{Done: 0, Total: 1}) || !r.WaitingForFactory {
+	if r.Build != (api.BuildProgress{Done: 0, Total: 1}) || !r.WaitingForFactory {
 		t.Fatalf("build %+v waiting %v", r.Build, r.WaitingForFactory)
 	}
 	f.setState(t, 6, domain.Done)
 	r = f.requirementOf(t, "acme-2")
-	if r.Build != (core.BuildProgress{Done: 1, Total: 1}) || r.WaitingForFactory {
+	if r.Build != (api.BuildProgress{Done: 1, Total: 1}) || r.WaitingForFactory {
 		t.Fatalf("build %+v waiting %v", r.Build, r.WaitingForFactory)
 	}
 }
@@ -92,12 +92,12 @@ func TestImplementIsRefusedAndWritesNothingWhenItCannotRun(t *testing.T) {
 	cases := []struct {
 		name  string
 		setup func(f fixture, t *testing.T)
-		ref   core.Ref
+		ref   api.Ref
 		want  string
 	}{
 		{"a grilling Stage", func(f fixture, t *testing.T) { f.setState(t, 3, domain.InReview) }, "acme-3", "not a spec Stage"},
 		{"an implementation Ticket", func(f fixture, t *testing.T) {
-			f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-2", Title: "Build", State: domain.Ready})
+			f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-2", Title: "Build", State: domain.Ready})
 			f.setState(t, 6, domain.InReview)
 		}, "acme-6", "not a spec Stage"},
 		{"a spec Stage not In Review", func(f fixture, t *testing.T) {}, "acme-4", "In Review"},
@@ -111,8 +111,8 @@ func TestImplementIsRefusedAndWritesNothingWhenItCannotRun(t *testing.T) {
 			f.requirement(t)
 			c.setup(f, t)
 			before := snapshotTickets(t, f)
-			_, err := f.core.Implement(human, "acme", core.TicketInput{Ticket: c.ref})
-			wantCode(t, err, core.ActionNotAllowed, "")
+			_, err := f.core.Implement(human, "acme", api.TicketInput{Ticket: c.ref})
+			wantCode(t, err, api.ActionNotAllowed, "")
 			if !strings.Contains(err.Error(), c.want) {
 				t.Fatalf("the refusal should name %q: %v", c.want, err)
 			}
@@ -126,8 +126,8 @@ func TestImplementIsRefusedAndWritesNothingWhenItCannotRun(t *testing.T) {
 func TestImplementIsAHumanAction(t *testing.T) {
 	f := newFixture(t)
 	f.specInReview(t)
-	_, err := f.core.Implement(ctx, "acme", core.TicketInput{Ticket: "acme-4"})
-	wantCode(t, err, core.ActionNotAllowed, "")
+	_, err := f.core.Implement(ctx, "acme", api.TicketInput{Ticket: "acme-4"})
+	wantCode(t, err, api.ActionNotAllowed, "")
 }
 
 // snapshotTickets is every Ticket's ID, State and Moves' count, read back
@@ -136,7 +136,7 @@ func snapshotTickets(t *testing.T, f fixture) []string {
 	t.Helper()
 	var out []string
 	for n := 3; n <= 8; n++ {
-		id := core.Ref("acme-" + string(rune('0'+n)))
+		id := api.Ref("acme-" + string(rune('0'+n)))
 		tk, err := f.core.GetTicket(ctx, "acme", whole(id))
 		if err != nil {
 			continue

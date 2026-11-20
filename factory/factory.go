@@ -71,9 +71,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/clock"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/home"
 )
@@ -355,9 +355,9 @@ type factory struct {
 	project    string
 	host       string // the machine, as the Heartbeats name it
 	client     *client.Client
-	events     *sender[core.SessionEvent]  // posts Session Events
-	usage      *sender[core.UsageResponse] // posts model responses' token usage
-	planLimits latestPlanLimits            // the latest Plan Limits, sent on each Heartbeat
+	events     *sender[api.SessionEvent]  // posts Session Events
+	usage      *sender[api.UsageResponse] // posts model responses' token usage
+	planLimits latestPlanLimits           // the latest Plan Limits, sent on each Heartbeat
 	state      *stateFile
 	lock       *os.File // held for the Factory's whole life
 
@@ -391,7 +391,7 @@ type factory struct {
 	// lostClaims are the claims whose answer was lost on every try, oldest
 	// first, sent again at each poll until Code Central answers; each
 	// holds a slot meanwhile. They last this run only; the poll's own.
-	lostClaims []core.ClaimInput
+	lostClaims []api.ClaimInput
 
 	pauseMu sync.Mutex
 	pause   *pause // set during an outage

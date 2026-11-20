@@ -2,13 +2,14 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"os"
 	"slices"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -43,14 +44,14 @@ func TestARestartReconcilesEachSavedClaimAgainstCodeCentral(t *testing.T) {
 	// a Ticket.
 	h.Answer(answered, "Blue")
 	ctx := context.Background()
-	if _, err := h.Server.Client.Finish(ctx, h.Project, core.FinishInput{Ticket: core.Ref(finished), ClaimID: first[finished].Claim, Summary: "Done."}); err != nil {
+	if _, err := h.Server.Client.Finish(ctx, h.Project, api.FinishInput{Ticket: api.Ref(finished), ClaimID: first[finished].Claim, Summary: "Done."}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.Human().Cancel(ctx, h.Project, core.CancelInput{Ticket: core.Ref(cancelled)}); err != nil {
+	if _, err := h.Human().Cancel(ctx, h.Project, api.CancelInput{Ticket: api.Ref(cancelled)}); err != nil {
 		t.Fatal(err)
 	}
 	notOurs := h.ReadyTicket("Someone else's")
-	if _, err := h.Server.Client.Claim(ctx, h.Project, core.ClaimInput{Ticket: core.Ref(notOurs)}); err != nil {
+	if _, err := h.Server.Client.Claim(ctx, h.Project, api.ClaimInput{Ticket: api.Ref(notOurs)}); err != nil {
 		t.Fatal(err)
 	}
 	h.Script(answered, factorytest.Finish("Painted it blue."), factorytest.Result("success"))

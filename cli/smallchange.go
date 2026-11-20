@@ -3,7 +3,7 @@ package cli
 import (
 	"context"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/ops"
 )
 
@@ -34,7 +34,7 @@ func runSubmitSmallChange(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.SubmitSmallChange(ctx, sc.project, core.SubmitSmallChangeInput{Text: text, Draft: *draft, Full: *full})
+	v, err := sc.client.SubmitSmallChange(ctx, sc.project, api.SubmitSmallChangeInput{Text: text, Draft: *draft, Full: *full})
 	if err != nil {
 		return err
 	}

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // Submitting a Map (code-central-218).
@@ -37,7 +37,7 @@ func init() {
 			http: httpCall{"POST", "/api/p/acme/submit_map", `{"text":"  "}`},
 			cli:  []string{"--text", "  "},
 		},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -45,7 +45,7 @@ func init() {
 func submittedMap(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	must(t, func() error {
-		_, err := srv.Core.SubmitMap(context.Background(), "acme", core.SubmitMapInput{Text: "Offline mode"})
+		_, err := srv.Core.SubmitMap(context.Background(), "acme", api.SubmitMapInput{Text: "Offline mode"})
 		return err
 	})
 }
@@ -85,11 +85,11 @@ func TestEveryDoorWritesTheSpecFromAMap(t *testing.T) {
 	srv := newServer(t, submittedMap)
 	s := connect(t, srv, "acme")
 	text := "Offline mode\n\nFrom the Map."
-	mcpRejected(t, s, "submit_requirement", map[string]any{"text": text, "map": "acme-4"}, core.ActionNotAllowed)
-	httpRejected(t, srv, httpCall{"POST", "/api/p/acme/submit_requirement", `{"text":"Offline mode","map":"acme-4"}`}, core.ActionNotAllowed)
-	cliRejected(t, srv, []string{"submit-requirement", "--text", text, "--map", "acme-4"}, core.ActionNotAllowed)
+	mcpRejected(t, s, "submit_requirement", map[string]any{"text": text, "map": "acme-4"}, api.ActionNotAllowed)
+	httpRejected(t, srv, httpCall{"POST", "/api/p/acme/submit_requirement", `{"text":"Offline mode","map":"acme-4"}`}, api.ActionNotAllowed)
+	cliRejected(t, srv, []string{"submit-requirement", "--text", text, "--map", "acme-4"}, api.ActionNotAllowed)
 	must(t, func() error {
-		_, err := srv.Core.Move(core.WithActor(context.Background(), core.Human), "acme", core.MoveInput{Ticket: "5", ToState: "Cancelled"})
+		_, err := srv.Core.Move(api.WithActor(context.Background(), api.Human), "acme", api.MoveInput{Ticket: "5", ToState: "Cancelled"})
 		return err
 	})
 	written := map[string]map[string]any{

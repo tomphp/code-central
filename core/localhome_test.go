@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
@@ -25,13 +26,13 @@ func trackingOn(repository string) domain.CI {
 // remote's URL: empty for none.
 func (f fixture) reportPushRemote(t *testing.T, url string) {
 	t.Helper()
-	if _, err := f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: url}); err != nil {
+	if _, err := f.core.ReportPushRemote(ctx, "acme", api.ReportPushRemoteInput{URL: url}); err != nil {
 		t.Fatalf("report_push_remote %q: %v", url, err)
 	}
 }
 
 // home is the Home Repository's view.
-func (f fixture) home(t *testing.T) core.RepositoryView {
+func (f fixture) home(t *testing.T) api.RepositoryView {
 	t.Helper()
 	return repository(t, f.projectView(t, "acme"), "acme")
 }
@@ -52,7 +53,7 @@ func TestReportingNoPushRemoteMakesTheHomeLocalOnlyAndALaterURLMakesItPushedAgai
 	if !h.LocalOnly || h.CloneURL != "" || !h.CI.NotWatched {
 		t.Fatalf("Home %+v, want it local-only with no Clone URL, and Not watched", h)
 	}
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"}); err != nil {
 		t.Fatalf("Merge + Push with a local-only Home: %v", err)
 	}
 	if lp := f.projectView(t, "acme").LandingPolicies().In("acme"); lp.PushesBase() || lp.CIGateHolds() || lp.OffersLandAnyway() || !lp.FlagsNotLanded() {
@@ -74,21 +75,21 @@ func TestALocalOnlyHomeIsRefusedPullRequestAndFlaggedNotReroutedWhenItLosesItsRe
 	f.project(t, "acme")
 	f.reportPushRemote(t, "")
 
-	_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin"})
+	_, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin"})
 	wantRefusalNaming(t, err, "method", "acme", "an Own Landing such as Merge")
-	pr := core.RepositoryLandingPullRequest
-	_, err = f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "acme", Landing: &pr})
+	pr := api.RepositoryLandingPullRequest
+	_, err = f.core.EditRepository(human, "acme", api.EditRepositoryInput{Name: "acme", Landing: &pr})
 	wantRefusalNaming(t, err, "landing", "acme", "a Clone URL")
 
 	// Pushed, it may land by Pull Request; losing its remote then can't
 	// be refused, as the Factory reports it.
 	f.reportPushRemote(t, "git@github.com:acme/acme.git")
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin"}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin"}); err != nil {
 		t.Fatalf("Pull Request with the Home pushed: %v", err)
 	}
 	f.reportPushRemote(t, "")
 	h := f.home(t)
-	if !h.LocalOnly || !h.LocalOnlyUnderPullRequest || h.Landing != core.RepositoryLandingPullRequest {
+	if !h.LocalOnly || !h.LocalOnlyUnderPullRequest || h.Landing != api.RepositoryLandingPullRequest {
 		t.Fatalf("Home %+v, want it local-only under Pull Request, flagged and still on Pull Request", h)
 	}
 	if lp := f.projectView(t, "acme").LandingPolicies().In("acme"); !lp.LandsByPullRequest() {
@@ -96,12 +97,12 @@ func TestALocalOnlyHomeIsRefusedPullRequestAndFlaggedNotReroutedWhenItLosesItsRe
 	}
 	// A change to the Default Landing that leaves it there is not refused.
 	off := false
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin", LandPerSpec: &off}); err != nil {
+	if _, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin", LandPerSpec: &off}); err != nil {
 		t.Fatalf("Land per Spec off while the Home is local-only under Pull Request: %v", err)
 	}
 	// Its fix: another Landing.
-	merge := core.RepositoryLandingMerge
-	if _, err := f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "acme", Landing: &merge}); err != nil {
+	merge := api.RepositoryLandingMerge
+	if _, err := f.core.EditRepository(human, "acme", api.EditRepositoryInput{Name: "acme", Landing: &merge}); err != nil {
 		t.Fatal(err)
 	}
 	if h := f.home(t); h.LocalOnlyUnderPullRequest {
@@ -113,9 +114,9 @@ func TestEveryRepositoryLocalOnlyIsNotRefused(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.reportPushRemote(t, "")
-	f.addRepository(t, core.AddRepositoryInput{Name: "web", LocalPath: srcPath("web")})
+	f.addRepository(t, api.AddRepositoryInput{Name: "web", LocalPath: srcPath("web")})
 	for _, m := range []domain.LandingMethod{domain.LandingMerge, domain.LandingBranch} {
-		if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: m, Push: true, Remote: "origin"}); err != nil {
+		if _, err := f.core.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: m, Push: true, Remote: "origin"}); err != nil {
 			t.Fatalf("%s + Push with every Repository local-only: %v", m, err)
 		}
 	}
@@ -130,11 +131,11 @@ func TestTheHomeCanBeNotWatchedWhileCITrackingIsOn(t *testing.T) {
 	f := twoRepoWorld(t)
 	f.changes(t, 5, "acme")
 	var checked []string
-	f.core.SetCICheck(func(_ context.Context, in core.CICheckInput) core.WatcherCheckResult {
+	f.core.SetCICheck(func(_ context.Context, in api.CICheckInput) api.WatcherCheckResult {
 		checked = append(checked, in.Repository)
-		return core.WatcherCheckResult{}
+		return api.WatcherCheckResult{}
 	})
-	if _, err := f.core.SetRepositoryCI(human, "acme", core.SetRepositoryCIInput{Name: "acme", RepositoryCI: core.RepositoryCI{NotWatched: true}}); err != nil {
+	if _, err := f.core.SetRepositoryCI(human, "acme", api.SetRepositoryCIInput{Name: "acme", RepositoryCI: api.RepositoryCI{NotWatched: true}}); err != nil {
 		t.Fatalf("set_repository_ci on the Home: %v", err)
 	}
 	p := f.projectView(t, "acme")
@@ -148,13 +149,13 @@ func TestTheHomeCanBeNotWatchedWhileCITrackingIsOn(t *testing.T) {
 		t.Fatalf("CI watch %+v (%v), want the Home Not watched while CI Tracking is on", watch, err)
 	}
 
-	if _, err := f.core.SetRepositoryCI(human, "acme", core.SetRepositoryCIInput{Name: "acme", RepositoryCI: core.RepositoryCI{Repository: "acme/web"}}); err != nil {
+	if _, err := f.core.SetRepositoryCI(human, "acme", api.SetRepositoryCIInput{Name: "acme", RepositoryCI: api.RepositoryCI{Repository: "acme/web"}}); err != nil {
 		t.Fatal(err)
 	}
 	if !slices.Equal(checked, []string{"acme/web"}) {
 		t.Fatalf("checked %v, want the Home's acme/web checked as it is watched again", checked)
 	}
-	if home := changedIn(t, f.getTicket(t, "acme-5"), "acme"); home.CINotWatched || home.CIResult != core.CIRunning {
+	if home := changedIn(t, f.getTicket(t, "acme-5"), "acme"); home.CINotWatched || home.CIResult != api.CIRunning {
 		t.Fatalf("Home %+v, want it watched again, its CI running", home)
 	}
 }
@@ -163,7 +164,7 @@ func TestSetCITrackingTakesAnOlderClientsHomeTargetAsTheHomesCIEntry(t *testing.
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.reportPushRemote(t, "git@github.com:acme/acme.git")
-	if _, err := f.core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true}); err != nil {
+	if _, err := f.core.SetCITracking(human, "acme", api.SetCITrackingInput{Tracking: true}); err != nil {
 		t.Fatal(err)
 	}
 	if ci := f.home(t).CI; ci.NotWatched || ci.Repository != "acme/acme" {
@@ -173,17 +174,17 @@ func TestSetCITrackingTakesAnOlderClientsHomeTargetAsTheHomesCIEntry(t *testing.
 		t.Fatalf("CI watch %+v (%v), want the CI Watcher to watch the Home's filled-in acme/acme", watch, err)
 	}
 
-	azure := core.SetCITrackingInput{Tracking: true, Provider: domain.CIAzurePipelines, ProjectURL: "https://dev.azure.com/acme/ops/"}
+	azure := api.SetCITrackingInput{Tracking: true, Provider: domain.CIAzurePipelines, ProjectURL: "https://dev.azure.com/acme/ops/"}
 	if _, err := f.core.SetCITracking(human, "acme", azure); err != nil {
 		t.Fatal(err)
 	}
-	want := core.CIRepositoryView{Name: "acme", Provider: domain.CIAzurePipelines, ProjectURL: "https://dev.azure.com/acme/ops"}
+	want := api.CIRepositoryView{Name: "acme", Provider: domain.CIAzurePipelines, ProjectURL: "https://dev.azure.com/acme/ops"}
 	if ci := f.home(t).CI; ci != want {
 		t.Fatalf("Home's CI %+v, want %+v from the older client's provider and project URL", ci, want)
 	}
 	// A newer client names only the Project-wide fields, which leave the
 	// Home's entry.
-	if _, err := f.core.SetCITracking(human, "acme", core.SetCITrackingInput{IgnoredWorkflows: []string{"Nightly"}}); err != nil {
+	if _, err := f.core.SetCITracking(human, "acme", api.SetCITrackingInput{IgnoredWorkflows: []string{"Nightly"}}); err != nil {
 		t.Fatal(err)
 	}
 	p := f.projectView(t, "acme")
@@ -195,15 +196,15 @@ func TestSetCITrackingTakesAnOlderClientsHomeTargetAsTheHomesCIEntry(t *testing.
 	}
 	// An older client turning CI Tracking on with nothing to watch is
 	// refused, as before.
-	_, err := f.core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Provider: domain.CIGitHubActions})
-	wantCode(t, err, core.Invalid, "repository")
+	_, err := f.core.SetCITracking(human, "acme", api.SetCITrackingInput{Tracking: true, Provider: domain.CIGitHubActions})
+	wantCode(t, err, api.Invalid, "repository")
 
 	// Saving off on GitHub Actions with nothing named, as an older client
 	// does, leaves a Home the human made Not watched so.
-	if _, err := f.core.SetRepositoryCI(human, "acme", core.SetRepositoryCIInput{Name: "acme", RepositoryCI: core.RepositoryCI{NotWatched: true}}); err != nil {
+	if _, err := f.core.SetRepositoryCI(human, "acme", api.SetRepositoryCIInput{Name: "acme", RepositoryCI: api.RepositoryCI{NotWatched: true}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.core.SetCITracking(human, "acme", core.SetCITrackingInput{Provider: domain.CIGitHubActions}); err != nil {
+	if _, err := f.core.SetCITracking(human, "acme", api.SetCITrackingInput{Provider: domain.CIGitHubActions}); err != nil {
 		t.Fatal(err)
 	}
 	if ci := f.home(t).CI; !ci.NotWatched {
@@ -219,8 +220,8 @@ func TestALocalOnlyHomeNeitherWaitsOnCINorOffersLandAnywayWhileAPushedRepository
 	f.pushedFor(t, "api", "acme-5", "def456")
 	f.ciRunIn(t, "api", 1, "def456", "acme-5", domain.CIInProgress, "")
 	v := f.getTicket(t, "acme-5")
-	if api := changedIn(t, v, "api"); api.NotLanded != "waiting on CI at def456" {
-		t.Fatalf("api %+v, want it waiting on its CI under Merge + Push", api)
+	if apiRepo := changedIn(t, v, "api"); apiRepo.NotLanded != "waiting on CI at def456" {
+		t.Fatalf("api %+v, want it waiting on its CI under Merge + Push", apiRepo)
 	}
 	if home := changedIn(t, v, "acme"); home.NotLanded != "" || home.CIResult != "" {
 		t.Fatalf("Home %+v, want it waiting on nothing, local-only and Not watched", home)
@@ -228,16 +229,16 @@ func TestALocalOnlyHomeNeitherWaitsOnCINorOffersLandAnywayWhileAPushedRepository
 
 	f.ciRunIn(t, "api", 1, "def456", "acme-5", domain.CICompleted, domain.CIFailure)
 	v = f.getTicket(t, "acme-5")
-	if len(v.CIItems) != 1 || v.CIItems[0].Repository != "api" || !slices.Contains(v.CIItems[0].Options, core.OptionLandAnyway) {
+	if len(v.CIItems) != 1 || v.CIItems[0].Repository != "api" || !slices.Contains(v.CIItems[0].Options, api.OptionLandAnyway) {
 		t.Fatalf("CI items %+v, want api's alone, offering Land anyway", v.CIItems)
 	}
-	_, err := f.core.LandAnyway(human, "acme", core.CIResponseInput{Ticket: "acme-5", Repository: "acme"})
+	_, err := f.core.LandAnyway(human, "acme", api.CIResponseInput{Ticket: "acme-5", Repository: "acme"})
 	notAllowed(t, err)
-	if _, err := f.core.LandAnyway(human, "acme", core.CIResponseInput{Ticket: "acme-5", Repository: "api"}); err != nil {
+	if _, err := f.core.LandAnyway(human, "acme", api.CIResponseInput{Ticket: "acme-5", Repository: "api"}); err != nil {
 		t.Fatalf("Land anyway in api: %v", err)
 	}
 	// Under Merge, the Ticket is flagged once it hasn't landed after a
 	// while, whichever Repository holds it.
 	f.clock.Advance(core.NotLandedAfter)
-	wantReason(t, f.getTicket(t, "acme-5"), core.ReasonAcceptedNotLanded)
+	wantReason(t, f.getTicket(t, "acme-5"), api.ReasonAcceptedNotLanded)
 }

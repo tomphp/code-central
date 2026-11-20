@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
@@ -14,13 +15,13 @@ import (
 
 // scratch is a small .scratch/ folder mapped by an agent: two feature
 // folders, with Blockers inside and across them.
-func scratch() core.ImportPayload {
-	return core.ImportPayload{
-		Specs: []core.ImportSpec{
+func scratch() api.ImportPayload {
+	return api.ImportPayload{
+		Specs: []api.ImportSpec{
 			{Source: ".scratch/login/spec.md", Title: "Login", Body: "# Login\n", Labels: []string{"auth"}, Tags: map[string]string{"type": "prd"}},
 			{Source: ".scratch/billing/", Title: "billing"},
 		},
-		Tickets: []core.ImportTicket{
+		Tickets: []api.ImportTicket{
 			{Source: ".scratch/login/issues/01-form.md", Spec: ".scratch/login/spec.md", Title: "Form", State: domain.Done,
 				Description: "Build the form.\n", Tags: map[string]string{"scratch.status": "resolved"}},
 			{Source: ".scratch/login/issues/02-api.md", Spec: ".scratch/login/spec.md", Title: "API", State: domain.Ready,
@@ -44,7 +45,7 @@ func (f fixture) importFixture(t *testing.T) {
 func TestADryRunReturnsThePlanAndWritesNothing(t *testing.T) {
 	f := newFixture(t)
 	f.importFixture(t)
-	plan, err := f.core.Import(ctx, "acme", core.ImportInput{Payload: scratch(), DryRun: true})
+	plan, err := f.core.Import(ctx, "acme", api.ImportInput{Payload: scratch(), DryRun: true})
 	if err != nil {
 		t.Fatalf("import: %v", err)
 	}
@@ -66,10 +67,10 @@ func TestADryRunReturnsThePlanAndWritesNothing(t *testing.T) {
 	if billing.ID != "acme-5" || !slices.Equal(ids, []string{"acme-3", "acme-4", "acme-6", "acme-7", "acme-8"}) {
 		t.Fatalf("billing %s, ticket IDs %v", billing.ID, ids)
 	}
-	api := login.Tickets[1]
-	if api.Source != ".scratch/login/issues/02-api.md" || api.Title != "API" || api.State != domain.Ready ||
-		!slices.Equal(api.Labels, []string{"backend"}) || api.Tags["source"] != api.Source || !slices.Equal(api.BlockedBy, []string{"acme-3"}) {
-		t.Fatalf("api ticket: %+v", api)
+	apiRepo := login.Tickets[1]
+	if apiRepo.Source != ".scratch/login/issues/02-api.md" || apiRepo.Title != "API" || apiRepo.State != domain.Ready ||
+		!slices.Equal(apiRepo.Labels, []string{"backend"}) || apiRepo.Tags["source"] != apiRepo.Source || !slices.Equal(apiRepo.BlockedBy, []string{"acme-3"}) {
+		t.Fatalf("api ticket: %+v", apiRepo)
 	}
 	if inv := billing.Tickets[0]; !slices.Equal(inv.Replacements, []string{"acme-7"}) {
 		t.Fatalf("invoices: %+v", inv)
@@ -95,14 +96,14 @@ func TestADryRunReturnsThePlanAndWritesNothing(t *testing.T) {
 func TestAnImportWritesEverySpecAndTicket(t *testing.T) {
 	f := newFixture(t)
 	f.importFixture(t)
-	res, err := f.core.Import(core.WithActor(ctx, core.Human), "acme", core.ImportInput{Payload: scratch()})
+	res, err := f.core.Import(api.WithActor(ctx, api.Human), "acme", api.ImportInput{Payload: scratch()})
 	if err != nil {
 		t.Fatalf("import: %v", err)
 	}
 	if res.DryRun || len(res.Specs) != 2 || !strings.Contains(res.NextStep, "Delete `.scratch/`") || !strings.Contains(res.NextStep, "commit") {
 		t.Fatalf("result: %+v", res)
 	}
-	sp, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-2"})
+	sp, err := f.core.GetSpec(ctx, "acme", api.GetSpecInput{Spec: "acme-2"})
 	if err != nil || *sp.Body != "# Login\n" || sp.Tags["source"] != ".scratch/login/spec.md" || len(sp.Tickets) != 2 {
 		t.Fatalf("spec: %+v, %v", sp, err)
 	}
@@ -111,11 +112,11 @@ func TestAnImportWritesEverySpecAndTicket(t *testing.T) {
 		t.Fatalf("form: %+v", form)
 	}
 	// One move, with no from, written as agent whoever calls.
-	if len(form.Moves) != 1 || form.Moves[0] != (core.MoveView{To: domain.Done, Actor: "agent", Time: t0, Via: "import"}) {
+	if len(form.Moves) != 1 || form.Moves[0] != (api.MoveView{To: domain.Done, Actor: "agent", Time: t0, Via: "import"}) {
 		t.Fatalf("moves: %+v", form.Moves)
 	}
-	if api, _ := f.core.GetTicket(ctx, "acme", whole("acme-4")); api.Blocked || !api.Claimable {
-		t.Fatalf("API is blocked only by Done acme-3: %+v", api)
+	if apiRepo, _ := f.core.GetTicket(ctx, "acme", whole("acme-4")); apiRepo.Blocked || !apiRepo.Claimable {
+		t.Fatalf("API is blocked only by Done acme-3: %+v", apiRepo)
 	}
 	pdf, _ := f.core.GetTicket(ctx, "acme", whole("acme-7"))
 	if !pdf.Blocked || !slices.Equal(pdf.BlockedBy, []string{"acme-4"}) {
@@ -135,10 +136,10 @@ func TestAnImportSendsOneProjectChangeNotice(t *testing.T) {
 	f.importFixture(t)
 	notices, stop := f.core.Events().Subscribe()
 	defer stop()
-	if _, err := f.core.Import(ctx, "acme", core.ImportInput{Payload: scratch(), DryRun: true}); err != nil {
+	if _, err := f.core.Import(ctx, "acme", api.ImportInput{Payload: scratch(), DryRun: true}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.core.Import(ctx, "acme", core.ImportInput{Payload: scratch()}); err != nil {
+	if _, err := f.core.Import(ctx, "acme", api.ImportInput{Payload: scratch()}); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -154,33 +155,33 @@ func TestAnImportSendsOneProjectChangeNotice(t *testing.T) {
 
 func TestAnImportIntoAnUnknownProjectIsRefused(t *testing.T) {
 	f := newFixture(t)
-	_, err := f.core.Import(ctx, "nope", core.ImportInput{Payload: scratch(), DryRun: true})
-	wantCode(t, err, core.UnknownProject, "")
+	_, err := f.core.Import(ctx, "nope", api.ImportInput{Payload: scratch(), DryRun: true})
+	wantCode(t, err, api.UnknownProject, "")
 }
 
 func TestAnImportCanRunOnlyOnce(t *testing.T) {
 	f := newFixture(t)
 	f.importFixture(t)
-	if _, err := f.core.Import(ctx, "acme", core.ImportInput{Payload: scratch()}); err != nil {
+	if _, err := f.core.Import(ctx, "acme", api.ImportInput{Payload: scratch()}); err != nil {
 		t.Fatal(err)
 	}
 	for _, dry := range []bool{true, false} {
-		_, err := f.core.Import(ctx, "acme", core.ImportInput{Payload: scratch(), DryRun: dry})
-		wantCode(t, err, core.Invalid, "specs[0].source")
-		msg := err.(*core.Error).Message
+		_, err := f.core.Import(ctx, "acme", api.ImportInput{Payload: scratch(), DryRun: dry})
+		wantCode(t, err, api.Invalid, "specs[0].source")
+		msg := err.(*api.Error).Message
 		if !strings.Contains(msg, ".scratch/login/spec.md (acme-2)") || !strings.Contains(msg, ".scratch/billing/issues/03-tax.md (acme-8)") {
 			t.Fatalf("message doesn't list the matches: %s", msg)
 		}
 	}
 	// Removing one source Tag by hand lets that file be imported again.
-	if _, err := f.core.RemoveTags(ctx, "acme", core.RemoveTagsInput{Target: "acme-8", Keys: []string{"source"}}); err != nil {
+	if _, err := f.core.RemoveTags(ctx, "acme", api.RemoveTagsInput{Target: "acme-8", Keys: []string{"source"}}); err != nil {
 		t.Fatal(err)
 	}
 	p := scratch()
-	p.Tickets = []core.ImportTicket{p.Tickets[4]}
+	p.Tickets = []api.ImportTicket{p.Tickets[4]}
 	p.Tickets[0].Spec = ".scratch/tax/"
-	p.Specs = []core.ImportSpec{{Source: ".scratch/tax/", Title: "tax"}}
-	if _, err := f.core.Import(ctx, "acme", core.ImportInput{Payload: p}); err != nil {
+	p.Specs = []api.ImportSpec{{Source: ".scratch/tax/", Title: "tax"}}
+	if _, err := f.core.Import(ctx, "acme", api.ImportInput{Payload: p}); err != nil {
 		t.Fatalf("re-import after removing the source Tag: %v", err)
 	}
 }
@@ -188,27 +189,27 @@ func TestAnImportCanRunOnlyOnce(t *testing.T) {
 func TestAnInvalidPayloadNamesTheFieldAndWritesNothing(t *testing.T) {
 	cases := []struct {
 		name  string
-		edit  func(p *core.ImportPayload)
+		edit  func(p *api.ImportPayload)
 		field string
 	}{
-		{"no specs", func(p *core.ImportPayload) { p.Specs, p.Tickets = nil, nil }, "specs"},
-		{"spec without source", func(p *core.ImportPayload) { p.Specs[1].Source = "" }, "specs[1].source"},
-		{"multi-line source", func(p *core.ImportPayload) { p.Specs[1].Source = "a\nb" }, "specs[1].source"},
-		{"spec without title", func(p *core.ImportPayload) { p.Specs[0].Title = " " }, "specs[0].title"},
-		{"empty label", func(p *core.ImportPayload) { p.Specs[0].Labels = []string{"ok", ""} }, "specs[0].labels[1]"},
-		{"bad tag key", func(p *core.ImportPayload) { p.Specs[0].Tags = map[string]string{"Type": "prd"} }, "specs[0].tags.Type"},
-		{"empty tag value", func(p *core.ImportPayload) { p.Tickets[2].Tags["scratch.status"] = "" }, "tickets[2].tags.scratch.status"},
-		{"source tag given", func(p *core.ImportPayload) { p.Tickets[0].Tags["source"] = "x" }, "tickets[0].tags.source"},
-		{"duplicate source", func(p *core.ImportPayload) { p.Tickets[3].Source = p.Tickets[1].Source }, "tickets[3].source"},
-		{"ticket without title", func(p *core.ImportPayload) { p.Tickets[1].Title = "" }, "tickets[1].title"},
-		{"unknown spec", func(p *core.ImportPayload) { p.Tickets[1].Spec = ".scratch/nope/" }, "tickets[1].spec"},
-		{"in progress", func(p *core.ImportPayload) { p.Tickets[1].State = domain.InProgress }, "tickets[1].state"},
-		{"unknown state", func(p *core.ImportPayload) { p.Tickets[1].State = "Doing" }, "tickets[1].state"},
-		{"unknown blocker", func(p *core.ImportPayload) { p.Tickets[3].BlockedBy = []string{"x", ".scratch/nope.md"} }, "tickets[3].blocked_by[0]"},
-		{"spec as blocker", func(p *core.ImportPayload) { p.Tickets[3].BlockedBy = []string{".scratch/billing/"} }, "tickets[3].blocked_by[0]"},
-		{"replacements when not cancelled", func(p *core.ImportPayload) { p.Tickets[1].Replacements = []string{p.Tickets[3].Source} }, "tickets[1].replacements"},
-		{"unknown replacement", func(p *core.ImportPayload) { p.Tickets[2].Replacements = []string{p.Tickets[3].Source, "x"} }, "tickets[2].replacements[1]"},
-		{"replaces itself", func(p *core.ImportPayload) { p.Tickets[2].Replacements = []string{p.Tickets[2].Source} }, "tickets[2].replacements[0]"},
+		{"no specs", func(p *api.ImportPayload) { p.Specs, p.Tickets = nil, nil }, "specs"},
+		{"spec without source", func(p *api.ImportPayload) { p.Specs[1].Source = "" }, "specs[1].source"},
+		{"multi-line source", func(p *api.ImportPayload) { p.Specs[1].Source = "a\nb" }, "specs[1].source"},
+		{"spec without title", func(p *api.ImportPayload) { p.Specs[0].Title = " " }, "specs[0].title"},
+		{"empty label", func(p *api.ImportPayload) { p.Specs[0].Labels = []string{"ok", ""} }, "specs[0].labels[1]"},
+		{"bad tag key", func(p *api.ImportPayload) { p.Specs[0].Tags = map[string]string{"Type": "prd"} }, "specs[0].tags.Type"},
+		{"empty tag value", func(p *api.ImportPayload) { p.Tickets[2].Tags["scratch.status"] = "" }, "tickets[2].tags.scratch.status"},
+		{"source tag given", func(p *api.ImportPayload) { p.Tickets[0].Tags["source"] = "x" }, "tickets[0].tags.source"},
+		{"duplicate source", func(p *api.ImportPayload) { p.Tickets[3].Source = p.Tickets[1].Source }, "tickets[3].source"},
+		{"ticket without title", func(p *api.ImportPayload) { p.Tickets[1].Title = "" }, "tickets[1].title"},
+		{"unknown spec", func(p *api.ImportPayload) { p.Tickets[1].Spec = ".scratch/nope/" }, "tickets[1].spec"},
+		{"in progress", func(p *api.ImportPayload) { p.Tickets[1].State = domain.InProgress }, "tickets[1].state"},
+		{"unknown state", func(p *api.ImportPayload) { p.Tickets[1].State = "Doing" }, "tickets[1].state"},
+		{"unknown blocker", func(p *api.ImportPayload) { p.Tickets[3].BlockedBy = []string{"x", ".scratch/nope.md"} }, "tickets[3].blocked_by[0]"},
+		{"spec as blocker", func(p *api.ImportPayload) { p.Tickets[3].BlockedBy = []string{".scratch/billing/"} }, "tickets[3].blocked_by[0]"},
+		{"replacements when not cancelled", func(p *api.ImportPayload) { p.Tickets[1].Replacements = []string{p.Tickets[3].Source} }, "tickets[1].replacements"},
+		{"unknown replacement", func(p *api.ImportPayload) { p.Tickets[2].Replacements = []string{p.Tickets[3].Source, "x"} }, "tickets[2].replacements[1]"},
+		{"replaces itself", func(p *api.ImportPayload) { p.Tickets[2].Replacements = []string{p.Tickets[2].Source} }, "tickets[2].replacements[0]"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -216,8 +217,8 @@ func TestAnInvalidPayloadNamesTheFieldAndWritesNothing(t *testing.T) {
 			f.importFixture(t)
 			p := scratch()
 			c.edit(&p)
-			_, err := f.core.Import(ctx, "acme", core.ImportInput{Payload: p})
-			wantCode(t, err, core.Invalid, c.field)
+			_, err := f.core.Import(ctx, "acme", api.ImportInput{Payload: p})
+			wantCode(t, err, api.Invalid, c.field)
 			f.store.View(func(r store.Reader) error {
 				if len(r.FindTickets("acme", store.TicketFilter{})) != 0 || len(r.FindSpecs("acme", store.SpecFilter{})) != 1 {
 					t.Fatal("an invalid import wrote something")
@@ -231,13 +232,13 @@ func TestAnInvalidPayloadNamesTheFieldAndWritesNothing(t *testing.T) {
 func TestACycleAmongImportedTicketsIsRefused(t *testing.T) {
 	cases := []struct {
 		name string
-		edit func(p *core.ImportPayload)
+		edit func(p *api.ImportPayload)
 	}{
-		{"blocks itself", func(p *core.ImportPayload) { p.Tickets[1].BlockedBy = []string{p.Tickets[1].Source} }},
-		{"two Tickets wait on each other", func(p *core.ImportPayload) { p.Tickets[1].BlockedBy = []string{p.Tickets[3].Source} }},
+		{"blocks itself", func(p *api.ImportPayload) { p.Tickets[1].BlockedBy = []string{p.Tickets[1].Source} }},
+		{"two Tickets wait on each other", func(p *api.ImportPayload) { p.Tickets[1].BlockedBy = []string{p.Tickets[3].Source} }},
 		// 02-api waits on Cancelled 01-invoices, so on its Replacement 02-pdf, which waits on 02-api.
-		{"through a Replacement", func(p *core.ImportPayload) { p.Tickets[1].BlockedBy = []string{p.Tickets[2].Source} }},
-		{"Replacements in a loop", func(p *core.ImportPayload) {
+		{"through a Replacement", func(p *api.ImportPayload) { p.Tickets[1].BlockedBy = []string{p.Tickets[2].Source} }},
+		{"Replacements in a loop", func(p *api.ImportPayload) {
 			p.Tickets[4].Replacements = []string{p.Tickets[2].Source}
 			p.Tickets[2].Replacements = []string{p.Tickets[4].Source}
 		}},
@@ -248,8 +249,8 @@ func TestACycleAmongImportedTicketsIsRefused(t *testing.T) {
 			f.importFixture(t)
 			p := scratch()
 			c.edit(&p)
-			_, err := f.core.Import(ctx, "acme", core.ImportInput{Payload: p, DryRun: true})
-			wantCode(t, err, core.Cycle, "")
+			_, err := f.core.Import(ctx, "acme", api.ImportInput{Payload: p, DryRun: true})
+			wantCode(t, err, api.Cycle, "")
 		})
 	}
 }

@@ -13,7 +13,7 @@ import (
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 	"github.com/tomoram/code-central/ids"
-	"github.com/tomoram/code-central/ops"
+	"github.com/tomoram/code-central/ops/bind"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -76,7 +76,7 @@ func liveFeed(t *testing.T) (http.Handler, *bufio.Reader) {
 	t.Helper()
 	c := core.New(store.NewMemory(), clock.NewFake(time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)), &ids.Sequence{})
 	mux := http.NewServeMux()
-	httpapi.Register(mux, ops.Serve(c))
+	httpapi.Register(mux, bind.Serve(c))
 	hs := httptest.NewServer(mux)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(hs.Close)

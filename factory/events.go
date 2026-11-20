@@ -6,7 +6,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // Session Events (ADR 0008). The Factory turns each turn's stream-json
@@ -24,18 +24,18 @@ const toolResultMax = 4 << 10
 // messages, the result, the prompts) is left out. tools is the turn's
 // tool calls so far, tool-use ID to tool name, so a result names its
 // tool; wt is the worktree, for the calls' summaries.
-func streamEvents(msg streamMessage, now time.Time, tools map[string]string, wt string) []core.SessionEvent {
-	var out []core.SessionEvent
+func streamEvents(msg streamMessage, now time.Time, tools map[string]string, wt string) []api.SessionEvent {
+	var out []api.SessionEvent
 	for _, c := range msg.Message.Content {
 		switch {
 		case msg.Type == "assistant" && c.Type == "text" && strings.TrimSpace(c.Text) != "":
-			out = append(out, core.SessionEvent{Time: now, Kind: core.EventText, Text: c.Text})
+			out = append(out, api.SessionEvent{Time: now, Kind: api.EventText, Text: c.Text})
 		case msg.Type == "assistant" && c.Type == "tool_use":
 			tools[c.ID] = c.Name
-			out = append(out, core.SessionEvent{Time: now, Kind: core.EventToolCall, Text: toolCall(c.Name, c.Input, wt), Tool: c.Name, ToolUseID: c.ID})
+			out = append(out, api.SessionEvent{Time: now, Kind: api.EventToolCall, Text: toolCall(c.Name, c.Input, wt), Tool: c.Name, ToolUseID: c.ID})
 		case msg.Type == "user" && c.Type == "tool_result":
 			text, cut := cutResult(resultText(c.Content))
-			out = append(out, core.SessionEvent{Time: now, Kind: core.EventToolResult, Text: text, Tool: tools[c.ToolUseID], ToolUseID: c.ToolUseID, IsError: c.IsError, Truncated: cut})
+			out = append(out, api.SessionEvent{Time: now, Kind: api.EventToolResult, Text: text, Tool: tools[c.ToolUseID], ToolUseID: c.ToolUseID, IsError: c.IsError, Truncated: cut})
 		}
 	}
 	return out

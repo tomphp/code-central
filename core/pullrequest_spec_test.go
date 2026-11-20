@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -52,7 +52,7 @@ func itoa(n int) string { return string(rune('0' + n)) }
 func (f fixture) pushSpecBranch(t *testing.T, commit string, tickets ...string) {
 	t.Helper()
 	for _, id := range tickets {
-		if _, err := f.core.ReportPushedCommit(ctx, "acme", core.ReportPushedCommitInput{Ticket: core.Ref(id), Commit: commit, Branch: specBranch}); err != nil {
+		if _, err := f.core.ReportPushedCommit(ctx, "acme", api.ReportPushedCommitInput{Ticket: api.Ref(id), Commit: commit, Branch: specBranch}); err != nil {
 			t.Fatalf("report_pushed_commit %s: %v", id, err)
 		}
 	}
@@ -112,7 +112,7 @@ func TestAPullRequestForTheSpecBranchIsRecordedOnEveryWaitingTicket(t *testing.T
 	f.acceptedOnSpecBranch(t, 5, "one")
 	f.acceptedOnSpecBranch(t, 6, "two")
 	f.pushSpecBranch(t, "tip1", "acme-5", "acme-6")
-	f.reportPR(t, core.ReportPullRequestInput{Branch: specBranch, State: domain.PRMerged, MergeCommit: "m1"})
+	f.reportPR(t, api.ReportPullRequestInput{Branch: specBranch, State: domain.PRMerged, MergeCommit: "m1"})
 	for _, id := range []string{"acme-5", "acme-6"} {
 		if pr := f.getTicket(t, id).PullRequest; pr == nil || pr.State != domain.PRMerged || pr.MergeCommit != "m1" {
 			t.Errorf("%s pull request = %+v, want merged at m1", id, pr)
@@ -128,9 +128,9 @@ func TestTheSpecsToMergeIsOneItemOnItsLeadTicket(t *testing.T) {
 		t.Fatalf("reason %q before the Spec Branch is pushed, want none", got)
 	}
 	f.pushSpecBranch(t, "tip1", "acme-5", "acme-6")
-	f.reportPR(t, core.ReportPullRequestInput{Branch: specBranch, State: domain.PRConflicting})
+	f.reportPR(t, api.ReportPullRequestInput{Branch: specBranch, State: domain.PRConflicting})
 
-	wantReason(t, f.getTicket(t, "acme-5"), core.ReasonToMerge)
+	wantReason(t, f.getTicket(t, "acme-5"), api.ReasonToMerge)
 	if got := f.getTicket(t, "acme-6").NeedsMeReason; got != "" {
 		t.Fatalf("acme-6 reason %q, want none: the Spec is one item on acme-5", got)
 	}
@@ -148,12 +148,12 @@ func TestASpecsToMergeOffersNewFixTicketNotSendBack(t *testing.T) {
 	f.acceptedOnSpecBranch(t, 5, "one")
 	f.acceptedOnSpecBranch(t, 6, "two")
 	f.pushSpecBranch(t, "tip1", "acme-5", "acme-6")
-	f.reportPR(t, core.ReportPullRequestInput{Branch: specBranch, State: domain.PROpen})
+	f.reportPR(t, api.ReportPullRequestInput{Branch: specBranch, State: domain.PROpen})
 
-	if _, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "acme-5", Note: "x"}); err == nil {
+	if _, err := f.core.SendBack(human, "acme", api.SendBackInput{Ticket: "acme-5", Note: "x"}); err == nil {
 		t.Fatal("send_back of a Spec's lead succeeded")
 	}
-	fix, err := f.core.NewFixTicket(human, "acme", core.NewFixTicketInput{Ticket: "acme-5", Note: "reviewers asked for a rename", Full: true})
+	fix, err := f.core.NewFixTicket(human, "acme", api.NewFixTicketInput{Ticket: "acme-5", Note: "reviewers asked for a rename", Full: true})
 	if err != nil {
 		t.Fatalf("new_fix_ticket: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestASpecsToMergeOffersNewFixTicketNotSendBack(t *testing.T) {
 func TestASingleTicketsToMergeDoesNotOfferNewFixTicket(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
-	if _, err := f.core.NewFixTicket(human, "acme", core.NewFixTicketInput{Ticket: "2", Note: "x"}); err == nil {
+	if _, err := f.core.NewFixTicket(human, "acme", api.NewFixTicketInput{Ticket: "2", Note: "x"}); err == nil {
 		t.Fatal("new_fix_ticket on a single Ticket's To merge succeeded")
 	}
 }
@@ -180,17 +180,17 @@ func TestASpecsClosedPullRequestIsOneItemOffersNewFixTicketAndCancel(t *testing.
 	f.acceptedOnSpecBranch(t, 5, "one")
 	f.acceptedOnSpecBranch(t, 6, "two")
 	f.pushSpecBranch(t, "tip1", "acme-5", "acme-6")
-	f.reportPR(t, core.ReportPullRequestInput{Branch: specBranch, State: domain.PRClosed})
+	f.reportPR(t, api.ReportPullRequestInput{Branch: specBranch, State: domain.PRClosed})
 
-	wantReason(t, f.getTicket(t, "acme-5"), core.ReasonPullRequestClosed)
+	wantReason(t, f.getTicket(t, "acme-5"), api.ReasonPullRequestClosed)
 	if got := f.getTicket(t, "acme-6").NeedsMeReason; got != "" {
 		t.Fatalf("acme-6 reason %q, want none", got)
 	}
-	if _, err := f.core.NewFixTicket(human, "acme", core.NewFixTicketInput{Ticket: "acme-5", Note: "redo it"}); err != nil {
+	if _, err := f.core.NewFixTicket(human, "acme", api.NewFixTicketInput{Ticket: "acme-5", Note: "redo it"}); err != nil {
 		t.Fatalf("new_fix_ticket: %v", err)
 	}
 
-	if _, err := f.core.Cancel(human, "acme", core.CancelInput{Ticket: "acme-5"}); err != nil {
+	if _, err := f.core.Cancel(human, "acme", api.CancelInput{Ticket: "acme-5"}); err != nil {
 		t.Fatalf("cancel: %v", err)
 	}
 	for _, id := range []string{"acme-5", "acme-6"} {
@@ -204,7 +204,7 @@ func TestATicketOutsideLandPerSpecGetsItsOwnPullRequestUnderPullRequest(t *testi
 	f := landWorld(t, true)
 	f.landing(t, domain.Landing{Method: domain.LandingPullRequest, Remote: "origin", LandPerSpec: false})
 	f.moveTo(t, 5, domain.Accepted)
-	if _, err := f.core.ReportPushedCommit(ctx, "acme", core.ReportPushedCommitInput{Ticket: "acme-5", Commit: "c5", Branch: "acme-5"}); err != nil {
+	if _, err := f.core.ReportPushedCommit(ctx, "acme", api.ReportPushedCommitInput{Ticket: "acme-5", Commit: "c5", Branch: "acme-5"}); err != nil {
 		t.Fatal(err)
 	}
 	w := f.watch(t)
@@ -256,8 +256,8 @@ func TestLandPerSpecCountsAFinishedTicketsPushOfTheSpecBranch(t *testing.T) {
 
 func TestLandPerSpecNamesTheRepositoryATaggedSpecBranchWasPushedTo(t *testing.T) {
 	f := specPullRequestWorld(t)
-	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
-	if _, err := f.core.SetTags(ctx, "acme", core.SetTagsInput{Target: "acme-1", Tags: map[string]string{core.BranchTag: "feat/4711"}}); err != nil {
+	f.addRepository(t, api.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
+	if _, err := f.core.SetTags(ctx, "acme", api.SetTagsInput{Target: "acme-1", Tags: map[string]string{domain.BranchTag: "feat/4711"}}); err != nil {
 		t.Fatal(err)
 	}
 	f.changes(t, 5, "acme", "api")
@@ -266,7 +266,7 @@ func TestLandPerSpecNamesTheRepositoryATaggedSpecBranchWasPushedTo(t *testing.T)
 	if got := f.landStatus(t).Pushed; len(got) != 0 {
 		t.Fatalf("pushed = %v after a push to %s, want none: the Spec Branch is feat/4711", got, specBranch)
 	}
-	if _, err := f.core.ReportPushedCommit(ctx, "acme", core.ReportPushedCommitInput{Ticket: "acme-5", Commit: "tip2", Branch: "feat/4711", Repository: "api"}); err != nil {
+	if _, err := f.core.ReportPushedCommit(ctx, "acme", api.ReportPushedCommitInput{Ticket: "acme-5", Commit: "tip2", Branch: "feat/4711", Repository: "api"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := f.landStatus(t).Pushed; !slices.Equal(got, []string{"api"}) {

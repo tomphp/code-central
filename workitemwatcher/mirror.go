@@ -13,14 +13,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/azdo"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/ratelimit"
 )
 
 // Integration is the name every Link the Work Item Watcher makes carries.
-const Integration = core.IntegrationAzureBoards
+const Integration = domain.IntegrationAzureBoards
 
 // LinkID is the Link ID of org's work item id: org#id, org lowercased.
 // Work item IDs are unique in an organization, so it stays the same when
@@ -47,12 +47,12 @@ func workItemID(org, linkID string) (int, bool) {
 // leaves (leave). It returns Azure DevOps' rate limit, if it refused a
 // call for it; anything else that goes wrong is logged and tried again on
 // the next poll.
-func (cfg Config) mirror(ctx context.Context, watch core.WorkItemWatch, q queryRun) *ratelimit.Error {
+func (cfg Config) mirror(ctx context.Context, watch api.WorkItemWatch, q queryRun) *ratelimit.Error {
 	linked := map[string]bool{}
 	for _, id := range watch.Linked {
 		linked[id] = true
 	}
-	incoming := map[string]core.IncomingIssue{}
+	incoming := map[string]api.IncomingIssue{}
 	for _, i := range watch.Issues {
 		incoming[i.Link.ID] = i
 	}
@@ -83,7 +83,7 @@ func (cfg Config) mirror(ctx context.Context, watch core.WorkItemWatch, q queryR
 // when its work item, read alone, can't be: Azure DevOps answers one that
 // was deleted, or that the PAT may not read, as not found, or refuses it.
 // One of another organization than q's is out of scope without reading.
-func (cfg Config) leave(ctx context.Context, q queryRun, issues []core.IncomingIssue) *ratelimit.Error {
+func (cfg Config) leave(ctx context.Context, q queryRun, issues []api.IncomingIssue) *ratelimit.Error {
 	for _, i := range issues {
 		id, ours := workItemID(q.org, i.Link.ID)
 		if ours && slices.Contains(q.ids, id) {
@@ -111,9 +111,9 @@ func (cfg Config) leave(ctx context.Context, q queryRun, issues []core.IncomingI
 // spec, the Azure Boards Spec.
 func (cfg Config) arrive(ctx context.Context, q queryRun, spec string, w azdo.WorkItem) {
 	link := q.c.WorkItemURL(w.Fields.TeamProject, w.ID)
-	_, err := cfg.Client.CreateLinkedTicket(ctx, cfg.Project, core.CreateLinkedTicketInput{
-		Spec: core.Ref(spec), Title: w.Fields.Title, Description: body(w, link), State: domain.Draft,
-		Link: core.LinkInput{Integration: Integration, ID: LinkID(q.org, w.ID), URL: link},
+	_, err := cfg.Client.CreateLinkedTicket(ctx, cfg.Project, api.CreateLinkedTicketInput{
+		Spec: api.Ref(spec), Title: w.Fields.Title, Description: body(w, link), State: domain.Draft,
+		Link: api.LinkInput{Integration: Integration, ID: LinkID(q.org, w.ID), URL: link},
 	})
 	if err != nil && ctx.Err() == nil {
 		cfg.logf("create_linked_ticket for %s: %v", LinkID(q.org, w.ID), err)
@@ -123,9 +123,9 @@ func (cfg Config) arrive(ctx context.Context, q queryRun, spec string, w azdo.Wo
 // follow updates i to its work item w, one of q's matches: its title,
 // body and web link where they differ, and opens it if it was out of
 // scope or deleted.
-func (cfg Config) follow(ctx context.Context, q queryRun, i core.IncomingIssue, w azdo.WorkItem) {
+func (cfg Config) follow(ctx context.Context, q queryRun, i api.IncomingIssue, w azdo.WorkItem) {
 	link := q.c.WorkItemURL(w.Fields.TeamProject, w.ID)
-	up := core.UpdateLinkedTicketInput{Ticket: core.Ref(i.Ticket)}
+	up := api.UpdateLinkedTicketInput{Ticket: api.Ref(i.Ticket)}
 	if w.Fields.Title != i.Title {
 		up.Title = &w.Fields.Title
 	}
@@ -144,11 +144,11 @@ func (cfg Config) follow(ctx context.Context, q queryRun, i core.IncomingIssue, 
 }
 
 // setExternalState sets i's external state to state, if it isn't already.
-func (cfg Config) setExternalState(ctx context.Context, i core.IncomingIssue, state domain.ExternalState) {
+func (cfg Config) setExternalState(ctx context.Context, i api.IncomingIssue, state domain.ExternalState) {
 	if state == i.Link.ExternalState {
 		return
 	}
-	_, err := cfg.Client.SetExternalState(ctx, cfg.Project, core.SetExternalStateInput{Target: core.Ref(i.Ticket), ExternalState: state})
+	_, err := cfg.Client.SetExternalState(ctx, cfg.Project, api.SetExternalStateInput{Target: api.Ref(i.Ticket), ExternalState: state})
 	if err != nil && ctx.Err() == nil {
 		cfg.logf("set_external_state for %s: %v", i.Link.ID, err)
 	}

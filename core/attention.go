@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -16,28 +17,10 @@ import (
 // Ticket's reason from its Project's evaluation, so a Ticket notify
 // flags is in Needs Me, with a row of its own or in a CI item.
 
-// AttentionTicket is one Ticket as notify watches it.
-type AttentionTicket struct {
-	Project        string
-	ID             string
-	Title          string
-	Rounds         int
-	FailureReports int
-	// SilentClaim is the number of the live Claim while it is Silent,
-	// else 0.
-	SilentClaim int
-	// LongClaim is the number of the live Claim while it is Long, else 0.
-	LongClaim int
-	// CIFailedCommit is the pushed commit while the Ticket is CI failed,
-	// else "".
-	CIFailedCommit string
-	NeedsMe        bool
-}
-
 // Attention returns every Ticket in every Project, from one evaluation
 // of each.
-func (c *Core) Attention(context.Context) []AttentionTicket {
-	var out []AttentionTicket
+func (c *Core) Attention(context.Context) []api.AttentionTicket {
+	var out []api.AttentionTicket
 	c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
 			e := c.evaluate(r, p)
@@ -51,12 +34,12 @@ func (c *Core) Attention(context.Context) []AttentionTicket {
 }
 
 // AttentionOf returns one Ticket by display ID, or false if there is none.
-func (c *Core) AttentionOf(_ context.Context, project, id string) (AttentionTicket, bool) {
+func (c *Core) AttentionOf(_ context.Context, project, id string) (api.AttentionTicket, bool) {
 	n, err := strconv.Atoi(strings.TrimPrefix(id, project+"-"))
 	if err != nil {
-		return AttentionTicket{}, false
+		return api.AttentionTicket{}, false
 	}
-	var out AttentionTicket
+	var out api.AttentionTicket
 	var ok bool
 	c.store.View(func(r store.Reader) error {
 		var t domain.Ticket
@@ -71,8 +54,8 @@ func (c *Core) AttentionOf(_ context.Context, project, id string) (AttentionTick
 
 // attention is t as notify watches it, with its reason from its
 // Project's evaluation e.
-func attention(e *evaluation, t domain.Ticket) AttentionTicket {
-	a := AttentionTicket{
+func attention(e *evaluation, t domain.Ticket) api.AttentionTicket {
+	a := api.AttentionTicket{
 		Project: e.p.Key, ID: DisplayID(e.p.Key, t.Number), Title: t.Title,
 	}
 	if rd := t.Head.LatestRound; rd != nil {
@@ -84,13 +67,13 @@ func attention(e *evaluation, t domain.Ticket) AttentionTicket {
 	reason, _ := e.reason(t)
 	if cl, ok := liveClaim(t); ok {
 		switch reason {
-		case ReasonSilentClaim:
+		case api.ReasonSilentClaim:
 			a.SilentClaim = cl.Number
-		case ReasonLongClaim:
+		case api.ReasonLongClaim:
 			a.LongClaim = cl.Number
 		}
 	}
-	if it, ok := e.itemOf(t); ok && it.reason == ReasonCIFailed {
+	if it, ok := e.itemOf(t); ok && it.reason == api.ReasonCIFailed {
 		a.CIFailedCommit = it.commit
 	}
 	a.NeedsMe = reason != ""

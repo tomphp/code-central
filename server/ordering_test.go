@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // Blockers, Replacements and finding work (ticket 28).
@@ -24,7 +24,7 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/3/add_blocker", `{"blocker":3}`},
 				cli:  []string{"3", "3"},
 			},
-			code: core.Cycle,
+			code: api.Cycle,
 		},
 		"remove_blocker": {
 			setup: blockedDraft,
@@ -40,7 +40,7 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/2/remove_blocker", `{"blocker":9}`},
 				cli:  []string{"2", "9"},
 			},
-			code: core.Invalid,
+			code: api.Invalid,
 		},
 		"cancel": {
 			setup: readyTicket,
@@ -59,7 +59,7 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/2/cancel", `{"replacements":[9]}`},
 				cli:  []string{"2", "9"},
 			},
-			code: core.Invalid,
+			code: api.Invalid,
 		},
 		"get_spec": {
 			ok: call{
@@ -82,7 +82,7 @@ func init() {
 				http: httpCall{"GET", "/api/p/acme/specs/9", ""},
 				cli:  []string{"9"},
 			},
-			code: core.NotFound,
+			code: api.NotFound,
 		},
 		"find_specs": {
 			ok: call{
@@ -101,7 +101,7 @@ func init() {
 				http: httpCall{"GET", "/api/p/acme/specs?tag=Bad+Key%3Dx", ""},
 				cli:  []string{"--tag", "Bad Key=x"},
 			},
-			code: core.Invalid,
+			code: api.Invalid,
 		},
 	} {
 		cases[name] = c
@@ -112,7 +112,7 @@ func init() {
 func blockedDraft(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	must(t, func() error {
-		_, err := srv.Core.AddBlocker(context.Background(), "acme", core.BlockerInput{Ticket: "2", Blocker: "3"})
+		_, err := srv.Core.AddBlocker(context.Background(), "acme", api.BlockerInput{Ticket: "2", Blocker: "3"})
 		return err
 	})
 }
@@ -137,7 +137,7 @@ func TestBlockedByTagAndClaimableReachEveryDoor(t *testing.T) {
 	tagged := func(t *testing.T, srv *codecentraltest.Server) {
 		t.Helper()
 		must(t, func() error {
-			_, err := srv.Core.SetTags(context.Background(), "acme", core.SetTagsInput{Target: "3", Tags: map[string]string{"area": "web"}})
+			_, err := srv.Core.SetTags(context.Background(), "acme", api.SetTagsInput{Target: "3", Tags: map[string]string{"area": "web"}})
 			return err
 		})
 	}

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/httpapi"
 )
@@ -29,7 +29,7 @@ func init() {
 			ciSettings(t, out, true, "acme/web", []string{"nightly.yml"}, "")
 		},
 		bad:  call{http: setCITracking(`{"tracking":true,"provider":"github_actions"}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 	cases["report_push_remote"] = opCase{
 		ok: call{http: reportPushRemote(`{"url":"git@github.com:acme/web.git"}`)},
@@ -40,7 +40,7 @@ func init() {
 			ciSettings(t, out, false, "", nil, "git@github.com:acme/web.git")
 		},
 		bad:  call{http: httpCall{"POST", "/api/p/nope/report_push_remote", `{"url":"git@github.com:acme/web.git"}`}},
-		code: core.UnknownProject,
+		code: api.UnknownProject,
 	}
 }
 
@@ -87,9 +87,9 @@ func TestSetCITrackingIsReadBackByEveryProjectRead(t *testing.T) {
 
 func TestSetCITrackingIsRejectedForAnAgent(t *testing.T) {
 	srv := newServer(t)
-	status, b := httpDoAs(t, srv, core.Agent, setCITracking(`{"tracking":true,"repository":"acme/web"}`))
-	if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
-		t.Fatalf("status %d, want %d; message %q", status, httpapi.Status(core.ActionNotAllowed), e.Message)
+	status, b := httpDoAs(t, srv, api.Agent, setCITracking(`{"tracking":true,"repository":"acme/web"}`))
+	if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
+		t.Fatalf("status %d, want %d; message %q", status, httpapi.Status(api.ActionNotAllowed), e.Message)
 	}
 	ciSettings(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), false, "", nil, "")
 }
@@ -101,7 +101,7 @@ func TestSetCITrackingIsRejectedForAnAgent(t *testing.T) {
 func TestTurningCITrackingOnNeedsARepository(t *testing.T) {
 	srv := newServer(t)
 	for _, body := range []string{`{"tracking":true,"provider":"github_actions"}`, `{"tracking":true,"provider":"github_actions","repository":"  "}`} {
-		e := httpRejected(t, srv, setCITracking(body), core.Invalid)
+		e := httpRejected(t, srv, setCITracking(body), api.Invalid)
 		if e.Field != "repository" || !strings.Contains(e.Message, "owner/name") {
 			t.Fatalf("%s: field %q message %q, want repository asking for owner/name", body, e.Field, e.Message)
 		}
@@ -115,7 +115,7 @@ func TestTurningCITrackingOnNeedsARepository(t *testing.T) {
 func TestARepositoryIsOwnerSlashName(t *testing.T) {
 	srv := newServer(t)
 	for _, repo := range []string{"web", "acme/", "/web", "acme/web/extra", "https://github.com/acme/web", "acme /web"} {
-		e := httpRejected(t, srv, setCITracking(`{"tracking":true,"repository":"`+repo+`"}`), core.Invalid)
+		e := httpRejected(t, srv, setCITracking(`{"tracking":true,"repository":"`+repo+`"}`), api.Invalid)
 		if e.Field != "repository" || !strings.Contains(e.Message, repo) {
 			t.Fatalf("%q: field %q message %q, want repository naming it", repo, e.Field, e.Message)
 		}
@@ -126,7 +126,7 @@ func TestARepositoryIsOwnerSlashName(t *testing.T) {
 func TestIgnoredWorkflowsAreWorkflowFileNames(t *testing.T) {
 	srv := newServer(t)
 	for _, w := range []string{".github/workflows/ci.yml", "ci", "CI build"} {
-		e := httpRejected(t, srv, setCITracking(`{"tracking":false,"ignored_workflows":["`+w+`"]}`), core.Invalid)
+		e := httpRejected(t, srv, setCITracking(`{"tracking":false,"ignored_workflows":["`+w+`"]}`), api.Invalid)
 		if e.Field != "ignored_workflows" || !strings.Contains(e.Message, w) || !strings.Contains(e.Message, "ci.yml") {
 			t.Fatalf("%q: field %q message %q, want ignored_workflows naming it and an example", w, e.Field, e.Message)
 		}
@@ -137,7 +137,7 @@ func TestIgnoredWorkflowsAreWorkflowFileNames(t *testing.T) {
 
 func TestAnUnknownCIProviderIsInvalid(t *testing.T) {
 	srv := newServer(t)
-	e := httpRejected(t, srv, setCITracking(`{"tracking":true,"provider":"circleci","repository":"acme/web"}`), core.Invalid)
+	e := httpRejected(t, srv, setCITracking(`{"tracking":true,"provider":"circleci","repository":"acme/web"}`), api.Invalid)
 	if e.Field != "provider" || !strings.Contains(e.Message, `"github_actions"`) {
 		t.Fatalf("field %q message %q, want provider naming github_actions", e.Field, e.Message)
 	}
@@ -145,10 +145,10 @@ func TestAnUnknownCIProviderIsInvalid(t *testing.T) {
 
 func TestAnArchivedProjectRejectsSetCITracking(t *testing.T) {
 	srv := newServer(t)
-	human := core.WithActor(context.Background(), core.Human)
+	human := api.WithActor(context.Background(), api.Human)
 	must(t, func() error { _, err := srv.Core.ArchiveProject(human, "other"); return err })
-	httpRejected(t, srv, httpCall{"POST", "/api/p/other/set_ci_tracking", `{"tracking":false}`}, core.ActionNotAllowed)
-	httpRejected(t, srv, httpCall{"POST", "/api/p/nope/set_ci_tracking", `{"tracking":false}`}, core.UnknownProject)
+	httpRejected(t, srv, httpCall{"POST", "/api/p/other/set_ci_tracking", `{"tracking":false}`}, api.ActionNotAllowed)
+	httpRejected(t, srv, httpCall{"POST", "/api/p/nope/set_ci_tracking", `{"tracking":false}`}, api.UnknownProject)
 }
 
 // Every store write sends a notice, so none means nothing was written.
@@ -178,7 +178,7 @@ func TestTheSameCISettingsWriteNothingAndAChangeSendsANotice(t *testing.T) {
 
 func TestTheFactoryReportsThePushRemoteURL(t *testing.T) {
 	srv := newServer(t)
-	status, b := httpDoAs(t, srv, core.Agent, reportPushRemote(`{"url":" https://github.com/acme/web.git "}`))
+	status, b := httpDoAs(t, srv, api.Agent, reportPushRemote(`{"url":" https://github.com/acme/web.git "}`))
 	if status != 200 {
 		t.Fatalf("status %d: %s", status, b)
 	}
@@ -187,12 +187,12 @@ func TestTheFactoryReportsThePushRemoteURL(t *testing.T) {
 	// The human's settings keep the reported URL, and a new report keeps
 	// the human's settings.
 	httpOK(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web"}`))
-	httpDoAs(t, srv, core.Agent, reportPushRemote(`{"url":"git@github.com:acme/web.git"}`))
+	httpDoAs(t, srv, api.Agent, reportPushRemote(`{"url":"git@github.com:acme/web.git"}`))
 	ciSettings(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), true, "acme/web", nil, "git@github.com:acme/web.git")
 
 	// No Push remote, reported as an empty URL, makes the Home local-only
 	// (Spec code-central-890).
-	httpDoAs(t, srv, core.Agent, reportPushRemote(`{"url":""}`))
+	httpDoAs(t, srv, api.Agent, reportPushRemote(`{"url":""}`))
 	p := httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""})
 	home, _ := p["repositories"].([]any)[0].(map[string]any)
 	if home["clone_url"] != "" || home["local_only"] != true {
@@ -228,18 +228,18 @@ func TestTheSamePushRemoteURLWritesNothing(t *testing.T) {
 // answers with result.
 type ciChecks struct {
 	mu     sync.Mutex
-	calls  []core.CICheckInput
-	result core.WatcherCheckResult
+	calls  []api.CICheckInput
+	result api.WatcherCheckResult
 }
 
-func (c *ciChecks) check(_ context.Context, in core.CICheckInput) core.WatcherCheckResult {
+func (c *ciChecks) check(_ context.Context, in api.CICheckInput) api.WatcherCheckResult {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.calls = append(c.calls, in)
 	return c.result
 }
 
-func (c *ciChecks) ran() []core.CICheckInput {
+func (c *ciChecks) ran() []api.CICheckInput {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return slices.Clone(c.calls)
@@ -258,20 +258,20 @@ func TestTurningCITrackingOnRunsTheCheckWithTheGHPathOption(t *testing.T) {
 	gh := filepath.Join(t.TempDir(), "gh")
 	httpOK(t, srv, httpCall{"POST", "/api/set_options", `{"gh_path":` + strconv.Quote(gh) + `}`})
 	ciSettings(t, httpOK(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web","full":true}`)), true, "acme/web", nil, "")
-	want := []core.CICheckInput{{Provider: "github_actions", Repository: "acme/web", GHPath: gh}}
+	want := []api.CICheckInput{{Provider: "github_actions", Repository: "acme/web", GHPath: gh}}
 	if got := checks.ran(); !slices.Equal(got, want) {
 		t.Fatalf("checks = %+v, want %+v", got, want)
 	}
 }
 
 func TestAFailedCICheckRefusesTurningCITrackingOnWithItsFix(t *testing.T) {
-	for _, problem := range []core.WatcherProblem{core.ProblemGHMissing, core.ProblemLoggedOut, core.ProblemRepositoryUnreadable, core.ProblemCheckFailed} {
+	for _, problem := range []api.WatcherProblem{api.ProblemGHMissing, api.ProblemLoggedOut, api.ProblemRepositoryUnreadable, api.ProblemCheckFailed} {
 		t.Run(string(problem), func(t *testing.T) {
-			checks := &ciChecks{result: core.WatcherCheckResult{Problem: problem, Reason: "gh says no", Fix: "Run gh auth login."}}
+			checks := &ciChecks{result: api.WatcherCheckResult{Problem: problem, Reason: "gh says no", Fix: "Run gh auth login."}}
 			srv := newCICheckServer(t, checks)
-			e := httpRejected(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web"}`), core.Invalid)
+			e := httpRejected(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web"}`), api.Invalid)
 			field := "tracking"
-			if problem == core.ProblemRepositoryUnreadable {
+			if problem == api.ProblemRepositoryUnreadable {
 				field = "repository"
 			}
 			if e.Field != field || e.Message != "gh says no" || e.Fix != "Run gh auth login." {
@@ -300,7 +300,7 @@ func TestOnlyTurningCITrackingOnOrChangingItsRepositoryRunsTheCheck(t *testing.T
 	}
 
 	// Turning off runs no check, even when the check would fail.
-	checks.result = core.WatcherCheckResult{Problem: core.ProblemLoggedOut, Reason: "logged out", Fix: "Run gh auth login."}
+	checks.result = api.WatcherCheckResult{Problem: api.ProblemLoggedOut, Reason: "logged out", Fix: "Run gh auth login."}
 	ciSettings(t, httpOK(t, srv, setCITracking(`{"tracking":false,"repository":"acme/site","full":true}`)), false, "acme/site", nil, "")
 	if n := len(checks.ran()); n != 2 {
 		t.Fatalf("turning off ran a check: %d checks", n)
@@ -310,7 +310,7 @@ func TestOnlyTurningCITrackingOnOrChangingItsRepositoryRunsTheCheck(t *testing.T
 func TestAnAgentsSetCITrackingRunsNoCheck(t *testing.T) {
 	checks := &ciChecks{}
 	srv := newCICheckServer(t, checks)
-	httpDoAs(t, srv, core.Agent, setCITracking(`{"tracking":true,"repository":"acme/web"}`))
+	httpDoAs(t, srv, api.Agent, setCITracking(`{"tracking":true,"repository":"acme/web"}`))
 	if n := len(checks.ran()); n != 0 {
 		t.Fatalf("an agent's refused set_ci_tracking ran %d checks", n)
 	}

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -12,7 +12,7 @@ import (
 // a Ticket the human merges, agreeing with what send_back and
 // new_fix_ticket accept.
 
-func wantToMergeOptions(t *testing.T, v core.TicketView, want ...core.ToMergeOption) {
+func wantToMergeOptions(t *testing.T, v api.TicketView, want ...api.ToMergeOption) {
 	t.Helper()
 	if v.ToMergeOptions == nil || !slices.Equal(v.ToMergeOptions, want) {
 		t.Fatalf("%s to_merge_options %#v, want %v", v.ID, v.ToMergeOptions, want)
@@ -25,9 +25,9 @@ func TestToMergeUnderBranchOffersSendBack(t *testing.T) {
 	f.moveTo(t, 5, domain.Accepted)
 
 	v := f.getTicket(t, "acme-5")
-	wantReason(t, v, core.ReasonToMerge)
+	wantReason(t, v, api.ReasonToMerge)
 	wantToMergeOptions(t, v, "send_back")
-	if _, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "acme-5", Note: "rename it"}); err != nil {
+	if _, err := f.core.SendBack(human, "acme", api.SendBackInput{Ticket: "acme-5", Note: "rename it"}); err != nil {
 		t.Fatalf("send_back: %v", err)
 	}
 	if v := f.getTicket(t, "acme-5"); v.ToMergeOptions != nil {
@@ -38,15 +38,15 @@ func TestToMergeUnderBranchOffersSendBack(t *testing.T) {
 func TestToMergeUnderPullRequestWithoutLandPerSpecOffersSendBack(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
-	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PROpen})
+	f.reportPR(t, api.ReportPullRequestInput{Branch: "acme-2", State: domain.PROpen})
 
 	v := f.getTicket(t, "acme-2")
-	wantReason(t, v, core.ReasonToMerge)
+	wantReason(t, v, api.ReasonToMerge)
 	wantToMergeOptions(t, v, "send_back")
-	if _, err := f.core.NewFixTicket(human, "acme", core.NewFixTicketInput{Ticket: "acme-2", Note: "x"}); err == nil {
+	if _, err := f.core.NewFixTicket(human, "acme", api.NewFixTicketInput{Ticket: "acme-2", Note: "x"}); err == nil {
 		t.Fatal("new_fix_ticket on a single Ticket's To merge succeeded")
 	}
-	if _, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "acme-2", Note: "rename it"}); err != nil {
+	if _, err := f.core.SendBack(human, "acme", api.SendBackInput{Ticket: "acme-2", Note: "rename it"}); err != nil {
 		t.Fatalf("send_back: %v", err)
 	}
 }
@@ -62,7 +62,7 @@ func TestBranchAndPushOffersSendBackWhileItsCIItemListsItAlone(t *testing.T) {
 		t.Fatalf("item %+v, want one listing acme-5 alone", v.CIItem)
 	}
 	wantToMergeOptions(t, v, "send_back")
-	if _, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "acme-5", Note: "fix ci.yml"}); err != nil {
+	if _, err := f.core.SendBack(human, "acme", api.SendBackInput{Ticket: "acme-5", Note: "fix ci.yml"}); err != nil {
 		t.Fatalf("send_back: %v", err)
 	}
 }
@@ -78,7 +78,7 @@ func TestBranchAndPushOffersNothingWhileItsCIItemListsOtherTickets(t *testing.T)
 			t.Fatalf("%s item %+v, want one listing both", id, v.CIItem)
 		}
 		wantToMergeOptions(t, v)
-		_, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: core.Ref(id), Note: "fix ci.yml"})
+		_, err := f.core.SendBack(human, "acme", api.SendBackInput{Ticket: api.Ref(id), Note: "fix ci.yml"})
 		notAllowed(t, err)
 	}
 }
@@ -90,12 +90,12 @@ func TestASpecsLeadUnderPullRequestOffersNewFixTicketNotSendBack(t *testing.T) {
 			f.acceptedOnSpecBranch(t, 5, "one")
 			f.acceptedOnSpecBranch(t, 6, "two")
 			f.pushSpecBranch(t, "tip1", "acme-5", "acme-6")
-			f.reportPR(t, core.ReportPullRequestInput{Branch: specBranch, State: state})
+			f.reportPR(t, api.ReportPullRequestInput{Branch: specBranch, State: state})
 
 			wantToMergeOptions(t, f.getTicket(t, "acme-5"), "new_fix_ticket")
-			_, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "acme-5", Note: "x"})
+			_, err := f.core.SendBack(human, "acme", api.SendBackInput{Ticket: "acme-5", Note: "x"})
 			notAllowed(t, err)
-			if _, err := f.core.NewFixTicket(human, "acme", core.NewFixTicketInput{Ticket: "acme-5", Note: "reviewers asked for a rename"}); err != nil {
+			if _, err := f.core.NewFixTicket(human, "acme", api.NewFixTicketInput{Ticket: "acme-5", Note: "reviewers asked for a rename"}); err != nil {
 				t.Fatalf("new_fix_ticket: %v", err)
 			}
 		})
@@ -107,12 +107,12 @@ func TestASpecWaitingTicketThatIsNotItsLeadOffersNothing(t *testing.T) {
 	f.acceptedOnSpecBranch(t, 5, "one")
 	f.acceptedOnSpecBranch(t, 6, "two")
 	f.pushSpecBranch(t, "tip1", "acme-5", "acme-6")
-	f.reportPR(t, core.ReportPullRequestInput{Branch: specBranch, State: domain.PROpen})
+	f.reportPR(t, api.ReportPullRequestInput{Branch: specBranch, State: domain.PROpen})
 
 	wantToMergeOptions(t, f.getTicket(t, "acme-6"))
-	_, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "acme-6", Note: "x"})
+	_, err := f.core.SendBack(human, "acme", api.SendBackInput{Ticket: "acme-6", Note: "x"})
 	notAllowed(t, err)
-	if _, err := f.core.NewFixTicket(human, "acme", core.NewFixTicketInput{Ticket: "acme-6", Note: "x"}); err == nil {
+	if _, err := f.core.NewFixTicket(human, "acme", api.NewFixTicketInput{Ticket: "acme-6", Note: "x"}); err == nil {
 		t.Fatal("new_fix_ticket on a Spec's non-lead succeeded")
 	}
 }

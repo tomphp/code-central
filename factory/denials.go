@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -78,19 +78,19 @@ func distinct(ds []denial) []denial {
 func (f *factory) postDenials(ctx context.Context, t *turn, ds []denial) bool {
 	c := t.claim
 	ds = distinct(ds)
-	var qs []core.QuestionInput
+	var qs []api.QuestionInput
 	var patterns []string
 	for _, d := range ds {
 		p := d.pattern()
 		patterns = append(patterns, p)
-		qs = append(qs, core.QuestionInput{
+		qs = append(qs, api.QuestionInput{
 			Title: "Allow " + shorten(p, 100) + "?",
 			Body: fmt.Sprintf("Auto mode denied this call, so the agent's turn stopped:\n\n```\n%s %s\n```\n\n"+
 				"Answer one of:\n\n- `allow`: allow `%s` for the rest of this Claim\n- `allow <pattern>`: allow this --allowedTools rule instead, such as `Bash(npm test:*)`\n- `deny <why>`: don't allow it, and tell the agent why\n",
 				d.Tool, d.input(), p),
 		})
 	}
-	res, err := f.client.PostRound(ctx, f.project, core.PostRoundInput{Ticket: core.Ref(c.Ticket), ClaimID: c.ClaimID, SessionID: c.SessionID, Questions: qs})
+	res, err := f.client.PostRound(ctx, f.project, api.PostRoundInput{Ticket: api.Ref(c.Ticket), ClaimID: c.ClaimID, SessionID: c.SessionID, Questions: qs})
 	if err != nil {
 		f.claimf(c, "%s: post_round: %v", c.Ticket, err)
 		return false
@@ -107,7 +107,7 @@ func (f *factory) postDenials(ctx context.Context, t *turn, ds []denial) bool {
 func (f *factory) commentDenials(ctx context.Context, t *turn, ds []denial) {
 	c := t.claim
 	body := "code-central-factory: auto mode denied these calls during the last turn (session " + c.SessionID + "):\n" + denialList(ds)
-	if _, err := f.client.Comment(ctx, f.project, core.CommentInput{Ticket: core.Ref(c.Ticket), Body: body}); err != nil {
+	if _, err := f.client.Comment(ctx, f.project, api.CommentInput{Ticket: api.Ref(c.Ticket), Body: body}); err != nil {
 		f.claimf(c, "%s: comment: %v", c.Ticket, err)
 	}
 }
@@ -126,7 +126,7 @@ func denialList(ds []denial) string {
 // if res is that Round: what is allowed joins the Claim's allowed tools
 // and is saved. It returns the Claim as it now is and a note for the
 // agent on what was decided; res isn't that Round, it changes nothing.
-func (f *factory) takeDenialAnswers(c claim, res core.PickUpAnswersResult) (claim, string) {
+func (f *factory) takeDenialAnswers(c claim, res api.PickUpAnswersResult) (claim, string) {
 	if c.Denials == nil || c.Denials.Round != res.Round.Number {
 		return c, ""
 	}

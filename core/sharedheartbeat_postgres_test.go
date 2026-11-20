@@ -5,6 +5,7 @@ package core_test
 import (
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 )
 
@@ -16,14 +17,14 @@ func TestAFactoryReportingToOneServiceShowsOnAnotherOnPostgres(t *testing.T) {
 	there.core.SetService(core.Service{ID: "b", Host: "desktop"})
 	here.project(t, "acme")
 	tick := watchFactories(t, there)
-	beat(here, t, "cc", "box", core.HeartbeatOnline, 10)
-	here.reportBase(t, core.ReportBaseInput{State: core.BaseCurrent, Local: "aaa111", Remote: "aaa111"})
+	beat(here, t, "cc", "box", api.HeartbeatOnline, 10)
+	here.reportBase(t, api.ReportBaseInput{State: api.BaseCurrent, Local: "aaa111", Remote: "aaa111"})
 	tick()
 	got := onlyFactory(t, there)
-	if got.Status != core.FactoryOnline || got.ReportsTo != "laptop" {
+	if got.Status != api.FactoryOnline || got.ReportsTo != "laptop" {
 		t.Fatalf("there, %+v, want Online, reporting to laptop", got)
 	}
-	if b := factoryStatus(there, t).Base; b == nil || b.State != core.BaseCurrent {
+	if b := factoryStatus(there, t).Base; b == nil || b.State != api.BaseCurrent {
 		t.Fatalf("there, the base is %+v, want current", b)
 	}
 }

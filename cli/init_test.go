@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // runIn runs one command in-process from dir.
@@ -145,7 +145,7 @@ func TestInitTakesAnOverride(t *testing.T) {
 func TestInitRefusesATakenKeyUnlessTheHumanJoinsIt(t *testing.T) {
 	t.Parallel()
 	srv := codecentraltest.NewServer(t)
-	srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "api"})
+	srv.Client.CreateProject(context.Background(), api.CreateProjectInput{Key: "api"})
 	env := map[string]string{"CODE_CENTRAL_URL": srv.URL}
 
 	// declining to join asks for an override, which is then created
@@ -228,7 +228,7 @@ func TestInitMergesIntoAnExistingMCPFileAndNeverCommits(t *testing.T) {
 func TestInitLeavesAKnownKeyAlone(t *testing.T) {
 	t.Parallel()
 	srv := codecentraltest.NewServer(t)
-	srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"})
+	srv.Client.CreateProject(context.Background(), api.CreateProjectInput{Key: "acme"})
 	dir := gitRepo(t, "api", "origin=https://github.com/acme/api.git")
 	content := `{"mcpServers":{"code-central":{"type":"http","url":"http://custom:1/p/acme/mcp"}}}`
 	os.WriteFile(filepath.Join(dir, ".mcp.json"), []byte(content), 0o644)
@@ -271,7 +271,7 @@ func TestShellCommandsFindTheProjectFromTheNearestMCPFile(t *testing.T) {
 	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	for _, k := range []string{"acme", "flag", "envkey"} {
-		srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: k})
+		srv.Client.CreateProject(context.Background(), api.CreateProjectInput{Key: k})
 	}
 	dir := gitRepo(t, "api")
 	env := map[string]string{"CODE_CENTRAL_URL": srv.URL}
@@ -281,14 +281,14 @@ func TestShellCommandsFindTheProjectFromTheNearestMCPFile(t *testing.T) {
 	os.MkdirAll(sub, 0o755)
 	os.WriteFile(filepath.Join(dir, "a", ".mcp.json"), []byte(`{"mcpServers":{"other":{"command":"x"}}}`), 0o644)
 
-	if spec := decode[core.SpecView](t, runIn(t, sub, env, "", "create-spec", "--title", "S")); spec.ID != "acme-1" {
+	if spec := decode[api.SpecView](t, runIn(t, sub, env, "", "create-spec", "--title", "S")); spec.ID != "acme-1" {
 		t.Fatalf(".mcp.json: %+v", spec)
 	}
 	env["CODE_CENTRAL_PROJECT"] = "envkey"
-	if spec := decode[core.SpecView](t, runIn(t, sub, env, "", "create-spec", "--title", "S")); spec.ID != "envkey-1" {
+	if spec := decode[api.SpecView](t, runIn(t, sub, env, "", "create-spec", "--title", "S")); spec.ID != "envkey-1" {
 		t.Fatalf("CODE_CENTRAL_PROJECT: %+v", spec)
 	}
-	if spec := decode[core.SpecView](t, runIn(t, sub, env, "", "create-spec", "--title", "S", "--project", "flag")); spec.ID != "flag-1" {
+	if spec := decode[api.SpecView](t, runIn(t, sub, env, "", "create-spec", "--title", "S", "--project", "flag")); spec.ID != "flag-1" {
 		t.Fatalf("--project: %+v", spec)
 	}
 }
@@ -296,7 +296,7 @@ func TestShellCommandsFindTheProjectFromTheNearestMCPFile(t *testing.T) {
 func TestInitReportsAnUnreachableService(t *testing.T) {
 	t.Parallel()
 	dir := gitRepo(t, "api")
-	wantError(t, runIn(t, dir, map[string]string{"CODE_CENTRAL_URL": "http://" + freeAddr(t)}, "\ny\n", "init"), core.ServiceUnavailable)
+	wantError(t, runIn(t, dir, map[string]string{"CODE_CENTRAL_URL": "http://" + freeAddr(t)}, "\ny\n", "init"), api.ServiceUnavailable)
 }
 
 // An archived Project stays put away: init says so and writes nothing,
@@ -304,8 +304,8 @@ func TestInitReportsAnUnreachableService(t *testing.T) {
 func TestInitSaysWhenAProjectIsArchived(t *testing.T) {
 	t.Parallel()
 	srv := codecentraltest.NewServer(t)
-	srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"})
-	if _, err := srv.Core.ArchiveProject(core.WithActor(context.Background(), core.Human), "acme"); err != nil {
+	srv.Client.CreateProject(context.Background(), api.CreateProjectInput{Key: "acme"})
+	if _, err := srv.Core.ArchiveProject(api.WithActor(context.Background(), api.Human), "acme"); err != nil {
 		t.Fatal(err)
 	}
 	env := map[string]string{"CODE_CENTRAL_URL": srv.URL}

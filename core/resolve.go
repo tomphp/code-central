@@ -1,6 +1,7 @@
 package core
 
 import (
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -15,8 +16,8 @@ import (
 
 // resolveTicket reads the Ticket ref names as op's field, with the
 // History parts named.
-func resolveTicket(r store.Reader, key, op, field string, ref Ref, parts ...store.Part) (domain.Ticket, error) {
-	n, err := ref.number(key, field)
+func resolveTicket(r store.Reader, key, op, field string, ref api.Ref, parts ...store.Part) (domain.Ticket, error) {
+	n, err := refNumber(ref, key, field)
 	if err != nil {
 		return domain.Ticket{}, err
 	}
@@ -35,8 +36,8 @@ func ticketNumbered(r store.Reader, key, op, field string, n int, parts ...store
 }
 
 // resolveSpec reads the Spec ref names as op's field.
-func resolveSpec(r store.Reader, key, op, field string, ref Ref) (domain.Spec, error) {
-	n, err := ref.number(key, field)
+func resolveSpec(r store.Reader, key, op, field string, ref api.Ref) (domain.Spec, error) {
+	n, err := refNumber(ref, key, field)
 	if err != nil {
 		return domain.Spec{}, err
 	}
@@ -112,7 +113,7 @@ func mainTarget(op, field string) bool {
 
 // missing is a lookup's failure: not_found for op's main target, invalid
 // with field for a nested one.
-func missing(op, field, format string, args ...any) *Error {
+func missing(op, field, format string, args ...any) *api.Error {
 	if mainTarget(op, field) {
 		return notFound(format, args...)
 	}

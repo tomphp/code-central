@@ -1,6 +1,6 @@
 package server_test
 
-import "github.com/tomoram/code-central/core"
+import "github.com/tomoram/code-central/api"
 
 // Project modes (ticket 41).
 func init() {
@@ -8,6 +8,6 @@ func init() {
 		ok:    call{http: httpCall{"POST", "/api/projects/acme/set_project_mode", `{"mode":"local"}`}},
 		check: field("mode", "local"),
 		bad:   call{http: httpCall{"POST", "/api/projects/acme/set_project_mode", `{"mode":"shared"}`}},
-		code:  core.Invalid,
+		code:  api.Invalid,
 	}
 }

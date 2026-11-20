@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/httpapi"
 	"github.com/tomoram/code-central/ops"
 )
@@ -47,12 +47,12 @@ func TestTheHTTPDoorDispatchesEachOperationThroughItsService(t *testing.T) {
 		t.Fatalf("%d calls, want 1", len(svc.calls))
 	}
 	got := svc.calls[0]
-	want := ops.Call{Op: ops.Comment, Key: "acme", In: &core.CommentInput{Ticket: "2", Body: "Looks good."}, Actor: core.Human}
+	want := ops.Call{Op: ops.Comment, Key: "acme", In: &api.CommentInput{Ticket: "2", Body: "Looks good."}, Actor: api.Human}
 	if got.Op != want.Op || got.Key != want.Key || got.Actor != want.Actor || got.Args != nil || !reflect.DeepEqual(got.In, want.In) {
 		t.Fatalf("call %+v, want %+v", got, want)
 	}
 
-	svc.err = &core.Error{Code: core.StaleClaim, Message: "Your Claim has ended."}
+	svc.err = &api.Error{Code: api.StaleClaim, Message: "Your Claim has ended."}
 	rec = do(mux, "POST", "/api/p/acme/tickets/2/comment", `{"body":"Again."}`)
 	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `"code":"stale_claim"`) {
 		t.Fatalf("error: status %d, body %s", rec.Code, rec.Body)

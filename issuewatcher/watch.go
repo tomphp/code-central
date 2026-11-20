@@ -11,8 +11,8 @@ import (
 	"io"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
 	"github.com/tomoram/code-central/watchers"
@@ -26,13 +26,13 @@ const Interval = 2 * time.Minute
 // Client is what the Issue Watcher calls on Code Central, as the
 // integration Actor; *client.Client with its Actor set is one.
 type Client interface {
-	GetIssueWatch(ctx context.Context, key string) (core.IssueWatch, error)
-	ReportIssueWatcherStatus(ctx context.Context, key string, in core.ReportWatcherStatusInput) (core.Written[core.ProjectView], error)
-	FindLinked(ctx context.Context, key string, in core.FindLinkedInput) ([]core.LinkedRow, error)
-	CreateLinkedTicket(ctx context.Context, key string, in core.CreateLinkedTicketInput) (core.Written[core.TicketView], error)
-	UpdateLinkedTicket(ctx context.Context, key string, in core.UpdateLinkedTicketInput) (core.Written[core.TicketView], error)
-	SetExternalState(ctx context.Context, key string, in core.SetExternalStateInput) (core.LinkedRow, error)
-	ReportIssueWritten(ctx context.Context, key string, in core.ReportIssueWrittenInput) (core.LinkedRow, error)
+	GetIssueWatch(ctx context.Context, key string) (api.IssueWatch, error)
+	ReportIssueWatcherStatus(ctx context.Context, key string, in api.ReportWatcherStatusInput) (api.Written[api.ProjectView], error)
+	FindLinked(ctx context.Context, key string, in api.FindLinkedInput) ([]api.LinkedRow, error)
+	CreateLinkedTicket(ctx context.Context, key string, in api.CreateLinkedTicketInput) (api.Written[api.TicketView], error)
+	UpdateLinkedTicket(ctx context.Context, key string, in api.UpdateLinkedTicketInput) (api.Written[api.TicketView], error)
+	SetExternalState(ctx context.Context, key string, in api.SetExternalStateInput) (api.LinkedRow, error)
+	ReportIssueWritten(ctx context.Context, key string, in api.ReportIssueWrittenInput) (api.LinkedRow, error)
 }
 
 // Config wires the watch mode.
@@ -50,7 +50,7 @@ type Config struct {
 }
 
 // Kind is the Issue Watcher as the service's supervision runs it.
-var Kind = watchers.Kind{Kind: core.WatcherIssues, Args: WatchArgs}
+var Kind = watchers.Kind{Kind: api.WatcherIssues, Args: WatchArgs}
 
 // WatchArgs are the arguments that run program's Issue Watcher in its
 // watch mode for project, after the program itself.
@@ -77,7 +77,7 @@ func Watch(ctx context.Context, cfg Config) error {
 		reachable, limit := cfg.poll(ctx)
 		every, until := pace.Next(cfg.Clock.Now(), Interval, limit)
 		if reachable {
-			cfg.report(ctx, core.ReportWatcherStatusInput{State: core.WatcherWatching, RateLimitedUntil: until})
+			cfg.report(ctx, api.ReportWatcherStatusInput{State: api.WatcherWatching, RateLimitedUntil: until})
 		}
 		select {
 		case <-ctx.Done():
@@ -112,7 +112,7 @@ func (cfg Config) poll(ctx context.Context) (reachable bool, limit *ratelimit.Er
 		return false, nil
 	}
 	var passed []polled
-	var problems []core.RepositoryProblem
+	var problems []api.RepositoryProblem
 	for _, repository := range watch.Repositories {
 		a, r, err := checkAccess(ctx, repository, watch.GHPath, cfg.Env)
 		if ctx.Err() != nil {
@@ -120,12 +120,12 @@ func (cfg Config) poll(ctx context.Context) (reachable bool, limit *ratelimit.Er
 			return false, nil
 		}
 		switch {
-		case r.Problem == core.ProblemGHMissing || r.Problem == core.ProblemLoggedOut:
+		case r.Problem == api.ProblemGHMissing || r.Problem == api.ProblemLoggedOut:
 			// gh itself is the problem, for every repository alike.
-			cfg.report(ctx, core.ReportWatcherStatusInput{State: core.WatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
+			cfg.report(ctx, api.ReportWatcherStatusInput{State: api.WatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
 			return false, nil
 		case r.Problem != "":
-			problems = append(problems, core.RepositoryProblem{Repository: repository, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
+			problems = append(problems, api.RepositoryProblem{Repository: repository, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
 		case errors.As(err, &limit):
 			// A repository that already failed is still reported.
 			if len(problems) > 0 {
@@ -177,17 +177,17 @@ func (cfg Config) poll(ctx context.Context) (reachable bool, limit *ratelimit.Er
 // reportProblems reports an error for problems, the repositories that
 // failed their checks. One repository alone is reported as it always
 // was; several are named, each with its own fix.
-func (cfg Config) reportProblems(ctx context.Context, problems []core.RepositoryProblem, several bool) {
-	in := core.ReportWatcherStatusInput{State: core.WatcherError, Problem: problems[0].Problem, Message: problems[0].Message, Fix: problems[0].Fix}
+func (cfg Config) reportProblems(ctx context.Context, problems []api.RepositoryProblem, several bool) {
+	in := api.ReportWatcherStatusInput{State: api.WatcherError, Problem: problems[0].Problem, Message: problems[0].Message, Fix: problems[0].Fix}
 	if several {
-		sum := core.SumRepositoryProblems(problems)
+		sum := api.SumRepositoryProblems(problems)
 		in.Message, in.Fix, in.Repositories = sum.Reason, sum.Fix, problems
 	}
 	cfg.report(ctx, in)
 }
 
 // report reports the Issue Watcher's status.
-func (cfg Config) report(ctx context.Context, in core.ReportWatcherStatusInput) {
+func (cfg Config) report(ctx context.Context, in api.ReportWatcherStatusInput) {
 	if _, err := cfg.Client.ReportIssueWatcherStatus(ctx, cfg.Project, in); err != nil && ctx.Err() == nil {
 		cfg.logf("report_issue_watcher_status: %v", err)
 	}

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
@@ -20,18 +21,18 @@ import (
 
 // cancelledBlocker gives acme's Ticket id a Blocker on spec, then
 // cancels it with no Replacements.
-func (f fixture) cancelledBlocker(t *testing.T, id, spec core.Ref) {
+func (f fixture) cancelledBlocker(t *testing.T, id, spec api.Ref) {
 	t.Helper()
-	b := f.ticket(t, "acme", core.CreateTicketInput{Spec: spec, Title: "Gone", State: domain.Ready})
-	f.addBlocker(t, id, core.Ref(b.ID))
-	f.cancel(t, core.CancelInput{Ticket: core.Ref(b.ID)}, core.Human)
+	b := f.ticket(t, "acme", api.CreateTicketInput{Spec: spec, Title: "Gone", State: domain.Ready})
+	f.addBlocker(t, id, api.Ref(b.ID))
+	f.cancel(t, api.CancelInput{Ticket: api.Ref(b.ID)}, api.Human)
 }
 
 // inNeedsMe is the reasons Ticket id of Project key shows under in
 // needs_me: its own row's, and each CI item's that lists it.
-func inNeedsMe(t *testing.T, f fixture, key, id string) []core.NeedsMeReason {
+func inNeedsMe(t *testing.T, f fixture, key, id string) []api.NeedsMeReason {
 	t.Helper()
-	var out []core.NeedsMeReason
+	var out []api.NeedsMeReason
 	for _, row := range f.needsMe(t) {
 		if row.Project != key {
 			continue
@@ -46,23 +47,23 @@ func inNeedsMe(t *testing.T, f fixture, key, id string) []core.NeedsMeReason {
 // wantEverywhere checks that Ticket id of Project key waits for want, or
 // for nothing when want is "", alike on get_ticket, in needs_me (once,
 // as its own row or in a CI item) and in Attention.
-func wantEverywhere(t *testing.T, f fixture, key, id string, want core.NeedsMeReason) {
+func wantEverywhere(t *testing.T, f fixture, key, id string, want api.NeedsMeReason) {
 	t.Helper()
-	v, err := f.core.GetTicket(ctx, key, core.GetTicketInput{Ticket: core.Ref(id)})
+	v, err := f.core.GetTicket(ctx, key, api.GetTicketInput{Ticket: api.Ref(id)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if v.NeedsMeReason != want {
 		t.Errorf("get_ticket %s: needs_me_reason %q, want %q", id, v.NeedsMeReason, want)
 	}
-	rows, err := f.core.FindTickets(ctx, key, core.FindTicketsInput{State: domain.States})
+	rows, err := f.core.FindTickets(ctx, key, api.FindTicketsInput{State: domain.States})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if i := slices.IndexFunc(rows, func(r core.TicketRow) bool { return r.ID == id }); i < 0 || rows[i].NeedsMeReason != want {
+	if i := slices.IndexFunc(rows, func(r api.TicketRow) bool { return r.ID == id }); i < 0 || rows[i].NeedsMeReason != want {
 		t.Errorf("find_tickets %s: row %+v, want needs_me_reason %q", id, rows, want)
 	}
-	wantIn := []core.NeedsMeReason{}
+	wantIn := []api.NeedsMeReason{}
 	if want != "" {
 		wantIn = append(wantIn, want)
 	}
@@ -73,8 +74,8 @@ func wantEverywhere(t *testing.T, f fixture, key, id string, want core.NeedsMeRe
 	if !ok {
 		t.Fatalf("no Attention for %s", id)
 	}
-	if a.NeedsMe != (want != "") || (a.SilentClaim != 0) != (want == core.ReasonSilentClaim) ||
-		(a.LongClaim != 0) != (want == core.ReasonLongClaim) || (a.CIFailedCommit != "") != (want == core.ReasonCIFailed) {
+	if a.NeedsMe != (want != "") || (a.SilentClaim != 0) != (want == api.ReasonSilentClaim) ||
+		(a.LongClaim != 0) != (want == api.ReasonLongClaim) || (a.CIFailedCommit != "") != (want == api.ReasonCIFailed) {
 		t.Errorf("Attention %+v, want it to read %q", a, want)
 	}
 }
@@ -88,59 +89,59 @@ func TestWhenTwoReasonsApplyTheEarlierOneWinsForEveryReader(t *testing.T) {
 		// world leaves acme's Ticket id with both reasons.
 		world func(t *testing.T) fixture
 		id    string
-		want  core.NeedsMeReason
+		want  api.NeedsMeReason
 	}{
 		{"Needs Answer over Blocked by a Cancelled Ticket", func(t *testing.T) fixture {
 			f := newFixture(t)
 			f.asking(t, qDB)
 			f.cancelledBlocker(t, "acme-2", "acme-1")
 			return f
-		}, "acme-2", core.ReasonNeedsAnswer},
+		}, "acme-2", api.ReasonNeedsAnswer},
 		{"Failed over Blocked by a Cancelled Ticket", func(t *testing.T) fixture {
 			f := newFixture(t)
 			f.failed(t)
 			f.cancelledBlocker(t, "acme-2", "acme-1")
 			return f
-		}, "acme-2", core.ReasonFailed},
+		}, "acme-2", api.ReasonFailed},
 		{"In Review over Blocked by a Cancelled Ticket", func(t *testing.T) fixture {
 			f := newFixture(t)
 			f.inReview(t)
 			f.cancelledBlocker(t, "acme-2", "acme-1")
 			return f
-		}, "acme-2", core.ReasonInReview},
+		}, "acme-2", api.ReasonInReview},
 		{"Silent Claim over Long Claim", func(t *testing.T) fixture {
 			f := newFixture(t)
 			f.work(t, domain.Ready)
-			f.claim(t, core.ClaimInput{SessionID: "s1"})
+			f.claim(t, api.ClaimInput{SessionID: "s1"})
 			f.clock.Advance(core.LongAfter + time.Minute)
 			return f
-		}, "acme-2", core.ReasonSilentClaim},
+		}, "acme-2", api.ReasonSilentClaim},
 		{"Long Claim over Blocked by a Cancelled Ticket", func(t *testing.T) fixture {
 			f := newFixture(t)
 			f.work(t, domain.Ready)
-			f.claim(t, core.ClaimInput{SessionID: "s1"})
+			f.claim(t, api.ClaimInput{SessionID: "s1"})
 			f.cancelledBlocker(t, "acme-2", "acme-1")
 			f.keepActive(core.LongAfter + time.Second)
 			return f
-		}, "acme-2", core.ReasonLongClaim},
+		}, "acme-2", api.ReasonLongClaim},
 		{"CI failed over Accepted but not landed", func(t *testing.T) fixture {
 			f := itemWorld(t)
 			f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 			f.clock.Advance(core.NotLandedAfter + time.Minute)
 			return f
-		}, "acme-5", core.ReasonCIFailed},
+		}, "acme-5", api.ReasonCIFailed},
 		{"CI failed over Blocked by a Cancelled Ticket", func(t *testing.T) fixture {
 			f := itemWorld(t)
 			f.cancelledBlocker(t, "acme-8", "acme-7")
 			f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 			return f
-		}, "acme-8", core.ReasonCIFailed},
+		}, "acme-8", api.ReasonCIFailed},
 		{"CI cancelled over Accepted but not landed", func(t *testing.T) fixture {
 			f := itemWorld(t)
 			f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CICancelled)
 			f.clock.Advance(core.NotLandedAfter + time.Minute)
 			return f
-		}, "acme-5", core.ReasonCICancelled},
+		}, "acme-5", api.ReasonCICancelled},
 		{"CI failed over waiting on its Spec's pull request led by another Ticket", func(t *testing.T) fixture {
 			f := specPullRequestWorld(t)
 			f.withCITracking(t)
@@ -149,22 +150,22 @@ func TestWhenTwoReasonsApplyTheEarlierOneWinsForEveryReader(t *testing.T) {
 			f.pushSpecBranch(t, "abc123", "acme-5", "acme-6")
 			f.ciRun(t, 1, "ci.yml", "abc123", "acme-6", domain.CICompleted, domain.CIFailure)
 			return f
-		}, "acme-6", core.ReasonCIFailed},
+		}, "acme-6", api.ReasonCIFailed},
 		{"CI failed over Pull request closed", func(t *testing.T) fixture {
 			f := newFixture(t)
 			f.pullRequestAccepted(t)
 			f.withCITracking(t)
-			f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PRClosed})
+			f.reportPR(t, api.ReportPullRequestInput{Branch: "acme-2", State: domain.PRClosed})
 			f.reportRun(t, "acme-2", domain.CICompleted, domain.CIFailure)
 			return f
-		}, "acme-2", core.ReasonCIFailed},
+		}, "acme-2", api.ReasonCIFailed},
 		{"CI cancelled over To merge", func(t *testing.T) fixture {
 			f := newFixture(t)
 			f.pullRequestAccepted(t)
 			f.withCITracking(t)
 			f.reportRun(t, "acme-2", domain.CICompleted, domain.CICancelled)
 			return f
-		}, "acme-2", core.ReasonCICancelled},
+		}, "acme-2", api.ReasonCICancelled},
 		// A Spec's pull request is one item, on its lead Ticket: the
 		// other Tickets waiting on it have no reason of their own.
 		{"waiting on its Spec's pull request led by another Ticket over To merge", func(t *testing.T) fixture {
@@ -185,54 +186,54 @@ func TestWhenTwoReasonsApplyTheEarlierOneWinsForEveryReader(t *testing.T) {
 		{"Pull request closed over To merge", func(t *testing.T) fixture {
 			f := newFixture(t)
 			f.pullRequestAccepted(t)
-			f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PRClosed})
+			f.reportPR(t, api.ReportPullRequestInput{Branch: "acme-2", State: domain.PRClosed})
 			return f
-		}, "acme-2", core.ReasonPullRequestClosed},
+		}, "acme-2", api.ReasonPullRequestClosed},
 		{"Pull request closed over Blocked by a Cancelled Ticket", func(t *testing.T) fixture {
 			f := newFixture(t)
 			f.pullRequestAccepted(t)
-			f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: domain.PRClosed})
+			f.reportPR(t, api.ReportPullRequestInput{Branch: "acme-2", State: domain.PRClosed})
 			f.cancelledBlocker(t, "acme-2", "acme-1")
 			return f
-		}, "acme-2", core.ReasonPullRequestClosed},
+		}, "acme-2", api.ReasonPullRequestClosed},
 		{"To merge over Blocked by a Cancelled Ticket", func(t *testing.T) fixture {
 			f := newFixture(t)
 			f.pullRequestAccepted(t)
 			f.cancelledBlocker(t, "acme-2", "acme-1")
 			return f
-		}, "acme-2", core.ReasonToMerge},
+		}, "acme-2", api.ReasonToMerge},
 		{"CI unavailable over Accepted but not landed", func(t *testing.T) fixture {
 			f := itemWorld(t)
 			f.clock.Advance(core.CIUnavailableAfter + core.NotLandedAfter)
 			return f
-		}, "acme-5", core.ReasonCIUnavailable},
+		}, "acme-5", api.ReasonCIUnavailable},
 		{"CI unavailable over Blocked by a Cancelled Ticket", func(t *testing.T) fixture {
 			f := itemWorld(t)
 			f.cancelledBlocker(t, "acme-8", "acme-7")
 			f.clock.Advance(core.CIUnavailableAfter + time.Minute)
 			return f
-		}, "acme-8", core.ReasonCIUnavailable},
+		}, "acme-8", api.ReasonCIUnavailable},
 		{"Accepted but not landed over Blocked by a Cancelled Ticket", func(t *testing.T) fixture {
 			f := newFixture(t)
 			f.accepted(t)
 			f.cancelledBlocker(t, "acme-2", "acme-1")
 			f.clock.Advance(core.NotLandedAfter + time.Minute)
 			return f
-		}, "acme-2", core.ReasonAcceptedNotLanded},
+		}, "acme-2", api.ReasonAcceptedNotLanded},
 		{"Blocked by a Cancelled Ticket over Closed externally", func(t *testing.T) fixture {
 			f := newFixture(t)
 			f.linked(t)
 			f.cancelledBlocker(t, "acme-2", "acme-1")
 			f.setExternal(t, "2", domain.ExternalClosed)
 			return f
-		}, "acme-2", core.ReasonBlockedByCancelled},
+		}, "acme-2", api.ReasonBlockedByCancelled},
 		{"Closed externally over New issue", func(t *testing.T) fixture {
 			f := newFixture(t)
 			f.linked(t)
 			f.incomingIssue(t, 1, 2)
 			f.setExternal(t, "2", domain.ExternalClosed)
 			return f
-		}, "acme-2", core.ReasonClosedExternally},
+		}, "acme-2", api.ReasonClosedExternally},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -285,11 +286,11 @@ func agreementWorld(t *testing.T) fixture {
 	}
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 	// next is a new Ready Ticket on acme-7, and its number.
-	next := func(title string) (core.Ref, int) {
-		tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-7", Title: title, State: domain.Ready})
+	next := func(title string) (api.Ref, int) {
+		tk := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-7", Title: title, State: domain.Ready})
 		n, err := strconv.Atoi(strings.TrimPrefix(tk.ID, "acme-"))
 		must(nil, err)
-		return core.Ref(tk.ID), n
+		return api.Ref(tk.ID), n
 	}
 	accepted := func(title string) string {
 		ref, n := next(title)
@@ -300,66 +301,66 @@ func agreementWorld(t *testing.T) fixture {
 	f.ciRun(t, 2, "ci.yml", "c4c4c4", "acme-9", domain.CICompleted, domain.CICancelled)
 	f.pushed(t, accepted("No word of CI"), "d5d5d5") // acme-10
 	accepted("Not landed")                           // acme-11
-	claim := func(session string) (core.Ref, string) {
+	claim := func(session string) (api.Ref, string) {
 		ref, _ := next("Claimed")
-		res, err := f.core.Claim(ctx, "acme", core.ClaimInput{Ticket: ref, SessionID: session})
+		res, err := f.core.Claim(ctx, "acme", api.ClaimInput{Ticket: ref, SessionID: session})
 		must(res, err)
 		return ref, res.ClaimID
 	}
 	ref, id := claim("q1") // acme-12
-	must(f.core.PostRound(ctx, "acme", core.PostRoundInput{Ticket: ref, ClaimID: id, Questions: []core.QuestionInput{qDB}}))
+	must(f.core.PostRound(ctx, "acme", api.PostRoundInput{Ticket: ref, ClaimID: id, Questions: []api.QuestionInput{qDB}}))
 	ref, id = claim("q2") // acme-13
-	must(f.core.PostRound(ctx, "acme", core.PostRoundInput{Ticket: ref, ClaimID: id, Questions: []core.QuestionInput{qDB}}))
-	must(f.core.Answer(human, "acme", core.AnswerInput{Ticket: ref, Question: 1, Text: "SQLite"}))
+	must(f.core.PostRound(ctx, "acme", api.PostRoundInput{Ticket: ref, ClaimID: id, Questions: []api.QuestionInput{qDB}}))
+	must(f.core.Answer(human, "acme", api.AnswerInput{Ticket: ref, Question: 1, Text: "SQLite"}))
 	ref, id = claim("f1") // acme-14
-	must(f.core.ReportFailure(ctx, "acme", core.ReportFailureInput{Ticket: ref, ClaimID: id, WhatBroke: "B", Why: "W", WhatToFix: "F", WhereWorkStands: "S"}))
+	must(f.core.ReportFailure(ctx, "acme", api.ReportFailureInput{Ticket: ref, ClaimID: id, WhatBroke: "B", Why: "W", WhatToFix: "F", WhereWorkStands: "S"}))
 	ref, id = claim("r1") // acme-15
-	must(f.core.Finish(ctx, "acme", core.FinishInput{Ticket: ref, ClaimID: id, Summary: "Done."}))
+	must(f.core.Finish(ctx, "acme", api.FinishInput{Ticket: ref, ClaimID: id, Summary: "Done."}))
 	blocked, _ := next("Blocked") // acme-16
 	f.cancelledBlocker(t, blocked, "acme-7")
 	claim("s2") // acme-18, Silent once quiet
 	claim("s1") // acme-19, Long once kept active
-	must(f.core.CreateLinkedSpec(integration, "acme", core.CreateLinkedSpecInput{Title: "Issues", Body: "Issues.\n", Link: ghLink("10")}))
-	must(f.core.CreateLinkedTicket(integration, "acme", core.CreateLinkedTicketInput{Spec: "acme-20", Title: "Closed", Link: ghLink("11")}))
-	must(f.core.CreateLinkedTicket(integration, "acme", core.CreateLinkedTicketInput{Spec: "acme-20", Title: "New", Link: ghLink("12")}))
+	must(f.core.CreateLinkedSpec(integration, "acme", api.CreateLinkedSpecInput{Title: "Issues", Body: "Issues.\n", Link: ghLink("10")}))
+	must(f.core.CreateLinkedTicket(integration, "acme", api.CreateLinkedTicketInput{Spec: "acme-20", Title: "Closed", Link: ghLink("11")}))
+	must(f.core.CreateLinkedTicket(integration, "acme", api.CreateLinkedTicketInput{Spec: "acme-20", Title: "New", Link: ghLink("12")}))
 	f.setExternal(t, "acme-21", domain.ExternalClosed)
 	f.incomingIssue(t, 20, 22)
 
 	f.project(t, "web")
 	sp := f.spec(t, "web", "Login")
-	must(f.core.AddLabels(ctx, "web", core.LabelsInput{Target: core.Ref(sp.ID), Labels: []string{core.LongLivedLabel}}))
+	must(f.core.AddLabels(ctx, "web", api.LabelsInput{Target: api.Ref(sp.ID), Labels: []string{domain.LongLivedLabel}}))
 	for _, branch := range []string{"web-2", "web-3"} {
-		f.ticket(t, "web", core.CreateTicketInput{Spec: core.Ref(sp.ID), Title: "W", State: domain.Ready})
-		res, err := f.core.Claim(ctx, "web", core.ClaimInput{Ticket: core.Ref(branch)})
+		f.ticket(t, "web", api.CreateTicketInput{Spec: api.Ref(sp.ID), Title: "W", State: domain.Ready})
+		res, err := f.core.Claim(ctx, "web", api.ClaimInput{Ticket: api.Ref(branch)})
 		must(res, err)
-		must(f.core.Finish(ctx, "web", core.FinishInput{Ticket: core.Ref(branch), ClaimID: res.ClaimID, Summary: "Done.", Branch: branch}))
-		must(f.core.Accept(human, "web", core.TicketInput{Ticket: core.Ref(branch)}))
+		must(f.core.Finish(ctx, "web", api.FinishInput{Ticket: api.Ref(branch), ClaimID: res.ClaimID, Summary: "Done.", Branch: branch}))
+		must(f.core.Accept(human, "web", api.TicketInput{Ticket: api.Ref(branch)}))
 	}
-	must(f.core.ReportPushRemote(ctx, "web", core.ReportPushRemoteInput{URL: "git@github.com:acme/web.git", Base: "main"}))
-	must(f.core.SetLandingMethod(human, "web", core.SetLandingMethodInput{Method: domain.LandingPullRequest}))
+	must(f.core.ReportPushRemote(ctx, "web", api.ReportPushRemoteInput{URL: "git@github.com:acme/web.git", Base: "main"}))
+	must(f.core.SetLandingMethod(human, "web", api.SetLandingMethodInput{Method: domain.LandingPullRequest}))
 	for _, branch := range []string{"web-2", "web-3"} {
-		must(f.core.ReportPushedCommit(ctx, "web", core.ReportPushedCommitInput{Ticket: core.Ref(branch), Commit: branch + "-tip", Branch: branch}))
+		must(f.core.ReportPushedCommit(ctx, "web", api.ReportPushedCommitInput{Ticket: api.Ref(branch), Commit: branch + "-tip", Branch: branch}))
 	}
-	must(f.core.ReportPullRequest(ctx, "web", core.ReportPullRequestInput{Branch: "web-3", State: domain.PRClosed, Number: 8, Link: "https://github.com/acme/web/pull/8"}))
+	must(f.core.ReportPullRequest(ctx, "web", api.ReportPullRequestInput{Branch: "web-3", State: domain.PRClosed, Number: 8, Link: "https://github.com/acme/web/pull/8"}))
 
 	f.keepActive(core.LongAfter + time.Second)
 	for _, key := range []string{"acme", "web"} {
-		must(f.core.ReportHeartbeat(ctx, key, core.ReportHeartbeatInput{Factory: "cc", Host: "box", State: core.HeartbeatOnline, IntervalSeconds: 10}))
+		must(f.core.ReportHeartbeat(ctx, key, api.ReportHeartbeatInput{Factory: "cc", Host: "box", State: api.HeartbeatOnline, IntervalSeconds: 10}))
 	}
-	must(f.core.ReportBase(ctx, "acme", core.ReportBaseInput{State: core.BaseDiverged, Local: "a", Remote: "b"}))
-	must(f.core.ReportBase(ctx, "web", core.ReportBaseInput{State: core.BaseMissing}))
-	must(f.core.AddRepository(human, "acme", core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"}))
-	must(f.core.ReportRepositories(ctx, "acme", core.ReportRepositoriesInput{Repositories: []core.RepositoryReport{
-		{Name: "acme", Path: "/src/acme", State: core.CloneReady},
-		{Name: "api", Path: "/src/api", State: core.CloneMissing, Problem: "/src/api isn't a git repository"},
+	must(f.core.ReportBase(ctx, "acme", api.ReportBaseInput{State: api.BaseDiverged, Local: "a", Remote: "b"}))
+	must(f.core.ReportBase(ctx, "web", api.ReportBaseInput{State: api.BaseMissing}))
+	must(f.core.AddRepository(human, "acme", api.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"}))
+	must(f.core.ReportRepositories(ctx, "acme", api.ReportRepositoriesInput{Repositories: []api.RepositoryReport{
+		{Name: "acme", Path: "/src/acme", State: api.CloneReady},
+		{Name: "api", Path: "/src/api", State: api.CloneMissing, Problem: "/src/api isn't a git repository"},
 	}}))
 	return f
 }
 
 // allReasons are the Needs Me reasons in group order.
-var allReasons = []core.NeedsMeReason{core.ReasonNeedsAnswer, core.ReasonAnswered, core.ReasonSilentClaim, core.ReasonLongClaim, core.ReasonFailed,
-	core.ReasonInReview, core.ReasonCIFailed, core.ReasonCICancelled, core.ReasonBaseDiverged, core.ReasonBaseMissing, core.ReasonRepositoryMissing, core.ReasonPullRequestClosed,
-	core.ReasonToMerge, core.ReasonCIUnavailable, core.ReasonAcceptedNotLanded, core.ReasonBlockedByCancelled, core.ReasonNewIssue, core.ReasonClosedExternally}
+var allReasons = []api.NeedsMeReason{api.ReasonNeedsAnswer, api.ReasonAnswered, api.ReasonSilentClaim, api.ReasonLongClaim, api.ReasonFailed,
+	api.ReasonInReview, api.ReasonCIFailed, api.ReasonCICancelled, api.ReasonBaseDiverged, api.ReasonBaseMissing, api.ReasonRepositoryMissing, api.ReasonPullRequestClosed,
+	api.ReasonToMerge, api.ReasonCIUnavailable, api.ReasonAcceptedNotLanded, api.ReasonBlockedByCancelled, api.ReasonNewIssue, api.ReasonClosedExternally}
 
 // Over a world with a Ticket waiting for each reason, a CI item listing
 // two Tickets and both Base rows, every Ticket Attention flags is in
@@ -369,7 +370,7 @@ var allReasons = []core.NeedsMeReason{core.ReasonNeedsAnswer, core.ReasonAnswere
 func TestAttentionAndNeedsMeAgreeOnEveryTicket(t *testing.T) {
 	f := agreementWorld(t)
 
-	var reasons []core.NeedsMeReason
+	var reasons []api.NeedsMeReason
 	shown := map[string]bool{}
 	for _, row := range f.needsMe(t) {
 		reasons = append(reasons, row.Reason)
@@ -385,7 +386,7 @@ func TestAttentionAndNeedsMeAgreeOnEveryTicket(t *testing.T) {
 	if !slices.Equal(reasons, allReasons) {
 		t.Fatalf("needs_me reasons %v, want one item for each, in group order: %v", reasons, allReasons)
 	}
-	if it := f.theCIItem(t, core.ReasonCIFailed); !slices.Equal(listed(it), []string{"acme-5", "acme-8"}) {
+	if it := f.theCIItem(t, api.ReasonCIFailed); !slices.Equal(listed(it), []string{"acme-5", "acme-8"}) {
 		t.Fatalf("CI failed item lists %v, want acme-5 and acme-8", listed(it))
 	}
 
@@ -395,7 +396,7 @@ func TestAttentionAndNeedsMeAgreeOnEveryTicket(t *testing.T) {
 		if a.NeedsMe {
 			flagged[a.Project+" "+a.ID] = true
 		}
-		var want core.NeedsMeReason
+		var want api.NeedsMeReason
 		if len(in) > 0 {
 			want = in[0]
 		}
@@ -421,11 +422,11 @@ func TestAttentionAndNeedsMeAgreeOnEveryTicket(t *testing.T) {
 func TestTurningFocusKindsOffChangesNoReader(t *testing.T) {
 	f := agreementWorld(t)
 	type reads struct {
-		NeedsMe   core.NeedsMeView
-		Attention []core.AttentionTicket
-		Reasons   map[string]core.NeedsMeReason
+		NeedsMe   api.NeedsMeView
+		Attention []api.AttentionTicket
+		Reasons   map[string]api.NeedsMeReason
 		Counts    map[string]int
-		Specs     []core.SpecRow
+		Specs     []api.SpecRow
 	}
 	read := func() reads {
 		t.Helper()
@@ -439,9 +440,9 @@ func TestTurningFocusKindsOffChangesNoReader(t *testing.T) {
 				g.Tickets[i].FocusItem = true
 			}
 		}
-		out := reads{NeedsMe: v, Attention: f.core.Attention(ctx), Reasons: map[string]core.NeedsMeReason{}, Counts: map[string]int{}}
+		out := reads{NeedsMe: v, Attention: f.core.Attention(ctx), Reasons: map[string]api.NeedsMeReason{}, Counts: map[string]int{}}
 		for _, a := range out.Attention {
-			tk, err := f.core.GetTicket(ctx, a.Project, core.GetTicketInput{Ticket: core.Ref(a.ID)})
+			tk, err := f.core.GetTicket(ctx, a.Project, api.GetTicketInput{Ticket: api.Ref(a.ID)})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -454,7 +455,7 @@ func TestTurningFocusKindsOffChangesNoReader(t *testing.T) {
 		for _, row := range rows {
 			out.Counts[row.Key] = row.NeedsMe
 		}
-		if out.Specs, err = f.core.FindSpecs(ctx, "acme", core.FindSpecsInput{}); err != nil {
+		if out.Specs, err = f.core.FindSpecs(ctx, "acme", api.FindSpecsInput{}); err != nil {
 			t.Fatal(err)
 		}
 		return out
@@ -464,7 +465,7 @@ func TestTurningFocusKindsOffChangesNoReader(t *testing.T) {
 	before := read()
 
 	for _, key := range []string{"acme", "web"} {
-		if _, err := f.core.SetFocusKinds(human, key, core.SetFocusKindsInput{Off: allReasons}); err != nil {
+		if _, err := f.core.SetFocusKinds(human, key, api.SetFocusKindsInput{Off: allReasons}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -485,12 +486,12 @@ func TestTicketsSharingAPushedCommitShareItsCIItemForEveryReader(t *testing.T) {
 	f.cancelledBlocker(t, "acme-8", "acme-7")
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", domain.CICompleted, domain.CIFailure)
 	f.clock.Advance(core.NotLandedAfter + time.Minute)
-	it := f.theItem(t, core.ReasonCIFailed).CIItem
+	it := f.theItem(t, api.ReasonCIFailed).CIItem
 	if !slices.Equal(listed(it), []string{"acme-5", "acme-8"}) {
 		t.Fatalf("item lists %v, want acme-5 and acme-8", listed(it))
 	}
 	for _, id := range []string{"acme-5", "acme-8"} {
-		wantEverywhere(t, f, "acme", id, core.ReasonCIFailed)
+		wantEverywhere(t, f, "acme", id, api.ReasonCIFailed)
 		if v := f.getTicket(t, id); v.CIItem == nil || !reflect.DeepEqual(*v.CIItem, *it) {
 			t.Errorf("%s: item %+v, want needs_me's %+v", id, v.CIItem, *it)
 		}
@@ -499,11 +500,11 @@ func TestTicketsSharingAPushedCommitShareItsCIItemForEveryReader(t *testing.T) {
 		}
 	}
 
-	if _, err := f.core.LandAnyway(human, "acme", core.CIResponseInput{Ticket: "acme-8"}); err != nil {
+	if _, err := f.core.LandAnyway(human, "acme", api.CIResponseInput{Ticket: "acme-8"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"acme-5", "acme-8"} {
-		wantEverywhere(t, f, "acme", id, core.ReasonAcceptedNotLanded)
+		wantEverywhere(t, f, "acme", id, api.ReasonAcceptedNotLanded)
 		if v := f.getTicket(t, id); v.CIItem != nil || !v.LandAnyway {
 			t.Errorf("%s: item %+v, land_anyway %v: want no item, landing anyway", id, v.CIItem, v.LandAnyway)
 		}
@@ -511,9 +512,9 @@ func TestTicketsSharingAPushedCommitShareItsCIItemForEveryReader(t *testing.T) {
 }
 
 // theCIItem is the one CI item for reason in needs_me.
-func (f fixture) theCIItem(t *testing.T, reason core.NeedsMeReason) *core.CIItemView {
+func (f fixture) theCIItem(t *testing.T, reason api.NeedsMeReason) *api.CIItemView {
 	t.Helper()
-	var out *core.CIItemView
+	var out *api.CIItemView
 	for _, row := range f.needsMe(t) {
 		if row.Reason == reason && row.CIItem != nil {
 			if out != nil {

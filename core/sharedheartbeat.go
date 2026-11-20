@@ -8,6 +8,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -25,21 +26,21 @@ const heartbeatExpiry = 24 * time.Hour
 
 // heartbeatDoc is a Heartbeat as the Store keeps it.
 type heartbeatDoc struct {
-	State           HeartbeatState `json:"state"`
-	Note            string         `json:"note,omitempty"`
-	IntervalSeconds int            `json:"interval_seconds"`
-	Chat            bool           `json:"chat,omitempty"`
-	At              time.Time      `json:"at"`
-	PlanLimits      *PlanLimits    `json:"plan_limits,omitempty"`
-	Reported        *PlanLimits    `json:"reported,omitempty"`
+	State           api.HeartbeatState `json:"state"`
+	Note            string             `json:"note,omitempty"`
+	IntervalSeconds int                `json:"interval_seconds"`
+	Chat            bool               `json:"chat,omitempty"`
+	At              time.Time          `json:"at"`
+	PlanLimits      *api.PlanLimits    `json:"plan_limits,omitempty"`
+	Reported        *api.PlanLimits    `json:"reported,omitempty"`
 }
 
 // factoryReportsDoc is a Project's base and clone reports as the Store
 // keeps them, with when they last changed.
 type factoryReportsDoc struct {
-	At     time.Time            `json:"at"`
-	Bases  map[string]BaseView  `json:"bases,omitempty"`
-	Clones map[string]CloneView `json:"clones,omitempty"`
+	At     time.Time                `json:"at"`
+	Bases  map[string]api.BaseView  `json:"bases,omitempty"`
+	Clones map[string]api.CloneView `json:"clones,omitempty"`
 }
 
 // SetLog makes c log what it can't write to or read from the Store, and
@@ -56,7 +57,7 @@ func (c *Core) logf(format string, a ...any) {
 // offlineAt is when h's Factory went, or goes, Offline with no newer
 // Heartbeat.
 func (h heartbeat) offlineAt() time.Time {
-	if h.state == HeartbeatStopping {
+	if h.state == api.HeartbeatStopping {
 		return h.at
 	}
 	return h.at.Add(h.deadline())
@@ -198,16 +199,16 @@ func heartbeatOf(row store.Heartbeat) (heartbeat, error) {
 
 // sameBases says whether a and b show the human the same bases: what
 // ReportBase notices.
-func sameBases(a, b map[string]BaseView) bool {
-	return maps.EqualFunc(a, b, func(x, y BaseView) bool {
+func sameBases(a, b map[string]api.BaseView) bool {
+	return maps.EqualFunc(a, b, func(x, y api.BaseView) bool {
 		return x.State == y.State && x.Local == y.Local && x.Remote == y.Remote
 	})
 }
 
 // sameClones says whether a and b are the same clone reports: what
 // ReportRepositories notices.
-func sameClones(a, b map[string]CloneView) bool {
-	return maps.EqualFunc(a, b, func(x, y CloneView) bool {
+func sameClones(a, b map[string]api.CloneView) bool {
+	return maps.EqualFunc(a, b, func(x, y api.CloneView) bool {
 		return x.State == y.State && x.Path == y.Path && x.Problem == y.Problem && x.Since.Equal(y.Since)
 	})
 }

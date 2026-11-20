@@ -4,32 +4,34 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/domain"
 )
 
 func TestAProjectRemembersItsMode(t *testing.T) {
 	f := newFixture(t)
-	if p := f.project(t, "acme"); p.Mode != core.ModeCommitted {
+	if p := f.project(t, "acme"); p.Mode != domain.ModeCommitted {
 		t.Fatalf("default mode %q", p.Mode)
 	}
-	p, err := f.core.CreateProject(ctx, core.CreateProjectInput{Key: "solo", Mode: core.ModeLocal})
-	if err != nil || p.Mode != core.ModeLocal {
+	p, err := f.core.CreateProject(ctx, api.CreateProjectInput{Key: "solo", Mode: domain.ModeLocal})
+	if err != nil || p.Mode != domain.ModeLocal {
 		t.Fatalf("create local: %+v %v", p, err)
 	}
-	_, err = f.core.CreateProject(ctx, core.CreateProjectInput{Key: "odd", Mode: "shared"})
-	wantCode(t, err, core.Invalid, "mode")
+	_, err = f.core.CreateProject(ctx, api.CreateProjectInput{Key: "odd", Mode: "shared"})
+	wantCode(t, err, api.Invalid, "mode")
 
-	p, err = f.core.SetProjectMode(ctx, "acme", core.SetProjectModeInput{Mode: core.ModeLocal})
-	if err != nil || p.Mode != core.ModeLocal {
+	p, err = f.core.SetProjectMode(ctx, "acme", api.SetProjectModeInput{Mode: domain.ModeLocal})
+	if err != nil || p.Mode != domain.ModeLocal {
 		t.Fatalf("set_project_mode: %+v %v", p, err)
 	}
-	if got, _ := f.core.GetProject(ctx, "acme"); got.Mode != core.ModeLocal {
+	if got, _ := f.core.GetProject(ctx, "acme"); got.Mode != domain.ModeLocal {
 		t.Fatalf("stored mode %q", got.Mode)
 	}
-	_, err = f.core.SetProjectMode(ctx, "acme", core.SetProjectModeInput{Mode: "shared"})
-	wantCode(t, err, core.Invalid, "mode")
-	_, err = f.core.SetProjectMode(ctx, "nope", core.SetProjectModeInput{Mode: core.ModeLocal})
-	wantCode(t, err, core.UnknownProject, "")
+	_, err = f.core.SetProjectMode(ctx, "acme", api.SetProjectModeInput{Mode: "shared"})
+	wantCode(t, err, api.Invalid, "mode")
+	_, err = f.core.SetProjectMode(ctx, "nope", api.SetProjectModeInput{Mode: domain.ModeLocal})
+	wantCode(t, err, api.UnknownProject, "")
 }
 
 func TestTheTeachingFilesMapTheSkillsToCodeCentral(t *testing.T) {

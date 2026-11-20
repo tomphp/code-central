@@ -4,31 +4,31 @@ package server_test
 import (
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // A session claiming the Ticket it already holds gets the same Claim back
 // on every door; another session is told who holds it.
 func TestTheHoldingSessionClaimsAgainOnEveryDoor(t *testing.T) {
 	const held = "acme-3 is held by Claim 1 of another session; claim another Ticket, or ask the human to release it"
-	for door, claim := range map[string]func(t *testing.T) (first, again map[string]any, other core.Error){
-		"mcp": func(t *testing.T) (map[string]any, map[string]any, core.Error) {
+	for door, claim := range map[string]func(t *testing.T) (first, again map[string]any, other api.Error){
+		"mcp": func(t *testing.T) (map[string]any, map[string]any, api.Error) {
 			s := connect(t, newServer(t), "acme")
 			args := map[string]any{"ticket": "acme-3", "session_id": "sess-1"}
 			return mcpOK(t, s, "claim", args), mcpOK(t, s, "claim", args),
-				mcpRejected(t, s, "claim", map[string]any{"ticket": "acme-3", "session_id": "sess-2"}, core.ActionNotAllowed)
+				mcpRejected(t, s, "claim", map[string]any{"ticket": "acme-3", "session_id": "sess-2"}, api.ActionNotAllowed)
 		},
-		"http": func(t *testing.T) (map[string]any, map[string]any, core.Error) {
+		"http": func(t *testing.T) (map[string]any, map[string]any, api.Error) {
 			srv := newServer(t)
 			c := httpCall{"POST", "/api/p/acme/claim", `{"ticket":"acme-3","session_id":"sess-1"}`}
 			return httpOK(t, srv, c), httpOK(t, srv, c),
-				httpRejected(t, srv, httpCall{"POST", "/api/p/acme/claim", `{"ticket":"acme-3","session_id":"sess-2"}`}, core.ActionNotAllowed)
+				httpRejected(t, srv, httpCall{"POST", "/api/p/acme/claim", `{"ticket":"acme-3","session_id":"sess-2"}`}, api.ActionNotAllowed)
 		},
-		"cli": func(t *testing.T) (map[string]any, map[string]any, core.Error) {
+		"cli": func(t *testing.T) (map[string]any, map[string]any, api.Error) {
 			srv := newServer(t)
 			args := []string{"claim", "--ticket", "acme-3", "--session", "sess-1"}
 			return cliOK(t, srv, args), cliOK(t, srv, args),
-				cliRejected(t, srv, []string{"claim", "--ticket", "acme-3", "--session", "sess-2"}, core.ActionNotAllowed)
+				cliRejected(t, srv, []string{"claim", "--ticket", "acme-3", "--session", "sess-2"}, api.ActionNotAllowed)
 		},
 	} {
 		t.Run(door, func(t *testing.T) {

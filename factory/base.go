@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // baseState is what the Factory knows of one Repository's base from poll
@@ -55,7 +55,7 @@ func (l *lander) stateOf(r *repository) *baseState {
 // Project's Repositories': it is local-only under Pull Request, its base
 // is missing, or under r's Merge + Push isn't level with the remote's. It
 // is "" when r's base is ready.
-func (l *lander) held(r *repository, policies core.LandingPolicies) string {
+func (l *lander) held(r *repository, policies api.LandingPolicies) string {
 	s := l.stateOf(r)
 	switch {
 	case r.localOnlyUnderPullRequest:
@@ -81,7 +81,7 @@ func (l *lander) anyBaseHeld() bool {
 
 // locateBases finds every Repository's base, Home first, as locateBase
 // does each.
-func (l *lander) locateBases(ctx context.Context, p core.ProjectView) {
+func (l *lander) locateBases(ctx context.Context, p api.ProjectView) {
 	for _, r := range l.repos.ready() {
 		l.locateBase(ctx, p, r)
 	}
@@ -97,7 +97,7 @@ func (l *lander) locateBases(ctx context.Context, p core.ProjectView) {
 // found for the first time or changed. Nothing touching r lands while its
 // base is missing. A held .mcp.json doesn't stop landing; it only stops
 // claims.
-func (l *lander) locateBase(ctx context.Context, p core.ProjectView, r *repository) {
+func (l *lander) locateBase(ctx context.Context, p api.ProjectView, r *repository) {
 	s := l.stateOf(r)
 	base := l.repos.baseOf(r)
 	ref := "refs/heads/" + base
@@ -134,7 +134,7 @@ func (l *lander) locateBase(ctx context.Context, p core.ProjectView, r *reposito
 		if r.home {
 			l.mcpBase = ""
 		}
-		l.reportBaseState(ctx, r, core.ReportBaseInput{State: core.BaseMissing})
+		l.reportBaseState(ctx, r, api.ReportBaseInput{State: api.BaseMissing})
 		return
 	}
 	if s.missing {
@@ -153,7 +153,7 @@ func (l *lander) locateBase(ctx context.Context, p core.ProjectView, r *reposito
 		if t, rerr := r.git.commit("refs/remotes/" + remote + "/" + base); rerr == nil && !localOnly {
 			theirs = t
 		}
-		l.reportBaseState(ctx, r, core.ReportBaseInput{State: core.BaseCurrent, Local: tip, Remote: theirs})
+		l.reportBaseState(ctx, r, api.ReportBaseInput{State: api.BaseCurrent, Local: tip, Remote: theirs})
 	}
 }
 

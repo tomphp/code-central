@@ -11,7 +11,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/ratelimit"
 )
 
@@ -25,7 +25,7 @@ const checkLimit = time.Minute
 // found on the service's PATH, and reads its result. A check that doesn't
 // finish is the check failed problem, naming kind, with the fix of
 // turning its setting on again once the service's log is checked.
-func Check(ctx context.Context, program string, environ, args []string, kind core.WatcherKind) core.WatcherCheckResult {
+func Check(ctx context.Context, program string, environ, args []string, kind api.WatcherKind) api.WatcherCheckResult {
 	ctx, cancel := context.WithTimeout(ctx, checkLimit)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, program, args...)
@@ -33,7 +33,7 @@ func Check(ctx context.Context, program string, environ, args []string, kind cor
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()
-	var r core.WatcherCheckResult
+	var r api.WatcherCheckResult
 	if err == nil {
 		err = json.Unmarshal(stdout.Bytes(), &r)
 	}
@@ -41,7 +41,7 @@ func Check(ctx context.Context, program string, environ, args []string, kind cor
 		if line := ratelimit.FirstLine(stderr.String()); line != "" {
 			err = fmt.Errorf("%w: %s", err, line)
 		}
-		return core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: fmt.Sprintf("The %s's check didn't finish: %v", kind.Name(), err),
+		return api.WatcherCheckResult{Problem: api.ProblemCheckFailed, Reason: fmt.Sprintf("The %s's check didn't finish: %v", kind.Name(), err),
 			Fix: "Check the service's log, then turn " + kind.Setting() + " on again."}
 	}
 	return r

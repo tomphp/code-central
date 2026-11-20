@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -19,29 +20,6 @@ import (
 // code-central-1107), and works out the Factory Status from memory on
 // every read.
 
-// HeartbeatState is the state a Factory reports in a Heartbeat.
-type HeartbeatState string
-
-const (
-	HeartbeatOnline   HeartbeatState = "online"
-	HeartbeatDraining HeartbeatState = "draining"
-	HeartbeatStopping HeartbeatState = "stopping"
-)
-
-// FactoryStatusName is a Factory's, or a Project's combined, Factory Status.
-type FactoryStatusName string
-
-const (
-	FactoryOnline   FactoryStatusName = "online"
-	FactoryDraining FactoryStatusName = "draining"
-	FactoryOffline  FactoryStatusName = "offline"
-)
-
-// FactoryStatusNames are the Factory Statuses.
-func FactoryStatusNames() []FactoryStatusName {
-	return []FactoryStatusName{FactoryOnline, FactoryDraining, FactoryOffline}
-}
-
 const (
 	maxHeartbeatNote       = 200
 	maxHeartbeatInterval   = 86400
@@ -49,45 +27,10 @@ const (
 	heartbeatMissed        = 3
 )
 
-// FactoryStatusView is a Project's Factory Status as every Project read
-// returns it, always filled in.
-type FactoryStatusView struct {
-	// Status is the combined status: Online if any Factory is, else
-	// Draining if any is, else Offline (also with no Factories).
-	Status    FactoryStatusName `json:"status"`
-	Factories []FactoryView     `json:"factories"`
-	// Base is the base the Factory last reported under Pull Request
-	// (code-central-394); left out while none is reporting.
-	Base *BaseView `json:"base,omitempty"`
-	// PlanLimits are the most recently observed Plan Limits among the
-	// Factories that aren't Offline (Spec code-central-861); left out
-	// while none has any.
-	PlanLimits *PlanLimits `json:"plan_limits,omitempty"`
-}
-
-// FactoryView is one Factory as the Project view lists it, from its last
-// Heartbeat.
-type FactoryView struct {
-	Name   string            `json:"name"`
-	Host   string            `json:"host"`
-	Status FactoryStatusName `json:"status"`
-	// Note is empty when none; a stopped Factory keeps its last one.
-	Note            string    `json:"note"`
-	LastHeartbeat   time.Time `json:"last_heartbeat"`
-	IntervalSeconds int       `json:"interval_seconds"`
-	// Chat is Chat support: the Factory can run Conversations. Chat is
-	// available for the Project while an Online Factory has it.
-	Chat bool `json:"chat"`
-	// ReportsTo is the host of the Factory's Reporting Service, the
-	// service its Heartbeats reach, when that is another service sharing
-	// the Store; empty when it is this one.
-	ReportsTo string `json:"reports_to,omitempty"`
-}
-
 // heartbeat is a Factory's latest Heartbeat.
 type heartbeat struct {
 	name, host string
-	state      HeartbeatState
+	state      api.HeartbeatState
 	note       string
 	interval   int
 	chat       bool
@@ -95,7 +38,7 @@ type heartbeat struct {
 	// limits are the Factory's Plan Limits as kept, observed_at capped
 	// at receipt, and reported are them as the Factory sent them; both
 	// nil when it reports none.
-	limits, reported *PlanLimits
+	limits, reported *api.PlanLimits
 	// service and serviceHost are the ID and host of the Factory's
 	// Reporting Service.
 	service, serviceHost string
@@ -112,10 +55,10 @@ type heartbeats struct {
 	seen map[string]string
 	// base is each Project's reported bases (code-central-394), by
 	// Repository Name (Spec code-central-848).
-	base map[string]map[string]BaseView
+	base map[string]map[string]api.BaseView
 	// clones is each Project's reported clones, by Repository Name
 	// (Spec code-central-848).
-	clones map[string]map[string]CloneView
+	clones map[string]map[string]api.CloneView
 	// reportsAt is when each Project's base and clone reports last
 	// changed, here or on the service whose reports were last read, so
 	// the newest wins.
@@ -135,14 +78,14 @@ func (h heartbeat) deadline() time.Duration {
 }
 
 // status is h's status at now.
-func (h heartbeat) status(now time.Time) FactoryStatusName {
+func (h heartbeat) status(now time.Time) api.FactoryStatusName {
 	switch {
-	case h.state == HeartbeatStopping, now.Sub(h.at) >= h.deadline():
-		return FactoryOffline
-	case h.state == HeartbeatDraining:
-		return FactoryDraining
+	case h.state == api.HeartbeatStopping, now.Sub(h.at) >= h.deadline():
+		return api.FactoryOffline
+	case h.state == api.HeartbeatDraining:
+		return api.FactoryDraining
 	}
-	return FactoryOnline
+	return api.FactoryOnline
 }
 
 // noticed says whether h, replacing prev (seen says whether there was
@@ -154,11 +97,11 @@ func noticed(prev heartbeat, seen bool, h heartbeat, now time.Time) bool {
 }
 
 // view is project's Factory Status at now.
-func (hs *heartbeats) view(project string, now time.Time) FactoryStatusView {
+func (hs *heartbeats) view(project string, now time.Time) api.FactoryStatusView {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 	var latest heartbeatKey // the Factory whose Plan Limits v holds
-	v := FactoryStatusView{Status: FactoryOffline, Factories: []FactoryView{}}
+	v := api.FactoryStatusView{Status: api.FactoryOffline, Factories: []api.FactoryView{}}
 	for k, h := range hs.all {
 		if k.project != project {
 			continue
@@ -168,19 +111,19 @@ func (hs *heartbeats) view(project string, now time.Time) FactoryStatusView {
 		if h.service != hs.self {
 			reportsTo = h.serviceHost
 		}
-		v.Factories = append(v.Factories, FactoryView{Name: h.name, Host: h.host, Status: s, Note: h.note, LastHeartbeat: h.at,
+		v.Factories = append(v.Factories, api.FactoryView{Name: h.name, Host: h.host, Status: s, Note: h.note, LastHeartbeat: h.at,
 			IntervalSeconds: h.interval, Chat: h.chat, ReportsTo: reportsTo})
 		switch {
-		case s == FactoryOnline, s == FactoryDraining && v.Status == FactoryOffline:
+		case s == api.FactoryOnline, s == api.FactoryDraining && v.Status == api.FactoryOffline:
 			v.Status = s
 		}
-		if s != FactoryOffline && h.limits != nil && (v.PlanLimits == nil || newerLimits(*h.limits, k, *v.PlanLimits, latest)) {
+		if s != api.FactoryOffline && h.limits != nil && (v.PlanLimits == nil || newerLimits(*h.limits, k, *v.PlanLimits, latest)) {
 			v.PlanLimits, latest = h.limits, k
 		}
 	}
 	// The Home Repository's, named by the Project Key.
 	v.Base = hs.baseView(project, project, now)
-	slices.SortFunc(v.Factories, func(a, b FactoryView) int {
+	slices.SortFunc(v.Factories, func(a, b api.FactoryView) int {
 		if c := strings.Compare(a.Name, b.Name); c != 0 {
 			return c
 		}
@@ -189,55 +132,33 @@ func (hs *heartbeats) view(project string, now time.Time) FactoryStatusView {
 	return v
 }
 
-// ReportHeartbeatInput is the Factory's report_heartbeat(factory, host,
-// state, note?, interval_seconds, full?).
-type ReportHeartbeatInput struct {
-	Factory string         `json:"factory"`
-	Host    string         `json:"host"`
-	State   HeartbeatState `json:"state"`
-	// Note is free text, cut to 200 characters; Code Central never
-	// interprets it.
-	Note string `json:"note"`
-	// IntervalSeconds is the Factory's poll interval, 1 to 86400.
-	IntervalSeconds int `json:"interval_seconds"`
-	// Chat is Chat support: the Factory can run Conversations. It
-	// defaults to false, so a Factory that doesn't know Chat has none.
-	Chat bool `json:"chat"`
-	// PlanLimits are the Plan Limits the Factory last read from its
-	// Turns; left out when it has none. Plan Limits with neither window
-	// are none.
-	PlanLimits *PlanLimits `json:"plan_limits,omitempty"`
-	// Full asks for the Project in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
 // ReportHeartbeat is the Factory's report_heartbeat. The Heartbeat replaces
 // the earlier one of the same factory and host, in memory and then in the
 // Store, with this service as its Reporting Service; a Store it can't
 // write to is logged, and the Heartbeat still counts here. It sends the
 // Project's notice only when a Factory is new or what the human sees of it
 // changed, so a steady Factory doesn't make the UI refetch each poll.
-func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeatInput) (Written[ProjectView], error) {
+func (c *Core) ReportHeartbeat(_ context.Context, key string, in api.ReportHeartbeatInput) (api.Written[api.ProjectView], error) {
 	name, host := strings.TrimSpace(in.Factory), strings.TrimSpace(in.Host)
 	switch {
 	case name == "":
-		return Written[ProjectView]{}, invalid("factory", "factory is required: the Factory's name")
+		return api.Written[api.ProjectView]{}, invalid("factory", "factory is required: the Factory's name")
 	case host == "":
-		return Written[ProjectView]{}, invalid("host", "host is required: the machine the Factory runs on")
-	case !slices.Contains([]HeartbeatState{HeartbeatOnline, HeartbeatDraining, HeartbeatStopping}, in.State):
-		return Written[ProjectView]{}, invalid("state", "state is one of online, draining, stopping, not %q", in.State)
+		return api.Written[api.ProjectView]{}, invalid("host", "host is required: the machine the Factory runs on")
+	case !slices.Contains([]api.HeartbeatState{api.HeartbeatOnline, api.HeartbeatDraining, api.HeartbeatStopping}, in.State):
+		return api.Written[api.ProjectView]{}, invalid("state", "state is one of online, draining, stopping, not %q", in.State)
 	case in.IntervalSeconds < 1 || in.IntervalSeconds > maxHeartbeatInterval:
-		return Written[ProjectView]{}, invalid("interval_seconds", "interval_seconds is from 1 to %d, not %d", maxHeartbeatInterval, in.IntervalSeconds)
+		return api.Written[api.ProjectView]{}, invalid("interval_seconds", "interval_seconds is from 1 to %d, not %d", maxHeartbeatInterval, in.IntervalSeconds)
 	}
 	reported, err := checkPlanLimits(in.PlanLimits)
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	note := strings.TrimSpace(in.Note)
 	if r := []rune(note); len(r) > maxHeartbeatNote {
 		note = strings.TrimSpace(string(r[:maxHeartbeatNote]))
 	}
-	var before ProjectView
+	var before api.ProjectView
 	var project domain.Project
 	if err := c.store.View(func(r store.Reader) error {
 		if err := writable(r, key); err != nil {
@@ -247,7 +168,7 @@ func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeat
 		before = c.projectView(project)
 		return nil
 	}); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	now := c.now()
 	k := heartbeatKey{key, name, host}
@@ -258,7 +179,7 @@ func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeat
 	prev, seen := hs.all[k]
 	h.limits = keptLimits(prev, reported, now)
 	hs.all[k] = h
-	cleared := !seen || prev.status(now) == FactoryOffline || in.State == HeartbeatStopping
+	cleared := !seen || prev.status(now) == api.FactoryOffline || in.State == api.HeartbeatStopping
 	if cleared {
 		// A Factory that is new, back from a lapse or stopping holds
 		// no base or clone report of its own to trust.
@@ -339,7 +260,7 @@ func (c *Core) factoryStatusChanges() []string {
 		hs.mu.Lock()
 		prev, ok := hs.seen[key]
 		if !ok {
-			prev = string(FactoryOffline) // a Project with no Factories
+			prev = string(api.FactoryOffline) // a Project with no Factories
 		}
 		hs.seen[key] = sig
 		hs.mu.Unlock()

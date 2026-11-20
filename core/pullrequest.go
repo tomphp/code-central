@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -21,29 +21,16 @@ import (
 // Repository, each into that Repository's own Base, and each body lists
 // its siblings.
 
-// PullRequestView is a pull request as reads show it: on a Ticket, on the
-// Spec page and in the Pull Request Watcher's list.
-type PullRequestView struct {
-	// Repository is the Repository Name the pull request is in; left out
-	// while the Project has one Repository.
-	Repository string                  `json:"repository,omitempty"`
-	Number     int                     `json:"number"`
-	Link       string                  `json:"link"`
-	State      domain.PullRequestState `json:"state"`
-	// MergeCommit is the commit the Code Host merged it at, once merged.
-	MergeCommit string `json:"merge_commit,omitempty"`
-}
-
-func pullRequestView(p *domain.PullRequest) *PullRequestView {
+func pullRequestView(p *domain.PullRequest) *api.PullRequestView {
 	if p == nil {
 		return nil
 	}
-	return &PullRequestView{Number: p.Number, Link: p.Link, State: p.State, MergeCommit: p.MergeCommit}
+	return &api.PullRequestView{Number: p.Number, Link: p.Link, State: p.State, MergeCommit: p.MergeCommit}
 }
 
 // pullRequestViewIn is p's view in Project pr, naming its Repository
 // while pr has several.
-func pullRequestViewIn(pr domain.Project, p domain.PullRequest) PullRequestView {
+func pullRequestViewIn(pr domain.Project, p domain.PullRequest) api.PullRequestView {
 	v := *pullRequestView(&p)
 	if severalRepositories(pr) {
 		v.Repository = recordRepository(pr.Key, p.Repository)
@@ -75,14 +62,14 @@ func anyPullRequest(t domain.Ticket, state domain.PullRequestState) bool {
 
 // closedPullRequests is t's pull requests closed without merging, in
 // p's landing order: each is a Pull request closed.
-func closedPullRequests(p domain.Project, t domain.Ticket) []PullRequestView {
-	out := []PullRequestView{}
+func closedPullRequests(p domain.Project, t domain.Ticket) []api.PullRequestView {
+	out := []api.PullRequestView{}
 	for _, pr := range t.PullRequests {
 		if pr.State == domain.PRClosed {
 			out = append(out, pullRequestViewIn(p, pr))
 		}
 	}
-	inLandingOrder(p, out, func(v PullRequestView) string { return recordRepository(p.Key, v.Repository) })
+	inLandingOrder(p, out, func(v api.PullRequestView) string { return recordRepository(p.Key, v.Repository) })
 	return out
 }
 
@@ -103,76 +90,12 @@ func setPullRequest(t *domain.Ticket, pr domain.PullRequest) bool {
 	return true
 }
 
-// PullRequestWatch is get_pull_request_watch: everything the Pull Request
-// Watcher needs on each poll. Work and Close are empty unless the Landing
-// Method is Pull Request.
-type PullRequestWatch struct {
-	Project string `json:"project"`
-	// On says the Landing Method is Pull Request.
-	On bool `json:"on"`
-	// CodeHost, Repository and Base are the Home Repository's.
-	CodeHost   CodeHost `json:"code_host"`
-	Repository string   `json:"repository"`
-	Base       string   `json:"base"`
-	// Repositories are every Repository the watcher watches, in landing
-	// order, the Home Repository's included.
-	Repositories []PullRequestRepositoryView `json:"repositories"`
-	// PATEnv names the environment variable holding the Azure Repos PAT,
-	// for every Repository on Azure Repos.
-	PATEnv string `json:"pat_env"`
-	GHPath string `json:"gh_path"`
-	// Work is every piece of pushed work to watch, by when it was pushed.
-	Work []PushedWorkView `json:"work"`
-	// Close is every open pull request marked to close.
-	Close []PullRequestToClose `json:"close"`
-}
-
-// PullRequestRepositoryView is one Repository as the Pull Request Watcher
-// works it: its Code Host and the repository there, worked out from its
-// Clone URL, and its Base.
-type PullRequestRepositoryView struct {
-	Name     string   `json:"name"`
-	CodeHost CodeHost `json:"code_host"`
-	// Repository is owner/name on GitHub and
-	// organization/project/repository on Azure Repos.
-	Repository string `json:"repository"`
-	Base       string `json:"base"`
-}
-
-// PushedWorkView is one piece of pushed work: a Ticket's branch in one
-// Repository, with its latest pushed commit there, what to open its pull
-// request with, and its current pull request, if any.
-type PushedWorkView struct {
-	// Repository is the Repository Name the work is in.
-	Repository string    `json:"repository"`
-	Branch     string    `json:"branch"`
-	Commit     string    `json:"commit"`
-	Pushed     time.Time `json:"pushed"`
-	// Tickets are the Tickets the work covers.
-	Tickets []string `json:"tickets"`
-	Title   string   `json:"title"`
-	// Body is what the pull request's body should be: the watcher opens
-	// it with that, and with several Repositories edits it to match.
-	Body string `json:"body"`
-	// PullRequest is nil until the Watcher has reported one.
-	PullRequest *PullRequestView `json:"pull_request,omitempty"`
-}
-
-// PullRequestToClose is an open pull request marked to close, as sending
-// its Ticket back marks its open pull requests while none has merged.
-type PullRequestToClose struct {
-	Repository string `json:"repository"`
-	Branch     string `json:"branch"`
-	Number     int    `json:"number"`
-	Link       string `json:"link"`
-}
-
 // GetPullRequestWatch is the Pull Request Watcher's get_pull_request_watch.
 // Pushed work is listed while any of its Tickets is Accepted, and while
 // one is In Review after its pull request was opened, so that a merge
 // while it is In Review is still seen.
-func (c *Core) GetPullRequestWatch(_ context.Context, key string) (PullRequestWatch, error) {
-	var out PullRequestWatch
+func (c *Core) GetPullRequestWatch(_ context.Context, key string) (api.PullRequestWatch, error) {
+	var out api.PullRequestWatch
 	err := c.store.View(func(r store.Reader) error {
 		p, ok := r.Project(key)
 		if !ok {
@@ -180,15 +103,15 @@ func (c *Core) GetPullRequestWatch(_ context.Context, key string) (PullRequestWa
 		}
 		lv := landingView(p)
 		ps := landingPolicies(p)
-		out = PullRequestWatch{Project: key, On: ps.RunsPullRequestWatcher(), CodeHost: lv.CodeHost, Repository: lv.Repository,
-			Base: p.Base(), Repositories: []PullRequestRepositoryView{}, PATEnv: lv.PATEnv, GHPath: r.Options().GHPath, Work: []PushedWorkView{}, Close: []PullRequestToClose{}}
+		out = api.PullRequestWatch{Project: key, On: ps.RunsPullRequestWatcher(), CodeHost: lv.CodeHost, Repository: lv.Repository,
+			Base: p.Base(), Repositories: []api.PullRequestRepositoryView{}, PATEnv: lv.PATEnv, GHPath: r.Options().GHPath, Work: []api.PushedWorkView{}, Close: []api.PullRequestToClose{}}
 		if out.On {
 			for _, rv := range repositoriesView(p) {
 				if !ps.In(rv.Name).LandsByPullRequest() {
 					continue
 				}
 				_, repository := codeHostOf(rv.CloneURL)
-				out.Repositories = append(out.Repositories, PullRequestRepositoryView{Name: rv.Name, CodeHost: rv.CodeHost, Repository: repository, Base: rv.Base})
+				out.Repositories = append(out.Repositories, api.PullRequestRepositoryView{Name: rv.Name, CodeHost: rv.CodeHost, Repository: repository, Base: rv.Base})
 			}
 			out.Work = pushedWork(r, key)
 			out.Close = pullRequestsToClose(r, p)
@@ -259,8 +182,8 @@ func watchesPullRequest(t domain.Ticket) bool {
 // first Ticket's number, then of its Repositories' first push. Under
 // Land per Spec a Spec's Tickets share its Spec Branch in each
 // Repository, which is one piece of work titled with the Spec's title.
-func pushedWork(r store.Reader, key string) []PushedWorkView {
-	out := []PushedWorkView{}
+func pushedWork(r store.Reader, key string) []api.PushedWorkView {
+	out := []api.PushedWorkView{}
 	type at struct{ repository, branch string }
 	index := map[at]int{}
 	p, _ := r.Project(key)
@@ -287,7 +210,7 @@ func pushedWork(r store.Reader, key string) []PushedWorkView {
 			}
 			index[at{name, branch}] = len(out)
 			covered = append(covered, []domain.Ticket{t})
-			out = append(out, PushedWorkView{Repository: name, Branch: branch, Commit: latest.Commit, Pushed: latest.Pushed, Tickets: []string{DisplayID(key, t.Number)},
+			out = append(out, api.PushedWorkView{Repository: name, Branch: branch, Commit: latest.Commit, Pushed: latest.Pushed, Tickets: []string{DisplayID(key, t.Number)},
 				Title: t.Title, PullRequest: pullRequestView(pullRequestIn(key, t, name))})
 		}
 	}
@@ -322,15 +245,15 @@ func pushedWork(r store.Reader, key string) []PushedWorkView {
 
 // pullRequestsToClose is every open pull request of p's unfinished
 // Tickets marked to close, by Ticket.
-func pullRequestsToClose(r store.Reader, p domain.Project) []PullRequestToClose {
-	out := []PullRequestToClose{}
+func pullRequestsToClose(r store.Reader, p domain.Project) []api.PullRequestToClose {
+	out := []api.PullRequestToClose{}
 	for _, t := range r.FindTickets(p.Key, store.TicketFilter{States: unfinished}) {
 		for _, pr := range t.PullRequests {
 			if !pr.Close || (pr.State != domain.PROpen && pr.State != domain.PRConflicting) {
 				continue
 			}
 			name := recordRepository(p.Key, pr.Repository)
-			out = append(out, PullRequestToClose{Repository: name, Branch: branchIn(p.Key, t, name), Number: pr.Number, Link: pr.Link})
+			out = append(out, api.PullRequestToClose{Repository: name, Branch: branchIn(p.Key, t, name), Number: pr.Number, Link: pr.Link})
 		}
 	}
 	return out
@@ -368,11 +291,11 @@ func ticketPullRequestBody(key string, t domain.Ticket, project string) string {
 // Write-back closes the issue (ADR 0050). "" when spec has no attached
 // GitHub issue.
 func issueMention(p domain.Project, spec domain.Spec, name string) string {
-	if !spec.Link.Attached() || spec.Link.Integration != string(CodeHostGitHub) {
+	if !spec.Link.Attached() || spec.Link.Integration != string(api.CodeHostGitHub) {
 		return ""
 	}
 	ref := spec.Link.ID
-	if host, _ := codeHostOf(cloneURLOf(p, name)); host != CodeHostGitHub && spec.Link.URL != "" {
+	if host, _ := codeHostOf(cloneURLOf(p, name)); host != api.CodeHostGitHub && spec.Link.URL != "" {
 		ref = spec.Link.URL
 	}
 	return "\n\nIssue: " + ref
@@ -430,7 +353,7 @@ func lastFinishSummary(t domain.Ticket) string {
 			continue
 		}
 		for _, cm := range slices.Backward(t.Comments) {
-			if cm.Time.Equal(m.Time) && cm.Actor != string(Human) {
+			if cm.Time.Equal(m.Time) && cm.Actor != string(api.Human) {
 				return strings.TrimSpace(cm.Body)
 			}
 		}
@@ -439,54 +362,27 @@ func lastFinishSummary(t domain.Ticket) string {
 	return ""
 }
 
-// ReportPullRequestInput is the Pull Request Watcher's
-// report_pull_request(repository?, branch, number, link, state,
-// merge_commit?, full?).
-type ReportPullRequestInput struct {
-	// Repository is the Repository Name the pull request is in; empty for
-	// the Home Repository.
-	Repository string `json:"repository,omitempty"`
-	// Branch is the pushed work's branch.
-	Branch string                  `json:"branch"`
-	Number int                     `json:"number"`
-	Link   string                  `json:"link"`
-	State  domain.PullRequestState `json:"state"`
-	// MergeCommit is the commit the Code Host merged the pull request at;
-	// needed with the merged state.
-	MergeCommit string `json:"merge_commit,omitempty"`
-	// Full asks for the Tickets covered in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
-// PullRequestReport is report_pull_request's record: the Tickets it
-// recorded the pull request on.
-type PullRequestReport struct {
-	Branch  string          `json:"branch"`
-	Tickets []string        `json:"tickets"`
-	Record  PullRequestView `json:"pull_request"`
-}
-
 // ReportPullRequest is the Pull Request Watcher's report_pull_request: the
 // pull request of one piece of pushed work, recorded on every Ticket the
 // work covers: those not yet Done or Cancelled whose latest pushed commit
 // in the Repository was pushed as the branch. A merged pull request
 // stores the merge commit the Code Host reports. Any state may follow any
 // other, so a closed pull request reopened is reported open again.
-func (c *Core) ReportPullRequest(_ context.Context, key string, in ReportPullRequestInput) (Written[PullRequestReport], error) {
+func (c *Core) ReportPullRequest(_ context.Context, key string, in api.ReportPullRequestInput) (api.Written[api.PullRequestReport], error) {
 	branch, link, merge := strings.TrimSpace(in.Branch), strings.TrimSpace(in.Link), strings.TrimSpace(in.MergeCommit)
 	switch {
 	case branch == "":
-		return Written[PullRequestReport]{}, invalid("branch", "report_pull_request needs the pushed work's branch")
+		return api.Written[api.PullRequestReport]{}, invalid("branch", "report_pull_request needs the pushed work's branch")
 	case in.Number <= 0:
-		return Written[PullRequestReport]{}, invalid("number", "report_pull_request needs the pull request's number on the Code Host")
+		return api.Written[api.PullRequestReport]{}, invalid("number", "report_pull_request needs the pull request's number on the Code Host")
 	case link == "":
-		return Written[PullRequestReport]{}, invalid("link", "report_pull_request needs the pull request's link")
+		return api.Written[api.PullRequestReport]{}, invalid("link", "report_pull_request needs the pull request's link")
 	case !slices.Contains(domain.PullRequestStates, in.State):
-		return Written[PullRequestReport]{}, invalid("state", "the state is one of %v, not %q", domain.PullRequestStates, in.State)
+		return api.Written[api.PullRequestReport]{}, invalid("state", "the state is one of %v, not %q", domain.PullRequestStates, in.State)
 	case in.State == domain.PRMerged && merge == "":
-		return Written[PullRequestReport]{}, invalid("merge_commit", "a merged pull request needs the merge commit the Code Host reports")
+		return api.Written[api.PullRequestReport]{}, invalid("merge_commit", "a merged pull request needs the merge commit the Code Host reports")
 	case in.State != domain.PRMerged && merge != "":
-		return Written[PullRequestReport]{}, invalid("merge_commit", "only a merged pull request has a merge commit")
+		return api.Written[api.PullRequestReport]{}, invalid("merge_commit", "only a merged pull request has a merge commit")
 	}
 	pr := domain.PullRequest{Number: in.Number, Link: link, State: in.State, MergeCommit: merge}
 	var covered []int
@@ -514,9 +410,9 @@ func (c *Core) ReportPullRequest(_ context.Context, key string, in ReportPullReq
 		}
 		return nil
 	}); err != nil {
-		return Written[PullRequestReport]{}, err
+		return api.Written[api.PullRequestReport]{}, err
 	}
-	report := PullRequestReport{Branch: branch, Tickets: []string{}, Record: *pullRequestView(&pr)}
+	report := api.PullRequestReport{Branch: branch, Tickets: []string{}, Record: *pullRequestView(&pr)}
 	var changed []string
 	// A store update writes one record, so each Ticket has its own.
 	for _, n := range covered {
@@ -532,7 +428,7 @@ func (c *Core) ReportPullRequest(_ context.Context, key string, in ReportPullReq
 			return w.PutTicket(key, t)
 		})
 		if err != nil {
-			return Written[PullRequestReport]{}, err
+			return api.Written[api.PullRequestReport]{}, err
 		}
 		id := DisplayID(key, n)
 		report.Tickets = append(report.Tickets, id)
@@ -542,13 +438,13 @@ func (c *Core) ReportPullRequest(_ context.Context, key string, in ReportPullReq
 		}
 	}
 	if in.Full {
-		return Written[PullRequestReport]{Record: &report}, nil
+		return api.Written[api.PullRequestReport]{Record: &report}, nil
 	}
-	ack := Acknowledgement{ID: key, Updated: c.now(), Changed: []string{}}
+	ack := api.Acknowledgement{ID: key, Updated: c.now(), Changed: []string{}}
 	if len(changed) > 0 {
 		ack.Changed = []string{"pull_request"}
 	}
-	return Written[PullRequestReport]{Acknowledgement: ack}, nil
+	return api.Written[api.PullRequestReport]{Acknowledgement: ack}, nil
 }
 
 // pushedAs reports whether pc, t's latest pushed commit in a Repository,
@@ -571,13 +467,13 @@ func pullRequestOpen(p domain.PullRequest) bool {
 // the open pull requests of each Accepted Ticket of p, by Ticket, in the
 // Repositories no longer under Pull Request. A Spec's one pull request
 // shows for each of its Tickets.
-func openPullRequests(r store.Reader, p domain.Project) []OpenPullRequest {
-	out := []OpenPullRequest{}
+func openPullRequests(r store.Reader, p domain.Project) []api.OpenPullRequest {
+	out := []api.OpenPullRequest{}
 	ps := landingPolicies(p)
 	for _, t := range r.FindTickets(p.Key, store.TicketFilter{States: []domain.State{domain.Accepted}}) {
 		for _, pr := range t.PullRequests {
 			if pullRequestOpen(pr) && !ps.In(recordRepository(p.Key, pr.Repository)).LandsByPullRequest() {
-				out = append(out, OpenPullRequest{Ticket: DisplayID(p.Key, t.Number), Link: pr.Link})
+				out = append(out, api.OpenPullRequest{Ticket: DisplayID(p.Key, t.Number), Link: pr.Link})
 			}
 		}
 	}

@@ -6,6 +6,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -24,65 +25,6 @@ const TranscriptLimit = 2000
 // longer text is cut on arrival.
 const SessionEventTextLimit = 64 << 10
 
-// SessionEventKind is a Session Event's kind, one of SessionEventKinds as
-// the Factory posts them. Code Central doesn't check it.
-type SessionEventKind string
-
-// The kinds of Session Event.
-const (
-	// EventText is the agent's text.
-	EventText SessionEventKind = "text"
-	// EventToolCall is a tool call, its text a summary of the call.
-	EventToolCall SessionEventKind = "tool_call"
-	// EventToolResult is a tool call's result.
-	EventToolResult SessionEventKind = "tool_result"
-	// EventFactory is a Factory log line about the Claim.
-	EventFactory SessionEventKind = "factory"
-	// EventPermissionDenials is a Chat reply's item listing the calls
-	// its turn had denied, from its result's permission_denials.
-	EventPermissionDenials SessionEventKind = "permission_denials"
-)
-
-// SessionEventKinds are the kinds of Session Event.
-func SessionEventKinds() []SessionEventKind {
-	return []SessionEventKind{EventText, EventToolCall, EventToolResult, EventFactory, EventPermissionDenials}
-}
-
-// SessionEvent is one thing a Claim's session did, as posted: agent text,
-// a tool call, a tool result or a Factory log line. Tool and Text are
-// opaque strings.
-type SessionEvent struct {
-	Time      time.Time        `json:"time"`
-	Kind      SessionEventKind `json:"kind"`
-	Text      string           `json:"text"`
-	Tool      string           `json:"tool,omitempty"`
-	ToolUseID string           `json:"tool_use_id,omitempty"`
-	IsError   bool             `json:"is_error,omitempty"`
-	Truncated bool             `json:"truncated,omitempty"`
-}
-
-// HeldSessionEvent is a Session Event in a Transcript, with its sequence
-// number, which rises within the Transcript and is the SSE id its stream
-// resumes from.
-type HeldSessionEvent struct {
-	Seq int `json:"seq"`
-	SessionEvent
-}
-
-// TranscriptView is a Claim's Transcript as the read returns it: the held
-// events, oldest first. Tail is true when it holds only part of the
-// session: events were dropped from its front, as it keeps the last
-// TranscriptLimit, or it began after the Claim did, as none are kept
-// from before Code Central's last restart, or on another service before
-// its session moved here. Host is the host of another service on the
-// Store holding the Transcript, its Reporting Service, while that service
-// is running: then Events is empty.
-type TranscriptView struct {
-	Events []HeldSessionEvent `json:"events"`
-	Tail   bool               `json:"tail"`
-	Host   string             `json:"host,omitempty"`
-}
-
 // transcripts is every Claim's Transcript, keyed by Project, Ticket and
 // Claim number.
 type transcripts struct {
@@ -93,7 +35,7 @@ type transcripts struct {
 }
 
 type transcript struct {
-	events  []HeldSessionEvent
+	events  []api.HeldSessionEvent
 	lastSeq int
 	tail    bool
 }
@@ -102,7 +44,7 @@ type transcript struct {
 // adds the events to the Transcript of the newest Claim with that session
 // ID, live or ended, and counts as a ping. With no such Claim they are
 // dropped.
-func (c *Core) PostSessionEvents(ctx context.Context, sessionID string, events []SessionEvent) {
+func (c *Core) PostSessionEvents(ctx context.Context, sessionID string, events []api.SessionEvent) {
 	if sessionID == "" {
 		return
 	}
@@ -131,7 +73,7 @@ func (ts *transcripts) holds(k markKey) bool {
 
 // hold adds events to Claim k's Transcript, starting it if need be: as a
 // tail when the Claim started before the service did, or moved is true.
-func (c *Core) hold(k markKey, started time.Time, moved bool, events []SessionEvent) {
+func (c *Core) hold(k markKey, started time.Time, moved bool, events []api.SessionEvent) {
 	ts := c.transcripts
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
@@ -151,7 +93,7 @@ func (c *Core) hold(k markKey, started time.Time, moved bool, events []SessionEv
 	for _, e := range events {
 		e.Text, e.Truncated = cutText(e.Text, e.Truncated)
 		tr.lastSeq++
-		tr.events = append(tr.events, HeldSessionEvent{Seq: tr.lastSeq, SessionEvent: e})
+		tr.events = append(tr.events, api.HeldSessionEvent{Seq: tr.lastSeq, SessionEvent: e})
 	}
 	if over := len(tr.events) - TranscriptLimit; over > 0 {
 		tr.events = tr.events[over:]
@@ -194,18 +136,18 @@ func cutText(text string, truncated bool) (string, bool) {
 // the Session Events held for Claim number claim, oldest first. An unknown
 // Project, Ticket or Claim is not_found; a Claim with none held has an
 // empty Transcript.
-func (c *Core) Transcript(_ context.Context, key string, ticket Ref, claim int) (TranscriptView, error) {
+func (c *Core) Transcript(_ context.Context, key string, ticket api.Ref, claim int) (api.TranscriptView, error) {
 	k, err := c.claimKey(key, "transcript", ticket, claim)
 	if err != nil {
-		return TranscriptView{}, err
+		return api.TranscriptView{}, err
 	}
 	if host := c.heldElsewhere(k); host != "" {
-		return TranscriptView{Events: []HeldSessionEvent{}, Host: host}, nil
+		return api.TranscriptView{Events: []api.HeldSessionEvent{}, Host: host}, nil
 	}
 	ts := c.transcripts
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	v := TranscriptView{Events: []HeldSessionEvent{}}
+	v := api.TranscriptView{Events: []api.HeldSessionEvent{}}
 	if tr := ts.all[k]; tr != nil {
 		v.Events = append(v.Events, tr.events...)
 		v.Tail = tr.tail
@@ -215,13 +157,13 @@ func (c *Core) Transcript(_ context.Context, key string, ticket Ref, claim int) 
 
 // claimKey is Claim number claim of a Ticket, as a Transcript's key. An
 // unknown Project, Ticket or Claim is not_found.
-func (c *Core) claimKey(key, op string, ticket Ref, claim int) (markKey, error) {
+func (c *Core) claimKey(key, op string, ticket api.Ref, claim int) (markKey, error) {
 	var k markKey
 	err := c.store.View(func(r store.Reader) error {
 		if _, ok := r.Project(key); !ok {
 			return notFound("there is no Project %q", key)
 		}
-		n, err := ticket.number(key, "ticket")
+		n, err := refNumber(ticket, key, "ticket")
 		if err != nil {
 			return notFound("there is no Ticket %s", ticket)
 		}
@@ -260,7 +202,7 @@ type TranscriptFeed struct {
 // another service holds the Transcript (see heldElsewhere), the feed has
 // ended already: Host names that service's host, and it never wakes. An
 // unknown Project, Ticket or Claim is not_found. Stop ends it.
-func (c *Core) FollowTranscript(_ context.Context, key string, ticket Ref, claim, after int) (*TranscriptFeed, error) {
+func (c *Core) FollowTranscript(_ context.Context, key string, ticket api.Ref, claim, after int) (*TranscriptFeed, error) {
 	k, err := c.claimKey(key, "follow_transcript", ticket, claim)
 	if err != nil {
 		return nil, err
@@ -297,7 +239,7 @@ func (f *TranscriptFeed) Host() string { return f.host }
 // Next gives the held events after the last it gave, oldest first, and
 // says whether a tail notice is due before them: when events between the
 // last it gave and the oldest held were dropped before it could give them.
-func (f *TranscriptFeed) Next() (tail bool, events []HeldSessionEvent) {
+func (f *TranscriptFeed) Next() (tail bool, events []api.HeldSessionEvent) {
 	f.ts.mu.Lock()
 	defer f.ts.mu.Unlock()
 	tr := f.ts.all[f.k]

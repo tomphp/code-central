@@ -2,15 +2,16 @@ package server_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/events"
 )
 
@@ -26,7 +27,7 @@ func init() {
 			field("repository", "acme/web")(t, out)
 		},
 		bad:  call{http: getCIWatch("nope")},
-		code: core.UnknownProject,
+		code: api.UnknownProject,
 	}
 	cases["report_ci_watcher_status"] = opCase{
 		setup: ciTrackingOn,
@@ -38,7 +39,7 @@ func init() {
 			ciWatcher(t, out, "watching", "", "")
 		},
 		bad:  call{http: reportCIWatcherStatus(`{"state":"asleep"}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -82,7 +83,7 @@ func TestGetCIWatchHasTheCISettingsRulesAndGHPath(t *testing.T) {
 	gh := filepath.Join(t.TempDir(), "gh")
 	httpOK(t, srv, httpCall{"POST", "/api/set_options", `{"gh_path":` + strconv.Quote(gh) + `}`})
 
-	status, b := httpDoAs(t, srv, core.Agent, getCIWatch("acme"))
+	status, b := httpDoAs(t, srv, api.Agent, getCIWatch("acme"))
 	if status != 200 {
 		t.Fatalf("status %d: %s", status, b)
 	}
@@ -103,7 +104,7 @@ func TestGetCIWatchHasTheCISettingsRulesAndGHPath(t *testing.T) {
 func TestGetCIWatchHasWhenEachRulesLatestRunFinished(t *testing.T) {
 	srv := newServer(t, ciTrackingOn)
 	httpOK(t, srv, addCIRule(`{"workflow":"ci.yml","branch":"main","state":"Ready"}`))
-	rule := func() core.CIWatchRule {
+	rule := func() api.CIWatchRule {
 		t.Helper()
 		w, err := srv.Client.GetCIWatch(context.Background(), "acme")
 		if err != nil {
@@ -114,7 +115,7 @@ func TestGetCIWatchHasWhenEachRulesLatestRunFinished(t *testing.T) {
 	if got := rule(); got.LastRun != nil {
 		t.Fatalf("rule = %+v, want no last run before one is reported", got)
 	}
-	run := func(id int64, finished time.Time) core.CIRunView {
+	run := func(id int64, finished time.Time) api.CIRunView {
 		r := ciRun(id, "ci.yml", "def456", domain.CICompleted, domain.CIFailure)
 		r.Ticket, r.Rule, r.Finished = "", "acme-4", &finished
 		return r
@@ -130,7 +131,7 @@ func TestGetCIWatchHasEveryPushedAndLandCommitWithItsTicket(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
 	pushCommit(t, srv, "def456")
 	must(t, func() error {
-		_, err := srv.Client.Land(context.Background(), "acme", core.LandInput{Ticket: "acme-3", Commit: "def456"})
+		_, err := srv.Client.Land(context.Background(), "acme", api.LandInput{Ticket: "acme-3", Commit: "def456"})
 		return err
 	})
 	tk := ticket3(t, srv)
@@ -138,7 +139,7 @@ func TestGetCIWatchHasEveryPushedAndLandCommitWithItsTicket(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []core.CITicketCommit{{Ticket: "acme-3", Spec: tk.Spec.ID, Commit: "abc123"}, {Ticket: "acme-3", Spec: tk.Spec.ID, Commit: "def456"}}
+	want := []api.CITicketCommit{{Ticket: "acme-3", Spec: tk.Spec.ID, Commit: "abc123"}, {Ticket: "acme-3", Spec: tk.Spec.ID, Commit: "def456"}}
 	if !slices.Equal(w.Pushed, want) {
 		t.Fatalf("pushed = %+v, want %+v", w.Pushed, want)
 	}
@@ -162,7 +163,7 @@ func TestEveryProjectReadCarriesTheCIWatchersStatus(t *testing.T) {
 	srv := newServer(t, ciTrackingOn)
 	ciWatcher(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), "not_reported", "", "")
 
-	status, b := httpDoAs(t, srv, core.Agent, reportCIWatcherStatus(`{"state":"error","problem":"logged_out","message":"gh isn't logged in","fix":"Run gh auth login."}`))
+	status, b := httpDoAs(t, srv, api.Agent, reportCIWatcherStatus(`{"state":"error","problem":"logged_out","message":"gh isn't logged in","fix":"Run gh auth login."}`))
 	if status != 200 {
 		t.Fatalf("status %d: %s", status, b)
 	}
@@ -182,7 +183,7 @@ func TestEveryProjectReadCarriesTheCIWatchersStatus(t *testing.T) {
 
 func TestAnErrorNeedsItsMessage(t *testing.T) {
 	srv := newServer(t, ciTrackingOn)
-	e := httpRejected(t, srv, reportCIWatcherStatus(`{"state":"error"}`), core.Invalid)
+	e := httpRejected(t, srv, reportCIWatcherStatus(`{"state":"error"}`), api.Invalid)
 	if e.Field != "message" {
 		t.Fatalf("field %q, want message", e.Field)
 	}
@@ -190,8 +191,8 @@ func TestAnErrorNeedsItsMessage(t *testing.T) {
 
 func TestTheCIWatchersStatusIsRefusedWhileCITrackingIsOff(t *testing.T) {
 	srv := newServer(t)
-	httpRejected(t, srv, reportCIWatcherStatus(`{"state":"watching"}`), core.ActionNotAllowed)
-	httpRejected(t, srv, httpCall{"POST", "/api/p/nope/report_ci_watcher_status", `{"state":"watching"}`}, core.UnknownProject)
+	httpRejected(t, srv, reportCIWatcherStatus(`{"state":"watching"}`), api.ActionNotAllowed)
+	httpRejected(t, srv, httpCall{"POST", "/api/p/nope/report_ci_watcher_status", `{"state":"watching"}`}, api.UnknownProject)
 }
 
 func TestTurningCITrackingOffForgetsTheCIWatchersStatus(t *testing.T) {
@@ -209,7 +210,7 @@ func TestChangingTheRepositoryForgetsTheCIWatchersStatus(t *testing.T) {
 
 func TestAnErrorsProblemIsACIProblem(t *testing.T) {
 	srv := newServer(t, ciTrackingOn)
-	e := httpRejected(t, srv, reportCIWatcherStatus(`{"state":"error","problem":"sad","message":"no"}`), core.Invalid)
+	e := httpRejected(t, srv, reportCIWatcherStatus(`{"state":"error","problem":"sad","message":"no"}`), api.Invalid)
 	if e.Field != "problem" {
 		t.Fatalf("field %q, want problem", e.Field)
 	}
@@ -244,7 +245,7 @@ func TestTheCIWatchersStatusPublishesOnlyWhenItChanges(t *testing.T) {
 // Only the service reports a crash: the CI Watcher can't name it.
 func TestTheCIWatcherCantReportItsOwnCrash(t *testing.T) {
 	srv := newServer(t, ciTrackingOn)
-	e := httpRejected(t, srv, reportCIWatcherStatus(`{"state":"error","problem":"crashed","message":"crashed"}`), core.Invalid)
+	e := httpRejected(t, srv, reportCIWatcherStatus(`{"state":"error","problem":"crashed","message":"crashed"}`), api.Invalid)
 	if e.Field != "problem" {
 		t.Fatalf("field %q, want problem", e.Field)
 	}
@@ -257,7 +258,7 @@ func TestACrashStaysShownUntilTheCIWatcherHasRunSteadily(t *testing.T) {
 	srv := newServer(t, ciTrackingOn)
 	ctx := context.Background()
 	crash := func(restarts int) {
-		srv.Core.ReportWatcherCrash(ctx, core.WatcherCI, "acme", core.WatcherCrash{Restarts: restarts, LastLine: "panic: boom",
+		srv.Core.ReportWatcherCrash(ctx, api.WatcherCI, "acme", api.WatcherCrash{Restarts: restarts, LastLine: "panic: boom",
 			RestartAt: srv.Clock.Now().Add(time.Second)})
 	}
 	crashed := "The CI Watcher crashed, restarted 2 times; the last line it wrote: panic: boom"
@@ -274,7 +275,7 @@ func TestACrashStaysShownUntilTheCIWatcherHasRunSteadily(t *testing.T) {
 		t.Fatalf("CI Watcher attention %+v, want one error, for one Notification", got)
 	}
 
-	srv.Clock.Advance(core.WatcherSteadyAfter - time.Millisecond)
+	srv.Clock.Advance(api.WatcherSteadyAfter - time.Millisecond)
 	httpOK(t, srv, reportCIWatcherStatus(`{"state":"watching"}`))
 	ciWatcher(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), "error", crashed, fix)
 	srv.Clock.Advance(time.Millisecond)
@@ -293,9 +294,9 @@ func TestACrashStaysShownUntilTheCIWatcherHasRunSteadily(t *testing.T) {
 func TestTurningCITrackingOffEndsACrashStreak(t *testing.T) {
 	srv := newServer(t, ciTrackingOn)
 	ctx := context.Background()
-	srv.Core.ReportWatcherCrash(ctx, core.WatcherCI, "acme", core.WatcherCrash{Restarts: 1, RestartAt: srv.Clock.Now()})
+	srv.Core.ReportWatcherCrash(ctx, api.WatcherCI, "acme", api.WatcherCrash{Restarts: 1, RestartAt: srv.Clock.Now()})
 	httpOK(t, srv, setCITracking(`{"tracking":false,"repository":"acme/web"}`))
-	srv.Core.ReportWatcherCrash(ctx, core.WatcherCI, "acme", core.WatcherCrash{Restarts: 2, RestartAt: srv.Clock.Now()})
+	srv.Core.ReportWatcherCrash(ctx, api.WatcherCI, "acme", api.WatcherCrash{Restarts: 2, RestartAt: srv.Clock.Now()})
 	ciWatcher(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), "not_reported", "", "")
 	ciTrackingOn(t, srv)
 	httpOK(t, srv, reportCIWatcherStatus(`{"state":"watching"}`))
@@ -329,7 +330,7 @@ func TestARateLimitedCIWatcherIsWatchingUntilATimeAndNotAnError(t *testing.T) {
 // Only a Watching CI Watcher is rate-limited: an error has its own fix.
 func TestAnErrorIsntRateLimited(t *testing.T) {
 	srv := newServer(t, ciTrackingOn)
-	e := httpRejected(t, srv, reportCIWatcherStatus(`{"state":"error","message":"no","rate_limited_until":"2026-01-05T10:00:00Z"}`), core.Invalid)
+	e := httpRejected(t, srv, reportCIWatcherStatus(`{"state":"error","message":"no","rate_limited_until":"2026-01-05T10:00:00Z"}`), api.Invalid)
 	if e.Field != "rate_limited_until" {
 		t.Fatalf("field %q, want rate_limited_until", e.Field)
 	}

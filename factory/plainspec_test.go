@@ -2,11 +2,12 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -79,7 +80,7 @@ func TestLabellingASpecLongLivedWhileItsTicketsWaitLandsThemTogetherAtOnce(t *te
 	r := h.Start()
 	r.WantOutput(c + ": merged into spec/" + h.SpecID())
 
-	if _, err := h.Human().AddLabels(context.Background(), h.Project, core.LabelsInput{Target: core.Ref(h.SpecID()), Labels: []string{core.LongLivedLabel}}); err != nil {
+	if _, err := h.Human().AddLabels(context.Background(), h.Project, api.LabelsInput{Target: api.Ref(h.SpecID()), Labels: []string{domain.LongLivedLabel}}); err != nil {
 		t.Fatal(err)
 	}
 	r.Poll()

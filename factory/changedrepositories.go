@@ -6,8 +6,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/client"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -24,15 +24,15 @@ import (
 // changedIn is tk's Changed Repositories as git has them, in landing
 // order, each with its branch's head. A Stage, being detached, changes
 // none.
-func (rs *repositories) changedIn(tk core.TicketView) []core.RepositoryWork {
-	branch := workBranch(core.GuideName(tk.Labels), tk.ID)
+func (rs *repositories) changedIn(tk api.TicketView) []api.RepositoryWork {
+	branch := workBranch(api.GuideName(tk.Labels), tk.ID)
 	if branch == "" {
 		return nil
 	}
-	var out []core.RepositoryWork
+	var out []api.RepositoryWork
 	for _, r := range rs.ready() {
 		if head, ok := rs.changedHead(r, tk, branch); ok {
-			out = append(out, core.RepositoryWork{Name: r.name, Branch: branch, Commit: head})
+			out = append(out, api.RepositoryWork{Name: r.name, Branch: branch, Commit: head})
 		}
 	}
 	return out
@@ -42,7 +42,7 @@ func (rs *repositories) changedIn(tk core.TicketView) []core.RepositoryWork {
 // beyond r's Base and, for a Spec-landed Ticket, its Spec Branch there.
 // While r's Base is missing nothing can be said to be beyond it, so r
 // counts as unchanged until it is back (Base missing).
-func (rs *repositories) changedHead(r *repository, tk core.TicketView, branch string) (string, bool) {
+func (rs *repositories) changedHead(r *repository, tk api.TicketView, branch string) (string, bool) {
 	head, err := r.git.commit("refs/heads/" + branch)
 	if err != nil || rs.inBaseOf(r, head) {
 		return "", false
@@ -59,7 +59,7 @@ func (rs *repositories) changedHead(r *repository, tk core.TicketView, branch st
 // reportChanged reports the live Changed Repositories of tk, held In
 // Progress under c, when the set or a head has changed since the last
 // report for c.
-func (f *factory) reportChanged(ctx context.Context, c claim, tk core.TicketView) {
+func (f *factory) reportChanged(ctx context.Context, c claim, tk api.TicketView) {
 	if !f.repos.several() || tk.State != domain.InProgress {
 		return
 	}
@@ -68,7 +68,7 @@ func (f *factory) reportChanged(ctx context.Context, c claim, tk core.TicketView
 	if last, ok := f.reportedChanged[c.ClaimID]; ok && last == said {
 		return
 	}
-	in := core.ReportChangedRepositoriesInput{Ticket: core.Ref(c.Ticket), ClaimID: c.ClaimID, Repositories: work}
+	in := api.ReportChangedRepositoriesInput{Ticket: api.Ref(c.Ticket), ClaimID: c.ClaimID, Repositories: work}
 	if _, err := f.client.ReportChangedRepositories(ctx, f.project, in); err != nil {
 		if ctx.Err() == nil {
 			f.claimf(c, "%s: report_changed_repositories: %v", c.Ticket, err)
@@ -86,7 +86,7 @@ func (f *factory) reportChanged(ctx context.Context, c claim, tk core.TicketView
 // is failed by the check before it lands. It runs against the registry
 // rs, fails the finish through c in project, and prints to rs's output:
 // the session part runs it after a turn, the landing part before landing.
-func checkFinish(ctx context.Context, rs *repositories, c *client.Client, project string, tk core.TicketView) (passed, failed bool) {
+func checkFinish(ctx context.Context, rs *repositories, c *client.Client, project string, tk api.TicketView) (passed, failed bool) {
 	if !rs.several() {
 		return true, false
 	}
@@ -95,8 +95,8 @@ func checkFinish(ctx context.Context, rs *repositories, c *client.Client, projec
 		return true, false
 	}
 	rs.printf("%s: the finish check failed: %s", tk.ID, strings.Join(problems, "; "))
-	in := core.FailFinishInput{
-		Ticket:    core.Ref(tk.ID),
+	in := api.FailFinishInput{
+		Ticket:    api.Ref(tk.ID),
 		WhatBroke: "The finish's record of the Repositories this Ticket changed doesn't match their branches:\n\n- " + strings.Join(problems, "\n- "),
 		Why: "With several Repositories, a finish records every Repository whose branch holds the work, each at its branch's head commit: `branch` and `commit` for the Home Repository, and `repositories` for each other one. " +
 			"The Factory checks the record against every Repository's branch after the finish and before landing, so that no work is dropped and none lands at the wrong commit.",
@@ -115,11 +115,11 @@ func checkFinish(ctx context.Context, rs *repositories, c *client.Client, projec
 // finishProblems compares tk's recorded Changed Repositories with its
 // branch in every Repository with a clone: what is wrong with the record,
 // and where each Repository's work stands.
-func (rs *repositories) finishProblems(tk core.TicketView) (problems, stands []string) {
+func (rs *repositories) finishProblems(tk api.TicketView) (problems, stands []string) {
 	work := rs.changedIn(tk)
 	for _, r := range rs.ready() {
-		i := slices.IndexFunc(tk.Repositories, func(v core.ChangedRepositoryView) bool { return v.Name == r.name })
-		j := slices.IndexFunc(work, func(w core.RepositoryWork) bool { return w.Name == r.name })
+		i := slices.IndexFunc(tk.Repositories, func(v api.ChangedRepositoryView) bool { return v.Name == r.name })
+		j := slices.IndexFunc(work, func(w api.RepositoryWork) bool { return w.Name == r.name })
 		if j >= 0 {
 			stands = append(stands, fmt.Sprintf("%s: branch %s at %s", r.name, work[j].Branch, short(work[j].Commit)))
 		}
@@ -144,10 +144,10 @@ func (rs *repositories) finishProblems(tk core.TicketView) (problems, stands []s
 // whose commit is in r's base already while the Ticket's branch holds no
 // more work (holdsWork), as when the human merged it and deleted the
 // branch.
-func (rs *repositories) recordProblem(r *repository, tk core.TicketView, rec core.ChangedRepositoryView, holdsWork bool) string {
+func (rs *repositories) recordProblem(r *repository, tk api.TicketView, rec api.ChangedRepositoryView, holdsWork bool) string {
 	branch := rec.Branch
 	if branch == "" {
-		branch = workBranch(core.GuideName(tk.Labels), tk.ID)
+		branch = workBranch(api.GuideName(tk.Labels), tk.ID)
 	}
 	if rec.Commit == "" || branch == "" {
 		return ""

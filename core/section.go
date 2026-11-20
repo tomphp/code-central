@@ -5,24 +5,17 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/tomoram/code-central/api"
 )
 
 // Sections of a Markdown body (ticket 134): its outline, and the cut of
 // the Sections a reader names. It knows nothing about Specs. A heading is
 // an ATX heading outside fenced code; setext headings aren't recognised.
 
-// Heading is one heading of a body's outline.
-type Heading struct {
-	Text  string `json:"text"`
-	Level int    `json:"level"`
-	// Size is the bytes of the Section the heading opens, subsections
-	// included, so a reader can weigh a Section before fetching it.
-	Size int `json:"size"`
-}
-
 // heading is a Heading and the line it starts on.
 type heading struct {
-	Heading
+	api.Heading
 	line int
 }
 
@@ -33,10 +26,10 @@ var (
 )
 
 // Outline is every heading of body, in order, each with its Section's size.
-func Outline(body string) []Heading {
+func Outline(body string) []api.Heading {
 	lines := strings.Split(body, "\n")
 	hs := headings(lines)
-	out := []Heading{}
+	out := []api.Heading{}
 	for i, h := range hs {
 		end := len(lines)
 		for _, next := range hs[i+1:] {
@@ -112,7 +105,7 @@ func headings(lines []string) []heading {
 			continue
 		}
 		if m := atx.FindStringSubmatch(l); m != nil {
-			out = append(out, heading{Heading{Text: headingText(m[2]), Level: len(m[1])}, i})
+			out = append(out, heading{api.Heading{Text: headingText(m[2]), Level: len(m[1])}, i})
 		}
 	}
 	return out

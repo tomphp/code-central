@@ -2,13 +2,14 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -107,7 +108,7 @@ func TestAStageWorktreePathHoldingABranchWorktreeIsAFailureReport(t *testing.T) 
 // move moves a Ticket to state as the human.
 func move(t *testing.T, h *factorytest.Harness, id string, state domain.State) {
 	t.Helper()
-	if _, err := h.Human().Move(context.Background(), h.Project, core.MoveInput{Ticket: core.Ref(id), ToState: state}); err != nil {
+	if _, err := h.Human().Move(context.Background(), h.Project, api.MoveInput{Ticket: api.Ref(id), ToState: state}); err != nil {
 		t.Fatal(err)
 	}
 }

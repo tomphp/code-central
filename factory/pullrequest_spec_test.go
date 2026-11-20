@@ -2,13 +2,14 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -124,7 +125,7 @@ func TestUnderPullRequestATicketOutsideLandPerSpecStillGetsItsOwnPullRequest(t *
 	h := factorytest.New(t)
 	h.AddRemote("origin")
 	off := false
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingBranch, LandPerSpec: &off})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch, LandPerSpec: &off})
 	pullRequestOn(h, "origin")
 	h.MakeRequirement()
 	id, commit := accepted(h, "Plain", "plain.txt", "plain\n")

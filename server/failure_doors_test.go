@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // failedTicket claims acme-3 as claim-1 and reports a failure on it.
@@ -13,7 +13,7 @@ func failedTicket(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	claimedTicket(t, srv)
 	must(t, func() error {
-		_, err := srv.Core.ReportFailure(context.Background(), "acme", core.ReportFailureInput{
+		_, err := srv.Core.ReportFailure(context.Background(), "acme", api.ReportFailureInput{
 			Ticket: "3", ClaimID: "claim-1", WhatBroke: "B", Why: "W", WhatToFix: "F", WhereWorkStands: "S",
 		})
 		return err
@@ -51,7 +51,7 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/3/report_failure", `{"claim_id":"claim-1","what_broke":"B","why":"W","what_to_fix":"F"}`},
 				cli:  []string{"acme-3", "--claim", "claim-1", "--what-broke", "B", "--why", "W", "--what-to-fix", "F"},
 			},
-			code: core.Invalid,
+			code: api.Invalid,
 		},
 		"give_up": {
 			setup: claimedTicket,
@@ -70,7 +70,7 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/3/give_up", `{"claim_id":"claim-9","note":"Out of time."}`},
 				cli:  []string{"acme-3", "--claim", "claim-9", "--note", "Out of time."},
 			},
-			code: core.StaleClaim,
+			code: api.StaleClaim,
 		},
 		// send_back as the agent sends Accepted work back on a conflict
 		// (ticket 72); the human's send_back from Failed is tested below.
@@ -95,7 +95,7 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/2/send_back", `{"note":"N"}`},
 				cli:  []string{"acme-2", "--note", "N"},
 			},
-			code: core.ActionNotAllowed,
+			code: api.ActionNotAllowed,
 		},
 		"to_draft": {
 			setup: failedTicket,
@@ -103,7 +103,7 @@ func init() {
 			check: ticketAcknowledgement("acme-3", "Draft", "state", "moves", "needs_me_reason"),
 			full:  field("state", "Draft"),
 			bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/2/to_draft", `{}`}},
-			code:  core.ActionNotAllowed,
+			code:  api.ActionNotAllowed,
 		},
 	} {
 		cases[name] = c

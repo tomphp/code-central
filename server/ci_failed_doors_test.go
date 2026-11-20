@@ -2,13 +2,14 @@ package server_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"slices"
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 )
 
@@ -22,7 +23,7 @@ func init() {
 		check: ticketAcknowledgement("acme-3", "Accepted", "land_anyway", "ci_item", "ci_failure_options", "needs_me_reason"),
 		full:  func(t *testing.T, out map[string]any) { boolField(t, out, "land_anyway", true) },
 		bad:   call{http: landAnyway("2")},
-		code:  core.ActionNotAllowed,
+		code:  api.ActionNotAllowed,
 	}
 }
 
@@ -52,7 +53,7 @@ func failedCI(t *testing.T, srv *codecentraltest.Server) {
 
 // needsMeRowOf is id's Needs Me row, as the HTTP API gives it, if it has
 // one: its own, or the CI item listing it (code-central-432).
-func needsMeRowOf(t *testing.T, srv *codecentraltest.Server, id string) (core.NeedsMeRow, bool) {
+func needsMeRowOf(t *testing.T, srv *codecentraltest.Server, id string) (api.NeedsMeRow, bool) {
 	t.Helper()
 	v, err := srv.Client.NeedsMe(context.Background())
 	if err != nil {
@@ -63,19 +64,19 @@ func needsMeRowOf(t *testing.T, srv *codecentraltest.Server, id string) (core.Ne
 			if row.ID == id {
 				return row, true
 			}
-			if row.CIItem != nil && slices.ContainsFunc(row.CIItem.Tickets, func(tk core.CIItemTicket) bool { return tk.ID == id }) {
+			if row.CIItem != nil && slices.ContainsFunc(row.CIItem.Tickets, func(tk api.CIItemTicket) bool { return tk.ID == id }) {
 				return row, true
 			}
 		}
 	}
-	return core.NeedsMeRow{}, false
+	return api.NeedsMeRow{}, false
 }
 
 func TestAnAcceptedTicketWhoseCIFailedIsInNeedsMeAsCIFailed(t *testing.T) {
 	srv := newServer(t, failedCI)
 	srv.Clock.Advance(time.Hour)
 	row, ok := needsMeRowOf(t, srv, "acme-3")
-	if !ok || row.Reason != core.ReasonCIFailed || !row.Since.Equal(failedAt) {
+	if !ok || row.Reason != api.ReasonCIFailed || !row.Since.Equal(failedAt) {
 		t.Fatalf("row %+v, want CI failed since its run failed", row)
 	}
 	if row.CIFailure == nil || row.CIFailure.Commit != "abc123" || !slices.Equal(row.CIFailure.Workflows, []string{"ci.yml"}) {
@@ -85,35 +86,35 @@ func TestAnAcceptedTicketWhoseCIFailedIsInNeedsMeAsCIFailed(t *testing.T) {
 	if row.ID != "" || row.Title != "CI failed at abc123" || row.CIItem == nil || len(row.CIItem.Tickets) != 1 || row.CIItem.Tickets[0].ID != "acme-3" {
 		t.Fatalf("row %+v, want the item for abc123 listing acme-3 with no Ticket of its own", row)
 	}
-	if want := []core.CIFailureOption{"rerun_ci", "land_anyway", "send_back", "new_fix_ticket"}; !slices.Equal(row.CIItem.Options, want) {
+	if want := []api.CIFailureOption{"rerun_ci", "land_anyway", "send_back", "new_fix_ticket"}; !slices.Equal(row.CIItem.Options, want) {
 		t.Fatalf("item options %v, want %v", row.CIItem.Options, want)
 	}
 	tk := ticket3(t, srv)
 	if tk.CIItem == nil || tk.CIItem.Commit != "abc123" {
 		t.Fatalf("ticket item %+v, want acme-3 linking the item for abc123", tk.CIItem)
 	}
-	if tk.NeedsMeReason != core.ReasonCIFailed || !slices.Contains(tk.CIFailureOptions, "land_anyway") || tk.LandAnyway {
+	if tk.NeedsMeReason != api.ReasonCIFailed || !slices.Contains(tk.CIFailureOptions, "land_anyway") || tk.LandAnyway {
 		t.Fatalf("reason %q, options %v, land anyway %v: want CI failed offering Land anyway", tk.NeedsMeReason, tk.CIFailureOptions, tk.LandAnyway)
 	}
 }
 
 func TestCIFailedIsGroupedAheadOfToMerge(t *testing.T) {
 	order := workflowNeedsMe(t)
-	in, merge := slices.Index(order, core.ReasonInReview), slices.Index(order, core.ReasonToMerge)
-	if ci := slices.Index(order, core.ReasonCIFailed); ci < 0 || ci < in || ci > merge {
+	in, merge := slices.Index(order, api.ReasonInReview), slices.Index(order, api.ReasonToMerge)
+	if ci := slices.Index(order, api.ReasonCIFailed); ci < 0 || ci < in || ci > merge {
 		t.Fatalf("Needs Me order %v, want CI failed after In Review and ahead of To merge", order)
 	}
 }
 
 // workflowNeedsMe is the Needs Me reasons in group order, as the
 // published workflow lists them.
-func workflowNeedsMe(t *testing.T) []core.NeedsMeReason {
+func workflowNeedsMe(t *testing.T) []api.NeedsMeReason {
 	t.Helper()
 	w, err := newServer(t).Core.GetWorkflow(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	var out []core.NeedsMeReason
+	var out []api.NeedsMeReason
 	for _, r := range w.NeedsMe {
 		out = append(out, r.Reason)
 	}
@@ -121,7 +122,7 @@ func workflowNeedsMe(t *testing.T) []core.NeedsMeReason {
 }
 
 func TestOnlyAFailedCIResultIsCIFailed(t *testing.T) {
-	for name, runs := range map[string][]core.CIRunView{
+	for name, runs := range map[string][]api.CIRunView{
 		"running": {ciRun(1, "ci.yml", "abc123", domain.CIInProgress, "")},
 		"passed":  {ciRun(1, "ci.yml", "abc123", domain.CICompleted, domain.CISuccess)},
 		"ignored": {ciRun(1, "nightly.yml", "abc123", domain.CICompleted, domain.CIFailure)},
@@ -129,7 +130,7 @@ func TestOnlyAFailedCIResultIsCIFailed(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			srv := newServer(t, pushedAccepted)
 			reportRuns(t, srv, runs...)
-			if row, ok := needsMeRowOf(t, srv, "acme-3"); ok && row.Reason == core.ReasonCIFailed {
+			if row, ok := needsMeRowOf(t, srv, "acme-3"); ok && row.Reason == api.ReasonCIFailed {
 				t.Fatalf("row %+v, want no CI failed", row)
 			}
 			if tk := ticket3(t, srv); tk.CIFailureOptions != nil {
@@ -146,7 +147,7 @@ func TestLandAnywayClearsCIFailedAndTheFactoryReadsIt(t *testing.T) {
 		t.Fatalf("row %+v, want acme-3 out of Needs Me once the human chose Land anyway", row)
 	}
 	tk := ticket3(t, srv)
-	if !tk.LandAnyway || tk.CIResult != core.CIFailed || tk.CIFailureOptions != nil {
+	if !tk.LandAnyway || tk.CIResult != api.CIFailed || tk.CIFailureOptions != nil {
 		t.Fatalf("land anyway %v, ci result %q, options %v: want Land anyway on the failed result, no options left", tk.LandAnyway, tk.CIResult, tk.CIFailureOptions)
 	}
 	// Choosing it again changes nothing.
@@ -164,7 +165,7 @@ func TestLandAnywayHoldsOnlyForThePushedCommitItWasChosenFor(t *testing.T) {
 	pushCommit(t, srv, "def456")
 	reportRuns(t, srv, ciRun(3, "ci.yml", "def456", domain.CICompleted, domain.CIFailure))
 	tk := ticket3(t, srv)
-	if tk.LandAnyway || tk.NeedsMeReason != core.ReasonCIFailed {
+	if tk.LandAnyway || tk.NeedsMeReason != api.ReasonCIFailed {
 		t.Fatalf("land anyway %v, reason %q: want def456's failure CI failed again", tk.LandAnyway, tk.NeedsMeReason)
 	}
 }
@@ -184,7 +185,7 @@ func TestLandAnywayNeedsAFailedCIResult(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			srv := newServer(t, setup)
-			httpRejected(t, srv, landAnyway("3"), core.ActionNotAllowed)
+			httpRejected(t, srv, landAnyway("3"), api.ActionNotAllowed)
 			if ticket3(t, srv).LandAnyway {
 				t.Fatal("Land anyway recorded on a refused call")
 			}
@@ -198,17 +199,17 @@ func TestLandAnywayIsNotOfferedUnderBranch(t *testing.T) {
 	srv := newServer(t, failedCI)
 	httpOK(t, srv, setLandingMethod(`{"method":"branch","push":true,"remote":"origin"}`))
 	tk := ticket3(t, srv)
-	if tk.NeedsMeReason != core.ReasonCIFailed || tk.CIFailureOptions == nil || slices.Contains(tk.CIFailureOptions, "land_anyway") {
+	if tk.NeedsMeReason != api.ReasonCIFailed || tk.CIFailureOptions == nil || slices.Contains(tk.CIFailureOptions, "land_anyway") {
 		t.Fatalf("reason %q, options %#v: want CI failed without Land anyway", tk.NeedsMeReason, tk.CIFailureOptions)
 	}
-	httpRejected(t, srv, landAnyway("3"), core.ActionNotAllowed)
+	httpRejected(t, srv, landAnyway("3"), api.ActionNotAllowed)
 }
 
 func TestLandAnywayIsRejectedForAnAgent(t *testing.T) {
 	srv := newServer(t, failedCI)
-	status, b := httpDoAs(t, srv, core.Agent, landAnyway("3"))
-	if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) {
-		t.Fatalf("status %d, want %d for %s", status, httpapi.Status(core.ActionNotAllowed), e.Code)
+	status, b := httpDoAs(t, srv, api.Agent, landAnyway("3"))
+	if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) {
+		t.Fatalf("status %d, want %d for %s", status, httpapi.Status(api.ActionNotAllowed), e.Code)
 	}
 	if ticket3(t, srv).LandAnyway {
 		t.Fatal("an agent's Land anyway was recorded")

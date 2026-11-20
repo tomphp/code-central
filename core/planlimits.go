@@ -3,6 +3,8 @@ package core
 import (
 	"strings"
 	"time"
+
+	"github.com/tomoram/code-central/api"
 )
 
 // Plan Limits (Spec code-central-861): the Claude account's 5-hour and
@@ -11,29 +13,10 @@ import (
 // every service sharing the Store reads, and the Project's Factory Status shows the most recently
 // observed among its Factories that aren't Offline.
 
-// PlanLimits are a Factory's Plan Limits, as it reports them and as the
-// Project's Factory Status shows them.
-type PlanLimits struct {
-	// ObservedAt is when the Factory read the figures; one later than
-	// Code Central's receipt is kept as the receipt time.
-	ObservedAt time.Time `json:"observed_at"`
-	// FiveHour and Weekly are each left out when the Factory has no
-	// figures for that window.
-	FiveHour *PlanLimitWindow `json:"five_hour,omitempty"`
-	Weekly   *PlanLimitWindow `json:"weekly,omitempty"`
-}
-
-// PlanLimitWindow is one window of the Plan Limits.
-type PlanLimitWindow struct {
-	// UsedPercent is the share of the window's limit used, 0 to 100.
-	UsedPercent float64   `json:"used_percent"`
-	ResetsAt    time.Time `json:"resets_at"`
-}
-
 // checkPlanLimits checks the Plan Limits a Heartbeat reports and returns
 // a copy of them, or nil when it reports none: no plan_limits, or neither
 // window.
-func checkPlanLimits(in *PlanLimits) (*PlanLimits, error) {
+func checkPlanLimits(in *api.PlanLimits) (*api.PlanLimits, error) {
 	if in == nil || in.FiveHour == nil && in.Weekly == nil {
 		return nil, nil
 	}
@@ -48,12 +31,12 @@ func checkPlanLimits(in *PlanLimits) (*PlanLimits, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &PlanLimits{ObservedAt: in.ObservedAt.UTC(), FiveHour: fiveHour, Weekly: weekly}, nil
+	return &api.PlanLimits{ObservedAt: in.ObservedAt.UTC(), FiveHour: fiveHour, Weekly: weekly}, nil
 }
 
 // checkPlanLimitWindow checks the window at field and returns a copy of
 // it, or nil when it is left out.
-func checkPlanLimitWindow(field string, in *PlanLimitWindow) (*PlanLimitWindow, error) {
+func checkPlanLimitWindow(field string, in *api.PlanLimitWindow) (*api.PlanLimitWindow, error) {
 	if in == nil {
 		return nil, nil
 	}
@@ -64,14 +47,14 @@ func checkPlanLimitWindow(field string, in *PlanLimitWindow) (*PlanLimitWindow, 
 	if in.ResetsAt.IsZero() {
 		return nil, invalid(field+".resets_at", "%s.resets_at is required: when the window resets, as an RFC 3339 time", field)
 	}
-	return &PlanLimitWindow{UsedPercent: in.UsedPercent, ResetsAt: in.ResetsAt.UTC()}, nil
+	return &api.PlanLimitWindow{UsedPercent: in.UsedPercent, ResetsAt: in.ResetsAt.UTC()}, nil
 }
 
 // keptLimits are the Plan Limits to keep for a Heartbeat reporting
 // reported at now, after prev: reported with observed_at capped at now.
 // Figures the Factory sent before keep their first capped time, so a
 // Factory whose clock runs ahead doesn't look newer on every Heartbeat.
-func keptLimits(prev heartbeat, reported *PlanLimits, now time.Time) *PlanLimits {
+func keptLimits(prev heartbeat, reported *api.PlanLimits, now time.Time) *api.PlanLimits {
 	if reported == nil {
 		return nil
 	}
@@ -86,7 +69,7 @@ func keptLimits(prev heartbeat, reported *PlanLimits, now time.Time) *PlanLimits
 }
 
 // sameLimits says whether a and b are the same Plan Limits, or both none.
-func sameLimits(a, b *PlanLimits) bool {
+func sameLimits(a, b *api.PlanLimits) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
@@ -94,7 +77,7 @@ func sameLimits(a, b *PlanLimits) bool {
 }
 
 // sameWindow says whether a and b are the same window, or both left out.
-func sameWindow(a, b *PlanLimitWindow) bool {
+func sameWindow(a, b *api.PlanLimitWindow) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
@@ -104,7 +87,7 @@ func sameWindow(a, b *PlanLimitWindow) bool {
 // newerLimits says whether a, from the Factory ak, wins over b, from bk:
 // observed later, or at the same time from the Factory first by name and
 // host, so the choice doesn't hang on map order.
-func newerLimits(a PlanLimits, ak heartbeatKey, b PlanLimits, bk heartbeatKey) bool {
+func newerLimits(a api.PlanLimits, ak heartbeatKey, b api.PlanLimits, bk heartbeatKey) bool {
 	if !a.ObservedAt.Equal(b.ObservedAt) {
 		return a.ObservedAt.After(b.ObservedAt)
 	}

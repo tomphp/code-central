@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/ciwatcher"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/watchers"
 	"github.com/tomoram/code-central/watchers/watchertest"
 )
@@ -30,12 +30,12 @@ func newSupervising(t *testing.T) *supervising {
 	return &supervising{t: t, h: watchertest.New(t), srv: codecentraltest.NewServer(t)}
 }
 
-var human = core.WithActor(context.Background(), core.Human)
+var human = api.WithActor(context.Background(), api.Human)
 
 // project creates key, with CI Tracking on or off.
 func (s *supervising) project(key string, tracking bool) {
 	s.t.Helper()
-	if _, err := s.srv.Core.CreateProject(human, core.CreateProjectInput{Key: key}); err != nil {
+	if _, err := s.srv.Core.CreateProject(human, api.CreateProjectInput{Key: key}); err != nil {
 		s.t.Fatal(err)
 	}
 	s.tracking(key, tracking)
@@ -44,7 +44,7 @@ func (s *supervising) project(key string, tracking bool) {
 // tracking turns key's CI Tracking on or off, as the human does.
 func (s *supervising) tracking(key string, on bool) {
 	s.t.Helper()
-	if _, err := s.srv.Core.SetCITracking(human, key, core.SetCITrackingInput{Tracking: on, Repository: "acme/web"}); err != nil {
+	if _, err := s.srv.Core.SetCITracking(human, key, api.SetCITrackingInput{Tracking: on, Repository: "acme/web"}); err != nil {
 		s.t.Fatal(err)
 	}
 }
@@ -56,9 +56,9 @@ func (s *supervising) start(program string) {
 }
 
 // status waits for key's CI Watcher status to be state, and returns it.
-func (s *supervising) status(key string, state core.WatcherState) core.WatcherView {
+func (s *supervising) status(key string, state api.WatcherState) api.WatcherView {
 	s.t.Helper()
-	var got core.WatcherView
+	var got api.WatcherView
 	codecentraltest.Eventually(s.t, func() bool {
 		p, err := s.srv.Client.GetProject(context.Background(), key)
 		if err != nil {
@@ -84,8 +84,8 @@ func (s *supervising) crashRuns(n int) {
 func (s *supervising) crashed(restarts string) {
 	s.t.Helper()
 	s.srv.Clock.BlockUntil(1)
-	got := s.status("acme", core.WatcherError)
-	if got.Problem != core.ProblemCrashed || !strings.Contains(got.Message, "crashed, restarted "+restarts) ||
+	got := s.status("acme", api.WatcherError)
+	if got.Problem != api.ProblemCrashed || !strings.Contains(got.Message, "crashed, restarted "+restarts) ||
 		!strings.Contains(got.Message, "panic: the CI Watcher broke on purpose") || !strings.Contains(got.Fix, "service's log") {
 		s.t.Fatalf("status %+v, want crashed, restarted %s, with its last line on stderr", got, restarts)
 	}
@@ -108,12 +108,12 @@ func TestTheServiceStartsACIWatcherForEachProjectWithCITrackingOn(t *testing.T) 
 	s.project("acme", true)
 	s.project("beta", false)
 	s.start(s.h.CodeCentral)
-	s.status("acme", core.WatcherWatching)
+	s.status("acme", api.WatcherWatching)
 	s.Logged("started the CI Watcher for acme", 1)
 
 	// Turning CI Tracking on starts one.
 	s.tracking("beta", true)
-	s.status("beta", core.WatcherWatching)
+	s.status("beta", api.WatcherWatching)
 	s.Logged("started the CI Watcher for beta", 1)
 	if strings.Count(s.Log.String(), "started the CI Watcher for acme") != 1 {
 		t.Fatalf("acme's CI Watcher started again:\n%s", s.Log)
@@ -124,21 +124,21 @@ func TestTurningCITrackingOffStopsItsCIWatcher(t *testing.T) {
 	s := newSupervising(t)
 	s.project("acme", true)
 	s.start(s.h.CodeCentral)
-	s.status("acme", core.WatcherWatching)
+	s.status("acme", api.WatcherWatching)
 	s.tracking("acme", false)
 	s.Logged("stopped the CI Watcher for acme", 1)
 
 	// And on again starts a new one.
 	s.tracking("acme", true)
 	s.Logged("started the CI Watcher for acme", 2)
-	s.status("acme", core.WatcherWatching)
+	s.status("acme", api.WatcherWatching)
 }
 
 func TestArchivingAProjectStopsItsCIWatcher(t *testing.T) {
 	s := newSupervising(t)
 	s.project("acme", true)
 	s.start(s.h.CodeCentral)
-	s.status("acme", core.WatcherWatching)
+	s.status("acme", api.WatcherWatching)
 	if _, err := s.srv.Core.ArchiveProject(human, "acme"); err != nil {
 		t.Fatal(err)
 	}
@@ -155,8 +155,8 @@ func TestStoppingTheServiceStopsEveryCIWatcher(t *testing.T) {
 	s.project("acme", true)
 	s.project("beta", true)
 	s.start(s.h.CodeCentral)
-	s.status("acme", core.WatcherWatching)
-	s.status("beta", core.WatcherWatching)
+	s.status("acme", api.WatcherWatching)
+	s.status("beta", api.WatcherWatching)
 	s.Stop()
 	select {
 	case <-s.Done:

@@ -2,9 +2,8 @@ package ops
 
 import (
 	"context"
-	"strings"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 )
@@ -23,7 +22,7 @@ type Call struct {
 	Args []byte
 	// Actor is the Actor the request names, unchecked: the HTTP API's
 	// Actor header, "" when it sends none. MCP names agent.
-	Actor core.Actor
+	Actor api.Actor
 }
 
 // Dispatcher calls operations: all the MCP door needs.
@@ -32,46 +31,40 @@ type Dispatcher interface {
 }
 
 // Service is all the HTTP door needs: Dispatch for every operation, and
-// the reads, streams and Factory posts that aren't operations.
+// the reads, streams and Factory posts that aren't operations. ops/bind
+// serves the Core as one.
 type Service interface {
 	Dispatcher
 	// Events is the change feed.
 	Events() *events.Bus
-	Wait(ctx context.Context, key string, ref core.Ref, from domain.State) (core.WaitResult, error)
-	Transcript(ctx context.Context, key string, ticket core.Ref, claim int) (core.TranscriptView, error)
-	FollowTranscript(ctx context.Context, key string, ticket core.Ref, claim, after int) (*core.TranscriptFeed, error)
-	FollowChat(ctx context.Context, key string, after int) (*core.ChatFeed, error)
-	Usage(ctx context.Context, in core.UsageInput) (core.UsageView, error)
-	SessionUsage(ctx context.Context, in core.SessionUsageInput) (core.SessionUsageView, error)
-	CIOverview(ctx context.Context, in core.CIOverviewInput) (core.CIOverview, error)
+	Wait(ctx context.Context, key string, ref api.Ref, from domain.State) (api.WaitResult, error)
+	Transcript(ctx context.Context, key string, ticket api.Ref, claim int) (api.TranscriptView, error)
+	FollowTranscript(ctx context.Context, key string, ticket api.Ref, claim, after int) (TranscriptFeed, error)
+	FollowChat(ctx context.Context, key string, after int) (ChatFeed, error)
+	Usage(ctx context.Context, in api.UsageInput) (api.UsageView, error)
+	SessionUsage(ctx context.Context, in api.SessionUsageInput) (api.SessionUsageView, error)
+	CIOverview(ctx context.Context, in api.CIOverviewInput) (api.CIOverview, error)
 	Ping(ctx context.Context, sessionID string)
-	PostSessionEvents(ctx context.Context, sessionID string, events []core.SessionEvent)
-	PostChatEvents(ctx context.Context, key string, in core.PostChatEventsInput)
-	PostUsage(ctx context.Context, sessionID string, responses []core.UsageResponse)
+	PostSessionEvents(ctx context.Context, sessionID string, events []api.SessionEvent)
+	PostChatEvents(ctx context.Context, key string, in api.PostChatEventsInput)
+	PostUsage(ctx context.Context, sessionID string, responses []api.UsageResponse)
 }
 
-// Serve is c as a Service: the one adapter between core and the doors.
-func Serve(c *core.Core) Service { return served{c} }
+// A TranscriptFeed follows one Claim's Transcript: the stream read
+// (GET .../transcript/stream) sends what Next gives each time Wake fires,
+// until Stop. Host is the host of another service holding the Transcript,
+// when it does: then the feed has ended and the stream sends only that.
+type TranscriptFeed interface {
+	Wake() <-chan struct{}
+	Host() string
+	Next() (tail bool, events []api.HeldSessionEvent)
+	Stop()
+}
 
-type served struct{ *core.Core }
-
-// Dispatch invokes the call's operation, first decoding its Args when the
-// door decoded no input. A key given to an operation that isn't on one
-// Project, whose route has no {key}, must still name a Project: MCP's URL
-// names one for every tool, and an unknown one is unknown_project
-// whatever the tool.
-func (s served) Dispatch(ctx context.Context, call Call) (any, error) {
-	in := call.In
-	if in == nil {
-		in = call.Op.NewInput()
-		if err := core.Decode(ctx, call.Args, in); err != nil {
-			return nil, err
-		}
-	}
-	if _, pattern := call.Op.Route(); call.Key != "" && !strings.Contains(pattern, "{key}") {
-		if _, err := s.GetProject(ctx, call.Key); err != nil {
-			return nil, err
-		}
-	}
-	return call.Op.Invoke(ctx, s.Core, call.Key, in)
+// A ChatFeed follows a Project's current Conversation: the stream read
+// sends the frames Next gives each time Wake fires, until Stop.
+type ChatFeed interface {
+	Wake() <-chan struct{}
+	Next() []api.ChatFrame
+	Stop()
 }

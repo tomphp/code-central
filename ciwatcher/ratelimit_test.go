@@ -8,12 +8,13 @@ package ciwatcher_test
 import (
 	"context"
 	"fmt"
-	"github.com/tomoram/code-central/domain"
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/ciwatcher"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/watchers"
 )
@@ -41,7 +42,7 @@ func runsOf(commit string) []string {
 // rate-limited until until.
 func (w *watching) rateLimitedUntil(until time.Time) {
 	w.t.Helper()
-	var got core.WatcherView
+	var got api.WatcherView
 	w.waitFor(fmt.Sprintf("rate-limited until %s", until), func() bool {
 		p, err := w.srv.Client.GetProject(context.Background(), "acme")
 		if err != nil {
@@ -50,7 +51,7 @@ func (w *watching) rateLimitedUntil(until time.Time) {
 		got = p.CI.Watcher
 		return got.RateLimitedUntil.Equal(until)
 	})
-	if got.State != core.WatcherWatching || got.Message != "" {
+	if got.State != api.WatcherWatching || got.Message != "" {
 		w.t.Fatalf("status %+v, want Watching, rate-limited", got)
 	}
 }
@@ -89,7 +90,7 @@ func TestARateLimitedCIWatcherMakesNoGitHubCallsUntilTheResetTimeThenResumes(t *
 	w.runsAnswer("abc123", listedRun{id: 11, attempt: 1, workflow: "ci.yml", status: "completed", conclude: "success", updated: "2026-01-05T09:05:00Z"})
 	w.jobsAnswer(11, 1, [2]string{"test", "success"})
 	w.srv.Clock.Advance(time.Second)
-	w.ciResult(id, core.CIPassed)
+	w.ciResult(id, api.CIPassed)
 	w.rateLimitedUntil(time.Time{})
 	w.noErrors()
 }

@@ -2,9 +2,11 @@ package notify_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"testing"
 	"time"
+
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
@@ -53,31 +55,31 @@ func (f *fixture) start() {
 // <key>-2 onwards.
 func (f *fixture) project(key string, n int) {
 	f.t.Helper()
-	must(f.t)(f.core.CreateProject(ctx, core.CreateProjectInput{Key: key}))
-	must(f.t)(f.core.CreateSpec(ctx, key, core.CreateSpecInput{Title: "Login", Body: "body\n"}))
+	must(f.t)(f.core.CreateProject(ctx, api.CreateProjectInput{Key: key}))
+	must(f.t)(f.core.CreateSpec(ctx, key, api.CreateSpecInput{Title: "Login", Body: "body\n"}))
 	for i := range n {
-		must(f.t)(f.core.CreateTicket(ctx, key, core.CreateTicketInput{Spec: "1", Title: "Task " + string(rune('A'+i)), State: domain.Ready}))
+		must(f.t)(f.core.CreateTicket(ctx, key, api.CreateTicketInput{Spec: "1", Title: "Task " + string(rune('A'+i)), State: domain.Ready}))
 	}
 }
 
 // claim claims ticket in project and returns the Claim ID.
 func (f *fixture) claim(project, ticket string) string {
 	f.t.Helper()
-	res := must(f.t)(f.core.Claim(ctx, project, core.ClaimInput{Ticket: core.Ref(ticket), SessionID: "s-" + ticket}))
-	return res.(core.ClaimResult).ClaimID
+	res := must(f.t)(f.core.Claim(ctx, project, api.ClaimInput{Ticket: api.Ref(ticket), SessionID: "s-" + ticket}))
+	return res.(api.ClaimResult).ClaimID
 }
 
 func (f *fixture) round(project, ticket string) {
 	f.t.Helper()
 	claim := f.claim(project, ticket)
-	must(f.t)(f.core.PostRound(ctx, project, core.PostRoundInput{Ticket: core.Ref(ticket), ClaimID: claim,
-		Questions: []core.QuestionInput{{Title: "Which?", Body: "A or B?"}}}))
+	must(f.t)(f.core.PostRound(ctx, project, api.PostRoundInput{Ticket: api.Ref(ticket), ClaimID: claim,
+		Questions: []api.QuestionInput{{Title: "Which?", Body: "A or B?"}}}))
 }
 
 func (f *fixture) failure(project, ticket string) {
 	f.t.Helper()
 	claim := f.claim(project, ticket)
-	must(f.t)(f.core.ReportFailure(ctx, project, core.ReportFailureInput{Ticket: core.Ref(ticket), ClaimID: claim,
+	must(f.t)(f.core.ReportFailure(ctx, project, api.ReportFailureInput{Ticket: api.Ref(ticket), ClaimID: claim,
 		WhatBroke: "tests", Why: "flaky", WhatToFix: "fix", WhereWorkStands: "branch"}))
 }
 
@@ -85,8 +87,8 @@ func (f *fixture) failure(project, ticket string) {
 func (f *fixture) accepted(project, ticket string) {
 	f.t.Helper()
 	claim := f.claim(project, ticket)
-	must(f.t)(f.core.Finish(ctx, project, core.FinishInput{Ticket: core.Ref(ticket), ClaimID: claim, Summary: "done", Branch: project + "-" + ticket, Commit: "abc"}))
-	must(f.t)(f.core.Accept(core.WithActor(ctx, core.Human), project, core.TicketInput{Ticket: core.Ref(ticket)}))
+	must(f.t)(f.core.Finish(ctx, project, api.FinishInput{Ticket: api.Ref(ticket), ClaimID: claim, Summary: "done", Branch: project + "-" + ticket, Commit: "abc"}))
+	must(f.t)(f.core.Accept(api.WithActor(ctx, api.Human), project, api.TicketInput{Ticket: api.Ref(ticket)}))
 }
 
 // closeWindow waits for notify to be holding events (Silent tick plus
@@ -199,12 +201,12 @@ func TestInReviewAndAnsweredNeverNotify(t *testing.T) {
 	f.project("acme", 3)
 	f.start()
 	claim := f.claim("acme", "2")
-	must(t)(f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: claim, Summary: "done"}))
+	must(t)(f.core.Finish(ctx, "acme", api.FinishInput{Ticket: "2", ClaimID: claim, Summary: "done"}))
 	f.round("acme", "3")
 	f.closeWindow()
 	f.want(notify.Notification{Title: "acme-3 has a new Round", Body: "Task B", URL: base + "/?view=inbox&ticket=acme-3"})
 
-	must(t)(f.core.Answer(core.WithActor(ctx, core.Human), "acme", core.AnswerInput{Ticket: "3", Question: 1, Text: "A"}))
+	must(t)(f.core.Answer(api.WithActor(ctx, api.Human), "acme", api.AnswerInput{Ticket: "3", Question: 1, Text: "A"}))
 	f.round("acme", "4")
 	f.closeWindow()
 	f.want(notify.Notification{Title: "acme-4 has a new Round", Body: "Task C", URL: base + "/?view=inbox&ticket=acme-4"})
@@ -227,7 +229,7 @@ func TestAcceptedButNotLandedNeverNotifies(t *testing.T) {
 func TestToMergeNeverNotifies(t *testing.T) {
 	f := newFixture(t)
 	f.project("acme", 2)
-	must(t)(f.core.SetLandingMethod(core.WithActor(ctx, core.Human), "acme", core.SetLandingMethodInput{Method: domain.LandingBranch}))
+	must(t)(f.core.SetLandingMethod(api.WithActor(ctx, api.Human), "acme", api.SetLandingMethodInput{Method: domain.LandingBranch}))
 	f.start()
 	f.accepted("acme", "2")
 	f.clock.BlockUntil(1)
@@ -340,37 +342,37 @@ func TestStartupSummaryForOneTicket(t *testing.T) {
 
 // ciWatcher reports the status of key's CI Watcher, turning CI Tracking
 // on first if it is off.
-func (f *fixture) ciWatcher(key string, state core.WatcherState, message string) {
+func (f *fixture) ciWatcher(key string, state api.WatcherState, message string) {
 	f.t.Helper()
-	p := must(f.t)(f.core.GetProject(ctx, key)).(core.ProjectView)
+	p := must(f.t)(f.core.GetProject(ctx, key)).(api.ProjectView)
 	if !p.CI.Tracking {
-		must(f.t)(f.core.SetCITracking(core.WithActor(ctx, core.Human), key, core.SetCITrackingInput{Tracking: true, Repository: "acme/web"}))
+		must(f.t)(f.core.SetCITracking(api.WithActor(ctx, api.Human), key, api.SetCITrackingInput{Tracking: true, Repository: "acme/web"}))
 	}
-	must(f.t)(f.core.ReportCIWatcherStatus(ctx, key, core.ReportWatcherStatusInput{State: state, Message: message, Fix: "Run gh auth login."}))
+	must(f.t)(f.core.ReportCIWatcherStatus(ctx, key, api.ReportWatcherStatusInput{State: state, Message: message, Fix: "Run gh auth login."}))
 }
 
 func TestACIWatcherGoingIntoAnErrorNotifiesOnceNotOncePerPoll(t *testing.T) {
 	f := newFixture(t)
 	f.project("acme", 1)
 	f.start()
-	f.ciWatcher("acme", core.WatcherWatching, "")
-	f.ciWatcher("acme", core.WatcherError, "gh isn't logged in")
-	f.ciWatcher("acme", core.WatcherError, "gh isn't logged in")
+	f.ciWatcher("acme", api.WatcherWatching, "")
+	f.ciWatcher("acme", api.WatcherError, "gh isn't logged in")
+	f.ciWatcher("acme", api.WatcherError, "gh isn't logged in")
 	f.closeWindow()
 	inError := notify.Notification{Title: "acme's CI Watcher is in error", Body: "gh isn't logged in", URL: base + "/?view=project-options&project=acme"}
 	f.want(inError)
 
 	// Another error while in error is no new one; nor is it when the tick
 	// looks again.
-	f.ciWatcher("acme", core.WatcherError, "gh can't read acme/web")
+	f.ciWatcher("acme", api.WatcherError, "gh can't read acme/web")
 	f.clock.Advance(notify.Tick)
 	f.round("acme", "2")
 	f.closeWindow()
 	f.want(notify.Notification{Title: "acme-2 has a new Round", Body: "Task A", URL: base + "/?view=inbox&ticket=acme-2"})
 
 	// Back to Watching, then into an error again: one more.
-	f.ciWatcher("acme", core.WatcherWatching, "")
-	f.ciWatcher("acme", core.WatcherError, "gh isn't logged in")
+	f.ciWatcher("acme", api.WatcherWatching, "")
+	f.ciWatcher("acme", api.WatcherError, "gh isn't logged in")
 	f.closeWindow()
 	f.want(inError)
 	f.wantNothing()
@@ -382,11 +384,11 @@ func TestACIWatcherErrorAfterCITrackingIsTurnedBackOnNotifies(t *testing.T) {
 	f := newFixture(t)
 	f.project("acme", 0)
 	f.start()
-	f.ciWatcher("acme", core.WatcherError, "gh isn't logged in")
+	f.ciWatcher("acme", api.WatcherError, "gh isn't logged in")
 	f.closeWindow()
 	f.want(notify.Notification{Title: "acme's CI Watcher is in error", Body: "gh isn't logged in", URL: base + "/?view=project-options&project=acme"})
-	must(t)(f.core.SetCITracking(core.WithActor(ctx, core.Human), "acme", core.SetCITrackingInput{Tracking: false, Repository: "acme/web"}))
-	f.ciWatcher("acme", core.WatcherError, "gh isn't logged in")
+	must(t)(f.core.SetCITracking(api.WithActor(ctx, api.Human), "acme", api.SetCITrackingInput{Tracking: false, Repository: "acme/web"}))
+	f.ciWatcher("acme", api.WatcherError, "gh isn't logged in")
 	f.closeWindow()
 	f.want(notify.Notification{Title: "acme's CI Watcher is in error", Body: "gh isn't logged in", URL: base + "/?view=project-options&project=acme"})
 }
@@ -396,10 +398,10 @@ func TestACIWatcherErrorAfterCITrackingIsTurnedBackOnNotifies(t *testing.T) {
 func TestACIWatcherErrorThatClearedBeforeNotifyLookedStillNotifies(t *testing.T) {
 	f := newFixture(t)
 	f.project("acme", 0)
-	f.ciWatcher("acme", core.WatcherWatching, "")
+	f.ciWatcher("acme", api.WatcherWatching, "")
 	f.start()
-	f.ciWatcher("acme", core.WatcherError, "gh isn't logged in")
-	f.ciWatcher("acme", core.WatcherWatching, "")
+	f.ciWatcher("acme", api.WatcherError, "gh isn't logged in")
+	f.ciWatcher("acme", api.WatcherWatching, "")
 	f.closeWindow()
 	f.want(notify.Notification{Title: "acme's CI Watcher is in error", Body: "gh isn't logged in", URL: base + "/?view=project-options&project=acme"})
 	f.wantNothing()
@@ -407,13 +409,13 @@ func TestACIWatcherErrorThatClearedBeforeNotifyLookedStillNotifies(t *testing.T)
 
 // issueWatcher reports the status of key's Issue Watcher, as the
 // integration Actor, turning GitHub Issues on first if it is off.
-func (f *fixture) issueWatcher(key string, in core.ReportWatcherStatusInput) {
+func (f *fixture) issueWatcher(key string, in api.ReportWatcherStatusInput) {
 	f.t.Helper()
-	p := must(f.t)(f.core.GetProject(ctx, key)).(core.ProjectView)
+	p := must(f.t)(f.core.GetProject(ctx, key)).(api.ProjectView)
 	if !p.GitHubIssues.On {
-		must(f.t)(f.core.SetGitHubIssues(core.WithActor(ctx, core.Human), key, core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}}))
+		must(f.t)(f.core.SetGitHubIssues(api.WithActor(ctx, api.Human), key, api.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}}))
 	}
-	must(f.t)(f.core.ReportIssueWatcherStatus(core.WithActor(ctx, core.Integration), key, in))
+	must(f.t)(f.core.ReportIssueWatcherStatus(api.WithActor(ctx, api.Integration), key, in))
 }
 
 // The Issue Watcher's errors notify as the CI Watcher's do, once each
@@ -423,9 +425,9 @@ func TestAnIssueWatcherGoingIntoAnErrorNotifiesOnceAndARateLimitNever(t *testing
 	f := newFixture(t)
 	f.project("acme", 0)
 	f.start()
-	f.issueWatcher("acme", core.ReportWatcherStatusInput{State: core.WatcherWatching})
-	f.issueWatcher("acme", core.ReportWatcherStatusInput{State: core.WatcherWatching, RateLimitedUntil: t0.Add(time.Hour)})
-	inError := core.ReportWatcherStatusInput{State: core.WatcherError, Problem: core.ProblemNoTriage, Message: "gh can't triage acme/web", Fix: "Give it triage."}
+	f.issueWatcher("acme", api.ReportWatcherStatusInput{State: api.WatcherWatching})
+	f.issueWatcher("acme", api.ReportWatcherStatusInput{State: api.WatcherWatching, RateLimitedUntil: t0.Add(time.Hour)})
+	inError := api.ReportWatcherStatusInput{State: api.WatcherError, Problem: api.ProblemNoTriage, Message: "gh can't triage acme/web", Fix: "Give it triage."}
 	f.issueWatcher("acme", inError)
 	f.issueWatcher("acme", inError)
 	f.closeWindow()
@@ -437,19 +439,19 @@ func TestAnIssueWatcherGoingIntoAnErrorNotifiesOnceAndARateLimitNever(t *testing
 // commit as ticket's pushed commit; ticket must be Accepted.
 func (f *fixture) pushed(project, ticket, commit string) {
 	f.t.Helper()
-	human := core.WithActor(ctx, core.Human)
-	if p := must(f.t)(f.core.GetProject(ctx, project)).(core.ProjectView); !p.CI.Tracking {
-		must(f.t)(f.core.SetCITracking(human, project, core.SetCITrackingInput{Tracking: true, Repository: "acme/web"}))
-		must(f.t)(f.core.SetLandingMethod(human, project, core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"}))
+	human := api.WithActor(ctx, api.Human)
+	if p := must(f.t)(f.core.GetProject(ctx, project)).(api.ProjectView); !p.CI.Tracking {
+		must(f.t)(f.core.SetCITracking(human, project, api.SetCITrackingInput{Tracking: true, Repository: "acme/web"}))
+		must(f.t)(f.core.SetLandingMethod(human, project, api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"}))
 	}
-	must(f.t)(f.core.ReportPushedCommit(ctx, project, core.ReportPushedCommitInput{Ticket: core.Ref(ticket), Commit: commit}))
+	must(f.t)(f.core.ReportPushedCommit(ctx, project, api.ReportPushedCommitInput{Ticket: api.Ref(ticket), Commit: commit}))
 }
 
 // ciRun reports one run of ci.yml on commit, tracked against ticket, as
 // the CI Watcher.
 func (f *fixture) ciRun(project, ticket, commit string, id int64, status domain.CIRunStatus, conclusion domain.CIConclusion) {
 	f.t.Helper()
-	must(f.t)(f.core.ReportCIRuns(ctx, project, core.ReportCIRunsInput{Runs: []core.CIRunView{{ID: id, Attempt: 1, Workflow: "ci.yml",
+	must(f.t)(f.core.ReportCIRuns(ctx, project, api.ReportCIRunsInput{Runs: []api.CIRunView{{ID: id, Attempt: 1, Workflow: "ci.yml",
 		Commit: commit, Status: status, Conclusion: conclusion, Ticket: project + "-" + ticket}}}))
 }
 

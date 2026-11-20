@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 )
@@ -27,10 +27,10 @@ func TestEveryWriteSendsAChangeNotice(t *testing.T) {
 		}
 	}
 	// A rejected write sends nothing.
-	if _, err := f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: ""}); err == nil {
+	if _, err := f.core.Comment(ctx, "acme", api.CommentInput{Ticket: "2", Body: ""}); err == nil {
 		t.Fatal("empty comment accepted")
 	}
-	if _, err := f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: "hi"}); err != nil {
+	if _, err := f.core.Comment(ctx, "acme", api.CommentInput{Ticket: "2", Body: "hi"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := <-notices; got != want[3] {
@@ -45,14 +45,14 @@ func TestWaitReturnsAtOnceWhenTheTicketHasLeftTheState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantMove := core.MoveView{From: domain.InProgress, To: domain.NeedsAnswer, Actor: "agent", Time: t0.Add(time.Hour), Claim: 1}
+	wantMove := api.MoveView{From: domain.InProgress, To: domain.NeedsAnswer, Actor: "agent", Time: t0.Add(time.Hour), Claim: 1}
 	if res.Ticket != "acme-2" || res.State != domain.NeedsAnswer || res.LastMove == nil || *res.LastMove != wantMove {
 		t.Fatalf("got %+v", res)
 	}
 }
 
-func (f fixture) waitAsync(ref core.Ref, from domain.State) chan core.WaitResult {
-	out := make(chan core.WaitResult, 1)
+func (f fixture) waitAsync(ref api.Ref, from domain.State) chan api.WaitResult {
+	out := make(chan api.WaitResult, 1)
 	go func() {
 		res, err := f.core.Wait(ctx, "acme", ref, from)
 		if err != nil {
@@ -69,10 +69,10 @@ func TestWaitWakesWhenTheTicketLeavesTheState(t *testing.T) {
 	done := f.waitAsync("2", domain.NeedsAnswer)
 	f.clock.BlockUntil(1)
 	// A change that leaves the State alone doesn't end the wait.
-	if _, err := f.core.Comment(human, "acme", core.CommentInput{Ticket: "2", Body: "Thinking."}); err != nil {
+	if _, err := f.core.Comment(human, "acme", api.CommentInput{Ticket: "2", Body: "Thinking."}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite"}); err != nil {
+	if _, err := f.core.Answer(human, "acme", api.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite"}); err != nil {
 		t.Fatal(err)
 	}
 	if res := <-done; res.State != domain.Answered {
@@ -101,7 +101,7 @@ func TestWaitEndsWhenItsRequestIsCancelled(t *testing.T) {
 	f := newFixture(t)
 	f.asking(t, qDB)
 	cctx, cancel := context.WithCancel(ctx)
-	done := make(chan core.WaitResult)
+	done := make(chan api.WaitResult)
 	go func() {
 		res, _ := f.core.Wait(cctx, "acme", "2", domain.NeedsAnswer)
 		done <- res
@@ -117,11 +117,11 @@ func TestWaitRejections(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
 	_, err := f.core.Wait(ctx, "acme", "2", "Waiting")
-	wantCode(t, err, core.Invalid, "from")
+	wantCode(t, err, api.Invalid, "from")
 	_, err = f.core.Wait(ctx, "acme", "2", "")
-	wantCode(t, err, core.Invalid, "from")
+	wantCode(t, err, api.Invalid, "from")
 	_, err = f.core.Wait(ctx, "acme", "9", domain.Ready)
-	wantCode(t, err, core.NotFound, "")
+	wantCode(t, err, api.NotFound, "")
 	_, err = f.core.Wait(ctx, "nope", "9", domain.Ready)
-	wantCode(t, err, core.UnknownProject, "")
+	wantCode(t, err, api.UnknownProject, "")
 }

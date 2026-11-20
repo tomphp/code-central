@@ -4,13 +4,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"github.com/tomoram/code-central/domain"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // Hide Code Central (Spec code-central-1050): while it is on,
@@ -21,7 +22,7 @@ import (
 
 // opaque is the opaque marker of the comment key on target: the first 12
 // hex digits of the SHA-256 of the two joined by a space. It is worked
-// out here, apart from core.OpaqueMarker, so the tests check the Spec's
+// out here, apart from domain.OpaqueMarker, so the tests check the Spec's
 // definition rather than the code against itself.
 func opaque(target, key string) string {
 	sum := sha256.Sum256([]byte(target + " " + key))
@@ -32,7 +33,7 @@ func opaque(target, key string) string {
 // comment always carries this hash.
 func TestTheOpaqueMarkerIsAStableHashOfTheTargetAndKey(t *testing.T) {
 	want := "<!-- 6bfc160dceca -->"
-	if got := core.OpaqueMarker("acme-5", "grilling"); got != want || opaque("acme-5", "grilling") != want {
+	if got := domain.OpaqueMarker("acme-5", "grilling"); got != want || opaque("acme-5", "grilling") != want {
 		t.Fatalf("opaque marker = %q, want %q", got, want)
 	}
 }
@@ -290,8 +291,8 @@ func TestAHiddenLandedLineHasNoTicketID(t *testing.T) {
 // Repository, and the Changed Repositories line is as branded.
 func TestAHiddenLandedLineWithSeveralRepositoriesHasNoTicketID(t *testing.T) {
 	srv := newServer(t, boardsHidden(true, true)) // acme-4
-	human := core.WithActor(context.Background(), core.Human)
-	if _, err := srv.Core.AddRepository(human, "acme", core.AddRepositoryInput{Name: "docs", CloneURL: "https://dev.azure.com/org/proj/_git/docs"}); err != nil {
+	human := api.WithActor(context.Background(), api.Human)
+	if _, err := srv.Core.AddRepository(human, "acme", api.AddRepositoryInput{Name: "docs", CloneURL: "https://dev.azure.com/org/proj/_git/docs"}); err != nil {
 		t.Fatal(err)
 	}
 	w := hiddenLanded(t, srv, `"branch":"acme-10","commit":"h1","repositories":[{"name":"docs","branch":"acme-10","commit":"d1"}]`,

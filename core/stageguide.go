@@ -7,6 +7,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -17,25 +18,17 @@ import (
 // the service, like the workflow prose, and name only Code Central
 // operations, so any agent on any door can follow them.
 
-// ImplementationStage names the Stage Guide for a Ticket with no
-// reserved type Label.
-const ImplementationStage = "implementation"
-
-// mapGuidePrefix starts the Guide name of each Map Ticket type, which
-// keeps the Map's grilling apart from the grilling Stage.
-const mapGuidePrefix = "map-"
-
 // GuideNames are the names with a guide: each Stage, each Map Ticket
 // type, prototype, retro, then implementation.
 var GuideNames = func() []string {
 	var names []string
-	for _, s := range Stages() {
+	for _, s := range domain.Stages() {
 		names = append(names, string(s))
 	}
-	for _, t := range WayfinderTypes() {
-		names = append(names, mapGuidePrefix+string(t))
+	for _, t := range api.WayfinderTypes() {
+		names = append(names, api.MapGuidePrefix+string(t))
 	}
-	return append(names, PrototypeLabel, RetroLabel, ImplementationStage)
+	return append(names, domain.PrototypeLabel, domain.RetroLabel, api.ImplementationStage)
 }()
 
 //go:embed stageguides/*.md
@@ -75,42 +68,19 @@ var modelAssignmentFragment = template.Must(template.New("model-assignment.md").
 	},
 }).ParseFS(guideFragments, "stageguides/fragments/model-assignment.md"))
 
-// StageGuidesView is a Project's Stage Guides settings as every Project
-// read returns them.
-type StageGuidesView struct {
-	// SubagentExploration is whether the implementation guide tells the
-	// agent to send reading across several files to a subagent.
-	SubagentExploration bool `json:"subagent_exploration"`
-	// ModelAssignment is whether the tickets Stage sets each Ticket's
-	// model and effort.
-	ModelAssignment bool `json:"model_assignment"`
-}
-
-func stageGuidesView(g domain.StageGuides) StageGuidesView {
-	return StageGuidesView{SubagentExploration: !g.SubagentExplorationOff, ModelAssignment: g.ModelAssignmentOn}
-}
-
-// StageGuideInput is get_stage_guide's input.
-type StageGuideInput struct {
-	Stage string `json:"stage" path:"stage" desc:"The guide's name: the Ticket's Stage Label without stage:, map-<type> for a Wayfinder Label wayfinder:<type>, prototype, retro, or implementation when it has none of these." required:"true"`
-}
-
-// StageGuideView is one Stage Guide: get_stage_guide's result, and the
-// guide in claim's.
-type StageGuideView struct {
-	Stage string `json:"stage"`
-	Guide string `json:"guide"`
+func stageGuidesView(g domain.StageGuides) api.StageGuidesView {
+	return api.StageGuidesView{SubagentExploration: !g.SubagentExplorationOff, ModelAssignment: g.ModelAssignmentOn}
 }
 
 // GetStageGuide is get_stage_guide(stage): the Project's guide named by
 // one of GuideNames, as claim would give it now.
-func (c *Core) GetStageGuide(_ context.Context, key string, in StageGuideInput) (StageGuideView, error) {
+func (c *Core) GetStageGuide(_ context.Context, key string, in api.StageGuideInput) (api.StageGuideView, error) {
 	p, err := c.projectOf(key)
 	if err != nil {
-		return StageGuideView{}, err
+		return api.StageGuideView{}, err
 	}
 	if !slices.Contains(GuideNames, in.Stage) {
-		return StageGuideView{}, invalid("stage", "there is no Stage Guide %q; the guides are %s", in.Stage, strings.Join(GuideNames, ", "))
+		return api.StageGuideView{}, invalid("stage", "there is no Stage Guide %q; the guides are %s", in.Stage, strings.Join(GuideNames, ", "))
 	}
 	return stageGuide(in.Stage, p), nil
 }
@@ -130,7 +100,7 @@ func (c *Core) projectOf(key string) (domain.Project, error) {
 
 // stageGuide is the named Stage's guide for Project p, ending with the
 // trouble rules; the name must be one of GuideNames.
-func stageGuide(stage string, p domain.Project) StageGuideView {
+func stageGuide(stage string, p domain.Project) api.StageGuideView {
 	g := p.StageGuides
 	b, err := stageGuides.ReadFile("stageguides/" + stage + ".md")
 	if err != nil {
@@ -152,7 +122,7 @@ func stageGuide(stage string, p domain.Project) StageGuideView {
 	if strings.Contains(text, severalRepositoriesPlaceholder) {
 		text = strings.Replace(text, severalRepositoriesPlaceholder+"\n", severalRepositoriesText(p), 1)
 	}
-	return StageGuideView{Stage: stage, Guide: text + "\n" + troubleRules}
+	return api.StageGuideView{Stage: stage, Guide: text + "\n" + troubleRules}
 }
 
 // severalRepositoriesText is what replaces the several-repositories
@@ -184,36 +154,16 @@ func modelAssignmentText(p domain.Project) string {
 	return b.String()
 }
 
-// GuideName names the guide for a Ticket with these Labels: its Stage,
-// map-<type> for a Map Ticket, prototype for a Prototype, or
-// ImplementationStage only when it has no reserved type Label.
-func GuideName(labels []string) string {
-	for _, l := range labels {
-		if g, ok := typeGuide(l); ok {
-			return g
-		}
-	}
-	return ImplementationStage
-}
-
-// SetSubagentExplorationInput is the human's
-// set_subagent_exploration(on, full?).
-type SetSubagentExplorationInput struct {
-	On bool `json:"on"`
-	// Full asks for the Project in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
 // SetSubagentExploration is the human's set_subagent_exploration:
 // whether the implementation guide has the subagent line. It applies
 // from the next Claim and the next get_stage_guide. Like the Project's
 // other settings it adds no Move, Edit or Comment; the Project's notice
 // announces it.
-func (c *Core) SetSubagentExploration(ctx context.Context, key string, in SetSubagentExplorationInput) (Written[ProjectView], error) {
+func (c *Core) SetSubagentExploration(ctx context.Context, key string, in api.SetSubagentExplorationInput) (api.Written[api.ProjectView], error) {
 	if err := humanOnly(ctx, "set_subagent_exploration"); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
-	var before, after ProjectView
+	var before, after api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -229,27 +179,20 @@ func (c *Core) SetSubagentExploration(ctx context.Context, key string, in SetSub
 		return w.PutProject(p)
 	})
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	return acknowledgeProject(before, after, in.Full, c.now())
-}
-
-// SetModelAssignmentInput is the human's set_model_assignment(on, full?).
-type SetModelAssignmentInput struct {
-	On bool `json:"on"`
-	// Full asks for the Project in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
 }
 
 // SetModelAssignment is the human's set_model_assignment: whether the
 // tickets Stage sets each Ticket's model and effort. Like the Project's
 // other settings it adds no Move, Edit or Comment; the Project's notice
 // announces it, and only on a change.
-func (c *Core) SetModelAssignment(ctx context.Context, key string, in SetModelAssignmentInput) (Written[ProjectView], error) {
+func (c *Core) SetModelAssignment(ctx context.Context, key string, in api.SetModelAssignmentInput) (api.Written[api.ProjectView], error) {
 	if err := humanOnly(ctx, "set_model_assignment"); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
-	var before, after ProjectView
+	var before, after api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -265,7 +208,7 @@ func (c *Core) SetModelAssignment(ctx context.Context, key string, in SetModelAs
 		return w.PutProject(p)
 	})
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	return acknowledgeProject(before, after, in.Full, c.now())
 }

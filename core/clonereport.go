@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -20,90 +21,34 @@ import (
 // where every service sharing the Store reads it, and drops it when the
 // Project's Factories all go offline.
 
-// CloneState is the state of a Repository's clone as the Factory reports
-// it.
-type CloneState string
-
-const (
-	// CloneReady is a clone the Factory made or adopted.
-	CloneReady CloneState = "ready"
-	// CloneMissing is Repository missing: the path holds something other
-	// than a clone of the Clone URL, or cloning it failed; for a
-	// local-only Repository, no git repository of its own; or the path
-	// is another Repository's.
-	CloneMissing CloneState = "missing"
-)
-
-// CloneStates are the states of a reported clone.
-func CloneStates() []CloneState { return []CloneState{CloneReady, CloneMissing} }
-
-// RepositoryReport is one Repository's clone in report_repositories.
-type RepositoryReport struct {
-	Name string `json:"name"`
-	// Path is where the Factory looks for the clone.
-	Path  string     `json:"path"`
-	State CloneState `json:"state"`
-	// Problem says what is wrong at Path; required for missing.
-	Problem string `json:"problem,omitempty"`
-}
-
-// ReportRepositoriesInput is the Factory's report_repositories(
-// repositories, full?).
-type ReportRepositoriesInput struct {
-	Repositories []RepositoryReport `json:"repositories"`
-	// Full asks for the Project in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
-// CloneView is a Repository's clone as the Factory last reported it;
-// absent while no Factory is reporting.
-type CloneView struct {
-	State   CloneState `json:"state"`
-	Path    string     `json:"path"`
-	Problem string     `json:"problem,omitempty"`
-	// Since is when the Factory first reported it in this state with
-	// this problem.
-	Since time.Time `json:"since"`
-}
-
-// RepositoryMissingView is a Repository missing item's detail: the
-// Repository, its path and Clone URL, what is wrong and the fix.
-type RepositoryMissingView struct {
-	Repository string `json:"repository"`
-	Path       string `json:"path"`
-	CloneURL   string `json:"clone_url"`
-	Problem    string `json:"problem"`
-	Fix        string `json:"fix"`
-}
-
 // ReportRepositories is the Factory's report_repositories. The report
 // replaces the Project's earlier one, in the runtime state a Store shares; a missing
 // Repository shows in Needs Me while the latest says so and a Factory is
 // still online.
-func (c *Core) ReportRepositories(_ context.Context, key string, in ReportRepositoriesInput) (Written[ProjectView], error) {
+func (c *Core) ReportRepositories(_ context.Context, key string, in api.ReportRepositoriesInput) (api.Written[api.ProjectView], error) {
 	now := c.now()
-	report := map[string]CloneView{}
+	report := map[string]api.CloneView{}
 	for _, r := range in.Repositories {
 		name, path, problem := strings.TrimSpace(r.Name), strings.TrimSpace(r.Path), strings.TrimSpace(r.Problem)
 		switch {
 		case name == "":
-			return Written[ProjectView]{}, invalid("repositories", "each Repository needs its name")
+			return api.Written[api.ProjectView]{}, invalid("repositories", "each Repository needs its name")
 		case path == "":
-			return Written[ProjectView]{}, invalid("repositories", "Repository %s needs the path of its clone", name)
-		case !slices.Contains(CloneStates(), r.State):
-			return Written[ProjectView]{}, invalid("repositories", "Repository %s's state is ready or missing, not %q", name, r.State)
-		case r.State == CloneMissing && problem == "":
-			return Written[ProjectView]{}, invalid("repositories", "Repository %s is missing, so needs the problem", name)
+			return api.Written[api.ProjectView]{}, invalid("repositories", "Repository %s needs the path of its clone", name)
+		case !slices.Contains(api.CloneStates(), r.State):
+			return api.Written[api.ProjectView]{}, invalid("repositories", "Repository %s's state is ready or missing, not %q", name, r.State)
+		case r.State == api.CloneMissing && problem == "":
+			return api.Written[api.ProjectView]{}, invalid("repositories", "Repository %s is missing, so needs the problem", name)
 		}
 		if _, dup := report[name]; dup {
-			return Written[ProjectView]{}, invalid("repositories", "Repository %s is reported twice", name)
+			return api.Written[api.ProjectView]{}, invalid("repositories", "Repository %s is reported twice", name)
 		}
-		if r.State == CloneReady {
+		if r.State == api.CloneReady {
 			problem = ""
 		}
-		report[name] = CloneView{State: r.State, Path: path, Problem: problem, Since: now}
+		report[name] = api.CloneView{State: r.State, Path: path, Problem: problem, Since: now}
 	}
-	var before ProjectView
+	var before api.ProjectView
 	var project domain.Project
 	if err := c.store.View(func(r store.Reader) error {
 		if err := writable(r, key); err != nil {
@@ -113,7 +58,7 @@ func (c *Core) ReportRepositories(_ context.Context, key string, in ReportReposi
 		before = c.projectView(project)
 		return nil
 	}); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	hs := c.heartbeats
 	hs.mu.Lock()
@@ -138,7 +83,7 @@ func (c *Core) ReportRepositories(_ context.Context, key string, in ReportReposi
 // cloneView is the clone of project's Repository name at now, or nil
 // when none is current: no report of it, or no Factory online or
 // draining. hs.mu is held.
-func (hs *heartbeats) cloneView(project, name string, now time.Time) *CloneView {
+func (hs *heartbeats) cloneView(project, name string, now time.Time) *api.CloneView {
 	v, ok := hs.clones[project][name]
 	if !ok || !hs.reporting(project, now) {
 		return nil
@@ -148,7 +93,7 @@ func (hs *heartbeats) cloneView(project, name string, now time.Time) *CloneView 
 
 // fillClones fills in each of rs's clones from the latest clone report of
 // the Project key.
-func (c *Core) fillClones(key string, rs []RepositoryView) {
+func (c *Core) fillClones(key string, rs []api.RepositoryView) {
 	hs := c.heartbeats
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
@@ -161,15 +106,15 @@ func (c *Core) fillClones(key string, rs []RepositoryView) {
 // repositoryMissingRows are p's Repository missing items: one per listed
 // Repository its Factory reports missing, in landing order, with no
 // Ticket.
-func (c *Core) repositoryMissingRows(p domain.Project) []NeedsMeRow {
+func (c *Core) repositoryMissingRows(p domain.Project) []api.NeedsMeRow {
 	if !p.Archived.IsZero() {
 		return nil
 	}
-	var out []NeedsMeRow
+	var out []api.NeedsMeRow
 	rs := repositoriesView(p)
 	c.fillClones(p.Key, rs)
 	for _, r := range rs {
-		if r.Clone == nil || r.Clone.State != CloneMissing {
+		if r.Clone == nil || r.Clone.State != api.CloneMissing {
 			continue
 		}
 		var fix string
@@ -179,9 +124,9 @@ func (c *Core) repositoryMissingRows(p domain.Project) []NeedsMeRow {
 		} else {
 			fix = fmt.Sprintf("Clone %s to %s by hand, set Repository %s's local path to a clone of it in Project Options, or move what's at %s aside for the Factory to clone it there", r.CloneURL, r.Clone.Path, r.Name, r.Clone.Path)
 		}
-		out = append(out, NeedsMeRow{
-			Project: p.Key, Title: "Repository missing: " + r.Name, Reason: ReasonRepositoryMissing, Since: r.Clone.Since,
-			RepositoryMissing: &RepositoryMissingView{Repository: r.Name, Path: r.Clone.Path, CloneURL: r.CloneURL, Problem: r.Clone.Problem, Fix: fix},
+		out = append(out, api.NeedsMeRow{
+			Project: p.Key, Title: "Repository missing: " + r.Name, Reason: api.ReasonRepositoryMissing, Since: r.Clone.Since,
+			RepositoryMissing: &api.RepositoryMissingView{Repository: r.Name, Path: r.Clone.Path, CloneURL: r.CloneURL, Problem: r.Clone.Problem, Fix: fix},
 		})
 	}
 	return out

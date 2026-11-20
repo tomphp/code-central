@@ -7,6 +7,7 @@ import (
 	"io"
 	"regexp"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 	"github.com/tomoram/code-central/ops"
@@ -51,7 +52,7 @@ func (m calls) Dispatch(ctx context.Context, call ops.Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	v, err := m.Service.Dispatch(core.WithActor(ctx, a), call)
+	v, err := m.Service.Dispatch(api.WithActor(ctx, a), call)
 	if m.door.Usage {
 		m.record(call, v, err)
 	}
@@ -59,14 +60,14 @@ func (m calls) Dispatch(ctx context.Context, call ops.Call) (any, error) {
 }
 
 // actor is the Actor a call names, defaulting to agent.
-func actor(named core.Actor) (core.Actor, error) {
+func actor(named api.Actor) (api.Actor, error) {
 	switch named {
 	case "":
-		return core.Agent, nil
-	case core.Human, core.Agent, core.Integration:
+		return api.Agent, nil
+	case api.Human, api.Agent, api.Integration:
 		return named, nil
 	default:
-		return "", &core.Error{Code: core.Invalid, Field: httpapi.ActorHeader, Message: fmt.Sprintf("unknown Actor %q: use human, agent or integration", named)}
+		return "", &api.Error{Code: api.Invalid, Field: httpapi.ActorHeader, Message: fmt.Sprintf("unknown Actor %q: use human, agent or integration", named)}
 	}
 }
 
@@ -75,7 +76,7 @@ func actor(named core.Actor) (core.Actor, error) {
 // A result that can't be encoded is the door's to report, so it goes
 // unrecorded.
 func (m calls) record(call ops.Call, v any, err error) {
-	var code core.Code
+	var code api.Code
 	if err != nil {
 		e := core.ErrorOf(err)
 		v, code = e, e.Code
@@ -99,7 +100,7 @@ func (m calls) record(call ops.Call, v any, err error) {
 // call loads. id is the Ticket or Spec the call names, or else the one it
 // returns, and is left out when there is neither; a rejected call ends
 // with error=<code>.
-func (m calls) logCall(op, key, id string, bytes int, code core.Code) {
+func (m calls) logCall(op, key, id string, bytes int, code api.Code) {
 	line := fmt.Sprintf("code-central serve: %s %s project=%s", m.door.Name, op, key)
 	if id != "" {
 		line += " id=" + id
@@ -114,9 +115,9 @@ func (m calls) logCall(op, key, id string, bytes int, code core.Code) {
 // callID is the ID a call's arguments name (ticket, spec or target), as
 // <key>-<n>, or else the ID its result holds, or "".
 func callID(key string, args, text []byte) string {
-	var in struct{ Ticket, Spec, Target core.Ref }
+	var in struct{ Ticket, Spec, Target api.Ref }
 	_ = json.Unmarshal(args, &in)
-	for _, r := range []core.Ref{in.Ticket, in.Spec, in.Target} {
+	for _, r := range []api.Ref{in.Ticket, in.Spec, in.Target} {
 		if r == "" {
 			continue
 		}

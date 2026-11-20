@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -26,7 +27,7 @@ func (e *evaluation) runSummary(it ciItem) string {
 			runs = append(runs, run)
 		}
 	}
-	cancelled := it.reason == ReasonCICancelled
+	cancelled := it.reason == api.ReasonCICancelled
 	bad := func(c domain.CIConclusion) bool { return c.Failed() }
 	if cancelled {
 		bad = func(c domain.CIConclusion) bool { return c.Cancelled() }
@@ -80,7 +81,7 @@ func (e *evaluation) lastPassedCommit(name string, runs []domain.CIRun) string {
 			if recordRepository(e.p.Key, pc.Repository) != name || pc.Pushed.Before(last.Pushed) {
 				continue
 			}
-			if ciResultOf(pc.Commit, runs) == CIPassed {
+			if ciResultOf(pc.Commit, runs) == api.CIPassed {
 				last = pc
 			}
 		}

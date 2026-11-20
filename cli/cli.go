@@ -19,8 +19,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/client"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/home"
 	"github.com/tomoram/code-central/notify"
@@ -183,7 +183,7 @@ func Run(ctx context.Context, args []string, e Env) int {
 	}
 	err := cmd.run(ctx, e, args[1:])
 	var ue usageError
-	var ce *core.Error
+	var ce *api.Error
 	var ec exitCode
 	switch {
 	case err == nil:
@@ -329,7 +329,7 @@ func runCreateSpec(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.CreateSpec(ctx, sc.project, core.CreateSpecInput{Title: *title, Body: text, Full: *full})
+	v, err := sc.client.CreateSpec(ctx, sc.project, api.CreateSpecInput{Title: *title, Body: text, Full: *full})
 	if err != nil {
 		return err
 	}
@@ -368,11 +368,11 @@ func runCreateTicket(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	in := core.CreateTicketInput{
-		Spec: core.Ref(*spec), Title: *title, Description: text, State: domain.State(*state), Labels: labels, Tags: tags, Full: *full,
+	in := api.CreateTicketInput{
+		Spec: api.Ref(*spec), Title: *title, Description: text, State: domain.State(*state), Labels: labels, Tags: tags, Full: *full,
 	}
 	for _, b := range blockedBy {
-		in.BlockedBy = append(in.BlockedBy, core.Ref(b))
+		in.BlockedBy = append(in.BlockedBy, api.Ref(b))
 	}
 	v, err := sc.client.CreateTicket(ctx, sc.project, in)
 	if err != nil {
@@ -401,9 +401,9 @@ func runGetTicket(ctx context.Context, e Env, args []string) error {
 	// CLI names get_ticket's default parts itself, and briefs them.
 	brief := len(parts) == 0
 	if brief {
-		parts = core.DefaultTicketParts()
+		parts = api.DefaultTicketParts()
 	}
-	v, err := sc.client.GetTicket(ctx, sc.project, core.Ref(pos[0]), parts...)
+	v, err := sc.client.GetTicket(ctx, sc.project, api.Ref(pos[0]), parts...)
 	if err != nil {
 		return err
 	}
@@ -435,7 +435,7 @@ func runFindTickets(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	in := core.FindTicketsInput{Title: *title, Labels: labels, Spec: core.Ref(*spec)}
+	in := api.FindTicketsInput{Title: *title, Labels: labels, Spec: api.Ref(*spec)}
 	for _, s := range states {
 		in.State = append(in.State, domain.State(s))
 	}
@@ -447,7 +447,7 @@ func runFindTickets(ctx context.Context, e Env, args []string) error {
 	}
 	if *full {
 		// As get-ticket does: the default parts, brief.
-		views, err := sc.client.FindTicketViews(ctx, sc.project, in, core.DefaultTicketParts()...)
+		views, err := sc.client.FindTicketViews(ctx, sc.project, in, api.DefaultTicketParts()...)
 		if err != nil {
 			return err
 		}
@@ -481,7 +481,7 @@ func runClaim(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	in := core.ClaimInput{Spec: core.Ref(*spec), Ticket: core.Ref(*ticket), SessionID: sessionID(e, *session)}
+	in := api.ClaimInput{Spec: api.Ref(*spec), Ticket: api.Ref(*ticket), SessionID: sessionID(e, *session)}
 	in.WorkingDir, in.ResumeCommand = resume.values()
 	v, err := sc.client.Claim(ctx, sc.project, in)
 	if err != nil {
@@ -516,7 +516,7 @@ func runFinish(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	in := core.FinishInput{Ticket: core.Ref(pos[0]), ClaimID: *claim, Summary: text, Branch: *branch, Commit: *commit, Recommendation: domain.Recommendation(*recommendation), Full: *full}
+	in := api.FinishInput{Ticket: api.Ref(pos[0]), ClaimID: *claim, Summary: text, Branch: *branch, Commit: *commit, Recommendation: domain.Recommendation(*recommendation), Full: *full}
 	if *repositories != "" {
 		if err := decodeField(ctx, *repositories, "repositories", &in.Repositories); err != nil {
 			return err

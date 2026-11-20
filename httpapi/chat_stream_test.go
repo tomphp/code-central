@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/store"
@@ -23,7 +24,7 @@ type chatFrame struct {
 type chatFixture struct {
 	h    http.Handler
 	hs   string
-	turn *core.ChatTurn
+	turn *api.ChatTurn
 }
 
 func newChatFixture(t *testing.T) *chatFixture {
@@ -49,9 +50,9 @@ func (f *chatFixture) ok(t *testing.T, method, path, body string) []byte {
 // has yet, so it holds the Conversation and may post to it.
 func (f *chatFixture) send(t *testing.T, text string) {
 	t.Helper()
-	got := make(chan core.ChatWork, 1)
+	got := make(chan api.ChatWork, 1)
 	go func() {
-		var w core.ChatWork
+		var w api.ChatWork
 		json.Unmarshal(do(f.h, "GET", "/api/p/acme/chat/next-work?factory=f&host=h", "").Body.Bytes(), &w)
 		got <- w
 	}()
@@ -129,10 +130,10 @@ func nextChatFrame(t *testing.T, r *bufio.Reader) chatFrame {
 }
 
 // opening reads the opening conversation event.
-func opening(t *testing.T, r *bufio.Reader) (chatFrame, core.ConversationView) {
+func opening(t *testing.T, r *bufio.Reader) (chatFrame, api.ConversationView) {
 	t.Helper()
 	fr := nextChatFrame(t, r)
-	var v core.ConversationView
+	var v api.ConversationView
 	if fr.name != "conversation" {
 		t.Fatalf("got %s %s, want the conversation", fr.name, fr.data)
 	}
@@ -146,7 +147,7 @@ func wantChatItems(t *testing.T, r *bufio.Reader, texts ...string) (last int) {
 	prev := 0
 	for _, text := range texts {
 		fr := nextChatFrame(t, r)
-		var it core.HeldSessionEvent
+		var it api.HeldSessionEvent
 		json.Unmarshal([]byte(fr.data), &it)
 		id, _ := strconv.Atoi(fr.id)
 		if fr.name != "item" || it.Text != text || id == 0 || (prev != 0 && id != prev+1) {
@@ -157,10 +158,10 @@ func wantChatItems(t *testing.T, r *bufio.Reader, texts ...string) (last int) {
 	return prev
 }
 
-func wantOutcome(t *testing.T, r *bufio.Reader, outcome core.ChatOutcome) int {
+func wantOutcome(t *testing.T, r *bufio.Reader, outcome api.ChatOutcome) int {
 	t.Helper()
 	fr := nextChatFrame(t, r)
-	var o core.ChatOutcomeEvent
+	var o api.ChatOutcomeEvent
 	json.Unmarshal([]byte(fr.data), &o)
 	id, _ := strconv.Atoi(fr.id)
 	if fr.name != "outcome" || o.Outcome != outcome || id == 0 {
@@ -169,11 +170,11 @@ func wantOutcome(t *testing.T, r *bufio.Reader, outcome core.ChatOutcome) int {
 	return id
 }
 
-func wantMessages(t *testing.T, r *bufio.Reader, from ...core.ChatAuthor) {
+func wantMessages(t *testing.T, r *bufio.Reader, from ...api.ChatAuthor) {
 	t.Helper()
 	for _, want := range from {
 		fr := nextChatFrame(t, r)
-		var m core.ChatMessageView
+		var m api.ChatMessageView
 		json.Unmarshal([]byte(fr.data), &m)
 		if fr.name != "message" || fr.id == "" || m.From != want {
 			t.Fatalf("got %s id %s %s, want a message from %s", fr.name, fr.id, fr.data, want)
@@ -185,7 +186,7 @@ func TestAChatStreamOpensWithNoConversationThenWithTheOneThatStarts(t *testing.T
 	f := newChatFixture(t)
 	r := f.stream(t, "")
 	fr, v := opening(t, r)
-	if fr.id != "" || v.Availability != core.ChatNone {
+	if fr.id != "" || v.Availability != api.ChatNone {
 		t.Fatalf("opening %+v %+v, want none with no id", fr, v)
 	}
 	f.ok(t, "POST", "/api/p/acme/start_conversation", `{}`)
@@ -208,7 +209,7 @@ func TestAChatStreamOpensWithTheConversationAsItStandsThenSendsEachNewItemAndOut
 	f.post(t, []string{"two", "three"}, "")
 	wantChatItems(t, r, "two", "three")
 	f.post(t, nil, "done")
-	wantOutcome(t, r, core.ChatDone)
+	wantOutcome(t, r, api.ChatDone)
 
 	// A second message streams as two Chat Messages, then its items.
 	f.send(t, "again")
@@ -229,7 +230,7 @@ func TestAChatStreamWithLastEventIDResumesWithNoGapsOrRepeats(t *testing.T) {
 
 	r = f.stream(t, strconv.Itoa(last))
 	wantChatItems(t, r, "three")
-	wantOutcome(t, r, core.ChatFailed)
+	wantOutcome(t, r, api.ChatFailed)
 	if fr.id == "" {
 		t.Fatal("the opening had no id to resume from")
 	}
@@ -293,9 +294,9 @@ func TestAChatStreamSendsReplacedWhenTheConversationIsReplaced(t *testing.T) {
 func TestAChatStreamOfAnUnknownProjectIsNotFound(t *testing.T) {
 	f := newChatFixture(t)
 	rec := do(f.h, "GET", "/api/p/nope/chat/stream", "")
-	var e core.Error
+	var e api.Error
 	json.Unmarshal(rec.Body.Bytes(), &e)
-	if rec.Code != 404 || e.Code != core.UnknownProject {
+	if rec.Code != 404 || e.Code != api.UnknownProject {
 		t.Fatalf("%d %s, want 404 unknown_project", rec.Code, rec.Body)
 	}
 }

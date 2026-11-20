@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/ratelimit"
@@ -28,7 +28,7 @@ type Provider interface {
 	// result with no Problem when it can, else what is wrong and its fix.
 	// The CI Provider rate-limiting it is a *ratelimit.Error, as from
 	// every method: not a problem, just a wait.
-	CheckAccess(ctx context.Context) (core.WatcherCheckResult, error)
+	CheckAccess(ctx context.Context) (api.WatcherCheckResult, error)
 	// RunsForCommit lists the workflow runs started for commit, with
 	// their statuses and conclusions mapped to Code Central's and no jobs.
 	// A pullRequest above zero is the commit's pull request number: Azure
@@ -39,7 +39,7 @@ type Provider interface {
 	// branch that finished after since, mapped as RunsForCommit's are.
 	CompletedRunsOnBranch(ctx context.Context, branch string, since time.Time) ([]Run, error)
 	// Jobs lists the jobs of one attempt of a run.
-	Jobs(ctx context.Context, id int64, attempt int) ([]core.CIJobView, error)
+	Jobs(ctx context.Context, id int64, attempt int) ([]api.CIJobView, error)
 	// RerunFailedJobs re-runs the failed jobs of a run, as its next
 	// attempt.
 	RerunFailedJobs(ctx context.Context, id int64) error
@@ -50,14 +50,14 @@ type Provider interface {
 // last changed it, so the CI Watcher fetches jobs only for runs that
 // changed.
 type Run struct {
-	core.CIRunView
+	api.CIRunView
 	Updated time.Time
 }
 
 // NewProvider is the CI Provider for in, chosen by its CI Provider:
 // GitHub Actions finds gh with in's gh path Option, and Azure Pipelines
 // reads the PAT from env by in's PAT environment variable.
-func NewProvider(in core.CICheckInput, env gh.Env) (Provider, error) {
+func NewProvider(in api.CICheckInput, env gh.Env) (Provider, error) {
 	switch in.Provider {
 	case domain.CIGitHubActions:
 		return &GitHubActions{Repository: in.Repository, GHPath: in.GHPath, Env: env}, nil
@@ -71,7 +71,7 @@ func NewProvider(in core.CICheckInput, env gh.Env) (Provider, error) {
 // Check is the check mode: whether the CI Watcher can watch in's
 // repository through its CI Provider. Being rate-limited fails the check,
 // as there is no knowing yet whether the repository can be read.
-func Check(ctx context.Context, in core.CICheckInput, env gh.Env) core.WatcherCheckResult {
+func Check(ctx context.Context, in api.CICheckInput, env gh.Env) api.WatcherCheckResult {
 	p, bad := provider(in, env)
 	if bad != nil {
 		return *bad
@@ -85,10 +85,10 @@ func Check(ctx context.Context, in core.CICheckInput, env gh.Env) core.WatcherCh
 }
 
 // provider is in's CI Provider, or the problem with it.
-func provider(in core.CICheckInput, env gh.Env) (Provider, *core.WatcherCheckResult) {
+func provider(in api.CICheckInput, env gh.Env) (Provider, *api.WatcherCheckResult) {
 	p, err := NewProvider(in, env)
 	if err != nil {
-		return nil, &core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: err.Error(), Fix: "Choose GitHub Actions or Azure Pipelines as the CI Provider."}
+		return nil, &api.WatcherCheckResult{Problem: api.ProblemCheckFailed, Reason: err.Error(), Fix: "Choose GitHub Actions or Azure Pipelines as the CI Provider."}
 	}
 	return p, nil
 }

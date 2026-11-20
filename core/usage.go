@@ -5,8 +5,8 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/usage"
 )
@@ -48,20 +48,6 @@ func (c *Core) projectExists(key string) bool {
 	return found
 }
 
-// UsageResponse is one model response's token usage, as a Factory posts
-// it: when it came, the subagent it was for ("" for the main session)
-// with that Subagent's Agent Type and description, the kind of session,
-// the model that gave it ("" when not posted), and its four token counts.
-type UsageResponse struct {
-	Time        time.Time `json:"time"`
-	Agent       string    `json:"agent,omitempty"`
-	AgentType   string    `json:"agent_type,omitempty"`
-	Description string    `json:"description,omitempty"`
-	Kind        string    `json:"kind"`
-	Model       string    `json:"model,omitempty"`
-	usage.Tokens
-}
-
 // PostUsage is POST /api/usage {session_id, responses}: it records the
 // responses under the newest Claim with that session ID, live or ended,
 // as Session Events are filed, and counts as a ping. With no such Claim
@@ -69,7 +55,7 @@ type UsageResponse struct {
 // with no Ticket and Claim 0, so they count at Project scope only; with
 // neither they are dropped. A response with no time is dated now. The
 // models they name join the Project's Reported Models. It never fails.
-func (c *Core) PostUsage(ctx context.Context, sessionID string, responses []UsageResponse) {
+func (c *Core) PostUsage(ctx context.Context, sessionID string, responses []api.UsageResponse) {
 	if sessionID == "" {
 		return
 	}
@@ -106,109 +92,21 @@ func (c *Core) PostUsage(ctx context.Context, sessionID string, responses []Usag
 	c.usage.RecordResponses(k.project, rs)
 }
 
-// UsageInput is a Usage read: one Project, or every Project (Archived
-// ones too) when Project is "", over the last Days local days.
-type UsageInput struct {
-	Project string
-	// Days is one of UsageDays; 0 is the default.
-	Days int
-}
-
-// UsageView is Usage as the read returns it. Kinds, Sessions and Days
-// come from the token usage a Factory posts: Kinds over every session,
-// main and Subagent; Sessions the main sessions, newest first and at
-// most RecentSessions, each with all its Subagents; and Days a row for
-// every local day in the range, oldest first.
-type UsageView struct {
-	Operations []UsageOperation `json:"operations"`
-	Kinds      []UsageKind      `json:"kinds"`
-	Sessions   []UsageSession   `json:"sessions"`
-	Days       []UsageDay       `json:"days"`
-}
-
-// UsageOperation is one MCP operation's row: its calls, their total and
-// average request and response sizes in bytes, and how many were
-// rejected. Averages are rounded to the nearest byte.
-type UsageOperation struct {
-	Op                   string `json:"op"`
-	Calls                int    `json:"calls"`
-	RequestBytes         int    `json:"request_bytes"`
-	AverageRequestBytes  int    `json:"average_request_bytes"`
-	ResponseBytes        int    `json:"response_bytes"`
-	AverageResponseBytes int    `json:"average_response_bytes"`
-	Errors               int    `json:"errors"`
-}
-
-// UsageKind is one kind of session's Context Size figures: how many
-// sessions there were, and the average and largest of their peaks. The
-// average is rounded to the nearest token.
-type UsageKind struct {
-	Kind        string `json:"kind"`
-	Sessions    int    `json:"sessions"`
-	AveragePeak int    `json:"average_peak"`
-	LargestPeak int    `json:"largest_peak"`
-}
-
-// UsageSession is one recent session: a Claim's main session, or a
-// Subagent of it (Agent), with the Project, Ticket, Claim and kind of its
-// latest response. Started is its first response's time, Peak the largest
-// Context Size among its responses, Tokens all their tokens, and Models
-// each distinct model its responses name, in order of first use. A
-// Subagent has the latest non-empty Agent Type and description among its
-// responses.
-//
-// A main session has its Subagents, oldest first, and TotalTokens, its
-// Tokens and theirs; a Subagent has no Subagents and no TotalTokens. A
-// main session whose only responses are its Subagents' has none of its
-// own: no kind, models, peak or tokens, its Subagents' first start and
-// the Project, Ticket and Claim of their latest response.
-type UsageSession struct {
-	Project     string         `json:"project"`
-	Ticket      string         `json:"ticket"`
-	Claim       int            `json:"claim"`
-	SessionID   string         `json:"session_id"`
-	Agent       string         `json:"agent,omitempty"`
-	AgentType   string         `json:"agent_type,omitempty"`
-	Description string         `json:"description,omitempty"`
-	Kind        string         `json:"kind"`
-	Started     time.Time      `json:"started"`
-	Peak        int            `json:"peak"`
-	Responses   int            `json:"responses"`
-	Models      []string       `json:"models"`
-	Tokens      int            `json:"tokens"`
-	TotalTokens *int           `json:"total_tokens,omitempty"`
-	Subagents   []UsageSession `json:"subagents"`
-}
-
-// UsageDay is one local day's token usage, by kind of session: the kinds
-// with any usage that day, in kindOrder; none on a day with no usage.
-// Day is YYYY-MM-DD in the service's time zone.
-type UsageDay struct {
-	Day   string           `json:"day"`
-	Kinds []UsageDayTokens `json:"kinds"`
-}
-
-// UsageDayTokens is one kind's tokens on one day, by token type.
-type UsageDayTokens struct {
-	Kind string `json:"kind"`
-	usage.Tokens
-}
-
 // Usage reads Usage. An unknown Project is not_found, and a Days outside
 // UsageDays is invalid.
-func (c *Core) Usage(_ context.Context, in UsageInput) (UsageView, error) {
+func (c *Core) Usage(_ context.Context, in api.UsageInput) (api.UsageView, error) {
 	if in.Days == 0 {
 		in.Days = UsageDays()[0]
 	}
 	if !slices.Contains(UsageDays(), in.Days) {
-		return UsageView{}, invalid("days", "days must be 7, 30 or 90, not %d", in.Days)
+		return api.UsageView{}, invalid("days", "days must be 7, 30 or 90, not %d", in.Days)
 	}
 	if in.Project != "" && !c.projectExists(in.Project) {
-		return UsageView{}, &Error{Code: NotFound, Message: fmt.Sprintf("no Project %q", in.Project)}
+		return api.UsageView{}, &api.Error{Code: api.NotFound, Message: fmt.Sprintf("no Project %q", in.Project)}
 	}
 	recs := c.usage.Read(in.Project, in.Days)
 	all, mains := usageSessions(recs.Responses)
-	return UsageView{
+	return api.UsageView{
 		Operations: operations(recs.Calls),
 		Kinds:      kinds(all),
 		Sessions:   mains[:min(len(mains), RecentSessions)],
@@ -216,44 +114,19 @@ func (c *Core) Usage(_ context.Context, in UsageInput) (UsageView, error) {
 	}, nil
 }
 
-// SessionUsageInput is one session's read: its Project, its session ID,
-// and its subagent, "" for the main session.
-type SessionUsageInput struct {
-	Project string
-	Session string
-	Agent   string
-}
-
-// SessionUsageView is one session's responses, oldest first, for its
-// line chart. For a Subagent it also has its Agent Type and description,
-// the latest non-empty of each among its responses.
-type SessionUsageView struct {
-	AgentType   string                 `json:"agent_type,omitempty"`
-	Description string                 `json:"description,omitempty"`
-	Responses   []SessionUsageResponse `json:"responses"`
-}
-
-// SessionUsageResponse is one of a session's model responses: when it
-// came, its Context Size and its four token counts.
-type SessionUsageResponse struct {
-	Time        time.Time `json:"time"`
-	ContextSize int       `json:"context_size"`
-	usage.Tokens
-}
-
 // SessionUsage reads one session's responses over every day Usage keeps
 // (today and the usage.KeepDays before it), whatever range the rest of
 // Usage reads. An unknown Project is
 // not_found; an unknown session has no responses.
-func (c *Core) SessionUsage(_ context.Context, in SessionUsageInput) (SessionUsageView, error) {
+func (c *Core) SessionUsage(_ context.Context, in api.SessionUsageInput) (api.SessionUsageView, error) {
 	if in.Project == "" {
-		return SessionUsageView{}, invalid("project", "project is required")
+		return api.SessionUsageView{}, invalid("project", "project is required")
 	}
 	if in.Session == "" {
-		return SessionUsageView{}, invalid("session", "session is required")
+		return api.SessionUsageView{}, invalid("session", "session is required")
 	}
 	if !c.projectExists(in.Project) {
-		return SessionUsageView{}, &Error{Code: NotFound, Message: fmt.Sprintf("no Project %q", in.Project)}
+		return api.SessionUsageView{}, &api.Error{Code: api.NotFound, Message: fmt.Sprintf("no Project %q", in.Project)}
 	}
 	var mine []usage.Response
 	for _, r := range c.usage.Read(in.Project, usage.KeepDays+1).Responses {
@@ -262,11 +135,11 @@ func (c *Core) SessionUsage(_ context.Context, in SessionUsageInput) (SessionUsa
 		}
 	}
 	slices.SortStableFunc(mine, func(a, b usage.Response) int { return a.Time.Compare(b.Time) })
-	out := SessionUsageView{Responses: []SessionUsageResponse{}}
+	out := api.SessionUsageView{Responses: []api.SessionUsageResponse{}}
 	for _, r := range mine {
 		out.AgentType = cmp.Or(r.AgentType, out.AgentType)
 		out.Description = cmp.Or(r.Description, out.Description)
-		out.Responses = append(out.Responses, SessionUsageResponse{Time: r.Time, ContextSize: r.ContextSize(), Tokens: r.Tokens})
+		out.Responses = append(out.Responses, api.SessionUsageResponse{Time: r.Time, ContextSize: r.ContextSize(), Tokens: r.Tokens})
 	}
 	return out, nil
 }
@@ -283,18 +156,18 @@ const RecentSessions = 50
 // oldest first, whatever order they were read in, so each session starts
 // at its first, takes its Claim and kind from its latest, and lists its
 // models in order of first use.
-func usageSessions(responses []usage.Response) (all, mains []UsageSession) {
+func usageSessions(responses []usage.Response) (all, mains []api.UsageSession) {
 	responses = slices.Clone(responses)
 	slices.SortStableFunc(responses, func(a, b usage.Response) int { return a.Time.Compare(b.Time) })
 	type key struct{ session, agent string }
-	byKey := map[key]*UsageSession{}
+	byKey := map[key]*api.UsageSession{}
 	// latestSubagent is each session ID's latest Subagent response.
 	latestSubagent := map[string]usage.Response{}
 	for _, r := range responses {
 		k := key{r.SessionID, r.Agent}
 		s := byKey[k]
 		if s == nil {
-			s = &UsageSession{SessionID: r.SessionID, Agent: r.Agent, Started: r.Time, Models: []string{}, Subagents: []UsageSession{}}
+			s = &api.UsageSession{SessionID: r.SessionID, Agent: r.Agent, Started: r.Time, Models: []string{}, Subagents: []api.UsageSession{}}
 			byKey[k] = s
 		}
 		s.Responses++
@@ -311,7 +184,7 @@ func usageSessions(responses []usage.Response) (all, mains []UsageSession) {
 		}
 	}
 
-	byID := map[string]*UsageSession{}
+	byID := map[string]*api.UsageSession{}
 	for k, s := range byKey {
 		all = append(all, *s)
 		if k.agent == "" {
@@ -322,7 +195,7 @@ func usageSessions(responses []usage.Response) (all, mains []UsageSession) {
 	// its turn started before it.
 	for id, r := range latestSubagent {
 		if byID[id] == nil {
-			byID[id] = &UsageSession{Project: r.Project, Ticket: r.Ticket, Claim: r.Claim, SessionID: id, Models: []string{}, Subagents: []UsageSession{}}
+			byID[id] = &api.UsageSession{Project: r.Project, Ticket: r.Ticket, Claim: r.Claim, SessionID: id, Models: []string{}, Subagents: []api.UsageSession{}}
 		}
 	}
 	for k, s := range byKey {
@@ -331,9 +204,9 @@ func usageSessions(responses []usage.Response) (all, mains []UsageSession) {
 			m.Subagents = append(m.Subagents, *s)
 		}
 	}
-	mains = []UsageSession{}
+	mains = []api.UsageSession{}
 	for _, m := range byID {
-		slices.SortFunc(m.Subagents, func(a, b UsageSession) int {
+		slices.SortFunc(m.Subagents, func(a, b api.UsageSession) int {
 			return cmp.Or(a.Started.Compare(b.Started), cmp.Compare(a.Agent, b.Agent))
 		})
 		if m.Responses == 0 {
@@ -346,7 +219,7 @@ func usageSessions(responses []usage.Response) (all, mains []UsageSession) {
 		m.TotalTokens = &total
 		mains = append(mains, *m)
 	}
-	slices.SortFunc(mains, func(a, b UsageSession) int {
+	slices.SortFunc(mains, func(a, b api.UsageSession) int {
 		return cmp.Or(b.Started.Compare(a.Started), cmp.Compare(a.SessionID, b.SessionID))
 	})
 	return all, mains
@@ -354,28 +227,28 @@ func usageSessions(responses []usage.Response) (all, mains []UsageSession) {
 
 // usageDays is a row for each of days, oldest first, with the responses'
 // tokens on that day summed by kind.
-func usageDays(days []string, responses []usage.Response) []UsageDay {
-	byDay := map[string]map[string]*UsageDayTokens{}
+func usageDays(days []string, responses []usage.Response) []api.UsageDay {
+	byDay := map[string]map[string]*api.UsageDayTokens{}
 	for _, r := range responses {
 		kinds := byDay[r.Day]
 		if kinds == nil {
-			kinds = map[string]*UsageDayTokens{}
+			kinds = map[string]*api.UsageDayTokens{}
 			byDay[r.Day] = kinds
 		}
 		k := kinds[r.Kind]
 		if k == nil {
-			k = &UsageDayTokens{Kind: r.Kind}
+			k = &api.UsageDayTokens{Kind: r.Kind}
 			kinds[r.Kind] = k
 		}
 		k.Add(r.Tokens)
 	}
-	rows := make([]UsageDay, len(days))
+	rows := make([]api.UsageDay, len(days))
 	for i, d := range days {
-		rows[i] = UsageDay{Day: d, Kinds: []UsageDayTokens{}}
+		rows[i] = api.UsageDay{Day: d, Kinds: []api.UsageDayTokens{}}
 		for _, k := range byDay[d] {
 			rows[i].Kinds = append(rows[i].Kinds, *k)
 		}
-		slices.SortFunc(rows[i].Kinds, func(a, b UsageDayTokens) int { return compareKinds(a.Kind, b.Kind) })
+		slices.SortFunc(rows[i].Kinds, func(a, b api.UsageDayTokens) int { return compareKinds(a.Kind, b.Kind) })
 	}
 	return rows
 }
@@ -385,25 +258,25 @@ func usageDays(days []string, responses []usage.Response) []UsageDay {
 var kindOrder = []string{"grilling", "spec", "tickets", "implementation", "review", "subagent"}
 
 // kinds is each kind of session's Context Size figures, in kindOrder.
-func kinds(sessions []UsageSession) []UsageKind {
-	byKind := map[string]*UsageKind{}
+func kinds(sessions []api.UsageSession) []api.UsageKind {
+	byKind := map[string]*api.UsageKind{}
 	total := map[string]int{}
 	for _, s := range sessions {
 		k := byKind[s.Kind]
 		if k == nil {
-			k = &UsageKind{Kind: s.Kind}
+			k = &api.UsageKind{Kind: s.Kind}
 			byKind[s.Kind] = k
 		}
 		k.Sessions++
 		k.LargestPeak = max(k.LargestPeak, s.Peak)
 		total[s.Kind] += s.Peak
 	}
-	rows := []UsageKind{}
+	rows := []api.UsageKind{}
 	for _, k := range byKind {
 		k.AveragePeak = average(total[k.Kind], k.Sessions)
 		rows = append(rows, *k)
 	}
-	slices.SortFunc(rows, func(a, b UsageKind) int { return compareKinds(a.Kind, b.Kind) })
+	slices.SortFunc(rows, func(a, b api.UsageKind) int { return compareKinds(a.Kind, b.Kind) })
 	return rows
 }
 
@@ -420,12 +293,12 @@ func compareKinds(a, b string) int {
 
 // operations is the operations table: one row per op, most called
 // first, then by name.
-func operations(calls []usage.Call) []UsageOperation {
-	byOp := map[string]*UsageOperation{}
+func operations(calls []usage.Call) []api.UsageOperation {
+	byOp := map[string]*api.UsageOperation{}
 	for _, call := range calls {
 		row := byOp[call.Op]
 		if row == nil {
-			row = &UsageOperation{Op: call.Op}
+			row = &api.UsageOperation{Op: call.Op}
 			byOp[call.Op] = row
 		}
 		row.Calls++
@@ -435,13 +308,13 @@ func operations(calls []usage.Call) []UsageOperation {
 			row.Errors++
 		}
 	}
-	rows := []UsageOperation{}
+	rows := []api.UsageOperation{}
 	for _, row := range byOp {
 		row.AverageRequestBytes = average(row.RequestBytes, row.Calls)
 		row.AverageResponseBytes = average(row.ResponseBytes, row.Calls)
 		rows = append(rows, *row)
 	}
-	slices.SortFunc(rows, func(a, b UsageOperation) int {
+	slices.SortFunc(rows, func(a, b api.UsageOperation) int {
 		return cmp.Or(cmp.Compare(b.Calls, a.Calls), cmp.Compare(a.Op, b.Op))
 	})
 	return rows

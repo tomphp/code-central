@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
@@ -24,9 +25,9 @@ func claimedOnBoth(t *testing.T, s store.Store) (laptop, desktop fixture, tick f
 	t.Helper()
 	laptop, desktop = twoServices(t, s)
 	laptop.longLived(t, laptop.spec(t, "acme", "Login"))
-	laptop.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Ta", State: domain.Ready})
+	laptop.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Ta", State: domain.Ready})
 	laptop.clock.Advance(time.Minute)
-	laptop.claim(t, core.ClaimInput{SessionID: "s1"})
+	laptop.claim(t, api.ClaimInput{SessionID: "s1"})
 	return laptop, desktop, watchFactories(t, desktop)
 }
 
@@ -136,7 +137,7 @@ func TestAPingTheStoreCannotRecordStillCounts(t *testing.T) {
 	var log strings.Builder
 	f.core.SetLog(&log)
 	f.work(t, domain.Ready)
-	f.claim(t, core.ClaimInput{SessionID: "s1"})
+	f.claim(t, api.ClaimInput{SessionID: "s1"})
 	tick := watchFactories(t, f)
 
 	f.clock.Advance(25 * time.Minute)

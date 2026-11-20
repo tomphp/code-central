@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -14,18 +15,10 @@ import (
 // The human's own operations beside Needs Me (ticket 32): moving a
 // Ticket by hand, renaming a Project and listing every Project.
 
-// MoveInput is the human's move(ticket, to_state).
-type MoveInput struct {
-	Ticket  Ref          `json:"ticket" path:"n"`
-	ToState domain.State `json:"to_state"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
 // Move is the human's move(to_state): a Ticket goes to any State but its
 // own, Needs Answer and Failed. Leaving a Claim State ends the Claim;
 // leaving Needs Answer also dismisses its open Questions.
-func (c *Core) Move(ctx context.Context, key string, in MoveInput) (Written[TicketView], error) {
+func (c *Core) Move(ctx context.Context, key string, in api.MoveInput) (api.Written[api.TicketView], error) {
 	return c.updateTicket(key, "move", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		to := in.ToState
 		row := Workflow[slices.IndexFunc(Workflow, func(a Action) bool { return a.Name == "move" })]
@@ -41,23 +34,18 @@ func (c *Core) Move(ctx context.Context, key string, in MoveInput) (Written[Tick
 	})
 }
 
-// RenameProjectInput is the human's rename_project(display_name).
-type RenameProjectInput struct {
-	DisplayName string `json:"display_name"`
-}
-
 // RenameProject is the human's rename_project: it changes the display
 // name only. The key, and every ID built from it, never changes.
-func (c *Core) RenameProject(ctx context.Context, key string, in RenameProjectInput) (ProjectView, error) {
-	if a := ActorOf(ctx); a != Human {
-		return ProjectView{}, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf(
+func (c *Core) RenameProject(ctx context.Context, key string, in api.RenameProjectInput) (api.ProjectView, error) {
+	if a := api.ActorOf(ctx); a != api.Human {
+		return api.ProjectView{}, &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf(
 			"rename_project is a human action; this request is made as %s", a)}
 	}
 	name := strings.TrimSpace(in.DisplayName)
 	if name == "" {
-		return ProjectView{}, invalid("display_name", "a Project needs a display name")
+		return api.ProjectView{}, invalid("display_name", "a Project needs a display name")
 	}
-	var v ProjectView
+	var v api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -74,49 +62,31 @@ func (c *Core) RenameProject(ctx context.Context, key string, in RenameProjectIn
 	return v, err
 }
 
-// SetLandingMethodInput is the human's set_landing_method(method, push,
-// remote, land_per_spec, rebase).
-type SetLandingMethodInput struct {
-	Method domain.LandingMethod `json:"method"`
-	Push   bool                 `json:"push"`
-	Remote string               `json:"remote"`
-	// LandPerSpec, when left out, keeps the stored value.
-	LandPerSpec *bool `json:"land_per_spec,omitempty"`
-	// Rebase, when left out, keeps the stored value.
-	Rebase *bool `json:"rebase,omitempty"`
-	// PATEnv names the environment variable holding the Azure Repos PAT
-	// under Pull Request; left out, it keeps the stored name.
-	PATEnv string `json:"pat_env,omitempty"`
-	// Base is the branch work is cut from and lands on; left out, it keeps
-	// the stored one. Only its name is checked, never whether it exists.
-	Base *string `json:"base,omitempty"`
-}
-
 // SetLandingMethod is the human's set_landing_method: how the Project's
 // accepted work lands. Code Central never sees git, so whether the remote
 // exists is the Factory's check.
-func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMethodInput) (ProjectView, error) {
+func (c *Core) SetLandingMethod(ctx context.Context, key string, in api.SetLandingMethodInput) (api.ProjectView, error) {
 	if err := humanOnly(ctx, "set_landing_method"); err != nil {
-		return ProjectView{}, err
+		return api.ProjectView{}, err
 	}
 	if !in.Method.Valid() {
-		return ProjectView{}, invalid("method", "Landing Method %q is not %q, %q or %q", in.Method, domain.LandingMerge, domain.LandingBranch, domain.LandingPullRequest)
+		return api.ProjectView{}, invalid("method", "Landing Method %q is not %q, %q or %q", in.Method, domain.LandingMerge, domain.LandingBranch, domain.LandingPullRequest)
 	}
 	// Push is implied under Pull Request, so the flag is ignored and not stored.
 	l := domain.Landing{Method: in.Method, Push: in.Push, Remote: strings.TrimSpace(in.Remote)}.Normalized()
 	if l.Remote == "" {
 		if l.Push {
-			return ProjectView{}, invalid("remote", "Push needs a git remote to push to, such as %q", domain.DefaultLandingRemote)
+			return api.ProjectView{}, invalid("remote", "Push needs a git remote to push to, such as %q", domain.DefaultLandingRemote)
 		}
 		l.Remote = domain.DefaultLandingRemote
 	}
 	patEnv := strings.TrimSpace(in.PATEnv)
 	if patEnv != "" && !patEnvPattern.MatchString(patEnv) {
-		return ProjectView{}, invalid("pat_env", "%q is not an environment variable's name, such as %s", patEnv, domain.DefaultPATEnv)
+		return api.ProjectView{}, invalid("pat_env", "%q is not an environment variable's name, such as %s", patEnv, domain.DefaultPATEnv)
 	}
 	if in.Base != nil {
 		if err := checkBranchName(strings.TrimSpace(*in.Base)); err != nil {
-			return ProjectView{}, invalid("base", "%s", err)
+			return api.ProjectView{}, invalid("base", "%s", err)
 		}
 	}
 	withLanding := func(p domain.Project) domain.Project {
@@ -127,9 +97,9 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		return p
 	}
 	if err := c.checkPullRequest(ctx, key, withLanding); err != nil {
-		return ProjectView{}, err
+		return api.ProjectView{}, err
 	}
-	var v ProjectView
+	var v api.ProjectView
 	var accepted, left []int
 	var resetWatcher bool
 	err := c.store.Update(func(w store.Writer) error {
@@ -196,7 +166,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		return v, err
 	}
 	if resetWatcher {
-		c.watchers.reset(watcherKey{WatcherPullRequests, key})
+		c.watchers.reset(watcherKey{api.WatcherPullRequests, key})
 	}
 	// The pull requests stay on the host, so each Ticket says to close its own.
 	for _, n := range left {
@@ -216,7 +186,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 			if len(links) > 1 {
 				body = fmt.Sprintf("The Landing Method is no longer Pull Request, so its pull requests %s are left open on their hosts. Close them there when you no longer want them.", strings.Join(links, ", "))
 			}
-			addComment(&t, Human, c.now(), 0, body)
+			addComment(&t, api.Human, c.now(), 0, body)
 			t.Updated = c.now()
 			return h.put(w, key, &t)
 		}); err != nil {
@@ -238,22 +208,12 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 	return v, nil
 }
 
-// ProjectRow is one list_projects row: the Project and how many of its
-// Tickets need the human.
-type ProjectRow struct {
-	ProjectView
-	NeedsMe int `json:"needs_me"`
-	// Unfinished counts the Tickets not yet Done or Cancelled; archiving
-	// waits for it to reach zero.
-	Unfinished int `json:"unfinished"`
-}
-
 // ListProjects is list_projects: every Project, archived ones too, by key.
-func (c *Core) ListProjects(context.Context) ([]ProjectRow, error) {
-	out := []ProjectRow{}
+func (c *Core) ListProjects(context.Context) ([]api.ProjectRow, error) {
+	out := []api.ProjectRow{}
 	err := c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
-			row := ProjectRow{ProjectView: c.projectView(p)}
+			row := api.ProjectRow{ProjectView: c.projectView(p)}
 			row.Landing.OpenPullRequests = openPullRequests(r, p)
 			fillChangedBy(r, &row.ProjectView)
 			e := c.evaluate(r, p)

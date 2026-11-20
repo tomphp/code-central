@@ -3,8 +3,8 @@ package factory
 import (
 	"context"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/client"
-	"github.com/tomoram/code-central/core"
 )
 
 // The Factory's landing part (Spec code-central-934): on each poll it
@@ -109,7 +109,7 @@ func newLander(repos *repositories, c *client.Client, project string, w work, pr
 // sure each Repository has a clone, lands what it can unless the Factory
 // is stopped, and sweeps the worktrees the Factory is done with. ok says
 // whether the Project was read, and p is it.
-func (l *lander) poll(ctx context.Context) (p core.ProjectView, ok bool) {
+func (l *lander) poll(ctx context.Context) (p api.ProjectView, ok bool) {
 	p, ok = l.landing(ctx)
 	if ok {
 		p = l.reportPushRemote(ctx, p)

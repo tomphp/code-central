@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
@@ -54,25 +55,25 @@ func reloaded(t *testing.T, setup func(f fixture)) fixture {
 	return fixture{core: core.New(s, clk, &ids.Sequence{}), clock: clk, store: s}
 }
 
-func (f fixture) project(t *testing.T, key string) core.ProjectView {
+func (f fixture) project(t *testing.T, key string) api.ProjectView {
 	t.Helper()
-	p, err := f.core.CreateProject(ctx, core.CreateProjectInput{Key: key})
+	p, err := f.core.CreateProject(ctx, api.CreateProjectInput{Key: key})
 	if err != nil {
 		t.Fatalf("create_project: %v", err)
 	}
 	return p
 }
 
-func (f fixture) spec(t *testing.T, key, title string) core.SpecView {
+func (f fixture) spec(t *testing.T, key, title string) api.SpecView {
 	t.Helper()
-	s, err := f.core.CreateSpec(ctx, key, core.CreateSpecInput{Title: title, Body: "body\n", Full: true})
+	s, err := f.core.CreateSpec(ctx, key, api.CreateSpecInput{Title: title, Body: "body\n", Full: true})
 	if err != nil {
 		t.Fatalf("create_spec: %v", err)
 	}
 	return *s.Record
 }
 
-func (f fixture) ticket(t *testing.T, key string, in core.CreateTicketInput) core.TicketView {
+func (f fixture) ticket(t *testing.T, key string, in api.CreateTicketInput) api.TicketView {
 	t.Helper()
 	in.Full = true
 	tk, err := record(f.core.CreateTicket(ctx, key, in))
@@ -83,21 +84,21 @@ func (f fixture) ticket(t *testing.T, key string, in core.CreateTicketInput) cor
 }
 
 // record is the Ticket a write asked for with full returned.
-func record(w core.Written[core.TicketView], err error) (core.TicketView, error) {
+func record(w api.Written[api.TicketView], err error) (api.TicketView, error) {
 	if err != nil {
-		return core.TicketView{}, err
+		return api.TicketView{}, err
 	}
 	if w.Record == nil {
-		return core.TicketView{}, errors.New("the write returned an acknowledgement: ask for the Ticket with Full")
+		return api.TicketView{}, errors.New("the write returned an acknowledgement: ask for the Ticket with Full")
 	}
 	return *w.Record, nil
 }
 
-func wantCode(t *testing.T, err error, code core.Code, field string) {
+func wantCode(t *testing.T, err error, code api.Code, field string) {
 	t.Helper()
-	var e *core.Error
+	var e *api.Error
 	if !errors.As(err, &e) {
-		t.Fatalf("err = %v, want a core.Error with code %s", err, code)
+		t.Fatalf("err = %v, want an api.Error with code %s", err, code)
 	}
 	if e.Code != code || e.Field != field {
 		t.Fatalf("got code %s field %q (%s), want %s field %q", e.Code, e.Field, e.Message, code, field)
@@ -110,7 +111,7 @@ func TestCreateProject(t *testing.T) {
 	if p.Key != "acme" || p.DisplayName != "acme" || !p.Created.Equal(t0) {
 		t.Fatalf("display name should default to the key: %+v", p)
 	}
-	named, err := f.core.CreateProject(ctx, core.CreateProjectInput{Key: "web", DisplayName: "Web App"})
+	named, err := f.core.CreateProject(ctx, api.CreateProjectInput{Key: "web", DisplayName: "Web App"})
 	if err != nil || named.DisplayName != "Web App" {
 		t.Fatalf("got %+v, %v", named, err)
 	}
@@ -124,29 +125,29 @@ func TestCreateProjectRejects(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	for _, key := range []string{"", "Acme", "a/b", "..", "-x", "a b"} {
-		_, err := f.core.CreateProject(ctx, core.CreateProjectInput{Key: key})
-		wantCode(t, err, core.Invalid, "key")
+		_, err := f.core.CreateProject(ctx, api.CreateProjectInput{Key: key})
+		wantCode(t, err, api.Invalid, "key")
 	}
-	_, err := f.core.CreateProject(ctx, core.CreateProjectInput{Key: "acme"})
-	wantCode(t, err, core.Invalid, "key")
+	_, err := f.core.CreateProject(ctx, api.CreateProjectInput{Key: "acme"})
+	wantCode(t, err, api.Invalid, "key")
 }
 
 func TestGetUnknownProject(t *testing.T) {
 	f := newFixture(t)
 	_, err := f.core.GetProject(ctx, "nope")
-	wantCode(t, err, core.UnknownProject, "")
+	wantCode(t, err, api.UnknownProject, "")
 }
 
 func TestOperationsOnAnUnknownProject(t *testing.T) {
 	f := newFixture(t)
-	_, err := f.core.CreateSpec(ctx, "nope", core.CreateSpecInput{Title: "S"})
-	wantCode(t, err, core.UnknownProject, "")
-	_, err = f.core.CreateTicket(ctx, "nope", core.CreateTicketInput{Spec: "1", Title: "T"})
-	wantCode(t, err, core.UnknownProject, "")
+	_, err := f.core.CreateSpec(ctx, "nope", api.CreateSpecInput{Title: "S"})
+	wantCode(t, err, api.UnknownProject, "")
+	_, err = f.core.CreateTicket(ctx, "nope", api.CreateTicketInput{Spec: "1", Title: "T"})
+	wantCode(t, err, api.UnknownProject, "")
 	_, err = f.core.GetTicket(ctx, "nope", whole("1"))
-	wantCode(t, err, core.UnknownProject, "")
-	_, err = f.core.FindTickets(ctx, "nope", core.FindTicketsInput{})
-	wantCode(t, err, core.UnknownProject, "")
+	wantCode(t, err, api.UnknownProject, "")
+	_, err = f.core.FindTickets(ctx, "nope", api.FindTicketsInput{})
+	wantCode(t, err, api.UnknownProject, "")
 }
 
 func TestSpecsAndTicketsShareOneCounter(t *testing.T) {
@@ -156,7 +157,7 @@ func TestSpecsAndTicketsShareOneCounter(t *testing.T) {
 	if s.ID != "acme-1" || s.Title != "Login" || s.Body != "body\n" || !s.Created.Equal(t0) || !s.Updated.Equal(t0) {
 		t.Fatalf("spec: %+v", s)
 	}
-	tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Form"})
+	tk := f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Form"})
 	s2 := f.spec(t, "acme", "Logout")
 	if tk.ID != "acme-2" || s2.ID != "acme-3" {
 		t.Fatalf("ids: ticket %s, spec %s", tk.ID, s2.ID)
@@ -169,7 +170,7 @@ func TestCreateTicket(t *testing.T) {
 	f.spec(t, "acme", "Login")
 	f.clock.Advance(time.Minute)
 
-	draft := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Form", Description: "Build it.\n", Labels: []string{"ui"}})
+	draft := f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Form", Description: "Build it.\n", Labels: []string{"ui"}})
 	if draft.State != domain.Draft {
 		t.Fatalf("default State = %s, want Draft", draft.State)
 	}
@@ -183,7 +184,7 @@ func TestCreateTicket(t *testing.T) {
 		t.Fatalf("a Draft is not claimable: %+v", draft)
 	}
 
-	ready := f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "API", State: domain.Ready})
+	ready := f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "API", State: domain.Ready})
 	if ready.State != domain.Ready || !ready.Claimable {
 		t.Fatalf("ready: %+v", ready)
 	}
@@ -201,24 +202,24 @@ func TestCreateTicketRejects(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Login")
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Form"})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Form"})
 	cases := []struct {
 		name  string
-		in    core.CreateTicketInput
+		in    api.CreateTicketInput
 		field string
 	}{
-		{"no title", core.CreateTicketInput{Spec: "1"}, "title"},
-		{"no spec", core.CreateTicketInput{Title: "T"}, "spec"},
-		{"unknown spec", core.CreateTicketInput{Spec: "9", Title: "T"}, "spec"},
-		{"spec is a ticket", core.CreateTicketInput{Spec: "2", Title: "T"}, "spec"},
-		{"spec from another project", core.CreateTicketInput{Spec: "web-1", Title: "T"}, "spec"},
-		{"state other than Draft or Ready", core.CreateTicketInput{Spec: "1", Title: "T", State: domain.InProgress}, "state"},
-		{"unknown state", core.CreateTicketInput{Spec: "1", Title: "T", State: "Doing"}, "state"},
+		{"no title", api.CreateTicketInput{Spec: "1"}, "title"},
+		{"no spec", api.CreateTicketInput{Title: "T"}, "spec"},
+		{"unknown spec", api.CreateTicketInput{Spec: "9", Title: "T"}, "spec"},
+		{"spec is a ticket", api.CreateTicketInput{Spec: "2", Title: "T"}, "spec"},
+		{"spec from another project", api.CreateTicketInput{Spec: "web-1", Title: "T"}, "spec"},
+		{"state other than Draft or Ready", api.CreateTicketInput{Spec: "1", Title: "T", State: domain.InProgress}, "state"},
+		{"unknown state", api.CreateTicketInput{Spec: "1", Title: "T", State: "Doing"}, "state"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			_, err := f.core.CreateTicket(ctx, "acme", c.in)
-			wantCode(t, err, core.Invalid, c.field)
+			wantCode(t, err, api.Invalid, c.field)
 		})
 	}
 }
@@ -226,20 +227,20 @@ func TestCreateTicketRejects(t *testing.T) {
 func TestCreateSpecNeedsATitle(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	_, err := f.core.CreateSpec(ctx, "acme", core.CreateSpecInput{Body: "x"})
-	wantCode(t, err, core.Invalid, "title")
+	_, err := f.core.CreateSpec(ctx, "acme", api.CreateSpecInput{Body: "x"})
+	wantCode(t, err, api.Invalid, "title")
 }
 
 func TestGetTicketNotFound(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Login")
-	for _, ref := range []core.Ref{"1", "5", "acme-7"} {
+	for _, ref := range []api.Ref{"1", "5", "acme-7"} {
 		_, err := f.core.GetTicket(ctx, "acme", whole(ref))
-		wantCode(t, err, core.NotFound, "")
+		wantCode(t, err, api.NotFound, "")
 	}
 	_, err := f.core.GetTicket(ctx, "acme", whole("banana"))
-	wantCode(t, err, core.Invalid, "ticket")
+	wantCode(t, err, api.Invalid, "ticket")
 }
 
 func TestFindTickets(t *testing.T) {
@@ -248,17 +249,17 @@ func TestFindTickets(t *testing.T) {
 	f.spec(t, "acme", "Login")  // 1
 	f.spec(t, "acme", "Search") // 2
 	f.clock.Set(t0.Add(2 * time.Minute))
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form", Labels: []string{"ui", "auth"}}) // 3
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Login form", Labels: []string{"ui", "auth"}}) // 3
 	f.clock.Set(t0.Add(1 * time.Minute))
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "2", Title: "Search API", State: domain.Ready}) // 4, created earlier
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Login API", State: domain.Ready, Labels: []string{"auth"}})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "2", Title: "Search API", State: domain.Ready}) // 4, created earlier
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Login API", State: domain.Ready, Labels: []string{"auth"}})
 	// A finished Ticket, written straight to the store since no operation
 	// reaches Done yet.
 	f.store.Update(func(w store.Writer) error {
 		return w.PutTicket("acme", domain.Ticket{Number: 6, Title: "Old login", State: domain.Done, Spec: 1, Created: t0, Updated: t0})
 	})
 
-	ids := func(rows []core.TicketRow) []string {
+	ids := func(rows []api.TicketRow) []string {
 		var out []string
 		for _, r := range rows {
 			out = append(out, r.ID)
@@ -267,16 +268,16 @@ func TestFindTickets(t *testing.T) {
 	}
 	cases := []struct {
 		name string
-		in   core.FindTicketsInput
+		in   api.FindTicketsInput
 		want []string
 	}{
-		{"all unfinished, in claim order", core.FindTicketsInput{}, []string{"acme-4", "acme-5", "acme-3"}},
-		{"by state", core.FindTicketsInput{State: []domain.State{domain.Ready}}, []string{"acme-4", "acme-5"}},
-		{"finished only when named", core.FindTicketsInput{State: []domain.State{domain.Done}}, []string{"acme-6"}},
-		{"title, case-insensitive substring", core.FindTicketsInput{Title: "LOGIN"}, []string{"acme-5", "acme-3"}},
-		{"labels all present", core.FindTicketsInput{Labels: []string{"auth", "ui"}}, []string{"acme-3"}},
-		{"by spec", core.FindTicketsInput{Spec: "acme-2"}, []string{"acme-4"}},
-		{"filters combine", core.FindTicketsInput{Title: "login", State: []domain.State{domain.Ready}}, []string{"acme-5"}},
+		{"all unfinished, in claim order", api.FindTicketsInput{}, []string{"acme-4", "acme-5", "acme-3"}},
+		{"by state", api.FindTicketsInput{State: []domain.State{domain.Ready}}, []string{"acme-4", "acme-5"}},
+		{"finished only when named", api.FindTicketsInput{State: []domain.State{domain.Done}}, []string{"acme-6"}},
+		{"title, case-insensitive substring", api.FindTicketsInput{Title: "LOGIN"}, []string{"acme-5", "acme-3"}},
+		{"labels all present", api.FindTicketsInput{Labels: []string{"auth", "ui"}}, []string{"acme-3"}},
+		{"by spec", api.FindTicketsInput{Spec: "acme-2"}, []string{"acme-4"}},
+		{"filters combine", api.FindTicketsInput{Title: "login", State: []domain.State{domain.Ready}}, []string{"acme-5"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -290,14 +291,14 @@ func TestFindTickets(t *testing.T) {
 		})
 	}
 
-	rows, _ := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{Labels: []string{"ui"}})
+	rows, _ := f.core.FindTickets(ctx, "acme", api.FindTicketsInput{Labels: []string{"ui"}})
 	r := rows[0]
 	if r.Title != "Login form" || r.State != domain.Draft || r.Spec != "acme-1" || !slices.Equal(r.Labels, []string{"ui", "auth"}) || r.Blocked || !r.Created.Equal(t0.Add(2*time.Minute)) || !r.Updated.Equal(t0.Add(2*time.Minute)) {
 		t.Fatalf("row: %+v", r)
 	}
 
-	_, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: []domain.State{"Doing"}})
-	wantCode(t, err, core.Invalid, "state")
+	_, err := f.core.FindTickets(ctx, "acme", api.FindTicketsInput{State: []domain.State{"Doing"}})
+	wantCode(t, err, api.Invalid, "state")
 }
 
 func TestOperationList(t *testing.T) {

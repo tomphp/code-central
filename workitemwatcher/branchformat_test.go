@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -16,18 +16,18 @@ import (
 // setFormat is the human saving Azure Boards, on for queryID, with the
 // Branch format format.
 func (w *watching) setFormat(format string) error {
-	_, err := w.srv.Core.SetAzureBoards(human, "acme", core.SetAzureBoardsInput{On: true, QueryURL: w.queryURL(queryID), BranchFormat: format})
+	_, err := w.srv.Core.SetAzureBoards(human, "acme", api.SetAzureBoardsInput{On: true, QueryURL: w.queryURL(queryID), BranchFormat: format})
 	return err
 }
 
 // branchTag is Spec spec's branch Tag, and whether it has one.
 func (w *watching) branchTag(spec string) (string, bool) {
 	w.t.Helper()
-	sp, err := w.srv.Core.GetSpec(context.Background(), "acme", core.GetSpecInput{Spec: core.Ref(spec)})
+	sp, err := w.srv.Core.GetSpec(context.Background(), "acme", api.GetSpecInput{Spec: api.Ref(spec)})
 	if err != nil {
 		w.t.Fatal(err)
 	}
-	name, ok := sp.Tags[core.BranchTag]
+	name, ok := sp.Tags[domain.BranchTag]
 	return name, ok
 }
 
@@ -72,8 +72,8 @@ func TestABranchFormatThatCantNameASpecBranchIsRefused(t *testing.T) {
 			}
 			continue
 		}
-		var e *core.Error
-		if !errors.As(err, &e) || e.Code != core.Invalid || e.Field != "branch_format" || !strings.Contains(e.Message, says) {
+		var e *api.Error
+		if !errors.As(err, &e) || e.Code != api.Invalid || e.Field != "branch_format" || !strings.Contains(e.Message, says) {
 			t.Errorf("%q: err = %v, want branch_format refused saying %q", format, err, says)
 		}
 	}
@@ -85,7 +85,7 @@ func TestChangingTheBranchFormatLeavesTheWorkItemWatcherAsItIs(t *testing.T) {
 	if err := w.setFormat("feat/{id}"); err != nil {
 		t.Fatal(err)
 	}
-	if got := w.settings().Watcher.State; got != core.WatcherWatching {
+	if got := w.settings().Watcher.State; got != api.WatcherWatching {
 		t.Fatalf("Work Item Watcher %s after the Branch format changed, want still watching", got)
 	}
 }
@@ -104,7 +104,7 @@ func TestToRequirementSetsTheBranchTagFromTheBranchFormat(t *testing.T) {
 	if name, _ := w.branchTag(spec); name != "feat/2" {
 		t.Fatalf("branch Tag %q, want feat/2", name)
 	}
-	tk, err := w.srv.Core.GetTicket(context.Background(), "acme", core.GetTicketInput{Ticket: core.Ref(w.ticketOf(2).Replacements[0])})
+	tk, err := w.srv.Core.GetTicket(context.Background(), "acme", api.GetTicketInput{Ticket: api.Ref(w.ticketOf(2).Replacements[0])})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,18 +116,18 @@ func TestToRequirementSetsTheBranchTagFromTheBranchFormat(t *testing.T) {
 func TestToRequirementWhoseBranchIsTakenIsRefusedWithNothingWritten(t *testing.T) {
 	w := newWatching(t)
 	w.arrived(1)
-	other, err := w.srv.Core.CreateSpec(human, "acme", core.CreateSpecInput{Title: "Dark mode", Full: true})
+	other, err := w.srv.Core.CreateSpec(human, "acme", api.CreateSpecInput{Title: "Dark mode", Full: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := w.srv.Core.SetTags(human, "acme", core.SetTagsInput{Target: core.Ref(other.Record.ID), Tags: map[string]string{core.BranchTag: "feat/1"}}); err != nil {
+	if _, err := w.srv.Core.SetTags(human, "acme", api.SetTagsInput{Target: api.Ref(other.Record.ID), Tags: map[string]string{domain.BranchTag: "feat/1"}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := w.setFormat("feat/{id}"); err != nil {
 		t.Fatal(err)
 	}
 	before := len(w.linked())
-	_, err = w.srv.Core.ToRequirement(human, "acme", core.ToRequirementInput{Ticket: core.Ref(w.ticketOf(1).ID), Context: "Seen on every login."})
+	_, err = w.srv.Core.ToRequirement(human, "acme", api.ToRequirementInput{Ticket: api.Ref(w.ticketOf(1).ID), Context: "Seen on every login."})
 	wantSaid := []string{"feat/1", other.Record.ID, "Dark mode", "branch Tag", "Branch format"}
 	for _, s := range wantSaid {
 		if err == nil || !strings.Contains(err.Error(), s) {

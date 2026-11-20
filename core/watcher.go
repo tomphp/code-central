@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -23,36 +24,16 @@ import (
 // child, so a restarted service has no status until its Watcher reports
 // again, and never shows a stale Watching.
 
-// WatcherKind names a kind of Watcher.
-type WatcherKind string
-
-// The kinds of Watcher.
-const (
-	// WatcherCI is the CI Watcher, run while CI Tracking is on.
-	WatcherCI WatcherKind = "ci"
-	// WatcherIssues is the Issue Watcher, run while GitHub Issues is on.
-	WatcherIssues WatcherKind = "issues"
-	// WatcherPullRequests is the Pull Request Watcher, run while the
-	// Landing Method is Pull Request.
-	WatcherPullRequests WatcherKind = "pull_requests"
-	// WatcherWorkItems is the Work Item Watcher, run while Azure Boards is
-	// on.
-	WatcherWorkItems WatcherKind = "work_items"
-)
-
 // watcherKind is how one kind of Watcher is configured; a new kind of
 // Watcher is one more entry in watcherKinds.
 type watcherKind struct {
-	// name is the kind's glossary name, such as CI Watcher.
-	name string
-	// setting is the Project setting that turns it on, such as CI
-	// Tracking, and on whether it is on.
-	setting string
-	on      func(domain.Project) bool
+	// on is whether the Project setting that turns it on is on; the
+	// setting's name and the kind's own are in api.
+	on func(domain.Project) bool
 	// problems are the problems an error it reports may name; crashed is
 	// the service's, never the Watcher's. A problem it may not name is
 	// refused as not a problem of watches, such as CI.
-	problems []WatcherProblem
+	problems []api.WatcherProblem
 	watches  string
 	// watched are the names of what it watches, one by one, that a
 	// per-Repository problem may name: the Project's Repository Names
@@ -63,171 +44,41 @@ type watcherKind struct {
 }
 
 // watcherKinds is every kind of Watcher.
-var watcherKinds = map[WatcherKind]watcherKind{
-	WatcherCI: {name: "CI Watcher", setting: "CI Tracking", on: func(p domain.Project) bool { return landingPolicies(p).RunsCIWatcher() },
-		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemPATMissing, ProblemPATRejected,
-			ProblemProjectUnreadable, ProblemPATScope, ProblemCheckFailed}, watches: "CI"},
-	WatcherIssues: {name: "Issue Watcher", setting: "GitHub Issues", on: func(p domain.Project) bool { return p.GitHubIssues.On },
-		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemIssuesDisabled, ProblemNoTriage, ProblemCheckFailed},
+var watcherKinds = map[api.WatcherKind]watcherKind{
+	api.WatcherCI: {on: func(p domain.Project) bool { return landingPolicies(p).RunsCIWatcher() },
+		problems: []api.WatcherProblem{api.ProblemGHMissing, api.ProblemLoggedOut, api.ProblemRepositoryUnreadable, api.ProblemPATMissing, api.ProblemPATRejected,
+			api.ProblemProjectUnreadable, api.ProblemPATScope, api.ProblemCheckFailed}, watches: "CI"},
+	api.WatcherIssues: {on: func(p domain.Project) bool { return p.GitHubIssues.On },
+		problems: []api.WatcherProblem{api.ProblemGHMissing, api.ProblemLoggedOut, api.ProblemRepositoryUnreadable, api.ProblemIssuesDisabled, api.ProblemNoTriage, api.ProblemCheckFailed},
 		watches:  "GitHub Issues", watched: func(p domain.Project) []string { return p.GitHubIssues.Repositories }},
-	WatcherPullRequests: {name: "Pull Request Watcher", setting: "Pull Request", on: func(p domain.Project) bool { return landingPolicies(p).RunsPullRequestWatcher() },
-		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemNoWrite, ProblemPATMissing, ProblemPATRejected,
-			ProblemPATScope, ProblemCheckFailed}, watches: "pull requests"},
-	WatcherWorkItems: {name: "Work Item Watcher", setting: "Azure Boards", on: func(p domain.Project) bool { return p.AzureBoards.On },
-		problems: []WatcherProblem{ProblemPATMissing, ProblemPATRejected, ProblemProjectUnreadable, ProblemPATScope, ProblemQueryUnusable,
-			ProblemTooManyWorkItems, ProblemCheckFailed}, watches: "Azure Boards", watched: func(domain.Project) []string { return nil }},
+	api.WatcherPullRequests: {on: func(p domain.Project) bool { return landingPolicies(p).RunsPullRequestWatcher() },
+		problems: []api.WatcherProblem{api.ProblemGHMissing, api.ProblemLoggedOut, api.ProblemRepositoryUnreadable, api.ProblemNoWrite, api.ProblemPATMissing, api.ProblemPATRejected,
+			api.ProblemPATScope, api.ProblemCheckFailed}, watches: "pull requests"},
+	api.WatcherWorkItems: {on: func(p domain.Project) bool { return p.AzureBoards.On },
+		problems: []api.WatcherProblem{api.ProblemPATMissing, api.ProblemPATRejected, api.ProblemProjectUnreadable, api.ProblemPATScope, api.ProblemQueryUnusable,
+			api.ProblemTooManyWorkItems, api.ProblemCheckFailed}, watches: "Azure Boards", watched: func(domain.Project) []string { return nil }},
 }
 
-// Name is the kind's glossary name, such as CI Watcher.
-func (k WatcherKind) Name() string { return watcherKinds[k].name }
-
-// Setting is the name of the Project setting that turns the kind on, such
-// as CI Tracking.
-func (k WatcherKind) Setting() string { return watcherKinds[k].setting }
-
-// WatcherProblem names why a Watcher can't watch what it watches.
-type WatcherProblem string
-
-// The problems, each with its own fix.
-const (
-	// ProblemGHMissing is gh, the GitHub CLI, found nowhere Code Central looks.
-	ProblemGHMissing WatcherProblem = "gh_missing"
-	// ProblemLoggedOut is gh with no login: gh auth status fails.
-	ProblemLoggedOut WatcherProblem = "logged_out"
-	// ProblemRepositoryUnreadable is a repository gh's login can't read.
-	ProblemRepositoryUnreadable WatcherProblem = "repository_unreadable"
-	// ProblemIssuesDisabled is a repository with GitHub's issues turned
-	// off.
-	ProblemIssuesDisabled WatcherProblem = "issues_disabled"
-	// ProblemNoTriage is a repository on which gh's login has less than
-	// triage permission, which labelling and closing issues need.
-	ProblemNoTriage WatcherProblem = "no_triage"
-	// ProblemNoWrite is a repository on which gh's login can't write, as
-	// opening a pull request needs.
-	ProblemNoWrite WatcherProblem = "no_write"
-	// ProblemPATMissing is the PAT environment variable unset or empty in
-	// the service's environment.
-	ProblemPATMissing WatcherProblem = "pat_missing"
-	// ProblemPATRejected is an Azure DevOps PAT that is expired, revoked or
-	// wrong.
-	ProblemPATRejected WatcherProblem = "pat_rejected"
-	// ProblemProjectUnreadable is an Azure DevOps project the PAT can't
-	// read, or that wasn't found.
-	ProblemProjectUnreadable WatcherProblem = "project_unreadable"
-	// ProblemPATScope is an Azure DevOps PAT without a scope its Watcher
-	// needs: Build for the CI Watcher, Work Items Read & Write for the
-	// Work Item Watcher.
-	ProblemPATScope WatcherProblem = "pat_scope"
-	// ProblemQueryUnusable is an Azure Boards query that can't be run: a
-	// Saved query not found, or a tree or links one, or a WIQL filter
-	// Azure DevOps refuses.
-	ProblemQueryUnusable WatcherProblem = "query_unusable"
-	// ProblemTooManyWorkItems is an Azure Boards query matching more work
-	// items than the Work Item Watcher takes in.
-	ProblemTooManyWorkItems WatcherProblem = "too_many_work_items"
-	// ProblemCheckFailed is a check that didn't run to an answer.
-	ProblemCheckFailed WatcherProblem = "check_failed"
-	// ProblemCrashed is a Watcher that exited without being stopped. The
-	// service reports it, never the Watcher.
-	ProblemCrashed WatcherProblem = "crashed"
-)
-
-// WatcherProblems are the problems.
-func WatcherProblems() []WatcherProblem {
-	return []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable,
-		ProblemIssuesDisabled, ProblemNoTriage, ProblemNoWrite, ProblemPATMissing, ProblemPATRejected,
-		ProblemProjectUnreadable, ProblemPATScope, ProblemQueryUnusable, ProblemTooManyWorkItems, ProblemCheckFailed, ProblemCrashed}
-}
-
-// WatcherCheckResult is a Watcher's check mode's answer: no Problem when
-// it can watch, else what is wrong and its fix.
-type WatcherCheckResult struct {
-	Problem WatcherProblem `json:"problem,omitempty"`
-	Reason  string         `json:"reason,omitempty"`
-	Fix     string         `json:"fix,omitempty"`
-	// Repositories are the failing Repositories of a check that was given
-	// a list of them, each with its own problem; Problem, Reason and Fix
-	// then sum them up.
-	Repositories []RepositoryProblem `json:"repositories,omitempty"`
-}
-
-// RepositoryProblem is one Repository a Watcher can't watch, by
-// Repository Name, with what is wrong and its fix (Spec
-// code-central-848): the Watcher carries on with the others.
-type RepositoryProblem struct {
-	Repository string         `json:"repository"`
-	Problem    WatcherProblem `json:"problem,omitempty"`
-	Message    string         `json:"message"`
-	Fix        string         `json:"fix,omitempty"`
-}
-
-// WatcherState is how a Project's Watcher last said it was.
-type WatcherState string
-
-const (
-	// WatcherNotReported is a Watcher that hasn't reported since the
-	// service started, or since its setting was turned on.
-	WatcherNotReported WatcherState = "not_reported"
-	// WatcherWatching is a Watcher that can reach what it watches.
-	WatcherWatching WatcherState = "watching"
-	// WatcherError is a Watcher that can't, with the message and fix.
-	WatcherError WatcherState = "error"
-	// WatcherElsewhere is a Watcher another service runs, on the host
-	// holding the Project's Watcher Lease (ADR 0068), whose status this
-	// service doesn't know.
-	WatcherElsewhere WatcherState = "elsewhere"
-	// WatcherWaiting is a Watcher no service runs: the Project's Watcher
-	// Lease lapsed, and no live service has taken it yet.
-	WatcherWaiting WatcherState = "waiting"
-)
-
-// WatcherStates are the states a Watcher can be in.
-func WatcherStates() []WatcherState {
-	return []WatcherState{WatcherNotReported, WatcherWatching, WatcherError, WatcherElsewhere, WatcherWaiting}
-}
-
-// WatcherView is a Project's Watcher's status, in its kind's settings.
-type WatcherView struct {
-	State WatcherState `json:"state"`
-	// Problem, Message and Fix say what is wrong, while in error.
-	Problem WatcherProblem `json:"problem,omitempty"`
-	Message string         `json:"message,omitempty"`
-	Fix     string         `json:"fix,omitempty"`
-	// Repositories are the Repositories it can't watch, each with its
-	// problem and fix, while in error about some of them only: it carries
-	// on watching the rest.
-	Repositories []RepositoryProblem `json:"repositories,omitempty"`
-	// RateLimitedUntil is when GitHub lets a rate-limited Watcher call it
-	// again; until then it is still Watching, not in error.
-	RateLimitedUntil time.Time `json:"rate_limited_until,omitzero"`
-	// Since is when the Watcher went into this state; nil until it
-	// reports.
-	Since *time.Time `json:"since,omitempty"`
-	// Host is the machine whose service holds the Project's Watcher
-	// Lease, and so runs the Watcher, once a Lease is known.
-	Host string `json:"host,omitempty"`
-}
-
-// equal reports whether v and w say the same, Since aside.
-func (v WatcherView) equal(w WatcherView) bool {
+// watcherViewsEqual reports whether v and w say the same, Since aside.
+func watcherViewsEqual(v, w api.WatcherView) bool {
 	return v.State == w.State && v.Problem == w.Problem && v.Message == w.Message && v.Fix == w.Fix &&
 		v.RateLimitedUntil.Equal(w.RateLimitedUntil) && slices.Equal(v.Repositories, w.Repositories)
 }
 
-// watches reports whether the Watcher watches the Repository name: it is
-// Watching, or in error only about other Repositories. One another
-// service runs is taken to watch it, as this service can't tell.
-func (v WatcherView) watches(name string) bool {
-	if v.State == WatcherWatching || v.State == WatcherElsewhere {
+// watcherWatches reports whether the Watcher v watches the Repository
+// name: it is Watching, or in error only about other Repositories. One
+// another service runs is taken to watch it, as this service can't tell.
+func watcherWatches(v api.WatcherView, name string) bool {
+	if v.State == api.WatcherWatching || v.State == api.WatcherElsewhere {
 		return true
 	}
-	return len(v.Repositories) > 0 && !slices.ContainsFunc(v.Repositories, func(p RepositoryProblem) bool { return p.Repository == name })
+	return len(v.Repositories) > 0 && !slices.ContainsFunc(v.Repositories, func(p api.RepositoryProblem) bool { return p.Repository == name })
 }
 
-// messageFor is what the Watcher says about the Repository name while it
-// doesn't watch it: its own problem's message, or the Watcher's.
-func (v WatcherView) messageFor(name string) string {
-	if i := slices.IndexFunc(v.Repositories, func(p RepositoryProblem) bool { return p.Repository == name }); i >= 0 {
+// watcherMessageFor is what the Watcher v says about the Repository name
+// while it doesn't watch it: its own problem's message, or the Watcher's.
+func watcherMessageFor(v api.WatcherView, name string) string {
+	if i := slices.IndexFunc(v.Repositories, func(p api.RepositoryProblem) bool { return p.Repository == name }); i >= 0 {
 		return v.Repositories[i].Message
 	}
 	return v.Message
@@ -235,7 +86,7 @@ func (v WatcherView) messageFor(name string) string {
 
 // watcherKey names one Project's Watcher of one kind.
 type watcherKey struct {
-	kind    WatcherKind
+	kind    api.WatcherKind
 	project string
 }
 
@@ -252,7 +103,7 @@ type watchers struct {
 
 // watcherStatus is one Watcher's status, with the errors notify counts.
 type watcherStatus struct {
-	view WatcherView
+	view api.WatcherView
 	// errors counts the times it went into an error, and lastError is the
 	// latest one's message: notify sends one Notification for each, even
 	// one that has cleared by the time it looks.
@@ -268,17 +119,17 @@ type watcherStatus struct {
 // view is the status of k's Watcher at now: its own, while this service
 // holds the Project's Watcher Lease or none is known yet; else where it
 // runs, or that none does.
-func (w *watchers) view(k watcherKey, now time.Time) WatcherView {
+func (w *watchers) view(k watcherKey, now time.Time) api.WatcherView {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	l, leased := w.leases[k.project]
 	switch {
 	case leased && l.Lapsed(now):
-		return WatcherView{State: WatcherWaiting, Message: "Waiting for a service to take the Watchers."}
+		return api.WatcherView{State: api.WatcherWaiting, Message: "Waiting for a service to take the Watchers."}
 	case leased && l.Holder != w.self:
-		return WatcherView{State: WatcherElsewhere, Host: l.Host}
+		return api.WatcherView{State: api.WatcherElsewhere, Host: l.Host}
 	}
-	v := WatcherView{State: WatcherNotReported}
+	v := api.WatcherView{State: api.WatcherNotReported}
 	if s, ok := w.all[k]; ok {
 		v = s.view
 	}
@@ -298,7 +149,7 @@ func (w *watchers) hold(l store.Lease, now time.Time) bool {
 	if known && was.Holder == w.self && l.Holder != w.self {
 		for k, s := range w.all {
 			if k.project == l.Project {
-				s.view, s.crashingUntil = WatcherView{State: WatcherNotReported}, time.Time{}
+				s.view, s.crashingUntil = api.WatcherView{State: api.WatcherNotReported}, time.Time{}
 				w.all[k] = s
 			}
 		}
@@ -321,7 +172,7 @@ func (w *watchers) reset(k watcherKey) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if s, ok := w.all[k]; ok {
-		s.view = WatcherView{State: WatcherNotReported}
+		s.view = api.WatcherView{State: api.WatcherNotReported}
 		s.crashingUntil = time.Time{}
 		w.all[k] = s
 	}
@@ -329,7 +180,7 @@ func (w *watchers) reset(k watcherKey) {
 
 // report makes next, as the Watcher reported it, k's status, unless a
 // crash streak holds it back, and reports whether it changed.
-func (w *watchers) report(k watcherKey, next WatcherView, now time.Time) bool {
+func (w *watchers) report(k watcherKey, next api.WatcherView, now time.Time) bool {
 	w.mu.Lock()
 	crashing := now.Before(w.all[k].crashingUntil)
 	w.mu.Unlock()
@@ -341,7 +192,7 @@ func (w *watchers) report(k watcherKey, next WatcherView, now time.Time) bool {
 
 // crashed makes next, the service's crash report, k's status, holding it
 // until until.
-func (w *watchers) crashed(k watcherKey, next WatcherView, until, now time.Time) bool {
+func (w *watchers) crashed(k watcherKey, next api.WatcherView, until, now time.Time) bool {
 	changed := w.set(k, next, now)
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -353,15 +204,15 @@ func (w *watchers) crashed(k watcherKey, next WatcherView, until, now time.Time)
 
 // set makes next k's status, keeping since while the status is the same,
 // and reports whether it changed.
-func (w *watchers) set(k watcherKey, next WatcherView, now time.Time) bool {
+func (w *watchers) set(k watcherKey, next api.WatcherView, now time.Time) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	s, ok := w.all[k]
-	if ok && s.view.equal(next) {
+	if ok && watcherViewsEqual(s.view, next) {
 		return false
 	}
 	was := s.view
-	if next.State == WatcherError && was.State != WatcherError {
+	if next.State == api.WatcherError && was.State != api.WatcherError {
 		s.errors++
 		s.lastError = next.Message
 	}
@@ -375,38 +226,17 @@ func (w *watchers) set(k watcherKey, next WatcherView, now time.Time) bool {
 	return true
 }
 
-// ReportWatcherStatusInput is a Watcher's status report: for the CI
-// Watcher, report_ci_watcher_status(state, problem?, message?, fix?,
-// rate_limited_until?, full?).
-type ReportWatcherStatusInput struct {
-	// State is watching or error.
-	State   WatcherState   `json:"state"`
-	Problem WatcherProblem `json:"problem,omitempty"`
-	// Message and Fix are an error's; watching drops them.
-	Message string `json:"message,omitempty"`
-	Fix     string `json:"fix,omitempty"`
-	// RateLimitedUntil is when GitHub lets a Watching Watcher call it
-	// again, while it is rate-limited.
-	RateLimitedUntil time.Time `json:"rate_limited_until,omitzero"`
-	// Repositories are the Repositories an error is about, each with its
-	// own problem and fix, while the Watcher carries on watching the
-	// others; an error with only these reads as the first one's.
-	Repositories []RepositoryProblem `json:"repositories,omitempty"`
-	// Full asks for the Project in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
 // repositoryProblems is ps checked as a k Watcher's: each names a
 // Repository once, with a message and one of k's problems.
-func repositoryProblems(k watcherKind, ps []RepositoryProblem) ([]RepositoryProblem, error) {
-	var out []RepositoryProblem
+func repositoryProblems(k watcherKind, ps []api.RepositoryProblem) ([]api.RepositoryProblem, error) {
+	var out []api.RepositoryProblem
 	for i, p := range ps {
 		field := fmt.Sprintf("repositories[%d]", i)
-		p = RepositoryProblem{Repository: strings.TrimSpace(p.Repository), Problem: p.Problem, Message: strings.TrimSpace(p.Message), Fix: strings.TrimSpace(p.Fix)}
+		p = api.RepositoryProblem{Repository: strings.TrimSpace(p.Repository), Problem: p.Problem, Message: strings.TrimSpace(p.Message), Fix: strings.TrimSpace(p.Fix)}
 		switch {
 		case p.Repository == "":
 			return nil, invalid(field+".repository", "a Repository's problem names the Repository")
-		case slices.ContainsFunc(out, func(o RepositoryProblem) bool { return o.Repository == p.Repository }):
+		case slices.ContainsFunc(out, func(o api.RepositoryProblem) bool { return o.Repository == p.Repository }):
 			return nil, invalid(field+".repository", "%s is named twice: report one problem per Repository", p.Repository)
 		case p.Problem != "" && !slices.Contains(k.problems, p.Problem):
 			return nil, invalid(field+".problem", "%q isn't a %s problem", p.Problem, k.watches)
@@ -422,28 +252,28 @@ func repositoryProblems(k watcherKind, ps []RepositoryProblem) ([]RepositoryProb
 // every poll; a change publishes a notice. Going into an error is
 // counted, whoever reports it, so notify sends one Notification; being
 // rate-limited is Watching, so it sends none.
-func (c *Core) reportWatcherStatus(kind WatcherKind, key string, in ReportWatcherStatusInput) (Written[ProjectView], error) {
+func (c *Core) reportWatcherStatus(kind api.WatcherKind, key string, in api.ReportWatcherStatusInput) (api.Written[api.ProjectView], error) {
 	k := watcherKinds[kind]
-	next := WatcherView{State: in.State}
+	next := api.WatcherView{State: in.State}
 	var err error
 	switch in.State {
-	case WatcherWatching:
+	case api.WatcherWatching:
 		if !in.RateLimitedUntil.IsZero() {
 			next.RateLimitedUntil = in.RateLimitedUntil.UTC()
 		}
 		if len(in.Repositories) > 0 {
-			return Written[ProjectView]{}, invalid("repositories", "a Watching %s has no failing Repositories; report them as an error", k.name)
+			return api.Written[api.ProjectView]{}, invalid("repositories", "a Watching %s has no failing Repositories; report them as an error", kind.Name())
 		}
-	case WatcherError:
+	case api.WatcherError:
 		if !in.RateLimitedUntil.IsZero() {
-			return Written[ProjectView]{}, invalid("rate_limited_until", "only a Watching %s is rate-limited; an error has its own fix", k.name)
+			return api.Written[api.ProjectView]{}, invalid("rate_limited_until", "only a Watching %s is rate-limited; an error has its own fix", kind.Name())
 		}
 		if in.Problem != "" && !slices.Contains(k.problems, in.Problem) {
-			return Written[ProjectView]{}, invalid("problem", "%q isn't a %s problem", in.Problem, k.watches)
+			return api.Written[api.ProjectView]{}, invalid("problem", "%q isn't a %s problem", in.Problem, k.watches)
 		}
 		next.Problem, next.Message, next.Fix = in.Problem, strings.TrimSpace(in.Message), strings.TrimSpace(in.Fix)
 		if next.Repositories, err = repositoryProblems(k, in.Repositories); err != nil {
-			return Written[ProjectView]{}, err
+			return api.Written[api.ProjectView]{}, err
 		}
 		if next.Message == "" && len(next.Repositories) > 0 {
 			// An error in some Repositories reads as the first one's.
@@ -451,12 +281,12 @@ func (c *Core) reportWatcherStatus(kind WatcherKind, key string, in ReportWatche
 			next.Problem, next.Message, next.Fix = first.Problem, first.Repository+": "+first.Message, first.Fix
 		}
 		if next.Message == "" {
-			return Written[ProjectView]{}, invalid("message", "an error needs its message")
+			return api.Written[api.ProjectView]{}, invalid("message", "an error needs its message")
 		}
 	default:
-		return Written[ProjectView]{}, invalid("state", "the %s is %q or %q, not %q", k.name, WatcherWatching, WatcherError, in.State)
+		return api.Written[api.ProjectView]{}, invalid("state", "the %s is %q or %q, not %q", kind.Name(), api.WatcherWatching, api.WatcherError, in.State)
 	}
-	var before, after ProjectView
+	var before, after api.ProjectView
 	changed := false
 	err = c.store.View(func(r store.Reader) error {
 		if err := writable(r, key); err != nil {
@@ -464,7 +294,7 @@ func (c *Core) reportWatcherStatus(kind WatcherKind, key string, in ReportWatche
 		}
 		p, _ := r.Project(key)
 		if !k.on(p) {
-			return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is off on %s, so it has no %s", k.setting, key, k.name)}
+			return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s is off on %s, so it has no %s", kind.Setting(), key, kind.Name())}
 		}
 		names := repositoryNames(p.RepositoryList())
 		if k.watched != nil {
@@ -477,9 +307,9 @@ func (c *Core) reportWatcherStatus(kind WatcherKind, key string, in ReportWatche
 				case k.watched == nil:
 					return notARepository(p, field, rp.Repository)
 				case len(names) == 0:
-					return invalid(field, "the %s watches no repositories: report its problem without naming one", k.name)
+					return invalid(field, "the %s watches no repositories: report its problem without naming one", kind.Name())
 				default:
-					return invalid(field, "%q is not one of %s's %s repositories, which are %s", rp.Repository, key, k.setting, strings.Join(names, ", "))
+					return invalid(field, "%q is not one of %s's %s repositories, which are %s", rp.Repository, key, kind.Setting(), strings.Join(names, ", "))
 				}
 			}
 		}
@@ -491,7 +321,7 @@ func (c *Core) reportWatcherStatus(kind WatcherKind, key string, in ReportWatche
 		return nil
 	})
 	if err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	if changed {
 		c.events.Publish(events.Event{Type: events.ProjectChanged, Project: key})
@@ -499,50 +329,34 @@ func (c *Core) reportWatcherStatus(kind WatcherKind, key string, in ReportWatche
 	return acknowledgeProject(before, after, in.Full, c.now())
 }
 
-// WatcherAttention is one Project's Watcher of one kind as notify watches
-// it.
-type WatcherAttention struct {
-	Kind    WatcherKind
-	Project string
-	// Errors counts the times it went into an error since the service
-	// started, and LastError is the latest one's message.
-	Errors    int
-	LastError string
-}
-
 // WatcherAttention is every Watcher that has reported, by Project, then
 // kind.
-func (c *Core) WatcherAttention(context.Context) []WatcherAttention {
+func (c *Core) WatcherAttention(context.Context) []api.WatcherAttention {
 	return c.watchers.attention()
 }
 
-func (w *watchers) attention() []WatcherAttention {
+func (w *watchers) attention() []api.WatcherAttention {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	out := []WatcherAttention{}
+	out := []api.WatcherAttention{}
 	for k, s := range w.all {
-		out = append(out, WatcherAttention{Kind: k.kind, Project: k.project, Errors: s.errors, LastError: s.lastError})
+		out = append(out, api.WatcherAttention{Kind: k.kind, Project: k.project, Errors: s.errors, LastError: s.lastError})
 	}
-	slices.SortFunc(out, func(a, b WatcherAttention) int {
+	slices.SortFunc(out, func(a, b api.WatcherAttention) int {
 		return cmp.Or(strings.Compare(a.Project, b.Project), strings.Compare(string(a.Kind), string(b.Kind)))
 	})
 	return out
 }
 
-// WatcherSteadyAfter is how long a restarted Watcher runs before its
-// crash streak ends: its restart backoff starts again, and its own
-// reports show again.
-const WatcherSteadyAfter = 10 * time.Minute
-
 // watched is whether p should have a Watcher of kind: its setting on,
 // and not archived.
-func watched(kind WatcherKind, p domain.Project) bool {
+func watched(kind api.WatcherKind, p domain.Project) bool {
 	return watcherKinds[kind].on(p) && p.Archived.IsZero()
 }
 
 // WatchedProjects is the key of every Project the service runs a Watcher
 // of kind for.
-func (c *Core) WatchedProjects(_ context.Context, kind WatcherKind) []string {
+func (c *Core) WatchedProjects(_ context.Context, kind api.WatcherKind) []string {
 	out := []string{}
 	c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
@@ -555,23 +369,12 @@ func (c *Core) WatchedProjects(_ context.Context, kind WatcherKind) []string {
 	return out
 }
 
-// WatcherCrash is the service's report of a Watcher that crashed.
-type WatcherCrash struct {
-	// Restarts counts the crashes in this streak, each followed by a
-	// restart.
-	Restarts int
-	// LastLine is the last line it wrote to stderr.
-	LastLine string
-	// RestartAt is when the service restarts it.
-	RestartAt time.Time
-}
-
 // ReportWatcherCrash is the service's own report that key's Watcher of
 // kind crashed. It has no door: a Watcher can't report its own crash. The
 // status stays crashed until the Watcher has run WatcherSteadyAfter from
 // its restart, so like any error the streak sends one Notification
 // however often it restarts. A Project no longer watched is left alone.
-func (c *Core) ReportWatcherCrash(_ context.Context, kind WatcherKind, key string, crash WatcherCrash) {
+func (c *Core) ReportWatcherCrash(_ context.Context, kind api.WatcherKind, key string, crash api.WatcherCrash) {
 	times := "times"
 	if crash.Restarts == 1 {
 		times = "time"
@@ -580,12 +383,12 @@ func (c *Core) ReportWatcherCrash(_ context.Context, kind WatcherKind, key strin
 	if line := strings.TrimSpace(crash.LastLine); line != "" {
 		msg += "; the last line it wrote: " + line
 	}
-	next := WatcherView{State: WatcherError, Problem: ProblemCrashed, Message: msg,
+	next := api.WatcherView{State: api.WatcherError, Problem: api.ProblemCrashed, Message: msg,
 		Fix: "Code Central restarts it by itself, waiting longer after each crash. Its output is in the service's log."}
 	changed := false
 	c.store.View(func(r store.Reader) error {
 		if p, ok := r.Project(key); ok && watched(kind, p) {
-			changed = c.watchers.crashed(watcherKey{kind, key}, next, crash.RestartAt.Add(WatcherSteadyAfter), c.now())
+			changed = c.watchers.crashed(watcherKey{kind, key}, next, crash.RestartAt.Add(api.WatcherSteadyAfter), c.now())
 		}
 		return nil
 	})

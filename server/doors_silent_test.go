@@ -3,7 +3,7 @@ package server_test
 import (
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // Silent Claims, sessions and release (ticket 31).
@@ -32,7 +32,7 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/3/set_session", `{"claim_id":"claim-9","session_id":"sess-2"}`},
 				cli:  []string{"acme-3", "--claim", "claim-9", "--session", "sess-2"},
 			},
-			code: core.StaleClaim,
+			code: api.StaleClaim,
 		},
 		"release": {
 			setup: claimedTicket,
@@ -40,7 +40,7 @@ func init() {
 			check: ticketAcknowledgement("acme-3", "Ready", "state", "claims", "comments", "moves", "claimable"),
 			full:  field("state", "Ready"),
 			bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/2/release", `{}`}},
-			code:  core.ActionNotAllowed,
+			code:  api.ActionNotAllowed,
 		},
 	} {
 		cases[name] = c

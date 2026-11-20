@@ -2,11 +2,12 @@ package server_test
 
 import (
 	"context"
+	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // Spec merge Tickets (code-central-542): the Factory's open_spec_merge,
@@ -21,7 +22,7 @@ func init() {
 			field("outcome", "opened")(t, out)
 		},
 		bad:  call{http: openSpecMerge(`{"conflicts":[],"base_tip":"aaa111","spec_branch_tip":"bbb222"}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -34,7 +35,7 @@ func openSpecMerge(body string) httpCall {
 func notLongLived(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	must(t, func() error {
-		_, err := srv.Core.RemoveLabels(context.Background(), "acme", core.LabelsInput{Target: "acme-1", Labels: []string{core.LongLivedLabel}})
+		_, err := srv.Core.RemoveLabels(context.Background(), "acme", api.LabelsInput{Target: "acme-1", Labels: []string{domain.LongLivedLabel}})
 		return err
 	})
 }
@@ -50,7 +51,7 @@ func TestOpenSpecMergeTakesEachRepositorysConflictOverHTTP(t *testing.T) {
 		t.Fatalf("description %q, want it to name api's conflict", d)
 	}
 	_, b := httpDo(t, srv, openSpecMerge(`{"repositories":[{"name":"web","conflicts":["a"],"base_tip":"a","spec_branch_tip":"b"}]}`))
-	if e := errorJSON(t, b, core.Invalid); e.Field != "repositories[0].name" || !strings.Contains(e.Message, "acme, api") {
+	if e := errorJSON(t, b, api.Invalid); e.Field != "repositories[0].name" || !strings.Contains(e.Message, "acme, api") {
 		t.Fatalf("refusal %+v, want it to name the Repositories", e)
 	}
 }

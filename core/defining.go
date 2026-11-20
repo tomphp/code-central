@@ -8,34 +8,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
-// EditView is one entry in a Spec's or Ticket's edit history. Previous
-// holds the old value of each field the edit changed.
-type EditView struct {
-	Number   int               `json:"number"`
-	Actor    string            `json:"actor"`
-	Time     time.Time         `json:"time"`
-	Previous map[string]string `json:"previous"`
-}
-
-// EditTicketInput is edit_ticket's input. A field left out is unchanged.
-type EditTicketInput struct {
-	Ticket      Ref     `json:"ticket" path:"n" desc:"The Ticket." required:"true"`
-	Title       *string `json:"title,omitempty" desc:"The new title."`
-	Description *string `json:"description,omitempty" desc:"The new description in Markdown, replacing the old one whole."`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
-}
-
 // EditTicket is edit_ticket(ticket, title?, description?, full?). An edit
 // that changes something records the previous values in edits; one that
 // changes nothing writes nothing.
-func (c *Core) EditTicket(ctx context.Context, key string, in EditTicketInput) (Written[TicketView], error) {
+func (c *Core) EditTicket(ctx context.Context, key string, in api.EditTicketInput) (api.Written[api.TicketView], error) {
 	if in.Title != nil && strings.TrimSpace(*in.Title) == "" {
-		return Written[TicketView]{}, invalid("title", "a Ticket needs a title")
+		return api.Written[api.TicketView]{}, invalid("title", "a Ticket needs a title")
 	}
 	return c.updateTicket(key, "edit_ticket", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		if err := definitionOwned(ctx, DisplayID(key, t.Number), t.Link); err != nil {
@@ -47,7 +30,7 @@ func (c *Core) EditTicket(ctx context.Context, key string, in EditTicketInput) (
 		if len(prev) == 0 {
 			return false, nil
 		}
-		t.Edits = append(t.Edits, domain.Edit{Number: len(t.Edits) + 1, Actor: string(ActorOf(ctx)), Time: c.now(), Previous: prev})
+		t.Edits = append(t.Edits, domain.Edit{Number: len(t.Edits) + 1, Actor: string(api.ActorOf(ctx)), Time: c.now(), Previous: prev})
 		return true, nil
 	})
 }
@@ -69,23 +52,13 @@ func specEditable(p domain.Project, s domain.Spec, specFinished bool) bool {
 	return !specFinished && !isMap(s.Labels) && !s.Link.Owned() && p.Archived.IsZero()
 }
 
-// EditSpecInput is edit_spec's input. A field left out is unchanged; a
-// body given replaces the old one whole.
-type EditSpecInput struct {
-	Spec  Ref     `json:"spec" path:"n" desc:"The Spec." required:"true"`
-	Title *string `json:"title,omitempty" desc:"The new title."`
-	Body  *string `json:"body,omitempty" desc:"The new body in Markdown, replacing the old one whole."`
-	// Full asks for the Spec in place of the Acknowledgement.
-	Full bool `json:"full,omitempty" desc:"Return the whole Spec instead of the acknowledgement."`
-}
-
 // EditSpec is edit_spec(spec, title?, body?, full?), recording edits as
 // EditTicket does. The history sits in the Spec's own file.
-func (c *Core) EditSpec(ctx context.Context, key string, in EditSpecInput) (Written[SpecView], error) {
+func (c *Core) EditSpec(ctx context.Context, key string, in api.EditSpecInput) (api.Written[api.SpecView], error) {
 	if in.Title != nil && strings.TrimSpace(*in.Title) == "" {
-		return Written[SpecView]{}, invalid("title", "a Spec needs a title")
+		return api.Written[api.SpecView]{}, invalid("title", "a Spec needs a title")
 	}
-	var v Written[SpecView]
+	var v api.Written[api.SpecView]
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -104,7 +77,7 @@ func (c *Core) EditSpec(ctx context.Context, key string, in EditSpecInput) (Writ
 		change(prev, "body", &s.Body, in.Body)
 		if len(prev) > 0 {
 			s.Updated = c.now()
-			s.Edits = append(s.Edits, domain.Edit{Number: len(s.Edits) + 1, Actor: string(ActorOf(ctx)), Time: s.Updated, Previous: prev})
+			s.Edits = append(s.Edits, domain.Edit{Number: len(s.Edits) + 1, Actor: string(api.ActorOf(ctx)), Time: s.Updated, Previous: prev})
 			if err := w.PutSpec(key, s); err != nil {
 				return err
 			}
@@ -125,43 +98,20 @@ func change(prev map[string]string, name string, field *string, to *string) {
 	*field = *to
 }
 
-// TicketInput names one Ticket, for actions that need nothing else.
-type TicketInput struct {
-	Ticket Ref `json:"ticket" path:"n" desc:"The Ticket." required:"true" cli:"<id>"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
-}
-
-// CommentInput is comment's input.
-type CommentInput struct {
-	Ticket Ref    `json:"ticket" path:"n" desc:"The Ticket." required:"true"`
-	Body   string `json:"body" desc:"The comment in Markdown." required:"true"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
-}
-
-// DeferInput is defer's input; the reason is required.
-type DeferInput struct {
-	Ticket Ref    `json:"ticket" path:"n" desc:"The Ticket." required:"true"`
-	Reason string `json:"reason" desc:"Why it isn't ready." required:"true"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
-}
-
 // Comment is comment(ticket, body). It works on any Ticket, including
 // one another agent holds, and needs no Claim ID.
-func (c *Core) Comment(ctx context.Context, key string, in CommentInput) (Written[TicketView], error) {
+func (c *Core) Comment(ctx context.Context, key string, in api.CommentInput) (api.Written[api.TicketView], error) {
 	if strings.TrimSpace(in.Body) == "" {
-		return Written[TicketView]{}, invalid("body", "a comment needs a body")
+		return api.Written[api.TicketView]{}, invalid("body", "a comment needs a body")
 	}
 	return c.updateTicket(key, "comment", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
-		addComment(t, ActorOf(ctx), c.now(), 0, in.Body)
+		addComment(t, api.ActorOf(ctx), c.now(), 0, in.Body)
 		return true, nil
 	})
 }
 
 // Approve is approve(ticket): Draft to Ready.
-func (c *Core) Approve(ctx context.Context, key string, in TicketInput) (Written[TicketView], error) {
+func (c *Core) Approve(ctx context.Context, key string, in api.TicketInput) (api.Written[api.TicketView], error) {
 	return c.updateTicket(key, "approve", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		return true, transition(ctx, t, key, "approve", "", c.now())
 	})
@@ -169,22 +119,22 @@ func (c *Core) Approve(ctx context.Context, key string, in TicketInput) (Written
 
 // Defer is defer(ticket, reason): Ready to Draft, with the reason stored
 // as a comment.
-func (c *Core) Defer(ctx context.Context, key string, in DeferInput) (Written[TicketView], error) {
+func (c *Core) Defer(ctx context.Context, key string, in api.DeferInput) (api.Written[api.TicketView], error) {
 	if strings.TrimSpace(in.Reason) == "" {
-		return Written[TicketView]{}, invalid("reason", "defer needs a reason")
+		return api.Written[api.TicketView]{}, invalid("reason", "defer needs a reason")
 	}
 	return c.updateTicket(key, "defer", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		if err := transition(ctx, t, key, "defer", "", c.now()); err != nil {
 			return false, err
 		}
-		addComment(t, ActorOf(ctx), c.now(), 0, in.Reason)
+		addComment(t, api.ActorOf(ctx), c.now(), 0, in.Reason)
 		return true, nil
 	})
 }
 
 // addComment adds a numbered comment to t. claim is the number of the
 // Claim a required note was made under, 0 for none.
-func addComment(t *domain.Ticket, a Actor, at time.Time, claim int, body string) {
+func addComment(t *domain.Ticket, a api.Actor, at time.Time, claim int, body string) {
 	t.Comments = append(t.Comments, domain.Comment{Number: len(t.Comments) + 1, Actor: string(a), Time: at, Claim: claim, Body: body})
 }
 
@@ -192,52 +142,22 @@ func addComment(t *domain.Ticket, a Actor, at time.Time, claim int, body string)
 // write lock and applies fn. When fn reports a change, the Ticket's
 // updated time is set and it is written. Its result is the write's
 // Acknowledgement, or with full the Ticket.
-func (c *Core) updateTicket(key, op string, ref Ref, full bool, fn func(t *domain.Ticket) (bool, error)) (Written[TicketView], error) {
+func (c *Core) updateTicket(key, op string, ref api.Ref, full bool, fn func(t *domain.Ticket) (bool, error)) (api.Written[api.TicketView], error) {
 	return c.updateTicketIn(key, op, ref, full, func(_ store.Reader, t *domain.Ticket) (bool, error) { return fn(t) })
-}
-
-// RecordKind says whether a record is a Spec or a Ticket.
-type RecordKind string
-
-// The kinds of record.
-const (
-	RecordSpec   RecordKind = "spec"
-	RecordTicket RecordKind = "ticket"
-)
-
-// RecordKinds are the kinds of record.
-func RecordKinds() []RecordKind { return []RecordKind{RecordSpec, RecordTicket} }
-
-// TargetView is a Spec's or Ticket's Labels and Tags, as the Label and
-// Tag operations return them.
-type TargetView struct {
-	ID     string            `json:"id"`
-	Kind   RecordKind        `json:"kind"`
-	Labels []string          `json:"labels"`
-	Tags   map[string]string `json:"tags"`
-}
-
-// LabelsInput is add_labels' and remove_labels' input. Each Label is
-// added or removed by name; the rest of the list is left alone, so two
-// writers don't overwrite each other.
-type LabelsInput struct {
-	Target Ref `json:"target" desc:"The Spec or Ticket." required:"true" cli:"<id>"`
-	// Labels to add or remove; the operation's definition words it.
-	Labels []string `json:"labels" required:"true" cli:"<label>..."`
 }
 
 // AddLabels is add_labels(target, labels). A Label already present is
 // kept once. Adding the auto-accept Label also accepts, in the same
 // write, every Ticket it now covers that is In Review and eligible.
-func (c *Core) AddLabels(ctx context.Context, key string, in LabelsInput) (TargetView, error) {
+func (c *Core) AddLabels(ctx context.Context, key string, in api.LabelsInput) (api.TargetView, error) {
 	if err := checkLabels(in.Labels); err != nil {
-		return TargetView{}, err
+		return api.TargetView{}, err
 	}
 	if err := checkReservedNames("labels", in.Labels); err != nil {
-		return TargetView{}, err
+		return api.TargetView{}, err
 	}
 	if err := checkHumanLabels(ctx, "labels", in.Labels); err != nil {
-		return TargetView{}, err
+		return api.TargetView{}, err
 	}
 	sweep := false
 	then := func(r store.Reader, target store.Import) (store.Import, error) {
@@ -250,7 +170,7 @@ func (c *Core) AddLabels(ctx context.Context, key string, in LabelsInput) (Targe
 		if err := checkPlacement("labels", in.Labels, onSpec); err != nil {
 			return err
 		}
-		sweep = slices.Contains(in.Labels, AutoAcceptLabel) && !slices.Contains(*labels, AutoAcceptLabel)
+		sweep = slices.Contains(in.Labels, domain.AutoAcceptLabel) && !slices.Contains(*labels, domain.AutoAcceptLabel)
 		for _, l := range in.Labels {
 			if !slices.Contains(*labels, l) {
 				*labels = append(*labels, l)
@@ -267,12 +187,12 @@ func (c *Core) AddLabels(ctx context.Context, key string, in LabelsInput) (Targe
 
 // RemoveLabels is remove_labels(target, labels). A Label not present is
 // ignored.
-func (c *Core) RemoveLabels(ctx context.Context, key string, in LabelsInput) (TargetView, error) {
+func (c *Core) RemoveLabels(ctx context.Context, key string, in api.LabelsInput) (api.TargetView, error) {
 	if err := checkLabels(in.Labels); err != nil {
-		return TargetView{}, err
+		return api.TargetView{}, err
 	}
 	if err := checkHumanLabels(ctx, "labels", in.Labels); err != nil {
-		return TargetView{}, err
+		return api.TargetView{}, err
 	}
 	return c.updateTarget(key, in.Target, func(_ bool, labels *[]string, _ map[string]string) error {
 		*labels = slices.DeleteFunc(*labels, func(l string) bool { return slices.Contains(in.Labels, l) })
@@ -292,29 +212,17 @@ func checkLabels(labels []string) error {
 	return nil
 }
 
-// SetTagsInput is set_tags' input.
-type SetTagsInput struct {
-	Target Ref               `json:"target" desc:"The Spec or Ticket." required:"true" cli:"<id>"`
-	Tags   map[string]string `json:"tags" desc:"Tags to set, as {key: value}." required:"true" cli:"<key>=<value>..."`
-}
-
-// RemoveTagsInput is remove_tags' input.
-type RemoveTagsInput struct {
-	Target Ref      `json:"target" desc:"The Spec or Ticket." required:"true" cli:"<id>"`
-	Keys   []string `json:"keys" desc:"Tag keys to remove." required:"true" cli:"<key>..."`
-}
-
 var tagKey = regexp.MustCompile(`^[a-z0-9._-]+$`)
 
 // SetTags is set_tags(target, {k: v}). It merges, overwriting only the
 // keys it names. A Spec's branch Tag is checked as checkBranchTagChange
 // says.
-func (c *Core) SetTags(_ context.Context, key string, in SetTagsInput) (TargetView, error) {
+func (c *Core) SetTags(_ context.Context, key string, in api.SetTagsInput) (api.TargetView, error) {
 	if len(in.Tags) == 0 {
-		return TargetView{}, invalid("tags", "name at least one Tag")
+		return api.TargetView{}, invalid("tags", "name at least one Tag")
 	}
 	if err := checkTagSyntax(in.Tags); err != nil {
-		return TargetView{}, err
+		return api.TargetView{}, err
 	}
 	return c.updateTargetIn(key, in.Target, func(r store.Reader, n int, onSpec bool, _ *[]string, tags map[string]string) error {
 		if !onSpec {
@@ -322,7 +230,7 @@ func (c *Core) SetTags(_ context.Context, key string, in SetTagsInput) (TargetVi
 				return err
 			}
 		}
-		if name, ok := in.Tags[BranchTag]; ok && onSpec {
+		if name, ok := in.Tags[domain.BranchTag]; ok && onSpec {
 			if err := checkBranchTagChange(r, key, "tags", n, tags, name); err != nil {
 				return err
 			}
@@ -357,17 +265,17 @@ func checkTicketTags(r store.Reader, key string, tags map[string]string) error {
 // RemoveTags is remove_tags(target, keys). A key not present is ignored.
 // Removing a Spec's branch Tag is refused once it is locked, as
 // checkBranchTagChange says.
-func (c *Core) RemoveTags(_ context.Context, key string, in RemoveTagsInput) (TargetView, error) {
+func (c *Core) RemoveTags(_ context.Context, key string, in api.RemoveTagsInput) (api.TargetView, error) {
 	if len(in.Keys) == 0 {
-		return TargetView{}, invalid("keys", "name at least one Tag key")
+		return api.TargetView{}, invalid("keys", "name at least one Tag key")
 	}
 	for _, k := range in.Keys {
 		if !tagKey.MatchString(k) {
-			return TargetView{}, invalid("keys", "Tag key %q must be lowercase letters, digits, '.', '_' and '-'", k)
+			return api.TargetView{}, invalid("keys", "Tag key %q must be lowercase letters, digits, '.', '_' and '-'", k)
 		}
 	}
 	return c.updateTargetIn(key, in.Target, func(r store.Reader, n int, onSpec bool, _ *[]string, tags map[string]string) error {
-		if onSpec && slices.Contains(in.Keys, BranchTag) {
+		if onSpec && slices.Contains(in.Keys, domain.BranchTag) {
 			if err := checkBranchTagChange(r, key, "keys", n, tags, ""); err != nil {
 				return err
 			}
@@ -382,7 +290,7 @@ func (c *Core) RemoveTags(_ context.Context, key string, in RemoveTagsInput) (Ta
 // updateTarget loads the Spec or Ticket numbered by ref (they share one
 // counter) and applies fn to its Labels and Tags. It is written only
 // when they changed. Label and Tag changes aren't recorded in edits.
-func (c *Core) updateTarget(key string, ref Ref, fn func(onSpec bool, labels *[]string, tags map[string]string) error) (TargetView, error) {
+func (c *Core) updateTarget(key string, ref api.Ref, fn func(onSpec bool, labels *[]string, tags map[string]string) error) (api.TargetView, error) {
 	return c.updateTargetIn(key, ref, func(_ store.Reader, _ int, onSpec bool, labels *[]string, tags map[string]string) error {
 		return fn(onSpec, labels, tags)
 	})
@@ -394,21 +302,21 @@ type targetFn func(r store.Reader, n int, onSpec bool, labels *[]string, tags ma
 
 // updateTargetIn is updateTarget with fn given the store and the
 // target's number too.
-func (c *Core) updateTargetIn(key string, ref Ref, fn targetFn) (TargetView, error) {
+func (c *Core) updateTargetIn(key string, ref api.Ref, fn targetFn) (api.TargetView, error) {
 	return c.updateTargetThen(key, ref, fn, nil)
 }
 
 // updateTargetThen is updateTargetIn with then, when not nil, turning
 // the changed target, given as an Import that rewrites it alone, into
 // the records the write makes, so other records can change with it.
-func (c *Core) updateTargetThen(key string, ref Ref, fn targetFn,
-	then func(r store.Reader, target store.Import) (store.Import, error)) (TargetView, error) {
-	var v TargetView
+func (c *Core) updateTargetThen(key string, ref api.Ref, fn targetFn,
+	then func(r store.Reader, target store.Import) (store.Import, error)) (api.TargetView, error) {
+	var v api.TargetView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		n, err := ref.number(key, "target")
+		n, err := refNumber(ref, key, "target")
 		if err != nil {
 			return err
 		}
@@ -442,7 +350,7 @@ func (c *Core) updateTargetThen(key string, ref Ref, fn targetFn,
 					return err
 				}
 			}
-			v = TargetView{ID: DisplayID(key, n), Kind: RecordSpec, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags)}
+			v = api.TargetView{ID: DisplayID(key, n), Kind: api.RecordSpec, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags)}
 			return nil
 		}
 		// An Import rewrites the Ticket whole, so it is read whole.
@@ -457,7 +365,7 @@ func (c *Core) updateTargetThen(key string, ref Ref, fn targetFn,
 					return err
 				}
 			}
-			v = TargetView{ID: DisplayID(key, n), Kind: RecordTicket, Labels: orEmpty(t.Labels), Tags: orEmptyMap(t.Tags)}
+			v = api.TargetView{ID: DisplayID(key, n), Kind: api.RecordTicket, Labels: orEmpty(t.Labels), Tags: orEmptyMap(t.Tags)}
 			return nil
 		}
 		return notFound("there is no Spec or Ticket %s", DisplayID(key, n))
@@ -465,27 +373,18 @@ func (c *Core) updateTargetThen(key string, ref Ref, fn targetFn,
 	return v, err
 }
 
-func editViews(es []domain.Edit) []EditView {
-	out := []EditView{}
+func editViews(es []domain.Edit) []api.EditView {
+	out := []api.EditView{}
 	for _, e := range es {
-		out = append(out, EditView{Number: e.Number, Actor: e.Actor, Time: e.Time, Previous: e.Previous})
+		out = append(out, api.EditView{Number: e.Number, Actor: e.Actor, Time: e.Time, Previous: e.Previous})
 	}
 	return out
 }
 
-// CommentView is one comment on a Ticket.
-type CommentView struct {
-	Number int       `json:"number"`
-	Actor  string    `json:"actor"`
-	Time   time.Time `json:"time"`
-	Claim  int       `json:"claim,omitempty"` // the Claim a required note was made under
-	Body   string    `json:"body"`
-}
-
-func commentViews(cs []domain.Comment) []CommentView {
-	out := []CommentView{}
+func commentViews(cs []domain.Comment) []api.CommentView {
+	out := []api.CommentView{}
 	for _, c := range cs {
-		out = append(out, CommentView{Number: c.Number, Actor: c.Actor, Time: c.Time, Claim: c.Claim, Body: c.Body})
+		out = append(out, api.CommentView{Number: c.Number, Actor: c.Actor, Time: c.Time, Claim: c.Claim, Body: c.Body})
 	}
 	return out
 }

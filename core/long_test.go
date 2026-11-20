@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
@@ -17,7 +18,7 @@ func (f fixture) keepActive(d time.Duration) {
 	}
 }
 
-func longRow(t *testing.T, f fixture, id string) (core.NeedsMeRow, bool) {
+func longRow(t *testing.T, f fixture, id string) (api.NeedsMeRow, bool) {
 	t.Helper()
 	v, err := f.core.NeedsMe(human)
 	if err != nil {
@@ -30,22 +31,22 @@ func longRow(t *testing.T, f fixture, id string) (core.NeedsMeRow, bool) {
 			}
 		}
 	}
-	return core.NeedsMeRow{}, false
+	return api.NeedsMeRow{}, false
 }
 
 func TestAnActiveClaimTurnsLongAfterSixtyMinutesWithoutAMove(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
 	claimed := f.clock.Now()
-	f.claim(t, core.ClaimInput{SessionID: "s1"})
+	f.claim(t, api.ClaimInput{SessionID: "s1"})
 
 	f.keepActive(core.LongAfter)
 	wantReason(t, f.get(t, "2"), "")
 
 	f.clock.Advance(time.Second)
-	wantReason(t, f.get(t, "2"), core.ReasonLongClaim)
+	wantReason(t, f.get(t, "2"), api.ReasonLongClaim)
 	row, ok := longRow(t, f, "acme-2")
-	if !ok || row.Reason != core.ReasonLongClaim || !row.Since.Equal(claimed) {
+	if !ok || row.Reason != api.ReasonLongClaim || !row.Since.Equal(claimed) {
 		t.Fatalf("Needs Me row %+v, want long_claim since its last move %s", row, claimed)
 	}
 }
@@ -53,22 +54,22 @@ func TestAnActiveClaimTurnsLongAfterSixtyMinutesWithoutAMove(t *testing.T) {
 func TestOnlyAMoveRestartsALongClaimsClock(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
-	f.claim(t, core.ClaimInput{SessionID: "s1"})
+	f.claim(t, api.ClaimInput{SessionID: "s1"})
 	f.keepActive(40 * time.Minute)
-	if _, err := f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: "still going"}); err != nil {
+	if _, err := f.core.Comment(ctx, "acme", api.CommentInput{Ticket: "2", Body: "still going"}); err != nil {
 		t.Fatal(err)
 	}
 	f.keepActive(20*time.Minute + time.Second)
-	wantReason(t, f.get(t, "2"), core.ReasonLongClaim) // a comment is activity, not a move
+	wantReason(t, f.get(t, "2"), api.ReasonLongClaim) // a comment is activity, not a move
 }
 
 func TestPickingUpAnswersRestartsALongClaimsClock(t *testing.T) {
 	f := newFixture(t)
 	f.asking(t, qDB) // claimed at t0 by sess-1, Round posted an hour later
-	if _, err := f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite"}); err != nil {
+	if _, err := f.core.Answer(human, "acme", api.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.core.PickUpAnswers(ctx, "acme", core.PickUpAnswersInput{Ticket: "2", ClaimID: "claim-1"}); err != nil {
+	if _, err := f.core.PickUpAnswers(ctx, "acme", api.PickUpAnswersInput{Ticket: "2", ClaimID: "claim-1"}); err != nil {
 		t.Fatal(err)
 	}
 	picked := f.clock.Now()
@@ -78,7 +79,7 @@ func TestPickingUpAnswersRestartsALongClaimsClock(t *testing.T) {
 	}
 	wantReason(t, f.get(t, "2"), "")
 	f.clock.Advance(time.Second)
-	wantReason(t, f.get(t, "2"), core.ReasonLongClaim)
+	wantReason(t, f.get(t, "2"), api.ReasonLongClaim)
 	if row, _ := longRow(t, f, "acme-2"); !row.Since.Equal(picked) {
 		t.Fatalf("since %s, want the pick-up %s", row.Since, picked)
 	}
@@ -87,7 +88,7 @@ func TestPickingUpAnswersRestartsALongClaimsClock(t *testing.T) {
 func TestTheWatchSendsTicketChangedWhenAClaimTurnsLongOrSilentTurnsLong(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
-	f.claim(t, core.ClaimInput{SessionID: "s1"})
+	f.claim(t, api.ClaimInput{SessionID: "s1"})
 
 	tick := watch(t, f)
 
@@ -109,10 +110,10 @@ func TestTheWatchSendsTicketChangedWhenAClaimTurnsLongOrSilentTurnsLong(t *testi
 func TestSilentTakesPrecedenceOverLong(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
-	f.claim(t, core.ClaimInput{SessionID: "s1"})
+	f.claim(t, api.ClaimInput{SessionID: "s1"})
 	f.clock.Advance(core.LongAfter + time.Minute) // quiet the whole time
-	wantReason(t, f.get(t, "2"), core.ReasonSilentClaim)
+	wantReason(t, f.get(t, "2"), api.ReasonSilentClaim)
 
 	f.core.Ping(ctx, "s1") // active again, and still unmoved
-	wantReason(t, f.get(t, "2"), core.ReasonLongClaim)
+	wantReason(t, f.get(t, "2"), api.ReasonLongClaim)
 }

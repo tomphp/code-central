@@ -3,6 +3,7 @@ package core
 import (
 	"slices"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -13,55 +14,21 @@ import (
 // fix Ticket's own push has a CI result and its item lists it, which is
 // the next attempt.
 
-// CIAutoFixView is what Auto-fix does about a Ticket's CI failure in one
-// Repository, worked out in Go for the UI to format (ADR 0063): the auto
-// fix Ticket fixing it, the one covering it, or the chain Auto-fix
-// stopped at the limit. One of them is set.
-type CIAutoFixView struct {
-	Fixing   *AutoFixFixingView   `json:"fixing,omitempty"`
-	Covering *AutoFixCoveringView `json:"covering,omitempty"`
-	Stopped  *AutoFixStoppedView  `json:"stopped,omitempty"`
-}
-
-// AutoFixFixingView is the auto fix Ticket fixing the failure of a
-// Ticket's latest pushed commit: attempt Attempt of the Auto-fix limit,
-// Limit.
-type AutoFixFixingView struct {
-	FixTicket string `json:"fix_ticket"`
-	Attempt   int    `json:"attempt"`
-	Limit     int    `json:"limit"`
-}
-
-// AutoFixCoveringView is the open auto fix Ticket covering a Ticket whose
-// later commit carries the failure it fixes, and the commit it was opened
-// for.
-type AutoFixCoveringView struct {
-	FixTicket string `json:"fix_ticket"`
-	Commit    string `json:"commit"`
-}
-
-// AutoFixStoppedView is the chain Auto-fix stopped at the limit on a CI
-// failed item, which comes back to the human: "Auto-fix stopped after N
-// attempts", Attempts being the N auto fix Tickets, attempt 1 first.
-type AutoFixStoppedView struct {
-	Attempts []string `json:"attempts"`
-}
-
 // ciAutoFix is what Auto-fix does about t's CI failure in the Repository
 // name, nil when it does nothing.
-func (e *evaluation) ciAutoFix(t domain.Ticket, name string) *CIAutoFixView {
+func (e *evaluation) ciAutoFix(t domain.Ticket, name string) *api.CIAutoFixView {
 	rc := e.ci.ticket(t).in(name)
 	switch {
 	case rc == nil:
 		return nil
 	case rc.fixing != nil && rc.fixing.AutoFix != nil:
-		return &CIAutoFixView{Fixing: &AutoFixFixingView{FixTicket: DisplayID(e.p.Key, rc.fixing.Number), Attempt: rc.fixing.AutoFix.Attempt, Limit: e.p.CI.AutoFix.AttemptLimit()}}
+		return &api.CIAutoFixView{Fixing: &api.AutoFixFixingView{FixTicket: DisplayID(e.p.Key, rc.fixing.Number), Attempt: rc.fixing.AutoFix.Attempt, Limit: e.p.CI.AutoFix.AttemptLimit()}}
 	case rc.covering != nil:
-		return &CIAutoFixView{Covering: &AutoFixCoveringView{FixTicket: DisplayID(e.p.Key, rc.covering.Number), Commit: rc.covering.AutoFix.Commit}}
+		return &api.CIAutoFixView{Covering: &api.AutoFixCoveringView{FixTicket: DisplayID(e.p.Key, rc.covering.Number), Commit: rc.covering.AutoFix.Commit}}
 	}
 	if it, ok := e.itemIn(t, name); ok {
 		if stopped := e.autoFixStoppedLine(it); stopped != nil {
-			return &CIAutoFixView{Stopped: stopped}
+			return &api.CIAutoFixView{Stopped: stopped}
 		}
 	}
 	return nil
@@ -70,12 +37,12 @@ func (e *evaluation) ciAutoFix(t domain.Ticket, name string) *CIAutoFixView {
 // autoFixStoppedLine is it's "Auto-fix stopped" line while Auto-fix has
 // stopped at the limit on it, nil otherwise: each attempt, found by
 // following the chain back from the highest auto fix Ticket it lists.
-func (e *evaluation) autoFixStoppedLine(it ciItem) *AutoFixStoppedView {
+func (e *evaluation) autoFixStoppedLine(it ciItem) *api.AutoFixStoppedView {
 	plan, status := e.planAutoFix(it)
 	if status != autoFixStopped {
 		return nil
 	}
-	v := &AutoFixStoppedView{Attempts: []string{}}
+	v := &api.AutoFixStoppedView{Attempts: []string{}}
 	// A chain is never longer than its highest attempt.
 	for n := plan.mark.Previous; n != 0 && len(v.Attempts) < plan.mark.Attempt; {
 		v.Attempts = append(v.Attempts, DisplayID(e.p.Key, n))
@@ -153,7 +120,7 @@ func (s *ciState) listedOn(t domain.Ticket, k itemKey) bool {
 	if t.State != domain.Accepted || landedIn(t, k.name) || len(pushed) == 0 || pushed[len(pushed)-1].Commit != k.commit {
 		return false
 	}
-	return s.repoResult(t, k.name).result == CIFailed
+	return s.repoResult(t, k.name).result == api.CIFailed
 }
 
 // openAutoFixes are the Project's auto fix Tickets that are neither Done

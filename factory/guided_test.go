@@ -2,12 +2,13 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"strconv"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 	"github.com/tomoram/code-central/store"
 )
@@ -18,12 +19,12 @@ func newMap(t *testing.T, h *factorytest.Harness, title string, tags map[string]
 	t.Helper()
 	ctx := context.Background()
 	c := h.Server.Client
-	s, err := c.CreateSpec(ctx, h.Project, core.CreateSpecInput{Title: title})
+	s, err := c.CreateSpec(ctx, h.Project, api.CreateSpecInput{Title: title})
 	mustNot(t, err)
-	_, err = c.AddLabels(ctx, h.Project, core.LabelsInput{Target: core.Ref(s.ID), Labels: []string{core.MapLabel}})
+	_, err = c.AddLabels(ctx, h.Project, api.LabelsInput{Target: api.Ref(s.ID), Labels: []string{domain.MapLabel}})
 	mustNot(t, err)
 	if len(tags) > 0 {
-		_, err = h.Human().SetTags(ctx, h.Project, core.SetTagsInput{Target: core.Ref(s.ID), Tags: tags})
+		_, err = h.Human().SetTags(ctx, h.Project, api.SetTagsInput{Target: api.Ref(s.ID), Tags: tags})
 		mustNot(t, err)
 	}
 	return s.ID
@@ -32,14 +33,14 @@ func newMap(t *testing.T, h *factorytest.Harness, title string, tags map[string]
 // guidedMap is newMap with its guided Tag on.
 func guidedMap(t *testing.T, h *factorytest.Harness, title string) string {
 	t.Helper()
-	return newMap(t, h, title, map[string]string{core.GuidedTag: core.GuidedOn})
+	return newMap(t, h, title, map[string]string{domain.GuidedTag: domain.GuidedOn})
 }
 
 // decision creates a Draft Ticket carrying label on Map m, as Charting
 // creates its decision Tickets, and returns its ID.
 func decision(t *testing.T, h *factorytest.Harness, m, label, title string) string {
 	t.Helper()
-	tk, err := h.Server.Client.CreateTicket(context.Background(), h.Project, core.CreateTicketInput{Spec: core.Ref(m), Title: title, Labels: []string{label}})
+	tk, err := h.Server.Client.CreateTicket(context.Background(), h.Project, api.CreateTicketInput{Spec: api.Ref(m), Title: title, Labels: []string{label}})
 	mustNot(t, err)
 	return tk.ID
 }
@@ -83,7 +84,7 @@ func TestTheFactoryStartsOneDecisionPerIdleGuidedMapInCreatedOrder(t *testing.T)
 	other := guidedMap(t, h, "Dark mode")
 	blocked := decision(t, h, other, "wayfinder:task", "Pick colours")
 	unblocked := decision(t, h, other, "wayfinder:task", "Pick a toggle")
-	_, err := h.Server.Client.AddBlocker(context.Background(), h.Project, core.BlockerInput{Ticket: core.Ref(blocked), Blocker: core.Ref(unblocked)})
+	_, err := h.Server.Client.AddBlocker(context.Background(), h.Project, api.BlockerInput{Ticket: api.Ref(blocked), Blocker: api.Ref(unblocked)})
 	mustNot(t, err)
 	h.Script(first, factorytest.Wait(), factorytest.Finish("Legal says yes."), factorytest.Result("success"))
 
@@ -146,7 +147,7 @@ func TestAMapIsGuidedOnlyWhenItsGuidedTagIsOn(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	var drafts []string
-	for _, tags := range []map[string]string{nil, {core.GuidedTag: "off"}, {core.GuidedTag: "true"}, {core.GuidedTag: "On"}} {
+	for _, tags := range []map[string]string{nil, {domain.GuidedTag: "off"}, {domain.GuidedTag: "true"}, {domain.GuidedTag: "On"}} {
 		m := newMap(t, h, "Offline mode", tags)
 		drafts = append(drafts, decision(t, h, m, "wayfinder:task", "Ask legal"))
 	}

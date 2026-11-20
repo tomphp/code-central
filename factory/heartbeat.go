@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 )
 
 // The Factory's Heartbeats (Spec code-central-305): one on each poll, one
@@ -20,33 +20,33 @@ const factoryName = "code-central-factory"
 // heartbeater posts the newest waiting Heartbeat. Only the newest waits:
 // an older one a slow post kept back is not worth sending.
 type heartbeater struct {
-	post func(ctx context.Context, in core.ReportHeartbeatInput) error
-	base core.ReportHeartbeatInput // factory, host and interval
+	post func(ctx context.Context, in api.ReportHeartbeatInput) error
+	base api.ReportHeartbeatInput // factory, host and interval
 	// limits are the Factory's latest Plan Limits as a Heartbeat is
 	// queued, nil before its first Turn reads any.
-	limits func() *core.PlanLimits
+	limits func() *api.PlanLimits
 	warn   func(err error)
 	work   work
 
 	mu      sync.Mutex
-	waiting *core.ReportHeartbeatInput
-	posted  func()              // ends the waiting Heartbeat's busy work once it is posted
-	last    core.HeartbeatState // the furthest state sent: online, draining, stopping
+	waiting *api.ReportHeartbeatInput
+	posted  func()             // ends the waiting Heartbeat's busy work once it is posted
+	last    api.HeartbeatState // the furthest state sent: online, draining, stopping
 	failing bool
 	wake    chan struct{}
 	stop    chan struct{}
 	done    chan struct{}
 }
 
-func newHeartbeater(post func(context.Context, core.ReportHeartbeatInput) error, base core.ReportHeartbeatInput, limits func() *core.PlanLimits, warn func(error), w work) *heartbeater {
+func newHeartbeater(post func(context.Context, api.ReportHeartbeatInput) error, base api.ReportHeartbeatInput, limits func() *api.PlanLimits, warn func(error), w work) *heartbeater {
 	return &heartbeater{post: post, base: base, limits: limits, warn: warn, work: w, wake: make(chan struct{}, 1), stop: make(chan struct{}), done: make(chan struct{})}
 }
 
-var heartbeatRank = map[core.HeartbeatState]int{core.HeartbeatOnline: 0, core.HeartbeatDraining: 1, core.HeartbeatStopping: 2}
+var heartbeatRank = map[api.HeartbeatState]int{api.HeartbeatOnline: 0, api.HeartbeatDraining: 1, api.HeartbeatStopping: 2}
 
 // send queues a Heartbeat. A state earlier than one already queued or
 // sent (online after draining) is dropped: the Factory doesn't go back.
-func (h *heartbeater) send(state core.HeartbeatState, note string) {
+func (h *heartbeater) send(state api.HeartbeatState, note string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if heartbeatRank[state] < heartbeatRank[h.last] {
@@ -67,7 +67,7 @@ func (h *heartbeater) send(state core.HeartbeatState, note string) {
 
 // take takes the waiting Heartbeat, if any, and the func that ends its
 // busy work once it is posted.
-func (h *heartbeater) take() (*core.ReportHeartbeatInput, func()) {
+func (h *heartbeater) take() (*api.ReportHeartbeatInput, func()) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	in, posted := h.waiting, h.posted
@@ -79,8 +79,8 @@ func (h *heartbeater) take() (*core.ReportHeartbeatInput, func()) {
 }
 
 // postOne posts in, logging a failure once until a post goes through.
-func (h *heartbeater) postOne(ctx context.Context, in *core.ReportHeartbeatInput) {
-	if in.State == core.HeartbeatStopping {
+func (h *heartbeater) postOne(ctx context.Context, in *api.ReportHeartbeatInput) {
+	if in.State == api.HeartbeatStopping {
 		ctx = context.Background() // close cancels the others, never this one
 	}
 	ctx, cancel := context.WithTimeout(ctx, postTimeout)
@@ -115,7 +115,7 @@ func (h *heartbeater) run() {
 			// The stopping Heartbeat has one postTimeout of its own,
 			// beside the final flushes.
 			in, posted := h.take()
-			if in != nil && in.State == core.HeartbeatStopping {
+			if in != nil && in.State == api.HeartbeatStopping {
 				h.postOne(context.Background(), in)
 			}
 			posted()
@@ -126,13 +126,13 @@ func (h *heartbeater) run() {
 
 // close sends the stopping Heartbeat with note and stops.
 func (h *heartbeater) close(note string) {
-	h.send(core.HeartbeatStopping, note)
+	h.send(api.HeartbeatStopping, note)
 	close(h.stop)
 	<-h.done
 }
 
 // heartbeat queues a Heartbeat for the Factory's Project.
-func (f *factory) heartbeat(state core.HeartbeatState, note string) {
+func (f *factory) heartbeat(state api.HeartbeatState, note string) {
 	f.heartbeats.send(state, note)
 }
 
@@ -175,8 +175,8 @@ func hostname() string {
 }
 
 func newFactoryHeartbeater(f *factory) *heartbeater {
-	base := core.ReportHeartbeatInput{Factory: factoryName, Host: f.host, IntervalSeconds: max(1, int(f.o.poll/time.Second)), Chat: !f.o.noChat}
-	return newHeartbeater(func(ctx context.Context, in core.ReportHeartbeatInput) error {
+	base := api.ReportHeartbeatInput{Factory: factoryName, Host: f.host, IntervalSeconds: max(1, int(f.o.poll/time.Second)), Chat: !f.o.noChat}
+	return newHeartbeater(func(ctx context.Context, in api.ReportHeartbeatInput) error {
 		_, err := f.client.ReportHeartbeat(ctx, f.project, in)
 		return err
 	}, base, f.planLimits.get, func(err error) {

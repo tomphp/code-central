@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -18,48 +19,13 @@ import (
 // ciViewDays is how far back the CI view lists finished runs.
 const ciViewDays = 7
 
-// CIOverviewInput is the CI view's read: one Project, or every active
-// Project when Project is "". Running keeps only the runs that count as
-// running towards a Ticket's CI result, as the Activity Dashboard reads
-// them (code-central-276).
-type CIOverviewInput struct {
-	Project string
-	Running bool
-}
-
-// CIOverview is the CI view: the CI Watchers' statuses, then the runs,
-// in-progress ones first, newest started first, then those finished in
-// the last ciViewDays days, newest finished first. A run re-run lists its
-// latest attempt only.
-type CIOverview struct {
-	Projects []CIProjectStatus `json:"projects"`
-	Runs     []CIRunRow        `json:"runs"`
-}
-
-// CIProjectStatus is one Project's CI Tracking and its CI Watcher's
-// status, as the CI view heads its runs with them.
-type CIProjectStatus struct {
-	Project    string            `json:"project"`
-	Tracking   bool              `json:"tracking"`
-	Provider   domain.CIProvider `json:"provider"`
-	Repository string            `json:"repository"`
-	ProjectURL string            `json:"project_url"`
-	Watcher    WatcherView       `json:"watcher"`
-}
-
-// CIRunRow is one CI Run in the CI view, with its Project.
-type CIRunRow struct {
-	Project string `json:"project"`
-	CIRunView
-}
-
 // CIOverview reads the CI view. One Project's read has that Project,
 // Archived or with CI Tracking off; All Projects has every active Project
 // with CI Tracking on. An unknown Project is not_found. With Running, the
 // runs are only the unfinished ones counting towards a Ticket's CI result,
 // newest started first.
-func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, error) {
-	out := CIOverview{Projects: []CIProjectStatus{}, Runs: []CIRunRow{}}
+func (c *Core) CIOverview(_ context.Context, in api.CIOverviewInput) (api.CIOverview, error) {
+	out := api.CIOverview{Projects: []api.CIProjectStatus{}, Runs: []api.CIRunRow{}}
 	now := c.now()
 	type listed struct {
 		project string
@@ -71,7 +37,7 @@ func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, er
 		if in.Project != "" {
 			p, ok := r.Project(in.Project)
 			if !ok {
-				return &Error{Code: NotFound, Message: fmt.Sprintf("no Project %q", in.Project)}
+				return &api.Error{Code: api.NotFound, Message: fmt.Sprintf("no Project %q", in.Project)}
 			}
 			projects = []domain.Project{p}
 		} else {
@@ -82,8 +48,8 @@ func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, er
 			}
 		}
 		for _, p := range projects {
-			v := ciView(p, c.watchers.view(watcherKey{WatcherCI, p.Key}, now))
-			out.Projects = append(out.Projects, CIProjectStatus{Project: p.Key, Tracking: v.Tracking, Provider: v.Provider, Repository: v.Repository, ProjectURL: v.ProjectURL, Watcher: v.Watcher})
+			v := ciView(p, c.watchers.view(watcherKey{api.WatcherCI, p.Key}, now))
+			out.Projects = append(out.Projects, api.CIProjectStatus{Project: p.Key, Tracking: v.Tracking, Provider: v.Provider, Repository: v.Repository, ProjectURL: v.ProjectURL, Watcher: v.Watcher})
 			ci := c.ciStateOf(r, p)
 			for _, run := range latestAttempts(keptCIRuns(r.CIRuns(p.Key), now)) {
 				if in.Running {
@@ -100,7 +66,7 @@ func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, er
 		return nil
 	})
 	if err != nil {
-		return CIOverview{}, err
+		return api.CIOverview{}, err
 	}
 	slices.SortStableFunc(rows, func(a, b listed) int {
 		aEnded, bEnded := ciRunEnded(a.run), ciRunEnded(b.run)
@@ -116,7 +82,7 @@ func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, er
 		return bEnded.Compare(aEnded)
 	})
 	for _, row := range rows {
-		out.Runs = append(out.Runs, CIRunRow{Project: row.project, CIRunView: ciRunView(row.project, row.run)})
+		out.Runs = append(out.Runs, api.CIRunRow{Project: row.project, CIRunView: ciRunView(row.project, row.run)})
 	}
 	return out, nil
 }

@@ -3,12 +3,14 @@ package wire_test
 import (
 	"bytes"
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/clock"
@@ -38,14 +40,14 @@ func storeInReview(t *testing.T) string {
 	defer st.Close()
 	c := core.New(st, clock.System{}, ids.Random{})
 	ctx := context.Background()
-	c.CreateProject(ctx, core.CreateProjectInput{Key: "acme"})
-	c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login", Body: "b\n"})
-	c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", State: domain.Ready})
-	res, err := c.Claim(ctx, "acme", core.ClaimInput{})
+	c.CreateProject(ctx, api.CreateProjectInput{Key: "acme"})
+	c.CreateSpec(ctx, "acme", api.CreateSpecInput{Title: "Login", Body: "b\n"})
+	c.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "Form", State: domain.Ready})
+	res, err := c.Claim(ctx, "acme", api.ClaimInput{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: res.ClaimID, Summary: "done"}); err != nil {
+	if _, err := c.Finish(ctx, "acme", api.FinishInput{Ticket: "2", ClaimID: res.ClaimID, Summary: "done"}); err != nil {
 		t.Fatal(err)
 	}
 	return dir

@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/internal/fieldwalk"
 	"github.com/tomoram/code-central/ops"
 )
@@ -91,7 +91,7 @@ func handle(op ops.Operation) (handlerFunc, error) {
 			reflect.ValueOf(in).Elem().FieldByIndex(path.Index).SetString(r.PathValue(path.Tag.Get("path")))
 		}
 		op.ApplyHTTPDefaults(in)
-		return s.Dispatch(r.Context(), ops.Call{Op: op, Key: r.PathValue("key"), In: in, Actor: core.Actor(r.Header.Get(ActorHeader))})
+		return s.Dispatch(r.Context(), ops.Call{Op: op, Key: r.PathValue("key"), In: in, Actor: api.Actor(r.Header.Get(ActorHeader))})
 	}, nil
 }
 
@@ -223,7 +223,7 @@ func boolParam(q url.Values, name string) (*bool, error) {
 	}
 	b, err := strconv.ParseBool(q.Get(name))
 	if err != nil {
-		return nil, &core.Error{Code: core.Invalid, Field: name, Message: fmt.Sprintf("%s is true or false, not %q", name, q.Get(name))}
+		return nil, &api.Error{Code: api.Invalid, Field: name, Message: fmt.Sprintf("%s is true or false, not %q", name, q.Get(name))}
 	}
 	return &b, nil
 }

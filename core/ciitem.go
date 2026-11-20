@@ -4,6 +4,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -17,52 +18,18 @@ import (
 // response, Land anyway or Re-run failed jobs, is stored once per commit
 // on the Project (domain.CIResponse) and acts on every listed Ticket.
 
-// CIItemView is a CI item as a Needs Me row and each listed Ticket's
-// view carry it: its reason, the pushed commit, the Tickets waiting on
-// it, accepted earliest first, and the failure options the human may
-// choose, each an operation's name, which act on every one of them;
-// none while CI unavailable.
-type CIItemView struct {
-	Reason NeedsMeReason `json:"reason"`
-	// Repository is the Repository Name the commit was pushed in, left
-	// out while the Project has the Home Repository alone. Each option
-	// acts on that Repository only.
-	Repository string            `json:"repository,omitempty"`
-	Commit     string            `json:"commit"`
-	Tickets    []CIItemTicket    `json:"tickets"`
-	Options    []CIFailureOption `json:"options"`
-	// NewFixNote is the note New fix Ticket starts from, the Run summary
-	// and the Project's Fix instructions; SendBackNote is the note Send
-	// back to fix starts from, the Run summary alone. Each is left out
-	// while its option isn't offered, and the human edits either before
-	// choosing it.
-	NewFixNote   string `json:"new_fix_note,omitempty"`
-	SendBackNote string `json:"send_back_note,omitempty"`
-	// AutoFixStopped is the "Auto-fix stopped after N attempts" line
-	// while Auto-fix has stopped at the limit on the item, which waits on
-	// the human again; left out otherwise.
-	AutoFixStopped *AutoFixStoppedView `json:"auto_fix_stopped,omitempty"`
-}
-
-// CIItemTicket is one Ticket a CI item lists, with its Spec.
-type CIItemTicket struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-	Spec  string `json:"spec"`
-}
-
 // ciItem is one CI item as worked out: its reason, the Repository Name
 // and commit, the Tickets it lists, since when it waits (the earliest of
 // theirs), the detail of its reason and its CI result.
 type ciItem struct {
-	reason      NeedsMeReason
+	reason      api.NeedsMeReason
 	repository  string
 	commit      string
 	tickets     []domain.Ticket
 	since       time.Time
-	failure     *CIFailureSummary
-	unavailable *CIUnavailableView
-	result      CIResult
+	failure     *api.CIFailureSummary
+	unavailable *api.CIUnavailableView
+	result      api.CIResult
 }
 
 // label is it's pushed commit as its title names it: Name@sha while p has
@@ -76,19 +43,19 @@ func (it ciItem) label(p domain.Project) string {
 
 // ciItemView is it as the views carry it, with the two fix notes while
 // their options are offered.
-func (e *evaluation) ciItemView(it ciItem) *CIItemView {
+func (e *evaluation) ciItemView(it ciItem) *api.CIItemView {
 	p := e.p
-	v := &CIItemView{Reason: it.reason, Commit: it.commit, Tickets: []CIItemTicket{}, Options: ciItemOptions(e.r, p, it)}
+	v := &api.CIItemView{Reason: it.reason, Commit: it.commit, Tickets: []api.CIItemTicket{}, Options: ciItemOptions(e.r, p, it)}
 	if severalRepositories(p) {
 		v.Repository = it.repository
 	}
 	for _, t := range it.tickets {
-		v.Tickets = append(v.Tickets, CIItemTicket{ID: DisplayID(p.Key, t.Number), Title: t.Title, Spec: DisplayID(p.Key, t.Spec)})
+		v.Tickets = append(v.Tickets, api.CIItemTicket{ID: DisplayID(p.Key, t.Number), Title: t.Title, Spec: DisplayID(p.Key, t.Spec)})
 	}
-	if slices.Contains(v.Options, OptionSendBack) {
+	if slices.Contains(v.Options, api.OptionSendBack) {
 		v.SendBackNote = e.runSummary(it)
 	}
-	if slices.Contains(v.Options, OptionNewFixTicket) {
+	if slices.Contains(v.Options, api.OptionNewFixTicket) {
 		v.NewFixNote = e.newFixNote(it)
 	}
 	v.AutoFixStopped = e.autoFixStoppedLine(it)
@@ -104,20 +71,20 @@ func (e *evaluation) ciItemView(it ciItem) *CIItemView {
 // item's Repository doesn't land with its Spec's (landsWithSpecIn); and for a
 // failure New fix Ticket, since a cancelled run has nothing to fix
 // forward.
-func ciItemOptions(r store.Reader, p domain.Project, it ciItem) []CIFailureOption {
-	options := []CIFailureOption{}
-	if it.reason == ReasonCIUnavailable {
+func ciItemOptions(r store.Reader, p domain.Project, it ciItem) []api.CIFailureOption {
+	options := []api.CIFailureOption{}
+	if it.reason == api.ReasonCIUnavailable {
 		return options
 	}
-	options = append(options, OptionRerunCI)
+	options = append(options, api.OptionRerunCI)
 	if landingPolicyIn(p, it.repository).OffersLandAnyway() {
-		options = append(options, OptionLandAnyway)
+		options = append(options, api.OptionLandAnyway)
 	}
 	if len(it.tickets) == 1 && !landsWithSpecIn(r, p, it.tickets[0], it.repository) {
-		options = append(options, OptionSendBack)
+		options = append(options, api.OptionSendBack)
 	}
-	if it.reason == ReasonCIFailed {
-		options = append(options, OptionNewFixTicket)
+	if it.reason == api.ReasonCIFailed {
+		options = append(options, api.OptionNewFixTicket)
 	}
 	return options
 }
@@ -125,9 +92,9 @@ func ciItemOptions(r store.Reader, p domain.Project, it ciItem) []CIFailureOptio
 // failureOptions are the failure options the human may choose on t's CI
 // item in the Repository name while t is CI failed or CI cancelled there,
 // nil otherwise; see ciItemOptions.
-func (e *evaluation) failureOptions(t domain.Ticket, name string) []CIFailureOption {
+func (e *evaluation) failureOptions(t domain.Ticket, name string) []api.CIFailureOption {
 	it, ok := e.itemIn(t, name)
-	if !ok || it.reason == ReasonCIUnavailable {
+	if !ok || it.reason == api.ReasonCIUnavailable {
 		return nil
 	}
 	return ciItemOptions(e.r, e.p, it)
@@ -135,8 +102,8 @@ func (e *evaluation) failureOptions(t domain.Ticket, name string) []CIFailureOpt
 
 // ciItemRow is it's Needs Me row: one per Repository and commit, with no
 // Ticket.
-func (e *evaluation) ciItemRow(it ciItem) NeedsMeRow {
-	return NeedsMeRow{
+func (e *evaluation) ciItemRow(it ciItem) api.NeedsMeRow {
+	return api.NeedsMeRow{
 		Project: e.p.Key, Title: needsMeTitle(it.reason) + " at " + it.label(e.p), Reason: it.reason, Since: it.since,
 		CIFailure: it.failure, CIUnavailable: it.unavailable, CIItem: e.ciItemView(it),
 		CIResult: it.result,
@@ -144,11 +111,11 @@ func (e *evaluation) ciItemRow(it ciItem) NeedsMeRow {
 }
 
 // needsMeTitle is a CI item's reason as its title starts.
-func needsMeTitle(reason NeedsMeReason) string {
+func needsMeTitle(reason api.NeedsMeReason) string {
 	switch reason {
-	case ReasonCICancelled:
+	case api.ReasonCICancelled:
 		return "CI cancelled"
-	case ReasonCIUnavailable:
+	case api.ReasonCIUnavailable:
 		return "CI unavailable"
 	}
 	return "CI failed"

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/ids"
@@ -44,7 +45,7 @@ func (f fixture) holdLease(t *testing.T, key string) bool {
 	return held
 }
 
-func (f fixture) ciWatcher(t *testing.T) core.WatcherView {
+func (f fixture) ciWatcher(t *testing.T) api.WatcherView {
 	t.Helper()
 	return f.projectView(t, "acme").CI.Watcher
 }
@@ -57,14 +58,14 @@ func TestAProjectsWatcherStatusShowsTheHostHoldingItsLease(t *testing.T) {
 	if desktop.holdLease(t, "acme") {
 		t.Fatal("the desktop took the Watcher Lease the laptop holds")
 	}
-	if _, err := laptop.core.ReportCIWatcherStatus(ctx, "acme", core.ReportWatcherStatusInput{State: core.WatcherWatching}); err != nil {
+	if _, err := laptop.core.ReportCIWatcherStatus(ctx, "acme", api.ReportWatcherStatusInput{State: api.WatcherWatching}); err != nil {
 		t.Fatal(err)
 	}
 
-	if w := laptop.ciWatcher(t); w.State != core.WatcherWatching || w.Host != "laptop" {
+	if w := laptop.ciWatcher(t); w.State != api.WatcherWatching || w.Host != "laptop" {
 		t.Fatalf("on the laptop, the CI Watcher is %+v, want watching on laptop", w)
 	}
-	if w := desktop.ciWatcher(t); w.State != core.WatcherElsewhere || w.Host != "laptop" {
+	if w := desktop.ciWatcher(t); w.State != api.WatcherElsewhere || w.Host != "laptop" {
 		t.Fatalf("on the desktop, the CI Watcher is %+v, want elsewhere, on laptop", w)
 	}
 }
@@ -75,26 +76,26 @@ func TestAProjectsWatcherStatusShowsTheHostHoldingItsLease(t *testing.T) {
 func TestALapsedWatcherLeaseWaitsUntilAnotherServiceTakesItOver(t *testing.T) {
 	laptop, desktop := laptopAndDesktop(t)
 	laptop.holdLease(t, "acme")
-	if _, err := laptop.core.ReportCIWatcherStatus(ctx, "acme", core.ReportWatcherStatusInput{State: core.WatcherWatching}); err != nil {
+	if _, err := laptop.core.ReportCIWatcherStatus(ctx, "acme", api.ReportWatcherStatusInput{State: api.WatcherWatching}); err != nil {
 		t.Fatal(err)
 	}
 	desktop.holdLease(t, "acme")
 
 	laptop.clock.Advance(store.ServiceLife)
-	if w := desktop.ciWatcher(t); w.State != core.WatcherWaiting || w.Message != "Waiting for a service to take the Watchers." {
+	if w := desktop.ciWatcher(t); w.State != api.WatcherWaiting || w.Message != "Waiting for a service to take the Watchers." {
 		t.Fatalf("with the Lease lapsed, the CI Watcher is %+v, want waiting", w)
 	}
 
 	if !desktop.holdLease(t, "acme") {
 		t.Fatal("the desktop didn't take over the lapsed Lease")
 	}
-	if w := desktop.ciWatcher(t); w.State != core.WatcherNotReported || w.Host != "desktop" {
+	if w := desktop.ciWatcher(t); w.State != api.WatcherNotReported || w.Host != "desktop" {
 		t.Fatalf("on the desktop, the CI Watcher is %+v, want not reported yet, on desktop", w)
 	}
 	if laptop.holdLease(t, "acme") {
 		t.Fatal("the laptop took back the Lease the desktop holds")
 	}
-	if w := laptop.ciWatcher(t); w.State != core.WatcherElsewhere || w.Host != "desktop" {
+	if w := laptop.ciWatcher(t); w.State != api.WatcherElsewhere || w.Host != "desktop" {
 		t.Fatalf("on the laptop, the CI Watcher is %+v, want elsewhere, on desktop", w)
 	}
 
@@ -106,7 +107,7 @@ func TestALapsedWatcherLeaseWaitsUntilAnotherServiceTakesItOver(t *testing.T) {
 	if !laptop.holdLease(t, "acme") {
 		t.Fatal("the laptop didn't take the Lease the desktop let go of")
 	}
-	if w := laptop.ciWatcher(t); w.State != core.WatcherNotReported || w.Host != "laptop" {
+	if w := laptop.ciWatcher(t); w.State != api.WatcherNotReported || w.Host != "laptop" {
 		t.Fatalf("on the laptop again, the CI Watcher is %+v, want not reported, on laptop", w)
 	}
 }
@@ -115,7 +116,7 @@ func TestALapsedWatcherLeaseWaitsUntilAnotherServiceTakesItOver(t *testing.T) {
 // as a service always did.
 func TestAWatcherStatusWithNoLeaseKnownShowsNoHost(t *testing.T) {
 	laptop, _ := laptopAndDesktop(t)
-	if w := laptop.ciWatcher(t); w.State != core.WatcherNotReported || w.Host != "" {
+	if w := laptop.ciWatcher(t); w.State != api.WatcherNotReported || w.Host != "" {
 		t.Fatalf("the CI Watcher is %+v, want not reported, with no host", w)
 	}
 }

@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/ratelimit"
 )
 
@@ -57,14 +57,14 @@ func DefaultInstallPlaces(getenv func(string) string) []string {
 }
 
 // missing is the problem of a gh found nowhere it was looked for.
-func missing(reason string) core.WatcherCheckResult {
-	return core.WatcherCheckResult{Problem: core.ProblemGHMissing, Reason: reason,
+func missing(reason string) api.WatcherCheckResult {
+	return api.WatcherCheckResult{Problem: api.ProblemGHMissing, Reason: reason,
 		Fix: "Install gh, the GitHub CLI (https://cli.github.com), or set the gh path Option to where it is."}
 }
 
 // Find finds gh: ghPath, the gh path Option, if set, else on PATH, else
 // in the install places. Not finding it is the gh missing problem.
-func Find(ghPath string, env Env) (string, *core.WatcherCheckResult) {
+func Find(ghPath string, env Env) (string, *api.WatcherCheckResult) {
 	if ghPath != "" {
 		if prog, ok := isProgram(ghPath); ok {
 			return prog, nil
@@ -111,11 +111,11 @@ func isProgram(path string) (string, bool) {
 // CheckLogin checks prog, gh, is logged in to GitHub with gh auth status:
 // a result with no Problem when it is, else the problem and its fix.
 // GitHub rate-limiting the check is a *ratelimit.Error, not a problem.
-func CheckLogin(ctx context.Context, env Env, prog string) (core.WatcherCheckResult, error) {
+func CheckLogin(ctx context.Context, env Env, prog string) (api.WatcherCheckResult, error) {
 	cmd, stdout, stderr := command(ctx, env, prog, "auth", "status", "--hostname", "github.com")
 	err := cmd.Run()
 	if err == nil {
-		return core.WatcherCheckResult{}, nil
+		return api.WatcherCheckResult{}, nil
 	}
 	if r, ran := DidntRun(prog, err); !ran {
 		return r, nil
@@ -128,9 +128,9 @@ func CheckLogin(ctx context.Context, env Env, prog string) (core.WatcherCheckRes
 	// gh auth status calls GitHub too, and says so when that is
 	// rate-limited, with no reset time.
 	if strings.Contains(strings.ToLower(out), "rate limit") {
-		return core.WatcherCheckResult{}, &ratelimit.Error{System: "GitHub", Message: rateLimitLine(out)}
+		return api.WatcherCheckResult{}, &ratelimit.Error{System: "GitHub", Message: rateLimitLine(out)}
 	}
-	return core.WatcherCheckResult{Problem: core.ProblemLoggedOut, Reason: "gh isn't logged in to GitHub: " + ratelimit.FirstLine(out),
+	return api.WatcherCheckResult{Problem: api.ProblemLoggedOut, Reason: "gh isn't logged in to GitHub: " + ratelimit.FirstLine(out),
 		Fix: "Run `gh auth login` as the user the service runs as."}, nil
 }
 
@@ -139,7 +139,7 @@ func CheckLogin(ctx context.Context, env Env, prog string) (core.WatcherCheckRes
 // it found, which is ready when the result has no Problem and err is nil;
 // GitHub rate-limiting the login check is a *ratelimit.Error, not a
 // problem.
-func Ready(ctx context.Context, env Env, ghPath string) (prog string, r core.WatcherCheckResult, err error) {
+func Ready(ctx context.Context, env Env, ghPath string) (prog string, r api.WatcherCheckResult, err error) {
 	prog, missing := Find(ghPath, env)
 	if missing != nil {
 		return "", *missing, nil
@@ -170,12 +170,12 @@ func rateLimitLine(out string) string {
 
 // DidntRun is a check failing because prog, gh, didn't run at all,
 // rather than running and saying no; ran is true when it did run.
-func DidntRun(prog string, err error) (r core.WatcherCheckResult, ran bool) {
+func DidntRun(prog string, err error) (r api.WatcherCheckResult, ran bool) {
 	var exit *exec.ExitError
 	if errors.As(err, &exit) && exit.Exited() {
 		return r, true
 	}
-	return core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: fmt.Sprintf("gh at %s didn't run: %v", prog, err),
+	return api.WatcherCheckResult{Problem: api.ProblemCheckFailed, Reason: fmt.Sprintf("gh at %s didn't run: %v", prog, err),
 		Fix: "Check gh runs for the user the service runs as, or set the gh path Option to one that does."}, false
 }
 

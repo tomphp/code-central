@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // The service logs each MCP tool call's response size, so the context
@@ -17,17 +17,17 @@ func loggedServer(t *testing.T) (*codecentraltest.Server, *codecentraltest.SyncB
 	log := &codecentraltest.SyncBuffer{}
 	srv := codecentraltest.NewServer(t, codecentraltest.WithLog(log))
 	ctx := context.Background()
-	must(t, func() error { _, err := srv.Core.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}); return err })
+	must(t, func() error { _, err := srv.Core.CreateProject(ctx, api.CreateProjectInput{Key: "acme"}); return err })
 	must(t, func() error {
-		_, err := srv.Core.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"})
+		_, err := srv.Core.CreateSpec(ctx, "acme", api.CreateSpecInput{Title: "Login"})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form", Description: "A form."})
+		_, err := srv.Core.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "Login form", Description: "A form."})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login API", State: "Ready"})
+		_, err := srv.Core.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "Login API", State: "Ready"})
 		return err
 	})
 	return srv, log

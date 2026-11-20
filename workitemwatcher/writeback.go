@@ -9,11 +9,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/tomoram/code-central/domain"
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/azdo"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/ratelimit"
 )
 
@@ -22,7 +23,7 @@ import (
 // azdo.ErrMissingScope when the PAT can't write work items; anything else
 // that goes wrong for a work item is logged, and its writes are tried
 // again on the next poll.
-func (cfg Config) writeBack(ctx context.Context, q queryRun, watch core.WorkItemWatch) error {
+func (cfg Config) writeBack(ctx context.Context, q queryRun, watch api.WorkItemWatch) error {
 	for _, w := range watch.Writes {
 		id, ours := workItemID(q.org, w.Link.ID)
 		if !ours {
@@ -44,7 +45,7 @@ func (cfg Config) writeBack(ctx context.Context, q queryRun, watch core.WorkItem
 
 // writeItem carries out w's due writes on work item id: its comments,
 // then its tag.
-func (cfg Config) writeItem(ctx context.Context, c *azdo.Client, id int, w core.WorkItemWrites) error {
+func (cfg Config) writeItem(ctx context.Context, c *azdo.Client, id int, w api.WorkItemWrites) error {
 	item, err := c.WorkItemToWrite(ctx, id)
 	if err != nil {
 		return err
@@ -72,7 +73,7 @@ func (cfg Config) writeItem(ctx context.Context, c *azdo.Client, id int, w core.
 // writeComments posts each of w's comments due on item, unless its
 // branded or opaque marker shows it was posted before a crash, and
 // reports each written. It reports whether it posted any.
-func (cfg Config) writeComments(ctx context.Context, c *azdo.Client, item azdo.WorkItem, w core.WorkItemWrites) (posted bool, err error) {
+func (cfg Config) writeComments(ctx context.Context, c *azdo.Client, item azdo.WorkItem, w api.WorkItemWrites) (posted bool, err error) {
 	if len(w.Comments) == 0 {
 		return false, nil
 	}
@@ -83,14 +84,14 @@ func (cfg Config) writeComments(ctx context.Context, c *azdo.Client, item azdo.W
 	for _, cm := range w.Comments {
 		// Either marker, whatever the setting: it may have changed between
 		// posting a comment and reporting it written.
-		branded, opaque := core.IssueMarker(w.Target, cm.Key), core.OpaqueMarker(w.Target, cm.Key)
+		branded, opaque := domain.IssueMarker(w.Target, cm.Key), domain.OpaqueMarker(w.Target, cm.Key)
 		if !slices.ContainsFunc(existing, func(text string) bool { return strings.Contains(text, branded) || strings.Contains(text, opaque) }) {
 			if err := c.AddComment(ctx, item.Fields.TeamProject, item.ID, cm.Body); err != nil {
 				return posted, fmt.Errorf("posting the %s comment: %w", cm.Key, err)
 			}
 			posted = true
 		}
-		if _, err := cfg.Client.ReportIssueWritten(ctx, cfg.Project, core.ReportIssueWrittenInput{Target: core.Ref(w.Target), Key: cm.Key}); err != nil {
+		if _, err := cfg.Client.ReportIssueWritten(ctx, cfg.Project, api.ReportIssueWrittenInput{Target: api.Ref(w.Target), Key: cm.Key}); err != nil {
 			return posted, fmt.Errorf("report_issue_written %s: %w", cm.Key, err)
 		}
 	}
@@ -98,7 +99,7 @@ func (cfg Config) writeComments(ctx context.Context, c *azdo.Client, item azdo.W
 }
 
 // withStatusTag is tags with tag the only status tag: every other tag
-// that starts with core.StatusLabelPrefix is removed, and tag is added if
+// that starts with domain.StatusLabelPrefix is removed, and tag is added if
 // it isn't there. Tags are the same whatever their case, as Azure DevOps
 // takes them. changed is false when tags already are so.
 func withStatusTag(tags []string, tag string) (out []string, changed bool) {
@@ -108,7 +109,7 @@ func withStatusTag(tags []string, tag string) (out []string, changed bool) {
 		case strings.EqualFold(t, tag):
 			has = true
 			out = append(out, t)
-		case strings.HasPrefix(strings.ToLower(t), core.StatusLabelPrefix):
+		case strings.HasPrefix(strings.ToLower(t), domain.StatusLabelPrefix):
 			changed = true
 		default:
 			out = append(out, t)
@@ -122,8 +123,8 @@ func withStatusTag(tags []string, tag string) (out []string, changed bool) {
 
 // writeScopeProblem is the PAT refused for writing work items in the
 // project of q.
-func writeScopeProblem(watch core.WorkItemWatch, q queryRun) core.WatcherCheckResult {
-	return core.WatcherCheckResult{Problem: core.ProblemPATScope,
+func writeScopeProblem(watch api.WorkItemWatch, q queryRun) api.WatcherCheckResult {
+	return api.WatcherCheckResult{Problem: api.ProblemPATScope,
 		Reason: fmt.Sprintf("The PAT in %s can read work items but Azure DevOps refused it writing a comment or tag to one in %s.", watch.PATEnv, q.c.ProjectURL()),
 		Fix:    fmt.Sprintf("The PAT needs %s. Make a new PAT with that scope, and set it in %s for the service, then restart the Code Central service.", scope, watch.PATEnv)}
 }

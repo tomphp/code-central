@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // The Model Choice (Spec code-central-301): the Factory's
@@ -23,7 +23,7 @@ func init() {
 			field("source", "none")(t, effort)
 		},
 		bad:  call{http: httpCall{"GET", "/api/p/acme/tickets/99/model-choice", ""}},
-		code: core.NotFound,
+		code: api.NotFound,
 	}
 	cases["report_model_choice"] = opCase{
 		setup: claimedTicket,
@@ -39,7 +39,7 @@ func init() {
 			field("effort", "high")(t, claim)
 		},
 		bad:  call{http: reportModelChoice(`{"claim_id":"claim-9","model":"opus"}`)},
-		code: core.StaleClaim,
+		code: api.StaleClaim,
 	}
 }
 
@@ -51,7 +51,7 @@ func reportModelChoice(body string) httpCall {
 func taggedTicket(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	must(t, func() error {
-		_, err := srv.Core.SetTags(context.Background(), "acme", core.SetTagsInput{Target: "3", Tags: map[string]string{"model": "opus"}})
+		_, err := srv.Core.SetTags(context.Background(), "acme", api.SetTagsInput{Target: "3", Tags: map[string]string{"model": "opus"}})
 		return err
 	})
 }

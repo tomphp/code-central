@@ -2,14 +2,15 @@ package factory_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -19,13 +20,13 @@ import (
 // Repository missing.
 
 // clone is the Factory's last clone report of the Repository name.
-func clone(t *testing.T, h *factorytest.Harness, name string) *core.CloneView {
+func clone(t *testing.T, h *factorytest.Harness, name string) *api.CloneView {
 	t.Helper()
 	p, err := h.Human().GetProject(context.Background(), h.Project)
 	if err != nil {
 		t.Fatal(err)
 	}
-	i := slices.IndexFunc(p.Repositories, func(r core.RepositoryView) bool { return r.Name == name })
+	i := slices.IndexFunc(p.Repositories, func(r api.RepositoryView) bool { return r.Name == name })
 	if i < 0 {
 		t.Fatalf("the Project has no Repository %s", name)
 	}
@@ -34,10 +35,10 @@ func clone(t *testing.T, h *factorytest.Harness, name string) *core.CloneView {
 
 // repositoryMissingItems are the Project's Repository missing items in
 // Needs Me.
-func repositoryMissingItems(t *testing.T, h *factorytest.Harness) []core.RepositoryMissingView {
+func repositoryMissingItems(t *testing.T, h *factorytest.Harness) []api.RepositoryMissingView {
 	t.Helper()
-	var out []core.RepositoryMissingView
-	for _, row := range h.NeedsMeItems(core.ReasonRepositoryMissing) {
+	var out []api.RepositoryMissingView
+	for _, row := range h.NeedsMeItems(api.ReasonRepositoryMissing) {
 		out = append(out, *row.RepositoryMissing)
 	}
 	return out
@@ -48,7 +49,7 @@ func repositoryMissingItems(t *testing.T, h *factorytest.Harness) []core.Reposit
 func wantMissing(t *testing.T, h *factorytest.Harness, r *factorytest.Repository, problem string) {
 	t.Helper()
 	c := clone(t, h, r.Name)
-	if c == nil || c.State != core.CloneMissing || c.Path != r.Path || !strings.Contains(c.Problem, problem) {
+	if c == nil || c.State != api.CloneMissing || c.Path != r.Path || !strings.Contains(c.Problem, problem) {
 		t.Fatalf("%s's clone %+v, want missing at %s, its problem saying %q", r.Name, c, r.Path, problem)
 	}
 	items := repositoryMissingItems(t, h)
@@ -85,10 +86,10 @@ func TestARepositoryAddedWhileTheFactoryRunsIsClonedOnTheNextPoll(t *testing.T) 
 	if got, want := h.GitIn(web.Path, "rev-parse", "HEAD"), h.GitIn(web.CloneURL, "rev-parse", "main"); got != want {
 		t.Errorf("the clone is at %s, want the remote's main, %s", got, want)
 	}
-	if c := clone(t, h, "web"); c == nil || c.State != core.CloneReady || c.Path != web.Path {
+	if c := clone(t, h, "web"); c == nil || c.State != api.CloneReady || c.Path != web.Path {
 		t.Errorf("web's clone %+v, want ready at %s", c, web.Path)
 	}
-	if c := clone(t, h, h.Project); c == nil || c.State != core.CloneReady || c.Path != h.Repo {
+	if c := clone(t, h, h.Project); c == nil || c.State != api.CloneReady || c.Path != h.Repo {
 		t.Errorf("the Home Repository's clone %+v, want ready at %s", c, h.Repo)
 	}
 	if items := repositoryMissingItems(t, h); len(items) != 0 {
@@ -104,7 +105,7 @@ func TestTheCloneIsMadeUnderThePushRemotesName(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	h.AddRemote("upstream")
-	h.SetLandingMethod(core.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "upstream"})
+	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "upstream"})
 	web := h.AddRepository("web")
 
 	h.Start()
@@ -126,7 +127,7 @@ func TestAnExistingMatchingCloneIsAdoptedAsItIs(t *testing.T) {
 	}
 	h.GitIn(web.Path, "checkout", "-q", "-b", "mine")
 	head := h.GitIn(web.Path, "rev-parse", "HEAD")
-	if _, err := h.Human().AddRepository(context.Background(), h.Project, core.AddRepositoryInput{Name: "web", CloneURL: web.CloneURL}); err != nil {
+	if _, err := h.Human().AddRepository(context.Background(), h.Project, api.AddRepositoryInput{Name: "web", CloneURL: web.CloneURL}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -135,7 +136,7 @@ func TestAnExistingMatchingCloneIsAdoptedAsItIs(t *testing.T) {
 	// The Factory's first Heartbeat follows its first poll, so its first
 	// report stands from the second.
 	r.Poll()
-	if c := clone(t, h, "web"); c == nil || c.State != core.CloneReady || c.Path != web.Path {
+	if c := clone(t, h, "web"); c == nil || c.State != api.CloneReady || c.Path != web.Path {
 		t.Errorf("web's clone %+v, want ready at %s", c, web.Path)
 	}
 	if got := h.GitIn(web.Path, "rev-parse", "--abbrev-ref", "HEAD"); got != "mine" {
@@ -155,12 +156,12 @@ func TestARepositoryAtItsLocalPathIsAdopted(t *testing.T) {
 	web := h.MakeRepository("web")
 	elsewhere := filepath.Join(filepath.Dir(filepath.Dir(h.Repo)), "src", "web")
 	h.GitIn(filepath.Dir(h.Repo), "clone", "-q", web.CloneURL, elsewhere)
-	if _, err := h.Human().AddRepository(context.Background(), h.Project, core.AddRepositoryInput{Name: "web", CloneURL: web.CloneURL, LocalPath: elsewhere}); err != nil {
+	if _, err := h.Human().AddRepository(context.Background(), h.Project, api.AddRepositoryInput{Name: "web", CloneURL: web.CloneURL, LocalPath: elsewhere}); err != nil {
 		t.Fatal(err)
 	}
 
 	h.Start().Poll()
-	if c := clone(t, h, "web"); c == nil || c.State != core.CloneReady || c.Path != elsewhere {
+	if c := clone(t, h, "web"); c == nil || c.State != api.CloneReady || c.Path != elsewhere {
 		t.Errorf("web's clone %+v, want ready at its local path %s", c, elsewhere)
 	}
 	if _, err := os.Stat(web.Path); err == nil {
@@ -178,7 +179,7 @@ func TestAPathHoldingSomethingElseIsRepositoryMissingAndHoldsClaimsUntilMovedAsi
 	if err := os.WriteFile(filepath.Join(web.Path, "plans.txt"), []byte("mine\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.Human().AddRepository(context.Background(), h.Project, core.AddRepositoryInput{Name: "web", CloneURL: web.CloneURL}); err != nil {
+	if _, err := h.Human().AddRepository(context.Background(), h.Project, api.AddRepositoryInput{Name: "web", CloneURL: web.CloneURL}); err != nil {
 		t.Fatal(err)
 	}
 	id := h.ReadyTicket("Waits for every Repository")
@@ -199,7 +200,7 @@ func TestAPathHoldingSomethingElseIsRepositoryMissingAndHoldsClaimsUntilMovedAsi
 	}
 	r.Poll()
 	h.WantState(id, domain.InReview)
-	if c := clone(t, h, "web"); c == nil || c.State != core.CloneReady {
+	if c := clone(t, h, "web"); c == nil || c.State != api.CloneReady {
 		t.Errorf("web's clone %+v, want ready once cloned", c)
 	}
 	if items := repositoryMissingItems(t, h); len(items) != 0 {
@@ -214,7 +215,7 @@ func TestACloneOfAnotherRepositoryIsRepositoryMissing(t *testing.T) {
 	other := h.MakeRepository("other")
 	h.GitIn(filepath.Dir(web.Path), "clone", "-q", other.CloneURL, web.Path)
 	head := h.GitIn(web.Path, "rev-parse", "HEAD")
-	if _, err := h.Human().AddRepository(context.Background(), h.Project, core.AddRepositoryInput{Name: "web", CloneURL: web.CloneURL}); err != nil {
+	if _, err := h.Human().AddRepository(context.Background(), h.Project, api.AddRepositoryInput{Name: "web", CloneURL: web.CloneURL}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -232,7 +233,7 @@ func TestAFailedCloneIsRepositoryMissing(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	gone := filepath.Join(filepath.Dir(filepath.Dir(h.Repo)), "repositories", "gone.git")
-	if _, err := h.Human().AddRepository(context.Background(), h.Project, core.AddRepositoryInput{Name: "gone", CloneURL: gone}); err != nil {
+	if _, err := h.Human().AddRepository(context.Background(), h.Project, api.AddRepositoryInput{Name: "gone", CloneURL: gone}); err != nil {
 		t.Fatal(err)
 	}
 	id := h.ReadyTicket("Waits for every Repository")
@@ -257,13 +258,13 @@ func TestBackToTheHomeRepositoryAloneTheCloneReportIsCleared(t *testing.T) {
 	if c := clone(t, h, "web"); c == nil {
 		t.Fatal("web's clone isn't reported")
 	}
-	if _, err := h.Human().RemoveRepository(context.Background(), h.Project, core.RemoveRepositoryInput{Name: "web"}); err != nil {
+	if _, err := h.Human().RemoveRepository(context.Background(), h.Project, api.RemoveRepositoryInput{Name: "web"}); err != nil {
 		t.Fatal(err)
 	}
 	r.Poll()
 
 	// Added again, web has no clone report until the Factory's next poll.
-	if _, err := h.Human().AddRepository(context.Background(), h.Project, core.AddRepositoryInput{Name: "web", CloneURL: web.CloneURL}); err != nil {
+	if _, err := h.Human().AddRepository(context.Background(), h.Project, api.AddRepositoryInput{Name: "web", CloneURL: web.CloneURL}); err != nil {
 		t.Fatal(err)
 	}
 	if c := clone(t, h, "web"); c != nil {
@@ -276,7 +277,7 @@ func TestARemovedRepositorysCloneIsLeftOnDisk(t *testing.T) {
 	h := factorytest.New(t)
 	web := h.AddRepository("web")
 	r := h.Start()
-	if _, err := h.Human().RemoveRepository(context.Background(), h.Project, core.RemoveRepositoryInput{Name: "web"}); err != nil {
+	if _, err := h.Human().RemoveRepository(context.Background(), h.Project, api.RemoveRepositoryInput{Name: "web"}); err != nil {
 		t.Fatal(err)
 	}
 	r.Poll()

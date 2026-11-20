@@ -2,11 +2,12 @@ package server_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // The Pull Request Watcher's own (code-central-388, -389): get_pull_request_watch
@@ -25,7 +26,7 @@ func init() {
 			}
 		},
 		bad:  call{http: httpCall{"GET", "/api/p/nope/pull-request-watch", ""}},
-		code: core.UnknownProject,
+		code: api.UnknownProject,
 	}
 	cases["report_pull_request"] = opCase{
 		setup: pushedAcceptedForPullRequest,
@@ -39,7 +40,7 @@ func init() {
 			}
 		},
 		bad:  call{http: reportPullRequest(`{"branch":"acme-3","number":7,"link":"https://github.com/acme/web/pull/7","state":"merged"}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 	cases["report_pull_request_watcher_status"] = opCase{
 		setup: pushedAcceptedForPullRequest,
@@ -53,7 +54,7 @@ func init() {
 			}
 		},
 		bad:  call{http: httpCall{"POST", "/api/p/acme/report_pull_request_watcher_status", `{"state":"asleep"}`}},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -67,17 +68,17 @@ func reportPullRequest(body string) httpCall {
 func pushedAcceptedForPullRequest(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	must(t, func() error {
-		_, err := srv.Client.ReportPushRemote(context.Background(), "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/web.git", Base: "main"})
+		_, err := srv.Client.ReportPushRemote(context.Background(), "acme", api.ReportPushRemoteInput{URL: "git@github.com:acme/web.git", Base: "main"})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.SetLandingMethod(core.WithActor(context.Background(), core.Human), "acme",
-			core.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin"})
+		_, err := srv.Core.SetLandingMethod(api.WithActor(context.Background(), api.Human), "acme",
+			api.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin"})
 		return err
 	})
 	acceptedTicket(t, srv)
 	must(t, func() error {
-		_, err := srv.Client.ReportPushedCommit(context.Background(), "acme", core.ReportPushedCommitInput{Ticket: "acme-3", Commit: "abc123", Branch: "acme-3"})
+		_, err := srv.Client.ReportPushedCommit(context.Background(), "acme", api.ReportPushedCommitInput{Ticket: "acme-3", Commit: "abc123", Branch: "acme-3"})
 		return err
 	})
 }

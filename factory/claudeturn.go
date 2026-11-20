@@ -18,8 +18,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
-	"github.com/tomoram/code-central/core"
 )
 
 // turnRunner runs Turns of claude. It holds only what every Turn needs,
@@ -75,9 +75,9 @@ type turnInput struct {
 	// OnEvent gets each Session Event, in order, OnUsage each model
 	// response's usage, and OnPlanLimits the Plan Limits of each
 	// rate_limit_event.
-	OnEvent      func(core.SessionEvent)
-	OnUsage      func(core.UsageResponse)
-	OnPlanLimits func(core.PlanLimits)
+	OnEvent      func(api.SessionEvent)
+	OnUsage      func(api.UsageResponse)
+	OnPlanLimits func(api.PlanLimits)
 	// Linef prints a line about the Turn: a warning, or with verbose on
 	// a tool call unless Echo is set.
 	Linef func(format string, args ...any)
@@ -163,9 +163,9 @@ func (r *turnRunner) run(stop context.Context, in turnInput) turnOutcome {
 		case <-streamRead:
 		}
 	}()
-	end := readTurn(cmd, stdout, in.Dir, r.clock.Now, newUsageReader(in.UsageKind, r.clock.Now), func(e core.SessionEvent) {
+	end := readTurn(cmd, stdout, in.Dir, r.clock.Now, newUsageReader(in.UsageKind, r.clock.Now), func(e api.SessionEvent) {
 		in.OnEvent(e)
-		if r.verbose && e.Kind == core.EventToolCall {
+		if r.verbose && e.Kind == api.EventToolCall {
 			in.Echo(e.Text)
 		}
 	}, in.OnUsage, in.OnPlanLimits)
@@ -179,13 +179,13 @@ func (r *turnRunner) run(stop context.Context, in turnInput) turnOutcome {
 // leaves out, and Linef for an Echo it leaves out.
 func (in turnInput) withDefaults() turnInput {
 	if in.OnEvent == nil {
-		in.OnEvent = func(core.SessionEvent) {}
+		in.OnEvent = func(api.SessionEvent) {}
 	}
 	if in.OnUsage == nil {
-		in.OnUsage = func(core.UsageResponse) {}
+		in.OnUsage = func(api.UsageResponse) {}
 	}
 	if in.OnPlanLimits == nil {
-		in.OnPlanLimits = func(core.PlanLimits) {}
+		in.OnPlanLimits = func(api.PlanLimits) {}
 	}
 	if in.Linef == nil {
 		in.Linef = func(string, ...any) {}
@@ -454,7 +454,7 @@ type streamMessage struct {
 // usage, as usage reads them, and onPlanLimits with the Plan Limits of
 // each rate_limit_event; dir is the Turn's worktree, and now times each
 // Session Event and dates each Plan Limits.
-func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, now func() time.Time, usage *usageReader, onEvent func(core.SessionEvent), onResponse func(core.UsageResponse), onPlanLimits func(core.PlanLimits)) turnEnd {
+func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, now func() time.Time, usage *usageReader, onEvent func(api.SessionEvent), onResponse func(api.UsageResponse), onPlanLimits func(api.PlanLimits)) turnEnd {
 	var end turnEnd
 	var retryErr string
 	tools := map[string]string{}
@@ -473,7 +473,7 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, now func() time.Time,
 			onPlanLimits(pl)
 		}
 		for _, e := range streamEvents(msg, now(), tools, dir) {
-			if e.Kind == core.EventText {
+			if e.Kind == api.EventText {
 				end.LastText = e.Text
 			}
 			onEvent(e)

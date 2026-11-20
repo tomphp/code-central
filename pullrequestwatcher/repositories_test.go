@@ -2,15 +2,16 @@ package pullrequestwatcher_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"io"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakeazdo"
 	"github.com/tomoram/code-central/internal/fakegh"
@@ -46,39 +47,39 @@ func newSeveralWatching(t *testing.T, azure ...fakeazdo.Answer) *severalWatching
 	t.Helper()
 	srv := codecentraltest.NewServer(t)
 	c := srv.Core
-	must(t, func() error { _, err := c.CreateProject(human, core.CreateProjectInput{Key: "acme"}); return err })
+	must(t, func() error { _, err := c.CreateProject(human, api.CreateProjectInput{Key: "acme"}); return err })
 	must(t, func() error {
-		_, err := c.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/web.git", Base: "main"})
+		_, err := c.ReportPushRemote(ctx, "acme", api.ReportPushRemoteInput{URL: "git@github.com:acme/web.git", Base: "main"})
 		return err
 	})
 	must(t, func() error {
-		_, err := c.AddRepository(human, "acme", core.AddRepositoryInput{Name: "api", CloneURL: "https://dev.azure.com/acme/shop/_git/api", Base: "develop"})
+		_, err := c.AddRepository(human, "acme", api.AddRepositoryInput{Name: "api", CloneURL: "https://dev.azure.com/acme/shop/_git/api", Base: "develop"})
 		return err
 	})
 	must(t, func() error {
-		_, err := c.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: domain.LandingPullRequest})
+		_, err := c.SetLandingMethod(human, "acme", api.SetLandingMethodInput{Method: domain.LandingPullRequest})
 		return err
 	})
-	must(t, func() error { _, err := c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"}); return err })
+	must(t, func() error { _, err := c.CreateSpec(ctx, "acme", api.CreateSpecInput{Title: "Login"}); return err })
 	must(t, func() error {
-		_, err := c.AddLabels(ctx, "acme", core.LabelsInput{Target: "acme-1", Labels: []string{core.LongLivedLabel}})
+		_, err := c.AddLabels(ctx, "acme", api.LabelsInput{Target: "acme-1", Labels: []string{domain.LongLivedLabel}})
 		return err
 	})
 	must(t, func() error {
-		_, err := c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form", State: domain.Ready})
+		_, err := c.CreateTicket(ctx, "acme", api.CreateTicketInput{Spec: "1", Title: "Login form", State: domain.Ready})
 		return err
 	})
-	res, err := c.Claim(ctx, "acme", core.ClaimInput{Ticket: "2"})
+	res, err := c.Claim(ctx, "acme", api.ClaimInput{Ticket: "2"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	must(t, func() error {
-		_, err := c.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: res.ClaimID, Summary: "Built the login form.", Branch: "acme-2", Commit: "abc123",
-			Repositories: []core.RepositoryWork{{Name: "api", Branch: "acme-2", Commit: "def456"}}})
+		_, err := c.Finish(ctx, "acme", api.FinishInput{Ticket: "2", ClaimID: res.ClaimID, Summary: "Built the login form.", Branch: "acme-2", Commit: "abc123",
+			Repositories: []api.RepositoryWork{{Name: "api", Branch: "acme-2", Commit: "def456"}}})
 		return err
 	})
-	must(t, func() error { _, err := c.Accept(human, "acme", core.TicketInput{Ticket: "2"}); return err })
-	for _, in := range []core.ReportPushedCommitInput{{Ticket: "acme-2", Commit: "abc123", Branch: "acme-2"}, {Ticket: "acme-2", Commit: "def456", Branch: "acme-2", Repository: "api"}} {
+	must(t, func() error { _, err := c.Accept(human, "acme", api.TicketInput{Ticket: "2"}); return err })
+	for _, in := range []api.ReportPushedCommitInput{{Ticket: "acme-2", Commit: "abc123", Branch: "acme-2"}, {Ticket: "acme-2", Commit: "def456", Branch: "acme-2", Repository: "api"}} {
 		must(t, func() error { _, err := srv.Client.ReportPushedCommit(ctx, "acme", in); return err })
 	}
 	h := watchertest.New(t)
@@ -108,11 +109,11 @@ func (w *severalWatching) start(environ ...string) {
 
 // pullRequestIn waits for acme-2's pull request in repository to be in
 // state.
-func (w *severalWatching) pullRequestIn(repository string, state domain.PullRequestState) core.PullRequestView {
+func (w *severalWatching) pullRequestIn(repository string, state domain.PullRequestState) api.PullRequestView {
 	w.t.Helper()
-	var got *core.PullRequestView
+	var got *api.PullRequestView
 	codecentraltest.Eventually(w.t, func() bool {
-		tk, err := w.srv.Core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "2"})
+		tk, err := w.srv.Core.GetTicket(ctx, "acme", api.GetTicketInput{Ticket: "2"})
 		if err != nil {
 			return false
 		}
@@ -158,9 +159,9 @@ func TestTwoRepositoriesOnMixedCodeHostsGetTwoPullRequestsThatReferenceEachOther
 	w.start("ADO_PAT=" + secretPAT)
 
 	home := w.pullRequestIn("acme", domain.PROpen)
-	api := w.pullRequestIn("api", domain.PROpen)
-	if home.Number != 7 || api.Number != 4 || !strings.HasSuffix(api.Link, apiLink) {
-		t.Fatalf("pull requests acme %+v, api %+v", home, api)
+	apiRepo := w.pullRequestIn("api", domain.PROpen)
+	if home.Number != 7 || apiRepo.Number != 4 || !strings.HasSuffix(apiRepo.Link, apiLink) {
+		t.Fatalf("pull requests acme %+v, api %+v", home, apiRepo)
 	}
 	// Each opens into its own Repository's Base.
 	opened := w.ghCalls("api", repoPath+"/pulls", "--method", "POST")
@@ -223,7 +224,7 @@ func TestSendingBackClosesEachOpenPullRequestOnItsHost(t *testing.T) {
 	w.pullRequestIn("api", domain.PROpen)
 
 	must(t, func() error {
-		_, err := w.srv.Core.SendBack(human, "acme", core.SendBackInput{Ticket: "2", Note: "Redo it."})
+		_, err := w.srv.Core.SendBack(human, "acme", api.SendBackInput{Ticket: "2", Note: "Redo it."})
 		return err
 	})
 	w.srv.Clock.BlockUntil(1)
@@ -247,16 +248,16 @@ func TestAFailingRepositoryIsNamedAndTheOthersAreStillWatched(t *testing.T) {
 	w.start() // no PAT: api can't be watched
 
 	w.pullRequestIn("acme", domain.PROpen)
-	var got core.WatcherView
+	var got api.WatcherView
 	codecentraltest.Eventually(t, func() bool {
 		p, err := w.srv.Client.GetProject(ctx, "acme")
 		if err != nil {
 			t.Fatal(err)
 		}
 		got = p.Landing.Watcher
-		return got.State == core.WatcherError
+		return got.State == api.WatcherError
 	}, "the Pull Request Watcher's status %+v, want error", &got)
-	if len(got.Repositories) != 1 || got.Repositories[0].Repository != "api" || got.Repositories[0].Problem != core.ProblemPATMissing || got.Repositories[0].Fix == "" {
+	if len(got.Repositories) != 1 || got.Repositories[0].Repository != "api" || got.Repositories[0].Problem != api.ProblemPATMissing || got.Repositories[0].Fix == "" {
 		t.Errorf("status %+v, want api named with its missing PAT and fix", got)
 	}
 	if !strings.Contains(got.Message, "api: ") {
@@ -270,12 +271,12 @@ func TestTurningPullRequestOnChecksEachRepositoryNamingTheOneThatFails(t *testin
 	h.Answer(fakegh.Answer{Args: []string{"api", "repos/acme/api"}, Stdout: readOnly})
 	srv := checking(t, h, h.Bin)
 	must(t, func() error {
-		_, err := srv.Core.AddRepository(human, "acme", core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
+		_, err := srv.Core.AddRepository(human, "acme", api.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
 		return err
 	})
 
 	err := turnOn(srv)
-	var e *core.Error
+	var e *api.Error
 	if !asError(err, &e) || e.Field != "method" || !strings.HasPrefix(e.Message, "api: ") || !strings.Contains(e.Message, "acme/api") || !strings.HasPrefix(e.Fix, "api: ") {
 		t.Fatalf("turning on = %v, want refused naming api with its reason and fix", err)
 	}

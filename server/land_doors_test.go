@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // Accepted and land (ticket 71).
@@ -31,7 +31,7 @@ func init() {
 			http: httpCall{"POST", "/api/p/acme/tickets/3/land", `{"commit":" "}`},
 			cli:  []string{"acme-3", "--commit", " "},
 		},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -41,11 +41,11 @@ func acceptedTicket(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	claimedTicket(t, srv)
 	must(t, func() error {
-		_, err := srv.Core.Finish(context.Background(), "acme", core.FinishInput{Ticket: "3", ClaimID: "claim-1", Summary: "Done.", Branch: "acme-3", Commit: "abc123"})
+		_, err := srv.Core.Finish(context.Background(), "acme", api.FinishInput{Ticket: "3", ClaimID: "claim-1", Summary: "Done.", Branch: "acme-3", Commit: "abc123"})
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Core.Accept(core.WithActor(context.Background(), core.Human), "acme", core.TicketInput{Ticket: "3"})
+		_, err := srv.Core.Accept(api.WithActor(context.Background(), api.Human), "acme", api.TicketInput{Ticket: "3"})
 		return err
 	})
 }

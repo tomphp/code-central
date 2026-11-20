@@ -6,8 +6,8 @@ import (
 	"github.com/tomoram/code-central/cli"
 	"os"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/workitemwatcher"
@@ -31,7 +31,7 @@ func runWorkItemWatcher(ctx context.Context, e cli.Env, args []string) error {
 	fs := cli.FlagSet(workitemwatcher.Command)
 	check := fs.Bool("check", false, "check access once and exit")
 	project := fs.String("project", "", "the Project to watch")
-	var in core.AzureBoardsCheckInput
+	var in api.AzureBoardsCheckInput
 	mode := fs.String("mode", string(domain.AzureBoardsSavedQuery), "how the query is picked: saved_query or wiql")
 	fs.StringVar(&in.QueryURL, "query-url", "", "the Saved query's URL")
 	fs.StringVar(&in.ProjectURL, "project-url", "", "the Azure DevOps project URL a WIQL filter runs in")
@@ -60,7 +60,7 @@ func runWorkItemWatcher(ctx context.Context, e cli.Env, args []string) error {
 		return json.NewEncoder(e.Stdout).Encode(r)
 	}
 	c := cli.NewClient(e)
-	c.Actor = core.Integration
+	c.Actor = api.Integration
 	return workitemwatcher.Watch(ctx, workitemwatcher.Config{Client: c, Project: *project, Env: gh.Env{Environ: os.Environ()},
 		Clock: clock.System{}, Stdin: e.Stdin, Log: e.Stderr})
 }

@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 )
 
 // claimable starts a server with Project acme and Ready Ticket acme-2.
@@ -23,9 +23,9 @@ func claimable(t *testing.T) (*codecentraltest.Server, map[string]string) {
 	t.Helper()
 	srv := codecentraltest.NewServer(t)
 	bg := context.Background()
-	srv.Client.CreateProject(bg, core.CreateProjectInput{Key: "acme"})
-	srv.Client.CreateSpec(bg, "acme", core.CreateSpecInput{Title: "Login"})
-	if _, err := srv.Client.CreateTicket(bg, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", State: "Ready"}); err != nil {
+	srv.Client.CreateProject(bg, api.CreateProjectInput{Key: "acme"})
+	srv.Client.CreateSpec(bg, "acme", api.CreateSpecInput{Title: "Login"})
+	if _, err := srv.Client.CreateTicket(bg, "acme", api.CreateTicketInput{Spec: "1", Title: "Form", State: "Ready"}); err != nil {
 		t.Fatal(err)
 	}
 	return srv, map[string]string{"CODE_CENTRAL_URL": srv.URL, "CODE_CENTRAL_PROJECT": "acme"}
@@ -35,15 +35,15 @@ func TestTheSessionIDDefaultsToClaudeCodesAndTheFlagWins(t *testing.T) {
 	t.Parallel()
 	_, env := claimable(t)
 	env["CLAUDE_CODE_SESSION_ID"] = "from-env"
-	res := decode[core.ClaimResult](t, run(t, env, "", "claim"))
+	res := decode[api.ClaimResult](t, run(t, env, "", "claim"))
 	if s := res.Ticket.Claims[0].SessionID; s != "from-env" {
 		t.Fatalf("claim recorded session %q, want from-env", s)
 	}
-	v := decode[core.TicketView](t, run(t, env, "", "set-session", "acme-2", "--claim", res.ClaimID, "--session", "from-flag", "--full"))
+	v := decode[api.TicketView](t, run(t, env, "", "set-session", "acme-2", "--claim", res.ClaimID, "--session", "from-flag", "--full"))
 	if s := v.Claims[0].SessionID; s != "from-flag" {
 		t.Fatalf("set-session recorded %q, want from-flag", s)
 	}
-	v = decode[core.TicketView](t, run(t, env, "", "set-session", "acme-2", "--claim", res.ClaimID, "--full"))
+	v = decode[api.TicketView](t, run(t, env, "", "set-session", "acme-2", "--claim", res.ClaimID, "--full"))
 	if s := v.Claims[0].SessionID; s != "from-env" {
 		t.Fatalf("set-session recorded %q, want from-env", s)
 	}
@@ -63,7 +63,7 @@ func silentAfter(t *testing.T, srv *codecentraltest.Server, d time.Duration) *ti
 func TestPingMarksActivityFromTheFlagOrTheHooksJSON(t *testing.T) {
 	t.Parallel()
 	srv, env := claimable(t)
-	decode[core.ClaimResult](t, run(t, env, "", "claim", "--session", "s1"))
+	decode[api.ClaimResult](t, run(t, env, "", "claim", "--session", "s1"))
 
 	srv.Clock.Advance(40 * time.Minute)
 	if r := run(t, env, "", "ping", "--session", "s1"); r.code != 0 || r.stdout != "" || r.stderr != "" {

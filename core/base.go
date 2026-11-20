@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -21,85 +22,24 @@ import (
 // With several Repositories (Spec code-central-848) it reports each
 // Repository's base apart, and keeps the latest report of each.
 
-// BaseState is the state of the local base a Factory reports.
-type BaseState string
-
-const (
-	BaseCurrent  BaseState = "current"
-	BaseDiverged BaseState = "diverged"
-	// BaseMissing is a base that exists neither locally nor on the Push
-	// remote, or in a local-only Repository, never looked for on a
-	// remote, doesn't exist locally; it carries no commits.
-	BaseMissing BaseState = "missing"
-)
-
-// BaseStates are the states of a reported base.
-func BaseStates() []BaseState { return []BaseState{BaseCurrent, BaseDiverged, BaseMissing} }
-
-// BaseView is a Project's reported base, as its Factory Status carries it;
-// absent while no Factory is reporting.
-type BaseView struct {
-	State BaseState `json:"state"`
-	// Local and Remote are the local and remote base commits.
-	Local  string `json:"local"`
-	Remote string `json:"remote"`
-	// Branch is the base branch's name, when the Factory reported it.
-	Branch string    `json:"branch,omitempty"`
-	At     time.Time `json:"at"`
-}
-
-// BaseDivergedView is a Base diverged item's detail: both commits and the
-// base branch, and the Repository whose base it is while the Project has
-// several.
-type BaseDivergedView struct {
-	Repository string `json:"repository,omitempty"`
-	Base       string `json:"base,omitempty"`
-	Local      string `json:"local"`
-	Remote     string `json:"remote"`
-}
-
-// BaseMissingView is a Base missing item's detail: the branch and the fix,
-// and the Repository whose base it is while the Project has several.
-type BaseMissingView struct {
-	Repository string `json:"repository,omitempty"`
-	Base       string `json:"base"`
-	Fix        string `json:"fix"`
-}
-
-// ReportBaseInput is the Factory's report_base(state, local, remote,
-// repository?, full?).
-type ReportBaseInput struct {
-	State BaseState `json:"state"`
-	// Local and Remote are the local and remote base commits.
-	// They are required for current and diverged, and ignored for missing.
-	Local  string `json:"local"`
-	Remote string `json:"remote"`
-	// Repository is the Repository Name whose base this is; blank for the
-	// Home Repository, as a Factory from before Repositories reports it
-	// (Spec code-central-848).
-	Repository string `json:"repository,omitempty"`
-	// Full asks for the Project in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
 // ReportBase is the Factory's report_base. The report replaces the
 // Repository's earlier one, in the runtime state a Store shares, each Repository's base kept
 // apart; Base diverged and Base missing show in Needs Me, one item per
 // Repository, while the latest says so and a Factory is still online.
-func (c *Core) ReportBase(_ context.Context, key string, in ReportBaseInput) (Written[ProjectView], error) {
+func (c *Core) ReportBase(_ context.Context, key string, in api.ReportBaseInput) (api.Written[api.ProjectView], error) {
 	local, remote := strings.TrimSpace(in.Local), strings.TrimSpace(in.Remote)
-	if in.State == BaseMissing {
+	if in.State == api.BaseMissing {
 		local, remote = "", ""
 	}
 	switch {
-	case in.State != BaseCurrent && in.State != BaseDiverged && in.State != BaseMissing:
-		return Written[ProjectView]{}, invalid("state", "state is current, diverged or missing, not %q", in.State)
-	case in.State != BaseMissing && local == "":
-		return Written[ProjectView]{}, invalid("local", "local is required: the local base commit")
-	case in.State != BaseMissing && remote == "":
-		return Written[ProjectView]{}, invalid("remote", "remote is required: the remote base commit")
+	case in.State != api.BaseCurrent && in.State != api.BaseDiverged && in.State != api.BaseMissing:
+		return api.Written[api.ProjectView]{}, invalid("state", "state is current, diverged or missing, not %q", in.State)
+	case in.State != api.BaseMissing && local == "":
+		return api.Written[api.ProjectView]{}, invalid("local", "local is required: the local base commit")
+	case in.State != api.BaseMissing && remote == "":
+		return api.Written[api.ProjectView]{}, invalid("remote", "remote is required: the remote base commit")
 	}
-	var before ProjectView
+	var before api.ProjectView
 	var project domain.Project
 	var repository domain.Repository
 	if err := c.store.View(func(r store.Reader) error {
@@ -114,16 +54,16 @@ func (c *Core) ReportBase(_ context.Context, key string, in ReportBaseInput) (Wr
 		before = c.projectView(project)
 		return nil
 	}); err != nil {
-		return Written[ProjectView]{}, err
+		return api.Written[api.ProjectView]{}, err
 	}
 	now := c.now()
 	hs := c.heartbeats
 	hs.mu.Lock()
 	if hs.base[key] == nil {
-		hs.base[key] = map[string]BaseView{}
+		hs.base[key] = map[string]api.BaseView{}
 	}
 	prev, seen := hs.base[key][repository.Name]
-	hs.base[key][repository.Name] = BaseView{State: in.State, Local: local, Remote: remote, Branch: baseOfRepository(project, repository), At: now}
+	hs.base[key][repository.Name] = api.BaseView{State: in.State, Local: local, Remote: remote, Branch: baseOfRepository(project, repository), At: now}
 	hs.reportsAt[key] = now
 	hs.mu.Unlock()
 	c.recordReports(key)
@@ -160,7 +100,7 @@ func baseOfRepository(p domain.Project, r domain.Repository) string {
 // baseView is the reported base of project's Repository name at now, or
 // nil when none is current: no report, or no Factory online or draining.
 // hs.mu is held.
-func (hs *heartbeats) baseView(project, name string, now time.Time) *BaseView {
+func (hs *heartbeats) baseView(project, name string, now time.Time) *api.BaseView {
 	b, ok := hs.base[project][name]
 	if !ok || !hs.reporting(project, now) {
 		return nil
@@ -172,7 +112,7 @@ func (hs *heartbeats) baseView(project, name string, now time.Time) *BaseView {
 // at now, so its reports stand. hs.mu is held.
 func (hs *heartbeats) reporting(project string, now time.Time) bool {
 	for k, h := range hs.all {
-		if k.project == project && h.status(now) != FactoryOffline {
+		if k.project == project && h.status(now) != api.FactoryOffline {
 			return true
 		}
 	}
@@ -181,16 +121,16 @@ func (hs *heartbeats) reporting(project string, now time.Time) bool {
 
 // reportedBase is the reported base of p's Repository r while it is in
 // state and p isn't archived.
-func (c *Core) reportedBase(p domain.Project, r domain.Repository, state BaseState) (BaseView, bool) {
+func (c *Core) reportedBase(p domain.Project, r domain.Repository, state api.BaseState) (api.BaseView, bool) {
 	if !p.Archived.IsZero() {
-		return BaseView{}, false
+		return api.BaseView{}, false
 	}
 	hs := c.heartbeats
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 	b := hs.baseView(p.Key, r.Name, c.clock.Now())
 	if b == nil || b.State != state {
-		return BaseView{}, false
+		return api.BaseView{}, false
 	}
 	return *b, true
 }
@@ -198,22 +138,22 @@ func (c *Core) reportedBase(p domain.Project, r domain.Repository, state BaseSta
 // divergedBase is the reported base of p's Repository r while it is
 // diverged and r's Landing Policy is Pull Request or Merge + Push: never
 // in a local-only Repository.
-func (c *Core) divergedBase(p domain.Project, r domain.Repository) (BaseView, bool) {
+func (c *Core) divergedBase(p domain.Project, r domain.Repository) (api.BaseView, bool) {
 	if !landingPolicyIn(p, r.Name).KeepsBaseLevel() {
-		return BaseView{}, false
+		return api.BaseView{}, false
 	}
-	return c.reportedBase(p, r, BaseDiverged)
+	return c.reportedBase(p, r, api.BaseDiverged)
 }
 
 // baseDivergedRows are p's Base diverged items: one per Repository whose
 // base has diverged, in landing order, each with no Ticket.
-func (c *Core) baseDivergedRows(p domain.Project) []NeedsMeRow {
-	var out []NeedsMeRow
+func (c *Core) baseDivergedRows(p domain.Project) []api.NeedsMeRow {
+	var out []api.NeedsMeRow
 	for _, r := range p.RepositoryList() {
 		if b, ok := c.divergedBase(p, r); ok {
-			out = append(out, NeedsMeRow{
-				Project: p.Key, Title: "Base diverged" + baseItemOf(p, r), Reason: ReasonBaseDiverged, Since: b.At,
-				BaseDiverged: &BaseDivergedView{Repository: baseRepository(p, r), Base: baseOfRepository(p, r), Local: b.Local, Remote: b.Remote},
+			out = append(out, api.NeedsMeRow{
+				Project: p.Key, Title: "Base diverged" + baseItemOf(p, r), Reason: api.ReasonBaseDiverged, Since: b.At,
+				BaseDiverged: &api.BaseDivergedView{Repository: baseRepository(p, r), Base: baseOfRepository(p, r), Local: b.Local, Remote: b.Remote},
 			})
 		}
 	}
@@ -223,10 +163,10 @@ func (c *Core) baseDivergedRows(p domain.Project) []NeedsMeRow {
 // baseMissingRows are p's Base missing items: one per Repository whose
 // base is missing, under any Landing Method, in landing order, each with
 // no Ticket.
-func (c *Core) baseMissingRows(p domain.Project) []NeedsMeRow {
-	var out []NeedsMeRow
+func (c *Core) baseMissingRows(p domain.Project) []api.NeedsMeRow {
+	var out []api.NeedsMeRow
 	for _, r := range p.RepositoryList() {
-		b, ok := c.reportedBase(p, r, BaseMissing)
+		b, ok := c.reportedBase(p, r, api.BaseMissing)
 		if !ok {
 			continue
 		}
@@ -235,9 +175,9 @@ func (c *Core) baseMissingRows(p domain.Project) []NeedsMeRow {
 		if !r.Home {
 			fix = fmt.Sprintf("Create the branch %s in Repository %s, or change its Base in Project Options", base, r.Name)
 		}
-		out = append(out, NeedsMeRow{
-			Project: p.Key, Title: "Base missing" + baseItemOf(p, r), Reason: ReasonBaseMissing, Since: b.At,
-			BaseMissing: &BaseMissingView{Repository: baseRepository(p, r), Base: base, Fix: fix},
+		out = append(out, api.NeedsMeRow{
+			Project: p.Key, Title: "Base missing" + baseItemOf(p, r), Reason: api.ReasonBaseMissing, Since: b.At,
+			BaseMissing: &api.BaseMissingView{Repository: baseRepository(p, r), Base: base, Fix: fix},
 		})
 	}
 	return out
@@ -269,7 +209,7 @@ func (c *Core) brokenBase(p domain.Project, name string) string {
 	if err != nil {
 		return ""
 	}
-	if _, ok := c.reportedBase(p, r, BaseMissing); ok {
+	if _, ok := c.reportedBase(p, r, api.BaseMissing); ok {
 		return fmt.Sprintf("its base, %s, is missing", baseOfRepository(p, r))
 	}
 	if _, ok := c.divergedBase(p, r); ok {

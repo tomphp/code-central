@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -15,7 +15,7 @@ import (
 // the human's accept when the finished Ticket is eligible.
 
 // projectView reads the Project as the UI does.
-func (f fixture) projectView(t *testing.T, key string) core.ProjectView {
+func (f fixture) projectView(t *testing.T, key string) api.ProjectView {
 	t.Helper()
 	p, err := f.core.GetProject(ctx, key)
 	if err != nil {
@@ -25,9 +25,9 @@ func (f fixture) projectView(t *testing.T, key string) core.ProjectView {
 }
 
 // setAutoAccept turns the given kinds on or off on acme as the human.
-func (f fixture) setAutoAccept(t *testing.T, kinds map[domain.AutoAcceptKind]bool) core.ProjectView {
+func (f fixture) setAutoAccept(t *testing.T, kinds map[domain.AutoAcceptKind]bool) api.ProjectView {
 	t.Helper()
-	v, err := f.core.SetAutoAccept(human, "acme", core.SetAutoAcceptInput{Kinds: kinds, Full: true})
+	v, err := f.core.SetAutoAccept(human, "acme", api.SetAutoAcceptInput{Kinds: kinds, Full: true})
 	if err != nil {
 		t.Fatalf("set_auto_accept: %v", err)
 	}
@@ -59,11 +59,11 @@ func TestSetAutoAcceptTurnsKindsOnAndOffAndTheProjectReadsThem(t *testing.T) {
 func TestSetAutoAcceptAcknowledgesTheSettingAndWritesNothingWhenUnchanged(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	v, err := f.core.SetAutoAccept(human, "acme", core.SetAutoAcceptInput{Kinds: map[domain.AutoAcceptKind]bool{"tickets": true}})
+	v, err := f.core.SetAutoAccept(human, "acme", api.SetAutoAcceptInput{Kinds: map[domain.AutoAcceptKind]bool{"tickets": true}})
 	if err != nil || v.ID != "acme" || len(v.Changed) != 1 || v.Changed[0] != "auto_accept" {
 		t.Fatalf("acknowledgement %+v, %v", v, err)
 	}
-	v, err = f.core.SetAutoAccept(human, "acme", core.SetAutoAcceptInput{Kinds: map[domain.AutoAcceptKind]bool{"tickets": true}})
+	v, err = f.core.SetAutoAccept(human, "acme", api.SetAutoAcceptInput{Kinds: map[domain.AutoAcceptKind]bool{"tickets": true}})
 	if err != nil || len(v.Changed) != 0 {
 		t.Fatalf("acknowledgement of no change %+v, %v", v, err)
 	}
@@ -72,16 +72,16 @@ func TestSetAutoAcceptAcknowledgesTheSettingAndWritesNothingWhenUnchanged(t *tes
 func TestSetAutoAcceptIsTheHumansAloneAndRefusesAnUnknownKind(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	for _, actor := range []core.Actor{core.Agent, core.Integration} {
-		_, err := f.core.SetAutoAccept(core.WithActor(ctx, actor), "acme", core.SetAutoAcceptInput{Kinds: map[domain.AutoAcceptKind]bool{"implementation": true}})
-		var e *core.Error
-		if !errors.As(err, &e) || e.Code != core.ActionNotAllowed {
+	for _, actor := range []api.Actor{api.Agent, api.Integration} {
+		_, err := f.core.SetAutoAccept(api.WithActor(ctx, actor), "acme", api.SetAutoAcceptInput{Kinds: map[domain.AutoAcceptKind]bool{"implementation": true}})
+		var e *api.Error
+		if !errors.As(err, &e) || e.Code != api.ActionNotAllowed {
 			t.Fatalf("as %s: %v, want action_not_allowed", actor, err)
 		}
 	}
-	_, err := f.core.SetAutoAccept(human, "acme", core.SetAutoAcceptInput{Kinds: map[domain.AutoAcceptKind]bool{"prototype": true}})
-	var e *core.Error
-	if !errors.As(err, &e) || e.Code != core.Invalid || e.Field != "kinds" {
+	_, err := f.core.SetAutoAccept(human, "acme", api.SetAutoAcceptInput{Kinds: map[domain.AutoAcceptKind]bool{"prototype": true}})
+	var e *api.Error
+	if !errors.As(err, &e) || e.Code != api.Invalid || e.Field != "kinds" {
 		t.Fatalf("unknown kind: %v, want invalid on kinds", err)
 	}
 	if p := f.projectView(t, "acme"); p.AutoAccept["implementation"] {
@@ -91,10 +91,10 @@ func TestSetAutoAcceptIsTheHumansAloneAndRefusesAnUnknownKind(t *testing.T) {
 
 // finishWork claims and finishes acme-2, a plain implementation Ticket on
 // a Long-lived Spec, naming a branch when branch isn't empty.
-func (f fixture) finishWork(t *testing.T, branch string) core.FinishResult {
+func (f fixture) finishWork(t *testing.T, branch string) api.FinishResult {
 	t.Helper()
-	f.claim(t, core.ClaimInput{Ticket: "acme-2"})
-	res, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-2", ClaimID: "claim-1", Summary: "Done on acme-2.", Branch: branch})
+	f.claim(t, api.ClaimInput{Ticket: "acme-2"})
+	res, err := f.core.Finish(ctx, "acme", api.FinishInput{Ticket: "acme-2", ClaimID: "claim-1", Summary: "Done on acme-2.", Branch: branch})
 	if err != nil {
 		t.Fatalf("finish: %v", err)
 	}
@@ -104,7 +104,7 @@ func (f fixture) finishWork(t *testing.T, branch string) core.FinishResult {
 // autoAccepted checks the Ticket's last Move is an auto-accept by the
 // human from In Review to state, with cause, after the agent's move to
 // In Review.
-func autoAccepted(t *testing.T, tk core.TicketView, to domain.State, cause domain.AutoAcceptCause) {
+func autoAccepted(t *testing.T, tk api.TicketView, to domain.State, cause domain.AutoAcceptCause) {
 	t.Helper()
 	if tk.State != to {
 		t.Fatalf("%s is %s, want %s", tk.ID, tk.State, to)
@@ -160,8 +160,8 @@ func TestFinishLeavesTheTicketInReviewWhileItsKindIsOff(t *testing.T) {
 }
 
 func TestFinishsResponseIsTheSameWhetherOrNotItAutoAccepts(t *testing.T) {
-	var results []core.FinishResult
-	var fulls []core.FinishResult
+	var results []api.FinishResult
+	var fulls []api.FinishResult
 	for _, on := range []bool{false, true} {
 		f := newFixture(t)
 		f.work(t, domain.Ready)
@@ -173,8 +173,8 @@ func TestFinishsResponseIsTheSameWhetherOrNotItAutoAccepts(t *testing.T) {
 		g.work(t, domain.Ready)
 		g.setAutoAccept(t, map[domain.AutoAcceptKind]bool{domain.AutoAcceptImplementation: on})
 		g.clock.Set(t0.Add(time.Hour))
-		g.claim(t, core.ClaimInput{Ticket: "acme-2"})
-		full, err := g.core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-2", ClaimID: "claim-1", Summary: "Done on acme-2.", Branch: "acme-2", Full: true})
+		g.claim(t, api.ClaimInput{Ticket: "acme-2"})
+		full, err := g.core.Finish(ctx, "acme", api.FinishInput{Ticket: "acme-2", ClaimID: "claim-1", Summary: "Done on acme-2.", Branch: "acme-2", Full: true})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -190,12 +190,12 @@ func TestFinishsResponseIsTheSameWhetherOrNotItAutoAccepts(t *testing.T) {
 
 // finishSpecStage claims the spec Stage acme-4 and finishes it with the
 // recommendation.
-func (f fixture) finishSpecStage(t *testing.T, rec domain.Recommendation) core.FinishResult {
+func (f fixture) finishSpecStage(t *testing.T, rec domain.Recommendation) api.FinishResult {
 	t.Helper()
 	f.setState(t, 3, domain.Done)
 	f.setState(t, 4, domain.Ready)
-	f.claim(t, core.ClaimInput{Ticket: "acme-4"})
-	res, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-4", ClaimID: "claim-1", Summary: "Spec written.", Recommendation: rec})
+	f.claim(t, api.ClaimInput{Ticket: "acme-4"})
+	res, err := f.core.Finish(ctx, "acme", api.FinishInput{Ticket: "acme-4", ClaimID: "claim-1", Summary: "Spec written.", Recommendation: rec})
 	if err != nil {
 		t.Fatalf("finish: %v", err)
 	}
@@ -300,10 +300,10 @@ func TestFinishingASpecStageStillNeedsARecommendationUnderAutoAccept(t *testing.
 	f.setAutoAccept(t, map[domain.AutoAcceptKind]bool{domain.AutoAcceptSpec: true})
 	f.setState(t, 3, domain.Done)
 	f.setState(t, 4, domain.Ready)
-	f.claim(t, core.ClaimInput{Ticket: "acme-4"})
-	_, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-4", ClaimID: "claim-1", Summary: "Spec written."})
-	var e *core.Error
-	if !errors.As(err, &e) || e.Code != core.Invalid {
+	f.claim(t, api.ClaimInput{Ticket: "acme-4"})
+	_, err := f.core.Finish(ctx, "acme", api.FinishInput{Ticket: "acme-4", ClaimID: "claim-1", Summary: "Spec written."})
+	var e *api.Error
+	if !errors.As(err, &e) || e.Code != api.Invalid {
 		t.Fatalf("finish without a recommendation: %v, want invalid", err)
 	}
 	if spec := f.get(t, "acme-4"); spec.State != domain.InProgress {
@@ -322,10 +322,10 @@ func (f fixture) allKinds(t *testing.T) {
 }
 
 // finishTicket claims ref and finishes it with no branch.
-func (f fixture) finishTicket(t *testing.T, ref core.Ref) {
+func (f fixture) finishTicket(t *testing.T, ref api.Ref) {
 	t.Helper()
-	res := f.claim(t, core.ClaimInput{Ticket: ref})
-	if _, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: ref, ClaimID: res.ClaimID, Summary: "Finished " + string(ref) + "."}); err != nil {
+	res := f.claim(t, api.ClaimInput{Ticket: ref})
+	if _, err := f.core.Finish(ctx, "acme", api.FinishInput{Ticket: ref, ClaimID: res.ClaimID, Summary: "Finished " + string(ref) + "."}); err != nil {
 		t.Fatalf("finish %s: %v", ref, err)
 	}
 }
@@ -369,7 +369,7 @@ func TestMergeResultsAutoAcceptsOnlyASpecMergeTicket(t *testing.T) {
 	autoAccepted(t, f.get(t, "acme-3"), domain.Done, domain.CauseProject)
 
 	// An ordinary Ticket is Implementation results, whatever its title.
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Merge the base into the Spec Branch of acme-1", State: domain.Ready})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Merge the base into the Spec Branch of acme-1", State: domain.Ready})
 	f.finishTicket(t, "acme-4")
 	if got := f.get(t, "acme-4"); got.State != domain.InReview {
 		t.Fatalf("a Ticket titled like a Spec merge Ticket is %s under Merge results, want In Review", got.State)
@@ -388,7 +388,7 @@ func TestImplementationResultsNeverAcceptsASpecMergeTicket(t *testing.T) {
 	if got := f.get(t, "acme-3"); got.State != domain.InReview {
 		t.Fatalf("the Spec merge Ticket is %s under Implementation results, want In Review", got.State)
 	}
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Merge the base into the Spec Branch of acme-1", State: domain.Ready})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Merge the base into the Spec Branch of acme-1", State: domain.Ready})
 	f.finishTicket(t, "acme-4")
 	autoAccepted(t, f.get(t, "acme-4"), domain.Done, domain.CauseProject)
 }
@@ -397,7 +397,7 @@ func TestPrototypesAndMapTicketsAreNeverAutoAccepted(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	f.spec(t, "acme", "Login")
-	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Try", State: domain.Ready, Labels: []string{core.PrototypeLabel}})
+	f.ticket(t, "acme", api.CreateTicketInput{Spec: "acme-1", Title: "Try", State: domain.Ready, Labels: []string{domain.PrototypeLabel}})
 	f.allKinds(t)
 	f.finishTicket(t, "acme-2")
 	if got := f.get(t, "acme-2"); got.State != domain.InReview {
@@ -405,10 +405,10 @@ func TestPrototypesAndMapTicketsAreNeverAutoAccepted(t *testing.T) {
 	}
 
 	g := newFixture(t)
-	g.mapWith(t, core.CreateTicketInput{Title: "Look into caching", State: domain.Ready, Labels: []string{core.WayfinderPrefix + "research"}},
-		core.CreateTicketInput{Title: "Untyped", State: domain.Ready})
+	g.mapWith(t, api.CreateTicketInput{Title: "Look into caching", State: domain.Ready, Labels: []string{domain.WayfinderPrefix + "research"}},
+		api.CreateTicketInput{Title: "Untyped", State: domain.Ready})
 	g.allKinds(t)
-	for _, ref := range []core.Ref{"acme-2", "acme-3"} {
+	for _, ref := range []api.Ref{"acme-2", "acme-3"} {
 		g.finishTicket(t, ref)
 		if got := g.get(t, ref); got.State != domain.InReview {
 			t.Fatalf("Map Ticket %s is %s with every kind on, want In Review", ref, got.State)
@@ -420,12 +420,12 @@ func TestARedoIsAutoAcceptedLikeAnyOtherFinish(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
 	f.finishWork(t, "acme-2")
-	if _, err := f.core.Reject(human, "acme", core.RejectInput{Ticket: "acme-2", Comment: "Missing tests."}); err != nil {
+	if _, err := f.core.Reject(human, "acme", api.RejectInput{Ticket: "acme-2", Comment: "Missing tests."}); err != nil {
 		t.Fatal(err)
 	}
 	f.setAutoAccept(t, map[domain.AutoAcceptKind]bool{domain.AutoAcceptImplementation: true})
-	res := f.claim(t, core.ClaimInput{Ticket: "acme-2"})
-	if _, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-2", ClaimID: res.ClaimID, Summary: "Tests added.", Branch: "acme-2"}); err != nil {
+	res := f.claim(t, api.ClaimInput{Ticket: "acme-2"})
+	if _, err := f.core.Finish(ctx, "acme", api.FinishInput{Ticket: "acme-2", ClaimID: res.ClaimID, Summary: "Tests added.", Branch: "acme-2"}); err != nil {
 		t.Fatal(err)
 	}
 	autoAccepted(t, f.get(t, "acme-2"), domain.Accepted, domain.CauseProject)

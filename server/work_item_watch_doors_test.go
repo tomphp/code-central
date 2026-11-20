@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 )
 
@@ -28,7 +28,7 @@ func init() {
 			field("query_url", webQuery)(t, out)
 		},
 		bad:  call{http: getWorkItemWatch("nope")},
-		code: core.UnknownProject,
+		code: api.UnknownProject,
 	}
 	cases["report_work_item_watcher_status"] = opCase{
 		setup: boardsOn(false),
@@ -40,7 +40,7 @@ func init() {
 			workItemWatcher(t, out, "watching", "", "")
 		},
 		bad:  call{http: reportWorkItemWatcherStatus(`{"state":"asleep"}`)},
-		code: core.Invalid,
+		code: api.Invalid,
 	}
 }
 
@@ -374,7 +374,7 @@ func TestAwaitingTriageFollowsEachIntegrationsOwnNewIssuesNeedMe(t *testing.T) {
 		item := workItem(t, srv, "acme-5", 12)
 		for id, want := range map[string]bool{issue: c.issuesNeedMe, item: c.boardsNeedMe} {
 			row, ok := needsMeRowOf(t, srv, id)
-			if ok != want || ok && row.Reason != core.ReasonNewIssue {
+			if ok != want || ok && row.Reason != api.ReasonNewIssue {
 				t.Fatalf("issues %v, boards %v: %s's row = %+v (%v), want New issue %v", c.issuesNeedMe, c.boardsNeedMe, id, row, ok, want)
 			}
 			tk := httpOK(t, srv, httpCall{"GET", "/api/p/acme/tickets/" + strings.TrimPrefix(id, "acme-"), ""})
@@ -392,14 +392,14 @@ func TestTheIntegrationActorFollowsAWorkItem(t *testing.T) {
 	field("title", "Work item 12, edited")(t, ticket5(t, srv))
 
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/integration/set_external_state", `{"target":"5","external_state":"out_of_scope"}`})
-	if row, _ := needsMeRowOf(t, srv, item); row.Reason != core.ReasonClosedExternally {
+	if row, _ := needsMeRowOf(t, srv, item); row.Reason != api.ReasonClosedExternally {
 		t.Fatalf("out of scope: reason %q, want closed externally", row.Reason)
 	}
 	if got := workItemWritesDue(t, srv); len(got) != 0 {
 		t.Fatalf("writes due out of scope = %v, want none", got)
 	}
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/integration/set_external_state", `{"target":"5","external_state":"open"}`})
-	if row, _ := needsMeRowOf(t, srv, item); row.Reason != core.ReasonNewIssue {
+	if row, _ := needsMeRowOf(t, srv, item); row.Reason != api.ReasonNewIssue {
 		t.Fatalf("back in scope: reason %q, want New issue", row.Reason)
 	}
 }
@@ -408,10 +408,10 @@ func TestTheIntegrationActorFollowsAWorkItem(t *testing.T) {
 // nor the human may make it.
 func TestReportWorkItemWatcherStatusIsRefusedFromAnyoneButTheIntegrationActor(t *testing.T) {
 	srv := newServer(t, boardsOn(false))
-	for _, actor := range []core.Actor{core.Agent, core.Human} {
+	for _, actor := range []api.Actor{api.Agent, api.Human} {
 		status, b := httpDoAs(t, srv, actor, reportWorkItemWatcherStatus(`{"state":"watching"}`))
-		if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) || !strings.Contains(e.Message, "integration") {
-			t.Fatalf("as %s: status %d, want %d; message %q", actor, status, httpapi.Status(core.ActionNotAllowed), e.Message)
+		if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) || !strings.Contains(e.Message, "integration") {
+			t.Fatalf("as %s: status %d, want %d; message %q", actor, status, httpapi.Status(api.ActionNotAllowed), e.Message)
 		}
 	}
 	workItemWatcher(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), "not_reported", "", "")
@@ -448,7 +448,7 @@ func TestTheWorkItemWatchersStatusShowsInAzureBoards(t *testing.T) {
 func TestReportWorkItemWatcherStatusRefusesWhatIsntTheWorkItemWatchers(t *testing.T) {
 	srv := newServer(t)
 	status, b := httpDo(t, srv, reportWorkItemWatcherStatus(`{"state":"watching"}`))
-	if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) || !strings.Contains(e.Message, "Azure Boards is off") {
+	if e := errorJSON(t, b, api.ActionNotAllowed); status != httpapi.Status(api.ActionNotAllowed) || !strings.Contains(e.Message, "Azure Boards is off") {
 		t.Fatalf("status %d; message %q, want Azure Boards off", status, e.Message)
 	}
 	boardsOn(false)(t, srv)
@@ -458,7 +458,7 @@ func TestReportWorkItemWatcherStatusRefusesWhatIsntTheWorkItemWatchers(t *testin
 		`{"state":"error","message":"no","repositories":[{"repository":"web","message":"no"}]}`,
 	} {
 		status, b := httpDo(t, srv, reportWorkItemWatcherStatus(body))
-		if errorJSON(t, b, core.Invalid); status != httpapi.Status(core.Invalid) {
+		if errorJSON(t, b, api.Invalid); status != httpapi.Status(api.Invalid) {
 			t.Fatalf("%s: status %d, want invalid", body, status)
 		}
 	}
@@ -471,17 +471,17 @@ func TestReportWorkItemWatcherStatusRefusesWhatIsntTheWorkItemWatchers(t *testin
 // on, and its crash is an error like any other kind's.
 func TestTheServiceRunsAWorkItemWatcherWhileAzureBoardsIsOn(t *testing.T) {
 	srv := newServer(t)
-	if got := srv.Core.WatchedProjects(t.Context(), core.WatcherWorkItems); len(got) != 0 {
+	if got := srv.Core.WatchedProjects(t.Context(), api.WatcherWorkItems); len(got) != 0 {
 		t.Fatalf("watched while off = %v, want none", got)
 	}
 	boardsOn(false)(t, srv)
-	if got := srv.Core.WatchedProjects(t.Context(), core.WatcherWorkItems); !slices.Equal(got, []string{"acme"}) {
+	if got := srv.Core.WatchedProjects(t.Context(), api.WatcherWorkItems); !slices.Equal(got, []string{"acme"}) {
 		t.Fatalf("watched = %v, want acme", got)
 	}
-	if core.WatcherWorkItems.Name() != "Work Item Watcher" || core.WatcherWorkItems.Setting() != "Azure Boards" {
-		t.Fatalf("kind %q named %q, set by %q", core.WatcherWorkItems, core.WatcherWorkItems.Name(), core.WatcherWorkItems.Setting())
+	if api.WatcherWorkItems.Name() != "Work Item Watcher" || api.WatcherWorkItems.Setting() != "Azure Boards" {
+		t.Fatalf("kind %q named %q, set by %q", api.WatcherWorkItems, api.WatcherWorkItems.Name(), api.WatcherWorkItems.Setting())
 	}
-	srv.Core.ReportWatcherCrash(t.Context(), core.WatcherWorkItems, "acme", core.WatcherCrash{Restarts: 1, RestartAt: codecentraltest.Start})
+	srv.Core.ReportWatcherCrash(t.Context(), api.WatcherWorkItems, "acme", api.WatcherCrash{Restarts: 1, RestartAt: codecentraltest.Start})
 	w := httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""})["azure_boards"].(map[string]any)["watcher"].(map[string]any)
 	if w["state"] != "error" || w["problem"] != "crashed" || !strings.Contains(str(w["message"]), "Work Item Watcher crashed") {
 		t.Fatalf("azure_boards.watcher = %v, want the crash", w)

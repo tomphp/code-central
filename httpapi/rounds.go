@@ -3,7 +3,7 @@ package httpapi
 import (
 	"net/http"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/ops"
 )
@@ -19,5 +19,5 @@ func wait(s ops.Service, r *http.Request) (any, error) {
 	if err := onlyParams(q, "from"); err != nil {
 		return nil, err
 	}
-	return s.Wait(r.Context(), r.PathValue("key"), core.Ref(r.PathValue("n")), domain.State(q.Get("from")))
+	return s.Wait(r.Context(), r.PathValue("key"), api.Ref(r.PathValue("n")), domain.State(q.Get("from")))
 }

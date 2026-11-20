@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/world"
@@ -152,7 +152,7 @@ func TestAFactorysUsageAndSessionEventsAreFiledUnderItsClaim(t *testing.T) {
 // that service, and the world's own service names its host.
 func TestSessionEventsPostedToAnotherServiceAreHeldThere(t *testing.T) {
 	w := claimedWorld(t)
-	w.PostSessionEventsOn("desktop", "s1", []core.SessionEvent{{Time: w.Now(), Kind: core.EventText, Text: "Reading the Spec"}})
+	w.PostSessionEventsOn("desktop", "s1", []api.SessionEvent{{Time: w.Now(), Kind: api.EventText, Text: "Reading the Spec"}})
 	if b := ok(t, w, "", "GET", "/api/projects/acme/tickets/2/claims/1/transcript", ""); b != `{"events":[],"tail":false,"host":"desktop"}`+"\n" {
 		t.Errorf("Transcript: %s, want none, on the desktop", b)
 	}
@@ -175,7 +175,7 @@ func TestAdvanceMovesCoresClock(t *testing.T) {
 // checkCases turn on each setting whose check the world stands in for.
 var checkCases = []struct {
 	name  string
-	set   func(*world.World, core.WatcherCheckResult)
+	set   func(*world.World, api.WatcherCheckResult)
 	path  string
 	body  string
 	field string
@@ -209,16 +209,16 @@ func TestACheckRefusalReachesCoresCheckResult(t *testing.T) {
 	for _, c := range checkCases {
 		t.Run(c.name, func(t *testing.T) {
 			w := checkedWorld(t)
-			c.set(w, core.WatcherCheckResult{Problem: core.ProblemRepositoryUnreadable, Reason: "gh can't read acme/app", Fix: "Grant gh access"})
+			c.set(w, api.WatcherCheckResult{Problem: api.ProblemRepositoryUnreadable, Reason: "gh can't read acme/app", Fix: "Grant gh access"})
 
 			status, b := send(t, w, "", "POST", c.path, c.body)
-			var e core.Error
+			var e api.Error
 			json.Unmarshal([]byte(b), &e)
 			if status != http.StatusUnprocessableEntity || e.Field != c.field || e.Message != "gh can't read acme/app" || e.Fix != "Grant gh access" {
 				t.Fatalf("%d %s, want it refused on %s with the check's reason and fix", status, b, c.field)
 			}
 
-			c.set(w, core.WatcherCheckResult{})
+			c.set(w, api.WatcherCheckResult{})
 			ok(t, w, "", "POST", c.path, c.body)
 		})
 	}
@@ -228,7 +228,7 @@ func TestAWatcherCrashIsReportedToCore(t *testing.T) {
 	w := checkedWorld(t)
 	ok(t, w, "", "POST", "/api/p/acme/set_ci_tracking", `{"tracking":true,"repository":"acme/app"}`)
 
-	w.ReportWatcherCrash(core.WatcherCI, "acme", core.WatcherCrash{Restarts: 1, LastLine: "panic: no gh", RestartAt: start.Add(time.Second)})
+	w.ReportWatcherCrash(api.WatcherCI, "acme", api.WatcherCrash{Restarts: 1, LastLine: "panic: no gh", RestartAt: start.Add(time.Second)})
 
 	if b := ok(t, w, "", "GET", "/api/projects/acme", ""); !strings.Contains(b, `"problem":"crashed"`) || !strings.Contains(b, "panic: no gh") {
 		t.Errorf("get_project: %s, want the CI Watcher crashed with its last line", b)
@@ -241,9 +241,9 @@ func TestAWatcherCrashIsReportedToCore(t *testing.T) {
 func TestAWatcherLeaseIsHeldWhereTheTestSays(t *testing.T) {
 	w := checkedWorld(t)
 	ok(t, w, "", "POST", "/api/p/acme/set_ci_tracking", `{"tracking":true,"repository":"acme/app"}`)
-	watcher := func() core.WatcherView {
+	watcher := func() api.WatcherView {
 		t.Helper()
-		var p core.ProjectView
+		var p api.ProjectView
 		if err := json.Unmarshal([]byte(ok(t, w, "", "GET", "/api/projects/acme", "")), &p); err != nil {
 			t.Fatal(err)
 		}
@@ -251,16 +251,16 @@ func TestAWatcherLeaseIsHeldWhereTheTestSays(t *testing.T) {
 	}
 
 	w.HoldWatcherLease("acme", world.Host)
-	if v := watcher(); v.State != core.WatcherNotReported || v.Host != world.Host {
+	if v := watcher(); v.State != api.WatcherNotReported || v.Host != world.Host {
 		t.Fatalf("held by the world's own service: %+v", v)
 	}
 	w.Advance(store.ServiceLife)
 	w.HoldWatcherLease("acme", "desktop")
-	if v := watcher(); v.State != core.WatcherElsewhere || v.Host != "desktop" {
+	if v := watcher(); v.State != api.WatcherElsewhere || v.Host != "desktop" {
 		t.Fatalf("held on desktop: %+v", v)
 	}
 	w.Advance(store.ServiceLife)
-	if v := watcher(); v.State != core.WatcherWaiting {
+	if v := watcher(); v.State != api.WatcherWaiting {
 		t.Fatalf("lapsed: %+v", v)
 	}
 }

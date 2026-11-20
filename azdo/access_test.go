@@ -5,8 +5,8 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/azdo"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/internal/fakeazdo"
 )
@@ -29,7 +29,7 @@ func TestReadyWithoutThePATIsThePATMissingProblem(t *testing.T) {
 	if err != nil || c != nil {
 		t.Fatalf("Ready = %v, %v; want no client and no error", c, err)
 	}
-	want := core.WatcherCheckResult{Problem: core.ProblemPATMissing,
+	want := api.WatcherCheckResult{Problem: api.ProblemPATMissing,
 		Reason: "The environment variable MY_PAT is not set, or is empty, in the CI Watcher's environment.",
 		Fix:    azdo.PATMissingFix(runtime.GOOS, "MY_PAT", "Build: Read & execute")}
 	if !reflect.DeepEqual(r, want) {
@@ -44,7 +44,7 @@ func TestReadyReadsTheDefaultPATVariableWhenNoneIsNamed(t *testing.T) {
 		t.Fatalf("Ready = %+v, %v; want a client", r, err)
 	}
 	_, r, _ := azdo.Access{Watcher: "Pull Request Watcher", Scope: "Code: Read & write"}.Ready(fake.ProjectURL())
-	if r.Problem != core.ProblemPATMissing || r.Fix != azdo.PATMissingFix(runtime.GOOS, domain.DefaultPATEnv, "Code: Read & write") {
+	if r.Problem != api.ProblemPATMissing || r.Fix != azdo.PATMissingFix(runtime.GOOS, domain.DefaultPATEnv, "Code: Read & write") {
 		t.Fatalf("result = %+v, want the PAT missing problem naming %s", r, domain.DefaultPATEnv)
 	}
 }
@@ -58,7 +58,7 @@ func TestReadyRefusesAProjectURLThatDoesNotParse(t *testing.T) {
 
 func TestRejectedIsThePATRejectedProblemWithTheScope(t *testing.T) {
 	r := azdo.Access{PATEnv: "MY_PAT", Scope: "Code: Read & write"}.Rejected()
-	want := core.WatcherCheckResult{Problem: core.ProblemPATRejected,
+	want := api.WatcherCheckResult{Problem: api.ProblemPATRejected,
 		Reason: "Azure DevOps rejected the PAT in MY_PAT: it may have expired or been revoked.",
 		Fix:    "Make a new PAT with Code: Read & write, and set it in MY_PAT for the service."}
 	if !reflect.DeepEqual(r, want) {

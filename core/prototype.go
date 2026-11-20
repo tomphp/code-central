@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 
+	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -11,27 +12,18 @@ import (
 // prototype, on any Spec: the human asks for one with its text, and the
 // Factory builds it on a local branch that never lands.
 
-// SubmitPrototypeInput is submit_prototype's input: the Spec it is on and
-// the Prototype's free text, whose first line becomes its title.
-type SubmitPrototypeInput struct {
-	Spec Ref    `json:"spec" desc:"The Spec the Prototype is on." required:"true"`
-	Text string `json:"text" desc:"What to prototype and the question it answers, in Markdown; its first line becomes the title." required:"true"`
-	// Full asks for the Ticket in place of its Acknowledgement.
-	Full bool `json:"full,omitempty" desc:"Return the whole Ticket instead of the acknowledgement."`
-}
-
 // SubmitPrototype is submit_prototype(spec, text). It writes, as human
 // whoever calls, a Ready Prototype titled "Prototype: <first line>" with
 // the text as its description.
-func (c *Core) SubmitPrototype(_ context.Context, key string, in SubmitPrototypeInput) (Written[TicketView], error) {
+func (c *Core) SubmitPrototype(_ context.Context, key string, in api.SubmitPrototypeInput) (api.Written[api.TicketView], error) {
 	title := titleLine(in.Text)
 	if title == "" {
-		return Written[TicketView]{}, invalid("text", "a Prototype needs text; its first line becomes the Ticket's title")
+		return api.Written[api.TicketView]{}, invalid("text", "a Prototype needs text; its first line becomes the Ticket's title")
 	}
 	if in.Spec == "" {
-		return Written[TicketView]{}, invalid("spec", "a Prototype is on a Spec")
+		return api.Written[api.TicketView]{}, invalid("spec", "a Prototype is on a Spec")
 	}
-	var v Written[TicketView]
+	var v api.Written[api.TicketView]
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -43,8 +35,8 @@ func (c *Core) SubmitPrototype(_ context.Context, key string, in SubmitPrototype
 		now := c.now()
 		t := domain.Ticket{
 			Number: w.NextNumber(key), Title: "Prototype: " + title, State: domain.Ready, Spec: sp.Number,
-			Labels: []string{PrototypeLabel}, Created: now, Updated: now, Description: in.Text,
-			Moves: []domain.Move{{To: domain.Ready, Actor: string(Human), Time: now, Via: "submit_prototype"}},
+			Labels: []string{domain.PrototypeLabel}, Created: now, Updated: now, Description: in.Text,
+			Moves: []domain.Move{{To: domain.Ready, Actor: string(api.Human), Time: now, Via: "submit_prototype"}},
 		}
 		if err := whole.put(w, key, &t); err != nil {
 			return err
