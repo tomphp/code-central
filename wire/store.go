@@ -1,10 +1,11 @@
-package cli
+package wire
 
 import (
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/tomoram/code-central/cli"
 	"io"
 	"maps"
 	"os"
@@ -19,22 +20,22 @@ import (
 )
 
 func init() {
-	commands["store"] = command{
-		usage: "store move --to <kind>[:<path>] [--url-env <name>] [--store <dir>]  copy the Store serve opens into a new, empty " +
+	cli.Register("store", cli.Command{
+		Usage: "store move --to <kind>[:<path>] [--url-env <name>] [--store <dir>]  copy the Store serve opens into a new, empty " +
 			"files, sqlite or postgres Store and switch settings.yaml to it; offline: stop serve first",
-		run: runStore,
-	}
+		Run: runStore,
+	})
 }
 
 // copyStore is Store Move's copy; a test makes it go wrong.
 var copyStore = store.Copy
 
-func runStore(ctx context.Context, e Env, args []string) error {
+func runStore(ctx context.Context, e cli.Env, args []string) error {
 	if len(args) == 0 {
-		return usagef("expected move")
+		return cli.UsageError("expected move")
 	}
 	if args[0] != "move" {
-		return usagef("unknown store command %q: expected move", args[0])
+		return cli.UsageError("unknown store command %q: expected move", args[0])
 	}
 	return storeMove(e, args[1:])
 }
@@ -44,23 +45,23 @@ func runStore(ctx context.Context, e Env, args []string) error {
 // points settings.yaml's store: block at it. The source is left as it
 // was, as a backup. It doesn't talk to the service: holding the source's
 // lock is what keeps a running serve from writing during the copy.
-func storeMove(e Env, args []string) error {
-	fs := flagSet("store move")
+func storeMove(e cli.Env, args []string) error {
+	fs := cli.FlagSet("store move")
 	to := fs.String("to", "", "")
 	urlEnv := fs.String("url-env", "", "")
 	storeFlag := fs.String("store", "", "")
-	pos, err := parse(fs, args)
+	pos, err := cli.Parse(fs, args)
 	if err != nil {
 		return err
 	}
 	if len(pos) > 0 {
-		return usagef("unexpected argument %q", pos[0])
+		return cli.UsageError("unexpected argument %q", pos[0])
 	}
 	block, err := moveTarget(*to, *urlEnv, e.Dir)
 	if err != nil {
 		return err
 	}
-	h := e.home()
+	h := e.Home()
 	local, err := loadSettings(h)
 	if err != nil {
 		return err
@@ -115,7 +116,7 @@ func storeMove(e Env, args []string) error {
 
 // move copies the Store at from into the empty one at target and checks
 // the copy, returning the Tally the two then share. It closes both.
-func move(e Env, from, target store.Location) (store.Tally, error) {
+func move(e cli.Env, from, target store.Location) (store.Tally, error) {
 	src, err := store.OpenAt(from)
 	if errors.Is(err, store.ErrLocked) {
 		return store.Tally{}, fmt.Errorf("%s is locked by a running code-central serve: stop the service and move again", from)
@@ -177,14 +178,14 @@ func move(e Env, from, target store.Location) (store.Tally, error) {
 // target. A relative path is the working folder's.
 func moveTarget(to, urlEnv, wd string) (storeSettings, error) {
 	if to == "" {
-		return storeSettings{}, usagef("--to is required: files, sqlite or postgres, with :<path> for files or sqlite")
+		return storeSettings{}, cli.UsageError("--to is required: files, sqlite or postgres, with :<path> for files or sqlite")
 	}
 	kind, path, _ := strings.Cut(to, ":")
 	b := storeSettings{Kind: kind}
 	switch store.Kind(kind) {
 	case store.Files, store.SQLite:
 		if urlEnv != "" {
-			return b, usagef("--url-env is for a postgres target; a %s target takes a path, as --to %s:<path>", kind, kind)
+			return b, cli.UsageError("--url-env is for a postgres target; a %s target takes a path, as --to %s:<path>", kind, kind)
 		}
 		if path != "" && !filepath.IsAbs(path) {
 			path = filepath.Join(wd, path)
@@ -192,11 +193,11 @@ func moveTarget(to, urlEnv, wd string) (storeSettings, error) {
 		b.Path = path
 	case store.Postgres:
 		if path != "" {
-			return b, usagef("--to postgres takes no path: its URL is in the environment variable --url-env names (%s by default)", defaultURLEnv)
+			return b, cli.UsageError("--to postgres takes no path: its URL is in the environment variable --url-env names (%s by default)", defaultURLEnv)
 		}
 		b.URLEnv = urlEnv
 	default:
-		return b, usagef("--to %s: the kind must be files, sqlite or postgres, not %q", to, kind)
+		return b, cli.UsageError("--to %s: the kind must be files, sqlite or postgres, not %q", to, kind)
 	}
 	return b, nil
 }

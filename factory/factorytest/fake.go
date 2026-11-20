@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/cli"
+	_ "github.com/tomoram/code-central/wire"
 )
 
 func runFake(data string, args []string) int {
