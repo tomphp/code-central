@@ -191,7 +191,7 @@ Type the slash command yourself. `/to-spec`, `/to-tickets` and `/implement` only
 
    **Accept** `acme-shop-4`.
 
-   Check: Grilling, Spec and Tickets are done on the strip, and Build shows *0/1*. `acme-shop-5` is in Ready, with its acceptance criteria. A larger Requirement gets several implementation Tickets, ordered by Blockers. Work each one as in the next step.
+   Check: Grilling, Spec and Tickets are done on the strip, and Build shows *0/1*. `acme-shop-5` is in Ready, with its acceptance criteria. A larger Requirement gets several implementation Tickets, ordered by Blockers; when one Build Ticket blocks another, the Requirement's view draws them as a **Ticket graph** above the Build list, each Blocker left of what it blocks (Stage Tickets are never in it), and clicking a node opens its Ticket. Work each one as in the next step.
 
 8. **Work the implementation Ticket.** Unlike the Stages, it changes the repository: the session works on a branch named after the Ticket and commits there.
 

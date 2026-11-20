@@ -467,7 +467,7 @@ $ code-central submit-retro acme-shop-4 --note "Why did this take three redos?"
 
 A Ticket with any of these Labels is never run as an implementation Ticket.
 
-Selecting the Map in the **Requirements** view opens the Map view: **New Prototype** and its Destination, then its Tickets as a graph read left to right, each Blocker before what it blocks, coloured like the Stage strip, and a dim **Not yet specified** node at the right edge that shows that section when clicked. A Draft Ticket that nothing blocks is on the frontier: click **Start** on its node to approve it to Ready, and the Factory claims it at once. Clicking a node opens its Ticket below. **Decisions so far** and **Out of scope** sit beside the graph.
+Selecting the Map in the **Requirements** view opens the Map view: **New Prototype** and its Destination, then its Tickets as a **Ticket graph** read left to right, each Blocker before what it blocks, coloured like the Stage strip, and a dim **Not yet specified** node at the right edge that shows that section when clicked. A Draft Ticket that nothing blocks is on the frontier: click **Start** on its node to approve it to Ready, and the Factory claims it at once. Clicking a node opens its Ticket below. **Decisions so far** and **Out of scope** sit beside the graph.
 
 To let the Factory find the way for you, tick **Guided** in the Map view's header. It sets the Map's `guided` Tag to `on`, and from then on, on each poll, the Factory checks whether the Map is idle: every Ticket on it that isn't research is Draft, Done or Cancelled. When it is, the Factory approves the Map's first frontier Ticket in created order, one per poll, and claims it as usual:
 
