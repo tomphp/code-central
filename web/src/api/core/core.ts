@@ -14,6 +14,7 @@
 // calls after each test; a story's world lives as long as the story.
 import type { Api } from "../api";
 import { createHttpApi } from "../http";
+import type { SessionEvent } from "../types";
 
 // CoreModule is what cmd/corewasm sets on globalThis.codeCentralCore.
 interface CoreModule {
@@ -27,6 +28,7 @@ interface CoreModule {
   setPullRequestCheck(id: number, resultJSON: string): void;
   reportWatcherCrash(id: number, kind: string, key: string, restarts: number, lastLine: string, restartAtISO: string): void;
   holdWatcherLease(id: number, key: string, host: string): void;
+  postSessionEventsOn(id: number, host: string, sessionId: string, eventsJSON: string): void;
   dropStreams(id: number): void;
   transcriptStreams(id: number): number;
   settled(id: number, events: number, transcripts: number, chats: number): string;
@@ -303,6 +305,14 @@ export class World {
   // it is free. The world's service then sees where it is held.
   holdWatcherLease(key: string, host: string) {
     this.live().holdWatcherLease(this.id, key, host);
+  }
+
+  // postSessionEventsOn posts a session's Session Events to the service on
+  // host, as a Factory reporting to it does: the world's own, on
+  // WORLD_HOST, or another service on the same store, which then holds the
+  // Transcript, so the world's service names its host.
+  postSessionEventsOn(host: string, sessionId: string, events: SessionEvent[]) {
+    this.live().postSessionEventsOn(this.id, host, sessionId, JSON.stringify(events));
   }
 
   // dropStreams ends every open stream, change notices and Transcript

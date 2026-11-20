@@ -14,6 +14,7 @@
 //	setAzureBoardsCheck(id, resultJSON), setPullRequestCheck(id, resultJSON)
 //	reportWatcherCrash(id, kind, key, restarts, lastLine, restartAtISO)
 //	holdWatcherLease(id, key, host)
+//	postSessionEventsOn(id, host, sessionID, eventsJSON)
 //	dropStreams(id)
 //	transcriptStreams(id) -> count
 //	settled(id, events, transcripts, chats) -> busyJSON
@@ -22,7 +23,8 @@
 // fetch's headers are [name, value] pairs and its body a string; its
 // Response's body streams as the handler writes it, and cancelling that
 // body or aborting signal ends the request. A check's result is
-// core.WatcherCheckResult as JSON, "{}" to pass. settled takes how many
+// core.WatcherCheckResult as JSON, "{}" to pass, and eventsJSON is
+// []core.SessionEvent as JSON. settled takes how many
 // feeds of each stream kind the client has subscribed and answers
 // world.Busy as JSON, "{}" once the world is settled. Using an id after
 // drop is a test's bug, and stops the program.
@@ -76,6 +78,14 @@ func main() {
 		return nil
 	})
 	set("holdWatcherLease", func(a []js.Value) any { of(a[0]).HoldWatcherLease(a[1].String(), a[2].String()); return nil })
+	set("postSessionEventsOn", func(a []js.Value) any {
+		var events []core.SessionEvent
+		if err := json.Unmarshal([]byte(a[3].String()), &events); err != nil {
+			panic("corewasm: Session Events: " + err.Error())
+		}
+		of(a[0]).PostSessionEventsOn(a[1].String(), a[2].String(), events)
+		return nil
+	})
 	set("dropStreams", func(a []js.Value) any { of(a[0]).DropStreams(); return nil })
 	set("transcriptStreams", func(a []js.Value) any { return of(a[0]).TranscriptStreams() })
 	set("settled", func(a []js.Value) any {

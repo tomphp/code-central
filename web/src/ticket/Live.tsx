@@ -36,25 +36,36 @@ export function Live({ project, id, claim, defaultOpen }: LiveProps) {
 
 // TranscriptLog subscribes to the Claim's Transcript for as long as it is
 // mounted. The Transcript read says whether there is none, since the
-// stream can't say that nothing more is on its way.
+// stream can't say that nothing more is on its way. On a Shared Store,
+// the read or the stream may name the host of another service holding it
+// instead (Spec code-central-1107): then it stops following.
 function TranscriptLog({ project, id, claim }: Omit<LiveProps, "defaultOpen">) {
   const api = useApi();
   const [events, setEvents] = useState<HeldSessionEvent[]>([]);
   const [tail, setTail] = useState(false);
   const [noneHeld, setNoneHeld] = useState(false);
+  const [host, setHost] = useState("");
   const box = useRef<HTMLDivElement>(null);
   const following = useRef(true);
 
   useEffect(() => {
     let current = true;
     api.transcript(project, id, claim).then(
-      (tr) => current && setNoneHeld(tr.events.length === 0),
+      (tr) => {
+        if (!current) return;
+        setNoneHeld(tr.events.length === 0);
+        if (tr.host) setHost(tr.host);
+      },
       () => {},
     );
     const stop = api.subscribeTranscript(project, id, claim, {
       // The stream never repeats one; this keeps a repeat from showing twice if it did.
       onEvent: (e) => setEvents((es) => (es.length && es[es.length - 1].seq >= e.seq ? es : [...es, e])),
       onTail: () => setTail(true),
+      onHost: (h) => {
+        stop();
+        setHost(h);
+      },
     });
     return () => {
       current = false;
@@ -86,7 +97,8 @@ function TranscriptLog({ project, id, claim }: Omit<LiveProps, "defaultOpen">) {
           Earlier events aren't held (Code Central keeps the last 2,000 and none from before its last restart)
         </p>
       )}
-      {noneHeld && events.length === 0 && <p className="muted small transcript-note">This Claim has no Transcript.</p>}
+      {host && events.length === 0 && <p className="muted small transcript-note">This Transcript is on {host}.</p>}
+      {!host && noneHeld && events.length === 0 && <p className="muted small transcript-note">This Claim has no Transcript.</p>}
       {events.map((e) => {
         // A result shows under its call; one whose call wasn't held shows on its own.
         if (e.kind === "tool_result" && e.tool_use_id && calls.has(e.tool_use_id)) return null;

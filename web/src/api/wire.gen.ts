@@ -820,10 +820,14 @@ export interface NeedsMeView {
 // events, oldest first. Tail is true when it holds only part of the
 // session: events were dropped from its front, as it keeps the last
 // TranscriptLimit, or it began after the Claim did, as none are kept
-// from before Code Central's last restart.
+// from before Code Central's last restart, or on another service before
+// its session moved here. Host is the host of another service on the
+// Store holding the Transcript, its Reporting Service, while that service
+// is running: then Events is empty.
 export interface TranscriptView {
   events: HeldSessionEvent[];
   tail: boolean;
+  host?: string;
 }
 
 // CIOverview is the CI view: the CI Watchers' statuses, then the runs,
