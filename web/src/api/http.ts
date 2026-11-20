@@ -7,6 +7,7 @@ import {
   type ChatHandlers,
   type TranscriptHandlers,
 } from "./api";
+import { OPERATIONS, type OperationInputs, type OperationName } from "./wire.gen";
 import { ApiError, type ChangeEvent, type ChatOutcome, type Conversation, type ChatItem, type ChatMessage, type HeldSessionEvent } from "./types";
 
 export interface HttpApiOptions {
@@ -16,6 +17,20 @@ export interface HttpApiOptions {
   retryMs?: number;
   fetch?: typeof fetch;
 }
+
+// OperationEntry is an Operation Table entry as operate reads it: the
+// table's literal types widened to one shape.
+interface OperationEntry {
+  method: "GET" | "POST";
+  path: string;
+  bind: Record<string, string>;
+  query: Record<string, string>;
+}
+
+// Every Ticket action is an operation in the Operation Table: an action
+// file that names something else fails to type-check here.
+const actionsAreOperations: [Exclude<TicketAction, OperationName>] extends [never] ? true : never = true;
+void actionsAreOperations;
 
 // The UI is the human: only it sends this Actor.
 const headers = { "X-Code-Central-Actor": "human" };
@@ -41,79 +56,89 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     throw toError(res.status, text);
   }
 
-  const p = (project: string) => `/api/p/${encodeURIComponent(project)}`;
+  // operate sends the operation name's request for input: the path and
+  // query from the Operation Table, the body from the input.
+  function operate<N extends OperationName, T>(name: N, project: string, input: OperationInputs[N]): Promise<T> {
+    const op: OperationEntry = OPERATIONS[name];
+    const values = input as Record<string, unknown>;
+    let path = op.path.replace("{key}", encodeURIComponent(project));
+    for (const [placeholder, field] of Object.entries(op.bind)) {
+      path = path.replace(`{${placeholder}}`, encodeURIComponent(String(values[field])));
+    }
+    const { method } = op;
+    if (method === "GET") {
+      const q = new URLSearchParams();
+      for (const [field, param] of Object.entries(op.query)) {
+        const v = values[field];
+        if (Array.isArray(v)) for (const item of v) q.append(param, String(item));
+        else if (typeof v === "string" ? v !== "" : v === true) q.append(param, String(v));
+      }
+      return call("GET", path + (q.size ? `?${q}` : ""));
+    }
+    // The path carries what it binds, so the body doesn't.
+    const bound = new Set(Object.values(op.bind));
+    return call("POST", path, Object.fromEntries(Object.entries(values).filter(([field]) => !bound.has(field))));
+  }
   const transcriptPath = (project: string, id: string, claim: number) =>
     `/api/projects/${encodeURIComponent(project)}/tickets/${encodeURIComponent(numberOf(id))}/claims/${claim}/transcript`;
 
   return {
-    listProjects: () => call("GET", "/api/projects"),
-    needsMe: () => call("GET", "/api/needs-me"),
-    findTickets: (project, filter = {}) => {
-      const q = new URLSearchParams();
-      for (const s of filter.state ?? []) q.append("state", s);
-      const qs = q.toString();
-      return call("GET", `${p(project)}/tickets${qs ? `?${qs}` : ""}`);
-    },
-    getTicket: (project, id) => call("GET", `${p(project)}/tickets/${encodeURIComponent(numberOf(id))}`),
-    getSpec: (project, spec) => call("GET", `${p(project)}/specs/${encodeURIComponent(numberOf(spec))}`),
-    findSpecs: (project, filter = {}) => {
-      const q = new URLSearchParams();
-      if (filter.requirements) q.set("requirements", "true");
-      for (const l of filter.labels ?? []) q.append("label", l);
-      if (filter.finished) q.set("finished", "true");
-      const qs = q.toString();
-      return call("GET", `${p(project)}/specs${qs ? `?${qs}` : ""}`);
-    },
+    listProjects: () => operate("list_projects", "", {}),
+    needsMe: () => operate("needs_me", "", {}),
+    findTickets: (project, filter = {}) => operate("find_tickets", project, { state: filter.state }),
+    getTicket: (project, id) => operate("get_ticket", project, { ticket: numberOf(id) }),
+    getSpec: (project, spec) => operate("get_spec", project, { spec: numberOf(spec) }),
+    findSpecs: (project, filter = {}) =>
+      operate("find_specs", project, { requirements: filter.requirements, labels: filter.labels, finished: filter.finished }),
     submitRequirement: (project, text, map, skipGrilling, draft) =>
-      call("POST", `${p(project)}/submit_requirement`, {
+      operate("submit_requirement", project, {
         text,
         ...(map && { map }),
         ...(skipGrilling && { skip_grilling: true }),
         ...(draft && { draft }),
       }),
-    submitMap: (project, text, draft) => call("POST", `${p(project)}/submit_map`, { text, ...(draft && { draft }) }),
-    submitPrototype: (project, spec, text) => call("POST", `${p(project)}/submit_prototype`, { spec, text }),
-    submitRetro: (project, target, note) =>
-      call("POST", `${p(project)}/submit_retro`, { target, ...(note && { note }) }),
-    submitSmallChange: (project, text, draft) =>
-      call("POST", `${p(project)}/submit_small_change`, { text, ...(draft && { draft }) }),
-    newTicket: (project, spec, text, draft) => call("POST", `${p(project)}/new_ticket`, { spec, text, ...(draft && { draft }) }),
-    specQuestions: (project, spec) => call("GET", `${p(project)}/specs/${encodeURIComponent(numberOf(spec))}/questions`),
+    submitMap: (project, text, draft) => operate("submit_map", project, { text, ...(draft && { draft }) }),
+    submitPrototype: (project, spec, text) => operate("submit_prototype", project, { spec, text }),
+    submitRetro: (project, target, note) => operate("submit_retro", project, { target, ...(note && { note }) }),
+    submitSmallChange: (project, text, draft) => operate("submit_small_change", project, { text, ...(draft && { draft }) }),
+    newTicket: (project, spec, text, draft) => operate("new_ticket", project, { spec, text, ...(draft && { draft }) }),
+    specQuestions: (project, spec) => operate("get_spec_questions", project, { spec: numberOf(spec) }),
     act: <A extends TicketAction>(project: string, id: string, action: A, body: TicketActions[A]["body"]) =>
-      call<TicketActions[A]["result"]>("POST", `${p(project)}/tickets/${encodeURIComponent(numberOf(id))}/${action}`, body),
-    editSpec: (project, spec, change) => call("POST", `${p(project)}/specs/${encodeURIComponent(numberOf(spec))}/edit_spec`, change),
-    archiveProject: (project) => call("POST", `${p(project)}/archive_project`, {}),
-    unarchiveProject: (project) => call("POST", `${p(project)}/unarchive_project`, {}),
-    renameProject: (project, display_name) => call("POST", `${p(project)}/rename_project`, { display_name }),
-    setLandingMethod: (project, landing) => call("POST", `${p(project)}/set_landing_method`, landing),
-    setCITracking: (project, ci) => call("POST", `${p(project)}/set_ci_tracking`, { ...ci, full: true }),
-    setAutoFix: (project, autoFix) => call("POST", `${p(project)}/set_auto_fix`, { ...autoFix, full: true }),
-    setRepositoryCI: (project, name, ci) => call("POST", `${p(project)}/set_repository_ci`, { ...ci, name, full: true }),
+      operate<A, TicketActions[A]["result"]>(action, project, { ...body, ticket: numberOf(id) } as OperationInputs[A]),
+    editSpec: (project, spec, change) => operate("edit_spec", project, { ...change, spec: numberOf(spec) }),
+    archiveProject: (project) => operate("archive_project", project, {}),
+    unarchiveProject: (project) => operate("unarchive_project", project, {}),
+    renameProject: (project, display_name) => operate("rename_project", project, { display_name }),
+    setLandingMethod: (project, landing) => operate("set_landing_method", project, landing),
+    setCITracking: (project, ci) => operate("set_ci_tracking", project, { ...ci, full: true }),
+    setAutoFix: (project, autoFix) => operate("set_auto_fix", project, { ...autoFix, full: true }),
+    setRepositoryCI: (project, name, ci) => operate("set_repository_ci", project, { ...ci, name, full: true }),
     // Only the settings themselves: a Project's read adds spec and watcher.
     setGitHubIssues: (project, { on, repositories, label, new_issues_need_me }) =>
-      call("POST", `${p(project)}/set_github_issues`, { on, repositories, label, new_issues_need_me, full: true }),
+      operate("set_github_issues", project, { on, repositories, label, new_issues_need_me, full: true }),
     // Only the settings themselves: a Project's read adds spec.
     setAzureBoards: (project, { on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central, branch_format }) =>
-      call("POST", `${p(project)}/set_azure_boards`, { on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central, branch_format, full: true }),
-    setModels: (project, models) => call("POST", `${p(project)}/set_models`, { default: models.default, chat: models.chat ?? { model: "", effort: "" }, kinds: models.kinds, full: true }),
-    setSubagentExploration: (project, on) => call("POST", `${p(project)}/set_subagent_exploration`, { on, full: true }),
-    setModelAssignment: (project, on) => call("POST", `${p(project)}/set_model_assignment`, { on, full: true }),
-    setAutoAccept: (project, kinds) => call("POST", `${p(project)}/set_auto_accept`, { kinds, full: true }),
-    setFocusKinds: (project, off) => call("POST", `${p(project)}/set_focus_kinds`, { off, full: true }),
-    addCIRule: (project, rule) => call("POST", `${p(project)}/add_ci_rule`, { ...rule, full: true }),
-    editCIRule: (project, spec, rule) => call("POST", `${p(project)}/edit_ci_rule`, { ...rule, spec, full: true }),
-    removeCIRule: (project, spec) => call("POST", `${p(project)}/remove_ci_rule`, { spec, full: true }),
-    addRepository: (project, repository) => call("POST", `${p(project)}/add_repository`, { ...repository, full: true }),
-    editRepository: (project, name, change) => call("POST", `${p(project)}/edit_repository`, { ...change, name, full: true }),
-    removeRepository: (project, name) => call("POST", `${p(project)}/remove_repository`, { name, full: true }),
-    setLandingOrder: (project, names) => call("POST", `${p(project)}/set_landing_order`, { names, full: true }),
-    unlink: (project, target) => call("POST", `${p(project)}/unlink`, { target }),
-    setTags: (project, target, tags) => call("POST", `${p(project)}/set_tags`, { target, tags }),
-    removeTags: (project, target, keys) => call("POST", `${p(project)}/remove_tags`, { target, keys }),
-    addLabels: (project, target, labels) => call("POST", `${p(project)}/add_labels`, { target, labels }),
-    removeLabels: (project, target, labels) => call("POST", `${p(project)}/remove_labels`, { target, labels }),
-    options: () => call("GET", "/api/options"),
-    setOptions: (change) => call("POST", "/api/set_options", change),
+      operate("set_azure_boards", project, { on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central, branch_format, full: true }),
+    setModels: (project, models) =>
+      operate("set_models", project, { default: models.default, chat: models.chat ?? { model: "", effort: "" }, kinds: models.kinds, full: true }),
+    setSubagentExploration: (project, on) => operate("set_subagent_exploration", project, { on, full: true }),
+    setModelAssignment: (project, on) => operate("set_model_assignment", project, { on, full: true }),
+    setAutoAccept: (project, kinds) => operate("set_auto_accept", project, { kinds, full: true }),
+    setFocusKinds: (project, off) => operate("set_focus_kinds", project, { off, full: true }),
+    addCIRule: (project, rule) => operate("add_ci_rule", project, { ...rule, full: true }),
+    editCIRule: (project, spec, rule) => operate("edit_ci_rule", project, { ...rule, spec, full: true }),
+    removeCIRule: (project, spec) => operate("remove_ci_rule", project, { spec, full: true }),
+    addRepository: (project, repository) => operate("add_repository", project, { ...repository, full: true }),
+    editRepository: (project, name, change) => operate("edit_repository", project, { ...change, name, full: true }),
+    removeRepository: (project, name) => operate("remove_repository", project, { name, full: true }),
+    setLandingOrder: (project, names) => operate("set_landing_order", project, { names, full: true }),
+    unlink: (project, target) => operate("unlink", project, { target }),
+    setTags: (project, target, tags) => operate("set_tags", project, { target, tags }),
+    removeTags: (project, target, keys) => operate("remove_tags", project, { target, keys }),
+    addLabels: (project, target, labels) => operate("add_labels", project, { target, labels }),
+    removeLabels: (project, target, labels) => operate("remove_labels", project, { target, labels }),
+    options: () => operate("get_options", "", {}),
+    setOptions: (change) => operate("set_options", "", change),
     usage: (filter = {}) => {
       const q = new URLSearchParams();
       if (filter.project) q.set("project", filter.project);
@@ -132,7 +157,7 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
       if (agent) q.set("agent", agent);
       return call("GET", `/api/usage/session?${q}`);
     },
-    storage: (project) => call("GET", `/api/storage${project ? `?${new URLSearchParams({ project })}` : ""}`),
+    storage: (project) => operate("get_storage", "", { project }),
     subscribe: (h) =>
       follow(doFetch, base + "/api/events", retryMs, {
         onOpen: h.onOpen,
@@ -142,10 +167,10 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
       }),
     transcript: (project, id, claim) => call("GET", transcriptPath(project, id, claim)),
     subscribeTranscript: (project, id, claim, h) => subscribeTranscript(doFetch, base + transcriptPath(project, id, claim) + "/stream", retryMs, h),
-    getChat: (project) => call("GET", `${p(project)}/chat`),
-    startConversation: (project, pick) => call("POST", `${p(project)}/start_conversation`, pick),
-    sendChatMessage: (project, text) => call("POST", `${p(project)}/send_chat_message`, { text }),
-    stopChatReply: (project) => call("POST", `${p(project)}/stop_chat_reply`, {}),
+    getChat: (project) => operate("get_chat", project, {}),
+    startConversation: (project, pick) => operate("start_conversation", project, pick),
+    sendChatMessage: (project, text) => operate("send_chat_message", project, { text }),
+    stopChatReply: (project) => operate("stop_chat_reply", project, {}),
     subscribeChat: (project, h) => subscribeChat(doFetch, base + `/api/p/${encodeURIComponent(project)}/chat/stream`, retryMs, h),
   };
 }
