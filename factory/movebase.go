@@ -42,7 +42,7 @@ func (l *lander) moveBase(ctx context.Context, repo *repository, remote, local, 
 		l.noteBase(ctx, repo, true, local, theirs)
 		return false
 	}
-	reset := func(dir, commit string) (string, error) { return repo.git.reset(dir, commit, local) }
+	reset := func(dir, commit string) (string, error) { return repo.git.Reset(dir, commit, local) }
 	if why := l.setBaseTo(repo, local, r.tip, reset); why != "" {
 		l.noteBase(ctx, repo, false, local, theirs)
 		l.printf("warning: can't move %s onto %s/%s%s yet: %s", base, remote, base, repo.where(), firstLine(why))
@@ -81,25 +81,25 @@ type rebuilt struct {
 // rebuild this way.
 func (l *lander) rebuildOnto(repo *repository, onto, from string, heads map[string]bool) (r rebuilt, conflicts []string, why string) {
 	g := repo.git
-	chain, err := g.firstParents(from, onto)
+	chain, err := g.FirstParents(from, onto)
 	if err != nil {
 		return rebuilt{}, nil, err.Error()
 	}
 	r = rebuilt{tip: onto, rewritten: map[string]string{}}
 	for _, c := range chain {
-		parents, err := g.parentsOf(c)
+		parents, err := g.ParentsOf(c)
 		if err != nil {
 			return rebuilt{}, nil, err.Error()
 		}
 		var tree string
 		switch len(parents) {
 		case 1:
-			tree, conflicts, err = g.replayTree(r.tip, c)
+			tree, conflicts, err = g.ReplayTree(r.tip, c)
 		case 2:
 			if !heads[parents[1]] {
 				return rebuilt{}, nil, fmt.Sprintf("%s is a merge the Factory didn't make, so it can't be rebuilt safely", short(c))
 			}
-			tree, conflicts, err = g.mergeTree(r.tip, parents[1])
+			tree, conflicts, err = g.MergeTree(r.tip, parents[1])
 		default:
 			return rebuilt{}, nil, fmt.Sprintf("%s has %d parents, so it can't be rebuilt safely", short(c), len(parents))
 		}
@@ -109,7 +109,7 @@ func (l *lander) rebuildOnto(repo *repository, onto, from string, heads map[stri
 		if len(conflicts) > 0 {
 			return rebuilt{}, conflicts, fmt.Sprintf("%s conflicts in %s", short(c), strings.Join(conflicts, ", "))
 		}
-		made, err := g.commitTreeLike(tree, c, append([]string{r.tip}, parents[1:]...)...)
+		made, err := g.CommitTreeLike(tree, c, append([]string{r.tip}, parents[1:]...)...)
 		if err != nil {
 			return rebuilt{}, nil, err.Error()
 		}
@@ -134,7 +134,7 @@ func (l *lander) mergeHeads(repo *repository, theirs string, merged []api.Ticket
 			heads[head] = true
 		}
 	}
-	specs, err := repo.git.specBranches()
+	specs, err := repo.git.SpecBranches()
 	if err != nil {
 		return nil, err
 	}
@@ -142,12 +142,12 @@ func (l *lander) mergeHeads(repo *repository, theirs string, merged []api.Ticket
 		if !tk.SpecLanded || slices.Contains(specs, tk.Spec.Branch) {
 			continue
 		}
-		if _, err := repo.git.commit("refs/heads/" + tk.Spec.Branch); err == nil {
+		if _, err := repo.git.Commit("refs/heads/" + tk.Spec.Branch); err == nil {
 			specs = append(specs, tk.Spec.Branch)
 		}
 	}
 	for _, s := range specs {
-		line, err := repo.git.firstParents("refs/heads/"+s, theirs)
+		line, err := repo.git.FirstParents("refs/heads/"+s, theirs)
 		if err != nil {
 			return nil, err
 		}

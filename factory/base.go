@@ -102,13 +102,13 @@ func (l *lander) locateBase(ctx context.Context, p api.ProjectView, r *repositor
 	base := l.repos.baseOf(r)
 	ref := "refs/heads/" + base
 	localOnly, remote := r.localOnly, r.remote
-	tip, err := r.git.commit(ref)
-	if err != nil && !localOnly && r.git.hasRemote(remote) {
-		if out, ferr := r.git.fetch(ctx, remote); ferr != nil {
+	tip, err := r.git.Commit(ref)
+	if err != nil && !localOnly && r.git.HasRemote(remote) {
+		if out, ferr := r.git.Fetch(ctx, remote); ferr != nil {
 			if ctx.Err() == nil {
 				l.printf("warning: can't fetch %s to look for the base, %s%s: %s", remote, base, r.where(), firstLine(out))
 			}
-		} else if theirs, rerr := r.git.commit("refs/remotes/" + remote + "/" + base); rerr == nil {
+		} else if theirs, rerr := r.git.Commit("refs/remotes/" + remote + "/" + base); rerr == nil {
 			if _, berr := l.repos.gitOut(r.dir, "branch", "--no-track", base, theirs); berr != nil {
 				l.printf("warning: can't create the base, %s, from %s/%s%s: %v", base, remote, base, r.where(), berr)
 			} else {
@@ -150,7 +150,7 @@ func (l *lander) locateBase(ctx context.Context, p api.ProjectView, r *repositor
 		// diverges.
 		s.diverged = false
 		theirs := tip
-		if t, rerr := r.git.commit("refs/remotes/" + remote + "/" + base); rerr == nil && !localOnly {
+		if t, rerr := r.git.Commit("refs/remotes/" + remote + "/" + base); rerr == nil && !localOnly {
 			theirs = t
 		}
 		l.reportBaseState(ctx, r, api.ReportBaseInput{State: api.BaseCurrent, Local: tip, Remote: theirs})

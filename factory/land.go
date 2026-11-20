@@ -39,7 +39,7 @@ func (l *lander) reportPushRemote(ctx context.Context, p api.ProjectView) api.Pr
 		return p
 	}
 	home := p.Repositories[i]
-	url, err := l.repos.home.git.remoteURL(home.PushRemote)
+	url, err := l.repos.home.git.RemoteURL(home.PushRemote)
 	if err != nil {
 		url = ""
 	}
@@ -216,7 +216,7 @@ func (l *lander) landMergedBranch(ctx context.Context, tk api.TicketView, polici
 	r := w.r
 	head, what, err := l.workIn(r, tk)
 	switch {
-	case err == nil && w.landed != "" && r.git.isAncestor(head, w.landed):
+	case err == nil && w.landed != "" && r.git.IsAncestor(head, w.landed):
 		return
 	case err == nil && l.repos.inBaseOf(r, head):
 		l.printf("%s: merged into %s by hand%s", tk.ID, l.repos.baseOf(r), r.where())
@@ -277,7 +277,7 @@ func (l *lander) workOf(tk api.TicketView) (commit, what string, err error) {
 	if work == "" {
 		work, what = "refs/heads/"+tk.Branch, "its branch "+tk.Branch
 	}
-	commit, err = l.repos.home.git.commit(work)
+	commit, err = l.repos.home.git.Commit(work)
 	return commit, what, err
 }
 
@@ -317,7 +317,7 @@ func (l *lander) finishedIn(r *repository, tk api.TicketView) (commit, what stri
 	if work == "" {
 		work, what = "refs/heads/"+v.Branch, "its branch "+v.Branch+" in Repository "+r.name
 	}
-	commit, err = r.git.commit(work)
+	commit, err = r.git.Commit(work)
 	return commit, what, err
 }
 
@@ -376,7 +376,7 @@ func (l *lander) mergedByHand(tk api.TicketView, policies api.LandingPolicies) [
 		if w.r.policy(policies).LandsByPullRequest() {
 			continue
 		}
-		if w.commit == "" || l.held(w.r, policies) != "" || !l.repos.inBaseOf(w.r, w.commit) || w.landed != "" && w.r.git.isAncestor(w.commit, w.landed) {
+		if w.commit == "" || l.held(w.r, policies) != "" || !l.repos.inBaseOf(w.r, w.commit) || w.landed != "" && w.r.git.IsAncestor(w.commit, w.landed) {
 			continue
 		}
 		out = append(out, w)
@@ -521,7 +521,7 @@ func (l *lander) planMerge(ctx context.Context, tk api.TicketView, w changedWork
 	r := w.r
 	pl.r = r
 	if w.landed != "" {
-		if head, _, err := l.workIn(r, tk); err == nil && r.git.isAncestor(head, w.landed) {
+		if head, _, err := l.workIn(r, tk); err == nil && r.git.IsAncestor(head, w.landed) {
 			return pl, true, true
 		}
 	}
@@ -532,7 +532,7 @@ func (l *lander) planMerge(ctx context.Context, tk api.TicketView, w changedWork
 		return pl, false, true
 	}
 	base := l.repos.baseOf(r)
-	baseTip, err := r.git.commit("refs/heads/" + base)
+	baseTip, err := r.git.Commit("refs/heads/" + base)
 	if err != nil {
 		l.cantLandIn(ctx, tk, r, fmt.Sprintf("the base, %s, isn't a branch, so the Factory can't move it.", base))
 		return pl, false, false
@@ -547,7 +547,7 @@ func (l *lander) planMerge(ctx context.Context, tk api.TicketView, w changedWork
 		pl.inBase = true
 		return pl, false, true
 	}
-	if rebase && !r.git.isAncestor(baseTip, head) {
+	if rebase && !r.git.IsAncestor(baseTip, head) {
 		rp, files, why, err := l.planBaseReplay(r, branchIn(tk, r), head, baseTip)
 		switch {
 		case err != nil:
@@ -568,7 +568,7 @@ func (l *lander) planMerge(ctx context.Context, tk api.TicketView, w changedWork
 			return pl, false, true
 		}
 	}
-	if pl.tree, pl.conflicts, err = r.git.mergeTree(baseTip, pl.head); err != nil {
+	if pl.tree, pl.conflicts, err = r.git.MergeTree(baseTip, pl.head); err != nil {
 		l.printf("warning: %s: can't merge%s: %v", tk.ID, r.where(), err)
 		return pl, false, false
 	}
@@ -596,7 +596,7 @@ func (l *lander) mergeAndLand(ctx context.Context, tk api.TicketView, p api.Proj
 		return l.landPushed(ctx, tk, p, r, base, pl.head)
 	}
 	msg := fmt.Sprintf("Merge %s: %s", tk.ID, tk.Title)
-	merge, err := r.git.commitTree(pl.tree, msg, pl.baseTip, pl.head)
+	merge, err := r.git.CommitTree(pl.tree, msg, pl.baseTip, pl.head)
 	if err != nil {
 		l.printf("warning: %s: can't make the merge commit%s: %v", tk.ID, r.where(), err)
 		return false
@@ -671,7 +671,7 @@ func (l *lander) pushedBase(r *repository, pushed *api.PushedCommitView, remote,
 	if pushed == nil {
 		return false
 	}
-	return r.git.isAncestor(commit, pushed.Commit) && r.git.isAncestor(pushed.Commit, "refs/remotes/"+remote+"/"+base)
+	return r.git.IsAncestor(commit, pushed.Commit) && r.git.IsAncestor(pushed.Commit, "refs/remotes/"+remote+"/"+base)
 }
 
 // landOnCI lands tk in r, where the CI gate holds it, once v, its Changed
@@ -724,7 +724,7 @@ func viewIn(tk api.TicketView, r *repository) (v api.ChangedRepositoryView, ok b
 // remoteTip is the commit branch's remote-tracking ref on remote holds
 // in r, or, without one to read, pushed.
 func (l *lander) remoteTip(r *repository, remote, branch, pushed string) string {
-	commit, err := r.git.commit("refs/remotes/" + remote + "/" + branch)
+	commit, err := r.git.Commit("refs/remotes/" + remote + "/" + branch)
 	if err != nil {
 		return pushed
 	}
@@ -780,7 +780,7 @@ func (l *lander) reportTip(ctx context.Context, policies api.LandingPolicies) {
 		if !r.policy(policies).CIGateHolds() || l.held(r, policies) != "" {
 			continue
 		}
-		if tip, err := r.git.commit("refs/remotes/" + r.remote + "/" + l.repos.baseOf(r)); err == nil {
+		if tip, err := r.git.Commit("refs/remotes/" + r.remote + "/" + l.repos.baseOf(r)); err == nil {
 			tips = append(tips, tipIn{r, tip})
 		}
 	}
@@ -795,7 +795,7 @@ func (l *lander) reportTip(ctx context.Context, policies api.LandingPolicies) {
 			v, ok := viewIn(tk, t.r)
 			switch {
 			case !ok || v.Landed != nil || v.PushedCommit == nil:
-			case v.PushedCommit.Commit == t.tip || !t.r.git.isAncestor(v.PushedCommit.Commit, t.tip):
+			case v.PushedCommit.Commit == t.tip || !t.r.git.IsAncestor(v.PushedCommit.Commit, t.tip):
 			case tk.State == domain.InReview && (v.Commit == "" || !l.repos.inBaseOf(t.r, v.Commit)):
 			default:
 				l.reportPushed(ctx, tk, policies, t.r, l.repos.baseOf(t.r), t.tip)
@@ -817,19 +817,19 @@ func (l *lander) reportTip(ctx context.Context, policies api.LandingPolicies) {
 // that name.
 func (l *lander) push(ctx context.Context, r *repository, remote, branch, commit string, force bool) (pushed bool, why string) {
 	tracking := "refs/remotes/" + remote + "/" + branch
-	if r.git.isAncestor(commit, tracking) {
+	if r.git.IsAncestor(commit, tracking) {
 		return false, ""
 	}
 	if force && l.isBase(r, branch) {
 		return false, fmt.Sprintf("the Factory never force-pushes a base, and %s is the base%s.", branch, r.where())
 	}
 	var lease string
-	if theirs, err := r.git.commit(tracking); force && err == nil && !r.git.isAncestor(theirs, commit) {
+	if theirs, err := r.git.Commit(tracking); force && err == nil && !r.git.IsAncestor(theirs, commit) {
 		lease = theirs
 	}
 	defer l.work.busy("pushing ", branch)()
 	// A stop kills it, so a push that hangs doesn't hold up the Factory.
-	if out, err := r.git.push(ctx, remote, branch, lease); err != nil {
+	if out, err := r.git.Push(ctx, remote, branch, lease); err != nil {
 		return false, fmt.Sprintf("couldn't push %s to %s:\n\n```\n%s\n```", branch, remote, out)
 	}
 	return true, ""
@@ -1016,7 +1016,7 @@ func (l *lander) sendBackConflicts(ctx context.Context, tk api.TicketView, onto 
 // advanceBase fast-forwards r's base from old to merge. It returns why it
 // couldn't, or "".
 func (l *lander) advanceBase(r *repository, old, merge string) string {
-	return l.setBaseTo(r, old, merge, r.git.fastForward)
+	return l.setBaseTo(r, old, merge, r.git.FastForward)
 }
 
 // setBaseTo moves r's base from old to tip: with move in the worktree
@@ -1024,27 +1024,27 @@ func (l *lander) advanceBase(r *repository, old, merge string) string {
 // it couldn't, or "".
 func (l *lander) setBaseTo(r *repository, old, tip string, move func(dir, commit string) (out string, err error)) string {
 	base := l.repos.baseOf(r)
-	list, err := r.git.worktrees()
+	list, err := r.git.Worktrees()
 	if err != nil {
 		return err.Error()
 	}
 	for _, w := range list {
-		if w.branch != base {
+		if w.Branch != base {
 			continue
 		}
 		if moved := l.baseMoved(r, old); moved != "" {
 			return moved
 		}
-		out, err := move(w.path, tip)
+		out, err := move(w.Path, tip)
 		if err == nil {
 			return ""
 		}
 		if moved := l.baseMoved(r, old); moved != "" {
 			return moved
 		}
-		return fmt.Sprintf("uncommitted changes in %s, where %s is checked out, are in the way:\n\n%s", w.path, base, out)
+		return fmt.Sprintf("uncommitted changes in %s, where %s is checked out, are in the way:\n\n%s", w.Path, base, out)
 	}
-	if err := r.git.updateRef("refs/heads/"+base, tip, old); err != nil {
+	if err := r.git.UpdateRef("refs/heads/"+base, tip, old); err != nil {
 		if moved := l.baseMoved(r, old); moved != "" {
 			return moved
 		}
@@ -1056,7 +1056,7 @@ func (l *lander) setBaseTo(r *repository, old, tip string, move func(dir, commit
 // baseMoved says so when r's base is no longer at old.
 func (l *lander) baseMoved(r *repository, old string) string {
 	base := l.repos.baseOf(r)
-	if tip, err := r.git.commit("refs/heads/" + base); err == nil && tip == old {
+	if tip, err := r.git.Commit("refs/heads/" + base); err == nil && tip == old {
 		return ""
 	}
 	return fmt.Sprintf("%s moved while the Factory was merging.", base)
@@ -1072,7 +1072,7 @@ type mergeOn struct{ base, commit string }
 // merged again into the base the Project names then.
 func (l *lander) mergedOnOldBase(r *repository, id string) (mergeOn, bool) {
 	m, ok := l.stateOf(r).mergedOn[id]
-	if !ok || m.base == l.repos.baseOf(r) || !r.git.isAncestor(m.commit, "refs/heads/"+m.base) {
+	if !ok || m.base == l.repos.baseOf(r) || !r.git.IsAncestor(m.commit, "refs/heads/"+m.base) {
 		return mergeOn{}, false
 	}
 	return m, true

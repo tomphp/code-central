@@ -7,13 +7,15 @@ import (
 	"slices"
 	"strings"
 	"sync"
+
+	"github.com/tomoram/code-central/factory/git"
 )
 
-// fakeRepo is an in-memory repo for testing landing and the sweep
+// fakeRepo is an in-memory git.Repo for testing landing and the sweep
 // without git: commits are names with parents, refs point at them, and
 // what only real git can tell (a merge's conflicts, a dirty worktree, a
 // broken remote) is set by the test. The tests through factorytest
-// run gitRepo against real git.
+// run git.Real against real git.
 type fakeRepo struct {
 	mu      sync.Mutex
 	parents map[string][]string // commit -> its parents
@@ -23,7 +25,7 @@ type fakeRepo struct {
 	// conflicts is the files merging a head commit into any base
 	// conflicts in.
 	conflicts map[string][]string
-	list      []gitWorktree     // the repo's own checkout first
+	list      []git.Worktree    // the repo's own checkout first
 	dirty     map[string]string // worktree path -> its status
 	pushes    int
 	next      int
@@ -40,7 +42,7 @@ type fakeRemote struct {
 func newFakeRepo(dir string) *fakeRepo {
 	r := &fakeRepo{parents: map[string][]string{}, message: map[string]string{}, refs: map[string]string{}, remotes: map[string]*fakeRemote{}, conflicts: map[string][]string{}, dirty: map[string]string{}}
 	r.refs["refs/heads/main"] = r.newCommit("Set up Code Central")
-	r.list = []gitWorktree{{path: dir, branch: "main"}}
+	r.list = []git.Worktree{{Path: dir, Branch: "main"}}
 	return r
 }
 
@@ -125,7 +127,7 @@ func (r *fakeRepo) setBroken(name string, broken bool) {
 func (r *fakeRepo) addWorktree(path, branch string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.list = append(r.list, gitWorktree{path: path, branch: branch})
+	r.list = append(r.list, git.Worktree{Path: path, Branch: branch})
 }
 
 // hasWorktree reports whether a worktree is at path.
@@ -168,7 +170,7 @@ func (r *fakeRepo) reachable(commit, from string) bool {
 	return false
 }
 
-func (r *fakeRepo) commit(rev string) (string, error) {
+func (r *fakeRepo) Commit(rev string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if c, ok := r.resolve(rev); ok {
@@ -177,16 +179,16 @@ func (r *fakeRepo) commit(rev string) (string, error) {
 	return "", fmt.Errorf("git rev-parse: %s isn't a commit", rev)
 }
 
-func (r *fakeRepo) isAncestor(commit, rev string) bool {
+func (r *fakeRepo) IsAncestor(commit, rev string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	tip, ok := r.resolve(rev)
 	return ok && r.reachable(commit, tip)
 }
 
-// mergeBase is the first of a's ancestors, nearest first by first
+// MergeBase is the first of a's ancestors, nearest first by first
 // parent, that b reaches.
-func (r *fakeRepo) mergeBase(a, b string) (string, error) {
+func (r *fakeRepo) MergeBase(a, b string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	from, _ := r.resolve(a)
@@ -205,26 +207,26 @@ func (r *fakeRepo) mergeBase(a, b string) (string, error) {
 	return "", fmt.Errorf("git merge-base: %s and %s have no common ancestor", a, b)
 }
 
-func (r *fakeRepo) hasRemote(name string) bool {
+func (r *fakeRepo) HasRemote(name string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.remotes[name] != nil
 }
 
-func (r *fakeRepo) remoteURL(name string) (string, error) {
-	if !r.hasRemote(name) {
+func (r *fakeRepo) RemoteURL(name string) (string, error) {
+	if !r.HasRemote(name) {
 		return "", fmt.Errorf("no remote %s", name)
 	}
 	return "/remotes/" + name + ".git", nil
 }
 
-func (r *fakeRepo) topLevel() (string, error) {
+func (r *fakeRepo) TopLevel() (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.list[0].path, nil
+	return r.list[0].Path, nil
 }
 
-func (r *fakeRepo) mergeTree(base, head string) (string, []string, error) {
+func (r *fakeRepo) MergeTree(base, head string) (string, []string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if files := r.conflicts[head]; len(files) > 0 {
@@ -233,27 +235,27 @@ func (r *fakeRepo) mergeTree(base, head string) (string, []string, error) {
 	return "tree-of-" + head, nil, nil
 }
 
-func (r *fakeRepo) commitTree(tree, msg string, parents ...string) (string, error) {
+func (r *fakeRepo) CommitTree(tree, msg string, parents ...string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.newCommit(msg, parents...), nil
 }
 
-func (r *fakeRepo) commitTreeLike(tree, like string, parents ...string) (string, error) {
+func (r *fakeRepo) CommitTreeLike(tree, like string, parents ...string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.newCommit(r.message[like], parents...), nil
 }
 
-func (r *fakeRepo) treeOf(commit string) (string, error) {
+func (r *fakeRepo) TreeOf(commit string) (string, error) {
 	return "tree-of-" + commit, nil
 }
 
-func (r *fakeRepo) replayTree(base, commit string) (string, []string, error) {
-	return r.mergeTree(base, commit)
+func (r *fakeRepo) ReplayTree(base, commit string) (string, []string, error) {
+	return r.MergeTree(base, commit)
 }
 
-func (r *fakeRepo) firstParents(rev, exclude string) ([]string, error) {
+func (r *fakeRepo) FirstParents(rev, exclude string) ([]string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	c, _ := r.resolve(rev)
@@ -269,20 +271,20 @@ func (r *fakeRepo) firstParents(rev, exclude string) ([]string, error) {
 	return chain, nil
 }
 
-func (r *fakeRepo) parentsOf(commit string) ([]string, error) {
+func (r *fakeRepo) ParentsOf(commit string) ([]string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return slices.Clone(r.parents[commit]), nil
 }
 
-func (r *fakeRepo) reset(dir, commit, old string) (string, error) {
+func (r *fakeRepo) Reset(dir, commit, old string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.dirty[dir] != "" {
 		return "error: Your local changes to the following files would be overwritten by reset:\n\t" + r.dirty[dir], errors.New("exit status 1")
 	}
 	w, _ := find(r.list, dir)
-	ref := "refs/heads/" + w.branch
+	ref := "refs/heads/" + w.Branch
 	if r.refs[ref] != old {
 		return "", fmt.Errorf("the branch moved to %s meanwhile", r.refs[ref])
 	}
@@ -290,14 +292,14 @@ func (r *fakeRepo) reset(dir, commit, old string) (string, error) {
 	return "", nil
 }
 
-func (r *fakeRepo) fastForward(dir, commit string) (string, error) {
+func (r *fakeRepo) FastForward(dir, commit string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.dirty[dir] != "" {
 		return "error: Your local changes to the following files would be overwritten by merge:\n\t" + r.dirty[dir], errors.New("exit status 1")
 	}
 	w, _ := find(r.list, dir)
-	ref := "refs/heads/" + w.branch
+	ref := "refs/heads/" + w.Branch
 	if !r.reachable(r.refs[ref], commit) {
 		return "fatal: Not possible to fast-forward, aborting.", errors.New("exit status 128")
 	}
@@ -305,7 +307,7 @@ func (r *fakeRepo) fastForward(dir, commit string) (string, error) {
 	return "", nil
 }
 
-func (r *fakeRepo) updateRef(ref, new, old string) error {
+func (r *fakeRepo) UpdateRef(ref, new, old string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.refs[ref] != old {
@@ -315,7 +317,7 @@ func (r *fakeRepo) updateRef(ref, new, old string) error {
 	return nil
 }
 
-func (r *fakeRepo) specBranches() ([]string, error) {
+func (r *fakeRepo) SpecBranches() ([]string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []string
@@ -328,12 +330,12 @@ func (r *fakeRepo) specBranches() ([]string, error) {
 	return out, nil
 }
 
-func (r *fakeRepo) forkPoints() ([]string, error) {
+func (r *fakeRepo) ForkPoints() ([]string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var out []string
 	for ref := range r.refs {
-		if id, ok := strings.CutPrefix(ref, forkRefs); ok {
+		if id, ok := strings.CutPrefix(ref, git.ForkRefs); ok {
 			out = append(out, id)
 		}
 	}
@@ -341,7 +343,7 @@ func (r *fakeRepo) forkPoints() ([]string, error) {
 	return out, nil
 }
 
-func (r *fakeRepo) deleteRef(ref, old string) error {
+func (r *fakeRepo) DeleteRef(ref, old string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.refs[ref] != old {
@@ -351,7 +353,7 @@ func (r *fakeRepo) deleteRef(ref, old string) error {
 	return nil
 }
 
-func (r *fakeRepo) push(ctx context.Context, remote, branch, lease string) (string, error) {
+func (r *fakeRepo) Push(ctx context.Context, remote, branch, lease string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	rm := r.remotes[remote]
@@ -372,7 +374,7 @@ func (r *fakeRepo) push(ctx context.Context, remote, branch, lease string) (stri
 	return "", nil
 }
 
-func (r *fakeRepo) fetch(ctx context.Context, remote string) (string, error) {
+func (r *fakeRepo) Fetch(ctx context.Context, remote string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	rm := r.remotes[remote]
@@ -385,7 +387,7 @@ func (r *fakeRepo) fetch(ctx context.Context, remote string) (string, error) {
 	return "", nil
 }
 
-func (r *fakeRepo) remoteHas(ctx context.Context, remote, branch string) (bool, error) {
+func (r *fakeRepo) RemoteHas(ctx context.Context, remote, branch string) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	rm := r.remotes[remote]
@@ -395,24 +397,24 @@ func (r *fakeRepo) remoteHas(ctx context.Context, remote, branch string) (bool, 
 	return rm.refs[branch] != "", nil
 }
 
-func (r *fakeRepo) worktrees() ([]gitWorktree, error) {
+func (r *fakeRepo) Worktrees() ([]git.Worktree, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return slices.Clone(r.list), nil
 }
 
-func (r *fakeRepo) status(dir string) (string, error) {
+func (r *fakeRepo) Status(dir string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.dirty[dir], nil
 }
 
-func (r *fakeRepo) removeWorktree(path string) error {
+func (r *fakeRepo) RemoveWorktree(path string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.dirty[path] != "" {
 		return fmt.Errorf("git worktree remove: %s contains modified or untracked files", path)
 	}
-	r.list = slices.DeleteFunc(r.list, func(w gitWorktree) bool { return w.path == path })
+	r.list = slices.DeleteFunc(r.list, func(w git.Worktree) bool { return w.Path == path })
 	return nil
 }

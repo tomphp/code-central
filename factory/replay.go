@@ -2,6 +2,8 @@ package factory
 
 import (
 	"fmt"
+
+	"github.com/tomoram/code-central/factory/git"
 )
 
 // Replaying an accepted Ticket onto its Spec Branch under Rebase (Spec
@@ -18,15 +20,12 @@ import (
 // its branch moves to them before the `Merge <id>` commit is made, so
 // that the "head is in the base" check still answers "landed".
 
-// forkRefs is the namespace of the Factory's fork refs.
-const forkRefs = "refs/code-central/fork/"
-
 // forkRef is ticket's fork ref in a Repository: the Spec Branch tip its
 // branch was cut from or last replayed onto, or the base's tip it was
 // last replayed onto with Land per Spec off, where its own commits start.
 // It is written at the cut, moved whenever the Factory moves the branch,
 // and deleted when the Ticket's branch is cleaned up.
-func forkRef(ticket string) string { return forkRefs + ticket }
+func forkRef(ticket string) string { return git.ForkRefs + ticket }
 
 // replayedRef is ticket's replayed ref in a Repository: the tip of the
 // commits its last replay made, written with its fork ref and deleted
@@ -36,17 +35,17 @@ func replayedRef(ticket string) string { return "refs/code-central/replayed/" + 
 // setRef points ref in r at commit, whatever it held, and returns what it
 // held, "" for nothing.
 func setRef(r *repository, ref, commit string) (old string, err error) {
-	old, _ = r.git.commit(ref)
-	return old, r.git.updateRef(ref, commit, old)
+	old, _ = r.git.Commit(ref)
+	return old, r.git.UpdateRef(ref, commit, old)
 }
 
 // restoreRef points ref in r back at old from now, or deletes it when old
 // is "", undoing setRef.
 func restoreRef(r *repository, ref, old, now string) error {
 	if old == "" {
-		return r.git.deleteRef(ref, now)
+		return r.git.DeleteRef(ref, now)
 	}
-	return r.git.updateRef(ref, old, now)
+	return r.git.UpdateRef(ref, old, now)
 }
 
 // setForkPoint points ticket's fork ref in r at commit, whatever it held.
@@ -58,11 +57,11 @@ func setForkPoint(r *repository, ticket, commit string) error {
 // moveForkPoint moves ticket's fork ref in r to commit, as its branch
 // moves there, when it has one.
 func (rs *repositories) moveForkPoint(r *repository, ticket, commit string) {
-	old, err := r.git.commit(forkRef(ticket))
+	old, err := r.git.Commit(forkRef(ticket))
 	if err != nil || old == commit {
 		return
 	}
-	if err := r.git.updateRef(forkRef(ticket), commit, old); err != nil {
+	if err := r.git.UpdateRef(forkRef(ticket), commit, old); err != nil {
 		rs.printf("warning: %s: can't move its fork point%s: %v", ticket, r.where(), err)
 	}
 }
@@ -71,11 +70,11 @@ func (rs *repositories) moveForkPoint(r *repository, ticket, commit string) {
 // has them.
 func (rs *repositories) deleteForkPoint(r *repository, ticket string) {
 	for _, ref := range []string{forkRef(ticket), replayedRef(ticket)} {
-		old, err := r.git.commit(ref)
+		old, err := r.git.Commit(ref)
 		if err != nil {
 			continue
 		}
-		if err := r.git.deleteRef(ref, old); err != nil {
+		if err := r.git.DeleteRef(ref, old); err != nil {
 			rs.printf("warning: %s: can't delete %s%s: %v", ticket, ref, r.where(), err)
 		}
 	}
@@ -87,11 +86,11 @@ func (rs *repositories) deleteForkPoint(r *repository, ticket string) {
 // base is newer when the branch was rebased onto onto since, to resolve
 // a conflict. A ref head doesn't hold, or none, leaves the merge base.
 func forkPoint(r *repository, ticket, head, onto string) (string, error) {
-	base, err := r.git.mergeBase(head, onto)
+	base, err := r.git.MergeBase(head, onto)
 	if err != nil {
 		return "", err
 	}
-	if ref, err := r.git.commit(forkRef(ticket)); err == nil && ref != base && r.git.isAncestor(base, ref) && r.git.isAncestor(ref, head) {
+	if ref, err := r.git.Commit(forkRef(ticket)); err == nil && ref != base && r.git.IsAncestor(base, ref) && r.git.IsAncestor(ref, head) {
 		return ref, nil
 	}
 	return base, nil
@@ -107,11 +106,11 @@ func replayedTip(r *repository, ticket, branch string) (string, bool) {
 	if branch == "" {
 		return "", false
 	}
-	tip, err := r.git.commit("refs/heads/" + branch)
+	tip, err := r.git.Commit("refs/heads/" + branch)
 	if err != nil {
 		return "", false
 	}
-	if replayed, err := r.git.commit(replayedRef(ticket)); err != nil || replayed != tip {
+	if replayed, err := r.git.Commit(replayedRef(ticket)); err != nil || replayed != tip {
 		return "", false
 	}
 	return tip, true
@@ -145,7 +144,7 @@ func (l *lander) planBaseReplay(r *repository, branch, head, onto string) (rp *r
 	if why := cantReplay(r, branch, head, "the base"); why != "" {
 		return nil, nil, why, nil
 	}
-	fork, err := r.git.mergeBase(head, onto)
+	fork, err := r.git.MergeBase(head, onto)
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -159,7 +158,7 @@ func cantReplay(r *repository, branch, head, target string) string {
 	if branch == "" {
 		return fmt.Sprintf("it has no branch to move to its work replayed onto %s, as Rebase does.", target)
 	}
-	if tip, err := r.git.commit("refs/heads/" + branch); err != nil || tip != head {
+	if tip, err := r.git.Commit("refs/heads/" + branch); err != nil || tip != head {
 		return fmt.Sprintf("its branch %s isn't at its finish commit %s, so which work to replay onto %s is unclear. Send it back to finish again at the branch's head.", branch, short(head), target)
 	}
 	return ""
@@ -177,22 +176,22 @@ func (l *lander) replayFrom(r *repository, branch, head, fork, onto, target stri
 		return nil, conflicts, "", err
 	}
 	rp = &replay{branch: branch, head: head, tip: tip}
-	list, err := r.git.worktrees()
+	list, err := r.git.Worktrees()
 	if err != nil {
 		return nil, nil, "", err
 	}
 	for _, w := range list {
-		if w.branch != branch {
+		if w.Branch != branch {
 			continue
 		}
-		status, err := r.git.status(w.path)
+		status, err := r.git.Status(w.Path)
 		if err != nil {
 			return nil, nil, "", err
 		}
 		if status != "" {
-			return nil, nil, fmt.Sprintf("uncommitted changes in %s, where %s is checked out, are in the way of moving it to its commits replayed onto %s:\n\n%s", w.path, branch, target, status), nil
+			return nil, nil, fmt.Sprintf("uncommitted changes in %s, where %s is checked out, are in the way of moving it to its commits replayed onto %s:\n\n%s", w.Path, branch, target, status), nil
 		}
-		rp.worktree = w.path
+		rp.worktree = w.Path
 	}
 	return rp, nil, "", nil
 }
@@ -206,13 +205,13 @@ func (l *lander) replayFrom(r *repository, branch, head, fork, onto, target stri
 // makes the commits and moves nothing. It returns the new tip, or the
 // files the first commit that doesn't apply cleanly conflicts in.
 func replayLine(r *repository, head, from, onto string, merges bool) (tip string, conflicts []string, err error) {
-	chain, err := r.git.firstParents(head, from)
+	chain, err := r.git.FirstParents(head, from)
 	if err != nil {
 		return "", nil, err
 	}
 	tip = onto
 	for _, c := range chain {
-		parents, err := r.git.parentsOf(c)
+		parents, err := r.git.ParentsOf(c)
 		if err != nil {
 			return "", nil, err
 		}
@@ -220,9 +219,9 @@ func replayLine(r *repository, head, from, onto string, merges bool) (tip string
 		var files []string
 		switch {
 		case len(parents) == 1:
-			tree, files, err = r.git.replayTree(tip, c)
+			tree, files, err = r.git.ReplayTree(tip, c)
 		case len(parents) == 2 && merges:
-			tree, files, err = r.git.mergeTree(tip, parents[1])
+			tree, files, err = r.git.MergeTree(tip, parents[1])
 		default:
 			continue
 		}
@@ -232,12 +231,12 @@ func replayLine(r *repository, head, from, onto string, merges bool) (tip string
 		if len(files) > 0 {
 			return "", files, nil
 		}
-		if was, err := r.git.treeOf(tip); err != nil {
+		if was, err := r.git.TreeOf(tip); err != nil {
 			return "", nil, err
 		} else if tree == was {
 			continue
 		}
-		if tip, err = r.git.commitTreeLike(tree, c, append([]string{tip}, parents[1:]...)...); err != nil {
+		if tip, err = r.git.CommitTreeLike(tree, c, append([]string{tip}, parents[1:]...)...); err != nil {
 			return "", nil, err
 		}
 	}
@@ -267,8 +266,8 @@ type specBranchReplacement struct {
 // Branch's commits the branch lacks, and replaying from head's merge
 // base with it would replay the whole Spec Branch.
 func planSpecBranchReplacement(r *repository, ticket, branch, head, tip string) (rp *specBranchReplacement, conflicts []string, why string, err error) {
-	fork, err := r.git.commit(forkRef(ticket))
-	if err != nil || !r.git.isAncestor(fork, tip) {
+	fork, err := r.git.Commit(forkRef(ticket))
+	if err != nil || !r.git.IsAncestor(fork, tip) {
 		return nil, nil, fmt.Sprintf("the Factory doesn't know where its branch forked from %s (its fork point isn't recorded, or %s no longer holds it), so it can't tell which of %s's commits to replay onto the branch. Move %s to the branch by hand, with any commits %s gained since the branch was cut rebased onto it first, and the Factory carries on.", branch, branch, branch, branch, branch), nil
 	}
 	rp = &specBranchReplacement{fork: fork, tip: tip, next: head}
@@ -314,12 +313,12 @@ func (rp *replay) apply(r *repository, ticket, onto string) error {
 // by a reset in its worktree when it is checked out, else by ref.
 func (rp *replay) move(r *repository) error {
 	if rp.worktree != "" {
-		if out, err := r.git.reset(rp.worktree, rp.tip, rp.head); err != nil {
+		if out, err := r.git.Reset(rp.worktree, rp.tip, rp.head); err != nil {
 			return fmt.Errorf("can't move %s, checked out in %s, to its replayed commits: %v %s", rp.branch, rp.worktree, err, out)
 		}
 		return nil
 	}
-	if err := r.git.updateRef("refs/heads/"+rp.branch, rp.tip, rp.head); err != nil {
+	if err := r.git.UpdateRef("refs/heads/"+rp.branch, rp.tip, rp.head); err != nil {
 		return fmt.Errorf("can't move %s to its replayed commits: %v", rp.branch, err)
 	}
 	return nil
@@ -333,14 +332,14 @@ func (rp *replay) move(r *repository) error {
 // moved. It returns the rebuilt tip, or the files the first commit that
 // doesn't apply cleanly conflicts in, or why it can't rebuild it.
 func (l *lander) rebaseSpecBranch(r *repository, onto, tip string) (rebased string, conflicts []string, why string) {
-	line, err := r.git.firstParents(tip, onto)
+	line, err := r.git.FirstParents(tip, onto)
 	if err != nil {
 		return "", nil, err.Error()
 	}
 	// The Spec Branch's own merges are the Factory's, made into it.
 	heads := map[string]bool{}
 	for _, c := range line {
-		parents, err := r.git.parentsOf(c)
+		parents, err := r.git.ParentsOf(c)
 		if err != nil {
 			return "", nil, err.Error()
 		}
