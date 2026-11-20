@@ -122,7 +122,8 @@ type Env struct {
 	Work Work
 	// Git is the Git port the Factory opens each Repository's clone
 	// through. Nil means git.Real, with the git on the environment's PATH
-	// and Environ.
+	// and Environ. The Factory still needs that git either way: cloning,
+	// worktrees and its other checks don't go through the port yet.
 	Git git.Git
 }
 

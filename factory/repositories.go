@@ -34,6 +34,12 @@ type repository struct {
 	// level the Factory starts in.
 	dir string
 	// git is the seam for every git call in the clone; nil while missing.
+	//
+	// Landing's helpers (inBase, inOldBase, pushedBase, pushedAlreadyIn,
+	// remoteTip, mergedOnOldBase) each wrap it with a different ref, or
+	// with a Ticket's or the Factory's own record, not a different git
+	// question, so they stay separate rather than being gathered into a
+	// Git facts module.
 	git git.Repo
 	// worktrees is the folder of its worktrees, beside the clone:
 	// <dir>.worktrees for the Home Repository, and <dir's

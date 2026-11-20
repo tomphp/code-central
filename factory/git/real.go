@@ -13,7 +13,9 @@ import (
 // Real is git through the binary at Binary, with every call run in the
 // environment Environ: the Factory's Git unless a test gives it another.
 type Real struct {
-	Binary  string
+	// Binary is the path of the git binary.
+	Binary string
+	// Environ is the environment each git call runs in.
 	Environ []string
 }
 
