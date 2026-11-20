@@ -5,7 +5,7 @@ TEST_BUDGET := 60
 # npm ci writes this; it is newer than the lockfile while node_modules is current.
 WEB_DEPS := web/node_modules/.package-lock.json
 
-.PHONY: test test-verbose typecheck lint vitestvitest-stress e2e build web clean hooks context-report ci-failures serve-components build-components corewasm wiretypes demo-store demo
+.PHONY: test test-verbose typecheck lint vitestvitest-stress e2e scalebuild web clean hooks context-report ci-failures serve-components build-components corewasm wiretypes demo-store demo
 
 # Every recipe is one command that runs the same under cmd.exe and POSIX
 # sh, so a Windows developer needs only GNU make. Binaries get .exe there.
@@ -106,6 +106,17 @@ ifeq ($(F),)
 else
 	cd web && npm run test:e2e -- $(F:web/%=%)
 endif
+
+# The Scale tier: the tests named TestScale…, which `make test` and
+# `make e2e` leave out for their size. Builds what e2e builds, then runs
+# the core one and the end-to-end one against the binaries.
+scale: export CODE_CENTRAL_BIN := $(CURDIR)/bin/code-central$(EXE)
+scale: export CODE_CENTRAL_FACTORY_BIN := $(CURDIR)/bin/code-central-factory$(EXE)
+scale: export CODE_CENTRAL_FAKE_GH_BIN := $(CURDIR)/bin/fake-gh$(EXE)
+scale: build corewasm
+	go build -o bin/fake-gh$(EXE) ./internal/fakegh/gh
+	go test -tags scale -count=1 -run "^TestScale" ./...
+	go test -tags "e2e scale" -count=1 -run "^TestScale" ./e2e/
 
 # A scratch service on PORT (default 7801, never 7733) filled with a demo
 # Project, to look at the UI against; internal/demostore explains it.
