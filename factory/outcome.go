@@ -44,6 +44,9 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, out turnOutcome) domai
 		if len(denials) > 0 {
 			f.commentDenials(ctx, t, denials)
 		}
+		if by == "finish" {
+			f.checkReview(ctx, t, tk, c.Reviewed || end.ReviewCalled)
+		}
 		if checksFinish(by, tk.State) {
 			if _, failed := checkFinish(ctx, f.repos, f.client, f.project, tk); failed {
 				return domain.Failed

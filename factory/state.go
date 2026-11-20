@@ -31,6 +31,9 @@ type claim struct {
 	// Denials is the Round the Factory posted for the calls its last turn
 	// had denied, while it waits for answers; nil otherwise.
 	Denials *denialRound `json:"denials,omitempty"`
+	// Reviewed is whether an earlier turn of the Claim called the
+	// code-review skill.
+	Reviewed bool `json:"reviewed,omitempty"`
 }
 
 // denialRound is a Round of the Factory's own: one Question per distinct

@@ -62,6 +62,9 @@ func (f *factory) startTurn(ctx context.Context, c claim, in turnInput) {
 			f.forgetEnded(c)
 			return
 		}
+		if out.End.ReviewCalled && !c.Reviewed {
+			_ = f.updateClaim(c.ClaimID, func(c *claim) { c.Reviewed = true })
+		}
 		ran := f.e.Clock.Now().Sub(t.started)
 		// The turn keeps its slot until its outcome is acted on, and
 		// "turn ended" is printed once the slot is free.
