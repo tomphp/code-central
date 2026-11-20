@@ -32,7 +32,7 @@ jobs:
       run:
         shell: bash
     env:
-      CODE_CENTRAL_E2E_STARTUP_BUDGET: ${{ runner.os == 'Windows' && '1m' || '' }}
+      CODE_CENTRAL_E2E_STARTUP_BUDGET: ${{ matrix.os == 'windows-latest' && '1m' || '' }}
 
     steps:
       - uses: actions/checkout@v6
