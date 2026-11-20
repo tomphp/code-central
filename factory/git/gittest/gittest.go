@@ -427,6 +427,11 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 		}
 		checkNoFolder(t, again)
 		checkBranch(t, repo, "topic", next)
+		// git makes the branch before it looks at the folder.
+		if err := repo.AddWorktreeOnNewBranch(wt, "other", first); err == nil {
+			t.Error("AddWorktreeOnNewBranch in a worktree's folder succeeded, want an error")
+		}
+		checkBranch(t, repo, "other", first)
 	})
 
 	t.Run("a worktree added on an existing branch holds its files, and none is added where it can't be", func(t *testing.T) {
@@ -597,6 +602,11 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 		if got, err := s.CommitAll(topic, "Nothing"); err == nil {
 			t.Errorf("CommitAll of a clean worktree = %s, want an error", got)
 		}
+		writeFile(t, topic, "a.txt", "two\n")
+		if got, err := s.CommitAll(topic, ""); err == nil {
+			t.Errorf("CommitAll with no message = %s, want an error", got)
+		}
+		checkBranch(t, repo, "topic", made)
 
 		noError(t, repo.AddDetachedWorktree(stage, "topic"))
 		writeFile(t, stage, "a.txt", "two\n")

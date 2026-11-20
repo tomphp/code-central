@@ -116,6 +116,16 @@ func TestFakeGitFailsTheTestOnWhatItDoesntModel(t *testing.T) {
 			c := commit(git.Change{Files: map[string]string{"a.txt": "a\n"}})
 			return repo.AddWorktree(filepath.Join(t.TempDir(), "wt"), c)
 		}},
+		{"a worktree whose .git file is gone", func(t *testing.T, dir string, repo git.Repo, commit commitFunc) error {
+			wt := filepath.Join(t.TempDir(), "wt")
+			if err := repo.AddDetachedWorktree(wt, "main"); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Remove(filepath.Join(wt, ".git")); err != nil {
+				t.Fatal(err)
+			}
+			return repo.PruneWorktrees()
+		}},
 		{"an ignore file in a worktree", func(t *testing.T, dir string, repo git.Repo, commit commitFunc) error {
 			writeFile(t, filepath.Join(dir, ".gitignore"), "*.log\n")
 			_, err := repo.Status(dir)

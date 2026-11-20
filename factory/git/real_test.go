@@ -102,14 +102,11 @@ func (r realRepository) commit(c git.Change) string {
 func (r realRepository) commitAll(dir, msg string) (string, error) {
 	var commit string
 	for _, args := range [][]string{{"add", "-A"}, {"commit", "-q", "-m", msg}, {"rev-parse", "HEAD"}} {
-		cmd := exec.Command(r.binary, args...)
-		cmd.Dir = dir
-		cmd.Env = r.environ
-		out, err := cmd.CombinedOutput()
+		out, err := r.run(dir, nil, "", args...)
 		if err != nil {
-			return "", fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, out)
+			return "", err
 		}
-		commit = strings.TrimSpace(string(out))
+		commit = out
 	}
 	return commit, nil
 }
@@ -119,13 +116,24 @@ func (r realRepository) commitAll(dir, msg string) (string, error) {
 // the test when git fails.
 func (r realRepository) git(env []string, input string, args ...string) string {
 	r.t.Helper()
+	out, err := r.run(r.dir, env, input, args...)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	return out
+}
+
+// run is git's run in dir, with env added to its environment and input
+// on its standard input: its trimmed output, or, when git fails, an error
+// with that output rather than a failed test.
+func (r realRepository) run(dir string, env []string, input string, args ...string) (string, error) {
 	cmd := exec.Command(r.binary, args...)
-	cmd.Dir = r.dir
+	cmd.Dir = dir
 	cmd.Env = append(slices.Clone(r.environ), env...)
 	cmd.Stdin = strings.NewReader(input)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		r.t.Fatalf("git %s: %v: %s", strings.Join(args, " "), err, out)
+		return "", fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, out)
 	}
-	return strings.TrimSpace(string(out))
+	return strings.TrimSpace(string(out)), nil
 }

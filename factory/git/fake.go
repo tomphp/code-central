@@ -75,7 +75,7 @@ func (w *fakeWorktree) branch() string {
 
 // at is the commit checked out in w.
 func (r *fakeRepository) at(w *fakeWorktree) string {
-	if strings.HasPrefix(w.head, "refs/") {
+	if w.branch() != "" {
 		return r.refs[w.head]
 	}
 	return w.head
@@ -84,12 +84,15 @@ func (r *fakeRepository) at(w *fakeWorktree) string {
 // setAt moves the branch checked out in w to commit, or, when it is
 // detached, w itself.
 func (r *fakeRepository) setAt(w *fakeWorktree, commit string) {
-	if strings.HasPrefix(w.head, "refs/") {
+	if w.branch() != "" {
 		r.refs[w.head] = commit
 	} else {
 		w.head = commit
 	}
 }
+
+// main is r's worktree in its own folder.
+func (r *fakeRepository) main() *fakeWorktree { return r.worktrees[0] }
 
 // worktree is r's worktree in the folder dir, resolved, or nil.
 func (r *fakeRepository) worktree(dir string) *fakeWorktree {
@@ -174,7 +177,7 @@ func (f *Fake) CommitAll(dir, msg string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	folder, err := g.folderTree(w.dir)
+	folder, err := f.folderTree(w.dir)
 	if err != nil {
 		return "", err
 	}
@@ -241,10 +244,13 @@ func (f *Fake) Version() (string, error) { return "", f.notModelled("the version
 // the error to return for it. It fails it with Errorf, not Fatalf: the
 // Factory calls git from goroutines of its own.
 func (f *Fake) notModelled(what string, args ...any) error {
-	err := fmt.Errorf("fake git: not modelled: "+what, args...)
+	err := fmt.Errorf("%w: "+what, append([]any{errNotModelled}, args...)...)
 	f.tb.Errorf("%v", err)
 	return err
 }
+
+// errNotModelled is what every error of notModelled wraps.
+var errNotModelled = errors.New("fake git: not modelled")
 
 // fakeID is the ID of the object of kind made of fields: a SHA-1 of them,
 // each length-prefixed, so that equal objects have equal IDs, with no
@@ -401,7 +407,7 @@ func checkOut(dir string, was, now fakeTree) error {
 // stage it. What git would treat in ways the Fake doesn't model, an
 // ignore file, a nested repository, a link, an executable or a path
 // status would quote, isn't modelled.
-func (g fakeRepo) folderTree(dir string) (fakeTree, error) {
+func (f *Fake) folderTree(dir string) (fakeTree, error) {
 	tree := fakeTree{}
 	err := filepath.WalkDir(dir, func(name string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -418,22 +424,22 @@ func (g fakeRepo) folderTree(dir string) (fakeTree, error) {
 		case p == ".git":
 			return skip(d)
 		case d.Name() == ".git":
-			return g.f.notModelled("the repository %s, inside the worktree %s", name, dir)
+			return f.notModelled("the repository %s, inside the worktree %s", name, dir)
 		case d.Name() == ".gitignore":
-			return g.f.notModelled("the ignore file %s", name)
+			return f.notModelled("the ignore file %s", name)
 		case strings.Trim(p, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/-") != "":
-			return g.f.notModelled("the path %q, which status quotes", p)
+			return f.notModelled("the path %q, which status quotes", p)
 		case d.IsDir():
 			return nil
 		case !d.Type().IsRegular():
-			return g.f.notModelled("%s, which isn't a file or a folder", name)
+			return f.notModelled("%s, which isn't a file or a folder", name)
 		}
 		info, err := d.Info()
 		if err != nil {
 			return err
 		}
 		if info.Mode()&0o111 != 0 && runtime.GOOS != "windows" {
-			return g.f.notModelled("the executable %s", name)
+			return f.notModelled("the executable %s", name)
 		}
 		content, err := os.ReadFile(name)
 		if err != nil {
@@ -904,7 +910,23 @@ func (g fakeRepo) worktree(r *fakeRepository, dir string) (*fakeWorktree, error)
 	if _, err := os.Stat(w.dir); err != nil {
 		return nil, err
 	}
+	if _, err := g.gone(r, w); err != nil {
+		return nil, err
+	}
 	return w, nil
+}
+
+// gone is whether the worktree w's folder is gone. A worktree whose
+// folder is there but whose .git file isn't, which git would prune,
+// isn't modelled.
+func (g fakeRepo) gone(r *fakeRepository, w *fakeWorktree) (bool, error) {
+	if _, err := os.Lstat(w.dir); errors.Is(err, fs.ErrNotExist) {
+		return true, nil
+	}
+	if _, err := os.Lstat(filepath.Join(w.dir, ".git")); w != r.main() && errors.Is(err, fs.ErrNotExist) {
+		return false, g.f.notModelled("the worktree %s, whose .git file is gone", w.dir)
+	}
+	return false, nil
 }
 
 func (g fakeRepo) UpdateRef(ref, new, old string) error {
@@ -1042,8 +1064,9 @@ func (g fakeRepo) Status(dir string) (string, error) {
 	return g.status(r, w)
 }
 
+// status is Status of the worktree w.
 func (g fakeRepo) status(r *fakeRepository, w *fakeWorktree) (string, error) {
-	folder, err := g.folderTree(w.dir)
+	folder, err := g.f.folderTree(w.dir)
 	if err != nil {
 		return "", err
 	}
@@ -1077,10 +1100,13 @@ func (g fakeRepo) RemoveWorktree(path string) error {
 	switch {
 	case w == nil:
 		return fmt.Errorf("fatal: '%s' is not a working tree", path)
-	case w == r.worktrees[0]:
+	case w == r.main():
 		return fmt.Errorf("fatal: '%s' is a main working tree", path)
 	}
-	if _, err := os.Lstat(w.dir); errors.Is(err, fs.ErrNotExist) {
+	switch gone, err := g.gone(r, w); {
+	case err != nil:
+		return err
+	case gone:
 		r.forget(w)
 		return nil
 	}
@@ -1103,6 +1129,9 @@ func (r *fakeRepository) forget(w *fakeWorktree) {
 	r.worktrees = slices.DeleteFunc(r.worktrees, func(o *fakeWorktree) bool { return o == w })
 }
 
+// AddWorktree adds a worktree at path with branch checked out there, as
+// git does, unless it is checked out in another. A rev that isn't a
+// branch, which git would check out detached, isn't modelled.
 func (g fakeRepo) AddWorktree(path, branch string) error {
 	r, unlock, err := g.lock()
 	defer unlock()
@@ -1115,7 +1144,7 @@ func (g fakeRepo) AddWorktree(path, branch string) error {
 		switch {
 		case err == nil:
 			return g.f.notModelled("a worktree on %s, which isn't a branch", branch)
-		case strings.HasPrefix(err.Error(), "fake git: not modelled"):
+		case errors.Is(err, errNotModelled):
 			return err
 		}
 		return fmt.Errorf("fatal: invalid reference: %s", branch)
@@ -1190,6 +1219,10 @@ func (g fakeRepo) addWorktree(r *fakeRepository, path, head string) error {
 		return err
 	}
 	w := &fakeWorktree{dir: realPath(path), head: head}
+	// As git's, it holds a .git file, for the worktree that loses it.
+	if err := os.WriteFile(filepath.Join(w.dir, ".git"), []byte("gitdir: fake\n"), 0o644); err != nil {
+		return err
+	}
 	if err := checkOut(w.dir, fakeTree{}, r.treeOf(r.at(w))); err != nil {
 		return err
 	}
@@ -1214,12 +1247,14 @@ func (g fakeRepo) CheckoutDetached(dir, rev string) error {
 	if err != nil {
 		return err
 	}
-	at := r.at(w)
-	detached := &fakeWorktree{dir: w.dir, head: at}
-	if out, err := r.moveTo(detached, commit, "checkout"); err != nil {
+	// Detached, moveTo moves w itself, not its branch; refused, w is back
+	// on its branch.
+	was := w.head
+	w.head = r.at(w)
+	if out, err := r.moveTo(w, commit, "checkout"); err != nil {
+		w.head = was
 		return fmt.Errorf("%w: %s", err, out)
 	}
-	w.head = detached.head
 	return nil
 }
 
@@ -1230,10 +1265,19 @@ func (g fakeRepo) PruneWorktrees() error {
 	if err != nil {
 		return err
 	}
-	r.worktrees = slices.DeleteFunc(r.worktrees, func(w *fakeWorktree) bool {
-		_, err := os.Lstat(w.dir)
-		return w != r.worktrees[0] && errors.Is(err, fs.ErrNotExist)
-	})
+	var gone []*fakeWorktree
+	for _, w := range r.worktrees[1:] {
+		isGone, err := g.gone(r, w)
+		if err != nil {
+			return err
+		}
+		if isGone {
+			gone = append(gone, w)
+		}
+	}
+	for _, w := range gone {
+		r.forget(w)
+	}
 	return nil
 }
 
