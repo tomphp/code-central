@@ -480,13 +480,6 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, now func() time.Time,
 			}
 			onEvent(e)
 		}
-		if msg.Type == "assistant" {
-			for _, c := range msg.Message.Content {
-				if c.Type == "tool_use" && calledReview(c.Name, c.Input) {
-					end.ReviewCalled = true
-				}
-			}
-		}
 		switch msg.Type {
 		case "user":
 			for _, c := range msg.Message.Content {
@@ -501,6 +494,11 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, now func() time.Time,
 		case "assistant":
 			if msg.Error != "" {
 				end.APIError = msg.Error
+			}
+			for _, c := range msg.Message.Content {
+				if c.Type == "tool_use" && calledReview(c.Name, c.Input) {
+					end.ReviewCalled = true
+				}
 			}
 		case "result":
 			var r result

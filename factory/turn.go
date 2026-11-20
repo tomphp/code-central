@@ -63,7 +63,9 @@ func (f *factory) startTurn(ctx context.Context, c claim, in turnInput) {
 			return
 		}
 		if out.End.ReviewCalled && !c.Reviewed {
-			_ = f.updateClaim(c.ClaimID, func(c *claim) { c.Reviewed = true })
+			if err := f.updateClaim(c.ClaimID, func(c *claim) { c.Reviewed = true }); err != nil {
+				f.claimf(c, "%s: can't write the state file: %v", c.Ticket, err)
+			}
 		}
 		ran := f.e.Clock.Now().Sub(t.started)
 		// The turn keeps its slot until its outcome is acted on, and
