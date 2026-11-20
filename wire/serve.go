@@ -1,8 +1,9 @@
-package cli
+package wire
 
 import (
 	"context"
 	"fmt"
+	"github.com/tomoram/code-central/cli"
 	"net"
 	"os"
 	"path/filepath"
@@ -25,11 +26,11 @@ func loopback(port int) []string {
 }
 
 func init() {
-	commands["serve"] = command{
-		usage: "serve [--store <dir>] [--port <n>] [--bind <ip>] [--no-notify] [--log <file>]  run the service in the foreground; --port serves on that loopback port instead of 7733; --bind adds one address " +
+	cli.Register("serve", cli.Command{
+		Usage: "serve [--store <dir>] [--port <n>] [--bind <ip>] [--no-notify] [--log <file>]  run the service in the foreground; --port serves on that loopback port instead of 7733; --bind adds one address " +
 			"(such as the Docker bridge IP), never a LAN address; --log appends serve's output to a file",
-		run: runServe,
-	}
+		Run: runServe,
+	})
 }
 
 // serveOptions are serve's flags. Add new serve flags here and in
@@ -49,31 +50,31 @@ type serveOptions struct {
 }
 
 func parseServe(args []string) (serveOptions, error) {
-	fs := flagSet("serve")
+	fs := cli.FlagSet("serve")
 	var o serveOptions
 	fs.StringVar(&o.store, "store", "", "store directory")
 	fs.IntVar(&o.port, "port", 0, "loopback port to serve on")
 	fs.StringVar(&o.bind, "bind", "", "one extra address to listen on")
 	fs.BoolVar(&o.noNotify, "no-notify", false, "send no OS Notifications this run")
 	fs.StringVar(&o.log, "log", "", "file to append output to")
-	pos, err := parse(fs, args)
+	pos, err := cli.Parse(fs, args)
 	if err != nil {
 		return o, err
 	}
 	if len(pos) > 0 {
-		return o, usagef("unexpected argument %q", pos[0])
+		return o, cli.UsageError("unexpected argument %q", pos[0])
 	}
 	if o.port != 0 && (o.port < 1 || o.port > 65535) {
-		return o, usagef("--port %d is not a port", o.port)
+		return o, cli.UsageError("--port %d is not a port", o.port)
 	}
-	o.bindSet = isSet(fs, "bind")
+	o.bindSet = cli.IsSet(fs, "bind")
 	return o, nil
 }
 
 // runServe is the serve command: it reads the flags and the local
 // settings, then runs the service (app.Run) until ctx ends. Startup
 // failures exit 1 with a message on stderr.
-func runServe(ctx context.Context, e Env, args []string) (err error) {
+func runServe(ctx context.Context, e cli.Env, args []string) (err error) {
 	o, err := parseServe(args)
 	if err != nil {
 		return err
@@ -95,7 +96,7 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 		}()
 		e.Stdout, e.Stderr = f, f
 	}
-	local, err := loadSettings(e.home())
+	local, err := loadSettings(e.Home())
 	if err != nil {
 		return err
 	}
@@ -105,7 +106,7 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 			return err
 		}
 	}
-	loc, err := storeLocation(o.store, local, e.home())
+	loc, err := storeLocation(o.store, local, e.Home())
 	if err != nil {
 		return err
 	}
@@ -125,7 +126,7 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 		notifier = nil
 	}
 	return app.Run(ctx, app.Options{
-		Store: loc, Addrs: addrs, Bind: bind, Version: e.version(),
+		Store: loc, Addrs: addrs, Bind: bind, Version: e.StampedVersion(),
 		Stdout: e.Stdout, Stderr: e.Stderr, Notifier: notifier, OnListening: e.OnListening,
 	})
 }
@@ -193,10 +194,10 @@ func parseBind(v string, port int) (addr string, err error) {
 	host = strings.Trim(host, "[]")
 	ip := net.ParseIP(host)
 	if ip == nil {
-		return "", usagef("--bind takes one IP address, such as the Docker bridge IP, not %q", v)
+		return "", cli.UsageError("--bind takes one IP address, such as the Docker bridge IP, not %q", v)
 	}
 	if ip.IsUnspecified() {
-		return "", usagef("--bind never takes %s: it would expose the service to the network; name one specific address", host)
+		return "", cli.UsageError("--bind never takes %s: it would expose the service to the network; name one specific address", host)
 	}
 	return net.JoinHostPort(host, p), nil
 }

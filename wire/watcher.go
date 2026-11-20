@@ -1,8 +1,9 @@
-package cli
+package wire
 
 import (
 	"context"
 	"encoding/json"
+	"github.com/tomoram/code-central/cli"
 	"os"
 
 	"github.com/tomoram/code-central/api"
@@ -15,20 +16,20 @@ import (
 // The CI Watcher (Spec code-central-247) is a hidden subcommand: the
 // service starts it through its own executable, and nobody types it.
 func init() {
-	commands[ciwatcher.Command] = command{
-		hidden: true,
-		usage: ciwatcher.Command + " --project <key>  watch the Project's CI until stdin closes; " +
+	cli.Register(ciwatcher.Command, cli.Command{
+		Hidden: true,
+		Usage: ciwatcher.Command + " --project <key>  watch the Project's CI until stdin closes; " +
 			ciwatcher.Command + " --check --provider github_actions --repository <owner/name> [--gh-path <path>] | --provider azure_pipelines --project-url <url> [--pat-env <name>]  check the CI Watcher can watch what it is given, answering JSON",
-		run: runCIWatcher,
-	}
+		Run: runCIWatcher,
+	})
 }
 
 // runCIWatcher runs the CI Watcher. Its watch mode polls for one Project
 // until its stdin, a pipe from the service, closes. Its check mode prints
 // one CI check result as JSON, a refusal's reason and fix included, and
 // exits 0; the service reads it.
-func runCIWatcher(ctx context.Context, e Env, args []string) error {
-	fs := flagSet(ciwatcher.Command)
+func runCIWatcher(ctx context.Context, e cli.Env, args []string) error {
+	fs := cli.FlagSet(ciwatcher.Command)
 	check := fs.Bool("check", false, "check access once and exit")
 	project := fs.String("project", "", "the Project to watch")
 	var in api.CICheckInput
@@ -37,25 +38,25 @@ func runCIWatcher(ctx context.Context, e Env, args []string) error {
 	fs.StringVar(&in.ProjectURL, "project-url", "", "Azure DevOps project URL")
 	fs.StringVar(&in.PATEnv, "pat-env", domain.DefaultPATEnv, "the environment variable holding the Azure DevOps PAT")
 	fs.StringVar(&in.GHPath, "gh-path", "", "the gh path Option")
-	pos, err := parse(fs, args)
+	pos, err := cli.Parse(fs, args)
 	if err != nil {
 		return err
 	}
 	switch {
 	case len(pos) > 0:
-		return usagef("unexpected argument %q", pos[0])
+		return cli.UsageError("unexpected argument %q", pos[0])
 	case !*check && *project == "":
-		return usagef("the CI Watcher needs --project, or --check")
+		return cli.UsageError("the CI Watcher needs --project, or --check")
 	case !*check:
-		return ciwatcher.Watch(ctx, ciwatcher.Config{Client: newClient(e), Project: *project, Env: gh.Env{Environ: os.Environ()},
+		return ciwatcher.Watch(ctx, ciwatcher.Config{Client: cli.NewClient(e), Project: *project, Env: gh.Env{Environ: os.Environ()},
 			Clock: clock.System{}, Stdin: e.Stdin, Log: e.Stderr})
 	}
 	in.Provider = domain.CIProvider(*provider)
 	switch {
 	case in.Provider == domain.CIAzurePipelines && in.ProjectURL == "":
-		return usagef("--check needs --project-url")
+		return cli.UsageError("--check needs --project-url")
 	case in.Provider != domain.CIAzurePipelines && in.Repository == "":
-		return usagef("--check needs --repository")
+		return cli.UsageError("--check needs --repository")
 	}
 	r := ciwatcher.Check(ctx, in, gh.Env{Environ: os.Environ()})
 	return json.NewEncoder(e.Stdout).Encode(r)

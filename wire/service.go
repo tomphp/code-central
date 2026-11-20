@@ -1,4 +1,4 @@
-package cli
+package wire
 
 import (
 	"bytes"
@@ -7,6 +7,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"github.com/tomoram/code-central/cli"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -21,11 +22,11 @@ import (
 )
 
 func init() {
-	commands["service"] = command{
-		usage: "service install [--store <dir>] [--bind <ip>] | service restart  run serve as a login item " +
+	cli.Register("service", cli.Command{
+		Usage: "service install [--store <dir>] [--bind <ip>] | service restart  run serve as a login item " +
 			"(launchd on macOS, systemd user unit on Linux, a scheduled task on Windows); install again after an upgrade",
-		run: runService,
-	}
+		Run: runService,
+	})
 }
 
 // The launchd label, the systemd unit name and the scheduled task's name.
@@ -35,9 +36,9 @@ const (
 	scheduledTask = "Code Central"
 )
 
-func runService(ctx context.Context, e Env, args []string) error {
+func runService(ctx context.Context, e cli.Env, args []string) error {
 	if len(args) == 0 {
-		return usagef("expected install or restart")
+		return cli.UsageError("expected install or restart")
 	}
 	m, err := serviceManagerFor(e)
 	if err != nil {
@@ -48,7 +49,7 @@ func runService(ctx context.Context, e Env, args []string) error {
 		return serviceInstall(ctx, e, m, args[1:])
 	case "restart":
 		if len(args) > 1 {
-			return usagef("unexpected argument %q", args[1])
+			return cli.UsageError("unexpected argument %q", args[1])
 		}
 		if _, err := os.Stat(m.unitPath); errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("Code Central isn't installed as a service (no %s): run `code-central service install`", m.unitPath)
@@ -59,26 +60,26 @@ func runService(ctx context.Context, e Env, args []string) error {
 		fmt.Fprintln(e.Stdout, "Restarted the Code Central service.")
 		return nil
 	default:
-		return usagef("unknown service command %q: expected install or restart", args[0])
+		return cli.UsageError("unknown service command %q: expected install or restart", args[0])
 	}
 }
 
-func serviceInstall(ctx context.Context, e Env, m serviceManager, args []string) error {
-	fs := flagSet("service install")
+func serviceInstall(ctx context.Context, e cli.Env, m serviceManager, args []string) error {
+	fs := cli.FlagSet("service install")
 	storeFlag := fs.String("store", "", "store directory")
 	bind := fs.String("bind", "", "")
-	pos, err := parse(fs, args)
+	pos, err := cli.Parse(fs, args)
 	if err != nil {
 		return err
 	}
 	if len(pos) > 0 {
-		return usagef("unexpected argument %q", pos[0])
+		return cli.UsageError("unexpected argument %q", pos[0])
 	}
 	bin, err := programPath(e)
 	if err != nil {
 		return err
 	}
-	local, err := loadSettings(e.home())
+	local, err := loadSettings(e.Home())
 	if err != nil {
 		return err
 	}
@@ -86,8 +87,8 @@ func serviceInstall(ctx context.Context, e Env, m serviceManager, args []string)
 	// The unit names the File Store's folder, so the service needn't find
 	// the data folder itself; a store: block in the settings it reads at
 	// startup, like the port.
-	if storeIsAFolder(*storeFlag, local, e.home()) {
-		dir, err := store.Dir(*storeFlag, e.home())
+	if storeIsAFolder(*storeFlag, local, e.Home()) {
+		dir, err := store.Dir(*storeFlag, e.Home())
 		if err != nil {
 			return err
 		}
@@ -96,7 +97,7 @@ func serviceInstall(ctx context.Context, e Env, m serviceManager, args []string)
 		}
 		serveArgs = append(serveArgs, "--store", dir)
 	}
-	if isSet(fs, "bind") {
+	if cli.IsSet(fs, "bind") {
 		if _, err := parseBind(*bind, app.Port); err != nil {
 			return err
 		}
@@ -142,14 +143,14 @@ type serviceManager struct {
 	install, restart []serviceCmd
 }
 
-func serviceManagerFor(e Env) (serviceManager, error) {
+func serviceManagerFor(e cli.Env) (serviceManager, error) {
 	goos := e.GOOS
 	if goos == "" {
 		goos = runtime.GOOS
 	}
 	switch goos {
 	case "darwin":
-		dir, err := e.home().Home()
+		dir, err := e.Home().Home()
 		if err != nil {
 			return serviceManager{}, fmt.Errorf("cannot find the LaunchAgents folder: %w", err)
 		}
@@ -166,7 +167,7 @@ func serviceManagerFor(e Env) (serviceManager, error) {
 			restart: []serviceCmd{{args: []string{"launchctl", "kickstart", "-k", domain + "/" + launchdLabel}}},
 		}, nil
 	case "linux":
-		unit, err := e.home().Config("systemd", "user", systemdUnit)
+		unit, err := e.Home().Config("systemd", "user", systemdUnit)
 		if err != nil {
 			return serviceManager{}, fmt.Errorf("cannot find the systemd user folder: %w", err)
 		}
@@ -182,7 +183,7 @@ func serviceManagerFor(e Env) (serviceManager, error) {
 		}, nil
 	case "windows":
 		// The task's XML sits next to its log (ADR 0011).
-		dir, err := e.home().State("code-central")
+		dir, err := e.Home().State("code-central")
 		if err != nil {
 			return serviceManager{}, fmt.Errorf("cannot find the service's folder: %w", err)
 		}
@@ -193,7 +194,7 @@ func serviceManagerFor(e Env) (serviceManager, error) {
 		if d := e.Getenv("USERDOMAIN"); d != "" {
 			user = d + `\` + user
 		}
-		shortcut, err := notify.ShortcutPath(e.home())
+		shortcut, err := notify.ShortcutPath(e.Home())
 		if err != nil {
 			return serviceManager{}, err
 		}
@@ -217,7 +218,7 @@ func serviceManagerFor(e Env) (serviceManager, error) {
 }
 
 // runServiceCmds runs cs in order, carrying on past a failure that may fail.
-func runServiceCmds(ctx context.Context, e Env, cs []serviceCmd) error {
+func runServiceCmds(ctx context.Context, e cli.Env, cs []serviceCmd) error {
 	for _, c := range cs {
 		if err := runServiceCmd(ctx, e, c); err != nil && !c.mayFail {
 			return err
@@ -226,7 +227,7 @@ func runServiceCmds(ctx context.Context, e Env, cs []serviceCmd) error {
 	return nil
 }
 
-func runServiceCmd(ctx context.Context, e Env, c serviceCmd) error {
+func runServiceCmd(ctx context.Context, e cli.Env, c serviceCmd) error {
 	run := e.RunService
 	if run == nil {
 		run = func(ctx context.Context, name string, args ...string) error {
@@ -244,7 +245,7 @@ func runServiceCmd(ctx context.Context, e Env, c serviceCmd) error {
 // programPath is the binary's absolute path as invoked, without resolving
 // symlinks, so a symlinked install keeps working after an upgrade. On
 // Windows the binary may have been invoked without its .exe.
-func programPath(e Env) (string, error) {
+func programPath(e cli.Env) (string, error) {
 	p := e.Program
 	if p == "" {
 		return os.Executable()

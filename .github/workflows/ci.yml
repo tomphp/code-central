@@ -1,9 +1,12 @@
-# Builds and tests everything on each OS in the matrix: the same steps
+# Builds and tests on each OS in the matrix: the Go tests, the Vite build
+# the binaries embed, and both end-to-end suites. These are the steps
 # `make test` and `make e2e` run, called directly rather than through
 # make (its 60-second budget would trip on a cold runner, and each step
 # gets its own log). Every step runs under bash, so the
 # commands are identical on every OS and a red run on one OS is a real
-# platform difference. A separate job checks the commit messages since
+# platform difference. The web checks that don't depend on the OS
+# (vitest, tsc, ESLint, the Storybook build) run once, in the web job on
+# Linux. A separate job checks the commit messages since
 # the latest tag, and another runs the store and cli tests again on Linux
 # against a Postgres service container, which no other runner can give.
 name: CI
@@ -80,6 +83,62 @@ jobs:
           CODE_CENTRAL_TEST_POSTGRES_URL: postgres://postgres:postgres@localhost:5432/code_central_test?sslmode=disable
         run: go test -v ./store/... ./cli/... ./core/... ./app/...
 
+  # The web checks that don't depend on the OS, run once here rather than
+  # on every OS in the test matrix: vitest (in jsdom), tsc, ESLint, the
+  # Vite build and the Storybook build. They need core.wasm, the WASM Core
+  # the UI's tests and stories run on.
+  web:
+    name: web
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: npm ci
+        working-directory: web
+        run: npm ci
+
+      # As `make corewasm` builds it. A failing js build fails the run here.
+      - name: core.wasm
+        run: go run ./internal/corewasm web/src/api/core
+
+      - name: vitest
+        working-directory: web
+        run: npx vitest run
+
+      - name: tsc
+        working-directory: web
+        run: npx tsc --noEmit
+
+      - name: eslint
+        working-directory: web
+        run: npx eslint .
+
+      - name: Vite build
+        working-directory: web
+        run: npm run build
+
+      # Storybook must keep building, as `make build-components` checks. It
+      # needs the WASM Core built above.
+      - name: Storybook build
+        working-directory: web
+        run: npm exec -- storybook build
+
   test:
     name: test (${{ matrix.os }})
     strategy:
@@ -133,32 +192,16 @@ jobs:
       - name: go test
         run: go test -v ./...
 
-      # The WASM Core the UI's tests run on, as `make corewasm` builds it.
-      # A failing js build fails the run here.
+      # The WASM Core the UI e2e config's shared test setup loads, as `make
+      # corewasm` builds it. A failing js build fails the run here.
       - name: core.wasm
         run: go run ./internal/corewasm web/src/api/core
 
-      - name: vitest
-        working-directory: web
-        run: npx vitest run
-
-      - name: tsc
-        working-directory: web
-        run: npx tsc --noEmit
-
-      - name: eslint
-        working-directory: web
-        run: npx eslint .
-
+      # After go test, which runs against the committed placeholder page.
+      # The binaries below embed web/dist, and the UI e2e tests serve it.
       - name: Vite build
         working-directory: web
         run: npm run build
-
-      # Storybook must keep building, as `make build-components` checks. It
-      # needs the WASM Core built above.
-      - name: Storybook build
-        working-directory: web
-        run: npm exec -- storybook build
 
       # As `make build`, with the OS's executable suffix (.exe on Windows,
       # empty elsewhere), and the fake gh `make e2e` builds. The absolute
