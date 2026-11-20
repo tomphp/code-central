@@ -13,28 +13,31 @@ export function ciContract(driver: () => Driver) {
     await d.createProject("acme", "Acme");
     const refused = await d.reportCIWatcherStatus("acme", { state: "watching" }).catch((e) => e);
     expect(refused).toMatchObject({ code: "action_not_allowed" });
-    await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
-    expect(withoutHost((await d.api.listProjects())[0].ci.watcher)).toEqual({ state: "not_reported" });
+    // Each status is the one its write left: a real service's own CI
+    // Watcher starts with CI Tracking and reports over a later read.
+    const tracked = await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+    expect(withoutHost(tracked.ci.watcher)).toEqual({ state: "not_reported" });
 
-    await d.reportCIWatcherStatus("acme", { state: "error", problem: "logged_out", message: "gh isn't logged in", fix: "Run gh auth login." });
-    expect(withoutHost((await d.api.listProjects())[0].ci.watcher)).toEqual({
+    const loggedOut = await d.reportCIWatcherStatus("acme", { state: "error", problem: "logged_out", message: "gh isn't logged in", fix: "Run gh auth login." });
+    expect(withoutHost(loggedOut)).toEqual({
       state: "error",
       problem: "logged_out",
       message: "gh isn't logged in",
       fix: "Run gh auth login.",
       since: expect.any(String),
     });
-    await d.reportCIWatcherStatus("acme", { state: "watching" });
-    expect(withoutHost((await d.api.listProjects())[0].ci.watcher)).toEqual({ state: "watching", since: expect.any(String) });
+    expect(withoutHost(await d.reportCIWatcherStatus("acme", { state: "watching" }))).toEqual({ state: "watching", since: expect.any(String) });
     // Rate-limited is still Watching, until a time.
-    await d.reportCIWatcherStatus("acme", { state: "watching", rate_limited_until: "2026-01-05T10:15:00Z" });
-    expect(withoutHost((await d.api.listProjects())[0].ci.watcher)).toEqual({ state: "watching", rate_limited_until: "2026-01-05T10:15:00Z", since: expect.any(String) });
+    expect(withoutHost(await d.reportCIWatcherStatus("acme", { state: "watching", rate_limited_until: "2026-01-05T10:15:00Z" }))).toEqual({
+      state: "watching",
+      rate_limited_until: "2026-01-05T10:15:00Z",
+      since: expect.any(String),
+    });
     const limitedError = await d
       .reportCIWatcherStatus("acme", { state: "error", message: "no", rate_limited_until: "2026-01-05T10:15:00Z" })
       .catch((e) => e);
     expect(limitedError).toMatchObject({ code: "invalid" });
-    await d.reportCIWatcherStatus("acme", { state: "watching" });
-    expect(withoutHost((await d.api.listProjects())[0].ci.watcher)).toEqual({ state: "watching", since: expect.any(String) });
+    expect(withoutHost(await d.reportCIWatcherStatus("acme", { state: "watching" }))).toEqual({ state: "watching", since: expect.any(String) });
     // Only the service reports a crash.
     const crashed = await d.reportCIWatcherStatus("acme", { state: "error", problem: "crashed", message: "crashed" }).catch((e) => e);
     expect(crashed).toMatchObject({ code: "invalid" });

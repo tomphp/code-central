@@ -15,7 +15,7 @@
 // test asserts straight after it: a world's waits for the world to settle,
 // and serve's is a no-op.
 import type { Api } from "./api";
-import type { CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, ModelsReport, PullRequestReport, SessionEvent, TicketView, UsageResponse } from "./types";
+import type { CIRunView, CIWatcherReport, CIWatcherStatus, ExternalState, HeartbeatReport, ModelsReport, ProjectView, PullRequestReport, SessionEvent, TicketView, UsageResponse } from "./types";
 import type { World } from "./core/core";
 import { toError } from "./http";
 
@@ -109,8 +109,10 @@ export interface Driver {
   // (code-central-389).
   letGHWrite(repository: string): Promise<void>;
   // reportCIWatcherStatus reports the CI Watcher's status as the CI
-  // Watcher does on each poll (code-central-253).
-  reportCIWatcherStatus(key: string, status: CIWatcherReport): Promise<void>;
+  // Watcher does on each poll (code-central-253), and returns the status
+  // as that write left it: a real service's own CI Watcher reports too,
+  // so a later read may have its status instead.
+  reportCIWatcherStatus(key: string, status: CIWatcherReport): Promise<CIWatcherStatus>;
   // reportPushedCommit reports the commit a Factory pushed for an
   // Accepted Ticket, and reportCIRuns the CI Runs the CI Watcher saw
   // (code-central-256).
@@ -345,7 +347,8 @@ export class HttpDriver implements Driver {
 
   // code-central-253: as the CI Watcher
   reportCIWatcherStatus: Driver["reportCIWatcherStatus"] = async (key, status) => {
-    await this.agent(`${this.projectPath(key)}/report_ci_watcher_status`, status);
+    const project = await this.agent<ProjectView>(`${this.projectPath(key)}/report_ci_watcher_status`, { ...status, full: true });
+    return project.ci.watcher;
   };
 
   // code-central-256: as the Factory and the CI Watcher
