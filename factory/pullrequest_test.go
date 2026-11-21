@@ -228,7 +228,7 @@ func TestUnderPullRequestANewBranchIsCutFromTheFastForwardedBase(t *testing.T) {
 	}
 	// The branch was cut from the host's base, so it holds its commit.
 	if !h.IsAncestor(theirs, ready) {
-		t.Errorf("%s is not in %s", theirs, ready)
+		t.Fatalf("%s is not in %s", theirs, ready)
 	}
 }
 

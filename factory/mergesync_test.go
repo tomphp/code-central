@@ -59,7 +59,7 @@ func TestUnderMergeAndPushWithCITrackingARemoteThatIsAheadIsFastForwarded(t *tes
 		t.Errorf("the local base is at %s, want it fast-forwarded to %s", got, theirs)
 	}
 	if !h.IsAncestor(theirs, ready) {
-		t.Errorf("%s is not in %s", theirs, ready)
+		t.Fatalf("%s is not in %s", theirs, ready)
 	}
 }
 
@@ -82,7 +82,7 @@ func TestUnderMergeAndPushANewBranchIsCutFromTheFastForwardedBase(t *testing.T) 
 		t.Fatalf("calls %+v, want %s claimed", calls, ready)
 	}
 	if !h.IsAncestor(theirs, ready) {
-		t.Errorf("%s is not in %s", theirs, ready)
+		t.Fatalf("%s is not in %s", theirs, ready)
 	}
 }
 
@@ -101,7 +101,7 @@ func TestUnderMergeAndPushALocalBaseAheadOfTheRemoteIsCurrent(t *testing.T) {
 		t.Error("an unpushed local commit showed Base diverged")
 	}
 	if !remote.IsAncestor(mine, "main") {
-		t.Errorf("%s is not in the remote's main", mine)
+		t.Fatalf("%s is not in the remote's main", mine)
 	}
 	if out := r.Stdout() + r.Stderr(); strings.Contains(out, "diverged") {
 		t.Errorf("the Factory reported a divergence:\n%s", out)
@@ -208,7 +208,7 @@ func TestUnderMergeAndPushUncommittedChangesInTheWayMakeThePollWait(t *testing.T
 	r.Poll()
 	h.WantState(id, domain.Done)
 	if !h.IsAncestor(theirs, "main") {
-		t.Errorf("%s is not in %s", theirs, "main")
+		t.Fatalf("%s is not in main", theirs)
 	}
 }
 
