@@ -7,6 +7,7 @@ _spec = importlib.util.spec_from_file_location("bare_make_test", pathlib.Path(__
 bare_make_test = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(bare_make_test)
 piped = bare_make_test.piped_make_test
+full = bare_make_test.full_suite_command
 
 
 class BareMakeTestTest(unittest.TestCase):
@@ -40,6 +41,27 @@ class BareMakeTestTest(unittest.TestCase):
         self.assertFalse(piped("git log | grep test"))
         self.assertFalse(piped("echo make test | cat"))
         self.assertFalse(piped("echo 'make test | tail'"))
+
+    def test_full_suite_refused(self):
+        self.assertTrue(full("make vitest"))
+        self.assertTrue(full("make vitest 2>&1 | tail -6"))
+        self.assertTrue(full("make wiretypes; make vitest"))
+        self.assertTrue(full("go test ./..."))
+        self.assertTrue(full("go test -count=1 ./..."))
+        self.assertTrue(full("make vitest F="))
+        self.assertTrue(full("CI=1 make vitest"))
+        self.assertTrue(full("time go test ./..."))
+        self.assertTrue(full("make vitest 2>&1 | tail -6; go test ./... | grep -v ^ok"))
+
+    def test_partial_suite_allowed(self):
+        self.assertFalse(full("make vitest F=web/src/x.test.ts"))
+        self.assertFalse(full("make vitest-related F=web/src/x.ts"))
+        self.assertFalse(full("make vitest-stress F=web/src/x.test.ts"))
+        self.assertFalse(full("go test ./core"))
+        self.assertFalse(full("go test -count=1 ./core ./server"))
+        self.assertFalse(full("make test"))
+        self.assertFalse(full("echo make vitest"))
+        self.assertFalse(full("git commit -m 'go test ./...'"))
 
 
 if __name__ == "__main__":
