@@ -23,7 +23,7 @@ func lastFailure(t *testing.T, h *factorytest.Harness, id string) string {
 
 func TestAStrayDirectoryAtTheWorktreePathIsAFailureReportAndIsLeftAlone(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Something's in the way")
 	stray := filepath.Join(h.Worktree(id), "mine.txt")
 	if err := os.MkdirAll(h.Worktree(id), 0o755); err != nil {
@@ -49,9 +49,9 @@ func TestAStrayDirectoryAtTheWorktreePathIsAFailureReportAndIsLeftAlone(t *testi
 
 func TestAWorktreeOnAnotherBranchAtTheWorktreePathIsAFailureReportAndIsLeftAlone(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Wrong branch")
-	h.Git("worktree", "add", "-q", "-b", "experiment", h.Worktree(id), "main")
+	h.AddWorktreeOnNewBranch(h.Worktree(id), "experiment", "main")
 
 	h.Start()
 	report := lastFailure(t, h, id)
@@ -59,7 +59,7 @@ func TestAWorktreeOnAnotherBranchAtTheWorktreePathIsAFailureReportAndIsLeftAlone
 	if !strings.Contains(report, h.Worktree(id)) || !strings.Contains(report, "experiment") {
 		t.Errorf("failure report %q doesn't name the path and the branch it's on", report)
 	}
-	if b := h.GitIn(h.Worktree(id), "rev-parse", "--abbrev-ref", "HEAD"); b != "experiment" {
+	if b := h.BranchOf(h.Worktree(id)); b != "experiment" {
 		t.Errorf("the worktree was switched to %q", b)
 	}
 	if n := len(h.Calls()); n != 0 {
@@ -69,10 +69,10 @@ func TestAWorktreeOnAnotherBranchAtTheWorktreePathIsAFailureReportAndIsLeftAlone
 
 func TestTheTicketsBranchCheckedOutElsewhereIsAFailureReport(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Busy branch")
 	elsewhere := h.Repo + "-elsewhere"
-	h.Git("worktree", "add", "-q", "-b", id, elsewhere, "main")
+	h.AddWorktreeOnNewBranch(elsewhere, id, "main")
 
 	h.Start()
 	report := lastFailure(t, h, id)
@@ -83,16 +83,16 @@ func TestTheTicketsBranchCheckedOutElsewhereIsAFailureReport(t *testing.T) {
 	if _, err := os.Stat(h.Worktree(id)); !os.IsNotExist(err) {
 		t.Errorf("a worktree was made at %s anyway", h.Worktree(id))
 	}
-	if b := h.GitIn(elsewhere, "rev-parse", "--abbrev-ref", "HEAD"); b != id {
+	if b := h.BranchOf(elsewhere); b != id {
 		t.Errorf("the other worktree was switched to %q", b)
 	}
 }
 
 func TestAStageWorktreePathHoldingABranchWorktreeIsAFailureReport(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.StageTicket("spec", "Spec: on a branch")
-	h.Git("worktree", "add", "-q", "-b", "mine", h.Worktree(id), "main")
+	h.AddWorktreeOnNewBranch(h.Worktree(id), "mine", "main")
 
 	h.Start()
 	report := lastFailure(t, h, id)
@@ -100,7 +100,7 @@ func TestAStageWorktreePathHoldingABranchWorktreeIsAFailureReport(t *testing.T) 
 	if !strings.Contains(report, h.Worktree(id)) || !strings.Contains(report, "mine") {
 		t.Errorf("failure report %q doesn't name the path and the branch it's on", report)
 	}
-	if b := h.GitIn(h.Worktree(id), "rev-parse", "--abbrev-ref", "HEAD"); b != "mine" {
+	if b := h.BranchOf(h.Worktree(id)); b != "mine" {
 		t.Errorf("the worktree was switched to %q", b)
 	}
 }
@@ -120,7 +120,7 @@ func exists(path string) bool {
 
 func TestWorktreesAreKeptThroughInReviewGiveUpAndFailed(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	review := h.ReadyTicket("Finished")
 	gaveUp := h.ReadyTicket("Too hard")
 	h.Script(gaveUp, factorytest.CLI("give-up", "{{ticket}}", "--claim", "{{claim}}", "--note", "Too hard."), factorytest.Result("success"))
@@ -144,7 +144,7 @@ func TestWorktreesAreKeptThroughInReviewGiveUpAndFailed(t *testing.T) {
 
 func TestACleanWorktreeIsRemovedOnDoneAndItsBranchKept(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Shipped")
 	h.Script(id,
 		factorytest.WriteFile("x.txt", "x\n"),
@@ -154,7 +154,7 @@ func TestACleanWorktreeIsRemovedOnDoneAndItsBranchKept(t *testing.T) {
 	r := h.Start()
 	h.WantState(id, domain.InReview)
 	r.WantOutput(id + " turn ended")
-	tip := h.Git("rev-parse", id)
+	tip := h.Tip(id)
 
 	move(t, h, id, domain.Done)
 	r.Poll()
@@ -162,17 +162,17 @@ func TestACleanWorktreeIsRemovedOnDoneAndItsBranchKept(t *testing.T) {
 	if exists(h.Worktree(id)) {
 		t.Errorf("the Done Ticket's clean worktree %s is still there", h.Worktree(id))
 	}
-	if strings.Contains(h.Git("worktree", "list"), h.Worktree(id)) {
+	if h.HasWorktree(h.Worktree(id)) {
 		t.Errorf("git still lists the worktree %s", h.Worktree(id))
 	}
-	if got := h.Git("rev-parse", id); got != tip {
+	if got := h.Tip(id); got != tip {
 		t.Errorf("branch %s is at %s, want it kept at %s", id, got, tip)
 	}
 }
 
 func TestADirtyWorktreeIsLeftOnCancelledWithAWarning(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Abandoned")
 	h.Script(id, factorytest.WriteFile("wip.txt", "wip\n"), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start()
@@ -189,22 +189,22 @@ func TestADirtyWorktreeIsLeftOnCancelledWithAWarning(t *testing.T) {
 	if !strings.Contains(r.Stdout(), h.Worktree(id)) {
 		t.Errorf("stdout %q: the warning doesn't name the worktree", r.Stdout())
 	}
-	if h.Git("branch", "--list", id) == "" {
+	if !h.Exists(id) {
 		t.Errorf("branch %s was deleted", id)
 	}
 }
 
 func TestTheSweepAtStartRemovesFinishedTicketsWorktreesAndPrunes(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	done := h.ReadyTicket("Done before")
-	h.Git("worktree", "add", "-q", "-b", done, h.Worktree(done), "main")
+	h.AddWorktreeOnNewBranch(h.Worktree(done), done, "main")
 	move(t, h, done, domain.Done)
 	stage := h.StageTicket("spec", "Spec: cancelled before")
-	h.Git("worktree", "add", "-q", "--detach", h.Worktree(stage), "main")
+	h.AddDetachedWorktreeAt(h.Worktree(stage), "main")
 	move(t, h, stage, domain.Cancelled)
 	gone := h.Repo + "-gone"
-	h.Git("worktree", "add", "-q", "--detach", gone, "main")
+	h.AddDetachedWorktreeAt(gone, "main")
 	if err := os.RemoveAll(gone); err != nil {
 		t.Fatal(err)
 	}
@@ -217,17 +217,18 @@ func TestTheSweepAtStartRemovesFinishedTicketsWorktreesAndPrunes(t *testing.T) {
 		}
 	}
 
-	if list := h.Git("worktree", "list"); strings.Contains(list, gone) {
-		t.Errorf("git worktree list still has the deleted %s:\n%s", gone, list)
+	if h.HasWorktree(gone) {
+		t.Errorf("git worktree list still has the deleted %s", gone)
 	}
-	if h.Git("branch", "--list", done) == "" {
+	if !h.Exists(done) {
 		t.Errorf("branch %s was deleted", done)
 	}
 }
 
 func TestAGitFailureSettingUpTheWorktreeIsAFailureReport(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	// Real git: only it has a ref lock for the Fake to stand in for.
+	h := factorytest.New(t, factorytest.RealGit())
 	id := h.ReadyTicket("git says no")
 	// A stale ref lock makes `git worktree add -b` fail to make the branch.
 	lock := filepath.Join(h.Git("rev-parse", "--absolute-git-dir"), "refs", "heads", id+".lock")

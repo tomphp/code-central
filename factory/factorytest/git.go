@@ -42,7 +42,7 @@ func FakeGit() Option { return func(o *options) { o.fakeGit = true } }
 // typedHelpers are the helpers that serve real git and the Fake git alike.
 // They take branch names and commit IDs, not revision syntax like HEAD or
 // main^, which the Fake git doesn't model.
-const typedHelpers = "Tip, Exists, Log, Parents, Subject, File, RemoteTip, CommitOn, MergeByHand, PushByHand, Publish, IsAncestor, Remote.CommitOn, Remote.Branch, HasRemoteTip, SubjectIn, Head, CheckedOut, HasRemote, RemoteURL, SetRemote, Fetch, SpecBranches, Status, AddDetachedWorktree, DiscardWorktree, CloneByHand, CheckoutNewBranch"
+const typedHelpers = "Tip, Exists, Log, Parents, Subject, Author, File, RemoteTip, CommitOn, CommitOnBy, MergeByHand, PushByHand, Publish, IsAncestor, NewBranch, MoveBranch, EmptyBranch, Untrack, Detach, Status, AddWorktree, AddWorktreeOnNewBranch, AddWorktreeAt, AddDetachedWorktreeAt, HasWorktree, HeadOf, BranchOf, Remote.CommitOn, Remote.Branch, HasRemoteTip, SubjectIn, Head, CheckedOut, HasRemote, RemoteURL, SetRemote, Fetch, SpecBranches, DiscardWorktree, CloneByHand, CheckoutNewBranch"
 
 // gitEnv, set to "real", runs every Harness on real git, even one whose
 // test chose FakeGit, to check a run on the Fake git against real git.
@@ -126,7 +126,156 @@ func (h *Harness) RemoteTip(remote, branch string) string {
 // there.
 func (h *Harness) CommitOn(branch, file, content string) string {
 	h.t.Helper()
-	return h.commitOn(h.Repo, branch, file, content)
+	return h.commitOn(h.Repo, branch, file, content, "")
+}
+
+// CommitOnBy is CommitOn by author, as "Name <email>".
+func (h *Harness) CommitOnBy(branch, file, content, author string) string {
+	h.t.Helper()
+	return h.commitOn(h.Repo, branch, file, content, author)
+}
+
+// Author is commit's author in the repo, as "Name <email>".
+func (h *Harness) Author(commit string) string {
+	h.t.Helper()
+	return h.author(h.Repo, commit)
+}
+
+// NewBranch makes branch at from, a branch or a commit, in the repo.
+func (h *Harness) NewBranch(branch, from string) {
+	h.t.Helper()
+	if h.fake != nil {
+		must(h.t, h.fake.Open(h.Repo).CreateBranch(branch, h.commit(h.Repo, from)))
+		return
+	}
+	h.git(h.Repo, "branch", branch, from)
+}
+
+// MoveBranch moves branch, which no worktree has checked out, to to, a
+// branch or a commit, in the repo.
+func (h *Harness) MoveBranch(branch, to string) {
+	h.t.Helper()
+	if h.fake != nil {
+		h.moveBranch(h.Repo, branch, h.commit(h.Repo, to), h.tip(h.Repo, branch))
+		return
+	}
+	h.git(h.Repo, "branch", "-f", branch, to)
+}
+
+// EmptyBranch makes branch at a root commit holding no files.
+func (h *Harness) EmptyBranch(branch string) {
+	h.t.Helper()
+	if h.fake != nil {
+		root := h.fake.MakeCommit(h.Repo, git.Change{Message: "empty"})
+		must(h.t, h.fake.Open(h.Repo).CreateBranch(branch, root))
+		return
+	}
+	h.git(h.Repo, "branch", branch, h.git(h.Repo, "commit-tree", "-m", "empty", "4b825dc642cb6eb9a060e54bf8d69288fbee4904"))
+}
+
+// Untrack commits the removal of file from main, leaving the file in the
+// repo's folder, untracked.
+func (h *Harness) Untrack(file string) {
+	h.t.Helper()
+	if h.fake == nil {
+		h.git(h.Repo, "rm", "-q", "--cached", file)
+		h.git(h.Repo, "commit", "-q", "-m", "Untrack "+file)
+		return
+	}
+	content, err := os.ReadFile(filepath.Join(h.Repo, file))
+	must(h.t, err)
+	old := h.tip(h.Repo, "main")
+	commit := h.fake.MakeCommit(h.Repo, git.Change{Parents: []string{old}, Removed: []string{file}, Message: "Untrack " + file})
+	h.moveBranch(h.Repo, "main", commit, old)
+	must(h.t, os.WriteFile(filepath.Join(h.Repo, file), content, 0o644))
+}
+
+// Detach detaches the repo's checkout at the commit it is on.
+func (h *Harness) Detach() {
+	h.t.Helper()
+	if h.fake != nil {
+		must(h.t, h.fake.Open(h.Repo).CheckoutDetached(h.Repo, h.headOf(h.Repo)))
+		return
+	}
+	h.git(h.Repo, "checkout", "-q", "--detach")
+}
+
+// Status is the repo's uncommitted changes, untracked files included: ""
+// when it is clean.
+func (h *Harness) Status() string {
+	h.t.Helper()
+	if h.fake != nil {
+		out, err := h.fake.Open(h.Repo).Status(h.Repo)
+		must(h.t, err)
+		return strings.TrimSpace(out)
+	}
+	return h.git(h.Repo, "status", "--porcelain")
+}
+
+// AddWorktreeAt adds a worktree at path, with the existing branch checked
+// out.
+func (h *Harness) AddWorktreeAt(path, branch string) {
+	h.t.Helper()
+	if h.fake != nil {
+		must(h.t, h.fake.Open(h.Repo).AddWorktree(path, branch))
+		return
+	}
+	h.git(h.Repo, "worktree", "add", "-q", path, branch)
+}
+
+// AddWorktreeOnNewBranch adds a worktree at path on branch, new, made at
+// from.
+func (h *Harness) AddWorktreeOnNewBranch(path, branch, from string) {
+	h.t.Helper()
+	if h.fake != nil {
+		must(h.t, h.fake.Open(h.Repo).AddWorktreeOnNewBranch(path, branch, h.commit(h.Repo, from)))
+		return
+	}
+	h.git(h.Repo, "worktree", "add", "-q", "-b", branch, path, from)
+}
+
+// AddDetachedWorktreeAt adds a worktree at path, detached at rev.
+func (h *Harness) AddDetachedWorktreeAt(path, rev string) {
+	h.t.Helper()
+	if h.fake != nil {
+		must(h.t, h.fake.Open(h.Repo).AddDetachedWorktree(path, h.commit(h.Repo, rev)))
+		return
+	}
+	h.git(h.Repo, "worktree", "add", "-q", "--detach", path, rev)
+}
+
+// HasWorktree reports whether the repo lists a worktree at path.
+func (h *Harness) HasWorktree(path string) bool {
+	h.t.Helper()
+	if h.fake != nil {
+		worktrees, err := h.fake.Open(h.Repo).Worktrees()
+		must(h.t, err)
+		for _, w := range worktrees {
+			if filepath.Clean(w.Path) == filepath.Clean(path) {
+				return true
+			}
+		}
+		return false
+	}
+	return strings.Contains(h.git(h.Repo, "worktree", "list", "--porcelain"), "worktree "+path+"\n")
+}
+
+// HeadOf is the commit checked out in the worktree dir.
+func (h *Harness) HeadOf(dir string) string {
+	h.t.Helper()
+	return h.headOf(dir)
+}
+
+// BranchOf is the branch checked out in the worktree dir, failing the
+// test when it is detached.
+func (h *Harness) BranchOf(dir string) string {
+	h.t.Helper()
+	if h.fake != nil {
+		branch, err := h.fake.Open(h.Repo).CurrentBranch(dir)
+		must(h.t, err)
+		return branch
+	}
+	return h.git(dir, "symbolic-ref", "--short", "HEAD")
 }
 
 // MergeByHand merges branch into into, as a human would outside the
@@ -229,7 +378,7 @@ func (r *Repository) Publish(remote *Remote, commit, branch string) {
 // CommitOn is Harness.CommitOn in r's clone at Path.
 func (r *Repository) CommitOn(branch, file, content string) string {
 	r.h.t.Helper()
-	return r.h.commitOn(r.Path, branch, file, content)
+	return r.h.commitOn(r.Path, branch, file, content, "")
 }
 
 // MergeByHand is Harness.MergeByHand in r's clone at Path.
@@ -502,8 +651,8 @@ func (h *Harness) file(dir, rev, path string) string {
 	return content
 }
 
-// commitOn is CommitOn in the clone at dir.
-func (h *Harness) commitOn(dir, branch, file, content string) string {
+// commitOn is CommitOn in the clone at dir, by author unless it is "".
+func (h *Harness) commitOn(dir, branch, file, content, author string) string {
 	h.t.Helper()
 	if h.fake != nil {
 		old, _ := h.lookup(dir, "refs/heads/"+branch)
@@ -511,7 +660,7 @@ func (h *Harness) commitOn(dir, branch, file, content string) string {
 		if parent == "" {
 			parent = h.tip(dir, "main")
 		}
-		commit := h.fake.MakeCommit(dir, git.Change{Parents: []string{parent}, Files: map[string]string{file: content}, Message: "Change " + file})
+		commit := h.fake.MakeCommit(dir, git.Change{Parents: []string{parent}, Files: map[string]string{file: content}, Message: "Change " + file, Author: author})
 		h.moveBranch(dir, branch, commit, old)
 		return commit
 	}
@@ -524,7 +673,11 @@ func (h *Harness) commitOn(dir, branch, file, content string) string {
 	}
 	must(h.t, os.WriteFile(filepath.Join(dir, file), []byte(content), 0o644))
 	h.git(dir, "add", file)
-	h.git(dir, "commit", "-q", "-m", "Change "+file)
+	if author == "" {
+		h.git(dir, "commit", "-q", "-m", "Change "+file)
+	} else {
+		h.git(dir, "commit", "-q", "-m", "Change "+file, "--author="+author)
+	}
 	return h.git(dir, "rev-parse", "HEAD")
 }
 
@@ -556,6 +709,26 @@ func (h *Harness) commitOnRemote(path, branch, file, content string) string {
 	h.git(other, "commit", "-q", "-m", "Change "+file)
 	h.git(other, "push", "-q", "origin", branch)
 	return h.git(other, "rev-parse", "HEAD")
+}
+
+// headOf is HeadOf in the repository at dir.
+func (h *Harness) headOf(dir string) string {
+	h.t.Helper()
+	if h.fake != nil {
+		out, err := h.fake.Run(dir, "rev-parse", "HEAD")
+		must(h.t, err)
+		return out
+	}
+	return h.git(dir, "rev-parse", "HEAD")
+}
+
+// author is Author in the repository at dir.
+func (h *Harness) author(dir, commit string) string {
+	h.t.Helper()
+	if h.fake != nil {
+		return h.fake.AuthorOf(dir, h.commit(dir, commit))
+	}
+	return h.git(dir, "log", "-1", "--format=%an <%ae>", commit, "--")
 }
 
 // mergeByHand is MergeByHand in the clone at dir.

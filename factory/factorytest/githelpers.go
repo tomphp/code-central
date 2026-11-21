@@ -68,10 +68,8 @@ func (r *Repository) SetRemote(name, url string) { r.h.t.Helper(); r.h.setRemote
 // remote-tracking branches are up to date.
 func (r *Repository) Fetch(remote string) { r.h.t.Helper(); r.h.fetch(r.Path, remote) }
 
-// Status is the porcelain status of the repo's worktree, an absolute path.
-func (h *Harness) Status(worktree string) string { h.t.Helper(); return h.status(h.Repo, worktree) }
-
-// Status is Harness.Status for r's clone.
+// Status is the porcelain status of r's worktree, an absolute path, in r's
+// clone.
 func (r *Repository) Status(worktree string) string {
 	r.h.t.Helper()
 	return r.h.status(r.Path, worktree)
@@ -215,20 +213,6 @@ func (r *Repository) HasRemoteTip(remote, branch string) bool {
 	r.h.t.Helper()
 	_, ok := r.h.lookup(r.Path, "refs/remotes/"+remote+"/"+branch)
 	return ok
-}
-
-// BranchOf is the branch checked out in the worktree, "" when it is
-// detached.
-func (h *Harness) BranchOf(worktree string) string {
-	h.t.Helper()
-	if h.fake == nil {
-		return h.git(worktree, "branch", "--show-current")
-	}
-	b, err := h.fake.Open(worktree).CurrentBranch(worktree)
-	if err != nil {
-		return ""
-	}
-	return b
 }
 
 // RepositoryAt is a Repository named name whose clone is at path, one

@@ -25,7 +25,7 @@ func answeredTicket(t *testing.T, h *factorytest.Harness, args ...string) (strin
 
 func TestAnAnsweredClaimIsPickedUpAndItsSessionResumedWithTheAnswers(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id, first, r := answeredTicket(t, h, "--model", "opus")
 
 	r.Poll()
@@ -63,7 +63,7 @@ func TestAnAnsweredClaimIsPickedUpAndItsSessionResumedWithTheAnswers(t *testing.
 
 func TestAResumeIsInBypassModeWithBypassPermissions(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id, _, r := answeredTicket(t, h, "--bypass-permissions")
 	r.Poll()
 	h.WantState(id, domain.InReview)
@@ -74,7 +74,7 @@ func TestAResumeIsInBypassModeWithBypassPermissions(t *testing.T) {
 
 func TestWhenASlotFreesAnAnsweredResumeGoesBeforeANewClaim(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	asks := h.ReadyTicket("Ask first")
 	busy := h.ReadyTicket("Busy")
 	h.Script(asks, factorytest.PostRound("Which colour?"), factorytest.Result("success"))
@@ -111,7 +111,7 @@ func TestWhenASlotFreesAnAnsweredResumeGoesBeforeANewClaim(t *testing.T) {
 
 func TestAResumeWaitsAPollWhileAnotherProcessHoldsTheSession(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id, first, r := answeredTicket(t, h)
 	release := h.HoldSession(first.Session)
 

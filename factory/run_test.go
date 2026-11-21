@@ -10,7 +10,7 @@ import (
 
 func TestTheFactoryClaimsAReadyTicketAndRunsOneSessionToInReview(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Add a button")
 	h.Script(id,
 		factorytest.WriteFile("button.txt", "button\n"),
@@ -18,7 +18,7 @@ func TestTheFactoryClaimsAReadyTicketAndRunsOneSessionToInReview(t *testing.T) {
 		factorytest.Git("commit", "-q", "-m", "Add a button"),
 		factorytest.Finish("Added the button."),
 		factorytest.Result("success"))
-	mainTip := h.Git("rev-parse", "main")
+	mainTip := h.Tip("main")
 
 	r := h.Start()
 	r.WantOutput("base: main")
@@ -42,10 +42,10 @@ func TestTheFactoryClaimsAReadyTicketAndRunsOneSessionToInReview(t *testing.T) {
 	if claim.SessionID != c.Session || claim.WorkingDir != h.Worktree(id) || claim.ResumeCommand != "claude --resume "+c.Session {
 		t.Errorf("claim = %+v; want session %s, working_dir %s and its resume command", claim, c.Session, h.Worktree(id))
 	}
-	if b := h.GitIn(h.Worktree(id), "rev-parse", "--abbrev-ref", "HEAD"); b != id {
+	if b := h.BranchIn(h.Worktree(id)); b != id {
 		t.Errorf("worktree is on %q, want branch %s", b, id)
 	}
-	if parent := h.Git("rev-parse", id+"^"); parent != mainTip {
+	if parent := strings.Join(h.Parents(h.Tip(id)), " "); parent != mainTip {
 		t.Errorf("branch %s starts at %s, want main's tip %s", id, parent, mainTip)
 	}
 	r.WantOutput(id + ` turn ended (implementation): "Add a button": exit 0, success; now In Review; ran `)
@@ -55,7 +55,7 @@ func TestTheFactoryClaimsAReadyTicketAndRunsOneSessionToInReview(t *testing.T) {
 // the one claude run and the Factory.
 func onlyCall(t *testing.T, args ...string) (factorytest.Call, *factorytest.Running) {
 	t.Helper()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Work")
 	r := h.Start(args...)
 	h.WantState(id, domain.InReview)

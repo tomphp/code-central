@@ -513,3 +513,24 @@ func TestTheSpecBranchWorktreeAndPushHelpersAgreeOnRealGitAndTheFakeGit(t *testi
 		}
 	})
 }
+
+func TestTheWorktreeBranchAndDetachedWorktreeHelpersAgreeOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		base := h.Tip("main")
+		h.AddDetachedWorktree("acme-1", "main")
+		dir := h.Worktree("acme-1")
+		if got := h.BranchIn(dir); got != "" {
+			t.Errorf("BranchIn(detached) = %q, want \"\"", got)
+		}
+		if got := h.HeadIn(dir); got != base {
+			t.Errorf("HeadIn = %s, want %s", got, base)
+		}
+		h.CommitOn("feature", "f.txt", "f\n")
+		h.AddWorktree("feature")
+		if got := h.BranchIn(h.Worktree("feature")); got != "feature" {
+			t.Errorf("BranchIn(feature) = %q, want feature", got)
+		}
+	})
+}

@@ -2,7 +2,6 @@ package factory_test
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/api"
@@ -29,14 +28,14 @@ func pullRequestBase(h *factorytest.Harness, base string) {
 }
 
 func contains(h *factorytest.Harness, branch, commit string) bool {
-	return strings.Contains(h.Git("branch", "--contains", commit, "--list", branch), branch)
+	return h.IsAncestor(commit, branch)
 }
 
 func TestChangingTheBaseMergesAnAcceptedTicketNotYetMergedIntoTheNewBase(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
-	h.Git("branch", "release", "main")
-	oldMain := h.Git("rev-parse", "main")
+	h := factorytest.New(t, factorytest.FakeGit())
+	h.NewBranch("release", "main")
+	oldMain := h.Tip("main")
 	// A base that exists nowhere holds landing, so the Ticket is still
 	// Accepted when the base changes.
 	setBase(h, "ghost")
@@ -51,17 +50,17 @@ func TestChangingTheBaseMergesAnAcceptedTicketNotYetMergedIntoTheNewBase(t *test
 	if !contains(h, "release", commit) {
 		t.Errorf("release doesn't hold %s", commit)
 	}
-	if got := h.Git("rev-parse", "main"); got != oldMain {
+	if got := h.Tip("main"); got != oldMain {
 		t.Errorf("main moved to %s, want it left at %s", got, oldMain)
 	}
-	if m := tk.Moves[len(tk.Moves)-1]; m.Commit != h.Git("rev-parse", "release") {
+	if m := tk.Moves[len(tk.Moves)-1]; m.Commit != h.Tip("release") {
 		t.Errorf("landed at %q, want release's merge", m.Commit)
 	}
 }
 
 func TestChangingTheBaseSendsBackABranchThatConflictsWithTheNewBase(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.CommitOn("release", "feature.txt", "release's\n")
 	setBase(h, "ghost")
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
@@ -76,10 +75,10 @@ func TestChangingTheBaseSendsBackABranchThatConflictsWithTheNewBase(t *testing.T
 
 func TestChangingTheBaseAfterTheMergeButBeforeThePushFinishesOnTheOldBase(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
-	h.Git("branch", "release", "main")
-	oldRelease := h.Git("rev-parse", "release")
+	h.NewBranch("release", "main")
+	oldRelease := h.Tip("release")
 	setMergeBase(h, "main")
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	remote.RefusePushes()
@@ -95,20 +94,20 @@ func TestChangingTheBaseAfterTheMergeButBeforeThePushFinishesOnTheOldBase(t *tes
 	h.WantState(id, domain.Done)
 	r.WantOutput(id + ": pushed main to origin")
 	r.WantOutput(id + ": landed on main at ")
-	if got, want := remote.Git("rev-parse", "main"), h.Git("rev-parse", "main"); got != want {
+	if got, want := remote.Tip("main"), h.Tip("main"); got != want {
 		t.Errorf("the remote's main is at %s, want %s", got, want)
 	}
-	if got := h.Git("rev-parse", "release"); got != oldRelease {
+	if got := h.Tip("release"); got != oldRelease {
 		t.Errorf("release moved to %s: the merge was made again", got)
 	}
 }
 
 func TestChangingTheBaseAfterASpecIsMergedButBeforeThePushFinishesOnTheOldBase(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
-	h.Git("branch", "release", "main")
-	oldRelease := h.Git("rev-parse", "release")
+	h.NewBranch("release", "main")
+	oldRelease := h.Tip("release")
 	setMergeBase(h, "main")
 	a, b := twoAccepted(t, h)
 	remote.RefusePushes()
@@ -120,19 +119,19 @@ func TestChangingTheBaseAfterASpecIsMergedButBeforeThePushFinishesOnTheOldBase(t
 	r.Poll()
 	h.WantState(a, domain.Done)
 	h.WantState(b, domain.Done)
-	if got, want := remote.Git("rev-parse", "main"), h.Git("rev-parse", "main"); got != want {
+	if got, want := remote.Tip("main"), h.Tip("main"); got != want {
 		t.Errorf("the remote's main is at %s, want %s", got, want)
 	}
-	if got := h.Git("rev-parse", "release"); got != oldRelease {
+	if got := h.Tip("release"); got != oldRelease {
 		t.Errorf("release moved to %s: the Spec was merged again", got)
 	}
 }
 
 func TestChangingTheBaseMergesAWaitingSpecBranchIntoTheNewBase(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
-	h.Git("branch", "release", "main")
-	oldMain := h.Git("rev-parse", "main")
+	h := factorytest.New(t, factorytest.FakeGit())
+	h.NewBranch("release", "main")
+	oldMain := h.Tip("main")
 	setBase(h, "ghost")
 	a, b := twoAccepted(t, h)
 	r := h.Start()
@@ -142,7 +141,7 @@ func TestChangingTheBaseMergesAWaitingSpecBranchIntoTheNewBase(t *testing.T) {
 	r.Poll()
 	h.WantState(a, domain.Done)
 	h.WantState(b, domain.Done)
-	if got := h.Git("rev-parse", "main"); got != oldMain {
+	if got := h.Tip("main"); got != oldMain {
 		t.Errorf("main moved to %s, want it left at %s", got, oldMain)
 	}
 	r.WantOutput(h.SpecID() + ": merged spec/" + h.SpecID() + " into release at ")
@@ -150,17 +149,15 @@ func TestChangingTheBaseMergesAWaitingSpecBranchIntoTheNewBase(t *testing.T) {
 
 func TestUnderBranchAWaitingTicketIsWatchedOnTheNewBase(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
-	h.Git("branch", "release", "main")
+	h := factorytest.New(t, factorytest.FakeGit())
+	h.NewBranch("release", "main")
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch})
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	r := h.Start()
 	r.WantOutput(id + ": Accepted under the Branch Landing Method: merge " + id + " into main")
 
 	// Merged by hand into the branch the base will be.
-	h.Git("checkout", "-q", "release")
-	h.Git("merge", "-q", "--no-ff", "-m", "Merge "+id, id)
-	h.Git("checkout", "-q", "main")
+	h.MergeByHand(id, "release")
 	r.Poll()
 	if s := h.Ticket(id).State; s != domain.Accepted {
 		t.Fatalf("%s is %s, want it still waiting on main", id, s)
@@ -175,9 +172,9 @@ func TestUnderBranchAWaitingTicketIsWatchedOnTheNewBase(t *testing.T) {
 
 func TestUnderPullRequestAnOpenPullRequestKeepsItsTargetAndNewOnesUseTheNewBase(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
-	h.Git("branch", "release", "main")
+	h.NewBranch("release", "main")
 	pullRequestOn(h, "origin")
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	r := h.Start()
@@ -196,7 +193,7 @@ func TestUnderPullRequestAnOpenPullRequestKeepsItsTargetAndNewOnesUseTheNewBase(
 
 	// The open pull request was into main, and is merged there.
 	merge := h.CommitOn("theirs", "feature.txt", "feature\n")
-	h.Git("push", "-q", remote.Path, "theirs:refs/heads/main")
+	h.Publish(remote, merge, "main")
 	reportPullRequest(t, h, id, merge)
 	r.Poll()
 	h.WantState(id, domain.Done)
@@ -205,11 +202,11 @@ func TestUnderPullRequestAnOpenPullRequestKeepsItsTargetAndNewOnesUseTheNewBase(
 
 func TestChangingTheBaseResetsBaseDiverged(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
-	h.Git("branch", "release", "main")
-	h.Git("push", "-q", remote.Path, "main:refs/heads/release")
-	h.Git("push", "-q", remote.Path, h.CommitOn("theirs", "theirs.txt", "t\n")+":refs/heads/main")
+	h.NewBranch("release", "main")
+	h.Publish(remote, h.Tip("main"), "release")
+	h.Publish(remote, h.CommitOn("theirs", "theirs.txt", "t\n"), "main")
 	h.CommitOn("main", "ours.txt", "o\n")
 	pullRequestOn(h, "origin")
 	r := h.Start()
@@ -225,9 +222,9 @@ func TestChangingTheBaseResetsBaseDiverged(t *testing.T) {
 
 func TestLandingByMergeWithoutPushResetsBaseDiverged(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
-	h.Git("push", "-q", remote.Path, h.CommitOn("theirs", "theirs.txt", "t\n")+":refs/heads/main")
+	h.Publish(remote, h.CommitOn("theirs", "theirs.txt", "t\n"), "main")
 	h.CommitOn("main", "ours.txt", "o\n")
 	pullRequestOn(h, "origin")
 	ready := h.ReadyTicket("Waits for the base")

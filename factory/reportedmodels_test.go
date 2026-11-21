@@ -46,7 +46,7 @@ var (
 
 func TestAtStartupTheFactoryReportsWhatItsClaudeAcceptsWithItsFlags(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.Start("--model", "opus", "--effort", "high")
 	wantAccepts(t, wantReport(t, h), claudeLevels, claudeAliases, "opus", "high")
 }
@@ -80,7 +80,7 @@ Options:
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			h := factorytest.New(t)
+			h := factorytest.New(t, factorytest.FakeGit())
 			h.ClaudeHelp(help)
 			h.Start()
 			wantAccepts(t, wantReport(t, h), claudeLevels, claudeAliases, "", "")
@@ -90,7 +90,7 @@ Options:
 
 func TestHelpTheFactoryCantReadWarnsAndReportsNoLevelsOrAliases(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	// What an earlier Factory found is kept.
 	if _, err := h.Server.Client.ReportModels(context.Background(), h.Project, api.ReportModelsInput{EffortLevels: []string{"low", "high"}, Aliases: []string{"opus"}}); err != nil {
 		t.Fatal(err)
@@ -106,7 +106,7 @@ func TestHelpTheFactoryCantReadWarnsAndReportsNoLevelsOrAliases(t *testing.T) {
 
 func TestTheFactoryRefusesToStartWithAnEffortItsClaudeDoesntAccept(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	refuses(t, h, h.Repo, `--effort "extreme" isn't an effort level claude accepts: use one of low, medium, high, xhigh, max`, "--effort", "extreme")
 	if r := reported(t, h); r.Reported != nil {
 		t.Errorf("a refused Factory reported %+v", r)
@@ -115,7 +115,7 @@ func TestTheFactoryRefusesToStartWithAnEffortItsClaudeDoesntAccept(t *testing.T)
 
 func TestAProjectUnreadableAtStartupIsReportedOnTheFirstPollThatCanReadIt(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.SetFailing("/api/projects/" + h.Project)
 	r := h.Start("--model", "opus")
 	r.Poll()

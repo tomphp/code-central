@@ -15,7 +15,7 @@ import (
 
 func TestARestartReconcilesEachSavedClaimAgainstCodeCentral(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	cutOff := h.ReadyTicket("Cut off")
 	answered := h.ReadyTicket("Answered while down")
 	waiting := h.ReadyTicket("Still waiting")
@@ -112,7 +112,7 @@ func lastCall(h *factorytest.Harness, ticket string) factorytest.Call {
 
 func TestALostStateFileLosesItsClaimsButNotTheFactory(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	held := h.ReadyTicket("Held")
 	h.Script(held, factorytest.Wait())
 	r := h.Start()
