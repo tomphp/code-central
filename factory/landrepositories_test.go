@@ -2,8 +2,6 @@ package factory_test
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -48,7 +46,7 @@ func setLandingOrder(t *testing.T, h *factorytest.Harness, names ...string) {
 
 func TestATwoRepositoryTicketLandsInEachInTheLandingOrder(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	home := h.AddRemote("origin")
 	apiRepo := h.AddRepository("api")
 	mergeAndPush(h, "origin")
@@ -61,11 +59,11 @@ func TestATwoRepositoryTicketLandsInEachInTheLandingOrder(t *testing.T) {
 	r.Poll()
 
 	tk := h.WantState(id, domain.Done)
-	homeMerge, apiMerge := h.Git("rev-parse", "main"), h.GitIn(apiRepo.Path, "rev-parse", "main")
-	if got := home.Git("rev-parse", "main"); got != homeMerge {
+	homeMerge, apiMerge := h.Tip("main"), apiRepo.Tip("main")
+	if got := home.Tip("main"); got != homeMerge {
 		t.Errorf("the Home Repository's remote main is at %s, want its merge %s", got, homeMerge)
 	}
-	if got := apiRepo.Remote("origin").Git("rev-parse", "main"); got != apiMerge {
+	if got := apiRepo.Remote("origin").Tip("main"); got != apiMerge {
 		t.Errorf("api's remote main is at %s, want its merge %s", got, apiMerge)
 	}
 	if landedIn(tk, "api") != apiMerge || landedIn(tk, h.Project) != homeMerge {
@@ -81,14 +79,14 @@ func TestATwoRepositoryTicketLandsInEachInTheLandingOrder(t *testing.T) {
 
 func TestAConflictInEitherRepositoryLandsNeither(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo := h.AddRepository("api")
 	id := inTwo(h, "Add an endpoint")
 	r := h.Start()
 	h.WantState(id, domain.InReview)
 	// api, landing after the Home Repository, conflicts.
 	apiBase := apiRepo.CommitOn("main", "endpoint.go", "package other\n")
-	homeBase := h.Git("rev-parse", "main")
+	homeBase := h.Tip("main")
 	// Hold the next Claim's turn, so the Ticket stays as send_back left it.
 	h.Script(id, factorytest.Wait())
 
@@ -99,10 +97,10 @@ func TestAConflictInEitherRepositoryLandsNeither(t *testing.T) {
 	if !movedTo(tk, domain.Accepted, domain.Ready) {
 		t.Fatalf("%s wasn't sent back: %+v", id, tk.Moves)
 	}
-	if got := h.Git("rev-parse", "main"); got != homeBase {
+	if got := h.Tip("main"); got != homeBase {
 		t.Errorf("the Home Repository's main moved to %s: nothing lands when api conflicts", got)
 	}
-	if got := h.GitIn(apiRepo.Path, "rev-parse", "main"); got != apiBase {
+	if got := apiRepo.Tip("main"); got != apiBase {
 		t.Errorf("api's main moved to %s", got)
 	}
 	if !commented(tk, "- api: merging", "into main at "+apiBase[:12], "  - endpoint.go") || commented(tk, "- "+h.Project+": merging") {
@@ -113,7 +111,7 @@ func TestAConflictInEitherRepositoryLandsNeither(t *testing.T) {
 
 func TestARefusedPushLeavesTheTicketPartlyLandedAndIsTriedAgain(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	apiRepo := h.AddRepository("api")
 	mergeAndPush(h, "origin")
@@ -136,22 +134,22 @@ func TestARefusedPushLeavesTheTicketPartlyLandedAndIsTriedAgain(t *testing.T) {
 	if tk.Repositories[1].NotLanded != "couldn't push main to origin" {
 		t.Fatalf("api %+v, want why it hasn't landed", tk.Repositories[1])
 	}
-	merge := h.GitIn(apiRepo.Path, "rev-parse", "main")
+	merge := apiRepo.Tip("main")
 
 	// Tried again, without merging again or moving the Home Repository.
-	homeMain := h.Git("rev-parse", "main")
+	homeMain := h.Tip("main")
 	remote.AcceptPushes()
 	r.Poll()
 
 	tk = h.WantState(id, domain.Done)
-	if landedIn(tk, "api") == "" || remote.Git("rev-parse", "main") != merge || h.Git("rev-parse", "main") != homeMain {
+	if landedIn(tk, "api") == "" || remote.Tip("main") != merge || h.Tip("main") != homeMain {
 		t.Fatalf("Changed Repositories %+v, want api landed, its first merge %s pushed", tk.Repositories, merge)
 	}
 }
 
 func TestABrokenBaseInOneRepositoryHoldsBackOnlyTheTicketsTouchingIt(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRepository("api")
 	homeOnly := h.ReadyTicket("Change the client")
 	h.Script(homeOnly, factorytest.WriteFile("client.go", "package acme\n"), factorytest.Git("add", "client.go"), factorytest.Git("commit", "-q", "-m", "Change it"),
@@ -181,13 +179,13 @@ func TestABrokenBaseInOneRepositoryHoldsBackOnlyTheTicketsTouchingIt(t *testing.
 
 func TestAHandMergeInOneRepositoryLandsWhileTheHomeRepositorysBaseIsMissing(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo := h.AddRepository("api")
 	id := inAPI(h, "Add an endpoint")
 	r := h.Start()
 	h.WantState(id, domain.InReview)
 	setBase(h, "release")
-	h.GitIn(apiRepo.Path, "merge", "-q", "--no-ff", "-m", "Merge "+id, id)
+	apiRepo.MergeByHand(id, "main")
 
 	r.Poll()
 
@@ -197,7 +195,7 @@ func TestAHandMergeInOneRepositoryLandsWhileTheHomeRepositorysBaseIsMissing(t *t
 
 func TestADivergedBaseInOneRepositoryHoldsBackOnlyItsWork(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	apiRepo := h.AddRepository("api")
 	mergeAndPush(h, "origin")
@@ -224,7 +222,7 @@ func TestADivergedBaseInOneRepositoryHoldsBackOnlyItsWork(t *testing.T) {
 
 func TestEachRepositorysBaseIsKeptLevelWithItsOwnRemote(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	apiRepo := h.AddRepository("api")
 	mergeAndPush(h, "origin")
@@ -233,7 +231,7 @@ func TestEachRepositorysBaseIsKeptLevelWithItsOwnRemote(t *testing.T) {
 
 	r.Poll()
 
-	if got := h.GitIn(apiRepo.Path, "rev-parse", "main"); got != theirs {
+	if got := apiRepo.Tip("main"); got != theirs {
 		t.Fatalf("api's main is at %s, want it fast-forwarded to its remote's %s", got, theirs)
 	}
 	r.WantOutput("main: fast-forwarded to origin/main at " + theirs[:12] + " in Repository api")
@@ -244,15 +242,7 @@ func TestEachRepositorysBaseIsKeptLevelWithItsOwnRemote(t *testing.T) {
 // returns the commit.
 func pushElsewhere(t *testing.T, h *factorytest.Harness, apiRepo *factorytest.Repository, file, content string) string {
 	t.Helper()
-	other := t.TempDir()
-	h.GitIn(other, "clone", "-q", apiRepo.CloneURL, ".")
-	if err := os.WriteFile(filepath.Join(other, file), []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	h.GitIn(other, "add", file)
-	h.GitIn(other, "commit", "-q", "-m", "Theirs: "+file)
-	h.GitIn(other, "push", "-q", "origin", "main")
-	return h.GitIn(other, "rev-parse", "HEAD")
+	return apiRepo.Remote("origin").CommitOn("main", file, content)
 }
 
 // The CI gate per Repository (Spec code-central-848, ADR 0034): under
@@ -286,7 +276,7 @@ func pushedIn(tk api.TicketView, name string) string {
 // in each. It returns the Ticket.
 func gatedInTwo(t *testing.T, notWatched bool) (h *factorytest.Harness, apiRepo *factorytest.Repository, r *factorytest.Running, id string) {
 	t.Helper()
-	h = factorytest.New(t)
+	h = factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	apiRepo = h.AddRepository("api")
 	mergeAndPush(h, "origin")
@@ -306,7 +296,7 @@ func TestUnderTheCIGateEachRepositoryLandsOnceItsOwnCIResultPasses(t *testing.T)
 
 	tk := h.WantState(id, domain.Accepted)
 	homePushed, apiPushed := pushedIn(tk, h.Project), pushedIn(tk, "api")
-	if homePushed == "" || apiPushed == "" || apiPushed != apiRepo.Remote("origin").Git("rev-parse", "main") {
+	if homePushed == "" || apiPushed == "" || apiPushed != apiRepo.Remote("origin").Tip("main") {
 		t.Fatalf("Changed Repositories %+v, want each merge pushed and reported, api's at its remote's main", tk.Repositories)
 	}
 	if tk.PartlyLanded {
@@ -359,7 +349,7 @@ func TestUnderTheCIGateANotWatchedRepositoryLandsOncePushed(t *testing.T) {
 	h, apiRepo, r, id := gatedInTwo(t, true)
 
 	tk := h.WantState(id, domain.Accepted)
-	apiMerge := apiRepo.Remote("origin").Git("rev-parse", "main")
+	apiMerge := apiRepo.Remote("origin").Tip("main")
 	if landedIn(tk, "api") != apiMerge || tk.Repositories[0].Landed != nil || pushedIn(tk, "api") != "" {
 		t.Fatalf("Changed Repositories %+v, want api landed at its pushed merge %s, with no pushed commit for CI, and the Home Repository waiting on its CI", tk.Repositories, apiMerge)
 	}

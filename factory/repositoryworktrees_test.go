@@ -33,7 +33,7 @@ func wantAddDirs(t *testing.T, c factorytest.Call, dirs ...string) {
 func wantOnBranch(t *testing.T, h *factorytest.Harness, branch string, worktrees ...string) {
 	t.Helper()
 	for _, wt := range worktrees {
-		if b := h.GitIn(wt, "branch", "--show-current"); b != branch {
+		if b := h.BranchOf(wt); b != branch {
 			t.Errorf("%s is on branch %q, want %q", wt, b, branch)
 		}
 	}
@@ -41,7 +41,7 @@ func wantOnBranch(t *testing.T, h *factorytest.Harness, branch string, worktrees
 
 func TestAClaimGetsAWorktreeOnTheSameBranchInEveryRepositoryAndTheSessionSeesThemAll(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	apiRepo := h.AddRepository("api")
 	id := inAPI(h, "Add an endpoint")
 
@@ -49,10 +49,10 @@ func TestAClaimGetsAWorktreeOnTheSameBranchInEveryRepositoryAndTheSessionSeesThe
 	tk := h.WantState(id, domain.InReview)
 
 	wantOnBranch(t, h, id, h.Worktree(id), apiRepo.Worktree(id))
-	if parent, base := h.GitIn(apiRepo.Path, "rev-parse", id+"^"), h.GitIn(apiRepo.Path, "rev-parse", "main"); parent != base {
+	if parent, base := apiRepo.Parents(apiRepo.Tip(id))[0], apiRepo.Tip("main"); parent != base {
 		t.Errorf("api's branch %s starts at %s, want api's Base tip %s", id, parent, base)
 	}
-	if got := h.GitIn(apiRepo.Path, "log", "-1", "--format=%s", id); got != "Change endpoint.go" {
+	if got := h.SubjectIn(apiRepo.Path, apiRepo.Tip(id)); got != "Change endpoint.go" {
 		t.Errorf("api's branch %s ends with %q, want the session's commit", id, got)
 	}
 
@@ -83,10 +83,10 @@ func TestAClaimGetsAWorktreeOnTheSameBranchInEveryRepositoryAndTheSessionSeesThe
 
 func TestAWorktreeIsNamedAfterItsRepositoryBesideAClonesLocalPath(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo := h.MakeRepository("api")
 	checkout := filepath.Join(filepath.Dir(filepath.Dir(h.Repo)), "src", "api-checkout")
-	h.GitIn(filepath.Dir(h.Repo), "clone", "-q", apiRepo.CloneURL, checkout)
+	h.CloneByHand(apiRepo.CloneURL, checkout)
 	if _, err := h.Human().AddRepository(context.Background(), h.Project, api.AddRepositoryInput{Name: "api", CloneURL: apiRepo.CloneURL, LocalPath: checkout}); err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestAWorktreeIsNamedAfterItsRepositoryBesideAClonesLocalPath(t *testing.T) 
 
 func TestTheHomeRepositoryAloneGetsNoAddedDirectoriesAndNoRepositoriesList(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Add a button")
 	r := h.Start()
 	tk := h.WantState(id, domain.InReview)
@@ -130,14 +130,14 @@ func TestTheHomeRepositoryAloneGetsNoAddedDirectoriesAndNoRepositoriesList(t *te
 	h.WantState(id, domain.Done)
 	r.Poll()
 	r.WantOutput(id + ": Done: removed its worktree " + h.Worktree(id))
-	if b := h.Git("branch", "--list", id); b == "" {
+	if !h.Exists(id) {
 		t.Errorf("the branch %s was deleted, want it kept with the Home Repository alone", id)
 	}
 }
 
 func TestAStageGetsADetachedWorktreeAtEachRepositorysBaseTip(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo := h.AddRepository("api")
 	id := h.StageTicket("spec", "Spec: Add an endpoint")
 
@@ -145,13 +145,13 @@ func TestAStageGetsADetachedWorktreeAtEachRepositorysBaseTip(t *testing.T) {
 	h.WantState(id, domain.InReview)
 
 	wantOnBranch(t, h, "", h.Worktree(id), apiRepo.Worktree(id))
-	for _, w := range []struct{ wt, clone string }{{h.Worktree(id), h.Repo}, {apiRepo.Worktree(id), apiRepo.Path}} {
-		if got, tip := h.GitIn(w.wt, "rev-parse", "HEAD"), h.GitIn(w.clone, "rev-parse", "main"); got != tip {
+	for _, w := range []struct{ wt, head, tip string }{{h.Worktree(id), h.Head(h.Worktree(id)), h.Tip("main")}, {apiRepo.Worktree(id), apiRepo.Head(apiRepo.Worktree(id)), apiRepo.Tip("main")}} {
+		if got, tip := w.head, w.tip; got != tip {
 			t.Errorf("%s is at %s, want its Base's tip %s", w.wt, got, tip)
 		}
 	}
-	if b := h.GitIn(apiRepo.Path, "branch", "--list", id); b != "" {
-		t.Errorf("a Stage made branch %q in api", b)
+	if apiRepo.Exists(id) {
+		t.Errorf("a Stage made branch %q in api", id)
 	}
 	c := h.WantCalls(1)[0]
 	wantAddDirs(t, c, apiRepo.Worktree(id))
@@ -165,7 +165,7 @@ func TestAStageGetsADetachedWorktreeAtEachRepositorysBaseTip(t *testing.T) {
 
 func TestARepositoryAddedMidSessionGetsItsWorktreeAtTheTicketsNextClaim(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo := h.AddRepository("api")
 	id, first, r := answeredTicket(t, h)
 	web := h.AddRepository("web")
@@ -193,7 +193,7 @@ func TestARepositoryAddedMidSessionGetsItsWorktreeAtTheTicketsNextClaim(t *testi
 
 func TestAChatSeesEveryRepositoryThroughAChatWorktreeInEachAtItsBaseTip(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	apiRepo := h.AddRepository("api")
 	r := h.Start()
 
@@ -207,7 +207,7 @@ func TestAChatSeesEveryRepositoryThroughAChatWorktreeInEachAtItsBaseTip(t *testi
 	}
 	wantAddDirs(t, c, apiRepo.Worktree("chat"))
 	wantOnBranch(t, h, "", apiRepo.Worktree("chat"))
-	if head, tip := h.GitIn(apiRepo.Worktree("chat"), "rev-parse", "HEAD"), h.GitIn(apiRepo.Path, "rev-parse", "main"); head != tip {
+	if head, tip := apiRepo.Head(apiRepo.Worktree("chat")), apiRepo.Tip("main"); head != tip {
 		t.Errorf("api's Chat worktree is at %s, want api's Base tip %s", head, tip)
 	}
 	if want := "cd " + chatWorktree(h) + " && claude --resume " + session + " --add-dir " + apiRepo.Worktree("chat"); cv.ResumeCommand != want {
@@ -233,7 +233,7 @@ func TestAChatSeesEveryRepositoryThroughAChatWorktreeInEachAtItsBaseTip(t *testi
 
 func TestADirtyChatWorktreeInAnotherRepositoryFailsTheFirstTurnNamingIt(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo := h.AddRepository("api")
 	h.Start()
 	h.SendChat("First")
@@ -258,7 +258,7 @@ func TestADirtyChatWorktreeInAnotherRepositoryFailsTheFirstTurnNamingIt(t *testi
 
 func TestADoneTicketsWorktreesAndTheBranchesItNeverUsedAreSweptInEveryRepository(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo := h.AddRepository("api")
 	id := h.ReadyTicket("Change nothing in api")
 	r := h.Start()
@@ -270,12 +270,15 @@ func TestADoneTicketsWorktreesAndTheBranchesItNeverUsedAreSweptInEveryRepository
 
 	r.Poll()
 
-	for _, w := range []struct{ wt, clone string }{{h.Worktree(id), h.Repo}, {apiRepo.Worktree(id), apiRepo.Path}} {
+	for _, w := range []struct {
+		wt     string
+		exists bool
+	}{{h.Worktree(id), h.Exists(id)}, {apiRepo.Worktree(id), apiRepo.Exists(id)}} {
 		if _, err := os.Stat(w.wt); !os.IsNotExist(err) {
 			t.Errorf("%s is still there (%v), want it removed", w.wt, err)
 		}
-		if b := h.GitIn(w.clone, "branch", "--list", id); b != "" {
-			t.Errorf("%s still has the unused branch %q", w.clone, b)
+		if w.exists {
+			t.Errorf("%s's repository still has the unused branch %s", w.wt, id)
 		}
 	}
 	r.WantOutput(id + ": deleted its unused branch " + id + "\n")
@@ -284,7 +287,7 @@ func TestADoneTicketsWorktreesAndTheBranchesItNeverUsedAreSweptInEveryRepository
 
 func TestABranchWithWorkOfItsOwnIsKeptInEveryRepositoryEvenOnceMerged(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo := h.AddRepository("api")
 	id := h.ReadyTicket("Add an endpoint")
 	h.Script(id, append(factorytest.CommitIn("api", "endpoint.go", "package api\n"),
@@ -292,11 +295,15 @@ func TestABranchWithWorkOfItsOwnIsKeptInEveryRepositoryEvenOnceMerged(t *testing
 		factorytest.FinishIn("Done.", true, "api"), factorytest.Result("success"))...)
 	r := h.Start()
 	h.WantState(id, domain.InReview)
-	heads := map[string]string{}
-	for _, clone := range []string{h.Repo, apiRepo.Path} {
-		heads[clone] = h.GitIn(clone, "rev-parse", id)
+	clones := []interface {
+		Tip(string) string
+		MergeByHand(branch, into string) string
+	}{h, apiRepo}
+	heads := make([]string, len(clones))
+	for i, clone := range clones {
+		heads[i] = clone.Tip(id)
 		// The human merges it into the Base by hand.
-		h.GitIn(clone, "merge", "-q", "--no-ff", "-m", "Merge "+id, id)
+		clone.MergeByHand(id, "main")
 	}
 	h.Accept(id)
 	r.Poll()
@@ -307,9 +314,9 @@ func TestABranchWithWorkOfItsOwnIsKeptInEveryRepositoryEvenOnceMerged(t *testing
 	if _, err := os.Stat(apiRepo.Worktree(id)); !os.IsNotExist(err) {
 		t.Errorf("api's worktree is still there (%v), want it removed", err)
 	}
-	for clone, head := range heads {
-		if got := h.GitIn(clone, "rev-parse", id); got != head {
-			t.Errorf("%s's branch %s is at %q, want it kept at its work, %s", clone, id, got, head)
+	for i, head := range heads {
+		if got := clones[i].Tip(id); got != head {
+			t.Errorf("repository %d's branch %s is at %q, want it kept at its work, %s", i, id, got, head)
 		}
 	}
 	if strings.Contains(r.Stdout(), "deleted its unused branch") {
@@ -319,40 +326,40 @@ func TestABranchWithWorkOfItsOwnIsKeptInEveryRepositoryEvenOnceMerged(t *testing
 
 func TestASpecLandedTicketsBranchIsCutFromEachRepositorysOwnSpecBranch(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo := h.AddRepository("api")
 	h.MakeRequirement()
 	r := h.Start()
 	spec := "spec/" + h.SpecID()
 	// api's Spec Branch already holds an earlier Ticket's work.
 	apiRepo.CommitOn(spec, "earlier.go", "package api\n")
-	apiSpecTip := h.GitIn(apiRepo.Path, "rev-parse", spec)
+	apiSpecTip := apiRepo.Tip(spec)
 	id := h.ReadyTicket("Add a feature")
 	h.Script(id, factorytest.Wait())
 
 	r.Poll()
 
-	if got, base := h.Git("rev-parse", spec), h.Git("rev-parse", "main"); got != base {
+	if got, base := h.Tip(spec), h.Tip("main"); got != base {
 		t.Errorf("the Home Repository's Spec Branch is at %s, want made at its Base's tip %s", got, base)
 	}
-	if got := h.GitIn(h.Worktree(id), "rev-parse", "HEAD"); got != h.Git("rev-parse", spec) {
+	if got := h.Head(h.Worktree(id)); got != h.Tip(spec) {
 		t.Errorf("the Home worktree is at %s, want its Spec Branch's tip", got)
 	}
-	if got := h.GitIn(apiRepo.Worktree(id), "rev-parse", "HEAD"); got != apiSpecTip {
+	if got := apiRepo.Head(apiRepo.Worktree(id)); got != apiSpecTip {
 		t.Errorf("api's worktree is at %s, want api's Spec Branch's tip %s", got, apiSpecTip)
 	}
 }
 
 func TestASpecBranchInEachRepositorysBaseIsDeletedOnceEveryTicketIsDone(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo := h.AddRepository("api")
 	h.MakeRequirement()
 	cancelDrafts(t, h)
 	id := h.ReadyTicket("Change nothing")
 	r := h.Start()
 	h.WantState(id, domain.InReview)
-	if h.GitIn(apiRepo.Path, "branch", "--list", "spec/*") == "" {
+	if len(apiRepo.SpecBranches()) == 0 {
 		t.Fatal("the Claim made no Spec Branch in api")
 	}
 	h.Accept(id)
@@ -362,16 +369,16 @@ func TestASpecBranchInEachRepositorysBaseIsDeletedOnceEveryTicketIsDone(t *testi
 
 	r.WantOutput(h.SpecID() + ": deleted spec/" + h.SpecID() + ", which is in main")
 	r.WantOutput(h.SpecID() + ": deleted spec/" + h.SpecID() + " in Repository api, which is in main")
-	for _, clone := range []string{h.Repo, apiRepo.Path} {
-		if out := h.GitIn(clone, "branch", "--list", "spec/*"); out != "" {
-			t.Errorf("%s still has the Spec Branch %q", clone, out)
+	for _, left := range [][]string{h.SpecBranches(), apiRepo.SpecBranches()} {
+		if len(left) != 0 {
+			t.Errorf("a repository still has the Spec Branches %q", left)
 		}
 	}
 }
 
 func TestEachRepositorysBranchIsCutFromItsOwnBase(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo := h.AddRepository("api")
 	develop := "develop"
 	if _, err := h.Human().EditRepository(context.Background(), h.Project, api.EditRepositoryInput{Name: "api", Base: &develop}); err != nil {
@@ -379,16 +386,16 @@ func TestEachRepositorysBranchIsCutFromItsOwnBase(t *testing.T) {
 	}
 	r := h.Start()
 	apiRepo.CommitOn(develop, "develop.go", "package api\n")
-	developTip := h.GitIn(apiRepo.Path, "rev-parse", develop)
+	developTip := apiRepo.Tip(develop)
 	id := h.ReadyTicket("Add an endpoint")
 	h.Script(id, factorytest.Wait())
 
 	r.Poll()
 
-	if got := h.GitIn(apiRepo.Worktree(id), "rev-parse", "HEAD"); got != developTip {
+	if got := apiRepo.Head(apiRepo.Worktree(id)); got != developTip {
 		t.Errorf("api's branch %s starts at %s, want api's Base develop's tip %s", id, got, developTip)
 	}
-	if got, main := h.GitIn(h.Worktree(id), "rev-parse", "HEAD"), h.Git("rev-parse", "main"); got != main {
+	if got, main := h.Head(h.Worktree(id)), h.Tip("main"); got != main {
 		t.Errorf("the Home branch %s starts at %s, want the Project's Base main's tip %s", id, got, main)
 	}
 	if want := "\n- api: worktree " + apiRepo.Worktree(id) + ", Base develop, branch " + id; !strings.HasSuffix(callFor(t, h, id).Prompt, want) {
@@ -398,7 +405,7 @@ func TestEachRepositorysBranchIsCutFromItsOwnBase(t *testing.T) {
 
 func TestAPrototypeWorksOnItsPrototypeBranchInEveryRepository(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo := h.AddRepository("api")
 	id := h.LabelledTicket("prototype", "Prototype: the theme picker")
 	h.Script(id, factorytest.Wait())
@@ -413,7 +420,7 @@ func TestAPrototypeWorksOnItsPrototypeBranchInEveryRepository(t *testing.T) {
 
 func TestAStrayDirectoryAtAnotherRepositorysWorktreePathFailsTheClaimNamingIt(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo := h.AddRepository("api")
 	r := h.Start()
 	id := h.ReadyTicket("Add an endpoint")
@@ -435,7 +442,7 @@ func TestAStrayDirectoryAtAnotherRepositorysWorktreePathFailsTheClaimNamingIt(t 
 
 func TestABranchConflictingInAnotherRepositoryMakesAConflictClaimListingItsFiles(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo := h.AddRepository("api")
 	r := h.Start()
 	id := h.ReadyTicket("Change api's readme")
@@ -465,11 +472,11 @@ func TestABranchConflictingInAnotherRepositoryMakesAConflictClaimListingItsFiles
 
 func TestADirtyStageWorktreeInAnotherRepositoryFailsTheClaimNamingIt(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo := h.AddRepository("api")
 	r := h.Start()
 	id := h.StageTicket("spec", "Spec: Add an endpoint")
-	h.GitIn(apiRepo.Path, "worktree", "add", "-q", "--detach", apiRepo.Worktree(id), "main")
+	apiRepo.AddDetachedWorktree(apiRepo.Worktree(id), "main")
 	if err := os.WriteFile(filepath.Join(apiRepo.Worktree(id), "notes.md"), []byte("written by a Stage"), 0o644); err != nil {
 		t.Fatal(err)
 	}

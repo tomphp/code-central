@@ -234,6 +234,37 @@ func (f *Fake) Clone(ctx context.Context, remote, url, path string) (string, err
 	return "", nil
 }
 
+// Rename renames the folder from to to as os.Rename does, and moves the
+// repository there, with its worktrees inside it, along with it: git
+// finds a repository wherever its folder is, the Fake only where it
+// recorded it. A repository's linked worktrees elsewhere aren't moved.
+func (f *Fake) Rename(from, to string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	from = realPath(from)
+	if err := os.Rename(from, to); err != nil {
+		return err
+	}
+	to = realPath(to)
+	moved := map[string]*fakeRepository{}
+	for dir, r := range f.repos {
+		if !within(dir, from) {
+			continue
+		}
+		for _, w := range r.worktrees {
+			if within(w.dir, from) {
+				w.dir = to + strings.TrimPrefix(w.dir, from)
+			}
+		}
+		delete(f.repos, dir)
+		moved[to+strings.TrimPrefix(dir, from)] = r
+	}
+	for dir, r := range moved {
+		f.repos[dir] = r
+	}
+	return nil
+}
+
 // reach is the repository at url, as a remote, or git's output and error
 // when it can't be reached. Only a folder holding a repository in the
 // Fake is modelled.

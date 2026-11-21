@@ -20,7 +20,12 @@ func cloneRepository(ctx context.Context, g git.Git, remote, url, path string) (
 	}
 	out, err := g.Clone(ctx, remote, url, partial)
 	if err == nil {
-		err = os.Rename(partial, path)
+		if mv, ok := g.(interface{ Rename(from, to string) error }); ok {
+			// The Fake git, which keeps its repositories by folder.
+			err = mv.Rename(partial, path)
+		} else {
+			err = os.Rename(partial, path)
+		}
 	}
 	if err != nil {
 		os.RemoveAll(partial)

@@ -44,7 +44,7 @@ func setPushRemote(t *testing.T, h *factorytest.Harness, name, remote string) {
 
 func TestUnderMergeAndPushAnUnpushedHomeLandsOnMergeWhileAPushedRepositoryIsPushedAndGated(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo := h.AddRepository("api")
 	mergeAndPush(h, "origin")
 	trackCI(t, h)
@@ -60,11 +60,11 @@ func TestUnderMergeAndPushAnUnpushedHomeLandsOnMergeWhileAPushedRepositoryIsPush
 	r.Poll()
 
 	tk := h.WantState(id, domain.Accepted)
-	homeMerge, apiPushed := h.Git("rev-parse", "main"), pushedIn(tk, "api")
+	homeMerge, apiPushed := h.Tip("main"), pushedIn(tk, "api")
 	if landedIn(tk, h.Project) != homeMerge || pushedIn(tk, h.Project) != "" {
 		t.Fatalf("Changed Repositories %+v, want the Home landed at its merge %s with nothing pushed", tk.Repositories, homeMerge)
 	}
-	if apiPushed == "" || apiPushed != apiRepo.Remote("origin").Git("rev-parse", "main") || landedIn(tk, "api") != "" {
+	if apiPushed == "" || apiPushed != apiRepo.Remote("origin").Tip("main") || landedIn(tk, "api") != "" {
 		t.Fatalf("Changed Repositories %+v, want api's merge pushed to its origin and waiting on its CI", tk.Repositories)
 	}
 	r.WantOutput(id + ": pushed main to origin in Repository api\n")
@@ -83,7 +83,7 @@ func TestUnderMergeAndPushAnUnpushedHomeLandsOnMergeWhileAPushedRepositoryIsPush
 
 func TestEachRepositoryIsClonedPushedAndFetchedByItsOwnPushRemote(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	home := h.AddRemote("origin")
 	apiRepo := h.AddRepository("api")
 	mergeAndPush(h, "origin")
@@ -91,19 +91,19 @@ func TestEachRepositoryIsClonedPushedAndFetchedByItsOwnPushRemote(t *testing.T) 
 	id := inTwo(h, "Add an endpoint")
 	r := h.Start()
 	h.WantState(id, domain.InReview)
-	if got := h.GitIn(apiRepo.Path, "remote"); got != "upstream" {
-		t.Fatalf("api's clone has the remotes %q, want its own Push remote, upstream, alone", got)
+	if !apiRepo.HasRemote("upstream") || apiRepo.HasRemote("origin") {
+		t.Fatalf("api's clone has upstream %t and origin %t, want its own Push remote, upstream, alone", apiRepo.HasRemote("upstream"), apiRepo.HasRemote("origin"))
 	}
 
 	h.Accept(id)
 	r.Poll()
 
 	tk := h.WantState(id, domain.Done)
-	homeMerge, apiMerge := h.Git("rev-parse", "main"), h.GitIn(apiRepo.Path, "rev-parse", "main")
-	if got := home.Git("rev-parse", "main"); got != homeMerge {
+	homeMerge, apiMerge := h.Tip("main"), apiRepo.Tip("main")
+	if got := home.Tip("main"); got != homeMerge {
 		t.Errorf("the Home's origin's main is at %s, want its merge %s pushed", got, homeMerge)
 	}
-	if got := apiRepo.Remote("upstream").Git("rev-parse", "main"); got != apiMerge {
+	if got := apiRepo.Remote("upstream").Tip("main"); got != apiMerge {
 		t.Errorf("api's upstream's main is at %s, want its merge %s pushed", got, apiMerge)
 	}
 	if landedIn(tk, "api") != apiMerge || landedIn(tk, h.Project) != homeMerge {
@@ -115,7 +115,7 @@ func TestEachRepositoryIsClonedPushedAndFetchedByItsOwnPushRemote(t *testing.T) 
 
 func TestARepositoryWhoseCloneLacksItsOwnPushRemoteIsMissingAndHoldsBackOnlyItsTickets(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	apiRepo := h.AddRepository("api")
 	mergeAndPush(h, "origin")
@@ -140,7 +140,9 @@ func TestARepositoryWhoseCloneLacksItsOwnPushRemoteIsMissingAndHoldsBackOnlyItsT
 
 func TestTheFactoryReportsAHomeWithNoPushRemoteAtStartAndOneAddedLaterAtTheNextStart(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	// Real git: the Home's origin is a github.com URL, a remote outside the
+	// Fake git.
+	h := factorytest.New(t, factorytest.RealGit())
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"})
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
@@ -152,7 +154,7 @@ func TestTheFactoryReportsAHomeWithNoPushRemoteAtStartAndOneAddedLaterAtTheNextS
 
 	// Added while running: reported at the next start.
 	h.AddRemote("origin")
-	h.Git("remote", "set-url", "origin", "git@github.com:acme/web.git")
+	h.SetRemote("origin", "git@github.com:acme/web.git")
 	r.Poll()
 	if home := repositoryView(t, h, h.Project); !home.LocalOnly {
 		t.Fatalf("Home %+v, want it local-only until the next start", home)
@@ -167,9 +169,11 @@ func TestTheFactoryReportsAHomeWithNoPushRemoteAtStartAndOneAddedLaterAtTheNextS
 
 func TestAChangedHomePushRemoteNameIsReportedAndLandingGoesOn(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	// Real git: the Home's origin is a github.com URL, a remote outside the
+	// Fake git.
+	h := factorytest.New(t, factorytest.RealGit())
 	h.AddRemote("origin")
-	h.Git("remote", "set-url", "origin", "git@github.com:acme/web.git")
+	h.SetRemote("origin", "git@github.com:acme/web.git")
 	r := h.Start()
 	if home := repositoryView(t, h, h.Project); home.LocalOnly {
 		t.Fatalf("Home %+v, want it pushed", home)
@@ -193,7 +197,7 @@ func TestAChangedHomePushRemoteNameIsReportedAndLandingGoesOn(t *testing.T) {
 
 func TestALocalOnlyHomeUnderPullRequestIsSaidOnceAndHoldsBackOnlyTheTicketsLandingThere(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo := h.AddRepository("api")
 	// While its Push remote was last reported, the Home may land by Pull
 	// Request; its clone has none now.
@@ -213,10 +217,10 @@ func TestALocalOnlyHomeUnderPullRequestIsSaidOnceAndHoldsBackOnlyTheTicketsLandi
 	r.Poll()
 
 	h.WantState(both, domain.Accepted)
-	if got := apiRepo.Remote("origin").Git("branch", "--list", both); got != "" {
-		t.Errorf("api's origin holds %q, want nothing of %s pushed while the Home holds it back", got, both)
+	if apiRepo.Remote("origin").Exists(both) {
+		t.Errorf("api's origin holds %s, want nothing of it pushed while the Home holds it back", both)
 	}
-	if pushed := wantPushedIn(t, h, "api", only); pushed != h.GitIn(apiRepo.Path, "rev-parse", only) {
+	if pushed := wantPushedIn(t, h, "api", only); pushed != apiRepo.Tip(only) {
 		t.Errorf("%s's pushed commit in api is %s, want its branch's tip", only, pushed)
 	}
 	r.WantOutput(both + ": waits to land: it is local-only under Pull Request\n")
