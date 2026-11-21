@@ -34,7 +34,7 @@ func rebasePullRequestOn(h *factorytest.Harness, remote string, landPerSpec bool
 // main, which the Factory's next fetch brings in. It returns the commit.
 func moveRemoteBase(h *factorytest.Harness, remote *factorytest.Remote, file, content string) string {
 	moved := h.CommitOn("upstream", file, content)
-	h.Git("push", "-q", remote.Path, "upstream:refs/heads/main")
+	remote.PushTo("upstream", "main")
 	return moved
 }
 
@@ -43,7 +43,7 @@ func moveRemoteBase(h *factorytest.Harness, remote *factorytest.Remote, file, co
 // and returns that commit.
 func stalePush(h *factorytest.Harness, remote *factorytest.Remote, branch string) string {
 	stale := h.CommitOn("stale-"+branch, "stale.txt", "an earlier finish\n")
-	h.Git("push", "-q", remote.Path, "stale-"+branch+":refs/heads/"+branch)
+	remote.PushTo("stale-"+branch, branch)
 	return stale
 }
 
@@ -168,7 +168,7 @@ func TestUnderPullRequestWithRebaseASpecBranchIsRebasedOntoTheFetchedBaseAndForc
 	if strings.Join(subjects, ",") != "Change one.txt,Change two.txt" || len(merges) > 0 {
 		t.Errorf("%s holds %v with merges %v on the fetched base, want a's and b's commits and no merge", branch, subjects, merges)
 	}
-	if !descends(h, h.Repo, tip, moved) {
+	if !h.Descends(tip, moved) {
 		t.Errorf("%s at %s doesn't descend from the fetched base's tip %s", branch, tip, moved)
 	}
 	wantPushed(t, h, branch, tip)

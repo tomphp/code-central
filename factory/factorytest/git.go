@@ -204,6 +204,108 @@ func (r *Remote) File(rev, path string) string {
 	return r.h.file(r.Path, rev, path)
 }
 
+// SpecBranches is the names of the repo's branches under spec/.
+func (h *Harness) SpecBranches() []string {
+	h.t.Helper()
+	return h.specBranches(h.Repo)
+}
+
+// SpecBranches is Harness.SpecBranches in r's clone at Path.
+func (r *Repository) SpecBranches() []string {
+	r.h.t.Helper()
+	return r.h.specBranches(r.Path)
+}
+
+// SpecBranches is Harness.SpecBranches in the bare repository.
+func (r *Remote) SpecBranches() []string {
+	r.h.t.Helper()
+	return r.h.specBranches(r.Path)
+}
+
+// Descends reports whether commit is ancestor or descends from it, in the
+// repo.
+func (h *Harness) Descends(commit, ancestor string) bool {
+	h.t.Helper()
+	if h.fake != nil {
+		return h.fake.Open(h.Repo).IsAncestor(ancestor, commit)
+	}
+	return exec.Command("git", "-C", h.Repo, "merge-base", "--is-ancestor", ancestor, commit).Run() == nil
+}
+
+// WorktreeHead is the commit checked out in ticket's worktree in the repo.
+func (h *Harness) WorktreeHead(ticket string) string {
+	h.t.Helper()
+	return h.head(h.Worktree(ticket))
+}
+
+// WorktreeHead is Harness.WorktreeHead in r's clone.
+func (r *Repository) WorktreeHead(ticket string) string {
+	r.h.t.Helper()
+	return r.h.head(r.Worktree(ticket))
+}
+
+// AddWorktree adds a worktree on the repo's existing branch at the
+// Factory's place for it, Worktree(branch), as the Factory would make it.
+func (h *Harness) AddWorktree(branch string) {
+	h.t.Helper()
+	path := h.Worktree(branch)
+	if h.fake != nil {
+		must(h.t, h.fake.Open(h.Repo).AddWorktree(path, branch))
+		return
+	}
+	h.git(h.Repo, "worktree", "add", "-q", path, branch)
+}
+
+// PushTo pushes the repo's branch from to the remote's branch to, as
+// `git push <remote's path> from:refs/heads/to` does: by path, so it leaves
+// the repo's remote-tracking branches as they were. It is for a remote made
+// with AddRemote.
+func (r *Remote) PushTo(from, to string) {
+	r.h.t.Helper()
+	if r.h.fake != nil {
+		r.h.fake.SetRemoteBranch(r.h.Repo, r.Name, to, r.h.tip(r.h.Repo, from))
+		return
+	}
+	r.h.git(r.h.Repo, "push", "-q", r.Path, from+":refs/heads/"+to)
+}
+
+// DeleteBranch deletes the remote's branch, as its owner would on the
+// Code Host.
+func (r *Remote) DeleteBranch(branch string) {
+	r.h.t.Helper()
+	if r.h.fake != nil {
+		must(r.h.t, r.h.fake.Open(r.Path).DeleteRef("refs/heads/"+branch, r.h.tip(r.Path, branch)))
+		return
+	}
+	r.h.git(r.Path, "branch", "-D", branch)
+}
+
+// specBranches is SpecBranches in the repository at dir.
+func (h *Harness) specBranches(dir string) []string {
+	h.t.Helper()
+	if h.fake != nil {
+		names, err := h.fake.Open(dir).SpecBranches()
+		must(h.t, err)
+		return names
+	}
+	out := h.git(dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/spec/")
+	if out == "" {
+		return nil
+	}
+	return strings.Split(out, "\n")
+}
+
+// head is the commit checked out in the worktree at dir.
+func (h *Harness) head(dir string) string {
+	h.t.Helper()
+	if h.fake != nil {
+		out, err := h.fake.Run(dir, "rev-parse", "HEAD")
+		must(h.t, err)
+		return out
+	}
+	return h.git(dir, "rev-parse", "HEAD")
+}
+
 // tip is Tip in the repository at dir.
 func (h *Harness) tip(dir, branch string) string {
 	h.t.Helper()
