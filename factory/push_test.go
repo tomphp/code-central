@@ -16,7 +16,7 @@ func mergeAndPush(h *factorytest.Harness, remote string) {
 
 func TestUnderMergeAndPushTheBaseIsPushedBeforeTheTicketLands(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
 	mergeAndPush(h, "origin")
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
@@ -24,8 +24,8 @@ func TestUnderMergeAndPushTheBaseIsPushedBeforeTheTicketLands(t *testing.T) {
 	r := h.Start()
 	tk := h.WantState(id, domain.Done)
 	r.WantOutput(id + ": pushed main to origin")
-	merge := h.Git("rev-parse", "main")
-	if got := remote.Git("rev-parse", "main"); got != merge {
+	merge := h.Tip("main")
+	if got := remote.Tip("main"); got != merge {
 		t.Errorf("the remote's main is at %q, want the merge %s", got, merge)
 	}
 	if m := tk.Moves[len(tk.Moves)-1]; m.Commit != merge {
@@ -35,7 +35,7 @@ func TestUnderMergeAndPushTheBaseIsPushedBeforeTheTicketLands(t *testing.T) {
 
 func TestAFactoryWhosePushNamesAMissingRemoteStartsWithTheHomeLocalOnlyAndClaims(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	mergeAndPush(h, "upstream")
 	ready := h.ReadyTicket("Still claimed")
@@ -50,17 +50,17 @@ func TestAFactoryWhosePushNamesAMissingRemoteStartsWithTheHomeLocalOnlyAndClaims
 
 func TestUnderBranchAndPushAnAcceptedTicketsBranchReachesABareRemote(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	r := h.Start()
 	r.WantOutput(id + ": pushed " + id + " to origin")
-	if got := remote.Git("rev-parse", "refs/heads/"+id); got != commit {
+	if got := remote.Tip(id); got != commit {
 		t.Errorf("the remote's %s is at %q, want the finish commit %s", id, got, commit)
 	}
-	if out := remote.Git("branch", "--list", "main"); out != "" {
-		t.Errorf("the base was pushed under Branch: %q", out)
+	if remote.Exists("main") {
+		t.Errorf("the base was pushed under Branch")
 	}
 }

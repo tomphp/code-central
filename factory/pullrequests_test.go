@@ -84,7 +84,7 @@ func landedIn(tk api.TicketView, repository string) string {
 
 func TestUnderPullRequestEachChangedRepositoryIsPushedAndLandsWhenItsPullRequestMergesInAnyOrder(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	home := h.AddRemote("origin")
 	apiRepo := h.AddRepository("api")
 	pullRequestOn(h, "origin")
@@ -93,12 +93,12 @@ func TestUnderPullRequestEachChangedRepositoryIsPushedAndLandsWhenItsPullRequest
 	r.WantOutput(id + ": pushed " + id + " to origin in Repository api")
 	apiHead := wantPushedIn(t, h, "api", id)
 	homeHead := wantPushedIn(t, h, h.Project, id)
-	if got := h.GitIn(apiRepo.Path, "rev-parse", "origin/"+id); got != apiHead {
+	if got := apiRepo.RemoteTip("origin", id); got != apiHead {
 		t.Errorf("api's remote %s is at %q, want %s", id, got, apiHead)
 	}
 
 	// The human merges api's pull request first, on the host.
-	h.GitIn(apiRepo.Path, "push", "-q", "origin", id+":refs/heads/main")
+	apiRepo.PushByHand(apiRepo.Remote("origin"), id, "main")
 	reportPullRequestIn(t, h, "api", id, 4, apiHead)
 	r.Poll()
 	tk := h.WantState(id, domain.Accepted)
@@ -107,7 +107,7 @@ func TestUnderPullRequestEachChangedRepositoryIsPushedAndLandsWhenItsPullRequest
 	}
 
 	// Then the Home Repository's.
-	h.Git("push", "-q", home.Path, id+":refs/heads/main")
+	h.PushByHand(home, id, "main")
 	reportPullRequestIn(t, h, "", id, 7, homeHead)
 	r.Poll()
 	tk = h.WantState(id, domain.Done)
@@ -118,7 +118,7 @@ func TestUnderPullRequestEachChangedRepositoryIsPushedAndLandsWhenItsPullRequest
 
 func TestSentBackAfterASiblingMergedTheNextClaimStartsThatRepositorysBranchAtItsBaseTip(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	h.AddRemote("origin")
 	apiRepo := h.AddRepository("api")
 	pullRequestOn(h, "origin")
@@ -127,7 +127,7 @@ func TestSentBackAfterASiblingMergedTheNextClaimStartsThatRepositorysBranchAtIts
 	// api's pull request is squash-merged: the host's commit has the
 	// work but not its history.
 	squash := apiRepo.CommitOn("squash", "endpoint.go", "package api // squashed\n")
-	h.GitIn(apiRepo.Path, "push", "-q", "origin", "squash:refs/heads/main")
+	apiRepo.PushByHand(apiRepo.Remote("origin"), "squash", "main")
 	reportPullRequestIn(t, h, "api", id, 4, squash)
 	r.Poll()
 	if tk := h.WantState(id, domain.Accepted); landedIn(tk, "api") != squash {
@@ -142,7 +142,7 @@ func TestSentBackAfterASiblingMergedTheNextClaimStartsThatRepositorysBranchAtIts
 	r.Poll()
 	tk := h.WantState(id, domain.InReview)
 
-	if got := h.GitIn(apiRepo.Path, "rev-parse", id); got == apiHead || got != squash {
+	if got := apiRepo.Tip(id); got == apiHead || got != squash {
 		t.Errorf("api's %s is at %q, want moved from %s to the Base tip %s", id, got, apiHead, squash)
 	}
 	r.WantOutput(id + ": its work in Repository api landed, so " + id + " moved to main's tip")
@@ -158,7 +158,7 @@ func TestSentBackAfterASiblingMergedTheNextClaimStartsThatRepositorysBranchAtIts
 // under Pull Request as under Merge.
 func TestUnderPullRequestATicketInAnotherRepositoryLandsWhileTheHomeRepositorysBaseIsMissing(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	h.AddRemote("origin")
 	apiRepo := h.AddRepository("api")
 	pullRequestOn(h, "origin")
@@ -174,7 +174,7 @@ func TestUnderPullRequestATicketInAnotherRepositoryLandsWhileTheHomeRepositorysB
 	pullRequestOn(h, "origin")
 	release := "release"
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin", Base: &release})
-	h.GitIn(apiRepo.Path, "push", "-q", "origin", id+":refs/heads/main")
+	apiRepo.PushByHand(apiRepo.Remote("origin"), id, "main")
 	reportPullRequestIn(t, h, "api", id, 4, apiHead)
 
 	r.Poll()
