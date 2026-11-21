@@ -266,16 +266,18 @@ func (h *Harness) HeadOf(dir string) string {
 	return h.headOf(dir)
 }
 
-// BranchOf is the branch checked out in the worktree dir, failing the
-// test when it is detached.
+// BranchOf is the branch checked out in the worktree dir, in any of the
+// Repositories, "" when it is detached.
 func (h *Harness) BranchOf(dir string) string {
 	h.t.Helper()
-	if h.fake != nil {
-		branch, err := h.fake.Open(h.Repo).CurrentBranch(dir)
-		must(h.t, err)
-		return branch
+	if h.fake == nil {
+		return h.git(dir, "branch", "--show-current")
 	}
-	return h.git(dir, "symbolic-ref", "--short", "HEAD")
+	branch, err := h.fake.Open(dir).CurrentBranch(dir)
+	if err != nil {
+		return ""
+	}
+	return branch
 }
 
 // MergeByHand merges branch into into, as a human would outside the
