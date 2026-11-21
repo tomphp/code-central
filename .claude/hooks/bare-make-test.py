@@ -12,6 +12,7 @@ import sys
 SUITE_TARGETS = {"test", "test-verbose"}
 LIST_OPERATORS = {";", "&&", "||", "&"}
 PIPE_OPERATORS = {"|", "|&"}
+WRAPPERS = {"time", "nice", "env"}
 
 
 def is_make_test(words):
@@ -21,11 +22,14 @@ def is_make_test(words):
 
 
 def is_full_suite(words):
+    while words and ("=" in words[0] or words[0] in WRAPPERS):
+        words = words[1:]
     if words[:2] == ["go", "test"]:
         return "./..." in words
     if words[:1] == ["make"]:
         targets = [w for w in words[1:] if not w.startswith("-") and "=" not in w]
-        return "vitest" in targets and not any(w.startswith("F=") for w in words[1:])
+        has_filter = any(w.startswith("F=") and len(w) > 2 for w in words[1:])
+        return "vitest" in targets and not has_filter
     return False
 
 

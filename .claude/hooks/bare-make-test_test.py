@@ -48,6 +48,9 @@ class BareMakeTestTest(unittest.TestCase):
         self.assertTrue(full("make wiretypes; make vitest"))
         self.assertTrue(full("go test ./..."))
         self.assertTrue(full("go test -count=1 ./..."))
+        self.assertTrue(full("make vitest F="))
+        self.assertTrue(full("CI=1 make vitest"))
+        self.assertTrue(full("time go test ./..."))
         self.assertTrue(full("make vitest 2>&1 | tail -6; go test ./... | grep -v ^ok"))
 
     def test_partial_suite_allowed(self):
