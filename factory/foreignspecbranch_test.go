@@ -17,7 +17,7 @@ import (
 // Factory didn't push, and returns the commit.
 func handMadeOn(h *factorytest.Harness, remote *factorytest.Remote, branch string) string {
 	hand := h.CommitOn("handmade", "hand.txt", "hand\n")
-	h.Git("push", "-q", remote.Path, "handmade:refs/heads/"+branch)
+	remote.PushTo("handmade", branch)
 	return hand
 }
 
@@ -41,14 +41,14 @@ func wantForeignBranchCommentOnce(t *testing.T, h *factorytest.Harness, branch s
 // wantRemoteAt fails when remote's branch isn't at commit.
 func wantRemoteAt(t *testing.T, remote *factorytest.Remote, branch, commit string) {
 	t.Helper()
-	if got := remote.Git("rev-parse", branch); got != commit {
+	if got := remote.Tip(branch); got != commit {
 		t.Errorf("the remote's %s is at %q, want the hand-made %s left untouched", branch, got, commit)
 	}
 }
 
 func TestUnderPullRequestATaggedSpecBranchIsntPushedOverABranchOfThatNameTheFactoryDidntPush(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
 	pullRequestOn(h, "origin")
 	taggedRequirement(t, h)
@@ -68,11 +68,11 @@ func TestUnderPullRequestATaggedSpecBranchIsntPushedOverABranchOfThatNameTheFact
 	}
 
 	// Once the human deletes it, a later poll pushes the Spec Branch.
-	remote.Git("branch", "-D", taggedBranch)
+	remote.DeleteBranch(taggedBranch)
 	r.Poll()
 	r.WantOutput(h.SpecID() + ": pushed " + taggedBranch + " to origin")
-	tip := h.Git("rev-parse", taggedBranch)
-	if got := remote.Git("rev-parse", taggedBranch); got != tip {
+	tip := h.Tip(taggedBranch)
+	if got := remote.Tip(taggedBranch); got != tip {
 		t.Errorf("the remote's %s is at %q, want the Spec Branch %s", taggedBranch, got, tip)
 	}
 	wantPushed(t, h, taggedBranch, tip)
@@ -80,7 +80,7 @@ func TestUnderPullRequestATaggedSpecBranchIsntPushedOverABranchOfThatNameTheFact
 
 func TestUnderPullRequestWithRebaseASpecBranchIsntForcePushedOverABranchOfThatNameTheFactoryDidntPush(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
 	rebasePullRequestOn(h, "origin", true)
 	h.MakeRequirement()
@@ -93,18 +93,18 @@ func TestUnderPullRequestWithRebaseASpecBranchIsntForcePushedOverABranchOfThatNa
 	wantRemoteAt(t, remote, branch, hand)
 	wantForeignBranchCommentOnce(t, h, branch, a)
 
-	remote.Git("branch", "-D", branch)
+	remote.DeleteBranch(branch)
 	r.Poll()
 	r.WantOutput(h.SpecID() + ": pushed " + branch + " to origin")
-	tip := h.Git("rev-parse", branch)
-	if got := remote.Git("rev-parse", branch); got != tip {
+	tip := h.Tip(branch)
+	if got := remote.Tip(branch); got != tip {
 		t.Errorf("the remote's %s is at %q, want the Spec Branch %s", branch, got, tip)
 	}
 }
 
 func TestUnderPullRequestWithRebaseAFactoryPushedSpecBranchIsStillForcePushed(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
 	rebasePullRequestOn(h, "origin", true)
 	h.MakeRequirement()
@@ -113,16 +113,16 @@ func TestUnderPullRequestWithRebaseAFactoryPushedSpecBranchIsStillForcePushed(t 
 
 	r := h.Start()
 	r.WantOutput(h.SpecID() + ": pushed " + branch + " to origin")
-	first := h.Git("rev-parse", branch)
+	first := h.Tip(branch)
 
 	moveRemoteBase(h, remote, "base.txt", "base\n")
 	accepted(h, "Second", "two.txt", "2\n")
 	r.Poll()
-	tip := h.Git("rev-parse", branch)
+	tip := h.Tip(branch)
 	if tip == first {
 		t.Fatalf("%s wasn't rebased", branch)
 	}
-	if got := remote.Git("rev-parse", branch); got != tip {
+	if got := remote.Tip(branch); got != tip {
 		t.Errorf("the remote's %s is at %q, want the rebased Spec Branch %s over the Factory's own push %s", branch, got, tip, first)
 	}
 	if commented(h.Ticket(a), "already has a branch named") {
