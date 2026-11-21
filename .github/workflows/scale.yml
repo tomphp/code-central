@@ -4,6 +4,7 @@
 # called directly rather than through make, under bash on every OS. The
 # Windows job shares the local windows-setup action and gives the
 # 10,000-Ticket test a 1m startup budget, which a Windows runner needs.
+# A last step runs the Factory's tests on real git.
 # Not a CI Rule: it is nightly, so no pull request waits on it.
 name: Scale
 
@@ -87,3 +88,10 @@ jobs:
 
       - name: Scale (e2e)
         run: go test -v -tags 'e2e scale' -count=1 -run '^TestScale' ./e2e/
+
+      # The Factory's tests run on the Fake git by default; this runs them
+      # on real git, the backstop for the contract suite.
+      - name: Factory on real git
+        env:
+          CODE_CENTRAL_TEST_FACTORY_GIT: real
+        run: go test -count=1 ./factory/...

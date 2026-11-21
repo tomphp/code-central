@@ -56,7 +56,7 @@ func specMergeOpened(t *testing.T, h *factorytest.Harness, fix string, script ..
 
 func TestUnderRebaseASpecBranchConflictOpensTheRebaseTicketAndAcceptingItReplacesTheSpecBranch(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	fix := "acme-5"
 	r, a, _ := specMergeOpened(t, h, fix, rebaseSpecMergeScript(fix)...)
 	spec := "spec/" + h.SpecID()
@@ -82,11 +82,11 @@ func TestUnderRebaseASpecBranchConflictOpensTheRebaseTicketAndAcceptingItReplace
 	if got := h.Git("rev-parse", spec); got != rebased {
 		t.Errorf("%s is at %s, want the rebased result %s", spec, got, rebased)
 	}
-	subjects, merges := specLine(h, h.Repo, baseTip)
-	if strings.Join(subjects, ",") != "Change README,Change one.txt" || len(merges) != 0 {
-		t.Errorf("%s holds %v with merges %v on the base, want a's two commits and no merge", spec, subjects, merges)
+	subs, merges := specLine(h, h, baseTip)
+	if strings.Join(subs, ",") != "Change README,Change one.txt" || len(merges) != 0 {
+		t.Errorf("%s holds %v with merges %v on the base, want a's two commits and no merge", spec, subs, merges)
 	}
-	if ms := mergeSpecs(h, h.Repo, baseTip); len(ms) != 1 || h.Git("rev-parse", ms[0]+"^2") != rebased || h.Git("rev-parse", ms[0]+"^1") != baseTip {
+	if ms := mergeSpecs(h, baseTip); len(ms) != 1 || h.Git("rev-parse", ms[0]+"^2") != rebased || h.Git("rev-parse", ms[0]+"^1") != baseTip {
 		t.Errorf("main gained the Merge spec commits %v, want one merging %s into %s", ms, rebased, baseTip)
 	}
 }
@@ -109,7 +109,7 @@ func acceptedOnSpecBranch(h *factorytest.Harness, title, file, content string) (
 
 func TestUnderRebaseTicketsAcceptedWhileTheSpecMergeTicketWasOpenAreReplayedOntoItsResult(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	fix := "acme-5"
 	r, a, _ := specMergeOpened(t, h, fix, rebaseSpecMergeScript(fix)...)
 	spec := "spec/" + h.SpecID()
@@ -136,18 +136,18 @@ func TestUnderRebaseTicketsAcceptedWhileTheSpecMergeTicketWasOpenAreReplayedOnto
 	if h.Git("rev-parse", tip+"^") != rebased || descends(h, h.Repo, tip, goneOn) {
 		t.Errorf("%s is at %s, want b's commit on the rebased result %s, not on the old tip %s", spec, tip, rebased, goneOn)
 	}
-	subjects, merges := specLine(h, h.Repo, baseTip)
-	if strings.Join(subjects, ",") != "Change README,Change one.txt,Change two.txt" || len(merges) != 0 {
-		t.Errorf("%s holds %v with merges %v on the base, want a's then b's commits, each once, and no merge", spec, subjects, merges)
+	subs, merges := specLine(h, h, baseTip)
+	if strings.Join(subs, ",") != "Change README,Change one.txt,Change two.txt" || len(merges) != 0 {
+		t.Errorf("%s holds %v with merges %v on the base, want a's then b's commits, each once, and no merge", spec, subs, merges)
 	}
-	if ms := mergeSpecs(h, h.Repo, baseTip); len(ms) != 1 || h.Git("rev-parse", ms[0]+"^2") != tip {
+	if ms := mergeSpecs(h, baseTip); len(ms) != 1 || h.Git("rev-parse", ms[0]+"^2") != tip {
 		t.Errorf("main gained the Merge spec commits %v, want one merging %s", ms, tip)
 	}
 }
 
 func TestUnderRebaseAConflictReplayingTheSpecBranchOntoTheSpecMergeTicketSendsItBackToRebase(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	fix := "acme-5"
 	// The session keeps the base's side of README; a Ticket accepted
 	// meanwhile changes the Spec Branch's side, so it doesn't replay.
@@ -209,7 +209,7 @@ func TestUnderRebaseAConflictReplayingTheSpecBranchOntoTheSpecMergeTicketSendsIt
 
 func TestUnderRebaseTheSpecMergeTicketStartsAsAConflictClaimAskedToRebase(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	fix := "acme-5"
 	specMergeOpened(t, h, fix, factorytest.Wait())
 
@@ -222,7 +222,7 @@ func TestUnderRebaseTheSpecMergeTicketStartsAsAConflictClaimAskedToRebase(t *tes
 
 func TestAnUnmarkedTicketWithTheRebaseTitleIsRecognisedAsASpecMergeTicket(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.MakeRequirement()
 	setRebase(h, true)
 	a, _ := accepted(h, "First", "README", "spec side\n")
@@ -248,7 +248,7 @@ func TestAnUnmarkedTicketWithTheRebaseTitleIsRecognisedAsASpecMergeTicket(t *tes
 
 func TestUnderRebaseAMergeTheSpecBranchGainedWhileRebaseWasOffIsRemadeOnTheRebasedResult(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	fix := "acme-5"
 	r, a, _ := specMergeOpened(t, h, fix, rebaseSpecMergeScript(fix)...)
 	spec := "spec/" + h.SpecID()
@@ -328,7 +328,7 @@ func rebaseInTwo(apiSide string) []factorytest.Step {
 
 func TestUnderRebaseAcceptingTheSpecMergeTicketMovesTheSpecBranchInEachRepository(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	fix := "acme-5"
 	r, apiRepo, id := specMergeOpenedInTwo(t, h, fix, rebaseInTwo("theirs")...)
 	spec := "spec/" + h.SpecID()
@@ -361,7 +361,7 @@ func TestUnderRebaseAcceptingTheSpecMergeTicketMovesTheSpecBranchInEachRepositor
 
 func TestUnderRebaseASpecMergeTicketConflictingInOneRepositoryMovesTheSpecBranchInNeither(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	fix := "acme-5"
 	// In api the session keeps the base's side of endpoint.go.
 	r, apiRepo, id := specMergeOpenedInTwo(t, h, fix, rebaseInTwo("ours")...)

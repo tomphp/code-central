@@ -18,7 +18,8 @@ All landing code is methods of `*lander` (Spec code-central-934). The session co
 | `movebase.go` | Merge + Push when the local and remote bases each hold commits the other lacks: `moveBase`, `rebuildOnto` (which also rebases a Spec Branch onto the base under Rebase). |
 | `repositories.go` | The `repository` and `repositories` types, `syncRepositories` and `cloneOf` (clone or adopt each Repository), `baseOf`, `inBaseOf`. |
 | `changedrepositories.go` | The Repositories a Ticket changed (`changedIn`, `changedHead`) and the finish check on them. |
-| `repo.go` | `gitRepo`: thin git wrappers (`mergeTree`, `commitTree`, `fastForward`, `push`, `fetch`, `remoteHas`, `worktrees`, ...). |
+| `git/` | The Git port, package `factory/git` (`go doc ./factory/git`), which every Factory git call goes through: `git.Repo` (`MergeTree`, `CommitTree`, `FastForward`, `Push`, `Fetch`, `RemoteHas`, `Worktrees`, `AddWorktree`, ...), opened by a `git.Git` (`Open`, `Clone`, `TopLevel`, `Version`); `git.Real` is it through the git binary. `Env.Git` sets it; nil is `git.Real`. `gitguard_test.go` fails on a git call outside it. |
+| `repo.go` | `cloneRepository`: a clone made beside its path and moved into place once whole. |
 
 Avoid reading `land.go` whole. Read `pullrequest.go` and `specbranch.go` for those two paths.
 

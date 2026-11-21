@@ -75,6 +75,7 @@ import (
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/factory/git"
 	"github.com/tomoram/code-central/home"
 )
 
@@ -119,6 +120,10 @@ type Env struct {
 	// Work, if set, hears of the Factory's work in flight, so that a test
 	// knows when it has settled. The binary sets none.
 	Work Work
+	// Git is the Git port every git call of the Factory's goes through.
+	// Nil means git.Real, with the git on the environment's PATH and
+	// Environ.
+	Git git.Git
 }
 
 func (e Env) getenv(key string) string {
@@ -142,6 +147,20 @@ func (e Env) killGrace() time.Duration {
 // home is where the state file is found.
 func (e Env) home() home.Lookup {
 	return home.Lookup{Getenv: e.getenv, UserHomeDir: e.UserHomeDir}
+}
+
+// gitPort is the Git every git call of the Factory's goes through: the
+// Env's own, else real git through the git on PATH, failing when there is
+// none.
+func (e Env) gitPort() (git.Git, error) {
+	if e.Git != nil {
+		return e.Git, nil
+	}
+	binary, ok := e.lookPath("git")
+	if !ok {
+		return nil, errors.New("git isn't on PATH")
+	}
+	return git.Real{Binary: binary, Environ: e.Environ}, nil
 }
 
 // lookPath finds name on the environment's PATH.
@@ -435,7 +454,7 @@ type factory struct {
 func newFactory(e Env, o options) *factory {
 	w := work{e.Work}
 	f := &factory{e: e, o: o, drainCh: make(chan struct{}), wakeCh: make(chan func(), 1), work: w, polling: stint{w: w}, drainWork: newHandoff(), stopWork: newHandoff(), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, backInReady: map[string]time.Time{}, reportedChanged: map[string]string{}}
-	f.repos = newRepositories(e.Environ, f.printf)
+	f.repos = newRepositories(f.printf)
 	return f
 }
 
@@ -453,17 +472,16 @@ func (f *factory) hooks() landerHooks {
 // start makes every start-up check, refusing with the reason.
 func start(e Env, o options) (*factory, error) {
 	f := newFactory(e, o)
-	git, ok := e.lookPath("git")
-	if !ok {
-		return nil, errors.New("git isn't on PATH")
+	g, err := e.gitPort()
+	if err != nil {
+		return nil, err
 	}
-	f.repos.git = git
-	top, err := f.gitOut(e.Dir, "rev-parse", "--show-toplevel")
+	f.repos.git = g
+	top, err := g.TopLevel(e.Dir)
 	if err != nil {
 		return nil, fmt.Errorf("not in a git repository (%s)", e.Dir)
 	}
-	// git writes C:/... on Windows; the Factory's paths are C:\...
-	home := f.repos.newRepository("", filepath.FromSlash(top))
+	home := f.repos.newRepository("", top)
 	home.home = true
 	f.repos.home = home
 	if err := f.checkGitVersion(); err != nil {
@@ -480,9 +498,11 @@ func start(e Env, o options) (*factory, error) {
 	// The Home Repository is named by the Project Key.
 	home.name = project
 	f.repos.replace(map[string]*repository{project: home}, []*repository{home})
-	if f.claude, ok = e.lookPath("claude"); !ok {
+	claude, ok := e.lookPath("claude")
+	if !ok {
 		return nil, errors.New("claude isn't on PATH")
 	}
+	f.claude = claude
 	if err := refuseClaudeShim(f.claude); err != nil {
 		return nil, err
 	}
@@ -550,7 +570,7 @@ func start(e Env, o options) (*factory, error) {
 var minGit = [2]int{2, 38}
 
 func (f *factory) checkGitVersion() error {
-	out, err := f.gitOut(f.repos.home.dir, "version")
+	out, err := f.repos.git.Version()
 	if err != nil {
 		return err
 	}
@@ -588,9 +608,4 @@ func writable(dir string) error {
 	}
 	tmp.Close()
 	return os.Remove(tmp.Name())
-}
-
-// gitOut runs git in dir and returns its trimmed output.
-func (f *factory) gitOut(dir string, args ...string) (string, error) {
-	return f.repos.gitOut(dir, args...)
 }

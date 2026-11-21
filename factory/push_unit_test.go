@@ -15,10 +15,7 @@ import (
 // Factory has since fetched, and returns it.
 func pushedElsewhere(w *landWorld, branch string) string {
 	theirs := w.repo.commitOn("elsewhere-"+branch, "Pushed from elsewhere")
-	w.repo.mu.Lock()
-	defer w.repo.mu.Unlock()
-	w.repo.remotes["origin"].refs[branch] = theirs
-	w.repo.refs["refs/remotes/origin/"+branch] = theirs
+	w.repo.setRemoteBranch("origin", branch, theirs)
 	return theirs
 }
 
@@ -35,8 +32,8 @@ func TestForceNeverPushesABaseButReplacesAnotherBranchWithLease(t *testing.T) {
 	if pushed || !strings.Contains(why, "never force-pushes a base") {
 		t.Errorf("forcing main pushed %v, why %q; want it refused", pushed, why)
 	}
-	if got := w.repo.remoteTip("origin", "main"); got != theirs || w.repo.pushes != 0 {
-		t.Errorf("the remote's main is at %s after %d pushes, want it left at %s", got, w.repo.pushes, theirs)
+	if got := w.repo.remoteTip("origin", "main"); got != theirs || w.repo.pushes.Load() != 0 {
+		t.Errorf("the remote's main is at %s after %d pushes, want it left at %s", got, w.repo.pushes.Load(), theirs)
 	}
 
 	pushedElsewhere(w, "spec/acme-1")

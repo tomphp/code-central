@@ -15,10 +15,10 @@ const sessionLogsRule = "Claude Code keeps each session's log in its projects fo
 
 func TestARetroStartsTheRetroSkillReadOnlyInADetachedWorktreeAtTheBasesTip(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.LabelledTicket(domain.RetroLabel, "Retro: Add a button")
 	h.Script(id, factorytest.Finish("No candidates: see the resolution comment."), factorytest.Result("success"))
-	mainTip := h.Git("rev-parse", "main")
+	mainTip := h.Tip("main")
 
 	h.Start()
 	h.WantState(id, domain.InReview)
@@ -47,20 +47,20 @@ func TestARetroStartsTheRetroSkillReadOnlyInADetachedWorktreeAtTheBasesTip(t *te
 	if c.Dir != h.Worktree(id) {
 		t.Errorf("claude ran in %s, want the worktree %s", c.Dir, h.Worktree(id))
 	}
-	if head := h.GitIn(h.Worktree(id), "rev-parse", "--abbrev-ref", "HEAD"); head != "HEAD" {
+	if head := h.BranchIn(h.Worktree(id)); head != "" {
 		t.Errorf("the Retro's worktree is on branch %q, want it detached", head)
 	}
-	if got := h.GitIn(h.Worktree(id), "rev-parse", "HEAD"); got != mainTip {
+	if got := h.HeadIn(h.Worktree(id)); got != mainTip {
 		t.Errorf("the Retro's worktree is at %s, want main's tip %s", got, mainTip)
 	}
-	if b := h.Git("branch", "--list", "*"+id); b != "" {
+	if b := id; h.Exists(b) || h.Exists("retro/"+b) {
 		t.Errorf("a Retro made branch %q", b)
 	}
 }
 
 func TestOnlyARetrosSystemPromptSaysWhereSessionLogsAre(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	ids := []string{
 		h.StageTicket("spec", "Spec: Add a button"),
 		h.LabelledTicket("wayfinder:task", "Set up the design account"),

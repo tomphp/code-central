@@ -20,7 +20,7 @@ const wakePath = "/api/p/acme/factory/next-wake"
 
 // wakingHarness is a harness that passes the Factory its wakes.
 func wakingHarness(t *testing.T) *factorytest.Harness {
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.PassWakes()
 	return h
 }
@@ -266,7 +266,7 @@ func TestAnEndingTurnFillsItsFreedSlotAtOnce(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			h := factorytest.New(t)
+			h := factorytest.New(t, factorytest.FakeGit())
 			first := h.ReadyTicket("First")
 			second := h.ReadyTicket("Second")
 			h.Script(first, append([]factorytest.Step{factorytest.Wait()}, end...)...)
@@ -287,7 +287,7 @@ func TestAnEndingTurnFillsItsFreedSlotAtOnce(t *testing.T) {
 // at its turn's end claims the next Ticket, not it again.
 func TestAGivenUpTicketWaitsForTheNextTimedPoll(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	gaveUp := h.ReadyTicket("Too hard")
 	h.Script(gaveUp, factorytest.CLI("give-up", "{{ticket}}", "--claim", "{{claim}}", "--note", "Too hard."), factorytest.Result("success"))
 	next := h.ReadyTicket("Next")
@@ -308,7 +308,7 @@ func TestAGivenUpTicketWaitsForTheNextTimedPoll(t *testing.T) {
 // before its turn ends and holds it back.
 func TestAGivenUpTicketIsntClaimedWhileItsTurnRuns(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	gaveUp := h.ReadyTicket("Too hard")
 	h.Script(gaveUp, factorytest.CLI("give-up", "{{ticket}}", "--claim", "{{claim}}", "--note", "Too hard."), factorytest.Wait(), factorytest.Result("success"))
 	next := h.ReadyTicket("Next")
@@ -333,7 +333,7 @@ func TestAGivenUpTicketIsntClaimedWhileItsTurnRuns(t *testing.T) {
 // turn ends.
 func TestADrainingFactoryClaimsNothingWhenATurnEnds(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	running := h.ReadyTicket("Nearly done")
 	h.Script(running, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start("--parallel", "1")

@@ -35,19 +35,19 @@ func specBranchPushedIn(spec api.SpecDetail) []string {
 func (rs *repositories) specBranchTip(r *repository, branch string) (string, error) {
 	ref := "refs/heads/" + branch
 	base := rs.baseOf(r)
-	baseTip, err := r.git.commit("refs/heads/" + base)
+	baseTip, err := r.git.Commit("refs/heads/" + base)
 	if err != nil {
 		return "", fmt.Errorf("the base, %s, isn't a branch", base)
 	}
-	tip, err := r.git.commit(ref)
+	tip, err := r.git.Commit(ref)
 	if err != nil {
-		if err := r.git.updateRef(ref, baseTip, ""); err != nil {
+		if err := r.git.UpdateRef(ref, baseTip, ""); err != nil {
 			return "", fmt.Errorf("can't create the Spec Branch %s%s: %v", branch, inTheWayHint(branch), err)
 		}
 		return baseTip, nil
 	}
 	if tip != baseTip && rs.inBaseOf(r, tip) {
-		if err := r.git.updateRef(ref, baseTip, tip); err != nil {
+		if err := r.git.UpdateRef(ref, baseTip, tip); err != nil {
 			return "", fmt.Errorf("can't move the Spec Branch %s to %s's tip: %v", branch, base, err)
 		}
 		return baseTip, nil
@@ -130,7 +130,7 @@ func (l *lander) mergeIntoSpecBranch(ctx context.Context, tk api.TicketView, pol
 			l.cantLandIn(ctx, tk, r, what+" isn't in this repository.")
 			return false
 		}
-		if w.landed != "" && r.git.isAncestor(head, w.landed) {
+		if w.landed != "" && r.git.IsAncestor(head, w.landed) {
 			continue
 		}
 		tip, err := l.repos.specBranchTip(r, branch)
@@ -140,7 +140,7 @@ func (l *lander) mergeIntoSpecBranch(ctx context.Context, tk api.TicketView, pol
 		}
 		// Replayed work, once reported, is merged though a rewrite of the
 		// Spec Branch left it off.
-		m := specBranchMerge{r: r, head: head, tip: tip, replayed: replayed, merged: r.git.isAncestor(head, ref) || (replayed && reported)}
+		m := specBranchMerge{r: r, head: head, tip: tip, replayed: replayed, merged: r.git.IsAncestor(head, ref) || (replayed && reported)}
 		if !m.merged {
 			var files []string
 			rebase := r.policy(policies).RebaseInForce()
@@ -173,7 +173,7 @@ func (l *lander) mergeIntoSpecBranch(ctx context.Context, tk api.TicketView, pol
 					return false
 				}
 			default:
-				if m.tree, files, err = r.git.mergeTree(tip, head); err != nil {
+				if m.tree, files, err = r.git.MergeTree(tip, head); err != nil {
 					l.printf("warning: %s: can't merge%s: %v", tk.ID, r.where(), err)
 					return false
 				}
@@ -206,14 +206,14 @@ func (l *lander) mergeIntoSpecBranch(ctx context.Context, tk api.TicketView, pol
 			}
 			next, merges[i].replayed = m.replay.tip, true
 		default:
-			merge, err := m.r.git.commitTree(m.tree, fmt.Sprintf("Merge %s: %s", tk.ID, tk.Title), m.tip, m.head)
+			merge, err := m.r.git.CommitTree(m.tree, fmt.Sprintf("Merge %s: %s", tk.ID, tk.Title), m.tip, m.head)
 			if err != nil {
 				l.printf("warning: %s: can't make the merge commit%s: %v", tk.ID, m.r.where(), err)
 				return false
 			}
 			next = merge
 		}
-		if err := m.r.git.updateRef(ref, next, m.tip); err != nil {
+		if err := m.r.git.UpdateRef(ref, next, m.tip); err != nil {
 			l.cantLandIn(ctx, tk, m.r, fmt.Sprintf("the Spec Branch %s moved while the Factory was merging, or git refused: %v", branch, err))
 			return false
 		}
@@ -344,17 +344,17 @@ func (l *lander) planSpecPush(spec api.SpecRef, r *repository, tickets []api.Tic
 		return pl, false, false
 	}
 	id, branch := spec.ID, spec.Branch
-	tip, err := r.git.commit("refs/heads/" + branch)
+	tip, err := r.git.Commit("refs/heads/" + branch)
 	if err != nil || l.repos.inBaseOf(r, tip) {
 		return pl, false, true
 	}
 	base := l.repos.baseOf(r)
-	baseTip, err := r.git.commit("refs/heads/" + base)
+	baseTip, err := r.git.Commit("refs/heads/" + base)
 	if err != nil {
 		return pl, false, false
 	}
 	pl = specPlan{r: r, tickets: tickets, tip: tip, baseTip: baseTip, push: true, rebase: r.policy(policies).RebaseInForce()}
-	if pl.rebase && !r.git.isAncestor(tip, "refs/remotes/"+r.remote+"/"+branch) && !r.git.isAncestor(baseTip, tip) {
+	if pl.rebase && !r.git.IsAncestor(tip, "refs/remotes/"+r.remote+"/"+branch) && !r.git.IsAncestor(baseTip, tip) {
 		rebased, conflicts, why := l.rebaseSpecBranch(r, baseTip, tip)
 		switch {
 		case len(conflicts) > 0:
@@ -367,7 +367,7 @@ func (l *lander) planSpecPush(spec api.SpecRef, r *repository, tickets []api.Tic
 		pl.rebasedFrom, pl.tip = tip, rebased
 		return pl, true, true
 	}
-	if _, pl.conflicts, err = r.git.mergeTree(baseTip, tip); err != nil {
+	if _, pl.conflicts, err = r.git.MergeTree(baseTip, tip); err != nil {
 		l.printf("warning: %s: can't merge %s%s: %v", id, branch, r.where(), err)
 		return pl, false, false
 	}
@@ -422,11 +422,11 @@ func (l *lander) pushSpecBranch(ctx context.Context, spec api.SpecRef, pushedIn 
 // poll.
 func (l *lander) foreignSpecBranch(ctx context.Context, r *repository, branch, tip string, pushedIn []string) (why string, ok bool) {
 	tracking := "refs/remotes/" + r.remote + "/" + branch
-	theirs, err := r.git.commit(tracking)
+	theirs, err := r.git.Commit(tracking)
 	if err != nil || theirs == tip || slices.Contains(pushedIn, r.name) || l.pushedSpecBranches[r.name+"@"+branch] {
 		return "", true
 	}
-	has, err := r.git.remoteHas(ctx, r.remote, branch)
+	has, err := r.git.RemoteHas(ctx, r.remote, branch)
 	if err != nil {
 		if ctx.Err() == nil {
 			l.printf("warning: can't ask %s for %s%s, so it isn't pushed this poll: %v", r.remote, branch, r.where(), err)
@@ -434,7 +434,7 @@ func (l *lander) foreignSpecBranch(ctx context.Context, r *repository, branch, t
 		return "", false
 	}
 	if !has {
-		if err := r.git.deleteRef(tracking, theirs); err != nil {
+		if err := r.git.DeleteRef(tracking, theirs); err != nil {
 			l.printf("warning: can't forget %s, deleted from %s%s, so %s isn't pushed this poll: %v", tracking, r.remote, r.where(), branch, err)
 			return "", false
 		}
@@ -622,7 +622,7 @@ func (l *lander) mergeSpec(ctx context.Context, spec api.SpecDetail, tickets []a
 func (l *lander) planSpec(spec api.SpecRef, r *repository, tickets []api.TicketView, rebase bool) (pl specPlan, handled, ok bool) {
 	id, branch := spec.ID, spec.Branch
 	pl = specPlan{r: r, tickets: tickets, rebase: rebase}
-	tip, err := r.git.commit("refs/heads/" + branch)
+	tip, err := r.git.Commit("refs/heads/" + branch)
 	if err != nil {
 		return pl, false, false
 	}
@@ -633,7 +633,7 @@ func (l *lander) planSpec(spec api.SpecRef, r *repository, tickets []api.TicketV
 		return pl, true, true
 	}
 	base := l.repos.baseOf(r)
-	if pl.baseTip, err = r.git.commit("refs/heads/" + base); err != nil {
+	if pl.baseTip, err = r.git.Commit("refs/heads/" + base); err != nil {
 		l.printf("warning: %s: the base, %s, isn't a branch%s, so the Spec can't land", id, base, r.where())
 		return pl, true, false
 	}
@@ -641,7 +641,7 @@ func (l *lander) planSpec(spec api.SpecRef, r *repository, tickets []api.TicketV
 		pl.inBase = true
 		return pl, true, true
 	}
-	if rebase && !r.git.isAncestor(pl.baseTip, tip) {
+	if rebase && !r.git.IsAncestor(pl.baseTip, tip) {
 		rebased, conflicts, why := l.rebaseSpecBranch(r, pl.baseTip, tip)
 		switch {
 		case len(conflicts) > 0:
@@ -653,7 +653,7 @@ func (l *lander) planSpec(spec api.SpecRef, r *repository, tickets []api.TicketV
 		}
 		pl.rebasedFrom, pl.tip = tip, rebased
 	}
-	if pl.tree, pl.conflicts, err = r.git.mergeTree(pl.baseTip, pl.tip); err != nil {
+	if pl.tree, pl.conflicts, err = r.git.MergeTree(pl.baseTip, pl.tip); err != nil {
 		l.printf("warning: %s: can't merge %s%s: %v", id, branch, r.where(), err)
 		return pl, true, false
 	}
@@ -686,7 +686,7 @@ func (l *lander) moveRebasedSpecBranches(spec api.SpecRef, plans []specPlan) boo
 		if pl.rebasedFrom == "" {
 			continue
 		}
-		if err := pl.r.git.updateRef("refs/heads/"+branch, pl.tip, pl.rebasedFrom); err != nil {
+		if err := pl.r.git.UpdateRef("refs/heads/"+branch, pl.tip, pl.rebasedFrom); err != nil {
 			l.printf("warning: %s: can't move %s to its rebase onto %s%s: %v", id, branch, l.repos.baseOf(pl.r), pl.r.where(), err)
 			return false
 		}
@@ -712,7 +712,7 @@ func (l *lander) landSpecIn(ctx context.Context, spec api.SpecDetail, p api.Proj
 		}
 		return l.landEachAt(ctx, pl.tickets, p, r, base, commit)
 	}
-	merge, err := r.git.commitTree(pl.tree, fmt.Sprintf("Merge spec %s: %s", spec.ID, spec.Title), pl.baseTip, pl.tip)
+	merge, err := r.git.CommitTree(pl.tree, fmt.Sprintf("Merge spec %s: %s", spec.ID, spec.Title), pl.baseTip, pl.tip)
 	if err != nil {
 		l.printf("warning: %s: can't make the merge commit%s: %v", spec.ID, r.where(), err)
 		return false
@@ -864,7 +864,7 @@ func (l *lander) specLanded(spec api.SpecDetail) bool {
 func (l *lander) sweepSpecBranches(ctx context.Context, policies api.LandingPolicies) {
 	specs := map[string]*api.SpecDetail{}
 	for _, r := range l.repos.ready() {
-		branches, err := r.git.specBranches()
+		branches, err := r.git.SpecBranches()
 		if err != nil {
 			continue
 		}
@@ -904,7 +904,7 @@ func (l *lander) sweepTaggedSpecBranches(ctx context.Context, policies api.Landi
 			if ctx.Err() != nil {
 				return
 			}
-			if _, err := r.git.commit("refs/heads/" + branch); err != nil {
+			if _, err := r.git.Commit("refs/heads/" + branch); err != nil {
 				continue
 			}
 			if spec == nil {
@@ -938,7 +938,7 @@ func (l *lander) sweepSpecBranch(r *repository, id, branch string, spec api.Spec
 	policy := r.policy(policies)
 	base := l.repos.baseOf(r)
 	ref := "refs/heads/" + branch
-	tip, err := r.git.commit(ref)
+	tip, err := r.git.Commit(ref)
 	if err != nil {
 		return
 	}
@@ -950,7 +950,7 @@ func (l *lander) sweepSpecBranch(r *repository, id, branch string, spec api.Spec
 		}
 		return
 	}
-	if err := r.git.deleteRef(ref, tip); err != nil {
+	if err := r.git.DeleteRef(ref, tip); err != nil {
 		l.printf("warning: %s: can't delete %s%s: %v", id, branch, where, err)
 		return
 	}

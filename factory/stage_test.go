@@ -25,7 +25,7 @@ func guide(t *testing.T, h *factorytest.Harness, stage string) string {
 
 func TestEachSessionStartsItsStagesSkillWithItsStageGuide(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	ids := map[string]string{ // guide stage -> Ticket
 		"spec":                  h.StageTicket("spec", "Spec: Add a button"),
 		"tickets":               h.StageTicket("tickets", "Tickets: Add a button"),
@@ -58,7 +58,7 @@ func TestEachSessionStartsItsStagesSkillWithItsStageGuide(t *testing.T) {
 
 func TestEachSystemPromptSaysTheTicketIsAlreadyClaimedAndNotToCallClaim(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	ids := map[string]string{ // stage -> Ticket
 		"spec":                  h.StageTicket("spec", "Spec: Add a button"),
 		api.ImplementationStage: h.ReadyTicket("Add a button"),
@@ -103,9 +103,9 @@ func TestEachSystemPromptSaysTheTicketIsAlreadyClaimedAndNotToCallClaim(t *testi
 
 func TestAStageWorksInADetachedWorktreeAtTheBasesTip(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.StageTicket("spec", "Spec: Add a button")
-	mainTip := h.Git("rev-parse", "main")
+	mainTip := h.Tip("main")
 
 	h.Start()
 	h.WantState(id, domain.InReview)
@@ -113,38 +113,38 @@ func TestAStageWorksInADetachedWorktreeAtTheBasesTip(t *testing.T) {
 	if c := h.Calls()[0]; c.Dir != h.Worktree(id) {
 		t.Errorf("claude ran in %s, want the worktree %s", c.Dir, h.Worktree(id))
 	}
-	if head := h.GitIn(h.Worktree(id), "rev-parse", "--abbrev-ref", "HEAD"); head != "HEAD" {
+	if head := h.BranchIn(h.Worktree(id)); head != "" {
 		t.Errorf("the Stage's worktree is on branch %q, want it detached", head)
 	}
-	if got := h.GitIn(h.Worktree(id), "rev-parse", "HEAD"); got != mainTip {
+	if got := h.HeadIn(h.Worktree(id)); got != mainTip {
 		t.Errorf("the Stage's worktree is at %s, want main's tip %s", got, mainTip)
 	}
-	if b := h.Git("branch", "--list", id); b != "" {
-		t.Errorf("a Stage made branch %q", b)
+	if h.Exists(id) {
+		t.Errorf("a Stage made branch %q", id)
 	}
 }
 
 func TestACleanStageWorktreeMovesToTheBasesCurrentTipAtANewClaim(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.StageTicket("tickets", "Tickets: Add a button")
-	h.Git("worktree", "add", "-q", "--detach", h.Worktree(id), "main")
-	h.Git("commit", "-q", "--allow-empty", "-m", "main moves on")
-	mainTip := h.Git("rev-parse", "main")
+	h.AddDetachedWorktree(id, "main")
+	h.CommitOn("main", "moved.txt", "main moves on\n")
+	mainTip := h.Tip("main")
 
 	h.Start()
 	h.WantState(id, domain.InReview)
 
-	if got := h.GitIn(h.Worktree(id), "rev-parse", "HEAD"); got != mainTip {
+	if got := h.HeadIn(h.Worktree(id)); got != mainTip {
 		t.Errorf("the Stage's worktree is at %s, want main's current tip %s", got, mainTip)
 	}
 }
 
 func TestADirtyStageWorktreeIsAFailureReport(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.StageTicket("spec", "Spec: Add a button")
-	h.Git("worktree", "add", "-q", "--detach", h.Worktree(id), "main")
+	h.AddDetachedWorktree(id, "main")
 	if err := os.WriteFile(filepath.Join(h.Worktree(id), "notes.md"), []byte("written by a Stage"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestADirtyStageWorktreeIsAFailureReport(t *testing.T) {
 
 func TestTheGrillingStageStartsGrillingWithDomainModelingAndItsStageGuide(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.StageTicket("grilling", "Grilling: Add a button")
 
 	h.Start()
@@ -186,13 +186,13 @@ func TestTheGrillingStageStartsGrillingWithDomainModelingAndItsStageGuide(t *tes
 
 func TestEachMapTicketStartsItsSkillWithItsGuideInADetachedWorktree(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	ids := map[string]string{ // guide -> Ticket
 		"map-chart":    h.LabelledTicket("wayfinder:chart", "Charting: Dark mode"),
 		"map-grilling": h.LabelledTicket("wayfinder:grilling", "Which themes?"),
 		"map-task":     h.LabelledTicket("wayfinder:task", "Set up the design account"),
 	}
-	mainTip := h.Git("rev-parse", "main")
+	mainTip := h.Tip("main")
 
 	h.Start()
 	for _, id := range ids {
@@ -231,14 +231,14 @@ func TestEachMapTicketStartsItsSkillWithItsGuideInADetachedWorktree(t *testing.T
 		if c.Dir != h.Worktree(id) {
 			t.Errorf("%s: claude ran in %s, want the worktree %s", name, c.Dir, h.Worktree(id))
 		}
-		if head := h.GitIn(h.Worktree(id), "rev-parse", "--abbrev-ref", "HEAD"); head != "HEAD" {
+		if head := h.BranchIn(h.Worktree(id)); head != "" {
 			t.Errorf("%s: the worktree is on branch %q, want it detached", name, head)
 		}
-		if got := h.GitIn(h.Worktree(id), "rev-parse", "HEAD"); got != mainTip {
+		if got := h.HeadIn(h.Worktree(id)); got != mainTip {
 			t.Errorf("%s: the worktree is at %s, want main's tip %s", name, got, mainTip)
 		}
-		if b := h.Git("branch", "--list", id); b != "" {
-			t.Errorf("%s: made branch %q", name, b)
+		if h.Exists(id) {
+			t.Errorf("%s: made branch %q", name, id)
 		}
 	}
 	if p := calls[ids["map-grilling"]].SystemPrompt; !strings.Contains(p, "Run /domain-modeling alongside /grilling") {

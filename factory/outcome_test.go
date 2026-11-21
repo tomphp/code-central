@@ -16,7 +16,7 @@ import (
 
 func TestATurnThatExitsWithItsClaimInProgressBecomesAFailureReport(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Too big")
 	h.Script(id,
 		factorytest.WriteFile("half.txt", "half\n"),
@@ -34,7 +34,7 @@ func TestATurnThatExitsWithItsClaimInProgressBecomesAFailureReport(t *testing.T)
 	}
 	fr := tk.FailureReports[0]
 	all := strings.Join([]string{fr.WhatBroke, fr.Why, fr.WhatToFix, fr.WhereWorkStands}, "\n")
-	commit := h.GitIn(h.Worktree(id), "rev-parse", "--short", "HEAD")
+	commit := h.HeadOf(h.Worktree(id))[:7]
 	for _, want := range []string{"exit 3", "error_max_turns", "max_turns", "I ran out of turns halfway through.", "branch " + id, h.Worktree(id), commit, "Half a feature"} {
 		if !strings.Contains(all, want) {
 			t.Errorf("the Failure Report doesn't give %q:\n%s", want, all)
@@ -47,7 +47,7 @@ func TestATurnThatExitsWithItsClaimInProgressBecomesAFailureReport(t *testing.T)
 
 func TestATurnThatEndsWithDenialsAndNoExitGetsARoundOfOneQuestionPerDistinctCall(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Needs npm")
 	h.Script(id, factorytest.ResultDenied(
 		factorytest.Denied("npm install"),
@@ -82,7 +82,7 @@ func TestATurnThatEndsWithDenialsAndNoExitGetsARoundOfOneQuestionPerDistinctCall
 
 func TestWhatTheHumanAllowsIsPassedAsAllowedToolsOnThatClaimsLaterRunsOnly(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Needs npm")
 	h.Script(id, factorytest.ResultDenied(
 		factorytest.Denied("npm install"),
@@ -127,7 +127,7 @@ func TestWhatTheHumanAllowsIsPassedAsAllowedToolsOnThatClaimsLaterRunsOnly(t *te
 
 func TestDenialsOnATurnThatFinishedAreListedInAComment(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Mostly done")
 	h.Script(id, factorytest.Finish("Done, but I couldn't run the linter."), factorytest.ResultDenied(
 		factorytest.Denied("golangci-lint run"),
@@ -165,7 +165,7 @@ func hookRefused(command string) []factorytest.Step {
 
 func TestAHookRefusalOnATurnThatStoppedIsStuckNotAnAllowRound(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Hook refused")
 	h.Script(id, append(hookRefused("python3 replace.py"),
 		factorytest.ResultDenied(factorytest.Denied("python3 replace.py")))...)
@@ -183,7 +183,7 @@ func TestAHookRefusalOnATurnThatStoppedIsStuckNotAnAllowRound(t *testing.T) {
 
 func TestAHookRefusalOnATurnThatFinishedIsNotListedAsADenial(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Hook refused, then done")
 	steps := hookRefused("python3 replace.py")
 	steps = append(steps, factorytest.Finish("Done."), factorytest.ResultDenied(
@@ -210,7 +210,7 @@ func TestAHookRefusalOnATurnThatFinishedIsNotListedAsADenial(t *testing.T) {
 
 func TestAnOutagePausesClaimingAndResumingAndSaysWhatItIsWaitingOn(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	// Longer than a poll, which moves the clock by --poll.
 	h.Backoff = time.Minute
 	cut := h.ReadyTicket("Cut off")
@@ -232,7 +232,7 @@ func TestAnOutagePausesClaimingAndResumingAndSaysWhatItIsWaitingOn(t *testing.T)
 
 func TestAPauseWithNothingLeftCutOffEndsAndClaimingCarriesOn(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	cut := h.ReadyTicket("Cut off")
 	h.Script(cut, factorytest.APIError("rate_limit"), factorytest.Result("success"), factorytest.Exit(1))
 	r := h.Start()
@@ -250,7 +250,7 @@ func TestAPauseWithNothingLeftCutOffEndsAndClaimingCarriesOn(t *testing.T) {
 
 func TestACutOffTurnIsResumedWithBackoffUntilTheOutageIsOver(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	// Two polls, each of which moves the clock by --poll, 30s.
 	h.Backoff = time.Minute
 	cut := h.ReadyTicket("Cut off")
@@ -307,7 +307,7 @@ func TestACutOffTurnIsResumedWithBackoffUntilTheOutageIsOver(t *testing.T) {
 
 func TestAnExpiredLoginStopsTheFactory(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	busy := h.ReadyTicket("Busy")
 	h.Script(busy, factorytest.Wait())
 	r := h.Start("--parallel", "2")

@@ -17,34 +17,34 @@ var branchLanding = api.SetLandingMethodInput{Method: domain.LandingBranch}
 // worktree a Factory Claim would have left at its path.
 func withWorktree(h *factorytest.Harness, title, file, content string) (id, commit string) {
 	id, commit = accepted(h, title, file, content)
-	h.Git("worktree", "add", "-q", h.Worktree(id), id)
+	h.AddWorktreeAt(h.Worktree(id), id)
 	return id, commit
 }
 
 func TestUnderBranchAnAcceptedTicketIsLeftOnItsBranchAndLandedOnceMergedByHand(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.SetLandingMethod(branchLanding)
 	id, commit := withWorktree(h, "Add a feature", "feature.txt", "feature\n")
-	base := h.Git("rev-parse", "main")
+	base := h.Tip("main")
 
 	r := h.Start()
 	r.Poll()
 	if s := h.Ticket(id).State; s != domain.Accepted {
 		t.Fatalf("%s is %s, want it left Accepted", id, s)
 	}
-	if h.Git("rev-parse", "main") != base {
+	if h.Tip("main") != base {
 		t.Error("main moved under the Branch Landing Method")
 	}
 	if _, err := os.Stat(h.Worktree(id)); !os.IsNotExist(err) {
 		t.Errorf("the worktree %s is still there: %v", h.Worktree(id), err)
 	}
-	if got := h.Git("rev-parse", "refs/heads/"+id); got != commit {
+	if got := h.Tip(id); got != commit {
 		t.Errorf("branch %s is at %q, want it kept at %s", id, got, commit)
 	}
 	r.WantOutput(id + ": Accepted under the Branch Landing Method: merge " + id + " into main")
 
-	h.Git("merge", "-q", "--no-ff", "-m", "My own merge", id)
+	h.MergeByHand(id, "main")
 	r.Poll()
 	tk := h.WantState(id, domain.Done)
 	if m := tk.Moves[len(tk.Moves)-1]; m.From != domain.Accepted || m.Commit != commit {

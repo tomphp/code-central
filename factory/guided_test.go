@@ -77,7 +77,7 @@ func wantState(t *testing.T, h *factorytest.Harness, id string, want domain.Stat
 
 func TestTheFactoryStartsOneDecisionPerIdleGuidedMapInCreatedOrder(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	m := guidedMap(t, h, "Offline mode")
 	first := decision(t, h, m, "wayfinder:task", "Ask legal")
 	second := decision(t, h, m, "wayfinder:task", "Ask ops")
@@ -116,7 +116,7 @@ func TestAGuidedMapIsHeldByAnyNonResearchTicketThatWaitsOnTheHumanOrAnAgent(t *t
 	for _, state := range []domain.State{domain.Ready, domain.InProgress, domain.NeedsAnswer, domain.Answered, domain.Failed, domain.InReview, domain.Accepted} {
 		t.Run(string(state), func(t *testing.T) {
 			t.Parallel()
-			h := factorytest.New(t)
+			h := factorytest.New(t, factorytest.FakeGit())
 			m := guidedMap(t, h, "Offline mode")
 			holding := decision(t, h, m, "wayfinder:grilling", "Which store")
 			next := decision(t, h, m, "wayfinder:task", "Ask legal")
@@ -132,7 +132,7 @@ func TestAGuidedMapIsHeldByAnyNonResearchTicketThatWaitsOnTheHumanOrAnAgent(t *t
 
 func TestAGuidedMapIsNotHeldByResearch(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	m := guidedMap(t, h, "Offline mode")
 	research := decision(t, h, m, "wayfinder:research", "Sync libraries")
 	next := decision(t, h, m, "wayfinder:grilling", "Which store")
@@ -145,7 +145,7 @@ func TestAGuidedMapIsNotHeldByResearch(t *testing.T) {
 
 func TestAMapIsGuidedOnlyWhenItsGuidedTagIsOn(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	var drafts []string
 	for _, tags := range []map[string]string{nil, {domain.GuidedTag: "off"}, {domain.GuidedTag: "true"}, {domain.GuidedTag: "On"}} {
 		m := newMap(t, h, "Offline mode", tags)
@@ -161,7 +161,7 @@ func TestAMapIsGuidedOnlyWhenItsGuidedTagIsOn(t *testing.T) {
 
 func TestAPausedFactoryStartsNoDecision(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	cut := h.ReadyTicket("Cut off")
 	h.Script(cut, factorytest.APIError("rate_limit"), factorytest.Result("success"), factorytest.Exit(1))
 	r := h.Start()

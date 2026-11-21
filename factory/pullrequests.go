@@ -120,15 +120,15 @@ func (l *lander) planPushRebases(ctx context.Context, tk api.TicketView, policie
 			continue
 		}
 		head, _, err := l.workIn(r, tk)
-		if err != nil || l.repos.inBaseOf(r, head) || r.git.isAncestor(head, "refs/remotes/"+r.remote+"/"+v.Branch) {
+		if err != nil || l.repos.inBaseOf(r, head) || r.git.IsAncestor(head, "refs/remotes/"+r.remote+"/"+v.Branch) {
 			continue
 		}
 		if !l.stateOf(r).current {
 			return nil, nil, false
 		}
 		base := l.repos.baseOf(r)
-		baseTip, err := r.git.commit("refs/heads/" + base)
-		if err != nil || r.git.isAncestor(baseTip, head) {
+		baseTip, err := r.git.Commit("refs/heads/" + base)
+		if err != nil || r.git.IsAncestor(baseTip, head) {
 			continue
 		}
 		rp, files, why, err := l.planBaseReplay(r, v.Branch, head, baseTip)
@@ -193,7 +193,7 @@ func (l *lander) landIn(ctx context.Context, tk api.TicketView, r *repository, c
 // pushedAlreadyIn reports whether branch is on r's Push remote, as far
 // as the last fetch or push knows.
 func (l *lander) pushedAlreadyIn(r *repository, branch string) bool {
-	_, err := r.git.commit("refs/remotes/" + r.remote + "/" + branch)
+	_, err := r.git.Commit("refs/remotes/" + r.remote + "/" + branch)
 	return err == nil
 }
 

@@ -100,10 +100,12 @@ func (f *factory) reportStuck(ctx context.Context, t *turn, end turnEnd) bool {
 // whereWorkStands names the worktree, its branch and its last commit.
 func (f *factory) whereWorkStands(dir string) string {
 	branch := "a detached HEAD"
-	if b, err := f.gitOut(dir, "symbolic-ref", "--short", "-q", "HEAD"); err == nil && b != "" {
+	repo := f.repos.home.git
+	if b, err := repo.CurrentBranch(dir); err == nil {
 		branch = "branch " + b
 	}
-	last, err := f.gitOut(dir, "log", "-1", "--format=%h %s")
+	id, subject, err := repo.LastCommit(dir)
+	last := strings.TrimSpace(id + " " + subject)
 	if err != nil {
 		last = "unknown (" + err.Error() + ")"
 	}

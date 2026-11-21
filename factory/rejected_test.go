@@ -71,7 +71,7 @@ func TestAModelClaudeRejectsFailsTheClaimNamingWhereItWasSet(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			h := factorytest.New(t)
+			h := factorytest.New(t, factorytest.FakeGit())
 			id := h.ReadyTicket("Rejected")
 			if tc.set != nil {
 				tc.set(t, h, id)
@@ -125,7 +125,7 @@ func TestAnEffortClaudeDoesntAcceptFailsTheClaimWithNoTurnStarted(t *testing.T) 
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			h := factorytest.New(t)
+			h := factorytest.New(t, factorytest.FakeGit())
 			id := h.ReadyTicket("Too much effort")
 			// Set while the seeded levels allow it; this claude doesn't.
 			tc.set(t, h, id)
@@ -141,7 +141,7 @@ func TestAnEffortClaudeDoesntAcceptFailsTheClaimWithNoTurnStarted(t *testing.T) 
 
 func TestAnEffortALaterReportMadeInvalidFailsTheResume(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id, _, r := answeredTicket(t, h)
 	setTags(t, h, id, map[string]string{"effort": "xhigh"})
 	r.Stop()
@@ -156,7 +156,7 @@ func TestAnEffortALaterReportMadeInvalidFailsTheResume(t *testing.T) {
 
 func TestWithoutLevelsFromItsHelpTheFactoryDoesntCheckEffort(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Unchecked")
 	setTags(t, h, id, map[string]string{"effort": "xhigh"})
 	h.ClaudeHelp("Usage: claude [options]\n")
@@ -167,7 +167,7 @@ func TestWithoutLevelsFromItsHelpTheFactoryDoesntCheckEffort(t *testing.T) {
 
 func TestAModelRejectedWithOnlyItsResultFailsTheClaim(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("No assistant error")
 	setTags(t, h, id, map[string]string{"model": "opus-9"})
 	// The result alone: terminal_reason api_error, api_error_status 404.

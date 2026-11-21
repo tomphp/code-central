@@ -28,7 +28,7 @@ func line(t *testing.T, r *factorytest.Running, prefix string) string {
 
 func TestTheClaimedLineNamesTheTicketStageTitleSpecWorktreeAndResumeCommand(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	impl := h.ReadyTicket("Paint the shed")
 	grill := h.StageTicket("grilling", "Shed colours")
 	r := h.Start()
@@ -53,7 +53,7 @@ func TestTheClaimedLineNamesTheTicketStageTitleSpecWorktreeAndResumeCommand(t *t
 
 func TestTheTurnEndedLineGivesTheStageTitleExitStateAndDuration(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	asks := h.ReadyTicket("Ask first")
 	done := h.StageTicket("spec", "Write it up")
 	h.Script(asks, factorytest.PostRound("Which colour?"), factorytest.Result("success"))
@@ -77,7 +77,7 @@ func TestTheTurnEndedLineGivesTheStageTitleExitStateAndDuration(t *testing.T) {
 
 func TestTheTurnEndedLineNamesTheStateTheFactoryLeftTheTicketIn(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Stops early")
 	h.Script(id, factorytest.Say("I give up."), factorytest.Result("success"))
 	r := h.Start()
@@ -90,7 +90,7 @@ func TestTheTurnEndedLineNamesTheStateTheFactoryLeftTheTicketIn(t *testing.T) {
 
 func TestTheResumedLineNamesTheRoundBeingAnswered(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id, _, r := answeredTicket(t, h)
 	r.Poll()
 	h.WantState(id, domain.InReview)
@@ -103,7 +103,7 @@ func TestTheResumedLineNamesTheRoundBeingAnswered(t *testing.T) {
 
 func TestTheResumedLineForACutOffClaimSaysSoAfterARestart(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.StageTicket("tickets", "Cut it up")
 	h.Script(id, factorytest.Wait())
 	r := h.Start()
@@ -162,7 +162,7 @@ func inWorktree(wt, rel string) string {
 
 func TestVerbosePrintsOneLinePerToolCallWithItsSummary(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Busy")
 	wt := h.Worktree(id)
 	h.Script(id, toolCalls(wt)...)
@@ -209,7 +209,7 @@ func TestVerbosePrintsOneLinePerToolCallWithItsSummary(t *testing.T) {
 
 func TestWithoutVerboseNoToolCallLinesArePrinted(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Busy")
 	h.Script(id, toolCalls(h.Worktree(id))...)
 	r := h.Start()

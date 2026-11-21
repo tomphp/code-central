@@ -1,0 +1,537 @@
+package factorytest
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+	"slices"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
+)
+
+// onEachGit runs test on real git and on the Fake git, in parallel.
+func onEachGit(t *testing.T, test func(t *testing.T, opt Option)) {
+	for _, g := range []struct {
+		name string
+		opt  Option
+	}{{"real git", RealGit()}, {"Fake git", FakeGit()}} {
+		t.Run(g.name, func(t *testing.T) {
+			t.Parallel()
+			test(t, g.opt)
+		})
+	}
+}
+
+func TestAnAcceptedTicketLandsAlikeOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		id := h.ReadyTicket("Add a feature")
+		if h.Exists(id) {
+			t.Fatalf("%s exists before CommitOn", id)
+		}
+		commit := h.CommitOn(id, "feature.txt", "feature\n")
+		if !h.Exists(id) || h.Tip(id) != commit {
+			t.Fatalf("%s isn't at the commit %s", id, commit)
+		}
+		if got, want := h.Log(id), []string{"Change feature.txt", "Set up Code Central"}; !slices.Equal(got, want) {
+			t.Errorf("Log(%s) = %q, want %q", id, got, want)
+		}
+		h.Finished(id, id, commit)
+		h.Accept(id)
+		oldMain := h.Tip("main")
+
+		h.Start()
+		h.WantState(id, domain.Done)
+
+		merge := h.Tip("main")
+		if got, want := h.Parents(merge), []string{oldMain, commit}; !slices.Equal(got, want) {
+			t.Errorf("main's tip has parents %q, want %q", got, want)
+		}
+		if got, want := h.Log("main"), []string{"Merge " + id + ": Add a feature", "Set up Code Central"}; !slices.Equal(got, want) {
+			t.Errorf("Log(main) = %q, want %q", got, want)
+		}
+		if got := h.File("main", "feature.txt"); got != "feature\n" {
+			t.Errorf("main's feature.txt is %q", got)
+		}
+		// main is checked out in the repo, so it was fast-forwarded there.
+		if b, err := os.ReadFile(filepath.Join(h.Repo, "feature.txt")); err != nil || string(b) != "feature\n" {
+			t.Errorf("feature.txt in the checkout: %q, %v", b, err)
+		}
+	})
+}
+
+func TestARefusedPushAndItsRetryAreAlikeOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		remote := h.AddRemote("origin")
+		h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"})
+		id := h.ReadyTicket("Add a feature")
+		commit := h.CommitOn(id, "feature.txt", "feature\n")
+		h.Finished(id, id, commit)
+		h.Accept(id)
+		remote.RefusePushes()
+
+		r := h.Start()
+		r.WantOutput(id + ": can't land yet")
+		if remote.Exists("main") {
+			t.Errorf("the remote has main at %s though it refuses pushes", remote.Tip("main"))
+		}
+
+		remote.AcceptPushes()
+		r.Poll()
+		h.WantState(id, domain.Done)
+		merge := h.Tip("main")
+		if got := remote.Tip("main"); got != merge {
+			t.Errorf("the remote's main is at %s, want the merge %s", got, merge)
+		}
+		if got := h.RemoteTip("origin", "main"); got != merge {
+			t.Errorf("origin/main is at %s, want the merge %s", got, merge)
+		}
+		if got, want := remote.Parents(merge), h.Parents(merge); !slices.Equal(got, want) {
+			t.Errorf("the remote's merge has parents %q, want %q", got, want)
+		}
+		if got, want := remote.Log("main"), h.Log("main"); !slices.Equal(got, want) {
+			t.Errorf("the remote's Log(main) = %q, want %q", got, want)
+		}
+		if got := remote.File("main", "feature.txt"); got != "feature\n" {
+			t.Errorf("the remote's feature.txt is %q", got)
+		}
+	})
+}
+
+func TestABrokenRemoteAndItsRestoreAreAlikeOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		remote := h.AddRemote("origin")
+		h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin"})
+		id := h.ReadyTicket("Add a feature")
+		h.Finished(id, id, h.CommitOn(id, "feature.txt", "feature\n"))
+		h.Accept(id)
+		remote.Break()
+
+		r := h.Start()
+		r.WantOutput("warning: can't fetch origin")
+		if tk := h.Ticket(id); tk.State != domain.Accepted {
+			t.Errorf("%s is %s with the remote broken, want it left Accepted", id, tk.State)
+		}
+
+		remote.Restore()
+		r.Poll()
+		h.WantState(id, domain.Done)
+		if got, want := remote.Tip("main"), h.Tip("main"); got != want {
+			t.Errorf("the remote's main is at %s, want %s", got, want)
+		}
+	})
+}
+
+func TestAMergeByHandIsAlikeOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		topic := h.CommitOn("topic", "topic.txt", "topic\n")
+		base := h.CommitOn("main", "main.txt", "main\n")
+		other := h.CommitOn("other", "other.txt", "other\n")
+
+		merge := h.MergeByHand("topic", "main")
+		if got, want := h.Parents(merge), []string{base, topic}; !slices.Equal(got, want) {
+			t.Errorf("the merge has parents %q, want %q", got, want)
+		}
+		if got, want := h.Log("main"), []string{"Merge topic", "Change main.txt", "Set up Code Central"}; !slices.Equal(got, want) {
+			t.Errorf("Log(main) = %q, want %q", got, want)
+		}
+		if b, err := os.ReadFile(filepath.Join(h.Repo, "topic.txt")); err != nil || string(b) != "topic\n" {
+			t.Errorf("topic.txt in the checkout: %q, %v", b, err)
+		}
+		if again := h.MergeByHand("topic", "main"); again != merge {
+			t.Errorf("merging topic again made %s: main has it already", again)
+		}
+
+		into := h.MergeByHand("main", "other")
+		if got, want := h.Parents(into), []string{other, merge}; !slices.Equal(got, want) {
+			t.Errorf("the merge into other has parents %q, want %q", got, want)
+		}
+		if h.Tip("other") != into || h.Tip("main") != merge {
+			t.Errorf("other is at %s and main at %s, want %s and %s", h.Tip("other"), h.Tip("main"), into, merge)
+		}
+		if got := h.File("other", "topic.txt"); got != "topic\n" {
+			t.Errorf("other's topic.txt is %q", got)
+		}
+	})
+}
+
+func TestAPushByHandAndAnAncestryCheckAreAlikeOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		remote := h.AddRemote("origin")
+		base := h.Tip("main")
+		theirs := h.CommitOn("theirs", "theirs.txt", "theirs\n")
+		h.CommitOn("main", "main.txt", "main\n")
+
+		h.PushByHand(remote, "theirs", "main")
+		if got := remote.Tip("main"); got != theirs {
+			t.Errorf("the remote's main is %s, want %s", got, theirs)
+		}
+		if !remote.IsAncestor(base, "main") || !remote.IsAncestor(theirs, "main") {
+			t.Errorf("the remote's main should hold the base and theirs")
+		}
+		if !h.IsAncestor(base, "main") || !h.IsAncestor(theirs, "theirs") || h.IsAncestor(theirs, "main") {
+			t.Errorf("ancestry in the repo: want the base and theirs on their branches, and theirs not on main")
+		}
+	})
+}
+
+func TestASecondRepositoryHasTheTypedHelpersOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		repo := h.AddLocalRepository("api")
+		commit := repo.CommitOn("feature", "api.txt", "api\n")
+		if !repo.Exists("feature") || repo.Tip("feature") != commit {
+			t.Fatalf("feature isn't at %s in api", commit)
+		}
+		if h.Exists("feature") {
+			t.Errorf("CommitOn in api made feature in the Home Repository")
+		}
+		merge := repo.MergeByHand("feature", "main")
+		if got := repo.Parents(merge); len(got) != 2 || got[1] != commit {
+			t.Errorf("api's merge has parents %q", got)
+		}
+		if got, want := repo.Log("main"), []string{"Merge feature", "Start api"}; !slices.Equal(got, want) {
+			t.Errorf("api's Log(main) = %q, want %q", got, want)
+		}
+		if got := repo.File("main", "api.txt"); got != "api\n" {
+			t.Errorf("api's api.txt is %q", got)
+		}
+
+		made := h.MakeRepository("web")
+		if got, want := made.Remote("origin").Log("main"), []string{"Start web"}; !slices.Equal(got, want) {
+			t.Errorf("web's remote Log(main) = %q, want %q", got, want)
+		}
+	})
+}
+
+func TestACommitOnARemoteIsAlikeOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		remote := h.MakeRepository("web").Remote("origin")
+		base := remote.Tip("main")
+		theirs := remote.CommitOn("main", "theirs.txt", "theirs\n")
+		if got := remote.Tip("main"); got != theirs {
+			t.Errorf("the remote's main is %s, want %s", got, theirs)
+		}
+		if got := remote.Parents(theirs); !slices.Equal(got, []string{base}) {
+			t.Errorf("theirs has parents %q, want the base %s", got, base)
+		}
+		release := remote.CommitOn("release", "release.txt", "release\n")
+		if !remote.Exists("release") || remote.Tip("release") != release || remote.Tip("main") != theirs {
+			t.Errorf("release isn't at %s alone", release)
+		}
+		if got := remote.Parents(release); !slices.Equal(got, []string{theirs}) {
+			t.Errorf("release has parents %q, want main's tip %s", got, theirs)
+		}
+	})
+}
+
+// fatalT is a testing.TB that records what fails the test and ends the
+// goroutine there, as Fatal does.
+type fatalT struct {
+	testing.TB
+	mu    sync.Mutex
+	fatal string
+}
+
+func (f *fatalT) Helper() {}
+func (f *fatalT) Fatalf(format string, args ...any) {
+	f.mu.Lock()
+	f.fatal = fmt.Sprintf(format, args...)
+	f.mu.Unlock()
+	runtime.Goexit()
+}
+func (f *fatalT) Fatal(args ...any) { f.Fatalf("%s", fmt.Sprint(args...)) }
+
+// failure runs do on its own goroutine, as h's test, and returns what
+// failed it.
+func (f *fatalT) failure(do func()) string {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		do()
+	}()
+	<-done
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.fatal
+}
+
+func TestRawGitFailsUnderTheFakeGitNamingTheTypedHelpersAndRealGit(t *testing.T) {
+	t.Parallel()
+	h := New(t, FakeGit())
+	if h.fake == nil {
+		t.Skip(gitEnv + "=real runs every Harness on real git")
+	}
+	remote := h.AddRemote("origin")
+	for name, raw := range map[string]func(){
+		"Git":        func() { h.Git("rev-parse", "main") },
+		"GitIn":      func() { h.GitIn(h.Repo, "rev-parse", "main") },
+		"Remote.Git": func() { remote.Git("rev-parse", "main") },
+	} {
+		ft := &fatalT{TB: t}
+		h.t = ft
+		got := ft.failure(raw)
+		for _, want := range []string{"git rev-parse main", typedHelpers, "RealGit()"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("%s under the Fake git failed with %q, want it to name %q", name, got, want)
+			}
+		}
+	}
+	h.t = t
+}
+
+func TestTheGitSwitchRunsATestThatChoseTheFakeGitOnRealGit(t *testing.T) {
+	t.Setenv(gitEnv, "real")
+	h := New(t, FakeGit())
+	if h.fake != nil {
+		t.Fatalf("%s=real, but the Harness is on the Fake git", gitEnv)
+	}
+	if got, want := h.Git("rev-parse", "main"), h.Tip("main"); got != want {
+		t.Errorf("real git's main is %s, want %s", got, want)
+	}
+}
+
+func TestTheGitSwitchTakesOnlyReal(t *testing.T) {
+	t.Setenv(gitEnv, "fake")
+	ft := &fatalT{TB: t}
+	got := ft.failure(func() { useFakeGit(ft, []Option{FakeGit()}) })
+	if !strings.Contains(got, gitEnv) || !strings.Contains(got, `"real"`) {
+		t.Errorf("%s=fake failed with %q, want it to name the switch and real", gitEnv, got)
+	}
+}
+
+func TestTheLastGitOptionWinsAndTheFakeGitIsTheDefault(t *testing.T) {
+	t.Setenv(gitEnv, "")
+	for _, c := range []struct {
+		opts []Option
+		fake bool
+	}{
+		{nil, true},
+		{[]Option{RealGit()}, false},
+		{[]Option{FakeGit()}, true},
+		{[]Option{FakeGit(), RealGit()}, false},
+		{[]Option{RealGit(), FakeGit()}, true},
+	} {
+		if got := useFakeGit(t, c.opts); got != c.fake {
+			t.Errorf("%d options: on the Fake git %v, want %v", len(c.opts), got, c.fake)
+		}
+	}
+}
+
+func TestGitVersionSetsTheFakeGitsVersion(t *testing.T) {
+	t.Parallel()
+	h := New(t, FakeGit())
+	if h.fake == nil {
+		t.Skip(gitEnv + "=real runs every Harness on real git")
+	}
+	h.GitVersion("2.37.9")
+	if v, err := h.fake.Version(); err != nil || v != "git version 2.37.9" {
+		t.Errorf("the Fake git's version is %q, %v", v, err)
+	}
+}
+
+func TestAScriptsGitStepsCommitAndTheFactoryLandsThemOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		id := h.ReadyTicket("Add a feature")
+		h.Script(id,
+			WriteFile("feature.txt", "feature\n"),
+			Git("add", "feature.txt"),
+			Git("commit", "-q", "-m", "Add a feature"),
+			CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", "Added.", "--branch", "{{ticket}}", "--commit", "{{head}}"),
+			Result("success"))
+		oldMain := h.Tip("main")
+
+		r := h.Start()
+		tk := h.WantState(id, domain.InReview)
+		commit := h.Tip(id)
+		if tk.Commit != commit {
+			t.Errorf("finished with %q, want the Script's commit %s", tk.Commit, commit)
+		}
+		if got, want := h.Parents(commit), []string{oldMain}; !slices.Equal(got, want) {
+			t.Errorf("the Script's commit has parents %q, want %q", got, want)
+		}
+		h.Accept(id)
+		r.Poll()
+		h.WantState(id, domain.Done)
+
+		if got, want := h.Parents(h.Tip("main")), []string{oldMain, commit}; !slices.Equal(got, want) {
+			t.Errorf("main's tip has parents %q, want %q", got, want)
+		}
+		if got, want := h.Log(commit), []string{"Add a feature", "Set up Code Central"}; !slices.Equal(got, want) {
+			t.Errorf("Log(%s) = %q, want %q", commit, got, want)
+		}
+		if got := h.File("main", "feature.txt"); got != "feature\n" {
+			t.Errorf("main's feature.txt is %q", got)
+		}
+	})
+}
+
+func TestAScriptsGitStepTheFakeGitDoesntModelFailsTheTestNamingTheCommand(t *testing.T) {
+	t.Parallel()
+	ft := &fakeT{TB: t}
+	defer ft.finish()
+	h := New(ft, FakeGit())
+	if h.fake == nil {
+		t.Skip(gitEnv + "=real runs every Harness on real git")
+	}
+	id := h.ReadyTicket("Add a feature")
+	h.Script(id, Git("stash", "push"), Result("success"))
+
+	h.Start()
+	h.WaitFor("the Fake git to fail the test", func() bool { return ft.failed() != "" })
+	if got := ft.failed(); !strings.Contains(got, "not modelled") || !strings.Contains(got, "git stash push") {
+		t.Errorf("the step failed the test with %q, want it to name git stash push as not modelled", got)
+	}
+}
+
+func TestAScriptsGitStepsInASecondRepositoryCommitInItsWorktreeOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		repo := h.AddLocalRepository("api")
+		id := h.ReadyTicket("Add an endpoint")
+		h.Script(id, append(CommitIn("api", "endpoint.go", "package api\n"),
+			FinishIn("Done.", false, "api"), Result("success"))...)
+
+		h.Start()
+		tk := h.WantState(id, domain.InReview)
+		commit := repo.Tip(id)
+		if len(tk.Repositories) != 1 || tk.Repositories[0].Commit != commit {
+			t.Errorf("finished with %+v, want api at the Script's commit %s", tk.Repositories, commit)
+		}
+		if got, want := repo.Log(commit), []string{"Change endpoint.go", "Start api"}; !slices.Equal(got, want) {
+			t.Errorf("api's Log(%s) = %q, want %q", commit, got, want)
+		}
+		if got := repo.File(commit, "endpoint.go"); got != "package api\n" {
+			t.Errorf("api's endpoint.go is %q", got)
+		}
+		if h.Exists(id) && h.Tip(id) != h.Tip("main") {
+			t.Errorf("the Script committed on %s in the Home Repository", id)
+		}
+	})
+}
+
+func TestAHumansCloneRemotesAndWorktreesAreAlikeOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		web := h.MakeRepository("web")
+		h.CloneByHand(web.CloneURL, web.Path)
+
+		if !web.HasRemote("origin") || web.HasRemote("upstream") || web.RemoteURL("origin") != web.CloneURL {
+			t.Errorf("the clone's origin is %q, want %q alone", web.RemoteURL("origin"), web.CloneURL)
+		}
+		tip := web.Tip("main")
+		if got := web.Head(web.Path); got != tip || web.CheckedOut(web.Path) != "main" {
+			t.Errorf("the clone has %s at %s checked out, want main at %s", web.CheckedOut(web.Path), got, tip)
+		}
+		if got := h.SubjectIn(web.Path, tip); got != "Start web" {
+			t.Errorf("the subject of main's tip = %q, want the one it was made with", got)
+		}
+
+		web.SetRemote("upstream", web.CloneURL)
+		web.SetRemote("origin", "/elsewhere.git")
+		if !web.HasRemote("upstream") || web.RemoteURL("origin") != "/elsewhere.git" {
+			t.Errorf("after SetRemote, upstream is %t and origin %q", web.HasRemote("upstream"), web.RemoteURL("origin"))
+		}
+		web.SetRemote("origin", web.CloneURL)
+
+		web.Remote("origin").Branch("release", "main")
+		web.Fetch("origin")
+		if got := web.RemoteTip("origin", "release"); got != tip {
+			t.Errorf("origin/release is at %s, want %s", got, tip)
+		}
+
+		web.CommitOn("spec/one", "one.txt", "one\n")
+		if got := web.SpecBranches(); !slices.Equal(got, []string{"spec/one"}) {
+			t.Errorf("SpecBranches = %q, want spec/one alone", got)
+		}
+
+		wt := web.Worktree("scratch")
+		web.AddDetachedWorktree(wt, "main")
+		if got := web.Head(wt); got != tip {
+			t.Errorf("the detached worktree is at %s, want %s", got, tip)
+		}
+		if err := os.WriteFile(filepath.Join(web.Path, "notes.txt"), []byte("n\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if got := web.Status(web.Path); got != "?? notes.txt" {
+			t.Errorf("Status = %q, want the untracked file", got)
+		}
+
+		web.CheckoutNewBranch("mine")
+		if got := web.CheckedOut(web.Path); got != "mine" || web.Head(web.Path) != tip {
+			t.Errorf("after checkout -b the clone is on %s at %s, want mine at %s", got, web.Head(web.Path), tip)
+		}
+	})
+}
+
+func TestTheSpecBranchWorktreeAndPushHelpersAgreeOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		remote := h.AddRemote("origin")
+		base := h.Tip("main")
+		spec := h.CommitOn("spec/acme-1", "spec.txt", "spec\n")
+		if got := h.SpecBranches(); !slices.Equal(got, []string{"spec/acme-1"}) {
+			t.Errorf("SpecBranches() = %q", got)
+		}
+		if !h.Descends(spec, base) || h.Descends(base, spec) {
+			t.Errorf("Descends: want %s over %s and not the reverse", spec, base)
+		}
+
+		h.AddWorktree("spec/acme-1")
+		if got := h.WorktreeHead("spec/acme-1"); got != spec {
+			t.Errorf("WorktreeHead = %s, want %s", got, spec)
+		}
+
+		remote.PushTo("spec/acme-1", "handmade")
+		if got := remote.Tip("handmade"); got != spec {
+			t.Errorf("after PushTo the remote's handmade is %s, want %s", got, spec)
+		}
+		remote.DeleteBranch("handmade")
+		if remote.Exists("handmade") {
+			t.Error("DeleteBranch left handmade on the remote")
+		}
+	})
+}
+
+func TestTheWorktreeBranchAndDetachedWorktreeHelpersAgreeOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		base := h.Tip("main")
+		h.AddDetachedWorktree("acme-1", "main")
+		dir := h.Worktree("acme-1")
+		if got := h.BranchIn(dir); got != "" {
+			t.Errorf("BranchIn(detached) = %q, want \"\"", got)
+		}
+		if got := h.HeadIn(dir); got != base {
+			t.Errorf("HeadIn = %s, want %s", got, base)
+		}
+		h.CommitOn("feature", "f.txt", "f\n")
+		h.AddWorktree("feature")
+		if got := h.BranchIn(h.Worktree("feature")); got != "feature" {
+			t.Errorf("BranchIn(feature) = %q, want feature", got)
+		}
+	})
+}

@@ -28,15 +28,14 @@ func refuses(t *testing.T, h *factorytest.Harness, dir, why string, args ...stri
 
 func TestTheFactoryRefusesToStartOutsideAGitRepo(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	refuses(t, h, t.TempDir(), "not in a git repository")
 }
 
 func TestTheFactoryRefusesToStartWithNoProject(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
-	h.Git("rm", "-q", "--cached", ".mcp.json")
-	h.Git("commit", "-q", "-m", "No Project")
+	h := factorytest.New(t, factorytest.FakeGit())
+	h.Untrack(".mcp.json")
 	if err := os.Remove(filepath.Join(h.Repo, ".mcp.json")); err != nil {
 		t.Fatal(err)
 	}
@@ -45,22 +44,21 @@ func TestTheFactoryRefusesToStartWithNoProject(t *testing.T) {
 
 func TestTheFactoryRefusesToStartWhenMCPJSONIsNotCommitted(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
-	h.Git("rm", "-q", "--cached", ".mcp.json")
-	h.Git("commit", "-q", "-m", "Keep .mcp.json local")
+	h := factorytest.New(t, factorytest.FakeGit())
+	h.Untrack(".mcp.json")
 	refuses(t, h, h.Repo, ".mcp.json isn't committed")
 }
 
 func TestTheFactoryRefusesToStartWithoutClaudeOnPath(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.RemoveClaude()
 	refuses(t, h, h.Repo, "claude isn't on PATH")
 }
 
 func TestTheFactoryRefusesToStartWhenClaudeIsOnlyTheNpmCmdShim(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.ShimClaude()
 	if runtime.GOOS != "windows" {
 		// Only Windows runs a .cmd for the bare name claude.
@@ -77,16 +75,16 @@ func TestTheFactoryRefusesToStartWhenClaudeIsOnlyTheNpmCmdShim(t *testing.T) {
 
 func TestTheFactoryRefusesToStartWithGitOlderThan2_38(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
-	h.FakeGit("2.37.9")
+	h := factorytest.New(t, factorytest.RealGit())
+	h.GitVersion("2.37.9")
 	refuses(t, h, h.Repo, "git 2.37.9 is older than 2.38")
 }
 
 func TestTheFactoryStartsOnADetachedHead(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("From anywhere")
-	h.Git("checkout", "-q", "--detach")
+	h.Detach()
 	r := h.Start()
 	r.WantOutput("base: main")
 	h.WantState(id, domain.InReview)
@@ -94,13 +92,13 @@ func TestTheFactoryStartsOnADetachedHead(t *testing.T) {
 
 func TestTheFactoryRefusesTheBaseFlagAndPointsToProjectOptions(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	refuses(t, h, h.Repo, "Project Options' Base branch field", "--base", "release")
 }
 
 func TestTheFactoryRefusesToStartWhenTheWorktreeFolderCannotBeMade(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	if err := os.WriteFile(h.Repo+".worktrees", []byte("in the way"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +107,7 @@ func TestTheFactoryRefusesToStartWhenTheWorktreeFolderCannotBeMade(t *testing.T)
 
 func TestTheFactoryRefusesBadFlags(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	refuses(t, h, h.Repo, "--parallel must be at least 1", "--parallel", "0")
 	refuses(t, h, h.Repo, "--poll must be at least 5s", "--poll", "4s")
 }

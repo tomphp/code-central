@@ -38,7 +38,7 @@ type runnerOpts struct {
 
 func newTurnTest(t *testing.T, o runnerOpts) *turnTest {
 	t.Helper()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	e := factory.Env{Environ: h.Environ(), Clock: h.Clock, KillGrace: factorytest.KillGrace}
 	return &turnTest{h: h, runner: factory.NewTurnRunner(h.Claude(), e, defaultLevels, o.bypass, o.claudeArgs, o.verbose)}
 }

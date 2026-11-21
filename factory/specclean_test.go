@@ -14,22 +14,22 @@ func off() *bool { v := false; return &v }
 
 func TestTurningLandPerSpecOffLandsTheWaitingTicketsAsAGroupAndLaterOnesSingly(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	a, b := twoAccepted(t, h)
 	release := holdTicketsStage(t, h)
 	r := h.Start()
 	r.WantOutput(b + ": merged into spec/" + h.SpecID())
-	oldMain := h.Git("rev-parse", "main")
+	oldMain := h.Tip("main")
 
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, LandPerSpec: off()})
 	r.Poll()
 	h.WantState(a, domain.Done)
 	h.WantState(b, domain.Done)
-	merge := h.Git("rev-parse", "main")
-	if got := h.Git("log", "-1", "--format=%s", merge); got != "Merge spec "+h.SpecID()+": Work" {
+	merge := h.Tip("main")
+	if got := h.Log(merge)[0]; got != "Merge spec "+h.SpecID()+": Work" {
 		t.Errorf("merge subject %q", got)
 	}
-	if h.Git("merge-base", oldMain, merge) != oldMain {
+	if h.Parents(merge)[0] != oldMain {
 		t.Error("the Spec merge doesn't descend from the old base")
 	}
 
@@ -37,14 +37,14 @@ func TestTurningLandPerSpecOffLandsTheWaitingTicketsAsAGroupAndLaterOnesSingly(t
 	c, _ := accepted(h, "Later", "three.txt", "3\n")
 	r.Poll()
 	h.WantState(c, domain.Done)
-	if got := h.Git("log", "-1", "--format=%s", "main"); got != "Merge "+c+": Later" {
+	if got := h.Log("main")[0]; got != "Merge "+c+": Later" {
 		t.Errorf("later Ticket landed with %q, want a plain merge", got)
 	}
 }
 
 func TestTurningLandPerSpecOnHoldsOnlyLaterTickets(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.MakeRequirement()
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, LandPerSpec: off()})
 	a, _ := accepted(h, "First", "one.txt", "1\n")
@@ -81,7 +81,7 @@ func cancelDrafts(t *testing.T, h *factorytest.Harness) {
 
 func TestASpecBranchInTheBaseIsDeletedOnceEveryTicketIsDone(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	a, b := twoAccepted(t, h)
 	cancelDrafts(t, h)
 	r := h.Start()
@@ -89,17 +89,17 @@ func TestASpecBranchInTheBaseIsDeletedOnceEveryTicketIsDone(t *testing.T) {
 	h.WantState(b, domain.Done)
 	r.Poll()
 	r.WantOutput(h.SpecID() + ": deleted spec/" + h.SpecID() + ", which is in main")
-	if out := h.Git("branch", "--list", "spec/*"); out != "" {
+	if out := h.SpecBranches(); len(out) != 0 {
 		t.Errorf("Spec Branch still there: %q", out)
 	}
-	if out := h.Git("branch", "--list", a); out == "" {
+	if !h.Exists(a) {
 		t.Error("a Ticket branch was deleted")
 	}
 }
 
 func TestAnUnmergedSpecBranchIsKeptWithOneLine(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.MakeRequirement()
 	a, _ := accepted(h, "First", "one.txt", "1\n")
 	release := holdTicketsStage(t, h)
@@ -113,7 +113,7 @@ func TestAnUnmergedSpecBranchIsKeptWithOneLine(t *testing.T) {
 	r.Poll()
 	r.WantOutput(h.SpecID() + ": every Ticket is finished but spec/" + h.SpecID() + " isn't in main: kept")
 	r.Poll()
-	if out := h.Git("branch", "--list", "spec/*"); out == "" {
+	if len(h.SpecBranches()) == 0 {
 		t.Error("the unmerged Spec Branch was deleted")
 	}
 	if n := strings.Count(r.Stdout(), "isn't in main: kept"); n != 1 {
@@ -123,7 +123,7 @@ func TestAnUnmergedSpecBranchIsKeptWithOneLine(t *testing.T) {
 
 func TestAFinishedTaggedSpecsBranchIsDeletedOnceInTheBase(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	taggedRequirement(t, h)
 	a, b := twoAccepted(t, h)
 	cancelDrafts(t, h)
@@ -132,12 +132,12 @@ func TestAFinishedTaggedSpecsBranchIsDeletedOnceInTheBase(t *testing.T) {
 	h.WantState(b, domain.Done)
 	r.Poll()
 	r.WantOutput(h.SpecID() + ": deleted " + taggedBranch + ", which is in main")
-	wantNoBranch(t, h, h.Repo, taggedBranch)
+	wantNoBranch(t, h, taggedBranch)
 }
 
 func TestAnUnfinishedTaggedSpecsBranchIsKept(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	taggedRequirement(t, h)
 	a, _ := accepted(h, "First", "one.txt", "1\n")
 	release := holdTicketsStage(t, h)
@@ -145,7 +145,7 @@ func TestAnUnfinishedTaggedSpecsBranchIsKept(t *testing.T) {
 	r := h.Start()
 	r.WantOutput(a + ": merged into " + taggedBranch)
 	r.Poll()
-	if out := h.Git("branch", "--list", taggedBranch); out == "" {
+	if !h.Exists(taggedBranch) {
 		t.Error("the unfinished Spec's branch was deleted")
 	}
 }

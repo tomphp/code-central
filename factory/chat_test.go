@@ -46,7 +46,7 @@ var uuid = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a
 
 func TestAChatMessageStartsANewSessionInTheChatWorktreeDetachedAtTheBase(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.Start("--", "--chrome")
 
 	h.SendChat("What does this Project do?")
@@ -67,10 +67,10 @@ func TestAChatMessageStartsANewSessionInTheChatWorktreeDetachedAtTheBase(t *test
 	if c.Dir != chatWorktree(h) {
 		t.Errorf("ran in %s, want the Chat worktree %s", c.Dir, chatWorktree(h))
 	}
-	if head, tip := h.GitIn(chatWorktree(h), "rev-parse", "HEAD"), h.Git("rev-parse", "main"); head != tip {
+	if head, tip := h.HeadIn(chatWorktree(h)), h.Tip("main"); head != tip {
 		t.Errorf("Chat worktree at %s, want the base's tip %s", head, tip)
 	}
-	if b := h.GitIn(chatWorktree(h), "branch", "--show-current"); b != "" {
+	if b := h.BranchIn(chatWorktree(h)); b != "" {
 		t.Errorf("Chat worktree on branch %q, want detached", b)
 	}
 	if m, _ := c.Flag("--model"); m != core.DefaultChatModel {
@@ -121,7 +121,7 @@ func slicesEqual(a, b []string) bool { return strings.Join(a, "\x00") == strings
 
 func TestAChatTurnUsesTheConversationsModelAndEffort(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.Start("--model", "opus", "--effort", "high")
 	if _, err := h.Human().StartConversation(context.Background(), h.Project, api.StartConversationInput{Model: "sonnet", Effort: "low"}); err != nil {
 		t.Fatal(err)
@@ -141,7 +141,7 @@ func TestAChatTurnUsesTheConversationsModelAndEffort(t *testing.T) {
 
 func TestTheChatTurnsItemsReachGetChatAsTheyArrive(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.Script(factorytest.Chat,
 		factorytest.Say("Looking."),
 		factorytest.ToolUse("Bash", `{"command":"ls"}`),
@@ -173,7 +173,7 @@ func TestTheChatTurnsItemsReachGetChatAsTheyArrive(t *testing.T) {
 
 func TestASecondChatMessageResumesTheSession(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.Start()
 	h.SendChat("First")
 	first := h.WaitForReply()
@@ -205,7 +205,7 @@ func TestASecondChatMessageResumesTheSession(t *testing.T) {
 
 func TestAChatPostThatFailsIsDroppedAndTheTurnGoesOn(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.Script(factorytest.Chat, factorytest.Say("Lost."), factorytest.Wait(), factorytest.Say("Kept."), factorytest.Result("success"))
 	run := h.Start()
 	h.SetFailing("/chat/events")
@@ -230,7 +230,7 @@ func TestAChatPostThatFailsIsDroppedAndTheTurnGoesOn(t *testing.T) {
 
 func TestAChatTurnsPermissionDenialsArePostedAsAnItemBeforeTheOutcome(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.Script(factorytest.Chat, factorytest.Say("I'll try."), factorytest.ResultDenied(factorytest.Denied("rm -rf build")))
 	h.Start()
 
@@ -256,7 +256,7 @@ func TestAFailingChatTurnEndsFailedWithNoFailureReport(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			h := factorytest.New(t)
+			h := factorytest.New(t, factorytest.FakeGit())
 			h.Script(factorytest.Chat, tc.steps...)
 			r := h.Start()
 
@@ -286,7 +286,7 @@ func TestAFailingChatTurnEndsFailedWithNoFailureReport(t *testing.T) {
 
 func TestAChatReplyCutOffByAnOutageEndsFailedAndTheFactoryGoesOn(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.Script(factorytest.Chat, factorytest.Say("Partway."), factorytest.APIError("rate_limit"), factorytest.Result("error_during_execution"), factorytest.Exit(1))
 	r := h.Start()
 
@@ -312,7 +312,7 @@ func TestAChatReplyCutOffByAnOutageEndsFailedAndTheFactoryGoesOn(t *testing.T) {
 
 func TestAChatReplyWithAnExpiredLoginEndsFailedAndTheFactoryKeepsRunning(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.Script(factorytest.Chat, factorytest.APIError("authentication_failed"), factorytest.Result("error_during_execution"), factorytest.Exit(1))
 	r := h.Start()
 
@@ -336,7 +336,7 @@ func TestAChatReplyWithAnExpiredLoginEndsFailedAndTheFactoryKeepsRunning(t *test
 
 func TestARejectedChatModelEndsFailedNamingTheModel(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.Script(factorytest.Chat, factorytest.ModelNotFound("claude-nope")...)
 	h.Start()
 	if _, err := h.Human().StartConversation(context.Background(), h.Project, api.StartConversationInput{Model: "claude-nope"}); err != nil {
@@ -354,7 +354,7 @@ func TestARejectedChatModelEndsFailedNamingTheModel(t *testing.T) {
 
 func TestAChatEffortClaudeDoesntAcceptEndsFailedWithNoTurn(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	// Set while the seeded levels allow it; this claude doesn't.
 	if _, err := h.Human().StartConversation(context.Background(), h.Project, api.StartConversationInput{Effort: "xhigh"}); err != nil {
 		t.Fatal(err)
@@ -379,7 +379,7 @@ func TestAChatEffortClaudeDoesntAcceptEndsFailedWithNoTurn(t *testing.T) {
 
 func TestADirtyChatWorktreeFailsTheFirstTurnNamingTheFiles(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.Start()
 	h.SendChat("First")
 	h.WaitForReply()
@@ -415,7 +415,7 @@ func TestADirtyChatWorktreeFailsTheFirstTurnNamingTheFiles(t *testing.T) {
 
 func TestANewConversationMovesACleanChatWorktreeToTheBasesTip(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.Start()
 	h.SendChat("First")
 	h.WaitForReply()
@@ -424,7 +424,7 @@ func TestANewConversationMovesACleanChatWorktreeToTheBasesTip(t *testing.T) {
 	// A later turn of the same Conversation uses the worktree as it is.
 	h.SendChat("Second")
 	h.WaitForReply()
-	if head := h.GitIn(chatWorktree(h), "rev-parse", "HEAD"); head == tip {
+	if head := h.HeadIn(chatWorktree(h)); head == tip {
 		t.Errorf("a later turn moved the Chat worktree to %s, want it left as it was", tip)
 	}
 
@@ -435,14 +435,14 @@ func TestANewConversationMovesACleanChatWorktreeToTheBasesTip(t *testing.T) {
 	if r := reply(h.WaitForReply()); r.Outcome != api.ChatDone {
 		t.Fatalf("reply ended %q (%q), want done", r.Outcome, r.Error)
 	}
-	if head := h.GitIn(chatWorktree(h), "rev-parse", "HEAD"); head != tip {
+	if head := h.HeadIn(chatWorktree(h)); head != tip {
 		t.Errorf("Chat worktree at %s, want the base's new tip %s", head, tip)
 	}
 }
 
 func TestAChatTurnRunsWhileEveryClaimSlotIsFull(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Long job")
 	h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
 	run := h.Start("--parallel", "1")
@@ -463,7 +463,7 @@ func TestAChatTurnRunsWhileEveryClaimSlotIsFull(t *testing.T) {
 
 func TestAChatTurnsUsageIsPostedWithKindChat(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.Script(factorytest.Chat,
 		factorytest.Response("msg_1", "", "claude-haiku-5-5", 100, 0, 0, 10),
 		factorytest.Say("Hi."),
@@ -490,7 +490,7 @@ func TestAChatTurnsUsageIsPostedWithKindChat(t *testing.T) {
 
 func TestTheSweepLeavesTheChatWorktreeAlone(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	r := h.Start()
 	h.SendChat("Hi")
 	h.WaitForReply()
