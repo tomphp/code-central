@@ -50,7 +50,7 @@ func ranWith(t *testing.T, h *factorytest.Harness, ticket string, c factorytest.
 
 func TestATicketsTagsSetTheFirstTurnsModelAndEffortOverTheFactorysFlags(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Hard work")
 	setTags(t, h, id, map[string]string{"model": "opus", "effort": "max"})
 	h.Start("--model", "sonnet", "--effort", "low")
@@ -60,7 +60,7 @@ func TestATicketsTagsSetTheFirstTurnsModelAndEffortOverTheFactorysFlags(t *testi
 
 func TestTheFactorysFlagsFillWhatATicketsTagsLeaveUnset(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	effortOnly := h.ReadyTicket("Effort only")
 	modelOnly := h.ReadyTicket("Model only")
 	setTags(t, h, effortOnly, map[string]string{"effort": "high"})
@@ -74,7 +74,7 @@ func TestTheFactorysFlagsFillWhatATicketsTagsLeaveUnset(t *testing.T) {
 
 func TestAKindsModelsRowReachesClaudeOverTheProjectDefaultAndTheFactorysFlags(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Implement it")
 	setModels(t, h, api.SetModelsInput{Default: api.ModelRowView{Model: "opus", Effort: "medium"},
 		Kinds: []api.KindModelsView{{Kind: api.ImplementationStage, ModelRowView: api.ModelRowView{Effort: "xhigh"}}}})
@@ -85,7 +85,7 @@ func TestAKindsModelsRowReachesClaudeOverTheProjectDefaultAndTheFactorysFlags(t 
 
 func TestWithNothingSetNoModelOrEffortIsPassed(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Work")
 	h.Start()
 	h.WantState(id, domain.InReview)
@@ -94,7 +94,7 @@ func TestWithNothingSetNoModelOrEffortIsPassed(t *testing.T) {
 
 func TestATagChangedWhileATicketWaitsOnARoundAppliesWhenItResumes(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id, first, r := answeredTicket(t, h, "--effort", "low")
 	ranWith(t, h, id, first, "", "low")
 	setTags(t, h, id, map[string]string{"model": "opus"})
@@ -106,7 +106,7 @@ func TestATagChangedWhileATicketWaitsOnARoundAppliesWhenItResumes(t *testing.T) 
 
 func TestAnAnsweredResumeWaitsAPollWhenItsModelChoiceCantBeRead(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id, _, r := answeredTicket(t, h)
 	h.SetFailing("/model-choice")
 
@@ -123,7 +123,7 @@ func TestAnAnsweredResumeWaitsAPollWhenItsModelChoiceCantBeRead(t *testing.T) {
 
 func TestACutOffTurnResumesWithTheModelChoiceReadAfresh(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Cut off")
 	h.Script(id, factorytest.APIError("overloaded_error"), factorytest.Result("success"), factorytest.Exit(1))
 	r := h.Start("--model", "sonnet")
@@ -153,7 +153,7 @@ func TestACutOffTurnResumesWithTheModelChoiceReadAfresh(t *testing.T) {
 
 func TestAClaimResumedAfterARestartTakesItsModelChoiceAfresh(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Cut off by a stop")
 	h.Script(id, factorytest.Wait())
 	r := h.Start()

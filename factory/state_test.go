@@ -12,7 +12,7 @@ import (
 
 func TestASecondFactoryOnTheSameProjectRefusesToStartNamingTheFirstsPid(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	first := h.Start()
 	first.WantOutput("base: main")
 
@@ -25,7 +25,7 @@ func TestASecondFactoryOnTheSameProjectRefusesToStartNamingTheFirstsPid(t *testi
 
 func TestTheStateFileHoldsEachClaimAfterItIsMade(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Work")
 	// Read while the turn runs: its ending wakes a poll that drops the Claim.
 	h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
@@ -61,7 +61,7 @@ func TestTheStateFileHoldsEachClaimAfterItIsMade(t *testing.T) {
 
 func TestWithNoHOMETheStateFileIsUnderTheProfileFolder(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.Setenv("HOME", "") // as on Windows: Home is then only the profile folder
 	id := h.ReadyTicket("Work")
 	h.Start()

@@ -13,7 +13,7 @@ import (
 
 func TestTheFirstCtrlCDrainsWaitingForRunningTurnsAndClaimingNoMore(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Nearly done")
 	h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
 	later := h.ReadyTicket("Later")
@@ -89,7 +89,7 @@ func killed(t *testing.T, h *factorytest.Harness, r *factorytest.Running, id str
 
 func TestASecondCtrlCStopsTheRunningTurnsAndKeepsTheirClaims(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Long job")
 	h.Script(id, factorytest.Wait())
 	r := h.Start()
@@ -107,7 +107,7 @@ func TestSIGTERMOrSIGHUPStopsTheRunningTurnsAtOnce(t *testing.T) {
 	for _, sig := range []os.Signal{syscall.SIGTERM, syscall.SIGHUP} {
 		t.Run(sig.String(), func(t *testing.T) {
 			t.Parallel()
-			h := factorytest.New(t)
+			h := factorytest.New(t, factorytest.FakeGit())
 			id := h.ReadyTicket("Long job")
 			h.Script(id, factorytest.Wait())
 			r := h.Start()

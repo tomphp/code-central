@@ -27,7 +27,7 @@ func hasInOrder(t *testing.T, c factorytest.Call, want ...string) {
 
 func TestClaudeArgsReachEveryStartAndResumeBeforeThePrompt(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id, first, r := answeredTicket(t, h, "--", "--chrome", "--add-dir", "a", "b")
 	r.Poll()
 	h.WantState(id, domain.InReview)
@@ -44,7 +44,7 @@ func TestClaudeArgsReachEveryStartAndResumeBeforeThePrompt(t *testing.T) {
 
 func TestTheFactoryRefusesClaudeArgsItSetsItself(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	for _, tc := range [][]string{
 		{"--model", "use the Factory's --model"},
 		{"--model=opus", "use the Factory's --model"},
@@ -67,14 +67,14 @@ func TestTheFactoryRefusesClaudeArgsItSetsItself(t *testing.T) {
 
 func TestTheFactoryRefusesToStartWhenClaudeNamesAClaudeArgUnknown(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.ClaudeRejects("--chrom")
 	refuses(t, h, h.Repo, "error: unknown option '--chrom'", "--", "--chrom")
 }
 
 func TestTheFactoryWarnsAndCarriesOnWhenTheClaudeArgsCheckIsNotUnderstood(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.ClaudeSays("something new")
 	id := h.ReadyTicket("Work")
 	r := h.Start("--", "--chrome")
@@ -86,7 +86,7 @@ func TestTheFactoryWarnsAndCarriesOnWhenTheClaudeArgsCheckIsNotUnderstood(t *tes
 
 func TestTheClaudeArgsCheckIsNotATurnAndOnlyRunsWithClaudeArgs(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.ClaudeSays("would warn")
 	id := h.ReadyTicket("Work")
 	r := h.Start()
@@ -101,7 +101,7 @@ func TestTheClaudeArgsCheckIsNotATurnAndOnlyRunsWithClaudeArgs(t *testing.T) {
 
 func TestTheFactoryPrintsTheClaudeArgsItPasses(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	r := h.Start("--", "--chrome", "--append-dir=x", "--add-dir", "my dir")
 	r.WantOutput(`passing to every claude turn: --chrome --append-dir=x --add-dir "my dir"`)
 }
@@ -109,7 +109,7 @@ func TestTheFactoryPrintsTheClaudeArgsItPasses(t *testing.T) {
 func TestAFailureReportForATurnWithNoResultListsTheClaudeArgs(t *testing.T) {
 	t.Parallel()
 	for _, withArgs := range []bool{true, false} {
-		h := factorytest.New(t)
+		h := factorytest.New(t, factorytest.FakeGit())
 		id := h.ReadyTicket("Rejected")
 		h.Script(id, factorytest.Exit(1))
 		var args []string

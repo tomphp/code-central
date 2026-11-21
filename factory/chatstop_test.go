@@ -25,7 +25,7 @@ func startLongReply(t *testing.T, h *factorytest.Harness, args ...string) *facto
 
 func TestAStopEndsTheChatTurnAndTheNextMessageResumesTheSession(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	r := startLongReply(t, h)
 
 	if _, err := h.Human().StopChatReply(t.Context(), h.Project); err != nil {
@@ -59,7 +59,7 @@ func TestAStopEndsTheChatTurnAndTheNextMessageResumesTheSession(t *testing.T) {
 
 func TestTheFirstCtrlCDrainsLettingTheChatReplyFinishAndTheConversationIsUnavailable(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	r := startLongReply(t, h)
 
 	r.Interrupt()
@@ -87,7 +87,7 @@ func TestTheFirstCtrlCDrainsLettingTheChatReplyFinishAndTheConversationIsUnavail
 
 func TestStoppingStopsTheChatReplyPostsStoppedAndExits(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	r := startLongReply(t, h)
 
 	r.Interrupt()
@@ -108,7 +108,7 @@ func TestStoppingStopsTheChatReplyPostsStoppedAndExits(t *testing.T) {
 
 func TestNoChatNeverPollsForChatWork(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	// Every poll for Chat work would fail and be counted.
 	h.SetFailing("/chat/next-work")
 	h.Start("--no-chat")

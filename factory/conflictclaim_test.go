@@ -55,7 +55,7 @@ func requireOrdinaryClaim(t *testing.T, h *factorytest.Harness, c factorytest.Ca
 
 func TestATicketSentBackForAConflictIsClaimedWithAnInlinePrompt(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id, _ := accepted(h, "Change the readme", "README", "theirs\n")
 	h.CommitOn("main", "README", "ours\n")
 
@@ -67,7 +67,7 @@ func TestATicketSentBackForAConflictIsClaimedWithAnInlinePrompt(t *testing.T) {
 
 func TestATicketSentBackForAnotherReasonStartsAsAnOrdinaryClaim(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id, _ := accepted(h, "Change the readme", "README", "theirs\n")
 	if _, err := h.Human().SendBack(context.Background(), h.Project, api.SendBackInput{Ticket: api.Ref(id), Note: "Rename it."}); err != nil {
 		t.Fatal(err)
@@ -81,7 +81,7 @@ func TestATicketSentBackForAnotherReasonStartsAsAnOrdinaryClaim(t *testing.T) {
 
 func TestATicketWhoseBranchNoLongerConflictsStartsAsAnOrdinaryClaim(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id, _ := accepted(h, "Change the readme", "README", "theirs\n")
 	h.CommitOn("main", "OTHER", "ours\n")
 	if _, err := h.Human().SendBack(context.Background(), h.Project, api.SendBackInput{Ticket: api.Ref(id), Note: "Merge the base."}); err != nil {
@@ -96,7 +96,7 @@ func TestATicketWhoseBranchNoLongerConflictsStartsAsAnOrdinaryClaim(t *testing.T
 
 func TestAFirstClaimIsAnOrdinaryClaim(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Add a button")
 	h.CommitOn("main", "README", "ours\n")
 
@@ -109,7 +109,7 @@ func TestAFirstClaimIsAnOrdinaryClaim(t *testing.T) {
 func TestATicketOnASpecBranchIsAConflictClaimOnlyWhenItsBranchConflicts(t *testing.T) {
 	t.Parallel()
 	for _, conflicts := range []bool{true, false} {
-		h := factorytest.New(t)
+		h := factorytest.New(t, factorytest.FakeGit())
 		h.MakeRequirement()
 		id := h.ReadyTicket("Merge the base into the Spec Branch")
 		h.CommitOn(id, "README", "theirs\n")
@@ -133,7 +133,7 @@ func TestATicketOnASpecBranchIsAConflictClaimOnlyWhenItsBranchConflicts(t *testi
 
 func TestTheConflictTicketTheFactoryOpensForASpecBranchStartsAsAConflictClaim(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.MakeRequirement()
 	a, _ := accepted(h, "First", "README", "spec side\n")
 	release := holdTicketsStage(t, h)

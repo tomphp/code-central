@@ -85,7 +85,7 @@ func wantUsage(t *testing.T, h *factorytest.Harness, r *factorytest.Running, n i
 
 func TestEachModelResponsesTokenUsageIsPostedOnceUnderItsKind(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.StageTicket("spec", "Spec: Paint the shed")
 	h.Script(id,
 		// One response in two content blocks, each line carrying its usage.
@@ -122,7 +122,7 @@ func TestEachModelResponsesTokenUsageIsPostedOnceUnderItsKind(t *testing.T) {
 
 func TestEachSubagentsResponsesCarryItsAgentTypeAndDescriptionAndTheMainSessionsCarryNeither(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Paint with helpers")
 	h.Script(id,
 		factorytest.Response("msg_1", "", "", 100, 0, 0, 10),
@@ -166,7 +166,7 @@ func TestEachSubagentsResponsesCarryItsAgentTypeAndDescriptionAndTheMainSessions
 
 func TestEachUsageSessionListsTheModelsOfItsResponsesInOrderOfFirstUse(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Paint with two brushes")
 	h.Script(id,
 		// One response in two content blocks counts its model once.
@@ -192,7 +192,7 @@ func TestEachUsageSessionListsTheModelsOfItsResponsesInOrderOfFirstUse(t *testin
 
 func TestASyntheticResponseIsPostedWithItsTokensButNoModel(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Paint after a hiccup")
 	h.Script(id,
 		factorytest.Response("msg_1", "", "claude-opus-5-5", 100, 0, 0, 10),
@@ -218,7 +218,7 @@ func TestASyntheticResponseIsPostedWithItsTokensButNoModel(t *testing.T) {
 
 func TestAResumedSessionAddsToTheSameUsageSession(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Ask first")
 	h.Script(id,
 		factorytest.Response("msg_first", "", "", 100, 0, 0, 10),
@@ -246,7 +246,7 @@ func TestAResumedSessionAddsToTheSameUsageSession(t *testing.T) {
 
 func TestWithCodeCentralDownMidTurnTheTurnStillFinishesAndDroppedUsageHoldsNothingUp(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Paint through an outage")
 	h.Script(id,
 		factorytest.Response("msg_before", "", "", 100, 0, 0, 1), factorytest.Wait(),

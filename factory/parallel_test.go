@@ -20,7 +20,7 @@ func callsFor(h *factorytest.Harness, ticket string) []factorytest.Call {
 
 func TestParallelCapsTheTurnsRunningAtOnce(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	a, b, c := h.ReadyTicket("A"), h.ReadyTicket("B"), h.ReadyTicket("C")
 	for _, id := range []string{a, b, c} {
 		h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
@@ -45,7 +45,7 @@ func TestParallelCapsTheTurnsRunningAtOnce(t *testing.T) {
 
 func TestAClaimParkedInNeedsAnswerDoesNotTakeASlot(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	a, b := h.ReadyTicket("A"), h.ReadyTicket("B")
 	h.Script(a, factorytest.PostRound("Which colour?"), factorytest.Result("success"))
 	h.Script(b, factorytest.Wait())
