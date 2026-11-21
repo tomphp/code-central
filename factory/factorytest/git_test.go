@@ -167,6 +167,28 @@ func TestAMergeByHandIsAlikeOnRealGitAndTheFakeGit(t *testing.T) {
 	})
 }
 
+func TestAPushByHandAndAnAncestryCheckAreAlikeOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		remote := h.AddRemote("origin")
+		base := h.Tip("main")
+		theirs := h.CommitOn("theirs", "theirs.txt", "theirs\n")
+		h.CommitOn("main", "main.txt", "main\n")
+
+		h.PushByHand(remote, "theirs", "main")
+		if got := remote.Tip("main"); got != theirs {
+			t.Errorf("the remote's main is %s, want %s", got, theirs)
+		}
+		if !remote.IsAncestor(base, "main") || !remote.IsAncestor(theirs, "main") {
+			t.Errorf("the remote's main should hold the base and theirs")
+		}
+		if !h.IsAncestor(base, "main") || !h.IsAncestor(theirs, "theirs") || h.IsAncestor(theirs, "main") {
+			t.Errorf("ancestry in the repo: want the base and theirs on their branches, and theirs not on main")
+		}
+	})
+}
+
 func TestASecondRepositoryHasTheTypedHelpersOnRealGitAndTheFakeGit(t *testing.T) {
 	t.Parallel()
 	onEachGit(t, func(t *testing.T, opt Option) {
