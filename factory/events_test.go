@@ -43,7 +43,7 @@ func waitForTranscript(h *factorytest.Harness, r *factorytest.Running, ticket, s
 
 func TestATurnsStreamJSONIsPostedAsSessionEvents(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Paint the shed")
 	wt := h.Worktree(id)
 	h.Script(id,
@@ -103,7 +103,7 @@ func TestATurnsStreamJSONIsPostedAsSessionEvents(t *testing.T) {
 
 func TestTheFactorysLinesAboutAClaimArePostedToItsTranscript(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Ask first")
 	h.Script(id, factorytest.PostRound("Which colour?"), factorytest.Result("success"))
 	r := h.Start()
@@ -139,7 +139,7 @@ func TestTheFactorysLinesAboutAClaimArePostedToItsTranscript(t *testing.T) {
 
 func TestATurnThatKeepsPostingEventsNeverMakesItsClaimSilent(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Long job")
 	h.Script(id,
 		factorytest.Wait(), factorytest.Say("Still painting."),
@@ -166,7 +166,7 @@ func TestATurnThatKeepsPostingEventsNeverMakesItsClaimSilent(t *testing.T) {
 
 func TestWithCodeCentralDownMidTurnTheTurnStillFinishesAndDroppedEventsHoldNothingUp(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Paint through an outage")
 	h.Script(id,
 		factorytest.Say("Before the outage."), factorytest.Wait(),

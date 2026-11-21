@@ -125,7 +125,7 @@ func TestAClaimLostOnEveryTryIsSentFourTimes(t *testing.T) {
 // and the turn runs under the one Claim the first try made.
 func TestAClaimLostOnEveryTryIsClaimedAgainAtLaterPolls(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Lost for a while")
 	// The first poll's 4 tries and the next poll's one.
 	h.LoseAnswer("/claim", 5)
@@ -156,7 +156,7 @@ func TestAClaimLostOnEveryTryIsClaimedAgainAtLaterPolls(t *testing.T) {
 // it has slots.
 func TestALostClaimHoldsItsSlot(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	a, b, c := h.ReadyTicket("A"), h.ReadyTicket("B"), h.ReadyTicket("C")
 	for _, id := range []string{a, b, c} {
 		h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
@@ -188,7 +188,7 @@ func TestALostClaimHoldsItsSlot(t *testing.T) {
 // answer: the Factory drops it, freeing its slot, and sends it no more.
 func TestALostClaimRefusedAtALaterPollIsDropped(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	a, b := h.ReadyTicket("Taken elsewhere"), h.ReadyTicket("Next")
 	h.LoseRequest("/claim", 4)
 	r := h.Start("--parallel", "1")
@@ -212,7 +212,7 @@ func TestALostClaimRefusedAtALaterPollIsDropped(t *testing.T) {
 // whose answer was lost: its Ticket may be In Progress already.
 func TestADrainingFactoryStillClaimsALostClaimAgain(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id, later := h.ReadyTicket("Lost"), h.ReadyTicket("Later")
 	// The first poll's 4 tries and the drain's first.
 	h.LoseAnswer("/claim", 5)
@@ -237,7 +237,7 @@ func TestADrainingFactoryStillClaimsALostClaimAgain(t *testing.T) {
 // A stopping Factory abandons a claim whose answer was lost.
 func TestAStoppingFactoryAbandonsALostClaim(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Lost")
 	h.LoseAnswer("/claim", 4)
 	r := h.Start()
@@ -258,7 +258,7 @@ func TestAStoppingFactoryAbandonsALostClaim(t *testing.T) {
 // it waits for the lost claim, and claims the next Ticket meanwhile.
 func TestALostClaimsTicketIsNotChosenAgainAsNewWork(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	a, b := h.ReadyTicket("Lost on the way"), h.ReadyTicket("Next")
 	for _, id := range []string{a, b} {
 		h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))

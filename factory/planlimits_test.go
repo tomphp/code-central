@@ -41,7 +41,7 @@ func wantWindow(t *testing.T, name string, w *api.PlanLimitWindow, percent float
 
 func TestAFactorySendsNoPlanLimitsBeforeItsFirstTurn(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	r := h.Start()
 	if pl := planLimits(t, h, r); pl != nil {
 		t.Errorf("Plan Limits %+v before any Turn, want none", pl)
@@ -50,7 +50,7 @@ func TestAFactorySendsNoPlanLimitsBeforeItsFirstTurn(t *testing.T) {
 
 func TestATurnsRateLimitEventReachesTheNextHeartbeat(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Spends the limit")
 	fiveHour, weekly := resets(h, 3), resets(h, 100)
 	h.Script(id, factorytest.RateLimitEvent(map[string]factorytest.RateLimitWindow{
@@ -74,7 +74,7 @@ func TestATurnsRateLimitEventReachesTheNextHeartbeat(t *testing.T) {
 
 func TestADrainingHeartbeatCarriesTheRunningTurnsPlanLimits(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Still running")
 	fiveHour := resets(h, 3)
 	h.Script(id, factorytest.RateLimitEvent(map[string]factorytest.RateLimitWindow{
@@ -98,7 +98,7 @@ func TestADrainingHeartbeatCarriesTheRunningTurnsPlanLimits(t *testing.T) {
 
 func TestAMissingWindowIsntReported(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Opus only")
 	fiveHour := resets(h, 2)
 	h.Script(id, factorytest.RateLimitEvent(map[string]factorytest.RateLimitWindow{
@@ -120,7 +120,7 @@ func TestAMissingWindowIsntReported(t *testing.T) {
 
 func TestTheLatestRateLimitEventWinsAndStaysAfterTheTurn(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	first := h.ReadyTicket("First")
 	h.Script(first, factorytest.RateLimitEvent(map[string]factorytest.RateLimitWindow{
 		"five_hour": {Utilization: 0.1, ResetsAt: resets(h, 4)},
@@ -156,7 +156,7 @@ func TestTheLatestRateLimitEventWinsAndStaysAfterTheTurn(t *testing.T) {
 
 func TestAChatTurnsRateLimitEventReachesTheNextHeartbeat(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	weekly := resets(h, 100)
 	h.Script(factorytest.Chat, factorytest.RateLimitEvent(map[string]factorytest.RateLimitWindow{
 		"seven_day": {Utilization: 0.61, ResetsAt: weekly},
@@ -177,7 +177,7 @@ func TestAChatTurnsRateLimitEventReachesTheNextHeartbeat(t *testing.T) {
 
 func TestUtilizationAboveOneIsSentAsAHundredPercent(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Over the limit")
 	fiveHour := resets(h, 1)
 	h.Script(id, factorytest.RateLimitEvent(map[string]factorytest.RateLimitWindow{

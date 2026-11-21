@@ -25,10 +25,10 @@ func researched(h *factorytest.Harness, id string) {
 
 func TestAMapResearchTicketStartsTheResearchSkillInItsOwnWorktreeOnALocalResearchBranch(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.LabelledTicket("wayfinder:research", "Which colour libraries exist?")
 	researched(h, id)
-	mainTip := h.Git("rev-parse", "main")
+	mainTip := h.Tip("main")
 
 	h.Start()
 	h.WantState(id, domain.InReview)
@@ -58,14 +58,14 @@ func TestAMapResearchTicketStartsTheResearchSkillInItsOwnWorktreeOnALocalResearc
 	if c.Dir != h.Worktree(id) {
 		t.Errorf("claude ran in %s, want the worktree %s", c.Dir, h.Worktree(id))
 	}
-	if head := h.GitIn(h.Worktree(id), "rev-parse", "--abbrev-ref", "HEAD"); head != branch {
+	if head := h.BranchIn(h.Worktree(id)); head != branch {
 		t.Errorf("the worktree is on %q, want branch %s", head, branch)
 	}
-	if got := h.Git("rev-parse", branch+"^"); got != mainTip {
+	if got := strings.Join(h.Parents(h.Tip(branch)), " "); got != mainTip {
 		t.Errorf("%s was made from %s, want main's tip %s", branch, got, mainTip)
 	}
-	if b := h.Git("branch", "--list", id); b != "" {
-		t.Errorf("a research Ticket made the implementation branch %q", b)
+	if h.Exists(id) {
+		t.Errorf("a research Ticket made the implementation branch %q", id)
 	}
 }
 
@@ -79,16 +79,16 @@ func TestAnAcceptedMapResearchTicketIsDoneWithNothingPushedOrLandedUnderEveryLan
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			h := factorytest.New(t)
+			h := factorytest.New(t, factorytest.FakeGit())
 			remote := h.AddRemote("origin")
 			h.SetLandingMethod(landing)
 			id := h.LabelledTicket("wayfinder:research", "Which colour libraries exist?")
 			researched(h, id)
-			mainTip := h.Git("rev-parse", "main")
+			mainTip := h.Tip("main")
 
 			r := h.Start()
 			h.WantState(id, domain.InReview)
-			commit := h.Git("rev-parse", "research/"+id)
+			commit := h.Tip("research/" + id)
 			h.Accept(id)
 			if tk := h.Ticket(id); tk.State != domain.Done {
 				t.Fatalf("%s is %s once accepted, want Done straight away", id, tk.State)
@@ -96,13 +96,13 @@ func TestAnAcceptedMapResearchTicketIsDoneWithNothingPushedOrLandedUnderEveryLan
 			r.Poll()
 			r.Poll()
 
-			if got := h.Git("rev-parse", "main"); got != mainTip {
+			if got := h.Tip("main"); got != mainTip {
 				t.Errorf("main moved to %s, want it left at %s", got, mainTip)
 			}
-			if got := remote.Git("for-each-ref", "--format=%(refname)"); got != "" {
-				t.Errorf("the remote got %q, want nothing pushed", got)
+			if remote.Exists("main") || remote.Exists("research/"+id) {
+				t.Errorf("the remote has main or the branch, want nothing pushed")
 			}
-			if got := h.Git("rev-parse", "research/"+id); got != commit {
+			if got := h.Tip("research/" + id); got != commit {
 				t.Errorf("research/%s is at %q, want it kept at %s", id, got, commit)
 			}
 			if out := r.Stdout(); strings.Contains(out, "landed") || strings.Contains(out, "pushed") {
@@ -114,7 +114,7 @@ func TestAnAcceptedMapResearchTicketIsDoneWithNothingPushedOrLandedUnderEveryLan
 
 func TestAMapResearchTicketsWorktreeIsKeptInReviewAndSweptOnceDone(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.LabelledTicket("wayfinder:research", "Which colour libraries exist?")
 	researched(h, id)
 
@@ -126,33 +126,33 @@ func TestAMapResearchTicketsWorktreeIsKeptInReviewAndSweptOnceDone(t *testing.T)
 		t.Fatalf("the worktree went in In Review: %v", err)
 	}
 
-	commit := h.Git("rev-parse", "research/"+id)
+	commit := h.Tip("research/" + id)
 	h.Accept(id)
 	r.Poll()
 	r.WantOutput(id + ": Done: removed its worktree " + h.Worktree(id))
 	if _, err := os.Stat(h.Worktree(id)); !os.IsNotExist(err) {
 		t.Errorf("the worktree %s is still there: %v", h.Worktree(id), err)
 	}
-	if got := h.Git("rev-parse", "research/"+id); got != commit {
+	if got := h.Tip("research/" + id); got != commit {
 		t.Errorf("research/%s is at %q, want it kept at %s", id, got, commit)
 	}
 }
 
 func TestACancelledMapResearchTicketsWorktreeIsSweptAndItsBranchKept(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.LabelledTicket("wayfinder:research", "Which colour libraries exist?")
 	researched(h, id)
 
 	r := h.Start()
 	h.WantState(id, domain.InReview)
-	commit := h.Git("rev-parse", "research/"+id)
+	commit := h.Tip("research/" + id)
 	if _, err := h.Human().Cancel(context.Background(), h.Project, api.CancelInput{Ticket: api.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
 	r.Poll()
 	r.WantOutput(id + ": Cancelled: removed its worktree " + h.Worktree(id))
-	if got := h.Git("rev-parse", "research/"+id); got != commit {
+	if got := h.Tip("research/" + id); got != commit {
 		t.Errorf("research/%s is at %q, want it kept at %s", id, got, commit)
 	}
 }

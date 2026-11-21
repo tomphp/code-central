@@ -38,7 +38,7 @@ func wantFactory(t *testing.T, h *factorytest.Harness, status api.FactoryStatusN
 
 func TestEachPollSendsAnOnlineHeartbeatWithTheTurnsRunning(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Long job")
 	h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start("--parallel", "2", "--poll", "20s")
@@ -60,7 +60,7 @@ func TestEachPollSendsAnOnlineHeartbeatWithTheTurnsRunning(t *testing.T) {
 
 func TestNoChatReportsNoChatSupport(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.Start("--no-chat")
 	fs := wantFactory(t, h, api.FactoryOnline, "turns running")
 	if fs.Factories[0].Chat {
@@ -70,7 +70,7 @@ func TestNoChatReportsNoChatSupport(t *testing.T) {
 
 func TestAnOutagePauseStaysOnlineAndSaysWhenItResumes(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	cut := h.ReadyTicket("Cut off")
 	h.Script(cut, factorytest.APIError("rate_limit"), factorytest.Result("success"), factorytest.Exit(1))
 	r := h.Start()
@@ -84,7 +84,7 @@ func TestAnOutagePauseStaysOnlineAndSaysWhenItResumes(t *testing.T) {
 
 func TestTheFirstCtrlCSendsDrainingAndTheDrainKeepsSendingIt(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Nearly done")
 	h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start("--parallel", "1")
@@ -107,7 +107,7 @@ func TestTheFirstCtrlCSendsDrainingAndTheDrainKeepsSendingIt(t *testing.T) {
 
 func TestASecondCtrlCSendsAStoppingHeartbeatNamingTheSignal(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Long job")
 	h.Script(id, factorytest.Wait())
 	r := h.Start()
@@ -123,7 +123,7 @@ func TestASecondCtrlCSendsAStoppingHeartbeatNamingTheSignal(t *testing.T) {
 
 func TestSIGTERMSendsAStoppingHeartbeatNamingTheSignal(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Long job")
 	h.Script(id, factorytest.Wait())
 	r := h.Start()
@@ -136,7 +136,7 @@ func TestSIGTERMSendsAStoppingHeartbeatNamingTheSignal(t *testing.T) {
 
 func TestAStopForSendsAStoppingHeartbeatWithItsReason(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	expired := h.ReadyTicket("Expired")
 	h.Script(expired, factorytest.APIError("authentication_failed"), factorytest.Result("success"), factorytest.Exit(1))
 	r := h.Start()
@@ -146,7 +146,7 @@ func TestAStopForSendsAStoppingHeartbeatWithItsReason(t *testing.T) {
 
 func TestAFactoryThatRefusesToStartSendsNoHeartbeat(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	refuses(t, h, h.Repo, "isn't an effort level", "--effort", "extreme")
 	if fs := factories(t, h); len(fs.Factories) != 0 {
 		t.Errorf("a refused Factory sent %+v", fs)
@@ -155,7 +155,7 @@ func TestAFactoryThatRefusesToStartSendsNoHeartbeat(t *testing.T) {
 
 func TestARefusedHeartbeatIsWarnedOnceAndNeverStopsThePoll(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.SetFailing("/report_heartbeat")
 	r := h.Start()
 	r.Poll()
