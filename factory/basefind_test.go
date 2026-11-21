@@ -24,24 +24,24 @@ func baseMissingItem(t *testing.T, h *factorytest.Harness) (api.NeedsMeRow, bool
 
 func TestABaseOnlyOnTheRemoteIsCreatedLocally(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
-	h.Git("push", "-q", remote.Path, "main:refs/heads/release")
-	want := h.Git("rev-parse", "main")
+	h.Publish(remote, h.Tip("main"), "release")
+	want := h.Tip("main")
 	setBase(h, "release")
 	id := h.ReadyTicket("On release")
 
 	r := h.Start()
 	r.WantOutput("base: created release at")
 	h.WantState(id, domain.InReview)
-	if got := h.Git("rev-parse", "refs/heads/release"); got != want {
+	if got := h.Tip("release"); got != want {
 		t.Errorf("release is at %s, want the remote's %s", got, want)
 	}
 }
 
 func TestAMissingBaseHoldsClaimsAndLandingUntilItIsCreated(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	setBase(h, "release")
 	landing, _ := accepted(h, "Waits to land", "feature.txt", "feature\n")
@@ -61,7 +61,7 @@ func TestAMissingBaseHoldsClaimsAndLandingUntilItIsCreated(t *testing.T) {
 		t.Errorf("%s is %s, want it not landed", landing, s)
 	}
 
-	h.Git("branch", "release", "main")
+	h.NewBranch("release", "main")
 	r.Poll()
 	r.WantOutput("base: found release again")
 	h.WantState(ready, domain.InReview)
@@ -73,9 +73,8 @@ func TestAMissingBaseHoldsClaimsAndLandingUntilItIsCreated(t *testing.T) {
 
 func TestABaseWithoutMCPJSONHoldsNewBranchesUntilItIsCommitted(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
-	empty := h.Git("commit-tree", "-m", "empty", "4b825dc642cb6eb9a060e54bf8d69288fbee4904")
-	h.Git("branch", "release", empty)
+	h := factorytest.New(t, factorytest.FakeGit())
+	h.EmptyBranch("release")
 
 	r := h.Start()
 	setBase(h, "release")
@@ -87,7 +86,7 @@ func TestABaseWithoutMCPJSONHoldsNewBranchesUntilItIsCommitted(t *testing.T) {
 		t.Errorf("%s is %s, want it not claimed", ready, s)
 	}
 
-	h.Git("branch", "-f", "release", "main")
+	h.MoveBranch("release", "main")
 	r.Poll()
 	h.WantState(ready, domain.InReview)
 }

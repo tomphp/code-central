@@ -39,7 +39,7 @@ func stateTickets(t *testing.T, h *factorytest.Harness) []string {
 
 func TestAReleasedClaimsTurnIsStoppedAndDropped(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Stopped")
 	h.Script(id, factorytest.Wait())
 	r := h.Start()
@@ -83,7 +83,7 @@ func stateClaims(t *testing.T, h *factorytest.Harness) []string {
 
 func TestACancelledClaimsTurnIsStoppedAndDropped(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Not wanted")
 	h.Script(id, factorytest.Wait())
 	r := h.Start()
@@ -101,7 +101,7 @@ func TestACancelledClaimsTurnIsStoppedAndDropped(t *testing.T) {
 
 func TestAReleasedTicketIsClaimedAfreshInItsWorktreeOnItsBranch(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Try again")
 	h.Script(id,
 		factorytest.WriteFile("wip.txt", "wip\n"),

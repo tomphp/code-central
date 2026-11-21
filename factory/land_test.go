@@ -23,18 +23,18 @@ func accepted(h *factorytest.Harness, title, file, content string) (id, commit s
 
 func TestAnAcceptedTicketIsMergedIntoTheBaseAndLanded(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
-	oldMain := h.Git("rev-parse", "main")
+	oldMain := h.Tip("main")
 
 	h.Start()
 	tk := h.WantState(id, domain.Done)
 
-	merge := h.Git("rev-parse", "main")
-	if got := h.Git("log", "-1", "--format=%P", merge); got != oldMain+" "+commit {
+	merge := h.Tip("main")
+	if got := strings.Join(h.Parents(merge), " "); got != oldMain+" "+commit {
 		t.Errorf("main's tip has parents %q, want %q then %q", got, oldMain, commit)
 	}
-	if got := h.Git("log", "-1", "--format=%s", merge); got != "Merge "+id+": Add a feature" {
+	if got := h.Subject(merge); got != "Merge "+id+": Add a feature" {
 		t.Errorf("merge commit subject %q", got)
 	}
 	if m := tk.Moves[len(tk.Moves)-1]; m.Commit != merge || m.From != domain.Accepted {
@@ -44,17 +44,17 @@ func TestAnAcceptedTicketIsMergedIntoTheBaseAndLanded(t *testing.T) {
 	if b, err := os.ReadFile(filepath.Join(h.Repo, "feature.txt")); err != nil || string(b) != "feature\n" {
 		t.Errorf("feature.txt in the checkout: %q, %v", b, err)
 	}
-	if st := h.Git("status", "--porcelain"); st != "" {
+	if st := h.Status(); st != "" {
 		t.Errorf("the base checkout isn't clean after landing: %q", st)
 	}
 }
 
 func TestAConflictIsSentBackNamingTheBaseCommitAndTheConflictingFiles(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	id, _ := accepted(h, "Change the readme", "README", "theirs\n")
 	h.CommitOn("main", "README", "ours\n")
-	base := h.Git("rev-parse", "main")
+	base := h.Tip("main")
 
 	// Hold the next Claim's turn, so the Ticket stays where send_back put it.
 	h.Script(id, factorytest.Wait())
@@ -63,7 +63,7 @@ func TestAConflictIsSentBackNamingTheBaseCommitAndTheConflictingFiles(t *testing
 		t.Fatalf("%s wasn't sent back: %+v", id, h.Ticket(id).Moves)
 	}
 
-	if h.Git("rev-parse", "main") != base {
+	if h.Tip("main") != base {
 		t.Error("main moved on a conflict")
 	}
 	if !commented(h.Ticket(id), base[:12], "README") {
@@ -73,18 +73,18 @@ func TestAConflictIsSentBackNamingTheBaseCommitAndTheConflictingFiles(t *testing
 
 func TestUncommittedChangesInTheBaseCheckoutHoldACleanMergeAndAreLeftAlone(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	mine := filepath.Join(h.Repo, "feature.txt")
 	if err := os.WriteFile(mine, []byte("my work in progress\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	base := h.Git("rev-parse", "main")
+	base := h.Tip("main")
 
 	h.Start()
 	tk := h.Ticket(id)
-	if tk.State != domain.Accepted || h.Git("rev-parse", "main") != base {
-		t.Fatalf("%s is %s and main at %s; want it left Accepted with main unmoved", id, tk.State, h.Git("rev-parse", "main"))
+	if tk.State != domain.Accepted || h.Tip("main") != base {
+		t.Fatalf("%s is %s and main at %s; want it left Accepted with main unmoved", id, tk.State, h.Tip("main"))
 	}
 	if !commented(tk, "uncommitted changes in "+h.Repo, "feature.txt") {
 		t.Errorf("want a comment naming feature.txt, got %+v", tk.Comments)
@@ -120,36 +120,36 @@ func commented(tk api.TicketView, parts ...string) bool {
 
 func TestAnAcceptedTicketIsMergedIntoTheBaseTheProjectNames(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
-	h.Git("branch", "release")
+	h := factorytest.New(t, factorytest.FakeGit())
+	h.NewBranch("release", "main")
 	base := "release"
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Base: &base})
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
-	oldMain := h.Git("rev-parse", "main")
-	oldRelease := h.Git("rev-parse", "release")
+	oldMain := h.Tip("main")
+	oldRelease := h.Tip("release")
 
 	r := h.Start()
 	h.WantState(id, domain.Done)
 
-	if h.Git("rev-parse", "main") != oldMain {
+	if h.Tip("main") != oldMain {
 		t.Error("main moved, want the merge on release")
 	}
-	merge := h.Git("rev-parse", "release")
-	if got := h.Git("log", "-1", "--format=%P", merge); got != oldRelease+" "+commit {
+	merge := h.Tip("release")
+	if got := strings.Join(h.Parents(merge), " "); got != oldRelease+" "+commit {
 		t.Errorf("release's tip has parents %q, want %q then %q", got, oldRelease, commit)
 	}
 
 	// Changing the base takes hold on the next poll.
-	h.Git("branch", "next")
+	h.NewBranch("next", "main")
 	next := "next"
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Base: &next})
 	id2, commit2 := accepted(h, "Another feature", "other.txt", "other\n")
 	r.Poll()
 	h.WantState(id2, domain.Done)
-	if h.Git("rev-parse", "release") != merge {
+	if h.Tip("release") != merge {
 		t.Error("release moved after the base changed")
 	}
-	if got := h.Git("log", "-1", "--format=%P", "next"); !strings.HasSuffix(got, " "+commit2) {
+	if got := strings.Join(h.Parents(h.Tip("next")), " "); !strings.HasSuffix(got, " "+commit2) {
 		t.Errorf("next's tip has parents %q, want it to end at %s", got, commit2)
 	}
 }

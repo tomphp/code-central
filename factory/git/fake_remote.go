@@ -96,6 +96,24 @@ func (f *Fake) SetRemoteBranch(dir, remote, branch, commit string) {
 	to.refs["refs/heads/"+branch] = id
 }
 
+// AuthorOf is the author of commit in the repository at dir, as "Name
+// <email>". It fails the test when there is no such commit.
+func (f *Fake) AuthorOf(dir, commit string) string {
+	f.tb.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	g := fakeRepo{f: f, dir: filepath.Clean(dir)}
+	r, err := g.repository()
+	if err != nil {
+		f.tb.Fatal(err)
+	}
+	c, ok := r.commits[commit]
+	if !ok {
+		f.tb.Fatalf("fake git: %s has no commit %s", dir, commit)
+	}
+	return c.author
+}
+
 // MessageOf is the message of commit in the repository at dir, without
 // its closing newline. It fails the test when there is no such commit.
 func (f *Fake) MessageOf(dir, commit string) string {
