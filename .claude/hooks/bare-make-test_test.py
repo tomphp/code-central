@@ -16,6 +16,9 @@ class BareMakeTestTest(unittest.TestCase):
         self.assertTrue(piped("make test-verbose |& grep FAIL"))
         self.assertTrue(piped("make -j4 test | cat"))
         self.assertTrue(piped("make test|tail"))
+        self.assertTrue(piped("make e2e 2>&1 | tail -8"))
+        self.assertTrue(piped("make e2e F=web/src/e2e/a.test.ts | grep FAIL"))
+        self.assertTrue(piped("make typecheck && make e2e | tail"))
 
     def test_chained(self):
         self.assertTrue(piped("make lint 2>&1 | tail -8; make test 2>&1 | tail -20"))
@@ -32,6 +35,9 @@ class BareMakeTestTest(unittest.TestCase):
         self.assertFalse(piped("make test || tail log"))
         self.assertFalse(piped("make test; tail log"))
         self.assertFalse(piped("make test &\ntail log"))
+        self.assertFalse(piped("make e2e"))
+        self.assertFalse(piped("make e2e F=web/src/e2e/a.test.ts"))
+        self.assertFalse(piped("make e2e > out.log 2>&1"))
 
     def test_other_pipes_pass(self):
         self.assertFalse(piped("make lint 2>&1 | tail -8"))
