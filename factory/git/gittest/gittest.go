@@ -417,6 +417,19 @@ func Run(t *testing.T, newGit func(t *testing.T) Setup) {
 		}
 	})
 
+	t.Run("changedFiles lists what a branch changes since its merge base, sorted", func(t *testing.T) {
+		s, repo, first := open(t)
+		one := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"z.txt": "z\n", "d/a.txt": "one\n"}})
+		noError(t, repo.UpdateRef("refs/heads/topic", one, ""))
+
+		if got := must(repo.ChangedFiles("refs/heads/main", "refs/heads/topic"))(t); !slices.Equal(got, []string{"d/a.txt", "z.txt"}) {
+			t.Errorf("ChangedFiles(main, topic) = %q, want d/a.txt and z.txt", got)
+		}
+		if got := must(repo.ChangedFiles("refs/heads/main", "refs/heads/main"))(t); len(got) != 0 {
+			t.Errorf("ChangedFiles(main, main) = %q, want none", got)
+		}
+	})
+
 	t.Run("a worktree added on a new branch holds its commit's files, on that branch", func(t *testing.T) {
 		s, repo, first := open(t)
 		next := s.Commit(git.Change{Parents: []string{first}, Files: map[string]string{"a.txt": "one\n", "d/b.txt": "b\n"}})

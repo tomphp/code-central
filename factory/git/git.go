@@ -113,6 +113,9 @@ type Repo interface {
 	// CreateBranch makes branch at commit, tracking nothing, failing when
 	// it exists.
 	CreateBranch(branch, commit string) error
+	// ChangedFiles is the files head changes since its merge base with
+	// base, as `git diff --name-only base...head` lists them, sorted.
+	ChangedFiles(base, head string) ([]string, error)
 	// HasFile reports whether path is committed at rev.
 	HasFile(rev, path string) bool
 	// CurrentBranch is the branch checked out in the worktree dir, failing

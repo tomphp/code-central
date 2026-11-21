@@ -53,12 +53,11 @@ func (f *factory) checkReview(ctx context.Context, t *turn, tk api.TicketView, r
 	if tk.SpecLanded && tk.Spec.Branch != "" {
 		base = tk.Spec.Branch
 	}
-	out, err := f.repos.gitOut(r.dir, "diff", "--name-only", "refs/heads/"+base+"...refs/heads/"+tk.Branch)
+	files, err := f.repos.git.Open(r.dir).ChangedFiles("refs/heads/"+base, "refs/heads/"+tk.Branch)
 	if err != nil {
 		f.claimf(c, "%s: can't diff %s against %s to check for a review: %v", c.Ticket, tk.Branch, base, err)
 		return
 	}
-	files := strings.Fields(out)
 	if len(files) == 0 || docsOnly(files) {
 		return
 	}
