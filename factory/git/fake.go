@@ -1375,6 +1375,36 @@ func (g fakeRepo) CreateBranch(branch, commit string) error {
 	return nil
 }
 
+func (g fakeRepo) ChangedFiles(base, head string) ([]string, error) {
+	r, unlock, err := g.lock()
+	defer unlock()
+	if err != nil {
+		return nil, err
+	}
+	mb, err := g.mergeBase(r, base, head)
+	if err != nil {
+		return nil, err
+	}
+	h, err := g.resolve(r, head)
+	if err != nil {
+		return nil, err
+	}
+	was, now := r.treeOf(mb), r.treeOf(h)
+	var files []string
+	for p, c := range now {
+		if old, ok := was[p]; !ok || old != c {
+			files = append(files, p)
+		}
+	}
+	for p := range was {
+		if _, ok := now[p]; !ok {
+			files = append(files, p)
+		}
+	}
+	slices.Sort(files)
+	return files, nil
+}
+
 func (g fakeRepo) HasFile(rev, path string) bool {
 	r, unlock, err := g.lock()
 	defer unlock()

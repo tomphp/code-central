@@ -315,6 +315,21 @@ func (g realRepo) CreateBranch(branch, commit string) error {
 	return err
 }
 
+func (g realRepo) ChangedFiles(base, head string) ([]string, error) {
+	out, err := g.out("diff", "--name-only", "-z", base+"..."+head)
+	if err != nil {
+		return nil, err
+	}
+	var files []string
+	for _, f := range strings.Split(out, "\x00") {
+		if f != "" {
+			files = append(files, f)
+		}
+	}
+	slices.Sort(files)
+	return files, nil
+}
+
 func (g realRepo) HasFile(rev, path string) bool {
 	_, err := g.out("cat-file", "-e", rev+":"+path)
 	return err == nil
