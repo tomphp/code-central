@@ -16,6 +16,8 @@ While working, `make vitest-related F=<source> [<source>…]` runs every vitest 
 
 `make test` runs Go against the committed placeholder page, so it needs no Vite build. Installing web dependencies and building `core.wasm` happen before the clock starts. A failing job's output is kept in a log file whose path prints last; failed vitest files and Go tests killed under load rerun once serially, and a pass there prints "passed on serial rerun: flaky under load".
 
+`make test`, `make e2e` and `make vitest` without `F=` are **heavy suites**: each wants every core, so when sessions overlap they slow each other and e2e files time out. They take one machine-wide lock first (`internal/heavylock`: an OS file lock in the temporary folder, so a process that dies releases it) and run one at a time. A run that has to wait prints one line, such as `waiting for code-central-1186's make test`. `make test`'s 60s budget starts once the lock is held, so the wait doesn't count against it. A nested call, such as a target that a locked `make` runs, doesn't wait on the lock its parent holds. `make vitest F=…`, `make typecheck` and `make lint` don't take it.
+
 CI does not call `make test`: its 60s budget would trip on a cold runner, and each step wants its own log. It runs the same steps directly.
 
 ## CI's jobs
