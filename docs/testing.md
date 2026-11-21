@@ -68,7 +68,7 @@ This is the pattern for testing a port against more than one implementation: wri
 
 Four terms, defined here and not in `GLOSSARY.md` (ADR 0073):
 
-- **Git port**: `factory/git`, the one interface through which the Factory runs git. The Factory's own files run no git (see the Git guard).
+- **Git port**: `factory/git`, the one interface through which the Factory runs git. The Factory's own files run no git (see the [Git guard](#the-guard-tests)).
 - **Fake git**: `git.Fake`, an in-memory implementation of the Git port that starts no process. A Factory test runs on it by default, which is what keeps the Factory's package fast, and it is the faster of the two ways to run the Factory's scenarios.
 - **Git contract suite**: `gittest.Run`, the behaviour of the Git port written once over the interface. Real git and the Fake git each pass it on every push, so the Fake is held to real git, and a behaviour the Fake gets wrong fails the suite rather than a scenario test.
 - **Real-git tests**: the Factory tests that name `factorytest.RealGit()`. They run real git on every push, for what the Fake git doesn't model: raw git (`Git`, `GitIn`, `Remote.Git`), revision syntax such as `HEAD` or `main^`, and a fake claude's Git Script steps beyond the Fake's.
@@ -81,7 +81,7 @@ Four terms, defined here and not in `GLOSSARY.md` (ADR 0073):
 CODE_CENTRAL_TEST_FACTORY_GIT=real go test ./factory/...
 ```
 
-Run it after changing the Fake git or a typed helper, to check the Fake against real git. The nightly `scale.yml` runs this as its `Factory on real git` step on Linux, macOS and Windows, the backstop for the contract suite. The variable takes no other value: anything else fails the test.
+Run it after changing the Fake git or a typed helper, to check the Fake against real git. The nightly `scale.yml` runs this as its `Factory on real git` step on Linux, macOS and Windows, the backstop for the contract suite. The variable takes no other value: anything but empty or `real` fails the test.
 
 A new Fake behaviour goes into `gittest.Run` first, then into the Fake until real git and the Fake both pass it.
 

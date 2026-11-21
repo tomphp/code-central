@@ -188,8 +188,8 @@ type Harness struct {
 }
 
 // New starts a Code Central with Project "acme" and a git repo on branch
-// main whose one commit holds a .mcp.json naming it, on real git unless
-// opts choose the Fake git (FakeGit).
+// main whose one commit holds a .mcp.json naming it, on the Fake git
+// unless opts choose real git (RealGit).
 func New(t testing.TB, opts ...Option) *Harness {
 	t.Helper()
 	onFakeGit := useFakeGit(t, opts)
