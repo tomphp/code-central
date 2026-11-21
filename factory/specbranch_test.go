@@ -2,6 +2,7 @@ package factory_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/api"
@@ -18,20 +19,20 @@ func requirementAccepted(h *factorytest.Harness, title, file, content string) (i
 
 func TestAnAcceptedSpecLandedTicketIsMergedIntoTheSpecBranchAndNotTheBase(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id, commit := requirementAccepted(h, "Add a feature", "feature.txt", "feature\n")
-	oldMain := h.Git("rev-parse", "main")
+	oldMain := h.Tip("main")
 	holdTicketsStage(t, h)
 
 	r := h.Start()
 	r.WantOutput(id + ": merged into spec/" + h.SpecID() + " at ")
 
 	branch := "spec/" + h.SpecID()
-	tip := h.Git("rev-parse", branch)
-	if got := h.Git("log", "-1", "--format=%P", tip); got != oldMain+" "+commit {
+	tip := h.Tip(branch)
+	if got := strings.Join(h.Parents(tip), " "); got != oldMain+" "+commit {
 		t.Errorf("%s has parents %q, want %q then %q", branch, got, oldMain, commit)
 	}
-	if h.Git("rev-parse", "main") != oldMain {
+	if h.Tip("main") != oldMain {
 		t.Error("main moved: nothing reaches the base until the Spec lands")
 	}
 	tk := h.Ticket(id)
@@ -42,7 +43,7 @@ func TestAnAcceptedSpecLandedTicketIsMergedIntoTheSpecBranchAndNotTheBase(t *tes
 
 func TestASpecBranchConflictSendsTheTicketBack(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.MakeRequirement()
 	first, _ := accepted(h, "First", "README", "first\n")
 	second, _ := accepted(h, "Second", "README", "second\n")
@@ -63,62 +64,60 @@ func TestASpecBranchConflictSendsTheTicketBack(t *testing.T) {
 
 func TestATicketWhoseWorkIsInTheBaseLandsAsPlainMerge(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
-	id, commit := requirementAccepted(h, "Add a feature", "feature.txt", "feature\n")
-	h.Git("merge", "-q", "--ff-only", commit)
+	h := factorytest.New(t, factorytest.FakeGit())
+	id, _ := requirementAccepted(h, "Add a feature", "feature.txt", "feature\n")
+	h.MergeByHand(id, "main")
 
 	h.Start()
 	h.WantState(id, domain.Done)
-	if got := h.Git("branch", "--list", "spec/*"); got != "" {
+	if got := h.SpecBranches(); len(got) != 0 {
 		t.Errorf("a Spec Branch was made: %q", got)
 	}
 }
 
 func TestTheFirstClaimMakesTheSpecBranchAndCutsTheTicketBranchFromIt(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.MakeRequirement()
 	id := h.ReadyTicket("Add a feature")
 	h.Script(id, factorytest.Wait())
-	base := h.Git("rev-parse", "main")
+	base := h.Tip("main")
 
 	h.Start()
 
-	if got := h.Git("rev-parse", "spec/"+h.SpecID()); got != base {
+	if got := h.Tip("spec/" + h.SpecID()); got != base {
 		t.Errorf("the Spec Branch is at %s, want the base's tip %s", got, base)
 	}
-	if got := h.GitIn(h.Worktree(id), "rev-parse", "HEAD"); got != base {
+	if got := h.WorktreeHead(id); got != base {
 		t.Errorf("the Ticket's branch is at %s, want the Spec Branch's tip %s", got, base)
 	}
 }
 
 func TestASecondTicketIsCutFromTheSpecBranchHoldingTheFirstOnes(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	_, _ = requirementAccepted(h, "First", "one.txt", "1\n")
 	holdTicketsStage(t, h)
 	r := h.Start()
 	r.WantOutput("merged into spec/" + h.SpecID())
-	tip := h.Git("rev-parse", "spec/"+h.SpecID())
+	tip := h.Tip("spec/" + h.SpecID())
 
 	id := h.ReadyTicket("Second")
 	h.Script(id, factorytest.Wait())
 	r.Poll()
 
-	if got := h.GitIn(h.Worktree(id), "rev-parse", "HEAD"); got != tip {
+	if got := h.WorktreeHead(id); got != tip {
 		t.Errorf("the Ticket's branch is at %s, want the Spec Branch's tip %s", got, tip)
 	}
 }
 
 func TestAnAcceptedTicketsWorktreeIsRemovedOnceItsSpecMergeIsRecorded(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.MakeRequirement()
 	id := h.ReadyTicket("Add a feature")
-	h.Git("worktree", "add", "-q", "-b", id, h.Worktree(id), "main")
-	commit := h.GitIn(h.Worktree(id), "commit", "-q", "--allow-empty", "-m", "work")
-	_ = commit
-	head := h.GitIn(h.Worktree(id), "rev-parse", "HEAD")
+	head := h.CommitOn(id, "work.txt", "work\n")
+	h.AddWorktree(id)
 	h.Finished(id, id, head)
 	h.Accept(id)
 	holdTicketsStage(t, h)
@@ -132,11 +131,11 @@ func TestAnAcceptedTicketsWorktreeIsRemovedOnceItsSpecMergeIsRecorded(t *testing
 
 func TestUnderTheBranchMethodNoSpecBranchIsMade(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch})
 	id, _ := requirementAccepted(h, "Add a feature", "feature.txt", "feature\n")
 	h.Start()
-	if h.Ticket(id).State != domain.Accepted || h.Git("branch", "--list", "spec/*") != "" {
+	if h.Ticket(id).State != domain.Accepted || len(h.SpecBranches()) != 0 {
 		t.Errorf("want %s left Accepted with no Spec Branch", id)
 	}
 }

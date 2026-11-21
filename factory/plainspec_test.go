@@ -16,7 +16,7 @@ import (
 
 func TestAPlainSpecIsMergedAndPushedOnceAndItsTicketsLandTogether(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
 	mergeAndPush(h, "origin")
 	h.MakePlainSpec()
@@ -27,11 +27,11 @@ func TestAPlainSpecIsMergedAndPushedOnceAndItsTicketsLandTogether(t *testing.T) 
 	h.WantState(a, domain.Done)
 	h.WantState(b, domain.Done)
 
-	merge := h.Git("rev-parse", "main")
-	if got := h.Git("log", "-1", "--format=%s", merge); got != "Merge spec "+h.SpecID()+": Work" {
+	merge := h.Tip("main")
+	if got := h.Log(merge)[0]; got != "Merge spec "+h.SpecID()+": Work" {
 		t.Errorf("merge subject %q", got)
 	}
-	if got := remote.Git("rev-parse", "main"); got != merge {
+	if got := remote.Tip("main"); got != merge {
 		t.Errorf("the remote's main is %s, want %s", got, merge)
 	}
 	for _, id := range []string{a, b} {
@@ -39,28 +39,28 @@ func TestAPlainSpecIsMergedAndPushedOnceAndItsTicketsLandTogether(t *testing.T) 
 			t.Errorf("%s landed at %q, want the merge %s", id, m[len(m)-1].Commit, merge)
 		}
 	}
-	if got := h.Git("log", "--first-parent", "--format=%s", "main"); strings.Count(got, "Merge spec ") != 1 || strings.Contains(got, "Merge "+a) {
+	if got := strings.Join(h.Log("main"), "\n"); strings.Count(got, "Merge spec ") != 1 || strings.Contains(got, "Merge "+a) {
 		t.Errorf("main's first-parent history %q, want the one Spec merge and no Ticket merge of its own", got)
 	}
 }
 
 func TestATicketAddedAfterAPlainSpecLandedLandsWithASecondBatch(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.MakePlainSpec()
 	a, _ := accepted(h, "First", "one.txt", "1\n")
 	r := h.Start()
 	h.WantState(a, domain.Done)
-	first := h.Git("rev-parse", "main")
+	first := h.Tip("main")
 
 	late, _ := accepted(h, "Late", "late.txt", "late\n")
 	r.Poll()
 	h.WantState(late, domain.Done)
-	second := h.Git("rev-parse", "main")
+	second := h.Tip("main")
 	if second == first {
 		t.Fatal("main didn't move for the late Ticket")
 	}
-	if got := h.Git("log", "-1", "--format=%s", second); got != "Merge spec "+h.SpecID()+": Work" {
+	if got := h.Log(second)[0]; got != "Merge spec "+h.SpecID()+": Work" {
 		t.Errorf("second batch merge subject %q", got)
 	}
 	if m := h.Ticket(late).Moves; m[len(m)-1].Commit != second {
@@ -70,7 +70,7 @@ func TestATicketAddedAfterAPlainSpecLandedLandsWithASecondBatch(t *testing.T) {
 
 func TestLabellingASpecLongLivedWhileItsTicketsWaitLandsThemTogetherAtOnce(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.MakePlainSpec()
 	a, b := accepted(h, "First", "one.txt", "1\n")
 	_ = b
@@ -86,25 +86,25 @@ func TestLabellingASpecLongLivedWhileItsTicketsWaitLandsThemTogetherAtOnce(t *te
 	r.Poll()
 	h.WantState(a, domain.Done)
 	h.WantState(c, domain.Done)
-	merge := h.Git("rev-parse", "main")
-	if got := h.Git("log", "-1", "--format=%s", merge); got != "Merge spec "+h.SpecID()+": Work" {
+	merge := h.Tip("main")
+	if got := h.Log(merge)[0]; got != "Merge spec "+h.SpecID()+": Work" {
 		t.Errorf("merge subject %q", got)
 	}
 }
 
 func TestALongLivedSpecsTicketsLandOneByOne(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	a, _ := accepted(h, "First", "one.txt", "1\n")
 	b, _ := accepted(h, "Second", "two.txt", "2\n")
 
 	h.Start()
 	h.WantState(a, domain.Done)
 	h.WantState(b, domain.Done)
-	if got := h.Git("branch", "--list", "spec/*"); got != "" {
+	if got := h.SpecBranches(); len(got) != 0 {
 		t.Errorf("a Spec Branch was made for a Long-lived Spec: %q", got)
 	}
-	if got := h.Git("log", "-1", "--format=%s", "main"); !strings.HasPrefix(got, "Merge "+b) {
+	if got := h.Log("main")[0]; !strings.HasPrefix(got, "Merge "+b) {
 		t.Errorf("main's tip is %q, want a plain merge of %s", got, b)
 	}
 }

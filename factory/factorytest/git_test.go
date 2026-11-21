@@ -483,3 +483,33 @@ func TestAHumansCloneRemotesAndWorktreesAreAlikeOnRealGitAndTheFakeGit(t *testin
 		}
 	})
 }
+
+func TestTheSpecBranchWorktreeAndPushHelpersAgreeOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		remote := h.AddRemote("origin")
+		base := h.Tip("main")
+		spec := h.CommitOn("spec/acme-1", "spec.txt", "spec\n")
+		if got := h.SpecBranches(); !slices.Equal(got, []string{"spec/acme-1"}) {
+			t.Errorf("SpecBranches() = %q", got)
+		}
+		if !h.Descends(spec, base) || h.Descends(base, spec) {
+			t.Errorf("Descends: want %s over %s and not the reverse", spec, base)
+		}
+
+		h.AddWorktree("spec/acme-1")
+		if got := h.WorktreeHead("spec/acme-1"); got != spec {
+			t.Errorf("WorktreeHead = %s, want %s", got, spec)
+		}
+
+		remote.PushTo("spec/acme-1", "handmade")
+		if got := remote.Tip("handmade"); got != spec {
+			t.Errorf("after PushTo the remote's handmade is %s, want %s", got, spec)
+		}
+		remote.DeleteBranch("handmade")
+		if remote.Exists("handmade") {
+			t.Error("DeleteBranch left handmade on the remote")
+		}
+	})
+}

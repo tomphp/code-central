@@ -6,7 +6,6 @@ package factorytest
 import (
 	"context"
 	"path/filepath"
-	"sort"
 	"strings"
 )
 
@@ -21,10 +20,13 @@ func (h *Harness) SubjectIn(dir, commit string) string {
 
 // Head is the commit checked out in the repo's worktree, an absolute
 // path.
-func (h *Harness) Head(worktree string) string { h.t.Helper(); return h.head(h.Repo, worktree) }
+func (h *Harness) Head(worktree string) string { h.t.Helper(); return h.headIn(h.Repo, worktree) }
 
 // Head is Harness.Head for r's clone.
-func (r *Repository) Head(worktree string) string { r.h.t.Helper(); return r.h.head(r.Path, worktree) }
+func (r *Repository) Head(worktree string) string {
+	r.h.t.Helper()
+	return r.h.headIn(r.Path, worktree)
+}
 
 // CheckedOut is the branch checked out in the repo's worktree, an
 // absolute path, failing the test when it is detached.
@@ -65,12 +67,6 @@ func (r *Repository) SetRemote(name, url string) { r.h.t.Helper(); r.h.setRemote
 // Fetch fetches the remote in r's clone, as a human would, so its
 // remote-tracking branches are up to date.
 func (r *Repository) Fetch(remote string) { r.h.t.Helper(); r.h.fetch(r.Path, remote) }
-
-// SpecBranches is the names of the spec/ branches in r's clone, sorted.
-func (r *Repository) SpecBranches() []string { r.h.t.Helper(); return r.h.specBranches(r.Path) }
-
-// SpecBranches is Repository.SpecBranches in the repo.
-func (h *Harness) SpecBranches() []string { h.t.Helper(); return h.specBranches(h.Repo) }
 
 // Status is the porcelain status of the repo's worktree, an absolute path.
 func (h *Harness) Status(worktree string) string { h.t.Helper(); return h.status(h.Repo, worktree) }
@@ -130,7 +126,7 @@ func (h *Harness) CloneByHand(url, path string) {
 	h.git(filepath.Dir(path), "clone", "-q", url, path)
 }
 
-func (h *Harness) head(dir, worktree string) string {
+func (h *Harness) headIn(dir, worktree string) string {
 	h.t.Helper()
 	if h.fake == nil {
 		return h.git(worktree, "rev-parse", "HEAD")
@@ -201,22 +197,6 @@ func (h *Harness) fetch(dir, remote string) {
 		return
 	}
 	h.git(dir, "fetch", "-q", remote)
-}
-
-func (h *Harness) specBranches(dir string) []string {
-	h.t.Helper()
-	if h.fake != nil {
-		names, err := h.fake.Open(dir).SpecBranches()
-		must(h.t, err)
-		return names
-	}
-	out := h.git(dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/spec/")
-	if out == "" {
-		return nil
-	}
-	names := strings.Split(out, "\n")
-	sort.Strings(names)
-	return names
 }
 
 func (h *Harness) status(dir, worktree string) string {

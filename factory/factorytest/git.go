@@ -42,7 +42,7 @@ func FakeGit() Option { return func(o *options) { o.fakeGit = true } }
 // typedHelpers are the helpers that serve real git and the Fake git alike.
 // They take branch names and commit IDs, not revision syntax like HEAD or
 // main^, which the Fake git doesn't model.
-const typedHelpers = "Tip, Exists, Log, Parents, File, RemoteTip, CommitOn, MergeByHand, PushByHand, IsAncestor, Remote.CommitOn, Remote.Branch, HasRemoteTip, SubjectIn, Head, CheckedOut, HasRemote, RemoteURL, SetRemote, Fetch, SpecBranches, Status, AddDetachedWorktree, DiscardWorktree, CloneByHand, CheckoutNewBranch"
+const typedHelpers = "Tip, Exists, Log, Parents, Subject, File, RemoteTip, CommitOn, MergeByHand, PushByHand, Publish, IsAncestor, Remote.CommitOn, Remote.Branch, HasRemoteTip, SubjectIn, Head, CheckedOut, HasRemote, RemoteURL, SetRemote, Fetch, SpecBranches, Status, AddDetachedWorktree, DiscardWorktree, CloneByHand, CheckoutNewBranch"
 
 // gitEnv, set to "real", runs every Harness on real git, even one whose
 // test chose FakeGit, to check a run on the Fake git against real git.
@@ -91,6 +91,20 @@ func (h *Harness) Log(rev string) []string {
 func (h *Harness) Parents(commit string) []string {
 	h.t.Helper()
 	return h.parents(h.Repo, commit)
+}
+
+// Subject is the first line of commit's message in the repo.
+func (h *Harness) Subject(commit string) string {
+	h.t.Helper()
+	return h.subject(h.Repo, commit)
+}
+
+// Publish puts commit, one in the repo, on the remote's branch, as a push
+// from elsewhere would, with its history: the repo's own refs, its
+// remote-tracking ones too, are left for a fetch.
+func (h *Harness) Publish(remote *Remote, commit, branch string) {
+	h.t.Helper()
+	h.publish(h.Repo, remote, commit, branch)
 }
 
 // File is the content of the file path, slash-separated, at rev in the
@@ -200,6 +214,18 @@ func (r *Repository) RemoteTip(remote, branch string) string {
 	return r.h.remoteTip(r.Path, remote, branch)
 }
 
+// Subject is Harness.Subject in r's clone at Path.
+func (r *Repository) Subject(commit string) string {
+	r.h.t.Helper()
+	return r.h.subject(r.Path, commit)
+}
+
+// Publish is Harness.Publish in r's clone at Path.
+func (r *Repository) Publish(remote *Remote, commit, branch string) {
+	r.h.t.Helper()
+	r.h.publish(r.Path, remote, commit, branch)
+}
+
 // CommitOn is Harness.CommitOn in r's clone at Path.
 func (r *Repository) CommitOn(branch, file, content string) string {
 	r.h.t.Helper()
@@ -242,6 +268,108 @@ func (r *Remote) Parents(commit string) []string {
 func (r *Remote) File(rev, path string) string {
 	r.h.t.Helper()
 	return r.h.file(r.Path, rev, path)
+}
+
+// SpecBranches is the names of the repo's branches under spec/.
+func (h *Harness) SpecBranches() []string {
+	h.t.Helper()
+	return h.specBranches(h.Repo)
+}
+
+// SpecBranches is Harness.SpecBranches in r's clone at Path.
+func (r *Repository) SpecBranches() []string {
+	r.h.t.Helper()
+	return r.h.specBranches(r.Path)
+}
+
+// SpecBranches is Harness.SpecBranches in the bare repository.
+func (r *Remote) SpecBranches() []string {
+	r.h.t.Helper()
+	return r.h.specBranches(r.Path)
+}
+
+// Descends reports whether commit is ancestor or descends from it, in the
+// repo.
+func (h *Harness) Descends(commit, ancestor string) bool {
+	h.t.Helper()
+	if h.fake != nil {
+		return h.fake.Open(h.Repo).IsAncestor(ancestor, commit)
+	}
+	return exec.Command("git", "-C", h.Repo, "merge-base", "--is-ancestor", ancestor, commit).Run() == nil
+}
+
+// WorktreeHead is the commit checked out in ticket's worktree in the repo.
+func (h *Harness) WorktreeHead(ticket string) string {
+	h.t.Helper()
+	return h.head(h.Worktree(ticket))
+}
+
+// WorktreeHead is Harness.WorktreeHead in r's clone.
+func (r *Repository) WorktreeHead(ticket string) string {
+	r.h.t.Helper()
+	return r.h.head(r.Worktree(ticket))
+}
+
+// AddWorktree adds a worktree on the repo's existing branch at the
+// Factory's place for it, Worktree(branch), as the Factory would make it.
+func (h *Harness) AddWorktree(branch string) {
+	h.t.Helper()
+	path := h.Worktree(branch)
+	if h.fake != nil {
+		must(h.t, h.fake.Open(h.Repo).AddWorktree(path, branch))
+		return
+	}
+	h.git(h.Repo, "worktree", "add", "-q", path, branch)
+}
+
+// PushTo pushes the repo's branch from to the remote's branch to, as
+// `git push <remote's path> from:refs/heads/to` does: by path, so it leaves
+// the repo's remote-tracking branches as they were. It is for a remote made
+// with AddRemote.
+func (r *Remote) PushTo(from, to string) {
+	r.h.t.Helper()
+	if r.h.fake != nil {
+		r.h.fake.SetRemoteBranch(r.h.Repo, r.Name, to, r.h.tip(r.h.Repo, from))
+		return
+	}
+	r.h.git(r.h.Repo, "push", "-q", r.Path, from+":refs/heads/"+to)
+}
+
+// DeleteBranch deletes the remote's branch, as its owner would on the
+// Code Host.
+func (r *Remote) DeleteBranch(branch string) {
+	r.h.t.Helper()
+	if r.h.fake != nil {
+		must(r.h.t, r.h.fake.Open(r.Path).DeleteRef("refs/heads/"+branch, r.h.tip(r.Path, branch)))
+		return
+	}
+	r.h.git(r.Path, "branch", "-D", branch)
+}
+
+// specBranches is SpecBranches in the repository at dir.
+func (h *Harness) specBranches(dir string) []string {
+	h.t.Helper()
+	if h.fake != nil {
+		names, err := h.fake.Open(dir).SpecBranches()
+		must(h.t, err)
+		return names
+	}
+	out := h.git(dir, "for-each-ref", "--format=%(refname:short)", "refs/heads/spec/")
+	if out == "" {
+		return nil
+	}
+	return strings.Split(out, "\n")
+}
+
+// head is the commit checked out in the worktree at dir.
+func (h *Harness) head(dir string) string {
+	h.t.Helper()
+	if h.fake != nil {
+		out, err := h.fake.Run(dir, "rev-parse", "HEAD")
+		must(h.t, err)
+		return out
+	}
+	return h.git(dir, "rev-parse", "HEAD")
 }
 
 // tip is Tip in the repository at dir.
@@ -310,6 +438,25 @@ func (h *Harness) log(dir, rev string) []string {
 		}
 		commit = parents[0]
 	}
+}
+
+// subject is Subject in the repository at dir.
+func (h *Harness) subject(dir, commit string) string {
+	h.t.Helper()
+	if h.fake == nil {
+		return h.git(dir, "log", "-1", "--format=%s", commit, "--")
+	}
+	return h.fake.Subject(dir, h.commit(dir, commit))
+}
+
+// publish is Publish in the clone at dir.
+func (h *Harness) publish(dir string, remote *Remote, commit, branch string) {
+	h.t.Helper()
+	if h.fake == nil {
+		h.git(dir, "push", "-q", remote.Path, commit+":refs/heads/"+branch)
+		return
+	}
+	h.fake.SetRemoteBranch(dir, remote.Name, branch, h.commit(dir, commit))
 }
 
 // parents is Parents in the repository at dir.

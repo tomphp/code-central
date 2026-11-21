@@ -2,8 +2,6 @@ package factory_test
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -41,15 +39,15 @@ func twoAccepted(t *testing.T, h *factorytest.Harness) (a, b string) {
 
 func TestAReadySpecIsMergedIntoTheBaseAndItsTicketsLandAtTheMergeCommit(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	a, b := twoAccepted(t, h)
 
 	r := h.Start()
 	h.WantState(a, domain.Done)
 	tkB := h.WantState(b, domain.Done)
 
-	merge := h.Git("rev-parse", "main")
-	if got := h.Git("log", "-1", "--format=%s", merge); got != "Merge spec "+h.SpecID()+": Work" {
+	merge := h.Tip("main")
+	if got := h.Log(merge)[0]; got != "Merge spec "+h.SpecID()+": Work" {
 		t.Errorf("merge subject %q", got)
 	}
 	if m := tkB.Moves[len(tkB.Moves)-1]; m.Commit != merge {
@@ -64,7 +62,7 @@ func TestAReadySpecIsMergedIntoTheBaseAndItsTicketsLandAtTheMergeCommit(t *testi
 
 func TestNothingLandsWhileTheSpecIsNotReady(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	a, _ := twoAccepted(t, h)
 	release := holdTicketsStage(t, h)
 	r := h.Start()
@@ -88,7 +86,7 @@ func TestNothingLandsWhileTheSpecIsNotReady(t *testing.T) {
 
 func TestUnderPushASpecIsPushedOnceAndItsTicketsLand(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
 	mergeAndPush(h, "origin")
 	a, b := twoAccepted(t, h)
@@ -96,20 +94,20 @@ func TestUnderPushASpecIsPushedOnceAndItsTicketsLand(t *testing.T) {
 	h.Start()
 	h.WantState(a, domain.Done)
 	h.WantState(b, domain.Done)
-	if got, want := remote.Git("rev-parse", "main"), h.Git("rev-parse", "main"); got != want {
+	if got, want := remote.Tip("main"), h.Tip("main"); got != want {
 		t.Errorf("the remote's main is %s, want %s", got, want)
 	}
-	if got := remote.Git("branch", "--list"); got != "main" && got != "* main" {
-		t.Errorf("the remote has branches %q, want only main", got)
+	if got := remote.SpecBranches(); len(got) != 0 || remote.Exists(a) || remote.Exists(b) {
+		t.Errorf("the remote has Spec Branches %q or a Ticket branch, want only main", got)
 	}
 }
 
 func TestAFailedPushLeavesTheSpecsTicketsAcceptedAndRetries(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
 	theirs := h.CommitOn("theirs", "theirs.txt", "theirs\n")
-	h.Git("push", "-q", remote.Path, "theirs:refs/heads/main")
+	remote.PushTo("theirs", "main")
 	remote.RefusePushes()
 	mergeAndPush(h, "origin")
 	a, b := twoAccepted(t, h)
@@ -122,7 +120,7 @@ func TestAFailedPushLeavesTheSpecsTicketsAcceptedAndRetries(t *testing.T) {
 			t.Errorf("%s is %s with comments %+v, want Accepted and commented", id, tk.State, tk.Comments)
 		}
 	}
-	if got := remote.Git("rev-parse", "main"); got != theirs {
+	if got := remote.Tip("main"); got != theirs {
 		t.Errorf("the remote moved to %s", got)
 	}
 
@@ -134,7 +132,7 @@ func TestAFailedPushLeavesTheSpecsTicketsAcceptedAndRetries(t *testing.T) {
 
 func TestWithCITrackingASpecsTicketsShareOnePushedCommitAndLandOncePassed(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	mergeAndPush(h, "origin")
 	trackCI(t, h)
@@ -164,18 +162,14 @@ func TestWithCITrackingASpecsTicketsShareOnePushedCommitAndLandOncePassed(t *tes
 
 func TestASpecBranchThatConflictsWithTheBaseOpensOneConflictTicket(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.MakeRequirement()
 	a, _ := accepted(h, "First", "README", "spec side\n")
 	release := holdTicketsStage(t, h)
 	r := h.Start()
 	r.WantOutput(a + ": merged into spec/" + h.SpecID())
 
-	if err := os.WriteFile(filepath.Join(h.Repo, "README"), []byte("base side\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	h.Git("add", "README")
-	h.Git("commit", "-q", "-m", "base changes README")
+	h.CommitOn("main", "README", "base side\n")
 	release()
 	r.Poll()
 	r.WantOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main in README: opened ")
@@ -187,7 +181,7 @@ func TestASpecBranchThatConflictsWithTheBaseOpensOneConflictTicket(t *testing.T)
 	}
 	// Code Central opened it, marked, from the files and both tips.
 	fix := h.Ticket(rows[0].ID)
-	baseTip, specTip := h.Git("rev-parse", "main"), h.Git("rev-parse", "spec/"+h.SpecID())
+	baseTip, specTip := h.Tip("main"), h.Tip("spec/"+h.SpecID())
 	if !fix.SpecMergeTicket || !strings.Contains(fix.Description, "- README\n") ||
 		!strings.Contains(fix.Description, "base's tip is "+baseTip) || !strings.Contains(fix.Description, "Spec Branch's tip is "+specTip) {
 		t.Errorf("conflict Ticket %+v, want it marked, naming README, %s and %s", fix, baseTip, specTip)
@@ -199,7 +193,7 @@ func TestASpecBranchThatConflictsWithTheBaseOpensOneConflictTicket(t *testing.T)
 
 func TestASpecBranchConflictingWithAMovedBaseCommentsOnItsOpenSpecMergeTicket(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.MakeRequirement()
 	a, _ := accepted(h, "First", "README", "spec side\n")
 	release := holdTicketsStage(t, h)
@@ -216,7 +210,7 @@ func TestASpecBranchConflictingWithAMovedBaseCommentsOnItsOpenSpecMergeTicket(t 
 	// Land per Spec off merges the Spec Branch on every poll, ready or
 	// not, so the moved base meets the same conflict.
 	h.CommitOn("main", "README", "base side again\n")
-	baseTip := h.Git("rev-parse", "main")
+	baseTip := h.Tip("main")
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, LandPerSpec: off()})
 	r.Poll()
 	r.WantOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main again: commented on " + fix)
@@ -229,22 +223,18 @@ func TestASpecBranchConflictingWithAMovedBaseCommentsOnItsOpenSpecMergeTicket(t 
 
 func TestOnceTheConflictTicketIsAcceptedTheSpecLandsAgain(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.MakeRequirement()
 	a, _ := accepted(h, "First", "README", "spec side\n")
 	release := holdTicketsStage(t, h)
 	// The conflict Ticket is the next one made: its session merges the
-	// base into the Spec Branch and finishes.
+	// base into the Spec Branch, taking the base's side, and finishes.
 	fix := "acme-5"
-	h.Script(fix, factorytest.Git("merge", "-q", "-X", "theirs", "main"), factorytest.CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", "Merged the base.", "--branch", fix))
+	h.Script(fix, factorytest.WriteFile("README", "base side\n"), factorytest.Git("add", "README"), factorytest.Git("commit", "-q", "-m", "Take the base's README"), factorytest.CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", "Merged the base.", "--branch", fix))
 	r := h.Start()
 	r.WantOutput(a + ": merged into spec/" + h.SpecID())
 
-	if err := os.WriteFile(filepath.Join(h.Repo, "README"), []byte("base side\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	h.Git("add", "README")
-	h.Git("commit", "-q", "-m", "base changes README")
+	h.CommitOn("main", "README", "base side\n")
 	release()
 	r.Poll()
 	r.WantOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main in README: opened " + fix)

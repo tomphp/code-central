@@ -40,25 +40,100 @@ func commitAs(t *testing.T, h *factorytest.Harness, dir, branch, file, content, 
 }
 
 // authored is commit's author, author date and message, as a replay keeps
-// them.
+// them. It reads real git.
 func authored(h *factorytest.Harness, dir, commit string) string {
 	return h.GitIn(dir, "log", "-1", "--format=%an <%ae> %aI%n%B", commit)
 }
 
+// gitView is what the typed helpers read of a repository: the Harness for
+// the Home Repository, and a *factorytest.Repository.
+type gitView interface {
+	Tip(branch string) string
+	Parents(commit string) []string
+	Subject(commit string) string
+}
+
+// firstParents is commit and its first-parent line back to the root, newest
+// first.
+func firstParents(v gitView, commit string) []string {
+	var line []string
+	for ; commit != ""; commit = firstOf(v.Parents(commit)) {
+		line = append(line, commit)
+	}
+	return line
+}
+
+func firstOf(commits []string) string {
+	if len(commits) == 0 {
+		return ""
+	}
+	return commits[0]
+}
+
+// inRange is the commits on tip's first-parent line that base's line lacks,
+// oldest first, and its merge commits among them.
+func inRange(v gitView, tip, base string) (commits, merges []string) {
+	lacks := map[string]bool{}
+	for _, c := range firstParents(v, base) {
+		lacks[c] = true
+	}
+	for _, c := range firstParents(v, tip) {
+		if lacks[c] {
+			break
+		}
+		commits = append([]string{c}, commits...)
+		if len(v.Parents(c)) > 1 {
+			merges = append([]string{c}, merges...)
+		}
+	}
+	return commits, merges
+}
+
 // onSpecBranch is the commits on the Spec Branch that main lacks, oldest
 // first, and its merge commits among them.
-func onSpecBranch(h *factorytest.Harness, dir string) (commits, merges []string) {
-	return inRange(h, dir, "main..spec/"+h.SpecID())
+func onSpecBranch(h *factorytest.Harness, v gitView) (commits, merges []string) {
+	return inRange(v, v.Tip("spec/"+h.SpecID()), v.Tip("main"))
 }
 
-// inRange is the commits in dir's revision range rng, oldest first, and
-// its merge commits among them.
-func inRange(h *factorytest.Harness, dir, rng string) (commits, merges []string) {
-	return strings.Fields(h.GitIn(dir, "rev-list", "--reverse", rng)), strings.Fields(h.GitIn(dir, "rev-list", "--merges", rng))
+// subjects is the subjects of commits.
+func subjects(v gitView, commits []string) []string {
+	var out []string
+	for _, c := range commits {
+		out = append(out, v.Subject(c))
+	}
+	return out
 }
 
-// acceptedAs makes an Accepted Ticket whose branch, cut from main, holds
-// two commits by different authors, and returns it with them.
+// descendsFrom reports whether commit is ancestor, or has it behind it.
+func descendsFrom(v gitView, commit, ancestor string) bool {
+	seen := map[string]bool{}
+	todo := []string{commit}
+	for len(todo) > 0 {
+		c := todo[0]
+		todo = todo[1:]
+		if c == ancestor {
+			return true
+		}
+		if !seen[c] {
+			seen[c] = true
+			todo = append(todo, v.Parents(c)...)
+		}
+	}
+	return false
+}
+
+// acceptedTwice makes an Accepted Ticket whose branch, cut from main, holds
+// two commits, and returns it with them.
+func acceptedTwice(h *factorytest.Harness, title, file string) (id string, commits []string) {
+	id = h.ReadyTicket(title)
+	commits = append(commits, h.CommitOn(id, file+".a", "a\n"), h.CommitOn(id, file+".b", "b\n"))
+	h.Finished(id, id, commits[1])
+	h.Accept(id)
+	return id, commits
+}
+
+// acceptedAs is acceptedTwice with the commits by different authors, at
+// different dates and with messages of their own. It needs real git.
 func acceptedAs(t *testing.T, h *factorytest.Harness, title, file string) (id string, commits []string) {
 	t.Helper()
 	id = h.ReadyTicket(title)
@@ -72,7 +147,9 @@ func acceptedAs(t *testing.T, h *factorytest.Harness, title, file string) (id st
 
 func TestUnderRebaseAcceptedTicketsAreReplayedOntoALinearSpecBranchKeepingAuthorsAndMessages(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	// The Real-git test for Rebase: a replay keeps each commit's author,
+	// date and message.
+	h := factorytest.New(t, factorytest.RealGit())
 	h.MakeRequirement()
 	setRebase(h, true)
 	// Both cut from main, so the second is replayed onto the first's.
@@ -85,7 +162,7 @@ func TestUnderRebaseAcceptedTicketsAreReplayedOntoALinearSpecBranchKeepingAuthor
 	r.WantOutput(first + ": replayed onto spec/" + h.SpecID() + " at ")
 	r.WantOutput(second + ": replayed onto spec/" + h.SpecID() + " at ")
 
-	commits, merges := onSpecBranch(h, h.Repo)
+	commits, merges := onSpecBranch(h, h)
 	if len(merges) > 0 || len(commits) != 4 {
 		t.Fatalf("the Spec Branch holds %d commits with merges %v, want the 4 replayed and no merge", len(commits), merges)
 	}
@@ -116,18 +193,18 @@ func TestUnderRebaseAcceptedTicketsAreReplayedOntoALinearSpecBranchKeepingAuthor
 
 func TestUnderRebaseAReplayIsNeverMadeTwiceAfterAFailedReportOrARestart(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.MakeRequirement()
 	setRebase(h, true)
-	id, _ := acceptedAs(t, h, "Add a feature", "feature")
+	id, _ := acceptedTwice(h, "Add a feature", "feature")
 	holdTicketsStage(t, h)
 	h.SetFailing("/report_spec_merge")
 
 	r := h.Start()
 	r.WantOutput(id + ": report_spec_merge: ")
 	spec := "spec/" + h.SpecID()
-	tip := h.Git("rev-parse", spec)
-	if commits, _ := onSpecBranch(h, h.Repo); len(commits) != 2 {
+	tip := h.Tip(spec)
+	if commits, _ := onSpecBranch(h, h); len(commits) != 2 {
 		t.Fatalf("the Spec Branch holds %d commits, want the 2 replayed", len(commits))
 	}
 
@@ -137,21 +214,23 @@ func TestUnderRebaseAReplayIsNeverMadeTwiceAfterAFailedReportOrARestart(t *testi
 	if tk.SpecMerge == nil || tk.SpecMerge.Commit != tip || !tk.SpecMerge.Counts {
 		t.Fatalf("Spec merge %+v, want it reported at %s", tk.SpecMerge, tip)
 	}
-	if got := h.Git("rev-parse", spec); got != tip {
+	if got := h.Tip(spec); got != tip {
 		t.Fatalf("the Spec Branch moved to %s on the retry, want it left at %s", got, tip)
 	}
 
 	r.Stop()
 	r = h.Start()
 	r.Poll()
-	if got := h.Git("rev-parse", spec); got != tip {
+	if got := h.Tip(spec); got != tip {
 		t.Errorf("the Spec Branch moved to %s after a restart, want it left at %s", got, tip)
 	}
 }
 
 func TestUnderRebaseATicketCutBeforeItsSpecBranchWasRewrittenReplaysOnlyItsOwnCommits(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	// Rewriting the Spec Branch is a `git rebase`, which the Fake git
+	// doesn't model.
+	h := factorytest.New(t, factorytest.RealGit())
 	h.MakeRequirement()
 	setRebase(h, true)
 	first, _ := accepted(h, "First", "one.txt", "1\n")
@@ -177,13 +256,10 @@ func TestUnderRebaseATicketCutBeforeItsSpecBranchWasRewrittenReplaysOnlyItsOwnCo
 	h.Accept(second)
 	r.Poll()
 
-	commits, merges := onSpecBranch(h, h.Repo)
-	var subjects []string
-	for _, c := range commits {
-		subjects = append(subjects, subject(h, h.Repo, c))
-	}
-	if len(merges) > 0 || strings.Join(subjects, ", ") != "Change one.txt, Add two" {
-		t.Fatalf("the Spec Branch holds %q with merges %v, want the first Ticket's commit once and then the second's own", subjects, merges)
+	commits, merges := onSpecBranch(h, h)
+	got := subjects(h, commits)
+	if len(merges) > 0 || strings.Join(got, ", ") != "Change one.txt, Add two" {
+		t.Fatalf("the Spec Branch holds %q with merges %v, want the first Ticket's commit once and then the second's own", got, merges)
 	}
 	if got := h.Git("log", "-1", "--format=%P", commits[1]); got != rewritten {
 		t.Errorf("the second Ticket's commit is on %s, want the rewritten Spec Branch's tip %s", got, rewritten)
@@ -195,7 +271,8 @@ func TestUnderRebaseATicketCutBeforeItsSpecBranchWasRewrittenReplaysOnlyItsOwnCo
 
 func TestUnderRebaseASpecBranchConflictSendsTheTicketBackToRebase(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	// The Real-git test for a conflict on replay.
+	h := factorytest.New(t, factorytest.RealGit())
 	h.MakeRequirement()
 	setRebase(h, true)
 	first, _ := accepted(h, "First", "README", "first\n")
@@ -212,14 +289,14 @@ func TestUnderRebaseASpecBranchConflictSendsTheTicketBackToRebase(t *testing.T) 
 	if !commented(tk, "replaying", "onto "+spec, "- README", "Rebase the branch onto "+spec+", resolve the conflicts, and finish again.") || commented(tk, "Merge "+spec+" into the branch") {
 		t.Errorf("comments %+v, want the send-back note to say to rebase onto the Spec Branch", tk.Comments)
 	}
-	if commits, merges := onSpecBranch(h, h.Repo); len(commits) != 1 || len(merges) > 0 {
+	if commits, merges := onSpecBranch(h, h); len(commits) != 1 || len(merges) > 0 {
 		t.Errorf("the Spec Branch holds %d commits with merges %v, want the first Ticket's alone", len(commits), merges)
 	}
 }
 
 func TestUnderRebaseABaseConflictSendsBackAndClaimsWithTheRebaseWording(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	setRebase(h, true)
 	id, _ := accepted(h, "Change the readme", "README", "theirs\n")
 	h.CommitOn("main", "README", "ours\n")
@@ -240,7 +317,7 @@ func TestUnderRebaseABaseConflictSendsBackAndClaimsWithTheRebaseWording(t *testi
 
 func TestTurningRebaseOnPartWayLeavesEarlierMergesAndRebaseOffMergesLaterTickets(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.MakeRequirement()
 	release := holdTicketsStage(t, h)
 	first, _ := accepted(h, "First", "one.txt", "1\n")
@@ -258,12 +335,9 @@ func TestTurningRebaseOnPartWayLeavesEarlierMergesAndRebaseOffMergesLaterTickets
 	r.WantOutput(third + ": merged into spec/" + h.SpecID())
 
 	spec := "spec/" + h.SpecID()
-	var subjects []string
-	for _, c := range strings.Fields(h.Git("rev-list", "--first-parent", "--reverse", "main.."+spec)) {
-		subjects = append(subjects, subject(h, h.Repo, c))
-	}
+	line, _ := inRange(h, h.Tip(spec), h.Tip("main"))
 	want := "Merge " + first + ": First, Change two.txt, Merge " + third + ": Third"
-	if got := strings.Join(subjects, ", "); got != want {
+	if got := strings.Join(subjects(h, line), ", "); got != want {
 		t.Fatalf("the Spec Branch's line is %q, want %q", got, want)
 	}
 
@@ -277,7 +351,7 @@ func TestTurningRebaseOnPartWayLeavesEarlierMergesAndRebaseOffMergesLaterTickets
 
 func TestUnderRebaseTwoRepositoriesAreBothReplayedAndTheFinishCheckStillPasses(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	apiRepo, id := specInTwo(h)
 	setRebase(h, true)
 	holdTicketsStage(t, h)
@@ -295,20 +369,22 @@ func TestUnderRebaseTwoRepositoriesAreBothReplayedAndTheFinishCheckStillPasses(t
 	if tk.State != domain.Accepted || tk.SpecMerge == nil || !tk.SpecMerge.Counts {
 		t.Fatalf("%s is %s with Spec merge %+v, want Accepted with it reported: the finish check passed the replayed branches", id, tk.State, tk.SpecMerge)
 	}
-	for _, dir := range []string{h.Repo, apiRepo.Path} {
-		commits, merges := onSpecBranch(h, dir)
+	for name, v := range map[string]interface {
+		gitView
+	}{h.Project: h, "api": apiRepo} {
+		commits, merges := onSpecBranch(h, v)
 		if len(commits) != 1 || len(merges) > 0 {
-			t.Errorf("the Spec Branch in %s holds %d commits with merges %v, want the one replayed", dir, len(commits), merges)
+			t.Errorf("the Spec Branch in %s holds %d commits with merges %v, want the one replayed", name, len(commits), merges)
 		}
-		if got, want := h.GitIn(dir, "rev-parse", id), h.GitIn(dir, "rev-parse", "spec/"+h.SpecID()); got != want {
-			t.Errorf("%s's branch in %s is at %s, want the Spec Branch's tip %s", id, dir, got, want)
+		if got, want := v.Tip(id), v.Tip("spec/"+h.SpecID()); got != want {
+			t.Errorf("%s's branch in %s is at %s, want the Spec Branch's tip %s", id, name, got, want)
 		}
 	}
 }
 
 func TestUnderRebaseATicketConflictingInOneRepositoryIsReplayedIntoNeither(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	apiRepo, first := specInTwo(h)
 	setRebase(h, true)
 	release := holdTicketsStage(t, h)
@@ -324,8 +400,8 @@ func TestUnderRebaseATicketConflictingInOneRepositoryIsReplayedIntoNeither(t *te
 	h.Accept(first)
 	r.Poll()
 	spec := "spec/" + h.SpecID()
-	homeTip, apiTip := h.Git("rev-parse", spec), h.GitIn(apiRepo.Path, "rev-parse", spec)
-	homeBranch := h.Git("rev-parse", second)
+	homeTip, apiTip := h.Tip(spec), apiRepo.Tip(spec)
+	homeBranch := h.Tip(second)
 	h.Script(second, factorytest.Wait())
 
 	h.Accept(second)
@@ -335,10 +411,10 @@ func TestUnderRebaseATicketConflictingInOneRepositoryIsReplayedIntoNeither(t *te
 	if !movedTo(tk, domain.Accepted, domain.Ready) {
 		t.Fatalf("%s wasn't sent back: %+v", second, tk.Moves)
 	}
-	if h.Git("rev-parse", spec) != homeTip || h.GitIn(apiRepo.Path, "rev-parse", spec) != apiTip {
+	if h.Tip(spec) != homeTip || apiRepo.Tip(spec) != apiTip {
 		t.Fatal("a Spec Branch moved: a Ticket conflicting in any Repository is replayed into none")
 	}
-	if h.Git("rev-parse", second) != homeBranch {
+	if h.Tip(second) != homeBranch {
 		t.Error("the Home Repository's branch moved: a Ticket conflicting in any Repository is replayed into none")
 	}
 	if !commented(tk, "replaying it onto the Spec Branch conflicts in these Repositories, so it replayed it onto none of them", "- api: replaying", "onto "+spec+" at "+apiTip[:12], "  - endpoint.go", "In each, rebase the branch onto its Spec Branch") {
@@ -348,7 +424,7 @@ func TestUnderRebaseATicketConflictingInOneRepositoryIsReplayedIntoNeither(t *te
 
 func TestUnderRebaseADirtyWorktreeHoldsTheReplayAndIsLeftAlone(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	h.MakeRequirement()
 	setRebase(h, true)
 	id, commits := acceptedAs(t, h, "Add a feature", "feature")
@@ -366,7 +442,7 @@ func TestUnderRebaseADirtyWorktreeHoldsTheReplayAndIsLeftAlone(t *testing.T) {
 	if got := h.Git("rev-parse", id); got != commits[1] {
 		t.Errorf("the branch moved to %s, want it left at %s", got, commits[1])
 	}
-	if c, _ := onSpecBranch(h, h.Repo); len(c) != 0 {
+	if c, _ := onSpecBranch(h, h); len(c) != 0 {
 		t.Errorf("the Spec Branch holds %d commits, want none while the worktree is in the way", len(c))
 	}
 
@@ -385,13 +461,13 @@ func TestUnderRebaseADirtyWorktreeHoldsTheReplayAndIsLeftAlone(t *testing.T) {
 
 func TestUnderRebaseACommitAlreadyOnTheSpecBranchIsDroppedNotReplayedEmpty(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.MakeRequirement()
 	setRebase(h, true)
 	first, _ := accepted(h, "First", "one.txt", "1\n")
 	second := h.ReadyTicket("Second")
-	commitAs(t, h, h.Repo, second, "one.txt", "1\n", "Ada Lovelace <ada@example.com>", "2001-02-03T04:05:06+00:00", "Make the same change")
-	head := commitAs(t, h, h.Repo, second, "two.txt", "2\n", "Ada Lovelace <ada@example.com>", "2001-02-03T04:05:07+00:00", "Add two")
+	h.CommitOn(second, "one.txt", "1\n")
+	head := h.CommitOn(second, "two.txt", "2\n")
 	h.Finished(second, second, head)
 	h.Accept(second)
 	holdTicketsStage(t, h)
@@ -399,19 +475,16 @@ func TestUnderRebaseACommitAlreadyOnTheSpecBranchIsDroppedNotReplayedEmpty(t *te
 	r := h.Start()
 	r.WantOutput(first + ": replayed onto spec/" + h.SpecID())
 	r.WantOutput(second + ": replayed onto spec/" + h.SpecID())
-	commits, merges := onSpecBranch(h, h.Repo)
-	var subjects []string
-	for _, c := range commits {
-		subjects = append(subjects, subject(h, h.Repo, c))
-	}
-	if len(merges) > 0 || strings.Join(subjects, ", ") != "Change one.txt, Add two" {
-		t.Fatalf("the Spec Branch holds %q with merges %v, want the change already on it dropped, as git rebase drops it", subjects, merges)
+	commits, merges := onSpecBranch(h, h)
+	got := subjects(h, commits)
+	if len(merges) > 0 || strings.Join(got, ", ") != "Change one.txt, Change two.txt" {
+		t.Fatalf("the Spec Branch holds %q with merges %v, want the change already on it dropped, as git rebase drops it", got, merges)
 	}
 }
 
 func TestUnderRebaseABranchMovedOnFromItsFinishCommitIsHeldNotMerged(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.MakeRequirement()
 	setRebase(h, true)
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
@@ -423,7 +496,7 @@ func TestUnderRebaseABranchMovedOnFromItsFinishCommitIsHeldNotMerged(t *testing.
 	if !commented(h.Ticket(id), "isn't at its finish commit", "finish again at the branch's head") {
 		t.Errorf("comments %+v, want a can't-land note on the moved branch", h.Ticket(id).Comments)
 	}
-	if commits, merges := onSpecBranch(h, h.Repo); len(commits) != 0 || len(merges) != 0 {
+	if commits, merges := onSpecBranch(h, h); len(commits) != 0 || len(merges) != 0 {
 		t.Errorf("the Spec Branch holds %v, merges %v: want nothing, and no Merge commit under Rebase", commits, merges)
 	}
 }
