@@ -412,6 +412,18 @@ func TestAnE2ERunNamesItselfRunsJobsInOrderAndKeepsItsOwnLog(t *testing.T) {
 	}
 }
 
+func TestASerialRunSkipsTheJobsAfterAFailure(t *testing.T) {
+	t.Cleanup(func(old bool) func() { return func() { serial = old } }(serial))
+	serial = true
+	var out strings.Builder
+	if run([]job{fakeJob(t, "go e2e", "exit", "1"), fakeJob(t, "playwright", "print", "ran")}, 0, false, "", &out) {
+		t.Fatal("the run passed")
+	}
+	if !strings.Contains(out.String(), "skipped playwright\n") || strings.Contains(out.String(), "ran") {
+		t.Errorf("playwright wasn't skipped:\n%s", out.String())
+	}
+}
+
 func TestGoFilesSkipsNestedModules(t *testing.T) {
 	root := t.TempDir()
 	for _, f := range []string{"go.mod", "a.go", "pkg/b.go", "nested/go.mod", "nested/c.go", "nested/deep/d.go", ".claude/worktrees/w/go.mod", ".claude/worktrees/w/e.go"} {

@@ -366,6 +366,7 @@ func run(jobs []job, budget time.Duration, verbose bool, log string, out io.Writ
 	start := time.Now()
 	outputs := make([]bytes.Buffer, len(jobs))
 	codes := make([]int, len(jobs))
+	skipped := make([]bool, len(jobs))
 	var wg sync.WaitGroup
 	for i, j := range jobs {
 		do := func() {
@@ -376,6 +377,12 @@ func run(jobs []job, budget time.Duration, verbose bool, log string, out io.Writ
 			}
 		}
 		if serial {
+			// A serial run stops at the first failure, so a Go failure doesn't
+			// wait on the slower UI suite.
+			if failedBefore(codes[:i]) {
+				skipped[i] = true
+				continue
+			}
 			do()
 		} else {
 			wg.Go(do)
@@ -414,6 +421,8 @@ func run(jobs []job, budget time.Duration, verbose bool, log string, out io.Writ
 			fmt.Fprintf(out, "== %s\n", j.Name)
 			out.Write(outputs[i].Bytes())
 		case flaky[i] != nil:
+		case skipped[i]:
+			fmt.Fprintf(out, "skipped %s\n", j.Name)
 		case codes[i] == 0:
 			fmt.Fprintf(out, "ok %s\n", j.Name)
 		default:
@@ -475,6 +484,15 @@ func run(jobs []job, budget time.Duration, verbose bool, log string, out io.Writ
 	}
 	fmt.Fprintf(out, "%s: %.2fs (budget %gs)\n", command, elapsed, budget.Seconds())
 	return true
+}
+
+func failedBefore(codes []int) bool {
+	for _, c := range codes {
+		if c != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // runJob runs the job with its output, stdout and stderr together, going
