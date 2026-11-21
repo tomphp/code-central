@@ -12,6 +12,8 @@ How the project tests, what each tier catches, and where a new test goes. The Ma
 
 The **Scale tier** is the tests too big for the per-push suite. `make test` and `make e2e` leave them out, because they build without the `scale` tag.
 
+While working, `make vitest-related F=<source> [<source>…]` runs every vitest file that imports a changed file, through any chain of imports; with no `F=` it uses the web files changed against `main`, committed and uncommitted. It is an inner-loop step that catches a broken test in a file you did not open, and it does not replace `make test`: that still runs every vitest file, CI runs the full suite, and the order is related tests while working, then `make test` once at the end.
+
 `make test` runs Go against the committed placeholder page, so it needs no Vite build. Installing web dependencies and building `core.wasm` happen before the clock starts. A failing job's output is kept in a log file whose path prints last; failed vitest files and Go tests killed under load rerun once serially, and a pass there prints "passed on serial rerun: flaky under load".
 
 CI does not call `make test`: its 60s budget would trip on a cold runner, and each step wants its own log. It runs the same steps directly.
