@@ -119,10 +119,9 @@ e2e-run: export CODE_CENTRAL_FAKE_GH_BIN := $(CURDIR)/bin/fake-gh$(EXE)
 e2e-run: build corewasm $(if $(F),$(WEB_DEPS))
 	go build -o bin/fake-gh$(EXE) ./internal/fakegh/gh
 ifeq ($(F),)
-	go test -tags e2e -count=1 ./e2e/
-	cd web && npm run test:e2e
+	go run ./internal/testrun -e2e
 else
-	cd web && npm run test:e2e -- $(F:web/%=%)
+	go run ./internal/testrun -e2e -f $(F)
 endif
 
 # The Scale tier: the tests named TestScale…, which `make test` and

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""PreToolUse hook: refuse a Bash command that pipes `make test` into another command,
+"""PreToolUse hook: refuse a Bash command that pipes `make test` or `make e2e` into another command,
 or that runs all of vitest or the Go suite outside `make test`.
 
-A pipe reports the last command's status, not the suite's, and `make test`
-already trims its output and prints the log path on failure.
+A pipe reports the last command's status, not the suite's, and both
+already trim their output and print the log path on failure.
 """
 import json
 import shlex
 import sys
 
-SUITE_TARGETS = {"test", "test-verbose"}
+SUITE_TARGETS = {"test", "test-verbose", "e2e"}
 LIST_OPERATORS = {";", "&&", "||", "&"}
 PIPE_OPERATORS = {"|", "|&"}
 WRAPPERS = {"time", "nice", "env"}
@@ -90,10 +90,10 @@ def main():
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
             "permissionDecisionReason": (
-                "Run `make test` (or `make test-verbose`) bare, not piped into another "
-                "command: a pipe reports the pipe's status, not the suite's. Its output is "
-                "already trimmed; on a failure it prints the path of the full log, so read "
-                "that file."
+                "Run `make test` (or `make test-verbose`, or `make e2e`) bare, not piped into "
+                "another command: a pipe reports the pipe's status, not the suite's. Its "
+                "output is already trimmed; on a failure it prints the path of the full log, "
+                "so read that file."
             ),
         }}, sys.stdout)
 

@@ -15,6 +15,10 @@
 // test killed or one whose harness "didn't stop") gets one serial rerun of
 // just what failed; if that passes the job is reported as flaky under load
 // and doesn't fail the suite. The load average is printed beside failures.
+// With -e2e [-f <web file>] it runs `make e2e`'s suites instead, one after
+// the other, with no budget, the same way and with its log named
+// code-central-e2e-<worktree>-<hash>.log; a FAIL line also carries the first
+// error under a failed Playwright file.
 // It is Go rather than a shell recipe so `make test`
 // runs the same under cmd.exe and POSIX sh. It is a developer tool for
 // the Makefile, not a shipped command, so it lives under internal/
@@ -60,6 +64,16 @@ type job struct {
 	// and returns what failed (files, tests or packages), for the FAIL lines.
 	Failures func(output []byte) []string
 }
+
+// command names the run in its report, kind is the word in its log's file
+// name, and serial runs the jobs one after another rather than together
+// (`make e2e`: its two suites are heavy and time out when they share the
+// machine). main sets them for -e2e; they are variables so tests can too.
+var (
+	command = "make test"
+	kind    = "test"
+	serial  = false
+)
 
 // loadAverage and cores are variables so tests can fake them.
 var (
@@ -150,6 +164,36 @@ func failuresVitest(output []byte) []string {
 		if f := string(m[1]); !seen[f] {
 			seen[f] = true
 			items = append(items, f)
+		}
+	}
+	return items
+}
+
+var errorLine = regexp.MustCompile(`^\s*(?:\w*Error|Error)\b`)
+
+// failuresVitestErrors names each failed test file once with the first error
+// printed under it: a failed test's assertion, or for a file that failed with
+// no failed test (a setup or import error) the error that failed the file.
+func failuresVitestErrors(output []byte) []string {
+	var items []string
+	index := map[string]int{}
+	current := -1
+	for _, line := range strings.Split(string(output), "\n") {
+		if m := vitestFail.FindStringSubmatch(line); m != nil {
+			i, ok := index[m[1]]
+			if !ok {
+				i = len(items)
+				index[m[1]] = i
+				items = append(items, m[1])
+			}
+			current = i
+			continue
+		}
+		if current >= 0 && errorLine.MatchString(line) {
+			if !strings.Contains(items[current], " - ") {
+				items[current] += " - " + strings.TrimSpace(line)
+			}
+			current = -1
 		}
 	}
 	return items
@@ -247,11 +291,33 @@ var suite = []job{
 	{Name: "hooks", Args: []string{"python3", "-I", ".claude/hooks/prefer-edit_test.py"}},
 }
 
+// e2eSuite is `make e2e`: the Go end-to-end tests, then the UI's. The
+// Makefile has built the binaries and set their paths in the environment.
+// file, when not empty, is one web e2e file, and the Go tests are skipped.
+func e2eSuite(file string) []job {
+	web := job{Name: "playwright", Dir: "web", Args: []string{"node", "node_modules/vitest/vitest.mjs", "run", "--config", "vitest.e2e.config.ts"}, Failures: failuresVitestErrors}
+	if file != "" {
+		web.Args = append(web.Args, file)
+		return []job{web}
+	}
+	goE2E := job{Name: "go e2e", Args: []string{"go", "test", "-tags", "e2e", "-count=1", "./e2e/"}, Failures: failuresGo}
+	return []job{goE2E, web}
+}
+
 func main() {
 	budget := flag.Duration("budget", 60*time.Second, "the most wall-clock time the suite may take")
 	verbose := flag.Bool("v", false, "print every job's whole output, not only the failures'")
+	e2e := flag.Bool("e2e", false, "run `make e2e`'s suites instead of the fast suite")
+	file := flag.String("f", "", "with -e2e, run only this web e2e file")
 	flag.Parse()
 	wd, _ := os.Getwd()
+	if *e2e {
+		command, kind, serial = "make e2e", "e2e", true
+		if !run(e2eSuite(strings.TrimPrefix(filepath.ToSlash(*file), "web/")), 0, *verbose, logPath(wd), os.Stdout) {
+			os.Exit(1)
+		}
+		return
+	}
 	files, err := goFiles(".")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -287,7 +353,7 @@ func quiet(output []byte) []byte {
 // share a file.
 func logPath(dir string) string {
 	sum := sha256.Sum256([]byte(dir))
-	return filepath.Join(os.TempDir(), fmt.Sprintf("code-central-test-%s-%x.log", filepath.Base(dir), sum[:4]))
+	return filepath.Join(os.TempDir(), fmt.Sprintf("code-central-%s-%s-%x.log", kind, filepath.Base(dir), sum[:4]))
 }
 
 // run runs the jobs in parallel, prints each one's output under its name
@@ -300,15 +366,27 @@ func run(jobs []job, budget time.Duration, verbose bool, log string, out io.Writ
 	start := time.Now()
 	outputs := make([]bytes.Buffer, len(jobs))
 	codes := make([]int, len(jobs))
+	skipped := make([]bool, len(jobs))
 	var wg sync.WaitGroup
 	for i, j := range jobs {
-		wg.Go(func() {
+		do := func() {
 			codes[i] = runJob(j, j.Args, &outputs[i])
 			if codes[i] == 0 && j.FailOnOutput && outputs[i].Len() > 0 {
 				fmt.Fprintln(&outputs[i], "^ these files aren't gofmt'd: run gofmt -w on them")
 				codes[i] = 1
 			}
-		})
+		}
+		if serial {
+			// A serial run stops at the first failure, so a Go failure doesn't
+			// wait on the slower UI suite.
+			if failedBefore(codes[:i]) {
+				skipped[i] = true
+				continue
+			}
+			do()
+		} else {
+			wg.Go(do)
+		}
 	}
 	wg.Wait()
 
@@ -343,6 +421,8 @@ func run(jobs []job, budget time.Duration, verbose bool, log string, out io.Writ
 			fmt.Fprintf(out, "== %s\n", j.Name)
 			out.Write(outputs[i].Bytes())
 		case flaky[i] != nil:
+		case skipped[i]:
+			fmt.Fprintf(out, "skipped %s\n", j.Name)
 		case codes[i] == 0:
 			fmt.Fprintf(out, "ok %s\n", j.Name)
 		default:
@@ -355,10 +435,10 @@ func run(jobs []job, budget time.Duration, verbose bool, log string, out io.Writ
 		statuses[i] = fmt.Sprintf("%s: %d", j.Name, codes[i])
 		failed = failed || codes[i] != 0
 	}
-	overBudget := elapsed > budget.Seconds()
+	overBudget := budget > 0 && elapsed > budget.Seconds()
 	switch {
 	case failed:
-		fmt.Fprintf(out, "make test failed (%s) in %.2fs", strings.Join(statuses, ", "), elapsed)
+		fmt.Fprintf(out, "%s failed (%s) in %.2fs", command, strings.Join(statuses, ", "), elapsed)
 		if loadText != "" {
 			fmt.Fprintf(out, ", load %s on %d cores", loadText, cores())
 		}
@@ -381,7 +461,7 @@ func run(jobs []job, budget time.Duration, verbose bool, log string, out io.Writ
 		if log != "" {
 			var all bytes.Buffer
 			for i, j := range jobs {
-				fmt.Fprintf(&all, "== %s\n%s", j.Name, outputs[i].Bytes())
+				fmt.Fprintf(&all, "== %s\n%s", j.Name, ansi.ReplaceAll(outputs[i].Bytes(), nil))
 			}
 			if err := os.WriteFile(log, all.Bytes(), 0o644); err != nil {
 				fmt.Fprintf(out, "the whole output couldn't be saved: %v\n", err)
@@ -391,15 +471,28 @@ func run(jobs []job, budget time.Duration, verbose bool, log string, out io.Writ
 		}
 		return false
 	case overBudget && load >= 0 && load > float64(cores()):
-		fmt.Fprintf(out, "make test: warning: all suites passed, but took %.2fs, over the %gs budget; the load (%s) is above the %d cores, so this isn't a failure.\n", elapsed, budget.Seconds(), loadText, cores())
+		fmt.Fprintf(out, "%s: warning: all suites passed, but took %.2fs, over the %gs budget; the load (%s) is above the %d cores, so this isn't a failure.\n", command, elapsed, budget.Seconds(), loadText, cores())
 		return true
 	case overBudget:
-		fmt.Fprintf(out, "make test: all suites passed, but took %.2fs, over the %gs budget.\n", elapsed, budget.Seconds())
+		fmt.Fprintf(out, "%s: all suites passed, but took %.2fs, over the %gs budget.\n", command, elapsed, budget.Seconds())
 		fmt.Fprintln(out, "A cold cache (after npm ci or a fresh worktree) or another process (a dev server, a stress run) inflates this; rerun once before treating it as a failure.")
 		return false
 	}
-	fmt.Fprintf(out, "make test: %.2fs (budget %gs)\n", elapsed, budget.Seconds())
+	if budget <= 0 {
+		fmt.Fprintf(out, "%s: %.2fs\n", command, elapsed)
+		return true
+	}
+	fmt.Fprintf(out, "%s: %.2fs (budget %gs)\n", command, elapsed, budget.Seconds())
 	return true
+}
+
+func failedBefore(codes []int) bool {
+	for _, c := range codes {
+		if c != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // runJob runs the job with its output, stdout and stderr together, going

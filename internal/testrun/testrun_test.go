@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -363,6 +364,63 @@ func TestAFailedRunEndsWithOneFailLinePerFailureBeforeTheLogPath(t *testing.T) {
 	}
 	if !strings.HasSuffix(lines[len(lines)-1], log) {
 		t.Errorf("the log path isn't last:\n%s", out.String())
+	}
+}
+
+func TestFailuresVitestErrorsNamesEachFileWithItsFirstError(t *testing.T) {
+	output := "code-central serve: listening\n" +
+		" FAIL  src/e2e/a.test.ts [ src/e2e/a.test.ts ]\n" +
+		"Error: Cannot find module './nope'\n" +
+		"  at x\n" +
+		" FAIL  src/e2e/b.test.ts > shows it\n" +
+		"AssertionError: expected 1 to be 2\n" +
+		"Error: later\n" +
+		" FAIL  src/e2e/a.test.ts [ src/e2e/a.test.ts ]\n" +
+		"Error: again\n"
+	got := failuresVitestErrors([]byte(output))
+	want := []string{
+		"src/e2e/a.test.ts - Error: Cannot find module './nope'",
+		"src/e2e/b.test.ts - AssertionError: expected 1 to be 2",
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestAnE2ERunNamesItselfRunsJobsInOrderAndKeepsItsOwnLog(t *testing.T) {
+	t.Cleanup(func(old1, old2 string, old3 bool) func() {
+		return func() { command, kind, serial = old1, old2, old3 }
+	}(command, kind, serial))
+	command, kind, serial = "make e2e", "e2e", true
+	if p := logPath("/x/wt"); !strings.Contains(filepath.Base(p), "code-central-e2e-wt-") {
+		t.Errorf("log path %q isn't an e2e log", p)
+	}
+	web := fakeJob(t, "playwright", "print", " FAIL  src/e2e/a.test.ts [ src/e2e/a.test.ts ]", "print", "Error: boom", "exit", "1")
+	web.Failures = failuresVitestErrors
+	var out strings.Builder
+	log := filepath.Join(t.TempDir(), "e2e.log")
+	if run([]job{fakeJob(t, "go e2e"), web}, 0, false, log, &out) {
+		t.Fatal("the run passed")
+	}
+	for _, want := range []string{"ok go e2e\n", "make e2e failed (", "FAIL playwright src/e2e/a.test.ts - Error: boom\n"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("output lacks %q:\n%s", want, out.String())
+		}
+	}
+	if !strings.HasSuffix(strings.TrimSpace(out.String()), log) {
+		t.Errorf("the log path isn't last:\n%s", out.String())
+	}
+}
+
+func TestASerialRunSkipsTheJobsAfterAFailure(t *testing.T) {
+	t.Cleanup(func(old bool) func() { return func() { serial = old } }(serial))
+	serial = true
+	var out strings.Builder
+	if run([]job{fakeJob(t, "go e2e", "exit", "1"), fakeJob(t, "playwright", "print", "ran")}, 0, false, "", &out) {
+		t.Fatal("the run passed")
+	}
+	if !strings.Contains(out.String(), "skipped playwright\n") || strings.Contains(out.String(), "ran") {
+		t.Errorf("playwright wasn't skipped:\n%s", out.String())
 	}
 }
 
