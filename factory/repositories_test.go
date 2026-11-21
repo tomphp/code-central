@@ -74,7 +74,8 @@ func files(t *testing.T, dir string) []string {
 
 func TestARepositoryAddedWhileTheFactoryRunsIsClonedOnTheNextPoll(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t, factorytest.FakeGit())
+	// Real git: the clone of a remote Repository, as git makes it.
+	h := factorytest.New(t, factorytest.RealGit())
 	r := h.Start()
 	web := h.AddRepository("web")
 
