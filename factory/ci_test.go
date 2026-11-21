@@ -24,7 +24,7 @@ func pushRemoteURL(t *testing.T, h *factorytest.Harness) string {
 
 func TestTheFactoryReportsThePushRemoteURLWhenItStarts(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	h.AddRemote("origin")
 	h.Git("remote", "set-url", "origin", "git@github.com:acme/web.git")
 
@@ -36,7 +36,7 @@ func TestTheFactoryReportsThePushRemoteURLWhenItStarts(t *testing.T) {
 
 func TestThePushRemoteReportedIsTheOneTheLandingMethodNames(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	h.AddRemote("origin")
 	h.AddRemote("upstream")
 	h.Git("remote", "set-url", "upstream", "https://github.com/acme/web.git")
@@ -50,7 +50,7 @@ func TestThePushRemoteReportedIsTheOneTheLandingMethodNames(t *testing.T) {
 
 func TestAFactoryWithNoPushRemoteReportsNoURLAndStillStarts(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	id := h.ReadyTicket("Still claimed")
 	h.Script(id, factorytest.Wait())
 
@@ -71,7 +71,7 @@ func trackCI(t *testing.T, h *factorytest.Harness) {
 
 func TestUnderMergeAndPushTheFactoryReportsThePushedBaseAsTheTicketsPushedCommit(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	mergeAndPush(h, "origin")
 	trackCI(t, h)
@@ -80,7 +80,7 @@ func TestUnderMergeAndPushTheFactoryReportsThePushedBaseAsTheTicketsPushedCommit
 	r := h.Start()
 	r.WantOutput(id + ": CI tracks main at ")
 	tk := h.Ticket(id)
-	merge := h.Git("rev-parse", "main")
+	merge := h.Tip("main")
 	if tk.PushedCommit == nil || tk.PushedCommit.Commit != merge {
 		t.Fatalf("pushed commit %+v, want the pushed merge %s", tk.PushedCommit, merge)
 	}
@@ -91,7 +91,7 @@ func TestUnderMergeAndPushTheFactoryReportsThePushedBaseAsTheTicketsPushedCommit
 
 func TestUnderBranchAndPushTheFactoryReportsThePushedBranchAsTheTicketsPushedCommit(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 	trackCI(t, h)
@@ -111,7 +111,7 @@ func TestUnderBranchAndPushTheFactoryReportsThePushedBranchAsTheTicketsPushedCom
 
 func TestWithCITrackingOffThePushedCommitIsNotReported(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	mergeAndPush(h, "origin")
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
@@ -124,7 +124,7 @@ func TestWithCITrackingOffThePushedCommitIsNotReported(t *testing.T) {
 
 func TestABranchPushedBeforeCITrackingWasOnIsNotTracked(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")

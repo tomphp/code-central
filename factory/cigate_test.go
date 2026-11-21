@@ -31,9 +31,9 @@ func gated(t *testing.T, h *factorytest.Harness, r *factorytest.Running, title, 
 
 // gatedHarness is a harness under Merge + Push to origin with CI Tracking
 // on, its Factory started.
-func gatedHarness(t *testing.T) (*factorytest.Harness, *factorytest.Remote, *factorytest.Running) {
+func gatedHarness(t *testing.T, opts ...factorytest.Option) (*factorytest.Harness, *factorytest.Remote, *factorytest.Running) {
 	t.Helper()
-	h := factorytest.New(t)
+	h := factorytest.New(t, append([]factorytest.Option{factorytest.FakeGit()}, opts...)...)
 	remote := h.AddRemote("origin")
 	mergeAndPush(h, "origin")
 	trackCI(t, h)
@@ -72,7 +72,7 @@ func TestUnderMergeAndPushWithCITrackingATicketLandsAtItsPushedCommitOncePassed(
 	t.Parallel()
 	h, remote, r := gatedHarness(t)
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
-	if got := remote.Git("rev-parse", "main"); got != pushed {
+	if got := remote.Tip("main"); got != pushed {
 		t.Fatalf("the remote's main is at %q, want the pushed commit %s", got, pushed)
 	}
 	stillAccepted(t, h, r, id, "with no CI Runs reported")
@@ -120,7 +120,7 @@ func TestUnderTheCIGateATicketLandsAtAnEarlierPushedCommitThatPassedAfterALaterO
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
 	reportRun(t, h, 1, id, pushed, domain.CIInProgress, "")
 	later := h.CommitOn("later", "later.txt", "later\n")
-	h.Git("push", "-q", remote.Path, "later:refs/heads/main")
+	h.PushByHand(remote, "later", "main")
 	if _, err := h.Server.Client.ReportPushedCommit(context.Background(), h.Project, api.ReportPushedCommitInput{Ticket: api.Ref(id), Commit: later, Branch: "main"}); err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestATicketWaitingOnCIDoesNotStopAnotherFromMergingAndPushing(t *testing.T)
 	h, remote, r := gatedHarness(t)
 	first, _ := gated(t, h, r, "Add a feature", "feature.txt")
 	second, secondPushed := gated(t, h, r, "Add another", "another.txt")
-	if got := remote.Git("rev-parse", "main"); got != secondPushed {
+	if got := remote.Tip("main"); got != secondPushed {
 		t.Fatalf("the remote's main is at %q, want the second Ticket's merge %s pushed", got, secondPushed)
 	}
 	stillAccepted(t, h, r, first, "while its CI Run is running")
@@ -226,7 +226,7 @@ func TestATicketWaitingOnCIDoesNotStopAnotherFromMergingAndPushing(t *testing.T)
 
 func TestUnderBranchAndPushTheHumansMergeLandsWhateverTheCIResult(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 	trackCI(t, h)
@@ -235,7 +235,7 @@ func TestUnderBranchAndPushTheHumansMergeLandsWhateverTheCIResult(t *testing.T) 
 	r := h.Start()
 	r.WantOutput(id + ": CI tracks " + id + " at ")
 	reportRun(t, h, 1, id, commit, domain.CICompleted, domain.CIFailure)
-	h.Git("merge", "-q", "--no-ff", "-m", "Merge "+id, id)
+	h.MergeByHand(id, "main")
 	r.Poll()
 	if tk := h.WantState(id, domain.Done); tk.CIResult != api.CIFailed {
 		t.Fatalf("ci result %q, want it landed with its failed CI result", tk.CIResult)
@@ -248,16 +248,16 @@ func TestAnInReviewTicketMergedByHandWaitsOnCIInReview(t *testing.T) {
 	id := h.ReadyTicket("Add a feature")
 	commit := h.CommitOn(id, "feature.txt", "feature\n")
 	h.Finished(id, id, commit)
-	h.Git("merge", "-q", "--no-ff", "-m", "My own merge", id)
+	h.MergeByHand(id, "main")
 
 	r.Poll()
 	r.WantOutput(id + ": CI tracks main at ")
 	tk := h.Ticket(id)
-	merge := h.Git("rev-parse", "main")
+	merge := h.Tip("main")
 	if tk.State != domain.InReview || tk.PushedCommit == nil || tk.PushedCommit.Commit != merge {
 		t.Fatalf("%s with pushed commit %+v, want it In Review with the pushed merge %s", tk.State, tk.PushedCommit, merge)
 	}
-	if got := remote.Git("rev-parse", "main"); got != merge {
+	if got := remote.Tip("main"); got != merge {
 		t.Fatalf("the remote's main is at %q, want the merge %s", got, merge)
 	}
 	r.Poll()
@@ -285,7 +285,7 @@ func TestASentBackCIFailureIsFixedOnItsBranchAndItsNewPushedCommitDecides(t *tes
 	if calls := h.Calls(); len(calls) != 2 || calls[1].Ticket != id || calls[1].Dir != h.Worktree(id) {
 		t.Fatalf("calls %+v, want the second Claim run in %s", calls, h.Worktree(id))
 	}
-	if got := h.Git("log", "-1", "--format=%s", id); got != "Fix CI" {
+	if got := h.Log(id)[0]; got != "Fix CI" {
 		t.Fatalf("%s's tip is %q, want the fix on the same branch", id, got)
 	}
 
@@ -296,8 +296,8 @@ func TestASentBackCIFailureIsFixedOnItsBranchAndItsNewPushedCommitDecides(t *tes
 		t.Fatalf("%s's pushed commit is %+v, want one newer than the failed %s", id, tk.PushedCommit, failed)
 	}
 	fixed := tk.PushedCommit.Commit
-	if tk.CIResult != api.CIRunning || remote.Git("rev-parse", "main") != fixed {
-		t.Fatalf("ci result %q, remote main %s: want the fix pushed as %s and its CI running", tk.CIResult, remote.Git("rev-parse", "main"), fixed)
+	if tk.CIResult != api.CIRunning || remote.Tip("main") != fixed {
+		t.Fatalf("ci result %q, remote main %s: want the fix pushed as %s and its CI running", tk.CIResult, remote.Tip("main"), fixed)
 	}
 	stillAccepted(t, h, r, id, "while its new pushed commit's CI runs")
 
@@ -391,7 +391,7 @@ func TestAfterAnotherTicketsMergeIsPushedEarlierWaitingTicketsGetTheNewTipAndLan
 			t.Errorf("%s landed with %q, want the tip that passed, %s", id, m.Commit, tip)
 		}
 	}
-	if got := remote.Git("rev-parse", "main"); got != tip {
+	if got := remote.Tip("main"); got != tip {
 		t.Errorf("the remote's main is at %s, want it left at %s", got, tip)
 	}
 }
@@ -401,7 +401,7 @@ func TestACommitPushedByHandFromAnotherCloneIsReportedToWaitingTicketsAndLandsTh
 	h, remote, r := gatedHarness(t)
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
 	byHand := h.CommitOn("hand", "hand.txt", "hand\n")
-	h.Git("push", "-q", remote.Path, "hand:refs/heads/main")
+	h.PushByHand(remote, "hand", "main")
 
 	stillAccepted(t, h, r, id, "while the hand-pushed commit's CI runs")
 	pc := h.Ticket(id).PushedCommit
@@ -421,11 +421,11 @@ func TestAnInReviewTicketMergedByHandGetsALaterTipToo(t *testing.T) {
 	h, remote, r := gatedHarness(t)
 	id := h.ReadyTicket("Add a feature")
 	h.Finished(id, id, h.CommitOn(id, "feature.txt", "feature\n"))
-	h.Git("merge", "-q", "--no-ff", "-m", "My own merge", id)
+	h.MergeByHand(id, "main")
 	r.Poll()
 	r.WantOutput(id + ": CI tracks main at ")
 	byHand := h.CommitOn("hand", "hand.txt", "hand\n")
-	h.Git("push", "-q", remote.Path, "hand:refs/heads/main")
+	h.PushByHand(remote, "hand", "main")
 
 	r.Poll()
 	r.WantOutput(id + ": CI tracks main at " + byHand[:12])
@@ -438,10 +438,10 @@ func TestAnInReviewTicketMergedByHandGetsALaterTipToo(t *testing.T) {
 
 func TestATipThatDoesNotContainATicketsWorkIsNotReportedToIt(t *testing.T) {
 	t.Parallel()
-	h, remote, r := gatedHarness(t)
+	h, remote, r := gatedHarness(t, factorytest.RealGit())
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
 	// Another clone force-pushes the base back to before the Ticket's work.
-	before := h.Git("rev-parse", pushed+"^1")
+	before := h.Parents(pushed)[0]
 	h.Git("push", "-q", "-f", remote.Path, before+":refs/heads/main")
 
 	stillAccepted(t, h, r, id, "while the tip lacks its work")
@@ -452,7 +452,7 @@ func TestATipThatDoesNotContainATicketsWorkIsNotReportedToIt(t *testing.T) {
 
 func TestUnderBranchAndPushALaterTipIsNotReportedToATicket(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 	trackCI(t, h)
@@ -460,7 +460,7 @@ func TestUnderBranchAndPushALaterTipIsNotReportedToATicket(t *testing.T) {
 	r := h.Start()
 	r.WantOutput(id + ": CI tracks " + id + " at ")
 	h.CommitOn("hand", "hand.txt", "hand\n")
-	h.Git("push", "-q", remote.Path, "hand:refs/heads/main")
+	h.PushByHand(remote, "hand", "main")
 
 	r.Poll()
 	r.Poll()
@@ -474,7 +474,7 @@ func TestUnderBranchAndPushALaterTipIsNotReportedToATicket(t *testing.T) {
 // Repository doesn't hold back the Home Repository's landing.
 func TestUnderTheCIGateARedBuildInAnotherRepositoryDoesNotHoldBackTheHomes(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
 	mergeAndPush(h, "origin")
 	trackCI(t, h)
@@ -484,7 +484,7 @@ func TestUnderTheCIGateARedBuildInAnotherRepositoryDoesNotHoldBackTheHomes(t *te
 	}
 	r := h.Start()
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
-	if got := remote.Git("rev-parse", "main"); got != pushed {
+	if got := remote.Tip("main"); got != pushed {
 		t.Fatalf("the remote's main is at %q, want the pushed commit %s", got, pushed)
 	}
 	// Its commit in api, as pushed there, fails its CI.
