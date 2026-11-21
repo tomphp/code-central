@@ -5,7 +5,7 @@ TEST_BUDGET := 60
 # npm ci writes this; it is newer than the lockfile while node_modules is current.
 WEB_DEPS := web/node_modules/.package-lock.json
 
-.PHONY: test test-verbose typecheck lint vitest vitest-stress e2e e2e-run scale build web clean hooks context-report ci-failures serve-components build-components corewasm wiretypes demo-store demo
+.PHONY: test test-verbose typecheck lint vitest vitest-related vitest-stress e2e e2e-run scale build web clean hooks context-report ci-failures serve-components build-components corewasm wiretypes demo-store demo
 
 # Every recipe is one command that runs the same under cmd.exe and POSIX
 # sh, so a Windows developer needs only GNU make. Binaries get .exe there.
@@ -49,6 +49,13 @@ ifeq ($(F),)
 else
 	cd web && node node_modules/vitest/vitest.mjs run $(F:web/%=%)
 endif
+
+# vitest on every test that imports the given source files, through any
+# chain (F=src/a.tsx src/b.ts), or with no F= on the web files changed
+# against main, committed and uncommitted. An inner-loop step before
+# make test, which still runs every file.
+vitest-related: $(WEB_DEPS) hooks corewasm
+	cd web && node node_modules/vitest/vitest.mjs $(if $(F),related --run $(F:web/%=%),run --changed $(shell git merge-base HEAD main)) --passWithNoTests
 
 # Shows a flaky web test: vitest on one file (F=) N times (default 20)
 # while LOAD busy workers (default 4, 0 for none) take the CPU, the way a
