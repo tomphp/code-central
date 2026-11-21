@@ -23,33 +23,34 @@ import (
 type Option func(*options)
 
 type options struct {
-	fakeGit bool
+	realGit bool
 }
 
-// RealGit runs the Factory, and the harness's repositories, on real git,
-// as New does by default; a test that needs raw git (Git, GitIn,
-// Remote.Git, or a fake claude's Git Script steps beyond what the Fake
-// git models) names it.
-func RealGit() Option { return func(o *options) { o.fakeGit = false } }
+// RealGit runs the Factory, and the harness's repositories, on real git
+// instead of the Fake git, which New uses by default; a test that needs
+// raw git (Git, GitIn, Remote.Git, or a fake claude's Git Script steps
+// beyond what the Fake git models) names it.
+func RealGit() Option { return func(o *options) { o.realGit = true } }
 
 // FakeGit runs the Factory, and the harness's repositories, on the Fake
-// git (git.Fake): in memory, with no git process. The test reads and
-// changes them only through the typedHelpers; raw git fails it. A fake
+// git (git.Fake): in memory, with no git process. It is New's default,
+// so a test names it only to override an earlier RealGit. The test reads
+// and changes them only through the typedHelpers; raw git fails it. A fake
 // claude's Git Script steps run on the Fake through the relay
 // (relayPath). gitEnv set to "real" runs it on real git all the same.
-func FakeGit() Option { return func(o *options) { o.fakeGit = true } }
+func FakeGit() Option { return func(o *options) { o.realGit = false } }
 
 // typedHelpers are the helpers that serve real git and the Fake git alike.
 // They take branch names and commit IDs, not revision syntax like HEAD or
 // main^, which the Fake git doesn't model.
 const typedHelpers = "Tip, Exists, Log, Parents, Subject, Author, File, RemoteTip, CommitOn, CommitOnBy, MergeByHand, PushByHand, Publish, IsAncestor, NewBranch, MoveBranch, EmptyBranch, Untrack, Detach, Status, AddWorktree, AddWorktreeOnNewBranch, AddWorktreeAt, AddDetachedWorktreeAt, HasWorktree, HeadOf, BranchOf, Remote.CommitOn, Remote.Branch, HasRemoteTip, SubjectIn, Head, CheckedOut, HasRemote, RemoteURL, SetRemote, Fetch, SpecBranches, DiscardWorktree, CloneByHand, CheckoutNewBranch"
 
-// gitEnv, set to "real", runs every Harness on real git, even one whose
-// test chose FakeGit, to check a run on the Fake git against real git.
+// gitEnv, set to "real", runs every Harness on real git, even one on the
+// Fake git, to check a run on the Fake git against real git.
 const gitEnv = "CODE_CENTRAL_TEST_FACTORY_GIT"
 
-// useFakeGit is whether New runs on the Fake git: the last of opts that
-// chooses, unless gitEnv says real git.
+// useFakeGit is whether New runs on the Fake git: by default, or as the
+// last of opts that chooses says, unless gitEnv says real git.
 func useFakeGit(t testing.TB, opts []Option) bool {
 	t.Helper()
 	var o options
@@ -58,7 +59,7 @@ func useFakeGit(t testing.TB, opts []Option) bool {
 	}
 	switch v := os.Getenv(gitEnv); v {
 	case "":
-		return o.fakeGit
+		return !o.realGit
 	case "real":
 		return false
 	default:

@@ -317,13 +317,14 @@ func TestTheGitSwitchTakesOnlyReal(t *testing.T) {
 	}
 }
 
-func TestTheLastGitOptionWinsAndRealGitIsTheDefault(t *testing.T) {
+func TestTheLastGitOptionWinsAndTheFakeGitIsTheDefault(t *testing.T) {
 	t.Setenv(gitEnv, "")
 	for _, c := range []struct {
 		opts []Option
 		fake bool
 	}{
-		{nil, false},
+		{nil, true},
+		{[]Option{RealGit()}, false},
 		{[]Option{FakeGit()}, true},
 		{[]Option{FakeGit(), RealGit()}, false},
 		{[]Option{RealGit(), FakeGit()}, true},
