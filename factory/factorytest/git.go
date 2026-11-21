@@ -42,7 +42,7 @@ func FakeGit() Option { return func(o *options) { o.fakeGit = true } }
 // typedHelpers are the helpers that serve real git and the Fake git alike.
 // They take branch names and commit IDs, not revision syntax like HEAD or
 // main^, which the Fake git doesn't model.
-const typedHelpers = "Tip, Exists, Log, Parents, File, RemoteTip, CommitOn, MergeByHand, PushByHand, IsAncestor"
+const typedHelpers = "Tip, Exists, Log, Parents, Subject, File, RemoteTip, CommitOn, MergeByHand, PushByHand, Publish, IsAncestor"
 
 // gitEnv, set to "real", runs every Harness on real git, even one whose
 // test chose FakeGit, to check a run on the Fake git against real git.
@@ -91,6 +91,20 @@ func (h *Harness) Log(rev string) []string {
 func (h *Harness) Parents(commit string) []string {
 	h.t.Helper()
 	return h.parents(h.Repo, commit)
+}
+
+// Subject is the first line of commit's message in the repo.
+func (h *Harness) Subject(commit string) string {
+	h.t.Helper()
+	return h.subject(h.Repo, commit)
+}
+
+// Publish puts commit, one in the repo, on the remote's branch, as a push
+// from elsewhere would, with its history: the repo's own refs, its
+// remote-tracking ones too, are left for a fetch.
+func (h *Harness) Publish(remote *Remote, commit, branch string) {
+	h.t.Helper()
+	h.publish(h.Repo, remote, commit, branch)
 }
 
 // File is the content of the file path, slash-separated, at rev in the
@@ -190,6 +204,18 @@ func (r *Repository) File(rev, path string) string {
 func (r *Repository) RemoteTip(remote, branch string) string {
 	r.h.t.Helper()
 	return r.h.remoteTip(r.Path, remote, branch)
+}
+
+// Subject is Harness.Subject in r's clone at Path.
+func (r *Repository) Subject(commit string) string {
+	r.h.t.Helper()
+	return r.h.subject(r.Path, commit)
+}
+
+// Publish is Harness.Publish in r's clone at Path.
+func (r *Repository) Publish(remote *Remote, commit, branch string) {
+	r.h.t.Helper()
+	r.h.publish(r.Path, remote, commit, branch)
 }
 
 // CommitOn is Harness.CommitOn in r's clone at Path.
@@ -302,6 +328,25 @@ func (h *Harness) log(dir, rev string) []string {
 		}
 		commit = parents[0]
 	}
+}
+
+// subject is Subject in the repository at dir.
+func (h *Harness) subject(dir, commit string) string {
+	h.t.Helper()
+	if h.fake == nil {
+		return h.git(dir, "log", "-1", "--format=%s", commit, "--")
+	}
+	return h.fake.Subject(dir, h.commit(dir, commit))
+}
+
+// publish is Publish in the clone at dir.
+func (h *Harness) publish(dir string, remote *Remote, commit, branch string) {
+	h.t.Helper()
+	if h.fake == nil {
+		h.git(dir, "push", "-q", remote.Path, commit+":refs/heads/"+branch)
+		return
+	}
+	h.fake.SetRemoteBranch(dir, remote.Name, branch, h.commit(dir, commit))
 }
 
 // parents is Parents in the repository at dir.
