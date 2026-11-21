@@ -17,7 +17,7 @@ var branchLanding = api.SetLandingMethodInput{Method: domain.LandingBranch}
 // worktree a Factory Claim would have left at its path.
 func withWorktree(h *factorytest.Harness, title, file, content string) (id, commit string) {
 	id, commit = accepted(h, title, file, content)
-	h.AddWorktree(h.Worktree(id), id)
+	h.AddWorktreeAt(h.Worktree(id), id)
 	return id, commit
 }
 

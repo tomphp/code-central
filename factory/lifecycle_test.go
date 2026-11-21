@@ -201,10 +201,10 @@ func TestTheSweepAtStartRemovesFinishedTicketsWorktreesAndPrunes(t *testing.T) {
 	h.AddWorktreeOnNewBranch(h.Worktree(done), done, "main")
 	move(t, h, done, domain.Done)
 	stage := h.StageTicket("spec", "Spec: cancelled before")
-	h.AddDetachedWorktree(h.Worktree(stage), "main")
+	h.AddDetachedWorktreeAt(h.Worktree(stage), "main")
 	move(t, h, stage, domain.Cancelled)
 	gone := h.Repo + "-gone"
-	h.AddDetachedWorktree(gone, "main")
+	h.AddDetachedWorktreeAt(gone, "main")
 	if err := os.RemoveAll(gone); err != nil {
 		t.Fatal(err)
 	}

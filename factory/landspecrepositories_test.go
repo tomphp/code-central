@@ -28,12 +28,12 @@ func specInTwo(h *factorytest.Harness) (apiRepo *factorytest.Repository, id stri
 
 // subject is the subject of commit in the repository at dir.
 func subject(h *factorytest.Harness, dir, commit string) string {
-	return h.GitIn(dir, "log", "-1", "--format=%s", commit)
+	return h.SubjectIn(dir, commit)
 }
 
 func TestATwoRepositorySpecLandsWithTheSameMergeSpecCommitInEachInTheLandingOrder(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	home := h.AddRemote("origin")
 	apiRepo, id := specInTwo(h)
 	mergeAndPush(h, "origin")
@@ -45,7 +45,7 @@ func TestATwoRepositorySpecLandsWithTheSameMergeSpecCommitInEachInTheLandingOrde
 	r.Poll()
 
 	tk := h.WantState(id, domain.Done)
-	homeMerge, apiMerge := h.Git("rev-parse", "main"), h.GitIn(apiRepo.Path, "rev-parse", "main")
+	homeMerge, apiMerge := h.Tip("main"), apiRepo.Tip("main")
 	want := "Merge spec " + h.SpecID() + ": Work"
 	if got := subject(h, h.Repo, homeMerge); got != want {
 		t.Errorf("the Home Repository's merge is %q, want %q", got, want)
@@ -53,7 +53,7 @@ func TestATwoRepositorySpecLandsWithTheSameMergeSpecCommitInEachInTheLandingOrde
 	if got := subject(h, apiRepo.Path, apiMerge); got != want {
 		t.Errorf("api's merge is %q, want %q", got, want)
 	}
-	if home.Git("rev-parse", "main") != homeMerge || apiRepo.Remote("origin").Git("rev-parse", "main") != apiMerge {
+	if home.Tip("main") != homeMerge || apiRepo.Remote("origin").Tip("main") != apiMerge {
 		t.Error("a merge wasn't pushed to its Repository's remote")
 	}
 	if landedIn(tk, "api") != apiMerge || landedIn(tk, h.Project) != homeMerge {
@@ -70,7 +70,7 @@ func TestATwoRepositorySpecLandsWithTheSameMergeSpecCommitInEachInTheLandingOrde
 
 func TestASpecConflictInAnyRepositoryOpensOneSpecMergeTicketNamingEachAndNothingLands(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo, id := specInTwo(h)
 	release := holdTicketsStage(t, h)
 	fix := "acme-5"
@@ -88,11 +88,11 @@ func TestASpecConflictInAnyRepositoryOpensOneSpecMergeTicketNamingEachAndNothing
 	r.Poll()
 
 	h.WantState(id, domain.Accepted)
-	if h.Git("rev-parse", "main") != homeBase || h.GitIn(apiRepo.Path, "rev-parse", "main") != apiBase {
+	if h.Tip("main") != homeBase || apiRepo.Tip("main") != apiBase {
 		t.Fatal("a base moved: nothing lands while any Repository's Spec Branch conflicts")
 	}
 	spec := "spec/" + h.SpecID()
-	homeTip, apiTip := h.Git("rev-parse", spec), h.GitIn(apiRepo.Path, "rev-parse", spec)
+	homeTip, apiTip := h.Tip(spec), apiRepo.Tip(spec)
 	tk := h.Ticket(fix)
 	if !tk.SpecMergeTicket || tk.Title != api.SpecMergeTitle(h.SpecID()) {
 		t.Fatalf("%s %+v, want the Spec merge Ticket", fix, tk)
@@ -110,7 +110,7 @@ func TestASpecConflictInAnyRepositoryOpensOneSpecMergeTicketNamingEachAndNothing
 
 func TestATicketConflictingWithItsSpecBranchInOneRepositoryIsMergedIntoNeither(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo, first := specInTwo(h)
 	release := holdTicketsStage(t, h)
 	defer release()
@@ -125,7 +125,7 @@ func TestATicketConflictingWithItsSpecBranchInOneRepositoryIsMergedIntoNeither(t
 	h.Accept(first)
 	r.Poll()
 	spec := "spec/" + h.SpecID()
-	homeTip, apiTip := h.Git("rev-parse", spec), h.GitIn(apiRepo.Path, "rev-parse", spec)
+	homeTip, apiTip := h.Tip(spec), apiRepo.Tip(spec)
 	// Hold the next Claim's turn, so the Ticket stays as send_back left it.
 	h.Script(second, factorytest.Wait())
 
@@ -136,7 +136,7 @@ func TestATicketConflictingWithItsSpecBranchInOneRepositoryIsMergedIntoNeither(t
 	if !movedTo(tk, domain.Accepted, domain.Ready) {
 		t.Fatalf("%s wasn't sent back: %+v", second, tk.Moves)
 	}
-	if h.Git("rev-parse", spec) != homeTip || h.GitIn(apiRepo.Path, "rev-parse", spec) != apiTip {
+	if h.Tip(spec) != homeTip || apiRepo.Tip(spec) != apiTip {
 		t.Fatal("a Spec Branch moved: a Ticket conflicting in any Repository is merged into none")
 	}
 	if !commented(tk, "- api: merging", "into "+spec+" at "+apiTip[:12], "  - endpoint.go") || commented(tk, "- "+h.Project+": merging") {
@@ -147,7 +147,7 @@ func TestATicketConflictingWithItsSpecBranchInOneRepositoryIsMergedIntoNeither(t
 
 func TestARefusedPushLeavesASpecsTicketPartlyLandedAndIsTriedAgain(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	apiRepo, id := specInTwo(h)
 	mergeAndPush(h, "origin")
@@ -166,8 +166,8 @@ func TestARefusedPushLeavesASpecsTicketPartlyLandedAndIsTriedAgain(t *testing.T)
 	if !commented(tk, "The Factory can't land this in api yet: couldn't push main to origin") {
 		t.Fatalf("comments %+v, want one saying api's push was refused", tk.Comments)
 	}
-	merge := h.GitIn(apiRepo.Path, "rev-parse", "main")
-	homeMain := h.Git("rev-parse", "main")
+	merge := apiRepo.Tip("main")
+	homeMain := h.Tip("main")
 
 	remote.AcceptPushes()
 	r.Poll()
@@ -175,7 +175,7 @@ func TestARefusedPushLeavesASpecsTicketPartlyLandedAndIsTriedAgain(t *testing.T)
 	// Its work is in api's base, so it lands there through the plain path,
 	// as with the Home Repository alone, without merging again.
 	tk = h.WantState(id, domain.Done)
-	if landedIn(tk, "api") == "" || remote.Git("rev-parse", "main") != merge || h.Git("rev-parse", "main") != homeMain {
+	if landedIn(tk, "api") == "" || remote.Tip("main") != merge || h.Tip("main") != homeMain {
 		t.Fatalf("Changed Repositories %+v, want api landed and its Spec's merge %s pushed, and the Home Repository left as it was", tk.Repositories, merge)
 	}
 	if got := subject(h, apiRepo.Path, merge); got != "Merge spec "+h.SpecID()+": Work" {
@@ -185,7 +185,10 @@ func TestARefusedPushLeavesASpecsTicketPartlyLandedAndIsTriedAgain(t *testing.T)
 
 func TestOnceTheSpecMergeTicketIsAcceptedATwoRepositorySpecLands(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	// Real git: the Spec merge Ticket's session resolves the conflict with
+	// git merge -X theirs, which the Fake git doesn't model, and a
+	// two-repository Spec landing is one of the Real-git tests.
+	h := factorytest.New(t, factorytest.RealGit())
 	apiRepo, id := specInTwo(h)
 	release := holdTicketsStage(t, h)
 	// The Spec merge Ticket merges api's base into its branch there.
@@ -211,7 +214,7 @@ func TestOnceTheSpecMergeTicketIsAcceptedATwoRepositorySpecLands(t *testing.T) {
 
 func TestUnderTheCIGateASpecStuckInOneRepositoryLandsThereOnceUnstuck(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	apiRepo, id := specInTwo(h)
 	mergeAndPush(h, "origin")
@@ -258,7 +261,7 @@ func TestUnderTheCIGateASpecStuckInOneRepositoryLandsThereOnceUnstuck(t *testing
 
 func TestUnderPullRequestATwoRepositorySpecBranchIsPushedInEachAndLandsAsEachMerges(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	home := h.AddRemote("origin")
 	apiRepo, id := specInTwo(h)
 	pullRequestOn(h, "origin")
@@ -271,18 +274,18 @@ func TestUnderPullRequestATwoRepositorySpecBranchIsPushedInEachAndLandsAsEachMer
 
 	r.WantOutput(h.SpecID() + ": pushed " + branch + " to origin in Repository api")
 	apiTip, homeTip := wantPushedIn(t, h, "api", branch), wantPushedIn(t, h, h.Project, branch)
-	if got := apiRepo.Remote("origin").Git("rev-parse", branch); got != apiTip || apiTip != h.GitIn(apiRepo.Path, "rev-parse", branch) {
+	if got := apiRepo.Remote("origin").Tip(branch); got != apiTip || apiTip != apiRepo.Tip(branch) {
 		t.Errorf("api's remote %s is at %q, want its Spec Branch %s", branch, got, apiTip)
 	}
-	if got := home.Git("rev-parse", branch); got != homeTip {
+	if got := home.Tip(branch); got != homeTip {
 		t.Errorf("the Home Repository's remote %s is at %q, want %s", branch, got, homeTip)
 	}
-	if got := apiRepo.Remote("origin").Git("branch", "--list", id); got != "" {
-		t.Errorf("api's remote has the Ticket's own branch %q: only the Spec Branch is pushed", got)
+	if apiRepo.Remote("origin").Exists(id) {
+		t.Errorf("api's remote has the Ticket's own branch %s: only the Spec Branch is pushed", id)
 	}
 
 	// The human merges api's pull request first, on the host.
-	h.GitIn(apiRepo.Path, "push", "-q", "origin", branch+":refs/heads/main")
+	apiRepo.PushByHand(apiRepo.Remote("origin"), branch, "main")
 	reportPullRequestIn(t, h, "api", branch, 4, apiTip)
 	r.Poll()
 
@@ -292,7 +295,7 @@ func TestUnderPullRequestATwoRepositorySpecBranchIsPushedInEachAndLandsAsEachMer
 	}
 
 	// Then the Home Repository's.
-	h.Git("push", "-q", home.Path, branch+":refs/heads/main")
+	h.PushByHand(home, branch, "main")
 	reportPullRequestIn(t, h, "", branch, 7, homeTip)
 	r.Poll()
 
@@ -304,7 +307,7 @@ func TestUnderPullRequestATwoRepositorySpecBranchIsPushedInEachAndLandsAsEachMer
 
 func TestADivergedBaseInOneRepositoryHoldsBackASpecTouchingIt(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	apiRepo, id := specInTwo(h)
 	mergeAndPush(h, "origin")
@@ -314,7 +317,7 @@ func TestADivergedBaseInOneRepositoryHoldsBackASpecTouchingIt(t *testing.T) {
 	h.Accept(id)
 	r.Poll()
 	r.WantOutput(id + ": merged into spec/" + h.SpecID() + " at ")
-	homeMain := h.Git("rev-parse", "main")
+	homeMain := h.Tip("main")
 	// api's remote and its clone's main each gain a commit the other
 	// lacks, and they conflict.
 	apiRepo.CommitOn("main", "README.md", "ours\n")
@@ -324,7 +327,7 @@ func TestADivergedBaseInOneRepositoryHoldsBackASpecTouchingIt(t *testing.T) {
 	r.Poll()
 
 	tk := h.WantState(id, domain.Accepted)
-	if got := h.Git("rev-parse", "main"); got != homeMain || tk.PartlyLanded {
+	if got := h.Tip("main"); got != homeMain || tk.PartlyLanded {
 		t.Fatalf("the Home Repository's main is at %s, partly landed %v: a Spec touching a diverged base lands nowhere", got, tk.PartlyLanded)
 	}
 	if rows := h.NeedsMeItems(api.ReasonBaseDiverged); len(rows) != 1 || rows[0].BaseDiverged.Repository != "api" {
@@ -334,7 +337,7 @@ func TestADivergedBaseInOneRepositoryHoldsBackASpecTouchingIt(t *testing.T) {
 
 func TestUnderPullRequestASpecConflictInOneRepositoryPushesNoSpecBranch(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	home := h.AddRemote("origin")
 	apiRepo, id := specInTwo(h)
 	pullRequestOn(h, "origin")
@@ -353,11 +356,11 @@ func TestUnderPullRequestASpecConflictInOneRepositoryPushesNoSpecBranch(t *testi
 	r.Poll()
 
 	branch := "spec/" + h.SpecID()
-	if got := home.Git("branch", "--list", branch); got != "" {
-		t.Errorf("the Home Repository's remote has %q: no Spec Branch is pushed while one conflicts", got)
+	if home.Exists(branch) {
+		t.Errorf("the Home Repository's remote has %s: no Spec Branch is pushed while one conflicts", branch)
 	}
-	if got := apiRepo.Remote("origin").Git("branch", "--list", branch); got != "" {
-		t.Errorf("api's remote has %q", got)
+	if apiRepo.Remote("origin").Exists(branch) {
+		t.Errorf("api's remote has %s", branch)
 	}
 	if tk := h.Ticket(fix); !tk.SpecMergeTicket || !strings.Contains(tk.Description, "- api: merging "+branch) {
 		t.Fatalf("%s %+v, want the Spec merge Ticket naming api's conflict", fix, tk)

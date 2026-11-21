@@ -42,7 +42,7 @@ func FakeGit() Option { return func(o *options) { o.fakeGit = true } }
 // typedHelpers are the helpers that serve real git and the Fake git alike.
 // They take branch names and commit IDs, not revision syntax like HEAD or
 // main^, which the Fake git doesn't model.
-const typedHelpers = "Tip, Exists, Log, Parents, Subject, Author, File, RemoteTip, CommitOn, CommitOnBy, MergeByHand, PushByHand, Publish, IsAncestor, NewBranch, MoveBranch, EmptyBranch, Untrack, Detach, Status, AddWorktree, AddWorktreeOnNewBranch, AddDetachedWorktree, HasWorktree, HeadOf, BranchOf"
+const typedHelpers = "Tip, Exists, Log, Parents, Subject, Author, File, RemoteTip, CommitOn, CommitOnBy, MergeByHand, PushByHand, Publish, IsAncestor, NewBranch, MoveBranch, EmptyBranch, Untrack, Detach, Status, AddWorktree, AddWorktreeOnNewBranch, AddWorktreeAt, AddDetachedWorktreeAt, HasWorktree, HeadOf, BranchOf, Remote.CommitOn, Remote.Branch, HasRemoteTip, SubjectIn, Head, CheckedOut, HasRemote, RemoteURL, SetRemote, Fetch, SpecBranches, DiscardWorktree, CloneByHand, CheckoutNewBranch"
 
 // gitEnv, set to "real", runs every Harness on real git, even one whose
 // test chose FakeGit, to check a run on the Fake git against real git.
@@ -212,9 +212,9 @@ func (h *Harness) Status() string {
 	return h.git(h.Repo, "status", "--porcelain")
 }
 
-// AddWorktree adds a worktree at path, with the existing branch checked
+// AddWorktreeAt adds a worktree at path, with the existing branch checked
 // out.
-func (h *Harness) AddWorktree(path, branch string) {
+func (h *Harness) AddWorktreeAt(path, branch string) {
 	h.t.Helper()
 	if h.fake != nil {
 		must(h.t, h.fake.Open(h.Repo).AddWorktree(path, branch))
@@ -234,8 +234,8 @@ func (h *Harness) AddWorktreeOnNewBranch(path, branch, from string) {
 	h.git(h.Repo, "worktree", "add", "-q", "-b", branch, path, from)
 }
 
-// AddDetachedWorktree adds a worktree at path, detached at rev.
-func (h *Harness) AddDetachedWorktree(path, rev string) {
+// AddDetachedWorktreeAt adds a worktree at path, detached at rev.
+func (h *Harness) AddDetachedWorktreeAt(path, rev string) {
 	h.t.Helper()
 	if h.fake != nil {
 		must(h.t, h.fake.Open(h.Repo).AddDetachedWorktree(path, h.commit(h.Repo, rev)))
@@ -266,16 +266,18 @@ func (h *Harness) HeadOf(dir string) string {
 	return h.headOf(dir)
 }
 
-// BranchOf is the branch checked out in the worktree dir, failing the
-// test when it is detached.
+// BranchOf is the branch checked out in the worktree dir, in any of the
+// Repositories, "" when it is detached.
 func (h *Harness) BranchOf(dir string) string {
 	h.t.Helper()
-	if h.fake != nil {
-		branch, err := h.fake.Open(h.Repo).CurrentBranch(dir)
-		must(h.t, err)
-		return branch
+	if h.fake == nil {
+		return h.git(dir, "branch", "--show-current")
 	}
-	return h.git(dir, "symbolic-ref", "--short", "HEAD")
+	branch, err := h.fake.Open(dir).CurrentBranch(dir)
+	if err != nil {
+		return ""
+	}
+	return branch
 }
 
 // MergeByHand merges branch into into, as a human would outside the
@@ -317,6 +319,14 @@ func (r *Repository) IsAncestor(commit, rev string) bool {
 func (r *Remote) IsAncestor(commit, rev string) bool {
 	r.h.t.Helper()
 	return r.h.isAncestor(r.Path, commit, rev)
+}
+
+// CommitOn commits file with content on branch in the bare repository, made
+// from main when it doesn't exist, and returns the commit: what someone
+// else pushing from a clone of their own does.
+func (r *Remote) CommitOn(branch, file, content string) string {
+	r.h.t.Helper()
+	return r.h.commitOnRemote(r.Path, branch, file, content)
 }
 
 // Tip is Harness.Tip in r's clone at Path.
@@ -671,6 +681,36 @@ func (h *Harness) commitOn(dir, branch, file, content, author string) string {
 		h.git(dir, "commit", "-q", "-m", "Change "+file, "--author="+author)
 	}
 	return h.git(dir, "rev-parse", "HEAD")
+}
+
+// commitOnRemote is Remote.CommitOn in the bare repository at path. Real
+// git clones it, commits and pushes, as someone else would.
+func (h *Harness) commitOnRemote(path, branch, file, content string) string {
+	h.t.Helper()
+	if h.fake != nil {
+		old, _ := h.lookup(path, "refs/heads/"+branch)
+		parent := old
+		if parent == "" {
+			parent = h.tip(path, "main")
+		}
+		commit := h.fake.MakeCommit(path, git.Change{Parents: []string{parent}, Files: map[string]string{file: content}, Message: "Change " + file})
+		must(h.t, h.fake.Open(path).UpdateRef("refs/heads/"+branch, commit, old))
+		return commit
+	}
+	other := h.t.TempDir()
+	h.git(other, "clone", "-q", path, ".")
+	if branch != "main" {
+		from := "origin/main"
+		if _, err := h.runGit(other, "rev-parse", "--verify", "-q", "origin/"+branch); err == nil {
+			from = "origin/" + branch
+		}
+		h.git(other, "checkout", "-q", "-b", branch, from)
+	}
+	must(h.t, os.WriteFile(filepath.Join(other, file), []byte(content), 0o644))
+	h.git(other, "add", file)
+	h.git(other, "commit", "-q", "-m", "Change "+file)
+	h.git(other, "push", "-q", "origin", branch)
+	return h.git(other, "rev-parse", "HEAD")
 }
 
 // headOf is HeadOf in the repository at dir.

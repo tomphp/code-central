@@ -26,7 +26,7 @@ func addLocalOnly(t *testing.T, h *factorytest.Harness, name, dir string) *facto
 	if _, err := h.Human().AddRepository(context.Background(), h.Project, api.AddRepositoryInput{Name: name, LocalPath: dir}); err != nil {
 		t.Fatal(err)
 	}
-	return &factorytest.Repository{Name: name, Path: dir}
+	return h.RepositoryAt(name, dir)
 }
 
 // editCloneURL has the human set Repository name's Clone URL to url.
@@ -43,15 +43,15 @@ func editCloneURL(t *testing.T, h *factorytest.Harness, name, url string) {
 // history with r's. It returns other.
 func addUnrelatedOrigin(h *factorytest.Harness, r *factorytest.Repository) *factorytest.Repository {
 	other := h.MakeRepository("other")
-	h.GitIn(r.Path, "remote", "add", "origin", other.CloneURL)
+	r.SetRemote("origin", other.CloneURL)
 	return other
 }
 
 func TestALocalOnlyRepositoryIsAdoptedWithNoRemoteCheck(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	web := h.AddLocalRepository("web")
-	head := h.GitIn(web.Path, "rev-parse", "HEAD")
+	head := web.Head(web.Path)
 
 	r := h.Start()
 	r.WantOutput("repository web: adopted the clone at " + web.Path)
@@ -59,17 +59,17 @@ func TestALocalOnlyRepositoryIsAdoptedWithNoRemoteCheck(t *testing.T) {
 	if c := clone(t, h, "web"); c == nil || c.State != api.CloneReady || c.Path != web.Path {
 		t.Errorf("web's clone %+v, want ready at %s", c, web.Path)
 	}
-	if got := h.GitIn(web.Path, "remote"); got != "" {
-		t.Errorf("web's remotes are %q, want none added", got)
+	if web.HasRemote("origin") {
+		t.Errorf("web has a remote origin, want none added")
 	}
-	if got := h.GitIn(web.Path, "rev-parse", "HEAD"); got != head {
+	if got := web.Head(web.Path); got != head {
 		t.Errorf("web is at %s, want it left at %s", got, head)
 	}
 }
 
 func TestALocalOnlyRepositoryWithAnUnrelatedRemoteIsAdoptedAsItIs(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	web := h.AddLocalRepository("web")
 	other := addUnrelatedOrigin(h, web)
 
@@ -77,14 +77,14 @@ func TestALocalOnlyRepositoryWithAnUnrelatedRemoteIsAdoptedAsItIs(t *testing.T) 
 	if c := clone(t, h, "web"); c == nil || c.State != api.CloneReady {
 		t.Errorf("web's clone %+v, want ready", c)
 	}
-	if got := h.GitIn(web.Path, "remote", "get-url", "origin"); got != other.CloneURL {
+	if got := web.RemoteURL("origin"); got != other.CloneURL {
 		t.Errorf("web's origin is %s, want it left as %s", got, other.CloneURL)
 	}
 }
 
 func TestALocalOnlyRepositoryWithNothingAtItsPathIsRepositoryMissingAndNeverCloned(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	web := addLocalOnly(t, h, "web", filepath.Join(filepath.Dir(h.Repo), "web"))
 	id := h.ReadyTicket("Waits for every Repository")
 
@@ -105,7 +105,7 @@ func TestALocalOnlyRepositoryWithNothingAtItsPathIsRepositoryMissingAndNeverClon
 
 func TestALocalOnlyRepositorysPathHoldingSomethingElseIsRepositoryMissing(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	web := addLocalOnly(t, h, "web", filepath.Join(filepath.Dir(h.Repo), "web"))
 	if err := os.MkdirAll(web.Path, 0o755); err != nil {
 		t.Fatal(err)
@@ -123,7 +123,7 @@ func TestALocalOnlyRepositorysPathHoldingSomethingElseIsRepositoryMissing(t *tes
 
 func TestALocalOnlyRepositoryInsideAnotherIsRepositoryMissing(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	nested := filepath.Join(h.Repo, "web")
 	if err := os.MkdirAll(nested, 0o755); err != nil {
 		t.Fatal(err)
@@ -136,30 +136,30 @@ func TestALocalOnlyRepositoryInsideAnotherIsRepositoryMissing(t *testing.T) {
 
 func TestALocalOnlyRepositoryGetsAWorktreeAndLandsOnceMerged(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo := h.AddLocalRepository("api")
 	id := inAPI(h, "Add an endpoint")
 	r := h.Start()
 	h.WantState(id, domain.InReview)
 	wantOnBranch(t, h, id, apiRepo.Worktree(id))
-	if got := h.GitIn(apiRepo.Path, "log", "-1", "--format=%s", id); got != "Change endpoint.go" {
+	if got := h.SubjectIn(apiRepo.Path, apiRepo.Tip(id)); got != "Change endpoint.go" {
 		t.Errorf("api's branch %s ends with %q, want the session's commit", id, got)
 	}
 
 	h.Accept(id)
 	r.Poll()
 	tk := h.WantState(id, domain.Done)
-	if merge := h.GitIn(apiRepo.Path, "rev-parse", "main"); landedIn(tk, "api") != merge {
+	if merge := apiRepo.Tip("main"); landedIn(tk, "api") != merge {
 		t.Errorf("Changed Repositories %+v, want api landed at its merge %s", tk.Repositories, merge)
 	}
 }
 
 func TestACloneURLAddedLaterIsCheckedAgainstTheExistingClone(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	web := h.MakeRepository("web")
 	other := h.MakeRepository("other")
-	h.GitIn(filepath.Dir(web.Path), "clone", "-q", web.CloneURL, web.Path)
+	h.CloneByHand(web.CloneURL, web.Path)
 	addLocalOnly(t, h, "web", web.Path)
 	r := h.Start()
 	r.Poll()
@@ -176,14 +176,14 @@ func TestACloneURLAddedLaterIsCheckedAgainstTheExistingClone(t *testing.T) {
 	editCloneURL(t, h, "web", other.CloneURL)
 	r.Poll()
 	wantMissing(t, h, &factorytest.Repository{Name: "web", CloneURL: other.CloneURL, Path: web.Path}, "origin is "+web.CloneURL)
-	if got := h.GitIn(web.Path, "remote", "get-url", "origin"); got != web.CloneURL {
+	if got := web.RemoteURL("origin"); got != web.CloneURL {
 		t.Errorf("web's origin is %s, want it never rewritten", got)
 	}
 }
 
 func TestARepositoryAtAnEarlierRepositorysPathIsRepositoryMissing(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	web := h.AddRepository("web")
 	// Before the Factory's first report Code Central can't see that web's
 	// default path is api's local path.
@@ -200,7 +200,9 @@ func TestARepositoryAtAnEarlierRepositorysPathIsRepositoryMissing(t *testing.T) 
 
 func TestARepositoryWithACloneURLAtAnEarlierRepositorysPathIsNeitherClonedNorAdopted(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	// Real git: the site's path holds a repository with no commit, which the
+	// Fake git has no way to make.
+	h := factorytest.New(t, factorytest.RealGit())
 	site := h.MakeRepository("site")
 	// web, local-only, is at site's default path, which Code Central
 	// can't see before the Factory's first report.
@@ -212,8 +214,8 @@ func TestARepositoryWithACloneURLAtAnEarlierRepositorysPathIsNeitherClonedNorAdo
 
 	h.Start().Poll()
 	wantMissing(t, h, site, site.Path+" is Repository web's clone")
-	if got := h.GitIn(web.Path, "remote"); got != "" {
-		t.Errorf("web's remotes are %q, want none added", got)
+	if web.HasRemote("origin") {
+		t.Errorf("web has a remote origin, want none added")
 	}
 	if got := files(t, web.Path); !slices.Equal(got, []string{".git"}) {
 		t.Errorf("%s holds %v, want nothing cloned into it", web.Path, got)
@@ -222,7 +224,7 @@ func TestARepositoryWithACloneURLAtAnEarlierRepositorysPathIsNeitherClonedNorAdo
 
 func TestARepositoryAtTheHomeRepositorysPathIsRepositoryMissing(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	web := addLocalOnly(t, h, "web", h.Repo)
 	// First in the landing order, it still can't take the Home's path.
 	setLandingOrder(t, h, "web", h.Project)

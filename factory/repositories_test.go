@@ -74,16 +74,17 @@ func files(t *testing.T, dir string) []string {
 
 func TestARepositoryAddedWhileTheFactoryRunsIsClonedOnTheNextPoll(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	// Real git: the clone of a remote Repository, as git makes it.
+	h := factorytest.New(t, factorytest.RealGit())
 	r := h.Start()
 	web := h.AddRepository("web")
 
 	r.Poll()
 	r.WantOutput("repository web: cloned " + web.CloneURL + " to " + web.Path)
-	if got := h.GitIn(web.Path, "remote", "get-url", "origin"); got != web.CloneURL {
+	if got := web.RemoteURL("origin"); got != web.CloneURL {
 		t.Errorf("the clone's origin is %s, want %s", got, web.CloneURL)
 	}
-	if got, want := h.GitIn(web.Path, "rev-parse", "HEAD"), h.GitIn(web.CloneURL, "rev-parse", "main"); got != want {
+	if got, want := web.Head(web.Path), web.Remote("origin").Tip("main"); got != want {
 		t.Errorf("the clone is at %s, want the remote's main, %s", got, want)
 	}
 	if c := clone(t, h, "web"); c == nil || c.State != api.CloneReady || c.Path != web.Path {
@@ -103,30 +104,30 @@ func TestARepositoryAddedWhileTheFactoryRunsIsClonedOnTheNextPoll(t *testing.T) 
 
 func TestTheCloneIsMadeUnderThePushRemotesName(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("upstream")
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "upstream"})
 	web := h.AddRepository("web")
 
 	h.Start()
-	if got := h.GitIn(web.Path, "remote"); got != "upstream" {
-		t.Errorf("the clone's remotes are %q, want the Push remote's name, upstream, alone", got)
+	if !web.HasRemote("upstream") || web.HasRemote("origin") {
+		t.Errorf("the clone has upstream %t and origin %t, want the Push remote's name, upstream, alone", web.HasRemote("upstream"), web.HasRemote("origin"))
 	}
 }
 
 func TestAnExistingMatchingCloneIsAdoptedAsItIs(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	web := h.MakeRepository("web")
-	h.GitIn(filepath.Dir(web.Path), "clone", "-q", web.CloneURL, web.Path)
+	h.CloneByHand(web.CloneURL, web.Path)
 	// The clone's own URL differs from the Clone URL only in its .git and
 	// a trailing slash, and it holds work of its own.
-	h.GitIn(web.Path, "remote", "set-url", "origin", strings.TrimSuffix(web.CloneURL, ".git")+"/")
+	web.SetRemote("origin", strings.TrimSuffix(web.CloneURL, ".git")+"/")
 	if err := os.WriteFile(filepath.Join(web.Path, "notes.txt"), []byte("mine\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	h.GitIn(web.Path, "checkout", "-q", "-b", "mine")
-	head := h.GitIn(web.Path, "rev-parse", "HEAD")
+	web.CheckoutNewBranch("mine")
+	head := web.Head(web.Path)
 	if _, err := h.Human().AddRepository(context.Background(), h.Project, api.AddRepositoryInput{Name: "web", CloneURL: web.CloneURL}); err != nil {
 		t.Fatal(err)
 	}
@@ -139,23 +140,23 @@ func TestAnExistingMatchingCloneIsAdoptedAsItIs(t *testing.T) {
 	if c := clone(t, h, "web"); c == nil || c.State != api.CloneReady || c.Path != web.Path {
 		t.Errorf("web's clone %+v, want ready at %s", c, web.Path)
 	}
-	if got := h.GitIn(web.Path, "rev-parse", "--abbrev-ref", "HEAD"); got != "mine" {
+	if got := web.CheckedOut(web.Path); got != "mine" {
 		t.Errorf("the clone is on %s, want it left on mine", got)
 	}
-	if got := h.GitIn(web.Path, "rev-parse", "HEAD"); got != head {
+	if got := web.Head(web.Path); got != head {
 		t.Errorf("the clone is at %s, want it left at %s", got, head)
 	}
-	if got := h.GitIn(web.Path, "status", "--porcelain"); got != "?? notes.txt" {
+	if got := web.Status(web.Path); got != "?? notes.txt" {
 		t.Errorf("the clone's status is %q, want its own notes.txt left alone", got)
 	}
 }
 
 func TestARepositoryAtItsLocalPathIsAdopted(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	web := h.MakeRepository("web")
 	elsewhere := filepath.Join(filepath.Dir(filepath.Dir(h.Repo)), "src", "web")
-	h.GitIn(filepath.Dir(h.Repo), "clone", "-q", web.CloneURL, elsewhere)
+	h.CloneByHand(web.CloneURL, elsewhere)
 	if _, err := h.Human().AddRepository(context.Background(), h.Project, api.AddRepositoryInput{Name: "web", CloneURL: web.CloneURL, LocalPath: elsewhere}); err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +172,7 @@ func TestARepositoryAtItsLocalPathIsAdopted(t *testing.T) {
 
 func TestAPathHoldingSomethingElseIsRepositoryMissingAndHoldsClaimsUntilMovedAside(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	web := h.MakeRepository("web")
 	if err := os.MkdirAll(web.Path, 0o755); err != nil {
 		t.Fatal(err)
@@ -210,29 +211,31 @@ func TestAPathHoldingSomethingElseIsRepositoryMissingAndHoldsClaimsUntilMovedAsi
 
 func TestACloneOfAnotherRepositoryIsRepositoryMissing(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	web := h.MakeRepository("web")
 	other := h.MakeRepository("other")
-	h.GitIn(filepath.Dir(web.Path), "clone", "-q", other.CloneURL, web.Path)
-	head := h.GitIn(web.Path, "rev-parse", "HEAD")
+	h.CloneByHand(other.CloneURL, web.Path)
+	head := web.Head(web.Path)
 	if _, err := h.Human().AddRepository(context.Background(), h.Project, api.AddRepositoryInput{Name: "web", CloneURL: web.CloneURL}); err != nil {
 		t.Fatal(err)
 	}
 
 	h.Start().Poll()
 	wantMissing(t, h, web, "origin is "+other.CloneURL)
-	if got := h.GitIn(web.Path, "rev-parse", "HEAD"); got != head {
+	if got := web.Head(web.Path); got != head {
 		t.Errorf("the clone is at %s, want it untouched at %s", got, head)
 	}
-	if got := h.GitIn(web.Path, "remote", "get-url", "origin"); got != other.CloneURL {
+	if got := web.RemoteURL("origin"); got != other.CloneURL {
 		t.Errorf("the clone's origin is %s, want it untouched", got)
 	}
 }
 
 func TestAFailedCloneIsRepositoryMissing(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
-	gone := filepath.Join(filepath.Dir(filepath.Dir(h.Repo)), "repositories", "gone.git")
+	h := factorytest.New(t, factorytest.FakeGit())
+	goneRepo := h.MakeRepository("gone")
+	gone := goneRepo.CloneURL
+	goneRepo.Remote("origin").Break()
 	if _, err := h.Human().AddRepository(context.Background(), h.Project, api.AddRepositoryInput{Name: "gone", CloneURL: gone}); err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +243,7 @@ func TestAFailedCloneIsRepositoryMissing(t *testing.T) {
 
 	r := h.Start()
 	r.Poll()
-	wantMissing(t, h, &factorytest.Repository{Name: "gone", CloneURL: gone, Path: filepath.Join(filepath.Dir(h.Repo), "gone")}, "git clone failed")
+	wantMissing(t, h, goneRepo, "git clone failed")
 	if s := h.Ticket(id).State; s != domain.Ready {
 		t.Errorf("%s is %s, want it not claimed while gone is missing", id, s)
 	}
@@ -251,7 +254,7 @@ func TestAFailedCloneIsRepositoryMissing(t *testing.T) {
 
 func TestBackToTheHomeRepositoryAloneTheCloneReportIsCleared(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	web := h.AddRepository("web")
 	r := h.Start()
 	r.Poll()
@@ -274,14 +277,14 @@ func TestBackToTheHomeRepositoryAloneTheCloneReportIsCleared(t *testing.T) {
 
 func TestARemovedRepositorysCloneIsLeftOnDisk(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	web := h.AddRepository("web")
 	r := h.Start()
 	if _, err := h.Human().RemoveRepository(context.Background(), h.Project, api.RemoveRepositoryInput{Name: "web"}); err != nil {
 		t.Fatal(err)
 	}
 	r.Poll()
-	if got := h.GitIn(web.Path, "remote", "get-url", "origin"); got != web.CloneURL {
+	if got := web.RemoteURL("origin"); got != web.CloneURL {
 		t.Errorf("the removed Repository's clone has origin %q, want it left as it was", got)
 	}
 }

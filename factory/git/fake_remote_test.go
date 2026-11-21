@@ -246,3 +246,29 @@ func TestAFakeRemoteCanBeRemovedAndABranchSetOnItAsAPushFromElsewhere(t *testing
 		t.Error("the repository still has origin")
 	}
 }
+
+func TestAFakeCloneRenamedToANewFolderIsTheRepositoryThere(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f, dir, first, remote := newFakeWithRemote(t)
+	if out, err := f.Open(dir).Push(ctx, "origin", "main", ""); err != nil {
+		t.Fatalf("Push: %v: %s", err, out)
+	}
+	parent := t.TempDir()
+	partial, path := filepath.Join(parent, ".web.cloning"), filepath.Join(parent, "web")
+	if out, err := f.Clone(ctx, "origin", remote, partial); err != nil {
+		t.Fatalf("Clone: %v: %s", err, out)
+	}
+	if err := f.Rename(partial, path); err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+	if c, err := f.Open(path).Commit("main"); err != nil || c != first {
+		t.Errorf("main of the clone after the rename = %s, %v; want %s", c, err, first)
+	}
+	if _, err := f.Open(partial).Commit("main"); err == nil {
+		t.Error("the folder renamed away still holds a repository")
+	}
+	if top, err := f.TopLevel(path); err != nil || top == "" {
+		t.Errorf("TopLevel(%s) = %q, %v; want the clone's folder", path, top, err)
+	}
+}

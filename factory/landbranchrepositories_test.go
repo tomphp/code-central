@@ -16,7 +16,7 @@ import (
 
 func TestUnderBranchHandMergingInBothRepositoriesLandsTheTicket(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.SetLandingMethod(branchLanding)
 	apiRepo := h.AddRepository("api")
 	id := inTwo(h, "Add an endpoint")
@@ -28,29 +28,29 @@ func TestUnderBranchHandMergingInBothRepositoriesLandsTheTicket(t *testing.T) {
 	r.WantOutput(id + ": Accepted under the Branch Landing Method: merge " + id + " into main in Repository api and the Factory lands it")
 
 	// Merged in api alone: Partly landed.
-	h.GitIn(apiRepo.Path, "merge", "-q", "--no-ff", "-m", "Merge "+id, id)
+	apiRepo.MergeByHand(id, "main")
 	r.Poll()
 
 	tk := h.WantState(id, domain.Accepted)
-	apiWork := h.GitIn(apiRepo.Path, "rev-parse", "refs/heads/"+id)
+	apiWork := apiRepo.Tip(id)
 	if !tk.PartlyLanded || landedIn(tk, "api") != apiWork || landedIn(tk, h.Project) != "" {
 		t.Fatalf("partly landed %v %+v, want it landed in api alone, at its work %s", tk.PartlyLanded, tk.Repositories, apiWork)
 	}
 	r.WantOutput(id + ": merged into main by hand in Repository api")
 
 	// Merged in the Home Repository too: Done.
-	h.Git("merge", "-q", "--no-ff", "-m", "Merge "+id, id)
+	h.MergeByHand(id, "main")
 	r.Poll()
 
 	tk = h.WantState(id, domain.Done)
-	if landedIn(tk, h.Project) != h.Git("rev-parse", "refs/heads/"+id) {
+	if landedIn(tk, h.Project) != h.Tip(id) {
 		t.Fatalf("Changed Repositories %+v, want the Home Repository landed at its work", tk.Repositories)
 	}
 }
 
 func TestUnderBranchAndPushAcceptPushesTheBranchInEachChangedRepository(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	home := h.AddRemote("origin")
 	apiRepo := h.AddRepository("api")
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
@@ -61,13 +61,13 @@ func TestUnderBranchAndPushAcceptPushesTheBranchInEachChangedRepository(t *testi
 	h.Accept(id)
 	r.Poll()
 
-	if got, want := home.Git("rev-parse", "refs/heads/"+id), h.Git("rev-parse", "refs/heads/"+id); got != want {
+	if got, want := home.Tip(id), h.Tip(id); got != want {
 		t.Errorf("the Home Repository's remote %s is at %q, want %s", id, got, want)
 	}
-	if got, want := apiRepo.Remote("origin").Git("rev-parse", "refs/heads/"+id), h.GitIn(apiRepo.Path, "rev-parse", "refs/heads/"+id); got != want {
+	if got, want := apiRepo.Remote("origin").Tip(id), apiRepo.Tip(id); got != want {
 		t.Errorf("api's remote %s is at %q, want %s", id, got, want)
 	}
-	if out := apiRepo.Remote("origin").Git("rev-parse", "main"); out != h.GitIn(apiRepo.Path, "rev-parse", "origin/main") {
+	if out := apiRepo.Remote("origin").Tip("main"); out != apiRepo.RemoteTip("origin", "main") {
 		t.Errorf("api's base was pushed under Branch: its remote's main is at %s", out)
 	}
 	r.WantOutput(id + ": pushed " + id + " to origin in Repository api")

@@ -219,6 +219,29 @@ func TestASecondRepositoryHasTheTypedHelpersOnRealGitAndTheFakeGit(t *testing.T)
 	})
 }
 
+func TestACommitOnARemoteIsAlikeOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		remote := h.MakeRepository("web").Remote("origin")
+		base := remote.Tip("main")
+		theirs := remote.CommitOn("main", "theirs.txt", "theirs\n")
+		if got := remote.Tip("main"); got != theirs {
+			t.Errorf("the remote's main is %s, want %s", got, theirs)
+		}
+		if got := remote.Parents(theirs); !slices.Equal(got, []string{base}) {
+			t.Errorf("theirs has parents %q, want the base %s", got, base)
+		}
+		release := remote.CommitOn("release", "release.txt", "release\n")
+		if !remote.Exists("release") || remote.Tip("release") != release || remote.Tip("main") != theirs {
+			t.Errorf("release isn't at %s alone", release)
+		}
+		if got := remote.Parents(release); !slices.Equal(got, []string{theirs}) {
+			t.Errorf("release has parents %q, want main's tip %s", got, theirs)
+		}
+	})
+}
+
 // fatalT is a testing.TB that records what fails the test and ends the
 // goroutine there, as Fatal does.
 type fatalT struct {
@@ -402,6 +425,61 @@ func TestAScriptsGitStepsInASecondRepositoryCommitInItsWorktreeOnRealGitAndTheFa
 		}
 		if h.Exists(id) && h.Tip(id) != h.Tip("main") {
 			t.Errorf("the Script committed on %s in the Home Repository", id)
+		}
+	})
+}
+
+func TestAHumansCloneRemotesAndWorktreesAreAlikeOnRealGitAndTheFakeGit(t *testing.T) {
+	t.Parallel()
+	onEachGit(t, func(t *testing.T, opt Option) {
+		h := New(t, opt)
+		web := h.MakeRepository("web")
+		h.CloneByHand(web.CloneURL, web.Path)
+
+		if !web.HasRemote("origin") || web.HasRemote("upstream") || web.RemoteURL("origin") != web.CloneURL {
+			t.Errorf("the clone's origin is %q, want %q alone", web.RemoteURL("origin"), web.CloneURL)
+		}
+		tip := web.Tip("main")
+		if got := web.Head(web.Path); got != tip || web.CheckedOut(web.Path) != "main" {
+			t.Errorf("the clone has %s at %s checked out, want main at %s", web.CheckedOut(web.Path), got, tip)
+		}
+		if got := h.SubjectIn(web.Path, tip); got != "Start web" {
+			t.Errorf("the subject of main's tip = %q, want the one it was made with", got)
+		}
+
+		web.SetRemote("upstream", web.CloneURL)
+		web.SetRemote("origin", "/elsewhere.git")
+		if !web.HasRemote("upstream") || web.RemoteURL("origin") != "/elsewhere.git" {
+			t.Errorf("after SetRemote, upstream is %t and origin %q", web.HasRemote("upstream"), web.RemoteURL("origin"))
+		}
+		web.SetRemote("origin", web.CloneURL)
+
+		web.Remote("origin").Branch("release", "main")
+		web.Fetch("origin")
+		if got := web.RemoteTip("origin", "release"); got != tip {
+			t.Errorf("origin/release is at %s, want %s", got, tip)
+		}
+
+		web.CommitOn("spec/one", "one.txt", "one\n")
+		if got := web.SpecBranches(); !slices.Equal(got, []string{"spec/one"}) {
+			t.Errorf("SpecBranches = %q, want spec/one alone", got)
+		}
+
+		wt := web.Worktree("scratch")
+		web.AddDetachedWorktree(wt, "main")
+		if got := web.Head(wt); got != tip {
+			t.Errorf("the detached worktree is at %s, want %s", got, tip)
+		}
+		if err := os.WriteFile(filepath.Join(web.Path, "notes.txt"), []byte("n\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if got := web.Status(web.Path); got != "?? notes.txt" {
+			t.Errorf("Status = %q, want the untracked file", got)
+		}
+
+		web.CheckoutNewBranch("mine")
+		if got := web.CheckedOut(web.Path); got != "mine" || web.Head(web.Path) != tip {
+			t.Errorf("after checkout -b the clone is on %s at %s, want mine at %s", got, web.Head(web.Path), tip)
 		}
 	})
 }

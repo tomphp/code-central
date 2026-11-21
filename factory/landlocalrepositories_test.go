@@ -19,7 +19,7 @@ import (
 
 func TestUnderMergeAndPushTheHomeIsPushedAndALocalOnlyRepositoryLandsOnMerge(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	home := h.AddRemote("origin")
 	apiRepo := h.AddLocalRepository("api")
 	mergeAndPush(h, "origin")
@@ -31,8 +31,8 @@ func TestUnderMergeAndPushTheHomeIsPushedAndALocalOnlyRepositoryLandsOnMerge(t *
 	r.Poll()
 
 	tk := h.WantState(id, domain.Done)
-	homeMerge, apiMerge := h.Git("rev-parse", "main"), h.GitIn(apiRepo.Path, "rev-parse", "main")
-	if got := home.Git("rev-parse", "main"); got != homeMerge {
+	homeMerge, apiMerge := h.Tip("main"), apiRepo.Tip("main")
+	if got := home.Tip("main"); got != homeMerge {
 		t.Errorf("the Home Repository's remote main is at %s, want its merge %s pushed", got, homeMerge)
 	}
 	if landedIn(tk, "api") != apiMerge || landedIn(tk, h.Project) != homeMerge {
@@ -47,11 +47,11 @@ func TestUnderMergeAndPushTheHomeIsPushedAndALocalOnlyRepositoryLandsOnMerge(t *
 
 func TestUnderMergeAndPushALocalOnlyRepositorysOwnRemoteIsNeverFetchedPushedOrLevelled(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	apiRepo := h.AddLocalRepository("api")
 	other := addUnrelatedOrigin(h, apiRepo)
-	theirs := other.Remote("origin").Git("rev-parse", "main")
+	theirs := other.Remote("origin").Tip("main")
 	mergeAndPush(h, "origin")
 	id := inAPI(h, "Add an endpoint")
 	r := h.Start()
@@ -61,13 +61,13 @@ func TestUnderMergeAndPushALocalOnlyRepositorysOwnRemoteIsNeverFetchedPushedOrLe
 	r.Poll()
 
 	tk := h.WantState(id, domain.Done)
-	if merge := h.GitIn(apiRepo.Path, "rev-parse", "main"); landedIn(tk, "api") != merge {
+	if merge := apiRepo.Tip("main"); landedIn(tk, "api") != merge {
 		t.Fatalf("Changed Repositories %+v, want api landed at its merge %s", tk.Repositories, merge)
 	}
-	if got := h.GitIn(apiRepo.Path, "for-each-ref", "refs/remotes"); got != "" {
-		t.Errorf("api's remote-tracking refs are %q, want its origin never fetched", got)
+	if apiRepo.HasRemoteTip("origin", "main") {
+		t.Errorf("api has a remote-tracking main for origin, want its origin never fetched")
 	}
-	if got := other.Remote("origin").Git("rev-parse", "main"); got != theirs {
+	if got := other.Remote("origin").Tip("main"); got != theirs {
 		t.Errorf("api's origin's main moved to %s, want nothing pushed to it", got)
 	}
 	if rows := h.NeedsMeItems(api.ReasonBaseDiverged); len(rows) != 0 {
@@ -77,13 +77,13 @@ func TestUnderMergeAndPushALocalOnlyRepositorysOwnRemoteIsNeverFetchedPushedOrLe
 
 func TestALocalOnlyRepositorysMissingBaseIsNotLookedForOnItsOwnRemote(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	apiRepo := h.AddLocalRepository("api")
 	other := addUnrelatedOrigin(h, apiRepo)
 	// release is on api's origin, which isn't the Repository's, and not
 	// in api itself.
 	release := "release"
-	other.Remote("origin").Git("branch", release, "main")
+	other.Remote("origin").Branch(release, "main")
 	if _, err := h.Human().EditRepository(context.Background(), h.Project, api.EditRepositoryInput{Name: "api", Base: &release}); err != nil {
 		t.Fatal(err)
 	}
@@ -96,14 +96,14 @@ func TestALocalOnlyRepositorysMissingBaseIsNotLookedForOnItsOwnRemote(t *testing
 	if len(rows) != 1 || rows[0].BaseMissing.Repository != "api" || rows[0].BaseMissing.Base != release {
 		t.Fatalf("Base missing items %+v, want one naming api's release", rows)
 	}
-	if got := h.GitIn(apiRepo.Path, "for-each-ref", "refs/remotes", "refs/heads/"+release); got != "" {
-		t.Errorf("api holds %q, want its origin never fetched and no release made from it", got)
+	if apiRepo.HasRemoteTip("origin", release) || apiRepo.Exists(release) {
+		t.Errorf("api holds a %s, want its origin never fetched and no release made from it", release)
 	}
 }
 
 func TestUnderTheCIGateATicketChangingOnlyALocalOnlyRepositoryLandsOnMergeWithNoPushedCommit(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	apiRepo := h.AddLocalRepository("api")
 	mergeAndPush(h, "origin")
@@ -118,7 +118,7 @@ func TestUnderTheCIGateATicketChangingOnlyALocalOnlyRepositoryLandsOnMergeWithNo
 	r.Poll()
 
 	tk := h.WantState(id, domain.Done)
-	if merge := h.GitIn(apiRepo.Path, "rev-parse", "main"); landedIn(tk, "api") != merge {
+	if merge := apiRepo.Tip("main"); landedIn(tk, "api") != merge {
 		t.Fatalf("Changed Repositories %+v, want api landed at its merge %s", tk.Repositories, merge)
 	}
 	for _, v := range tk.Repositories {
@@ -136,7 +136,7 @@ func TestUnderTheCIGateATicketChangingOnlyALocalOnlyRepositoryLandsOnMergeWithNo
 
 func TestUnderBranchAndPushAcceptPushesTheBranchOnlyWhereThereIsACloneURL(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	home := h.AddRemote("origin")
 	apiRepo := h.AddLocalRepository("api")
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
@@ -148,7 +148,7 @@ func TestUnderBranchAndPushAcceptPushesTheBranchOnlyWhereThereIsACloneURL(t *tes
 	r.Poll()
 
 	tk := h.WantState(id, domain.Accepted)
-	if got, want := home.Git("rev-parse", "refs/heads/"+id), h.Git("rev-parse", "refs/heads/"+id); got != want {
+	if got, want := home.Tip(id), h.Tip(id); got != want {
 		t.Errorf("the Home Repository's remote %s is at %q, want %s", id, got, want)
 	}
 	if commented(tk, "can't push") {
@@ -157,8 +157,8 @@ func TestUnderBranchAndPushAcceptPushesTheBranchOnlyWhereThereIsACloneURL(t *tes
 	r.WantOutput(id + ": pushed " + id + " to origin\n")
 	r.WantOutput(id + ": Accepted under the Branch Landing Method: merge " + id + " into main in Repository api and the Factory lands it")
 
-	h.GitIn(apiRepo.Path, "merge", "-q", "--no-ff", "-m", "Merge "+id, id)
-	h.Git("merge", "-q", "--no-ff", "-m", "Merge "+id, id)
+	apiRepo.MergeByHand(id, "main")
+	h.MergeByHand(id, "main")
 	r.Poll()
 	h.WantState(id, domain.Done)
 }
@@ -178,7 +178,7 @@ func TestATicketWaitingOnCIInARepositoryWhoseCloneURLIsClearedLandsThereWithNoGa
 		t.Fatal(err)
 	}
 	tip := pushElsewhere(t, h, apiRepo, "other.go", "package api\n")
-	h.GitIn(apiRepo.Path, "fetch", "-q", "origin")
+	apiRepo.Fetch("origin")
 
 	r.Poll()
 
@@ -196,7 +196,7 @@ func TestATicketWaitingOnCIInARepositoryWhoseCloneURLIsClearedLandsThereWithNoGa
 
 func TestUnderLandPerSpecALocalOnlyRepositorysSpecBranchMergeLandsOnMerge(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	home := h.AddRemote("origin")
 	h.MakeRequirement()
 	apiRepo := h.AddLocalRepository("api")
@@ -209,12 +209,12 @@ func TestUnderLandPerSpecALocalOnlyRepositorysSpecBranchMergeLandsOnMerge(t *tes
 	r.Poll()
 
 	tk := h.WantState(id, domain.Done)
-	homeMerge, apiMerge := h.Git("rev-parse", "main"), h.GitIn(apiRepo.Path, "rev-parse", "main")
+	homeMerge, apiMerge := h.Tip("main"), apiRepo.Tip("main")
 	want := "Merge spec " + h.SpecID() + ": Work"
 	if got := subject(h, apiRepo.Path, apiMerge); got != want {
 		t.Errorf("api's merge is %q, want %q", got, want)
 	}
-	if got := home.Git("rev-parse", "main"); got != homeMerge {
+	if got := home.Tip("main"); got != homeMerge {
 		t.Errorf("the Home Repository's remote main is at %s, want its Spec merge %s pushed", got, homeMerge)
 	}
 	if landedIn(tk, "api") != apiMerge || landedIn(tk, h.Project) != homeMerge {
@@ -224,19 +224,19 @@ func TestUnderLandPerSpecALocalOnlyRepositorysSpecBranchMergeLandsOnMerge(t *tes
 
 func TestUnderMergeAndPushAHandMergeInALocalOnlyRepositoryLandsWithNoPush(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	apiRepo := h.AddLocalRepository("api")
 	mergeAndPush(h, "origin")
 	id := inAPI(h, "Add an endpoint")
 	r := h.Start()
 	h.WantState(id, domain.InReview)
-	h.GitIn(apiRepo.Path, "merge", "-q", "--no-ff", "-m", "Merge "+id, id)
+	apiRepo.MergeByHand(id, "main")
 
 	r.Poll()
 
 	tk := h.WantState(id, domain.Done)
-	if work := h.GitIn(apiRepo.Path, "rev-parse", "refs/heads/"+id); landedIn(tk, "api") != work {
+	if work := apiRepo.Tip(id); landedIn(tk, "api") != work {
 		t.Fatalf("Changed Repositories %+v, want api landed at its work %s", tk.Repositories, work)
 	}
 	r.WantOutput(id + ": merged into main by hand in Repository api")
@@ -244,7 +244,7 @@ func TestUnderMergeAndPushAHandMergeInALocalOnlyRepositoryLandsWithNoPush(t *tes
 
 func TestARepositoryWhoseCloneURLIsClearedWhileItsBaseHasDivergedNoLongerHoldsBackClaims(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")
 	apiRepo := h.AddRepository("api")
 	mergeAndPush(h, "origin")
