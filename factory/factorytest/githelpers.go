@@ -5,6 +5,7 @@ package factorytest
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -121,6 +122,7 @@ func (h *Harness) CloneByHand(url, path string) {
 		}
 		return
 	}
+	must(h.t, os.MkdirAll(filepath.Dir(path), 0o755))
 	h.git(filepath.Dir(path), "clone", "-q", url, path)
 }
 

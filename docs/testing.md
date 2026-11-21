@@ -60,7 +60,30 @@ The Defender step is an experiment (code-central-1141): check the timings before
 
 Postgres runs only when `CODE_CENTRAL_TEST_POSTGRES_URL` is set (`storetest.NeedsPostgres`); otherwise it skips and names the variable. CI's `test (postgres)` job sets it.
 
+`factory/git/gittest.Run` is the Git port's contract suite, the same shape. Its `Setup` gives it a Git of one kind, and two thin tests supply it: real git (`factory/git/real_test.go`) and the Fake git (`factory/git/fake_test.go`). See [The Git port and the Fake git](#the-git-port-and-the-fake-git).
+
 This is the pattern for testing a port against more than one implementation: write the behaviour once as a suite over the interface, and give each implementation a thin test that supplies a factory. A new implementation passes the suite or is not an implementation of the port.
+
+## The Git port and the Fake git
+
+Four terms, defined here and not in `GLOSSARY.md` (ADR 0073):
+
+- **Git port**: `factory/git`, the one interface through which the Factory runs git. The Factory's own files run no git (see the [Git guard](#the-guard-tests)).
+- **Fake git**: `git.Fake`, an in-memory implementation of the Git port that starts no process. A Factory test runs on it by default, which is what keeps the Factory's package fast, and it is the faster of the two ways to run the Factory's scenarios.
+- **Git contract suite**: `gittest.Run`, the behaviour of the Git port written once over the interface. Real git and the Fake git each pass it on every push, so the Fake is held to real git, and a behaviour the Fake gets wrong fails the suite rather than a scenario test.
+- **Real-git tests**: the Factory tests that name `factorytest.RealGit()`. They run real git on every push, for what the Fake git doesn't model: raw git (`Git`, `GitIn`, `Remote.Git`), revision syntax such as `HEAD` or `main^`, and a fake claude's Git Script steps beyond the Fake's.
+
+`factorytest.New(t)` runs the harness, and its repositories, on the Fake git. A test reads and changes them only through the typed helpers (`Tip`, `Log`, `CommitOn`, `Publish` and the rest, listed in `factorytest/git.go`), which serve both implementations; raw git fails the test with a message naming them. A test that needs raw git passes `factorytest.RealGit()`. `factorytest.FakeGit()` is the default and only overrides an earlier `RealGit()`; the last option wins.
+
+`CODE_CENTRAL_TEST_FACTORY_GIT=real` runs every harness on real git, `RealGit()` or not:
+
+```
+CODE_CENTRAL_TEST_FACTORY_GIT=real go test ./factory/...
+```
+
+Run it after changing the Fake git or a typed helper, to check the Fake against real git. The nightly `scale.yml` runs this as its `Factory on real git` step on Linux, macOS and Windows, the backstop for the contract suite. The variable takes no other value: anything but empty or `real` fails the test.
+
+A new Fake behaviour goes into `gittest.Run` first, then into the Fake until real git and the Fake both pass it.
 
 ## The guard tests
 
