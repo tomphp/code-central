@@ -34,7 +34,7 @@ func rebasePullRequestOn(h *factorytest.Harness, remote string, landPerSpec bool
 // main, which the Factory's next fetch brings in. It returns the commit.
 func moveRemoteBase(h *factorytest.Harness, remote *factorytest.Remote, file, content string) string {
 	moved := h.CommitOn("upstream", file, content)
-	remote.PushTo("upstream", "main")
+	h.Publish(remote, moved, "main")
 	return moved
 }
 
@@ -43,18 +43,18 @@ func moveRemoteBase(h *factorytest.Harness, remote *factorytest.Remote, file, co
 // and returns that commit.
 func stalePush(h *factorytest.Harness, remote *factorytest.Remote, branch string) string {
 	stale := h.CommitOn("stale-"+branch, "stale.txt", "an earlier finish\n")
-	remote.PushTo("stale-"+branch, branch)
+	h.Publish(remote, stale, branch)
 	return stale
 }
 
 func TestUnderPullRequestWithRebaseATicketIsRebasedOntoTheFetchedBaseAndForcePushedWithLease(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
 	rebasePullRequestOn(h, "origin", false)
 	// With CI Tracking, the pushed commit is the one CI results count on.
 	trackCI(t, h)
-	id, commits := acceptedAs(t, h, "Add a feature", "feature")
+	id, commits := acceptedTwice(h, "Add a feature", "feature")
 	stale := stalePush(h, remote, id)
 	moved := moveRemoteBase(h, remote, "base.txt", "base\n")
 
@@ -62,19 +62,19 @@ func TestUnderPullRequestWithRebaseATicketIsRebasedOntoTheFetchedBaseAndForcePus
 	r.WantOutput(id + ": replayed onto main at ")
 	r.WantOutput(id + ": pushed " + id + " to origin")
 
-	tip := h.Git("rev-parse", id)
-	if got := remote.Git("rev-parse", id); got != tip {
+	tip := h.Tip(id)
+	if got := remote.Tip(id); got != tip {
 		t.Fatalf("the remote's %s is at %s, want the rebased branch %s over the earlier push %s", id, got, tip, stale)
 	}
-	line, merges := inRange(h, h.Repo, moved+".."+tip)
+	line, merges := inRange(h, tip, moved)
 	if len(line) != 2 || len(merges) > 0 {
 		t.Fatalf("the branch adds %d commits with merges %v to the fetched base, want the 2 replayed and no merge", len(line), merges)
 	}
-	if got := h.Git("rev-parse", line[0]+"^"); got != moved {
-		t.Errorf("the first replayed commit's parent is %s, want the fetched base's tip %s", got, moved)
+	if got := h.Parents(line[0]); len(got) != 1 || got[0] != moved {
+		t.Errorf("the first replayed commit's parents are %v, want the fetched base's tip %s", got, moved)
 	}
 	for i, orig := range commits {
-		if got, want := authored(h, h.Repo, line[i]), authored(h, h.Repo, orig); got != want {
+		if got, want := h.Subject(line[i]), h.Subject(orig); got != want {
 			t.Errorf("replayed commit %d is %q, want %q", i, got, want)
 		}
 	}
@@ -83,14 +83,14 @@ func TestUnderPullRequestWithRebaseATicketIsRebasedOntoTheFetchedBaseAndForcePus
 	if tk.State != domain.Accepted || tk.PushedCommit == nil || tk.PushedCommit.Commit != tip {
 		t.Errorf("%s is %s with pushed commit %+v, want it Accepted, pushed at the force-pushed tip %s", id, tk.State, tk.PushedCommit, tip)
 	}
-	if got := remote.Git("rev-parse", "main"); got != moved {
+	if got := remote.Tip("main"); got != moved {
 		t.Errorf("the remote's main is at %s, want it left at %s", got, moved)
 	}
 }
 
 func TestUnderPullRequestWithRebaseAPushedTicketIsntRebasedWhenTheBaseMoves(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
 	rebasePullRequestOn(h, "origin", false)
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
@@ -100,13 +100,13 @@ func TestUnderPullRequestWithRebaseAPushedTicketIsntRebasedWhenTheBaseMoves(t *t
 	moved := moveRemoteBase(h, remote, "base.txt", "base\n")
 	r.Poll()
 
-	if got := h.Git("rev-parse", "main"); got != moved {
+	if got := h.Tip("main"); got != moved {
 		t.Fatalf("main is at %s, want it fast-forwarded to the remote's %s", got, moved)
 	}
-	if got := remote.Git("rev-parse", id); got != commit {
+	if got := remote.Tip(id); got != commit {
 		t.Errorf("the remote's %s is at %s, want it left at the push %s", id, got, commit)
 	}
-	if got := h.Git("rev-parse", id); got != commit {
+	if got := h.Tip(id); got != commit {
 		t.Errorf("%s's branch is at %s, want it left at %s", id, got, commit)
 	}
 	if strings.Contains(r.Stdout(), id+": replayed onto") {
@@ -116,7 +116,7 @@ func TestUnderPullRequestWithRebaseAPushedTicketIsntRebasedWhenTheBaseMoves(t *t
 
 func TestUnderPullRequestWithRebaseATicketConflictingWithTheFetchedBaseIsSentBackToRebase(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
 	rebasePullRequestOn(h, "origin", false)
 	id, _ := accepted(h, "Add a feature", "feature.txt", "ticket side\n")
@@ -133,14 +133,14 @@ func TestUnderPullRequestWithRebaseATicketConflictingWithTheFetchedBaseIsSentBac
 	if !strings.Contains(c.Prompt, "Rebase the branch onto main and resolve the conflicts") {
 		t.Errorf("first prompt %q, want it to say to rebase onto main", c.Prompt)
 	}
-	if out := remote.Git("branch", "--list", id); strings.TrimSpace(out) != "" {
-		t.Errorf("the conflicting branch was pushed: %q", out)
+	if remote.Exists(id) {
+		t.Error("the conflicting branch was pushed")
 	}
 }
 
 func TestUnderPullRequestWithRebaseASpecBranchIsRebasedOntoTheFetchedBaseAndForcePushedWithLease(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
 	rebasePullRequestOn(h, "origin", true)
 	trackCI(t, h)
@@ -150,7 +150,7 @@ func TestUnderPullRequestWithRebaseASpecBranchIsRebasedOntoTheFetchedBaseAndForc
 
 	r := h.Start()
 	r.WantOutput(h.SpecID() + ": pushed " + branch + " to origin")
-	first := h.Git("rev-parse", branch)
+	first := h.Tip(branch)
 	wantPushed(t, h, branch, first)
 
 	// The base moves on the Code Host, and a Ticket added to the Spec is
@@ -160,15 +160,15 @@ func TestUnderPullRequestWithRebaseASpecBranchIsRebasedOntoTheFetchedBaseAndForc
 	r.Poll()
 	r.WantOutput(h.SpecID() + ": rebased " + branch + " onto main at ")
 
-	tip := h.Git("rev-parse", branch)
-	if got := remote.Git("rev-parse", branch); got != tip {
+	tip := h.Tip(branch)
+	if got := remote.Tip(branch); got != tip {
 		t.Fatalf("the remote's %s is at %s, want the rebased Spec Branch %s over the earlier push %s", branch, got, tip, first)
 	}
-	subjects, merges := specLine(h, h.Repo, moved)
-	if strings.Join(subjects, ",") != "Change one.txt,Change two.txt" || len(merges) > 0 {
-		t.Errorf("%s holds %v with merges %v on the fetched base, want a's and b's commits and no merge", branch, subjects, merges)
+	subs, merges := specLine(h, h, moved)
+	if strings.Join(subs, ",") != "Change one.txt,Change two.txt" || len(merges) > 0 {
+		t.Errorf("%s holds %v with merges %v on the fetched base, want a's and b's commits and no merge", branch, subs, merges)
 	}
-	if !h.Descends(tip, moved) {
+	if !descendsFrom(h, tip, moved) {
 		t.Errorf("%s at %s doesn't descend from the fetched base's tip %s", branch, tip, moved)
 	}
 	wantPushed(t, h, branch, tip)
@@ -177,14 +177,14 @@ func TestUnderPullRequestWithRebaseASpecBranchIsRebasedOntoTheFetchedBaseAndForc
 			t.Errorf("%s's pushed commit is %+v, want the force-pushed tip %s", id, tk.PushedCommit, tip)
 		}
 	}
-	if got := remote.Git("rev-parse", "main"); got != moved {
+	if got := remote.Tip("main"); got != moved {
 		t.Errorf("the remote's main is at %s, want it left at %s", got, moved)
 	}
 }
 
 func TestUnderPullRequestWithRebaseAPushedSpecBranchIsntRebasedWhenTheBaseMoves(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
 	rebasePullRequestOn(h, "origin", true)
 	h.MakeRequirement()
@@ -193,21 +193,21 @@ func TestUnderPullRequestWithRebaseAPushedSpecBranchIsntRebasedWhenTheBaseMoves(
 
 	r := h.Start()
 	r.WantOutput(h.SpecID() + ": pushed " + branch + " to origin")
-	first := h.Git("rev-parse", branch)
+	first := h.Tip(branch)
 	moveRemoteBase(h, remote, "base.txt", "base\n")
 	r.Poll()
 
-	if got := h.Git("rev-parse", branch); got != first {
+	if got := h.Tip(branch); got != first {
 		t.Errorf("%s moved to %s on a base move, want it left at %s", branch, got, first)
 	}
-	if got := remote.Git("rev-parse", branch); got != first {
+	if got := remote.Tip(branch); got != first {
 		t.Errorf("the remote's %s is at %s, want it left at %s", branch, got, first)
 	}
 }
 
 func TestUnderPullRequestWithRebaseASpecBranchConflictingWithTheFetchedBaseOpensTheRebaseTicket(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.FakeGit())
 	remote := h.AddRemote("origin")
 	rebasePullRequestOn(h, "origin", true)
 	h.MakeRequirement()
@@ -216,21 +216,21 @@ func TestUnderPullRequestWithRebaseASpecBranchConflictingWithTheFetchedBaseOpens
 
 	r := h.Start()
 	r.WantOutput(h.SpecID() + ": pushed " + branch + " to origin")
-	first := h.Git("rev-parse", branch)
+	first := h.Tip(branch)
 	moveRemoteBase(h, remote, "two.txt", "base side\n")
 	accepted(h, "Second", "two.txt", "spec side\n")
 	r.Poll()
 
 	r.WantOutput(h.SpecID() + ": " + branch + " conflicts with main in two.txt: opened ")
 	r.WantOutput(" to rebase it onto the base")
-	if got := remote.Git("rev-parse", branch); got != first {
+	if got := remote.Tip(branch); got != first {
 		t.Errorf("the remote's %s is at %s, want it left at %s while it conflicts", branch, got, first)
 	}
 }
 
 func TestUnderPullRequestWithRebaseATicketConflictingInOneRepositoryIsRebasedAndPushedInNeither(t *testing.T) {
 	t.Parallel()
-	h := factorytest.New(t)
+	h := factorytest.New(t, factorytest.RealGit())
 	home := h.AddRemote("origin")
 	apiRepo := h.AddRepository("api")
 	rebasePullRequestOn(h, "origin", false)
@@ -240,9 +240,9 @@ func TestUnderPullRequestWithRebaseATicketConflictingInOneRepositoryIsRebasedAnd
 	// Both remote bases move on: the Home Repository's cleanly, api's in
 	// conflict.
 	moveRemoteBase(h, home, "base.txt", "base\n")
-	apiRepo.CommitOn("upstream", "endpoint.go", "package other\n")
-	h.GitIn(apiRepo.Path, "push", "-q", "origin", "upstream:refs/heads/main")
-	homeBranch, apiBranch := h.Git("rev-parse", id), h.GitIn(apiRepo.Path, "rev-parse", id)
+	apiUpstream := apiRepo.CommitOn("upstream", "endpoint.go", "package other\n")
+	apiRepo.Publish(apiRepo.Remote("origin"), apiUpstream, "main")
+	homeBranch, apiBranch := h.Tip(id), apiRepo.Tip(id)
 	h.Script(id, factorytest.Wait())
 
 	h.Accept(id)
@@ -252,10 +252,10 @@ func TestUnderPullRequestWithRebaseATicketConflictingInOneRepositoryIsRebasedAnd
 	if !movedTo(tk, domain.Accepted, domain.Ready) {
 		t.Fatalf("%s wasn't sent back: %+v", id, tk.Moves)
 	}
-	if h.Git("rev-parse", id) != homeBranch || h.GitIn(apiRepo.Path, "rev-parse", id) != apiBranch {
+	if h.Tip(id) != homeBranch || apiRepo.Tip(id) != apiBranch {
 		t.Error("a branch moved: a Ticket conflicting in any Repository is rebased in none")
 	}
-	if strings.TrimSpace(home.Git("branch", "--list", id)) != "" || strings.TrimSpace(apiRepo.Remote("origin").Git("branch", "--list", id)) != "" {
+	if home.Exists(id) || apiRepo.Remote("origin").Exists(id) {
 		t.Error("a branch was pushed: a Ticket conflicting in any Repository is pushed in none")
 	}
 	if !commented(tk, "- api: replaying", "  - endpoint.go", "In each, rebase the branch onto its base") || commented(tk, "- "+h.Project+":") {

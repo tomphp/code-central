@@ -42,7 +42,7 @@ func FakeGit() Option { return func(o *options) { o.fakeGit = true } }
 // typedHelpers are the helpers that serve real git and the Fake git alike.
 // They take branch names and commit IDs, not revision syntax like HEAD or
 // main^, which the Fake git doesn't model.
-const typedHelpers = "Tip, Exists, Log, Parents, File, RemoteTip, CommitOn, MergeByHand"
+const typedHelpers = "Tip, Exists, Log, Parents, Subject, File, RemoteTip, CommitOn, MergeByHand, PushByHand, Publish, IsAncestor"
 
 // gitEnv, set to "real", runs every Harness on real git, even one whose
 // test chose FakeGit, to check a run on the Fake git against real git.
@@ -93,6 +93,20 @@ func (h *Harness) Parents(commit string) []string {
 	return h.parents(h.Repo, commit)
 }
 
+// Subject is the first line of commit's message in the repo.
+func (h *Harness) Subject(commit string) string {
+	h.t.Helper()
+	return h.subject(h.Repo, commit)
+}
+
+// Publish puts commit, one in the repo, on the remote's branch, as a push
+// from elsewhere would, with its history: the repo's own refs, its
+// remote-tracking ones too, are left for a fetch.
+func (h *Harness) Publish(remote *Remote, commit, branch string) {
+	h.t.Helper()
+	h.publish(h.Repo, remote, commit, branch)
+}
+
 // File is the content of the file path, slash-separated, at rev in the
 // repo, failing the test when none is committed there.
 func (h *Harness) File(rev, path string) string {
@@ -122,6 +136,38 @@ func (h *Harness) CommitOn(branch, file, content string) string {
 func (h *Harness) MergeByHand(branch, into string) string {
 	h.t.Helper()
 	return h.mergeByHand(h.Repo, branch, into)
+}
+
+// PushByHand pushes the repo's branch to remote's branch to, as a human
+// would from another clone: a fast-forward only, by remote's path, so it
+// leaves the repo's remote-tracking branches as they were.
+func (h *Harness) PushByHand(remote *Remote, branch, to string) {
+	h.t.Helper()
+	h.pushByHand(h.Repo, remote, branch, to)
+}
+
+// IsAncestor reports whether commit is reachable from rev in the repo.
+func (h *Harness) IsAncestor(commit, rev string) bool {
+	h.t.Helper()
+	return h.isAncestor(h.Repo, commit, rev)
+}
+
+// PushByHand is Harness.PushByHand from r's clone at Path.
+func (r *Repository) PushByHand(remote *Remote, branch, to string) {
+	r.h.t.Helper()
+	r.h.pushByHand(r.Path, remote, branch, to)
+}
+
+// IsAncestor is Harness.IsAncestor in r's clone at Path.
+func (r *Repository) IsAncestor(commit, rev string) bool {
+	r.h.t.Helper()
+	return r.h.isAncestor(r.Path, commit, rev)
+}
+
+// IsAncestor is Harness.IsAncestor in the bare repository.
+func (r *Remote) IsAncestor(commit, rev string) bool {
+	r.h.t.Helper()
+	return r.h.isAncestor(r.Path, commit, rev)
 }
 
 // Tip is Harness.Tip in r's clone at Path.
@@ -158,6 +204,18 @@ func (r *Repository) File(rev, path string) string {
 func (r *Repository) RemoteTip(remote, branch string) string {
 	r.h.t.Helper()
 	return r.h.remoteTip(r.Path, remote, branch)
+}
+
+// Subject is Harness.Subject in r's clone at Path.
+func (r *Repository) Subject(commit string) string {
+	r.h.t.Helper()
+	return r.h.subject(r.Path, commit)
+}
+
+// Publish is Harness.Publish in r's clone at Path.
+func (r *Repository) Publish(remote *Remote, commit, branch string) {
+	r.h.t.Helper()
+	r.h.publish(r.Path, remote, commit, branch)
 }
 
 // CommitOn is Harness.CommitOn in r's clone at Path.
@@ -374,6 +432,25 @@ func (h *Harness) log(dir, rev string) []string {
 	}
 }
 
+// subject is Subject in the repository at dir.
+func (h *Harness) subject(dir, commit string) string {
+	h.t.Helper()
+	if h.fake == nil {
+		return h.git(dir, "log", "-1", "--format=%s", commit, "--")
+	}
+	return h.fake.Subject(dir, h.commit(dir, commit))
+}
+
+// publish is Publish in the clone at dir.
+func (h *Harness) publish(dir string, remote *Remote, commit, branch string) {
+	h.t.Helper()
+	if h.fake == nil {
+		h.git(dir, "push", "-q", remote.Path, commit+":refs/heads/"+branch)
+		return
+	}
+	h.fake.SetRemoteBranch(dir, remote.Name, branch, h.commit(dir, commit))
+}
+
 // parents is Parents in the repository at dir.
 func (h *Harness) parents(dir, commit string) []string {
 	h.t.Helper()
@@ -469,6 +546,36 @@ func (h *Harness) mergeByHand(dir, branch, into string) string {
 	must(h.t, err)
 	h.moveBranch(dir, into, commit, at)
 	return commit
+}
+
+// pushByHand is PushByHand from the clone at dir.
+func (h *Harness) pushByHand(dir string, remote *Remote, branch, to string) {
+	h.t.Helper()
+	if h.fake == nil {
+		h.git(dir, "push", "-q", remote.Path, branch+":refs/heads/"+to)
+		return
+	}
+	commit := h.tip(dir, branch)
+	if old, ok := h.lookup(remote.Path, "refs/heads/"+to); ok && !h.fake.Open(dir).IsAncestor(old, commit) {
+		h.t.Fatalf("factorytest: pushing %s to %s on %s isn't a fast-forward", branch, to, remote.Name)
+	}
+	h.fake.SetRemoteBranch(dir, remote.Name, to, commit)
+}
+
+// isAncestor is IsAncestor in the repository at dir.
+func (h *Harness) isAncestor(dir, commit, rev string) bool {
+	h.t.Helper()
+	if h.fake != nil {
+		return h.fake.Open(dir).IsAncestor(h.commit(dir, commit), h.commit(dir, rev))
+	}
+	out, err := h.runGit(dir, "merge-base", "--is-ancestor", commit, rev)
+	if exit := (*exec.ExitError)(nil); errors.As(err, &exit) && exit.ExitCode() == 1 {
+		return false
+	}
+	if err != nil {
+		h.t.Fatalf("git merge-base --is-ancestor %s %s: %v\n%s", commit, rev, err, out)
+	}
+	return true
 }
 
 // moveBranch moves branch, or makes it when old is "", to commit in the
