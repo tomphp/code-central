@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -41,6 +41,46 @@ describe("Modal", () => {
     await user.click(screen.getByText("Open"));
     await user.click(screen.getByRole("dialog").parentElement!);
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it("stays open when a press inside the card is released on the backdrop", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(<Harness onClose={onClose} />);
+    await user.click(screen.getByText("Open"));
+    const card = screen.getByRole("dialog");
+    const backdrop = card.parentElement!;
+    fireEvent.mouseDown(card);
+    fireEvent.mouseUp(backdrop);
+    fireEvent.click(backdrop);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("stays open when a press on the backdrop is released inside the card", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(<Harness onClose={onClose} />);
+    await user.click(screen.getByText("Open"));
+    const card = screen.getByRole("dialog");
+    const backdrop = card.parentElement!;
+    fireEvent.mouseDown(backdrop);
+    fireEvent.mouseUp(card);
+    fireEvent.click(backdrop);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("closes on a press and release both on the backdrop", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(<Harness onClose={onClose} />);
+    await user.click(screen.getByText("Open"));
+    const backdrop = screen.getByRole("dialog").parentElement!;
+    fireEvent.mouseDown(backdrop);
+    fireEvent.mouseUp(backdrop);
+    fireEvent.click(backdrop);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("does not close on an Escape something inside handled", async () => {
