@@ -235,3 +235,57 @@ func TestWorkThatReachedAPhaseBeforeItWasMappedIsNotMoved(t *testing.T) {
 	w.acceptedToLand(fix)
 	w.polledSetting("Resolved")
 }
+
+// readyIssue is work item 1 arrived with states mapped, its Incoming
+// Issue approved to Ready and polled, so work from then on is after the
+// mapping, returning its Ticket.
+func (w *watching) readyIssue(states api.WorkItemStates) string {
+	w.t.Helper()
+	w.setStates(states)
+	w.arrived(1)
+	ticket := w.ticketOf(1).ID
+	if _, err := w.srv.Core.Approve(human, "acme", api.TicketInput{Ticket: api.Ref(ticket)}); err != nil {
+		w.t.Fatal(err)
+	}
+	w.polled()
+	return ticket
+}
+
+// An Incoming Issue worked directly sets its work item's In Progress State
+// at its first Move to In Progress, its Accepted State while Accepted and
+// its Done State once landed, each once: a send-back moves nothing back.
+func TestAnIncomingIssueWorkedDirectlySetsEachPhasesStateOnce(t *testing.T) {
+	w := newWatching(t)
+	ticket := w.readyIssue(mapped)
+	w.polledSettingNone("no work has started")
+	claim, err := w.srv.Core.Claim(agent, "acme", api.ClaimInput{Ticket: api.Ref(ticket)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.polledSetting("Committed")
+	w.polledSettingNone("it is set once")
+	if _, err := w.srv.Core.Finish(agent, "acme", api.FinishInput{Ticket: api.Ref(ticket), ClaimID: claim.ClaimID, Summary: "Finished.", Branch: ticket}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.srv.Core.Accept(human, "acme", api.TicketInput{Ticket: api.Ref(ticket)}); err != nil {
+		t.Fatal(err)
+	}
+	w.polledSetting("Resolved")
+	if _, err := w.srv.Core.SendBack(human, "acme", api.SendBackInput{Ticket: api.Ref(ticket), Note: "CI fails."}); err != nil {
+		t.Fatal(err)
+	}
+	w.polledSettingNone("a send-back sets nothing")
+	w.acceptedToLand(ticket)
+	w.polledSettingNone("Accepted was set once already")
+	w.landed(ticket, "abc123")
+	w.polledSetting("Done")
+	w.polledSettingNone("Done was set once")
+}
+
+// An Incoming Issue Done without landing has no Done State set.
+func TestAnIncomingIssueDoneWithoutLandingSetsNoDoneState(t *testing.T) {
+	w := newWatching(t)
+	ticket := w.readyIssue(api.WorkItemStates{Done: "Done"})
+	w.workedDone(ticket, "", "")
+	w.polledSettingNone("it was Done without landing")
+}
