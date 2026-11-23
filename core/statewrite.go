@@ -11,11 +11,11 @@ import (
 
 // The work item State due (Spec code-central-1215): as with comments and
 // tags, Core works it out from the work's state, never from events. It
-// is the mapped State of the furthest phase the linked work reached no
-// earlier than that mapping was turned on, until its key is reported
-// written; once a phase's key is written, it and every nearer phase are
-// never due again. Unlike tags, it is due on a work item out of scope,
-// and under Hide Code Central, as a State names nothing.
+// is the mapped State of the furthest phase the linked work reached after
+// that mapping was turned on, until its key is reported written; once a
+// phase's key is written, it and every nearer phase are never due again.
+// Unlike tags, it is due on a work item out of scope, and under Hide Code
+// Central, as a State names nothing.
 
 // phase is one of the phases linked work reaches, with its Written key
 // and its Work Item States mapping.
@@ -24,11 +24,17 @@ type phase struct {
 	mapping func(domain.WorkItemStates) domain.WorkItemState
 }
 
-// phases are the phases nearest first.
+// The phases' places in phases, nearest first.
+const (
+	inProgressPhase = iota
+	acceptedPhase
+	donePhase
+)
+
 var phases = [...]phase{
-	{domain.StateKeyInProgress, func(s domain.WorkItemStates) domain.WorkItemState { return s.InProgress }},
-	{domain.StateKeyAccepted, func(s domain.WorkItemStates) domain.WorkItemState { return s.Accepted }},
-	{domain.StateKeyDone, func(s domain.WorkItemStates) domain.WorkItemState { return s.Done }},
+	inProgressPhase: {domain.StateKeyInProgress, func(s domain.WorkItemStates) domain.WorkItemState { return s.InProgress }},
+	acceptedPhase:   {domain.StateKeyAccepted, func(s domain.WorkItemStates) domain.WorkItemState { return s.Accepted }},
+	donePhase:       {domain.StateKeyDone, func(s domain.WorkItemStates) domain.WorkItemState { return s.Done }},
 }
 
 // reached is when linked work reached each of phases, the zero time for
@@ -45,7 +51,7 @@ func stateWrite(states domain.WorkItemStates, written []string, at reached) *api
 			return nil
 		}
 		m := p.mapping(states)
-		if m.Name == "" || at[i].IsZero() || at[i].Before(m.Since) {
+		if m.Name == "" || !at[i].After(m.Since) {
 			continue
 		}
 		w := &api.WorkItemStateWrite{Name: m.Name, Key: p.key, Nearer: []string{}}
@@ -90,8 +96,8 @@ func specReached(tickets []domain.Ticket) reached {
 	var latest time.Time
 	for _, t := range tickets {
 		for _, m := range t.Moves {
-			if m.To == domain.InProgress && (at[0].IsZero() || m.Time.Before(at[0])) {
-				at[0] = m.Time
+			if first := &at[inProgressPhase]; m.To == domain.InProgress && (first.IsZero() || m.Time.Before(*first)) {
+				*first = m.Time
 			}
 		}
 		implementation := domain.StageOf(t.Labels) == ""
@@ -105,9 +111,9 @@ func specReached(tickets []domain.Ticket) reached {
 	switch {
 	case !settled:
 	case accepted:
-		at[1] = latest
+		at[acceptedPhase] = latest
 	case landed:
-		at[2] = latest
+		at[donePhase] = latest
 	default:
 		return reached{}
 	}

@@ -83,12 +83,15 @@ func (w *watching) claimed(ticket string) {
 }
 
 // requirement is work item 1 arrived with states mapped and taken To
-// Requirement, returning its Spec.
+// Requirement, then polled, so work from then on is after the mapping,
+// returning its Spec.
 func (w *watching) requirement(states api.WorkItemStates) string {
 	w.t.Helper()
 	w.setStates(states)
 	w.arrived(1)
-	return w.toRequirement(1, "")
+	spec := w.toRequirement(1, "")
+	w.polled()
+	return spec
 }
 
 // builtOut is every Stage of Requirement spec worked Done, with an

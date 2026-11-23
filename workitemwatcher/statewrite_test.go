@@ -13,7 +13,6 @@ import (
 func (w *watching) inProgress() string {
 	w.t.Helper()
 	spec := w.requirement(mapped)
-	w.polled()
 	w.claimed(w.stages(spec)[0])
 	return spec
 }
@@ -47,6 +46,7 @@ func TestUnderHideCodeCentralTheStateIsStillSet(t *testing.T) {
 	w.setBoards(api.SetAzureBoardsInput{On: true, QueryURL: w.queryURL(queryID), HideCodeCentral: true, WorkItemStates: mapped})
 	w.arrived(1)
 	spec := w.toRequirement(1, "")
+	w.polled()
 	w.claimed(w.stages(spec)[0])
 	w.polledSetting("Committed")
 	if got := w.statePatches(0); len(got) != len(w.patches(0)) {

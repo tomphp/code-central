@@ -89,8 +89,9 @@ func writeTag(ctx context.Context, c *azdo.Client, item azdo.WorkItem, tag strin
 	return true, c.SetTags(ctx, item.ID, item.Rev, tags)
 }
 
-// writeState moves item to w's State, unless it is in it already, in any
-// case, then reports its key and its nearer phases' keys written.
+// writeState moves item to w's State, unless it is in it already, as
+// compared ignoring case, then reports its key and its nearer phases'
+// keys written.
 func (cfg Config) writeState(ctx context.Context, c *azdo.Client, item azdo.WorkItem, w api.WorkItemWrites) error {
 	if !strings.EqualFold(item.Fields.State, w.State.Name) {
 		if err := c.SetState(ctx, item.ID, item.Rev, w.State.Name); err != nil {

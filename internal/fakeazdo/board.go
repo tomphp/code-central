@@ -222,9 +222,10 @@ func (b board) answer(serverURL string, req Request) *Answer {
 }
 
 // patch is the board's answer to a JSON Patch of a work item: a test on
-// /rev that holds, and an add of its tags or State, which it makes unless the
-// request only validates. Anything else is refused, as are a stale /rev
-// and a patch that isn't sent as a JSON Patch.
+// /rev that holds, and an add of its tags or State, which it makes unless
+// the request only validates. Anything else is refused, as are a stale
+// /rev, a State RefuseState refuses and a patch that isn't sent as a JSON
+// Patch.
 func (b board) patch(serverURL string, req Request) *Answer {
 	id, err := strconv.Atoi(strings.TrimPrefix(req.Path, workItemsPath))
 	w, ok := b.items[id]
