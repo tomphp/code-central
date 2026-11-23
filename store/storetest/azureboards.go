@@ -1,10 +1,10 @@
 package storetest
 
 import (
-	"github.com/tomoram/code-central/domain"
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 

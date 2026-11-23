@@ -44,10 +44,9 @@ func boardsPATEnvOf(ci domain.CI, a domain.AzureBoards) string {
 // SetAzureBoards is the human's set_azure_boards: Azure Boards on or off,
 // with its Mode and each Mode's settings, the PAT environment variable,
 // New issues need me, Hide Code Central, the Branch format and the Work
-// Item States, which no check runs for. Turning it
-// on needs the chosen Mode's settings, and turning it on, or changing
-// what it runs while on, passes the check. A Branch format is checked
-// whether on or off.
+// Item States, which no check runs for. Turning it on needs the chosen
+// Mode's settings, and turning it on, or changing what it runs while on,
+// passes the check. A Branch format is checked whether on or off.
 // The settings of the Mode not chosen are kept. The first time it is
 // turned on, it creates the Azure Boards Spec, written before the
 // settings so they never name a missing Spec. A change of the chosen

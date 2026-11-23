@@ -8,8 +8,6 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// Format 57 added Azure Boards' Work Item States. The real chain migrates
-// a format-56 store: Azure Boards stored without them has all three blank.
 func TestTheRealChainMigratesAFormat56StoreToTheWorkItemStatesFormat(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
 	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 56\n")

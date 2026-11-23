@@ -490,7 +490,7 @@ func TestWorkItemStatesSinceIsSetOnTurningOnKeptOnAnEditAndClearedOnBlank(t *tes
 
 	srv.Clock.Advance(time.Hour)
 	later := srv.Clock.Now().Format("15:04")
-	set(`{"in_progress":"Actve2","done":"Closed"}`)
+	set(`{"in_progress":"Active2","done":"Closed"}`)
 	if got := since(); !reflect.DeepEqual(got, map[string]string{"in_progress": first, "done": later}) {
 		t.Fatalf("since = %v, want in_progress kept at %s and done at %s", got, first, later)
 	}
