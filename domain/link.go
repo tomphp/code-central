@@ -76,3 +76,11 @@ const (
 	// the Spec is Finished.
 	CommentClosed = "closed"
 )
+
+// The Written keys of the work item States set for each phase the linked
+// work reached, nearest first (Spec code-central-1215).
+const (
+	StateKeyInProgress = "state:in-progress"
+	StateKeyAccepted   = "state:accepted"
+	StateKeyDone       = "state:done"
+)

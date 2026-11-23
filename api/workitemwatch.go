@@ -37,7 +37,7 @@ type WorkItemWatch struct {
 // WorkItemWrites is an item whose work item has writes due, as
 // get_work_item_watch lists it: what is due on a GitHub issue, with the
 // status label as the work item's tag of the same name, and never a
-// close, as a work item's State is the human's to move.
+// close. Its State is set only as Work Item States maps it.
 type WorkItemWrites struct {
 	// Target is the item, such as acme-5.
 	Target string   `json:"target"`
@@ -48,4 +48,18 @@ type WorkItemWrites struct {
 	// other code-central: tag; empty asks for none to be changed, as it
 	// always is under Hide Code Central.
 	Tag string `json:"tag,omitempty"`
+	// State is the work item State due, left out when none is.
+	State *WorkItemStateWrite `json:"state,omitempty"`
+}
+
+// WorkItemStateWrite is the work item State due for the furthest phase
+// the linked work reached: the State to set, then the Written keys to
+// report with report_issue_written once it is set.
+type WorkItemStateWrite struct {
+	Name string `json:"name"`
+	// Key is the phase's Written key, such as state:done.
+	Key string `json:"key"`
+	// Nearer are the nearer phases' Written keys, recorded as written
+	// with it, so none of them is due again.
+	Nearer []string `json:"nearer"`
 }
