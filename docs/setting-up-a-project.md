@@ -582,7 +582,17 @@ Make a PAT in Azure DevOps (**User settings**, **Personal access tokens**) with 
 
 ### What write-back does and doesn't do
 
-Code Central writes to a work item only in two ways: a **comment** in its Discussion for each milestone (posted once, however often the Work Item Watcher or the service restarts, found again by a hidden marker in the comment), and one **`code-central:` tag** for where its work stands, which replaces any other `code-central:` tag and leaves the work item's other tags alone. It never changes the work item's State, assignee or fields, and **Won't fix** only comments and tags. [The Work Item Watcher](running-as-a-service.md) in Running as a service describes the process.
+Code Central writes to a work item in three ways: a **comment** in its Discussion for each milestone (posted once, however often the Work Item Watcher or the service restarts, found again by a hidden marker in the comment), one **`code-central:` tag** for where its work stands, which replaces any other `code-central:` tag and leaves the work item's other tags alone, and, only if you ask, its **State**. It never changes the work item's assignee or other fields. [The Work Item Watcher](running-as-a-service.md) in Running as a service describes the process.
+
+#### Work Item States
+
+In the Azure Boards section of Project Options, **Work Item States** has three fields, **In Progress**, **Accepted** and **Done**: the State name to set on a work item when its linked work first reaches that phase. Each is blank by default, and a blank one sets nothing, so a Project that fills none in never has a State changed.
+
+- **Set once.** Each State is set once per phase and never again, even if the work moves back or a teammate moves the item.
+- **Furthest only.** When several phases are due at once, only the furthest is set.
+- **No backfill.** Only work that reaches a phase after its field was filled in is moved. Editing a name that is already filled in keeps its date, so correcting a typo retries the work that failed on it.
+- **A refused State is an error.** If Azure DevOps refuses a State (a workflow rule or an unknown name), the Work Item Watcher's status in the Azure Boards section shows an error naming the work item, the State and the reason, and it retries each poll until the State is written, the item is already in it, or you blank or change the field. Comments and tags are still written, and other work items' States are still set. Saving Work Item States clears the error at once.
+- **Won't fix leaves the State to you.** It only comments and tags.
 
 ## Choosing models for each kind of work
 
