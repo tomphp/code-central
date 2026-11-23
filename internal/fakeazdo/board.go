@@ -78,6 +78,13 @@ func (s *Server) RefuseState(state, message string) {
 	s.board.refused[state] = message
 }
 
+// AllowState makes a move to state that RefuseState refused go through.
+func (s *Server) AllowState(state string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.board.refused, state)
+}
+
 // PutComment adds a comment, as a human or an earlier run would have,
 // to work item id's Discussion.
 func (s *Server) PutComment(id int, text string) {

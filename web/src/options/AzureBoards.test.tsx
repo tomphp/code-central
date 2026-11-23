@@ -200,6 +200,15 @@ describe("the Azure Boards section", () => {
     expect(watcher()).toHaveTextContent("Work Item Watcher: Error. The saved query is a tree query.");
     expect(watcher()).toHaveTextContent("Save the query as a flat list.");
 
+    await s.reportWorkItemWatcher("acme", {
+      state: "error",
+      problem: "state_refused",
+      message: "Azure DevOps refused moving work item 1, for acme-3, to Committed: TF401320: Rule Error.",
+      fix: "Correct or blank In Progress in Work Item States.",
+    });
+    expect(watcher()).toHaveTextContent("Work Item Watcher: Error. Azure DevOps refused moving work item 1, for acme-3, to Committed: TF401320: Rule Error.");
+    expect(watcher()).toHaveTextContent("Correct or blank In Progress in Work Item States.");
+
     await s.reportWorkItemWatcher("acme", { state: "watching" });
     expect(watcher()).toHaveTextContent(`Work Item Watcher: Watching ${QUERY}.`);
   });
