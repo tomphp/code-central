@@ -8,10 +8,10 @@ package core
 
 import (
 	"context"
-	"slices"
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -22,10 +22,6 @@ const (
 	ModelTag  = "model"
 	EffortTag = "effort"
 )
-
-// seededEffortLevels are the valid effort levels until the Factory has
-// reported its claude's, so effort can be set on a fresh store.
-var seededEffortLevels = []string{"low", "medium", "high", "xhigh", "max"}
 
 // modelChoice works out the Model Choice of t, on Project p, highest
 // tier first: t's Tag, p's Models row for t's kind of work, then p's
@@ -54,23 +50,6 @@ func choose(tag, kindName, kindValue, def string) api.ChoiceValue {
 	return api.ChoiceValue{Source: api.SourceNone}
 }
 
-// effortLevels are the valid effort levels for a Project: its Reported
-// Models' levels, or the seeded ones until a report has given some.
-func effortLevels(r store.Reader, key string) []string {
-	p, _ := r.Project(key)
-	return validLevels(p.ReportedModels)
-}
-
-// checkEffort rejects an effort outside the Project's valid levels, in
-// field, listing them.
-func checkEffort(r store.Reader, key, field, effort string) error {
-	levels := effortLevels(r, key)
-	if !slices.Contains(levels, effort) {
-		return invalid(field, "effort %q isn't a valid level; use one of %s", effort, strings.Join(levels, ", "))
-	}
-	return nil
-}
-
 // GetModelChoice is the Factory's get_model_choice: the Model Choice for
 // the Ticket's next turn, which it reads before every resume.
 func (c *Core) GetModelChoice(_ context.Context, key string, in api.GetModelChoiceInput) (api.ModelChoice, error) {
@@ -78,9 +57,9 @@ func (c *Core) GetModelChoice(_ context.Context, key string, in api.GetModelChoi
 	err := c.store.View(func(r store.Reader) error {
 		p, ok := r.Project(key)
 		if !ok {
-			return unknownProject(key)
+			return api.UnknownProjectError(key)
 		}
-		t, err := resolveTicket(r, key, "get_model_choice", "ticket", in.Ticket)
+		t, err := foundation.ResolveTicket(r, key, "get_model_choice", "ticket", in.Ticket)
 		if err != nil {
 			return err
 		}
@@ -96,7 +75,7 @@ func (c *Core) ReportModelChoice(_ context.Context, key string, in api.ReportMod
 	model, effort := strings.TrimSpace(in.Model), strings.TrimSpace(in.Effort)
 	for field, v := range map[string]string{"model": model, "effort": effort} {
 		if strings.ContainsAny(v, "\r\n") {
-			return api.Written[api.TicketView]{}, invalid(field, "a %s is single-line", field)
+			return api.Written[api.TicketView]{}, api.InvalidField(field, "a %s is single-line", field)
 		}
 	}
 	return c.updateTicket(key, "report_model_choice", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {

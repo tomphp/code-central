@@ -16,19 +16,19 @@ import (
 // input refused.
 func checkBranchTagName(p domain.Project, field, name string) error {
 	if err := checkBranchName(name); err != nil {
-		return invalid(field, "a branch Tag names the Spec Branch, so it must be a valid branch name: %s", err)
+		return api.InvalidField(field, "a branch Tag names the Spec Branch, so it must be a valid branch name: %s", err)
 	}
 	// In any case, since git's refs are files on a case-insensitive disk.
 	if strings.HasPrefix(strings.ToLower(name), domain.SpecBranchPrefix) {
-		return invalid(field, "branch %q starts with %s, which is kept for the Spec Branches of Specs with no branch Tag", name, domain.SpecBranchPrefix)
+		return api.InvalidField(field, "branch %q starts with %s, which is kept for the Spec Branches of Specs with no branch Tag", name, domain.SpecBranchPrefix)
 	}
 	for _, r := range p.RepositoryList() {
 		if strings.EqualFold(baseOfRepository(p, r), name) {
-			return invalid(field, "branch %q is the Base of the Repository %s, so it can't name a Spec Branch", name, r.Name)
+			return api.InvalidField(field, "branch %q is the Base of the Repository %s, so it can't name a Spec Branch", name, r.Name)
 		}
 	}
 	if looksLikeTicketID(p.Key, name) {
-		return invalid(field, "branch %q has the shape of a Ticket ID, %s-<n>, which names Ticket branches", name, p.Key)
+		return api.InvalidField(field, "branch %q has the shape of a Ticket ID, %s-<n>, which names Ticket branches", name, p.Key)
 	}
 	return nil
 }
@@ -55,8 +55,8 @@ func checkBranchTagFree(r store.Reader, key, field string, n int, name, orElse s
 		if _, done := summarise(specTickets(r, key, s.Number)); done {
 			continue
 		}
-		id := DisplayID(key, s.Number)
-		return invalid(field, "branch %q is already the Spec Branch of %s, %q, which isn't Finished: change or remove the branch Tag on %s first, %s",
+		id := domain.DisplayID(key, s.Number)
+		return api.InvalidField(field, "branch %q is already the Spec Branch of %s, %q, which isn't Finished: change or remove the branch Tag on %s first, %s",
 			name, id, s.Title, id, orElse)
 	}
 	return nil
@@ -92,10 +92,10 @@ func checkBranchTagChange(r store.Reader, key, field string, n int, tags map[str
 func checkBranchTagLock(r store.Reader, key string, n int, tags map[string]string) error {
 	for _, t := range specTickets(r, key, n, store.Claims) {
 		if domain.StageOf(t.Labels) == "" && len(t.Claims) > 0 {
-			id := DisplayID(key, n)
+			id := domain.DisplayID(key, n)
 			return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf(
 				"the Spec Branch of %s already exists as %s, since %s has been claimed, so its branch Tag can't change or be removed",
-				id, domain.SpecBranch(id, tags), DisplayID(key, t.Number))}
+				id, domain.SpecBranch(id, tags), domain.DisplayID(key, t.Number))}
 		}
 	}
 	return nil

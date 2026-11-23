@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -53,7 +54,7 @@ func (c *Core) FailFinish(ctx context.Context, key string, in api.FailFinishInpu
 	}
 	return c.updateTicket(key, failFinish, in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		if t.State == domain.Accepted && landedSomewhere(key, *t) {
-			return false, &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s has landed in some of its Changed Repositories, so its finish can't fail: land the rest, or send it back", DisplayID(key, t.Number))}
+			return false, &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s has landed in some of its Changed Repositories, so its finish can't fail: land the rest, or send it back", domain.DisplayID(key, t.Number))}
 		}
 		// The Claim the finish ended; none for a Ticket moved there by hand.
 		var finishing domain.Claim
@@ -81,7 +82,7 @@ func checkFailureReport(parts domain.FailureReport) error {
 		{"where_work_stands", parts.WhereWorkStands, "where the work stands: branch, commits, what is done"},
 	} {
 		if strings.TrimSpace(f.value) == "" {
-			return invalid(f.name, "a Failure Report needs %s: %s", f.name, f.hint)
+			return api.InvalidField(f.name, "a Failure Report needs %s: %s", f.name, f.hint)
 		}
 	}
 	return nil
@@ -102,7 +103,7 @@ func addFailureReport(t *domain.Ticket, cl domain.Claim, actor api.Actor, now ti
 // note stored as a comment.
 func (c *Core) GiveUp(ctx context.Context, key string, in api.GiveUpInput) (api.FinishResult, error) {
 	if strings.TrimSpace(in.Note) == "" {
-		return api.FinishResult{}, invalid("note", "give_up needs a note saying how far you got and why you are stopping")
+		return api.FinishResult{}, api.InvalidField("note", "give_up needs a note saying how far you got and why you are stopping")
 	}
 	v, err := c.act(ctx, key, in.Ticket, in.Full, "give_up", in.ClaimID, in.Note)
 	if err != nil {
@@ -129,7 +130,7 @@ func (c *Core) SendBack(ctx context.Context, key string, in api.SendBackInput) (
 	}
 	shared := false
 	_ = c.store.View(func(r store.Reader) error {
-		if t, err := resolveTicket(r, key, "send_back", "ticket", in.Ticket); err == nil {
+		if t, err := foundation.ResolveTicket(r, key, "send_back", "ticket", in.Ticket); err == nil {
 			p, _ := r.Project(key)
 			shared = specLanded(r, p, t)
 		}
@@ -137,7 +138,7 @@ func (c *Core) SendBack(ctx context.Context, key string, in api.SendBackInput) (
 	})
 	return c.actThen(ctx, key, in.Ticket, in.Full, "send_back", "", in.Note, func(t *domain.Ticket) error {
 		if from := t.Moves[len(t.Moves)-1].From; from == domain.Accepted && strings.TrimSpace(in.Note) == "" {
-			return invalid("note", "sending back Accepted work needs a note saying why: the base commit and the conflicting files of a merge conflict, or the failed CI run's link and its failed jobs")
+			return api.InvalidField("note", "sending back Accepted work needs a note saying why: the base commit and the conflicting files of a merge conflict, or the failed CI run's link and its failed jobs")
 		}
 		if !shared {
 			markPullRequestsToClose(t)
@@ -154,7 +155,7 @@ func (c *Core) SendBack(ctx context.Context, key string, in api.SendBackInput) (
 // (code-central-432), which the commit's fix must cover as well.
 func (c *Core) refuseSendBackOfShared(key string, ref api.Ref) error {
 	return c.store.View(func(r store.Reader) error {
-		t, err := resolveTicket(r, key, "send_back", "ticket", ref)
+		t, err := foundation.ResolveTicket(r, key, "send_back", "ticket", ref)
 		if err != nil || !sharedCandidate(t) {
 			return nil // the send-back itself reports what is wrong
 		}
@@ -176,7 +177,7 @@ func (e *evaluation) sharedSendBackRefusal(t domain.Ticket) error {
 		return nil
 	}
 	key := e.p.Key
-	id := DisplayID(key, t.Number)
+	id := domain.DisplayID(key, t.Number)
 	if specLanded(e.r, e.p, t) && ticketLandingPolicies(e.p, t).LandPerSpecInForce() {
 		return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s's work is in the base with its Spec's, so there is no branch of its own to send back: land it anyway or open a fix Ticket", id)}
 	}
@@ -184,7 +185,7 @@ func (e *evaluation) sharedSendBackRefusal(t domain.Ticket) error {
 		var others []string
 		for _, o := range it.tickets {
 			if o.Number != t.Number {
-				others = append(others, DisplayID(key, o.Number))
+				others = append(others, domain.DisplayID(key, o.Number))
 			}
 		}
 		return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s waits on %s with %s, so there is no fix of its own to send back: re-run the failed jobs, land them anyway or open a fix Ticket", id, shortCommit(it.commit), strings.Join(others, ", "))}

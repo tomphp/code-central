@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/factories"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -30,30 +31,20 @@ const NotLandedAfter = 10 * time.Minute
 
 // PingThrottle is the shortest gap between two counted pings from one
 // session.
-const PingThrottle = time.Minute
-
-// pingExpiry is how old a ping row is before every service, and the Store,
-// forget it. A Claim quiet for longer shows its last stored write as its
-// last activity.
-const pingExpiry = 7 * 24 * time.Hour
+const PingThrottle = factories.PingThrottle
 
 // activity is the in-memory side of last activity: when the service
-// started, each session's last counted ping (here, and on every service as
-// of the last tick), and the timed reason the
-// background watch last saw on each Claim and Accepted Ticket.
+// started, and the timed reason the background watch last saw on each
+// Claim and Accepted Ticket.
 type activity struct {
 	started time.Time
 
-	mu     sync.Mutex
-	pings  map[string]time.Time          // session ID -> last counted ping here: what the throttle goes by
-	shared map[string]time.Time          // session ID -> last ping any service counted, as the Store had it at the last tick
-	marks  map[markKey]api.NeedsMeReason // Silent, Long, CI unavailable or Accepted but not landed
+	mu    sync.Mutex
+	marks map[markKey]api.NeedsMeReason // Silent, Long, CI unavailable or Accepted but not landed
 }
 
-// markKey names what a timed reason, a Transcript or a latest event
-// notice is on, across Projects: one Claim, or, with claim 0, a whole
-// Ticket: an Accepted one, which has no live Claim, for a timed reason,
-// and any Ticket for the latest event's throttle.
+// markKey names what a timed reason is on: one Claim, or, with claim 0, an
+// Accepted Ticket, which has no live Claim.
 type markKey struct {
 	project string
 	ticket  int
@@ -61,55 +52,7 @@ type markKey struct {
 }
 
 func newActivity(started time.Time) *activity {
-	return &activity{started: started, pings: map[string]time.Time{}, shared: map[string]time.Time{}, marks: map[markKey]api.NeedsMeReason{}}
-}
-
-// Ping is POST /api/ping {session_id}: it marks activity on every live
-// Claim with that session ID, in any Project. Pings within PingThrottle
-// of the session's last counted one here are ignored, as is an empty
-// session ID. A session ID no Claim has is harmless: it marks nothing. A
-// counted ping is written through to the Store, so about one row a minute
-// per session; a Store that can't be reached is logged and never fails the
-// ping.
-func (c *Core) Ping(_ context.Context, sessionID string) {
-	if sessionID == "" {
-		return
-	}
-	now := c.now()
-	a := c.activity
-	a.mu.Lock()
-	if last, ok := a.pings[sessionID]; ok && now.Sub(last) < PingThrottle {
-		a.mu.Unlock()
-		return
-	}
-	a.pings[sessionID] = now
-	a.mu.Unlock()
-	if err := c.store.Services().PutPing(store.Ping{Session: sessionID, At: now, Service: c.service.ID, ServiceHost: c.service.Host}); err != nil {
-		c.logf("cannot record a ping from session %s: %v", sessionID, err)
-	}
-}
-
-// refreshPings prunes the pings older than pingExpiry from the Store and
-// reads the rest, so a ping any service counted is seen here. What it
-// can't read is logged, and memory stands.
-func (c *Core) refreshPings() {
-	services := c.store.Services()
-	if err := services.PrunePings(c.now().Add(-pingExpiry)); err != nil {
-		c.logf("cannot prune the pings: %v", err)
-	}
-	rows, err := services.Pings()
-	if err != nil {
-		c.logf("cannot read the pings: %v", err)
-		return
-	}
-	shared := make(map[string]time.Time, len(rows))
-	for _, p := range rows {
-		shared[p.Session] = p.At
-	}
-	a := c.activity
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.shared = shared
+	return &activity{started: started, marks: map[markKey]api.NeedsMeReason{}}
 }
 
 // claimActivity is a Claim's last activity as reads show it: the latest
@@ -130,17 +73,7 @@ func (c *Core) lastPing(cl domain.Claim) time.Time {
 	if !cl.Live() || cl.SessionID == "" {
 		return time.Time{}
 	}
-	c.activity.mu.Lock()
-	defer c.activity.mu.Unlock()
-	return latest(c.activity.pings[cl.SessionID], c.activity.shared[cl.SessionID])
-}
-
-// latest is the later of a and b.
-func latest(a, b time.Time) time.Time {
-	if b.After(a) {
-		return b
-	}
-	return a
+	return c.factories.LastPing(cl.SessionID)
 }
 
 // quietSince is when the Ticket last saw any activity on its live Claim:
@@ -230,7 +163,7 @@ func (c *Core) WatchTimedReasons(ctx context.Context, ticks <-chan time.Time, ch
 			return
 		case <-ticks:
 			for _, k := range c.timedReasonChanges() {
-				changed(k.project, DisplayID(k.project, k.ticket))
+				changed(k.project, domain.DisplayID(k.project, k.ticket))
 			}
 		}
 	}

@@ -183,7 +183,7 @@ func holder(t *domain.Ticket, key, claimID string) (*domain.Claim, error) {
 		return c, nil
 	}
 	return nil, &api.Error{Code: api.StaleClaim, Message: fmt.Sprintf(
-		"that Claim ID is not the live Claim on %s: stop working this Ticket", DisplayID(key, t.Number))}
+		"that Claim ID is not the live Claim on %s: stop working this Ticket", domain.DisplayID(key, t.Number))}
 }
 
 // transition is one checked move of t by the action name, to the row's
@@ -200,7 +200,7 @@ func transition(ctx context.Context, t *domain.Ticket, key, name, claimID string
 // per target (accept), to picks the row.
 func transitionTo(ctx context.Context, t *domain.Ticket, key, name, claimID string, to domain.State, now time.Time) error {
 	actor := api.ActorOf(ctx)
-	id := DisplayID(key, t.Number)
+	id := domain.DisplayID(key, t.Number)
 	if isHolderAction(name) {
 		if _, err := holder(t, key, claimID); err != nil {
 			return err

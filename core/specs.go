@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -56,9 +57,9 @@ func (c *Core) GetSpec(_ context.Context, key string, in api.GetSpecInput) (api.
 	err = c.store.View(func(r store.Reader) error {
 		p, ok := r.Project(key)
 		if !ok {
-			return unknownProject(key)
+			return api.UnknownProjectError(key)
 		}
-		s, err := resolveSpec(r, key, "get_spec", "spec", in.Spec)
+		s, err := foundation.ResolveSpec(r, key, "get_spec", "spec", in.Spec)
 		if err != nil {
 			return err
 		}
@@ -80,7 +81,7 @@ func (c *Core) GetSpec(_ context.Context, key string, in api.GetSpecInput) (api.
 		v.Ticketable = whyNotNewTicket(p, s, tickets) == ""
 		v.LandPerSpec = landPerSpecView(r, key, s, tickets)
 		v.Map = mapView(e, s, tickets)
-		v.Retros = retrosOf(r, key, DisplayID(key, n))
+		v.Retros = retrosOf(r, key, domain.DisplayID(key, n))
 		if specReadLighter(in) {
 			v.Outline = Outline(s.Body)
 		}
@@ -129,7 +130,7 @@ func specReadParts(in api.GetSpecInput) (map[string]bool, error) {
 		return nil, err
 	}
 	if len(in.Sections) > 0 && !out[api.PartBody] {
-		return nil, invalid("sections", "sections cut the body, so parts must include body")
+		return nil, api.InvalidField("sections", "sections cut the body, so parts must include body")
 	}
 	return out, nil
 }
@@ -146,9 +147,9 @@ func noSuchSections(names []string, outline []api.Heading) *api.Error {
 		headings[i] = h.Text
 	}
 	if len(headings) == 0 {
-		return invalid("sections", "no heading matches %s: the body has no headings", strings.Join(quoted, ", "))
+		return api.InvalidField("sections", "no heading matches %s: the body has no headings", strings.Join(quoted, ", "))
 	}
-	return invalid("sections", "no heading matches %s; the headings are: %s", strings.Join(quoted, ", "), strings.Join(headings, "; "))
+	return api.InvalidField("sections", "no heading matches %s; the headings are: %s", strings.Join(quoted, ", "), strings.Join(headings, "; "))
 }
 
 // FindSpecs is find_specs(title?, labels?, tags?, finished?). Finished
@@ -161,7 +162,7 @@ func (c *Core) FindSpecs(_ context.Context, key string, in api.FindSpecsInput) (
 	err := c.store.View(func(r store.Reader) error {
 		p, ok := r.Project(key)
 		if !ok {
-			return unknownProject(key)
+			return api.UnknownProjectError(key)
 		}
 		// One evaluation for every Spec.
 		e := c.evaluate(r, p)
@@ -182,7 +183,7 @@ func (c *Core) FindSpecs(_ context.Context, key string, in api.FindSpecsInput) (
 				continue
 			}
 			rows = append(rows, api.SpecRow{
-				ID: DisplayID(key, s.Number), Title: s.Title, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags),
+				ID: domain.DisplayID(key, s.Number), Title: s.Title, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags),
 				StateSummary: summary, Finished: done, Updated: s.Updated, Link: linkView(s.Link),
 				Kind: specKind(s, req), Need: specNeed(e, tickets), Claimed: specClaimed(tickets),
 				Requirement: req, Map: mapView(e, s, tickets),
@@ -219,7 +220,7 @@ func summarise(tickets []domain.Ticket) (api.StateSummary, bool) {
 func checkTagFilter(tags map[string]string) error {
 	for k := range tags {
 		if !tagKey.MatchString(k) {
-			return invalid("tags", "Tag key %q must be lowercase letters, digits, '.', '_' and '-'", k)
+			return api.InvalidField("tags", "Tag key %q must be lowercase letters, digits, '.', '_' and '-'", k)
 		}
 	}
 	return nil

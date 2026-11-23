@@ -7,6 +7,7 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/azdourl"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -177,7 +178,7 @@ func ciEntry(name string, in api.RepositoryCI, field string) (domain.CIRepositor
 		e.Provider = domain.CIGitHubActions
 	}
 	if !e.Provider.Valid() {
-		return e, invalid(field+"provider", "CI Provider %q isn't %q or %q", e.Provider, domain.CIGitHubActions, domain.CIAzurePipelines)
+		return e, api.InvalidField(field+"provider", "CI Provider %q isn't %q or %q", e.Provider, domain.CIGitHubActions, domain.CIAzurePipelines)
 	}
 	if err := checkCITarget(&e); err != nil {
 		if ce, ok := err.(*api.Error); ok {
@@ -239,7 +240,7 @@ func (c *Core) checkCIEntryOn(ctx context.Context, p domain.Project, opts domain
 // Not watched. While CI Tracking is on, a watched entry that watches
 // something new must pass the CI Watcher's check first.
 func (c *Core) SetRepositoryCI(ctx context.Context, key string, in api.SetRepositoryCIInput) (api.Written[api.ProjectView], error) {
-	if err := humanOnly(ctx, "set_repository_ci"); err != nil {
+	if err := foundation.HumanOnly(ctx, "set_repository_ci"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	name := strings.TrimSpace(in.Name)
@@ -250,7 +251,7 @@ func (c *Core) SetRepositoryCI(ctx context.Context, key string, in api.SetReposi
 	var p domain.Project
 	var opts domain.Options
 	err = c.store.View(func(r store.Reader) error {
-		if err := writable(r, key); err != nil {
+		if err := foundation.Writable(r, key); err != nil {
 			return err
 		}
 		p, _ = r.Project(key)

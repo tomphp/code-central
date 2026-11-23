@@ -19,14 +19,14 @@ const postRoundNextStep = "End your turn now, after running `code-central wait <
 // Answer and keeping the Claim. The session ID defaults to the Claim's.
 func (c *Core) PostRound(ctx context.Context, key string, in api.PostRoundInput) (api.PostRoundResult, error) {
 	if len(in.Questions) == 0 {
-		return api.PostRoundResult{}, invalid("questions", "a Round needs at least one Question")
+		return api.PostRoundResult{}, api.InvalidField("questions", "a Round needs at least one Question")
 	}
 	for i, q := range in.Questions {
 		if strings.TrimSpace(q.Title) == "" {
-			return api.PostRoundResult{}, invalid(fmt.Sprintf("questions[%d].title", i), "every Question needs a title")
+			return api.PostRoundResult{}, api.InvalidField(fmt.Sprintf("questions[%d].title", i), "every Question needs a title")
 		}
 		if strings.TrimSpace(q.Body) == "" {
-			return api.PostRoundResult{}, invalid(fmt.Sprintf("questions[%d].body", i), "every Question needs a body")
+			return api.PostRoundResult{}, api.InvalidField(fmt.Sprintf("questions[%d].body", i), "every Question needs a body")
 		}
 	}
 	var res api.PostRoundResult
@@ -49,7 +49,7 @@ func (c *Core) PostRound(ctx context.Context, key string, in api.PostRoundInput)
 			r.Questions = append(r.Questions, domain.Question{Number: n, Title: q.Title, Body: q.Body, Recommended: q.Recommended, Status: domain.QuestionOpen})
 		}
 		t.Rounds = append(t.Rounds, r)
-		res = api.PostRoundResult{Round: r.Number, NextStep: strings.ReplaceAll(nextStep("post_round"), "<id>", DisplayID(key, t.Number))}
+		res = api.PostRoundResult{Round: r.Number, NextStep: strings.ReplaceAll(nextStep("post_round"), "<id>", domain.DisplayID(key, t.Number))}
 		return true, nil
 	})
 	if err != nil {
@@ -71,7 +71,7 @@ func (c *Core) PickUpAnswers(ctx context.Context, key string, in api.PickUpAnswe
 			return false, err
 		}
 		r := t.Rounds[len(t.Rounds)-1]
-		res = api.PickUpAnswersResult{Ticket: DisplayID(key, t.Number), Round: roundView(r), Comments: []api.CommentView{}}
+		res = api.PickUpAnswersResult{Ticket: domain.DisplayID(key, t.Number), Round: roundView(r), Comments: []api.CommentView{}}
 		for _, cv := range commentViews(t.Comments) {
 			if !cv.Time.Before(r.Posted) {
 				res.Comments = append(res.Comments, cv)
@@ -87,7 +87,7 @@ func (c *Core) PickUpAnswers(ctx context.Context, key string, in api.PickUpAnswe
 // Ticket to Answered.
 func (c *Core) Answer(ctx context.Context, key string, in api.AnswerInput) (api.Written[api.TicketView], error) {
 	if strings.TrimSpace(in.Text) == "" {
-		return api.Written[api.TicketView]{}, invalid("text", "an answer needs text; to decline a Question, dismiss it")
+		return api.Written[api.TicketView]{}, api.InvalidField("text", "an answer needs text; to decline a Question, dismiss it")
 	}
 	return c.onQuestion(ctx, key, in.Ticket, in.Full, "answer", in.Question, func(q *domain.Question, now time.Time) {
 		q.Status, q.Answer, q.Closed = domain.QuestionAnswered, in.Text, now
@@ -107,7 +107,7 @@ func (c *Core) DismissQuestion(ctx context.Context, key string, in api.DismissQu
 func (c *Core) AcceptRecommended(ctx context.Context, key string, in api.AcceptRecommendedInput) (api.Written[api.TicketView], error) {
 	find := func(t *domain.Ticket) (*domain.Round, error) {
 		if in.Round < 1 || in.Round > len(t.Rounds) {
-			return nil, notFound("there is no Round %d on %s", in.Round, DisplayID(key, t.Number))
+			return nil, api.NotFoundError("there is no Round %d on %s", in.Round, domain.DisplayID(key, t.Number))
 		}
 		return &t.Rounds[in.Round-1], nil
 	}
@@ -135,7 +135,7 @@ func (c *Core) onQuestion(ctx context.Context, key string, ref api.Ref, full boo
 				}
 			}
 		}
-		return nil, notFound("there is no Question %d on %s", n, DisplayID(key, t.Number))
+		return nil, api.NotFoundError("there is no Question %d on %s", n, domain.DisplayID(key, t.Number))
 	}
 	return c.onRound(ctx, key, ref, full, name, find, func(r *domain.Round, now time.Time) bool {
 		apply(&r.Questions[target], now)
@@ -159,7 +159,7 @@ func (c *Core) onRound(ctx context.Context, key string, ref api.Ref, full bool, 
 		}
 		if complete(*r) {
 			return false, &api.Error{Code: api.ActionNotAllowed, AllowedActions: allowedActions(t.State, api.Human), Message: fmt.Sprintf(
-				"Round %d on %s is complete, so its answers can't change; add a comment instead", r.Number, DisplayID(key, t.Number))}
+				"Round %d on %s is complete, so its answers can't change; add a comment instead", r.Number, domain.DisplayID(key, t.Number))}
 		}
 		now := c.now()
 		if !apply(r, now) {

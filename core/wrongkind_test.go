@@ -123,9 +123,9 @@ func ticketOps(f fixture) map[string]func(api.Ref) error {
 			_, err := c.Land(ctx, "acme", api.LandInput{Ticket: r, Commit: "abc"})
 			return err
 		},
-		"transcript": func(r api.Ref) error { _, err := c.Transcript(ctx, "acme", r, 1); return err },
+		"transcript": func(r api.Ref) error { _, err := c.Factories().Transcript(ctx, "acme", r, 1); return err },
 		"follow_transcript": func(r api.Ref) error {
-			feed, err := c.FollowTranscript(ctx, "acme", r, 1, 0)
+			feed, err := c.Factories().FollowTranscript(ctx, "acme", r, 1, 0)
 			if feed != nil {
 				feed.Stop()
 			}

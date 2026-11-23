@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -35,12 +36,12 @@ func focusKindsView(off []string) api.FocusKindsView {
 // Project's other settings it adds no Move, Edit or Comment; the
 // Project's notice announces it, and only on a change.
 func (c *Core) SetFocusKinds(ctx context.Context, key string, in api.SetFocusKindsInput) (api.Written[api.ProjectView], error) {
-	if err := humanOnly(ctx, "set_focus_kinds"); err != nil {
+	if err := foundation.HumanOnly(ctx, "set_focus_kinds"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	var before, after api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		off, err := checkedFocusKindsOff(in.Off)
@@ -73,7 +74,7 @@ func checkedFocusKindsOff(in []api.NeedsMeReason) ([]string, error) {
 			for _, x := range api.NeedsMeReasonViews {
 				names = append(names, string(x.Reason))
 			}
-			return nil, invalid("off", "%q isn't a Needs Me reason; the reasons are %s", r, strings.Join(names, ", "))
+			return nil, api.InvalidField("off", "%q isn't a Needs Me reason; the reasons are %s", r, strings.Join(names, ", "))
 		}
 		if !slices.Contains(off, string(r)) {
 			off = append(off, string(r))

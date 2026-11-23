@@ -57,7 +57,7 @@ func checkReservedNames(field string, labels []string) error {
 	for _, l := range labels {
 		name, ok := strings.CutPrefix(l, domain.WayfinderPrefix)
 		if ok && !slices.Contains(wayfinderNames, name) {
-			return invalid(field, "%q uses the reserved %q prefix; the only Wayfinder Labels are %s", l, domain.WayfinderPrefix, wayfinderLabelList)
+			return api.InvalidField(field, "%q uses the reserved %q prefix; the only Wayfinder Labels are %s", l, domain.WayfinderPrefix, wayfinderLabelList)
 		}
 	}
 	return nil
@@ -67,7 +67,7 @@ func checkReservedNames(field string, labels []string) error {
 // human, who alone adds or removes it.
 func checkHumanLabels(ctx context.Context, field string, labels []string) error {
 	if slices.Contains(labels, domain.AutoAcceptLabel) && api.ActorOf(ctx) != api.Human {
-		return invalid(field, "%q is reserved for the human, who alone adds or removes it", domain.AutoAcceptLabel)
+		return api.InvalidField(field, "%q is reserved for the human, who alone adds or removes it", domain.AutoAcceptLabel)
 	}
 	return nil
 }
@@ -79,15 +79,15 @@ func checkPlacement(field string, labels []string, onSpec bool) error {
 	for _, l := range labels {
 		switch {
 		case l == domain.MapLabel && !onSpec:
-			return invalid(field, "%q marks a Spec as a Map; a Ticket can't carry it", l)
+			return api.InvalidField(field, "%q marks a Spec as a Map; a Ticket can't carry it", l)
 		case l == domain.LongLivedLabel && !onSpec:
-			return invalid(field, "%q marks a Spec as long-lived; it goes on a Spec, not a Ticket", l)
+			return api.InvalidField(field, "%q marks a Spec as long-lived; it goes on a Spec, not a Ticket", l)
 		case onSpec && l == domain.PrototypeLabel:
-			return invalid(field, "%q marks a Ticket as a Prototype; a Spec can't carry it", l)
+			return api.InvalidField(field, "%q marks a Ticket as a Prototype; a Spec can't carry it", l)
 		case onSpec && l == domain.RetroLabel:
-			return invalid(field, "%q marks a Ticket as a Retro; a Spec can't carry it", l)
+			return api.InvalidField(field, "%q marks a Ticket as a Retro; a Spec can't carry it", l)
 		case onSpec && l != domain.MapLabel && strings.HasPrefix(l, domain.WayfinderPrefix):
-			return invalid(field, "%q marks a Map's Ticket; a Spec can only carry %q", l, domain.MapLabel)
+			return api.InvalidField(field, "%q marks a Map's Ticket; a Spec can only carry %q", l, domain.MapLabel)
 		}
 	}
 	return nil
@@ -103,7 +103,7 @@ func checkOneType(field string, labels []string) error {
 		}
 	}
 	if len(types) > 1 {
-		return invalid(field, "a Ticket carries at most one of the reserved type Labels (stage:*, wayfinder:*, prototype or retro), not %s", strings.Join(types, " and "))
+		return api.InvalidField(field, "a Ticket carries at most one of the reserved type Labels (stage:*, wayfinder:*, prototype or retro), not %s", strings.Join(types, " and "))
 	}
 	return nil
 }

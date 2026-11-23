@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -25,7 +26,7 @@ func (c *Core) SubmitRetro(_ context.Context, key string, in api.SubmitRetroInpu
 	// The target is checked before the Retros Spec is made, so a refused
 	// Retro writes nothing.
 	err := c.store.View(func(r store.Reader) error {
-		if err := writable(r, key); err != nil {
+		if err := foundation.Writable(r, key); err != nil {
 			return err
 		}
 		_, err := resolveRetroTarget(r, key, in.Target)
@@ -40,7 +41,7 @@ func (c *Core) SubmitRetro(_ context.Context, key string, in api.SubmitRetroInpu
 	}
 	var v api.Written[api.TicketView]
 	err = c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		target, err := resolveRetroTarget(w, key, in.Target)
@@ -74,28 +75,28 @@ type retroTarget struct {
 // resolveRetroTarget reads the finished work ref names: a Done or
 // Cancelled Ticket, or a Finished Spec that isn't Long-lived.
 func resolveRetroTarget(r store.Reader, key string, ref api.Ref) (retroTarget, error) {
-	n, err := refNumber(ref, key, "target")
+	n, err := api.RefNumber(ref, key, "target")
 	if err != nil {
 		return retroTarget{}, err
 	}
-	id := DisplayID(key, n)
+	id := domain.DisplayID(key, n)
 	if s, ok := r.Spec(key, n); ok {
 		if slices.Contains(s.Labels, domain.LongLivedLabel) {
-			return retroTarget{}, invalid("target", "%s is a Long-lived Spec, which never finishes; start a Retro on each of its finished Tickets instead", id)
+			return retroTarget{}, api.InvalidField("target", "%s is a Long-lived Spec, which never finishes; start a Retro on each of its finished Tickets instead", id)
 		}
 		tickets := specTickets(r, key, n, store.Claims)
 		if _, done := summarise(tickets); !done {
-			return retroTarget{}, invalid("target", "Spec %s isn't Finished; a Retro looks back on finished work, so start it once every Ticket is Done or Cancelled", id)
+			return retroTarget{}, api.InvalidField("target", "Spec %s isn't Finished; a Retro looks back on finished work, so start it once every Ticket is Done or Cancelled", id)
 		}
 		return retroTarget{key: key, id: id, kind: "Spec", title: s.Title, tickets: tickets}, nil
 	}
 	if t, ok := r.Ticket(key, n, store.Claims); ok {
 		if !finished(t.State) {
-			return retroTarget{}, invalid("target", "%s is %s; a Retro looks back on finished work, so start it once the Ticket is Done or Cancelled", id, t.State)
+			return retroTarget{}, api.InvalidField("target", "%s is %s; a Retro looks back on finished work, so start it once the Ticket is Done or Cancelled", id, t.State)
 		}
 		return retroTarget{key: key, id: id, kind: "Ticket", title: t.Title, tickets: []domain.Ticket{t}}, nil
 	}
-	return retroTarget{}, invalid("target", "there is no Spec or Ticket %s", id)
+	return retroTarget{}, api.InvalidField("target", "there is no Spec or Ticket %s", id)
 }
 
 // ticketRetroable is whether the UI offers the Retro button on t: once it
@@ -128,7 +129,7 @@ func (rt retroTarget) description(note string) string {
 	for _, t := range rt.tickets {
 		for _, cl := range t.Claims {
 			claims++
-			fmt.Fprintf(&b, "- %s (%s), Claim %d: %s.\n", DisplayID(rt.key, t.Number), t.Title, cl.Number, claimToRead(cl))
+			fmt.Fprintf(&b, "- %s (%s), Claim %d: %s.\n", domain.DisplayID(rt.key, t.Number), t.Title, cl.Number, claimToRead(cl))
 		}
 	}
 	if claims == 0 {
@@ -165,7 +166,7 @@ const retrosSpecBody = "This Spec holds the Retros the human opens on finished w
 func retrosOf(r store.Reader, key, target string) []api.RetroView {
 	var out []api.RetroView
 	for _, t := range r.FindTickets(key, store.TicketFilter{Label: domain.RetroLabel, Tag: &store.TagFilter{Key: RetroOfTag, Values: []string{target}}}) {
-		out = append(out, api.RetroView{ID: DisplayID(key, t.Number), Title: t.Title, State: t.State})
+		out = append(out, api.RetroView{ID: domain.DisplayID(key, t.Number), Title: t.Title, State: t.State})
 	}
 	return out
 }

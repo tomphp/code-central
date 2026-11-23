@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -65,8 +64,8 @@ func TestALaterCommitCarryingCoveredTicketsOpensNoSecondFixTicketAndStaysOutOfNe
 func (f fixture) fixPushFails(t *testing.T, fix int, id int64, commit string, riders ...string) {
 	t.Helper()
 	f.moveTo(t, fix, domain.Accepted)
-	f.rideOnto(t, commit, append([]string{core.DisplayID("acme", fix)}, riders...)...)
-	f.ciRun(t, id, "ci.yml", commit, core.DisplayID("acme", fix), domain.CICompleted, domain.CIFailure)
+	f.rideOnto(t, commit, append([]string{domain.DisplayID("acme", fix)}, riders...)...)
+	f.ciRun(t, id, "ci.yml", commit, domain.DisplayID("acme", fix), domain.CICompleted, domain.CIFailure)
 }
 
 func TestTheFixTicketsOwnFailedPushAfterACoveredCommitIsAttemptTwo(t *testing.T) {

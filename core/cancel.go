@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -24,7 +25,7 @@ func (c *Core) Cancel(ctx context.Context, key string, in api.CancelInput) (api.
 	// Cancelling a Spec's Pull request closed item cancels the Spec's
 	// other waiting Tickets with it, and leaves the Spec Branch.
 	for _, n := range others {
-		if _, err := c.cancelOne(ctx, key, api.CancelInput{Ticket: api.Ref(DisplayID(key, n)), Reason: in.Reason}); err != nil {
+		if _, err := c.cancelOne(ctx, key, api.CancelInput{Ticket: api.Ref(domain.DisplayID(key, n)), Reason: in.Reason}); err != nil {
 			return out, err
 		}
 	}
@@ -43,7 +44,7 @@ func (c *Core) closedSpecOthers(ctx context.Context, key string, ref api.Ref) []
 	}
 	var others []int
 	_ = c.store.View(func(r store.Reader) error {
-		t, err := resolveTicket(r, key, "cancel", "ticket", ref)
+		t, err := foundation.ResolveTicket(r, key, "cancel", "ticket", ref)
 		if err != nil {
 			return nil
 		}
@@ -74,7 +75,7 @@ func (c *Core) cancelOne(ctx context.Context, key string, in api.CancelInput) (a
 			// reverts (ADR 0049).
 			return false, &api.Error{Code: api.ActionNotAllowed, AllowedActions: slices.DeleteFunc(allowedActions(t.State, actor), func(a string) bool { return a == "cancel" }), Message: fmt.Sprintf(
 				"%s is Partly landed, its work already in the base of %s, so it can't be cancelled: land it in the rest of its Changed Repositories, or send it back",
-				DisplayID(key, t.Number), strings.Join(landedNames(key, *t), ", "))}
+				domain.DisplayID(key, t.Number), strings.Join(landedNames(key, *t), ", "))}
 		}
 		if err := transition(ctx, t, key, "cancel", "", now); err != nil {
 			return false, err
@@ -83,7 +84,7 @@ func (c *Core) cancelOne(ctx context.Context, key string, in api.CancelInput) (a
 			return false, err
 		}
 		if actor != api.Human && len(in.Replacements) == 0 {
-			return false, invalid("replacements", "an agent cancels a Ticket only by naming at least one Replacement that takes over its work")
+			return false, api.InvalidField("replacements", "an agent cancels a Ticket only by naming at least one Replacement that takes over its work")
 		}
 		reps, err := ticketRefs(r, key, "cancel", "replacements", in.Replacements)
 		if err != nil {
@@ -118,7 +119,7 @@ func refuseCancelOfMerged(r store.Reader, key string, t domain.Ticket) error {
 	if severalRepositories(p) {
 		where = fmt.Sprintf("its pull request in %s has merged", strings.Join(namesInLandingOrder(p, merged), ", "))
 	}
-	return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s can't be cancelled: %s, so its work is already in a base. Land the rest of it, or send it back to redo it", DisplayID(key, t.Number), where)}
+	return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s can't be cancelled: %s, so its work is already in a base. Land the rest of it, or send it back to redo it", domain.DisplayID(key, t.Number), where)}
 }
 
 // checkReplacements rejects Replacements for t that are t itself, that
@@ -128,7 +129,7 @@ func checkReplacements(r store.Reader, key string, t domain.Ticket, reps []int) 
 	var from []int
 	for _, n := range reps {
 		if n == t.Number {
-			return invalid("replacements", "%s can't replace itself", DisplayID(key, n))
+			return api.InvalidField("replacements", "%s can't replace itself", domain.DisplayID(key, n))
 		}
 		followed := store.Follow(r, key, n)
 		if slices.Contains(followed, t.Number) {

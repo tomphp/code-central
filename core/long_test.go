@@ -14,7 +14,7 @@ import (
 func (f fixture) keepActive(d time.Duration) {
 	for step := 20 * time.Minute; d > 0; d -= step {
 		f.clock.Advance(min(step, d))
-		f.core.Ping(ctx, "s1")
+		f.core.Factories().Ping(ctx, "s1")
 	}
 }
 
@@ -75,7 +75,7 @@ func TestPickingUpAnswersRestartsALongClaimsClock(t *testing.T) {
 	picked := f.clock.Now()
 	for range 3 {
 		f.clock.Advance(20 * time.Minute)
-		f.core.Ping(ctx, "sess-1")
+		f.core.Factories().Ping(ctx, "sess-1")
 	}
 	wantReason(t, f.get(t, "2"), "")
 	f.clock.Advance(time.Second)
@@ -101,7 +101,7 @@ func TestTheWatchSendsTicketChangedWhenAClaimTurnsLongOrSilentTurnsLong(t *testi
 	}
 	f.clock.Advance(core.SilentAfter)
 	tick() // Long to Silent
-	f.core.Ping(ctx, "s1")
+	f.core.Factories().Ping(ctx, "s1")
 	if got := tick(); len(got) != 1 || got[0].id != "acme-2" {
 		t.Fatalf("got %v, want one for acme-2 going from Silent back to Long", got)
 	}
@@ -114,6 +114,6 @@ func TestSilentTakesPrecedenceOverLong(t *testing.T) {
 	f.clock.Advance(core.LongAfter + time.Minute) // quiet the whole time
 	wantReason(t, f.get(t, "2"), api.ReasonSilentClaim)
 
-	f.core.Ping(ctx, "s1") // active again, and still unmoved
+	f.core.Factories().Ping(ctx, "s1") // active again, and still unmoved
 	wantReason(t, f.get(t, "2"), api.ReasonLongClaim)
 }

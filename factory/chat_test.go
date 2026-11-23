@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/api"
+	chatarea "github.com/tomoram/code-central/core/factories"
 	"github.com/tomoram/code-central/domain"
 
-	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -73,8 +73,8 @@ func TestAChatMessageStartsANewSessionInTheChatWorktreeDetachedAtTheBase(t *test
 	if b := h.BranchIn(chatWorktree(h)); b != "" {
 		t.Errorf("Chat worktree on branch %q, want detached", b)
 	}
-	if m, _ := c.Flag("--model"); m != core.DefaultChatModel {
-		t.Errorf("--model %q, want the Chat default %q", m, core.DefaultChatModel)
+	if m, _ := c.Flag("--model"); m != chatarea.DefaultChatModel {
+		t.Errorf("--model %q, want the Chat default %q", m, chatarea.DefaultChatModel)
 	}
 	if c.Has("--effort") {
 		t.Errorf("args %q set an effort, want Claude Code's default", c.Args)

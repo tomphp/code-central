@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -29,22 +30,22 @@ func (c *Core) GetOptions(ctx context.Context) (api.OptionsView, error) {
 // SetOptions is the human's set_options. It validates every change before
 // writing, and writes only when something changes.
 func (c *Core) SetOptions(ctx context.Context, in api.SetOptionsInput) (api.OptionsView, error) {
-	if err := humanOnly(ctx, "set_options"); err != nil {
+	if err := foundation.HumanOnly(ctx, "set_options"); err != nil {
 		return api.OptionsView{}, err
 	}
 	if in.FocusClear != nil && !in.FocusClear.Valid() {
-		return api.OptionsView{}, invalid("focus_clear", "focus_clear %q is not an Option's value; allowed: %s", *in.FocusClear, strings.Join(domain.FocusClearNames(), ", "))
+		return api.OptionsView{}, api.InvalidField("focus_clear", "focus_clear %q is not an Option's value; allowed: %s", *in.FocusClear, strings.Join(domain.FocusClearNames(), ", "))
 	}
 	if in.FocusPopup != nil && !in.FocusPopup.Valid() {
-		return api.OptionsView{}, invalid("focus_popup", "focus_popup %q is not an Option's value; allowed: %s", *in.FocusPopup, strings.Join(domain.FocusPopupNames(), ", "))
+		return api.OptionsView{}, api.InvalidField("focus_popup", "focus_popup %q is not an Option's value; allowed: %s", *in.FocusPopup, strings.Join(domain.FocusPopupNames(), ", "))
 	}
 	if in.LimitsPopup != nil && !in.LimitsPopup.Valid() {
-		return api.OptionsView{}, invalid("limits_popup", "limits_popup %q is not an Option's value; allowed: %s", *in.LimitsPopup, strings.Join(domain.LimitsPopupNames(), ", "))
+		return api.OptionsView{}, api.InvalidField("limits_popup", "limits_popup %q is not an Option's value; allowed: %s", *in.LimitsPopup, strings.Join(domain.LimitsPopupNames(), ", "))
 	}
 	if in.GHPath != nil {
 		gh := strings.TrimSpace(*in.GHPath)
 		if gh != "" && !filepath.IsAbs(gh) {
-			return api.OptionsView{}, invalid("gh_path", "gh path %q isn't an absolute path, such as /opt/homebrew/bin/gh", gh)
+			return api.OptionsView{}, api.InvalidField("gh_path", "gh path %q isn't an absolute path, such as /opt/homebrew/bin/gh", gh)
 		}
 		in.GHPath = &gh
 	}

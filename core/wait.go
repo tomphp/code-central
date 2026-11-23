@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -13,7 +14,7 @@ import (
 
 // WaitTimeout is how long one Wait holds before returning the State
 // unchanged, on the injected clock.
-const WaitTimeout = 60 * time.Second
+const WaitTimeout = foundation.WaitTimeout
 
 // Events is the bus core sends a change notice on after every write.
 func (c *Core) Events() *events.Bus { return c.events }
@@ -23,7 +24,7 @@ func (c *Core) Events() *events.Bus { return c.events }
 // once if the Ticket has already left from. It is a read: no Claim ID.
 func (c *Core) Wait(ctx context.Context, key string, ref api.Ref, from domain.State) (api.WaitResult, error) {
 	if !from.Valid() {
-		return api.WaitResult{}, invalid("from", "from must be a State, such as %q", domain.NeedsAnswer)
+		return api.WaitResult{}, api.InvalidField("from", "from must be a State, such as %q", domain.NeedsAnswer)
 	}
 	notices, stop := c.events.Subscribe()
 	defer stop()
@@ -55,13 +56,13 @@ func (c *Core) waitResult(key string, ref api.Ref) (api.WaitResult, error) {
 	var res api.WaitResult
 	err := c.store.View(func(r store.Reader) error {
 		if _, ok := r.Project(key); !ok {
-			return unknownProject(key)
+			return api.UnknownProjectError(key)
 		}
-		t, err := resolveTicket(r, key, "wait", "ticket", ref, store.Moves)
+		t, err := foundation.ResolveTicket(r, key, "wait", "ticket", ref, store.Moves)
 		if err != nil {
 			return err
 		}
-		res = api.WaitResult{Ticket: DisplayID(key, t.Number), State: t.State}
+		res = api.WaitResult{Ticket: domain.DisplayID(key, t.Number), State: t.State}
 		if n := len(t.Moves); n > 0 {
 			m := t.Moves[n-1]
 			mv := moveView(m)
@@ -81,11 +82,11 @@ func (c *Core) waitResult(key string, ref api.Ref) (api.WaitResult, error) {
 type notifying struct {
 	store.Store
 	bus   *events.Bus
-	wakes *factoryWakes
+	wakes waker
 }
 
 // newNotifying wraps s, hearing the Changes other services commit.
-func newNotifying(s store.Store, bus *events.Bus, wakes *factoryWakes) notifying {
+func newNotifying(s store.Store, bus *events.Bus, wakes waker) notifying {
 	n := notifying{Store: s, bus: bus, wakes: wakes}
 	s.Changes(n.deliver)
 	return n
@@ -117,7 +118,7 @@ func (n notifying) Update(fn func(store.Writer) error) error {
 func (n notifying) deliver(ch store.Change) {
 	n.bus.Publish(events.Event{Type: ch.Type, Project: ch.Project, ID: ch.ID})
 	if ch.Wakes {
-		n.wakes.wake(ch.Project)
+		n.wakes.Wake(ch.Project)
 	}
 }
 
@@ -138,12 +139,12 @@ func (w *noticeWriter) PutProject(p domain.Project) error {
 
 func (w *noticeWriter) PutSpec(key string, s domain.Spec) error {
 	wakes := specWakesTheFactory(w.Writer, key, s)
-	return w.wakeIf(wakes, key, w.put(w.Writer.PutSpec(key, s), events.Event{Type: events.SpecChanged, Project: key, ID: DisplayID(key, s.Number)}))
+	return w.wakeIf(wakes, key, w.put(w.Writer.PutSpec(key, s), events.Event{Type: events.SpecChanged, Project: key, ID: domain.DisplayID(key, s.Number)}))
 }
 
 func (w *noticeWriter) PutTicket(key string, t domain.Ticket, parts ...store.Part) error {
 	wakes := wakesTheFactory(w.Writer, key, t)
-	return w.wakeIf(wakes, key, w.put(w.Writer.PutTicket(key, t, parts...), events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, t.Number)}))
+	return w.wakeIf(wakes, key, w.put(w.Writer.PutTicket(key, t, parts...), events.Event{Type: events.TicketChanged, Project: key, ID: domain.DisplayID(key, t.Number)}))
 }
 
 // PutImport sends one project.changed notice for the whole Import, so a
@@ -182,3 +183,7 @@ func (w *noticeWriter) put(err error, e events.Event) error {
 	}
 	return err
 }
+
+// waker wakes a Project's Factories when a write is one their poll acts
+// on; the Factories area satisfies it.
+type waker interface{ Wake(project string) }

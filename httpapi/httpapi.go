@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/ops"
 )
 
@@ -89,7 +89,7 @@ func Status(code api.Code) int {
 // WriteError writes err as the API's JSON error with its status; an error
 // that is not a *api.Error is internal.
 func WriteError(w http.ResponseWriter, err error) {
-	e := core.ErrorOf(err)
+	e := foundation.ErrorOf(err)
 	writeJSON(w, Status(e.Code), e)
 }
 

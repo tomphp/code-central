@@ -14,6 +14,7 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/core/factories"
 	"github.com/tomoram/code-central/httpapi"
 	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/ops/bind"
@@ -152,7 +153,7 @@ func TestATranscriptStreamSendsATailNoticeWhenEarlierEventsWereDropped(t *testin
 	hs := liveServer(t, f.h)
 	f.claim(t, 2, "s1")
 	var batch []string
-	for i := 1; i <= core.TranscriptLimit+2; i++ {
+	for i := 1; i <= factories.TranscriptLimit+2; i++ {
 		batch = append(batch, fmt.Sprint(i))
 	}
 	f.events(t, "s1", batch...)
@@ -184,7 +185,7 @@ func TestATranscriptStreamSendsATailNoticeWhenEventsAreDroppedBeforeItSendsThem(
 
 	// One batch overflows the Transcript: 2 is dropped before it is sent.
 	var batch []string
-	for i := 2; i <= core.TranscriptLimit+2; i++ {
+	for i := 2; i <= factories.TranscriptLimit+2; i++ {
 		batch = append(batch, fmt.Sprint(i))
 	}
 	f.events(t, "s1", batch...)
@@ -292,7 +293,7 @@ func TestATranscriptStreamOfATranscriptAnotherServiceHoldsNamesItsHostAndEnds(t 
 			t.Fatal(err)
 		}
 		if svc.Host == "laptop" {
-			c.PostSessionEvents(context.Background(), "s1", []api.SessionEvent{{Time: f.clock.Now(), Kind: api.EventText, Text: "one"}})
+			c.Factories().PostSessionEvents(context.Background(), "s1", []api.SessionEvent{{Time: f.clock.Now(), Kind: api.EventText, Text: "one"}})
 			continue
 		}
 		mux := http.NewServeMux()

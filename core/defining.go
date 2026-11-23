@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -18,10 +19,10 @@ import (
 // changes nothing writes nothing.
 func (c *Core) EditTicket(ctx context.Context, key string, in api.EditTicketInput) (api.Written[api.TicketView], error) {
 	if in.Title != nil && strings.TrimSpace(*in.Title) == "" {
-		return api.Written[api.TicketView]{}, invalid("title", "a Ticket needs a title")
+		return api.Written[api.TicketView]{}, api.InvalidField("title", "a Ticket needs a title")
 	}
 	return c.updateTicket(key, "edit_ticket", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
-		if err := definitionOwned(ctx, DisplayID(key, t.Number), t.Link); err != nil {
+		if err := definitionOwned(ctx, domain.DisplayID(key, t.Number), t.Link); err != nil {
 			return false, err
 		}
 		prev := map[string]string{}
@@ -56,19 +57,19 @@ func specEditable(p domain.Project, s domain.Spec, specFinished bool) bool {
 // EditTicket does. The history sits in the Spec's own file.
 func (c *Core) EditSpec(ctx context.Context, key string, in api.EditSpecInput) (api.Written[api.SpecView], error) {
 	if in.Title != nil && strings.TrimSpace(*in.Title) == "" {
-		return api.Written[api.SpecView]{}, invalid("title", "a Spec needs a title")
+		return api.Written[api.SpecView]{}, api.InvalidField("title", "a Spec needs a title")
 	}
 	var v api.Written[api.SpecView]
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
-		s, err := resolveSpec(w, key, "edit_spec", "spec", in.Spec)
+		s, err := foundation.ResolveSpec(w, key, "edit_spec", "spec", in.Spec)
 		if err != nil {
 			return err
 		}
 		n := s.Number
-		if err := definitionOwned(ctx, DisplayID(key, n), s.Link); err != nil {
+		if err := definitionOwned(ctx, domain.DisplayID(key, n), s.Link); err != nil {
 			return err
 		}
 		before := specView(key, s)
@@ -102,7 +103,7 @@ func change(prev map[string]string, name string, field *string, to *string) {
 // one another agent holds, and needs no Claim ID.
 func (c *Core) Comment(ctx context.Context, key string, in api.CommentInput) (api.Written[api.TicketView], error) {
 	if strings.TrimSpace(in.Body) == "" {
-		return api.Written[api.TicketView]{}, invalid("body", "a comment needs a body")
+		return api.Written[api.TicketView]{}, api.InvalidField("body", "a comment needs a body")
 	}
 	return c.updateTicket(key, "comment", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		addComment(t, api.ActorOf(ctx), c.now(), 0, in.Body)
@@ -121,7 +122,7 @@ func (c *Core) Approve(ctx context.Context, key string, in api.TicketInput) (api
 // as a comment.
 func (c *Core) Defer(ctx context.Context, key string, in api.DeferInput) (api.Written[api.TicketView], error) {
 	if strings.TrimSpace(in.Reason) == "" {
-		return api.Written[api.TicketView]{}, invalid("reason", "defer needs a reason")
+		return api.Written[api.TicketView]{}, api.InvalidField("reason", "defer needs a reason")
 	}
 	return c.updateTicket(key, "defer", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {
 		if err := transition(ctx, t, key, "defer", "", c.now()); err != nil {
@@ -202,11 +203,11 @@ func (c *Core) RemoveLabels(ctx context.Context, key string, in api.LabelsInput)
 
 func checkLabels(labels []string) error {
 	if len(labels) == 0 {
-		return invalid("labels", "name at least one Label")
+		return api.InvalidField("labels", "name at least one Label")
 	}
 	for _, l := range labels {
 		if strings.TrimSpace(l) == "" || strings.ContainsAny(l, "\r\n") {
-			return invalid("labels", "a Label is non-empty and single-line, not %q", l)
+			return api.InvalidField("labels", "a Label is non-empty and single-line, not %q", l)
 		}
 	}
 	return nil
@@ -219,7 +220,7 @@ var tagKey = regexp.MustCompile(`^[a-z0-9._-]+$`)
 // says.
 func (c *Core) SetTags(_ context.Context, key string, in api.SetTagsInput) (api.TargetView, error) {
 	if len(in.Tags) == 0 {
-		return api.TargetView{}, invalid("tags", "name at least one Tag")
+		return api.TargetView{}, api.InvalidField("tags", "name at least one Tag")
 	}
 	if err := checkTagSyntax(in.Tags); err != nil {
 		return api.TargetView{}, err
@@ -244,10 +245,10 @@ func (c *Core) SetTags(_ context.Context, key string, in api.SetTagsInput) (api.
 func checkTagSyntax(tags map[string]string) error {
 	for k, v := range tags {
 		if !tagKey.MatchString(k) {
-			return invalid("tags", "Tag key %q must be lowercase letters, digits, '.', '_' and '-'", k)
+			return api.InvalidField("tags", "Tag key %q must be lowercase letters, digits, '.', '_' and '-'", k)
 		}
 		if strings.TrimSpace(v) == "" || strings.ContainsAny(v, "\r\n") {
-			return invalid("tags", "Tag %q needs a non-empty, single-line value", k)
+			return api.InvalidField("tags", "Tag %q needs a non-empty, single-line value", k)
 		}
 	}
 	return nil
@@ -257,7 +258,7 @@ func checkTagSyntax(tags map[string]string) error {
 // its Model Choice, so it is a valid effort level for the Project.
 func checkTicketTags(r store.Reader, key string, tags map[string]string) error {
 	if effort, ok := tags[EffortTag]; ok {
-		return checkEffort(r, key, "tags", effort)
+		return foundation.CheckEffort(r, key, "tags", effort)
 	}
 	return nil
 }
@@ -267,11 +268,11 @@ func checkTicketTags(r store.Reader, key string, tags map[string]string) error {
 // checkBranchTagChange says.
 func (c *Core) RemoveTags(_ context.Context, key string, in api.RemoveTagsInput) (api.TargetView, error) {
 	if len(in.Keys) == 0 {
-		return api.TargetView{}, invalid("keys", "name at least one Tag key")
+		return api.TargetView{}, api.InvalidField("keys", "name at least one Tag key")
 	}
 	for _, k := range in.Keys {
 		if !tagKey.MatchString(k) {
-			return api.TargetView{}, invalid("keys", "Tag key %q must be lowercase letters, digits, '.', '_' and '-'", k)
+			return api.TargetView{}, api.InvalidField("keys", "Tag key %q must be lowercase letters, digits, '.', '_' and '-'", k)
 		}
 	}
 	return c.updateTargetIn(key, in.Target, func(r store.Reader, n int, onSpec bool, _ *[]string, tags map[string]string) error {
@@ -313,10 +314,10 @@ func (c *Core) updateTargetThen(key string, ref api.Ref, fn targetFn,
 	then func(r store.Reader, target store.Import) (store.Import, error)) (api.TargetView, error) {
 	var v api.TargetView
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
-		n, err := refNumber(ref, key, "target")
+		n, err := api.RefNumber(ref, key, "target")
 		if err != nil {
 			return err
 		}
@@ -350,7 +351,7 @@ func (c *Core) updateTargetThen(key string, ref api.Ref, fn targetFn,
 					return err
 				}
 			}
-			v = api.TargetView{ID: DisplayID(key, n), Kind: api.RecordSpec, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags)}
+			v = api.TargetView{ID: domain.DisplayID(key, n), Kind: api.RecordSpec, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags)}
 			return nil
 		}
 		// An Import rewrites the Ticket whole, so it is read whole.
@@ -365,10 +366,10 @@ func (c *Core) updateTargetThen(key string, ref api.Ref, fn targetFn,
 					return err
 				}
 			}
-			v = api.TargetView{ID: DisplayID(key, n), Kind: api.RecordTicket, Labels: orEmpty(t.Labels), Tags: orEmptyMap(t.Tags)}
+			v = api.TargetView{ID: domain.DisplayID(key, n), Kind: api.RecordTicket, Labels: orEmpty(t.Labels), Tags: orEmptyMap(t.Tags)}
 			return nil
 		}
-		return notFound("there is no Spec or Ticket %s", DisplayID(key, n))
+		return api.NotFoundError("there is no Spec or Ticket %s", domain.DisplayID(key, n))
 	})
 	return v, err
 }

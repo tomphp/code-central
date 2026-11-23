@@ -260,7 +260,7 @@ func TestAClaimTurningSilentNotifiesOncePerCrossing(t *testing.T) {
 	f.want(notify.Notification{Title: "acme-3 has a new Round", Body: "Task B", URL: base + "/?view=inbox&ticket=acme-3"})
 
 	// A ping ends the silence; crossing the mark again notifies again.
-	f.core.Ping(ctx, "s-2")
+	f.core.Factories().Ping(ctx, "s-2")
 	f.clock.BlockUntil(1)
 	f.clock.Advance(notify.Tick)
 	f.clock.BlockUntil(1)
@@ -275,7 +275,7 @@ func (f *fixture) tickActive(ticket string, d time.Duration) {
 	f.t.Helper()
 	f.clock.BlockUntil(1)
 	f.clock.Advance(d)
-	f.core.Ping(ctx, "s-"+ticket)
+	f.core.Factories().Ping(ctx, "s-"+ticket)
 }
 
 func TestAClaimTurningLongNotifiesOncePerClaim(t *testing.T) {

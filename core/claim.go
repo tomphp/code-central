@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -32,14 +33,14 @@ const stopWorking = "stop working this Ticket"
 // Claim instead, writing nothing.
 func (c *Core) Claim(ctx context.Context, key string, in api.ClaimInput) (api.ClaimResult, error) {
 	if in.Spec != "" && in.Ticket != "" {
-		return api.ClaimResult{}, invalid("ticket", "pass spec or ticket, not both")
+		return api.ClaimResult{}, api.InvalidField("ticket", "pass spec or ticket, not both")
 	}
 	var res api.ClaimResult
 	// Made once, and kept by a retried Update, so the ID committed is the
 	// one returned; claiming again takes none.
 	var id string
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		rule := c.blockRule(w, key)
@@ -93,7 +94,7 @@ func (c *Core) claimResult(r store.Reader, key string, t domain.Ticket, id strin
 // Claim isn't the caller's, saying who holds it and what to do.
 func heldError(key string, t domain.Ticket, live *domain.Claim, sessionID string, actor api.Actor) error {
 	msg := fmt.Sprintf("%s is held by Claim %d of another session; claim another Ticket, or ask the human to release it",
-		DisplayID(key, t.Number), live.Number)
+		domain.DisplayID(key, t.Number), live.Number)
 	if sessionID == "" {
 		msg += "; if this session holds it, call claim again with your session_id"
 	}
@@ -105,7 +106,7 @@ func heldError(key string, t domain.Ticket, live *domain.Claim, sessionID string
 func claimTarget(rule blockRule, in api.ClaimInput) (t domain.Ticket, found bool, err error) {
 	r, key := rule.r, rule.p.Key
 	if in.Ticket != "" {
-		t, err := resolveTicket(r, key, "claim", "ticket", in.Ticket)
+		t, err := foundation.ResolveTicket(r, key, "claim", "ticket", in.Ticket)
 		if err != nil {
 			return t, false, err
 		}
@@ -115,7 +116,7 @@ func claimTarget(rule blockRule, in api.ClaimInput) (t domain.Ticket, found bool
 	}
 	specN := 0
 	if in.Spec != "" {
-		sp, err := resolveSpec(r, key, "claim", "spec", in.Spec)
+		sp, err := foundation.ResolveSpec(r, key, "claim", "spec", in.Spec)
 		if err != nil {
 			return t, false, err
 		}
@@ -141,15 +142,15 @@ func claimTarget(rule blockRule, in api.ClaimInput) (t domain.Ticket, found bool
 // Repositories; the result is the same either way.
 func (c *Core) Finish(ctx context.Context, key string, in api.FinishInput) (api.FinishResult, error) {
 	if strings.TrimSpace(in.Summary) == "" {
-		return api.FinishResult{}, invalid("summary", "finish needs a summary: what was done, where (branch or commit) and what the reviewer should check")
+		return api.FinishResult{}, api.InvalidField("summary", "finish needs a summary: what was done, where (branch or commit) and what the reviewer should check")
 	}
 	rec := domain.Recommendation(strings.TrimSpace(string(in.Recommendation)))
 	if rec != "" && !rec.Valid() {
-		return api.FinishResult{}, invalid("recommendation", "recommendation %q is neither %q nor %q", in.Recommendation, domain.RecommendImplement, domain.RecommendSplit)
+		return api.FinishResult{}, api.InvalidField("recommendation", "recommendation %q is neither %q nor %q", in.Recommendation, domain.RecommendImplement, domain.RecommendSplit)
 	}
 	var v api.Written[api.TicketView]
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		t, h, err := readForWrite(w, key, "finish", "ticket", in.Ticket, whole)
@@ -168,9 +169,9 @@ func (c *Core) Finish(ctx context.Context, key string, in api.FinishInput) (api.
 		spec := domain.StageOf(t.Labels) == "spec"
 		switch {
 		case spec && rec == "":
-			return invalid("recommendation", "finishing a spec Stage needs a recommendation: implement or split, with a one-line reason in the summary")
+			return api.InvalidField("recommendation", "finishing a spec Stage needs a recommendation: implement or split, with a one-line reason in the summary")
 		case !spec && rec != "":
-			return invalid("recommendation", "only a spec Stage takes a recommendation: finish again without it")
+			return api.InvalidField("recommendation", "only a spec Stage takes a recommendation: finish again without it")
 		}
 		t.Recommendation = rec
 		p, _ := w.Project(key)
@@ -231,7 +232,7 @@ func acceptStep(ctx context.Context, t *domain.Ticket, key string, cause domain.
 func (c *Core) Land(ctx context.Context, key string, in api.LandInput) (api.Written[api.TicketView], error) {
 	commit := strings.TrimSpace(in.Commit)
 	if commit == "" {
-		return api.Written[api.TicketView]{}, invalid("commit", "land needs the commit that put the work into the base")
+		return api.Written[api.TicketView]{}, api.InvalidField("commit", "land needs the commit that put the work into the base")
 	}
 	return c.updateTicketIn(key, "land", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
 		p, _ := r.Project(key)
@@ -242,7 +243,7 @@ func (c *Core) Land(ctx context.Context, key string, in api.LandInput) (api.Writ
 		now := c.now()
 		i := slices.IndexFunc(t.Repositories, func(cr domain.ChangedRepository) bool { return cr.Name == name })
 		if !landsLast(changedRepositories(key, *t), name) {
-			if _, err := check("land", t.State, "", api.ActorOf(ctx), DisplayID(key, t.Number)); err != nil {
+			if _, err := check("land", t.State, "", api.ActorOf(ctx), domain.DisplayID(key, t.Number)); err != nil {
 				return false, err
 			}
 			if l := t.Repositories[i].Landed; l != nil && l.Commit == commit {
@@ -268,7 +269,7 @@ func (c *Core) Land(ctx context.Context, key string, in api.LandInput) (api.Writ
 // keeps its place near the front of the claim order.
 func (c *Core) Reject(ctx context.Context, key string, in api.RejectInput) (api.Written[api.TicketView], error) {
 	if strings.TrimSpace(in.Comment) == "" {
-		return api.Written[api.TicketView]{}, invalid("comment", "reject needs a comment saying what to change")
+		return api.Written[api.TicketView]{}, api.InvalidField("comment", "reject needs a comment saying what to change")
 	}
 	return c.act(ctx, key, in.Ticket, in.Full, "reject", "", in.Comment)
 }

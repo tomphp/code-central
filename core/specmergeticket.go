@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -42,15 +43,15 @@ func (c *Core) OpenSpecMerge(ctx context.Context, key string, in api.OpenSpecMer
 	}
 	var res api.OpenSpecMergeResult
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		p, _ := w.Project(key)
-		sp, err := resolveSpec(w, key, "open_spec_merge", "spec", in.Spec)
+		sp, err := foundation.ResolveSpec(w, key, "open_spec_merge", "spec", in.Spec)
 		if err != nil {
 			return err
 		}
-		id := DisplayID(key, sp.Number)
+		id := domain.DisplayID(key, sp.Number)
 		tickets := specTickets(w, key, sp.Number)
 		if why := whyNoSpecMerge(sp, tickets); why != "" {
 			return &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s %s, so it takes no Spec merge Ticket", id, why)}
@@ -77,7 +78,7 @@ func (c *Core) OpenSpecMerge(ctx context.Context, key string, in api.OpenSpecMer
 		if open, ok := openSpecMergeTicket(tickets, id); ok {
 			h := held{store.Comments}
 			t, _ := w.Ticket(key, open.Number, h...)
-			res.Ticket = DisplayID(key, t.Number)
+			res.Ticket = domain.DisplayID(key, t.Number)
 			if t.Description == body || slices.ContainsFunc(t.Comments, func(cm domain.Comment) bool { return cm.Body == body }) {
 				res.Outcome = api.SpecMergeUnchanged
 				return nil
@@ -91,7 +92,7 @@ func (c *Core) OpenSpecMerge(ctx context.Context, key string, in api.OpenSpecMer
 			Number: w.NextNumber(key), Title: title, State: domain.Ready, Spec: sp.Number,
 			SpecMergeTicket: true, Created: now, Updated: now, Description: body,
 		}
-		res = api.OpenSpecMergeResult{Ticket: DisplayID(key, t.Number), Outcome: api.SpecMergeOpened}
+		res = api.OpenSpecMergeResult{Ticket: domain.DisplayID(key, t.Number), Outcome: api.SpecMergeOpened}
 		return whole.put(w, key, &t)
 	})
 	return res, err
@@ -165,11 +166,11 @@ func checkSpecMergeConflict(at string, conflicts []string, baseTip, specTip stri
 	}
 	switch {
 	case len(conflicts) == 0:
-		return invalid(field("conflicts"), "open_spec_merge needs the files the Spec Branch conflicts with the base in")
+		return api.InvalidField(field("conflicts"), "open_spec_merge needs the files the Spec Branch conflicts with the base in")
 	case strings.TrimSpace(baseTip) == "":
-		return invalid(field("base_tip"), "open_spec_merge needs the base's tip")
+		return api.InvalidField(field("base_tip"), "open_spec_merge needs the base's tip")
 	case strings.TrimSpace(specTip) == "":
-		return invalid(field("spec_branch_tip"), "open_spec_merge needs the Spec Branch's tip")
+		return api.InvalidField(field("spec_branch_tip"), "open_spec_merge needs the Spec Branch's tip")
 	}
 	return nil
 }
@@ -192,9 +193,9 @@ func specMergeConflicts(p domain.Project, in api.OpenSpecMergeInput) ([]api.Spec
 		case !slices.Contains(names, c.Name):
 			return nil, notARepository(p, at+".name", c.Name)
 		case c.Name == p.Key && specMergeHomeGiven(in):
-			return nil, invalid("repositories", "%s is the Home Repository, given both in conflicts and in repositories: give it in one form or the other", p.Key)
+			return nil, api.InvalidField("repositories", "%s is the Home Repository, given both in conflicts and in repositories: give it in one form or the other", p.Key)
 		case slices.ContainsFunc(out, func(o api.SpecMergeConflict) bool { return o.Name == c.Name }):
-			return nil, invalid(at+".name", "%s is listed twice: give each Repository's conflict once", c.Name)
+			return nil, api.InvalidField(at+".name", "%s is listed twice: give each Repository's conflict once", c.Name)
 		}
 		if err := checkSpecMergeConflict(at, c.Conflicts, c.BaseTip, c.SpecBranchTip); err != nil {
 			return nil, err

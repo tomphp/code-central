@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -32,11 +33,11 @@ const implementReason = "The human chose Implement: %s builds the Spec without t
 func (c *Core) Implement(ctx context.Context, key string, in api.TicketInput) (api.FinishResult, error) {
 	var res api.FinishResult
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		// An Import rewrites the spec Stage whole, so it is read whole.
-		t, err := resolveTicket(w, key, "implement", "ticket", in.Ticket, whole...)
+		t, err := foundation.ResolveTicket(w, key, "implement", "ticket", in.Ticket, whole...)
 		if err != nil {
 			return err
 		}
@@ -86,7 +87,7 @@ func (d implemented) records(t domain.Ticket) store.Import {
 // so a Draft Requirement stays unbuilt. It is action_not_allowed unless
 // t is a spec Stage In Review whose tickets Stage can still run.
 func (c *Core) implementStep(ctx context.Context, r store.Reader, key string, t *domain.Ticket, cause domain.AutoAcceptCause, now time.Time) (implemented, error) {
-	id := DisplayID(key, t.Number)
+	id := domain.DisplayID(key, t.Number)
 	if domain.StageOf(t.Labels) != "spec" {
 		return implemented{}, notAllowed("%s is not a spec Stage, so implement is not allowed: only a Requirement's spec Stage is implemented", id)
 	}
@@ -103,14 +104,14 @@ func (c *Core) implementStep(ctx context.Context, r store.Reader, key string, t 
 		}
 	}
 	if !found {
-		return implemented{}, notAllowed("%s has no tickets Stage, so implement is not allowed", DisplayID(key, t.Spec))
+		return implemented{}, notAllowed("%s has no tickets Stage, so implement is not allowed", domain.DisplayID(key, t.Spec))
 	}
 	if tickets.State != domain.Draft && tickets.State != domain.Ready {
 		return implemented{}, notAllowed("the tickets Stage %s is %s, so implement is not allowed: it must still be able to run (Draft or Ready, not claimed)",
-			DisplayID(key, tickets.Number), tickets.State)
+			domain.DisplayID(key, tickets.Number), tickets.State)
 	}
 	spec, _ := r.Spec(key, t.Spec)
-	specID := DisplayID(key, t.Spec)
+	specID := domain.DisplayID(key, t.Spec)
 
 	if err := transitionTo(ctx, t, key, "implement", "", domain.Done, now); err != nil {
 		return implemented{}, err
@@ -124,7 +125,7 @@ func (c *Core) implementStep(ctx context.Context, r store.Reader, key string, t 
 		state = tickets.State
 	}
 	n := r.NextNumber(key)
-	newID := DisplayID(key, n)
+	newID := domain.DisplayID(key, n)
 	build := domain.Ticket{
 		Number: n, Title: "Implement: " + spec.Title, State: state, Spec: t.Spec,
 		Created: now, Updated: now, Description: fmt.Sprintf(implementDescription, specID),

@@ -7,6 +7,7 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/azdourl"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -22,7 +23,7 @@ func azureBoardsView(p domain.Project, watcher api.WatcherView) api.AzureBoardsV
 	v := api.AzureBoardsView{On: a.On, Mode: azureBoardsModeOf(a), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
 		PATEnv: boardsPATEnvOf(p.CI, a), NewIssuesNeedMe: a.NewIssuesNeedMe, HideCodeCentral: a.HideCodeCentral, BranchFormat: a.BranchFormat, Watcher: watcher}
 	if a.Spec != 0 {
-		v.Spec = DisplayID(p.Key, a.Spec)
+		v.Spec = domain.DisplayID(p.Key, a.Spec)
 	}
 	return v
 }
@@ -51,7 +52,7 @@ func boardsPATEnvOf(ci domain.CI, a domain.AzureBoards) string {
 // Mode's organization or project retitles the Azure Boards Spec unless
 // the human has changed its title. Turning it off touches no Link.
 func (c *Core) SetAzureBoards(ctx context.Context, key string, in api.SetAzureBoardsInput) (api.Written[api.ProjectView], error) {
-	if err := humanOnly(ctx, "set_azure_boards"); err != nil {
+	if err := foundation.HumanOnly(ctx, "set_azure_boards"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	a := domain.AzureBoards{On: in.On, Mode: in.Mode, QueryURL: strings.TrimSpace(in.QueryURL),
@@ -87,7 +88,7 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in api.SetAzureBo
 	given := a
 	err := c.store.Update(func(w store.Writer) error {
 		a, resetWatcher = given, false
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		p, _ = w.Project(key)
@@ -129,7 +130,7 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in api.SetAzureBo
 func checkAzureBoardsSettings(a *domain.AzureBoards) error {
 	mode := azureBoardsModeOf(*a)
 	if !mode.Valid() {
-		return invalid("mode", "Azure Boards mode %q isn't %q or %q", a.Mode, domain.AzureBoardsSavedQuery, domain.AzureBoardsWIQL)
+		return api.InvalidField("mode", "Azure Boards mode %q isn't %q or %q", a.Mode, domain.AzureBoardsSavedQuery, domain.AzureBoardsWIQL)
 	}
 	// The default Mode is stored as none, so settings never set stay
 	// unwritten.
@@ -139,19 +140,19 @@ func checkAzureBoardsSettings(a *domain.AzureBoards) error {
 	if a.QueryURL != "" {
 		u, err := azdourl.ParseQueryURL(a.QueryURL)
 		if err != nil {
-			return invalid("query_url", "%v", err)
+			return api.InvalidField("query_url", "%v", err)
 		}
 		a.QueryURL = u
 	}
 	if a.ProjectURL != "" {
 		u, err := azdourl.ParseProjectURL(a.ProjectURL)
 		if err != nil {
-			return invalid("project_url", "%v", err)
+			return api.InvalidField("project_url", "%v", err)
 		}
 		a.ProjectURL = u
 	}
 	if words := strings.Fields(a.Where); len(words) > 0 && (strings.EqualFold(words[0], "SELECT") || strings.EqualFold(words[0], "WHERE")) {
-		return invalid("where", "Give only the WHERE clause, without SELECT or the WHERE keyword: Code Central wraps it, such as %s", exampleWhere)
+		return api.InvalidField("where", "Give only the WHERE clause, without SELECT or the WHERE keyword: Code Central wraps it, such as %s", exampleWhere)
 	}
 	if err := checkPATEnv(a.PATEnv); err != nil {
 		return err
@@ -161,11 +162,11 @@ func checkAzureBoardsSettings(a *domain.AzureBoards) error {
 	}
 	switch {
 	case mode == domain.AzureBoardsSavedQuery && a.QueryURL == "":
-		return invalid("query_url", "Azure Boards needs the saved query's URL, such as https://dev.azure.com/acme/web/_queries/query/<id>")
+		return api.InvalidField("query_url", "Azure Boards needs the saved query's URL, such as https://dev.azure.com/acme/web/_queries/query/<id>")
 	case mode == domain.AzureBoardsWIQL && a.ProjectURL == "":
-		return invalid("project_url", "A WIQL filter needs the Azure DevOps project it runs in, as its URL, such as https://dev.azure.com/acme/web")
+		return api.InvalidField("project_url", "A WIQL filter needs the Azure DevOps project it runs in, as its URL, such as https://dev.azure.com/acme/web")
 	case mode == domain.AzureBoardsWIQL && a.Where == "":
-		return invalid("where", "A WIQL filter needs a WHERE clause, such as %s", exampleWhere)
+		return api.InvalidField("where", "A WIQL filter needs a WHERE clause, such as %s", exampleWhere)
 	}
 	return nil
 }
@@ -239,7 +240,7 @@ func (c *Core) checkAzureBoards(ctx context.Context, key string, a domain.AzureB
 	var was, now api.AzureBoardsCheckInput
 	var wasOn bool
 	err := c.store.View(func(r store.Reader) error {
-		if err := writable(r, key); err != nil {
+		if err := foundation.Writable(r, key); err != nil {
 			return err
 		}
 		p, _ := r.Project(key)

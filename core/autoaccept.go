@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -32,7 +33,7 @@ func autoAcceptView(p domain.Project) api.AutoAcceptView {
 // now on, accepting nothing already In Review. Like the Project's other
 // settings it adds no Move, Edit or Comment.
 func (c *Core) SetAutoAccept(ctx context.Context, key string, in api.SetAutoAcceptInput) (api.Written[api.ProjectView], error) {
-	if err := humanOnly(ctx, "set_auto_accept"); err != nil {
+	if err := foundation.HumanOnly(ctx, "set_auto_accept"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	var unknown []string
@@ -43,11 +44,11 @@ func (c *Core) SetAutoAccept(ctx context.Context, key string, in api.SetAutoAcce
 	}
 	if len(unknown) > 0 {
 		sort.Strings(unknown)
-		return api.Written[api.ProjectView]{}, invalid("kinds", "unknown Auto-accept kind %s; the kinds are %s", strings.Join(unknown, ", "), joinKinds())
+		return api.Written[api.ProjectView]{}, api.InvalidField("kinds", "unknown Auto-accept kind %s; the kinds are %s", strings.Join(unknown, ", "), joinKinds())
 	}
 	var before, after api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		p, _ := w.Project(key)

@@ -111,7 +111,7 @@ func Run(ctx context.Context, o Options) error {
 			fmt.Fprintf(o.Stderr, "code-central serve: cannot deregister the service: %v\n", err)
 		}
 	}()
-	c.LoadFactories()
+	c.Factories().LoadFactories()
 	stopTimers := watchTimers(ctx, c)
 	defer stopTimers()
 	handler := newHandler(c, o, bindHosts)
@@ -260,7 +260,7 @@ func watchTimers(ctx context.Context, c *core.Core) (stop func()) {
 		c.Events().Publish(events.Event{Type: events.TicketChanged, Project: project, ID: ticketID})
 	})
 	factoryTicker := time.NewTicker(10 * time.Second)
-	go c.WatchFactoryStatus(ctx, factoryTicker.C, func(project string) {
+	go c.Factories().WatchFactoryStatus(ctx, factoryTicker.C, func(project string) {
 		c.Events().Publish(events.Event{Type: events.ProjectChanged, Project: project})
 	})
 	return func() {

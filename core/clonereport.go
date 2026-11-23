@@ -3,12 +3,11 @@ package core
 import (
 	"context"
 	"fmt"
-	"maps"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -32,16 +31,16 @@ func (c *Core) ReportRepositories(_ context.Context, key string, in api.ReportRe
 		name, path, problem := strings.TrimSpace(r.Name), strings.TrimSpace(r.Path), strings.TrimSpace(r.Problem)
 		switch {
 		case name == "":
-			return api.Written[api.ProjectView]{}, invalid("repositories", "each Repository needs its name")
+			return api.Written[api.ProjectView]{}, api.InvalidField("repositories", "each Repository needs its name")
 		case path == "":
-			return api.Written[api.ProjectView]{}, invalid("repositories", "Repository %s needs the path of its clone", name)
+			return api.Written[api.ProjectView]{}, api.InvalidField("repositories", "Repository %s needs the path of its clone", name)
 		case !slices.Contains(api.CloneStates(), r.State):
-			return api.Written[api.ProjectView]{}, invalid("repositories", "Repository %s's state is ready or missing, not %q", name, r.State)
+			return api.Written[api.ProjectView]{}, api.InvalidField("repositories", "Repository %s's state is ready or missing, not %q", name, r.State)
 		case r.State == api.CloneMissing && problem == "":
-			return api.Written[api.ProjectView]{}, invalid("repositories", "Repository %s is missing, so needs the problem", name)
+			return api.Written[api.ProjectView]{}, api.InvalidField("repositories", "Repository %s is missing, so needs the problem", name)
 		}
 		if _, dup := report[name]; dup {
-			return api.Written[api.ProjectView]{}, invalid("repositories", "Repository %s is reported twice", name)
+			return api.Written[api.ProjectView]{}, api.InvalidField("repositories", "Repository %s is reported twice", name)
 		}
 		if r.State == api.CloneReady {
 			problem = ""
@@ -51,7 +50,7 @@ func (c *Core) ReportRepositories(_ context.Context, key string, in api.ReportRe
 	var before api.ProjectView
 	var project domain.Project
 	if err := c.store.View(func(r store.Reader) error {
-		if err := writable(r, key); err != nil {
+		if err := foundation.Writable(r, key); err != nil {
 			return err
 		}
 		project, _ = r.Project(key)
@@ -60,46 +59,20 @@ func (c *Core) ReportRepositories(_ context.Context, key string, in api.ReportRe
 	}); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
-	hs := c.heartbeats
-	hs.mu.Lock()
-	prev := hs.clones[key]
-	for name, v := range report {
-		// A clone in the same state, with the same problem, is still
-		// waiting since it was first reported.
-		if p, ok := prev[name]; ok && p.State == v.State && p.Path == v.Path && p.Problem == v.Problem {
-			report[name] = p
-		}
-	}
-	hs.clones[key] = report
-	hs.reportsAt[key] = now
-	hs.mu.Unlock()
-	c.recordReports(key)
-	if !maps.Equal(prev, report) {
+	if c.factories.RecordClones(key, report, now) {
 		c.events.Publish(events.Event{Type: events.ProjectChanged, Project: key})
 	}
 	return acknowledgeProject(before, c.projectView(project), in.Full, now)
 }
 
-// cloneView is the clone of project's Repository name at now, or nil
-// when none is current: no report of it, or no Factory online or
-// draining. hs.mu is held.
-func (hs *heartbeats) cloneView(project, name string, now time.Time) *api.CloneView {
-	v, ok := hs.clones[project][name]
-	if !ok || !hs.reporting(project, now) {
-		return nil
-	}
-	return &v
-}
-
 // fillClones fills in each of rs's clones from the latest clone report of
 // the Project key.
 func (c *Core) fillClones(key string, rs []api.RepositoryView) {
-	hs := c.heartbeats
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
 	now := c.clock.Now()
 	for i := range rs {
-		rs[i].Clone = hs.cloneView(key, rs[i].Name, now)
+		if v, ok := c.factories.ReportedClone(key, rs[i].Name, now); ok {
+			rs[i].Clone = &v
+		}
 	}
 }
 

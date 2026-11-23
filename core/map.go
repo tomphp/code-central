@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -31,11 +32,11 @@ const chartingDescription = "Chart the Map [%[1]s](%[1]s): settle its destinatio
 func (c *Core) SubmitMap(_ context.Context, key string, in api.SubmitMapInput) (api.SubmitMapResult, error) {
 	title := titleLine(in.Text)
 	if title == "" {
-		return api.SubmitMapResult{}, invalid("text", "a Map needs text; its first line becomes the Spec's title")
+		return api.SubmitMapResult{}, api.InvalidField("text", "a Map needs text; its first line becomes the Spec's title")
 	}
 	var specN int
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		now := c.now()
@@ -45,7 +46,7 @@ func (c *Core) SubmitMap(_ context.Context, key string, in api.SubmitMapInput) (
 			Tickets: []domain.Ticket{{
 				Number: specN + 1, Title: "Charting: " + title, State: submitState(in.Draft), Spec: specN,
 				Labels: []string{domain.WayfinderPrefix + "chart"}, Created: now, Updated: now,
-				Description: fmt.Sprintf(chartingDescription, DisplayID(key, specN)),
+				Description: fmt.Sprintf(chartingDescription, domain.DisplayID(key, specN)),
 				Moves:       submitMoves(in.Draft, now, "submit_map"),
 			}},
 		})
@@ -89,10 +90,10 @@ func mapView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *api.MapView
 		return nil
 	}
 	key := e.p.Key
-	id := DisplayID(key, s.Number)
+	id := domain.DisplayID(key, s.Number)
 	v := &api.MapView{Guided: s.Tags[domain.GuidedTag] == domain.GuidedOn, CanWriteSpec: true, Requirements: []string{}}
 	for _, sp := range e.r.FindSpecs(key, store.SpecFilter{Tag: &store.TagFilter{Key: MapTag, Values: []string{id}}}) {
-		v.Requirements = append(v.Requirements, DisplayID(key, sp.Number))
+		v.Requirements = append(v.Requirements, domain.DisplayID(key, sp.Number))
 	}
 	for _, t := range tickets {
 		if reason, _ := e.reason(t); reason != "" {

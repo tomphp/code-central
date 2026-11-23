@@ -1,4 +1,4 @@
-package core
+package factories
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -44,7 +46,7 @@ type transcript struct {
 // adds the events to the Transcript of the newest Claim with that session
 // ID, live or ended, and counts as a ping. With no such Claim they are
 // dropped.
-func (c *Core) PostSessionEvents(ctx context.Context, sessionID string, events []api.SessionEvent) {
+func (c *Factories) PostSessionEvents(ctx context.Context, sessionID string, events []api.SessionEvent) {
 	if sessionID == "" {
 		return
 	}
@@ -52,10 +54,11 @@ func (c *Core) PostSessionEvents(ctx context.Context, sessionID string, events [
 	if len(events) == 0 {
 		return
 	}
-	k, started, ok := c.newestClaim(sessionID)
+	claim, started, ok := c.f.NewestClaim(sessionID)
 	if !ok {
 		return
 	}
+	k := markKey{claim.Project, claim.Ticket, claim.Claim}
 	moved := false
 	if !c.transcripts.holds(k) {
 		moved = c.startHolding(k)
@@ -73,20 +76,20 @@ func (ts *transcripts) holds(k markKey) bool {
 
 // hold adds events to Claim k's Transcript, starting it if need be: as a
 // tail when the Claim started before the service did, or moved is true.
-func (c *Core) hold(k markKey, started time.Time, moved bool, events []api.SessionEvent) {
+func (c *Factories) hold(k markKey, started time.Time, moved bool, events []api.SessionEvent) {
 	ts := c.transcripts
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	tr := ts.all[k]
 	if tr == nil {
 		tr = &transcript{}
-		if moved || started.Before(c.activity.started) {
+		if moved || started.Before(c.started) {
 			// A Claim older than the service lost its earlier events, and
 			// one whose session moved here left them on another service.
 			// Its seqs start past any the last service gave, so a
 			// follower resuming from one of those misses none of the new
 			// ones, and past 1, so one from the start hears it is a tail.
-			tr.tail, tr.lastSeq = true, int(c.activity.started.UnixMilli())
+			tr.tail, tr.lastSeq = true, int(c.started.UnixMilli())
 		}
 		ts.all[k] = tr
 	}
@@ -107,18 +110,6 @@ func (c *Core) hold(k markKey, started time.Time, moved bool, events []api.Sessi
 	}
 }
 
-// newestClaim is the most recently started Claim with the session ID, in
-// any Project, and when it started.
-func (c *Core) newestClaim(sessionID string) (markKey, time.Time, bool) {
-	var sc store.SessionClaim
-	found := false
-	c.store.View(func(r store.Reader) error {
-		sc, found = r.ClaimBySession(sessionID)
-		return nil
-	})
-	return markKey{sc.Project, sc.Ticket, sc.Claim.Number}, sc.Claim.Started, found
-}
-
 // cutText cuts text to SessionEventTextLimit bytes of whole runes, and
 // says whether it is now cut.
 func cutText(text string, truncated bool) (string, bool) {
@@ -136,7 +127,7 @@ func cutText(text string, truncated bool) (string, bool) {
 // the Session Events held for Claim number claim, oldest first. An unknown
 // Project, Ticket or Claim is not_found; a Claim with none held has an
 // empty Transcript.
-func (c *Core) Transcript(_ context.Context, key string, ticket api.Ref, claim int) (api.TranscriptView, error) {
+func (c *Factories) Transcript(_ context.Context, key string, ticket api.Ref, claim int) (api.TranscriptView, error) {
 	k, err := c.claimKey(key, "transcript", ticket, claim)
 	if err != nil {
 		return api.TranscriptView{}, err
@@ -157,17 +148,17 @@ func (c *Core) Transcript(_ context.Context, key string, ticket api.Ref, claim i
 
 // claimKey is Claim number claim of a Ticket, as a Transcript's key. An
 // unknown Project, Ticket or Claim is not_found.
-func (c *Core) claimKey(key, op string, ticket api.Ref, claim int) (markKey, error) {
+func (c *Factories) claimKey(key, op string, ticket api.Ref, claim int) (markKey, error) {
 	var k markKey
-	err := c.store.View(func(r store.Reader) error {
+	err := c.f.Store.View(func(r store.Reader) error {
 		if _, ok := r.Project(key); !ok {
-			return notFound("there is no Project %q", key)
+			return api.NotFoundError("there is no Project %q", key)
 		}
-		n, err := refNumber(ticket, key, "ticket")
+		n, err := api.RefNumber(ticket, key, "ticket")
 		if err != nil {
-			return notFound("there is no Ticket %s", ticket)
+			return api.NotFoundError("there is no Ticket %s", ticket)
 		}
-		t, err := ticketNumbered(r, key, op, "ticket", n, store.Claims)
+		t, err := foundation.TicketNumbered(r, key, op, "ticket", n, store.Claims)
 		if err != nil {
 			return err
 		}
@@ -177,7 +168,7 @@ func (c *Core) claimKey(key, op string, ticket api.Ref, claim int) (markKey, err
 				return nil
 			}
 		}
-		return notFound("%s has no Claim %d", DisplayID(key, n), claim)
+		return api.NotFoundError("%s has no Claim %d", domain.DisplayID(key, n), claim)
 	})
 	return k, err
 }
@@ -202,7 +193,7 @@ type TranscriptFeed struct {
 // another service holds the Transcript (see heldElsewhere), the feed has
 // ended already: Host names that service's host, and it never wakes. An
 // unknown Project, Ticket or Claim is not_found. Stop ends it.
-func (c *Core) FollowTranscript(_ context.Context, key string, ticket api.Ref, claim, after int) (*TranscriptFeed, error) {
+func (c *Factories) FollowTranscript(_ context.Context, key string, ticket api.Ref, claim, after int) (*TranscriptFeed, error) {
 	k, err := c.claimKey(key, "follow_transcript", ticket, claim)
 	if err != nil {
 		return nil, err

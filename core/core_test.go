@@ -1,7 +1,6 @@
 package core_test
 
 import (
-	"context"
 	"errors"
 	"slices"
 	"testing"
@@ -10,13 +9,13 @@ import (
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/core/coretest"
 	"github.com/tomoram/code-central/domain"
-	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/ops"
 	"github.com/tomoram/code-central/store"
 )
 
-var t0 = time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC)
+var t0 = coretest.T0
 
 type fixture struct {
 	core  *core.Core
@@ -24,14 +23,17 @@ type fixture struct {
 	store store.Store
 }
 
-func newFixture(t *testing.T) fixture {
-	t.Helper()
-	s := store.NewMemory()
-	clk := clock.NewFake(t0)
-	return fixture{core: core.New(s, clk, &ids.Sequence{}), clock: clk, store: s}
+func newFixture(t *testing.T) fixture { return fixtureOf(coretest.New(t)) }
+
+func fixtureOf(f coretest.Fixture) fixture {
+	return fixture{core: f.Core, clock: f.Clock, store: f.Store}
 }
 
-var ctx = context.Background()
+func (f fixture) shared() coretest.Fixture {
+	return coretest.Fixture{Core: f.core, Clock: f.clock, Store: f.store}
+}
+
+var ctx = coretest.Ctx
 
 // reloaded runs setup on a fixture over a file store, closes the store,
 // and returns a fixture over the store opened again from its files,
@@ -43,7 +45,7 @@ func reloaded(t *testing.T, setup func(f fixture)) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	setup(fixture{core: core.New(s, clock.NewFake(t0), &ids.Sequence{}), clock: clock.NewFake(t0), store: s})
+	setup(fixtureOf(coretest.On(s, clock.NewFake(t0))))
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -51,36 +53,19 @@ func reloaded(t *testing.T, setup func(f fixture)) fixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	clk := clock.NewFake(t0)
-	return fixture{core: core.New(s, clk, &ids.Sequence{}), clock: clk, store: s}
+	return fixtureOf(coretest.On(s, clock.NewFake(t0)))
 }
 
 func (f fixture) project(t *testing.T, key string) api.ProjectView {
-	t.Helper()
-	p, err := f.core.CreateProject(ctx, api.CreateProjectInput{Key: key})
-	if err != nil {
-		t.Fatalf("create_project: %v", err)
-	}
-	return p
+	return f.shared().Project(t, key)
 }
 
 func (f fixture) spec(t *testing.T, key, title string) api.SpecView {
-	t.Helper()
-	s, err := f.core.CreateSpec(ctx, key, api.CreateSpecInput{Title: title, Body: "body\n", Full: true})
-	if err != nil {
-		t.Fatalf("create_spec: %v", err)
-	}
-	return *s.Record
+	return f.shared().Spec(t, key, title)
 }
 
 func (f fixture) ticket(t *testing.T, key string, in api.CreateTicketInput) api.TicketView {
-	t.Helper()
-	in.Full = true
-	tk, err := record(f.core.CreateTicket(ctx, key, in))
-	if err != nil {
-		t.Fatalf("create_ticket: %v", err)
-	}
-	return tk
+	return f.shared().Ticket(t, key, in)
 }
 
 // record is the Ticket a write asked for with full returned.
@@ -96,13 +81,7 @@ func record(w api.Written[api.TicketView], err error) (api.TicketView, error) {
 
 func wantCode(t *testing.T, err error, code api.Code, field string) {
 	t.Helper()
-	var e *api.Error
-	if !errors.As(err, &e) {
-		t.Fatalf("err = %v, want an api.Error with code %s", err, code)
-	}
-	if e.Code != code || e.Field != field {
-		t.Fatalf("got code %s field %q (%s), want %s field %q", e.Code, e.Field, e.Message, code, field)
-	}
+	coretest.WantCode(t, err, code, field)
 }
 
 func TestCreateProject(t *testing.T) {

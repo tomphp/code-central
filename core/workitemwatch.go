@@ -21,7 +21,7 @@ func (c *Core) GetWorkItemWatch(_ context.Context, key string) (api.WorkItemWatc
 	err := c.store.View(func(r store.Reader) error {
 		p, ok := r.Project(key)
 		if !ok {
-			return unknownProject(key)
+			return api.UnknownProjectError(key)
 		}
 		a := azureBoardsView(p, api.WatcherView{})
 		out = api.WorkItemWatch{Project: key, On: a.On, Mode: a.Mode, QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where, PATEnv: a.PATEnv,

@@ -1,4 +1,4 @@
-package core
+package factories
 
 import (
 	"strings"
@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 )
 
@@ -24,9 +25,9 @@ const LatestEventLimit = 120
 // when it ends, so the last change is never lost.
 const LatestEventThrottle = 5 * time.Second
 
-// latestEvent is Claim number claim's latest event, or nil when its
+// LatestEvent is Claim number claim's latest event, or nil when its
 // Transcript holds none.
-func (c *Core) latestEvent(key string, ticket, claim int) *api.LatestEvent {
+func (c *Factories) LatestEvent(key string, ticket, claim int) *api.LatestEvent {
 	ts := c.transcripts
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
@@ -85,7 +86,7 @@ type latestNotices struct {
 // latestEventChanged sends ticket.changed for the Ticket now, unless one
 // went within LatestEventThrottle; then it sends one when the throttle
 // ends, standing for every change in between.
-func (c *Core) latestEventChanged(project string, ticket int) {
+func (c *Factories) latestEventChanged(project string, ticket int) {
 	n := c.latestNotices
 	k := markKey{project, ticket, 0}
 	n.mu.Lock()
@@ -93,27 +94,27 @@ func (c *Core) latestEventChanged(project string, ticket int) {
 		n.mu.Unlock()
 		return
 	}
-	now := c.clock.Now()
+	now := c.f.Clock.Now()
 	wait := n.sent[k].Add(LatestEventThrottle).Sub(now)
 	if wait <= 0 {
 		n.sent[k] = now
 		n.mu.Unlock()
-		c.publishTicketChanged(project, ticket)
+		c.f.PublishTicketChanged(project, ticket)
 		return
 	}
 	n.pending[k] = true
-	timer := c.clock.After(wait)
+	timer := c.f.Clock.After(wait)
 	n.mu.Unlock()
 	go func() {
 		<-timer
 		n.mu.Lock()
-		n.sent[k] = c.clock.Now()
+		n.sent[k] = c.f.Clock.Now()
 		delete(n.pending, k)
 		n.mu.Unlock()
-		c.publishTicketChanged(project, ticket)
+		c.f.PublishTicketChanged(project, ticket)
 	}()
 }
 
-func (c *Core) publishTicketChanged(project string, ticket int) {
-	c.events.Publish(events.Event{Type: events.TicketChanged, Project: project, ID: DisplayID(project, ticket)})
+func (c *Factories) publishTicketChanged(project string, ticket int) {
+	c.f.Events.Publish(events.Event{Type: events.TicketChanged, Project: project, ID: domain.DisplayID(project, ticket)})
 }

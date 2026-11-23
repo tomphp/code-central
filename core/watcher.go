@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -235,13 +236,13 @@ func repositoryProblems(k watcherKind, ps []api.RepositoryProblem) ([]api.Reposi
 		p = api.RepositoryProblem{Repository: strings.TrimSpace(p.Repository), Problem: p.Problem, Message: strings.TrimSpace(p.Message), Fix: strings.TrimSpace(p.Fix)}
 		switch {
 		case p.Repository == "":
-			return nil, invalid(field+".repository", "a Repository's problem names the Repository")
+			return nil, api.InvalidField(field+".repository", "a Repository's problem names the Repository")
 		case slices.ContainsFunc(out, func(o api.RepositoryProblem) bool { return o.Repository == p.Repository }):
-			return nil, invalid(field+".repository", "%s is named twice: report one problem per Repository", p.Repository)
+			return nil, api.InvalidField(field+".repository", "%s is named twice: report one problem per Repository", p.Repository)
 		case p.Problem != "" && !slices.Contains(k.problems, p.Problem):
-			return nil, invalid(field+".problem", "%q isn't a %s problem", p.Problem, k.watches)
+			return nil, api.InvalidField(field+".problem", "%q isn't a %s problem", p.Problem, k.watches)
 		case p.Message == "":
-			return nil, invalid(field+".message", "a Repository's problem needs its message")
+			return nil, api.InvalidField(field+".message", "a Repository's problem needs its message")
 		}
 		out = append(out, p)
 	}
@@ -262,14 +263,14 @@ func (c *Core) reportWatcherStatus(kind api.WatcherKind, key string, in api.Repo
 			next.RateLimitedUntil = in.RateLimitedUntil.UTC()
 		}
 		if len(in.Repositories) > 0 {
-			return api.Written[api.ProjectView]{}, invalid("repositories", "a Watching %s has no failing Repositories; report them as an error", kind.Name())
+			return api.Written[api.ProjectView]{}, api.InvalidField("repositories", "a Watching %s has no failing Repositories; report them as an error", kind.Name())
 		}
 	case api.WatcherError:
 		if !in.RateLimitedUntil.IsZero() {
-			return api.Written[api.ProjectView]{}, invalid("rate_limited_until", "only a Watching %s is rate-limited; an error has its own fix", kind.Name())
+			return api.Written[api.ProjectView]{}, api.InvalidField("rate_limited_until", "only a Watching %s is rate-limited; an error has its own fix", kind.Name())
 		}
 		if in.Problem != "" && !slices.Contains(k.problems, in.Problem) {
-			return api.Written[api.ProjectView]{}, invalid("problem", "%q isn't a %s problem", in.Problem, k.watches)
+			return api.Written[api.ProjectView]{}, api.InvalidField("problem", "%q isn't a %s problem", in.Problem, k.watches)
 		}
 		next.Problem, next.Message, next.Fix = in.Problem, strings.TrimSpace(in.Message), strings.TrimSpace(in.Fix)
 		if next.Repositories, err = repositoryProblems(k, in.Repositories); err != nil {
@@ -281,15 +282,15 @@ func (c *Core) reportWatcherStatus(kind api.WatcherKind, key string, in api.Repo
 			next.Problem, next.Message, next.Fix = first.Problem, first.Repository+": "+first.Message, first.Fix
 		}
 		if next.Message == "" {
-			return api.Written[api.ProjectView]{}, invalid("message", "an error needs its message")
+			return api.Written[api.ProjectView]{}, api.InvalidField("message", "an error needs its message")
 		}
 	default:
-		return api.Written[api.ProjectView]{}, invalid("state", "the %s is %q or %q, not %q", kind.Name(), api.WatcherWatching, api.WatcherError, in.State)
+		return api.Written[api.ProjectView]{}, api.InvalidField("state", "the %s is %q or %q, not %q", kind.Name(), api.WatcherWatching, api.WatcherError, in.State)
 	}
 	var before, after api.ProjectView
 	changed := false
 	err = c.store.View(func(r store.Reader) error {
-		if err := writable(r, key); err != nil {
+		if err := foundation.Writable(r, key); err != nil {
 			return err
 		}
 		p, _ := r.Project(key)
@@ -307,9 +308,9 @@ func (c *Core) reportWatcherStatus(kind api.WatcherKind, key string, in api.Repo
 				case k.watched == nil:
 					return notARepository(p, field, rp.Repository)
 				case len(names) == 0:
-					return invalid(field, "the %s watches no repositories: report its problem without naming one", kind.Name())
+					return api.InvalidField(field, "the %s watches no repositories: report its problem without naming one", kind.Name())
 				default:
-					return invalid(field, "%q is not one of %s's %s repositories, which are %s", rp.Repository, key, kind.Setting(), strings.Join(names, ", "))
+					return api.InvalidField(field, "%q is not one of %s's %s repositories, which are %s", rp.Repository, key, kind.Setting(), strings.Join(names, ", "))
 				}
 			}
 		}

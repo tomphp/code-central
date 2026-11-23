@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -99,7 +100,7 @@ func (c *Core) GetPullRequestWatch(_ context.Context, key string) (api.PullReque
 	err := c.store.View(func(r store.Reader) error {
 		p, ok := r.Project(key)
 		if !ok {
-			return unknownProject(key)
+			return api.UnknownProjectError(key)
 		}
 		lv := landingView(p)
 		ps := landingPolicies(p)
@@ -201,7 +202,7 @@ func pushedWork(r store.Reader, key string) []api.PushedWorkView {
 			}
 			latest, _ := latestPushedTo(key, t, name)
 			if i, ok := index[at{name, branch}]; ok {
-				out[i].Tickets = append(out[i].Tickets, DisplayID(key, t.Number))
+				out[i].Tickets = append(out[i].Tickets, domain.DisplayID(key, t.Number))
 				covered[i] = append(covered[i], t)
 				if latest.Pushed.After(out[i].Pushed) {
 					out[i].Commit, out[i].Pushed = latest.Commit, latest.Pushed
@@ -210,7 +211,7 @@ func pushedWork(r store.Reader, key string) []api.PushedWorkView {
 			}
 			index[at{name, branch}] = len(out)
 			covered = append(covered, []domain.Ticket{t})
-			out = append(out, api.PushedWorkView{Repository: name, Branch: branch, Commit: latest.Commit, Pushed: latest.Pushed, Tickets: []string{DisplayID(key, t.Number)},
+			out = append(out, api.PushedWorkView{Repository: name, Branch: branch, Commit: latest.Commit, Pushed: latest.Pushed, Tickets: []string{domain.DisplayID(key, t.Number)},
 				Title: t.Title, PullRequest: pullRequestView(pullRequestIn(key, t, name))})
 		}
 	}
@@ -264,9 +265,9 @@ func pullRequestsToClose(r store.Reader, p domain.Project) []api.PullRequestToCl
 // the Spec's ID.
 func specPullRequestBody(key string, spec domain.Spec, tickets []domain.Ticket, project string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Spec %s in %s.\n", DisplayID(key, spec.Number), project)
+	fmt.Fprintf(&b, "Spec %s in %s.\n", domain.DisplayID(key, spec.Number), project)
 	for _, t := range tickets {
-		fmt.Fprintf(&b, "\n## %s: %s\n\n", DisplayID(key, t.Number), t.Title)
+		fmt.Fprintf(&b, "\n## %s: %s\n\n", domain.DisplayID(key, t.Number), t.Title)
 		if s := lastFinishSummary(t); s != "" {
 			b.WriteString(s + "\n")
 		}
@@ -281,7 +282,7 @@ func ticketPullRequestBody(key string, t domain.Ticket, project string) string {
 	if s := lastFinishSummary(t); s != "" {
 		b.WriteString(s + "\n\n")
 	}
-	fmt.Fprintf(&b, "Ticket %s in %s.", DisplayID(key, t.Number), project)
+	fmt.Fprintf(&b, "Ticket %s in %s.", domain.DisplayID(key, t.Number), project)
 	return b.String()
 }
 
@@ -374,22 +375,22 @@ func (c *Core) ReportPullRequest(_ context.Context, key string, in api.ReportPul
 	branch, link, merge := strings.TrimSpace(in.Branch), strings.TrimSpace(in.Link), strings.TrimSpace(in.MergeCommit)
 	switch {
 	case branch == "":
-		return api.Written[api.PullRequestReport]{}, invalid("branch", "report_pull_request needs the pushed work's branch")
+		return api.Written[api.PullRequestReport]{}, api.InvalidField("branch", "report_pull_request needs the pushed work's branch")
 	case in.Number <= 0:
-		return api.Written[api.PullRequestReport]{}, invalid("number", "report_pull_request needs the pull request's number on the Code Host")
+		return api.Written[api.PullRequestReport]{}, api.InvalidField("number", "report_pull_request needs the pull request's number on the Code Host")
 	case link == "":
-		return api.Written[api.PullRequestReport]{}, invalid("link", "report_pull_request needs the pull request's link")
+		return api.Written[api.PullRequestReport]{}, api.InvalidField("link", "report_pull_request needs the pull request's link")
 	case !slices.Contains(domain.PullRequestStates, in.State):
-		return api.Written[api.PullRequestReport]{}, invalid("state", "the state is one of %v, not %q", domain.PullRequestStates, in.State)
+		return api.Written[api.PullRequestReport]{}, api.InvalidField("state", "the state is one of %v, not %q", domain.PullRequestStates, in.State)
 	case in.State == domain.PRMerged && merge == "":
-		return api.Written[api.PullRequestReport]{}, invalid("merge_commit", "a merged pull request needs the merge commit the Code Host reports")
+		return api.Written[api.PullRequestReport]{}, api.InvalidField("merge_commit", "a merged pull request needs the merge commit the Code Host reports")
 	case in.State != domain.PRMerged && merge != "":
-		return api.Written[api.PullRequestReport]{}, invalid("merge_commit", "only a merged pull request has a merge commit")
+		return api.Written[api.PullRequestReport]{}, api.InvalidField("merge_commit", "only a merged pull request has a merge commit")
 	}
 	pr := domain.PullRequest{Number: in.Number, Link: link, State: in.State, MergeCommit: merge}
 	var covered []int
 	if err := c.store.View(func(r store.Reader) error {
-		if err := writable(r, key); err != nil {
+		if err := foundation.Writable(r, key); err != nil {
 			return err
 		}
 		p, _ := r.Project(key)
@@ -408,7 +409,7 @@ func (c *Core) ReportPullRequest(_ context.Context, key string, in api.ReportPul
 			}
 		}
 		if len(covered) == 0 {
-			return notFound("no Ticket of %s has work pushed as branch %q in %s", key, branch, name)
+			return api.NotFoundError("no Ticket of %s has work pushed as branch %q in %s", key, branch, name)
 		}
 		return nil
 	}); err != nil {
@@ -432,7 +433,7 @@ func (c *Core) ReportPullRequest(_ context.Context, key string, in api.ReportPul
 		if err != nil {
 			return api.Written[api.PullRequestReport]{}, err
 		}
-		id := DisplayID(key, n)
+		id := domain.DisplayID(key, n)
 		report.Tickets = append(report.Tickets, id)
 		if moved {
 			changed = append(changed, id)
@@ -475,7 +476,7 @@ func openPullRequests(r store.Reader, p domain.Project) []api.OpenPullRequest {
 	for _, t := range r.FindTickets(p.Key, store.TicketFilter{States: []domain.State{domain.Accepted}}) {
 		for _, pr := range t.PullRequests {
 			if pullRequestOpen(pr) && !ps.In(recordRepository(p.Key, pr.Repository)).LandsByPullRequest() {
-				out = append(out, api.OpenPullRequest{Ticket: DisplayID(p.Key, t.Number), Link: pr.Link})
+				out = append(out, api.OpenPullRequest{Ticket: domain.DisplayID(p.Key, t.Number), Link: pr.Link})
 			}
 		}
 	}

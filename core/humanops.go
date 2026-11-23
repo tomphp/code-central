@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -24,11 +25,11 @@ func (c *Core) Move(ctx context.Context, key string, in api.MoveInput) (api.Writ
 		row := Workflow[slices.IndexFunc(Workflow, func(a Action) bool { return a.Name == "move" })]
 		switch {
 		case !to.Valid():
-			return false, invalid("to_state", "unknown State %q", to)
+			return false, api.InvalidField("to_state", "unknown State %q", to)
 		case slices.Contains(row.Except, to):
-			return false, invalid("to_state", "%s is entered only by posting a Round or a Failure Report", to)
+			return false, api.InvalidField("to_state", "%s is entered only by posting a Round or a Failure Report", to)
 		case to == t.State:
-			return false, invalid("to_state", "%s is already %s", DisplayID(key, t.Number), to)
+			return false, api.InvalidField("to_state", "%s is already %s", domain.DisplayID(key, t.Number), to)
 		}
 		return true, transitionTo(ctx, t, key, "move", "", to, c.now())
 	})
@@ -43,11 +44,11 @@ func (c *Core) RenameProject(ctx context.Context, key string, in api.RenameProje
 	}
 	name := strings.TrimSpace(in.DisplayName)
 	if name == "" {
-		return api.ProjectView{}, invalid("display_name", "a Project needs a display name")
+		return api.ProjectView{}, api.InvalidField("display_name", "a Project needs a display name")
 	}
 	var v api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		p, _ := w.Project(key)
@@ -66,27 +67,27 @@ func (c *Core) RenameProject(ctx context.Context, key string, in api.RenameProje
 // accepted work lands. Code Central never sees git, so whether the remote
 // exists is the Factory's check.
 func (c *Core) SetLandingMethod(ctx context.Context, key string, in api.SetLandingMethodInput) (api.ProjectView, error) {
-	if err := humanOnly(ctx, "set_landing_method"); err != nil {
+	if err := foundation.HumanOnly(ctx, "set_landing_method"); err != nil {
 		return api.ProjectView{}, err
 	}
 	if !in.Method.Valid() {
-		return api.ProjectView{}, invalid("method", "Landing Method %q is not %q, %q or %q", in.Method, domain.LandingMerge, domain.LandingBranch, domain.LandingPullRequest)
+		return api.ProjectView{}, api.InvalidField("method", "Landing Method %q is not %q, %q or %q", in.Method, domain.LandingMerge, domain.LandingBranch, domain.LandingPullRequest)
 	}
 	// Push is implied under Pull Request, so the flag is ignored and not stored.
 	l := domain.Landing{Method: in.Method, Push: in.Push, Remote: strings.TrimSpace(in.Remote)}.Normalized()
 	if l.Remote == "" {
 		if l.Push {
-			return api.ProjectView{}, invalid("remote", "Push needs a git remote to push to, such as %q", domain.DefaultLandingRemote)
+			return api.ProjectView{}, api.InvalidField("remote", "Push needs a git remote to push to, such as %q", domain.DefaultLandingRemote)
 		}
 		l.Remote = domain.DefaultLandingRemote
 	}
 	patEnv := strings.TrimSpace(in.PATEnv)
 	if patEnv != "" && !patEnvPattern.MatchString(patEnv) {
-		return api.ProjectView{}, invalid("pat_env", "%q is not an environment variable's name, such as %s", patEnv, domain.DefaultPATEnv)
+		return api.ProjectView{}, api.InvalidField("pat_env", "%q is not an environment variable's name, such as %s", patEnv, domain.DefaultPATEnv)
 	}
 	if in.Base != nil {
 		if err := checkBranchName(strings.TrimSpace(*in.Base)); err != nil {
-			return api.ProjectView{}, invalid("base", "%s", err)
+			return api.ProjectView{}, api.InvalidField("base", "%s", err)
 		}
 	}
 	withLanding := func(p domain.Project) domain.Project {
@@ -104,7 +105,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in api.SetLandi
 	var resetWatcher bool
 	err := c.store.Update(func(w store.Writer) error {
 		accepted, left, resetWatcher = nil, nil, false
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		p, _ := w.Project(key)
@@ -203,7 +204,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in api.SetLandi
 	// The method decides an Accepted Ticket's Needs Me reason (To merge,
 	// or Accepted but not landed), so each one changed without a write.
 	for _, n := range append(accepted, left...) {
-		c.events.Publish(events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, n)})
+		c.events.Publish(events.Event{Type: events.TicketChanged, Project: key, ID: domain.DisplayID(key, n)})
 	}
 	return v, nil
 }

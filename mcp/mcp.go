@@ -16,6 +16,7 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/ops"
 )
 
@@ -75,7 +76,7 @@ func newServer(d ops.Dispatcher, key string) *sdk.Server {
 // with isError set. Any other error is a bug inside the service.
 func result(v any, err error) (*sdk.CallToolResult, error) {
 	if err != nil {
-		v = core.ErrorOf(err)
+		v = foundation.ErrorOf(err)
 	}
 	b, merr := json.Marshal(v)
 	if merr != nil {

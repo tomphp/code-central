@@ -50,7 +50,7 @@ func (e *evaluation) ciItemView(it ciItem) *api.CIItemView {
 		v.Repository = it.repository
 	}
 	for _, t := range it.tickets {
-		v.Tickets = append(v.Tickets, api.CIItemTicket{ID: DisplayID(p.Key, t.Number), Title: t.Title, Spec: DisplayID(p.Key, t.Spec)})
+		v.Tickets = append(v.Tickets, api.CIItemTicket{ID: domain.DisplayID(p.Key, t.Number), Title: t.Title, Spec: domain.DisplayID(p.Key, t.Spec)})
 	}
 	if slices.Contains(v.Options, api.OptionSendBack) {
 		v.SendBackNote = e.runSummary(it)

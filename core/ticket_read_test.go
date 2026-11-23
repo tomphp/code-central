@@ -288,7 +288,7 @@ func (f fixture) claimedThenBlocked(t *testing.T) {
 			t.Fatalf("add_blocker %s: %v", b, err)
 		}
 	}
-	f.core.PostSessionEvents(ctx, "s1", []api.SessionEvent{{Time: f.clock.Now(), Kind: "tool_call", Text: "Bash: go test ./..."}})
+	f.core.Factories().PostSessionEvents(ctx, "s1", []api.SessionEvent{{Time: f.clock.Now(), Kind: "tool_call", Text: "Bash: go test ./..."}})
 }
 
 func TestGetTicketByDefaultShowsADoneBlockerAsItsIDAndStateOnly(t *testing.T) {

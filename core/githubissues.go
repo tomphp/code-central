@@ -8,6 +8,7 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codehost"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -25,7 +26,7 @@ func githubIssuesView(key string, g domain.GitHubIssues, watcher api.WatcherView
 		v.Repositories = []string{}
 	}
 	if g.Spec != 0 {
-		v.Spec = DisplayID(key, g.Spec)
+		v.Spec = domain.DisplayID(key, g.Spec)
 	}
 	return v
 }
@@ -38,7 +39,7 @@ func githubIssuesView(key string, g domain.GitHubIssues, watcher api.WatcherView
 // a missing Spec. Changing the repositories retitles the Issues Spec
 // unless the human has changed its title. Turning it off touches no Link.
 func (c *Core) SetGitHubIssues(ctx context.Context, key string, in api.SetGitHubIssuesInput) (api.Written[api.ProjectView], error) {
-	if err := humanOnly(ctx, "set_github_issues"); err != nil {
+	if err := foundation.HumanOnly(ctx, "set_github_issues"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	g := domain.GitHubIssues{On: in.On, Label: strings.TrimSpace(in.Label), NewIssuesNeedMe: in.NewIssuesNeedMe}
@@ -48,14 +49,14 @@ func (c *Core) SetGitHubIssues(ctx context.Context, key string, in api.SetGitHub
 		case repository == "":
 			continue
 		case !codehost.ValidGitHubRepository(repository):
-			return api.Written[api.ProjectView]{}, invalid("repositories", "%q isn't a GitHub repository as owner/name, such as acme/web", repository)
+			return api.Written[api.ProjectView]{}, api.InvalidField("repositories", "%q isn't a GitHub repository as owner/name, such as acme/web", repository)
 		case slices.ContainsFunc(g.Repositories, func(r string) bool { return strings.EqualFold(r, repository) }):
-			return api.Written[api.ProjectView]{}, invalid("repositories", "%s is listed twice: list each repository once", repository)
+			return api.Written[api.ProjectView]{}, api.InvalidField("repositories", "%s is listed twice: list each repository once", repository)
 		}
 		g.Repositories = append(g.Repositories, repository)
 	}
 	if len(g.Repositories) == 0 && g.On {
-		return api.Written[api.ProjectView]{}, invalid("repositories", "GitHub Issues needs the GitHub repositories its issues come from, as owner/name")
+		return api.Written[api.ProjectView]{}, api.InvalidField("repositories", "GitHub Issues needs the GitHub repositories its issues come from, as owner/name")
 	}
 	if err := c.checkIssues(ctx, key, g); err != nil {
 		return api.Written[api.ProjectView]{}, err
@@ -75,7 +76,7 @@ func (c *Core) SetGitHubIssues(ctx context.Context, key string, in api.SetGitHub
 	var resetWatcher bool
 	err := c.store.Update(func(w store.Writer) error {
 		resetWatcher = false
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		p, _ = w.Project(key)
@@ -121,7 +122,7 @@ func (c *Core) createIntegrationSpec(key string, specOf func(domain.Project) int
 	n := 0
 	err := c.store.Update(func(w store.Writer) error {
 		n = 0
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		if p, _ := w.Project(key); specOf(p) != 0 {
@@ -192,7 +193,7 @@ func (c *Core) checkIssues(ctx context.Context, key string, g domain.GitHubIssue
 	var was domain.GitHubIssues
 	var opts domain.Options
 	err := c.store.View(func(r store.Reader) error {
-		if err := writable(r, key); err != nil {
+		if err := foundation.Writable(r, key); err != nil {
 			return err
 		}
 		p, _ := r.Project(key)

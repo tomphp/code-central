@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -17,21 +18,12 @@ import (
 // checks effort against the levels, and the Models pickers offer them.
 
 func reportedModelsView(r domain.ReportedModels) api.ReportedModelsView {
-	v := api.ReportedModelsView{EffortLevels: validLevels(r), Aliases: orEmpty(r.Aliases), ModelIDs: orEmpty(r.ModelIDs), ModelFlag: r.ModelFlag, EffortFlag: r.EffortFlag}
+	v := api.ReportedModelsView{EffortLevels: foundation.ValidEffortLevels(r), Aliases: orEmpty(r.Aliases), ModelIDs: orEmpty(r.ModelIDs), ModelFlag: r.ModelFlag, EffortFlag: r.EffortFlag}
 	if !r.Reported.IsZero() {
 		at := r.Reported
 		v.Reported = &at
 	}
 	return v
-}
-
-// validLevels are the valid effort levels given r: its levels, or the
-// seeded ones while it has none.
-func validLevels(r domain.ReportedModels) []string {
-	if len(r.EffortLevels) == 0 {
-		return seededEffortLevels
-	}
-	return r.EffortLevels
 }
 
 // ReportModels is the Factory's report_models, made when it starts. Empty
@@ -50,12 +42,12 @@ func (c *Core) ReportModels(_ context.Context, key string, in api.ReportModelsIn
 	modelFlag, effortFlag := strings.TrimSpace(in.ModelFlag), strings.TrimSpace(in.EffortFlag)
 	for _, f := range []struct{ field, v string }{{"model_flag", modelFlag}, {"effort_flag", effortFlag}} {
 		if strings.ContainsAny(f.v, "\r\n") {
-			return api.Written[api.ProjectView]{}, invalid(f.field, "a flag's value is one line")
+			return api.Written[api.ProjectView]{}, api.InvalidField(f.field, "a flag's value is one line")
 		}
 	}
 	var before, after api.ProjectView
 	err = c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		p, _ := w.Project(key)
@@ -86,7 +78,7 @@ func reportedList(field string, vs []string) ([]string, error) {
 		v = strings.TrimSpace(v)
 		switch {
 		case strings.ContainsAny(v, "\r\n"):
-			return nil, invalid(field, "%q spans more than one line; each is one line", v)
+			return nil, api.InvalidField(field, "%q spans more than one line; each is one line", v)
 		case v != "" && !slices.Contains(out, v):
 			out = append(out, v)
 		}
@@ -115,7 +107,7 @@ func (c *Core) addModelIDs(key string, responses []api.UsageResponse) {
 		return
 	}
 	_ = c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		p, _ := w.Project(key)

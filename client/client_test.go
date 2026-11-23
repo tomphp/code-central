@@ -176,7 +176,7 @@ func TestPostSessionEventsReachesTheClaimsTranscript(t *testing.T) {
 	if err := c.PostSessionEvents(ctx, "unknown", sent); err != nil {
 		t.Fatalf("post for an unknown session: %v", err)
 	}
-	tr, err := srv.Core.Transcript(ctx, "acme", "2", 1)
+	tr, err := srv.Core.Factories().Transcript(ctx, "acme", "2", 1)
 	if err != nil || len(tr.Events) != 1 || tr.Events[0].Seq != 1 || tr.Events[0].SessionEvent != sent[0] {
 		t.Fatalf("Transcript %+v, %v; want the one event sent", tr, err)
 	}

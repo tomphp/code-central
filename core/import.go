@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -46,7 +47,7 @@ func (c *Core) Import(ctx context.Context, key string, in api.ImportInput) (api.
 	}
 	var res api.ImportResult
 	plan := func(r store.Reader) (store.Import, error) {
-		if err := writable(r, key); err != nil {
+		if err := foundation.Writable(r, key); err != nil {
 			return store.Import{}, err
 		}
 		if err := alreadyImported(r, key, p); err != nil {
@@ -85,17 +86,17 @@ func (c *Core) Import(ctx context.Context, key string, in api.ImportInput) (api.
 // field path. Only the human may name the auto-accept Label.
 func checkImport(ctx context.Context, p api.ImportPayload) error {
 	if len(p.Specs) == 0 {
-		return invalid("specs", "an Import needs at least one Spec: one per feature folder")
+		return api.InvalidField("specs", "an Import needs at least one Spec: one per feature folder")
 	}
 	sources := map[string]string{} // source → the field that first gave it
 	specs := map[string]bool{}
 	tickets := map[string]bool{}
 	source := func(field, s string) error {
 		if !singleLine(s) {
-			return invalid(field, "a source is the file's path from the repository root, non-empty and single-line")
+			return api.InvalidField(field, "a source is the file's path from the repository root, non-empty and single-line")
 		}
 		if first, ok := sources[s]; ok {
-			return invalid(field, "source %q is already used by %s", s, first)
+			return api.InvalidField(field, "source %q is already used by %s", s, first)
 		}
 		sources[s] = field
 		return nil
@@ -107,7 +108,7 @@ func checkImport(ctx context.Context, p api.ImportPayload) error {
 		}
 		specs[s.Source] = true
 		if strings.TrimSpace(s.Title) == "" {
-			return invalid(at+".title", "a Spec needs a title: the folder's name when it has no spec.md or map.md")
+			return api.InvalidField(at+".title", "a Spec needs a title: the folder's name when it has no spec.md or map.md")
 		}
 		if err := checkImportLabelsTags(ctx, at, s.Labels, s.Tags, true); err != nil {
 			return err
@@ -123,32 +124,32 @@ func checkImport(ctx context.Context, p api.ImportPayload) error {
 	for i, t := range p.Tickets {
 		at := fmt.Sprintf("tickets[%d]", i)
 		if strings.TrimSpace(t.Title) == "" {
-			return invalid(at+".title", "a Ticket needs a title")
+			return api.InvalidField(at+".title", "a Ticket needs a title")
 		}
 		if !specs[t.Spec] {
-			return invalid(at+".spec", "%q is not the source of a Spec in this payload", t.Spec)
+			return api.InvalidField(at+".spec", "%q is not the source of a Spec in this payload", t.Spec)
 		}
 		if t.State != "" && !slices.Contains(importStates, t.State) {
-			return invalid(at+".state", "an imported Ticket is Draft, Ready, Done or Cancelled, not %q", t.State)
+			return api.InvalidField(at+".state", "an imported Ticket is Draft, Ready, Done or Cancelled, not %q", t.State)
 		}
 		if err := checkImportLabelsTags(ctx, at, t.Labels, t.Tags, false); err != nil {
 			return err
 		}
 		for j, b := range t.BlockedBy {
 			if !tickets[b] {
-				return invalid(fmt.Sprintf("%s.blocked_by[%d]", at, j), "%q is not the source of a Ticket in this payload; drop the link and list it as a doubt", b)
+				return api.InvalidField(fmt.Sprintf("%s.blocked_by[%d]", at, j), "%q is not the source of a Ticket in this payload; drop the link and list it as a doubt", b)
 			}
 		}
 		if len(t.Replacements) > 0 && t.State != domain.Cancelled {
-			return invalid(at+".replacements", "only a Cancelled Ticket has Replacements")
+			return api.InvalidField(at+".replacements", "only a Cancelled Ticket has Replacements")
 		}
 		for j, r := range t.Replacements {
 			field := fmt.Sprintf("%s.replacements[%d]", at, j)
 			if !tickets[r] {
-				return invalid(field, "%q is not the source of a Ticket in this payload", r)
+				return api.InvalidField(field, "%q is not the source of a Ticket in this payload", r)
 			}
 			if r == t.Source {
-				return invalid(field, "a Ticket can't replace itself")
+				return api.InvalidField(field, "a Ticket can't replace itself")
 			}
 		}
 	}
@@ -159,7 +160,7 @@ func checkImportLabelsTags(ctx context.Context, at string, labels []string, tags
 	for j, l := range labels {
 		field := fmt.Sprintf("%s.labels[%d]", at, j)
 		if !singleLine(l) {
-			return invalid(field, "a Label is non-empty and single-line, not %q", l)
+			return api.InvalidField(field, "a Label is non-empty and single-line, not %q", l)
 		}
 		if err := checkReservedNames(field, []string{l}); err != nil {
 			return err
@@ -184,13 +185,13 @@ func checkImportLabelsTags(ctx context.Context, at string, labels []string, tags
 	for _, k := range keys {
 		field := at + ".tags." + k
 		if !tagKey.MatchString(k) {
-			return invalid(field, "Tag key %q must be lowercase letters, digits, '.', '_' and '-'", k)
+			return api.InvalidField(field, "Tag key %q must be lowercase letters, digits, '.', '_' and '-'", k)
 		}
 		if k == "source" {
-			return invalid(field, "the source Tag is set from source; don't give it as a Tag")
+			return api.InvalidField(field, "the source Tag is set from source; don't give it as a Tag")
 		}
 		if !singleLine(tags[k]) {
-			return invalid(field, "Tag %q needs a non-empty, single-line value", k)
+			return api.InvalidField(field, "Tag %q needs a non-empty, single-line value", k)
 		}
 	}
 	return nil
@@ -226,7 +227,7 @@ func alreadyImported(r store.Reader, key string, p api.ImportPayload) error {
 			if field == "" {
 				field = f
 			}
-			matches = append(matches, fmt.Sprintf("%s (%s)", src, DisplayID(key, n)))
+			matches = append(matches, fmt.Sprintf("%s (%s)", src, domain.DisplayID(key, n)))
 		}
 	}
 	for i, s := range p.Specs {
@@ -238,7 +239,7 @@ func alreadyImported(r store.Reader, key string, p api.ImportPayload) error {
 	if len(matches) == 0 {
 		return nil
 	}
-	return invalid(field, "this Project already has %d of these sources, so this Import has run before; nothing was imported: %s",
+	return api.InvalidField(field, "this Project already has %d of these sources, so this Import has run before; nothing was imported: %s",
 		len(matches), strings.Join(matches, ", "))
 }
 
@@ -260,7 +261,7 @@ func importBranchTags(r store.Reader, key string, p api.ImportPayload) error {
 			return err
 		}
 		if f, ok := first[name]; ok {
-			return invalid(field, "branch %q is already given by %s: each Spec needs its own Spec Branch", name, f)
+			return api.InvalidField(field, "branch %q is already given by %s: each Spec needs its own Spec Branch", name, f)
 		}
 		first[name] = field
 	}
@@ -310,7 +311,7 @@ func (c *Core) buildImport(r store.Reader, key string, p api.ImportPayload) (sto
 			Created: now, Updated: now, Body: s.Body}
 		im.Specs = append(im.Specs, sp)
 		bySpec[sp.Number] = len(res.Specs)
-		res.Specs = append(res.Specs, api.ImportedSpec{Source: s.Source, ID: DisplayID(key, sp.Number), Title: sp.Title,
+		res.Specs = append(res.Specs, api.ImportedSpec{Source: s.Source, ID: domain.DisplayID(key, sp.Number), Title: sp.Title,
 			Labels: orEmpty(sp.Labels), Tags: sp.Tags, Tickets: []api.ImportedTicket{}})
 	}
 	for _, i := range order {
@@ -332,7 +333,7 @@ func (c *Core) buildImport(r store.Reader, key string, p api.ImportPayload) (sto
 		res.StateCounts[state]++
 		g := &res.Specs[bySpec[tk.Spec]]
 		g.Tickets = append(g.Tickets, api.ImportedTicket{
-			Source: t.Source, ID: DisplayID(key, tk.Number), Title: tk.Title, State: state,
+			Source: t.Source, ID: domain.DisplayID(key, tk.Number), Title: tk.Title, State: state,
 			Labels: orEmpty(tk.Labels), Tags: tk.Tags,
 			BlockedBy: displayIDs(key, tk.BlockedBy), Replacements: displayIDs(key, tk.Replacements),
 		})

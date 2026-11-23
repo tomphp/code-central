@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -28,7 +29,7 @@ func (c *Core) checkPullRequest(ctx context.Context, key string, change func(dom
 	var homeUnder, single bool
 	var localOnly error
 	err := c.store.View(func(r store.Reader) error {
-		if err := writable(r, key); err != nil {
+		if err := foundation.Writable(r, key); err != nil {
 			return err
 		}
 		p, _ := r.Project(key)

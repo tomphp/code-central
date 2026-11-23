@@ -11,44 +11,23 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/core/coretest"
 	"github.com/tomoram/code-central/domain"
 )
 
 // work is a Project acme with Spec acme-1 and the given Tickets on it,
 // created a minute apart so their claim order is their creation order.
 func (f fixture) work(t *testing.T, states ...domain.State) []api.TicketView {
-	t.Helper()
-	f.project(t, "acme")
-	// Long-lived, so that its Tickets land one by one under the default Land per Spec.
-	f.longLived(t, f.spec(t, "acme", "Login"))
-	var out []api.TicketView
-	for i, s := range states {
-		out = append(out, f.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "T" + string(rune('a'+i)), State: s}))
-		f.clock.Advance(time.Minute)
-	}
-	return out
+	return f.shared().Work(t, states...)
 }
 
 // longLived gives s the long-lived Label.
-func (f fixture) longLived(t *testing.T, s api.SpecView) {
-	t.Helper()
-	if _, err := f.core.AddLabels(ctx, "acme", api.LabelsInput{Target: api.Ref(s.ID), Labels: []string{domain.LongLivedLabel}}); err != nil {
-		t.Fatalf("add_labels: %v", err)
-	}
-}
+func (f fixture) longLived(t *testing.T, s api.SpecView) { f.shared().LongLived(t, s) }
 
-var human = api.WithActor(ctx, api.Human)
+var human = coretest.Human
 
 func (f fixture) claim(t *testing.T, in api.ClaimInput) api.ClaimResult {
-	t.Helper()
-	res, err := f.core.Claim(ctx, "acme", in)
-	if err != nil {
-		t.Fatalf("claim: %v", err)
-	}
-	if res.Ticket == nil {
-		t.Fatal("claim: nothing claimed")
-	}
-	return res
+	return f.shared().Claim(t, in)
 }
 
 func TestClaimTakesTheNextReadyTicketInClaimOrder(t *testing.T) {

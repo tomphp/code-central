@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -20,7 +21,7 @@ func checkStageLabels(field string, labels []string) error {
 	for _, l := range labels {
 		name, ok := strings.CutPrefix(l, domain.StagePrefix)
 		if ok && !slices.Contains(domain.Stages(), domain.StageName(name)) {
-			return invalid(field, "%q uses the reserved %q prefix; the only Stage Labels are stage:grilling, stage:spec and stage:tickets", l, domain.StagePrefix)
+			return api.InvalidField(field, "%q uses the reserved %q prefix; the only Stage Labels are stage:grilling, stage:spec and stage:tickets", l, domain.StagePrefix)
 		}
 	}
 	return nil
@@ -53,17 +54,17 @@ const mapSpecDescription = "Write the Spec for the Requirement in Spec [%[1]s](%
 func (c *Core) SubmitRequirement(_ context.Context, key string, in api.SubmitRequirementInput) (api.SubmitRequirementResult, error) {
 	title := titleLine(in.Text)
 	if title == "" {
-		return api.SubmitRequirementResult{}, invalid("text", "a Requirement needs text; its first line becomes the Spec's title")
+		return api.SubmitRequirementResult{}, api.InvalidField("text", "a Requirement needs text; its first line becomes the Spec's title")
 	}
 	if in.SkipGrilling && in.Map != "" {
-		return api.SubmitRequirementResult{}, invalid("skip_grilling", "skip_grilling can't be given with map: a Requirement written from a Map has no grilling Stage already")
+		return api.SubmitRequirementResult{}, api.InvalidField("skip_grilling", "skip_grilling can't be given with map: a Requirement written from a Map has no grilling Stage already")
 	}
 	if in.Draft && in.Map != "" {
-		return api.SubmitRequirementResult{}, invalid("draft", "Write the Spec, a Requirement made from a Map, is saved as Ready only")
+		return api.SubmitRequirementResult{}, api.InvalidField("draft", "Write the Spec, a Requirement made from a Map, is saved as Ready only")
 	}
 	var res api.SubmitRequirementResult
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		stages, mapID := domain.Stages(), ""
@@ -75,7 +76,7 @@ func (c *Core) SubmitRequirement(_ context.Context, key string, in api.SubmitReq
 			if err != nil {
 				return err
 			}
-			stages, mapID = domain.Stages()[1:], DisplayID(key, m.Number)
+			stages, mapID = domain.Stages()[1:], domain.DisplayID(key, m.Number)
 		}
 		sp := domain.Spec{Title: title, Body: in.Text}
 		if mapID != "" {
@@ -101,7 +102,7 @@ func (c *Core) requirementImport(r store.Reader, key string, sp domain.Spec, sta
 	specN := r.NextNumber(key)
 	sp.Number, sp.Created, sp.Updated = specN, now, now
 	im := store.Import{Specs: []domain.Spec{sp}}
-	specID := DisplayID(key, specN)
+	specID := domain.DisplayID(key, specN)
 	var stageNs []int
 	for i, stage := range stages {
 		n := specN + 1 + i
@@ -149,18 +150,18 @@ func (c *Core) requirementResult(r store.Reader, key string, specN int, stageNs 
 // finishedMap reads the Map ref names as submit_requirement's map, which
 // must be labelled wayfinder:map and have no unfinished Tickets.
 func finishedMap(r store.Reader, key string, ref api.Ref) (domain.Spec, error) {
-	m, err := resolveSpec(r, key, "submit_requirement", "map", ref)
+	m, err := foundation.ResolveSpec(r, key, "submit_requirement", "map", ref)
 	if err != nil {
 		return domain.Spec{}, err
 	}
-	id := DisplayID(key, m.Number)
+	id := domain.DisplayID(key, m.Number)
 	if !isMap(m.Labels) {
-		return domain.Spec{}, invalid("map", "%s isn't a Map: a Map is a Spec labelled %s", id, domain.MapLabel)
+		return domain.Spec{}, api.InvalidField("map", "%s isn't a Map: a Map is a Spec labelled %s", id, domain.MapLabel)
 	}
 	var open []string
 	for _, t := range specTickets(r, key, m.Number) {
 		if !finished(t.State) {
-			open = append(open, fmt.Sprintf("%s (%s)", DisplayID(key, t.Number), t.State))
+			open = append(open, fmt.Sprintf("%s (%s)", domain.DisplayID(key, t.Number), t.State))
 		}
 	}
 	if len(open) > 0 {
@@ -214,7 +215,7 @@ func requirementView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *api
 	firstOpen := -1
 	for i, t := range stages {
 		reason, _ := e.reason(t)
-		v.Stages = append(v.Stages, api.StageView{Name: domain.StageOf(t.Labels), Ticket: DisplayID(e.p.Key, t.Number), State: t.State, NeedsMeReason: reason})
+		v.Stages = append(v.Stages, api.StageView{Name: domain.StageOf(t.Labels), Ticket: domain.DisplayID(e.p.Key, t.Number), State: t.State, NeedsMeReason: reason})
 		if firstOpen < 0 && !finished(t.State) {
 			firstOpen = i
 		}
@@ -247,7 +248,7 @@ func requirementView(e *evaluation, s domain.Spec, tickets []domain.Ticket) *api
 // claim order), firstOpen being the index of the first open Stage or -1,
 // and v's Map, Build and WaitingForFactory already set.
 func requirementSetStrip(v *api.RequirementView, e *evaluation, stages, build []domain.Ticket, firstOpen int) {
-	id := func(t domain.Ticket) string { return DisplayID(e.p.Key, t.Number) }
+	id := func(t domain.Ticket) string { return domain.DisplayID(e.p.Key, t.Number) }
 	v.Segments, v.Needs = []api.Segment{}, []api.RequirementNeed{}
 	// A Requirement made from a Map has no grilling Stage: the Map did that.
 	// One with neither was submitted Straight to Spec (ADR 0036).

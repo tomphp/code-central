@@ -16,7 +16,7 @@ func (f fixture) wakeAsync(key, factory string) chan api.FactoryWake {
 	out := make(chan api.FactoryWake, 1)
 	n := f.clock.Waiters()
 	go func() {
-		w, err := f.core.NextFactoryWake(ctx, key, api.NextFactoryWakeInput{Factory: factory, Host: "box"})
+		w, err := f.core.Factories().NextFactoryWake(ctx, key, api.NextFactoryWakeInput{Factory: factory, Host: "box"})
 		if err != nil {
 			panic(err)
 		}
@@ -135,7 +135,7 @@ func TestWritesTheFactorysPollDoesNotActOnLeaveItAsleepUntilTheTimeout(t *testin
 			return err
 		},
 		func() error {
-			f.core.PostSessionEvents(ctx, "s1", []api.SessionEvent{{Time: f.clock.Now(), Kind: "tool_call", Text: "Bash: go test ./..."}})
+			f.core.Factories().PostSessionEvents(ctx, "s1", []api.SessionEvent{{Time: f.clock.Now(), Kind: "tool_call", Text: "Bash: go test ./..."}})
 			return nil
 		},
 		func() error {
@@ -202,7 +202,7 @@ func TestANewerCallFromTheSameFactoryEndsTheOlderOneEmpty(t *testing.T) {
 	older := f.wakeAsync("acme", "cc")
 	newer := make(chan api.FactoryWake, 1)
 	go func() {
-		w, _ := f.core.NextFactoryWake(ctx, "acme", api.NextFactoryWakeInput{Factory: "cc", Host: "box"})
+		w, _ := f.core.Factories().NextFactoryWake(ctx, "acme", api.NextFactoryWakeInput{Factory: "cc", Host: "box"})
 		newer <- w
 	}()
 	if w := <-older; w.Woken {
@@ -221,7 +221,7 @@ func TestNextFactoryWakeEndsEmptyWhenItsRequestIsCancelled(t *testing.T) {
 	cctx, cancel := context.WithCancel(ctx)
 	done := make(chan api.FactoryWake, 1)
 	go func() {
-		w, _ := f.core.NextFactoryWake(cctx, "acme", api.NextFactoryWakeInput{Factory: "cc", Host: "box"})
+		w, _ := f.core.Factories().NextFactoryWake(cctx, "acme", api.NextFactoryWakeInput{Factory: "cc", Host: "box"})
 		done <- w
 	}()
 	f.clock.BlockUntil(1)
@@ -244,11 +244,11 @@ func TestNextFactoryWakeHoldsOnAnArchivedProject(t *testing.T) {
 func TestNextFactoryWakeRejections(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	_, err := f.core.NextFactoryWake(ctx, "acme", api.NextFactoryWakeInput{Host: "box"})
+	_, err := f.core.Factories().NextFactoryWake(ctx, "acme", api.NextFactoryWakeInput{Host: "box"})
 	wantCode(t, err, api.Invalid, "factory")
-	_, err = f.core.NextFactoryWake(ctx, "acme", api.NextFactoryWakeInput{Factory: "cc", Host: " "})
+	_, err = f.core.Factories().NextFactoryWake(ctx, "acme", api.NextFactoryWakeInput{Factory: "cc", Host: " "})
 	wantCode(t, err, api.Invalid, "host")
-	_, err = f.core.NextFactoryWake(ctx, "nope", api.NextFactoryWakeInput{Factory: "cc", Host: "box"})
+	_, err = f.core.Factories().NextFactoryWake(ctx, "nope", api.NextFactoryWakeInput{Factory: "cc", Host: "box"})
 	wantCode(t, err, api.UnknownProject, "")
 }
 
@@ -257,21 +257,21 @@ func TestNextFactoryWakeRejections(t *testing.T) {
 func TestWaitingFactoryWakesCountsTheOpenCallsNotYetWoken(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Draft)
-	if n := f.core.WaitingFactoryWakes("acme"); n != 0 {
+	if n := f.core.Factories().WaitingFactoryWakes("acme"); n != 0 {
 		t.Fatalf("with no call open, WaitingFactoryWakes = %d, want 0", n)
 	}
 	woken := f.wakeAsync("acme", "cc")
-	if n := f.core.WaitingFactoryWakes("acme"); n != 1 {
+	if n := f.core.Factories().WaitingFactoryWakes("acme"); n != 1 {
 		t.Fatalf("with one call open, WaitingFactoryWakes = %d, want 1", n)
 	}
-	if n := f.core.WaitingFactoryWakes("other"); n != 0 {
+	if n := f.core.Factories().WaitingFactoryWakes("other"); n != 0 {
 		t.Fatalf("on another Project, WaitingFactoryWakes = %d, want 0", n)
 	}
 	f.approve(t, "2")
 	if w := f.ended(woken); !w.Woken {
 		t.Fatalf("next_factory_wake = %+v, want woken", w)
 	}
-	if n := f.core.WaitingFactoryWakes("acme"); n != 0 {
+	if n := f.core.Factories().WaitingFactoryWakes("acme"); n != 0 {
 		t.Fatalf("once the call is woken, WaitingFactoryWakes = %d, want 0", n)
 	}
 }
@@ -515,7 +515,7 @@ func TestProjectWritesTheFactorysPollDoesNotActOnLeaveItAsleep(t *testing.T) {
 			return err
 		},
 		"Chat": func(f fixture) error {
-			_, err := f.core.SendChatMessage(human, "acme", api.SendChatMessageInput{Text: "What is acme?"})
+			_, err := f.core.Factories().SendChatMessage(human, "acme", api.SendChatMessageInput{Text: "What is acme?"})
 			return err
 		},
 		"Options": func(f fixture) error {

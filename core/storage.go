@@ -38,7 +38,7 @@ func (c *Core) GetStorage(_ context.Context, in api.GetStorageInput) (api.Storag
 		return api.StorageView{}, err
 	}
 	if in.Project != "" && !found {
-		return api.StorageView{}, notFound("no Project %q", in.Project)
+		return api.StorageView{}, api.NotFoundError("no Project %q", in.Project)
 	}
 	slices.SortFunc(projects, func(a, b api.StorageProject) int { return cmp.Compare(a.Key, b.Key) })
 	days := c.usage.Days()

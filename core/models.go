@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -27,12 +28,12 @@ func modelsView(m domain.Models) api.ModelsView {
 // rows whole. Like the Project's other settings it adds no Move, Edit or
 // Comment; the Project's notice announces it.
 func (c *Core) SetModels(ctx context.Context, key string, in api.SetModelsInput) (api.Written[api.ProjectView], error) {
-	if err := humanOnly(ctx, "set_models"); err != nil {
+	if err := foundation.HumanOnly(ctx, "set_models"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	var before, after api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		m, err := checkedModels(w, key, in)
@@ -70,9 +71,9 @@ func checkedModels(r store.Reader, key string, in api.SetModelsInput) (domain.Mo
 	for _, k := range in.Kinds {
 		switch {
 		case !slices.Contains(GuideNames, k.Kind):
-			return domain.Models{}, invalid("kinds", "%q isn't a kind of work; the kinds are %s", k.Kind, strings.Join(GuideNames, ", "))
+			return domain.Models{}, api.InvalidField("kinds", "%q isn't a kind of work; the kinds are %s", k.Kind, strings.Join(GuideNames, ", "))
 		case seen[k.Kind]:
-			return domain.Models{}, invalid("kinds", "there are two rows for %q; give each kind of work one", k.Kind)
+			return domain.Models{}, api.InvalidField("kinds", "there are two rows for %q; give each kind of work one", k.Kind)
 		}
 		seen[k.Kind] = true
 		row, err := modelRow(r, key, "kinds."+k.Kind, "the "+k.Kind+" row", k.ModelRowView)
@@ -96,12 +97,12 @@ func modelRow(r store.Reader, key, field, name string, v api.ModelRowView) (doma
 	model := strings.TrimSpace(v.Model)
 	switch {
 	case v.Model != "" && model == "":
-		return domain.ModelRow{}, invalid(field+".model", "%s's model is blank; leave it empty for Default", name)
+		return domain.ModelRow{}, api.InvalidField(field+".model", "%s's model is blank; leave it empty for Default", name)
 	case strings.ContainsAny(model, "\r\n"):
-		return domain.ModelRow{}, invalid(field+".model", "%s's model spans more than one line; a model is one line", name)
+		return domain.ModelRow{}, api.InvalidField(field+".model", "%s's model spans more than one line; a model is one line", name)
 	}
 	if v.Effort != "" {
-		if err := checkEffort(r, key, field+".effort", v.Effort); err != nil {
+		if err := foundation.CheckEffort(r, key, field+".effort", v.Effort); err != nil {
 			return domain.ModelRow{}, err
 		}
 	}

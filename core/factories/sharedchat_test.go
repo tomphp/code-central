@@ -1,4 +1,4 @@
-package core_test
+package factories_test
 
 import (
 	"errors"
@@ -16,7 +16,7 @@ import (
 // chatOn is the Project's Chat as f reads it.
 func chatOn(t *testing.T, f fixture) api.ConversationView {
 	t.Helper()
-	v, err := f.core.GetChat(ctx, "acme", api.GetChatInput{})
+	v, err := f.Core.Factories().GetChat(ctx, "acme", api.GetChatInput{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +26,7 @@ func chatOn(t *testing.T, f fixture) api.ConversationView {
 // refusedChat is f's refusal of a Chat Message.
 func refusedChat(t *testing.T, f fixture) *api.Error {
 	t.Helper()
-	_, err := f.core.SendChatMessage(human, "acme", api.SendChatMessageInput{Text: "What is acme?"})
+	_, err := f.Core.Factories().SendChatMessage(human, "acme", api.SendChatMessageInput{Text: "What is acme?"})
 	var e *api.Error
 	if !errors.As(err, &e) || e.Code != api.ActionNotAllowed {
 		t.Fatalf("send_chat_message = %v, want action_not_allowed", err)
@@ -37,7 +37,7 @@ func refusedChat(t *testing.T, f fixture) *api.Error {
 // chatBeat is an Online Heartbeat with Chat support from cc on box.
 func chatBeat(f fixture, t *testing.T) {
 	t.Helper()
-	if _, err := f.core.ReportHeartbeat(ctx, "acme", api.ReportHeartbeatInput{Factory: "cc", Host: "box", State: api.HeartbeatOnline, IntervalSeconds: 10, Chat: true}); err != nil {
+	if _, err := f.Core.ReportHeartbeat(ctx, "acme", api.ReportHeartbeatInput{Factory: "cc", Host: "box", State: api.HeartbeatOnline, IntervalSeconds: 10, Chat: true}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -45,11 +45,11 @@ func chatBeat(f fixture, t *testing.T) {
 func TestChatIsOfferedOnlyWhereAChatFactoryReportsAndNamedElsewhere(t *testing.T) {
 	laptop, desktop := twoServices(t, store.NewMemory())
 	for _, f := range []fixture{laptop, desktop} {
-		if err := f.core.Register(ctx); err != nil {
+		if err := f.Core.Register(ctx); err != nil {
 			t.Fatal(err)
 		}
 	}
-	tick := watchFactories(t, desktop)
+	tick := desktop.WatchFactories(t)
 	chatBeat(laptop, t)
 	tick()
 
@@ -60,7 +60,7 @@ func TestChatIsOfferedOnlyWhereAChatFactoryReportsAndNamedElsewhere(t *testing.T
 		t.Fatalf("the desktop refused with %q, want it to name laptop", e.Message)
 	}
 	// A Conversation started on the desktop can't be answered there either.
-	if _, err := desktop.core.StartConversation(human, "acme", api.StartConversationInput{}); err != nil {
+	if _, err := desktop.Core.Factories().StartConversation(human, "acme", api.StartConversationInput{}); err != nil {
 		t.Fatal(err)
 	}
 	if v := chatOn(t, desktop); v.Availability != api.ChatUnavailable || v.RunsOn != "laptop" {
@@ -74,10 +74,10 @@ func TestChatIsOfferedOnlyWhereAChatFactoryReportsAndNamedElsewhere(t *testing.T
 	if v := chatOn(t, laptop); v.RunsOn != "" {
 		t.Fatalf("the laptop's Chat runs on %q, want here", v.RunsOn)
 	}
-	if v, err := laptop.core.SendChatMessage(human, "acme", api.SendChatMessageInput{Text: "What is acme?"}); err != nil || v.Availability != api.ChatAvailable || v.RunsOn != "" {
+	if v, err := laptop.Core.Factories().SendChatMessage(human, "acme", api.SendChatMessageInput{Text: "What is acme?"}); err != nil || v.Availability != api.ChatAvailable || v.RunsOn != "" {
 		t.Fatalf("the laptop's send_chat_message = %+v, %v; want it available here", v, err)
 	}
-	if w, err := laptop.core.NextChatWork(ctx, "acme", api.NextChatWorkInput{Factory: "cc", Host: "box"}); err != nil || w.Turn == nil {
+	if w, err := laptop.Core.Factories().NextChatWork(ctx, "acme", api.NextChatWorkInput{Factory: "cc", Host: "box"}); err != nil || w.Turn == nil {
 		t.Fatalf("next_chat_work on the laptop = %+v, %v; want the turn", w, err)
 	}
 }
@@ -85,11 +85,11 @@ func TestChatIsOfferedOnlyWhereAChatFactoryReportsAndNamedElsewhere(t *testing.T
 func TestChatNamesNoHostWhenNoLiveServiceHasAChatFactory(t *testing.T) {
 	t.Run("no Factory with Chat support", func(t *testing.T) {
 		laptop, desktop := twoServices(t, store.NewMemory())
-		if err := laptop.core.Register(ctx); err != nil {
+		if err := laptop.Core.Register(ctx); err != nil {
 			t.Fatal(err)
 		}
-		tick := watchFactories(t, desktop)
-		beat(laptop, t, "cc", "box", api.HeartbeatOnline, 10)
+		tick := desktop.WatchFactories(t)
+		laptop.Beat(t, "cc", "box", api.HeartbeatOnline, 10)
 		tick()
 		if v := chatOn(t, desktop); v.RunsOn != "" {
 			t.Fatalf("the desktop's Chat runs on %q, want nowhere", v.RunsOn)
@@ -100,13 +100,13 @@ func TestChatNamesNoHostWhenNoLiveServiceHasAChatFactory(t *testing.T) {
 	})
 	t.Run("its service no longer registered", func(t *testing.T) {
 		laptop, desktop := twoServices(t, store.NewMemory())
-		if err := laptop.core.Register(ctx); err != nil {
+		if err := laptop.Core.Register(ctx); err != nil {
 			t.Fatal(err)
 		}
-		tick := watchFactories(t, desktop)
+		tick := desktop.WatchFactories(t)
 		chatBeat(laptop, t)
 		tick()
-		if err := laptop.core.Deregister(ctx); err != nil {
+		if err := laptop.Core.Deregister(ctx); err != nil {
 			t.Fatal(err)
 		}
 		tick()

@@ -91,7 +91,7 @@ func TestAPingClearsSilentAndIsThrottledToOncePerMinutePerSession(t *testing.T) 
 
 	f.clock.Advance(40 * time.Minute)
 	pinged := f.clock.Now()
-	f.core.Ping(ctx, "s1")
+	f.core.Factories().Ping(ctx, "s1")
 	v := f.get(t, "acme-2")
 	wantSilentSince(t, v, time.Time{})
 	if !v.Claims[0].LastActivity.Equal(pinged) {
@@ -99,14 +99,14 @@ func TestAPingClearsSilentAndIsThrottledToOncePerMinutePerSession(t *testing.T) 
 	}
 
 	f.clock.Advance(59 * time.Second)
-	f.core.Ping(ctx, "s1") // within 60 seconds of the last one: ignored
+	f.core.Factories().Ping(ctx, "s1") // within 60 seconds of the last one: ignored
 	f.clock.Advance(30*time.Minute - 59*time.Second)
 	wantSilentSince(t, f.get(t, "acme-2"), pinged)
 
 	pinged = f.clock.Now()
-	f.core.Ping(ctx, "s1") // 30 minutes after the last accepted one
+	f.core.Factories().Ping(ctx, "s1") // 30 minutes after the last accepted one
 	f.clock.Advance(time.Minute)
-	f.core.Ping(ctx, "s1") // exactly 60 seconds later: accepted
+	f.core.Factories().Ping(ctx, "s1") // exactly 60 seconds later: accepted
 	f.clock.Advance(30*time.Minute - time.Second)
 	wantSilentSince(t, f.get(t, "acme-2"), time.Time{})
 	f.clock.Advance(time.Second)
@@ -127,9 +127,9 @@ func TestAPingMarksEveryLiveClaimWithThatSessionInAnyProject(t *testing.T) {
 	claimed := f.clock.Now()
 
 	f.clock.Advance(time.Hour)
-	f.core.Ping(ctx, "s1")
-	f.core.Ping(ctx, "unknown") // an unknown session is fine
-	f.core.Ping(ctx, "")        // so is none
+	f.core.Factories().Ping(ctx, "s1")
+	f.core.Factories().Ping(ctx, "unknown") // an unknown session is fine
+	f.core.Factories().Ping(ctx, "")        // so is none
 
 	wantSilentSince(t, f.get(t, "acme-2"), time.Time{})
 	wantSilentSince(t, f.get(t, "acme-3"), claimed)
@@ -147,7 +147,7 @@ func TestAClaimWhoseSessionKeepsPostingSessionEventsNeverGoesSilent(t *testing.T
 
 	for range 12 { // three hours, posting every quarter of an hour
 		f.clock.Advance(15 * time.Minute)
-		f.core.PostSessionEvents(ctx, "s1", []api.SessionEvent{{Time: f.clock.Now(), Kind: "tool_call", Text: "Bash: go test ./..."}})
+		f.core.Factories().PostSessionEvents(ctx, "s1", []api.SessionEvent{{Time: f.clock.Now(), Kind: "tool_call", Text: "Bash: go test ./..."}})
 		wantSilentSince(t, f.get(t, "acme-2"), time.Time{})
 	}
 	posted := f.clock.Now()
@@ -181,7 +181,7 @@ func TestAfterARestartLastActivityCountsFromServiceStart(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, domain.Ready)
 	f.claim(t, api.ClaimInput{SessionID: "s1"})
-	f.core.Ping(ctx, "s1")
+	f.core.Factories().Ping(ctx, "s1")
 
 	f.clock.Advance(2 * time.Hour)
 	started := f.clock.Now()
@@ -213,7 +213,7 @@ func TestTheWatchSendsTicketChangedWhenAClaimTurnsSilentOrStopsBeingSilent(t *te
 	if got := tick(); len(got) != 0 {
 		t.Fatalf("once per crossing, got %v", got)
 	}
-	f.core.Ping(ctx, "s1")
+	f.core.Factories().Ping(ctx, "s1")
 	f.clock.Advance(10 * time.Minute) // acme-3 now Silent too
 	got := tick()
 	if len(got) != 2 {

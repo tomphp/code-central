@@ -40,15 +40,15 @@ func checkBranchFormat(p domain.Project, field, format string) error {
 		return nil
 	}
 	if !strings.Contains(format, branchFormatID) {
-		return invalid(field, "a Branch format must contain %s, which To Requirement fills with the item's ID, such as feat/%s", branchFormatID, branchFormatID)
+		return api.InvalidField(field, "a Branch format must contain %s, which To Requirement fills with the item's ID, such as feat/%s", branchFormatID, branchFormatID)
 	}
 	for _, m := range branchFormatPlaceholder.FindAllString(format, -1) {
 		if m != branchFormatID {
-			return invalid(field, "a Branch format can only fill in %s, not %s", branchFormatID, m)
+			return api.InvalidField(field, "a Branch format can only fill in %s, not %s", branchFormatID, m)
 		}
 	}
 	if strings.ContainsAny(strings.ReplaceAll(format, branchFormatID, ""), "{}") {
-		return invalid(field, "a Branch format can only use { and } around %s", branchFormatID)
+		return api.InvalidField(field, "a Branch format can only use { and } around %s", branchFormatID)
 	}
 	return checkBranchTagName(p, field, fillBranchFormat(format, sampleItemID))
 }

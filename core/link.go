@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -33,14 +34,14 @@ func linkOf(in api.LinkInput) (domain.Link, error) {
 	}
 	switch {
 	case l.Integration == "" || strings.ContainsAny(l.Integration, "\r\n"):
-		return l, invalid("link.integration", "a Link names its Integration on one line")
+		return l, api.InvalidField("link.integration", "a Link names its Integration on one line")
 	case l.ID == "" || strings.ContainsAny(l.ID, "\r\n"):
-		return l, invalid("link.id", "a Link needs the external item's ID on one line")
+		return l, api.InvalidField("link.id", "a Link needs the external item's ID on one line")
 	case !l.ExternalState.Valid():
-		return l, invalid("link.external_state", "unknown external state %q (open, closed, deleted or out_of_scope)", l.ExternalState)
+		return l, api.InvalidField("link.external_state", "unknown external state %q (open, closed, deleted or out_of_scope)", l.ExternalState)
 	}
 	if l.URL != "" && !absoluteURL(l.URL) {
-		return l, invalid("link.url", "a Link's URL is an absolute http or https URL, not %q", l.URL)
+		return l, api.InvalidField("link.url", "a Link's URL is an absolute http or https URL, not %q", l.URL)
 	}
 	return l, nil
 }
@@ -79,12 +80,12 @@ func linkedTo(r store.Reader, key string, l domain.Link, specs bool) (string, bo
 	link := &store.LinkFilter{Integration: l.Integration, ID: l.ID}
 	if specs {
 		if found := r.FindSpecs(key, store.SpecFilter{Link: link}); len(found) > 0 {
-			return DisplayID(key, found[0].Number), true
+			return domain.DisplayID(key, found[0].Number), true
 		}
 		return "", false
 	}
 	if found := r.FindTickets(key, store.TicketFilter{Link: link}); len(found) > 0 {
-		return DisplayID(key, found[0].Number), true
+		return domain.DisplayID(key, found[0].Number), true
 	}
 	return "", false
 }
@@ -96,7 +97,7 @@ func (c *Core) CreateLinkedSpec(ctx context.Context, key string, in api.CreateLi
 		return api.Written[api.SpecView]{}, err
 	}
 	if strings.TrimSpace(in.Title) == "" {
-		return api.Written[api.SpecView]{}, invalid("title", "a Spec needs a title")
+		return api.Written[api.SpecView]{}, api.InvalidField("title", "a Spec needs a title")
 	}
 	l, err := linkOf(in.Link)
 	if err != nil {
@@ -104,11 +105,11 @@ func (c *Core) CreateLinkedSpec(ctx context.Context, key string, in api.CreateLi
 	}
 	var v api.Written[api.SpecView]
 	err = c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		if id, ok := linkedTo(w, key, l, true); ok {
-			return invalid("link.id", "%s %s is already linked to Spec %s", l.Integration, l.ID, id)
+			return api.InvalidField("link.id", "%s %s is already linked to Spec %s", l.Integration, l.ID, id)
 		}
 		now := c.now()
 		s := domain.Spec{Number: w.NextNumber(key), Title: in.Title, Link: l, Created: now, Updated: now, Body: in.Body}
@@ -131,17 +132,17 @@ func (c *Core) CreateLinkedTicket(ctx context.Context, key string, in api.Create
 		return api.Written[api.TicketView]{}, err
 	}
 	if strings.TrimSpace(in.Title) == "" {
-		return api.Written[api.TicketView]{}, invalid("title", "a Ticket needs a title")
+		return api.Written[api.TicketView]{}, api.InvalidField("title", "a Ticket needs a title")
 	}
 	state := in.State
 	if state == "" {
 		state = domain.Draft
 	}
 	if state != domain.Draft && state != domain.Ready {
-		return api.Written[api.TicketView]{}, invalid("state", "an Integration creates a Ticket in Draft or Ready, not %q", state)
+		return api.Written[api.TicketView]{}, api.InvalidField("state", "an Integration creates a Ticket in Draft or Ready, not %q", state)
 	}
 	if in.Spec == "" {
-		return api.Written[api.TicketView]{}, invalid("spec", "every Ticket belongs to a Spec")
+		return api.Written[api.TicketView]{}, api.InvalidField("spec", "every Ticket belongs to a Spec")
 	}
 	l, err := linkOf(in.Link)
 	if err != nil {
@@ -149,16 +150,16 @@ func (c *Core) CreateLinkedTicket(ctx context.Context, key string, in api.Create
 	}
 	var v api.Written[api.TicketView]
 	err = c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
-		sp, err := resolveSpec(w, key, "create_linked_ticket", "spec", in.Spec)
+		sp, err := foundation.ResolveSpec(w, key, "create_linked_ticket", "spec", in.Spec)
 		if err != nil {
 			return err
 		}
 		specN := sp.Number
 		if id, ok := linkedTo(w, key, l, false); ok {
-			return invalid("link.id", "%s %s is already linked to Ticket %s", l.Integration, l.ID, id)
+			return api.InvalidField("link.id", "%s %s is already linked to Ticket %s", l.Integration, l.ID, id)
 		}
 		now := c.now()
 		t := domain.Ticket{Number: w.NextNumber(key), Title: in.Title, State: state, Spec: specN, Link: l, Created: now, Updated: now, Description: in.Description,
@@ -180,19 +181,19 @@ func (c *Core) UpdateLinkedSpec(ctx context.Context, key string, in api.UpdateLi
 		return api.Written[api.SpecView]{}, err
 	}
 	if in.Title != nil && strings.TrimSpace(*in.Title) == "" {
-		return api.Written[api.SpecView]{}, invalid("title", "a Spec needs a title")
+		return api.Written[api.SpecView]{}, api.InvalidField("title", "a Spec needs a title")
 	}
 	var v api.Written[api.SpecView]
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
-		s, err := resolveSpec(w, key, "update_linked_spec", "spec", in.Spec)
+		s, err := foundation.ResolveSpec(w, key, "update_linked_spec", "spec", in.Spec)
 		if err != nil {
 			return err
 		}
 		n := s.Number
-		if err := ownedByLink(DisplayID(key, n), s.Link); err != nil {
+		if err := ownedByLink(domain.DisplayID(key, n), s.Link); err != nil {
 			return err
 		}
 		before := specView(key, s)
@@ -219,13 +220,13 @@ func (c *Core) UpdateLinkedTicket(ctx context.Context, key string, in api.Update
 		return api.Written[api.TicketView]{}, err
 	}
 	if in.Title != nil && strings.TrimSpace(*in.Title) == "" {
-		return api.Written[api.TicketView]{}, invalid("title", "a Ticket needs a title")
+		return api.Written[api.TicketView]{}, api.InvalidField("title", "a Ticket needs a title")
 	}
 	if in.URL != nil && !absoluteURL(*in.URL) {
-		return api.Written[api.TicketView]{}, invalid("url", "a Link's URL is an absolute http or https URL, not %q", *in.URL)
+		return api.Written[api.TicketView]{}, api.InvalidField("url", "a Link's URL is an absolute http or https URL, not %q", *in.URL)
 	}
 	return c.updateTicketIn(key, "update_linked_ticket", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
-		if err := ownedByLink(DisplayID(key, t.Number), t.Link); err != nil {
+		if err := ownedByLink(domain.DisplayID(key, t.Number), t.Link); err != nil {
 			return false, err
 		}
 		moved := in.URL != nil && *in.URL != t.Link.URL
@@ -234,13 +235,13 @@ func (c *Core) UpdateLinkedTicket(ctx context.Context, key string, in api.Update
 		}
 		prev := map[string]string{}
 		if in.Spec != nil {
-			sp, err := resolveSpec(r, key, "update_linked_ticket", "spec", *in.Spec)
+			sp, err := foundation.ResolveSpec(r, key, "update_linked_ticket", "spec", *in.Spec)
 			if err != nil {
 				return false, err
 			}
 			n := sp.Number
 			if n != t.Spec {
-				prev["spec"] = DisplayID(key, t.Spec)
+				prev["spec"] = domain.DisplayID(key, t.Spec)
 				t.Spec = n
 			}
 		}
@@ -282,7 +283,7 @@ func (c *Core) SetExternalState(ctx context.Context, key string, in api.SetExter
 		return api.LinkedRow{}, err
 	}
 	if !in.ExternalState.Valid() {
-		return api.LinkedRow{}, invalid("external_state", "unknown external state %q (open, closed, deleted or out_of_scope)", in.ExternalState)
+		return api.LinkedRow{}, api.InvalidField("external_state", "unknown external state %q (open, closed, deleted or out_of_scope)", in.ExternalState)
 	}
 	return c.updateLink(ctx, key, in.Target, func(l *domain.Link) (map[string]string, error) {
 		if l.ExternalState == in.ExternalState {
@@ -318,15 +319,15 @@ func (c *Core) Unlink(ctx context.Context, key string, in api.UnlinkInput) (api.
 func (c *Core) updateLink(ctx context.Context, key string, ref api.Ref, fn func(l *domain.Link) (map[string]string, error)) (api.LinkedRow, error) {
 	var row api.LinkedRow
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
-		n, err := refNumber(ref, key, "target")
+		n, err := api.RefNumber(ref, key, "target")
 		if err != nil {
 			return err
 		}
-		id := DisplayID(key, n)
-		notLinked := invalid("target", "%s is not linked", id)
+		id := domain.DisplayID(key, n)
+		notLinked := api.InvalidField("target", "%s is not linked", id)
 		if s, ok := w.Spec(key, n); ok {
 			if !s.Link.Linked() {
 				return notLinked
@@ -364,17 +365,17 @@ func (c *Core) updateLink(ctx context.Context, key string, ref api.Ref, fn func(
 			row = ticketLinkedRow(key, t)
 			return nil
 		}
-		return notFound("there is no Spec or Ticket %s", id)
+		return api.NotFoundError("there is no Spec or Ticket %s", id)
 	})
 	return row, err
 }
 
 func specLinkedRow(key string, s domain.Spec) api.LinkedRow {
-	return api.LinkedRow{Kind: api.RecordSpec, ID: DisplayID(key, s.Number), Title: s.Title, Link: *linkView(s.Link)}
+	return api.LinkedRow{Kind: api.RecordSpec, ID: domain.DisplayID(key, s.Number), Title: s.Title, Link: *linkView(s.Link)}
 }
 
 func ticketLinkedRow(key string, t domain.Ticket) api.LinkedRow {
-	return api.LinkedRow{Kind: api.RecordTicket, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Link: *linkView(t.Link)}
+	return api.LinkedRow{Kind: api.RecordTicket, ID: domain.DisplayID(key, t.Number), Title: t.Title, State: t.State, Link: *linkView(t.Link)}
 }
 
 // FindLinked is find_linked(integration, id?): every Spec and Ticket in
@@ -383,12 +384,12 @@ func ticketLinkedRow(key string, t domain.Ticket) api.LinkedRow {
 // in number order.
 func (c *Core) FindLinked(_ context.Context, key string, in api.FindLinkedInput) ([]api.LinkedRow, error) {
 	if strings.TrimSpace(in.Integration) == "" {
-		return nil, invalid("integration", "name the Integration whose links to find")
+		return nil, api.InvalidField("integration", "name the Integration whose links to find")
 	}
 	rows := []api.LinkedRow{}
 	err := c.store.View(func(r store.Reader) error {
 		if _, ok := r.Project(key); !ok {
-			return unknownProject(key)
+			return api.UnknownProjectError(key)
 		}
 		link := &store.LinkFilter{Integration: in.Integration, ID: in.ID}
 		byNumber := map[int]api.LinkedRow{}

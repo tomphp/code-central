@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -19,7 +20,7 @@ import (
 func (c *Core) SubmitSmallChange(_ context.Context, key string, in api.SubmitSmallChangeInput) (api.Written[api.TicketView], error) {
 	title := titleLine(in.Text)
 	if title == "" {
-		return api.Written[api.TicketView]{}, invalid("text", "a Small Change needs text; its first line becomes the Ticket's title")
+		return api.Written[api.TicketView]{}, api.InvalidField("text", "a Small Change needs text; its first line becomes the Ticket's title")
 	}
 	spec, err := c.projectSpecNumber(key, smallChangesSpec)
 	if err != nil {
@@ -27,7 +28,7 @@ func (c *Core) SubmitSmallChange(_ context.Context, key string, in api.SubmitSma
 	}
 	var v api.Written[api.TicketView]
 	err = c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		now := c.now()

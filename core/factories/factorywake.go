@@ -1,13 +1,12 @@
-package core
+package factories
 
 import (
 	"context"
-	"slices"
 	"strings"
 	"sync"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -36,17 +35,17 @@ func newLongPoll() *longPoll {
 // key from host, both named as its Heartbeat names them. Either missing is
 // invalid, and an unknown Project is refused; an archived one is not, as
 // the call is a read.
-func (c *Core) longPollKey(key, factory, host string) (heartbeatKey, error) {
+func (c *Factories) longPollKey(key, factory, host string) (heartbeatKey, error) {
 	name, host := strings.TrimSpace(factory), strings.TrimSpace(host)
 	switch {
 	case name == "":
-		return heartbeatKey{}, invalid("factory", "factory is required: the Factory's name, as its Heartbeat gives it")
+		return heartbeatKey{}, api.InvalidField("factory", "factory is required: the Factory's name, as its Heartbeat gives it")
 	case host == "":
-		return heartbeatKey{}, invalid("host", "host is required: the machine the Factory runs on, as its Heartbeat gives it")
+		return heartbeatKey{}, api.InvalidField("host", "host is required: the machine the Factory runs on, as its Heartbeat gives it")
 	}
-	if err := c.store.View(func(r store.Reader) error {
+	if err := c.f.Store.View(func(r store.Reader) error {
 		if _, ok := r.Project(key); !ok {
-			return unknownProject(key)
+			return api.UnknownProjectError(key)
 		}
 		return nil
 	}); err != nil {
@@ -122,7 +121,7 @@ func (fw *factoryWakes) wake(key string) {
 // would wake now. A woken call stays uncounted while it returns. It is
 // for tests, which must know a wake will reach a Factory before they make
 // one.
-func (c *Core) WaitingFactoryWakes(key string) int {
+func (c *Factories) WaitingFactoryWakes(key string) int {
 	fw := c.factoryWakes
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
@@ -140,7 +139,7 @@ func (c *Core) WaitingFactoryWakes(key string) int {
 // returns woken; or, for at most WaitTimeout on the injected clock or
 // until ctx ends, and then returns empty. A newer call from the same
 // Factory and host ends this one, empty.
-func (c *Core) NextFactoryWake(ctx context.Context, key string, in api.NextFactoryWakeInput) (api.FactoryWake, error) {
+func (c *Factories) NextFactoryWake(ctx context.Context, key string, in api.NextFactoryWakeInput) (api.FactoryWake, error) {
 	k, err := c.longPollKey(key, in.Factory, in.Host)
 	if err != nil {
 		return api.FactoryWake{}, err
@@ -148,7 +147,7 @@ func (c *Core) NextFactoryWake(ctx context.Context, key string, in api.NextFacto
 	p := newLongPoll()
 	c.factoryWakes.open(k, p)
 	defer c.factoryWakes.close(k, p)
-	timeout := c.clock.After(WaitTimeout)
+	timeout := c.f.Clock.After(foundation.WaitTimeout)
 	select {
 	case <-p.wake:
 		return api.FactoryWake{Woken: true}, nil
@@ -165,71 +164,6 @@ func (c *Core) NextFactoryWake(ctx context.Context, key string, in api.NextFacto
 	return api.FactoryWake{}, nil
 }
 
-// wakingStates are the States a move into wakes the Factories: Ready
-// (claimable again), Answered (to resume), Accepted (to land), and Done
-// and Cancelled (which may clear another Ticket's last Blocker).
-var wakingStates = []domain.State{domain.Ready, domain.Answered, domain.Accepted, domain.Done, domain.Cancelled}
-
-// wakesTheFactory says whether writing Ticket t, over the record r holds
-// before the write, is a change the Factory's poll acts on: t moves into
-// one of the wakingStates (a new Ticket counts as moving into its
-// State), a live Claim on it ends by a move its holder didn't make, or
-// its Blockers shrink.
-func wakesTheFactory(r store.Reader, key string, t domain.Ticket) bool {
-	was, found := r.Ticket(key, t.Number)
-	if !found {
-		return slices.Contains(wakingStates, t.State)
-	}
-	movedIn := was.State != t.State && slices.Contains(wakingStates, t.State)
-	return movedIn || claimWithdrawn(was, t) || blockersShrank(was, t)
-}
-
-// blockersShrank says whether t has lost a Blocker was had, which may
-// leave it claimable.
-func blockersShrank(was, t domain.Ticket) bool {
-	return slices.ContainsFunc(was.BlockedBy, func(n int) bool { return !slices.Contains(t.BlockedBy, n) })
-}
-
-// claimWithdrawn says whether the Claim live on was has ended on t by an
-// action other than its holder's own, such as cancel, release or a move
-// by hand: the Factory may be running its turn, and has a slot back.
-func claimWithdrawn(was, t domain.Ticket) bool {
-	live, ok := liveClaim(was)
-	if !ok {
-		return false
-	}
-	for _, c := range t.Claims {
-		if c.Number == live.Number {
-			return !c.Live() && !isHolderAction(c.EndedBy)
-		}
-	}
-	return false
-}
-
-// projectWakesTheFactory says whether writing Project p, over the record
-// r holds before the write, changes a setting the Factory reads: the
-// base, Landing, CI, Models, Stage Guides, Auto-accept or Archived. The
-// Push remote the Factory reports, its Reported Models and UI-only
-// settings such as Focus Kinds don't count.
-func projectWakesTheFactory(r store.Reader, p domain.Project) bool {
-	was, found := r.Project(p.Key)
-	if !found {
-		return false
-	}
-	ci := func(c domain.CI) domain.CI {
-		c.PushRemoteURL, c.NoPushRemote, c.AutoFix = "", false, domain.AutoFix{}
-		return c
-	}
-	return was.Base() != p.Base() || was.Landing != p.Landing || !ci(was.CI).Equal(ci(p.CI)) ||
-		!was.Models.Equal(p.Models) || was.StageGuides != p.StageGuides ||
-		!slices.Equal(was.AutoAccept, p.AutoAccept) || !was.Archived.Equal(p.Archived)
-}
-
-// specWakesTheFactory says whether writing Spec s, over the record r
-// holds before the write, turns a Map's guided Tag on: the Factory then
-// starts its next decision.
-func specWakesTheFactory(r store.Reader, key string, s domain.Spec) bool {
-	guided := func(s domain.Spec) bool { return isMap(s.Labels) && s.Tags[domain.GuidedTag] == domain.GuidedOn }
-	was, found := r.Spec(key, s.Number)
-	return guided(s) && !(found && guided(was))
-}
+// Wake wakes every open next_factory_wake call on Project key, as a write
+// its poll acts on does.
+func (c *Factories) Wake(key string) { c.factoryWakes.wake(key) }

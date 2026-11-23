@@ -1,35 +1,37 @@
 package core_test
 
 import (
-	"context"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/coretest"
 	"github.com/tomoram/code-central/events"
+	"github.com/tomoram/code-central/store"
 )
 
 func beat(f fixture, t *testing.T, factory, host string, state api.HeartbeatState, interval int) {
-	t.Helper()
-	beatNote(f, t, factory, host, state, "", interval)
+	f.shared().Beat(t, factory, host, state, interval)
 }
 
 func beatNote(f fixture, t *testing.T, factory, host string, state api.HeartbeatState, note string, interval int) {
-	t.Helper()
-	_, err := f.core.ReportHeartbeat(ctx, "acme", api.ReportHeartbeatInput{Factory: factory, Host: host, State: state, Note: note, IntervalSeconds: interval})
-	if err != nil {
-		t.Fatal(err)
-	}
+	f.shared().BeatNote(t, factory, host, state, note, interval)
 }
 
 func factoryStatus(f fixture, t *testing.T) api.FactoryStatusView {
-	t.Helper()
-	p, err := f.core.GetProject(ctx, "acme")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return p.FactoryStatus
+	return f.shared().FactoryStatus(t)
+}
+
+func onlyFactory(t *testing.T, f fixture) api.FactoryView { return f.shared().OnlyFactory(t) }
+
+func watchFactories(t *testing.T, f fixture) (tick func() []string) {
+	return f.shared().WatchFactories(t)
+}
+
+func twoServices(t *testing.T, s store.Store) (laptop, desktop fixture) {
+	l, d := coretest.TwoServices(t, s)
+	return fixtureOf(l), fixtureOf(d)
 }
 
 func TestAFreshCoreHasNoFactoriesAndIsOffline(t *testing.T) {
@@ -228,34 +230,6 @@ func TestAHeartbeatAcknowledgesWithoutFactoryStatusNoise(t *testing.T) {
 	full, err := f.core.ReportHeartbeat(ctx, "acme", api.ReportHeartbeatInput{Factory: "f", Host: "h", State: api.HeartbeatOnline, IntervalSeconds: 10, Full: true})
 	if err != nil || full.Record == nil || full.Record.FactoryStatus.Status != api.FactoryOnline {
 		t.Fatalf("full = %+v, %v", full, err)
-	}
-}
-
-// watchFactories runs f.core.WatchFactoryStatus until the test ends and
-// returns tick: one tick, returning the Projects it reported.
-func watchFactories(t *testing.T, f fixture) (tick func() []string) {
-	t.Helper()
-	ticks := make(chan time.Time)
-	changes := make(chan string, 10)
-	watchCtx, stop := context.WithCancel(ctx)
-	done := make(chan struct{})
-	go func() {
-		f.core.WatchFactoryStatus(watchCtx, ticks, func(project string) { changes <- project })
-		close(done)
-	}()
-	t.Cleanup(func() { stop(); <-done })
-	return func() []string {
-		ticks <- f.clock.Now()
-		ticks <- f.clock.Now() // the second send returns once the first tick is handled
-		var got []string
-		for {
-			select {
-			case p := <-changes:
-				got = append(got, p)
-			default:
-				return got
-			}
-		}
 	}
 }
 

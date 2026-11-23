@@ -1,8 +1,9 @@
-package core
+package factories
 
 import (
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -18,14 +19,14 @@ import (
 // Transcript, as it starts holding it, and says whether another service
 // held it before: the session has moved here, so what this service holds
 // is a tail.
-func (c *Core) startHolding(k markKey) (moved bool) {
+func (c *Factories) startHolding(k markKey) (moved bool) {
 	prev, ok := c.transcriptHolder(k)
-	err := c.store.Services().PutTranscriptHolder(store.TranscriptHolder{Project: k.project, Ticket: k.ticket, Claim: k.claim,
-		Service: c.service.ID, ServiceHost: c.service.Host, At: c.now()})
+	err := c.f.Store.Services().PutTranscriptHolder(store.TranscriptHolder{Project: k.project, Ticket: k.ticket, Claim: k.claim,
+		Service: c.f.Service().ID, ServiceHost: c.f.Service().Host, At: c.f.Now()})
 	if err != nil {
-		c.logf("cannot record that this service holds %s's Claim %d's Transcript: %v", DisplayID(k.project, k.ticket), k.claim, err)
+		c.f.Logf("cannot record that this service holds %s's Claim %d's Transcript: %v", domain.DisplayID(k.project, k.ticket), k.claim, err)
 	}
-	return ok && prev.Service != c.service.ID
+	return ok && prev.Service != c.f.Service().ID
 }
 
 // heldElsewhere is the host of the service holding Claim k's Transcript,
@@ -34,14 +35,14 @@ func (c *Core) startHolding(k markKey) (moved bool) {
 // service holds older ones. It is empty when this service holds it, when
 // none is recorded, as for a hand-run session, which posts no Session
 // Events, or when the holder has stopped, as nobody holds more.
-func (c *Core) heldElsewhere(k markKey) string {
+func (c *Factories) heldElsewhere(k markKey) string {
 	h, ok := c.transcriptHolder(k)
-	if !ok || h.Service == c.service.ID {
+	if !ok || h.Service == c.f.Service().ID {
 		return ""
 	}
-	regs, err := c.store.Services().Registrations(c.now())
+	regs, err := c.f.Store.Services().Registrations(c.f.Now())
 	if err != nil {
-		c.logf("cannot read the services' Registrations: %v", err)
+		c.f.Logf("cannot read the services' Registrations: %v", err)
 		return ""
 	}
 	for _, r := range regs {
@@ -54,10 +55,10 @@ func (c *Core) heldElsewhere(k markKey) string {
 
 // transcriptHolder is Claim k's Transcript holder, if one is recorded.
 // What the Store can't read is logged, as none recorded.
-func (c *Core) transcriptHolder(k markKey) (store.TranscriptHolder, bool) {
-	h, ok, err := c.store.Services().TranscriptHolder(k.project, k.ticket, k.claim)
+func (c *Factories) transcriptHolder(k markKey) (store.TranscriptHolder, bool) {
+	h, ok, err := c.f.Store.Services().TranscriptHolder(k.project, k.ticket, k.claim)
 	if err != nil {
-		c.logf("cannot read who holds %s's Claim %d's Transcript: %v", DisplayID(k.project, k.ticket), k.claim, err)
+		c.f.Logf("cannot read who holds %s's Claim %d's Transcript: %v", domain.DisplayID(k.project, k.ticket), k.claim, err)
 		return store.TranscriptHolder{}, false
 	}
 	return h, ok
@@ -70,8 +71,8 @@ const transcriptHolderLife = 7 * 24 * time.Hour
 
 // pruneTranscriptHolders deletes the Transcript holders older than
 // transcriptHolderLife. What it can't delete is logged, to try next time.
-func (c *Core) pruneTranscriptHolders() {
-	if err := c.store.Services().PruneTranscriptHolders(c.now().Add(-transcriptHolderLife)); err != nil {
-		c.logf("cannot prune the Transcript holders: %v", err)
+func (c *Factories) pruneTranscriptHolders() {
+	if err := c.f.Store.Services().PruneTranscriptHolders(c.f.Now().Add(-transcriptHolderLife)); err != nil {
+		c.f.Logf("cannot prune the Transcript holders: %v", err)
 	}
 }

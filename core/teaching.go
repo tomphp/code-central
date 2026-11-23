@@ -5,6 +5,7 @@ import (
 	"embed"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -12,7 +13,7 @@ import (
 // A Project's mode (domain.Mode) says where init puts its files: committed
 // to the repository, or kept local to one checkout (`init --local`).
 func invalidMode(m domain.Mode) *api.Error {
-	return invalid("mode", "mode %q is neither %q nor %q", m, domain.ModeCommitted, domain.ModeLocal)
+	return api.InvalidField("mode", "mode %q is neither %q nor %q", m, domain.ModeCommitted, domain.ModeLocal)
 }
 
 // SetProjectMode is set_project_mode(key, mode): init calls it when the
@@ -23,7 +24,7 @@ func (c *Core) SetProjectMode(_ context.Context, key string, in api.SetProjectMo
 	}
 	var v api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		p, _ := w.Project(key)

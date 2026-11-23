@@ -40,3 +40,18 @@ func (e *Error) Error() string {
 	}
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
+
+// InvalidField is an invalid Error about field.
+func InvalidField(field, format string, args ...any) *Error {
+	return &Error{Code: Invalid, Field: field, Message: fmt.Sprintf(format, args...)}
+}
+
+// UnknownProjectError is the Error for a Project key that names none.
+func UnknownProjectError(key string) *Error {
+	return &Error{Code: UnknownProject, Message: fmt.Sprintf("no Project with key %q; ask the human to run `code-central init` in its repository", key)}
+}
+
+// NotFoundError is a not_found Error.
+func NotFoundError(format string, args ...any) *Error {
+	return &Error{Code: NotFound, Message: fmt.Sprintf(format, args...)}
+}
