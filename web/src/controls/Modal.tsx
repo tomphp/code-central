@@ -1,7 +1,7 @@
 // Modal is the shell every dialog and popup shares: it portals to the body,
-// draws the backdrop and closes on a click that starts and ends on the backdrop or Escape, unless
-// something inside already handled that Escape (an open menu calls
-// preventDefault on it). The card is the dialog: focus moves in on open, Tab
+// draws the backdrop and closes on a click that starts and ends on the
+// backdrop or Escape, unless something inside already handled that Escape (an
+// open menu calls preventDefault on it). The card is the dialog: focus moves in on open, Tab
 // stays inside it and focus goes back to the opener on close. "narrow" is the
 // 40rem dialog; "wide" is for popups, capped to the viewport, with its content
 // scrolling inside it while the page behind stays put. While any Modal is
