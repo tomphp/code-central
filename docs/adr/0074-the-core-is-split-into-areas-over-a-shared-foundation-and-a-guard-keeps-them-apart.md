@@ -2,7 +2,7 @@
 
 `*Core` had 150 exported methods and one pool of state: every file was a method on it, so nothing inside `core` had a boundary and any rule could reach any other's fields. With the wire contract in `api` and the bindings in `ops/bind` (ADR 0072), the split can now be made area by area.
 
-So each area is a package under `core`, with its own type, its own state and its own tests. The first is the agent runtime, `core/factories`: `factories.Factories` holds the Heartbeats, Transcripts, chats, activity, Plan Limits, Factory wakes and the shared-Store reports of the Factories, and `(*core.Core).Factories()` hands it out. The workflow stays in `core`.
+So each area is a package under `core`, with its own type, its own state and its own tests. The first is the agent runtime, `core/factories`: `factories.Factories` holds the Heartbeats, Transcripts, chats, Plan Limits, Factory wakes and the shared-Store reports of the Factories (the last-activity marks behind Silent Claims stay in `core` with them), and `(*core.Core).Factories()` hands it out. The workflow stays in `core`.
 
 What the areas share is in `core/foundation`: the service identity, the Store's archive check, ticket and Spec resolution, the error constructors and the effort rules. It is a leaf under both `core` and the areas.
 

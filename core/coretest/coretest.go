@@ -1,6 +1,7 @@
 // Package coretest builds a whole Core over a Store and a fake clock, for
 // the tests of core and of the areas under it, which can't import core
-// themselves.
+// themselves. The workflow helpers (Spec, Ticket, Work, Claim) are what the
+// areas' tests need to set a Ticket up.
 package coretest
 
 import (

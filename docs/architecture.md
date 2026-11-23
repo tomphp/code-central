@@ -72,7 +72,7 @@ A second, test-only composition exists: `world/` + `cmd/corewasm` build the real
 | Module | Owns | Its contract |
 |---|---|---|
 | `core/factories`, `core/foundation` | `factories.Factories` is the agent runtime, split out of `*Core` (ADR 0074): chat, Transcripts, Heartbeats, Plan Limits, Factory wake, and the reports shared through the Store. `foundation` is what the areas share: service identity, the archive check, ticket and Spec resolution, error constructors, effort rules. | `(*core.Core).Factories()`; bound in `ops/bind` with `bindFactories`. |
-| `core` | The workflow and every rule over it: Claims, Rounds, triage, Requirements, landing, CI, pull requests, issue and work-item links, usage, the read models, and the wake rules. It names the wire types (`*Input`, `*View`, `*Row`, `*Result`, the error codes, `Ref`, `Actor`, `Decode`) as `api.X`; it declares none, and has no alias for one. | `*core.Core`'s 150 exported methods; no interface. |
+| `core` | The workflow and every rule over it: Claims, Rounds, triage, Requirements, landing, CI, pull requests, issue and work-item links, usage, the read models, and the wake rules. It names the wire types (`*Input`, `*View`, `*Row`, `*Result`, the error codes, `Ref`, `Actor`, `Decode`) as `api.X`; it declares none, and has no alias for one. | `*core.Core`'s 138 exported methods; no interface. |
 | `api` | The wire contract (ADR 0072): every input, view, row and result of an operation, the error codes, `Ref`, `Actor`, `Decode`, the Watcher status contract, and the rules that belong to one of those types (`TicketView.Brief`, `ProjectView.LandingPolicies`, `FindTicketsInput.EncodeQuery`). It imports only `domain` and `internal/fieldwalk`. | The exported types; `internal/wiretypes` generates `wire.gen.ts` from them. |
 | `ops` | The one list of operations (`ops.All()`, ADR 0063): name, audience, route, input and output types (from `api`), and `ops.Service`, which `httpapi` needs, and `ops.Dispatcher`, which `mcp` needs (ADR 0065). It doesn't import `core` (ADR 0072). | `ops.Service`, `ops.Dispatcher`, `ops.Definitions()`. |
 | `ops/bind` | The service's side of the operations: each definition's binding, the `*core.Core` call that serves it, and `bind.Serve`, which adapts the Core to `ops.Service` and `ops.Dispatcher`. Only `server` imports it. | `bind.Serve`; the cross-door suite checks every definition has exactly one binding. |
@@ -97,7 +97,7 @@ There is no separate issue-tracker module: Specs and Tickets live in `core`, and
 
 ### What `core` contains
 
-`core` is about 18.1k non-test lines in 95 files, with a `*Core` of 150 exported methods and 6 exported types (the wire types went to `api`). By file grouping:
+`core` is about 15.9k non-test lines in 87 files, with a `*Core` of 138 exported methods and 6 exported types (the wire types went to `api`). By file grouping:
 
 - workflow and claims (claim, round, failure, blockers, triage, requirement, map, prototype, retro, small change, auto-accept, auto-fix…)
 - landing (landing policy, land per spec, spec merge, repositories, changed repositories, base, branch format)
@@ -189,7 +189,7 @@ Each operation's `Call` was a `func(c *core.Core, …)` in its definition, and `
 
 ### 5. `*core.Core` is a god object (in progress)
 
-One type with 150 methods and 20 fields, mixing the persisted workflow with in-memory runtime, the Watcher check modes and Usage. Every file was a method on `*Core`, so nothing inside `core` had a boundary, and any rule could reach any other's state.
+One type with 150 methods (138 after the first split) and 20 fields, mixing the persisted workflow with in-memory runtime, the Watcher check modes and Usage. Every file was a method on `*Core`, so nothing inside `core` had a boundary, and any rule could reach any other's state.
 
 The split is made area by area (ADR 0074). The first area is done: the agent runtime (chat, transcripts, Heartbeats, plan limits, Factory wake and the shared-Store reports) is `core/factories`, a `factories.Factories` that holds its own state, reached by `c.Factories()` and bound in `ops/bind` with `bindFactories`. What the areas share is `core/foundation`, and `internal/importguard` keeps an area from importing `core` or another area.
 
