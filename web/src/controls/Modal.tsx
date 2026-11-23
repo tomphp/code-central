@@ -1,7 +1,7 @@
 // Modal is the shell every dialog and popup shares: it portals to the body,
-// draws the backdrop and closes on a backdrop click or Escape, unless
-// something inside already handled that Escape (an open menu calls
-// preventDefault on it). The card is the dialog: focus moves in on open, Tab
+// draws the backdrop and closes on a click that starts and ends on the
+// backdrop or Escape, unless something inside already handled that Escape (an
+// open menu calls preventDefault on it). The card is the dialog: focus moves in on open, Tab
 // stays inside it and focus goes back to the opener on close. "narrow" is the
 // 40rem dialog; "wide" is for popups, capped to the viewport, with its content
 // scrolling inside it while the page behind stays put. While any Modal is
@@ -37,6 +37,7 @@ export function Modal({
   const card = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   close.current = onClose;
+  const pressedBackdrop = useRef(false);
 
   useEffect(() => {
     const opener = document.activeElement;
@@ -89,7 +90,15 @@ export function Modal({
   return createPortal(
     <div
       className={`modal${size === "wide" ? " modal-popup" : ""}`}
-      onClick={(e) => e.target === e.currentTarget && close.current()}
+      onMouseDown={(e) => {
+        pressedBackdrop.current = e.target === e.currentTarget;
+      }}
+      onMouseUp={(e) => {
+        if (e.target !== e.currentTarget) pressedBackdrop.current = false;
+      }}
+      onClick={(e) =>
+        pressedBackdrop.current && e.target === e.currentTarget && close.current()
+      }
     >
       <div
         ref={card}
