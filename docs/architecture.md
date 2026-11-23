@@ -195,11 +195,11 @@ The split is made area by area (ADR 0074). The first area is done: the agent run
 
 **Recommendation:** split the CI and code-host area next, which talks to the rest through Tickets and Watcher status. Each becomes a package under `core` with its own type that the bindings in `ops/bind` call, with `*Core` shrinking to the workflow. The wake rules stay in `core`, because they read the Store's writes.
 
-### 6. Runtime state is per service, but the Store can be shared
+### 6. Runtime state is per service, but the Store can be shared (fixed)
 
-Heartbeats, Transcripts, chats and Watcher status live in one service's memory ("in memory only, never in the store", `core/heartbeat.go`; ADR 0008). Since ADR 0068, several services can share a Postgres Store and hear each other's Changes, but not each other's runtime state: a Factory reporting to one service is Offline in the UI of another, and its Transcript is blank there. Nothing in the docs says whether that is intended.
+Heartbeats, Transcripts and chats lived in one service's memory, so when several services shared a Postgres Store, a Factory reporting to one showed Offline, with Silent Claims and a blank Transcript, in the UI of another. Watcher status was already shared, by Watcher Leases and `elsewhere`.
 
-**Recommendation:** decide it and record the decision in an ADR, either "a Factory and the UI that watches it use the same service" (and say so where a shared Store is set up), or move the state that must be seen everywhere (at least Heartbeats) into the Store's `Services()` side, outside any View or Update, as Registrations and Leases already are.
+Heartbeats, Factory reports, pings and Transcript holders are now on the Store's `Services()` side, outside any View or Update, next to Registrations and Leases. They are written through and refreshed on the 10 s Factory Status tick, and the code is in `core/factories`. Transcripts and Conversations stay on the Reporting Service, and the other services show "This Transcript is on \<host\>". The rule "a Factory and the UI that watches it use the same service" was rejected. The decision is in [`0072-runtime-state-across-services-sharing-a-store.md`](adr/0072-runtime-state-across-services-sharing-a-store.md), and Spec code-central-1107 built it.
 
 ### 7. `cli` is still wide
 
