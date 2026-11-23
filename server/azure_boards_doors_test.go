@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
@@ -420,5 +421,82 @@ func TestOnlyTurningAzureBoardsOnOrChangingWhatItRunsRunsTheCheck(t *testing.T) 
 	azureBoards(t, acmeOff, boardsSettings{mode: "saved_query", queryURL: apiQuery, patEnv: "ADO_PAT", spec: "acme-4"})
 	if n := len(checks.ran()); n != 3 {
 		t.Fatalf("turning off ran a check: %d checks", n)
+	}
+}
+
+func workItemStates(project map[string]any) map[string]any {
+	a, _ := project["azure_boards"].(map[string]any)
+	s, _ := a["work_item_states"].(map[string]any)
+	return s
+}
+
+func TestWorkItemStatesAreTrimmedSavedAndShownWithoutTheCheck(t *testing.T) {
+	checks := &boardsChecks{}
+	srv := newBoardsCheckServer(t, checks)
+	project := func() map[string]any { return httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}) }
+	httpOK(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`"}`))
+	if got := workItemStates(project()); got["in_progress"] != "" || got["accepted"] != "" || got["done"] != "" {
+		t.Fatalf("work_item_states = %v, want all blank", got)
+	}
+
+	httpOK(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`","work_item_states":{"in_progress":" Active ","accepted":"Resolved","done":"No Such State"}}`))
+	want := map[string]any{"in_progress": "Active", "accepted": "Resolved", "done": "No Such State"}
+	if got := workItemStates(project()); !reflect.DeepEqual(got, want) {
+		t.Fatalf("work_item_states = %v, want %v", got, want)
+	}
+	if n := len(checks.ran()); n != 1 {
+		t.Fatalf("saving Work Item States ran %d checks, want the 1 of turning on", n)
+	}
+}
+
+func TestChangingWorkItemStatesResetsTheWatchersStatus(t *testing.T) {
+	srv := newServer(t)
+	project := func() map[string]any { return httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}) }
+	httpOK(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`"}`))
+	httpOK(t, srv, reportWorkItemWatcherStatus(`{"state":"error","problem":"pat_rejected","message":"Azure DevOps rejected the PAT","fix":"Renew it."}`))
+
+	httpOK(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`","work_item_states":{"done":"Closed"}}`))
+	workItemWatcher(t, project(), "not_reported", "", "")
+}
+
+func TestWorkItemStatesSinceIsSetOnTurningOnKeptOnAnEditAndClearedOnBlank(t *testing.T) {
+	srv := newServer(t)
+	since := func() map[string]string {
+		got := map[string]string{}
+		must(t, func() error {
+			return srv.Store.View(func(r store.Reader) error {
+				p, _ := r.Project("acme")
+				s := p.AzureBoards.WorkItemStates
+				for name, m := range map[string]domain.WorkItemState{"in_progress": s.InProgress, "accepted": s.Accepted, "done": s.Done} {
+					if !m.Since.IsZero() {
+						got[name] = m.Since.Format("15:04")
+					}
+				}
+				return nil
+			})
+		})
+		return got
+	}
+	set := func(states string) {
+		httpOK(t, srv, setAzureBoards(`{"on":true,"query_url":"`+webQuery+`","work_item_states":`+states+`}`))
+	}
+	start := srv.Clock.Now()
+
+	set(`{"in_progress":"Active"}`)
+	first := start.Format("15:04")
+	if got := since(); !reflect.DeepEqual(got, map[string]string{"in_progress": first}) {
+		t.Fatalf("since = %v, want in_progress at %s", got, first)
+	}
+
+	srv.Clock.Advance(time.Hour)
+	later := srv.Clock.Now().Format("15:04")
+	set(`{"in_progress":"Actve2","done":"Closed"}`)
+	if got := since(); !reflect.DeepEqual(got, map[string]string{"in_progress": first, "done": later}) {
+		t.Fatalf("since = %v, want in_progress kept at %s and done at %s", got, first, later)
+	}
+
+	set(`{"done":"Closed"}`)
+	if got := since(); !reflect.DeepEqual(got, map[string]string{"done": later}) {
+		t.Fatalf("since = %v, want only done at %s", got, later)
 	}
 }

@@ -153,6 +153,8 @@ type azureBoardsFile struct {
 	HideCodeCentral bool   `yaml:"hide_code_central,omitempty"`
 	BranchFormat    string `yaml:"branch_format,omitempty"`
 	Spec            int    `yaml:"spec,omitempty"`
+
+	WorkItemStates *workItemStatesFile `yaml:"work_item_states,omitempty"`
 }
 
 type ciFile struct {
@@ -1083,7 +1085,8 @@ func encodeAzureBoards(a domain.AzureBoards) *azureBoardsFile {
 		return nil
 	}
 	return &azureBoardsFile{On: a.On, Mode: string(a.Mode), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
-		PATEnv: a.PATEnv, NewIssuesNeedMe: a.NewIssuesNeedMe, HideCodeCentral: a.HideCodeCentral, BranchFormat: a.BranchFormat, Spec: a.Spec}
+		PATEnv: a.PATEnv, NewIssuesNeedMe: a.NewIssuesNeedMe, HideCodeCentral: a.HideCodeCentral, BranchFormat: a.BranchFormat, Spec: a.Spec,
+		WorkItemStates: encodeWorkItemStates(a.WorkItemStates)}
 }
 
 // encodeAutoAccept is the on kinds as project.yaml holds them.
@@ -1460,6 +1463,10 @@ func projectOf(pf projectFile) (domain.Project, *LoadError) {
 	if a := pf.AzureBoards; a != nil {
 		p.AzureBoards = domain.AzureBoards{On: a.On, Mode: domain.AzureBoardsMode(a.Mode), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
 			PATEnv: a.PATEnv, NewIssuesNeedMe: a.NewIssuesNeedMe, HideCodeCentral: a.HideCodeCentral, BranchFormat: a.BranchFormat, Spec: a.Spec}
+		var at string
+		if p.AzureBoards.WorkItemStates, at, err = decodeWorkItemStates(a.WorkItemStates); err != nil {
+			return fail("azure_boards.work_item_states."+at, err.Error())
+		}
 		if a.Mode != "" && !p.AzureBoards.Mode.Valid() {
 			return fail("azure_boards.mode", fmt.Sprintf("unknown Azure Boards mode %q (%s)", a.Mode, strings.Join(domain.AzureBoardsModeNames(), " or ")))
 		}

@@ -784,8 +784,12 @@ A Project's Long-lived Spec that the Incoming Issues from every listed repositor
 _Avoid_: Inbox Spec, triage Spec
 
 **Azure Boards**:
-A Project's opt-in, off by default, to link the work items an Azure DevOps query returns through an Integration. The human turns it on in the Azure Boards section of Project Options, choosing a Saved query or a WIQL filter, the environment variable holding the PAT (the Project's CI PAT variable unless it names its own), whether New issues need me, Hide Code Central, and the Branch format; the settings of the mode not chosen are kept. Turning it on, or changing what it runs while on, first runs the Work Item Watcher's check mode, and the first time it creates the Azure Boards Spec. Turning it off leaves every Link as it is. It is inbound only, and never changes a work item's State. It is the second Integration.
+A Project's opt-in, off by default, to link the work items an Azure DevOps query returns through an Integration. The human turns it on in the Azure Boards section of Project Options, choosing a Saved query or a WIQL filter, the environment variable holding the PAT (the Project's CI PAT variable unless it names its own), whether New issues need me, Hide Code Central, and the Branch format, and the Work Item States; the settings of the mode not chosen are kept. Turning it on, or changing what it runs while on, first runs the Work Item Watcher's check mode, and the first time it creates the Azure Boards Spec. Turning it off leaves every Link as it is. It changes a work item's State only as Work Item States says. It is the second Integration.
 _Avoid_: ADO integration, Azure DevOps Boards sync
+
+**Work Item States**:
+An Azure Boards setting, set by the human in the Azure Boards section of Project Options, that names the work item State Write-back sets when the linked work first reaches In Progress, Accepted or Done. Each of the three is blank by default, and a blank one sets nothing. Each State is set once, only for work that reaches the phase after the setting was set, and only the furthest when several are due at once. Azure DevOps' "State" stays theirs, capitalised as Azure DevOps writes it.
+_Avoid_: status mapping, status sync
 
 **Work item**:
 Azure DevOps' own tracked item, such as a Product Backlog Item, Bug or User Story, which is what Azure Boards links. Like issue for GitHub, it is reserved for the external item, never a Ticket.
@@ -800,7 +804,7 @@ The other way Azure Boards chooses its work items: a WIQL WHERE clause, without 
 _Avoid_: WIQL query, custom query
 
 **Work Item Watcher**:
-The kind of Watcher that polls one Project's Azure Boards query over the Azure DevOps REST API with the PAT, writing as the `integration` Actor: each work item it matches arrives as an Incoming Issue and follows the work item's edits, and one that leaves the results is out of scope, or deleted when Azure DevOps can't read it. It posts Code Central's progress back to the work items, and has a check mode as the Issue Watcher does.
+The kind of Watcher that polls one Project's Azure Boards query over the Azure DevOps REST API with the PAT, writing as the `integration` Actor: each work item it matches arrives as an Incoming Issue and follows the work item's edits, and one that leaves the results is out of scope, or deleted when Azure DevOps can't read it. It posts Code Central's progress back to the work items, also sets their States as Work Item States names, reports a refused State change as an error in its status, and has a check mode as the Issue Watcher does.
 _Avoid_: Boards poller, ADO watcher
 
 **Azure Boards Spec**:
@@ -852,7 +856,7 @@ The one `code-central:` label Code Central keeps on a linked GitHub issue to sho
 _Avoid_: Tag, state label
 
 **Write-back**:
-What Code Central writes to a linked GitHub issue or work item, worked out per Integration: its comments, such as a Requirement's grilling resolution, its Spec's body and each Ticket as it lands, its Status label, and, for a GitHub issue only, closing it; a work item's State is never changed. Each Ticket's landed comment names its commit in every Changed Repository, as `owner/repo@sha` for a GitHub-hosted Repository and as `Name@sha`, by Repository Name, otherwise; the comment listing what landed once the Spec is Finished also lists the Spec's Changed Repositories. In a single-repository Project they read as before. Code Central works out from the work's state what is due on each issue, never from events, and the Integration's Watcher makes it so, posting each comment exactly once. Only the linked issue or work item is written to, never another. Nothing is ever written from Rounds, answers, Failure Reports, Transcripts or Claims. Under Hide Code Central, an Azure Boards Write-back carries no Status label, no link back and no IDs.
+What Code Central writes to a linked GitHub issue or work item, worked out per Integration: its comments, such as a Requirement's grilling resolution, its Spec's body and each Ticket as it lands, its Status label, and, for a GitHub issue only, closing it; a work item's State is set as Work Item States names it, once per phase. Each Ticket's landed comment names its commit in every Changed Repository, as `owner/repo@sha` for a GitHub-hosted Repository and as `Name@sha`, by Repository Name, otherwise; the comment listing what landed once the Spec is Finished also lists the Spec's Changed Repositories. In a single-repository Project they read as before. Code Central works out from the work's state what is due on each issue, never from events, and the Integration's Watcher makes it so, posting each comment exactly once. Only the linked issue or work item is written to, never another. Nothing is ever written from Rounds, answers, Failure Reports, Transcripts or Claims. Under Hide Code Central, an Azure Boards Write-back carries no Status label, no link back and no IDs.
 _Avoid_: Sync, mirroring
 
 **Outbound Link**:

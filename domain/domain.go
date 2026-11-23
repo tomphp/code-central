@@ -555,7 +555,25 @@ type AzureBoards struct {
 	// makes of a work item, with {id} for the work item's ID; empty for
 	// none.
 	BranchFormat string
-	Spec         int
+	// WorkItemStates names the work item State Write-back sets as the
+	// linked work first reaches each phase.
+	WorkItemStates WorkItemStates
+	Spec           int
+}
+
+// WorkItemStates are Azure Boards' three Work Item States: the State
+// Write-back sets when the linked work first reaches In Progress, Accepted
+// and Done. A blank mapping sets nothing.
+type WorkItemStates struct {
+	InProgress, Accepted, Done WorkItemState
+}
+
+// WorkItemState is one Work Item States mapping: the State's name, and
+// Since, when the mapping was last turned on (set from blank), zero while
+// the name is blank.
+type WorkItemState struct {
+	Name  string
+	Since time.Time
 }
 
 // AzureBoardsMode is how Azure Boards picks its work items.

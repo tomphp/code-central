@@ -152,6 +152,7 @@ async function boardsWorld() {
     new_issues_need_me: true,
     hide_code_central: false,
     branch_format: "",
+    work_item_states: { in_progress: "", accepted: "", done: "" },
   });
   const issue = await s.incomingIssue("acme", on.azure_boards.spec!, "Login is broken", {
     integration: "azure-boards",
