@@ -75,20 +75,19 @@ func stateWrites(r store.Reader, key string, states domain.WorkItemStates) map[i
 		return out
 	}
 	link := &store.LinkFilter{Integration: domain.IntegrationAzureBoards}
-	for _, t := range r.FindTickets(key, store.TicketFilter{Spec: []int{in.spec}, Link: link, Parts: []store.Part{store.Moves}}) {
-		if !t.Link.Attached() || t.Link.ExternalState == domain.ExternalDeleted {
-			continue
+	due := func(number int, l domain.Link, at reached) {
+		if w := stateWrite(states, l.Written, at); w != nil && l.ExternalState != domain.ExternalDeleted {
+			out[number] = api.WorkItemWrites{Target: domain.DisplayID(key, number), Link: *linkView(l), Comments: []api.IssueComment{}, State: w}
 		}
-		if due := stateWrite(states, t.Link.Written, ticketReached(t)); due != nil {
-			out[t.Number] = api.WorkItemWrites{Target: domain.DisplayID(key, t.Number), Link: *linkView(t.Link), Comments: []api.IssueComment{}, State: due}
+	}
+	for _, t := range r.FindTickets(key, store.TicketFilter{Spec: []int{in.spec}, Link: link, Parts: []store.Part{store.Moves}}) {
+		if t.Link.Attached() {
+			due(t.Number, t.Link, ticketReached(t))
 		}
 	}
 	for _, s := range r.FindSpecs(key, store.SpecFilter{Link: link}) {
-		if !s.Link.Attached() || !s.Link.Outbound || s.Link.ExternalState == domain.ExternalDeleted {
-			continue
-		}
-		if due := stateWrite(states, s.Link.Written, specReached(specTickets(r, key, s.Number, store.Moves))); due != nil {
-			out[s.Number] = api.WorkItemWrites{Target: domain.DisplayID(key, s.Number), Link: *linkView(s.Link), Comments: []api.IssueComment{}, State: due}
+		if s.Link.Attached() && s.Link.Outbound {
+			due(s.Number, s.Link, specReached(specTickets(r, key, s.Number, store.Moves)))
 		}
 	}
 	return out
