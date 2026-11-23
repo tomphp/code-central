@@ -64,3 +64,40 @@ func TestUnderMergeAndPushWithRebaseASpecsTicketsLandAfterARestartBetweenThePush
 	h.WantState(a, domain.Done)
 	h.WantState(b, domain.Done)
 }
+
+func TestUnderPullRequestWithRebaseASpecsTicketsLandOnceItsRebasedPullRequestMergesAndCIPasses(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t, factorytest.RealGit())
+	remote := h.AddRemote("origin")
+	rebasePullRequestOn(h, "origin", true)
+	trackCI(t, h)
+	h.Publish(remote, h.Tip("main"), "main")
+	h.MakeRequirement()
+	a, _ := accepted(h, "First", "one.txt", "1\n")
+	b, _ := accepted(h, "Second", "two.txt", "2\n")
+	branch := "spec/" + h.SpecID()
+	release := holdTicketsStage(t, h)
+	r := h.Start()
+	r.WantOutput(b + ": replayed onto " + branch)
+
+	h.Publish(remote, h.CommitOn("main", "base.txt", "base\n"), "main")
+	release()
+	r.Poll()
+	r.WantOutput(h.SpecID() + ": pushed " + branch + " to origin")
+	pushed := h.Tip(branch)
+	for _, id := range []string{a, b} {
+		tk := h.Ticket(id)
+		if !descendsFrom(h, pushed, h.Tip(id)) || tk.SpecMerge == nil || !descendsFrom(h, pushed, tk.SpecMerge.Commit) {
+			t.Errorf("%s's branch %s and Spec merge %+v aren't in the rebased Spec Branch %s", id, h.Tip(id), tk.SpecMerge, pushed)
+		}
+	}
+
+	squash := h.CommitOn("squash", "one.txt", "1\n")
+	h.PushByHand(remote, "squash", "main")
+	reportPullRequest(t, h, branch, squash)
+	reportRun(t, h, 1, a, squash, domain.CICompleted, domain.CISuccess)
+	reportRun(t, h, 2, b, squash, domain.CICompleted, domain.CISuccess)
+	r.Poll()
+	h.WantState(a, domain.Done)
+	h.WantState(b, domain.Done)
+}
