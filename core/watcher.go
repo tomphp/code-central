@@ -57,7 +57,7 @@ var watcherKinds = map[api.WatcherKind]watcherKind{
 			api.ProblemPATScope, api.ProblemCheckFailed}, watches: "pull requests"},
 	api.WatcherWorkItems: {on: func(p domain.Project) bool { return p.AzureBoards.On },
 		problems: []api.WatcherProblem{api.ProblemPATMissing, api.ProblemPATRejected, api.ProblemProjectUnreadable, api.ProblemPATScope, api.ProblemQueryUnusable,
-			api.ProblemTooManyWorkItems, api.ProblemCheckFailed}, watches: "Azure Boards", watched: func(domain.Project) []string { return nil }},
+			api.ProblemTooManyWorkItems, api.ProblemStateRefused, api.ProblemCheckFailed}, watches: "Azure Boards", watched: func(domain.Project) []string { return nil }},
 }
 
 // watcherViewsEqual reports whether v and w say the same, Since aside.

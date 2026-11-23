@@ -5,6 +5,7 @@ import type {
   AzureBoardsChange,
   AzureBoardsMode,
   ProjectRow,
+  WorkItemStates,
 } from "../api/types";
 import { Button } from "../controls/Button";
 import { Field } from "../controls/Field";
@@ -53,8 +54,15 @@ function azureDraft(project: ProjectRow): AzureBoardsChange {
     new_issues_need_me: a.new_issues_need_me,
     hide_code_central: a.hide_code_central,
     branch_format: a.branch_format,
+    work_item_states: a.work_item_states,
   };
 }
+
+const STATES: { key: keyof WorkItemStates; label: string }[] = [
+  { key: "in_progress", label: "In Progress" },
+  { key: "accepted", label: "Accepted" },
+  { key: "done", label: "Done" },
+];
 
 // AzureBoardsSection is the Project's Azure Boards settings (Spec
 // code-central-894): the switch, the mode (a Saved query's URL, or a WIQL
@@ -75,10 +83,14 @@ export function AzureBoardsSection({ project }: { project: ProjectRow }) {
   const id = useId();
   const { on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central, branch_format } =
     stored;
+  const { in_progress, accepted, done } = stored.work_item_states;
   useEffect(
     () =>
-      setDraft({ on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central, branch_format }),
-    [on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central, branch_format],
+      setDraft({
+        on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central, branch_format,
+        work_item_states: { in_progress, accepted, done },
+      }),
+    [on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central, branch_format, in_progress, accepted, done],
   );
 
   const edit = (patch: Partial<AzureBoardsChange>) => {
@@ -106,7 +118,8 @@ export function AzureBoardsSection({ project }: { project: ProjectRow }) {
     draft.pat_env.trim() !== pat_env ||
     draft.new_issues_need_me !== new_issues_need_me ||
     draft.hide_code_central !== hide_code_central ||
-    draft.branch_format.trim() !== branch_format;
+    draft.branch_format.trim() !== branch_format ||
+    STATES.some(({ key }) => draft.work_item_states[key].trim() !== stored.work_item_states[key]);
   const describedBy = (field: string, hint: string) =>
     error?.field === field ? `${hint} ${id}-error` : hint;
   const invalid = (field: string) => error?.field === field || undefined;
@@ -272,6 +285,25 @@ export function AzureBoardsSection({ project }: { project: ProjectRow }) {
             aria-invalid={invalid("branch_format")}
           />
         </Field>
+        <fieldset>
+          <legend>Work Item States</legend>
+          <p className="project-options-hint" id={`${id}-states`}>
+            The State Write-back sets on a work item when its work first reaches
+            the phase. Each is set once, only for work that reaches the phase
+            after the field is filled, and only the furthest when several are
+            due.
+          </p>
+          {STATES.map(({ key, label }) => (
+            <Field key={key} label={label}>
+              <input
+                value={draft.work_item_states[key]}
+                placeholder="Leave blank to keep the State"
+                onChange={(e) => edit({ work_item_states: { ...draft.work_item_states, [key]: e.target.value } })}
+                aria-describedby={`${id}-states`}
+              />
+            </Field>
+          ))}
+        </fieldset>
         {azure.spec && <p className="muted">Incoming Issues arrive on {azure.spec}.</p>}
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">

@@ -73,6 +73,29 @@ describe("the Azure Boards section", () => {
     expect((await w.api.listProjects())[0].azure_boards).toMatchObject({ on: false, branch_format: "feat/{id}" });
   });
 
+  it("shows a Work Item States group of three blank fields, and saves and shows them back", async () => {
+    const { w } = await fresh();
+    await renderApp(w);
+
+    const states = within(boards()).getByRole("group", { name: "Work Item States" });
+    for (const name of ["In Progress", "Accepted", "Done"]) {
+      const input = within(states).getByRole("textbox", { name });
+      expect(input).toHaveValue("");
+      expect(input).toHaveAttribute("placeholder", "Leave blank to keep the State");
+    }
+    expect(states).toHaveTextContent("only the furthest when several are due");
+
+    await userEvent.type(field("In Progress"), " Active ");
+    await userEvent.type(field("Done"), "Closed");
+    await save(w);
+
+    expect(within(boards()).getByRole("status")).toHaveTextContent("Saved");
+    expect(field("In Progress")).toHaveValue("Active");
+    expect(field("Accepted")).toHaveValue("");
+    expect(field("Done")).toHaveValue("Closed");
+    expect((await w.api.listProjects())[0].azure_boards.work_item_states).toEqual({ in_progress: "Active", accepted: "", done: "Closed" });
+  });
+
   it("shows a refused Branch format in place, against its field, and keeps the format as it was", async () => {
     const { w } = await fresh();
     await renderApp(w);
@@ -164,7 +187,7 @@ describe("the Azure Boards section", () => {
   it("shows the Work Item Watcher's status while on, live", async () => {
     const { w, s } = await fresh();
     await renderApp(w);
-    await w.api.setAzureBoards("acme", { on: true, mode: "saved_query", query_url: QUERY, project_url: "", where: "", pat_env: "", new_issues_need_me: false, hide_code_central: false, branch_format: "" });
+    await w.api.setAzureBoards("acme", { on: true, mode: "saved_query", query_url: QUERY, project_url: "", where: "", pat_env: "", new_issues_need_me: false, hide_code_central: false, branch_format: "", work_item_states: { in_progress: "", accepted: "", done: "" } });
     await settle(w);
     expect(watcher()).toHaveTextContent("Work Item Watcher: Starting; it hasn't reported yet.");
 
@@ -176,6 +199,15 @@ describe("the Azure Boards section", () => {
     });
     expect(watcher()).toHaveTextContent("Work Item Watcher: Error. The saved query is a tree query.");
     expect(watcher()).toHaveTextContent("Save the query as a flat list.");
+
+    await s.reportWorkItemWatcher("acme", {
+      state: "error",
+      problem: "state_refused",
+      message: "Azure DevOps refused moving work item 1, for acme-3, to Committed: TF401320: Rule Error.",
+      fix: "Correct or blank In Progress in Work Item States.",
+    });
+    expect(watcher()).toHaveTextContent("Work Item Watcher: Error. Azure DevOps refused moving work item 1, for acme-3, to Committed: TF401320: Rule Error.");
+    expect(watcher()).toHaveTextContent("Correct or blank In Progress in Work Item States.");
 
     await s.reportWorkItemWatcher("acme", { state: "watching" });
     expect(watcher()).toHaveTextContent(`Work Item Watcher: Watching ${QUERY}.`);

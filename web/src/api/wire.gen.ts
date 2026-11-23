@@ -135,6 +135,7 @@ export const WATCHER_PROBLEMS = [
   "pat_scope",
   "query_unusable",
   "too_many_work_items",
+  "state_refused",
   "check_failed",
   "crashed",
 ] as const;
@@ -1636,7 +1637,7 @@ export interface ToRequirementInput {
 
 // SetAzureBoardsInput is the human's set_azure_boards(on, mode, query_url,
 // project_url, where, pat_env, new_issues_need_me, hide_code_central,
-// branch_format, full?).
+// branch_format, work_item_states, full?).
 export interface SetAzureBoardsInput {
   on?: boolean;
   // Mode is saved_query when left out.
@@ -1658,6 +1659,10 @@ export interface SetAzureBoardsInput {
   // makes of a work item, with {id} for its ID; empty for none. It is
   // no part of the Azure Boards check.
   branch_format?: string;
+  // WorkItemStates are the work item States Write-back sets when the
+  // linked work first reaches In Progress, Accepted and Done; a blank
+  // one sets nothing. They are no part of the Azure Boards check.
+  work_item_states?: WorkItemStates;
   // Full asks for the Project in place of the Acknowledgement.
   full?: boolean;
 }
@@ -1823,6 +1828,9 @@ export interface AzureBoardsView {
   // makes of a work item, with {id} for its ID, such as feat/{id};
   // empty for none.
   branch_format: string;
+  // WorkItemStates are the work item States Write-back sets; a blank
+  // one sets nothing.
+  work_item_states: WorkItemStates;
   // Spec is the Azure Boards Spec's ID, left out until Azure Boards is
   // first turned on.
   spec?: string;
@@ -2494,6 +2502,13 @@ export interface RepositoryCI {
 export interface ImportPayload {
   specs: ImportSpec[];
   tickets: ImportTicket[];
+}
+
+// WorkItemStates are the State names of Azure Boards' Work Item States.
+export interface WorkItemStates {
+  in_progress: string;
+  accepted: string;
+  done: string;
 }
 
 // ModelRowView is one Models row's model and effort, each empty when the

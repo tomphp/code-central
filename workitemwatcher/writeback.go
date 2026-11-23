@@ -1,7 +1,7 @@
 // Write-backs: each poll, the Work Item Watcher makes each linked work
 // item what get_work_item_watch says it should be, writing each comment
-// once, then the status tag. It changes only what differs, and never a
-// work item's State, which is the human's to move.
+// once, then the status tag, then the State Work Item States maps, once
+// for each phase. It changes only what differs.
 
 package workitemwatcher
 
@@ -18,12 +18,12 @@ import (
 	"github.com/tomoram/code-central/ratelimit"
 )
 
-// writeBack carries out each of watch's due writes. It returns Azure
-// DevOps' rate limit, if it refused a call for it, or an error wrapping
-// azdo.ErrMissingScope when the PAT can't write work items; anything else
-// that goes wrong for a work item is logged, and its writes are tried
-// again on the next poll.
-func (cfg Config) writeBack(ctx context.Context, q queryRun, watch api.WorkItemWatch) error {
+// writeBack carries out each of watch's due writes, returning the States
+// Azure DevOps refused, or stops at its rate limit or an error wrapping
+// azdo.ErrMissingScope, and returns that. Anything else that goes wrong
+// for a work item is logged; what failed is tried again on the next poll.
+func (cfg Config) writeBack(ctx context.Context, q queryRun, watch api.WorkItemWatch) ([]*refusedState, error) {
+	var refused []*refusedState
 	for _, w := range watch.Writes {
 		id, ours := workItemID(q.org, w.Link.ID)
 		if !ours {
@@ -31,43 +31,82 @@ func (cfg Config) writeBack(ctx context.Context, q queryRun, watch api.WorkItemW
 		}
 		err := cfg.writeItem(ctx, q.c, id, w)
 		var limit *ratelimit.Error
+		var refusal *refusedState
 		switch {
 		case ctx.Err() != nil:
-			return nil
+			return nil, nil
 		case errors.As(err, &limit), errors.Is(err, azdo.ErrMissingScope):
-			return err
+			return nil, err
+		case errors.As(err, &refusal):
+			refused = append(refused, refusal)
 		case err != nil:
 			cfg.logf("writing to %s for %s: %v", w.Link.ID, w.Target, err)
 		}
 	}
-	return nil
+	return refused, nil
 }
 
 // writeItem carries out w's due writes on work item id: its comments,
-// then its tag.
+// then its tag, then its State.
 func (cfg Config) writeItem(ctx context.Context, c *azdo.Client, id int, w api.WorkItemWrites) error {
 	item, err := c.WorkItemToWrite(ctx, id)
 	if err != nil {
 		return err
 	}
-	posted, err := cfg.writeComments(ctx, c, item, w)
+	edited, err := cfg.writeComments(ctx, c, item, w)
 	if err != nil {
 		return err
 	}
-	if w.Tag == "" {
-		return nil
-	}
-	if posted {
-		// Posting a comment is an edit: the revision read is stale.
-		if item, err = c.WorkItemToWrite(ctx, id); err != nil {
+	if w.Tag != "" {
+		if item, err = reread(ctx, c, item, edited); err != nil {
+			return err
+		}
+		if edited, err = writeTag(ctx, c, item, w.Tag); err != nil {
 			return err
 		}
 	}
-	tags, changed := withStatusTag(item.Tags(), w.Tag)
-	if !changed {
+	if w.State == nil {
 		return nil
 	}
-	return c.SetTags(ctx, id, item.Rev, tags)
+	if item, err = reread(ctx, c, item, edited); err != nil {
+		return err
+	}
+	return cfg.writeState(ctx, c, item, w)
+}
+
+// reread is item read again when it was edited since it was read, as each
+// edit makes its revision stale.
+func reread(ctx context.Context, c *azdo.Client, item azdo.WorkItem, edited bool) (azdo.WorkItem, error) {
+	if !edited {
+		return item, nil
+	}
+	return c.WorkItemToWrite(ctx, item.ID)
+}
+
+// writeTag makes tag item's status tag, reporting whether it changed it.
+func writeTag(ctx context.Context, c *azdo.Client, item azdo.WorkItem, tag string) (edited bool, err error) {
+	tags, changed := withStatusTag(item.Tags(), tag)
+	if !changed {
+		return false, nil
+	}
+	return true, c.SetTags(ctx, item.ID, item.Rev, tags)
+}
+
+// writeState moves item to w's State, unless it is in it already, as
+// compared ignoring case, then reports its key and its nearer phases'
+// keys written.
+func (cfg Config) writeState(ctx context.Context, c *azdo.Client, item azdo.WorkItem, w api.WorkItemWrites) error {
+	if !strings.EqualFold(item.Fields.State, w.State.Name) {
+		if err := c.SetState(ctx, item.ID, item.Rev, w.State.Name); err != nil {
+			return fmt.Errorf("setting the State %s: %w", w.State.Name, asRefusedState(err, item.ID, w))
+		}
+	}
+	for _, key := range append([]string{w.State.Key}, w.State.Nearer...) {
+		if _, err := cfg.Client.ReportIssueWritten(ctx, cfg.Project, api.ReportIssueWrittenInput{Target: api.Ref(w.Target), Key: key}); err != nil {
+			return fmt.Errorf("report_issue_written %s: %w", key, err)
+		}
+	}
+	return nil
 }
 
 // writeComments posts each of w's comments due on item, unless its

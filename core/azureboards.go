@@ -21,7 +21,8 @@ import (
 func azureBoardsView(p domain.Project, watcher api.WatcherView) api.AzureBoardsView {
 	a := p.AzureBoards
 	v := api.AzureBoardsView{On: a.On, Mode: azureBoardsModeOf(a), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
-		PATEnv: boardsPATEnvOf(p.CI, a), NewIssuesNeedMe: a.NewIssuesNeedMe, HideCodeCentral: a.HideCodeCentral, BranchFormat: a.BranchFormat, Watcher: watcher}
+		PATEnv: boardsPATEnvOf(p.CI, a), NewIssuesNeedMe: a.NewIssuesNeedMe, HideCodeCentral: a.HideCodeCentral, BranchFormat: a.BranchFormat,
+		WorkItemStates: workItemStatesView(a.WorkItemStates), Watcher: watcher}
 	if a.Spec != 0 {
 		v.Spec = domain.DisplayID(p.Key, a.Spec)
 	}
@@ -42,10 +43,10 @@ func boardsPATEnvOf(ci domain.CI, a domain.AzureBoards) string {
 
 // SetAzureBoards is the human's set_azure_boards: Azure Boards on or off,
 // with its Mode and each Mode's settings, the PAT environment variable,
-// New issues need me, Hide Code Central and the Branch format. Turning it
-// on needs the chosen Mode's settings, and turning it on, or changing
-// what it runs while on, passes the check. A Branch format is checked
-// whether on or off.
+// New issues need me, Hide Code Central, the Branch format and the Work
+// Item States, which no check runs for. Turning it on needs the chosen
+// Mode's settings, and turning it on, or changing what it runs while on,
+// passes the check. A Branch format is checked whether on or off.
 // The settings of the Mode not chosen are kept. The first time it is
 // turned on, it creates the Azure Boards Spec, written before the
 // settings so they never name a missing Spec. A change of the chosen
@@ -57,7 +58,7 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in api.SetAzureBo
 	}
 	a := domain.AzureBoards{On: in.On, Mode: in.Mode, QueryURL: strings.TrimSpace(in.QueryURL),
 		ProjectURL: strings.TrimSpace(in.ProjectURL), Where: strings.TrimSpace(in.Where), PATEnv: strings.TrimSpace(in.PATEnv), NewIssuesNeedMe: in.NewIssuesNeedMe, HideCodeCentral: in.HideCodeCentral,
-		BranchFormat: strings.TrimSpace(in.BranchFormat)}
+		BranchFormat: strings.TrimSpace(in.BranchFormat), WorkItemStates: namedWorkItemStates(in.WorkItemStates)}
 	if err := checkAzureBoardsSettings(&a); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
@@ -94,6 +95,7 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in api.SetAzureBo
 		p, _ = w.Project(key)
 		before, was = c.projectView(p), p.AzureBoards
 		a.Spec = cmp.Or(was.Spec, created)
+		a.WorkItemStates = withSince(a.WorkItemStates, was.WorkItemStates, c.now())
 		// Naming the variable the CI settings name keeps following them.
 		if a.PATEnv == patEnvOf(p.CI) {
 			a.PATEnv = ""
@@ -103,7 +105,7 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in api.SetAzureBo
 			return nil
 		}
 		// What the Work Item Watcher said was about the old settings.
-		if !a.On || azureBoardsCheckInput(p.CI, a) != azureBoardsCheckInput(p.CI, was) {
+		if !a.On || azureBoardsCheckInput(p.CI, a) != azureBoardsCheckInput(p.CI, was) || a.WorkItemStates != was.WorkItemStates {
 			resetWatcher = true
 		}
 		return w.PutProject(p)

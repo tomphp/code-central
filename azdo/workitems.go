@@ -159,10 +159,10 @@ func (c *Client) WorkItem(ctx context.Context, id int) (WorkItem, error) {
 }
 
 // WorkItemToWrite reads what a write to work item id needs: its project,
-// its revision and its tags. It is WorkItem's read of the work item,
-// without its text.
+// its revision, its tags and its State. It is WorkItem's read of the
+// work item, without its text.
 func (c *Client) WorkItemToWrite(ctx context.Context, id int) (WorkItem, error) {
-	return c.workItemWith(ctx, id, []string{FieldTeamProject, FieldRev, FieldTags})
+	return c.workItemWith(ctx, id, []string{FieldTeamProject, FieldRev, FieldTags, FieldState})
 }
 
 func (c *Client) workItemWith(ctx context.Context, id int, fields []string) (WorkItem, error) {
@@ -255,9 +255,22 @@ func (c *Client) commentsURL(project string, id int) string {
 // a JSON Patch that tests /rev first, so it changes nothing, and is
 // refused (ErrRefused), if the work item was edited since it was read.
 func (c *Client) SetTags(ctx context.Context, id, rev int, tags []string) error {
+	return c.setField(ctx, id, rev, FieldTags, strings.Join(tags, "; "))
+}
+
+// SetState moves work item id, which is at revision rev, to state, as
+// SetTags sets its tags. A State the work item can't move to, unknown or
+// barred by a workflow rule, is refused with a 400 RefusedError.
+func (c *Client) SetState(ctx context.Context, id, rev int, state string) error {
+	return c.setField(ctx, id, rev, FieldState, state)
+}
+
+// setField sets field of work item id, at revision rev, to value by a
+// JSON Patch that tests /rev first.
+func (c *Client) setField(ctx context.Context, id, rev int, field, value string) error {
 	patch := []map[string]any{
 		{"op": "test", "path": "/rev", "value": rev},
-		{"op": "add", "path": "/fields/" + FieldTags, "value": strings.Join(tags, "; ")},
+		{"op": "add", "path": "/fields/" + field, "value": value},
 	}
 	return c.doAs(ctx, http.MethodPatch, c.collectionURL()+"/_apis/wit/workitems/"+strconv.Itoa(id), nil, "application/json-patch+json", patch, nil)
 }

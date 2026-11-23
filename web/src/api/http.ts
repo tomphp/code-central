@@ -117,8 +117,8 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     setGitHubIssues: (project, { on, repositories, label, new_issues_need_me }) =>
       operate("set_github_issues", project, { on, repositories, label, new_issues_need_me, full: true }),
     // Only the settings themselves: a Project's read adds spec.
-    setAzureBoards: (project, { on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central, branch_format }) =>
-      operate("set_azure_boards", project, { on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central, branch_format, full: true }),
+    setAzureBoards: (project, { on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central, branch_format, work_item_states }) =>
+      operate("set_azure_boards", project, { on, mode, query_url, project_url, where, pat_env, new_issues_need_me, hide_code_central, branch_format, work_item_states, full: true }),
     setModels: (project, models) =>
       operate("set_models", project, { default: models.default, chat: models.chat ?? { model: "", effort: "" }, kinds: models.kinds, full: true }),
     setSubagentExploration: (project, on) => operate("set_subagent_exploration", project, { on, full: true }),

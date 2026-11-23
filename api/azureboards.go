@@ -31,6 +31,9 @@ type AzureBoardsView struct {
 	// makes of a work item, with {id} for its ID, such as feat/{id};
 	// empty for none.
 	BranchFormat string `json:"branch_format"`
+	// WorkItemStates are the work item States Write-back sets; a blank
+	// one sets nothing.
+	WorkItemStates WorkItemStates `json:"work_item_states"`
 	// Spec is the Azure Boards Spec's ID, left out until Azure Boards is
 	// first turned on.
 	Spec string `json:"spec,omitempty"`
@@ -40,7 +43,7 @@ type AzureBoardsView struct {
 
 // SetAzureBoardsInput is the human's set_azure_boards(on, mode, query_url,
 // project_url, where, pat_env, new_issues_need_me, hide_code_central,
-// branch_format, full?).
+// branch_format, work_item_states, full?).
 type SetAzureBoardsInput struct {
 	On bool `json:"on"`
 	// Mode is saved_query when left out.
@@ -62,8 +65,19 @@ type SetAzureBoardsInput struct {
 	// makes of a work item, with {id} for its ID; empty for none. It is
 	// no part of the Azure Boards check.
 	BranchFormat string `json:"branch_format"`
+	// WorkItemStates are the work item States Write-back sets when the
+	// linked work first reaches In Progress, Accepted and Done; a blank
+	// one sets nothing. They are no part of the Azure Boards check.
+	WorkItemStates WorkItemStates `json:"work_item_states"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
+}
+
+// WorkItemStates are the State names of Azure Boards' Work Item States.
+type WorkItemStates struct {
+	InProgress string `json:"in_progress"`
+	Accepted   string `json:"accepted"`
+	Done       string `json:"done"`
 }
 
 // AzureBoardsCheckInput is what the Azure Boards check checks: that the

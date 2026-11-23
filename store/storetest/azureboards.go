@@ -1,9 +1,10 @@
 package storetest
 
 import (
-	"github.com/tomoram/code-central/domain"
 	"testing"
+	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -30,7 +31,11 @@ func runAzureBoards(t *testing.T, f Factory) {
 	t.Run("a project's azure boards settings read back after they are written", func(t *testing.T) {
 		s := f.New(t)
 		want := domain.AzureBoards{On: true, Mode: domain.AzureBoardsSavedQuery, QueryURL: "https://dev.azure.com/contoso/web/_queries/query/6b4a0c1e-9f1d-4a51-8f43-2a7d3c1b9e10",
-			ProjectURL: "https://dev.azure.com/contoso/api", Where: "[System.State] = 'Approved'", PATEnv: "BOARDS_PAT", NewIssuesNeedMe: true, HideCodeCentral: true, BranchFormat: "feat/{id}", Spec: 4}
+			ProjectURL: "https://dev.azure.com/contoso/api", Where: "[System.State] = 'Approved'", PATEnv: "BOARDS_PAT", NewIssuesNeedMe: true, HideCodeCentral: true, BranchFormat: "feat/{id}", Spec: 4,
+			WorkItemStates: domain.WorkItemStates{
+				InProgress: domain.WorkItemState{Name: "Active", Since: t0.Add(time.Hour)},
+				Done:       domain.WorkItemState{Name: "Closed", Since: t0.Add(2 * time.Hour)},
+			}}
 		put(t, s, func(w store.Writer) error {
 			return w.PutProject(domain.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed", AzureBoards: want})
 		})

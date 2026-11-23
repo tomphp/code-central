@@ -158,6 +158,7 @@ export function projectSettingsContract(driver: () => Driver) {
     await d.createProject("acme", "Acme");
     const off = {
       on: false, mode: "saved_query" as const, query_url: "", project_url: "", where: "", pat_env: "ADO_PAT", new_issues_need_me: false, hide_code_central: false, branch_format: "",
+      work_item_states: { in_progress: "", accepted: "", done: "" },
       watcher: { state: "not_reported" as const },
     };
     expect((await d.api.listProjects())[0].azure_boards).toEqual(off);

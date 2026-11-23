@@ -40,6 +40,7 @@ import {
   type TranscriptView,
   type WatcherState,
   type WatcherView,
+  type WorkItemStates,
 } from "./wire.gen";
 
 export * from "./wire.gen";
@@ -234,6 +235,7 @@ export interface AzureBoardsChange {
   // branch_format names a Requirement's Spec Branch from its work item,
   // with {id} for the work item's ID; "" for none.
   branch_format: string;
+  work_item_states: WorkItemStates;
 }
 
 // ---- Models and Factories ----
