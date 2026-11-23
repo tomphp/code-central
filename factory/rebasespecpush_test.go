@@ -8,11 +8,8 @@ import (
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
-// Under Merge + Push with Rebase and Land per Spec, a Spec Branch that
-// doesn't descend from the base is rebased before the Spec merges (Spec
-// code-central-1196): each Ticket's replayed ref, fork ref and branch move
-// with it, so the Ticket's work is in the pushed base and CI passing on it
-// lands the Ticket.
+// Spec code-central-1196: the Spec Branch's rebase moves each Ticket's work
+// with it. These use real git: the Fake doesn't model a rebase.
 
 // rebasedSpecPushed is a Spec whose two Tickets were replayed onto its Spec
 // Branch before the base moved on, then landed by merge and push, with CI

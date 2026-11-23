@@ -713,23 +713,27 @@ func (l *lander) moveTicketToRewrite(ctx context.Context, tk api.TicketView, pl 
 	replayed, atReplayed := replayedTip(r, tk.ID, branch)
 	for _, ref := range []string{replayedRef(tk.ID), forkRef(tk.ID)} {
 		old, err := r.git.Commit(ref)
-		made := pl.rewritten[old]
-		if err != nil || made == "" {
-			continue
-		}
-		if err := r.git.UpdateRef(ref, made, old); err != nil {
-			l.printf("warning: %s: can't move %s to its rebased commit%s: %v", tk.ID, ref, r.where(), err)
+		if err == nil && pl.rewritten[old] != "" {
+			l.moveToRewrite(tk, r, ref, old, pl.rewritten[old])
 		}
 	}
 	made := pl.rewritten[replayed]
 	if !atReplayed || made == "" {
 		return
 	}
-	if err := r.git.UpdateRef("refs/heads/"+branch, made, replayed); err != nil {
-		l.printf("warning: %s: can't move %s to its rebased commit%s: %v", tk.ID, branch, r.where(), err)
-		return
+	if l.moveToRewrite(tk, r, "refs/heads/"+branch, replayed, made) {
+		l.reportSpecMerge(ctx, tk, tk.Spec.Branch, []specBranchMerge{{r: r, tip: made, replayed: true}})
 	}
-	l.reportSpecMerge(ctx, tk, tk.Spec.Branch, []specBranchMerge{{r: r, tip: made, replayed: true}})
+}
+
+// moveToRewrite moves ref in r from old to made, its rebased commit, and
+// reports whether it moved.
+func (l *lander) moveToRewrite(tk api.TicketView, r *repository, ref, old, made string) bool {
+	if err := r.git.UpdateRef(ref, made, old); err != nil {
+		l.printf("warning: %s: can't move %s to its rebased commit%s: %v", tk.ID, ref, r.where(), err)
+		return false
+	}
+	return true
 }
 
 // landSpecIn lands spec's Tickets in pl's Repository as pl says, making
