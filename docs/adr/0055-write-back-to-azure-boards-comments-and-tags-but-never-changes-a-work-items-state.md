@@ -1,5 +1,7 @@
 # Write-back to Azure Boards comments and tags but never changes a work item's State
 
+> **Superseded in part** by [ADR 0075](0075-write-back-sets-a-work-items-state-once-per-phase-when-the-human-maps-one.md): Write-back now sets a work item's State once per phase when the human maps one. Comments and tags are as written here.
+
 On a GitHub issue, Write-back posts comments, keeps one Status label, and closes the issue after Won't fix or once its Spec is Finished. A GitHub issue has two states, open and closed. A work item's States, and which transitions between them are allowed, vary by process and by organisation, and a transition can fail on the organisation's own workflow rules.
 
 So Write-back to Azure Boards posts the same comments to the work item's Discussion, each exactly once, and keeps one `code-central:` tag of the Status label's names (`draft`, `requirement`, `building`, `done`, `wont-fix`), replacing only `code-central:` tags. It never changes the work item's State: after Won't fix, or once the work is done, the human moves the State in Azure DevOps, and Won't fix says so where it is offered.
