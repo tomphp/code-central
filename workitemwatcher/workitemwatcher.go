@@ -118,7 +118,7 @@ func (cfg Config) poll(ctx context.Context) (reachable bool, limit *ratelimit.Er
 	case errors.As(err, &limit):
 		return true, limit
 	case r.Problem != "":
-		cfg.report(ctx, api.ReportWatcherStatusInput{State: api.WatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
+		cfg.reportProblem(ctx, r)
 		return false, nil
 	}
 	limit = cfg.mirror(ctx, watch, q)
@@ -135,12 +135,10 @@ func (cfg Config) poll(ctx context.Context) (reachable bool, limit *ratelimit.Er
 		return true, limit
 	case err != nil:
 		// Only the PAT's scope stops write-back this way.
-		r := writeScopeProblem(watch, q)
-		cfg.report(ctx, api.ReportWatcherStatusInput{State: api.WatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
+		cfg.reportProblem(ctx, writeScopeProblem(watch, q))
 		return false, nil
 	case len(refused) > 0:
-		r := stateRefusedProblem(refused)
-		cfg.report(ctx, api.ReportWatcherStatusInput{State: api.WatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
+		cfg.reportProblem(ctx, stateRefusedProblem(refused))
 		return false, nil
 	}
 	return true, nil
@@ -156,6 +154,11 @@ func (cfg Config) report(ctx context.Context, in api.ReportWatcherStatusInput) {
 	if _, err := cfg.Client.ReportWorkItemWatcherStatus(ctx, cfg.Project, in); err != nil && ctx.Err() == nil {
 		cfg.logf("report_work_item_watcher_status: %v", err)
 	}
+}
+
+// reportProblem reports the Work Item Watcher in error with r.
+func (cfg Config) reportProblem(ctx context.Context, r api.WatcherCheckResult) {
+	cfg.report(ctx, api.ReportWatcherStatusInput{State: api.WatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
 }
 
 func (cfg Config) logf(format string, args ...any) {

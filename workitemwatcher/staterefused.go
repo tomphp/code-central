@@ -30,6 +30,10 @@ func (r *refusedState) Error() string {
 	return fmt.Sprintf("Azure DevOps refused moving work item %d, for %s, to %s: %s", r.ID, r.Target, r.State, r.Reason)
 }
 
+// sentence is r ending in one full stop, whether or not Azure DevOps'
+// reason ends in one.
+func (r *refusedState) sentence() string { return strings.TrimSuffix(r.Error(), ".") + "." }
+
 // asRefusedState is err as a refusedState when it is Azure DevOps' 400
 // refusal of w's State on work item id, else err.
 func asRefusedState(err error, id int, w api.WorkItemWrites) error {
@@ -51,7 +55,7 @@ var phaseNames = map[string]string{
 func stateRefusedProblem(refused []*refusedState) api.WatcherCheckResult {
 	var reasons, phases []string
 	for _, r := range refused {
-		reasons = append(reasons, strings.TrimSuffix(r.Error(), ".")+".")
+		reasons = append(reasons, r.sentence())
 		if name := phaseNames[r.Key]; !slices.Contains(phases, name) {
 			phases = append(phases, name)
 		}

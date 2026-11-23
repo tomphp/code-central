@@ -19,12 +19,11 @@ import (
 )
 
 // writeBack carries out each of watch's due writes, returning the States
-// Azure DevOps refused. It stops at Azure DevOps' rate limit, if it
-// refused a call for it, or an error wrapping azdo.ErrMissingScope when
-// the PAT can't write work items, and returns that; anything else that
-// goes wrong for a work item is logged, and its writes are tried again on
-// the next poll, as refused States are.
-func (cfg Config) writeBack(ctx context.Context, q queryRun, watch api.WorkItemWatch) (refused []*refusedState, err error) {
+// Azure DevOps refused, or stops at its rate limit or an error wrapping
+// azdo.ErrMissingScope, and returns that. Anything else that goes wrong
+// for a work item is logged; what failed is tried again on the next poll.
+func (cfg Config) writeBack(ctx context.Context, q queryRun, watch api.WorkItemWatch) ([]*refusedState, error) {
+	var refused []*refusedState
 	for _, w := range watch.Writes {
 		id, ours := workItemID(q.org, w.Link.ID)
 		if !ours {
