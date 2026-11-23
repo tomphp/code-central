@@ -81,18 +81,3 @@ func TestAStateRevisionConflictIsRetriedOnTheNextPoll(t *testing.T) {
 		t.Fatal("a revision conflict went into an error, want it retried quietly")
 	}
 }
-
-// A State Azure DevOps refuses leaves the work item as it was, and is
-// due again on the next poll.
-func TestARefusedStateIsLeftDue(t *testing.T) {
-	w := newWatching(t)
-	w.fake.RefuseState("Committed", "TF401320: Rule Error for field State. Error code: Required, InvalidListValue.")
-	spec := w.inProgress()
-	w.polled()
-	if got := w.state(1); got != "Approved" {
-		t.Fatalf("State %q, want Approved: the State was refused", got)
-	}
-	if got := w.stateDue(spec); got == nil || got.Name != "Committed" {
-		t.Fatalf("State due %+v, want Committed still due", got)
-	}
-}

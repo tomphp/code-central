@@ -18,12 +18,13 @@ import (
 	"github.com/tomoram/code-central/ratelimit"
 )
 
-// writeBack carries out each of watch's due writes. It returns Azure
-// DevOps' rate limit, if it refused a call for it, or an error wrapping
-// azdo.ErrMissingScope when the PAT can't write work items; anything else
-// that goes wrong for a work item is logged, and its writes are tried
-// again on the next poll.
-func (cfg Config) writeBack(ctx context.Context, q queryRun, watch api.WorkItemWatch) error {
+// writeBack carries out each of watch's due writes, returning the States
+// Azure DevOps refused. It stops at Azure DevOps' rate limit, if it
+// refused a call for it, or an error wrapping azdo.ErrMissingScope when
+// the PAT can't write work items, and returns that; anything else that
+// goes wrong for a work item is logged, and its writes are tried again on
+// the next poll, as refused States are.
+func (cfg Config) writeBack(ctx context.Context, q queryRun, watch api.WorkItemWatch) (refused []*refusedState, err error) {
 	for _, w := range watch.Writes {
 		id, ours := workItemID(q.org, w.Link.ID)
 		if !ours {
@@ -31,16 +32,19 @@ func (cfg Config) writeBack(ctx context.Context, q queryRun, watch api.WorkItemW
 		}
 		err := cfg.writeItem(ctx, q.c, id, w)
 		var limit *ratelimit.Error
+		var refusal *refusedState
 		switch {
 		case ctx.Err() != nil:
-			return nil
+			return nil, nil
 		case errors.As(err, &limit), errors.Is(err, azdo.ErrMissingScope):
-			return err
+			return nil, err
+		case errors.As(err, &refusal):
+			refused = append(refused, refusal)
 		case err != nil:
 			cfg.logf("writing to %s for %s: %v", w.Link.ID, w.Target, err)
 		}
 	}
-	return nil
+	return refused, nil
 }
 
 // writeItem carries out w's due writes on work item id: its comments,
@@ -95,7 +99,7 @@ func writeTag(ctx context.Context, c *azdo.Client, item azdo.WorkItem, tag strin
 func (cfg Config) writeState(ctx context.Context, c *azdo.Client, item azdo.WorkItem, w api.WorkItemWrites) error {
 	if !strings.EqualFold(item.Fields.State, w.State.Name) {
 		if err := c.SetState(ctx, item.ID, item.Rev, w.State.Name); err != nil {
-			return fmt.Errorf("setting the State %s: %w", w.State.Name, err)
+			return fmt.Errorf("setting the State %s: %w", w.State.Name, asRefusedState(err, item.ID, w))
 		}
 	}
 	for _, key := range append([]string{w.State.Key}, w.State.Nearer...) {

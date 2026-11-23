@@ -85,6 +85,10 @@ const (
 	// ProblemTooManyWorkItems is an Azure Boards query matching more work
 	// items than the Work Item Watcher takes in.
 	ProblemTooManyWorkItems WatcherProblem = "too_many_work_items"
+	// ProblemStateRefused is Azure DevOps refusing to move a work item to
+	// the State Work Item States maps: unknown to its type, or barred by a
+	// workflow rule.
+	ProblemStateRefused WatcherProblem = "state_refused"
 	// ProblemCheckFailed is a check that didn't run to an answer.
 	ProblemCheckFailed WatcherProblem = "check_failed"
 	// ProblemCrashed is a Watcher that exited without being stopped. The
@@ -96,7 +100,7 @@ const (
 func WatcherProblems() []WatcherProblem {
 	return []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable,
 		ProblemIssuesDisabled, ProblemNoTriage, ProblemNoWrite, ProblemPATMissing, ProblemPATRejected,
-		ProblemProjectUnreadable, ProblemPATScope, ProblemQueryUnusable, ProblemTooManyWorkItems, ProblemCheckFailed, ProblemCrashed}
+		ProblemProjectUnreadable, ProblemPATScope, ProblemQueryUnusable, ProblemTooManyWorkItems, ProblemStateRefused, ProblemCheckFailed, ProblemCrashed}
 }
 
 // WatcherCheckResult is a Watcher's check mode's answer: no Problem when

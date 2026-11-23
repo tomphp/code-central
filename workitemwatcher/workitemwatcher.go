@@ -122,8 +122,9 @@ func (cfg Config) poll(ctx context.Context) (reachable bool, limit *ratelimit.Er
 		return false, nil
 	}
 	limit = cfg.mirror(ctx, watch, q)
+	var refused []*refusedState
 	if limit == nil && ctx.Err() == nil {
-		err = cfg.writeBack(ctx, q, watch)
+		refused, err = cfg.writeBack(ctx, q, watch)
 	}
 	switch {
 	case ctx.Err() != nil:
@@ -135,6 +136,10 @@ func (cfg Config) poll(ctx context.Context) (reachable bool, limit *ratelimit.Er
 	case err != nil:
 		// Only the PAT's scope stops write-back this way.
 		r := writeScopeProblem(watch, q)
+		cfg.report(ctx, api.ReportWatcherStatusInput{State: api.WatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
+		return false, nil
+	case len(refused) > 0:
+		r := stateRefusedProblem(refused)
 		cfg.report(ctx, api.ReportWatcherStatusInput{State: api.WatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
 		return false, nil
 	}

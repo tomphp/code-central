@@ -135,6 +135,7 @@ export const WATCHER_PROBLEMS = [
   "pat_scope",
   "query_unusable",
   "too_many_work_items",
+  "state_refused",
   "check_failed",
   "crashed",
 ] as const;
