@@ -66,18 +66,28 @@ func stateWrite(states domain.WorkItemStates, written []string, at reached) *api
 }
 
 // stateWrites is the State due on the work item of each Spec in key with
-// an outbound Azure Boards Link, by number, as states maps them.
+// an outbound Azure Boards Link, and of each Ticket on its inbox Spec
+// with an attached one, by number, as states maps them.
 func stateWrites(r store.Reader, key string, states domain.WorkItemStates) map[int]api.WorkItemWrites {
 	out := map[int]api.WorkItemWrites{}
-	if states == (domain.WorkItemStates{}) || inboxOf(r, key, domain.IntegrationAzureBoards).spec == 0 {
+	in := inboxOf(r, key, domain.IntegrationAzureBoards)
+	if states == (domain.WorkItemStates{}) || in.spec == 0 {
 		return out
 	}
-	for _, s := range r.FindSpecs(key, store.SpecFilter{Link: &store.LinkFilter{Integration: domain.IntegrationAzureBoards}}) {
-		if !s.Link.Attached() || !s.Link.Outbound || s.Link.ExternalState == domain.ExternalDeleted {
-			continue
+	link := &store.LinkFilter{Integration: domain.IntegrationAzureBoards}
+	due := func(number int, l domain.Link, at reached) {
+		if w := stateWrite(states, l.Written, at); w != nil && l.ExternalState != domain.ExternalDeleted {
+			out[number] = api.WorkItemWrites{Target: domain.DisplayID(key, number), Link: *linkView(l), Comments: []api.IssueComment{}, State: w}
 		}
-		if due := stateWrite(states, s.Link.Written, specReached(specTickets(r, key, s.Number, store.Moves))); due != nil {
-			out[s.Number] = api.WorkItemWrites{Target: domain.DisplayID(key, s.Number), Link: *linkView(s.Link), Comments: []api.IssueComment{}, State: due}
+	}
+	for _, t := range r.FindTickets(key, store.TicketFilter{Spec: []int{in.spec}, Link: link, Parts: []store.Part{store.Moves}}) {
+		if t.Link.Attached() {
+			due(t.Number, t.Link, ticketReached(t))
+		}
+	}
+	for _, s := range r.FindSpecs(key, store.SpecFilter{Link: link}) {
+		if s.Link.Attached() && s.Link.Outbound {
+			due(s.Number, s.Link, specReached(specTickets(r, key, s.Number, store.Moves)))
 		}
 	}
 	return out
@@ -116,6 +126,26 @@ func specReached(tickets []domain.Ticket) reached {
 		at[donePhase] = latest
 	default:
 		return reached{}
+	}
+	return at
+}
+
+// ticketReached is when an Incoming Issue's Ticket reached each phase:
+// In Progress at its first Move to In Progress, Accepted while it is
+// Accepted, at its last Move to Accepted, and Done once it is Done by a
+// land, at that Move. Done any other way reaches none.
+func ticketReached(t domain.Ticket) reached {
+	var at reached
+	if i := slices.IndexFunc(t.Moves, func(m domain.Move) bool { return m.To == domain.InProgress }); i >= 0 {
+		at[inProgressPhase] = t.Moves[i].Time
+	}
+	switch t.State {
+	case domain.Accepted:
+		at[acceptedPhase] = movedIn(t)
+	case domain.Done:
+		if m := doneMove(t); m.Commit != "" {
+			at[donePhase] = m.Time
+		}
 	}
 	return at
 }
