@@ -50,7 +50,7 @@ func (c *Core) ReportModels(_ context.Context, key string, in api.ReportModelsIn
 	modelFlag, effortFlag := strings.TrimSpace(in.ModelFlag), strings.TrimSpace(in.EffortFlag)
 	for _, f := range []struct{ field, v string }{{"model_flag", modelFlag}, {"effort_flag", effortFlag}} {
 		if strings.ContainsAny(f.v, "\r\n") {
-			return api.Written[api.ProjectView]{}, invalid(f.field, "a flag's value is one line")
+			return api.Written[api.ProjectView]{}, api.InvalidField(f.field, "a flag's value is one line")
 		}
 	}
 	var before, after api.ProjectView
@@ -86,7 +86,7 @@ func reportedList(field string, vs []string) ([]string, error) {
 		v = strings.TrimSpace(v)
 		switch {
 		case strings.ContainsAny(v, "\r\n"):
-			return nil, invalid(field, "%q spans more than one line; each is one line", v)
+			return nil, api.InvalidField(field, "%q spans more than one line; each is one line", v)
 		case v != "" && !slices.Contains(out, v):
 			out = append(out, v)
 		}

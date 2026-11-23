@@ -78,7 +78,7 @@ func itemRepository(e *evaluation, t domain.Ticket, given string) (string, error
 	for _, it := range items {
 		names = append(names, it.repository)
 	}
-	return "", invalid("repository", "%s has CI items in %s: name the Repository whose item to act on", DisplayID(e.p.Key, t.Number), strings.Join(names, " and "))
+	return "", api.InvalidField("repository", "%s has CI items in %s: name the Repository whose item to act on", domain.DisplayID(e.p.Key, t.Number), strings.Join(names, " and "))
 }
 
 // respondCI is the human's op, land_anyway, rerun_ci or new_fix_ticket,
@@ -176,7 +176,7 @@ func (c *Core) LandAnyway(ctx context.Context, key string, in api.CIResponseInpu
 // whyNotLandAnyway says why t isn't offered Land anyway in the
 // Repository rc answers for, nil while t has no CI result there.
 func whyNotLandAnyway(ci *ciState, t domain.Ticket, rc *repoCI) string {
-	id := DisplayID(ci.p.Key, t.Number)
+	id := domain.DisplayID(ci.p.Key, t.Number)
 	if t.State != domain.Accepted {
 		return fmt.Sprintf("%s is %s: only an Accepted Ticket whose CI failed lands anyway", id, t.State)
 	}
@@ -242,7 +242,7 @@ func requestRerun(p *domain.Project, record, commit string, runs []domain.CIRun,
 
 // whyNotRerun says why t isn't offered Re-run failed jobs.
 func whyNotRerun(key string, t domain.Ticket) string {
-	id := DisplayID(key, t.Number)
+	id := domain.DisplayID(key, t.Number)
 	if t.State != domain.Accepted {
 		return fmt.Sprintf("%s is %s: only an Accepted Ticket whose CI failed has failed jobs to re-run", id, t.State)
 	}
@@ -267,7 +267,7 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in api.NewFixTicket
 		return api.Written[api.TicketView]{}, err
 	}
 	if strings.TrimSpace(in.Note) == "" {
-		return api.Written[api.TicketView]{}, invalid("note", "a fix Ticket needs a note saying what failed, such as the failed CI run's link and its failed jobs")
+		return api.Written[api.TicketView]{}, api.InvalidField("note", "a fix Ticket needs a note saying what failed, such as the failed CI run's link and its failed jobs")
 	}
 	if v, handled, err := c.newSpecFixTicket(ctx, key, in); handled {
 		return v, err
@@ -331,7 +331,7 @@ func (c *Core) openFixTicket(ctx context.Context, key string, failed domain.Tick
 			return err
 		}
 		now := c.now()
-		id := DisplayID(key, failed.Number)
+		id := domain.DisplayID(key, failed.Number)
 		f := domain.Ticket{
 			Number: w.NextNumber(key), Title: fmt.Sprintf("Fix the CI failure of %s%s: %s", id, where, failed.Title), State: domain.Ready, Spec: spec,
 			Created: now, Updated: now,
@@ -357,7 +357,7 @@ func (c *Core) openFixTicket(ctx context.Context, key string, failed domain.Tick
 // stores fix on the response of failed's pushed commit in the Repository
 // name, then comments on failed, naming fix, as ctx's Actor.
 func (c *Core) recordFixTicket(ctx context.Context, key string, failed domain.Ticket, name string, fix int) error {
-	ref := api.Ref(DisplayID(key, failed.Number))
+	ref := api.Ref(domain.DisplayID(key, failed.Number))
 	_, err := c.respondCI(key, api.OptionNewFixTicket, api.CIResponseInput{Ticket: ref, Repository: name, Full: true},
 		func(*ciState, *repoCI) bool { return false },
 		func(_ *ciState, t domain.Ticket, _ *repoCI) string { return whyNotNewFixTicket(key, t) },
@@ -368,7 +368,7 @@ func (c *Core) recordFixTicket(ctx context.Context, key string, failed domain.Ti
 		return err
 	}
 	_, err = c.updateTicketIn(key, "new_fix_ticket", ref, true, func(_ store.Reader, t *domain.Ticket) (bool, error) {
-		addComment(t, api.ActorOf(ctx), c.now(), 0, fmt.Sprintf("New fix Ticket: %s fixes this CI failure forward; %s stays Accepted and lands when a later commit passes CI.", DisplayID(key, fix), DisplayID(key, t.Number)))
+		addComment(t, api.ActorOf(ctx), c.now(), 0, fmt.Sprintf("New fix Ticket: %s fixes this CI failure forward; %s stays Accepted and lands when a later commit passes CI.", domain.DisplayID(key, fix), domain.DisplayID(key, t.Number)))
 		return true, nil
 	})
 	return err
@@ -380,7 +380,7 @@ const ciFixesSpecBody = "This Spec holds the fix Tickets the human opens with Ne
 
 // whyNotNewFixTicket says why t isn't offered New fix Ticket.
 func whyNotNewFixTicket(key string, t domain.Ticket) string {
-	id := DisplayID(key, t.Number)
+	id := domain.DisplayID(key, t.Number)
 	if t.State != domain.Accepted {
 		return fmt.Sprintf("%s is %s: only an Accepted Ticket whose CI failed gets a fix Ticket", id, t.State)
 	}

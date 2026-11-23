@@ -25,14 +25,14 @@ func (c *Core) SetAutoFix(ctx context.Context, key string, in api.SetAutoFixInpu
 		return api.Written[api.ProjectView]{}, err
 	}
 	if in.Limit < domain.MinAutoFixLimit || in.Limit > domain.MaxAutoFixLimit {
-		return api.Written[api.ProjectView]{}, invalid("limit", "the Auto-fix limit is %d to %d, not %d", domain.MinAutoFixLimit, domain.MaxAutoFixLimit, in.Limit)
+		return api.Written[api.ProjectView]{}, api.InvalidField("limit", "the Auto-fix limit is %d to %d, not %d", domain.MinAutoFixLimit, domain.MaxAutoFixLimit, in.Limit)
 	}
 	if strings.TrimSpace(in.FixInstructions) == "" {
-		return api.Written[api.ProjectView]{}, invalid("fix_instructions", "Fix instructions can't be empty; the default text is %q", domain.DefaultFixInstructions)
+		return api.Written[api.ProjectView]{}, api.InvalidField("fix_instructions", "Fix instructions can't be empty; the default text is %q", domain.DefaultFixInstructions)
 	}
 	v, err := c.updateCIIn(key, in.Full, func(p domain.Project, ci *domain.CI) error {
 		if in.On && !ciTrackingOn(*ci) {
-			return invalid("on", "Auto-fix needs CI Tracking on; turn CI Tracking on first")
+			return api.InvalidField("on", "Auto-fix needs CI Tracking on; turn CI Tracking on first")
 		}
 		instructions := in.FixInstructions
 		if instructions == domain.DefaultFixInstructions {

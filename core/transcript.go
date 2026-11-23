@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -161,11 +162,11 @@ func (c *Core) claimKey(key, op string, ticket api.Ref, claim int) (markKey, err
 	var k markKey
 	err := c.store.View(func(r store.Reader) error {
 		if _, ok := r.Project(key); !ok {
-			return notFound("there is no Project %q", key)
+			return api.NotFoundError("there is no Project %q", key)
 		}
-		n, err := refNumber(ticket, key, "ticket")
+		n, err := api.RefNumber(ticket, key, "ticket")
 		if err != nil {
-			return notFound("there is no Ticket %s", ticket)
+			return api.NotFoundError("there is no Ticket %s", ticket)
 		}
 		t, err := ticketNumbered(r, key, op, "ticket", n, store.Claims)
 		if err != nil {
@@ -177,7 +178,7 @@ func (c *Core) claimKey(key, op string, ticket api.Ref, claim int) (markKey, err
 				return nil
 			}
 		}
-		return notFound("%s has no Claim %d", DisplayID(key, n), claim)
+		return api.NotFoundError("%s has no Claim %d", domain.DisplayID(key, n), claim)
 	})
 	return k, err
 }

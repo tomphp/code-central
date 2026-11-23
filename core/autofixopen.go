@@ -30,7 +30,7 @@ func autoFixMarkView(p domain.Project, m *domain.AutoFixMark) *api.AutoFixMarkVi
 		v.Repository = recordRepository(p.Key, m.Repository)
 	}
 	if m.Previous != 0 {
-		v.Previous = DisplayID(p.Key, m.Previous)
+		v.Previous = domain.DisplayID(p.Key, m.Previous)
 	}
 	return v
 }

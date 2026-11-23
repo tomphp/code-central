@@ -20,7 +20,7 @@ func (c *Core) GetIssueWatch(_ context.Context, key string) (api.IssueWatch, err
 	err := c.store.View(func(r store.Reader) error {
 		p, ok := r.Project(key)
 		if !ok {
-			return unknownProject(key)
+			return api.UnknownProjectError(key)
 		}
 		g := githubIssuesView(key, p.GitHubIssues, api.WatcherView{})
 		out = api.IssueWatch{Project: key, On: g.On, Repositories: g.Repositories, Label: g.Label, GHPath: r.Options().GHPath, Spec: g.Spec,
@@ -41,7 +41,7 @@ func incomingIssues(r store.Reader, key, integration string) []api.IncomingIssue
 	}
 	for _, t := range r.FindTickets(key, store.TicketFilter{Spec: []int{in.spec}, States: unfinished, Link: &store.LinkFilter{Integration: integration}}) {
 		if t.Link.Owned() {
-			out = append(out, api.IncomingIssue{Ticket: DisplayID(key, t.Number), Link: *linkView(t.Link), Title: t.Title, Description: t.Description})
+			out = append(out, api.IncomingIssue{Ticket: domain.DisplayID(key, t.Number), Link: *linkView(t.Link), Title: t.Title, Description: t.Description})
 		}
 	}
 	return out

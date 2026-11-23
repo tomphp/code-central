@@ -73,7 +73,7 @@ func checkedFocusKindsOff(in []api.NeedsMeReason) ([]string, error) {
 			for _, x := range api.NeedsMeReasonViews {
 				names = append(names, string(x.Reason))
 			}
-			return nil, invalid("off", "%q isn't a Needs Me reason; the reasons are %s", r, strings.Join(names, ", "))
+			return nil, api.InvalidField("off", "%q isn't a Needs Me reason; the reasons are %s", r, strings.Join(names, ", "))
 		}
 		if !slices.Contains(off, string(r)) {
 			off = append(off, string(r))

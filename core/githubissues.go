@@ -25,7 +25,7 @@ func githubIssuesView(key string, g domain.GitHubIssues, watcher api.WatcherView
 		v.Repositories = []string{}
 	}
 	if g.Spec != 0 {
-		v.Spec = DisplayID(key, g.Spec)
+		v.Spec = domain.DisplayID(key, g.Spec)
 	}
 	return v
 }
@@ -48,14 +48,14 @@ func (c *Core) SetGitHubIssues(ctx context.Context, key string, in api.SetGitHub
 		case repository == "":
 			continue
 		case !codehost.ValidGitHubRepository(repository):
-			return api.Written[api.ProjectView]{}, invalid("repositories", "%q isn't a GitHub repository as owner/name, such as acme/web", repository)
+			return api.Written[api.ProjectView]{}, api.InvalidField("repositories", "%q isn't a GitHub repository as owner/name, such as acme/web", repository)
 		case slices.ContainsFunc(g.Repositories, func(r string) bool { return strings.EqualFold(r, repository) }):
-			return api.Written[api.ProjectView]{}, invalid("repositories", "%s is listed twice: list each repository once", repository)
+			return api.Written[api.ProjectView]{}, api.InvalidField("repositories", "%s is listed twice: list each repository once", repository)
 		}
 		g.Repositories = append(g.Repositories, repository)
 	}
 	if len(g.Repositories) == 0 && g.On {
-		return api.Written[api.ProjectView]{}, invalid("repositories", "GitHub Issues needs the GitHub repositories its issues come from, as owner/name")
+		return api.Written[api.ProjectView]{}, api.InvalidField("repositories", "GitHub Issues needs the GitHub repositories its issues come from, as owner/name")
 	}
 	if err := c.checkIssues(ctx, key, g); err != nil {
 		return api.Written[api.ProjectView]{}, err

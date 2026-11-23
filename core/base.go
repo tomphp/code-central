@@ -33,11 +33,11 @@ func (c *Core) ReportBase(_ context.Context, key string, in api.ReportBaseInput)
 	}
 	switch {
 	case in.State != api.BaseCurrent && in.State != api.BaseDiverged && in.State != api.BaseMissing:
-		return api.Written[api.ProjectView]{}, invalid("state", "state is current, diverged or missing, not %q", in.State)
+		return api.Written[api.ProjectView]{}, api.InvalidField("state", "state is current, diverged or missing, not %q", in.State)
 	case in.State != api.BaseMissing && local == "":
-		return api.Written[api.ProjectView]{}, invalid("local", "local is required: the local base commit")
+		return api.Written[api.ProjectView]{}, api.InvalidField("local", "local is required: the local base commit")
 	case in.State != api.BaseMissing && remote == "":
-		return api.Written[api.ProjectView]{}, invalid("remote", "remote is required: the remote base commit")
+		return api.Written[api.ProjectView]{}, api.InvalidField("remote", "remote is required: the remote base commit")
 	}
 	var before api.ProjectView
 	var project domain.Project
@@ -84,7 +84,7 @@ func repositoryField(p domain.Project, name string) (domain.Repository, error) {
 	rs := p.RepositoryList()
 	i := slices.IndexFunc(rs, func(r domain.Repository) bool { return r.Name == name })
 	if i < 0 {
-		return domain.Repository{}, invalid("repository", "%q is not one of this Project's Repositories, which are %s", name, strings.Join(repositoryNames(rs), ", "))
+		return domain.Repository{}, api.InvalidField("repository", "%q is not one of this Project's Repositories, which are %s", name, strings.Join(repositoryNames(rs), ", "))
 	}
 	return rs[i], nil
 }

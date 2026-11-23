@@ -41,7 +41,7 @@ func (e *evaluation) requirement(t domain.Ticket) *api.NeedsMeRequirement {
 	}
 	key := e.p.Key
 	sp, _ := e.r.Spec(key, t.Spec)
-	return &api.NeedsMeRequirement{Spec: DisplayID(key, t.Spec), Title: sp.Title, Stage: domain.StageOf(t.Labels)}
+	return &api.NeedsMeRequirement{Spec: domain.DisplayID(key, t.Spec), Title: sp.Title, Stage: domain.StageOf(t.Labels)}
 }
 
 // needsMeSpec is the Spec t is on when t is on a Map, or is a Map Ticket
@@ -55,7 +55,7 @@ func needsMeSpec(r store.Reader, key string, t domain.Ticket, req *api.NeedsMeRe
 	if !isMap && !slices.ContainsFunc(t.Labels, isWayfinderType) {
 		return nil
 	}
-	return &api.NeedsMeSpec{Spec: DisplayID(key, t.Spec), Title: sp.Title, Map: isMap}
+	return &api.NeedsMeSpec{Spec: domain.DisplayID(key, t.Spec), Title: sp.Title, Map: isMap}
 }
 
 // NeedsMe is needs_me, the human's read across every Project: one
@@ -117,7 +117,7 @@ func (e *evaluation) row(t domain.Ticket, tr ticketReason) api.NeedsMeRow {
 	key := e.p.Key
 	req := e.requirement(t)
 	row := api.NeedsMeRow{
-		Project: key, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: tr.reason, Since: tr.since, Link: linkView(t.Link),
+		Project: key, ID: domain.DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: tr.reason, Since: tr.since, Link: linkView(t.Link),
 		Requirement: req, Spec: needsMeSpec(e.r, key, t, req), Prototype: slices.Contains(t.Labels, domain.PrototypeLabel),
 		Retro:    slices.Contains(t.Labels, domain.RetroLabel),
 		CIResult: e.ci.ticket(t).result, PullRequest: pullRequestView(homePullRequest(key, t)),
@@ -205,7 +205,7 @@ func cancelledBlocker(rule blockRule, t domain.Ticket) (api.BlockerView, bool) {
 
 // cancelledAt is when the Cancelled Blocker b was cancelled.
 func cancelledAt(r store.Reader, key string, b api.BlockerView) time.Time {
-	n, _ := refNumber(api.Ref(b.ID), key, "blocker")
+	n, _ := api.RefNumber(api.Ref(b.ID), key, "blocker")
 	bt, _ := r.Ticket(key, n)
 	return entered(bt)
 }

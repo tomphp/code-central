@@ -23,7 +23,7 @@ func (c *Core) Events() *events.Bus { return c.events }
 // once if the Ticket has already left from. It is a read: no Claim ID.
 func (c *Core) Wait(ctx context.Context, key string, ref api.Ref, from domain.State) (api.WaitResult, error) {
 	if !from.Valid() {
-		return api.WaitResult{}, invalid("from", "from must be a State, such as %q", domain.NeedsAnswer)
+		return api.WaitResult{}, api.InvalidField("from", "from must be a State, such as %q", domain.NeedsAnswer)
 	}
 	notices, stop := c.events.Subscribe()
 	defer stop()
@@ -55,13 +55,13 @@ func (c *Core) waitResult(key string, ref api.Ref) (api.WaitResult, error) {
 	var res api.WaitResult
 	err := c.store.View(func(r store.Reader) error {
 		if _, ok := r.Project(key); !ok {
-			return unknownProject(key)
+			return api.UnknownProjectError(key)
 		}
 		t, err := resolveTicket(r, key, "wait", "ticket", ref, store.Moves)
 		if err != nil {
 			return err
 		}
-		res = api.WaitResult{Ticket: DisplayID(key, t.Number), State: t.State}
+		res = api.WaitResult{Ticket: domain.DisplayID(key, t.Number), State: t.State}
 		if n := len(t.Moves); n > 0 {
 			m := t.Moves[n-1]
 			mv := moveView(m)
@@ -138,12 +138,12 @@ func (w *noticeWriter) PutProject(p domain.Project) error {
 
 func (w *noticeWriter) PutSpec(key string, s domain.Spec) error {
 	wakes := specWakesTheFactory(w.Writer, key, s)
-	return w.wakeIf(wakes, key, w.put(w.Writer.PutSpec(key, s), events.Event{Type: events.SpecChanged, Project: key, ID: DisplayID(key, s.Number)}))
+	return w.wakeIf(wakes, key, w.put(w.Writer.PutSpec(key, s), events.Event{Type: events.SpecChanged, Project: key, ID: domain.DisplayID(key, s.Number)}))
 }
 
 func (w *noticeWriter) PutTicket(key string, t domain.Ticket, parts ...store.Part) error {
 	wakes := wakesTheFactory(w.Writer, key, t)
-	return w.wakeIf(wakes, key, w.put(w.Writer.PutTicket(key, t, parts...), events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, t.Number)}))
+	return w.wakeIf(wakes, key, w.put(w.Writer.PutTicket(key, t, parts...), events.Event{Type: events.TicketChanged, Project: key, ID: domain.DisplayID(key, t.Number)}))
 }
 
 // PutImport sends one project.changed notice for the whole Import, so a

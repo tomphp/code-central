@@ -43,7 +43,7 @@ func (c *Core) SetAutoAccept(ctx context.Context, key string, in api.SetAutoAcce
 	}
 	if len(unknown) > 0 {
 		sort.Strings(unknown)
-		return api.Written[api.ProjectView]{}, invalid("kinds", "unknown Auto-accept kind %s; the kinds are %s", strings.Join(unknown, ", "), joinKinds())
+		return api.Written[api.ProjectView]{}, api.InvalidField("kinds", "unknown Auto-accept kind %s; the kinds are %s", strings.Join(unknown, ", "), joinKinds())
 	}
 	var before, after api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {

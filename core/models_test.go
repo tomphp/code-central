@@ -269,7 +269,7 @@ func TestTheModelChoiceTakesTheRowForTheTicketsKindOfWork(t *testing.T) {
 	f.setModels(t, api.SetModelsInput{Default: row("opus", "high"), Kinds: kinds})
 	for i, g := range core.GuideNames {
 		want := choice(fromKind("model-"+g, g), set("high", api.SourceProjectDefault))
-		if mc := f.modelChoice(t, core.DisplayID("acme", 10+i)); mc != want {
+		if mc := f.modelChoice(t, domain.DisplayID("acme", 10+i)); mc != want {
 			t.Errorf("a %s Ticket's model choice = %+v, want %+v", g, mc, want)
 		}
 	}

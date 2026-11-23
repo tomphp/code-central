@@ -22,9 +22,9 @@ func (e *evaluation) ciAutoFix(t domain.Ticket, name string) *api.CIAutoFixView 
 	case rc == nil:
 		return nil
 	case rc.fixing != nil && rc.fixing.AutoFix != nil:
-		return &api.CIAutoFixView{Fixing: &api.AutoFixFixingView{FixTicket: DisplayID(e.p.Key, rc.fixing.Number), Attempt: rc.fixing.AutoFix.Attempt, Limit: e.p.CI.AutoFix.AttemptLimit()}}
+		return &api.CIAutoFixView{Fixing: &api.AutoFixFixingView{FixTicket: domain.DisplayID(e.p.Key, rc.fixing.Number), Attempt: rc.fixing.AutoFix.Attempt, Limit: e.p.CI.AutoFix.AttemptLimit()}}
 	case rc.covering != nil:
-		return &api.CIAutoFixView{Covering: &api.AutoFixCoveringView{FixTicket: DisplayID(e.p.Key, rc.covering.Number), Commit: rc.covering.AutoFix.Commit}}
+		return &api.CIAutoFixView{Covering: &api.AutoFixCoveringView{FixTicket: domain.DisplayID(e.p.Key, rc.covering.Number), Commit: rc.covering.AutoFix.Commit}}
 	}
 	if it, ok := e.itemIn(t, name); ok {
 		if stopped := e.autoFixStoppedLine(it); stopped != nil {
@@ -45,7 +45,7 @@ func (e *evaluation) autoFixStoppedLine(it ciItem) *api.AutoFixStoppedView {
 	v := &api.AutoFixStoppedView{Attempts: []string{}}
 	// A chain is never longer than its highest attempt.
 	for n := plan.mark.Previous; n != 0 && len(v.Attempts) < plan.mark.Attempt; {
-		v.Attempts = append(v.Attempts, DisplayID(e.p.Key, n))
+		v.Attempts = append(v.Attempts, domain.DisplayID(e.p.Key, n))
 		fix, ok := e.r.Ticket(e.p.Key, n)
 		if !ok || fix.AutoFix == nil {
 			break

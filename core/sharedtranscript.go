@@ -3,6 +3,7 @@ package core
 import (
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -23,7 +24,7 @@ func (c *Core) startHolding(k markKey) (moved bool) {
 	err := c.store.Services().PutTranscriptHolder(store.TranscriptHolder{Project: k.project, Ticket: k.ticket, Claim: k.claim,
 		Service: c.service.ID, ServiceHost: c.service.Host, At: c.now()})
 	if err != nil {
-		c.logf("cannot record that this service holds %s's Claim %d's Transcript: %v", DisplayID(k.project, k.ticket), k.claim, err)
+		c.logf("cannot record that this service holds %s's Claim %d's Transcript: %v", domain.DisplayID(k.project, k.ticket), k.claim, err)
 	}
 	return ok && prev.Service != c.service.ID
 }
@@ -57,7 +58,7 @@ func (c *Core) heldElsewhere(k markKey) string {
 func (c *Core) transcriptHolder(k markKey) (store.TranscriptHolder, bool) {
 	h, ok, err := c.store.Services().TranscriptHolder(k.project, k.ticket, k.claim)
 	if err != nil {
-		c.logf("cannot read who holds %s's Claim %d's Transcript: %v", DisplayID(k.project, k.ticket), k.claim, err)
+		c.logf("cannot read who holds %s's Claim %d's Transcript: %v", domain.DisplayID(k.project, k.ticket), k.claim, err)
 		return store.TranscriptHolder{}, false
 	}
 	return h, ok

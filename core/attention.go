@@ -56,7 +56,7 @@ func (c *Core) AttentionOf(_ context.Context, project, id string) (api.Attention
 // Project's evaluation e.
 func attention(e *evaluation, t domain.Ticket) api.AttentionTicket {
 	a := api.AttentionTicket{
-		Project: e.p.Key, ID: DisplayID(e.p.Key, t.Number), Title: t.Title,
+		Project: e.p.Key, ID: domain.DisplayID(e.p.Key, t.Number), Title: t.Title,
 	}
 	if rd := t.Head.LatestRound; rd != nil {
 		a.Rounds = rd.Number

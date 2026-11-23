@@ -89,8 +89,8 @@ func landingRepository(p domain.Project, t domain.Ticket, name string) (string, 
 	}
 	changed := changedRepositoryNames(p.Key, t)
 	if len(changed) > 0 && !slices.Contains(changed, r.Name) {
-		return "", invalid("repository", "%s is not one of %s's Changed Repositories, which are %s: land the work in each of those, naming it",
-			r.Name, DisplayID(p.Key, t.Number), strings.Join(namesInLandingOrder(p, changed), ", "))
+		return "", api.InvalidField("repository", "%s is not one of %s's Changed Repositories, which are %s: land the work in each of those, naming it",
+			r.Name, domain.DisplayID(p.Key, t.Number), strings.Join(namesInLandingOrder(p, changed), ", "))
 	}
 	return r.Name, nil
 }
@@ -140,11 +140,11 @@ func checkRepositoryWork(p domain.Project, field string, ws []api.RepositoryWork
 		r := domain.ChangedRepository{Name: strings.TrimSpace(w.Name), Branch: strings.TrimSpace(w.Branch), Commit: strings.TrimSpace(w.Commit)}
 		switch {
 		case !slices.Contains(names, r.Name):
-			return nil, invalid(at+".name", "%q is not one of this Project's Repositories, which are %s: name each as your first prompt's Repositories list does", w.Name, strings.Join(names, ", "))
+			return nil, api.InvalidField(at+".name", "%q is not one of this Project's Repositories, which are %s: name each as your first prompt's Repositories list does", w.Name, strings.Join(names, ", "))
 		case slices.ContainsFunc(out, func(o domain.ChangedRepository) bool { return o.Name == r.Name }):
-			return nil, invalid(at+".name", "%s is listed twice: give each Repository once, with its branch's head commit", r.Name)
+			return nil, api.InvalidField(at+".name", "%s is listed twice: give each Repository once, with its branch's head commit", r.Name)
 		case r.Branch == "" || r.Commit == "":
-			return nil, invalid(at, "%s needs both its branch and its branch's head commit", r.Name)
+			return nil, api.InvalidField(at, "%s needs both its branch and its branch's head commit", r.Name)
 		}
 		out = append(out, r)
 	}
@@ -192,7 +192,7 @@ func settleFinish(p domain.Project, t *domain.Ticket, in api.FinishInput) error 
 	home := slices.IndexFunc(rs, func(r domain.ChangedRepository) bool { return r.Name == p.Key })
 	switch {
 	case home >= 0 && (branch != "" || commit != ""):
-		return invalid("repositories", "%s is the Home Repository, given both in branch and commit and in repositories: give it in one form or the other", p.Key)
+		return api.InvalidField("repositories", "%s is the Home Repository, given both in branch and commit and in repositories: give it in one form or the other", p.Key)
 	case home >= 0:
 		t.Branch, t.Commit = rs[home].Branch, rs[home].Commit
 		rs = slices.Delete(rs, home, home+1)
@@ -307,7 +307,7 @@ func (c *Core) ReportChangedRepositories(ctx context.Context, key string, in api
 		}
 		if t.State != domain.InProgress {
 			return false, &api.Error{Code: api.ActionNotAllowed, AllowedActions: allowedActions(t.State, api.ActorOf(ctx)), Message: fmt.Sprintf(
-				"%s is %s: its Changed Repositories are reported only while it is In Progress, and its finish settles them", DisplayID(key, t.Number), t.State)}
+				"%s is %s: its Changed Repositories are reported only while it is In Progress, and its finish settles them", domain.DisplayID(key, t.Number), t.State)}
 		}
 		p, _ := r.Project(key)
 		rs, err := checkRepositoryWork(p, "repositories", in.Repositories)

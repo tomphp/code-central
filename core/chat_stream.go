@@ -71,7 +71,7 @@ type ChatFeed struct {
 func (c *Core) FollowChat(_ context.Context, key string, after int) (*ChatFeed, error) {
 	if err := c.store.View(func(r store.Reader) error {
 		if _, ok := r.Project(key); !ok {
-			return unknownProject(key)
+			return api.UnknownProjectError(key)
 		}
 		return nil
 	}); err != nil {

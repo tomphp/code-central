@@ -1,8 +1,10 @@
-package core
+// Package foundation holds what every area of the service shares: the
+// helpers that need the Store, the clock or the bus but no area's state.
+// It imports neither core nor an area.
+package foundation
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/store"
@@ -21,16 +23,4 @@ func ErrorOf(err error) *api.Error {
 		e = &api.Error{Code: "internal", Message: err.Error()}
 	}
 	return e
-}
-
-func invalid(field, format string, args ...any) *api.Error {
-	return &api.Error{Code: api.Invalid, Field: field, Message: fmt.Sprintf(format, args...)}
-}
-
-func unknownProject(key string) *api.Error {
-	return &api.Error{Code: api.UnknownProject, Message: fmt.Sprintf("no Project with key %q; ask the human to run `code-central init` in its repository", key)}
-}
-
-func notFound(format string, args ...any) *api.Error {
-	return &api.Error{Code: api.NotFound, Message: fmt.Sprintf(format, args...)}
 }

@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/usage"
 )
@@ -77,7 +78,7 @@ func (c *Core) PostUsage(ctx context.Context, sessionID string, responses []api.
 	}
 	ticket := ""
 	if k.ticket != 0 {
-		ticket = DisplayID(k.project, k.ticket)
+		ticket = domain.DisplayID(k.project, k.ticket)
 	}
 	rs := make([]usage.Response, len(responses))
 	for i, r := range responses {
@@ -99,7 +100,7 @@ func (c *Core) Usage(_ context.Context, in api.UsageInput) (api.UsageView, error
 		in.Days = UsageDays()[0]
 	}
 	if !slices.Contains(UsageDays(), in.Days) {
-		return api.UsageView{}, invalid("days", "days must be 7, 30 or 90, not %d", in.Days)
+		return api.UsageView{}, api.InvalidField("days", "days must be 7, 30 or 90, not %d", in.Days)
 	}
 	if in.Project != "" && !c.projectExists(in.Project) {
 		return api.UsageView{}, &api.Error{Code: api.NotFound, Message: fmt.Sprintf("no Project %q", in.Project)}
@@ -120,10 +121,10 @@ func (c *Core) Usage(_ context.Context, in api.UsageInput) (api.UsageView, error
 // not_found; an unknown session has no responses.
 func (c *Core) SessionUsage(_ context.Context, in api.SessionUsageInput) (api.SessionUsageView, error) {
 	if in.Project == "" {
-		return api.SessionUsageView{}, invalid("project", "project is required")
+		return api.SessionUsageView{}, api.InvalidField("project", "project is required")
 	}
 	if in.Session == "" {
-		return api.SessionUsageView{}, invalid("session", "session is required")
+		return api.SessionUsageView{}, api.InvalidField("session", "session is required")
 	}
 	if !c.projectExists(in.Project) {
 		return api.SessionUsageView{}, &api.Error{Code: api.NotFound, Message: fmt.Sprintf("no Project %q", in.Project)}

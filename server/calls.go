@@ -8,7 +8,7 @@ import (
 	"regexp"
 
 	"github.com/tomoram/code-central/api"
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/httpapi"
 	"github.com/tomoram/code-central/ops"
 	"github.com/tomoram/code-central/usage"
@@ -78,7 +78,7 @@ func actor(named api.Actor) (api.Actor, error) {
 func (m calls) record(call ops.Call, v any, err error) {
 	var code api.Code
 	if err != nil {
-		e := core.ErrorOf(err)
+		e := foundation.ErrorOf(err)
 		v, code = e, e.Code
 	}
 	text, merr := json.Marshal(v)

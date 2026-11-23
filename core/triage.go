@@ -30,7 +30,7 @@ func awaitsTriage(r store.Reader, key string, spec int) bool {
 
 // whyNotIncoming says why t isn't an Incoming Issue, "" when it is.
 func whyNotIncoming(r store.Reader, key string, t domain.Ticket) string {
-	id := DisplayID(key, t.Number)
+	id := domain.DisplayID(key, t.Number)
 	_, onInbox := inboxOn(r, key, t.Spec)
 	switch {
 	case !onInbox || !t.Link.Linked():

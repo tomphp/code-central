@@ -24,7 +24,7 @@ func (c *Core) NewTicket(ctx context.Context, key string, in api.NewTicketInput)
 	}
 	title := titleLine(in.Text)
 	if title == "" {
-		return api.Written[api.TicketView]{}, invalid("text", "a New Ticket needs text; its first line becomes the Ticket's title")
+		return api.Written[api.TicketView]{}, api.InvalidField("text", "a New Ticket needs text; its first line becomes the Ticket's title")
 	}
 	var v api.Written[api.TicketView]
 	err := c.store.Update(func(w store.Writer) error {
@@ -61,7 +61,7 @@ func (c *Core) NewTicket(ctx context.Context, key string, in api.NewTicketInput)
 // p is Archived. A Finished Spec takes one. new_ticket refuses with it,
 // and SpecDetail's ticketable is whether it is "".
 func whyNotNewTicket(p domain.Project, s domain.Spec, tickets []domain.Ticket) string {
-	id := DisplayID(p.Key, s.Number)
+	id := domain.DisplayID(p.Key, s.Number)
 	switch {
 	case !p.Archived.IsZero():
 		return archivedError(p.Key).Message

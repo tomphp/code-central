@@ -105,7 +105,7 @@ var keyPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 // defaults to the key.
 func (c *Core) CreateProject(_ context.Context, in api.CreateProjectInput) (api.ProjectView, error) {
 	if !keyPattern.MatchString(in.Key) {
-		return api.ProjectView{}, invalid("key", "a Project Key is lowercase letters, digits, '.', '_' and '-', starting with a letter or digit")
+		return api.ProjectView{}, api.InvalidField("key", "a Project Key is lowercase letters, digits, '.', '_' and '-', starting with a letter or digit")
 	}
 	name := in.DisplayName
 	if name == "" {
@@ -121,7 +121,7 @@ func (c *Core) CreateProject(_ context.Context, in api.CreateProjectInput) (api.
 	p := domain.Project{Key: in.Key, DisplayName: name, Created: c.now(), Mode: mode}
 	err := c.store.Update(func(w store.Writer) error {
 		if _, ok := w.Project(in.Key); ok {
-			return invalid("key", "a Project with key %q already exists", in.Key)
+			return api.InvalidField("key", "a Project with key %q already exists", in.Key)
 		}
 		return w.PutProject(p)
 	})
@@ -137,7 +137,7 @@ func (c *Core) GetProject(_ context.Context, key string) (api.ProjectView, error
 	err := c.store.View(func(r store.Reader) error {
 		p, ok := r.Project(key)
 		if !ok {
-			return unknownProject(key)
+			return api.UnknownProjectError(key)
 		}
 		v = c.projectView(p)
 		v.Landing.OpenPullRequests = openPullRequests(r, p)
@@ -150,7 +150,7 @@ func (c *Core) GetProject(_ context.Context, key string) (api.ProjectView, error
 // CreateSpec is create_spec(title, body, full?).
 func (c *Core) CreateSpec(_ context.Context, key string, in api.CreateSpecInput) (api.Written[api.SpecView], error) {
 	if strings.TrimSpace(in.Title) == "" {
-		return api.Written[api.SpecView]{}, invalid("title", "a Spec needs a title")
+		return api.Written[api.SpecView]{}, api.InvalidField("title", "a Spec needs a title")
 	}
 	var v api.Written[api.SpecView]
 	err := c.store.Update(func(w store.Writer) error {
@@ -173,17 +173,17 @@ func (c *Core) CreateSpec(_ context.Context, key string, in api.CreateSpecInput)
 // blocked_by, tags?, full?).
 func (c *Core) CreateTicket(ctx context.Context, key string, in api.CreateTicketInput) (api.Written[api.TicketView], error) {
 	if strings.TrimSpace(in.Title) == "" {
-		return api.Written[api.TicketView]{}, invalid("title", "a Ticket needs a title")
+		return api.Written[api.TicketView]{}, api.InvalidField("title", "a Ticket needs a title")
 	}
 	state := in.State
 	if state == "" {
 		state = domain.Draft
 	}
 	if state != domain.Draft && state != domain.Ready {
-		return api.Written[api.TicketView]{}, invalid("state", "a new Ticket is Draft or Ready, not %q", state)
+		return api.Written[api.TicketView]{}, api.InvalidField("state", "a new Ticket is Draft or Ready, not %q", state)
 	}
 	if in.Spec == "" {
-		return api.Written[api.TicketView]{}, invalid("spec", "every Ticket belongs to a Spec")
+		return api.Written[api.TicketView]{}, api.InvalidField("spec", "every Ticket belongs to a Spec")
 	}
 	if err := checkTicketLabels("labels", in.Labels); err != nil {
 		return api.Written[api.TicketView]{}, err
@@ -237,7 +237,7 @@ func (c *Core) GetTicket(_ context.Context, key string, in api.GetTicketInput) (
 	err = c.store.View(func(r store.Reader) error {
 		p, ok := r.Project(key)
 		if !ok {
-			return unknownProject(key)
+			return api.UnknownProjectError(key)
 		}
 		// It is read whole: left_out counts the parts it leaves out.
 		t, err := resolveTicket(r, key, "get_ticket", "ticket", in.Ticket, whole...)
@@ -245,7 +245,7 @@ func (c *Core) GetTicket(_ context.Context, key string, in api.GetTicketInput) (
 			return err
 		}
 		v = shapeView(c.ticketView(r, key, t), r, p, t, in.Parts, parts, in.WithModelChoice)
-		v.Retros = retrosOf(r, key, DisplayID(key, t.Number))
+		v.Retros = retrosOf(r, key, domain.DisplayID(key, t.Number))
 		return nil
 	})
 	return v, err
@@ -325,7 +325,7 @@ func (c *Core) FindTicketViews(_ context.Context, key string, in api.FindTickets
 func (c *Core) findIn(r store.Reader, key string, in api.FindTicketsInput) (*evaluation, []domain.Ticket, error) {
 	for _, s := range in.State {
 		if !s.Valid() {
-			return nil, nil, invalid("state", "unknown State %q", s)
+			return nil, nil, api.InvalidField("state", "unknown State %q", s)
 		}
 	}
 	if err := checkTagFilter(in.Tags); err != nil {
@@ -333,14 +333,14 @@ func (c *Core) findIn(r store.Reader, key string, in api.FindTicketsInput) (*eva
 	}
 	p, ok := r.Project(key)
 	if !ok {
-		return nil, nil, unknownProject(key)
+		return nil, nil, api.UnknownProjectError(key)
 	}
 	f := store.TicketFilter{States: in.State, Order: store.ByClaim}
 	if len(f.States) == 0 {
 		f.States = unfinished
 	}
 	if in.Spec != "" {
-		n, err := refNumber(in.Spec, key, "spec")
+		n, err := api.RefNumber(in.Spec, key, "spec")
 		if err != nil {
 			return nil, nil, err
 		}
@@ -398,7 +398,7 @@ func hasAll(labels []string, tags map[string]string, wantLabels []string, wantTa
 func (c *Core) ticketRow(r store.Reader, e *evaluation, t domain.Ticket, onMap, withBlockers bool) api.TicketRow {
 	key := e.p.Key
 	row := api.TicketRow{
-		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
+		ID: domain.DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: domain.DisplayID(key, t.Spec),
 		Labels: orEmpty(t.Labels), Blocked: c.blockRule(r, key).blocked(t), Created: t.Created, Updated: t.Updated, Link: linkView(t.Link),
 		CIResult: e.ci.ticket(t).result, PullRequest: pullRequestView(homePullRequest(key, t)),
 		WaitingForSpec: waitingForSpec(r, e.p, t),
@@ -439,7 +439,7 @@ func (c *Core) projectView(p domain.Project) api.ProjectView {
 
 func specView(key string, s domain.Spec) api.SpecView {
 	return api.SpecView{
-		ID: DisplayID(key, s.Number), Title: s.Title, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags),
+		ID: domain.DisplayID(key, s.Number), Title: s.Title, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags),
 		Created: s.Created, Updated: s.Updated, Body: s.Body, Edits: editViews(s.Edits), Link: linkView(s.Link),
 	}
 }
@@ -456,8 +456,8 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t domain.Ticket) api.
 	sp, _ := r.Spec(key, t.Spec)
 	rule := e.rule
 	v := api.TicketView{
-		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State,
-		Spec:   api.SpecRef{ID: DisplayID(key, t.Spec), Title: sp.Title, Branch: domain.SpecBranch(DisplayID(key, t.Spec), sp.Tags)},
+		ID: domain.DisplayID(key, t.Number), Title: t.Title, State: t.State,
+		Spec:   api.SpecRef{ID: domain.DisplayID(key, t.Spec), Title: sp.Title, Branch: domain.SpecBranch(domain.DisplayID(key, t.Spec), sp.Tags)},
 		Labels: orEmpty(t.Labels), Tags: orEmptyMap(t.Tags),
 		BlockedBy: displayIDs(key, t.BlockedBy), Replacements: displayIDs(key, t.Replacements),
 		Blockers: rule.blockerViews(t),
@@ -524,7 +524,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t domain.Ticket) api.
 func displayIDs(key string, ns []int) []string {
 	out := []string{}
 	for _, n := range ns {
-		out = append(out, DisplayID(key, n))
+		out = append(out, domain.DisplayID(key, n))
 	}
 	return out
 }

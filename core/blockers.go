@@ -32,7 +32,7 @@ func (c *Core) AddBlocker(_ context.Context, key string, in api.BlockerInput) (a
 		}
 		b := blocker.Number
 		if b == t.Number {
-			return false, &api.Error{Code: api.Cycle, Message: fmt.Sprintf("%s can't block itself", DisplayID(key, b))}
+			return false, &api.Error{Code: api.Cycle, Message: fmt.Sprintf("%s can't block itself", domain.DisplayID(key, b))}
 		}
 		if slices.Contains(t.BlockedBy, b) {
 			return false, nil
@@ -53,7 +53,7 @@ func (c *Core) AddBlocker(_ context.Context, key string, in api.BlockerInput) (a
 // Replacements is unlinked by removing that Cancelled Blocker.
 func (c *Core) RemoveBlocker(_ context.Context, key string, in api.BlockerInput) (api.Written[api.TicketView], error) {
 	return c.updateTicketIn(key, "remove_blocker", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
-		b, err := refNumber(in.Blocker, key, "blocker")
+		b, err := api.RefNumber(in.Blocker, key, "blocker")
 		if err != nil {
 			return false, err
 		}
@@ -65,12 +65,12 @@ func (c *Core) RemoveBlocker(_ context.Context, key string, in api.BlockerInput)
 			return true, nil
 		}
 		for _, bv := range c.blockRule(r, key).blockerViews(*t) {
-			if bv.ID == DisplayID(key, b) && bv.Via != "" {
-				return false, invalid("blocker", "%s blocks %s only as a Replacement for Cancelled %s; remove %s instead",
-					bv.ID, DisplayID(key, t.Number), bv.Via, bv.Via)
+			if bv.ID == domain.DisplayID(key, b) && bv.Via != "" {
+				return false, api.InvalidField("blocker", "%s blocks %s only as a Replacement for Cancelled %s; remove %s instead",
+					bv.ID, domain.DisplayID(key, t.Number), bv.Via, bv.Via)
 			}
 		}
-		return false, invalid("blocker", "%s is not a Blocker of %s", DisplayID(key, b), DisplayID(key, t.Number))
+		return false, api.InvalidField("blocker", "%s is not a Blocker of %s", domain.DisplayID(key, b), domain.DisplayID(key, t.Number))
 	})
 }
 
@@ -121,9 +121,9 @@ func (b blockRule) blockerViews(t domain.Ticket) []api.BlockerView {
 			// Within a Spec, a Spec-landed Blocker clears once its work is
 			// merged into the Spec Branch.
 			cleared := bt.Spec == t.Spec && bt.State == domain.Accepted && specMergeCounts(bt) && specLanded(b.r, b.p, bt)
-			v := api.BlockerView{ID: DisplayID(key, m), Title: bt.Title, State: bt.State, Cleared: &cleared}
+			v := api.BlockerView{ID: domain.DisplayID(key, m), Title: bt.Title, State: bt.State, Cleared: &cleared}
 			if m != n {
-				v.Via = DisplayID(key, n)
+				v.Via = domain.DisplayID(key, n)
 			}
 			out = append(out, v)
 		}
@@ -150,7 +150,7 @@ func (b blockRule) blockedError(t domain.Ticket, actor api.Actor) error {
 		names = append(names, s+")")
 	}
 	allowed := slices.DeleteFunc(allowedActions(t.State, actor), func(a string) bool { return a == "claim" })
-	msg := fmt.Sprintf("%s is blocked by %s, so claim is not allowed", DisplayID(b.p.Key, t.Number), strings.Join(names, ", "))
+	msg := fmt.Sprintf("%s is blocked by %s, so claim is not allowed", domain.DisplayID(b.p.Key, t.Number), strings.Join(names, ", "))
 	if len(allowed) > 0 {
 		msg += "; allowed from " + string(t.State) + ": " + strings.Join(allowed, ", ")
 	}
@@ -228,7 +228,7 @@ func waitPath(r store.Reader, key string, from []int, target func(int) bool) []i
 func cycleError(key string, chain []int) error {
 	ids := make([]string, len(chain))
 	for i, n := range chain {
-		ids[i] = DisplayID(key, n)
+		ids[i] = domain.DisplayID(key, n)
 	}
 	return &api.Error{Code: api.Cycle, Message: "that would form a cycle: " + strings.Join(ids, " → ") + " (each waits on the next)"}
 }

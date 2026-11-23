@@ -107,7 +107,7 @@ func (c *Core) ticketIssueWrites(r store.Reader, key string, t domain.Ticket, hi
 	if !t.Link.Attached() {
 		return api.IssueWrites{}, false
 	}
-	id := DisplayID(key, t.Number)
+	id := domain.DisplayID(key, t.Number)
 	w = api.IssueWrites{Target: id, Link: *linkView(t.Link), Comments: []api.IssueComment{}}
 	if reason, latest, _ := triageComment(t, api.OptionWontFix); latest {
 		w.Label, w.Close = domain.LabelWontFix, api.CloseNotPlanned
@@ -133,7 +133,7 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec, hide b
 	if !s.Link.Attached() || !s.Link.Outbound {
 		return api.IssueWrites{}, false
 	}
-	id := DisplayID(key, s.Number)
+	id := domain.DisplayID(key, s.Number)
 	w = api.IssueWrites{Target: id, Link: *linkView(s.Link), Comments: []api.IssueComment{}}
 	due := func(k, text string) {
 		if strings.TrimSpace(text) != "" && !slices.Contains(s.Link.Written, k) {
@@ -163,7 +163,7 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s domain.Spec, hide b
 	var list []string
 	for _, t := range landed {
 		line := landedLine(r, p, t, hide)
-		due(domain.CommentLanded+DisplayID(key, t.Number), "Landed "+line+".")
+		due(domain.CommentLanded+domain.DisplayID(key, t.Number), "Landed "+line+".")
 		list = append(list, "- "+line)
 	}
 	_, finishedSpec := summarise(tickets)
@@ -245,7 +245,7 @@ func bodyAt(s domain.Spec, at time.Time) string {
 // in landing order, each as repositoryLabel@commit. Hidden, it has no ID
 // and its title names other items by title as writtenText does.
 func landedLine(r store.Reader, p domain.Project, t domain.Ticket, hide bool) string {
-	line := fmt.Sprintf("**%s** (%s)", t.Title, DisplayID(p.Key, t.Number))
+	line := fmt.Sprintf("**%s** (%s)", t.Title, domain.DisplayID(p.Key, t.Number))
 	if hide {
 		line = fmt.Sprintf("**%s**", writtenText(r, p.Key, t.Title, true))
 	}
@@ -326,7 +326,7 @@ func (c *Core) ReportIssueWritten(ctx context.Context, key string, in api.Report
 		return api.LinkedRow{}, err
 	}
 	if strings.TrimSpace(in.Key) == "" {
-		return api.LinkedRow{}, invalid("key", "name the key of the comment written")
+		return api.LinkedRow{}, api.InvalidField("key", "name the key of the comment written")
 	}
 	return c.updateLink(ctx, key, in.Target, func(l *domain.Link) (map[string]string, error) {
 		if slices.Contains(l.Written, in.Key) {

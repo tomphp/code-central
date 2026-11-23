@@ -72,10 +72,10 @@ func ciRunView(key string, r domain.CIRun) api.CIRunView {
 		v.Jobs = append(v.Jobs, api.CIJobView{Name: j.Name, Conclusion: j.Conclusion, URL: j.URL})
 	}
 	if r.Ticket != 0 {
-		v.Ticket = DisplayID(key, r.Ticket)
+		v.Ticket = domain.DisplayID(key, r.Ticket)
 	}
 	if r.Rule != 0 {
-		v.Rule = DisplayID(key, r.Rule)
+		v.Rule = domain.DisplayID(key, r.Rule)
 	}
 	return v
 }
@@ -171,7 +171,7 @@ func countedRuns(commit string, runs []domain.CIRun) map[int64]domain.CIRun {
 func (c *Core) ReportPushedCommit(ctx context.Context, key string, in api.ReportPushedCommitInput) (api.Written[api.TicketView], error) {
 	commit := strings.TrimSpace(in.Commit)
 	if commit == "" {
-		return api.Written[api.TicketView]{}, invalid("commit", "report_pushed_commit needs the commit the Factory pushed")
+		return api.Written[api.TicketView]{}, api.InvalidField("commit", "report_pushed_commit needs the commit the Factory pushed")
 	}
 	// The Tickets already waiting on the commit get a change notice: its
 	// CI item lists one more (code-central-432).
@@ -179,7 +179,7 @@ func (c *Core) ReportPushedCommit(ctx context.Context, key string, in api.Report
 	v, err := c.updateTicketIn(key, "report_pushed_commit", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
 		sharing = nil
 		if t.State != domain.Accepted && t.State != domain.InReview {
-			return false, &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s is %s: only an Accepted or In Review Ticket is pushed", DisplayID(key, t.Number), t.State)}
+			return false, &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s is %s: only an Accepted or In Review Ticket is pushed", domain.DisplayID(key, t.Number), t.State)}
 		}
 		p, _ := r.Project(key)
 		name, err := repositoryOf(p, "repository", in.Repository)
@@ -230,7 +230,7 @@ func repositoryOf(p domain.Project, field, given string) (string, error) {
 // notARepository refuses name, on field, as naming none of p's
 // Repositories, which it lists.
 func notARepository(p domain.Project, field, name string) error {
-	return invalid(field, "%q is not one of this Project's Repositories, which are %s", name, strings.Join(repositoryNames(p.RepositoryList()), ", "))
+	return api.InvalidField(field, "%q is not one of this Project's Repositories, which are %s", name, strings.Join(repositoryNames(p.RepositoryList()), ", "))
 }
 
 // ReportCIRuns is the CI Watcher's report_ci_runs: it upserts each run,
@@ -290,7 +290,7 @@ func (c *Core) ReportCIRuns(ctx context.Context, key string, in api.ReportCIRuns
 	}
 	// In Ticket order, so what watches the events sees them the same way each time.
 	for _, n := range slices.Sorted(maps.Keys(changed)) {
-		c.events.Publish(events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, n)})
+		c.events.Publish(events.Event{Type: events.TicketChanged, Project: key, ID: domain.DisplayID(key, n)})
 	}
 	// A failed result can make its commit's item Auto-fix ready.
 	if err := c.sweepAutoFix(ctx, key); err != nil {
@@ -336,19 +336,19 @@ func (c *Core) ciRunOf(r store.Reader, p domain.Project, v api.CIRunView, field 
 	run.Repository = recordName(key, name)
 	switch {
 	case run.ID <= 0:
-		return run, invalid(field+".id", "a CI Run needs its CI Provider's run ID")
+		return run, api.InvalidField(field+".id", "a CI Run needs its CI Provider's run ID")
 	case run.Attempt <= 0:
-		return run, invalid(field+".attempt", "a CI Run's attempt counts from 1, not %d", run.Attempt)
+		return run, api.InvalidField(field+".attempt", "a CI Run's attempt counts from 1, not %d", run.Attempt)
 	case run.Workflow == "" || path.Base(run.Workflow) != run.Workflow:
-		return run, invalid(field+".workflow", "%q isn't a workflow file's base name, such as ci.yml", run.Workflow)
+		return run, api.InvalidField(field+".workflow", "%q isn't a workflow file's base name, such as ci.yml", run.Workflow)
 	case run.Commit == "":
-		return run, invalid(field+".commit", "a CI Run needs the commit it ran on")
+		return run, api.InvalidField(field+".commit", "a CI Run needs the commit it ran on")
 	case !run.Status.Valid():
-		return run, invalid(field+".status", "%q isn't a CI Run status (%s)", run.Status, joinNames(domain.CIRunStatuses))
+		return run, api.InvalidField(field+".status", "%q isn't a CI Run status (%s)", run.Status, joinNames(domain.CIRunStatuses))
 	case !run.Conclusion.Valid():
-		return run, invalid(field+".conclusion", "%q isn't a CI conclusion (%s)", run.Conclusion, joinNames(domain.CIConclusions))
+		return run, api.InvalidField(field+".conclusion", "%q isn't a CI conclusion (%s)", run.Conclusion, joinNames(domain.CIConclusions))
 	case (run.Status == domain.CICompleted) != (run.Conclusion != ""):
-		return run, invalid(field+".conclusion", "a completed CI Run has a conclusion, and an unfinished one has none")
+		return run, api.InvalidField(field+".conclusion", "a completed CI Run has a conclusion, and an unfinished one has none")
 	}
 	if v.Started != nil {
 		run.Started = v.Started.UTC()
@@ -358,13 +358,13 @@ func (c *Core) ciRunOf(r store.Reader, p domain.Project, v api.CIRunView, field 
 	}
 	for j, job := range v.Jobs {
 		if !job.Conclusion.Valid() {
-			return run, invalid(fmt.Sprintf("%s.jobs[%d].conclusion", field, j), "%q isn't a CI conclusion (%s)", job.Conclusion, joinNames(domain.CIConclusions))
+			return run, api.InvalidField(fmt.Sprintf("%s.jobs[%d].conclusion", field, j), "%q isn't a CI conclusion (%s)", job.Conclusion, joinNames(domain.CIConclusions))
 		}
 		run.Jobs = append(run.Jobs, domain.CIJob{Name: job.Name, Conclusion: job.Conclusion, URL: job.URL})
 	}
 	switch {
 	case (v.Ticket == "") == (v.Rule == ""):
-		return run, invalid(field+".ticket", "a CI Run is tracked against one Ticket or one CI Rule")
+		return run, api.InvalidField(field+".ticket", "a CI Run is tracked against one Ticket or one CI Rule")
 	case v.Ticket != "":
 		t, err := resolveTicket(r, key, "report_ci_runs", field+".ticket", api.Ref(v.Ticket))
 		if err != nil {
@@ -372,12 +372,12 @@ func (c *Core) ciRunOf(r store.Reader, p domain.Project, v api.CIRunView, field 
 		}
 		run.Ticket = t.Number
 	default:
-		n, err := refNumber(api.Ref(v.Rule), key, field+".rule")
+		n, err := api.RefNumber(api.Ref(v.Rule), key, field+".rule")
 		if err != nil {
 			return run, err
 		}
 		if _, ok := r.Spec(key, n); !ok {
-			return run, notFound("there is no CI Rule on Spec %s", DisplayID(key, n))
+			return run, api.NotFoundError("there is no CI Rule on Spec %s", domain.DisplayID(key, n))
 		}
 		run.Rule = n
 	}
@@ -416,7 +416,7 @@ func ciWaiting(ci *ciState, name string) []api.CIWaitingCommit {
 			if !ci.watched(rc, pc) {
 				continue
 			}
-			w := api.CIWaitingCommit{Ticket: DisplayID(key, t.Number), Commit: pc.Commit, Pushed: pc.Pushed}
+			w := api.CIWaitingCommit{Ticket: domain.DisplayID(key, t.Number), Commit: pc.Commit, Pushed: pc.Pushed}
 			if pr := pullRequestIn(key, t, name); pr != nil {
 				w.PullRequest = pr.Number
 			}

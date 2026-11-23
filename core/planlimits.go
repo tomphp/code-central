@@ -21,7 +21,7 @@ func checkPlanLimits(in *api.PlanLimits) (*api.PlanLimits, error) {
 		return nil, nil
 	}
 	if in.ObservedAt.IsZero() {
-		return nil, invalid("plan_limits.observed_at", "plan_limits.observed_at is required: when the Factory read the figures, as an RFC 3339 time")
+		return nil, api.InvalidField("plan_limits.observed_at", "plan_limits.observed_at is required: when the Factory read the figures, as an RFC 3339 time")
 	}
 	fiveHour, err := checkPlanLimitWindow("plan_limits.five_hour", in.FiveHour)
 	if err != nil {
@@ -42,10 +42,10 @@ func checkPlanLimitWindow(field string, in *api.PlanLimitWindow) (*api.PlanLimit
 	}
 	// Written this way round, the check refuses NaN too.
 	if p := in.UsedPercent; !(p >= 0 && p <= 100) {
-		return nil, invalid(field+".used_percent", "%s.used_percent is from 0 to 100, not %g", field, p)
+		return nil, api.InvalidField(field+".used_percent", "%s.used_percent is from 0 to 100, not %g", field, p)
 	}
 	if in.ResetsAt.IsZero() {
-		return nil, invalid(field+".resets_at", "%s.resets_at is required: when the window resets, as an RFC 3339 time", field)
+		return nil, api.InvalidField(field+".resets_at", "%s.resets_at is required: when the window resets, as an RFC 3339 time", field)
 	}
 	return &api.PlanLimitWindow{UsedPercent: in.UsedPercent, ResetsAt: in.ResetsAt.UTC()}, nil
 }

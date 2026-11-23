@@ -32,16 +32,16 @@ func (c *Core) ReportRepositories(_ context.Context, key string, in api.ReportRe
 		name, path, problem := strings.TrimSpace(r.Name), strings.TrimSpace(r.Path), strings.TrimSpace(r.Problem)
 		switch {
 		case name == "":
-			return api.Written[api.ProjectView]{}, invalid("repositories", "each Repository needs its name")
+			return api.Written[api.ProjectView]{}, api.InvalidField("repositories", "each Repository needs its name")
 		case path == "":
-			return api.Written[api.ProjectView]{}, invalid("repositories", "Repository %s needs the path of its clone", name)
+			return api.Written[api.ProjectView]{}, api.InvalidField("repositories", "Repository %s needs the path of its clone", name)
 		case !slices.Contains(api.CloneStates(), r.State):
-			return api.Written[api.ProjectView]{}, invalid("repositories", "Repository %s's state is ready or missing, not %q", name, r.State)
+			return api.Written[api.ProjectView]{}, api.InvalidField("repositories", "Repository %s's state is ready or missing, not %q", name, r.State)
 		case r.State == api.CloneMissing && problem == "":
-			return api.Written[api.ProjectView]{}, invalid("repositories", "Repository %s is missing, so needs the problem", name)
+			return api.Written[api.ProjectView]{}, api.InvalidField("repositories", "Repository %s is missing, so needs the problem", name)
 		}
 		if _, dup := report[name]; dup {
-			return api.Written[api.ProjectView]{}, invalid("repositories", "Repository %s is reported twice", name)
+			return api.Written[api.ProjectView]{}, api.InvalidField("repositories", "Repository %s is reported twice", name)
 		}
 		if r.State == api.CloneReady {
 			problem = ""

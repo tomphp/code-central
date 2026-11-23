@@ -230,7 +230,7 @@ func (c *Core) WatchTimedReasons(ctx context.Context, ticks <-chan time.Time, ch
 			return
 		case <-ticks:
 			for _, k := range c.timedReasonChanges() {
-				changed(k.project, DisplayID(k.project, k.ticket))
+				changed(k.project, domain.DisplayID(k.project, k.ticket))
 			}
 		}
 	}

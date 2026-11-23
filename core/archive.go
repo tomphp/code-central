@@ -34,7 +34,7 @@ func archivedError(key string) *api.Error {
 func writable(r store.Reader, key string) error {
 	p, ok := r.Project(key)
 	if !ok {
-		return unknownProject(key)
+		return api.UnknownProjectError(key)
 	}
 	if !p.Archived.IsZero() {
 		return archivedError(key)
@@ -76,7 +76,7 @@ func (c *Core) UnarchiveProject(ctx context.Context, key string) (api.ProjectVie
 	err := c.store.Update(func(w store.Writer) error {
 		p, ok := w.Project(key)
 		if !ok {
-			return unknownProject(key)
+			return api.UnknownProjectError(key)
 		}
 		if p.Archived.IsZero() {
 			v = c.projectView(p)
@@ -94,7 +94,7 @@ func (c *Core) UnarchiveProject(ctx context.Context, key string) (api.ProjectVie
 func unfinishedTickets(r store.Reader, key string) []string {
 	var out []string
 	for _, t := range r.FindTickets(key, store.TicketFilter{States: unfinished}) {
-		out = append(out, fmt.Sprintf("%s (%s)", DisplayID(key, t.Number), t.State))
+		out = append(out, fmt.Sprintf("%s (%s)", domain.DisplayID(key, t.Number), t.State))
 	}
 	return out
 }

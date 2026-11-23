@@ -142,13 +142,13 @@ func (c *Core) ReportHeartbeat(_ context.Context, key string, in api.ReportHeart
 	name, host := strings.TrimSpace(in.Factory), strings.TrimSpace(in.Host)
 	switch {
 	case name == "":
-		return api.Written[api.ProjectView]{}, invalid("factory", "factory is required: the Factory's name")
+		return api.Written[api.ProjectView]{}, api.InvalidField("factory", "factory is required: the Factory's name")
 	case host == "":
-		return api.Written[api.ProjectView]{}, invalid("host", "host is required: the machine the Factory runs on")
+		return api.Written[api.ProjectView]{}, api.InvalidField("host", "host is required: the machine the Factory runs on")
 	case !slices.Contains([]api.HeartbeatState{api.HeartbeatOnline, api.HeartbeatDraining, api.HeartbeatStopping}, in.State):
-		return api.Written[api.ProjectView]{}, invalid("state", "state is one of online, draining, stopping, not %q", in.State)
+		return api.Written[api.ProjectView]{}, api.InvalidField("state", "state is one of online, draining, stopping, not %q", in.State)
 	case in.IntervalSeconds < 1 || in.IntervalSeconds > maxHeartbeatInterval:
-		return api.Written[api.ProjectView]{}, invalid("interval_seconds", "interval_seconds is from 1 to %d, not %d", maxHeartbeatInterval, in.IntervalSeconds)
+		return api.Written[api.ProjectView]{}, api.InvalidField("interval_seconds", "interval_seconds is from 1 to %d, not %d", maxHeartbeatInterval, in.IntervalSeconds)
 	}
 	reported, err := checkPlanLimits(in.PlanLimits)
 	if err != nil {

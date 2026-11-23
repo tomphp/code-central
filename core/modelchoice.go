@@ -66,7 +66,7 @@ func effortLevels(r store.Reader, key string) []string {
 func checkEffort(r store.Reader, key, field, effort string) error {
 	levels := effortLevels(r, key)
 	if !slices.Contains(levels, effort) {
-		return invalid(field, "effort %q isn't a valid level; use one of %s", effort, strings.Join(levels, ", "))
+		return api.InvalidField(field, "effort %q isn't a valid level; use one of %s", effort, strings.Join(levels, ", "))
 	}
 	return nil
 }
@@ -78,7 +78,7 @@ func (c *Core) GetModelChoice(_ context.Context, key string, in api.GetModelChoi
 	err := c.store.View(func(r store.Reader) error {
 		p, ok := r.Project(key)
 		if !ok {
-			return unknownProject(key)
+			return api.UnknownProjectError(key)
 		}
 		t, err := resolveTicket(r, key, "get_model_choice", "ticket", in.Ticket)
 		if err != nil {
@@ -96,7 +96,7 @@ func (c *Core) ReportModelChoice(_ context.Context, key string, in api.ReportMod
 	model, effort := strings.TrimSpace(in.Model), strings.TrimSpace(in.Effort)
 	for field, v := range map[string]string{"model": model, "effort": effort} {
 		if strings.ContainsAny(v, "\r\n") {
-			return api.Written[api.TicketView]{}, invalid(field, "a %s is single-line", field)
+			return api.Written[api.TicketView]{}, api.InvalidField(field, "a %s is single-line", field)
 		}
 	}
 	return c.updateTicket(key, "report_model_choice", in.Ticket, in.Full, func(t *domain.Ticket) (bool, error) {

@@ -18,10 +18,10 @@ import (
 func (c *Core) SubmitPrototype(_ context.Context, key string, in api.SubmitPrototypeInput) (api.Written[api.TicketView], error) {
 	title := titleLine(in.Text)
 	if title == "" {
-		return api.Written[api.TicketView]{}, invalid("text", "a Prototype needs text; its first line becomes the Ticket's title")
+		return api.Written[api.TicketView]{}, api.InvalidField("text", "a Prototype needs text; its first line becomes the Ticket's title")
 	}
 	if in.Spec == "" {
-		return api.Written[api.TicketView]{}, invalid("spec", "a Prototype is on a Spec")
+		return api.Written[api.TicketView]{}, api.InvalidField("spec", "a Prototype is on a Spec")
 	}
 	var v api.Written[api.TicketView]
 	err := c.store.Update(func(w store.Writer) error {

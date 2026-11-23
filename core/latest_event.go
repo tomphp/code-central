@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 )
 
@@ -115,5 +116,5 @@ func (c *Core) latestEventChanged(project string, ticket int) {
 }
 
 func (c *Core) publishTicketChanged(project string, ticket int) {
-	c.events.Publish(events.Event{Type: events.TicketChanged, Project: project, ID: DisplayID(project, ticket)})
+	c.events.Publish(events.Event{Type: events.TicketChanged, Project: project, ID: domain.DisplayID(project, ticket)})
 }

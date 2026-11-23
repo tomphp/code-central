@@ -40,13 +40,13 @@ func (c *Core) longPollKey(key, factory, host string) (heartbeatKey, error) {
 	name, host := strings.TrimSpace(factory), strings.TrimSpace(host)
 	switch {
 	case name == "":
-		return heartbeatKey{}, invalid("factory", "factory is required: the Factory's name, as its Heartbeat gives it")
+		return heartbeatKey{}, api.InvalidField("factory", "factory is required: the Factory's name, as its Heartbeat gives it")
 	case host == "":
-		return heartbeatKey{}, invalid("host", "host is required: the machine the Factory runs on, as its Heartbeat gives it")
+		return heartbeatKey{}, api.InvalidField("host", "host is required: the machine the Factory runs on, as its Heartbeat gives it")
 	}
 	if err := c.store.View(func(r store.Reader) error {
 		if _, ok := r.Project(key); !ok {
-			return unknownProject(key)
+			return api.UnknownProjectError(key)
 		}
 		return nil
 	}); err != nil {

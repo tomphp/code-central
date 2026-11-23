@@ -35,7 +35,7 @@ func ciReruns(ci *ciState, name string) []api.CIRerun {
 			if slices.ContainsFunc(out, func(x api.CIRerun) bool { return x.Commit == commit && x.ID == a.ID && x.Attempt == a.Attempt }) {
 				continue
 			}
-			out = append(out, api.CIRerun{Ticket: DisplayID(key, t.Number), Commit: commit, ID: a.ID, Attempt: a.Attempt, Requested: ci.response(rc.record, commit).Rerun})
+			out = append(out, api.CIRerun{Ticket: domain.DisplayID(key, t.Number), Commit: commit, ID: a.ID, Attempt: a.Attempt, Requested: ci.response(rc.record, commit).Rerun})
 		}
 	}
 	return out
@@ -48,7 +48,7 @@ func (c *Core) GetCIWatch(_ context.Context, key string) (api.CIWatch, error) {
 	err := c.store.View(func(r store.Reader) error {
 		p, ok := r.Project(key)
 		if !ok {
-			return unknownProject(key)
+			return api.UnknownProjectError(key)
 		}
 		v := ciView(p, api.WatcherView{})
 		home, _ := ciEntryOf(p, key)
@@ -103,7 +103,7 @@ func ciRulesLastRuns(runs []domain.CIRun) map[int]time.Time {
 func ciTicketCommits(r store.Reader, key string) (pushed, landed []api.CITicketCommit) {
 	pushed, landed = []api.CITicketCommit{}, []api.CITicketCommit{}
 	for _, tc := range r.TicketCommits(key) {
-		row := api.CITicketCommit{Ticket: DisplayID(key, tc.Ticket), Spec: DisplayID(key, tc.Spec), Repository: tc.Repository, Commit: tc.Commit}
+		row := api.CITicketCommit{Ticket: domain.DisplayID(key, tc.Ticket), Spec: domain.DisplayID(key, tc.Spec), Repository: tc.Repository, Commit: tc.Commit}
 		if tc.Kind == store.CommitLanded {
 			landed = append(landed, row)
 		} else {

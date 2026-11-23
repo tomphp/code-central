@@ -12,7 +12,7 @@ import (
 // A Project's mode (domain.Mode) says where init puts its files: committed
 // to the repository, or kept local to one checkout (`init --local`).
 func invalidMode(m domain.Mode) *api.Error {
-	return invalid("mode", "mode %q is neither %q nor %q", m, domain.ModeCommitted, domain.ModeLocal)
+	return api.InvalidField("mode", "mode %q is neither %q nor %q", m, domain.ModeCommitted, domain.ModeLocal)
 }
 
 // SetProjectMode is set_project_mode(key, mode): init calls it when the

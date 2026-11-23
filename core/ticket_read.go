@@ -22,7 +22,7 @@ func partSet(asked, all []string) (map[string]bool, error) {
 	out := map[string]bool{}
 	for _, p := range asked {
 		if !slices.Contains(all, p) {
-			return nil, invalid("parts", "unknown part %q (the parts are %s)", p, strings.Join(all, ", "))
+			return nil, api.InvalidField("parts", "unknown part %q (the parts are %s)", p, strings.Join(all, ", "))
 		}
 		out[p] = true
 	}

@@ -93,7 +93,7 @@ func newChats() *chats {
 func (c *Core) GetChat(_ context.Context, key string, _ api.GetChatInput) (api.ConversationView, error) {
 	if err := c.store.View(func(r store.Reader) error {
 		if _, ok := r.Project(key); !ok {
-			return unknownProject(key)
+			return api.UnknownProjectError(key)
 		}
 		return nil
 	}); err != nil {
@@ -123,9 +123,9 @@ func (c *Core) StartConversation(ctx context.Context, key string, in api.StartCo
 		}
 		switch {
 		case in.Model != "" && model == "":
-			return invalid("model", "the model is blank; leave it empty for the Chat row's")
+			return api.InvalidField("model", "the model is blank; leave it empty for the Chat row's")
 		case strings.ContainsAny(model, "\r\n"):
-			return invalid("model", "the model spans more than one line; a model is one line")
+			return api.InvalidField("model", "the model spans more than one line; a model is one line")
 		}
 		if in.Effort != "" {
 			if err := checkEffort(r, key, "effort", in.Effort); err != nil {
@@ -157,9 +157,9 @@ func (c *Core) SendChatMessage(ctx context.Context, key string, in api.SendChatM
 	}
 	switch {
 	case strings.TrimSpace(in.Text) == "":
-		return api.ConversationView{}, invalid("text", "text is required: the Chat Message to send")
+		return api.ConversationView{}, api.InvalidField("text", "text is required: the Chat Message to send")
 	case len(in.Text) > SessionEventTextLimit:
-		return api.ConversationView{}, invalid("text", "a Chat Message is at most %d bytes; this one is %d", SessionEventTextLimit, len(in.Text))
+		return api.ConversationView{}, api.InvalidField("text", "a Chat Message is at most %d bytes; this one is %d", SessionEventTextLimit, len(in.Text))
 	}
 	var row domain.ModelRow
 	if err := c.store.View(func(r store.Reader) error {

@@ -80,7 +80,7 @@ func (c *Core) GetStageGuide(_ context.Context, key string, in api.StageGuideInp
 		return api.StageGuideView{}, err
 	}
 	if !slices.Contains(GuideNames, in.Stage) {
-		return api.StageGuideView{}, invalid("stage", "there is no Stage Guide %q; the guides are %s", in.Stage, strings.Join(GuideNames, ", "))
+		return api.StageGuideView{}, api.InvalidField("stage", "there is no Stage Guide %q; the guides are %s", in.Stage, strings.Join(GuideNames, ", "))
 	}
 	return stageGuide(in.Stage, p), nil
 }
@@ -91,7 +91,7 @@ func (c *Core) projectOf(key string) (domain.Project, error) {
 	err := c.store.View(func(r store.Reader) error {
 		var ok bool
 		if p, ok = r.Project(key); !ok {
-			return unknownProject(key)
+			return api.UnknownProjectError(key)
 		}
 		return nil
 	})

@@ -66,7 +66,7 @@ func changedBy(r store.Reader, key, name string) []string {
 	by := []string{}
 	for _, t := range r.FindTickets(key, store.TicketFilter{States: unfinished}) {
 		if slices.Contains(changedRepositoryNames(key, t), name) {
-			by = append(by, DisplayID(key, t.Number))
+			by = append(by, domain.DisplayID(key, t.Number))
 		}
 	}
 	return by
@@ -204,7 +204,7 @@ func (c *Core) publishAccepted(key string) {
 		return nil
 	})
 	for _, n := range accepted {
-		c.events.Publish(events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, n)})
+		c.events.Publish(events.Event{Type: events.TicketChanged, Project: key, ID: domain.DisplayID(key, n)})
 	}
 }
 

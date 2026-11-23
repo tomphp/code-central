@@ -98,7 +98,7 @@ func landPerSpecView(r store.Reader, key string, s domain.Spec, tickets []domain
 		case domain.Done, domain.Cancelled:
 		case domain.Accepted:
 			if waitingForSpec(r, p, t) {
-				v.Waiting = append(v.Waiting, DisplayID(key, t.Number))
+				v.Waiting = append(v.Waiting, domain.DisplayID(key, t.Number))
 				merged = merged || specMergeCounts(t)
 			}
 		default:
@@ -106,7 +106,7 @@ func landPerSpecView(r store.Reader, key string, s domain.Spec, tickets []domain
 		}
 	}
 	v.Ready = ready && merged
-	v.Pushed = specBranchPushedIn(key, domain.SpecBranch(DisplayID(key, s.Number), s.Tags), tickets)
+	v.Pushed = specBranchPushedIn(key, domain.SpecBranch(domain.DisplayID(key, s.Number), s.Tags), tickets)
 	return v
 }
 
@@ -137,12 +137,12 @@ func specBranchPushedIn(key, branch string, tickets []domain.Ticket) []string {
 func (c *Core) ReportSpecMerge(_ context.Context, key string, in api.ReportSpecMergeInput) (api.Written[api.TicketView], error) {
 	commit := strings.TrimSpace(in.Commit)
 	if commit == "" {
-		return api.Written[api.TicketView]{}, invalid("commit", "report_spec_merge needs the Spec Branch commit the Factory merged into")
+		return api.Written[api.TicketView]{}, api.InvalidField("commit", "report_spec_merge needs the Spec Branch commit the Factory merged into")
 	}
 	return c.updateTicketIn(key, "report_spec_merge", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
 		p, _ := r.Project(key)
 		if t.State != domain.Accepted || !specLanded(r, p, *t) {
-			return false, &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s is %s: only an Accepted Spec-landed Ticket is merged into its Spec Branch", DisplayID(key, t.Number), t.State)}
+			return false, &api.Error{Code: api.ActionNotAllowed, Message: fmt.Sprintf("%s is %s: only an Accepted Spec-landed Ticket is merged into its Spec Branch", domain.DisplayID(key, t.Number), t.State)}
 		}
 		name, err := repositoryOf(p, "repository", in.Repository)
 		if err != nil {
@@ -243,7 +243,7 @@ func (c *Core) newSpecFixTicket(ctx context.Context, key string, in api.NewFixTi
 		return api.Written[api.TicketView]{}, false, err
 	}
 	if strings.TrimSpace(in.Note) == "" {
-		return api.Written[api.TicketView]{}, true, invalid("note", "a fix Ticket needs a note saying what to fix, such as the reviewers' requested changes")
+		return api.Written[api.TicketView]{}, true, api.InvalidField("note", "a fix Ticket needs a note saying what to fix, such as the reviewers' requested changes")
 	}
 	what := "its pull request's requested changes"
 	if closed {
@@ -255,7 +255,7 @@ func (c *Core) newSpecFixTicket(ctx context.Context, key string, in api.NewFixTi
 		}
 		now := c.now()
 		f := domain.Ticket{
-			Number: w.NextNumber(key), Title: fmt.Sprintf("Fix %s: %s", DisplayID(key, lead.Spec), lead.Title), State: domain.Ready, Spec: lead.Spec,
+			Number: w.NextNumber(key), Title: fmt.Sprintf("Fix %s: %s", domain.DisplayID(key, lead.Spec), lead.Title), State: domain.Ready, Spec: lead.Spec,
 			Created: now, Updated: now,
 			Description: fmt.Sprintf("Fix %s on the Spec Branch: its work waits on one pull request, and accepting this pushes the Spec Branch again.\n\n%s", what, in.Note),
 		}
@@ -269,7 +269,7 @@ func (c *Core) newSpecFixTicket(ctx context.Context, key string, in api.NewFixTi
 		return api.Written[api.TicketView]{}, true, err
 	}
 	_, err = c.updateTicketIn(key, "new_fix_ticket", in.Ticket, true, func(_ store.Reader, t *domain.Ticket) (bool, error) {
-		addComment(t, api.ActorOf(ctx), c.now(), 0, fmt.Sprintf("New fix Ticket: a fix Ticket on %s takes %s; this Spec still waits on its pull request.", DisplayID(key, lead.Spec), what))
+		addComment(t, api.ActorOf(ctx), c.now(), 0, fmt.Sprintf("New fix Ticket: a fix Ticket on %s takes %s; this Spec still waits on its pull request.", domain.DisplayID(key, lead.Spec), what))
 		return true, nil
 	})
 	return v, true, err

@@ -17,7 +17,7 @@ import (
 // resolveTicket reads the Ticket ref names as op's field, with the
 // History parts named.
 func resolveTicket(r store.Reader, key, op, field string, ref api.Ref, parts ...store.Part) (domain.Ticket, error) {
-	n, err := refNumber(ref, key, field)
+	n, err := api.RefNumber(ref, key, field)
 	if err != nil {
 		return domain.Ticket{}, err
 	}
@@ -32,12 +32,12 @@ func ticketNumbered(r store.Reader, key, op, field string, n int, parts ...store
 	if err := specNotTicket(r, key, op, field, n); err != nil {
 		return domain.Ticket{}, err
 	}
-	return domain.Ticket{}, missing(op, field, "there is no Ticket %s", DisplayID(key, n))
+	return domain.Ticket{}, missing(op, field, "there is no Ticket %s", domain.DisplayID(key, n))
 }
 
 // resolveSpec reads the Spec ref names as op's field.
 func resolveSpec(r store.Reader, key, op, field string, ref api.Ref) (domain.Spec, error) {
-	n, err := refNumber(ref, key, field)
+	n, err := api.RefNumber(ref, key, field)
 	if err != nil {
 		return domain.Spec{}, err
 	}
@@ -47,7 +47,7 @@ func resolveSpec(r store.Reader, key, op, field string, ref api.Ref) (domain.Spe
 	if err := ticketNotSpec(r, key, op, field, n); err != nil {
 		return domain.Spec{}, err
 	}
-	return domain.Spec{}, missing(op, field, "there is no Spec %s", DisplayID(key, n))
+	return domain.Spec{}, missing(op, field, "there is no Spec %s", domain.DisplayID(key, n))
 }
 
 // specNotTicket is the error for n, which isn't a Ticket, given as op's
@@ -56,11 +56,11 @@ func specNotTicket(r store.Reader, key, op, field string, n int) error {
 	if _, ok := r.Spec(key, n); !ok {
 		return nil
 	}
-	id := DisplayID(key, n)
+	id := domain.DisplayID(key, n)
 	if mainTarget(op, field) {
-		return notFound("%s", specAsTicket(op, id))
+		return api.NotFoundError("%s", specAsTicket(op, id))
 	}
-	return invalid(field, "%s is a Spec, not a Ticket; give a Ticket of it (get_spec lists them)", id)
+	return api.InvalidField(field, "%s is a Spec, not a Ticket; give a Ticket of it (get_spec lists them)", id)
 }
 
 // ticketNotSpec is the error for n, which isn't a Spec, given as op's
@@ -71,11 +71,11 @@ func ticketNotSpec(r store.Reader, key, op, field string, n int) error {
 	if !ok {
 		return nil
 	}
-	id, spec := DisplayID(key, n), DisplayID(key, t.Spec)
+	id, spec := domain.DisplayID(key, n), domain.DisplayID(key, t.Spec)
 	if mainTarget(op, field) {
-		return notFound("%s is a Ticket of Spec %s; use %s", id, spec, specOps[op])
+		return api.NotFoundError("%s is a Ticket of Spec %s; use %s", id, spec, specOps[op])
 	}
-	return invalid(field, "%s is a Ticket of Spec %s; pass %s as %s", id, spec, spec, field)
+	return api.InvalidField(field, "%s is a Ticket of Spec %s; pass %s as %s", id, spec, spec, field)
 }
 
 // specAsTicket is the message for Spec id given as op's Ticket.
@@ -115,7 +115,7 @@ func mainTarget(op, field string) bool {
 // with field for a nested one.
 func missing(op, field, format string, args ...any) *api.Error {
 	if mainTarget(op, field) {
-		return notFound(format, args...)
+		return api.NotFoundError(format, args...)
 	}
-	return invalid(field, format, args...)
+	return api.InvalidField(field, format, args...)
 }

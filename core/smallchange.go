@@ -19,7 +19,7 @@ import (
 func (c *Core) SubmitSmallChange(_ context.Context, key string, in api.SubmitSmallChangeInput) (api.Written[api.TicketView], error) {
 	title := titleLine(in.Text)
 	if title == "" {
-		return api.Written[api.TicketView]{}, invalid("text", "a Small Change needs text; its first line becomes the Ticket's title")
+		return api.Written[api.TicketView]{}, api.InvalidField("text", "a Small Change needs text; its first line becomes the Ticket's title")
 	}
 	spec, err := c.projectSpecNumber(key, smallChangesSpec)
 	if err != nil {

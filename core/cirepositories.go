@@ -177,7 +177,7 @@ func ciEntry(name string, in api.RepositoryCI, field string) (domain.CIRepositor
 		e.Provider = domain.CIGitHubActions
 	}
 	if !e.Provider.Valid() {
-		return e, invalid(field+"provider", "CI Provider %q isn't %q or %q", e.Provider, domain.CIGitHubActions, domain.CIAzurePipelines)
+		return e, api.InvalidField(field+"provider", "CI Provider %q isn't %q or %q", e.Provider, domain.CIGitHubActions, domain.CIAzurePipelines)
 	}
 	if err := checkCITarget(&e); err != nil {
 		if ce, ok := err.(*api.Error); ok {
