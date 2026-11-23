@@ -61,10 +61,21 @@ type board struct {
 	filters map[string][]int
 	// comments are each work item's Discussion, oldest first.
 	comments map[int][]Comment
+	// refused are the States a work item can't be moved to, each with the
+	// message it is refused with.
+	refused map[string]string
 }
 
 func newBoard() board {
-	return board{items: map[int]WorkItem{}, saved: map[string][]int{}, filters: map[string][]int{}, comments: map[int][]Comment{}}
+	return board{items: map[int]WorkItem{}, saved: map[string][]int{}, filters: map[string][]int{}, comments: map[int][]Comment{}, refused: map[string]string{}}
+}
+
+// RefuseState makes a move of any work item to state refused with a 400
+// and message, as a State unknown to its type, or a workflow rule, does.
+func (s *Server) RefuseState(state, message string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.board.refused[state] = message
 }
 
 // PutComment adds a comment, as a human or an earlier run would have,
@@ -211,7 +222,7 @@ func (b board) answer(serverURL string, req Request) *Answer {
 }
 
 // patch is the board's answer to a JSON Patch of a work item: a test on
-// /rev that holds, and an add of its tags, which it makes unless the
+// /rev that holds, and an add of its tags or State, which it makes unless the
 // request only validates. Anything else is refused, as are a stale /rev
 // and a patch that isn't sent as a JSON Patch.
 func (b board) patch(serverURL string, req Request) *Answer {
@@ -241,6 +252,13 @@ func (b board) patch(serverURL string, req Request) *Answer {
 		case op.Op == "add" && op.Path == "/fields/System.Tags":
 			if json.Unmarshal(op.Value, &w.Tags) != nil {
 				return refusal(http.StatusBadRequest, "System.Tags must be a string.")
+			}
+		case op.Op == "add" && op.Path == "/fields/System.State":
+			if json.Unmarshal(op.Value, &w.State) != nil {
+				return refusal(http.StatusBadRequest, "System.State must be a string.")
+			}
+			if message, ok := b.refused[w.State]; ok {
+				return refusal(http.StatusBadRequest, message)
 			}
 		default:
 			return refusal(http.StatusBadRequest, fmt.Sprintf("The fake doesn't take the operation %s %s.", op.Op, op.Path))

@@ -26,9 +26,15 @@ func (c *Core) GetWorkItemWatch(_ context.Context, key string) (api.WorkItemWatc
 		a := azureBoardsView(p, api.WatcherView{})
 		out = api.WorkItemWatch{Project: key, On: a.On, Mode: a.Mode, QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where, PATEnv: a.PATEnv,
 			Spec: a.Spec, Issues: incomingIssues(r, key, domain.IntegrationAzureBoards), Linked: linkIDs(r, key, domain.IntegrationAzureBoards), Writes: []api.WorkItemWrites{}}
-		for _, w := range c.integrationWrites(r, key, domain.IntegrationAzureBoards, p.AzureBoards.HideCodeCentral) {
-			if w.Label != "" || len(w.Comments) > 0 {
-				out.Writes = append(out.Writes, api.WorkItemWrites{Target: w.Target, Link: w.Link, Comments: w.Comments, Tag: w.Label})
+		issues := c.integrationWritesByNumber(r, key, domain.IntegrationAzureBoards, p.AzureBoards.HideCodeCentral)
+		states := stateWrites(r, key, p.AzureBoards.WorkItemStates)
+		for n := 1; n < r.NextNumber(key); n++ {
+			w, ok := states[n]
+			if i, due := issues[n]; due && (i.Label != "" || len(i.Comments) > 0) {
+				w, ok = api.WorkItemWrites{Target: i.Target, Link: i.Link, Comments: i.Comments, Tag: i.Label, State: w.State}, true
+			}
+			if ok {
+				out.Writes = append(out.Writes, w)
 			}
 		}
 		return nil

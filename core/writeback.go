@@ -73,31 +73,41 @@ func triageComment(t domain.Ticket, via api.TriageAction) (comment string, lates
 // either way.
 func (c *Core) integrationWrites(r store.Reader, key, integration string, hide bool) []api.IssueWrites {
 	out := []api.IssueWrites{}
-	in := inboxOf(r, key, integration)
-	if in.spec == 0 {
-		return out
-	}
-	byNumber := map[int]api.IssueWrites{}
-	link := &store.LinkFilter{Integration: integration}
-	for _, s := range r.FindSpecs(key, store.SpecFilter{Link: link}) {
-		if w, ok := c.specIssueWrites(r, key, s, hide); ok {
-			byNumber[s.Number] = w
-		}
-	}
-	for _, t := range r.FindTickets(key, store.TicketFilter{Spec: []int{in.spec}, Link: link, Parts: []store.Part{store.Moves, store.Comments}}) {
-		if w, ok := c.ticketIssueWrites(r, key, t, hide); ok {
-			byNumber[t.Number] = w
-		}
-	}
+	byNumber := c.integrationWritesByNumber(r, key, integration, hide)
 	for n := 1; n < r.NextNumber(key); n++ {
 		if w, ok := byNumber[n]; ok {
-			if hide {
-				w.Label = ""
-			}
 			out = append(out, w)
 		}
 	}
 	return out
+}
+
+// integrationWritesByNumber is integrationWrites by the number of each
+// item with writes due.
+func (c *Core) integrationWritesByNumber(r store.Reader, key, integration string, hide bool) map[int]api.IssueWrites {
+	byNumber := map[int]api.IssueWrites{}
+	in := inboxOf(r, key, integration)
+	if in.spec == 0 {
+		return byNumber
+	}
+	link := &store.LinkFilter{Integration: integration}
+	due := func(n int, w api.IssueWrites, ok bool) {
+		if hide {
+			w.Label = ""
+		}
+		if ok {
+			byNumber[n] = w
+		}
+	}
+	for _, s := range r.FindSpecs(key, store.SpecFilter{Link: link}) {
+		w, ok := c.specIssueWrites(r, key, s, hide)
+		due(s.Number, w, ok)
+	}
+	for _, t := range r.FindTickets(key, store.TicketFilter{Spec: []int{in.spec}, Link: link, Parts: []store.Part{store.Moves, store.Comments}}) {
+		w, ok := c.ticketIssueWrites(r, key, t, hide)
+		due(t.Number, w, ok)
+	}
+	return byNumber
 }
 
 // ticketIssueWrites is what is due on the issue t, a Ticket on key's
