@@ -8,7 +8,6 @@ package core
 
 import (
 	"context"
-	"io"
 	"maps"
 	"regexp"
 	"slices"
@@ -18,6 +17,8 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
+	"github.com/tomoram/code-central/core/factories"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/ids"
@@ -31,12 +32,13 @@ type Core struct {
 	clock  clock.Clock
 	ids    ids.Source
 	events *events.Bus
+	// foundation is what the areas share with c: the Store, clock, IDs,
+	// bus, service identity and log.
+	foundation *foundation.Foundation
+	// factories is the Factories area.
+	factories *factories.Factories
 	// activity is the in-memory last-activity record behind Silent Claims.
 	activity *activity
-	// transcripts holds each Claim's Session Events, in memory only.
-	transcripts *transcripts
-	// latestNotices throttles the ticket.changed a new latest event sends.
-	latestNotices *latestNotices
 	// usage records agents' MCP calls (Usage); nil records nothing.
 	usage *usage.Recorder
 	// ciCheck is the CI Watcher's check mode, run when CI Tracking is
@@ -53,43 +55,31 @@ type Core struct {
 	pullRequestCheck api.PullRequestCheck
 	// watchers holds each Project's Watchers' statuses, in memory only.
 	watchers *watchers
-	// heartbeats holds each Factory's latest Heartbeat, in memory, read
-	// from and written through to the Store.
-	heartbeats *heartbeats
-	// chats holds each Project's current Conversation, in memory only.
-	chats *chats
-	// factoryWakes holds the Factories' open next_factory_wake calls, in
-	// memory only.
-	factoryWakes *factoryWakes
 	// uiURL is the UI's address, which a comment written to an issue
 	// links back to; empty links relative to the UI.
 	uiURL string
 	// autoFixLocks holds each Project's Auto-fix lock, a *sync.Mutex by
 	// Project key (lockAutoFix).
 	autoFixLocks sync.Map
-	// service is this service as the Store's record of the services
-	// running on it names it.
-	service Service
-	// log is where c logs what it can't write to or read from the Store,
-	// and carries on without; nil logs nothing.
-	log io.Writer
 }
 
 // New returns a Core persisting through s, telling time with clk and
 // issuing Claim IDs from idSource. Every write sends a change notice on
 // Events.
 func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
-	bus, wakes := events.New(), newFactoryWakes()
-	c := &Core{store: newNotifying(archiveGuard{s}, bus, wakes), clock: clk, ids: idSource, events: bus, factoryWakes: wakes}
+	bus := events.New()
+	f := foundation.New(clk, idSource, bus)
+	area := factories.New(f)
+	f.Store = newNotifying(foundation.ArchiveGuard{Store: s}, bus, area)
+	c := &Core{store: f.Store, clock: clk, ids: idSource, events: bus, foundation: f, factories: area}
 	c.activity = newActivity(c.now())
-	c.transcripts = &transcripts{all: map[markKey]*transcript{}, feeds: map[markKey]map[*TranscriptFeed]struct{}{}}
-	c.latestNotices = &latestNotices{sent: map[markKey]time.Time{}, pending: map[markKey]bool{}}
 	c.watchers = &watchers{all: map[watcherKey]watcherStatus{}, leases: map[string]store.Lease{}}
-	c.heartbeats = &heartbeats{all: map[heartbeatKey]heartbeat{}, seen: map[string]string{}, base: map[string]map[string]api.BaseView{}, clones: map[string]map[string]api.CloneView{},
-		reportsAt: map[string]time.Time{}, live: map[string]string{}}
-	c.chats = newChats()
 	return c
 }
+
+// Factories is the Factories area: Heartbeats and the Factory Status,
+// Plan Limits, Transcripts, Chat, the Factory's wake and the pings.
+func (c *Core) Factories() *factories.Factories { return c.factories }
 
 // now is the current time as stored: UTC, whole seconds.
 func (c *Core) now() time.Time { return c.clock.Now().UTC().Truncate(time.Second) }
@@ -154,7 +144,7 @@ func (c *Core) CreateSpec(_ context.Context, key string, in api.CreateSpecInput)
 	}
 	var v api.Written[api.SpecView]
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		now := c.now()
@@ -196,13 +186,13 @@ func (c *Core) CreateTicket(ctx context.Context, key string, in api.CreateTicket
 	}
 	var v api.Written[api.TicketView]
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		if err := checkTicketTags(w, key, in.Tags); err != nil {
 			return err
 		}
-		sp, err := resolveSpec(w, key, "create_ticket", "spec", in.Spec)
+		sp, err := foundation.ResolveSpec(w, key, "create_ticket", "spec", in.Spec)
 		if err != nil {
 			return err
 		}
@@ -240,7 +230,7 @@ func (c *Core) GetTicket(_ context.Context, key string, in api.GetTicketInput) (
 			return api.UnknownProjectError(key)
 		}
 		// It is read whole: left_out counts the parts it leaves out.
-		t, err := resolveTicket(r, key, "get_ticket", "ticket", in.Ticket, whole...)
+		t, err := foundation.ResolveTicket(r, key, "get_ticket", "ticket", in.Ticket, whole...)
 		if err != nil {
 			return err
 		}
@@ -346,7 +336,7 @@ func (c *Core) findIn(r store.Reader, key string, in api.FindTicketsInput) (*eva
 		}
 		// A Ticket is rejected naming its Spec; a Spec that doesn't
 		// exist matches no Tickets.
-		if err := ticketNotSpec(r, key, "find_tickets", "spec", n); err != nil {
+		if err := foundation.TicketNotSpec(r, key, "find_tickets", "spec", n); err != nil {
 			return nil, nil, err
 		}
 		f.Spec = []int{n}
@@ -411,7 +401,7 @@ func (c *Core) ticketRow(r store.Reader, e *evaluation, t domain.Ticket, onMap, 
 		row.BlockedBy = displayIDs(key, t.BlockedBy)
 	}
 	if cl, ok := liveClaim(t); ok {
-		row.LatestEvent = c.latestEvent(key, t.Number, cl.Number)
+		row.LatestEvent = c.factories.LatestEvent(key, t.Number, cl.Number)
 	}
 	if severalRepositories(e.p) {
 		row.Repositories = namesInLandingOrder(e.p, changedRepositoryNames(key, t))
@@ -428,7 +418,7 @@ func (c *Core) projectView(p domain.Project) api.ProjectView {
 		Landing: landingViewWith(p, c.watchers.view(watcherKey{api.WatcherPullRequests, p.Key}, now)), CI: ciView(p, c.watchers.view(watcherKey{api.WatcherCI, p.Key}, now)),
 		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{api.WatcherIssues, p.Key}, now)), AzureBoards: azureBoardsView(p, c.watchers.view(watcherKey{api.WatcherWorkItems, p.Key}, now)), Models: modelsView(p.Models),
 		ReportedModels: reportedModelsView(p.ReportedModels), StageGuides: stageGuidesView(p.StageGuides), AutoAccept: autoAcceptView(p),
-		FocusKinds: focusKindsView(p.FocusKindsOff), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now()), Repositories: repositoriesView(p)}
+		FocusKinds: focusKindsView(p.FocusKindsOff), FactoryStatus: c.factories.FactoryStatus(p.Key, c.clock.Now()), Repositories: repositoriesView(p)}
 	c.fillClones(p.Key, v.Repositories)
 	if !p.Archived.IsZero() {
 		at := p.Archived
@@ -470,7 +460,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t domain.Ticket) api.
 	}
 	for _, cl := range t.Claims {
 		cv := api.ClaimView{Number: cl.Number, SessionID: cl.SessionID, WorkingDir: cl.WorkingDir, ResumeCommand: cl.ResumeCommand, Model: cl.Model, Effort: cl.Effort, Started: cl.Started, LastActivity: c.claimActivity(t, cl), EndedBy: cl.EndedBy,
-			LatestEvent: c.latestEvent(key, t.Number, cl.Number)}
+			LatestEvent: c.factories.LatestEvent(key, t.Number, cl.Number)}
 		if !cl.Live() {
 			ended := cl.Ended
 			cv.Ended = &ended

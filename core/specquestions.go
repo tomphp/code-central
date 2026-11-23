@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -15,7 +16,7 @@ func (c *Core) GetSpecQuestions(_ context.Context, key string, ref api.Ref) (api
 		if _, ok := r.Project(key); !ok {
 			return api.UnknownProjectError(key)
 		}
-		s, err := resolveSpec(r, key, "get_spec_questions", "spec", ref)
+		s, err := foundation.ResolveSpec(r, key, "get_spec_questions", "spec", ref)
 		if err != nil {
 			return err
 		}

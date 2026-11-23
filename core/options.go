@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -29,7 +30,7 @@ func (c *Core) GetOptions(ctx context.Context) (api.OptionsView, error) {
 // SetOptions is the human's set_options. It validates every change before
 // writing, and writes only when something changes.
 func (c *Core) SetOptions(ctx context.Context, in api.SetOptionsInput) (api.OptionsView, error) {
-	if err := humanOnly(ctx, "set_options"); err != nil {
+	if err := foundation.HumanOnly(ctx, "set_options"); err != nil {
 		return api.OptionsView{}, err
 	}
 	if in.FocusClear != nil && !in.FocusClear.Valid() {

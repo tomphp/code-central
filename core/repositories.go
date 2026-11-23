@@ -10,6 +10,7 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codehost"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -85,7 +86,7 @@ func repositoryNames(rs []domain.Repository) []string {
 // end of the landing order. Under Pull Request, the Pull Request
 // Watcher's check must pass for it first.
 func (c *Core) AddRepository(ctx context.Context, key string, in api.AddRepositoryInput) (api.Written[api.ProjectView], error) {
-	if err := humanOnly(ctx, "add_repository"); err != nil {
+	if err := foundation.HumanOnly(ctx, "add_repository"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	r := domain.Repository{Name: strings.TrimSpace(in.Name), CloneURL: strings.TrimSpace(in.CloneURL), Base: strings.TrimSpace(in.Base), LocalPath: strings.TrimSpace(in.LocalPath)}
@@ -132,13 +133,13 @@ func (c *Core) AddRepository(ctx context.Context, key string, in api.AddReposito
 // report, the Landing section's Base and where the Factory runs, so none
 // is edited here.
 func (c *Core) EditRepository(ctx context.Context, key string, in api.EditRepositoryInput) (api.Written[api.ProjectView], error) {
-	if err := humanOnly(ctx, "edit_repository"); err != nil {
+	if err := foundation.HumanOnly(ctx, "edit_repository"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	name := strings.TrimSpace(in.Name)
 	var r domain.Repository
 	err := c.store.View(func(rd store.Reader) error {
-		if err := writable(rd, key); err != nil {
+		if err := foundation.Writable(rd, key); err != nil {
 			return err
 		}
 		p, _ := rd.Project(key)
@@ -228,7 +229,7 @@ func editHomeRefusal(in api.EditRepositoryInput) error {
 // its clone and any worktrees on disk. Neither the Home Repository nor a
 // Repository an unfinished Ticket has changed can be removed.
 func (c *Core) RemoveRepository(ctx context.Context, key string, in api.RemoveRepositoryInput) (api.Written[api.ProjectView], error) {
-	if err := humanOnly(ctx, "remove_repository"); err != nil {
+	if err := foundation.HumanOnly(ctx, "remove_repository"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	name := strings.TrimSpace(in.Name)
@@ -253,7 +254,7 @@ func (c *Core) RemoveRepository(ctx context.Context, key string, in api.RemoveRe
 // SetLandingOrder is the human's set_landing_order: the Repositories in
 // a new landing order, which must name each of them once.
 func (c *Core) SetLandingOrder(ctx context.Context, key string, in api.SetLandingOrderInput) (api.Written[api.ProjectView], error) {
-	if err := humanOnly(ctx, "set_landing_order"); err != nil {
+	if err := foundation.HumanOnly(ctx, "set_landing_order"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	return c.changeRepositories(key, in.Full, nil, func(_ store.Reader, p domain.Project) ([]domain.Repository, error) {
@@ -400,12 +401,9 @@ func resolvedClonePath(r domain.Repository, home string) string {
 // Factory's latest Repositories report says, empty while no Factory is
 // reporting or none has.
 func (c *Core) reportedHomeClone(p domain.Project) string {
-	hs := c.heartbeats
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
 	for _, r := range p.RepositoryList() {
 		if r.Home {
-			if v := hs.cloneView(p.Key, r.Name, c.clock.Now()); v != nil {
+			if v, ok := c.factories.ReportedClone(p.Key, r.Name, c.clock.Now()); ok {
 				return filepath.Clean(v.Path)
 			}
 		}
@@ -461,7 +459,7 @@ func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r 
 	var url string
 	var checkCI func() error
 	err := c.store.View(func(rd store.Reader) error {
-		if err := writable(rd, key); err != nil {
+		if err := foundation.Writable(rd, key); err != nil {
 			return err
 		}
 		p, _ := rd.Project(key)
@@ -532,7 +530,7 @@ func (c *Core) checkRepositoryPullRequests(ctx context.Context, name, url string
 func (c *Core) changeRepositories(key string, full bool, ci *domain.CIRepository, change func(store.Reader, domain.Project) ([]domain.Repository, error)) (api.Written[api.ProjectView], error) {
 	var before, after api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		p, _ := w.Project(key)

@@ -1,4 +1,4 @@
-package core
+package factories
 
 import (
 	"context"
@@ -55,7 +55,7 @@ func (cv *conversation) emit(event string, data any) {
 // A ChatFeed follows a Project's current Conversation. Like a
 // TranscriptFeed it holds no events of its own, only where it stands.
 type ChatFeed struct {
-	c    *Core
+	c    *Factories
 	key  string
 	wake chan struct{}
 	// opened says the feed has sent its opening; conv is the Conversation
@@ -68,8 +68,8 @@ type ChatFeed struct {
 // FollowChat starts a feed of the Project's Conversation after sequence
 // number after (0 for all of it), as a reconnect's Last-Event-ID asks. An
 // unknown Project is not_found. Stop ends it.
-func (c *Core) FollowChat(_ context.Context, key string, after int) (*ChatFeed, error) {
-	if err := c.store.View(func(r store.Reader) error {
+func (c *Factories) FollowChat(_ context.Context, key string, after int) (*ChatFeed, error) {
+	if err := c.f.Store.View(func(r store.Reader) error {
 		if _, ok := r.Project(key); !ok {
 			return api.UnknownProjectError(key)
 		}

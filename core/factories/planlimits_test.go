@@ -1,4 +1,4 @@
-package core_test
+package factories_test
 
 import (
 	"testing"
@@ -16,7 +16,7 @@ func limitsBeat(factory string, limits *api.PlanLimits) api.ReportHeartbeatInput
 // sendBeat sends in to acme.
 func sendBeat(f fixture, t *testing.T, in api.ReportHeartbeatInput) {
 	t.Helper()
-	if _, err := f.core.ReportHeartbeat(ctx, "acme", in); err != nil {
+	if _, err := f.Core.ReportHeartbeat(ctx, "acme", in); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -44,19 +44,19 @@ func limitsAt(at time.Time, five, week float64) *api.PlanLimits {
 
 func TestAProjectHasNoPlanLimitsUntilAFactoryReportsThem(t *testing.T) {
 	f := newFixture(t)
-	f.project(t, "acme")
-	beat(f, t, "cc", "box", api.HeartbeatOnline, 10)
-	if pl := factoryStatus(f, t).PlanLimits; pl != nil {
+	f.Project(t, "acme")
+	f.Beat(t, "cc", "box", api.HeartbeatOnline, 10)
+	if pl := f.FactoryStatus(t).PlanLimits; pl != nil {
 		t.Fatalf("plan_limits = %+v", pl)
 	}
 }
 
 func TestAHeartbeatsPlanLimitsShowOnTheFactoryStatus(t *testing.T) {
 	f := newFixture(t)
-	f.project(t, "acme")
+	f.Project(t, "acme")
 	sent := limitsAt(t0.Add(-time.Minute), 42.5, 7)
 	beatLimits(f, t, "cc", sent)
-	got := factoryStatus(f, t).PlanLimits
+	got := f.FactoryStatus(t).PlanLimits
 	if got == nil || !got.ObservedAt.Equal(sent.ObservedAt) || !sameWindow(got.FiveHour, sent.FiveHour) || !sameWindow(got.Weekly, sent.Weekly) {
 		t.Fatalf("plan_limits = %+v, want %+v", got, sent)
 	}
@@ -64,21 +64,21 @@ func TestAHeartbeatsPlanLimitsShowOnTheFactoryStatus(t *testing.T) {
 
 func TestOneWindowAloneIsKeptAndNeitherIsNone(t *testing.T) {
 	f := newFixture(t)
-	f.project(t, "acme")
+	f.Project(t, "acme")
 	only := &api.PlanLimits{ObservedAt: t0, Weekly: &api.PlanLimitWindow{UsedPercent: 100, ResetsAt: t0.Add(time.Hour)}}
 	beatLimits(f, t, "cc", only)
-	if got := factoryStatus(f, t).PlanLimits; got == nil || got.FiveHour != nil || got.Weekly == nil || got.Weekly.UsedPercent != 100 {
+	if got := f.FactoryStatus(t).PlanLimits; got == nil || got.FiveHour != nil || got.Weekly == nil || got.Weekly.UsedPercent != 100 {
 		t.Fatalf("weekly only: %+v", got)
 	}
 	beatLimits(f, t, "cc", &api.PlanLimits{ObservedAt: t0})
-	if got := factoryStatus(f, t).PlanLimits; got != nil {
+	if got := f.FactoryStatus(t).PlanLimits; got != nil {
 		t.Fatalf("neither window: %+v", got)
 	}
 }
 
 func TestPlanLimitsAreRefusedWithTheFieldAndItsFix(t *testing.T) {
 	f := newFixture(t)
-	f.project(t, "acme")
+	f.Project(t, "acme")
 	for field, mutate := range map[string]func(*api.PlanLimits){
 		"plan_limits.observed_at":            func(pl *api.PlanLimits) { pl.ObservedAt = time.Time{} },
 		"plan_limits.five_hour.used_percent": func(pl *api.PlanLimits) { pl.FiveHour.UsedPercent = 100.5 },
@@ -88,76 +88,76 @@ func TestPlanLimitsAreRefusedWithTheFieldAndItsFix(t *testing.T) {
 	} {
 		pl := limitsAt(t0, 10, 20)
 		mutate(pl)
-		_, err := f.core.ReportHeartbeat(ctx, "acme", limitsBeat("cc", pl))
+		_, err := f.Core.ReportHeartbeat(ctx, "acme", limitsBeat("cc", pl))
 		wantCode(t, err, api.Invalid, field)
 	}
-	if fs := factoryStatus(f, t); len(fs.Factories) != 0 {
+	if fs := f.FactoryStatus(t); len(fs.Factories) != 0 {
 		t.Fatalf("a refused Heartbeat was kept: %+v", fs)
 	}
 }
 
 func TestAnObservationLaterThanReceiptIsCappedAtReceipt(t *testing.T) {
 	f := newFixture(t)
-	f.project(t, "acme")
+	f.Project(t, "acme")
 	beatLimits(f, t, "cc", limitsAt(t0.Add(time.Hour), 10, 20))
-	if got := factoryStatus(f, t).PlanLimits; got == nil || !got.ObservedAt.Equal(t0) {
+	if got := f.FactoryStatus(t).PlanLimits; got == nil || !got.ObservedAt.Equal(t0) {
 		t.Fatalf("plan_limits = %+v, want observed at %s", got, t0)
 	}
 	// The same skewed figures again keep their first receipt time.
-	f.clock.Advance(10 * time.Second)
+	f.Clock.Advance(10 * time.Second)
 	beatLimits(f, t, "cc", limitsAt(t0.Add(time.Hour), 10, 20))
-	if got := factoryStatus(f, t).PlanLimits; !got.ObservedAt.Equal(t0) {
+	if got := f.FactoryStatus(t).PlanLimits; !got.ObservedAt.Equal(t0) {
 		t.Fatalf("resent: observed at %s, want %s", got.ObservedAt, t0)
 	}
 }
 
 func TestTheMostRecentlyObservedPlanLimitsAmongFactoriesWin(t *testing.T) {
 	f := newFixture(t)
-	f.project(t, "acme")
+	f.Project(t, "acme")
 	beatLimits(f, t, "a", limitsAt(t0.Add(-time.Minute), 30, 30))
 	beatLimits(f, t, "b", limitsAt(t0.Add(-2*time.Minute), 60, 60))
-	if got := factoryStatus(f, t).PlanLimits; got == nil || got.FiveHour.UsedPercent != 30 {
+	if got := f.FactoryStatus(t).PlanLimits; got == nil || got.FiveHour.UsedPercent != 30 {
 		t.Fatalf("plan_limits = %+v, want a's", got)
 	}
-	f.clock.Advance(5 * time.Second)
+	f.Clock.Advance(5 * time.Second)
 	beatLimits(f, t, "b", limitsAt(t0, 70, 70))
-	if got := factoryStatus(f, t).PlanLimits; got == nil || got.FiveHour.UsedPercent != 70 {
+	if got := f.FactoryStatus(t).PlanLimits; got == nil || got.FiveHour.UsedPercent != 70 {
 		t.Fatalf("plan_limits = %+v, want b's newer ones", got)
 	}
 }
 
 func TestAnOfflineFactorysPlanLimitsDropOutAtOnce(t *testing.T) {
 	f := newFixture(t)
-	f.project(t, "acme")
+	f.Project(t, "acme")
 	beatLimits(f, t, "a", limitsAt(t0, 30, 30))
-	f.clock.Advance(60 * time.Second)
+	f.Clock.Advance(60 * time.Second)
 	beatLimits(f, t, "b", limitsAt(t0.Add(-time.Hour), 60, 60))
-	f.clock.Advance(30 * time.Second) // a is Offline, b isn't
-	if got := factoryStatus(f, t).PlanLimits; got == nil || got.FiveHour.UsedPercent != 60 {
+	f.Clock.Advance(30 * time.Second) // a is Offline, b isn't
+	if got := f.FactoryStatus(t).PlanLimits; got == nil || got.FiveHour.UsedPercent != 60 {
 		t.Fatalf("plan_limits = %+v, want b's", got)
 	}
 	stopping := limitsBeat("b", limitsAt(t0, 60, 60))
 	stopping.State = api.HeartbeatStopping
 	sendBeat(f, t, stopping)
-	if got := factoryStatus(f, t).PlanLimits; got != nil {
+	if got := f.FactoryStatus(t).PlanLimits; got != nil {
 		t.Fatalf("every Factory Offline: plan_limits = %+v", got)
 	}
 }
 
 func TestAHeartbeatWithoutPlanLimitsClearsTheFactorys(t *testing.T) {
 	f := newFixture(t)
-	f.project(t, "acme")
+	f.Project(t, "acme")
 	beatLimits(f, t, "cc", limitsAt(t0, 30, 30))
 	beatLimits(f, t, "cc", nil)
-	if got := factoryStatus(f, t).PlanLimits; got != nil {
+	if got := f.FactoryStatus(t).PlanLimits; got != nil {
 		t.Fatalf("plan_limits = %+v", got)
 	}
 }
 
 func TestChangedPlanLimitsSendTheProjectsNoticeAndUnchangedOnesDont(t *testing.T) {
 	f := newFixture(t)
-	f.project(t, "acme")
-	notices, stop := f.core.Events().Subscribe()
+	f.Project(t, "acme")
+	notices, stop := f.Core.Events().Subscribe()
 	defer stop()
 	want := events.Event{Type: events.ProjectChanged, Project: "acme"}
 	expect := func(what string, send bool) {
@@ -173,7 +173,7 @@ func TestChangedPlanLimitsSendTheProjectsNoticeAndUnchangedOnesDont(t *testing.T
 	expect("new Factory", true)
 	beatLimits(f, t, "cc", limitsAt(t0, 10, 20))
 	expect("first figures", true)
-	f.clock.Advance(10 * time.Second)
+	f.Clock.Advance(10 * time.Second)
 	beatLimits(f, t, "cc", limitsAt(t0, 10, 20))
 	expect("same figures", false)
 	beatLimits(f, t, "cc", limitsAt(t0, 11, 20))
@@ -188,8 +188,8 @@ func TestChangedPlanLimitsSendTheProjectsNoticeAndUnchangedOnesDont(t *testing.T
 
 func TestTheWatchReportsPlanLimitsLapsing(t *testing.T) {
 	f := newFixture(t)
-	f.project(t, "acme")
-	tick := watchFactories(t, f)
+	f.Project(t, "acme")
+	tick := f.WatchFactories(t)
 	tick()
 	// A long interval keeps the Factory Online while a second one lapses.
 	slow := limitsBeat("slow", nil)
@@ -197,11 +197,11 @@ func TestTheWatchReportsPlanLimitsLapsing(t *testing.T) {
 	sendBeat(f, t, slow)
 	beatLimits(f, t, "fast", limitsAt(t0, 10, 20))
 	tick()
-	f.clock.Advance(90 * time.Second)
+	f.Clock.Advance(90 * time.Second)
 	if got := tick(); len(got) != 1 || got[0] != "acme" {
 		t.Fatalf("lapse reported %v, want acme", got)
 	}
-	if pl := factoryStatus(f, t).PlanLimits; pl != nil {
+	if pl := f.FactoryStatus(t).PlanLimits; pl != nil {
 		t.Fatalf("plan_limits = %+v", pl)
 	}
 }

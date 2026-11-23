@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -25,10 +26,10 @@ func (c *Core) SubmitPrototype(_ context.Context, key string, in api.SubmitProto
 	}
 	var v api.Written[api.TicketView]
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
-		sp, err := resolveSpec(w, key, "submit_prototype", "spec", in.Spec)
+		sp, err := foundation.ResolveSpec(w, key, "submit_prototype", "spec", in.Spec)
 		if err != nil {
 			return err
 		}

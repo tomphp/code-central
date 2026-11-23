@@ -2,9 +2,10 @@ package server_test
 
 import (
 	"context"
-	"github.com/tomoram/code-central/domain"
 	"strings"
 	"testing"
+
+	"github.com/tomoram/code-central/domain"
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/httpapi"

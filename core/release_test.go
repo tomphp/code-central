@@ -28,7 +28,7 @@ func TestSetSessionUpdatesTheLiveClaimsSessionID(t *testing.T) {
 	// Pings now follow the new session.
 	f.core.SetSession(ctx, "acme", api.SetSessionInput{Ticket: "2", ClaimID: "claim-1", SessionID: "new"})
 	f.clock.Advance(40 * time.Minute)
-	f.core.Ping(ctx, "new")
+	f.core.Factories().Ping(ctx, "new")
 	wantSilentSince(t, f.get(t, "acme-2"), time.Time{})
 }
 

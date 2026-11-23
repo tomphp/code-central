@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -204,7 +205,7 @@ func (c *Core) ReportPushedCommit(ctx context.Context, key string, in api.Report
 		return api.Written[api.TicketView]{}, err
 	}
 	for _, n := range sharing {
-		c.publishTicketChanged(key, n)
+		c.foundation.PublishTicketChanged(key, n)
 	}
 	// Tickets riding onto a later commit can make its item Auto-fix ready.
 	if err := c.sweepAutoFix(ctx, key); err != nil {
@@ -244,7 +245,7 @@ func (c *Core) ReportCIRuns(ctx context.Context, key string, in api.ReportCIRuns
 	var wrote bool
 	err := c.store.Update(func(w store.Writer) error {
 		reported, changed, wrote = api.CIRunsView{}, map[int]bool{}, false
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		p, _ := w.Project(key)
@@ -366,7 +367,7 @@ func (c *Core) ciRunOf(r store.Reader, p domain.Project, v api.CIRunView, field 
 	case (v.Ticket == "") == (v.Rule == ""):
 		return run, api.InvalidField(field+".ticket", "a CI Run is tracked against one Ticket or one CI Rule")
 	case v.Ticket != "":
-		t, err := resolveTicket(r, key, "report_ci_runs", field+".ticket", api.Ref(v.Ticket))
+		t, err := foundation.ResolveTicket(r, key, "report_ci_runs", field+".ticket", api.Ref(v.Ticket))
 		if err != nil {
 			return run, err
 		}

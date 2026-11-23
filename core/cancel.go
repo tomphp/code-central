@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -43,7 +44,7 @@ func (c *Core) closedSpecOthers(ctx context.Context, key string, ref api.Ref) []
 	}
 	var others []int
 	_ = c.store.View(func(r store.Reader) error {
-		t, err := resolveTicket(r, key, "cancel", "ticket", ref)
+		t, err := foundation.ResolveTicket(r, key, "cancel", "ticket", ref)
 		if err != nil {
 			return nil
 		}

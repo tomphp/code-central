@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -97,11 +98,11 @@ func (c *Core) respondCI(key string, op api.CIFailureOption, in api.CIResponseIn
 	var listed []int
 	err := c.store.Update(func(w store.Writer) error {
 		listed = nil
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		// Its view is the result, so it is read whole.
-		t, err := resolveTicket(w, key, string(op), "ticket", in.Ticket, whole...)
+		t, err := foundation.ResolveTicket(w, key, string(op), "ticket", in.Ticket, whole...)
 		if err != nil {
 			return err
 		}
@@ -139,7 +140,7 @@ func (c *Core) respondCI(key string, op api.CIFailureOption, in api.CIResponseIn
 		return api.Written[api.TicketView]{}, err
 	}
 	for _, n := range listed {
-		c.publishTicketChanged(key, n)
+		c.foundation.PublishTicketChanged(key, n)
 	}
 	return v, nil
 }
@@ -160,7 +161,7 @@ func inRepository(p domain.Project, name string) string {
 // next poll. A newer pushed commit has its own CI result, which it
 // doesn't cover. Choosing it again changes nothing.
 func (c *Core) LandAnyway(ctx context.Context, key string, in api.CIResponseInput) (api.Written[api.TicketView], error) {
-	if err := humanOnly(ctx, "land_anyway"); err != nil {
+	if err := foundation.HumanOnly(ctx, "land_anyway"); err != nil {
 		return api.Written[api.TicketView]{}, err
 	}
 	// Not between an Auto-fix sweep's read and its fix Ticket's response.
@@ -213,7 +214,7 @@ func whyNotLandAnyway(ci *ciState, t domain.Ticket, rc *repoCI) string {
 // run's new attempt, which answers the request, or the request lapses.
 // Asking again while it waits changes nothing.
 func (c *Core) RerunCI(ctx context.Context, key string, in api.CIResponseInput) (api.Written[api.TicketView], error) {
-	if err := humanOnly(ctx, "rerun_ci"); err != nil {
+	if err := foundation.HumanOnly(ctx, "rerun_ci"); err != nil {
 		return api.Written[api.TicketView]{}, err
 	}
 	// Not between an Auto-fix sweep's read and its fix Ticket's response.
@@ -263,7 +264,7 @@ func whyNotRerun(key string, t domain.Ticket) string {
 // that order: nothing names what doesn't exist. Its result is the fix
 // Ticket's create Acknowledgement.
 func (c *Core) NewFixTicket(ctx context.Context, key string, in api.NewFixTicketInput) (api.Written[api.TicketView], error) {
-	if err := humanOnly(ctx, "new_fix_ticket"); err != nil {
+	if err := foundation.HumanOnly(ctx, "new_fix_ticket"); err != nil {
 		return api.Written[api.TicketView]{}, err
 	}
 	if strings.TrimSpace(in.Note) == "" {
@@ -280,10 +281,10 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in api.NewFixTicket
 	// Ticket's title while the Project has more than one.
 	var name, where string
 	err := c.store.View(func(r store.Reader) error {
-		if err := writable(r, key); err != nil {
+		if err := foundation.Writable(r, key); err != nil {
 			return err
 		}
-		t, err := resolveTicket(r, key, "new_fix_ticket", "ticket", in.Ticket)
+		t, err := foundation.ResolveTicket(r, key, "new_fix_ticket", "ticket", in.Ticket)
 		if err != nil {
 			return err
 		}
@@ -327,7 +328,7 @@ func (c *Core) openFixTicket(ctx context.Context, key string, failed domain.Tick
 	var v api.Written[api.TicketView]
 	var fix int
 	err = c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		now := c.now()

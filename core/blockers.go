@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -26,7 +27,7 @@ func blockerCleared(b api.BlockerView) bool { return b.Cleared != nil && *b.Clea
 // writes nothing; one that would form a cycle is rejected with cycle.
 func (c *Core) AddBlocker(_ context.Context, key string, in api.BlockerInput) (api.Written[api.TicketView], error) {
 	return c.updateTicketIn(key, "add_blocker", in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
-		blocker, err := resolveTicket(r, key, "add_blocker", "blocker", in.Blocker)
+		blocker, err := foundation.ResolveTicket(r, key, "add_blocker", "blocker", in.Blocker)
 		if err != nil {
 			return false, err
 		}
@@ -57,7 +58,7 @@ func (c *Core) RemoveBlocker(_ context.Context, key string, in api.BlockerInput)
 		if err != nil {
 			return false, err
 		}
-		if err := specNotTicket(r, key, "remove_blocker", "blocker", b); err != nil {
+		if err := foundation.SpecNotTicket(r, key, "remove_blocker", "blocker", b); err != nil {
 			return false, err
 		}
 		if slices.Contains(t.BlockedBy, b) {
@@ -253,7 +254,7 @@ func (o overlay) Ticket(project string, n int, parts ...store.Part) (domain.Tick
 func ticketRefs(r store.Reader, key, op, field string, refs []api.Ref) ([]int, error) {
 	var out []int
 	for _, ref := range refs {
-		t, err := resolveTicket(r, key, op, field, ref)
+		t, err := foundation.ResolveTicket(r, key, op, field, ref)
 		if err != nil {
 			return nil, err
 		}
@@ -270,7 +271,7 @@ func ticketRefs(r store.Reader, key, op, field string, refs []api.Ref) ([]int, e
 func (c *Core) updateTicketIn(key, op string, ref api.Ref, full bool, fn func(r store.Reader, t *domain.Ticket) (bool, error)) (api.Written[api.TicketView], error) {
 	var v api.Written[api.TicketView]
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		t, h, err := readForWrite(w, key, op, "ticket", ref, whole)

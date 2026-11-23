@@ -1,9 +1,7 @@
-package core
+package factories
 
 import (
 	"encoding/json"
-	"fmt"
-	"io"
 	"maps"
 	"slices"
 	"time"
@@ -43,17 +41,6 @@ type factoryReportsDoc struct {
 	Clones map[string]api.CloneView `json:"clones,omitempty"`
 }
 
-// SetLog makes c log what it can't write to or read from the Store, and
-// carries on without, to w. Without one, nothing is logged.
-func (c *Core) SetLog(w io.Writer) { c.log = w }
-
-// logf logs a line to c's log, if it has one.
-func (c *Core) logf(format string, a ...any) {
-	if c.log != nil {
-		fmt.Fprintf(c.log, "code-central serve: "+format+"\n", a...)
-	}
-}
-
 // offlineAt is when h's Factory went, or goes, Offline with no newer
 // Heartbeat.
 func (h heartbeat) offlineAt() time.Time {
@@ -67,30 +54,30 @@ func (h heartbeat) offlineAt() time.Time {
 func (h heartbeat) expires() time.Time { return h.offlineAt().Add(heartbeatExpiry) }
 
 // recordHeartbeat writes h, the Heartbeat of k, through to the Store.
-func (c *Core) recordHeartbeat(k heartbeatKey, h heartbeat) {
+func (c *Factories) recordHeartbeat(k heartbeatKey, h heartbeat) {
 	doc, err := json.Marshal(heartbeatDoc{State: h.state, Note: h.note, IntervalSeconds: h.interval, Chat: h.chat, At: h.at,
 		PlanLimits: h.limits, Reported: h.reported})
 	if err == nil {
-		err = c.store.Services().PutHeartbeat(store.Heartbeat{Project: k.project, Factory: k.name, FactoryHost: k.host, Doc: doc,
+		err = c.f.Store.Services().PutHeartbeat(store.Heartbeat{Project: k.project, Factory: k.name, FactoryHost: k.host, Doc: doc,
 			Service: h.service, ServiceHost: h.serviceHost, Expires: h.expires()})
 	}
 	if err != nil {
-		c.logf("cannot record %s's Heartbeat from %s on %s: %v", k.project, k.name, k.host, err)
+		c.f.Logf("cannot record %s's Heartbeat from %s on %s: %v", k.project, k.name, k.host, err)
 	}
 }
 
 // recordReports writes the Project key's base and clone reports, as they
 // are in memory, through to the Store.
-func (c *Core) recordReports(key string) {
+func (c *Factories) recordReports(key string) {
 	hs := c.heartbeats
 	hs.mu.Lock()
 	doc, err := json.Marshal(factoryReportsDoc{At: hs.reportsAt[key], Bases: hs.base[key], Clones: hs.clones[key]})
 	hs.mu.Unlock()
 	if err == nil {
-		err = c.store.Services().PutFactoryReports(store.FactoryReports{Project: key, Doc: doc})
+		err = c.f.Store.Services().PutFactoryReports(store.FactoryReports{Project: key, Doc: doc})
 	}
 	if err != nil {
-		c.logf("cannot record %s's base and clone reports: %v", key, err)
+		c.f.Logf("cannot record %s's base and clone reports: %v", key, err)
 	}
 }
 
@@ -98,8 +85,8 @@ func (c *Core) recordReports(key string) {
 // Store, as serve does once before it serves, so a new service shows the
 // Factories reporting to the others at once, and a Heartbeat reaching it
 // first doesn't take a Factory it already has for a new one.
-func (c *Core) LoadFactories() {
-	c.refreshPings()
+func (c *Factories) LoadFactories() {
+	c.RefreshPings()
 	c.refreshFactories()
 }
 
@@ -110,23 +97,23 @@ func (c *Core) LoadFactories() {
 // Factories changed in a way the human sees, as ReportHeartbeat,
 // ReportBase and ReportRepositories would have noticed.
 // What it can't read is logged, and memory stands.
-func (c *Core) refreshFactories() []string {
-	now := c.now()
-	services := c.store.Services()
+func (c *Factories) refreshFactories() []string {
+	now := c.f.Now()
+	services := c.f.Store.Services()
 	if err := services.PruneHeartbeats(now); err != nil {
-		c.logf("cannot prune the Heartbeats: %v", err)
+		c.f.Logf("cannot prune the Heartbeats: %v", err)
 	}
 	rows, err := services.Heartbeats()
 	if err != nil {
-		c.logf("cannot read the Heartbeats: %v", err)
+		c.f.Logf("cannot read the Heartbeats: %v", err)
 	}
 	reports, rerr := services.FactoryReports()
 	if rerr != nil {
-		c.logf("cannot read the base and clone reports: %v", rerr)
+		c.f.Logf("cannot read the base and clone reports: %v", rerr)
 	}
 	regs, gerr := services.Registrations(now)
 	if gerr != nil {
-		c.logf("cannot read the services: %v", gerr)
+		c.f.Logf("cannot read the services: %v", gerr)
 	}
 
 	var changed []string
@@ -146,7 +133,7 @@ func (c *Core) refreshFactories() []string {
 	for _, row := range rows {
 		h, err := heartbeatOf(row)
 		if err != nil {
-			c.logf("cannot read %s's Heartbeat from %s on %s: %v", row.Project, row.Factory, row.FactoryHost, err)
+			c.f.Logf("cannot read %s's Heartbeat from %s on %s: %v", row.Project, row.Factory, row.FactoryHost, err)
 			continue
 		}
 		if !now.Before(h.expires()) {
@@ -165,7 +152,7 @@ func (c *Core) refreshFactories() []string {
 	for _, r := range reports {
 		var doc factoryReportsDoc
 		if err := json.Unmarshal(r.Doc, &doc); err != nil {
-			c.logf("cannot read %s's base and clone reports: %v", r.Project, err)
+			c.f.Logf("cannot read %s's base and clone reports: %v", r.Project, err)
 			continue
 		}
 		if at, ok := hs.reportsAt[r.Project]; ok && doc.At.Before(at) {

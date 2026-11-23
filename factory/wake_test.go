@@ -182,7 +182,7 @@ func TestACommentOrSetSessionDoesNotWakeThePoll(t *testing.T) {
 	if _, err := h.Server.Client.SetSession(ctx, h.Project, api.SetSessionInput{Ticket: api.Ref(other), ClaimID: held.ClaimID, SessionID: "elsewhere"}); err != nil {
 		t.Fatal(err)
 	}
-	if n := h.Server.Core.WaitingFactoryWakes(h.Project); n != 1 {
+	if n := h.Server.Core.Factories().WaitingFactoryWakes(h.Project); n != 1 {
 		t.Errorf("%d next_factory_wake calls still waiting, want the Factory's: nothing woke it", n)
 	}
 	r.Settle()
@@ -244,7 +244,7 @@ func TestADrainingFactoryClaimsNothingOnAWake(t *testing.T) {
 	r.Settle()
 	r.WantOutput("draining: waiting on 1 running turn(s)")
 	// Code Central lets go of the long-poll once the cancel reaches it.
-	h.WaitFor("the long-poll to close", func() bool { return h.Server.Core.WaitingFactoryWakes(h.Project) == 0 })
+	h.WaitFor("the long-poll to close", func() bool { return h.Server.Core.Factories().WaitingFactoryWakes(h.Project) == 0 })
 	id := h.ReadyTicket("Too late")
 	h.Continue(running)
 	if code := r.Exited(); code != 0 {

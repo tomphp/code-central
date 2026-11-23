@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -227,7 +228,7 @@ func (c *Core) newSpecFixTicket(ctx context.Context, key string, in api.NewFixTi
 	var lead domain.Ticket
 	var closed bool
 	err = c.store.View(func(r store.Reader) error {
-		t, err := resolveTicket(r, key, "new_fix_ticket", "ticket", in.Ticket)
+		t, err := foundation.ResolveTicket(r, key, "new_fix_ticket", "ticket", in.Ticket)
 		if err != nil {
 			return nil // the CI failure path reports what is wrong
 		}
@@ -250,7 +251,7 @@ func (c *Core) newSpecFixTicket(ctx context.Context, key string, in api.NewFixTi
 		what = "its closed pull request"
 	}
 	err = c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		now := c.now()

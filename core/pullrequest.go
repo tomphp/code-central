@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -389,7 +390,7 @@ func (c *Core) ReportPullRequest(_ context.Context, key string, in api.ReportPul
 	pr := domain.PullRequest{Number: in.Number, Link: link, State: in.State, MergeCommit: merge}
 	var covered []int
 	if err := c.store.View(func(r store.Reader) error {
-		if err := writable(r, key); err != nil {
+		if err := foundation.Writable(r, key); err != nil {
 			return err
 		}
 		p, _ := r.Project(key)

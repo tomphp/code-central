@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/core/factories"
 )
 
 type latestEvent struct {
@@ -125,13 +125,13 @@ func TestTicketChangedOnANewLatestEventIsThrottledPerTicketWithATrailingNotice(t
 	f.events(t, "s2", "elsewhere")
 	next("acme-3") // the throttle is per Ticket
 
-	f.clock.Advance(core.LatestEventThrottle - time.Second)
+	f.clock.Advance(factories.LatestEventThrottle - time.Second)
 	marker()
 	f.clock.Advance(time.Second)
 	next("acme-2") // one trailing notice for the last change
 	marker()       // and only one
 
-	f.clock.Advance(core.LatestEventThrottle)
+	f.clock.Advance(factories.LatestEventThrottle)
 	f.events(t, "s1", "after a quiet spell")
 	next("acme-2")
 }

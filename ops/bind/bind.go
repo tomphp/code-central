@@ -10,6 +10,7 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/core/factories"
 	"github.com/tomoram/code-central/ops"
 )
 
@@ -27,6 +28,13 @@ func bind[In, Out any](d *ops.Definition[In, Out], call func(c *core.Core, ctx c
 	return binding{op: d, invoke: func(ctx context.Context, c *core.Core, key string, in any) (any, error) {
 		return call(c, ctx, key, *in.(*In))
 	}}
+}
+
+// bindFactories binds d to call, a method of the Factories area.
+func bindFactories[In, Out any](d *ops.Definition[In, Out], call func(f *factories.Factories, ctx context.Context, key string, in In) (Out, error)) binding {
+	return bind(d, func(c *core.Core, ctx context.Context, key string, in In) (Out, error) {
+		return call(c.Factories(), ctx, key, in)
+	})
 }
 
 // Bound is the operation each binding serves, in the list's order, a
@@ -275,13 +283,13 @@ var all = []binding{
 
 	// Chat (Spec code-central-633): the human's Conversation and the
 	// Factory's long-poll for its turns. Chat writes change only memory.
-	bind(ops.GetChat, (*core.Core).GetChat),
-	bind(ops.StartConversation, (*core.Core).StartConversation),
-	bind(ops.SendChatMessage, (*core.Core).SendChatMessage),
-	bind(ops.StopChatReply, (*core.Core).StopChatReply),
-	bind(ops.NextChatWork, (*core.Core).NextChatWork),
+	bindFactories(ops.GetChat, (*factories.Factories).GetChat),
+	bindFactories(ops.StartConversation, (*factories.Factories).StartConversation),
+	bindFactories(ops.SendChatMessage, (*factories.Factories).SendChatMessage),
+	bindFactories(ops.StopChatReply, (*factories.Factories).StopChatReply),
+	bindFactories(ops.NextChatWork, (*factories.Factories).NextChatWork),
 
 	// The Factory's wake (Spec code-central-743): a long-poll that ends
 	// when a write its poll acts on reaches the Project.
-	bind(ops.NextFactoryWake, (*core.Core).NextFactoryWake),
+	bindFactories(ops.NextFactoryWake, (*factories.Factories).NextFactoryWake),
 }

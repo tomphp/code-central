@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -13,7 +14,7 @@ import (
 
 // WaitTimeout is how long one Wait holds before returning the State
 // unchanged, on the injected clock.
-const WaitTimeout = 60 * time.Second
+const WaitTimeout = foundation.WaitTimeout
 
 // Events is the bus core sends a change notice on after every write.
 func (c *Core) Events() *events.Bus { return c.events }
@@ -57,7 +58,7 @@ func (c *Core) waitResult(key string, ref api.Ref) (api.WaitResult, error) {
 		if _, ok := r.Project(key); !ok {
 			return api.UnknownProjectError(key)
 		}
-		t, err := resolveTicket(r, key, "wait", "ticket", ref, store.Moves)
+		t, err := foundation.ResolveTicket(r, key, "wait", "ticket", ref, store.Moves)
 		if err != nil {
 			return err
 		}
@@ -81,11 +82,11 @@ func (c *Core) waitResult(key string, ref api.Ref) (api.WaitResult, error) {
 type notifying struct {
 	store.Store
 	bus   *events.Bus
-	wakes *factoryWakes
+	wakes waker
 }
 
 // newNotifying wraps s, hearing the Changes other services commit.
-func newNotifying(s store.Store, bus *events.Bus, wakes *factoryWakes) notifying {
+func newNotifying(s store.Store, bus *events.Bus, wakes waker) notifying {
 	n := notifying{Store: s, bus: bus, wakes: wakes}
 	s.Changes(n.deliver)
 	return n
@@ -117,7 +118,7 @@ func (n notifying) Update(fn func(store.Writer) error) error {
 func (n notifying) deliver(ch store.Change) {
 	n.bus.Publish(events.Event{Type: ch.Type, Project: ch.Project, ID: ch.ID})
 	if ch.Wakes {
-		n.wakes.wake(ch.Project)
+		n.wakes.Wake(ch.Project)
 	}
 }
 
@@ -182,3 +183,7 @@ func (w *noticeWriter) put(err error, e events.Event) error {
 	}
 	return err
 }
+
+// waker wakes a Project's Factories when a write is one their poll acts
+// on; the Factories area satisfies it.
+type waker interface{ Wake(project string) }

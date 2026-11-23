@@ -1,6 +1,7 @@
 package core
 
 import (
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -28,7 +29,7 @@ var (
 func (c *Core) projectSpecNumber(key string, ps projectSpec) (int, error) {
 	n := 0
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		if p, _ := w.Project(key); *ps.number(&p) != 0 {

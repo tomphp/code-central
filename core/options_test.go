@@ -7,6 +7,7 @@ import (
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/core/coretest"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/ids"
@@ -46,15 +47,7 @@ func countingCore(t *testing.T) (*core.Core, *int, <-chan events.Event) {
 
 func focus(f domain.FocusClear) *domain.FocusClear { return &f }
 
-// noNotice fails if a notice is waiting.
-func noNotice(t *testing.T, notices <-chan events.Event) {
-	t.Helper()
-	select {
-	case e := <-notices:
-		t.Fatalf("unexpected notice %+v", e)
-	default:
-	}
-}
+var noNotice = coretest.NoNotice
 
 func TestGetOptionsIsEveryActorsAndStartsAtTheDefaults(t *testing.T) {
 	f := newFixture(t)

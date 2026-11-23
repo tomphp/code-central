@@ -10,7 +10,7 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/core/factories"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -229,7 +229,7 @@ func TestATranscriptKeepsTheLast2000EventsAndIsThenATail(t *testing.T) {
 	f := newTranscriptFixture(t)
 	f.claim(t, 2, "s1")
 	var batch []string
-	for i := 1; i <= core.TranscriptLimit; i++ {
+	for i := 1; i <= factories.TranscriptLimit; i++ {
 		batch = append(batch, fmt.Sprint(i))
 	}
 	f.events(t, "s1", batch...)
@@ -251,16 +251,16 @@ func TestATranscriptKeepsTheLast2000EventsAndIsThenATail(t *testing.T) {
 func TestASessionEventsTextIsCutTo64KB(t *testing.T) {
 	f := newTranscriptFixture(t)
 	f.claim(t, 2, "s1")
-	exact := strings.Repeat("a", core.SessionEventTextLimit)
+	exact := strings.Repeat("a", factories.SessionEventTextLimit)
 	// A multi-byte rune straddling the limit is dropped whole.
-	over := strings.Repeat("b", core.SessionEventTextLimit-1) + "é" + "tail"
+	over := strings.Repeat("b", factories.SessionEventTextLimit-1) + "é" + "tail"
 	f.events(t, "s1", exact, over)
 
 	tr := f.transcript(t, 2, 1)
 	if e := tr.Events[0]; e.Text != exact || e.Truncated {
 		t.Fatalf("a 64 KB text was changed: %d bytes, truncated %v", len(e.Text), e.Truncated)
 	}
-	if e := tr.Events[1]; e.Text != strings.Repeat("b", core.SessionEventTextLimit-1) || !e.Truncated {
+	if e := tr.Events[1]; e.Text != strings.Repeat("b", factories.SessionEventTextLimit-1) || !e.Truncated {
 		t.Fatalf("an over-long text: %d bytes, truncated %v; want it cut to whole runes within 64 KB", len(e.Text), e.Truncated)
 	}
 }

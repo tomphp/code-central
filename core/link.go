@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -104,7 +105,7 @@ func (c *Core) CreateLinkedSpec(ctx context.Context, key string, in api.CreateLi
 	}
 	var v api.Written[api.SpecView]
 	err = c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		if id, ok := linkedTo(w, key, l, true); ok {
@@ -149,10 +150,10 @@ func (c *Core) CreateLinkedTicket(ctx context.Context, key string, in api.Create
 	}
 	var v api.Written[api.TicketView]
 	err = c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
-		sp, err := resolveSpec(w, key, "create_linked_ticket", "spec", in.Spec)
+		sp, err := foundation.ResolveSpec(w, key, "create_linked_ticket", "spec", in.Spec)
 		if err != nil {
 			return err
 		}
@@ -184,10 +185,10 @@ func (c *Core) UpdateLinkedSpec(ctx context.Context, key string, in api.UpdateLi
 	}
 	var v api.Written[api.SpecView]
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
-		s, err := resolveSpec(w, key, "update_linked_spec", "spec", in.Spec)
+		s, err := foundation.ResolveSpec(w, key, "update_linked_spec", "spec", in.Spec)
 		if err != nil {
 			return err
 		}
@@ -234,7 +235,7 @@ func (c *Core) UpdateLinkedTicket(ctx context.Context, key string, in api.Update
 		}
 		prev := map[string]string{}
 		if in.Spec != nil {
-			sp, err := resolveSpec(r, key, "update_linked_ticket", "spec", *in.Spec)
+			sp, err := foundation.ResolveSpec(r, key, "update_linked_ticket", "spec", *in.Spec)
 			if err != nil {
 				return false, err
 			}
@@ -318,7 +319,7 @@ func (c *Core) Unlink(ctx context.Context, key string, in api.UnlinkInput) (api.
 func (c *Core) updateLink(ctx context.Context, key string, ref api.Ref, fn func(l *domain.Link) (map[string]string, error)) (api.LinkedRow, error) {
 	var row api.LinkedRow
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		n, err := api.RefNumber(ref, key, "target")

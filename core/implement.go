@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -32,11 +33,11 @@ const implementReason = "The human chose Implement: %s builds the Spec without t
 func (c *Core) Implement(ctx context.Context, key string, in api.TicketInput) (api.FinishResult, error) {
 	var res api.FinishResult
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		// An Import rewrites the spec Stage whole, so it is read whole.
-		t, err := resolveTicket(w, key, "implement", "ticket", in.Ticket, whole...)
+		t, err := foundation.ResolveTicket(w, key, "implement", "ticket", in.Ticket, whole...)
 		if err != nil {
 			return err
 		}

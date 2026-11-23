@@ -8,6 +8,7 @@ import (
 	"text/template"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -147,7 +148,7 @@ func modelAssignmentText(p domain.Project) string {
 		return ""
 	}
 	var b strings.Builder
-	data := struct{ Aliases, Levels []string }{p.ReportedModels.Aliases, validLevels(p.ReportedModels)}
+	data := struct{ Aliases, Levels []string }{p.ReportedModels.Aliases, foundation.ValidEffortLevels(p.ReportedModels)}
 	if err := modelAssignmentFragment.Execute(&b, data); err != nil {
 		panic("core: model-assignment fragment: " + err.Error())
 	}
@@ -160,12 +161,12 @@ func modelAssignmentText(p domain.Project) string {
 // other settings it adds no Move, Edit or Comment; the Project's notice
 // announces it.
 func (c *Core) SetSubagentExploration(ctx context.Context, key string, in api.SetSubagentExplorationInput) (api.Written[api.ProjectView], error) {
-	if err := humanOnly(ctx, "set_subagent_exploration"); err != nil {
+	if err := foundation.HumanOnly(ctx, "set_subagent_exploration"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	var before, after api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		p, _ := w.Project(key)
@@ -189,12 +190,12 @@ func (c *Core) SetSubagentExploration(ctx context.Context, key string, in api.Se
 // other settings it adds no Move, Edit or Comment; the Project's notice
 // announces it, and only on a change.
 func (c *Core) SetModelAssignment(ctx context.Context, key string, in api.SetModelAssignmentInput) (api.Written[api.ProjectView], error) {
-	if err := humanOnly(ctx, "set_model_assignment"); err != nil {
+	if err := foundation.HumanOnly(ctx, "set_model_assignment"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	var before, after api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		p, _ := w.Project(key)

@@ -71,7 +71,8 @@ A second, test-only composition exists: `world/` + `cmd/corewasm` build the real
 
 | Module | Owns | Its contract |
 |---|---|---|
-| `core` | The workflow and every rule over it: Claims, Rounds, triage, Requirements, landing, CI, pull requests, issue and work-item links, chat, usage, the read models. It names the wire types (`*Input`, `*View`, `*Row`, `*Result`, the error codes, `Ref`, `Actor`, `Decode`) as `api.X`; it declares none, and has no alias for one. | `*core.Core`'s 150 exported methods; no interface. |
+| `core/factories`, `core/foundation` | `factories.Factories` is the agent runtime, split out of `*Core` (ADR 0074): chat, Transcripts, Heartbeats, Plan Limits, Factory wake, and the reports shared through the Store. `foundation` is what the areas share: service identity, the archive check, ticket and Spec resolution, error constructors, effort rules. | `(*core.Core).Factories()`; bound in `ops/bind` with `bindFactories`. |
+| `core` | The workflow and every rule over it: Claims, Rounds, triage, Requirements, landing, CI, pull requests, issue and work-item links, usage, the read models, and the wake rules. It names the wire types (`*Input`, `*View`, `*Row`, `*Result`, the error codes, `Ref`, `Actor`, `Decode`) as `api.X`; it declares none, and has no alias for one. | `*core.Core`'s 150 exported methods; no interface. |
 | `api` | The wire contract (ADR 0072): every input, view, row and result of an operation, the error codes, `Ref`, `Actor`, `Decode`, the Watcher status contract, and the rules that belong to one of those types (`TicketView.Brief`, `ProjectView.LandingPolicies`, `FindTicketsInput.EncodeQuery`). It imports only `domain` and `internal/fieldwalk`. | The exported types; `internal/wiretypes` generates `wire.gen.ts` from them. |
 | `ops` | The one list of operations (`ops.All()`, ADR 0063): name, audience, route, input and output types (from `api`), and `ops.Service`, which `httpapi` needs, and `ops.Dispatcher`, which `mcp` needs (ADR 0065). It doesn't import `core` (ADR 0072). | `ops.Service`, `ops.Dispatcher`, `ops.Definitions()`. |
 | `ops/bind` | The service's side of the operations: each definition's binding, the `*core.Core` call that serves it, and `bind.Serve`, which adapts the Core to `ops.Service` and `ops.Dispatcher`. Only `server` imports it. | `bind.Serve`; the cross-door suite checks every definition has exactly one binding. |
@@ -101,7 +102,7 @@ There is no separate issue-tracker module: Specs and Tickets live in `core`, and
 - workflow and claims (claim, round, failure, blockers, triage, requirement, map, prototype, retro, small change, auto-accept, auto-fix…)
 - landing (landing policy, land per spec, spec merge, repositories, changed repositories, base, branch format)
 - CI and code host (ci*, pull request, GitHub issues, Azure Boards, links, write-back, watcher status)
-- agent runtime (chat, transcript, heartbeat, models, plan limits, usage, stage guides, Factory wake)
+- agent runtime (models, usage, stage guides, and the `ReportHeartbeat` wrapper and wake rules; the rest, chat, transcripts, Heartbeats, plan limits and Factory wake, is `core/factories`)
 - read models (`*View` types, needs-me, attention)
 - the builders of the wire contract's views (`*View`, `*Row` and `*Result` are in `api`)
 
@@ -114,6 +115,7 @@ Found:
 - **No import cycles**, and `core` never imports a door, `ops`, `factory`, `gh` or `azdo`.
 - **No client links `core` or `store`, and a test says so.** `internal/importguard` runs `go list -deps` on `client`, `factory`, `cmd/code-central-factory`, `ciwatcher`, `issuewatcher`, `pullrequestwatcher`, `workitemwatcher`, `gh`, `azdo`, `ratelimit`, `watchers` and `notify`, and fails, naming the client and the chain of imports, when `core` or `store` is among them. `factory/factorytest` is left out: it is test tooling that composes the real service in process, so it links both. `httpapi`, `mcp`, `server` and `internal/wiretypes` legitimately reach `core` and are checked only for a direct import of `store`.
 - **The leaves are leaves.** `gh`, `azdo` and `ratelimit` import `api` (the Watcher status contract) and not `core`.
+- **Areas under `core` import only `core/foundation`, and a test says so (ADR 0074).** `core` may import an area; an area imports neither `core` nor another area, and neither it nor `foundation` links `ops`, `ops/bind`, `server`, `httpapi` or `mcp`. Only `core`, `ops/bind`, `world`, `codecentraltest`, `core/coretest` and `app` import an area. `internal/importguard` finds the areas by listing the packages under `core`.
 - **`api` is a leaf over `domain`.** It imports only `domain` and `internal/fieldwalk`, and `core`, `ops`, the doors and the clients import it.
 
 | Package | Imports of Code Central (non-test) |
@@ -131,7 +133,9 @@ Found:
 | `ratelimit` | api |
 | `watchers` | api, clock, events, ratelimit |
 | `ops` | api, domain, events, internal/fieldwalk |
-| `ops/bind` | api, core, ops |
+| `ops/bind` | api, core, core/factories, ops |
+| `core/factories` | api, core/foundation, domain, events, ids, store |
+| `core/foundation` | api, clock, domain, events, ids, store |
 | `httpapi` | api, core, domain, ops, internal/fieldwalk |
 | `mcp` | api, core, ops, internal/fieldwalk |
 | `server` | api, core, httpapi, mcp, ops, ops/bind, usage |
@@ -183,11 +187,13 @@ Provider knowledge is left in `core`: `core/ci.go`'s `withoutLogin` duplicates `
 
 Each operation's `Call` was a `func(c *core.Core, …)` in its definition, and `client` imported `ops` to derive its calls, so it got the bindings, and with them `core` and `store`, as well as the definitions. Now `ops` holds only the definitions (name, audience, route, input and output types from `api`; what `client`, `cli`, `mcp` and the UI generator need) and imports no `core`, and the bindings (each operation's Core call, and `bind.Serve`, the dispatch side) are in the service-only `ops/bind`, which `server` composes with the definitions (Spec code-central-1111, ADR 0072). The cross-door suite's `TestEveryDefinitionHasExactlyOneBinding` keeps the two lists in step. A split of `*Core` (weakness 5) now rewrites only the bindings.
 
-### 5. `*core.Core` is a god object
+### 5. `*core.Core` is a god object (in progress)
 
-One type with 150 methods and 20 fields, mixing the persisted workflow with in-memory runtime (`heartbeats`, `transcripts`, `chats`, `activity`, `factoryWakes`, `watchers`, `latestNotices`), the Watcher check modes and Usage. Every file is a method on `*Core`, so nothing inside `core` has a boundary, and any rule can reach any other's state.
+One type with 150 methods and 20 fields, mixing the persisted workflow with in-memory runtime, the Watcher check modes and Usage. Every file was a method on `*Core`, so nothing inside `core` had a boundary, and any rule could reach any other's state.
 
-**Recommendation:** with weaknesses 1 and 4 done, split along the file groupings above, starting where the seam is already clean: the agent runtime (heartbeats, transcripts, chat, plan limits, Factory wake) holds its own state and barely touches the Store, and the CI and code-host area talks to the rest through Tickets and Watcher status. Each becomes a type with its own narrow interface that the bindings in `ops/bind` call, with `*Core` shrinking to the workflow.
+The split is made area by area (ADR 0074). The first area is done: the agent runtime (chat, transcripts, Heartbeats, plan limits, Factory wake and the shared-Store reports) is `core/factories`, a `factories.Factories` that holds its own state, reached by `c.Factories()` and bound in `ops/bind` with `bindFactories`. What the areas share is `core/foundation`, and `internal/importguard` keeps an area from importing `core` or another area.
+
+**Recommendation:** split the CI and code-host area next, which talks to the rest through Tickets and Watcher status. Each becomes a package under `core` with its own type that the bindings in `ops/bind` call, with `*Core` shrinking to the workflow. The wake rules stay in `core`, because they read the Store's writes.
 
 ### 6. Runtime state is per service, but the Store can be shared
 

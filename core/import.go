@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -46,7 +47,7 @@ func (c *Core) Import(ctx context.Context, key string, in api.ImportInput) (api.
 	}
 	var res api.ImportResult
 	plan := func(r store.Reader) (store.Import, error) {
-		if err := writable(r, key); err != nil {
+		if err := foundation.Writable(r, key); err != nil {
 			return store.Import{}, err
 		}
 		if err := alreadyImported(r, key, p); err != nil {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -39,7 +40,7 @@ func (c *Core) Claim(ctx context.Context, key string, in api.ClaimInput) (api.Cl
 	// one returned; claiming again takes none.
 	var id string
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		rule := c.blockRule(w, key)
@@ -105,7 +106,7 @@ func heldError(key string, t domain.Ticket, live *domain.Claim, sessionID string
 func claimTarget(rule blockRule, in api.ClaimInput) (t domain.Ticket, found bool, err error) {
 	r, key := rule.r, rule.p.Key
 	if in.Ticket != "" {
-		t, err := resolveTicket(r, key, "claim", "ticket", in.Ticket)
+		t, err := foundation.ResolveTicket(r, key, "claim", "ticket", in.Ticket)
 		if err != nil {
 			return t, false, err
 		}
@@ -115,7 +116,7 @@ func claimTarget(rule blockRule, in api.ClaimInput) (t domain.Ticket, found bool
 	}
 	specN := 0
 	if in.Spec != "" {
-		sp, err := resolveSpec(r, key, "claim", "spec", in.Spec)
+		sp, err := foundation.ResolveSpec(r, key, "claim", "spec", in.Spec)
 		if err != nil {
 			return t, false, err
 		}
@@ -149,7 +150,7 @@ func (c *Core) Finish(ctx context.Context, key string, in api.FinishInput) (api.
 	}
 	var v api.Written[api.TicketView]
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		t, h, err := readForWrite(w, key, "finish", "ticket", in.Ticket, whole)

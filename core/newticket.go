@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -19,7 +20,7 @@ import (
 // Blockers or Stages. It is action_not_allowed where whyNotNewTicket
 // says why.
 func (c *Core) NewTicket(ctx context.Context, key string, in api.NewTicketInput) (api.Written[api.TicketView], error) {
-	if err := humanOnly(ctx, "new_ticket"); err != nil {
+	if err := foundation.HumanOnly(ctx, "new_ticket"); err != nil {
 		return api.Written[api.TicketView]{}, err
 	}
 	title := titleLine(in.Text)
@@ -28,11 +29,11 @@ func (c *Core) NewTicket(ctx context.Context, key string, in api.NewTicketInput)
 	}
 	var v api.Written[api.TicketView]
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		p, _ := w.Project(key)
-		s, err := resolveSpec(w, key, "new_ticket", "spec", in.Spec)
+		s, err := foundation.ResolveSpec(w, key, "new_ticket", "spec", in.Spec)
 		if err != nil {
 			return err
 		}
@@ -64,7 +65,7 @@ func whyNotNewTicket(p domain.Project, s domain.Spec, tickets []domain.Ticket) s
 	id := domain.DisplayID(p.Key, s.Number)
 	switch {
 	case !p.Archived.IsZero():
-		return archivedError(p.Key).Message
+		return foundation.ArchivedError(p.Key).Message
 	case isMap(s.Labels):
 		return id + " is a Map, which charts work rather than holding it, so it takes no New Ticket"
 	case slices.Contains(s.Labels, domain.LongLivedLabel):

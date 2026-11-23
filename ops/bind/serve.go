@@ -47,7 +47,7 @@ func (s served) Dispatch(ctx context.Context, call ops.Call) (any, error) {
 // FollowTranscript is the Core's, as the feed ops.Service names: a nil
 // feed on an error, never a nil *core.TranscriptFeed inside one.
 func (s served) FollowTranscript(ctx context.Context, key string, ticket api.Ref, claim, after int) (ops.TranscriptFeed, error) {
-	f, err := s.Core.FollowTranscript(ctx, key, ticket, claim, after)
+	f, err := s.Core.Factories().FollowTranscript(ctx, key, ticket, claim, after)
 	if err != nil {
 		return nil, err
 	}
@@ -56,9 +56,27 @@ func (s served) FollowTranscript(ctx context.Context, key string, ticket api.Ref
 
 // FollowChat is the Core's, as the feed ops.Service names.
 func (s served) FollowChat(ctx context.Context, key string, after int) (ops.ChatFeed, error) {
-	f, err := s.Core.FollowChat(ctx, key, after)
+	f, err := s.Core.Factories().FollowChat(ctx, key, after)
 	if err != nil {
 		return nil, err
 	}
 	return f, nil
+}
+
+// Ping is the Factories area's.
+func (s served) Ping(ctx context.Context, sessionID string) { s.Core.Factories().Ping(ctx, sessionID) }
+
+// PostSessionEvents is the Factories area's.
+func (s served) PostSessionEvents(ctx context.Context, sessionID string, events []api.SessionEvent) {
+	s.Core.Factories().PostSessionEvents(ctx, sessionID, events)
+}
+
+// PostChatEvents is the Factories area's.
+func (s served) PostChatEvents(ctx context.Context, key string, in api.PostChatEventsInput) {
+	s.Core.Factories().PostChatEvents(ctx, key, in)
+}
+
+// Transcript is the Factories area's.
+func (s served) Transcript(ctx context.Context, key string, ticket api.Ref, claim int) (api.TranscriptView, error) {
+	return s.Core.Factories().Transcript(ctx, key, ticket, claim)
 }

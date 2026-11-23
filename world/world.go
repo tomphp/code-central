@@ -169,7 +169,7 @@ func (w *World) PostSessionEventsOn(host, sessionID string, events []api.Session
 	if host != Host {
 		c = w.service(host)
 	}
-	c.PostSessionEvents(context.Background(), sessionID, events)
+	c.Factories().PostSessionEvents(context.Background(), sessionID, events)
 }
 
 // service is the other service on host, on the world's Store: made the

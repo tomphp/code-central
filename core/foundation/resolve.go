@@ -1,4 +1,4 @@
-package core
+package foundation
 
 import (
 	"github.com/tomoram/code-central/api"
@@ -7,36 +7,36 @@ import (
 )
 
 // Specs and Tickets share one number counter per Project, so a number
-// that isn't the kind asked for may be the other kind. specNotTicket and
-// ticketNotSpec, which resolveTicket and resolveSpec call, are the one
+// that isn't the kind asked for may be the other kind. SpecNotTicket and
+// TicketNotSpec, which ResolveTicket and ResolveSpec call, are the one
 // place that says so, naming what to do instead.
 // op is the snake_case operation name and field the input it came in: the
 // operation's main target fails not_found, a nested field invalid with
 // the field.
 
-// resolveTicket reads the Ticket ref names as op's field, with the
+// ResolveTicket reads the Ticket ref names as op's field, with the
 // History parts named.
-func resolveTicket(r store.Reader, key, op, field string, ref api.Ref, parts ...store.Part) (domain.Ticket, error) {
+func ResolveTicket(r store.Reader, key, op, field string, ref api.Ref, parts ...store.Part) (domain.Ticket, error) {
 	n, err := api.RefNumber(ref, key, field)
 	if err != nil {
 		return domain.Ticket{}, err
 	}
-	return ticketNumbered(r, key, op, field, n, parts...)
+	return TicketNumbered(r, key, op, field, n, parts...)
 }
 
-// ticketNumbered is resolveTicket for a number already parsed.
-func ticketNumbered(r store.Reader, key, op, field string, n int, parts ...store.Part) (domain.Ticket, error) {
+// TicketNumbered is ResolveTicket for a number already parsed.
+func TicketNumbered(r store.Reader, key, op, field string, n int, parts ...store.Part) (domain.Ticket, error) {
 	if t, ok := r.Ticket(key, n, parts...); ok {
 		return t, nil
 	}
-	if err := specNotTicket(r, key, op, field, n); err != nil {
+	if err := SpecNotTicket(r, key, op, field, n); err != nil {
 		return domain.Ticket{}, err
 	}
-	return domain.Ticket{}, missing(op, field, "there is no Ticket %s", domain.DisplayID(key, n))
+	return domain.Ticket{}, Missing(op, field, "there is no Ticket %s", domain.DisplayID(key, n))
 }
 
-// resolveSpec reads the Spec ref names as op's field.
-func resolveSpec(r store.Reader, key, op, field string, ref api.Ref) (domain.Spec, error) {
+// ResolveSpec reads the Spec ref names as op's field.
+func ResolveSpec(r store.Reader, key, op, field string, ref api.Ref) (domain.Spec, error) {
 	n, err := api.RefNumber(ref, key, field)
 	if err != nil {
 		return domain.Spec{}, err
@@ -44,15 +44,15 @@ func resolveSpec(r store.Reader, key, op, field string, ref api.Ref) (domain.Spe
 	if s, ok := r.Spec(key, n); ok {
 		return s, nil
 	}
-	if err := ticketNotSpec(r, key, op, field, n); err != nil {
+	if err := TicketNotSpec(r, key, op, field, n); err != nil {
 		return domain.Spec{}, err
 	}
-	return domain.Spec{}, missing(op, field, "there is no Spec %s", domain.DisplayID(key, n))
+	return domain.Spec{}, Missing(op, field, "there is no Spec %s", domain.DisplayID(key, n))
 }
 
-// specNotTicket is the error for n, which isn't a Ticket, given as op's
+// SpecNotTicket is the error for n, which isn't a Ticket, given as op's
 // field: what to do instead when n is a Spec, nil when it isn't.
-func specNotTicket(r store.Reader, key, op, field string, n int) error {
+func SpecNotTicket(r store.Reader, key, op, field string, n int) error {
 	if _, ok := r.Spec(key, n); !ok {
 		return nil
 	}
@@ -63,10 +63,10 @@ func specNotTicket(r store.Reader, key, op, field string, n int) error {
 	return api.InvalidField(field, "%s is a Spec, not a Ticket; give a Ticket of it (get_spec lists them)", id)
 }
 
-// ticketNotSpec is the error for n, which isn't a Spec, given as op's
+// TicketNotSpec is the error for n, which isn't a Spec, given as op's
 // field: the Ticket's Spec and what to do instead when n is a Ticket, nil
 // when it isn't.
-func ticketNotSpec(r store.Reader, key, op, field string, n int) error {
+func TicketNotSpec(r store.Reader, key, op, field string, n int) error {
 	t, ok := r.Ticket(key, n)
 	if !ok {
 		return nil
@@ -111,9 +111,9 @@ func mainTarget(op, field string) bool {
 	return field == "ticket"
 }
 
-// missing is a lookup's failure: not_found for op's main target, invalid
+// Missing is a lookup's failure: not_found for op's main target, invalid
 // with field for a nested one.
-func missing(op, field, format string, args ...any) *api.Error {
+func Missing(op, field, format string, args ...any) *api.Error {
 	if mainTarget(op, field) {
 		return api.NotFoundError(format, args...)
 	}

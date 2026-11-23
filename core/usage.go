@@ -60,25 +60,25 @@ func (c *Core) PostUsage(ctx context.Context, sessionID string, responses []api.
 	if sessionID == "" {
 		return
 	}
-	c.Ping(ctx, sessionID)
+	c.factories.Ping(ctx, sessionID)
 	if len(responses) == 0 {
 		return
 	}
-	k, _, ok := c.newestClaim(sessionID)
+	k, _, ok := c.foundation.NewestClaim(sessionID)
 	if !ok {
 		// A Conversation's session's usage counts at Project scope:
 		// no Ticket and Claim 0 (Spec code-central-633).
-		if k.project, ok = c.conversationProject(sessionID); !ok {
+		if k.Project, ok = c.factories.ConversationProject(sessionID); !ok {
 			return
 		}
 	}
-	c.addModelIDs(k.project, responses)
+	c.addModelIDs(k.Project, responses)
 	if c.usage == nil {
 		return
 	}
 	ticket := ""
-	if k.ticket != 0 {
-		ticket = domain.DisplayID(k.project, k.ticket)
+	if k.Ticket != 0 {
+		ticket = domain.DisplayID(k.Project, k.Ticket)
 	}
 	rs := make([]usage.Response, len(responses))
 	for i, r := range responses {
@@ -86,11 +86,11 @@ func (c *Core) PostUsage(ctx context.Context, sessionID string, responses []api.
 			r.Time = c.now()
 		}
 		rs[i] = usage.Response{
-			Time: r.Time, Ticket: ticket, Claim: k.claim,
+			Time: r.Time, Ticket: ticket, Claim: k.Claim,
 			SessionID: sessionID, Agent: r.Agent, AgentType: r.AgentType, Description: r.Description, Kind: r.Kind, Model: r.Model, Tokens: r.Tokens,
 		}
 	}
-	c.usage.RecordResponses(k.project, rs)
+	c.usage.RecordResponses(k.Project, rs)
 }
 
 // Usage reads Usage. An unknown Project is not_found, and a Days outside

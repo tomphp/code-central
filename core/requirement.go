@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -63,7 +64,7 @@ func (c *Core) SubmitRequirement(_ context.Context, key string, in api.SubmitReq
 	}
 	var res api.SubmitRequirementResult
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		stages, mapID := domain.Stages(), ""
@@ -149,7 +150,7 @@ func (c *Core) requirementResult(r store.Reader, key string, specN int, stageNs 
 // finishedMap reads the Map ref names as submit_requirement's map, which
 // must be labelled wayfinder:map and have no unfinished Tickets.
 func finishedMap(r store.Reader, key string, ref api.Ref) (domain.Spec, error) {
-	m, err := resolveSpec(r, key, "submit_requirement", "map", ref)
+	m, err := foundation.ResolveSpec(r, key, "submit_requirement", "map", ref)
 	if err != nil {
 		return domain.Spec{}, err
 	}

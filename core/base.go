@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -43,7 +43,7 @@ func (c *Core) ReportBase(_ context.Context, key string, in api.ReportBaseInput)
 	var project domain.Project
 	var repository domain.Repository
 	if err := c.store.View(func(r store.Reader) error {
-		if err := writable(r, key); err != nil {
+		if err := foundation.Writable(r, key); err != nil {
 			return err
 		}
 		project, _ = r.Project(key)
@@ -57,17 +57,8 @@ func (c *Core) ReportBase(_ context.Context, key string, in api.ReportBaseInput)
 		return api.Written[api.ProjectView]{}, err
 	}
 	now := c.now()
-	hs := c.heartbeats
-	hs.mu.Lock()
-	if hs.base[key] == nil {
-		hs.base[key] = map[string]api.BaseView{}
-	}
-	prev, seen := hs.base[key][repository.Name]
-	hs.base[key][repository.Name] = api.BaseView{State: in.State, Local: local, Remote: remote, Branch: baseOfRepository(project, repository), At: now}
-	hs.reportsAt[key] = now
-	hs.mu.Unlock()
-	c.recordReports(key)
-	if !seen || prev.State != in.State || prev.Local != local || prev.Remote != remote {
+	reported := api.BaseView{State: in.State, Local: local, Remote: remote, Branch: baseOfRepository(project, repository), At: now}
+	if c.factories.RecordBase(key, repository.Name, reported) {
 		c.events.Publish(events.Event{Type: events.ProjectChanged, Project: key})
 	}
 	return acknowledgeProject(before, c.projectView(project), in.Full, now)
@@ -97,42 +88,17 @@ func baseOfRepository(p domain.Project, r domain.Repository) string {
 	return r.Base
 }
 
-// baseView is the reported base of project's Repository name at now, or
-// nil when none is current: no report, or no Factory online or draining.
-// hs.mu is held.
-func (hs *heartbeats) baseView(project, name string, now time.Time) *api.BaseView {
-	b, ok := hs.base[project][name]
-	if !ok || !hs.reporting(project, now) {
-		return nil
-	}
-	return &b
-}
-
-// reporting reports whether a Factory of project's is online or draining
-// at now, so its reports stand. hs.mu is held.
-func (hs *heartbeats) reporting(project string, now time.Time) bool {
-	for k, h := range hs.all {
-		if k.project == project && h.status(now) != api.FactoryOffline {
-			return true
-		}
-	}
-	return false
-}
-
 // reportedBase is the reported base of p's Repository r while it is in
 // state and p isn't archived.
 func (c *Core) reportedBase(p domain.Project, r domain.Repository, state api.BaseState) (api.BaseView, bool) {
 	if !p.Archived.IsZero() {
 		return api.BaseView{}, false
 	}
-	hs := c.heartbeats
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
-	b := hs.baseView(p.Key, r.Name, c.clock.Now())
-	if b == nil || b.State != state {
+	b, ok := c.factories.ReportedBase(p.Key, r.Name, c.clock.Now())
+	if !ok || b.State != state {
 		return api.BaseView{}, false
 	}
-	return *b, true
+	return b, true
 }
 
 // divergedBase is the reported base of p's Repository r while it is

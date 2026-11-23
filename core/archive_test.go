@@ -316,15 +316,15 @@ var writesOnAcme = map[string]func(f fixture) error{
 		return err
 	},
 	"start_conversation": func(f fixture) error {
-		_, err := f.core.StartConversation(human, "acme", api.StartConversationInput{})
+		_, err := f.core.Factories().StartConversation(human, "acme", api.StartConversationInput{})
 		return err
 	},
 	"send_chat_message": func(f fixture) error {
-		_, err := f.core.SendChatMessage(human, "acme", api.SendChatMessageInput{Text: "What is acme?"})
+		_, err := f.core.Factories().SendChatMessage(human, "acme", api.SendChatMessageInput{Text: "What is acme?"})
 		return err
 	},
 	"stop_chat_reply": func(f fixture) error {
-		_, err := f.core.StopChatReply(human, "acme", api.StopChatReplyInput{})
+		_, err := f.core.Factories().StopChatReply(human, "acme", api.StopChatReplyInput{})
 		return err
 	},
 	"set_github_issues": func(f fixture) error {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -129,7 +130,7 @@ func (c *Core) SendBack(ctx context.Context, key string, in api.SendBackInput) (
 	}
 	shared := false
 	_ = c.store.View(func(r store.Reader) error {
-		if t, err := resolveTicket(r, key, "send_back", "ticket", in.Ticket); err == nil {
+		if t, err := foundation.ResolveTicket(r, key, "send_back", "ticket", in.Ticket); err == nil {
 			p, _ := r.Project(key)
 			shared = specLanded(r, p, t)
 		}
@@ -154,7 +155,7 @@ func (c *Core) SendBack(ctx context.Context, key string, in api.SendBackInput) (
 // (code-central-432), which the commit's fix must cover as well.
 func (c *Core) refuseSendBackOfShared(key string, ref api.Ref) error {
 	return c.store.View(func(r store.Reader) error {
-		t, err := resolveTicket(r, key, "send_back", "ticket", ref)
+		t, err := foundation.ResolveTicket(r, key, "send_back", "ticket", ref)
 		if err != nil || !sharedCandidate(t) {
 			return nil // the send-back itself reports what is wrong
 		}

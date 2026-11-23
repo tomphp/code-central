@@ -2,9 +2,10 @@ package core
 
 import (
 	"context"
+	"io"
 
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/events"
-	"github.com/tomoram/code-central/store"
 )
 
 // The service among the others running on its Store (ADR 0068): its
@@ -15,20 +16,11 @@ import (
 
 // Service is this service as the Store's record of the services names
 // it.
-type Service struct {
-	// ID is its own, new each time it starts.
-	ID string
-	// Host is the machine it runs on, and Version its version.
-	Host    string
-	Version string
-}
+type Service = foundation.Service
 
 // SetService names this service, before it registers or holds a Lease.
 func (c *Core) SetService(s Service) {
-	c.service = s
-	c.heartbeats.mu.Lock()
-	c.heartbeats.self = s.ID
-	c.heartbeats.mu.Unlock()
+	c.foundation.SetService(s)
 	c.watchers.mu.Lock()
 	defer c.watchers.mu.Unlock()
 	c.watchers.self = s.ID
@@ -37,16 +29,15 @@ func (c *Core) SetService(s Service) {
 // Register writes this service's Service Registration, or renews it, as
 // at the Store's format this build writes. A *store.FormatChangedError is
 // the Store migrated past that by another service: this one must stop.
-func (c *Core) Register(context.Context) error {
-	return c.store.Services().Register(store.Registration{ID: c.service.ID, Host: c.service.Host,
-		Version: c.service.Version, Format: store.Format, Renewed: c.now()})
-}
+func (c *Core) Register(ctx context.Context) error { return c.foundation.Register(ctx) }
 
 // Deregister deletes this service's Service Registration and lets go of
 // its Watcher Leases, as it stops, so another service takes them at once.
-func (c *Core) Deregister(context.Context) error {
-	return c.store.Services().Deregister(c.service.ID)
-}
+func (c *Core) Deregister(ctx context.Context) error { return c.foundation.Deregister(ctx) }
+
+// SetLog makes c log what it can't write to or read from the Store, and
+// carries on without, to w. Without one, nothing is logged.
+func (c *Core) SetLog(w io.Writer) { c.foundation.SetLog(w) }
 
 // HoldWatcherLease renews the Project key's Watcher Lease for this
 // service, or takes it when it is free, and reports whether this service
@@ -55,13 +46,14 @@ func (c *Core) Deregister(context.Context) error {
 // held, as last known, until it lapses, and the error is for the log.
 func (c *Core) HoldWatcherLease(_ context.Context, key string) (bool, error) {
 	now := c.now()
-	l, err := c.store.Services().HoldLease(key, c.service.ID, now)
+	self := c.foundation.Service().ID
+	l, err := c.store.Services().HoldLease(key, self, now)
 	if err != nil {
 		l, ok := c.watchers.lease(key)
-		return ok && l.Holder == c.service.ID && !l.Lapsed(now), err
+		return ok && l.Holder == self && !l.Lapsed(now), err
 	}
 	if c.watchers.hold(l, now) {
 		c.events.Publish(events.Event{Type: events.ProjectChanged, Project: key})
 	}
-	return l.Holder == c.service.ID, nil
+	return l.Holder == self, nil
 }

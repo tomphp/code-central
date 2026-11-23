@@ -7,6 +7,7 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/azdourl"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -51,7 +52,7 @@ func boardsPATEnvOf(ci domain.CI, a domain.AzureBoards) string {
 // Mode's organization or project retitles the Azure Boards Spec unless
 // the human has changed its title. Turning it off touches no Link.
 func (c *Core) SetAzureBoards(ctx context.Context, key string, in api.SetAzureBoardsInput) (api.Written[api.ProjectView], error) {
-	if err := humanOnly(ctx, "set_azure_boards"); err != nil {
+	if err := foundation.HumanOnly(ctx, "set_azure_boards"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	a := domain.AzureBoards{On: in.On, Mode: in.Mode, QueryURL: strings.TrimSpace(in.QueryURL),
@@ -87,7 +88,7 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in api.SetAzureBo
 	given := a
 	err := c.store.Update(func(w store.Writer) error {
 		a, resetWatcher = given, false
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		p, _ = w.Project(key)
@@ -239,7 +240,7 @@ func (c *Core) checkAzureBoards(ctx context.Context, key string, a domain.AzureB
 	var was, now api.AzureBoardsCheckInput
 	var wasOn bool
 	err := c.store.View(func(r store.Reader) error {
-		if err := writable(r, key); err != nil {
+		if err := foundation.Writable(r, key); err != nil {
 			return err
 		}
 		p, _ := r.Project(key)

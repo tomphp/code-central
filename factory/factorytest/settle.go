@@ -527,7 +527,7 @@ func (h *Harness) longPollsUnsettled(wakes, chats int) string {
 	upWakes, upChats, parked := h.polls.upstream[factory.WakeLongPoll], h.polls.upstream[factory.ChatLongPoll], h.polls.parked
 	h.polls.mu.Unlock()
 	if wakes > parked {
-		if upWakes < wakes-parked || h.Server.Core.WaitingFactoryWakes(h.Project) < upWakes {
+		if upWakes < wakes-parked || h.Server.Core.Factories().WaitingFactoryWakes(h.Project) < upWakes {
 			return "the " + factory.WakeLongPoll + " not open at Code Central"
 		}
 	}

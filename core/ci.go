@@ -10,6 +10,7 @@ import (
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/azdourl"
 	"github.com/tomoram/code-central/codehost"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -94,7 +95,7 @@ func checkWorkflow(providers []domain.CIProvider, name string) (example string, 
 // each watched Repository's CI entry. The Push remote URL the Factory
 // reported, the CI Rules and the other CI entries are kept.
 func (c *Core) SetCITracking(ctx context.Context, key string, in api.SetCITrackingInput) (api.Written[api.ProjectView], error) {
-	if err := humanOnly(ctx, "set_ci_tracking"); err != nil {
+	if err := foundation.HumanOnly(ctx, "set_ci_tracking"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	home, err := olderClientsHomeCI(key, in)
@@ -128,7 +129,7 @@ func (c *Core) SetCITracking(ctx context.Context, key string, in api.SetCITracki
 	var p domain.Project
 	var opts domain.Options
 	err = c.store.View(func(r store.Reader) error {
-		if err := writable(r, key); err != nil {
+		if err := foundation.Writable(r, key); err != nil {
 			return err
 		}
 		p, _ = r.Project(key)
@@ -304,7 +305,7 @@ func (c *Core) updateCIResetting(key string, full bool, change func(domain.Proje
 	var p domain.Project
 	var reset bool
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		p, _ = w.Project(key)
@@ -348,7 +349,7 @@ const globChars = "*?[]"
 // update writes one record, so the Spec is written first and the rule
 // second: a rule never names a missing Spec.
 func (c *Core) AddCIRule(ctx context.Context, key string, in api.CIRuleInput) (api.Written[api.ProjectView], error) {
-	if err := humanOnly(ctx, "add_ci_rule"); err != nil {
+	if err := foundation.HumanOnly(ctx, "add_ci_rule"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	if in.State == "" {
@@ -356,7 +357,7 @@ func (c *Core) AddCIRule(ctx context.Context, key string, in api.CIRuleInput) (a
 	}
 	var r domain.CIRule
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		p, _ := w.Project(key)
@@ -387,7 +388,7 @@ func (c *Core) AddCIRule(ctx context.Context, key string, in api.CIRuleInput) (a
 // when it was created. The Spec's title follows the rule unless the human
 // has changed it, in a second write after the rule's.
 func (c *Core) EditCIRule(ctx context.Context, key string, in api.CIRuleInput) (api.Written[api.ProjectView], error) {
-	if err := humanOnly(ctx, "edit_ci_rule"); err != nil {
+	if err := foundation.HumanOnly(ctx, "edit_ci_rule"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	n, err := api.RefNumber(in.Spec, key, "spec")
@@ -425,7 +426,7 @@ func (c *Core) EditCIRule(ctx context.Context, key string, in api.CIRuleInput) (
 // RemoveCIRule is the human's remove_ci_rule. The rule's Spec stays, as
 // the record of its Tickets.
 func (c *Core) RemoveCIRule(ctx context.Context, key string, in api.RemoveCIRuleInput) (api.Written[api.ProjectView], error) {
-	if err := humanOnly(ctx, "remove_ci_rule"); err != nil {
+	if err := foundation.HumanOnly(ctx, "remove_ci_rule"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	n, err := api.RefNumber(in.Spec, key, "spec")

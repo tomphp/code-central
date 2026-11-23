@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -93,7 +94,7 @@ func newIssue(r store.Reader, key string, t domain.Ticket) (time.Time, bool) {
 // issue reason never comes back for it. It writes nothing to GitHub.
 // Keeping one that isn't awaiting triage changes nothing.
 func (c *Core) KeepAsDraft(ctx context.Context, key string, in api.TicketInput) (api.Written[api.TicketView], error) {
-	if err := humanOnly(ctx, string(api.OptionKeepAsDraft)); err != nil {
+	if err := foundation.HumanOnly(ctx, string(api.OptionKeepAsDraft)); err != nil {
 		return api.Written[api.TicketView]{}, err
 	}
 	return c.updateTicketIn(key, string(api.OptionKeepAsDraft), in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {
@@ -137,16 +138,16 @@ func requirementText(t domain.Ticket, extra string) string {
 // so the context comment is due on the issue (writeback.go). Its result
 // is the Incoming Issue's, whose Replacement leads to the Requirement.
 func (c *Core) ToRequirement(ctx context.Context, key string, in api.ToRequirementInput) (api.Written[api.TicketView], error) {
-	if err := humanOnly(ctx, string(api.OptionToRequirement)); err != nil {
+	if err := foundation.HumanOnly(ctx, string(api.OptionToRequirement)); err != nil {
 		return api.Written[api.TicketView]{}, err
 	}
 	var res api.Written[api.TicketView]
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		// An Import rewrites it whole, so it is read whole.
-		t, err := resolveTicket(w, key, string(api.OptionToRequirement), "ticket", in.Ticket, whole...)
+		t, err := foundation.ResolveTicket(w, key, string(api.OptionToRequirement), "ticket", in.Ticket, whole...)
 		if err != nil {
 			return err
 		}
@@ -215,7 +216,7 @@ func (c *Core) triageCancel(ctx context.Context, key string, t *domain.Ticket, v
 // planned; a work item's State is left for the human (writeback.go). Its
 // Link stays attached.
 func (c *Core) WontFix(ctx context.Context, key string, in api.WontFixInput) (api.Written[api.TicketView], error) {
-	if err := humanOnly(ctx, string(api.OptionWontFix)); err != nil {
+	if err := foundation.HumanOnly(ctx, string(api.OptionWontFix)); err != nil {
 		return api.Written[api.TicketView]{}, err
 	}
 	return c.updateTicketIn(key, string(api.OptionWontFix), in.Ticket, in.Full, func(r store.Reader, t *domain.Ticket) (bool, error) {

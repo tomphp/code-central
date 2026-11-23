@@ -1,4 +1,4 @@
-package core_test
+package factories_test
 
 import (
 	"testing"
@@ -14,22 +14,22 @@ import (
 // server/chat_doors_test.go.
 func TestTheWatchFailsAReplyWhoseFactoryWentOfflineAndSaysSo(t *testing.T) {
 	f := newFixture(t)
-	f.project(t, "acme")
-	tick := watchFactories(t, f)
-	if _, err := f.core.ReportHeartbeat(ctx, "acme", api.ReportHeartbeatInput{Factory: "cc", Host: "box", State: api.HeartbeatOnline, IntervalSeconds: 10, Chat: true}); err != nil {
+	f.Project(t, "acme")
+	tick := f.WatchFactories(t)
+	if _, err := f.Core.ReportHeartbeat(ctx, "acme", api.ReportHeartbeatInput{Factory: "cc", Host: "box", State: api.HeartbeatOnline, IntervalSeconds: 10, Chat: true}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.core.SendChatMessage(human, "acme", api.SendChatMessageInput{Text: "What is acme?"}); err != nil {
+	if _, err := f.Core.Factories().SendChatMessage(human, "acme", api.SendChatMessageInput{Text: "What is acme?"}); err != nil {
 		t.Fatal(err)
 	}
-	if w, err := f.core.NextChatWork(ctx, "acme", api.NextChatWorkInput{Factory: "cc", Host: "box"}); err != nil || w.Turn == nil {
+	if w, err := f.Core.Factories().NextChatWork(ctx, "acme", api.NextChatWorkInput{Factory: "cc", Host: "box"}); err != nil || w.Turn == nil {
 		t.Fatalf("next_chat_work = %+v, %v", w, err)
 	}
 	tick()
-	notices, stop := f.core.Events().Subscribe()
+	notices, stop := f.Core.Events().Subscribe()
 	defer stop()
 
-	f.clock.Advance(90 * time.Second)
+	f.Clock.Advance(90 * time.Second)
 	tick()
 	select {
 	case e := <-notices:
@@ -39,7 +39,7 @@ func TestTheWatchFailsAReplyWhoseFactoryWentOfflineAndSaysSo(t *testing.T) {
 	default:
 		t.Fatal("the tick sent no chat.changed")
 	}
-	v, err := f.core.GetChat(ctx, "acme", api.GetChatInput{})
+	v, err := f.Core.Factories().GetChat(ctx, "acme", api.GetChatInput{})
 	if err != nil {
 		t.Fatal(err)
 	}

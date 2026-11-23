@@ -3,12 +3,11 @@ package core_test
 import (
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/ids"
+	"github.com/tomoram/code-central/core/coretest"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -22,8 +21,8 @@ func laptopAndDesktop(t *testing.T) (laptop, desktop fixture) {
 	t.Helper()
 	s := store.NewMemory()
 	clk := clock.NewFake(t0)
-	laptop = fixture{core: core.New(s, clk, &ids.Sequence{}), clock: clk, store: s}
-	desktop = fixture{core: core.New(s, clk, &ids.Sequence{}), clock: clk, store: s}
+	laptop = fixtureOf(coretest.On(s, clk))
+	desktop = fixtureOf(coretest.On(s, clk))
 	laptop.core.SetService(core.Service{ID: "a", Host: "laptop", Version: "v1.2.0"})
 	desktop.core.SetService(core.Service{ID: "b", Host: "desktop", Version: "v1.2.0"})
 	for _, f := range []fixture{laptop, desktop} {
@@ -124,14 +123,14 @@ func TestAWatcherStatusWithNoLeaseKnownShowsNoHost(t *testing.T) {
 // A Lease the Store can't renew is still held until it lapses, as last
 // known, so a moment's outage doesn't stop the Watchers.
 func TestAWatcherLeaseTheStoreCannotRenewIsHeldUntilItLapses(t *testing.T) {
-	s := &failingServices{Store: store.NewMemory()}
+	s := &coretest.FailingServices{Store: store.NewMemory()}
 	clk := clock.NewFake(t0)
-	f := fixture{core: core.New(s, clk, &ids.Sequence{}), clock: clk, store: s}
+	f := fixtureOf(coretest.On(s, clk))
 	f.core.SetService(core.Service{ID: "a", Host: "laptop"})
 	f.project(t, "acme")
 	f.holdLease(t, "acme")
 
-	s.err = errors.New("connection refused")
+	s.Err = errors.New("connection refused")
 	clk.Advance(store.ServiceRenewal)
 	if held, err := f.core.HoldWatcherLease(ctx, "acme"); !held || err == nil {
 		t.Fatalf("held %v, %v: want still held, and the error to log", held, err)
@@ -140,90 +139,4 @@ func TestAWatcherLeaseTheStoreCannotRenewIsHeldUntilItLapses(t *testing.T) {
 	if held, _ := f.core.HoldWatcherLease(ctx, "acme"); held {
 		t.Fatal("held a Lease that has lapsed")
 	}
-}
-
-// failingServices is a Store whose Services fail with err, once it is
-// set.
-type failingServices struct {
-	store.Store
-	err error
-}
-
-func (s *failingServices) Services() store.Services {
-	return failing{s.Store.Services(), s}
-}
-
-type failing struct {
-	store.Services
-	s *failingServices
-}
-
-func (f failing) HoldLease(project, id string, now time.Time) (store.Lease, error) {
-	if f.s.err != nil {
-		return store.Lease{}, f.s.err
-	}
-	return f.Services.HoldLease(project, id, now)
-}
-
-func (f failing) PutHeartbeat(h store.Heartbeat) error {
-	if f.s.err != nil {
-		return f.s.err
-	}
-	return f.Services.PutHeartbeat(h)
-}
-
-func (f failing) Heartbeats() ([]store.Heartbeat, error) {
-	if f.s.err != nil {
-		return nil, f.s.err
-	}
-	return f.Services.Heartbeats()
-}
-
-func (f failing) PutFactoryReports(r store.FactoryReports) error {
-	if f.s.err != nil {
-		return f.s.err
-	}
-	return f.Services.PutFactoryReports(r)
-}
-
-func (f failing) FactoryReports() ([]store.FactoryReports, error) {
-	if f.s.err != nil {
-		return nil, f.s.err
-	}
-	return f.Services.FactoryReports()
-}
-
-func (f failing) PutTranscriptHolder(h store.TranscriptHolder) error {
-	if f.s.err != nil {
-		return f.s.err
-	}
-	return f.Services.PutTranscriptHolder(h)
-}
-
-func (f failing) TranscriptHolder(project string, ticket, claim int) (store.TranscriptHolder, bool, error) {
-	if f.s.err != nil {
-		return store.TranscriptHolder{}, false, f.s.err
-	}
-	return f.Services.TranscriptHolder(project, ticket, claim)
-}
-
-func (f failing) PutPing(p store.Ping) error {
-	if f.s.err != nil {
-		return f.s.err
-	}
-	return f.Services.PutPing(p)
-}
-
-func (f failing) Pings() ([]store.Ping, error) {
-	if f.s.err != nil {
-		return nil, f.s.err
-	}
-	return f.Services.Pings()
-}
-
-func (f failing) PrunePings(before time.Time) error {
-	if f.s.err != nil {
-		return f.s.err
-	}
-	return f.Services.PrunePings(before)
 }

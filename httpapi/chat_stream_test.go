@@ -12,7 +12,7 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/clock"
-	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/core/factories"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -246,7 +246,7 @@ func TestAChatStreamSendsTheConversationAgainWhenTheEventsItMissedAreGone(t *tes
 	r := f.stream(t, "")
 	fr, _ := opening(t, r)
 	var batch []string
-	for i := 0; i < core.ChatItemLimit+5; i++ {
+	for i := 0; i < factories.ChatItemLimit+5; i++ {
 		batch = append(batch, strconv.Itoa(i))
 	}
 	f.post(t, batch, "")

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
@@ -47,7 +48,7 @@ func (c *Core) RenameProject(ctx context.Context, key string, in api.RenameProje
 	}
 	var v api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		p, _ := w.Project(key)
@@ -66,7 +67,7 @@ func (c *Core) RenameProject(ctx context.Context, key string, in api.RenameProje
 // accepted work lands. Code Central never sees git, so whether the remote
 // exists is the Factory's check.
 func (c *Core) SetLandingMethod(ctx context.Context, key string, in api.SetLandingMethodInput) (api.ProjectView, error) {
-	if err := humanOnly(ctx, "set_landing_method"); err != nil {
+	if err := foundation.HumanOnly(ctx, "set_landing_method"); err != nil {
 		return api.ProjectView{}, err
 	}
 	if !in.Method.Valid() {
@@ -104,7 +105,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in api.SetLandi
 	var resetWatcher bool
 	err := c.store.Update(func(w store.Writer) error {
 		accepted, left, resetWatcher = nil, nil, false
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		p, _ := w.Project(key)

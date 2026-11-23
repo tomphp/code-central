@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -60,10 +61,10 @@ func (c *Core) EditSpec(ctx context.Context, key string, in api.EditSpecInput) (
 	}
 	var v api.Written[api.SpecView]
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
-		s, err := resolveSpec(w, key, "edit_spec", "spec", in.Spec)
+		s, err := foundation.ResolveSpec(w, key, "edit_spec", "spec", in.Spec)
 		if err != nil {
 			return err
 		}
@@ -257,7 +258,7 @@ func checkTagSyntax(tags map[string]string) error {
 // its Model Choice, so it is a valid effort level for the Project.
 func checkTicketTags(r store.Reader, key string, tags map[string]string) error {
 	if effort, ok := tags[EffortTag]; ok {
-		return checkEffort(r, key, "tags", effort)
+		return foundation.CheckEffort(r, key, "tags", effort)
 	}
 	return nil
 }
@@ -313,7 +314,7 @@ func (c *Core) updateTargetThen(key string, ref api.Ref, fn targetFn,
 	then func(r store.Reader, target store.Import) (store.Import, error)) (api.TargetView, error) {
 	var v api.TargetView
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		n, err := api.RefNumber(ref, key, "target")

@@ -1,4 +1,4 @@
-package core_test
+package factories_test
 
 import (
 	"errors"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/coretest"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -21,15 +22,15 @@ func claimedOnTwo(t *testing.T, s store.Store) (laptop, desktop fixture) {
 	t.Helper()
 	laptop, desktop = twoServices(t, s)
 	for _, f := range []fixture{laptop, desktop} {
-		if err := f.core.Register(ctx); err != nil {
+		if err := f.Core.Register(ctx); err != nil {
 			t.Fatal(err)
 		}
 	}
-	laptop.spec(t, "acme", "Login")
-	laptop.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Ta", State: domain.Ready})
-	laptop.ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Tb", State: domain.Ready})
-	laptop.claim(t, api.ClaimInput{Ticket: "2", SessionID: "s1"})
-	laptop.claim(t, api.ClaimInput{Ticket: "3", SessionID: "s2"})
+	laptop.Spec(t, "acme", "Login")
+	laptop.Ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Ta", State: domain.Ready})
+	laptop.Ticket(t, "acme", api.CreateTicketInput{Spec: "1", Title: "Tb", State: domain.Ready})
+	laptop.Claim(t, api.ClaimInput{Ticket: "2", SessionID: "s1"})
+	laptop.Claim(t, api.ClaimInput{Ticket: "3", SessionID: "s2"})
 	return laptop, desktop
 }
 
@@ -37,15 +38,15 @@ func claimedOnTwo(t *testing.T, s store.Store) (laptop, desktop fixture) {
 func post(f fixture, session string, texts ...string) {
 	var events []api.SessionEvent
 	for _, text := range texts {
-		events = append(events, api.SessionEvent{Time: f.clock.Now(), Kind: api.EventText, Text: text})
+		events = append(events, api.SessionEvent{Time: f.Clock.Now(), Kind: api.EventText, Text: text})
 	}
-	f.core.PostSessionEvents(ctx, session, events)
+	f.Core.Factories().PostSessionEvents(ctx, session, events)
 }
 
 // transcriptOf is f's Transcript of acme-<ticket>'s first Claim.
 func transcriptOf(t *testing.T, f fixture, ticket string) api.TranscriptView {
 	t.Helper()
-	v, err := f.core.Transcript(ctx, "acme", api.Ref(ticket), 1)
+	v, err := f.Core.Factories().Transcript(ctx, "acme", api.Ref(ticket), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +78,7 @@ func TestATranscriptOnAnotherServiceNamesItsHost(t *testing.T) {
 // Transcript and none names a host.
 func TestAHandRunSessionsTranscriptNamesNoHost(t *testing.T) {
 	laptop, desktop := claimedOnTwo(t, store.NewMemory())
-	laptop.core.Ping(ctx, "s2")
+	laptop.Core.Factories().Ping(ctx, "s2")
 	for name, f := range map[string]fixture{"laptop": laptop, "desktop": desktop} {
 		if v := transcriptOf(t, f, "3"); v.Host != "" || len(v.Events) != 0 {
 			t.Errorf("on the %s, %+v, want an empty Transcript", name, v)
@@ -99,7 +100,7 @@ func TestATranscriptFollowsItsFactoryToAnotherService(t *testing.T) {
 	if v := transcriptOf(t, laptop, "2"); v.Host != "desktop" || len(v.Events) != 0 {
 		t.Fatalf("on the laptop, %+v, want none, on the desktop", v)
 	}
-	feed, err := desktop.core.FollowTranscript(ctx, "acme", "2", 1, 0)
+	feed, err := desktop.Core.Factories().FollowTranscript(ctx, "acme", "2", 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +114,7 @@ func TestATranscriptFollowsItsFactoryToAnotherService(t *testing.T) {
 func TestFollowingATranscriptOnAnotherServiceNamesItsHost(t *testing.T) {
 	laptop, desktop := claimedOnTwo(t, store.NewMemory())
 	post(laptop, "s1", "one")
-	feed, err := desktop.core.FollowTranscript(ctx, "acme", "2", 1, 0)
+	feed, err := desktop.Core.Factories().FollowTranscript(ctx, "acme", "2", 1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +135,7 @@ func TestFollowingATranscriptOnAnotherServiceNamesItsHost(t *testing.T) {
 func TestATranscriptOnAStoppedServiceNamesNoHost(t *testing.T) {
 	laptop, desktop := claimedOnTwo(t, store.NewMemory())
 	post(laptop, "s1", "one")
-	if err := laptop.core.Deregister(ctx); err != nil {
+	if err := laptop.Core.Deregister(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if v := transcriptOf(t, desktop, "2"); v.Host != "" || len(v.Events) != 0 {
@@ -145,15 +146,15 @@ func TestATranscriptOnAStoppedServiceNamesNoHost(t *testing.T) {
 // A Store that can't be reached costs a Transcript its host, never its
 // events: the post and the read still work, as this service's own.
 func TestATranscriptHolderTheStoreCannotWriteIsLoggedOnly(t *testing.T) {
-	s := &failingServices{Store: store.NewMemory()}
+	s := &coretest.FailingServices{Store: store.NewMemory()}
 	laptop, desktop := claimedOnTwo(t, s)
 
-	s.err = errors.New("connection refused")
+	s.Err = errors.New("connection refused")
 	post(laptop, "s1", "one")
 	if v := transcriptOf(t, laptop, "2"); v.Host != "" || v.Tail || !slices.Equal(texts(v), []string{"one"}) {
 		t.Fatalf("on the laptop, %+v, want its event", v)
 	}
-	s.err = nil
+	s.Err = nil
 	if v := transcriptOf(t, desktop, "2"); v.Host != "" {
 		t.Fatalf("on the desktop, %+v, want no host, as none was written", v)
 	}
@@ -163,19 +164,19 @@ func TestATranscriptHolderTheStoreCannotWriteIsLoggedOnly(t *testing.T) {
 // as the pings are.
 func TestATranscriptHolderIsPrunedAfterAWeek(t *testing.T) {
 	laptop, desktop := claimedOnTwo(t, store.NewMemory())
-	tick := watchFactories(t, desktop)
+	tick := desktop.WatchFactories(t)
 	post(laptop, "s1", "one")
 
-	laptop.clock.Advance(7 * 24 * time.Hour)
-	if err := laptop.core.Register(ctx); err != nil {
+	laptop.Clock.Advance(7 * 24 * time.Hour)
+	if err := laptop.Core.Register(ctx); err != nil {
 		t.Fatal(err)
 	}
 	tick()
 	if v := transcriptOf(t, desktop, "2"); v.Host != "laptop" {
 		t.Fatalf("a week on, %+v, want the laptop named", v)
 	}
-	laptop.clock.Advance(time.Second)
-	if err := laptop.core.Register(ctx); err != nil {
+	laptop.Clock.Advance(time.Second)
+	if err := laptop.Core.Register(ctx); err != nil {
 		t.Fatal(err)
 	}
 	tick()

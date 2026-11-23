@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -25,7 +26,7 @@ func (c *Core) SubmitRetro(_ context.Context, key string, in api.SubmitRetroInpu
 	// The target is checked before the Retros Spec is made, so a refused
 	// Retro writes nothing.
 	err := c.store.View(func(r store.Reader) error {
-		if err := writable(r, key); err != nil {
+		if err := foundation.Writable(r, key); err != nil {
 			return err
 		}
 		_, err := resolveRetroTarget(r, key, in.Target)
@@ -40,7 +41,7 @@ func (c *Core) SubmitRetro(_ context.Context, key string, in api.SubmitRetroInpu
 	}
 	var v api.Written[api.TicketView]
 	err = c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		target, err := resolveRetroTarget(w, key, in.Target)

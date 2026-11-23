@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
@@ -27,12 +28,12 @@ func modelsView(m domain.Models) api.ModelsView {
 // rows whole. Like the Project's other settings it adds no Move, Edit or
 // Comment; the Project's notice announces it.
 func (c *Core) SetModels(ctx context.Context, key string, in api.SetModelsInput) (api.Written[api.ProjectView], error) {
-	if err := humanOnly(ctx, "set_models"); err != nil {
+	if err := foundation.HumanOnly(ctx, "set_models"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	var before, after api.ProjectView
 	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+		if err := foundation.Writable(w, key); err != nil {
 			return err
 		}
 		m, err := checkedModels(w, key, in)
@@ -101,7 +102,7 @@ func modelRow(r store.Reader, key, field, name string, v api.ModelRowView) (doma
 		return domain.ModelRow{}, api.InvalidField(field+".model", "%s's model spans more than one line; a model is one line", name)
 	}
 	if v.Effort != "" {
-		if err := checkEffort(r, key, field+".effort", v.Effort); err != nil {
+		if err := foundation.CheckEffort(r, key, field+".effort", v.Effort); err != nil {
 			return domain.ModelRow{}, err
 		}
 	}

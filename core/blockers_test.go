@@ -18,12 +18,7 @@ func whole(ref api.Ref) api.GetTicketInput {
 }
 
 func (f fixture) get(t *testing.T, ref api.Ref) api.TicketView {
-	t.Helper()
-	v, err := f.core.GetTicket(ctx, "acme", whole(ref))
-	if err != nil {
-		t.Fatalf("get_ticket %s: %v", ref, err)
-	}
-	return v
+	return f.shared().Get(t, ref)
 }
 
 func (f fixture) addBlocker(t *testing.T, ticket, blocker api.Ref) api.TicketView {

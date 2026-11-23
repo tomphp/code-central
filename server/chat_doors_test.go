@@ -13,6 +13,7 @@ import (
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/core/factories"
 	"github.com/tomoram/code-central/events"
 )
 
@@ -444,11 +445,11 @@ func TestSendIsRefusedWhileAReplyRunsAndWhileTheConversationIsUnavailable(t *tes
 
 func TestAnOverLongChatMessageIsRefused(t *testing.T) {
 	srv := newServer(t, chatFactory)
-	body, _ := json.Marshal(api.SendChatMessageInput{Text: strings.Repeat("x", core.SessionEventTextLimit+1)})
+	body, _ := json.Marshal(api.SendChatMessageInput{Text: strings.Repeat("x", factories.SessionEventTextLimit+1)})
 	if e := httpRejected(t, srv, sendChatMessage(string(body)), api.Invalid); e.Field != "text" {
 		t.Fatalf("field %q, want text", e.Field)
 	}
-	if v := sendChat(t, srv, strings.Repeat("x", core.SessionEventTextLimit)); len(v.Messages) != 2 {
+	if v := sendChat(t, srv, strings.Repeat("x", factories.SessionEventTextLimit)); len(v.Messages) != 2 {
 		t.Fatalf("a message of exactly the limit: %+v", v)
 	}
 }
@@ -469,14 +470,14 @@ func TestAConversationDropsWholeOldMessagesAndMarksATail(t *testing.T) {
 	}
 
 	second := chatTurn(t, srv, "two")
-	long := strings.Repeat("y", core.SessionEventTextLimit+10)
+	long := strings.Repeat("y", factories.SessionEventTextLimit+10)
 	postChat(t, srv, api.PostChatEventsInput{Conversation: second.Conversation, Factory: "f", Host: "h", Items: append(items(599), api.SessionEvent{Kind: "text", Text: long})})
 	v := getChat(t, srv)
 	if !v.Tail || len(v.Messages) != 2 || v.Messages[0].Text != "two" || len(v.Messages[1].Items) != 600 {
 		t.Fatalf("over the bound: tail %t, messages %d, first %q", v.Tail, len(v.Messages), v.Messages[0].Text)
 	}
 	cut := v.Messages[1].Items[599]
-	if !cut.Truncated || len(cut.Text) != core.SessionEventTextLimit {
+	if !cut.Truncated || len(cut.Text) != factories.SessionEventTextLimit {
 		t.Fatalf("the long item: truncated %t, %d bytes", cut.Truncated, len(cut.Text))
 	}
 	if !v.Running {

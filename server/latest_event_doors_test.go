@@ -25,7 +25,7 @@ func TestLatestEventThroughEveryDoor(t *testing.T) {
 			_, err := srv.Core.Claim(ctx, "acme", api.ClaimInput{SessionID: "s2"})
 			return err
 		})
-		srv.Core.PostSessionEvents(ctx, "s1", []api.SessionEvent{
+		srv.Core.Factories().PostSessionEvents(ctx, "s1", []api.SessionEvent{
 			{Time: time.Date(2026, 11, 7, 9, 0, 4, 0, time.UTC), Kind: "text", Text: "Planning."},
 			{Time: time.Date(2026, 11, 7, 9, 0, 5, 0, time.UTC), Kind: "tool_call", Text: "Bash: go test ./...", Tool: "Bash", ToolUseID: "tu1"},
 		})

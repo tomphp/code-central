@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/core/foundation"
 	"github.com/tomoram/code-central/domain"
 )
 
@@ -21,7 +22,7 @@ func autoFixView(a domain.AutoFix) api.AutoFixView {
 // Fix instructions, and turning Auto-fix on while CI Tracking is off.
 // Turning CI Tracking off later leaves the entry as it is.
 func (c *Core) SetAutoFix(ctx context.Context, key string, in api.SetAutoFixInput) (api.Written[api.ProjectView], error) {
-	if err := humanOnly(ctx, "set_auto_fix"); err != nil {
+	if err := foundation.HumanOnly(ctx, "set_auto_fix"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	if in.Limit < domain.MinAutoFixLimit || in.Limit > domain.MaxAutoFixLimit {
