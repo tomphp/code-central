@@ -18,7 +18,7 @@ import (
 // no command for them.
 func init() {
 	commands["repository"] = command{
-		usage: "repository list | add <name> [--clone-url <url>] [--base <branch>] [--local-path <path>] [--landing <landing>] [--push-remote <remote>] | edit <name> [--clone-url <url>] [--base <branch>] [--local-path <path>] [--landing <landing>] [--push-remote <remote>] | remove <name> | move <name> --before|--after <name>  [--project <key>]  manage the Project's Repositories, listed in landing order; each needs a Clone URL, a local path or both, and one with no Clone URL is local-only, never cloned or pushed; an empty --clone-url or --local-path clears it; --landing is default (the Project's Default Landing), merge, merge+push, branch, branch+push or pull-request, and an empty --push-remote uses the Project's; edit takes the Home Repository's --landing and --push-remote",
+		usage: "repository list | add <name> [--clone-url <url>] [--base <branch>] [--local-path <path>] [--landing <landing>] [--push-remote <remote>] [--check-command <command>] | edit <name> [--clone-url <url>] [--base <branch>] [--local-path <path>] [--landing <landing>] [--push-remote <remote>] [--check-command <command>] | remove <name> | move <name> --before|--after <name>  [--project <key>]  manage the Project's Repositories, listed in landing order; each needs a Clone URL, a local path or both, and one with no Clone URL is local-only, never cloned or pushed; an empty --clone-url or --local-path clears it; --landing is default (the Project's Default Landing), merge, merge+push, branch, branch+push or pull-request, an empty --push-remote uses the Project's, and an empty --check-command goes back to the Project's Check Command; edit takes the Home Repository's --landing, --push-remote and --check-command",
 		run:   runRepository,
 	}
 }
@@ -35,12 +35,13 @@ func runRepository(ctx context.Context, e Env, args []string) error {
 	localPath := fs.String("local-path", "", "")
 	landing := fs.String("landing", "", "")
 	pushRemote := fs.String("push-remote", "", "")
+	checkCommand := fs.String("check-command", "", "")
 	before := fs.String("before", "", "")
 	after := fs.String("after", "", "")
 	allowed := map[string][]string{
 		"list":   {"project"},
-		"add":    {"project", "clone-url", "base", "local-path", "landing", "push-remote"},
-		"edit":   {"project", "clone-url", "base", "local-path", "landing", "push-remote"},
+		"add":    {"project", "clone-url", "base", "local-path", "landing", "push-remote", "check-command"},
+		"edit":   {"project", "clone-url", "base", "local-path", "landing", "push-remote", "check-command"},
 		"remove": {"project"},
 		"move":   {"project", "before", "after"},
 	}[sub]
@@ -92,7 +93,7 @@ func runRepository(ctx context.Context, e Env, args []string) error {
 			return usagef("repository add needs --clone-url or --local-path")
 		}
 		w, err = sc.client.AddRepository(ctx, sc.project, api.AddRepositoryInput{Name: pos[0], CloneURL: *cloneURL, Base: *base, LocalPath: *localPath,
-			Landing: l, PushRemote: *pushRemote, Full: true})
+			Landing: l, PushRemote: *pushRemote, CheckCommand: *checkCommand, Full: true})
 	case "edit":
 		in := api.EditRepositoryInput{Name: pos[0], Full: true}
 		if set["clone-url"] {
@@ -110,8 +111,11 @@ func runRepository(ctx context.Context, e Env, args []string) error {
 		if set["push-remote"] {
 			in.PushRemote = pushRemote
 		}
+		if set["check-command"] {
+			in.CheckCommand = checkCommand
+		}
 		if len(set) == 0 || len(set) == 1 && set["project"] {
-			return usagef("repository edit needs --clone-url, --base, --local-path, --landing or --push-remote")
+			return usagef("repository edit needs --clone-url, --base, --local-path, --landing, --push-remote or --check-command")
 		}
 		w, err = sc.client.EditRepository(ctx, sc.project, in)
 	case "remove":
@@ -206,7 +210,7 @@ func landingShown(r api.RepositoryView) string {
 // printRepositories prints p's Repositories in landing order, one a line.
 func printRepositories(e Env, p api.ProjectView) error {
 	w := tabwriter.NewWriter(e.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tCLONE URL\tBASE\tLOCAL PATH\tLANDING\tPUSH REMOTE")
+	fmt.Fprintln(w, "NAME\tCLONE URL\tBASE\tLOCAL PATH\tLANDING\tPUSH REMOTE\tCHECK COMMAND")
 	for _, r := range p.Repositories {
 		name, url, path := r.Name, r.CloneURL, r.LocalPath
 		if r.Home {
@@ -225,7 +229,19 @@ func printRepositories(e Env, p api.ProjectView) error {
 		if r.LocalOnlyUnderPullRequest {
 			landing += ": nothing lands, as it is local-only"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", name, url, r.Base, path, landing, r.PushRemote)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", name, url, r.Base, path, landing, r.PushRemote, checkCommandShown(r))
 	}
 	return w.Flush()
+}
+
+// checkCommandShown is how a list shows r's effective Check Command,
+// marked own or default, and nothing when none applies.
+func checkCommandShown(r api.RepositoryView) string {
+	switch {
+	case r.CheckCommand == "":
+		return ""
+	case r.OwnCheckCommand:
+		return r.CheckCommand + " (own)"
+	}
+	return r.CheckCommand + " (default)"
 }
