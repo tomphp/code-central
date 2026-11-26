@@ -134,7 +134,7 @@ func runHook(_ context.Context, e Env, args []string) error {
 	if json.NewDecoder(e.Stdin).Decode(&in) != nil || in.SessionID == "" {
 		return nil
 	}
-	if !takesSession(in.ToolName) {
+	if !completesInput(in.ToolName) {
 		return nil
 	}
 	input := in.ToolInput
@@ -171,9 +171,9 @@ func runHook(_ context.Context, e Env, args []string) error {
 	return nil
 }
 
-// takesSession reports whether the hook completes the MCP tool's input: claim
-// and set_session. A Round takes its Claim's session.
-func takesSession(tool string) bool {
+// completesInput reports whether the hook completes the MCP tool's input:
+// claim and set_session.
+func completesInput(tool string) bool {
 	return strings.HasSuffix(tool, "__claim") || strings.HasSuffix(tool, "__set_session")
 }
 
