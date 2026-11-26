@@ -150,6 +150,9 @@ var all = []binding{
 	bind(ops.SetAutoAccept, (*core.Core).SetAutoAccept),
 	// Focus Kinds (Spec code-central-550).
 	bind(ops.SetFocusKinds, (*core.Core).SetFocusKinds),
+	// The Check Command (Spec code-central-1229): the human's alone, over
+	// HTTP only.
+	bind(ops.SetCheckCommand, (*core.Core).SetCheckCommand),
 	// Repositories (Spec code-central-848): the human's alone, over HTTP
 	// and the CLI's repository command, never MCP.
 	bind(ops.AddRepository, (*core.Core).AddRepository),

@@ -98,6 +98,9 @@ type Project struct {
 	// for, in AutoAcceptKinds order (ADR 0037). It is stored as on, so a
 	// Project stored without it reads every kind off (ADR 0059).
 	AutoAccept []AutoAcceptKind
+	// CheckCommand is the Project's Check Command, the default for each
+	// Repository without its own; empty for none.
+	CheckCommand string
 	// Repositories are the Project's Repositories in landing order (Spec
 	// code-central-848), the Home Repository among them. A Project stored
 	// without them has the Home Repository alone, as RepositoryList reads
@@ -107,7 +110,8 @@ type Project struct {
 
 // Repository is one git repository a Project's work changes. The Home
 // Repository, where the Factory runs, keeps its Name, the Project Key,
-// its place in the landing order, and any Own Landing and Push remote:
+// its place in the landing order, and any Own Landing, Push remote and
+// Check Command:
 // its Base is the Project's (Landing.Base) and its Clone URL the Push
 // remote URL the Factory reports.
 type Repository struct {
@@ -128,6 +132,9 @@ type Repository struct {
 	// PushRemote names the git remote the Factory pushes the Repository
 	// to and fetches it from; empty for the Project's (Landing.Remote).
 	PushRemote string
+	// CheckCommand is the Repository's own Check Command; empty for the
+	// Project's.
+	CheckCommand string
 }
 
 // OwnLanding is a Repository's own Landing Method and Push option, set

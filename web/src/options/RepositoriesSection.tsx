@@ -14,6 +14,7 @@ import { Field } from "../controls/Field";
 import { Select } from "../controls/Select";
 import { Refusal } from "./Refusal";
 import { RepositoryCI } from "./RepositoryCI";
+import { CheckCommandForm } from "./CheckCommandForm";
 
 // LANDINGS name each Landing a Repository can have, in the order its
 // form offers them: the Project's Default Landing, or an Own Landing.
@@ -45,8 +46,8 @@ const jumpToLanding = (e: MouseEvent<HTMLAnchorElement>) => {
 };
 
 // fieldsOf is r's fields as its edit form starts them: its Landing and
-// Push remote as its own, or default and empty while it follows the
-// Project's.
+// Push remote and Check Command as its own, or default and empty while it
+// follows the Project's.
 const fieldsOf = (r: RepositoryView): RepositoryFields => ({
   name: r.name,
   clone_url: r.clone_url,
@@ -54,6 +55,7 @@ const fieldsOf = (r: RepositoryView): RepositoryFields => ({
   local_path: r.local_path,
   landing: r.own_landing ? r.landing : "default",
   push_remote: r.own_push_remote ? r.push_remote : "",
+  check_command: r.own_check_command ? r.check_command : "",
 });
 
 // RepositoriesSection is the Project's Repositories (Spec code-central-848)
@@ -70,7 +72,11 @@ export function RepositoriesSection({ project }: { project: ProjectRow }) {
   const [editing, setEditing] = useState<string>();
   const repositories = project.repositories;
   const names = repositories.map((r) => r.name);
-  const defaults = { landing: project.landing.repository_landing, remote: project.landing.remote };
+  const defaults = {
+    landing: project.landing.repository_landing,
+    remote: project.landing.remote,
+    checkCommand: project.check_command,
+  };
 
   // move swaps the Repository at i with its neighbour by, -1 for up.
   const move = (i: number, by: -1 | 1) => {
@@ -97,6 +103,7 @@ export function RepositoriesSection({ project }: { project: ProjectRow }) {
           and so can CI Tracking, for when a Repository has one.
         </p>
       )}
+      <CheckCommandForm project={project} />
       <ol className="project-options-repositories" aria-label="Repositories">
         {repositories.map((r, i) =>
           editing === r.name ? (
@@ -105,14 +112,16 @@ export function RepositoriesSection({ project }: { project: ProjectRow }) {
                 label={`Edit ${r.name}`}
                 initial={fieldsOf(r)}
                 submit="Save"
-                save={({ clone_url, base, local_path, landing, push_remote }) =>
+                save={({ clone_url, base, local_path, landing, push_remote, check_command }) =>
                   api
                     .editRepository(
                       project.key,
                       r.name,
                       // The Home's Clone URL is reported and its Base is
                       // the Project's: it takes its Landing alone.
-                      r.home ? { landing, push_remote } : { clone_url, base, local_path, landing, push_remote },
+                      r.home
+                        ? { landing, push_remote, check_command }
+                        : { clone_url, base, local_path, landing, push_remote, check_command },
                     )
                     .then(() => setEditing(undefined))
                 }
@@ -139,7 +148,7 @@ export function RepositoriesSection({ project }: { project: ProjectRow }) {
       </ol>
       <RepositoryForm
         label="Add a Repository"
-        initial={{ name: "", clone_url: "", base: "main", local_path: "", landing: "default", push_remote: "" }}
+        initial={{ name: "", clone_url: "", base: "main", local_path: "", landing: "default", push_remote: "", check_command: "" }}
         submit="Add Repository"
         save={(r) => api.addRepository(project.key, r)}
         withName
@@ -234,6 +243,12 @@ function RepositoryRow({
         <dd>
           {r.push_remote} ({r.own_push_remote ? "its own" : "Project's"})
         </dd>
+        <dt>Check Command</dt>
+        <dd>
+          {r.check_command
+            ? `${r.check_command} (${r.own_check_command ? "its own" : "Project's"})`
+            : "none: follows the Repository's own docs"}
+        </dd>
         <dt>CI</dt>
         <dd>
           <RepositoryCI project={project} entry={r.ci} />
@@ -307,9 +322,9 @@ type RepositoryFields = Required<Omit<RepositoryAdd, "ci">>;
 
 // RepositoryForm is a Repository's fields: adding one, with its name, or
 // editing one in place, whose name never changes; the Home's, its
-// Landing and Push remote alone. defaults are the Project's Default
-// Landing and Push remote, which it follows while it has none of its
-// own. With ciChoice, while CI Tracking is on, adding one also chooses
+// Landing, Push remote and Check Command alone. defaults are the Project's
+// Default Landing, Push remote and Check Command, which it follows while
+// it has none of its own. With ciChoice, while CI Tracking is on, adding one also chooses
 // whether CI Tracking watches it, as its Clone URL names it, or leaves it
 // Not watched.
 function RepositoryForm(props: {
@@ -322,7 +337,7 @@ function RepositoryForm(props: {
   clearOnSave?: boolean;
   ciChoice?: boolean;
   home?: boolean;
-  defaults: { landing: RepositoryLanding; remote: string };
+  defaults: { landing: RepositoryLanding; remote: string; checkCommand: string };
 }) {
   const { label, initial, submit, save, cancel, withName, clearOnSave, ciChoice, home, defaults } = props;
   const [draft, setDraft] = useState<RepositoryFields>(initial);
@@ -436,6 +451,19 @@ function RepositoryForm(props: {
           onChange={(e) => edit({ push_remote: e.target.value })}
           aria-describedby={`${id}-push-remote`}
           {...invalid("push_remote")}
+        />
+      </Field>
+      <Field
+        label="Check Command"
+        hintId={`${id}-check-command`}
+        hint="The command an agent runs to check its code; leave it empty for the Project's."
+      >
+        <input
+          value={draft.check_command}
+          placeholder={defaults.checkCommand}
+          onChange={(e) => edit({ check_command: e.target.value })}
+          aria-describedby={`${id}-check-command`}
+          {...invalid("check_command")}
         />
       </Field>
       {showCIChoice && (

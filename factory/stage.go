@@ -190,7 +190,7 @@ const mapResearch = "map-research"
 // holds the instructions for resolving a merge of the base into the
 // Ticket's branch, or a rebase of the branch onto the base when rebase,
 // Rebase being in force (ADR 0067), which is all the work there is.
-func firstPrompt(c claim, stage, base string, conflicts []string, rebase bool) string {
+func firstPrompt(c claim, stage, base string, conflicts []string, rebase bool, check string) string {
 	if len(conflicts) > 0 {
 		var b strings.Builder
 		do := fmt.Sprintf("Merge %s into the branch", base)
@@ -201,7 +201,7 @@ func firstPrompt(c claim, stage, base string, conflicts []string, rebase bool) s
 		for _, f := range conflicts {
 			fmt.Fprintf(&b, "- %s\n", f)
 		}
-		b.WriteString("\nResolve them keeping the intent of both sides. Run `make typecheck` and the tests the resolution touches. Commit on the branch, with no push and no PR, and finish the Ticket.")
+		b.WriteString("\nResolve them keeping the intent of both sides. " + check + " Commit on the branch, with no push and no PR, and finish the Ticket.")
 		return b.String()
 	}
 	if sk := stageSkills[stage]; sk.skill != "" {
@@ -215,7 +215,7 @@ func firstPrompt(c claim, stage, base string, conflicts []string, rebase bool) s
 // conflicting in each Repository, and either ends with the Repositories
 // list, where the session finds each one.
 func severalFirstPrompt(c claim, stage string, ws worktreeSet, conflicts []conflict, rebase bool) string {
-	p := firstPrompt(c, stage, "", nil, false)
+	p := firstPrompt(c, stage, "", nil, false, "")
 	if len(conflicts) > 0 {
 		var b strings.Builder
 		do := "merge its base into the branch"
@@ -228,8 +228,9 @@ func severalFirstPrompt(c claim, stage string, ws worktreeSet, conflicts []confl
 			for _, f := range cf.files {
 				fmt.Fprintf(&b, "- %s\n", f)
 			}
+			fmt.Fprintf(&b, "%s\n", cf.w.r.checkInstruction())
 		}
-		b.WriteString("\nResolve them keeping the intent of both sides. Run `make typecheck` and the tests the resolution touches. Commit on the branch in each worktree, with no push and no PR, and finish the Ticket.")
+		b.WriteString("\nResolve them keeping the intent of both sides. Commit on the branch in each worktree, with no push and no PR, and finish the Ticket.")
 		p = b.String()
 	}
 	return p + "\n\n" + repositoriesList(ws)

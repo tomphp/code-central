@@ -9,9 +9,9 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-func TestTheRealChainMigratesAFormat57StoreToTheStopsFormat(t *testing.T) {
+func TestTheRealChainMigratesAFormat58StoreToTheStopsFormat(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
-	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 57\n")
+	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 58\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),
 		"key: acme\ndisplay_name: Acme\ncreated: 2026-01-02T03:04:05Z\nmode: committed\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/tickets/2.yaml"),

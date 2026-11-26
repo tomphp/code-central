@@ -101,7 +101,8 @@ var migrations = []MigrationStep{
 	{From: 54, Name: "add an Azure Boards setting Hide Code Central"},
 	{From: 55, Name: "add an Azure Boards setting Branch format"},
 	{From: 56, Name: "add Azure Boards' Work Item States"},
-	{From: 57, Name: "add a Claim's Factory and its Stops"},
+	{From: 57, Name: "add the Check Command of a Project and of a Repository"},
+	{From: 58, Name: "add a Claim's Factory and its Stops"},
 }
 
 // githubIssuesRepositoryBecomesAList is format 46 to 47 (Spec

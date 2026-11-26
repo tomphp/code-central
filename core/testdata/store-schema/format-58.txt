@@ -110,6 +110,7 @@ projects/<key>/project.yaml
   small_changes_spec: int (optional)
   retros_spec: int (optional)
   auto_accept: []string (optional)
+  check_command: string (optional)
   repositories: list of mappings (optional)
       name: string
       home: bool (optional)
@@ -120,6 +121,7 @@ projects/<key>/project.yaml
           method: string
           push: bool (optional)
       push_remote: string (optional)
+      check_command: string (optional)
 
 projects/<key>/specs/<n>.md: YAML frontmatter between --- lines, then the Markdown body
   id: int
@@ -210,14 +212,9 @@ projects/<key>/tickets/<n>.yaml
       resume_command: string (optional)
       model: string (optional)
       effort: string (optional)
-      factory: string (optional)
-      host: string (optional)
       started: string
       ended: string (optional)
       ended_by: string (optional)
-      stops: list of mappings (optional)
-          stopped: string
-          resumed: string (optional)
   rounds: list of mappings
       number: int
       claim: int
