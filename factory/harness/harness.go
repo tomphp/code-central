@@ -7,20 +7,57 @@ package harness
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os/exec"
+	"slices"
+	"strings"
 
 	"github.com/tomoram/code-central/api"
 )
 
 // Harness runs Turns of one coding-agent CLI.
 type Harness interface {
+	// Name is what the Factory's messages call the Harness.
+	Name() string
+	// Discover asks the Harness, run in dir, what it accepts, and warns
+	// through warnf of what it can't find out. It is called before any
+	// Run: a Turn with an effort outside the levels it found isn't
+	// started.
+	Discover(dir string, warnf func(format string, args ...any)) Accepts
+	// VerifyArgs checks, with the Harness run in dir, that it accepts
+	// the args it was given, warning through warnf when it can't tell.
+	VerifyArgs(dir string, warnf func(format string, args ...any)) error
 	// Capabilities declares the optional features this Harness has. One it
 	// lacks is absent from the Factory, never emulated.
 	Capabilities() Capabilities
 	// Run runs t to its end, stopping it when ctx ends, and says how it
 	// ended once its process has exited and its output has been read.
 	Run(ctx context.Context, t Turn) Outcome
+}
+
+// JoinArgs joins args with spaces, quoting any that holds a space.
+func JoinArgs(args []string) string {
+	parts := make([]string, len(args))
+	for i, a := range args {
+		parts[i] = a
+		if strings.ContainsAny(a, " \t") {
+			parts[i] = fmt.Sprintf("%q", a)
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+// Accepts is the effort levels and model aliases a Harness says it
+// accepts; either is empty when it didn't say.
+type Accepts struct {
+	Efforts, Aliases []string
+}
+
+// TakesEffort reports whether the Harness accepts effort, "" being no
+// effort at all. Without levels it can't say, so it takes any.
+func (a Accepts) TakesEffort(effort string) bool {
+	return effort == "" || len(a.Efforts) == 0 || slices.Contains(a.Efforts, effort)
 }
 
 // Capabilities are the optional features a Harness declares beyond the

@@ -20,7 +20,7 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, out harness.Outcome) d
 	}
 	c := t.claim
 	if out.Kind == harness.LoginFailed {
-		f.stopFor(fmt.Sprintf("claude's login has expired or is missing (authentication_failed, on %s): log in with `claude /login`, then start the Factory again", c.Ticket))
+		f.stopFor(fmt.Sprintf("%s's login has expired or is missing (authentication_failed, on %s): log in with `claude /login`, then start the Factory again", f.harness.Name(), c.Ticket))
 		return ""
 	}
 	if out.Kind != harness.Outage {
@@ -84,7 +84,7 @@ func (f *factory) reportStuck(ctx context.Context, t *turn, out harness.Outcome)
 	}
 	fix := fmt.Sprintf("Read the session (claude --resume %s, in %s) to see why it stopped, fix the cause and send the Ticket back.", c.SessionID, t.dir)
 	if !out.Ended && len(f.o.claudeArgs) > 0 {
-		fix += fmt.Sprintf(" The turn started with the Claude Args %s: if claude rejected one, fix it and restart the Factory.", joinArgs(f.o.claudeArgs))
+		fix += fmt.Sprintf(" The turn started with the Claude Args %s: if %s rejected one, fix it and restart the Factory.", harness.JoinArgs(f.o.claudeArgs), f.harness.Name())
 	}
 	return f.reportFailure(ctx, c, &failure{api.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("The turn exited with its Claim still In Progress: %s.", out.ExitDetail),

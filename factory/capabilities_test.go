@@ -15,6 +15,14 @@ type reportingHarness struct{ caps harness.Capabilities }
 
 func (h reportingHarness) Capabilities() harness.Capabilities { return h.caps }
 
+func (reportingHarness) Name() string { return "reporting" }
+
+func (reportingHarness) Discover(string, func(string, ...any)) harness.Accepts {
+	return harness.Accepts{}
+}
+
+func (reportingHarness) VerifyArgs(string, func(string, ...any)) error { return nil }
+
 func (reportingHarness) Run(_ context.Context, t harness.Turn) harness.Outcome {
 	t.OnPlanLimits(api.PlanLimits{})
 	return harness.Outcome{Kind: harness.Done, ReviewCalled: true}

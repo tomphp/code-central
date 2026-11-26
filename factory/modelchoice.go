@@ -51,8 +51,8 @@ func (f *factory) withFlags(kind string, mc *api.ModelChoice) turnChoice {
 }
 
 // describe names where the value name ("model" or "effort") was set, and
-// says how to change it there to one that claude accepts, as accepted
-// puts it.
+// says how to change it there to one that the Harness accepts, as
+// accepted puts it.
 func (s choiceFrom) describe(name, accepted string) (where, fix string) {
 	switch s.source {
 	case sourceFlag:
@@ -73,15 +73,16 @@ func (s choiceFrom) describe(name, accepted string) (where, fix string) {
 }
 
 // reportRejectedEffort files a Failure Report for c, whose turn the Turn
-// runner didn't start because tm's effort isn't one of the levels claude
-// accepts, naming it and where it was set: claude ignores an effort it
-// doesn't accept and runs at its default.
+// runner didn't start because tm's effort isn't one of the levels the
+// Harness accepts, naming it and where it was set: claude ignores an
+// effort it doesn't accept and runs at its default.
 func (f *factory) reportRejectedEffort(ctx context.Context, c claim, dir string, tm turnChoice, levels []string) {
 	list := strings.Join(levels, ", ")
-	where, fix := tm.effortFrom.describe("effort", "claude accepts ("+list+")")
+	name := f.harness.Name()
+	where, fix := tm.effortFrom.describe("effort", name+" accepts ("+list+")")
 	f.reportFailure(ctx, c, &failure{api.ReportFailureInput{
-		WhatBroke:       fmt.Sprintf("The effort `%s`, set by %s, isn't one this Factory's claude accepts (%s), so no turn was started.", tm.effort, where, list),
-		Why:             "claude ignores an `--effort` it doesn't accept and runs at its default effort, so the Factory checks a turn's effort against the levels `claude --help` lists before starting it. A value set while other levels were valid stays set when a later report drops its level.",
+		WhatBroke:       fmt.Sprintf("The effort `%s`, set by %s, isn't one this Factory's %s accepts (%s), so no turn was started.", tm.effort, where, name, list),
+		Why:             fmt.Sprintf("%[1]s ignores an `--effort` it doesn't accept and runs at its default effort, so the Factory checks a turn's effort against the levels `%[1]s --help` lists before starting it. A value set while other levels were valid stays set when a later report drops its level.", name),
 		WhatToFix:       fix,
 		WhereWorkStands: f.whereWorkStands(dir),
 	}})
@@ -96,10 +97,11 @@ func (f *factory) reportRejectedModel(ctx context.Context, t *turn, lastText str
 	if tm.model == "" {
 		model = "its default"
 	}
-	where, fix := tm.modelFrom.describe("model", "claude accepts")
+	name := f.harness.Name()
+	where, fix := tm.modelFrom.describe("model", name+" accepts")
 	return f.reportFailure(ctx, t.claim, &failure{api.ReportFailureInput{
-		WhatBroke:       fmt.Sprintf("claude rejected the model %s, set by %s (model_not_found).", model, where),
-		Why:             "The API answered the turn with model_not_found (404): the model doesn't exist, or this account can't use it. claude says:\n\n" + lastText,
+		WhatBroke:       fmt.Sprintf("%s rejected the model %s, set by %s (model_not_found).", name, model, where),
+		Why:             "The API answered the turn with model_not_found (404): the model doesn't exist, or this account can't use it. " + name + " says:\n\n" + lastText,
 		WhatToFix:       fix,
 		WhereWorkStands: f.whereWorkStands(t.dir),
 	}})
