@@ -25,7 +25,7 @@ Avoid reading `land.go` whole. Read `pullrequest.go` and `specbranch.go` for tho
 
 ## `factorytest` (`factory/factorytest/`)
 
-`factorytest.New(t)` gives a `*Harness`: a real service, a Home Repository (`h.Repo`, branch `main`), a fake `claude` and a proxy. `h.Start()` runs the Factory and returns a `*Running`; `Settle`, `Poll`, `Tick`, `Stop` and `WantOutput` drive and check it. Scripts for the fake `claude` are `h.Script(ticket, steps...)`, with the steps in `script.go` (`Finish`, `FinishIn`, `CommitIn`, `Git`, `WriteFile`, `PostRound`, `Result`, ...).
+`factorytest.New(t)` gives a `*Rig`: a real service, a Home Repository (`h.Repo`, branch `main`), a fake `claude` and a proxy. `h.Start()` runs the Factory and returns a `*Running`; `Settle`, `Poll`, `Tick`, `Stop` and `WantOutput` drive and check it. Scripts for the fake `claude` are `h.Script(ticket, steps...)`, with the steps in `script.go` (`Finish`, `FinishIn`, `CommitIn`, `Git`, `WriteFile`, `PostRound`, `Result`, ...).
 
 **World builders**
 

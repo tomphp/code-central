@@ -14,7 +14,7 @@ import (
 )
 
 // setTags sets tags on ticket, as the human.
-func setTags(t *testing.T, h *factorytest.Harness, ticket string, tags map[string]string) {
+func setTags(t *testing.T, h *factorytest.Rig, ticket string, tags map[string]string) {
 	t.Helper()
 	if _, err := h.Human().SetTags(context.Background(), h.Project, api.SetTagsInput{Target: api.Ref(ticket), Tags: tags}); err != nil {
 		t.Fatal(err)
@@ -22,7 +22,7 @@ func setTags(t *testing.T, h *factorytest.Harness, ticket string, tags map[strin
 }
 
 // setModels sets the Project's Models rows, as the human.
-func setModels(t *testing.T, h *factorytest.Harness, in api.SetModelsInput) {
+func setModels(t *testing.T, h *factorytest.Rig, in api.SetModelsInput) {
 	t.Helper()
 	if _, err := h.Human().SetModels(context.Background(), h.Project, in); err != nil {
 		t.Fatal(err)
@@ -31,7 +31,7 @@ func setModels(t *testing.T, h *factorytest.Harness, in api.SetModelsInput) {
 
 // ranWith checks that c passed --model and --effort as want, "" meaning
 // no flag, and that ticket's Claim recorded them.
-func ranWith(t *testing.T, h *factorytest.Harness, ticket string, c factorytest.Call, model, effort string) {
+func ranWith(t *testing.T, h *factorytest.Rig, ticket string, c factorytest.Call, model, effort string) {
 	t.Helper()
 	for flag, want := range map[string]string{"--model": model, "--effort": effort} {
 		got, ok := c.Flag(flag)

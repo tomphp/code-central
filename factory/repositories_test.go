@@ -20,7 +20,7 @@ import (
 // Repository missing.
 
 // clone is the Factory's last clone report of the Repository name.
-func clone(t *testing.T, h *factorytest.Harness, name string) *api.CloneView {
+func clone(t *testing.T, h *factorytest.Rig, name string) *api.CloneView {
 	t.Helper()
 	p, err := h.Human().GetProject(context.Background(), h.Project)
 	if err != nil {
@@ -35,7 +35,7 @@ func clone(t *testing.T, h *factorytest.Harness, name string) *api.CloneView {
 
 // repositoryMissingItems are the Project's Repository missing items in
 // Needs Me.
-func repositoryMissingItems(t *testing.T, h *factorytest.Harness) []api.RepositoryMissingView {
+func repositoryMissingItems(t *testing.T, h *factorytest.Rig) []api.RepositoryMissingView {
 	t.Helper()
 	var out []api.RepositoryMissingView
 	for _, row := range h.NeedsMeItems(api.ReasonRepositoryMissing) {
@@ -46,7 +46,7 @@ func repositoryMissingItems(t *testing.T, h *factorytest.Harness) []api.Reposito
 
 // wantMissing checks Repository r is reported missing with a problem
 // saying problem, in its clone and its Needs Me item.
-func wantMissing(t *testing.T, h *factorytest.Harness, r *factorytest.Repository, problem string) {
+func wantMissing(t *testing.T, h *factorytest.Rig, r *factorytest.Repository, problem string) {
 	t.Helper()
 	c := clone(t, h, r.Name)
 	if c == nil || c.State != api.CloneMissing || c.Path != r.Path || !strings.Contains(c.Problem, problem) {

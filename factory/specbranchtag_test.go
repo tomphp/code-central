@@ -19,8 +19,8 @@ import (
 // taggedBranch is the branch Tag these tests give the Spec.
 const taggedBranch = "feat/4242"
 
-// tagSpec gives the harness's Spec the branch Tag taggedBranch.
-func tagSpec(t *testing.T, h *factorytest.Harness) {
+// tagSpec gives the rig's Spec the branch Tag taggedBranch.
+func tagSpec(t *testing.T, h *factorytest.Rig) {
 	t.Helper()
 	if _, err := h.Human().SetTags(context.Background(), h.Project, api.SetTagsInput{Target: api.Ref(h.SpecID()), Tags: map[string]string{domain.BranchTag: taggedBranch}}); err != nil {
 		t.Fatal(err)
@@ -29,13 +29,13 @@ func tagSpec(t *testing.T, h *factorytest.Harness) {
 
 // taggedRequirement is a Requirement Spec with the branch Tag
 // taggedBranch.
-func taggedRequirement(t *testing.T, h *factorytest.Harness) {
+func taggedRequirement(t *testing.T, h *factorytest.Rig) {
 	t.Helper()
 	h.MakeRequirement()
 	tagSpec(t, h)
 }
 
-// repo is a repository the typed git helpers read: the Harness's Home
+// repo is a repository the typed git helpers read: the Rig's Home
 // Repository, a Repository, or a Remote.
 type repo interface {
 	Tip(branch string) string

@@ -32,7 +32,7 @@ func events(tr api.TranscriptView) []event {
 // waitForTranscript polls until the Transcript of ticket's first Claim
 // holds an event whose text contains s, and returns it. The Ticket has
 // been claimed: a test settles the Factory first.
-func waitForTranscript(h *factorytest.Harness, r *factorytest.Running, ticket, s string) api.TranscriptView {
+func waitForTranscript(h *factorytest.Rig, r *factorytest.Running, ticket, s string) api.TranscriptView {
 	var tr api.TranscriptView
 	r.PollUntil("an event with "+s+" in "+ticket+"'s Transcript", func() bool {
 		tr = h.Transcript(ticket, 1)

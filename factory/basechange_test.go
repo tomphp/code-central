@@ -12,22 +12,22 @@ import (
 
 // setMergeBase sets Merge with Push to origin and the base, which is what
 // the Project's Options save together.
-func setMergeBase(h *factorytest.Harness, base string) {
+func setMergeBase(h *factorytest.Rig, base string) {
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: "origin", Base: &base})
 }
 
 // pullRequestBase changes the base under Pull Request. The Factory
-// reports the harness remote's path as the Push remote's URL on each poll,
+// reports the rig remote's path as the Push remote's URL on each poll,
 // which Pull Request doesn't accept, so the Code Host's URL is reported
 // again first.
-func pullRequestBase(h *factorytest.Harness, base string) {
+func pullRequestBase(h *factorytest.Rig, base string) {
 	if _, err := h.Server.Client.ReportPushRemote(context.Background(), h.Project, api.ReportPushRemoteInput{URL: "https://github.com/acme/app.git"}); err != nil {
 		panic(err)
 	}
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin", Base: &base})
 }
 
-func contains(h *factorytest.Harness, branch, commit string) bool {
+func contains(h *factorytest.Rig, branch, commit string) bool {
 	return h.IsAncestor(commit, branch)
 }
 

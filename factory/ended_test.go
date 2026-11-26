@@ -16,7 +16,7 @@ import (
 )
 
 // stateTickets is the Tickets of the Claims in the Factory's state file.
-func stateTickets(t *testing.T, h *factorytest.Harness) []string {
+func stateTickets(t *testing.T, h *factorytest.Rig) []string {
 	t.Helper()
 	b, err := h.ReadStateFile()
 	if err != nil {
@@ -60,7 +60,7 @@ func TestAReleasedClaimsTurnIsStoppedAndDropped(t *testing.T) {
 }
 
 // stateClaims is the Claim IDs in the Factory's state file.
-func stateClaims(t *testing.T, h *factorytest.Harness) []string {
+func stateClaims(t *testing.T, h *factorytest.Rig) []string {
 	t.Helper()
 	b, err := h.ReadStateFile()
 	if err != nil {

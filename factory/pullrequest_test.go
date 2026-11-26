@@ -11,8 +11,8 @@ import (
 )
 
 // pullRequestOn sets the Pull Request Landing Method with the Push remote.
-func pullRequestOn(h *factorytest.Harness, remote string) {
-	// The harness's remote is a path; Pull Request needs a Code Host's URL.
+func pullRequestOn(h *factorytest.Rig, remote string) {
+	// The rig's remote is a path; Pull Request needs a Code Host's URL.
 	if _, err := h.Server.Client.ReportPushRemote(context.Background(), h.Project, api.ReportPushRemoteInput{URL: "https://github.com/acme/app.git", Base: "main"}); err != nil {
 		panic(err)
 	}
@@ -22,7 +22,7 @@ func pullRequestOn(h *factorytest.Harness, remote string) {
 // wantPushed checks the Factory has reported ticket's branch as pushed, at
 // commit when it isn't "": the Pull Request Watcher would see it in its list.
 // The Factory has settled.
-func wantPushed(t *testing.T, h *factorytest.Harness, ticket, commit string) {
+func wantPushed(t *testing.T, h *factorytest.Rig, ticket, commit string) {
 	t.Helper()
 	w, err := h.Server.Client.GetPullRequestWatch(context.Background(), h.Project)
 	if err != nil {
@@ -38,7 +38,7 @@ func wantPushed(t *testing.T, h *factorytest.Harness, ticket, commit string) {
 
 // reportPullRequest is the Pull Request Watcher reporting ticket's pull
 // request, as merged at commit when commit isn't "".
-func reportPullRequest(t *testing.T, h *factorytest.Harness, branch, commit string) {
+func reportPullRequest(t *testing.T, h *factorytest.Rig, branch, commit string) {
 	t.Helper()
 	in := api.ReportPullRequestInput{Branch: branch, Number: 7, Link: "https://example.test/pull/7", State: domain.PROpen}
 	if commit != "" {
@@ -200,7 +200,7 @@ func TestUnderPullRequestADivergedBaseStopsLandingAndClaiming(t *testing.T) {
 }
 
 // baseDivergedItem is the Project's Base diverged item in Needs Me.
-func baseDivergedItem(t *testing.T, h *factorytest.Harness) (api.NeedsMeRow, bool) {
+func baseDivergedItem(t *testing.T, h *factorytest.Rig) (api.NeedsMeRow, bool) {
 	t.Helper()
 	if rows := h.NeedsMeItems(api.ReasonBaseDiverged); len(rows) > 0 {
 		return rows[0], true

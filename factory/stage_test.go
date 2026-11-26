@@ -14,7 +14,7 @@ import (
 )
 
 // guide is the Stage Guide Code Central serves for stage.
-func guide(t *testing.T, h *factorytest.Harness, stage string) string {
+func guide(t *testing.T, h *factorytest.Rig, stage string) string {
 	t.Helper()
 	g, err := h.Server.Client.GetStageGuide(context.Background(), "acme", api.StageGuideInput{Stage: stage})
 	if err != nil {

@@ -20,14 +20,14 @@ import (
 
 // specInTwo is a Requirement Spec with the Repository api and a Ready
 // Ticket whose session commits in both (inTwo), and returns the Ticket.
-func specInTwo(h *factorytest.Harness) (apiRepo *factorytest.Repository, id string) {
+func specInTwo(h *factorytest.Rig) (apiRepo *factorytest.Repository, id string) {
 	h.MakeRequirement()
 	apiRepo = h.AddRepository("api")
 	return apiRepo, inTwo(h, "Add an endpoint")
 }
 
 // subject is the subject of commit in the repository at dir.
-func subject(h *factorytest.Harness, dir, commit string) string {
+func subject(h *factorytest.Rig, dir, commit string) string {
 	return h.SubjectIn(dir, commit)
 }
 

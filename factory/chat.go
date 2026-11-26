@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/factory/harness"
 )
 
 const (
@@ -126,7 +127,7 @@ func (f *factory) runChatTurn(ctx context.Context, t api.ChatTurn, work *stint, 
 	if t.First {
 		session = newSessionID()
 	}
-	p := f.newChatPoster(t, session, chatResumeCommand(ws.home().path, session, ws.addDirs()))
+	p := f.newChatPoster(t, session, f.chatResumeCommand(ws.home().path, session, ws.addDirs()))
 	p.start()
 	outcome, msg := f.answerChat(ctx, t, session, ws, p, work, stopWork)
 	if outcome == api.ChatFailed {
@@ -174,70 +175,71 @@ func (f *factory) answerChat(ctx context.Context, t api.ChatTurn, session string
 		f.printf("chat: starting a Conversation in %s; resume: %s", wt, p.resumeCommand)
 	}
 	out := f.runner.run(ctx, turnInput{
-		Dir:          wt,
-		AddDirs:      ws.addDirs(),
-		Session:      session,
-		Resume:       !t.First,
-		Choice:       turnChoice{model: t.Model, effort: t.Effort},
-		SystemPrompt: chatPrompt(f.project, wt) + chatRepositories(ws),
-		Prompt:       t.Text,
-		UsageKind:    kindChat,
-		OnEvent:      p.add,
-		OnUsage:      p.addUsage,
-		OnPlanLimits: f.planLimits.set,
-		Linef:        func(format string, args ...any) { f.printf("chat: "+format, args...) },
-		Key:          chatTurnKey,
-		Work:         work,
-		StopWork:     stopWork,
+		Turn: harness.Turn{
+			Dir:          wt,
+			AddDirs:      ws.addDirs(),
+			Session:      session,
+			Resume:       !t.First,
+			SystemPrompt: chatPrompt(f.project, wt) + chatRepositories(ws),
+			Prompt:       t.Text,
+			UsageKind:    kindChat,
+			OnEvent:      p.add,
+			OnUsage:      p.addUsage,
+			OnPlanLimits: f.planLimits.set,
+			Linef:        func(format string, args ...any) { f.printf("chat: "+format, args...) },
+		},
+		Choice:   turnChoice{model: t.Model, effort: t.Effort},
+		Key:      chatTurnKey,
+		Work:     work,
+		StopWork: stopWork,
 	})
-	if out.End.Result != nil && len(out.End.Result.PermissionDenials) > 0 {
-		p.add(denialsItem(out.End.Result.PermissionDenials, f.e.Clock.Now()))
+	if rules, denials := denialsOf(f.runner.harness, out); len(denials) > 0 {
+		p.add(denialsItem(rules, denials, f.e.Clock.Now()))
 	}
-	return chatOutcome(t, out)
+	return chatOutcome(f.harness.Name(), t, out)
 }
 
 // chatOutcome is how a Chat turn ended: done, stopped, or failed with the
 // Factory's error text, naming the cause when it was a rejected model or
 // effort, an Outage or an expired login. Chat never retries, pauses or
 // stops the Factory for any of them.
-func chatOutcome(t api.ChatTurn, out turnOutcome) (api.ChatOutcome, string) {
+func chatOutcome(name string, t api.ChatTurn, out harness.Outcome) (api.ChatOutcome, string) {
 	const pick = "Pick another in New conversation, or set the Chat row's in Project Options → Models."
 	switch out.Kind {
-	case turnStopped:
+	case harness.Stopped:
 		return api.ChatStopped, ""
-	case turnDone:
+	case harness.Done:
 		return api.ChatDone, ""
-	case turnEffortRejected:
-		return api.ChatFailed, fmt.Sprintf("The effort `%s` isn't one this Factory's claude accepts (%s), so no reply was started. %s", t.Effort, strings.Join(out.Levels, ", "), pick)
-	case turnModelRejected:
+	case harness.EffortRejected:
+		return api.ChatFailed, fmt.Sprintf("The effort `%s` isn't one this Factory's %s accepts (%s), so no reply was started. %s", t.Effort, name, strings.Join(out.Efforts, ", "), pick)
+	case harness.ModelRejected:
 		model := "`" + t.Model + "`"
 		if t.Model == "" {
 			model = "its default"
 		}
-		return api.ChatFailed, fmt.Sprintf("claude rejected the model %s (model_not_found): it doesn't exist, or this account can't use it. %s", model, pick)
-	case turnOutage:
-		return api.ChatFailed, fmt.Sprintf("claude hit an Outage (`%s`): a usage or rate limit, overload, or a server or network error cut off the reply. Send the message again later.", out.End.apiError())
-	case turnLoginFailed:
-		return api.ChatFailed, "claude's login has expired or is missing (authentication_failed): log in with `claude /login` on the Factory's host, then send the message again."
+		return api.ChatFailed, fmt.Sprintf("%s rejected the model %s (model_not_found): it doesn't exist, or this account can't use it. %s", name, model, pick)
+	case harness.Outage:
+		return api.ChatFailed, fmt.Sprintf("%s hit an Outage (`%s`): a usage or rate limit, overload, or a server or network error cut off the reply. Send the message again later.", name, out.ErrorClass)
+	case harness.LoginFailed:
+		return api.ChatFailed, name + "'s login has expired or is missing (authentication_failed): log in with `claude /login` on the Factory's host, then send the message again."
 	}
 	if out.StartErr != nil {
-		return api.ChatFailed, fmt.Sprintf("The Factory couldn't start claude: %v", out.StartErr)
+		return api.ChatFailed, fmt.Sprintf("The Factory couldn't start %s: %v", name, out.StartErr)
 	}
-	end := out.End
-	msg := "claude ended the reply with " + end.how()
-	if apiRepo := end.apiError(); apiRepo != "" {
-		msg += ", API error " + apiRepo
+	msg := name + " ended the reply with " + out.ExitDetail
+	if out.ErrorClass != "" {
+		msg += ", API error " + out.ErrorClass
 	}
-	if end.Result != nil && strings.TrimSpace(end.Result.Result) != "" {
-		msg += ": " + end.Result.Result
+	if strings.TrimSpace(out.EndText) != "" {
+		msg += ": " + out.EndText
 	}
 	return api.ChatFailed, msg
 }
 
 // denialsItem is the item listing the distinct calls a Chat turn had
 // denied.
-func denialsItem(ds []denial, now time.Time) api.SessionEvent {
-	return api.SessionEvent{Time: now, Kind: api.EventPermissionDenials, Text: "Auto mode denied these calls:\n" + denialList(ds)}
+func denialsItem(rules harness.DenialRules, ds []harness.Denial, now time.Time) api.SessionEvent {
+	return api.SessionEvent{Time: now, Kind: api.EventPermissionDenials, Text: "Auto mode denied these calls:\n" + denialList(rules, ds)}
 }
 
 // chatWorktreeAtBase makes r's Chat worktree wt detached at its base's
@@ -261,8 +263,8 @@ func (f *factory) chatWorktreeAtBase(r *repository, wt string) error {
 // chatResumeCommand brings a Conversation's session back from anywhere,
 // so it changes into the Chat worktree wt first, and adds the other
 // Repositories' Chat worktrees, dirs, as its turns do.
-func chatResumeCommand(wt, session string, dirs []string) string {
-	return "cd " + wt + " && claude --resume " + session + addDirFlags(dirs)
+func (f *factory) chatResumeCommand(wt, session string, dirs []string) string {
+	return "cd " + wt + " && " + f.harness.ResumeCommand(session, dirs)
 }
 
 // chatRepositories ends a Chat turn's system prompt in several

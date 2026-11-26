@@ -15,7 +15,7 @@ import (
 
 // handMadeOn pushes a hand-made commit to remote as branch, a branch the
 // Factory didn't push, and returns the commit.
-func handMadeOn(h *factorytest.Harness, remote *factorytest.Remote, branch string) string {
+func handMadeOn(h *factorytest.Rig, remote *factorytest.Remote, branch string) string {
 	hand := h.CommitOn("handmade", "hand.txt", "hand\n")
 	remote.PushTo("handmade", branch)
 	return hand
@@ -23,7 +23,7 @@ func handMadeOn(h *factorytest.Harness, remote *factorytest.Remote, branch strin
 
 // wantForeignBranchCommentOnce checks each of ids has the can't-push
 // comment naming branch on origin exactly once.
-func wantForeignBranchCommentOnce(t *testing.T, h *factorytest.Harness, branch string, ids ...string) {
+func wantForeignBranchCommentOnce(t *testing.T, h *factorytest.Rig, branch string, ids ...string) {
 	t.Helper()
 	for _, id := range ids {
 		var n int

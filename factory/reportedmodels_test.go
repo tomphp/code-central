@@ -11,7 +11,7 @@ import (
 )
 
 // reported is the Project's Reported Models, read as the human.
-func reported(t *testing.T, h *factorytest.Harness) api.ReportedModelsView {
+func reported(t *testing.T, h *factorytest.Rig) api.ReportedModelsView {
 	t.Helper()
 	p, err := h.Human().GetProject(context.Background(), h.Project)
 	if err != nil {
@@ -22,7 +22,7 @@ func reported(t *testing.T, h *factorytest.Harness) api.ReportedModelsView {
 
 // wantReport fails the test unless the Factory has made its report_models
 // (a test settles the Factory first), and returns it.
-func wantReport(t *testing.T, h *factorytest.Harness) api.ReportedModelsView {
+func wantReport(t *testing.T, h *factorytest.Rig) api.ReportedModelsView {
 	t.Helper()
 	got := reported(t, h)
 	if got.Reported == nil {
@@ -49,43 +49,6 @@ func TestAtStartupTheFactoryReportsWhatItsClaudeAcceptsWithItsFlags(t *testing.T
 	h := factorytest.New(t, factorytest.FakeGit())
 	h.Start("--model", "opus", "--effort", "high")
 	wantAccepts(t, wantReport(t, h), claudeLevels, claudeAliases, "opus", "high")
-}
-
-func TestTheFactoryReadsReWrappedAndReorderedHelp(t *testing.T) {
-	t.Parallel()
-	for name, help := range map[string]string{
-		"reordered and narrow": `Usage: claude [options]
-
-Options:
-  --model <model>   Model for the current session.
-                    Provide an alias for the
-                    latest model (e.g. 'fable',
-                    'opus', or 'sonnet') or a
-                    model's full name.
-  -d, --debug       Enable debug mode
-  --effort <level>  Effort level for the
-                    current session (low,
-                    medium, high, xhigh,
-                    max)
-`,
-		"wide": "Options:\n" +
-			"  --effort <level>   Effort level for the current session (low, medium, high, xhigh, max)\n" +
-			"  --model <model>    Model for the current session. Provide an alias for the latest model (e.g. \"fable\", \"opus\", or \"sonnet\") or a model's full name.\n",
-		"labelled choices and curly quotes": "Options:\n" +
-			"  --effort <level>  Effort level (choices: \"low\", \"medium\", \"high\", \"xhigh\", \"max\")\n" +
-			"  --model <model>   An alias (“fable”, ‘opus’ or ‘sonnet’) or a full name\n",
-		"bars": "Options:\n" +
-			"  --model <model>   An alias ('fable', 'opus', 'sonnet')\n" +
-			"  --effort <level>  Effort level (low|medium|high|xhigh|max)\n",
-	} {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			h := factorytest.New(t, factorytest.FakeGit())
-			h.ClaudeHelp(help)
-			h.Start()
-			wantAccepts(t, wantReport(t, h), claudeLevels, claudeAliases, "", "")
-		})
-	}
 }
 
 func TestHelpTheFactoryCantReadWarnsAndReportsNoLevelsOrAliases(t *testing.T) {

@@ -30,7 +30,7 @@ func wantAddDirs(t *testing.T, c factorytest.Call, dirs ...string) {
 
 // wantOnBranch fails the test unless each of worktrees is on branch, or
 // detached for "".
-func wantOnBranch(t *testing.T, h *factorytest.Harness, branch string, worktrees ...string) {
+func wantOnBranch(t *testing.T, h *factorytest.Rig, branch string, worktrees ...string) {
 	t.Helper()
 	for _, wt := range worktrees {
 		if b := h.BranchOf(wt); b != branch {

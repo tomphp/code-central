@@ -12,7 +12,7 @@ import (
 
 // callFor is the one claude call the Factory made for the Ticket. A test
 // settles the Factory first.
-func callFor(t *testing.T, h *factorytest.Harness, id string) factorytest.Call {
+func callFor(t *testing.T, h *factorytest.Rig, id string) factorytest.Call {
 	t.Helper()
 	var found []factorytest.Call
 	for _, c := range h.Calls() {
@@ -44,7 +44,7 @@ func requireConflictClaim(t *testing.T, c factorytest.Call, files ...string) {
 	}
 }
 
-func requireOrdinaryClaim(t *testing.T, h *factorytest.Harness, c factorytest.Call) {
+func requireOrdinaryClaim(t *testing.T, h *factorytest.Rig, c factorytest.Call) {
 	t.Helper()
 	if want := "/implement " + c.Ticket; c.Prompt != want {
 		t.Errorf("first prompt %q, want %q", c.Prompt, want)
@@ -66,7 +66,7 @@ func TestATicketSentBackForAConflictIsClaimedWithAnInlinePrompt(t *testing.T) {
 	requireConflictClaim(t, callFor(t, h, id), "README")
 }
 
-func conflictPromptWith(t *testing.T, setup func(h *factorytest.Harness)) string {
+func conflictPromptWith(t *testing.T, setup func(h *factorytest.Rig)) string {
 	t.Helper()
 	h := factorytest.New(t, factorytest.FakeGit())
 	id, _ := accepted(h, "Change the readme", "README", "theirs\n")
@@ -79,7 +79,7 @@ func conflictPromptWith(t *testing.T, setup func(h *factorytest.Harness)) string
 
 func TestAConflictPromptNamesTheRepositorysCheckCommandAndNotMakeTypecheck(t *testing.T) {
 	t.Parallel()
-	p := conflictPromptWith(t, func(h *factorytest.Harness) {
+	p := conflictPromptWith(t, func(h *factorytest.Rig) {
 		cmd := "npm run check"
 		if _, err := h.Human().EditRepository(context.Background(), h.Project, api.EditRepositoryInput{Name: h.Project, CheckCommand: &cmd}); err != nil {
 			t.Fatal(err)
@@ -92,7 +92,7 @@ func TestAConflictPromptNamesTheRepositorysCheckCommandAndNotMakeTypecheck(t *te
 
 func TestAConflictPromptWithNoCheckCommandPointsToTheRepositorysDocs(t *testing.T) {
 	t.Parallel()
-	p := conflictPromptWith(t, func(*factorytest.Harness) {})
+	p := conflictPromptWith(t, func(*factorytest.Rig) {})
 	if !strings.Contains(p, "as its own docs (such as CLAUDE.md or README) describe.") || strings.Contains(p, "make typecheck") || strings.Contains(p, "Run `") {
 		t.Errorf("prompt %q", p)
 	}
@@ -183,7 +183,7 @@ func TestTheConflictTicketTheFactoryOpensForASpecBranchStartsAsAConflictClaim(t 
 	requireConflictClaim(t, callFor(t, h, fix), "README")
 }
 
-func conflictClaimFinishing(t *testing.T, h *factorytest.Harness) api.TicketView {
+func conflictClaimFinishing(t *testing.T, h *factorytest.Rig) api.TicketView {
 	t.Helper()
 	id, _ := accepted(h, "Change the readme", "README", "theirs\n")
 	h.CommitOn("main", "README", "ours\n")

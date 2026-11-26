@@ -2,11 +2,8 @@ package factory
 
 import (
 	"context"
-	"io"
-	"os/exec"
-	"time"
 
-	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/factory/harness"
 )
 
 // The Turn runner's tests drive the factorytest claude shim, and
@@ -19,33 +16,17 @@ type TurnRunner = turnRunner
 // TurnInput is a Turn's input.
 type TurnInput = turnInput
 
-// TurnOutcome is how a Turn ended.
-type TurnOutcome = turnOutcome
-
-// NewTurnRunner builds a Turn runner of claude in e, whose claude
-// accepts the effort levels, as the Factory's flags bypass, claudeArgs
-// and verbose say.
-func NewTurnRunner(claude string, e Env, levels []string, bypass bool, claudeArgs []string, verbose bool) *TurnRunner {
-	return newTurnRunner(claude, e, claudeAccepts{levels: levels}, bypass, claudeArgs, verbose)
+// NewTurnRunner builds a Turn runner of h in e, as verbose says.
+func NewTurnRunner(h harness.Harness, e Env, verbose bool) *TurnRunner {
+	return newTurnRunner(h, e, verbose)
 }
 
 // Run runs a Turn, as run does.
-func (r *turnRunner) Run(stop context.Context, in turnInput) turnOutcome { return r.run(stop, in) }
+func (r *turnRunner) Run(stop context.Context, in turnInput) harness.Outcome { return r.run(stop, in) }
 
 // Choice is a Turn's model and effort.
 func Choice(model, effort string) turnChoice { return turnChoice{model: model, effort: effort} }
 
-// How is how the Turn ended, as Failure Reports and Chat say it.
-func (t turnEnd) How() string { return t.how() }
-
 // WakeRetry is the wake loop's pause after a next_factory_wake that
 // failed.
 const WakeRetry = wakeRetry
-
-// StartWaiting starts a child that waits, as startWaiting does.
-var StartWaiting = startWaiting
-
-// ReadTurn reads a started Turn's stream to its end, as the runner does.
-func ReadTurn(cmd *exec.Cmd, stdout io.Reader, dir string) turnEnd {
-	return readTurn(cmd, stdout, dir, time.Now, newUsageReader("implementation", time.Now), func(api.SessionEvent) {}, func(api.UsageResponse) {}, func(api.PlanLimits) {})
-}

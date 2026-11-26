@@ -12,7 +12,7 @@ import (
 
 // wantFailureReport checks id has failed, and its one Failure Report says
 // each of what it must. A test settles the Factory first.
-func wantFailureReport(t *testing.T, h *factorytest.Harness, id string, broke, fix []string) {
+func wantFailureReport(t *testing.T, h *factorytest.Rig, id string, broke, fix []string) {
 	t.Helper()
 	tk := h.WantState(id, domain.Failed)
 	if len(tk.FailureReports) != 1 {
@@ -37,27 +37,27 @@ func wantFailureReport(t *testing.T, h *factorytest.Harness, id string, broke, f
 func TestAModelClaudeRejectsFailsTheClaimNamingWhereItWasSet(t *testing.T) {
 	t.Parallel()
 	for name, tc := range map[string]struct {
-		set   func(t *testing.T, h *factorytest.Harness, id string)
+		set   func(t *testing.T, h *factorytest.Rig, id string)
 		flags []string
 		from  string
 		fix   string
 	}{
 		"Ticket Tag": {
-			set: func(t *testing.T, h *factorytest.Harness, id string) {
+			set: func(t *testing.T, h *factorytest.Rig, id string) {
 				setTags(t, h, id, map[string]string{"model": "opus-9"})
 			},
 			from: "the Ticket's `model` Tag",
 			fix:  "Tag",
 		},
 		"Project kind row": {
-			set: func(t *testing.T, h *factorytest.Harness, id string) {
+			set: func(t *testing.T, h *factorytest.Rig, id string) {
 				setModels(t, h, api.SetModelsInput{Kinds: []api.KindModelsView{{Kind: api.ImplementationStage, ModelRowView: api.ModelRowView{Model: "opus-9"}}}})
 			},
 			from: "the Project's Models row for implementation",
 			fix:  "Models row for implementation",
 		},
 		"Project default": {
-			set: func(t *testing.T, h *factorytest.Harness, id string) {
+			set: func(t *testing.T, h *factorytest.Rig, id string) {
 				setModels(t, h, api.SetModelsInput{Default: api.ModelRowView{Model: "opus-9"}})
 			},
 			from: "the Project's default Models row",
@@ -97,26 +97,26 @@ var fewerLevels = strings.Replace(factorytest.DefaultHelp, "(low, medium, high, 
 func TestAnEffortClaudeDoesntAcceptFailsTheClaimWithNoTurnStarted(t *testing.T) {
 	t.Parallel()
 	for name, tc := range map[string]struct {
-		set  func(t *testing.T, h *factorytest.Harness, id string)
+		set  func(t *testing.T, h *factorytest.Rig, id string)
 		from string
 		fix  string
 	}{
 		"Ticket Tag": {
-			set: func(t *testing.T, h *factorytest.Harness, id string) {
+			set: func(t *testing.T, h *factorytest.Rig, id string) {
 				setTags(t, h, id, map[string]string{"effort": "xhigh"})
 			},
 			from: "the Ticket's `effort` Tag",
 			fix:  "Tag",
 		},
 		"Project kind row": {
-			set: func(t *testing.T, h *factorytest.Harness, id string) {
+			set: func(t *testing.T, h *factorytest.Rig, id string) {
 				setModels(t, h, api.SetModelsInput{Kinds: []api.KindModelsView{{Kind: api.ImplementationStage, ModelRowView: api.ModelRowView{Effort: "xhigh"}}}})
 			},
 			from: "the Project's Models row for implementation",
 			fix:  "Models row for implementation",
 		},
 		"Project default": {
-			set: func(t *testing.T, h *factorytest.Harness, id string) {
+			set: func(t *testing.T, h *factorytest.Rig, id string) {
 				setModels(t, h, api.SetModelsInput{Default: api.ModelRowView{Effort: "xhigh"}})
 			},
 			from: "the Project's default Models row",

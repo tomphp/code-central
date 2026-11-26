@@ -12,7 +12,7 @@ import (
 )
 
 // requirementAccepted is accepted on a Requirement Spec.
-func requirementAccepted(h *factorytest.Harness, title, file, content string) (id, commit string) {
+func requirementAccepted(h *factorytest.Rig, title, file, content string) (id, commit string) {
 	h.MakeRequirement()
 	return accepted(h, title, file, content)
 }
