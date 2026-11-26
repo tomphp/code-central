@@ -56,16 +56,16 @@ func (h *Harness) Run(ctx context.Context, t harness.Turn) harness.Outcome {
 	cmd.Dir = t.Dir
 	cmd.Env = h.o.Environ
 	cmd.Stderr = h.o.Stderr
-	var end end
+	var ended end
 	exit, err := t.Exec(ctx, cmd, func(stdout io.Reader) {
-		end = readStream(stdout, t, h.o.Clock.Now)
+		ended = readStream(stdout, t, h.o.Clock.Now)
 	})
 	if err != nil {
 		t.Linef("can't start claude: %v", err)
 		return harness.Outcome{Kind: harness.Failed, StartErr: err}
 	}
-	end.exit = exit
-	return end.outcome(ctx.Err() != nil)
+	ended.exit = exit
+	return ended.outcome(ctx.Err() != nil)
 }
 
 // args are claude's args for t: -p, the session to start or resume, the

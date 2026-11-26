@@ -71,5 +71,5 @@ func (f *factory) turnEnded(t *turn, out harness.Outcome, state domain.State, ra
 	if state != "" {
 		now = "; now " + string(state)
 	}
-	f.claimf(c, "%s turn ended %s: %s%s; ran %s", c.Ticket, f.about(c), out.Exit, now, ran.Round(time.Second))
+	f.claimf(c, "%s turn ended %s: %s%s; ran %s", c.Ticket, f.about(c), out.ExitSummary, now, ran.Round(time.Second))
 }

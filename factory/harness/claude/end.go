@@ -1,3 +1,6 @@
+// How a Turn ended: the result claude printed last, its exit, and the
+// neutral Outcome they make.
+
 package claude
 
 import (
@@ -40,7 +43,7 @@ type end struct {
 func (e end) outcome(stopped bool) harness.Outcome {
 	o := harness.Outcome{
 		Kind:         e.kind(stopped),
-		Exit:         e.String(),
+		ExitSummary:  e.String(),
 		ExitDetail:   e.how(),
 		Ended:        e.result != nil,
 		LastText:     e.lastText,
@@ -48,7 +51,7 @@ func (e end) outcome(stopped bool) harness.Outcome {
 		ReviewCalled: e.reviewCalled,
 	}
 	if e.result != nil {
-		o.Message = e.result.Result
+		o.EndText = e.result.Result
 		for _, d := range e.result.PermissionDenials {
 			o.Denials = append(o.Denials, harness.Denial{Tool: d.Tool, Input: d.Input})
 		}

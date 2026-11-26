@@ -1,3 +1,6 @@
+// Reading a Turn's stream-json: each message to the Turn's callbacks, and
+// what the Turn ended with.
+
 package claude
 
 import (

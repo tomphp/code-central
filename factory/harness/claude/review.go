@@ -1,3 +1,5 @@
+// Review detection: whether a Turn ran the code-review skill.
+
 package claude
 
 import (

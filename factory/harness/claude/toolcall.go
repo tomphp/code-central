@@ -1,3 +1,5 @@
+// A tool call as one line, for the verbose echo and the Session Events.
+
 package claude
 
 import (
@@ -91,6 +93,7 @@ func firstString(input json.RawMessage) string {
 	return ""
 }
 
+// shorten is s cut to n characters, ending in an ellipsis when cut.
 func shorten(s string, n int) string {
 	if r := []rune(s); len(r) > n {
 		return string(r[:n-1]) + "…"

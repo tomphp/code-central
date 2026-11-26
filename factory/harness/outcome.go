@@ -1,3 +1,6 @@
+// The neutral Outcome of a Turn, the only thing the Factory reads of how
+// it ended.
+
 package harness
 
 import "encoding/json"
@@ -19,17 +22,17 @@ const (
 // output.
 type Outcome struct {
 	Kind Kind
-	// Exit says how the Turn ended briefly, as the "turn ended" line
-	// does, and ExitDetail says it in full, as Failure Reports and Chat
-	// do; both empty for a Turn that never started.
-	Exit, ExitDetail string
+	// ExitSummary says how the Turn ended briefly, as the "turn ended"
+	// line does, and ExitDetail says it in full, as Failure Reports and
+	// Chat do; both empty for a Turn that never started.
+	ExitSummary, ExitDetail string
 	// Ended is whether the Harness reported the session's own end: a
 	// Turn without one may have been refused before it began, as by an
 	// argument.
 	Ended bool
-	// LastText is the agent's last text, and Message the text the
+	// LastText is the agent's last text, and EndText the text the
 	// Harness ended the Turn with.
-	LastText, Message string
+	LastText, EndText string
 	// ErrorClass is the API error the Turn ended on, such as
 	// "rate_limit" or "model_not_found"; empty when there was none.
 	ErrorClass string

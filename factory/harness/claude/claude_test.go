@@ -3,7 +3,6 @@ package claude_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os/exec"
 	"runtime"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/factory/factorytest"
@@ -25,11 +25,12 @@ func TestMain(m *testing.M) { factorytest.Main(m) }
 type turnTest struct {
 	h       *factorytest.Rig
 	harness *claude.Harness
+	lines   factorytest.Lines
 
-	mu     sync.Mutex
-	events []api.SessionEvent
-	usage  []api.UsageResponse
-	lines  []string
+	mu         sync.Mutex
+	events     []api.SessionEvent
+	usage      []api.UsageResponse
+	planLimits []api.PlanLimits
 }
 
 // defaultLevels are the effort levels factorytest.DefaultHelp lists.
@@ -53,39 +54,30 @@ func newTurnTest(t *testing.T, o options) *turnTest {
 // turn is a Turn of id, whose script the fake runs, in the rig's repo,
 // its callbacks recording what they get.
 func (tt *turnTest) turn(id string) harness.Turn {
-	return harness.Turn{
-		Dir:       tt.h.Repo,
-		Session:   "11111111-2222-4333-8444-555555555555",
-		Prompt:    "Do the work.\n\nTicket: " + id + "\n",
-		UsageKind: "implementation",
-		OnEvent: func(e api.SessionEvent) {
-			tt.mu.Lock()
-			defer tt.mu.Unlock()
-			tt.events = append(tt.events, e)
-		},
-		OnUsage: func(r api.UsageResponse) {
-			tt.mu.Lock()
-			defer tt.mu.Unlock()
-			tt.usage = append(tt.usage, r)
-		},
-		Linef: func(format string, args ...any) {
-			tt.mu.Lock()
-			defer tt.mu.Unlock()
-			tt.lines = append(tt.lines, fmt.Sprintf(format, args...))
-		},
+	t := tt.h.Turn(id, &tt.lines)
+	t.UsageKind = "implementation"
+	t.OnEvent = func(e api.SessionEvent) {
+		tt.mu.Lock()
+		defer tt.mu.Unlock()
+		tt.events = append(tt.events, e)
 	}
+	t.OnUsage = func(r api.UsageResponse) {
+		tt.mu.Lock()
+		defer tt.mu.Unlock()
+		tt.usage = append(tt.usage, r)
+	}
+	t.OnPlanLimits = func(pl api.PlanLimits) {
+		tt.mu.Lock()
+		defer tt.mu.Unlock()
+		tt.planLimits = append(tt.planLimits, pl)
+	}
+	return t
 }
 
 // run scripts id with steps and runs its Turn to its end.
 func (tt *turnTest) run(id string, steps ...factorytest.Step) harness.Outcome {
 	tt.h.Script(id, steps...)
 	return tt.harness.Run(context.Background(), tt.turn(id))
-}
-
-func (tt *turnTest) gotLines() []string {
-	tt.mu.Lock()
-	defer tt.mu.Unlock()
-	return slices.Clone(tt.lines)
 }
 
 func wantKind(t *testing.T, o harness.Outcome, want harness.Kind) {
@@ -105,8 +97,8 @@ func TestATurnThatSucceedsIsDoneWithItsEventsAndLastText(t *testing.T) {
 	if o.LastText != "All done." {
 		t.Errorf("the last text is %q, want %q", o.LastText, "All done.")
 	}
-	if !o.Ended || o.Exit != "exit 0, success" {
-		t.Errorf("the Turn ended %q (ended: %t), want exit 0, success, ended", o.Exit, o.Ended)
+	if !o.Ended || o.ExitSummary != "exit 0, success" {
+		t.Errorf("the Turn ended %q (ended: %t), want exit 0, success, ended", o.ExitSummary, o.Ended)
 	}
 	if !slices.ContainsFunc(tt.events, func(e api.SessionEvent) bool { return e.Kind == "text" && e.Text == "All done." }) {
 		t.Errorf("the event sink got %+v, want the Say", tt.events)
@@ -123,7 +115,7 @@ func TestATurnThatExitsWithNoResultFails(t *testing.T) {
 	if o.Ended {
 		t.Error("the Turn has ended its session, want no end")
 	}
-	if got, want := o.Exit, "exit 1, no result"; got != want {
+	if got, want := o.ExitSummary, "exit 1, no result"; got != want {
 		t.Errorf("the Turn ended %q, want %q", got, want)
 	}
 	if got, want := o.ExitDetail, "exit 1, with no result message"; got != want {
@@ -219,14 +211,14 @@ func TestATurnWhoseModelClaudeRejectsEndsModelRejected(t *testing.T) {
 	}
 }
 
-func TestATurnEndsWithTheResultsTextAsItsMessage(t *testing.T) {
+func TestATurnEndsWithTheResultsTextAsItsEndText(t *testing.T) {
 	t.Parallel()
 	tt := newTurnTest(t, options{})
 
 	o := tt.run("turn-1", factorytest.Step{Stdout: `{"type":"result","subtype":"success","is_error":false,"result":"Answered."}`})
 
-	if o.Message != "Answered." || o.LastText != "Answered." {
-		t.Errorf("the Turn ended with the message %q and last text %q, want the result's text for both", o.Message, o.LastText)
+	if o.EndText != "Answered." || o.LastText != "Answered." {
+		t.Errorf("the Turn ended with the end text %q and last text %q, want the result's text for both", o.EndText, o.LastText)
 	}
 }
 
@@ -284,10 +276,10 @@ func TestATurnWhoseClaudeCantStartFailsSayingWhy(t *testing.T) {
 	if o.StartErr == nil {
 		t.Error("the outcome has no start error")
 	}
-	if o.Exit != "" || o.ExitDetail != "" {
-		t.Errorf("a Turn that never started ended %q (%q), want neither", o.Exit, o.ExitDetail)
+	if o.ExitSummary != "" || o.ExitDetail != "" {
+		t.Errorf("a Turn that never started ended %q (%q), want neither", o.ExitSummary, o.ExitDetail)
 	}
-	if lines := tt.gotLines(); len(lines) != 1 || !strings.HasPrefix(lines[0], "can't start claude: ") {
+	if lines := tt.lines.Got(); len(lines) != 1 || !strings.HasPrefix(lines[0], "can't start claude: ") {
 		t.Errorf("the line function got %q, want one \"can't start claude\" line", lines)
 	}
 	if hooked != 1 {
@@ -309,8 +301,8 @@ func TestATurnRunsItsProcessThroughItsExecAndReadsWhatItHandsBack(t *testing.T) 
 	o := tt.harness.Run(context.Background(), turn)
 
 	wantKind(t, o, harness.Failed)
-	if o.Exit != "signal: terminated, success" {
-		t.Errorf("the Turn ended %q, want signal: terminated, success", o.Exit)
+	if o.ExitSummary != "signal: terminated, success" {
+		t.Errorf("the Turn ended %q, want signal: terminated, success", o.ExitSummary)
 	}
 	if len(argv) == 0 || argv[0] != "-p" {
 		t.Errorf("the Exec got the args %q, want claude's", argv)
@@ -334,8 +326,8 @@ func TestATurnWhoseExecCantStartItFailsSayingWhy(t *testing.T) {
 	if o.StartErr == nil || o.StartErr.Error() != "no slot" {
 		t.Errorf("the start error is %v, want no slot", o.StartErr)
 	}
-	if want := []string{"can't start claude: no slot"}; !slices.Equal(tt.gotLines(), want) {
-		t.Errorf("the line function got %q, want %q", tt.gotLines(), want)
+	if want := []string{"can't start claude: no slot"}; !slices.Equal(tt.lines.Got(), want) {
+		t.Errorf("the line function got %q, want %q", tt.lines.Got(), want)
 	}
 }
 
@@ -359,6 +351,7 @@ func TestATurnPassesItsFlagsThenTheChoiceThenTheClaudeArgsThenThePrompt(t *testi
 			turn.Model, turn.Effort = "opus", "high"
 			turn.AllowedTools = []string{"Bash(git:*)", "Read"}
 			turn.SystemPrompt = "You work on Tickets."
+			turn.AddDirs = []string{"../spec"}
 
 			wantKind(t, tt.harness.Run(context.Background(), turn), harness.Done)
 
@@ -368,7 +361,7 @@ func TestATurnPassesItsFlagsThenTheChoiceThenTheClaudeArgsThenThePrompt(t *testi
 			}
 			want := append([]string{"-p", tc.sessionArg, turn.Session, "--output-format", "stream-json", "--verbose"}, tc.mode...)
 			want = append(want, "--model", "opus", "--effort", "high",
-				"--allowedTools", "Bash(git:*),Read", "--append-system-prompt", "You work on Tickets.",
+				"--allowedTools", "Bash(git:*),Read", "--append-system-prompt", "You work on Tickets.", "--add-dir", "../spec",
 				"--chrome", "--add-dir", "../other", "--", turn.Prompt)
 			if got := calls[0].Args; !slices.Equal(got, want) {
 				t.Errorf("claude got the args\n%q\nwant\n%q", got, want)
@@ -377,14 +370,14 @@ func TestATurnPassesItsFlagsThenTheChoiceThenTheClaudeArgsThenThePrompt(t *testi
 	}
 }
 
-func TestATurnWithNoChoiceToolsOrSystemPromptPassesNoneOfTheirFlags(t *testing.T) {
+func TestATurnWithNoChoiceToolsSystemPromptOrAddedDirsPassesNoneOfTheirFlags(t *testing.T) {
 	t.Parallel()
 	tt := newTurnTest(t, options{})
 
 	tt.run("turn-1", factorytest.Result("success"))
 
 	c := tt.h.Calls()[0]
-	for _, flag := range []string{"--model", "--effort", "--allowedTools", "--append-system-prompt"} {
+	for _, flag := range []string{"--model", "--effort", "--allowedTools", "--append-system-prompt", "--add-dir"} {
 		if c.Has(flag) {
 			t.Errorf("claude got %s: %q", flag, c.Args)
 		}
@@ -417,6 +410,54 @@ func TestATurnsDenialsComeBackWithTheirToolAndInput(t *testing.T) {
 	wantKind(t, o, harness.Done)
 	if d := o.Denials; len(d) != 1 || d[0].Tool != "Bash" || !strings.Contains(string(d[0].Input), "rm -rf build") {
 		t.Errorf("the outcome has the denials %+v, want the one Bash call", d)
+	}
+}
+
+func TestACallAHookRefusedIsNotADenial(t *testing.T) {
+	t.Parallel()
+	tt := newTurnTest(t, options{})
+	refused := factorytest.Denied("python3 replace.py")
+
+	o := tt.run("turn-1",
+		factorytest.ToolResult(refused.ID, "PreToolUse:Bash hook error: Edit the file with the Edit tool", true),
+		factorytest.ResultDenied(refused, factorytest.Denied("golangci-lint run")))
+
+	if d := o.Denials; len(d) != 1 || !strings.Contains(string(d[0].Input), "golangci-lint run") {
+		t.Errorf("the outcome has the denials %+v, want only the golangci-lint call", d)
+	}
+}
+
+func TestATurnSaysWhetherItCalledTheCodeReviewSkill(t *testing.T) {
+	t.Parallel()
+	for skill, want := range map[string]bool{"mattpocock-skills:code-review": true, "code-review": true, "tdd": false} {
+		t.Run(skill, func(t *testing.T) {
+			t.Parallel()
+			tt := newTurnTest(t, options{})
+
+			o := tt.run("turn-1", factorytest.ToolUse("Skill", `{"skill":"`+skill+`"}`), factorytest.Result("success"))
+
+			if o.ReviewCalled != want {
+				t.Errorf("the outcome says the review was called: %t, want %t", o.ReviewCalled, want)
+			}
+		})
+	}
+}
+
+func TestATurnsPlanLimitsReachThePlanLimitsSink(t *testing.T) {
+	t.Parallel()
+	tt := newTurnTest(t, options{})
+	resetsAt := tt.h.Clock.Now().Add(time.Hour).Unix()
+
+	tt.run("turn-1", factorytest.RateLimitEvent(map[string]factorytest.RateLimitWindow{
+		"five_hour": {Utilization: 0.42, ResetsAt: resetsAt},
+	}), factorytest.Result("success"))
+
+	if len(tt.planLimits) != 1 {
+		t.Fatalf("the Plan Limits sink got %+v, want one reading", tt.planLimits)
+	}
+	pl := tt.planLimits[0]
+	if w := pl.FiveHour; w == nil || w.UsedPercent != 42 || !w.ResetsAt.Equal(time.Unix(resetsAt, 0)) || pl.Weekly != nil {
+		t.Errorf("the Plan Limits sink got %+v, want the 5-hour window 42%% used, resetting at %d, and no weekly", pl, resetsAt)
 	}
 }
 

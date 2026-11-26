@@ -230,8 +230,8 @@ func chatOutcome(t api.ChatTurn, out harness.Outcome) (api.ChatOutcome, string) 
 	if out.ErrorClass != "" {
 		msg += ", API error " + out.ErrorClass
 	}
-	if strings.TrimSpace(out.Message) != "" {
-		msg += ": " + out.Message
+	if strings.TrimSpace(out.EndText) != "" {
+		msg += ": " + out.EndText
 	}
 	return api.ChatFailed, msg
 }

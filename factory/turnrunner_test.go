@@ -2,11 +2,9 @@ package factory_test
 
 import (
 	"context"
-	"fmt"
 	"runtime"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/tomoram/code-central/factory"
@@ -20,9 +18,7 @@ import (
 type runnerTest struct {
 	h      *factorytest.Rig
 	runner *factory.TurnRunner
-
-	mu    sync.Mutex
-	lines []string
+	lines  factorytest.Lines
 }
 
 func newRunnerTest(t *testing.T, verbose bool) *runnerTest {
@@ -33,25 +29,9 @@ func newRunnerTest(t *testing.T, verbose bool) *runnerTest {
 	return &runnerTest{h: h, runner: factory.NewTurnRunner(claudeCode, e, verbose)}
 }
 
-// input is a Turn of id, whose script the fake runs, in the rig's repo,
-// its line function recording what it gets.
+// input is the rig's Turn of id, its lines recorded.
 func (rt *runnerTest) input(id string) factory.TurnInput {
-	return factory.TurnInput{Turn: harness.Turn{
-		Dir:     rt.h.Repo,
-		Session: "11111111-2222-4333-8444-555555555555",
-		Prompt:  "Do the work.\n\nTicket: " + id + "\n",
-		Linef: func(format string, args ...any) {
-			rt.mu.Lock()
-			defer rt.mu.Unlock()
-			rt.lines = append(rt.lines, fmt.Sprintf(format, args...))
-		},
-	}}
-}
-
-func (rt *runnerTest) gotLines() []string {
-	rt.mu.Lock()
-	defer rt.mu.Unlock()
-	return slices.Clone(rt.lines)
+	return factory.TurnInput{Turn: rt.h.Turn(id, &rt.lines)}
 }
 
 func TestAStoppedTurnIsTakenThroughTheStopLadderAndEndsStopped(t *testing.T) {
@@ -86,11 +66,11 @@ func TestAStoppedTurnIsTakenThroughTheStopLadderAndEndsStopped(t *testing.T) {
 		t.Errorf("the Turn got the signals %q, want %q", got, want)
 	}
 	// run returned only once claude had exited: its exit is on the outcome.
-	if runtime.GOOS != "windows" && !strings.HasPrefix(o.Exit, "exit 143,") {
+	if runtime.GOOS != "windows" && !strings.HasPrefix(o.ExitSummary, "exit 143,") {
 		t.Errorf("the Turn ended %s, want the exit 143 of the SIGTERM", o.ExitDetail)
 	}
 	if o.Ended {
-		t.Errorf("a stopped Turn ended with a result (%s), want none", o.Exit)
+		t.Errorf("a stopped Turn ended with a result (%s), want none", o.ExitSummary)
 	}
 }
 
@@ -128,7 +108,7 @@ func TestVerboseEchoesEachToolCallThroughTheLineFunction(t *testing.T) {
 			if verbose {
 				want = []string{"Bash: go test ./..."}
 			}
-			if got := rt.gotLines(); !slices.Equal(got, want) {
+			if got := rt.lines.Got(); !slices.Equal(got, want) {
 				t.Errorf("the line function got %q, want %q", got, want)
 			}
 		})
@@ -148,7 +128,7 @@ func TestVerboseEchoesToolCallsThroughEchoInPlaceOfTheLineFunctionWhenSet(t *tes
 	if want := []string{"Bash: go test ./..."}; !slices.Equal(echoed, want) {
 		t.Errorf("Echo got %q, want %q", echoed, want)
 	}
-	if got := rt.gotLines(); len(got) != 0 {
+	if got := rt.lines.Got(); len(got) != 0 {
 		t.Errorf("the line function got %q, want nothing", got)
 	}
 }
