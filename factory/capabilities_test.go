@@ -27,6 +27,10 @@ func (reportingHarness) SkillPrompt(skill, args string) string { return skill + 
 
 func (reportingHarness) ToolLoadingNote() string { return "" }
 
+func (reportingHarness) MCPConfig() string { return "" }
+
+func (reportingHarness) ResumeCommand(string, []string) string { return "" }
+
 func (reportingHarness) Denials() harness.DenialRules { return nil }
 
 func (reportingHarness) Run(_ context.Context, t harness.Turn) harness.Outcome {

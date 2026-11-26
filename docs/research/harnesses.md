@@ -426,7 +426,7 @@ different mechanism.
 | Coupling | Where | Verdict | Why |
 |---|---|---|---|
 | Executable lookup (`claude`) | `factory/factory.go` | naming | Each tool is one executable. |
-| Windows shim refusal | `factory/process_windows.go` `refuseClaudeShim` | naming | Copilot, Gemini and OpenCode install through npm as `.cmd` shims too; the check moves into the Harness's lookup, each naming its own. |
+| Windows shim refusal | `factory/harness/claude/shim_windows.go` `refuseShim` | naming | Copilot, Gemini and OpenCode install through npm as `.cmd` shims too; the check moves into the Harness's lookup, each naming its own. |
 | argv: `-p`, `--output-format stream-json --verbose` | `claudeturn.go` `args` | naming | Every tool has a headless JSON mode. |
 | Factory-chosen `--session-id` | `run.go`, `chat.go` | conceptual | Codex assigns it. |
 | `--resume <id>` | `claudeturn.go` | naming | All resume by ID; OpenCode with the same flag that creates. |

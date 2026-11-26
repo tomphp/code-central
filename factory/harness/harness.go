@@ -35,6 +35,12 @@ type Harness interface {
 	// Run runs t to its end, stopping it when ctx ends, and says how it
 	// ended once its process has exited and its output has been read.
 	Run(ctx context.Context, t Turn) Outcome
+	// MCPConfig is the file the base must hold, for the Harness's
+	// sessions to reach Code Central's MCP server.
+	MCPConfig() string
+	// ResumeCommand is the command that brings session back by hand,
+	// adding the folders in addDirs as its Turns reach them.
+	ResumeCommand(session string, addDirs []string) string
 	// Denials is how the Harness turns the calls a Turn had denied into
 	// the rules that allow them on resume; nil for a Harness with no
 	// denial list, whose Turns end in no denial Round.

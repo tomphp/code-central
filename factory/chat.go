@@ -127,7 +127,7 @@ func (f *factory) runChatTurn(ctx context.Context, t api.ChatTurn, work *stint, 
 	if t.First {
 		session = newSessionID()
 	}
-	p := f.newChatPoster(t, session, chatResumeCommand(ws.home().path, session, ws.addDirs()))
+	p := f.newChatPoster(t, session, f.chatResumeCommand(ws.home().path, session, ws.addDirs()))
 	p.start()
 	outcome, msg := f.answerChat(ctx, t, session, ws, p, work, stopWork)
 	if outcome == api.ChatFailed {
@@ -263,8 +263,8 @@ func (f *factory) chatWorktreeAtBase(r *repository, wt string) error {
 // chatResumeCommand brings a Conversation's session back from anywhere,
 // so it changes into the Chat worktree wt first, and adds the other
 // Repositories' Chat worktrees, dirs, as its turns do.
-func chatResumeCommand(wt, session string, dirs []string) string {
-	return "cd " + wt + " && claude --resume " + session + addDirFlags(dirs)
+func (f *factory) chatResumeCommand(wt, session string, dirs []string) string {
+	return "cd " + wt + " && " + f.harness.ResumeCommand(session, dirs)
 }
 
 // chatRepositories ends a Chat turn's system prompt in several
