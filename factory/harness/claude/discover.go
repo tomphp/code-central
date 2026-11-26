@@ -1,20 +1,17 @@
-// The Reported Models (Spec code-central-301): at startup the Factory
-// reads from claude --help the effort levels and model aliases its claude
-// accepts, checks its own --effort against the levels, and reports both
-// to Code Central with its flags.
+// What claude accepts (Spec code-central-301): the effort levels and
+// model aliases its --help lists.
 
-package factory
+package claude
 
 import (
 	"context"
-	"fmt"
 	"os/exec"
 	"regexp"
 	"slices"
 	"strings"
 	"time"
 
-	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/factory/harness"
 )
 
 // helpTimeout bounds claude --help. It is on real time, not the Factory's
@@ -22,60 +19,28 @@ import (
 // hangs.
 const helpTimeout = 30 * time.Second
 
-// claudeAccepts is what claude --help says claude accepts; either is
-// empty when the help didn't say.
-type claudeAccepts struct {
-	levels, aliases []string
-}
-
-// readClaudeHelp runs claude --help and reads it, warning of what it
-// can't find. A claude that can't print its help is warned of too:
-// nothing here is fatal.
-func (f *factory) readClaudeHelp() claudeAccepts {
+// Discover runs claude --help in dir and reads the effort levels and
+// model aliases from it, warning of what it can't find. A claude that
+// can't print its help is warned of too: nothing here is fatal.
+func (h *Harness) Discover(dir string, warnf func(string, ...any)) harness.Accepts {
 	ctx, cancel := context.WithTimeout(context.Background(), helpTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, f.claude, "--help")
-	cmd.Dir, cmd.Env = f.repos.home.dir, f.e.Environ
+	cmd := exec.CommandContext(ctx, h.o.Path, "--help")
+	cmd.Dir, cmd.Env = dir, h.o.Environ
 	out, err := cmd.Output()
 	if err != nil {
-		f.printf("warning: can't run claude --help (%v), so there are no effort levels or model aliases to report, and --effort isn't checked", err)
-		return claudeAccepts{}
+		warnf("warning: can't run claude --help (%v), so there are no effort levels or model aliases to report, and --effort isn't checked", err)
+		return harness.Accepts{}
 	}
 	a := parseHelp(string(out))
-	if len(a.levels) == 0 {
-		f.printf("warning: can't read the effort levels from claude --help, so none are reported, and --effort isn't checked")
+	if len(a.Efforts) == 0 {
+		warnf("warning: can't read the effort levels from claude --help, so none are reported, and --effort isn't checked")
 	}
-	if len(a.aliases) == 0 {
-		f.printf("warning: can't read the model aliases from claude --help, so none are reported")
+	if len(a.Aliases) == 0 {
+		warnf("warning: can't read the model aliases from claude --help, so none are reported")
 	}
+	h.efforts = a.Efforts
 	return a
-}
-
-// takesEffort reports whether claude accepts effort, "" being no
-// --effort at all. Without levels it can't say, so it takes any.
-func (a claudeAccepts) takesEffort(effort string) bool {
-	return effort == "" || len(a.levels) == 0 || slices.Contains(a.levels, effort)
-}
-
-// checkEffortFlag refuses an --effort outside the levels claude accepts.
-func (f *factory) checkEffortFlag() error {
-	if f.accepts.takesEffort(f.o.effort) {
-		return nil
-	}
-	return fmt.Errorf("--effort %q isn't an effort level claude accepts: use one of %s", f.o.effort, strings.Join(f.accepts.levels, ", "))
-}
-
-// reportModels reports what claude accepts with the Factory's flags. It
-// reports whether Code Central took it; if not, the next poll tries again.
-func (f *factory) reportModels(ctx context.Context) bool {
-	in := api.ReportModelsInput{EffortLevels: f.accepts.levels, Aliases: f.accepts.aliases, ModelFlag: f.o.model, EffortFlag: f.o.effort}
-	if _, err := f.client.ReportModels(ctx, f.project, in); err != nil {
-		if ctx.Err() == nil {
-			f.printf("warning: can't report what claude accepts to Code Central: %v", err)
-		}
-		return false
-	}
-	return true
 }
 
 var (
@@ -96,18 +61,18 @@ var (
 // parenthesised list and the model aliases from the quoted names in the
 // --model option's text, wherever the options are and however their text
 // wraps.
-func parseHelp(help string) claudeAccepts {
-	var a claudeAccepts
+func parseHelp(help string) harness.Accepts {
+	var a harness.Accepts
 	for _, m := range parenthesised.FindAllStringSubmatch(optionText(help, "--effort"), -1) {
 		if levels := listed(m[1]); len(levels) > 1 {
-			a.levels = levels
+			a.Efforts = levels
 			break
 		}
 	}
 	for _, m := range quoted.FindAllStringSubmatch(optionText(help, "--model"), -1) {
 		alias := m[1]
-		if listedName.MatchString(alias) && !slices.Contains(a.aliases, alias) {
-			a.aliases = append(a.aliases, alias)
+		if listedName.MatchString(alias) && !slices.Contains(a.Aliases, alias) {
+			a.Aliases = append(a.Aliases, alias)
 		}
 	}
 	return a

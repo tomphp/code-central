@@ -196,14 +196,14 @@ func (f *factory) answerChat(ctx context.Context, t api.ChatTurn, session string
 	if len(out.Denials) > 0 {
 		p.add(denialsItem(out.Denials, f.e.Clock.Now()))
 	}
-	return chatOutcome(t, out)
+	return chatOutcome(f.harness.Name(), t, out)
 }
 
 // chatOutcome is how a Chat turn ended: done, stopped, or failed with the
 // Factory's error text, naming the cause when it was a rejected model or
 // effort, an Outage or an expired login. Chat never retries, pauses or
 // stops the Factory for any of them.
-func chatOutcome(t api.ChatTurn, out harness.Outcome) (api.ChatOutcome, string) {
+func chatOutcome(name string, t api.ChatTurn, out harness.Outcome) (api.ChatOutcome, string) {
 	const pick = "Pick another in New conversation, or set the Chat row's in Project Options → Models."
 	switch out.Kind {
 	case harness.Stopped:
@@ -211,22 +211,22 @@ func chatOutcome(t api.ChatTurn, out harness.Outcome) (api.ChatOutcome, string) 
 	case harness.Done:
 		return api.ChatDone, ""
 	case harness.EffortRejected:
-		return api.ChatFailed, fmt.Sprintf("The effort `%s` isn't one this Factory's claude accepts (%s), so no reply was started. %s", t.Effort, strings.Join(out.Efforts, ", "), pick)
+		return api.ChatFailed, fmt.Sprintf("The effort `%s` isn't one this Factory's %s accepts (%s), so no reply was started. %s", t.Effort, name, strings.Join(out.Efforts, ", "), pick)
 	case harness.ModelRejected:
 		model := "`" + t.Model + "`"
 		if t.Model == "" {
 			model = "its default"
 		}
-		return api.ChatFailed, fmt.Sprintf("claude rejected the model %s (model_not_found): it doesn't exist, or this account can't use it. %s", model, pick)
+		return api.ChatFailed, fmt.Sprintf("%s rejected the model %s (model_not_found): it doesn't exist, or this account can't use it. %s", name, model, pick)
 	case harness.Outage:
-		return api.ChatFailed, fmt.Sprintf("claude hit an Outage (`%s`): a usage or rate limit, overload, or a server or network error cut off the reply. Send the message again later.", out.ErrorClass)
+		return api.ChatFailed, fmt.Sprintf("%s hit an Outage (`%s`): a usage or rate limit, overload, or a server or network error cut off the reply. Send the message again later.", name, out.ErrorClass)
 	case harness.LoginFailed:
-		return api.ChatFailed, "claude's login has expired or is missing (authentication_failed): log in with `claude /login` on the Factory's host, then send the message again."
+		return api.ChatFailed, name + "'s login has expired or is missing (authentication_failed): log in with `claude /login` on the Factory's host, then send the message again."
 	}
 	if out.StartErr != nil {
-		return api.ChatFailed, fmt.Sprintf("The Factory couldn't start claude: %v", out.StartErr)
+		return api.ChatFailed, fmt.Sprintf("The Factory couldn't start %s: %v", name, out.StartErr)
 	}
-	msg := "claude ended the reply with " + out.ExitDetail
+	msg := name + " ended the reply with " + out.ExitDetail
 	if out.ErrorClass != "" {
 		msg += ", API error " + out.ErrorClass
 	}

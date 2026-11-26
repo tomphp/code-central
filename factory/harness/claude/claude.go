@@ -22,9 +22,6 @@ type Options struct {
 	// Clock times Session Events and dates model responses and Plan
 	// Limits; nil is the system clock.
 	Clock clock.Clock
-	// Efforts are the effort levels claude accepts, as its --help lists
-	// them; none accepts any.
-	Efforts []string
 	// Bypass runs Turns with permissions bypassed rather than in auto mode.
 	Bypass bool
 	// Args are the Claude Args, passed after the Factory's own flags.
@@ -32,7 +29,12 @@ type Options struct {
 }
 
 // Harness runs Turns of claude.
-type Harness struct{ o Options }
+type Harness struct {
+	o Options
+	// efforts are the effort levels Discover found in claude --help;
+	// none accepts any.
+	efforts []string
+}
 
 var _ harness.Harness = (*Harness)(nil)
 
@@ -44,11 +46,14 @@ func New(o Options) *Harness {
 	return &Harness{o: o}
 }
 
+// Name is claude.
+func (h *Harness) Name() string { return "claude" }
+
 // Run runs t as claude -p. An effort claude doesn't accept starts
 // nothing.
 func (h *Harness) Run(ctx context.Context, t harness.Turn) harness.Outcome {
-	if t.Effort != "" && len(h.o.Efforts) > 0 && !slices.Contains(h.o.Efforts, t.Effort) {
-		return harness.Outcome{Kind: harness.EffortRejected, Efforts: h.o.Efforts}
+	if t.Effort != "" && len(h.efforts) > 0 && !slices.Contains(h.efforts, t.Effort) {
+		return harness.Outcome{Kind: harness.EffortRejected, Efforts: h.efforts}
 	}
 	t = t.WithDefaults()
 	t.BeforeStart()

@@ -76,6 +76,7 @@ import (
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/factory/git"
+	"github.com/tomoram/code-central/factory/harness"
 	"github.com/tomoram/code-central/factory/harness/claude"
 	"github.com/tomoram/code-central/home"
 )
@@ -231,7 +232,7 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 		if i := len(args) - len(rest) - 1; i < 0 || args[i] != "--" {
 			return o, fmt.Errorf("unexpected argument %q", rest[0])
 		}
-		if err := checkClaudeArgs(rest); err != nil {
+		if err := claude.CheckArgs(rest); err != nil {
 			return o, err
 		}
 		o.claudeArgs = rest
@@ -270,7 +271,7 @@ func Run(ctx context.Context, args []string, e Env) int {
 	defer f.lock.Close()
 	f.printf("base: %s", f.repos.baseBranch())
 	if len(o.claudeArgs) > 0 {
-		f.printf("passing to every claude turn: %s", joinArgs(o.claudeArgs))
+		f.printf("passing to every %s turn: %s", f.harness.Name(), harness.JoinArgs(o.claudeArgs))
 	}
 	if o.bypass {
 		f.printf("warning: --bypass-permissions: every session runs in bypassPermissions mode, with no permission checks")
@@ -397,9 +398,11 @@ type factory struct {
 	// held Claim, by Claim ID, so a report goes only when they change;
 	// the poll's own.
 	reportedChanged map[string]string
-	// accepts is what claude --help said claude accepts, read at startup.
-	accepts claudeAccepts
-	// runner runs the claude Turns, built at startup once accepts is read.
+	// harness is the Factory's Harness.
+	harness harness.Harness
+	// accepts is what the Harness said it accepts, read at startup.
+	accepts harness.Accepts
+	// runner runs the Harness's Turns, built at startup once accepts is read.
 	runner *turnRunner
 	// modelsReported is whether Code Central has taken the report of
 	// accepts; until it has, each poll that reads the Project tries.
@@ -536,15 +539,16 @@ func start(e Env, o options) (*factory, error) {
 	if err := f.lander.checkMCPAtStart(); err != nil {
 		return nil, err
 	}
-	f.accepts = f.readClaudeHelp()
+	f.harness = claude.New(claude.Options{
+		Path: f.claude, Environ: e.Environ, Stderr: e.Stderr, Clock: e.Clock,
+		Bypass: o.bypass, Args: o.claudeArgs,
+	})
+	f.accepts = f.harness.Discover(home.dir, f.printf)
 	if err := f.checkEffortFlag(); err != nil {
 		return nil, err
 	}
-	f.runner = newTurnRunner(claude.New(claude.Options{
-		Path: f.claude, Environ: e.Environ, Stderr: e.Stderr, Clock: e.Clock,
-		Efforts: f.accepts.levels, Bypass: o.bypass, Args: o.claudeArgs,
-	}), e, o.verbose)
-	if err := f.checkClaudeArgsAccepted(); err != nil {
+	f.runner = newTurnRunner(f.harness, e, o.verbose)
+	if err := f.harness.VerifyArgs(home.dir, f.printf); err != nil {
 		return nil, err
 	}
 	if readErr == nil {

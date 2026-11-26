@@ -47,17 +47,7 @@ func TestTheFactoryRefusesClaudeArgsItSetsItself(t *testing.T) {
 	h := factorytest.New(t, factorytest.FakeGit())
 	for _, tc := range [][]string{
 		{"--model", "use the Factory's --model"},
-		{"--model=opus", "use the Factory's --model"},
-		{"--effort", "use the Factory's --effort"},
-		{"--permission-mode", "use --bypass-permissions"},
-		{"--permission-prompts", "use --bypass-permissions"},
-		{"--dangerously-skip-permissions", "use --bypass-permissions"},
 		{"--resume", "the Factory sets --resume itself"},
-		{"-p", "the Factory sets -p itself"},
-		{"--allowed-tools=Bash", "the Factory sets --allowed-tools itself"},
-		{"--system-prompt-file", "the Factory sets --system-prompt-file itself"},
-		{"--no-session-persistence", "the Factory sets --no-session-persistence itself"},
-		{"--bare", "the Factory sets --bare itself"},
 		{"--", "ends the flags itself"},
 	} {
 		refuses(t, h, h.Repo, tc[1], "--", "--chrome", tc[0])

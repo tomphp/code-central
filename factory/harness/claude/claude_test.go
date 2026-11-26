@@ -45,10 +45,12 @@ type options struct {
 func newTurnTest(t *testing.T, o options) *turnTest {
 	t.Helper()
 	h := factorytest.New(t, factorytest.FakeGit())
-	return &turnTest{h: h, harness: claude.New(claude.Options{
+	tt := &turnTest{h: h, harness: claude.New(claude.Options{
 		Path: h.Claude(), Environ: h.Environ(), Clock: h.Clock,
-		Efforts: defaultLevels, Bypass: o.bypass, Args: o.args,
+		Bypass: o.bypass, Args: o.args,
 	})}
+	tt.harness.Discover(h.Repo, t.Logf)
+	return tt
 }
 
 // turn is a Turn of id, whose script the fake runs, in the rig's repo,
