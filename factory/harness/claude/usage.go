@@ -1,4 +1,4 @@
-package factory
+package claude
 
 import (
 	"encoding/json"
@@ -9,11 +9,10 @@ import (
 	"github.com/tomoram/code-central/usage"
 )
 
-// Token usage (Spec code-central-201). The Factory reads each model
-// response's usage and model (Spec code-central-266) from a turn's
-// stream-json and posts them to Code Central's POST /api/usage, by the Session Events rules: the same
-// sender, so a post that fails, or an older Code Central's 404, is
-// dropped and a turn is never slowed or failed.
+// Token usage (Spec code-central-201). The Harness reads each model
+// response's usage and model (Spec code-central-266) from a Turn's
+// stream-json, which the Factory posts to Code Central's POST /api/usage
+// by the Session Events rules.
 
 // The kinds of session a subagent's responses are posted under; the main
 // session's kind is its Stage.

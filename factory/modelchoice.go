@@ -88,8 +88,9 @@ func (f *factory) reportRejectedEffort(ctx context.Context, c claim, dir string,
 }
 
 // reportRejectedModel files a Failure Report for t, whose turn claude
-// ended with model_not_found, naming the model and where it was set.
-func (f *factory) reportRejectedModel(ctx context.Context, t *turn, end turnEnd) bool {
+// ended with model_not_found, naming the model and where it was set and
+// quoting claude's last text.
+func (f *factory) reportRejectedModel(ctx context.Context, t *turn, lastText string) bool {
 	tm := t.choice
 	model := "`" + tm.model + "`"
 	if tm.model == "" {
@@ -98,7 +99,7 @@ func (f *factory) reportRejectedModel(ctx context.Context, t *turn, end turnEnd)
 	where, fix := tm.modelFrom.describe("model", "claude accepts")
 	return f.reportFailure(ctx, t.claim, &failure{api.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("claude rejected the model %s, set by %s (model_not_found).", model, where),
-		Why:             "The API answered the turn with model_not_found (404): the model doesn't exist, or this account can't use it. claude says:\n\n" + end.LastText,
+		Why:             "The API answered the turn with model_not_found (404): the model doesn't exist, or this account can't use it. claude says:\n\n" + lastText,
 		WhatToFix:       fix,
 		WhereWorkStands: f.whereWorkStands(t.dir),
 	}})

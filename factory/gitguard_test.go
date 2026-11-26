@@ -14,8 +14,9 @@ import (
 
 // The git guard holds Spec code-central-1148's line: every git call of
 // the Factory's goes through the Git port (factory/git), so the Factory's
-// own files run no git. It parses the package's non-test files, on every
-// OS's build, and flags each process they start but the ones allowed,
+// own files run no git. It parses the non-test files of the package and
+// of its Harnesses, on every OS's build, and flags each process they
+// start but the ones allowed,
 // however os/exec is imported, exec.Command taken as a value,
 // os.StartProcess, and any gitOut, the helper that ran git before the
 // port.
@@ -29,21 +30,26 @@ type gitGuardAllow struct {
 var gitGuardAllowlist = []gitGuardAllow{
 	{file: "claudehelp.go", program: "f.claude", why: "reads claude --help"},
 	{file: "claudeargs.go", program: "f.claude", why: "checks the Claude Args"},
-	{file: "claudeturn.go", program: "r.claude", why: "runs a turn"},
+	{file: "harness/claude/claude.go", program: "h.o.Path", why: "runs a turn"},
 	{file: "process_unix.go", program: "ps", why: "lists the processes"},
 }
 
 func TestTheFactoryRunsGitOnlyThroughTheGitPort(t *testing.T) {
-	files, err := filepath.Glob("*.go")
-	if err != nil {
-		t.Fatal(err)
+	var files []string
+	for _, pattern := range []string{"*.go", "harness/*.go", "harness/*/*.go"} {
+		matched, err := filepath.Glob(pattern)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, matched...)
 	}
 	fset := token.NewFileSet()
-	for _, name := range files {
+	for _, path := range files {
+		name := filepath.ToSlash(path)
 		if strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		file, err := parser.ParseFile(fset, name, nil, parser.SkipObjectResolution)
+		file, err := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)
 		if err != nil {
 			t.Fatal(err)
 		}
