@@ -20,8 +20,8 @@ import (
 
 // rebasePullRequestOn sets the Pull Request Landing Method with the Push
 // remote, Rebase on and Land per Spec as landPerSpec says.
-func rebasePullRequestOn(h *factorytest.Harness, remote string, landPerSpec bool) {
-	// The harness's remote is a path; Pull Request needs a Code Host's URL.
+func rebasePullRequestOn(h *factorytest.Rig, remote string, landPerSpec bool) {
+	// The rig's remote is a path; Pull Request needs a Code Host's URL.
 	if _, err := h.Server.Client.ReportPushRemote(context.Background(), h.Project, api.ReportPushRemoteInput{URL: "https://github.com/acme/app.git", Base: "main"}); err != nil {
 		panic(err)
 	}
@@ -32,7 +32,7 @@ func rebasePullRequestOn(h *factorytest.Harness, remote string, landPerSpec bool
 // moveRemoteBase moves the remote's main on, as a pull request merged on
 // the Code Host does, by a commit changing file on top of the local
 // main, which the Factory's next fetch brings in. It returns the commit.
-func moveRemoteBase(h *factorytest.Harness, remote *factorytest.Remote, file, content string) string {
+func moveRemoteBase(h *factorytest.Rig, remote *factorytest.Remote, file, content string) string {
 	moved := h.CommitOn("upstream", file, content)
 	h.Publish(remote, moved, "main")
 	return moved
@@ -41,7 +41,7 @@ func moveRemoteBase(h *factorytest.Harness, remote *factorytest.Remote, file, co
 // stalePush puts branch on the remote at a commit of its own, cut from
 // main, as a push of an earlier finish of its Ticket would have left it,
 // and returns that commit.
-func stalePush(h *factorytest.Harness, remote *factorytest.Remote, branch string) string {
+func stalePush(h *factorytest.Rig, remote *factorytest.Remote, branch string) string {
 	stale := h.CommitOn("stale-"+branch, "stale.txt", "an earlier finish\n")
 	h.Publish(remote, stale, branch)
 	return stale

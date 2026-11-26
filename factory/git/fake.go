@@ -39,7 +39,7 @@ func NewFake(tb testing.TB) *Fake {
 	return &Fake{tb: tb, repos: map[string]*fakeRepository{}}
 }
 
-// fakeAuthor is the identity CommitTree gives, the harness's own.
+// fakeAuthor is the identity CommitTree gives, the rig's own.
 const fakeAuthor = "Factory Test <factory@example.com>"
 
 // fakeRepository is one repository in a Fake.

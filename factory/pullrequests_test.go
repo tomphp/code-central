@@ -15,7 +15,7 @@ import (
 // acceptedIn is a Ticket of h that changed both the Home Repository and
 // api (inTwo), In Review then Accepted and polled once, with the Factory
 // running.
-func acceptedIn(t *testing.T, h *factorytest.Harness) (id string, r *factorytest.Running) {
+func acceptedIn(t *testing.T, h *factorytest.Rig) (id string, r *factorytest.Running) {
 	t.Helper()
 	id = inTwo(h, "Add an endpoint")
 	r = h.Start()
@@ -26,7 +26,7 @@ func acceptedIn(t *testing.T, h *factorytest.Harness) (id string, r *factorytest
 }
 
 // pullRequestWatch is what the Pull Request Watcher reads for h's Project.
-func pullRequestWatch(t *testing.T, h *factorytest.Harness) api.PullRequestWatch {
+func pullRequestWatch(t *testing.T, h *factorytest.Rig) api.PullRequestWatch {
 	t.Helper()
 	w, err := h.Server.Client.GetPullRequestWatch(context.Background(), h.Project)
 	if err != nil {
@@ -37,7 +37,7 @@ func pullRequestWatch(t *testing.T, h *factorytest.Harness) api.PullRequestWatch
 
 // pushedWorkIn is the work the Factory has reported pushed in repository,
 // for the Pull Request Watcher to open pull requests on, by branch.
-func pushedWorkIn(t *testing.T, h *factorytest.Harness, repository string) map[string]string {
+func pushedWorkIn(t *testing.T, h *factorytest.Rig, repository string) map[string]string {
 	t.Helper()
 	out := map[string]string{}
 	for _, work := range pullRequestWatch(t, h).Work {
@@ -51,7 +51,7 @@ func pushedWorkIn(t *testing.T, h *factorytest.Harness, repository string) map[s
 // wantPushedIn checks the Factory has reported ticket's branch in
 // repository as pushed: the Pull Request Watcher would open a pull request
 // there. It returns the pushed commit.
-func wantPushedIn(t *testing.T, h *factorytest.Harness, repository, ticket string) string {
+func wantPushedIn(t *testing.T, h *factorytest.Rig, repository, ticket string) string {
 	t.Helper()
 	work := pushedWorkIn(t, h, repository)
 	commit, ok := work[ticket]
@@ -63,7 +63,7 @@ func wantPushedIn(t *testing.T, h *factorytest.Harness, repository, ticket strin
 
 // reportPullRequestIn is the Pull Request Watcher reporting ticket's pull
 // request in repository, as merged at commit.
-func reportPullRequestIn(t *testing.T, h *factorytest.Harness, repository, branch string, number int, commit string) {
+func reportPullRequestIn(t *testing.T, h *factorytest.Rig, repository, branch string, number int, commit string) {
 	t.Helper()
 	in := api.ReportPullRequestInput{Repository: repository, Branch: branch, Number: number, Link: "https://example.test/pull/1", State: domain.PRMerged, MergeCommit: commit}
 	if _, err := h.Server.Client.ReportPullRequest(context.Background(), h.Project, in); err != nil {

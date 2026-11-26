@@ -15,7 +15,7 @@ import (
 
 // newMap creates a Map, a Spec labelled wayfinder:map, with these Tags,
 // and returns its ID.
-func newMap(t *testing.T, h *factorytest.Harness, title string, tags map[string]string) string {
+func newMap(t *testing.T, h *factorytest.Rig, title string, tags map[string]string) string {
 	t.Helper()
 	ctx := context.Background()
 	c := h.Server.Client
@@ -31,14 +31,14 @@ func newMap(t *testing.T, h *factorytest.Harness, title string, tags map[string]
 }
 
 // guidedMap is newMap with its guided Tag on.
-func guidedMap(t *testing.T, h *factorytest.Harness, title string) string {
+func guidedMap(t *testing.T, h *factorytest.Rig, title string) string {
 	t.Helper()
 	return newMap(t, h, title, map[string]string{domain.GuidedTag: domain.GuidedOn})
 }
 
 // decision creates a Draft Ticket carrying label on Map m, as Charting
 // creates its decision Tickets, and returns its ID.
-func decision(t *testing.T, h *factorytest.Harness, m, label, title string) string {
+func decision(t *testing.T, h *factorytest.Rig, m, label, title string) string {
 	t.Helper()
 	tk, err := h.Server.Client.CreateTicket(context.Background(), h.Project, api.CreateTicketInput{Spec: api.Ref(m), Title: title, Labels: []string{label}})
 	mustNot(t, err)
@@ -47,7 +47,7 @@ func decision(t *testing.T, h *factorytest.Harness, m, label, title string) stri
 
 // putState puts Ticket id in state directly in the store, with no Claim,
 // as if it had got there on its own.
-func putState(t *testing.T, h *factorytest.Harness, id string, state domain.State) {
+func putState(t *testing.T, h *factorytest.Rig, id string, state domain.State) {
 	t.Helper()
 	n, err := strconv.Atoi(strings.TrimPrefix(id, h.Project+"-"))
 	mustNot(t, err)
@@ -68,7 +68,7 @@ func mustNot(t *testing.T, err error) {
 }
 
 // wantState checks Ticket id is in want, saying why it should be.
-func wantState(t *testing.T, h *factorytest.Harness, id string, want domain.State, why string) {
+func wantState(t *testing.T, h *factorytest.Rig, id string, want domain.State, why string) {
 	t.Helper()
 	if got := h.Ticket(id).State; got != want {
 		t.Errorf("%s is %s, want %s: %s", id, got, want, why)

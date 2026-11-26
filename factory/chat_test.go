@@ -17,7 +17,7 @@ import (
 
 // chatCalls are the runs of the fake claude for Chat turns, oldest
 // first: the ones whose prompts name no Ticket.
-func chatCalls(h *factorytest.Harness) []factorytest.Call {
+func chatCalls(h *factorytest.Rig) []factorytest.Call {
 	var out []factorytest.Call
 	for _, c := range h.Calls() {
 		if c.Ticket == "" {
@@ -28,7 +28,7 @@ func chatCalls(h *factorytest.Harness) []factorytest.Call {
 }
 
 // chatWorktree is where the Factory keeps its Chat worktree.
-func chatWorktree(h *factorytest.Harness) string { return h.Worktree("chat") }
+func chatWorktree(h *factorytest.Rig) string { return h.Worktree("chat") }
 
 // reply is the Conversation's last Chat Message, Claude's reply.
 func reply(cv api.ConversationView) api.ChatMessageView { return cv.Messages[len(cv.Messages)-1] }

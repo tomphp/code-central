@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// The harness's tests run the fake claude, as the Factory's do.
+// The rig's tests run the fake claude, as the Factory's do.
 func TestMain(m *testing.M) { Main(m) }
 
 func TestTickMovesTheClockToTheNextPollsDeadline(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 	"github.com/tomoram/code-central/api"
 )
 
-// The harness cuts a claim before its answer's headers, which the client
+// The rig cuts a claim before its answer's headers, which the client
 // reports as service_unavailable; an answer cut off mid-body, as in CI run
 // 43772431843, comes back as the client's wrapped read error.
 func TestAClaimsAnswerIsLostUnlessCodeCentralAnswered(t *testing.T) {

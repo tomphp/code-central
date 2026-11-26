@@ -11,7 +11,7 @@ import (
 
 // callFor is the one claude call the Factory made for the Ticket. A test
 // settles the Factory first.
-func callFor(t *testing.T, h *factorytest.Harness, id string) factorytest.Call {
+func callFor(t *testing.T, h *factorytest.Rig, id string) factorytest.Call {
 	t.Helper()
 	var found []factorytest.Call
 	for _, c := range h.Calls() {
@@ -43,7 +43,7 @@ func requireConflictClaim(t *testing.T, c factorytest.Call, files ...string) {
 	}
 }
 
-func requireOrdinaryClaim(t *testing.T, h *factorytest.Harness, c factorytest.Call) {
+func requireOrdinaryClaim(t *testing.T, h *factorytest.Rig, c factorytest.Call) {
 	t.Helper()
 	if want := "/implement " + c.Ticket; c.Prompt != want {
 		t.Errorf("first prompt %q, want %q", c.Prompt, want)

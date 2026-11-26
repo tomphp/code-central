@@ -1,8 +1,8 @@
-// Package factorytest is the test harness for the local Factory: a real
+// Package factorytest is the test rig for the local Factory: a real
 // Code Central from codecentraltest, a real temporary git repo set up as
 // a Project, and a fake `claude` on PATH. The fake is the test binary
-// itself, linked or copied into the harness's bin folder as claude and run
-// as the fake because the harness's environment names the fake's folder:
+// itself, linked or copied into the rig's bin folder as claude and run
+// as the fake because the rig's environment names the fake's folder:
 // it records its arguments, follows a Script (print stream-json, call the
 // code-central CLI in-process, write a file, run git, exit) and needs
 // nothing built. There is no shell, so it runs the same on every OS.
@@ -23,7 +23,7 @@
 //
 // The Factory is settled when nothing it is doing will change anything
 // without an outside event: the clock moving, an answer to a long-poll, a
-// turn's claude printing or exiting, or a signal. It tells the harness of
+// turn's claude printing or exiting, or a signal. It tells the rig of
 // its work through factory.Work, each piece busy or resting:
 //
 //   - Busy (not settled): a poll in progress, a post of Session Events,
@@ -86,7 +86,7 @@ import (
 	"github.com/tomoram/code-central/factory/git"
 )
 
-// fakeEnv names the harness's data folder to a test binary run as a
+// fakeEnv names the rig's data folder to a test binary run as a
 // fake. It is in the Factory's environment, so its turns and git get it;
 // the Factory ignores it.
 const fakeEnv = "FACTORYTEST_FAKE"
@@ -108,7 +108,7 @@ func Main(m *testing.M) {
 	os.Exit(code)
 }
 
-// Timeout bounds every wait in the harness. A wait that holds returns at
+// Timeout bounds every wait in the rig. A wait that holds returns at
 // once, so it only costs time when a test is already failing; it is long
 // because the Factory's tests start many processes, and a loaded CI
 // runner can take longer than 30s to run one.
@@ -124,9 +124,9 @@ const EventBatchEvery = 10 * time.Second
 // to take a turn to the next step.
 const KillGrace = 100 * time.Millisecond
 
-// Harness is one Factory's world. Its fields are for assertions; change
+// Rig is one Factory's world. Its fields are for assertions; change
 // the Factory's environment with Setenv.
-type Harness struct {
+type Rig struct {
 	t      testing.TB
 	Server *codecentraltest.Server
 	// Project is the Project Key the repo's committed .mcp.json names.
@@ -171,7 +171,7 @@ type Harness struct {
 	inflight inflightRequests
 	polls    longPolls
 	// stall, if set before Start, is called by the proxy before it serves
-	// each request but a long-poll: the harness's own tests hold the
+	// each request but a long-poll: the rig's own tests hold the
 	// Factory or a turn mid-way with it.
 	stall func(*http.Request)
 	// runs is the Factories running; change is closed at the next change
@@ -190,7 +190,7 @@ type Harness struct {
 // New starts a Code Central with Project "acme" and a git repo on branch
 // main whose one commit holds a .mcp.json naming it, on the Fake git
 // unless opts choose real git (RealGit).
-func New(t testing.TB, opts ...Option) *Harness {
+func New(t testing.TB, opts ...Option) *Rig {
 	t.Helper()
 	onFakeGit := useFakeGit(t, opts)
 	// git reports real paths, so resolve macOS's /var -> /private/var.
@@ -202,7 +202,7 @@ func New(t testing.TB, opts ...Option) *Harness {
 	// move the Factory's clock on.
 	y, m, d := time.Now().UTC().Date()
 	now := time.Date(y, m, d, 12, 0, 0, 0, time.UTC)
-	h := &Harness{
+	h := &Rig{
 		t:       t,
 		Server:  codecentraltest.NewServer(t, codecentraltest.WithStart(now)),
 		Project: project,
@@ -260,10 +260,10 @@ func New(t testing.TB, opts ...Option) *Harness {
 	return h
 }
 
-// project is the Project Key of every Harness.
+// project is the Project Key of every Rig.
 const project = "acme"
 
-// gitIdentity is every git's environment in the harness: no system
+// gitIdentity is every git's environment in the rig: no system
 // config, no background maintenance (its detached process can create
 // .git/objects/maintenance.lock while the temp dir is being removed),
 // and a fixed author and committer.
@@ -288,7 +288,7 @@ var seedDir string
 
 // seedRepo is a repo on branch main whose one commit holds a .mcp.json
 // naming the Project. It is made once per test binary and each
-// Harness copies it, which costs no git processes.
+// Rig copies it, which costs no git processes.
 var seedRepo = sync.OnceValues(func() (string, error) {
 	git, err := realGit()
 	if err != nil {
@@ -322,11 +322,11 @@ var seedRepo = sync.OnceValues(func() (string, error) {
 })
 
 // startProxy starts the proxy in front of Server and returns its URL.
-// While the harness is down it drops every connection, as a stopped Code
+// While the rig is down it drops every connection, as a stopped Code
 // Central would refuse it. Under the Fake git it serves the relay
 // (relayPath) itself, down or not: the relay stands in for git, which a
 // Code Central outage doesn't stop.
-func (h *Harness) startProxy() string {
+func (h *Rig) startProxy() string {
 	fake := h.fake
 	target, err := url.Parse(h.Server.URL)
 	must(h.t, err)
@@ -472,7 +472,7 @@ type lossRule struct {
 
 // takeLoss reports whether r is to be cut, and if so whether after Code
 // Central has served it, using up one of the cuts owed.
-func (h *Harness) takeLoss(r *http.Request) (afterWrite, ok bool) {
+func (h *Rig) takeLoss(r *http.Request) (afterWrite, ok bool) {
 	h.loseMu.Lock()
 	defer h.loseMu.Unlock()
 	for i := range h.lose {
@@ -487,7 +487,7 @@ func (h *Harness) takeLoss(r *http.Request) (afterWrite, ok bool) {
 
 // cut drops r's connection, counting it as refused. Given afterWrite it
 // first lets Code Central serve r and throws the answer away.
-func (h *Harness) cut(rp http.Handler, w http.ResponseWriter, r *http.Request, afterWrite bool, finished *atomic.Bool) {
+func (h *Rig) cut(rp http.Handler, w http.ResponseWriter, r *http.Request, afterWrite bool, finished *atomic.Bool) {
 	h.countRefused(r)
 	when := "before it reached Code Central"
 	if afterWrite {
@@ -503,14 +503,14 @@ func (h *Harness) cut(rp http.Handler, w http.ResponseWriter, r *http.Request, a
 }
 
 // refuse answers r with status and the JSON error body, counting it.
-func (h *Harness) refuse(w http.ResponseWriter, r *http.Request, status int, body string) {
+func (h *Rig) refuse(w http.ResponseWriter, r *http.Request, status int, body string) {
 	h.countRefused(r)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	fmt.Fprint(w, body)
 }
 
-func (h *Harness) countRefused(r *http.Request) {
+func (h *Rig) countRefused(r *http.Request) {
 	h.refusedMu.Lock()
 	defer h.refusedMu.Unlock()
 	h.refused[r.URL.Path]++
@@ -527,7 +527,7 @@ const (
 // next_factory_wake answer back until PassWakes. An answer on its way to
 // the Factory is marked on it first, so the Factory isn't settled until
 // it has taken it.
-func (h *Harness) serveLongPoll(rp http.Handler, w http.ResponseWriter, r *http.Request, name string) {
+func (h *Rig) serveLongPoll(rp http.Handler, w http.ResponseWriter, r *http.Request, name string) {
 	rec := httptest.NewRecorder()
 	sent := h.sendLongPoll(name)
 	rp.ServeHTTP(rec, r)
@@ -556,11 +556,11 @@ func (h *Harness) serveLongPoll(rp http.Handler, w http.ResponseWriter, r *http.
 }
 
 // PassWakes lets the Factory's wakes through; a test calls it before
-// Start. Until a test calls it, the harness holds back every answer from
+// Start. Until a test calls it, the rig holds back every answer from
 // next_factory_wake, so the Factory polls only on Tick and what a test
 // sets up, such as a Ready Ticket it then claims itself, is first seen by
 // the poll it ticks.
-func (h *Harness) PassWakes() {
+func (h *Rig) PassWakes() {
 	h.holdMu.Lock()
 	defer h.holdMu.Unlock()
 	if h.wakesHeld != nil {
@@ -570,30 +570,30 @@ func (h *Harness) PassWakes() {
 }
 
 // SetDown takes Code Central down for the Factory and its sessions, or
-// brings it back up. The harness's own reads still reach it.
-func (h *Harness) SetDown(down bool) { h.down.Store(down) }
+// brings it back up. The rig's own reads still reach it.
+func (h *Rig) SetDown(down bool) { h.down.Store(down) }
 
 // SetFailing makes Code Central fail the Factory's and its sessions'
 // requests to every path ending in suffix, such as "/model-choice", or
 // stops failing them given "".
-func (h *Harness) SetFailing(suffix string) { h.failing.Store(suffix) }
+func (h *Rig) SetFailing(suffix string) { h.failing.Store(suffix) }
 
 // SetMissing makes Code Central answer the Factory's and its sessions'
 // requests to every path ending in suffix, such as "/factory/next-wake",
 // as an older Code Central without that route does: not found.
-func (h *Harness) SetMissing(suffix string) { h.missing.Store(suffix) }
+func (h *Rig) SetMissing(suffix string) { h.missing.Store(suffix) }
 
 // LoseAnswer cuts the connection of the next n requests whose path ends in
 // suffix, such as "/claim", after Code Central has served them and before
 // the answer is passed on: the write is applied and its client reads
 // unexpected EOF.
-func (h *Harness) LoseAnswer(suffix string, n int) { h.addLoss(lossRule{suffix, n, true}) }
+func (h *Rig) LoseAnswer(suffix string, n int) { h.addLoss(lossRule{suffix, n, true}) }
 
 // LoseRequest cuts the connection of the next n requests whose path ends in
 // suffix before they reach Code Central: the write is never applied.
-func (h *Harness) LoseRequest(suffix string, n int) { h.addLoss(lossRule{suffix, n, false}) }
+func (h *Rig) LoseRequest(suffix string, n int) { h.addLoss(lossRule{suffix, n, false}) }
 
-func (h *Harness) addLoss(l lossRule) {
+func (h *Rig) addLoss(l lossRule) {
 	h.loseMu.Lock()
 	defer h.loseMu.Unlock()
 	h.lose = append(h.lose, l)
@@ -602,14 +602,14 @@ func (h *Harness) addLoss(l lossRule) {
 // Refused is how many requests to path, such as "/api/session-events",
 // were refused while Code Central was down, or failed by SetFailing or
 // SetMissing, or cut by LoseAnswer or LoseRequest.
-func (h *Harness) Refused(path string) int64 {
+func (h *Rig) Refused(path string) int64 {
 	h.refusedMu.Lock()
 	defer h.refusedMu.Unlock()
 	return h.refused[path]
 }
 
 // realGit is the git binary itself. On macOS /usr/bin/git is an xcrun
-// shim whose lookup is cached per HOME, and every Harness has a fresh
+// shim whose lookup is cached per HOME, and every Rig has a fresh
 // HOME, so going through the shim costs ~100ms of CPU per test; the git
 // in git's exec path skips it. Elsewhere git on PATH is used as it is:
 // on Windows the one in the exec path can't find its DLLs.
@@ -637,7 +637,7 @@ func must(t testing.TB, err error) {
 
 // install puts the test binary in Bin as the fake name: a hard link, or a
 // copy where the link can't be made.
-func (h *Harness) install(name string) {
+func (h *Rig) install(name string) {
 	self, err := os.Executable()
 	must(h.t, err)
 	dst := filepath.Join(h.Bin, name+exeSuffix)
@@ -657,7 +657,7 @@ func (h *Harness) install(name string) {
 }
 
 // Setenv sets a variable in the Factory's environment; "" removes it.
-func (h *Harness) Setenv(key, value string) {
+func (h *Rig) Setenv(key, value string) {
 	if value == "" {
 		delete(h.env, key)
 		return
@@ -666,7 +666,7 @@ func (h *Harness) Setenv(key, value string) {
 }
 
 // Environ is the Factory's environment.
-func (h *Harness) Environ() []string {
+func (h *Rig) Environ() []string {
 	var out []string
 	for k, v := range h.env {
 		out = append(out, k+"="+v)
@@ -676,14 +676,14 @@ func (h *Harness) Environ() []string {
 }
 
 // Claude is the fake claude's path, as the Factory finds it on PATH.
-func (h *Harness) Claude() string { return filepath.Join(h.Bin, "claude"+exeSuffix) }
+func (h *Rig) Claude() string { return filepath.Join(h.Bin, "claude"+exeSuffix) }
 
 // RemoveClaude takes the fake claude off PATH.
-func (h *Harness) RemoveClaude() { must(h.t, os.Remove(h.Claude())) }
+func (h *Rig) RemoveClaude() { must(h.t, os.Remove(h.Claude())) }
 
 // ShimClaude puts a claude.cmd on PATH in place of the fake claude, as
 // installing claude with npm on Windows leaves.
-func (h *Harness) ShimClaude() {
+func (h *Rig) ShimClaude() {
 	h.RemoveClaude()
 	must(h.t, os.WriteFile(filepath.Join(h.Bin, "claude.cmd"), []byte("@echo off\r\nnode \"%~dp0\\node_modules\\@anthropic-ai\\claude-code\\cli.js\" %*\r\n"), 0o755))
 }
@@ -691,7 +691,7 @@ func (h *Harness) ShimClaude() {
 // HoldSession starts a process, outside the Factory, whose command line
 // names session, as another claude driving that session would. It runs
 // until the returned func or the end of the test.
-func (h *Harness) HoldSession(session string) (release func()) {
+func (h *Rig) HoldSession(session string) (release func()) {
 	h.t.Helper()
 	self, err := os.Executable()
 	must(h.t, err)
@@ -721,7 +721,7 @@ type versionGit struct {
 // GitVersion makes the Factory's git report version, such as "2.37.9":
 // under real git it puts a git on PATH that reports it and otherwise runs
 // the real git; under the Fake git it sets the Fake's.
-func (h *Harness) GitVersion(version string) {
+func (h *Rig) GitVersion(version string) {
 	if h.fake != nil {
 		h.fake.SetVersion("git version " + version)
 		return
@@ -736,7 +736,7 @@ func (h *Harness) GitVersion(version string) {
 
 // Git runs the real git in the repo and returns its trimmed output. It
 // fails the test under the Fake git, as GitIn does.
-func (h *Harness) Git(args ...string) string {
+func (h *Rig) Git(args ...string) string {
 	h.t.Helper()
 	return h.GitIn(h.Repo, args...)
 }
@@ -744,7 +744,7 @@ func (h *Harness) Git(args ...string) string {
 // GitIn runs the real git in dir and returns its trimmed output. Under the
 // Fake git there is no real repository to run it in, so it fails the test:
 // such a test uses the typed helpers, or real git with RealGit.
-func (h *Harness) GitIn(dir string, args ...string) string {
+func (h *Rig) GitIn(dir string, args ...string) string {
 	h.t.Helper()
 	if h.fake != nil {
 		h.t.Fatalf("factorytest: raw git (git %s) under the Fake git: use a typed helper (%s), or real git with factorytest.RealGit()", strings.Join(args, " "), typedHelpers)
@@ -754,7 +754,7 @@ func (h *Harness) GitIn(dir string, args ...string) string {
 
 // git is GitIn without the Fake git's check, for the typed helpers under
 // real git.
-func (h *Harness) git(dir string, args ...string) string {
+func (h *Rig) git(dir string, args ...string) string {
 	h.t.Helper()
 	out, err := h.runGit(dir, args...)
 	if err != nil {
@@ -765,7 +765,7 @@ func (h *Harness) git(dir string, args ...string) string {
 
 // runGit runs the real git in dir and returns its output, untrimmed, with
 // its error.
-func (h *Harness) runGit(dir string, args ...string) (string, error) {
+func (h *Rig) runGit(dir string, args ...string) (string, error) {
 	bin, err := realGit()
 	if err != nil {
 		return "", err
@@ -793,21 +793,21 @@ func failedToStart(err error) bool {
 }
 
 // Worktree is where the Factory keeps ticket's worktree.
-func (h *Harness) Worktree(ticket string) string { return filepath.Join(h.Repo+".worktrees", ticket) }
+func (h *Rig) Worktree(ticket string) string { return filepath.Join(h.Repo+".worktrees", ticket) }
 
 // StateFile is the Factory's state file for the Project.
-func (h *Harness) StateFile() string {
+func (h *Rig) StateFile() string {
 	return filepath.Join(h.Home, ".local", "state", "code-central-factory", h.Project+".json")
 }
 
 // ReadStateFile reads the Factory's state file, retrying while Windows
 // refuses to open it because the Factory is renaming a new one into
 // place.
-func (h *Harness) ReadStateFile() ([]byte, error) { return readFile(h.StateFile()) }
+func (h *Rig) ReadStateFile() ([]byte, error) { return readFile(h.StateFile()) }
 
 // ReadyTicket creates a Ready implementation Ticket (on one shared Spec)
 // and returns its ID.
-func (h *Harness) ReadyTicket(title string) string {
+func (h *Rig) ReadyTicket(title string) string {
 	h.t.Helper()
 	return h.readyTicket(title)
 }
@@ -815,7 +815,7 @@ func (h *Harness) ReadyTicket(title string) string {
 // StageTicket creates a Ready Stage Ticket, marked by stage's Label, on
 // the same shared Spec, and returns its ID. A spec Stage's script, until
 // a test sets its own, finishes it recommending split.
-func (h *Harness) StageTicket(stage domain.StageName, title string) string {
+func (h *Rig) StageTicket(stage domain.StageName, title string) string {
 	h.t.Helper()
 	id := h.readyTicket(title, domain.StageLabel(stage))
 	if stage == "spec" {
@@ -827,7 +827,7 @@ func (h *Harness) StageTicket(stage domain.StageName, title string) string {
 // LabelledTicket creates a Ready Ticket carrying label, such as a
 // Wayfinder Label or prototype, on the same shared Spec, and returns its
 // ID.
-func (h *Harness) LabelledTicket(label, title string) string {
+func (h *Rig) LabelledTicket(label, title string) string {
 	h.t.Helper()
 	return h.readyTicket(title, label)
 }
@@ -835,7 +835,7 @@ func (h *Harness) LabelledTicket(label, title string) string {
 // sharedSpec creates the shared Spec if it doesn't exist yet. It is
 // Long-lived, so that its Tickets land one by one under the default Land
 // per Spec, until MakeRequirement or MakePlainSpec takes the label off.
-func (h *Harness) sharedSpec() {
+func (h *Rig) sharedSpec() {
 	h.t.Helper()
 	if h.spec != "" {
 		return
@@ -851,21 +851,21 @@ func (h *Harness) sharedSpec() {
 
 // MakePlainSpec takes the long-lived Label off the shared Spec, so that
 // Land per Spec covers its Tickets.
-func (h *Harness) MakePlainSpec() {
+func (h *Rig) MakePlainSpec() {
 	h.t.Helper()
 	h.sharedSpec()
 	_, err := h.Server.Client.RemoveLabels(context.Background(), h.Project, api.LabelsInput{Target: api.Ref(h.spec), Labels: []string{domain.LongLivedLabel}})
 	must(h.t, err)
 }
 
-func (h *Harness) readyTicket(title string, labels ...string) string {
+func (h *Rig) readyTicket(title string, labels ...string) string {
 	h.t.Helper()
 	return h.NewTicket(api.CreateTicketInput{Title: title, State: domain.Ready, Labels: labels})
 }
 
 // NewTicket creates the Ticket in describes, such as a Draft one or one
 // with Blockers, on the same shared Spec, and returns its ID.
-func (h *Harness) NewTicket(in api.CreateTicketInput) string {
+func (h *Rig) NewTicket(in api.CreateTicketInput) string {
 	h.t.Helper()
 	h.sharedSpec()
 	in.Spec = api.Ref(h.spec)
@@ -876,7 +876,7 @@ func (h *Harness) NewTicket(in api.CreateTicketInput) string {
 
 // MakeRequirement makes the shared Spec a Requirement Spec, one with
 // Stages, by adding a Draft Stage Ticket the Factory won't claim.
-func (h *Harness) MakeRequirement() {
+func (h *Rig) MakeRequirement() {
 	h.t.Helper()
 	ctx := context.Background()
 	c := h.Server.Client
@@ -885,11 +885,11 @@ func (h *Harness) MakeRequirement() {
 	must(h.t, err)
 }
 
-// SpecID is the ID of the shared Spec the harness's Tickets are on.
-func (h *Harness) SpecID() string { return h.spec }
+// SpecID is the ID of the shared Spec the rig's Tickets are on.
+func (h *Rig) SpecID() string { return h.spec }
 
 // Ticket reads a Ticket from Code Central.
-func (h *Harness) Ticket(id string) api.TicketView {
+func (h *Rig) Ticket(id string) api.TicketView {
 	h.t.Helper()
 	tk, err := h.Server.Client.GetTicket(context.Background(), h.Project, api.Ref(id))
 	must(h.t, err)
@@ -897,7 +897,7 @@ func (h *Harness) Ticket(id string) api.TicketView {
 }
 
 // Transcript reads the Transcript of ticket's Claim number claim.
-func (h *Harness) Transcript(ticket string, claim int) api.TranscriptView {
+func (h *Rig) Transcript(ticket string, claim int) api.TranscriptView {
 	h.t.Helper()
 	tr, err := h.Server.Client.Transcript(context.Background(), h.Project, api.Ref(ticket), claim)
 	must(h.t, err)
@@ -905,7 +905,7 @@ func (h *Harness) Transcript(ticket string, claim int) api.TranscriptView {
 }
 
 // Usage reads Usage for the Project over the default range.
-func (h *Harness) Usage() api.UsageView {
+func (h *Rig) Usage() api.UsageView {
 	h.t.Helper()
 	u, err := h.Server.Client.Usage(context.Background(), h.Project, 0)
 	must(h.t, err)
@@ -913,7 +913,7 @@ func (h *Harness) Usage() api.UsageView {
 }
 
 // Chat reads the Project's current Conversation, as the human.
-func (h *Harness) Chat() api.ConversationView {
+func (h *Rig) Chat() api.ConversationView {
 	h.t.Helper()
 	cv, err := h.Human().GetChat(context.Background(), h.Project)
 	must(h.t, err)
@@ -923,7 +923,7 @@ func (h *Harness) Chat() api.ConversationView {
 // SendChat sends text as the human's Chat Message, as soon as Code
 // Central takes it: it refuses one until a Factory's Heartbeat reports
 // Chat support, and while a reply is running.
-func (h *Harness) SendChat(text string) {
+func (h *Rig) SendChat(text string) {
 	h.t.Helper()
 	var last error
 	h.WaitForDescribed(func() string { return fmt.Sprintf("send_chat_message to be taken (last refused: %v)", last) }, func() bool {
@@ -934,7 +934,7 @@ func (h *Harness) SendChat(text string) {
 
 // WaitForReply waits for the Conversation's last Chat Message, Claude's
 // reply, to end, and returns the Conversation.
-func (h *Harness) WaitForReply() api.ConversationView {
+func (h *Rig) WaitForReply() api.ConversationView {
 	h.t.Helper()
 	var cv api.ConversationView
 	h.WaitForDescribed(func() string { return fmt.Sprintf("the Chat reply to end; the Conversation is %+v", cv) }, func() bool {
@@ -947,7 +947,7 @@ func (h *Harness) WaitForReply() api.ConversationView {
 
 // SessionUsage reads one Usage session of the Project, agent being ""
 // for the main session.
-func (h *Harness) SessionUsage(session, agent string) api.SessionUsageView {
+func (h *Rig) SessionUsage(session, agent string) api.SessionUsageView {
 	h.t.Helper()
 	q := url.Values{"project": {h.Project}, "session": {session}, "agent": {agent}}
 	resp, err := http.Get(h.Server.URL + "/api/usage/session?" + q.Encode())
@@ -958,15 +958,15 @@ func (h *Harness) SessionUsage(session, agent string) api.SessionUsageView {
 	return v
 }
 
-// Human is a client of the harness's Code Central acting as the human.
-func (h *Harness) Human() *client.Client {
+// Human is a client of the rig's Code Central acting as the human.
+func (h *Rig) Human() *client.Client {
 	c := client.New(h.Server.URL)
 	c.Actor = api.Human
 	return c
 }
 
 // Answer answers every open Question on ticket with text, as the human.
-func (h *Harness) Answer(ticket, text string) {
+func (h *Rig) Answer(ticket, text string) {
 	h.t.Helper()
 	for _, r := range h.Ticket(ticket).Rounds {
 		for _, q := range r.Questions {
@@ -982,14 +982,14 @@ func (h *Harness) Answer(ticket, text string) {
 // is for effects outside the Factory, such as Code Central state no
 // Factory work changes, like a Chat reply: what the Factory does a test
 // waits for with Running.Settle.
-func (h *Harness) WaitFor(what string, cond func() bool) {
+func (h *Rig) WaitFor(what string, cond func() bool) {
 	h.t.Helper()
 	h.WaitForDescribed(func() string { return what }, cond)
 }
 
 // WaitForDescribed is WaitFor with what read when the wait times out, so
 // it can report the state the wait ended in.
-func (h *Harness) WaitForDescribed(what func() string, cond func() bool) {
+func (h *Rig) WaitForDescribed(what func() string, cond func() bool) {
 	h.t.Helper()
 	deadline := time.Now().Add(Timeout)
 	for !cond() {
@@ -1003,7 +1003,7 @@ func (h *Harness) WaitForDescribed(what func() string, cond func() bool) {
 // WantState reads the Ticket and fails the test unless it is in state,
 // with its latest Failure Report if it has one. A test settles the
 // Factory first.
-func (h *Harness) WantState(id string, state domain.State) api.TicketView {
+func (h *Rig) WantState(id string, state domain.State) api.TicketView {
 	h.t.Helper()
 	tk := h.Ticket(id)
 	if tk.State != state {
@@ -1025,7 +1025,7 @@ func lastFailure(tk api.TicketView) string {
 // Finished claims ticket outside the Factory and finishes it with this
 // branch and commit, and the work in any other repositories, so it is In
 // Review with work to land.
-func (h *Harness) Finished(ticket, branch, commit string, repositories ...api.RepositoryWork) {
+func (h *Rig) Finished(ticket, branch, commit string, repositories ...api.RepositoryWork) {
 	h.t.Helper()
 	ctx := context.Background()
 	c := h.Server.Client
@@ -1037,7 +1037,7 @@ func (h *Harness) Finished(ticket, branch, commit string, repositories ...api.Re
 
 // NeedsMeItems is the Project's Needs Me items of reason, in Needs Me's
 // order.
-func (h *Harness) NeedsMeItems(reason api.NeedsMeReason) []api.NeedsMeRow {
+func (h *Rig) NeedsMeItems(reason api.NeedsMeReason) []api.NeedsMeRow {
 	h.t.Helper()
 	v, err := h.Human().NeedsMe(context.Background())
 	must(h.t, err)
@@ -1053,23 +1053,23 @@ func (h *Harness) NeedsMeItems(reason api.NeedsMeReason) []api.NeedsMeRow {
 }
 
 // Accept accepts ticket as the human.
-func (h *Harness) Accept(ticket string) {
+func (h *Rig) Accept(ticket string) {
 	h.t.Helper()
 	_, err := h.Human().Accept(context.Background(), h.Project, api.TicketInput{Ticket: api.Ref(ticket)})
 	must(h.t, err)
 }
 
 // SetLandingMethod sets the Project's Landing Method as the human.
-func (h *Harness) SetLandingMethod(in api.SetLandingMethodInput) {
+func (h *Rig) SetLandingMethod(in api.SetLandingMethodInput) {
 	h.t.Helper()
 	_, err := h.Human().SetLandingMethod(context.Background(), h.Project, in)
 	must(h.t, err)
 }
 
-// Remote is a bare repository added as a named remote of the harness's
+// Remote is a bare repository added as a named remote of the rig's
 // repo.
 type Remote struct {
-	h *Harness
+	h *Rig
 	// Name is the remote's name in the repo.
 	Name string
 	// Path is the bare repository.
@@ -1078,7 +1078,7 @@ type Remote struct {
 
 // AddRemote makes a bare repository and adds it to the repo as the
 // remote name, with nothing pushed to it yet.
-func (h *Harness) AddRemote(name string) *Remote {
+func (h *Rig) AddRemote(name string) *Remote {
 	h.t.Helper()
 	path := filepath.Join(filepath.Dir(filepath.Dir(h.Repo)), "remotes", name+".git")
 	if h.fake != nil {
@@ -1153,7 +1153,7 @@ type Repository struct {
 	// Path is where the Factory clones it: beside the Home Repository,
 	// at <Repo's parent>/<Name>.
 	Path string
-	h    *Harness
+	h    *Rig
 }
 
 // Remote is r's bare remote, its Clone URL, as the remote name of the
@@ -1172,7 +1172,7 @@ func (r *Repository) Worktree(ticket string) string {
 // AddRepository makes a bare repository named name, holding one commit
 // on main, and adds it to the Project through add_repository, with no
 // local path, so the Factory clones it beside the Home Repository.
-func (h *Harness) AddRepository(name string) *Repository {
+func (h *Rig) AddRepository(name string) *Repository {
 	h.t.Helper()
 	r := h.MakeRepository(name)
 	if _, err := h.Human().AddRepository(context.Background(), h.Project, api.AddRepositoryInput{Name: name, CloneURL: r.CloneURL}); err != nil {
@@ -1183,7 +1183,7 @@ func (h *Harness) AddRepository(name string) *Repository {
 
 // MakeRepository makes AddRepository's bare repository without adding it
 // to the Project.
-func (h *Harness) MakeRepository(name string) *Repository {
+func (h *Rig) MakeRepository(name string) *Repository {
 	h.t.Helper()
 	root := filepath.Dir(filepath.Dir(h.Repo))
 	seed := filepath.Join(root, "seeds", name)
@@ -1203,7 +1203,7 @@ func (h *Harness) MakeRepository(name string) *Repository {
 
 // startRepository makes a repository named name at dir, with one commit
 // "Start <name>" on main holding a README.md.
-func (h *Harness) startRepository(dir, name string) {
+func (h *Rig) startRepository(dir, name string) {
 	h.t.Helper()
 	if h.fake != nil {
 		h.fake.Init(dir, map[string]string{"README.md": name + "\n"}, "Start "+name)
@@ -1221,7 +1221,7 @@ func (h *Harness) startRepository(dir, name string) {
 // the Project through add_repository with that local path and no Clone
 // URL (Spec code-central-879): a local-only Repository, which the
 // Factory adopts and never clones.
-func (h *Harness) AddLocalRepository(name string) *Repository {
+func (h *Rig) AddLocalRepository(name string) *Repository {
 	h.t.Helper()
 	r := &Repository{Name: name, Path: filepath.Join(filepath.Dir(h.Repo), name), h: h}
 	h.startRepository(r.Path, name)
@@ -1233,7 +1233,7 @@ func (h *Harness) AddLocalRepository(name string) *Repository {
 
 // Running is a Factory running in-process.
 type Running struct {
-	h              *Harness
+	h              *Rig
 	cancel         context.CancelFunc
 	done           chan struct{}
 	code           int
@@ -1248,13 +1248,13 @@ type Running struct {
 // exited) and it has settled, so whatever the test sets up next is first
 // seen by a later poll. Polls after the first happen only on Tick, or on
 // a wake from next_factory_wake.
-func (h *Harness) Start(args ...string) *Running {
+func (h *Rig) Start(args ...string) *Running {
 	h.t.Helper()
 	return h.StartIn(h.Repo, args...)
 }
 
 // StartIn is Start from dir.
-func (h *Harness) StartIn(dir string, args ...string) *Running {
+func (h *Rig) StartIn(dir string, args ...string) *Running {
 	h.t.Helper()
 	r := h.launch(dir, args...)
 	r.started()
@@ -1263,7 +1263,7 @@ func (h *Harness) StartIn(dir string, args ...string) *Running {
 }
 
 // launch runs the Factory in dir with args, without waiting.
-func (h *Harness) launch(dir string, args ...string) *Running {
+func (h *Rig) launch(dir string, args ...string) *Running {
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &Running{h: h, cancel: cancel, done: make(chan struct{}), stdout: &buffer{}, stderr: &buffer{}, signals: make(chan os.Signal, 2), track: newTracker(h)}
 	env := factory.Env{
@@ -1306,13 +1306,13 @@ func (h *Harness) launch(dir string, args ...string) *Running {
 
 // Run runs the Factory to its exit, as for a refusal, and returns its exit
 // code and output.
-func (h *Harness) Run(args ...string) (code int, stdout, stderr string) {
+func (h *Rig) Run(args ...string) (code int, stdout, stderr string) {
 	h.t.Helper()
 	return h.RunIn(h.Repo, args...)
 }
 
 // RunIn is Run from dir.
-func (h *Harness) RunIn(dir string, args ...string) (code int, stdout, stderr string) {
+func (h *Rig) RunIn(dir string, args ...string) (code int, stdout, stderr string) {
 	h.t.Helper()
 	r := h.launch(dir, args...)
 	select {

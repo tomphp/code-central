@@ -15,7 +15,7 @@ var branchLanding = api.SetLandingMethodInput{Method: domain.LandingBranch}
 
 // withWorktree makes an Accepted Ticket whose branch adds file, with the
 // worktree a Factory Claim would have left at its path.
-func withWorktree(h *factorytest.Harness, title, file, content string) (id, commit string) {
+func withWorktree(h *factorytest.Rig, title, file, content string) (id, commit string) {
 	id, commit = accepted(h, title, file, content)
 	h.AddWorktreeAt(h.Worktree(id), id)
 	return id, commit

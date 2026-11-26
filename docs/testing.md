@@ -77,9 +77,9 @@ Four terms, defined here and not in `GLOSSARY.md` (ADR 0073):
 - **Git contract suite**: `gittest.Run`, the behaviour of the Git port written once over the interface. Real git and the Fake git each pass it on every push, so the Fake is held to real git, and a behaviour the Fake gets wrong fails the suite rather than a scenario test.
 - **Real-git tests**: the Factory tests that name `factorytest.RealGit()`. They run real git on every push, for what the Fake git doesn't model: raw git (`Git`, `GitIn`, `Remote.Git`), revision syntax such as `HEAD` or `main^`, and a fake claude's Git Script steps beyond the Fake's.
 
-`factorytest.New(t)` runs the harness, and its repositories, on the Fake git. A test reads and changes them only through the typed helpers (`Tip`, `Log`, `CommitOn`, `Publish` and the rest, listed in `factorytest/git.go`), which serve both implementations; raw git fails the test with a message naming them. A test that needs raw git passes `factorytest.RealGit()`. `factorytest.FakeGit()` is the default and only overrides an earlier `RealGit()`; the last option wins.
+`factorytest.New(t)` runs the rig, and its repositories, on the Fake git. A test reads and changes them only through the typed helpers (`Tip`, `Log`, `CommitOn`, `Publish` and the rest, listed in `factorytest/git.go`), which serve both implementations; raw git fails the test with a message naming them. A test that needs raw git passes `factorytest.RealGit()`. `factorytest.FakeGit()` is the default and only overrides an earlier `RealGit()`; the last option wins.
 
-`CODE_CENTRAL_TEST_FACTORY_GIT=real` runs every harness on real git, `RealGit()` or not:
+`CODE_CENTRAL_TEST_FACTORY_GIT=real` runs every rig on real git, `RealGit()` or not:
 
 ```
 CODE_CENTRAL_TEST_FACTORY_GIT=real go test ./factory/...

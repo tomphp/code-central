@@ -19,7 +19,7 @@ import (
 // Base diverged.
 
 // wantAncestor fails the test unless commit is reachable from rev.
-func wantAncestor(t *testing.T, h *factorytest.Harness, commit, rev string) {
+func wantAncestor(t *testing.T, h *factorytest.Rig, commit, rev string) {
 	t.Helper()
 	if !h.IsAncestor(commit, rev) {
 		t.Errorf("%s doesn't hold %s", rev, commit)
@@ -28,7 +28,7 @@ func wantAncestor(t *testing.T, h *factorytest.Harness, commit, rev string) {
 
 // subjectsAbove is the subjects on main's first-parent line above base,
 // oldest first, one to a line.
-func subjectsAbove(h *factorytest.Harness, base string) string {
+func subjectsAbove(h *factorytest.Rig, base string) string {
 	commits, _ := inRange(h, h.Tip("main"), base)
 	var subjects []string
 	for _, c := range commits {
@@ -40,7 +40,7 @@ func subjectsAbove(h *factorytest.Harness, base string) string {
 // unpushedMerge starts the Factory with the remote refusing pushes, so
 // its merge of id stays in the local base unpushed, and returns the
 // running Factory with the remote accepting pushes again.
-func unpushedMerge(t *testing.T, h *factorytest.Harness, remote *factorytest.Remote, id string) *factorytest.Running {
+func unpushedMerge(t *testing.T, h *factorytest.Rig, remote *factorytest.Remote, id string) *factorytest.Running {
 	t.Helper()
 	remote.RefusePushes()
 	r := h.Start()

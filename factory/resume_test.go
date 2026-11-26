@@ -11,7 +11,7 @@ import (
 // answeredTicket runs the Factory with args on a Ticket whose first turn
 // posts a Round, and answers it. It returns the Ticket, its first run and
 // the Factory, with the next run scripted to finish.
-func answeredTicket(t *testing.T, h *factorytest.Harness, args ...string) (string, factorytest.Call, *factorytest.Running) {
+func answeredTicket(t *testing.T, h *factorytest.Rig, args ...string) (string, factorytest.Call, *factorytest.Running) {
 	t.Helper()
 	id := h.ReadyTicket("Ask first")
 	h.Script(id, factorytest.PostRound("Which colour?"), factorytest.Result("success"))

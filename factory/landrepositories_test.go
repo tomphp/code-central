@@ -20,7 +20,7 @@ import (
 
 // inTwo makes a Ready Ticket whose session commits in the Home Repository
 // and in api and finishes with both, and returns its ID.
-func inTwo(h *factorytest.Harness, title string) string {
+func inTwo(h *factorytest.Rig, title string) string {
 	id := h.ReadyTicket(title)
 	h.Script(id, append(factorytest.CommitIn("api", "endpoint.go", "package api\n"),
 		factorytest.WriteFile("client.go", "package acme\n"), factorytest.Git("add", "client.go"), factorytest.Git("commit", "-q", "-m", "Call it"),
@@ -30,14 +30,14 @@ func inTwo(h *factorytest.Harness, title string) string {
 
 // inAPI makes a Ready Ticket whose session commits in api alone and
 // finishes with it, and returns its ID.
-func inAPI(h *factorytest.Harness, title string) string {
+func inAPI(h *factorytest.Rig, title string) string {
 	id := h.ReadyTicket(title)
 	h.Script(id, append(factorytest.CommitIn("api", "endpoint.go", "package api\n"), factorytest.FinishIn("Done.", false, "api"), factorytest.Result("success"))...)
 	return id
 }
 
 // setLandingOrder has the human put the Repositories in names' order.
-func setLandingOrder(t *testing.T, h *factorytest.Harness, names ...string) {
+func setLandingOrder(t *testing.T, h *factorytest.Rig, names ...string) {
 	t.Helper()
 	if _, err := h.Human().SetLandingOrder(context.Background(), h.Project, api.SetLandingOrderInput{Names: names}); err != nil {
 		t.Fatal(err)
@@ -240,7 +240,7 @@ func TestEachRepositorysBaseIsKeptLevelWithItsOwnRemote(t *testing.T) {
 // pushElsewhere commits file with content on main in a clone of api of
 // its own and pushes it to api's remote, as someone else would, and
 // returns the commit.
-func pushElsewhere(t *testing.T, h *factorytest.Harness, apiRepo *factorytest.Repository, file, content string) string {
+func pushElsewhere(t *testing.T, h *factorytest.Rig, apiRepo *factorytest.Repository, file, content string) string {
 	t.Helper()
 	return apiRepo.Remote("origin").CommitOn("main", file, content)
 }
@@ -252,7 +252,7 @@ func pushElsewhere(t *testing.T, h *factorytest.Harness, apiRepo *factorytest.Re
 
 // watchCIIn has the human set the Repository name's CI to GitHub Actions
 // on repository, or with repository "", to Not watched.
-func watchCIIn(t *testing.T, h *factorytest.Harness, name, repository string) {
+func watchCIIn(t *testing.T, h *factorytest.Rig, name, repository string) {
 	t.Helper()
 	ci := api.RepositoryCI{Repository: repository, NotWatched: repository == ""}
 	if _, err := h.Human().SetRepositoryCI(context.Background(), h.Project, api.SetRepositoryCIInput{Name: name, RepositoryCI: ci}); err != nil {
@@ -270,11 +270,11 @@ func pushedIn(tk api.TicketView, name string) string {
 	return ""
 }
 
-// gatedInTwo is a harness under Merge + Push to origin with CI Tracking
+// gatedInTwo is a rig under Merge + Push to origin with CI Tracking
 // on and the Repository api, its CI watched on acme/api unless notWatched,
 // with a Ticket in both Accepted and polled once, so its merge is pushed
 // in each. It returns the Ticket.
-func gatedInTwo(t *testing.T, notWatched bool) (h *factorytest.Harness, apiRepo *factorytest.Repository, r *factorytest.Running, id string) {
+func gatedInTwo(t *testing.T, notWatched bool) (h *factorytest.Rig, apiRepo *factorytest.Repository, r *factorytest.Running, id string) {
 	t.Helper()
 	h = factorytest.New(t, factorytest.FakeGit())
 	h.AddRemote("origin")

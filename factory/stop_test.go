@@ -60,7 +60,7 @@ func stoppedExit() int {
 }
 
 // wantStopped checks the turn for id got stopSignals.
-func wantStopped(t *testing.T, h *factorytest.Harness, id string) {
+func wantStopped(t *testing.T, h *factorytest.Rig, id string) {
 	t.Helper()
 	if got, want := h.Signals(id), stopSignals(); !slices.Equal(got, want) {
 		t.Errorf("the turn got %q, want %q", got, want)
@@ -71,7 +71,7 @@ func wantStopped(t *testing.T, h *factorytest.Harness, id string) {
 // first stop step until the kill grace has passed: it got stopSignals,
 // and its Claim is kept, In Progress and in the state file, with no
 // Failure Report.
-func killed(t *testing.T, h *factorytest.Harness, r *factorytest.Running, id string) {
+func killed(t *testing.T, h *factorytest.Rig, r *factorytest.Running, id string) {
 	t.Helper()
 	r.PassKillGrace()
 	if code := r.Exited(); code != 0 {

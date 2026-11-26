@@ -14,14 +14,14 @@ import (
 // Turn's rate_limit_event and sends the latest on every Heartbeat.
 
 // resets is a window's reset time, in Unix seconds as claude gives it,
-// hours after the harness's midday start.
-func resets(h *factorytest.Harness, hours int) int64 {
+// hours after the rig's midday start.
+func resets(h *factorytest.Rig, hours int) int64 {
 	return h.Clock.Now().Add(time.Duration(hours) * time.Hour).Unix()
 }
 
 // planLimits is the Project's Plan Limits, read as the human after the
 // next poll's Heartbeat.
-func planLimits(t *testing.T, h *factorytest.Harness, r *factorytest.Running) *api.PlanLimits {
+func planLimits(t *testing.T, h *factorytest.Rig, r *factorytest.Running) *api.PlanLimits {
 	t.Helper()
 	r.Poll()
 	return wantFactory(t, h, api.FactoryOnline, "turns running").PlanLimits
