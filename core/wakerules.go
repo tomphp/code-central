@@ -15,15 +15,15 @@ var wakingStates = []domain.State{domain.Ready, domain.Answered, domain.Accepted
 // wakesTheFactory says whether writing Ticket t, over the record r holds
 // before the write, is a change the Factory's poll acts on: t moves into
 // one of the wakingStates (a new Ticket counts as moving into its
-// State), a live Claim on it ends by a move its holder didn't make, or
-// its Blockers shrink.
+// State), a live Claim on it ends by a move its holder didn't make, the
+// live Claim's Stopped mark changes, or its Blockers shrink.
 func wakesTheFactory(r store.Reader, key string, t domain.Ticket) bool {
 	was, found := r.Ticket(key, t.Number)
 	if !found {
 		return slices.Contains(wakingStates, t.State)
 	}
 	movedIn := was.State != t.State && slices.Contains(wakingStates, t.State)
-	return movedIn || claimWithdrawn(was, t) || blockersShrank(was, t)
+	return movedIn || claimWithdrawn(was, t) || stoppedMarkChanged(was, t) || blockersShrank(was, t)
 }
 
 // blockersShrank says whether t has lost a Blocker was had, which may
@@ -36,16 +36,30 @@ func blockersShrank(was, t domain.Ticket) bool {
 // action other than its holder's own, such as cancel, release or a move
 // by hand: the Factory may be running its turn, and has a slot back.
 func claimWithdrawn(was, t domain.Ticket) bool {
+	_, now, ok := liveClaimNow(was, t)
+	return ok && !now.Live() && !isHolderAction(now.EndedBy)
+}
+
+// stoppedMarkChanged says whether the Claim live on was is still live on
+// t and was Stopped or Resumed: the Factory stops its turn, or takes the
+// Claim up again.
+func stoppedMarkChanged(was, t domain.Ticket) bool {
+	before, now, ok := liveClaimNow(was, t)
+	return ok && now.Live() && now.Stopped() != before.Stopped()
+}
+
+// liveClaimNow is the Claim live on was, before and as t holds it.
+func liveClaimNow(was, t domain.Ticket) (before, now domain.Claim, ok bool) {
 	live, ok := liveClaim(was)
 	if !ok {
-		return false
+		return domain.Claim{}, domain.Claim{}, false
 	}
 	for _, c := range t.Claims {
 		if c.Number == live.Number {
-			return !c.Live() && !isHolderAction(c.EndedBy)
+			return *live, c, true
 		}
 	}
-	return false
+	return domain.Claim{}, domain.Claim{}, false
 }
 
 // projectWakesTheFactory says whether writing Project p, over the record

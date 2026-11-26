@@ -285,6 +285,11 @@ type TicketView struct {
 	// Every read sets them. Computed on read.
 	Editable  bool `json:"editable"`
 	Retroable bool `json:"retroable"`
+	// Stoppable says the human may stop the Ticket's live Claim, and
+	// Resumable that they may resume it, as stop and resume would accept
+	// them. Computed on read.
+	Stoppable bool `json:"stoppable,omitempty"`
+	Resumable bool `json:"resumable,omitempty"`
 	// SilentSince is set while the Ticket is a Silent Claim: In Progress
 	// with no activity for 30 minutes. It is the time of the last
 	// activity, so the quiet time is now minus it. Computed, never stored.

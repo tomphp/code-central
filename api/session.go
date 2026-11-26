@@ -22,3 +22,19 @@ type ReleaseInput struct {
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
+
+// StopInput is stop's input; the note is optional.
+type StopInput struct {
+	Ticket Ref    `json:"ticket" path:"n"`
+	Note   string `json:"note,omitempty"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
+}
+
+// ResumeInput is resume's input; the note is optional.
+type ResumeInput struct {
+	Ticket Ref    `json:"ticket" path:"n"`
+	Note   string `json:"note,omitempty"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
+}

@@ -208,6 +208,9 @@ var all = []entry{
 	// Silent Claims and sessions (ticket 31).
 	defined(SetSession),
 	defined(Release),
+	// Stopping a Factory Claim (Spec code-central-1233).
+	defined(Stop),
+	defined(Resume),
 	// Blockers, Replacements and finding work (ticket 28).
 	defined(AddBlocker),
 	defined(RemoveBlocker),

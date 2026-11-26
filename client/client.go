@@ -119,6 +119,16 @@ func (c *Client) Release(ctx context.Context, key string, in api.ReleaseInput) (
 	return written(ctx, c, ops.Release, key, in, in.Full)
 }
 
+// Stop is the human's stop; set Actor to human.
+func (c *Client) Stop(ctx context.Context, key string, in api.StopInput) (api.Written[api.TicketView], error) {
+	return written(ctx, c, ops.Stop, key, in, in.Full)
+}
+
+// Resume is the human's resume; set Actor to human.
+func (c *Client) Resume(ctx context.Context, key string, in api.ResumeInput) (api.Written[api.TicketView], error) {
+	return written(ctx, c, ops.Resume, key, in, in.Full)
+}
+
 // Ping is POST /api/ping: it marks activity on every live Claim with this
 // session ID. The service always answers 204.
 func (c *Client) Ping(ctx context.Context, sessionID string) error {
