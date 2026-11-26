@@ -560,21 +560,24 @@ func (f *factory) startClaimed(ctx context.Context, in api.ClaimInput, res api.C
 	ws := f.repos.worktreesNamed(id, workBranch(stage, id))
 	conflicts := f.conflictsIn(ws, stage, *res.Ticket)
 	rebase := f.rebases(ctx, conflicts)
+	conflicted := len(conflicts) > 0
 	var guide api.StageGuideView
-	if len(conflicts) == 0 {
+	if !conflicted {
 		guide = f.stageGuide(ctx, res.StageGuide, stage)
 	}
 	wt := ws.home().path
-	c := claim{Ticket: id, ClaimID: res.ClaimID, SessionID: session, AllowedTools: []string{}, AddDirs: ws.addDirs()}
+	c := claim{Ticket: id, ClaimID: res.ClaimID, SessionID: session, AllowedTools: []string{}, AddDirs: ws.addDirs(), Conflict: conflicted}
 	var prompt string
 	if ws.several() {
-		c.SystemPrompt, prompt = severalSystemPrompt(c, stage, ws, guide, len(conflicts) > 0), severalFirstPrompt(c, stage, ws, conflicts, rebase)
+		c.SystemPrompt, prompt = severalSystemPrompt(f.runner.harness, c, stage, ws, guide, conflicted), severalFirstPrompt(f.runner.harness, c, stage, ws, conflicts, rebase)
 	} else {
 		var files []string
+		var check string
 		if len(conflicts) > 0 {
 			files = conflicts[0].files
+			check = conflicts[0].w.r.checkInstruction()
 		}
-		c.SystemPrompt, prompt = systemPrompt(c, stage, wt, guide, files), firstPrompt(c, stage, f.repos.baseBranch(), files, rebase)
+		c.SystemPrompt, prompt = systemPrompt(f.runner.harness, c, stage, wt, guide, files), firstPrompt(f.runner.harness, c, stage, f.repos.baseBranch(), files, rebase, check)
 	}
 	// The Ticket's Resume Command adds the folders its turns do.
 	resume := *in.ResumeCommand + addDirFlags(c.AddDirs)

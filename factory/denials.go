@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"slices"
 	"strings"
 
@@ -28,27 +27,15 @@ func denialInput(d harness.Denial) string {
 	return strings.TrimSpace(b.String())
 }
 
-// allowRule is the --allowedTools rule that allows the call: a Bash
-// command exactly, a file tool on its path, WebFetch on its domain, and
-// any other tool by name.
-func allowRule(d harness.Denial) string {
-	var in struct {
-		Command  string `json:"command"`
-		FilePath string `json:"file_path"`
-		URL      string `json:"url"`
+// denialsOf is the calls out's turn had denied that the Harness can
+// allow, with the rules that allow them: none for a Harness with no
+// denial list.
+func denialsOf(h harness.Harness, out harness.Outcome) (harness.DenialRules, []harness.Denial) {
+	rules := h.Denials()
+	if rules == nil {
+		return nil, nil
 	}
-	_ = json.Unmarshal(d.Input, &in)
-	switch {
-	case d.Tool == "Bash" && in.Command != "":
-		return "Bash(" + in.Command + ")"
-	case in.FilePath != "":
-		return d.Tool + "(" + in.FilePath + ")"
-	case d.Tool == "WebFetch" && in.URL != "":
-		if u, err := url.Parse(in.URL); err == nil && u.Host != "" {
-			return "WebFetch(domain:" + u.Hostname() + ")"
-		}
-	}
-	return d.Tool
+	return rules, out.Denials
 }
 
 // distinct is the denied calls with repeats of the same call dropped.
@@ -68,19 +55,19 @@ func distinct(ds []harness.Denial) []harness.Denial {
 // postDenials posts a Round asking the human about each distinct call
 // t's turn had denied, and saves it so the answers can be read. It
 // reports whether it posted the Round.
-func (f *factory) postDenials(ctx context.Context, t *turn, ds []harness.Denial) bool {
+func (f *factory) postDenials(ctx context.Context, t *turn, rules harness.DenialRules, ds []harness.Denial) bool {
 	c := t.claim
 	ds = distinct(ds)
 	var qs []api.QuestionInput
 	var patterns []string
 	for _, d := range ds {
-		p := allowRule(d)
+		p := rules.Rule(d)
 		patterns = append(patterns, p)
 		qs = append(qs, api.QuestionInput{
 			Title: "Allow " + shorten(p, 100) + "?",
 			Body: fmt.Sprintf("Auto mode denied this call, so the agent's turn stopped:\n\n```\n%s %s\n```\n\n"+
-				"Answer one of:\n\n- `allow`: allow `%s` for the rest of this Claim\n- `allow <pattern>`: allow this --allowedTools rule instead, such as `Bash(npm test:*)`\n- `deny <why>`: don't allow it, and tell the agent why\n",
-				d.Tool, denialInput(d), p),
+				"Answer one of:\n\n- `allow`: allow `%s` for the rest of this Claim\n- `allow <pattern>`: allow this %s instead, such as `%s`\n- `deny <why>`: don't allow it, and tell the agent why\n",
+				d.Tool, denialInput(d), p, rules.RuleName(), rules.RuleExample()),
 		})
 	}
 	res, err := f.client.PostRound(ctx, f.project, api.PostRoundInput{Ticket: api.Ref(c.Ticket), ClaimID: c.ClaimID, SessionID: c.SessionID, Questions: qs})
@@ -97,9 +84,9 @@ func (f *factory) postDenials(ctx context.Context, t *turn, ds []harness.Denial)
 
 // commentDenials lists on the Ticket the distinct calls t's turn had
 // denied, for a turn that ended its own way.
-func (f *factory) commentDenials(ctx context.Context, t *turn, ds []harness.Denial) {
+func (f *factory) commentDenials(ctx context.Context, t *turn, rules harness.DenialRules, ds []harness.Denial) {
 	c := t.claim
-	body := "code-central-factory: auto mode denied these calls during the last turn (session " + c.SessionID + "):\n" + denialList(ds)
+	body := "code-central-factory: auto mode denied these calls during the last turn (session " + c.SessionID + "):\n" + denialList(rules, ds)
 	if _, err := f.client.Comment(ctx, f.project, api.CommentInput{Ticket: api.Ref(c.Ticket), Body: body}); err != nil {
 		f.claimf(c, "%s: comment: %v", c.Ticket, err)
 	}
@@ -107,10 +94,10 @@ func (f *factory) commentDenials(ctx context.Context, t *turn, ds []harness.Deni
 
 // denialList is the distinct denied calls' patterns, a Markdown list item
 // each, every one on a line of its own.
-func denialList(ds []harness.Denial) string {
+func denialList(rules harness.DenialRules, ds []harness.Denial) string {
 	var b strings.Builder
 	for _, d := range distinct(ds) {
-		fmt.Fprintf(&b, "\n- `%s`", allowRule(d))
+		fmt.Fprintf(&b, "\n- `%s`", rules.Rule(d))
 	}
 	return b.String()
 }

@@ -23,6 +23,12 @@ func (reportingHarness) Discover(string, func(string, ...any)) harness.Accepts {
 
 func (reportingHarness) VerifyArgs(string, func(string, ...any)) error { return nil }
 
+func (reportingHarness) SkillPrompt(skill, args string) string { return skill + " " + args }
+
+func (reportingHarness) ToolLoadingNote() string { return "" }
+
+func (reportingHarness) Denials() harness.DenialRules { return nil }
+
 func (reportingHarness) Run(_ context.Context, t harness.Turn) harness.Outcome {
 	t.OnPlanLimits(api.PlanLimits{})
 	return harness.Outcome{Kind: harness.Done, ReviewCalled: true}

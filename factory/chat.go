@@ -193,8 +193,8 @@ func (f *factory) answerChat(ctx context.Context, t api.ChatTurn, session string
 		Work:     work,
 		StopWork: stopWork,
 	})
-	if len(out.Denials) > 0 {
-		p.add(denialsItem(out.Denials, f.e.Clock.Now()))
+	if rules, denials := denialsOf(f.runner.harness, out); len(denials) > 0 {
+		p.add(denialsItem(rules, denials, f.e.Clock.Now()))
 	}
 	return chatOutcome(f.harness.Name(), t, out)
 }
@@ -238,8 +238,8 @@ func chatOutcome(name string, t api.ChatTurn, out harness.Outcome) (api.ChatOutc
 
 // denialsItem is the item listing the distinct calls a Chat turn had
 // denied.
-func denialsItem(ds []harness.Denial, now time.Time) api.SessionEvent {
-	return api.SessionEvent{Time: now, Kind: api.EventPermissionDenials, Text: "Auto mode denied these calls:\n" + denialList(ds)}
+func denialsItem(rules harness.DenialRules, ds []harness.Denial, now time.Time) api.SessionEvent {
+	return api.SessionEvent{Time: now, Kind: api.EventPermissionDenials, Text: "Auto mode denied these calls:\n" + denialList(rules, ds)}
 }
 
 // chatWorktreeAtBase makes r's Chat worktree wt detached at its base's

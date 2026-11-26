@@ -40,6 +40,11 @@ type RepositoryView struct {
 	PushRemote string `json:"push_remote"`
 	// OwnPushRemote is whether PushRemote is its own.
 	OwnPushRemote bool `json:"own_push_remote"`
+	// CheckCommand is the Check Command an agent runs in it: its own,
+	// else the Project's, else empty for none.
+	CheckCommand string `json:"check_command"`
+	// OwnCheckCommand is whether CheckCommand is its own.
+	OwnCheckCommand bool `json:"own_check_command"`
 	// LocalOnlyUnderPullRequest marks a local-only Repository whose
 	// Landing is Pull Request, as only a Home that lost its remote can
 	// be: nothing lands there until it has another Landing or a remote.
@@ -50,7 +55,8 @@ type RepositoryView struct {
 }
 
 // AddRepositoryInput is the human's add_repository(name, clone_url?,
-// base?, local_path?, ci?, landing?, push_remote?, full?): it needs
+// base?, local_path?, ci?, landing?, push_remote?, check_command?,
+// full?): it needs
 // clone_url, local_path or both.
 type AddRepositoryInput struct {
 	// Name is the Repository Name, fixed once added.
@@ -72,15 +78,17 @@ type AddRepositoryInput struct {
 	// PushRemote names the git remote it is pushed to; left out, the
 	// Project's.
 	PushRemote string `json:"push_remote,omitempty"`
+	// CheckCommand is its own Check Command; left out, the Project's.
+	CheckCommand string `json:"check_command,omitempty"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
 
 // EditRepositoryInput is the human's edit_repository(name, clone_url?,
-// base?, local_path?, landing?, push_remote?, full?): each field left out
-// keeps its value. The name only finds the Repository: a Repository Name
-// never changes. The Home Repository takes the landing and push_remote
-// alone.
+// base?, local_path?, landing?, push_remote?, check_command?, full?): each
+// field left out keeps its value. The name only finds the Repository: a
+// Repository Name never changes. The Home Repository takes the landing,
+// push_remote and check_command alone.
 type EditRepositoryInput struct {
 	Name string `json:"name"`
 	// CloneURL, set empty, clears it, making the Repository local-only.
@@ -94,6 +102,8 @@ type EditRepositoryInput struct {
 	Landing *RepositoryLanding `json:"landing,omitempty"`
 	// PushRemote, set empty, has it use the Project's.
 	PushRemote *string `json:"push_remote,omitempty"`
+	// CheckCommand, set empty, has it use the Project's.
+	CheckCommand *string `json:"check_command,omitempty"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }

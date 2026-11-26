@@ -102,6 +102,9 @@ type ProjectView struct {
 	// their Heartbeats, always filled in: offline, with no Factories,
 	// until one sends a Heartbeat.
 	FactoryStatus FactoryStatusView `json:"factory_status"`
+	// CheckCommand is the Project's Check Command, the default for each
+	// Repository without its own; empty for none.
+	CheckCommand string `json:"check_command"`
 	// Repositories are the Project's Repositories in landing order, always
 	// filled in: the Home Repository alone until the human adds another.
 	Repositories []RepositoryView `json:"repositories"`

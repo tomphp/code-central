@@ -57,7 +57,7 @@ A Project's colour bar, whose colour is fixed by the Project's Key, so a Project
 _Avoid_: colour bar, project colour
 
 **Project Options**:
-The page where the human sets a Project's settings, such as its Landing Method, CI Tracking, GitHub Issues, Models, Stage Guides, Auto-accept and Focus, with Auto-fix in its CI section, and its Repositories section, where the human adds and removes the Project's Repositories (the CLI does the same) and, in each Repository's row, sets its Own Landing, Push remote and CI choice. Unlike an Option, what it sets belongs to one Project.
+The page where the human sets a Project's settings, such as its Landing Method, CI Tracking, GitHub Issues, Models, Stage Guides, Auto-accept, Focus and Check Command, with Auto-fix in its CI section, and its Repositories section, where the human sets the Project's Check Command, adds and removes the Project's Repositories (the CLI does the same) and, in each Repository's row, sets its Own Landing, Push remote, Check Command and CI choice. Unlike an Option, what it sets belongs to one Project.
 _Avoid_: Project settings, preferences, config
 
 **Store**:
@@ -384,6 +384,10 @@ _Avoid_: usage popup, meter popup, session popup
 Talking to Claude about a Project from the UI, outside any Ticket, through a floating icon and a pop-up.
 _Avoid_: chatbot, assistant, console
 
+**Conflict Claim**:
+A Claim the Factory starts with conflicts in any Repository, the same condition that gives it the conflict prompt instead of the Stage's skill. It includes a Claim on a Spec merge Ticket. It is held to no review check: its finish never draws the comment that the code-review skill was skipped, whether it merges or rebases.
+_Avoid_: merge Claim, merge-conflict Claim
+
 **Conversation**:
 One Chat session, from its first Chat Message until the human starts a new one. Each message resumes the same session. A Project has at most one current Conversation, held by one Factory. Only Factories reporting to this service can take one here; on another service sharing the Store, Chat says where it runs.
 _Avoid_: thread, chat session
@@ -459,6 +463,10 @@ _Avoid_: CI Ticket, failure Ticket
 **Push remote**:
 The git remote a Landing Method's Push sends work to, `origin` unless the human names another, for the Project (the default) or for a Repository. Its URL in the Home Repository, which is the Home Repository's Clone URL, is reported by the Factory when it starts, and is empty when the clone has no Push remote.
 _Avoid_: Upstream, origin (for the concept)
+
+**Check Command**:
+The shell command an agent runs in a Repository to check its code, such as `npm run check` or `make typecheck`, for the Project (the default) or for a Repository (its own). It is optional, with no default: a Repository's is its own, else the Project's, else none, and with none an agent follows the Repository's own docs. What it covers, a quick type check or the whole suite, is up to the Project.
+_Avoid_: Test command, verify command, CI command
 
 **Blocker**:
 A Ticket in the same Project that must reach Done before another Ticket can be claimed, which an Accepted Ticket waiting on CI doesn't until it lands. Under Land per Spec, a Blocker on the same Spec as the dependant is also cleared once it is Accepted and its work is merged into the Spec Branch. A Blocker that no longer blocks though it isn't Done is cleared, shown as "no longer blocking".

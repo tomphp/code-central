@@ -31,7 +31,7 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, out harness.Outcome) d
 		f.claimf(c, "%s: get_ticket: %v", c.Ticket, err)
 		return ""
 	}
-	denials := out.Denials
+	rules, denials := denialsOf(f.runner.harness, out)
 	// The Claim may already be dropped by a poll that saw the finish, so
 	// liveness here is read from the Ticket alone.
 	ended, by := claimEnded(tk, c)
@@ -39,7 +39,7 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, out harness.Outcome) d
 		// The session ended its turn itself (finish, a Round, give_up):
 		// its denials are for the human to see.
 		if len(denials) > 0 {
-			f.commentDenials(ctx, t, denials)
+			f.commentDenials(ctx, t, rules, denials)
 		}
 		if by == "finish" && f.runner.detectsReview() {
 			f.checkReview(ctx, t, tk, c.Reviewed || out.ReviewCalled)
@@ -62,7 +62,7 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, out harness.Outcome) d
 			return domain.Failed
 		}
 	case len(denials) > 0:
-		if f.postDenials(ctx, t, denials) {
+		if f.postDenials(ctx, t, rules, denials) {
 			return domain.NeedsAnswer
 		}
 	default:

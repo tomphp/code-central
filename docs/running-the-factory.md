@@ -561,6 +561,7 @@ With **Rebase instead of merging** ticked (under Merge or Pull Request; see [Set
 - With Land per Spec off, each Ticket's branch is replayed onto the base before its `Merge <id>` commit.
 - Under Pull Request, a branch about to be pushed is rebased onto the fetched base first and pushed with `--force-with-lease`. The Factory force-pushes only its own Ticket and Spec branches, never a base or a branch of the Spec Branch's name it didn't push (see [Pull Request](#pull-request)), and when a rebase conflicts it pushes in no Repository.
 - A conflict Claim is asked to rebase the branch onto the base, not merge the base into it.
+- A conflict Claim's prompt tells it to check its resolution with the Repository's [Check Command](setting-up-a-project.md#several-repositories), or when the Repository has none, to run its checks as its own docs (such as CLAUDE.md or README) describe. With several Repositories, each one's prompt section names its own. A Conflict Claim draws no review-check comment.
 
 ```text
 acme-shop-5: replayed onto spec/acme-shop-2 at 3b9e1f0c2d44
