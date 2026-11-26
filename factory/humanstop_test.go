@@ -235,3 +235,27 @@ func TestAStopDuringADrainTakesEffectWhenTheTurnEndsAndHoldsOnTheNextStart(t *te
 	}
 	r.WantOutput(id + ": stopped by the human: holding its Claim")
 }
+
+func TestAClaimStoppedAgainAfterAResumeIsHeldAgain(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t, factorytest.FakeGit())
+	id := h.ReadyTicket("Stopped twice")
+	h.Script(id, factorytest.Wait())
+	r := h.Start()
+	first := h.WantCalls(1)[0]
+	stop(t, h, id)
+	r.Poll()
+	release := h.HoldSession(first.Session)
+	resume(t, h, id)
+	r.Poll()
+
+	stop(t, h, id)
+	r.Poll()
+	release()
+	r.Poll()
+
+	r.WantOutput(id + ": stopped by the human: holding its Claim")
+	if n := len(h.Calls()); n != 1 {
+		t.Errorf("claude ran %d times; a Claim Stopped again isn't resumed", n)
+	}
+}

@@ -30,7 +30,7 @@ func (f *factory) restart(ctx context.Context) {
 			continue
 		}
 		f.noteTicket(c, tk)
-		if v, _ := claimOn(tk, c); f.holdIfStopped(c, v) {
+		if f.holdStopped(c, tk) {
 			continue
 		}
 		switch tk.State {

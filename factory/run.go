@@ -336,20 +336,20 @@ func (f *factory) reconcile(ctx context.Context) (answered, resumed []claim) {
 			}
 			continue
 		}
-		v, ok := claimOn(tk, c)
-		if !ok || v.Ended != nil {
-			f.endClaim(c, endedBy(v, ok))
+		if ended, by := claimEnded(tk, c); ended {
+			f.endClaim(c, by)
 			continue
 		}
 		f.noteTicket(c, tk)
 		f.reportChanged(ctx, c, tk)
-		if f.holdIfStopped(c, v) {
+		if f.holdStopped(c, tk) {
 			continue
 		}
+		f.noteResumed(c)
 		switch {
 		case tk.State == domain.Answered && f.turnFor(c.ClaimID) == nil:
 			answered = append(answered, c)
-		case tk.State == domain.InProgress && f.resumedAfterStop(c):
+		case tk.State == domain.InProgress && f.owedResume(c):
 			resumed = append(resumed, c)
 		}
 	}
@@ -371,16 +371,10 @@ func claimOn(tk api.TicketView, c claim) (api.ClaimView, bool) {
 // the action that ended it.
 func claimEnded(tk api.TicketView, c claim) (bool, string) {
 	v, ok := claimOn(tk, c)
-	return !ok || v.Ended != nil, endedBy(v, ok)
-}
-
-// endedBy is the action that ended v, or "unknown" when the Ticket has no
-// such Claim.
-func endedBy(v api.ClaimView, ok bool) string {
 	if !ok {
-		return "unknown"
+		return true, "unknown"
 	}
-	return v.EndedBy
+	return v.Ended != nil, v.EndedBy
 }
 
 // endsItsOwnTurn are the actions by which a session ends its own Claim:
@@ -394,7 +388,7 @@ func (f *factory) endClaim(c claim, by string) {
 	f.ended[c.ClaimID] = true
 	f.mu.Unlock()
 	delete(f.reportedChanged, c.ClaimID)
-	delete(f.stoppedSeen, c.ClaimID)
+	delete(f.stops, c.ClaimID)
 	f.dropCutOff(c.ClaimID)
 	t := f.turnFor(c.ClaimID)
 	if t != nil && !endsItsOwnTurn[by] {
@@ -706,9 +700,8 @@ func (f *factory) resumeAnswered(ctx context.Context, c claim) {
 		return
 	}
 	after := ""
-	if f.stoppedSeen[c.ClaimID] {
-		after = " after a Stop"
-		delete(f.stoppedSeen, c.ClaimID)
+	if f.takeStop(c) {
+		after = " " + afterStop
 	}
 	f.claimf(c, "%s resumed %s%s with the answers to Round %d", c.Ticket, f.about(c), after, res.Round.Number)
 	c, decided := f.takeDenialAnswers(c, res)

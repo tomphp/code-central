@@ -12,37 +12,55 @@ import (
 	"github.com/tomoram/code-central/api"
 )
 
-// holdIfStopped reports whether the human has Stopped c, whose Claim on
-// its Ticket is v. A Stopped Claim's turn is stopped and the Claim kept,
-// and a Claim with no turn is noted held the first time it is seen.
-func (f *factory) holdIfStopped(c claim, v api.ClaimView) bool {
-	if !v.Stopped {
+// afterStop ends the line saying a Claim was resumed after a Stop.
+const afterStop = "after a Stop"
+
+// holdStopped holds c if the human has Stopped it on tk, and reports
+// whether it did: its turn is stopped and the Claim kept, and a Claim
+// with no turn is noted held when it is first seen Stopped.
+func (f *factory) holdStopped(c claim, tk api.TicketView) bool {
+	if !stoppedNow(tk, c) {
 		return false
 	}
 	f.dropCutOff(c.ClaimID)
 	f.restarted = slices.DeleteFunc(f.restarted, func(r claim) bool { return r.ClaimID == c.ClaimID })
-	seen := f.stoppedSeen[c.ClaimID]
-	f.stoppedSeen[c.ClaimID] = true
+	held := f.stops[c.ClaimID]
+	f.stops[c.ClaimID] = true
 	if t := f.turnFor(c.ClaimID); t != nil {
 		f.claimf(c, "%s: stopped by the human: stopping its turn (Claim kept)", c.Ticket)
 		f.stopTurn(t)
-	} else if !seen {
+	} else if !held {
 		f.claimf(c, "%s: stopped by the human: holding its Claim", c.Ticket)
 	}
 	return true
 }
 
-// resumedAfterStop reports whether c was seen Stopped and has since been
-// Resumed, so the poll resumes its session.
-func (f *factory) resumedAfterStop(c claim) bool {
-	return f.stoppedSeen[c.ClaimID] && f.turnFor(c.ClaimID) == nil
+// noteResumed notes that c, if held for a Stop, is no longer Stopped.
+func (f *factory) noteResumed(c claim) {
+	if _, ok := f.stops[c.ClaimID]; ok {
+		f.stops[c.ClaimID] = false
+	}
+}
+
+// owedResume reports whether c was held for a Stop and has no turn, so
+// once it is Resumed the poll resumes its session.
+func (f *factory) owedResume(c claim) bool {
+	_, ok := f.stops[c.ClaimID]
+	return ok && f.turnFor(c.ClaimID) == nil
+}
+
+// takeStop reports whether c was held for a Stop, and forgets it.
+func (f *factory) takeStop(c claim) bool {
+	_, ok := f.stops[c.ClaimID]
+	delete(f.stops, c.ClaimID)
+	return ok
 }
 
 // resumeStopped resumes c's session, which a Stop cut off, now that the
 // human has Resumed it, unless another process holds it.
 func (f *factory) resumeStopped(ctx context.Context, c claim) {
-	if f.resumeSession(ctx, c, "after a Stop", stoppedPrompt(c)) {
-		delete(f.stoppedSeen, c.ClaimID)
+	if f.resumeSession(ctx, c, afterStop, stoppedPrompt(c)) {
+		f.takeStop(c)
 	}
 }
 
