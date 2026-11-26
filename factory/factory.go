@@ -407,6 +407,9 @@ type factory struct {
 	// restarted is the saved Claims a stop cut off, to resume as cut off
 	// once a slot is free; the poll's own.
 	restarted []claim
+	// stoppedSeen is the held Claims, by Claim ID, the Factory has seen
+	// Stopped and not yet resumed; the poll's own.
+	stoppedSeen map[string]bool
 	// lostClaims are the claims whose answer was lost on every try, oldest
 	// first, sent again at each poll until Code Central answers; each
 	// holds a slot meanwhile. They last this run only; the poll's own.
@@ -453,7 +456,7 @@ type factory struct {
 // rest.
 func newFactory(e Env, o options) *factory {
 	w := work{e.Work}
-	f := &factory{e: e, o: o, drainCh: make(chan struct{}), wakeCh: make(chan func(), 1), work: w, polling: stint{w: w}, drainWork: newHandoff(), stopWork: newHandoff(), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, backInReady: map[string]time.Time{}, reportedChanged: map[string]string{}}
+	f := &factory{e: e, o: o, drainCh: make(chan struct{}), wakeCh: make(chan func(), 1), work: w, polling: stint{w: w}, drainWork: newHandoff(), stopWork: newHandoff(), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, backInReady: map[string]time.Time{}, reportedChanged: map[string]string{}, stoppedSeen: map[string]bool{}}
 	f.repos = newRepositories(f.printf)
 	return f
 }

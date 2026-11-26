@@ -207,15 +207,15 @@ func (f *factory) setDrained() {
 }
 
 // poll reconciles the held Claims, starts the next decision of each idle
-// guided Map, then fills free slots: Answered resumes first, then saved
-// Claims a stop cut off, then new claims.
+// guided Map, then fills free slots: Answered resumes first, then Claims
+// a human Resumed, then saved Claims a stop cut off, then new claims.
 func (f *factory) poll(ctx context.Context) {
 	defer func() {
 		if !f.halted(ctx) {
 			f.heartbeat(api.HeartbeatOnline, f.pollNote())
 		}
 	}()
-	answered := f.reconcile(ctx)
+	answered, resumed := f.reconcile(ctx)
 	// A poll that reads the Project also makes the report of what claude
 	// accepts, until one is taken.
 	if _, ok := f.lander.poll(ctx); ok && !f.modelsReported {
@@ -238,6 +238,12 @@ func (f *factory) poll(ctx context.Context) {
 			return
 		}
 		f.resumeAnswered(ctx, c)
+	}
+	for _, c := range resumed {
+		if !f.slotFree(ctx) {
+			return
+		}
+		f.resumeStopped(ctx, c)
 	}
 	f.resumeRestarted(ctx)
 	// A turn this poll started may have paused the Factory, which then
@@ -317,10 +323,11 @@ func (f *factory) turnRunningOn(ticket string) bool {
 
 // reconcile reads every held Claim's Ticket. A Claim that has ended
 // (released, moved, Cancelled, or finished) has its turn stopped and is
-// dropped, and its Claim ID is never written with again. It returns the
-// Answered Claims with no turn running, oldest first.
-func (f *factory) reconcile(ctx context.Context) []claim {
-	var answered []claim
+// dropped, and its Claim ID is never written with again. A Claim the
+// human Stopped has its turn stopped and is held. It returns the Answered
+// Claims with no turn running, and the In Progress ones the human has
+// Resumed, oldest first.
+func (f *factory) reconcile(ctx context.Context) (answered, resumed []claim) {
 	for _, c := range f.heldClaims() {
 		tk, err := f.client.GetTicket(ctx, f.project, api.Ref(c.Ticket))
 		if err != nil {
@@ -329,29 +336,51 @@ func (f *factory) reconcile(ctx context.Context) []claim {
 			}
 			continue
 		}
-		if ended, by := claimEnded(tk, c); ended {
-			f.endClaim(c, by)
+		v, ok := claimOn(tk, c)
+		if !ok || v.Ended != nil {
+			f.endClaim(c, endedBy(v, ok))
 			continue
 		}
 		f.noteTicket(c, tk)
 		f.reportChanged(ctx, c, tk)
-		if tk.State == domain.Answered && f.turnFor(c.ClaimID) == nil {
+		if f.holdIfStopped(c, v) {
+			continue
+		}
+		switch {
+		case tk.State == domain.Answered && f.turnFor(c.ClaimID) == nil:
 			answered = append(answered, c)
+		case tk.State == domain.InProgress && f.resumedAfterStop(c):
+			resumed = append(resumed, c)
 		}
 	}
-	return answered
+	return answered, resumed
+}
+
+// claimOn is c's Claim on tk. Claim IDs aren't on reads, so the Claim is
+// found by its session ID, which the Factory makes for each Claim.
+func claimOn(tk api.TicketView, c claim) (api.ClaimView, bool) {
+	for _, v := range tk.Claims {
+		if v.SessionID == c.SessionID {
+			return v, true
+		}
+	}
+	return api.ClaimView{}, false
 }
 
 // claimEnded reports whether c is no longer the Ticket's live Claim, and
-// the action that ended it. Claim IDs aren't on reads, so the Claim is
-// found by its session ID, which the Factory makes for each Claim.
+// the action that ended it.
 func claimEnded(tk api.TicketView, c claim) (bool, string) {
-	for _, v := range tk.Claims {
-		if v.SessionID == c.SessionID {
-			return v.Ended != nil, v.EndedBy
-		}
+	v, ok := claimOn(tk, c)
+	return !ok || v.Ended != nil, endedBy(v, ok)
+}
+
+// endedBy is the action that ended v, or "unknown" when the Ticket has no
+// such Claim.
+func endedBy(v api.ClaimView, ok bool) string {
+	if !ok {
+		return "unknown"
 	}
-	return true, "unknown"
+	return v.EndedBy
 }
 
 // endsItsOwnTurn are the actions by which a session ends its own Claim:
@@ -365,6 +394,7 @@ func (f *factory) endClaim(c claim, by string) {
 	f.ended[c.ClaimID] = true
 	f.mu.Unlock()
 	delete(f.reportedChanged, c.ClaimID)
+	delete(f.stoppedSeen, c.ClaimID)
 	f.dropCutOff(c.ClaimID)
 	t := f.turnFor(c.ClaimID)
 	if t != nil && !endsItsOwnTurn[by] {
@@ -675,7 +705,12 @@ func (f *factory) resumeAnswered(ctx context.Context, c claim) {
 		}
 		return
 	}
-	f.claimf(c, "%s resumed %s with the answers to Round %d", c.Ticket, f.about(c), res.Round.Number)
+	after := ""
+	if f.stoppedSeen[c.ClaimID] {
+		after = " after a Stop"
+		delete(f.stoppedSeen, c.ClaimID)
+	}
+	f.claimf(c, "%s resumed %s%s with the answers to Round %d", c.Ticket, f.about(c), after, res.Round.Number)
 	c, decided := f.takeDenialAnswers(c, res)
 	prompt := answeredPrompt(c, res)
 	if decided != "" {

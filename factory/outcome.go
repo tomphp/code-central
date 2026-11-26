@@ -54,7 +54,7 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, out turnOutcome) domai
 		}
 		return tk.State
 	}
-	if !f.live(c.ClaimID) {
+	if !f.live(c.ClaimID) || stoppedNow(tk, c) {
 		return tk.State
 	}
 	switch {

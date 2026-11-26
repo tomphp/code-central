@@ -12,8 +12,9 @@ import (
 // Review, Accepted or Done. An Answered one is kept: the poll picks up
 // its answers and resumes it before anything else. An In Progress one was
 // cut off by the stop, so it is resumed as cut off once a slot is free.
-// A Needs Answer one is kept. A Claim the file doesn't hold is never
-// looked for, so never adopted.
+// A Needs Answer one is kept, and so is one the human Stopped, held until
+// a Resume. A Claim the file doesn't hold is never looked for, so never
+// adopted.
 func (f *factory) restart(ctx context.Context) {
 	for _, c := range f.heldClaims() {
 		tk, err := f.client.GetTicket(ctx, f.project, api.Ref(c.Ticket))
@@ -29,6 +30,9 @@ func (f *factory) restart(ctx context.Context) {
 			continue
 		}
 		f.noteTicket(c, tk)
+		if v, _ := claimOn(tk, c); f.holdIfStopped(c, v) {
+			continue
+		}
 		switch tk.State {
 		case domain.InProgress:
 			f.claimf(c, "%s: saved Claim %s was cut off: resuming it", c.Ticket, c.ClaimID)
