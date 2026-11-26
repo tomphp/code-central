@@ -69,6 +69,24 @@ export const Claims = pane(async (s, w) => {
   return id;
 });
 
+// A Factory Claim the human stopped: the Stopped panel, and the Stop on its Claim row.
+export const Stopped = pane(async (s, w) => {
+  const id = await s.ticket("acme", { title: "Rate-limit the sign-in endpoint" });
+  await s.factoryClaim("acme", id, SESSION);
+  w.advance(10 * MIN);
+  await w.api.act("acme", id, "stop", {});
+  w.advance(20 * MIN);
+  return id;
+});
+
+// A running Factory Claim: Stop in the header.
+export const Stoppable = pane(async (s, w) => {
+  const id = await s.ticket("acme", { title: "Rate-limit the sign-in endpoint" });
+  await s.factoryClaim("acme", id, SESSION);
+  w.advance(5 * MIN);
+  return id;
+});
+
 // Failed: the Failure Report in its action panel.
 export const FailureReport = pane((s) => s.ticket("acme", { title: "Migrate the session table", state: "Failed" }));
 

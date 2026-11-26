@@ -56,6 +56,20 @@ var Release = &Definition[api.ReleaseInput, api.Written[api.TicketView]]{
 	Doc:  "Release a Claim: In Progress or Answered back to Ready.",
 }
 
+// Stop is the human's stop of a Factory Claim.
+var Stop = &Definition[api.StopInput, api.Written[api.TicketView]]{
+	Name: "stop", Audience: HumanOnly, Write: true,
+	HTTP: "POST /api/p/{key}/tickets/{n}/stop",
+	Doc:  "Stop the Factory's session on an In Progress or Answered Ticket, keeping its State and Claim until resumed or released.",
+}
+
+// Resume is the human's resume of a Stopped Claim.
+var Resume = &Definition[api.ResumeInput, api.Written[api.TicketView]]{
+	Name: "resume", Audience: HumanOnly, Write: true,
+	HTTP: "POST /api/p/{key}/tickets/{n}/resume",
+	Doc:  "Resume a Stopped Claim, so the Factory takes it up again.",
+}
+
 // AddBlocker is add_blocker.
 var AddBlocker = &Definition[api.BlockerInput, api.Written[api.TicketView]]{
 	Name: "add_blocker", Audience: AgentAndHuman, Write: true,

@@ -644,7 +644,7 @@ var ModelKinds = []string{"grilling", "spec", "tickets", "map-chart", "map-grill
 // NeedsMeReasons are the Needs Me reasons a Project's Focus Kinds may
 // turn off, in group order: core's Needs Me reasons, which core's tests
 // keep in step.
-var NeedsMeReasons = []string{"needs_answer", "answered", "silent_claim", "long_claim", "failed", "in_review",
+var NeedsMeReasons = []string{"needs_answer", "answered", "stopped", "silent_claim", "long_claim", "failed", "in_review",
 	"ci_failed", "ci_cancelled", "base_diverged", "base_missing", "repository_missing", "pull_request_closed", "to_merge", "ci_unavailable",
 	"accepted_not_landed", "blocked_by_cancelled", "new_issue", "closed_externally"}
 
@@ -747,11 +747,34 @@ type Claim struct {
 	ResumeCommand string
 	// Model and Effort are what the Claim's latest turn ran with, empty
 	// meaning Claude Code's default.
-	Model   string
-	Effort  string
+	Model  string
+	Effort string
+	// Factory and Host are the Factory that made the Claim, as its
+	// Heartbeat names it; empty for a Claim no Factory made.
+	Factory string
+	Host    string
 	Started time.Time
 	Ended   time.Time // zero while the Claim is live
 	EndedBy string    // the action that ended it
+	// Stops are the human's Stops of the Claim, oldest first.
+	Stops []Stop
+}
+
+// Stop is one Stop of a Claim, with the time of its Resume once Resumed.
+type Stop struct {
+	Stopped time.Time
+	Resumed time.Time // zero until Resumed
+}
+
+// FactoryClaim reports whether a Factory made the Claim. Only a Factory
+// Claim can be Stopped.
+func (c Claim) FactoryClaim() bool { return c.Factory != "" }
+
+// Stopped reports whether the Claim is live and its latest Stop has no
+// Resume. Ending the Claim ends the mark with it.
+func (c Claim) Stopped() bool {
+	n := len(c.Stops)
+	return c.Live() && n > 0 && c.Stops[n-1].Resumed.IsZero()
 }
 
 // FailureReport is one numbered, permanent report of why an agent with

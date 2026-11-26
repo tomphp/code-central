@@ -83,6 +83,7 @@ report_repositories	POST	/api/p/{key}/report_repositories
 report_spec_merge	POST	/api/p/{key}/tickets/{n}/report_spec_merge
 report_work_item_watcher_status	POST	/api/p/{key}/integration/report_work_item_watcher_status
 rerun_ci	POST	/api/p/{key}/tickets/{n}/rerun_ci
+resume	POST	/api/p/{key}/tickets/{n}/resume
 send_back	POST	/api/p/{key}/tickets/{n}/send_back
 send_chat_message	POST	/api/p/{key}/send_chat_message
 set_auto_accept	POST	/api/p/{key}/set_auto_accept
@@ -104,6 +105,7 @@ set_session	POST	/api/p/{key}/tickets/{n}/set_session
 set_subagent_exploration	POST	/api/p/{key}/set_subagent_exploration
 set_tags	POST	/api/p/{key}/set_tags
 start_conversation	POST	/api/p/{key}/start_conversation
+stop	POST	/api/p/{key}/tickets/{n}/stop
 stop_chat_reply	POST	/api/p/{key}/stop_chat_reply
 submit_map	POST	/api/p/{key}/submit_map
 submit_prototype	POST	/api/p/{key}/submit_prototype

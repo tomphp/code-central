@@ -55,6 +55,9 @@ export interface Driver {
   // claim claims a Ready Ticket as an agent with a session ID, moving it
   // to In Progress (ticket 35).
   claim(key: string, id: string, sessionId: string): Promise<void>;
+  // factoryClaim claims a Ready Ticket as the Factory does, naming itself
+  // and its host: the only Claim the human can stop.
+  factoryClaim(key: string, id: string, sessionId: string): Promise<void>;
   // linkTicket creates a Draft Ticket linked to an external item as an
   // Integration would, and records its external state (ticket 42).
   linkTicket(key: string, title: string, link: { integration: string; id: string; url: string }, external: ExternalState): Promise<string>;
@@ -256,8 +259,8 @@ export class HttpDriver implements Driver {
     return this.claims.get(id) ?? (await this.claimAs(key, id, session));
   }
 
-  private async claimAs(key: string, id: string, session_id: string): Promise<string> {
-    const { claim_id } = await this.agent<{ claim_id: string }>(`${this.projectPath(key)}/claim`, { ticket: id, session_id });
+  private async claimAs(key: string, id: string, session_id: string, factory?: { factory: string; host: string }): Promise<string> {
+    const { claim_id } = await this.agent<{ claim_id: string }>(`${this.projectPath(key)}/claim`, { ticket: id, session_id, ...factory });
     this.claims.set(id, claim_id);
     return claim_id;
   }
@@ -293,6 +296,10 @@ export class HttpDriver implements Driver {
   // ticket 35: always a new Claim, as a Ticket's next session makes.
   claim: Driver["claim"] = async (key, id, session_id) => {
     await this.claimAs(key, id, session_id);
+  };
+
+  factoryClaim: Driver["factoryClaim"] = async (key, id, session_id) => {
+    await this.claimAs(key, id, session_id, { factory: "code-central-factory", host: "laptop" });
   };
 
   // ticket 42

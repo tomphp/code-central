@@ -106,7 +106,7 @@ The coding-agent CLI a Factory runs its Turns with, such as Claude Code, Codex C
 _Avoid_: agent (the model at work inside a session), tool (an MCP or agent tool), provider, backend, runner
 
 **Turn**:
-One run of the Factory's Harness, for a Claim or to answer a Chat Message. It ends done, failed, in an Outage, on a login failure, on a rejected model or effort, or stopped.
+One run of the Factory's Harness, for a Claim or to answer a Chat Message. It ends done, failed, in an Outage, on a login failure, on a rejected model or effort, or stopped (by the Factory shutting down, or by a human's Stop on its Ticket).
 _Avoid_: run, process, session (a session spans many Turns)
 
 **Outage**:
@@ -477,8 +477,24 @@ A Ticket named by a Cancelled Ticket as taking over its work.
 _Avoid_: Successor
 
 **Claim**:
-An agent's exclusive hold on one Ticket, from taking it until the work leaves its hands. A Claim that has ended never comes back.
+An agent's exclusive hold on one Ticket, from taking it until the work leaves its hands. A Claim that has ended never comes back. A live Claim may be Stopped.
 _Avoid_: Lock, assignment
+
+**Factory Claim**:
+A Claim made by a Factory, which named itself (its name and host, as its Heartbeat gives them) on the `claim`. Only a Factory Claim can be Stopped.
+_Avoid_: Automated Claim
+
+**Stopped Claim**:
+A Claim whose session the human stopped. It is kept, and its Ticket stays in its State, but the Factory doesn't resume it until the human Resumes it. The human may also take it over with its Resume Command or Release it. It is a Needs Me reason, and never a Silent or Long Claim. A Claim records each Stop with the time of its Resume once Resumed; ending the Claim ends the mark.
+_Avoid_: paused (a Factory pauses for an Outage), held, parked, suspended
+
+**Stop** (on a Ticket):
+The human's action that stops a Factory Claim's running Turn, if any, and makes it a Stopped Claim.
+_Avoid_: pause, drain, kill, halt
+
+**Resume** (on a Ticket):
+The human's action that clears a Stopped Claim, so the Factory resumes the same session. It is not the Resume Command, which takes the session over by hand.
+_Avoid_: restart, unpause
 
 **Claim ID**:
 The identifier Code Central issues with a Claim, which proves the holder on every write that needs one, and which `claim` returns again to the session that holds it.
@@ -489,11 +505,11 @@ The command that brings a session back: a Claim's, given by whoever claims, from
 _Avoid_: Resume string, attach command
 
 **Silent Claim**:
-A Claim on a Ticket in progress with no recent activity, which may mean its session has died. Pings count on every service sharing the Store.
+A Claim on a Ticket in progress with no recent activity, which may mean its session has died. A Stopped Claim is never one. Pings count on every service sharing the Store.
 _Avoid_: Stale, stalled, lost
 
 **Long Claim**:
-A Claim on a Ticket in progress that is still active but hasn't moved for a long time, which may mean its agent is going round in circles.
+A Claim on a Ticket in progress that is still active but hasn't moved for a long time, which may mean its agent is going round in circles. A Stopped Claim is never one.
 _Avoid_: Looping, runaway, stuck
 
 **Session Event**:
@@ -541,8 +557,11 @@ Who made a change: the human, an agent, or an Integration.
 _Avoid_: User, caller
 
 **Needs Me**:
-The Tickets waiting on the human before they can move, a Project's Base diverged or Base missing, a Repository missing, and each pushed commit's CI failed, CI cancelled or CI unavailable, one item per commit listing the Tickets waiting on it.
+The Tickets waiting on the human before they can move, a Project's Base diverged or Base missing, a Repository missing, and each pushed commit's CI failed, CI cancelled or CI unavailable, one item per commit listing the Tickets waiting on it, and each Stopped Claim.
 _Avoid_: Inbox, blocked
+
+**Stopped** (Needs Me reason):
+A Stopped Claim waiting on the human to Resume, take over or Release it.
 
 **Needs Me count**:
 The number of things in Needs Me, as the human sees it. Each item counts once, except that a Requirement's Stage Tickets count once in total, as their Requirement. It is given for all Projects and per Project.
@@ -573,7 +592,7 @@ What kind of Spec a Spec is, as its badge on a Spec row, a Lane header and a Tic
 _Avoid_: Spec type, Spec badge
 
 **Stage strip**:
-A Requirement's progress on its Spec row and its view: a grilling segment (a Map for a Requirement written from a Map, skipped for one submitted Straight to Spec), a spec and a tickets segment, and Build, each done, skipped (a Cancelled Stage, passed over as a done one is), needs (waiting on the human), queued (waiting for a Factory), running (a Factory is on it) or waiting (behind an earlier segment). A Stage segment is done when its Ticket is Done and skipped when Cancelled; otherwise needs when its Ticket waits on the human, queued when it is the first open Stage and a Factory could claim it, waiting while Ready or Draft, and running otherwise. Build is done when it has Tickets, all Done and none waiting on the human; otherwise needs when any Build Ticket waits on the human, queued when no Stage is open and a Factory could claim one, running when no Stage is open and it has Tickets, and waiting otherwise. The current segment is the first not done or skipped, else Build. Its needs are every Ticket waiting on the human, Stage Tickets first in Stage order, then Build Tickets in claim order. The Requirement opens on the first of its needs, else the current Stage's Ticket, else its first unfinished Build Ticket, else its last Build Ticket, else its last Stage Ticket. The service works all of this out on a Requirement's view; the UI names the segments and words the headline. A Requirement's view shows its Build Tickets' Ticket graph after the CI sums.
+A Requirement's progress on its Spec row and its view: a grilling segment (a Map for a Requirement written from a Map, skipped for one submitted Straight to Spec), a spec and a tickets segment, and Build, each done, skipped (a Cancelled Stage, passed over as a done one is), needs (waiting on the human, as a Stopped Claim's segment does), queued (waiting for a Factory), running (a Factory is on it) or waiting (behind an earlier segment). A Stage segment is done when its Ticket is Done and skipped when Cancelled; otherwise needs when its Ticket waits on the human, queued when it is the first open Stage and a Factory could claim it, waiting while Ready or Draft, and running otherwise. Build is done when it has Tickets, all Done and none waiting on the human; otherwise needs when any Build Ticket waits on the human, queued when no Stage is open and a Factory could claim one, running when no Stage is open and it has Tickets, and waiting otherwise. The current segment is the first not done or skipped, else Build. Its needs are every Ticket waiting on the human, Stage Tickets first in Stage order, then Build Tickets in claim order. The Requirement opens on the first of its needs, else the current Stage's Ticket, else its first unfinished Build Ticket, else its last Build Ticket, else its last Stage Ticket. The service works all of this out on a Requirement's view; the UI names the segments and words the headline. A Requirement's view shows its Build Tickets' Ticket graph after the CI sums.
 _Avoid_: Progress bar, Stage bar
 
 **Lane header**:

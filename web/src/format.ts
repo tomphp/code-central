@@ -3,6 +3,7 @@ import type { CIRunView, NeedsMeReason, NeedsMeRow } from "./api/types";
 export const REASON_LABEL: Record<NeedsMeReason, string> = {
   needs_answer: "Questions",
   answered: "Answered",
+  stopped: "Stopped",
   silent_claim: "Silent Claim",
   long_claim: "Long Claim",
   failed: "Failed",
@@ -73,6 +74,8 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
         : "Questions waiting";
     case "answered":
       return `Answered ${ago(now, r.since)}, no session has picked it up`;
+    case "stopped":
+      return `Stopped ${ago(now, r.since)}`;
     case "silent_claim":
       return `Quiet for ${duration(now, r.since)}`;
     case "long_claim":
@@ -179,6 +182,11 @@ function externalDetail(r: NeedsMeRow): string {
 export function ago(now: Date, at: string): string {
   const d = duration(now, at);
   return d === "just now" ? d : `${d} ago`;
+}
+
+// timeOfDay is the 24-hour time of day of an instant, in the viewer's time zone.
+export function timeOfDay(at: string): string {
+  return new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 }
 
 // bytes is a size in readable units: bytes under 1 KB, then KB, then MB,

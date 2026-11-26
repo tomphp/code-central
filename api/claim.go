@@ -11,6 +11,11 @@ type ClaimInput struct {
 	// leaves them unset.
 	WorkingDir    *string `json:"working_dir,omitempty" desc:"The directory you work in, where the human runs the resume command. A hook usually fills it in for you."`
 	ResumeCommand *string `json:"resume_command,omitempty" desc:"The command that resumes your session from working_dir, shown to the human as is. Without one the human is shown claude --resume <session_id>."`
+	// Factory and Host are the Factory's name and host as its Heartbeat
+	// gives them, set only by a Factory; a Claim with them is a Factory
+	// Claim.
+	Factory string `json:"factory,omitempty" mcp:"-"`
+	Host    string `json:"host,omitempty" mcp:"-"`
 }
 
 // ClaimResult is claim's result: the Claim ID with the full Ticket view

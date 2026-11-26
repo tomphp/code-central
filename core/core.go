@@ -457,9 +457,11 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t domain.Ticket) api.
 		Comments: commentViews(t.Comments), Moves: []api.MoveView{}, Edits: editViews(t.Edits),
 		Blocked: rule.blocked(t), Link: linkView(t.Link),
 		Editable: ticketEditable(pr, t), Retroable: ticketRetroable(pr, t),
+		Stoppable: whyNotStoppable(key, t) == "", Resumable: whyNotResumable(key, t) == "",
 	}
 	for _, cl := range t.Claims {
 		cv := api.ClaimView{Number: cl.Number, SessionID: cl.SessionID, WorkingDir: cl.WorkingDir, ResumeCommand: cl.ResumeCommand, Model: cl.Model, Effort: cl.Effort, Started: cl.Started, LastActivity: c.claimActivity(t, cl), EndedBy: cl.EndedBy,
+			FactoryClaim: cl.FactoryClaim(), Stopped: cl.Stopped(), Stops: stopViews(cl.Stops),
 			LatestEvent: c.factories.LatestEvent(key, t.Number, cl.Number)}
 		if !cl.Live() {
 			ended := cl.Ended

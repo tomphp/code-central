@@ -22,6 +22,7 @@ export type State = (typeof STATES)[number];
 export const NEEDS_ME_REASONS = [
   "needs_answer",
   "answered",
+  "stopped",
   "silent_claim",
   "long_claim",
   "failed",
@@ -441,6 +442,8 @@ export const TICKET_FIELDS = [
   "claimable",
   "editable",
   "retroable",
+  "stoppable",
+  "resumable",
   "silent_since",
   "needs_me_reason",
   "link",
@@ -646,6 +649,12 @@ export interface TicketView {
   // Every read sets them. Computed on read.
   editable: boolean;
   retroable: boolean;
+  // Stoppable says the human may stop the Ticket's live Claim, and
+  // Resumable that they may resume it, as stop and resume would accept
+  // them. Left out when false, to keep an agent's get_ticket within its
+  // budget. Computed on read.
+  stoppable?: boolean;
+  resumable?: boolean;
   // SilentSince is set while the Ticket is a Silent Claim: In Progress
   // with no activity for 30 minutes. It is the time of the last
   // activity, so the quiet time is now minus it. Computed, never stored.
@@ -1089,6 +1098,11 @@ export interface ClaimInput {
   // leaves them unset.
   working_dir?: string;
   resume_command?: string;
+  // Factory and Host are the Factory's name and host as its Heartbeat
+  // gives them, set only by a Factory; a Claim with them is a Factory
+  // Claim.
+  factory?: string;
+  host?: string;
 }
 
 // FinishInput is finish's input.
@@ -1140,6 +1154,22 @@ export interface SetSessionInput {
 
 // ReleaseInput is release's input; the note is optional.
 export interface ReleaseInput {
+  ticket: string;
+  note?: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// StopInput is stop's input; the note is optional.
+export interface StopInput {
+  ticket: string;
+  note?: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// ResumeInput is resume's input; the note is optional.
+export interface ResumeInput {
   ticket: string;
   note?: string;
   // Full asks for the Ticket in place of the Acknowledgement.
@@ -2155,6 +2185,13 @@ export interface ClaimView {
   model?: string;
   effort?: string;
   started: string;
+  // FactoryClaim is whether a Factory made the Claim; only a Factory
+  // Claim can be Stopped.
+  factory_claim?: boolean;
+  // Stopped is whether the Claim is live with its latest Stop not yet
+  // Resumed.
+  stopped?: boolean;
+  stops?: StopView[];
   // LastActivity is the latest write the Claim's agent made on the Ticket.
   last_activity: string;
   ended?: string;
@@ -2718,6 +2755,12 @@ export interface CIItemTicket {
   spec: string;
 }
 
+// StopView is one Stop of a Claim; Resumed is nil until it is Resumed.
+export interface StopView {
+  stopped: string;
+  resumed?: string;
+}
+
 // QuestionView is one Question: open, answered or dismissed.
 export interface QuestionView {
   number: number;
@@ -3193,6 +3236,20 @@ export const OPERATIONS = {
     bind: { n: "ticket" },
     query: {},
     input: "ReleaseInput",
+  },
+  stop: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/stop",
+    bind: { n: "ticket" },
+    query: {},
+    input: "StopInput",
+  },
+  resume: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/resume",
+    bind: { n: "ticket" },
+    query: {},
+    input: "ResumeInput",
   },
   add_blocker: {
     method: "POST",
@@ -3683,6 +3740,8 @@ export interface OperationInputs {
   reject: RejectInput;
   set_session: SetSessionInput;
   release: ReleaseInput;
+  stop: StopInput;
+  resume: ResumeInput;
   add_blocker: BlockerInput;
   remove_blocker: BlockerInput;
   cancel: CancelInput;

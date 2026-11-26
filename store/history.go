@@ -103,6 +103,7 @@ func HeadOf(t domain.Ticket) domain.TicketHead {
 func cloneHead(h domain.TicketHead) domain.TicketHead {
 	if h.LiveClaim != nil {
 		c := *h.LiveClaim
+		c.Stops = slices.Clone(c.Stops)
 		h.LiveClaim = &c
 	}
 	if h.LatestRound != nil {

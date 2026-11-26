@@ -2,6 +2,7 @@
 // says that no session ID is recorded. Shared by any panel that offers to
 // bring a session back (the Failed panel's report has one too).
 import { useState } from "react";
+import type { TicketView } from "../../api/types";
 import { Button } from "../../controls/Button";
 
 // Session is what a Claim (or a Failure Report's copy of it) records about
@@ -27,7 +28,19 @@ function shellQuote(s: string): string {
   return /^[\w@%+=:,./~-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
-export function ResumeCommand(session: Session) {
+// sessionOf is the session to resume: the live Claim's (set_session keeps
+// it current), its session ID falling back to the one that posted the
+// latest Round.
+export function sessionOf(t: TicketView): Session {
+  const live = t.claims?.find((c) => !c.ended);
+  return {
+    sessionId: live?.session_id || t.rounds?.at(-1)?.session_id || undefined,
+    workingDir: live?.working_dir,
+    resumeCommand: live?.resume_command,
+  };
+}
+
+export function ResumeCommand({ copyLabel = "Copy", ...session }: Session & { copyLabel?: string }) {
   const [copied, setCopied] = useState(false);
   const command = composeResume(session);
   if (!command) {
@@ -44,8 +57,8 @@ export function ResumeCommand(session: Session) {
   return (
     <p className="resume-command">
       <code>{command}</code>{" "}
-      <Button type="button"  onClick={copy}>
-        {copied ? "Copied" : "Copy"}
+      <Button type="button" onClick={copy}>
+        {copied ? "Copied" : copyLabel}
       </Button>
     </p>
   );

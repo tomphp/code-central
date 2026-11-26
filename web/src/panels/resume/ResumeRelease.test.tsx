@@ -1,6 +1,5 @@
 // The Resume-then-Release panel, for an Answered Ticket and a Silent or
-// Long Claim, on the WASM Core through the real App. On a Silent or Long
-// Claim, release reads "Stop".
+// Long Claim, on the WASM Core through the real App.
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -153,7 +152,7 @@ describe("the Resume-then-Release panel", () => {
     expect(within(panel()).getByText("claude --resume sess-round")).toBeInTheDocument();
   });
 
-  it("shows a Long Claim in Needs Me with how long since it last moved, its resume command, and Stop", async () => {
+  it("shows a Long Claim in Needs Me with how long since it last moved, its resume command, and Release", async () => {
     const user = userEvent.setup();
     const { w, id } = await longWorld();
     await renderApp(w, id);
@@ -164,41 +163,41 @@ describe("the Resume-then-Release panel", () => {
     const p = await panel();
     expect(p).toHaveTextContent("Active, but no move for 1h.");
     expect(within(p).getByText("claude --resume sess-42")).toBeInTheDocument();
-    expect(within(p).queryByRole("button", { name: "Release…" })).toBeNull();
+    expect(within(p).queryByRole("button", { name: /^Stop/ })).toBeNull();
 
-    await user.click(within(p).getByRole("button", { name: "Stop…" }));
+    await user.click(within(p).getByRole("button", { name: "Release…" }));
     expect(within(p).getByRole("alert")).toHaveTextContent("a live session's next write will be rejected");
-    await user.click(within(p).getByRole("button", { name: "Stop Claim" }));
+    await user.click(within(p).getByRole("button", { name: "Release Claim" }));
     await settle(w);
     expect(w.calls).toContain("release");
     expect((await w.api.getTicket("acme", id)).state).toBe("Ready");
   });
 
-  it("labels release Stop on a Silent Claim and Release on an Answered Ticket", async () => {
-    const silent = await silentWorld("sess-42");
-    const view = await renderApp(silent.w, silent.id);
-    expect(within(panel()).getByRole("button", { name: "Stop…" })).toBeInTheDocument();
-    view.unmount();
-    const answered = await answeredWorld();
-    await renderApp(answered.w, answered.id);
-    expect(within(panel()).getByRole("button", { name: "Release…" })).toBeInTheDocument();
+  it("labels release Release on a Silent Claim, a Long Claim and an Answered Ticket, never Stop", async () => {
+    for (const build of [() => silentWorld("sess-42"), longWorld, answeredWorld]) {
+      const { w, id } = await build();
+      const view = await renderApp(w, id);
+      expect(within(panel()).getByRole("button", { name: "Release…" })).toBeInTheDocument();
+      expect(within(panel()).queryByRole("button", { name: /Stop/ })).toBeNull();
+      view.unmount();
+    }
   });
 
-  it("warns before stopping a Silent Claim, then sends the note", async () => {
+  it("warns before releasing a Silent Claim, then sends the note", async () => {
     const user = userEvent.setup();
     const { w, id } = await silentWorld("sess-42");
     await renderApp(w, id);
     const p = panel();
     expect(within(p).queryByRole("alert")).toBeNull();
 
-    await user.click(within(p).getByRole("button", { name: "Stop…" }));
+    await user.click(within(p).getByRole("button", { name: "Release…" }));
     const warning = within(p).getByRole("alert");
     expect(warning).toHaveTextContent("a live session's next write will be rejected");
     expect(warning).toHaveTextContent("can't be restored");
     expect(w.calls).not.toContain("release");
 
     await user.type(within(p).getByRole("textbox", { name: "Note (optional)" }), "Session died overnight");
-    await user.click(within(p).getByRole("button", { name: "Stop Claim" }));
+    await user.click(within(p).getByRole("button", { name: "Release Claim" }));
 
     await settle(w);
     expect(w.calls).toContain("release");
@@ -237,10 +236,10 @@ describe("the Resume-then-Release panel", () => {
     await s.human(`${s.ticketPath("acme", id)}/release`, {});
     await renderLive(w, <resumePanel.Component project="acme" ticket={stale} now={w.now()} />);
     const p = panel();
-    await user.click(within(p).getByRole("button", { name: "Stop…" }));
-    await user.click(within(p).getByRole("button", { name: "Stop Claim" }));
+    await user.click(within(p).getByRole("button", { name: "Release…" }));
+    await user.click(within(p).getByRole("button", { name: "Release Claim" }));
     await settle(w);
     expect(within(p).getByText(/release is not allowed/)).toBeInTheDocument();
-    expect(within(p).getByRole("button", { name: "Stop Claim" })).toBeEnabled();
+    expect(within(p).getByRole("button", { name: "Release Claim" })).toBeEnabled();
   });
 });

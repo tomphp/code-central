@@ -73,6 +73,10 @@ $ curl -s -X POST http://localhost:7733/api/p/acme-shop/report_heartbeat \
 
 The Project's `factory_status` carries `plan_limits`, in the same shape: the figures with the latest `observed_at` among its Factories that aren't Offline, left out while none has any. A Factory going Offline drops its figures out at once. New or changed figures count as a change, so the UI refetches; the same figures again don't.
 
+## Stop and Resume
+
+Name your Factory on `claim` (the `factory` field), so Code Central knows which Factory holds the Claim. A human can Stop a live Claim, which marks it Stopped. For a Stopped Claim, stop its Turn, keep the Claim, and don't resume it until it is no longer Stopped; it takes no slot. When the human Resumes it, resume the same session.
+
 ## Waking the poll
 
 A Factory polls for work on its own timer. It can also ask Code Central to say when a poll is worth running, so work is picked up at once instead of on the next tick. This is optional: a Factory that doesn't call it just polls, and Code Central loses nothing.
@@ -98,7 +102,8 @@ A wake comes when a write that a poll acts on happens on the Project:
 - a Ticket's Blockers shrink;
 - a Project setting the Factory reads changes (the base, Landing, CI, Models, Stage Guides, Auto-accept or Archived);
 - an Import lands;
-- a Map's `guided` Tag is turned on.
+- a Map's `guided` Tag is turned on;
+- a live Claim's Stopped mark changes (a human's Stop or Resume).
 
 Comments, Session Events, Usage, Rounds being posted, `finish` to In Review, `claim`, CI Runs, Chat and Options don't wake it. A change between two calls can be missed, so keep polling on your timer as the fallback; a missed wake costs at most one interval. A Code Central too old to have the operation answers not found: stop calling it and poll only.
 

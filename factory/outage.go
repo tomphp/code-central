@@ -148,6 +148,13 @@ func (f *factory) dropCutOff(claimID string) {
 // unless another process holds it or its Model Choice can't be read. It
 // reports whether it resumed.
 func (f *factory) resumeCutOff(ctx context.Context, c claim) bool {
+	return f.resumeSession(ctx, c, "after being cut off", cutOffPrompt(c))
+}
+
+// resumeSession resumes c's session with prompt, saying it resumed after
+// what cut it off, unless another process holds it or its Model Choice
+// can't be read. It reports whether it resumed.
+func (f *factory) resumeSession(ctx context.Context, c claim, after, prompt string) bool {
 	if !f.live(c.ClaimID) {
 		return false
 	}
@@ -159,8 +166,8 @@ func (f *factory) resumeCutOff(ctx context.Context, c claim) bool {
 	if !ok {
 		return false
 	}
-	f.claimf(c, "%s resumed %s after being cut off", c.Ticket, f.about(c))
-	f.startTurn(ctx, c, turnInput{Turn: harness.Turn{Dir: f.repos.worktree(c.Ticket), Resume: true, Prompt: cutOffPrompt(c)}, Choice: mc})
+	f.claimf(c, "%s resumed %s %s", c.Ticket, f.about(c), after)
+	f.startTurn(ctx, c, turnInput{Turn: harness.Turn{Dir: f.repos.worktree(c.Ticket), Resume: true, Prompt: prompt}, Choice: mc})
 	return true
 }
 

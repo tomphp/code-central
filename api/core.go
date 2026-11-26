@@ -149,6 +149,12 @@ type MoveView struct {
 	Cause domain.AutoAcceptCause `json:"cause,omitempty"`
 }
 
+// StopView is one Stop of a Claim; Resumed is nil until it is Resumed.
+type StopView struct {
+	Stopped time.Time  `json:"stopped"`
+	Resumed *time.Time `json:"resumed,omitempty"`
+}
+
 // ClaimView is one Claim as reads show it: never with its Claim ID.
 type ClaimView struct {
 	Number    int    `json:"number"`
@@ -162,6 +168,13 @@ type ClaimView struct {
 	Model   string    `json:"model,omitempty"`
 	Effort  string    `json:"effort,omitempty"`
 	Started time.Time `json:"started"`
+	// FactoryClaim is whether a Factory made the Claim; only a Factory
+	// Claim can be Stopped.
+	FactoryClaim bool `json:"factory_claim,omitempty"`
+	// Stopped is whether the Claim is live with its latest Stop not yet
+	// Resumed.
+	Stopped bool       `json:"stopped,omitempty"`
+	Stops   []StopView `json:"stops,omitempty"`
 	// LastActivity is the latest write the Claim's agent made on the Ticket.
 	LastActivity time.Time  `json:"last_activity"`
 	Ended        *time.Time `json:"ended,omitempty"`
@@ -272,6 +285,12 @@ type TicketView struct {
 	// Every read sets them. Computed on read.
 	Editable  bool `json:"editable"`
 	Retroable bool `json:"retroable"`
+	// Stoppable says the human may stop the Ticket's live Claim, and
+	// Resumable that they may resume it, as stop and resume would accept
+	// them. Left out when false, to keep an agent's get_ticket within its
+	// budget. Computed on read.
+	Stoppable bool `json:"stoppable,omitempty"`
+	Resumable bool `json:"resumable,omitempty"`
 	// SilentSince is set while the Ticket is a Silent Claim: In Progress
 	// with no activity for 30 minutes. It is the time of the last
 	// activity, so the quiet time is now minus it. Computed, never stored.

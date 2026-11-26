@@ -178,6 +178,14 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.Release(human, "acme", api.ReleaseInput{Ticket: "2"})
 		return err
 	},
+	"stop": func(f fixture) error {
+		_, err := f.core.Stop(human, "acme", api.StopInput{Ticket: "2"})
+		return err
+	},
+	"resume": func(f fixture) error {
+		_, err := f.core.Resume(human, "acme", api.ResumeInput{Ticket: "2"})
+		return err
+	},
 	"add_blocker": func(f fixture) error {
 		_, err := f.core.AddBlocker(ctx, "acme", api.BlockerInput{Ticket: "3", Blocker: "2"})
 		return err
