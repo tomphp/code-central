@@ -509,6 +509,9 @@ export interface ProjectView {
   // their Heartbeats, always filled in: offline, with no Factories,
   // until one sends a Heartbeat.
   factory_status: FactoryStatusView;
+  // CheckCommand is the Project's Check Command, the default for each
+  // Repository without its own; empty for none.
+  check_command: string;
   // Repositories are the Project's Repositories in landing order, always
   // filled in: the Home Repository alone until the human adds another.
   repositories: RepositoryView[];
@@ -1332,8 +1335,17 @@ export interface SetFocusKindsInput {
   full?: boolean;
 }
 
+// SetCheckCommandInput is the human's set_check_command(check_command?,
+// full?): the Project's Check Command, left out or empty for none.
+export interface SetCheckCommandInput {
+  check_command?: string;
+  // Full asks for the Project in place of the Acknowledgement.
+  full?: boolean;
+}
+
 // AddRepositoryInput is the human's add_repository(name, clone_url?,
-// base?, local_path?, ci?, landing?, push_remote?, full?): it needs
+// base?, local_path?, ci?, landing?, push_remote?, check_command?,
+// full?): it needs
 // clone_url, local_path or both.
 export interface AddRepositoryInput {
   // Name is the Repository Name, fixed once added.
@@ -1355,15 +1367,17 @@ export interface AddRepositoryInput {
   // PushRemote names the git remote it is pushed to; left out, the
   // Project's.
   push_remote?: string;
+  // CheckCommand is its own Check Command; left out, the Project's.
+  check_command?: string;
   // Full asks for the Project in place of the Acknowledgement.
   full?: boolean;
 }
 
 // EditRepositoryInput is the human's edit_repository(name, clone_url?,
-// base?, local_path?, landing?, push_remote?, full?): each field left out
-// keeps its value. The name only finds the Repository: a Repository Name
-// never changes. The Home Repository takes the landing and push_remote
-// alone.
+// base?, local_path?, landing?, push_remote?, check_command?, full?): each
+// field left out keeps its value. The name only finds the Repository: a
+// Repository Name never changes. The Home Repository takes the landing,
+// push_remote and check_command alone.
 export interface EditRepositoryInput {
   name?: string;
   // CloneURL, set empty, clears it, making the Repository local-only.
@@ -1377,6 +1391,8 @@ export interface EditRepositoryInput {
   landing?: RepositoryLanding;
   // PushRemote, set empty, has it use the Project's.
   push_remote?: string;
+  // CheckCommand, set empty, has it use the Project's.
+  check_command?: string;
   // Full asks for the Project in place of the Acknowledgement.
   full?: boolean;
 }
@@ -1941,6 +1957,11 @@ export interface RepositoryView {
   push_remote: string;
   // OwnPushRemote is whether PushRemote is its own.
   own_push_remote: boolean;
+  // CheckCommand is the Check Command an agent runs in it: its own,
+  // else the Project's, else empty for none.
+  check_command: string;
+  // OwnCheckCommand is whether CheckCommand is its own.
+  own_check_command: boolean;
   // LocalOnlyUnderPullRequest marks a local-only Repository whose
   // Landing is Pull Request, as only a Home that lost its remote can
   // be: nothing lands there until it has another Landing or a remote.
@@ -3355,6 +3376,13 @@ export const OPERATIONS = {
     query: {},
     input: "SetFocusKindsInput",
   },
+  set_check_command: {
+    method: "POST",
+    path: "/api/p/{key}/set_check_command",
+    bind: {},
+    query: {},
+    input: "SetCheckCommandInput",
+  },
   add_repository: {
     method: "POST",
     path: "/api/p/{key}/add_repository",
@@ -3681,6 +3709,7 @@ export interface OperationInputs {
   set_model_assignment: SetModelAssignmentInput;
   set_auto_accept: SetAutoAcceptInput;
   set_focus_kinds: SetFocusKindsInput;
+  set_check_command: SetCheckCommandInput;
   add_repository: AddRepositoryInput;
   edit_repository: EditRepositoryInput;
   remove_repository: RemoveRepositoryInput;

@@ -460,6 +460,10 @@ _Avoid_: CI Ticket, failure Ticket
 The git remote a Landing Method's Push sends work to, `origin` unless the human names another, for the Project (the default) or for a Repository. Its URL in the Home Repository, which is the Home Repository's Clone URL, is reported by the Factory when it starts, and is empty when the clone has no Push remote.
 _Avoid_: Upstream, origin (for the concept)
 
+**Check Command**:
+The shell command an agent runs in a Repository to check its code, such as `npm run check` or `make typecheck`, for the Project (the default) or for a Repository (its own). It is optional, with no default: a Repository's is its own, else the Project's, else none, and with none an agent follows the Repository's own docs. What it covers, a quick type check or the whole suite, is up to the Project.
+_Avoid_: Test command, verify command, CI command
+
 **Blocker**:
 A Ticket in the same Project that must reach Done before another Ticket can be claimed, which an Accepted Ticket waiting on CI doesn't until it lands. Under Land per Spec, a Blocker on the same Spec as the dependant is also cleared once it is Accepted and its work is merged into the Spec Branch. A Blocker that no longer blocks though it isn't Done is cleared, shown as "no longer blocking".
 _Avoid_: Dependency

@@ -87,6 +87,13 @@ var SetSubagentExploration = &Definition[api.SetSubagentExplorationInput, api.Wr
 	Doc:  "Set whether a Stage Guide tells agents to explore with subagents.",
 }
 
+// SetCheckCommand is set_check_command (Spec code-central-1229).
+var SetCheckCommand = &Definition[api.SetCheckCommandInput, api.Written[api.ProjectView]]{
+	Name: "set_check_command", Audience: HumanOnly, Write: true,
+	HTTP: "POST /api/p/{key}/set_check_command",
+	Doc:  "Set the Project's Check Command, the command an agent runs in a Repository to check its code.",
+}
+
 // SetModelAssignment is set_model_assignment.
 var SetModelAssignment = &Definition[api.SetModelAssignmentInput, api.Written[api.ProjectView]]{
 	Name: "set_model_assignment", Audience: HumanOnly, Write: true,
