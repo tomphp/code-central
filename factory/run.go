@@ -19,6 +19,7 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/factory/harness"
 )
 
 // loop polls until ctx ends: the first poll is at once, the rest on a
@@ -593,7 +594,7 @@ func (f *factory) startClaimed(ctx context.Context, in api.ClaimInput, res api.C
 		return true
 	}
 	mc := f.withFlags(stage, res.ModelChoice)
-	f.startTurn(ctx, c, turnInput{Dir: wt, Choice: mc, Prompt: prompt})
+	f.startTurn(ctx, c, turnInput{Turn: harness.Turn{Dir: wt, Prompt: prompt}, Choice: mc})
 	return true
 }
 
@@ -678,7 +679,7 @@ func (f *factory) resumeAnswered(ctx context.Context, c claim) {
 	if decided != "" {
 		prompt += "\n" + decided + "\n"
 	}
-	f.startTurn(ctx, c, turnInput{Dir: f.repos.worktree(c.Ticket), Resume: true, Choice: mc, Prompt: prompt})
+	f.startTurn(ctx, c, turnInput{Turn: harness.Turn{Dir: f.repos.worktree(c.Ticket), Resume: true, Prompt: prompt}, Choice: mc})
 }
 
 // sessionHolder looks through the process list for a process other than

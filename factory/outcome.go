@@ -7,23 +7,23 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/factory/harness"
 )
 
 // afterTurn acts on how a turn ended, and returns the State the Ticket
 // was left in, as the Factory read it or moved it; "" when it read none.
 // A turn the Factory stopped, or one that ended because the Factory is
 // stopping, is left alone.
-func (f *factory) afterTurn(ctx context.Context, t *turn, out turnOutcome) domain.State {
-	if ctx.Err() != nil || out.Kind == turnStopped || t.stopped.Load() {
+func (f *factory) afterTurn(ctx context.Context, t *turn, out harness.Outcome) domain.State {
+	if ctx.Err() != nil || out.Kind == harness.Stopped || t.stopped.Load() {
 		return ""
 	}
 	c := t.claim
-	end := out.End
-	if out.Kind == turnLoginFailed {
+	if out.Kind == harness.LoginFailed {
 		f.stopFor(fmt.Sprintf("claude's login has expired or is missing (authentication_failed, on %s): log in with `claude /login`, then start the Factory again", c.Ticket))
 		return ""
 	}
-	if out.Kind != turnOutage {
+	if out.Kind != harness.Outage {
 		f.turnWentWell(t)
 	}
 	tk, err := f.client.GetTicket(ctx, f.project, api.Ref(c.Ticket))
@@ -31,10 +31,7 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, out turnOutcome) domai
 		f.claimf(c, "%s: get_ticket: %v", c.Ticket, err)
 		return ""
 	}
-	var denials []denial
-	if end.Result != nil {
-		denials = end.Result.PermissionDenials
-	}
+	denials := out.Denials
 	// The Claim may already be dropped by a poll that saw the finish, so
 	// liveness here is read from the Ticket alone.
 	ended, by := claimEnded(tk, c)
@@ -45,7 +42,7 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, out turnOutcome) domai
 			f.commentDenials(ctx, t, denials)
 		}
 		if by == "finish" {
-			f.checkReview(ctx, t, tk, c.Reviewed || end.ReviewCalled)
+			f.checkReview(ctx, t, tk, c.Reviewed || out.ReviewCalled)
 		}
 		if checksFinish(by, tk.State) {
 			if _, failed := checkFinish(ctx, f.repos, f.client, f.project, tk); failed {
@@ -58,10 +55,10 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, out turnOutcome) domai
 		return tk.State
 	}
 	switch {
-	case out.Kind == turnOutage:
-		f.cutOff(c, end.apiError())
-	case out.Kind == turnModelRejected:
-		if f.reportRejectedModel(ctx, t, end) {
+	case out.Kind == harness.Outage:
+		f.cutOff(c, out.ErrorClass)
+	case out.Kind == harness.ModelRejected:
+		if f.reportRejectedModel(ctx, t, out.LastText) {
 			return domain.Failed
 		}
 	case len(denials) > 0:
@@ -69,7 +66,7 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, out turnOutcome) domai
 			return domain.NeedsAnswer
 		}
 	default:
-		if f.reportStuck(ctx, t, end) {
+		if f.reportStuck(ctx, t, out) {
 			return domain.Failed
 		}
 	}
@@ -79,18 +76,18 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, out turnOutcome) domai
 // reportStuck files a Failure Report, as the holder, for a turn that
 // exited on its own with its Claim still In Progress, and reports
 // whether it did.
-func (f *factory) reportStuck(ctx context.Context, t *turn, end turnEnd) bool {
+func (f *factory) reportStuck(ctx context.Context, t *turn, out harness.Outcome) bool {
 	c := t.claim
-	why := "The agent's last text:\n\n" + end.LastText
-	if strings.TrimSpace(end.LastText) == "" {
+	why := "The agent's last text:\n\n" + out.LastText
+	if strings.TrimSpace(out.LastText) == "" {
 		why = "The agent printed no text."
 	}
 	fix := fmt.Sprintf("Read the session (claude --resume %s, in %s) to see why it stopped, fix the cause and send the Ticket back.", c.SessionID, t.dir)
-	if end.Result == nil && len(f.o.claudeArgs) > 0 {
+	if !out.Ended && len(f.o.claudeArgs) > 0 {
 		fix += fmt.Sprintf(" The turn started with the Claude Args %s: if claude rejected one, fix it and restart the Factory.", joinArgs(f.o.claudeArgs))
 	}
 	return f.reportFailure(ctx, c, &failure{api.ReportFailureInput{
-		WhatBroke:       fmt.Sprintf("The turn exited with its Claim still In Progress: %s.", end.how()),
+		WhatBroke:       fmt.Sprintf("The turn exited with its Claim still In Progress: %s.", out.ExitDetail),
 		Why:             why,
 		WhatToFix:       fix,
 		WhereWorkStands: f.whereWorkStands(t.dir),

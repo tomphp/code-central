@@ -76,6 +76,7 @@ import (
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/factory/git"
+	"github.com/tomoram/code-central/factory/harness/claude"
 	"github.com/tomoram/code-central/home"
 )
 
@@ -498,11 +499,11 @@ func start(e Env, o options) (*factory, error) {
 	// The Home Repository is named by the Project Key.
 	home.name = project
 	f.repos.replace(map[string]*repository{project: home}, []*repository{home})
-	claude, ok := e.lookPath("claude")
+	claudePath, ok := e.lookPath("claude")
 	if !ok {
 		return nil, errors.New("claude isn't on PATH")
 	}
-	f.claude = claude
+	f.claude = claudePath
 	if err := refuseClaudeShim(f.claude); err != nil {
 		return nil, err
 	}
@@ -539,7 +540,10 @@ func start(e Env, o options) (*factory, error) {
 	if err := f.checkEffortFlag(); err != nil {
 		return nil, err
 	}
-	f.runner = newTurnRunner(f.claude, e, f.accepts, o.bypass, o.claudeArgs, o.verbose)
+	f.runner = newTurnRunner(claude.New(claude.Options{
+		Path: f.claude, Environ: e.Environ, Stderr: e.Stderr, Clock: e.Clock,
+		Efforts: f.accepts.levels, Bypass: o.bypass, Args: o.claudeArgs,
+	}), e, o.verbose)
 	if err := f.checkClaudeArgsAccepted(); err != nil {
 		return nil, err
 	}

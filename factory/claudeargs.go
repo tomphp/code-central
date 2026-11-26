@@ -71,6 +71,16 @@ func joinArgs(args []string) string {
 	return strings.Join(parts, " ")
 }
 
+// addDirFlags is the --add-dir flags for dirs as a command line ends
+// with them, each after a space, quoted where joinArgs quotes.
+func addDirFlags(dirs []string) string {
+	var b strings.Builder
+	for _, d := range dirs {
+		b.WriteString(" --add-dir " + joinArgs([]string{d}))
+	}
+	return b.String()
+}
+
 // checkClaudeArgsAccepted runs `claude -p <Claude Args>` with empty
 // stdin and no prompt, which makes no model call and leaves no session:
 // claude names an unknown option, or says the input must be provided.

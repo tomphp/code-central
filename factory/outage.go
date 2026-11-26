@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/tomoram/code-central/factory/harness"
 )
 
 // maxBackoff caps the wait between resumes of cut-off turns.
@@ -158,7 +160,7 @@ func (f *factory) resumeCutOff(ctx context.Context, c claim) bool {
 		return false
 	}
 	f.claimf(c, "%s resumed %s after being cut off", c.Ticket, f.about(c))
-	f.startTurn(ctx, c, turnInput{Dir: f.repos.worktree(c.Ticket), Resume: true, Choice: mc, Prompt: cutOffPrompt(c)})
+	f.startTurn(ctx, c, turnInput{Turn: harness.Turn{Dir: f.repos.worktree(c.Ticket), Resume: true, Prompt: cutOffPrompt(c)}, Choice: mc})
 	return true
 }
 

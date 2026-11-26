@@ -10,6 +10,7 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/factory/harness"
 )
 
 // startTurn runs c's Turn in, which says where it runs, whether it
@@ -52,17 +53,17 @@ func (f *factory) startTurn(ctx context.Context, c claim, in turnInput) {
 		defer f.endTurn(t)
 		defer cancel()
 		out := f.runner.run(stop, in)
-		if out.Kind == turnEffortRejected || out.StartErr != nil {
+		if out.Kind == harness.EffortRejected || out.StartErr != nil {
 			// The slot is held while the report is filed, so no poll acts
 			// on the Claim meanwhile.
-			if out.Kind == turnEffortRejected {
-				f.reportRejectedEffort(ctx, c, in.Dir, in.Choice, out.Levels)
+			if out.Kind == harness.EffortRejected {
+				f.reportRejectedEffort(ctx, c, in.Dir, in.Choice, out.Efforts)
 			}
 			f.freeSlot(c)
 			f.forgetEnded(c)
 			return
 		}
-		if out.End.ReviewCalled && !c.Reviewed {
+		if out.ReviewCalled && !c.Reviewed {
 			if err := f.updateClaim(c.ClaimID, func(c *claim) { c.Reviewed = true }); err != nil {
 				f.claimf(c, "%s: can't write the state file: %v", c.Ticket, err)
 			}
@@ -75,7 +76,7 @@ func (f *factory) startTurn(ctx context.Context, c claim, in turnInput) {
 			f.holdBack(c.Ticket)
 		}
 		f.freeSlot(c)
-		f.turnEnded(t, out.End, state, ran)
+		f.turnEnded(t, out, state, ran)
 		f.forgetEnded(c)
 	}()
 }
