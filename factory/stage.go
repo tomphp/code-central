@@ -8,6 +8,7 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/factory/harness"
 )
 
 // stageGuide is the Stage Guide from the claim, or, from a service whose
@@ -181,16 +182,15 @@ func (f *factory) conflictFiles(r *repository, stage string, tk api.TicketView) 
 const mapResearch = "map-research"
 
 // firstPrompt is the prompt that starts a Claim's first turn: the
-// guide's skill as a slash command with the Ticket's ID alone as its
-// arguments, since Claude Code repeats a skill's arguments in the expanded
-// skill. A guide that starts no skill is pointed at the system prompt
+// guide's skill as the Harness runs one, with the Ticket's ID alone as its
+// arguments. A guide that starts no skill is pointed at the system prompt
 // (systemPrompt), which holds everything else.
 //
 // A conflict Claim (conflicts non-empty) starts no skill: the prompt
 // holds the instructions for resolving a merge of the base into the
 // Ticket's branch, or a rebase of the branch onto the base when rebase,
 // Rebase being in force (ADR 0067), which is all the work there is.
-func firstPrompt(c claim, stage, base string, conflicts []string, rebase bool) string {
+func firstPrompt(h harness.Prompts, c claim, stage, base string, conflicts []string, rebase bool) string {
 	if len(conflicts) > 0 {
 		var b strings.Builder
 		do := fmt.Sprintf("Merge %s into the branch", base)
@@ -205,7 +205,7 @@ func firstPrompt(c claim, stage, base string, conflicts []string, rebase bool) s
 		return b.String()
 	}
 	if sk := stageSkills[stage]; sk.skill != "" {
-		return fmt.Sprintf("/%s %s", sk.skill, c.Ticket)
+		return h.SkillPrompt(sk.skill, c.Ticket)
 	}
 	return fmt.Sprintf("Work Ticket %s, as the Factory's instructions and its Stage Guide in your system prompt say.", c.Ticket)
 }
@@ -214,8 +214,8 @@ func firstPrompt(c claim, stage, base string, conflicts []string, rebase bool) s
 // several Repositories (ADR 0048): a conflict Claim's names the files
 // conflicting in each Repository, and either ends with the Repositories
 // list, where the session finds each one.
-func severalFirstPrompt(c claim, stage string, ws worktreeSet, conflicts []conflict, rebase bool) string {
-	p := firstPrompt(c, stage, "", nil, false)
+func severalFirstPrompt(h harness.Prompts, c claim, stage string, ws worktreeSet, conflicts []conflict, rebase bool) string {
+	p := firstPrompt(h, c, stage, "", nil, false)
 	if len(conflicts) > 0 {
 		var b strings.Builder
 		do := "merge its base into the branch"
@@ -259,14 +259,14 @@ func repositoriesList(ws worktreeSet) string {
 //
 // For a conflict Claim (conflicts non-empty) the Stage Guide is replaced
 // by a short finish instruction, since the first prompt holds the work.
-func systemPrompt(c claim, stage, wt string, g api.StageGuideView, conflicts []string) string {
-	return claimIntro(c, stage, wt) + guideOrFinish(g, len(conflicts) > 0)
+func systemPrompt(h harness.Prompts, c claim, stage, wt string, g api.StageGuideView, conflicts []string) string {
+	return claimIntro(h, c, stage, wt) + guideOrFinish(g, len(conflicts) > 0)
 }
 
 // severalSystemPrompt is systemPrompt for a Claim with its worktrees ws
 // in several Repositories (ADR 0048): it adds where they are and how to
 // commit in them and finish, before the guide.
-func severalSystemPrompt(c claim, stage string, ws worktreeSet, g api.StageGuideView, conflicted bool) string {
+func severalSystemPrompt(h harness.Prompts, c claim, stage string, ws worktreeSet, g api.StageGuideView, conflicted bool) string {
 	var several string
 	if branch := workBranch(stage, c.Ticket); branch != "" {
 		several = fmt.Sprintf("This Project has several Repositories, and this Ticket has a worktree in each on branch %s, listed at the end of your first prompt; this session starts in the Home Repository's. Commit each Repository's changes in its own worktree, on branch %s, and finish with `repositories`: one entry for each Repository you committed in, with its branch and head commit.", branch, branch)
@@ -277,12 +277,12 @@ func severalSystemPrompt(c claim, stage string, ws worktreeSet, g api.StageGuide
 	if conflicted {
 		end = "\n\n" + severalConflictFinish
 	}
-	return claimIntro(c, stage, ws.home().path) + "\n\n" + several + end
+	return claimIntro(h, c, stage, ws.home().path) + "\n\n" + several + end
 }
 
 // claimIntro starts a Claim's system prompt: its Ticket and Claim, and
 // how the Factory runs it in its worktree wt.
-func claimIntro(c claim, stage, wt string) string {
+func claimIntro(h harness.Prompts, c claim, stage, wt string) string {
 	var b strings.Builder
 	sk := stageSkills[stage]
 	fmt.Fprintf(&b, "Ticket: %s\nClaim: %s\n\n", c.Ticket, c.ClaimID)
@@ -307,7 +307,12 @@ func claimIntro(c claim, stage, wt string) string {
 			b.WriteString("\n\n" + sessionLogs)
 		}
 	}
-	fmt.Fprintf(&b, "\n\nYour first call is `get_ticket` with `ticket: %s`. The code-central tools are deferred: load their schemas with ToolSearch (`select:mcp__code-central__get_ticket,...`) before you call them, and pass `ticket` on the writes that take it.", c.Ticket)
+	fmt.Fprintf(&b, "\n\nYour first call is `get_ticket` with `ticket: %s`.", c.Ticket)
+	if note := h.ToolLoadingNote(); note != "" {
+		fmt.Fprintf(&b, " %s, and pass `ticket` on the writes that take it.", note)
+	} else {
+		b.WriteString(" Pass `ticket` on the writes that take it.")
+	}
 	return b.String()
 }
 

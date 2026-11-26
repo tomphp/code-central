@@ -15,9 +15,35 @@ import (
 
 // Harness runs Turns of one coding-agent CLI.
 type Harness interface {
+	Prompts
 	// Run runs t to its end, stopping it when ctx ends, and says how it
 	// ended once its process has exited and its output has been read.
 	Run(ctx context.Context, t Turn) Outcome
+	// Denials is how the Harness turns the calls a Turn had denied into
+	// the rules that allow them on resume; nil for a Harness with no
+	// denial list, whose Turns end in no denial Round.
+	Denials() DenialRules
+}
+
+// Prompts is the Harness's part of a Stage's prompts.
+type Prompts interface {
+	// SkillPrompt is the first prompt that runs the Stage skill, given
+	// the Ticket's ID alone as its arguments.
+	SkillPrompt(skill, args string) string
+	// ToolLoadingNote is what the claim intro says of loading the Code
+	// Central tools before calling them, as a clause that a sentence
+	// goes on from; empty when the Harness needs none.
+	ToolLoadingNote() string
+}
+
+// DenialRules is how a Harness allows the calls it denied.
+type DenialRules interface {
+	// Rule is the rule that allows d, as a Turn's AllowedTools holds it.
+	Rule(d Denial) string
+	// RuleName is what the Harness calls a rule, and RuleExample one
+	// the human could answer with.
+	RuleName() string
+	RuleExample() string
 }
 
 // Turn is one run of a Harness: where and as what it runs, and where
