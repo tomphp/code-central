@@ -1,15 +1,13 @@
 // Claude Args (Spec code-central-516): what follows -- on the Factory's
 // command line is claude flags the Factory passes, as given, to every
-// start and resume. The Factory refuses the ones it sets itself and
-// checks at startup that claude accepts the rest.
+// start and resume. The Harness refuses the ones the Factory sets itself
+// and checks at startup that claude accepts the rest.
 
 package claude
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/tomoram/code-central/factory/harness"
@@ -69,10 +67,8 @@ func (h *Harness) VerifyArgs(dir string, warnf func(string, ...any)) error {
 	if len(h.o.Args) == 0 {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), helpTimeout)
+	cmd, cancel := h.probe(dir, append([]string{"-p"}, h.o.Args...)...)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, h.o.Path, append([]string{"-p"}, h.o.Args...)...)
-	cmd.Dir, cmd.Env = dir, h.o.Environ
 	out, err := cmd.CombinedOutput()
 	text := strings.TrimSpace(string(out))
 	for line := range strings.Lines(text) {

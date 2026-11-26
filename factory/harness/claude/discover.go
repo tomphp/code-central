@@ -19,14 +19,21 @@ import (
 // hangs.
 const helpTimeout = 30 * time.Second
 
+// probe is claude run with args in dir, bounded by helpTimeout: cancel it
+// when done.
+func (h *Harness) probe(dir string, args ...string) (*exec.Cmd, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(context.Background(), helpTimeout)
+	cmd := exec.CommandContext(ctx, h.o.Path, args...)
+	cmd.Dir, cmd.Env = dir, h.o.Environ
+	return cmd, cancel
+}
+
 // Discover runs claude --help in dir and reads the effort levels and
 // model aliases from it, warning of what it can't find. A claude that
 // can't print its help is warned of too: nothing here is fatal.
 func (h *Harness) Discover(dir string, warnf func(string, ...any)) harness.Accepts {
-	ctx, cancel := context.WithTimeout(context.Background(), helpTimeout)
+	cmd, cancel := h.probe(dir, "--help")
 	defer cancel()
-	cmd := exec.CommandContext(ctx, h.o.Path, "--help")
-	cmd.Dir, cmd.Env = dir, h.o.Environ
 	out, err := cmd.Output()
 	if err != nil {
 		warnf("warning: can't run claude --help (%v), so there are no effort levels or model aliases to report, and --effort isn't checked", err)

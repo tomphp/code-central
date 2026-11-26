@@ -51,8 +51,8 @@ func (f *factory) withFlags(kind string, mc *api.ModelChoice) turnChoice {
 }
 
 // describe names where the value name ("model" or "effort") was set, and
-// says how to change it there to one that claude accepts, as accepted
-// puts it.
+// says how to change it there to one that the Harness accepts, as
+// accepted puts it.
 func (s choiceFrom) describe(name, accepted string) (where, fix string) {
 	switch s.source {
 	case sourceFlag:
@@ -73,9 +73,9 @@ func (s choiceFrom) describe(name, accepted string) (where, fix string) {
 }
 
 // reportRejectedEffort files a Failure Report for c, whose turn the Turn
-// runner didn't start because tm's effort isn't one of the levels claude
-// accepts, naming it and where it was set: claude ignores an effort it
-// doesn't accept and runs at its default.
+// runner didn't start because tm's effort isn't one of the levels the
+// Harness accepts, naming it and where it was set: claude ignores an
+// effort it doesn't accept and runs at its default.
 func (f *factory) reportRejectedEffort(ctx context.Context, c claim, dir string, tm turnChoice, levels []string) {
 	list := strings.Join(levels, ", ")
 	name := f.harness.Name()

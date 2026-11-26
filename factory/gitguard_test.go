@@ -28,8 +28,7 @@ type gitGuardAllow struct {
 }
 
 var gitGuardAllowlist = []gitGuardAllow{
-	{file: "harness/claude/discover.go", program: "h.o.Path", why: "reads claude --help"},
-	{file: "harness/claude/args.go", program: "h.o.Path", why: "checks the Claude Args"},
+	{file: "harness/claude/discover.go", program: "h.o.Path", why: "reads claude --help and checks the Claude Args"},
 	{file: "harness/claude/claude.go", program: "h.o.Path", why: "runs a turn"},
 	{file: "process_unix.go", program: "ps", why: "lists the processes"},
 }
