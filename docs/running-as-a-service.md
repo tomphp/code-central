@@ -55,7 +55,7 @@ Building from source instead: `make build && cp bin/code-central bin/code-centra
 
 `service restart` restarts the installed service. The service never watches for its binary being replaced, so the restart is what picks up the new version. A restart loses nothing: Claims, Rounds and all other state live in the store, the service finishes in-flight writes before it stops (on Windows `/End` terminates it instead, which loses nothing either, because every write is flushed before it is acknowledged), and `code-central wait` retries until the service is back. Keep restarts short, because Claude Code marks an MCP server failed after about 31 seconds.
 
-Until you restart, a newer hook or CLI may send a field the old service doesn't know, and the call fails with `invalid JSON: json: unknown field "<name>"`. Since the service learned to name the versions (see [Versions](#versions)), that error names both and says to run `code-central service restart`. A service from before that change doesn't know `client_version` itself, so a new hook's first `claim`, `set_session` or `post_round` fails once on `unknown field "client_version"` with no hint. Restarting the service fixes it.
+Until you restart, a newer hook or CLI may send a field the old service doesn't know, and the call fails with `invalid JSON: json: unknown field "<name>"`. Since the service learned to name the versions (see [Versions](#versions)), that error names both and says to run `code-central service restart`. A service from before that change doesn't know `client_version` itself, so a new hook's first `claim` or `set_session` that it changes fails once on `unknown field "client_version"` with no hint. Restarting the service fixes it.
 
 ### The store is migrated at startup
 
@@ -91,7 +91,7 @@ The old binary refuses the upgraded store (`unknown format`), so you can't run i
 
 ### When to run `init` again
 
-Files written by an older `init` keep working: the `.mcp.json` URL, the port, the MCP server name and the hook commands (`code-central hook session-id`, `code-central ping`) never change within v1, and the generated `docs/agents/` files name operations only, which v1 changes additively. Nothing detects stale files, so run `code-central init` again in a repository when:
+Files written by an older `init` keep working: the `.mcp.json` URL, the port, the MCP server name and the hook commands (`code-central hook session-id`, `code-central ping`) never change within v1 (the hook's matcher does: running `init` again drops `post_round` from it, and until then the hook does nothing for `post_round`), and the generated `docs/agents/` files name operations only, which v1 changes additively. Nothing detects stale files, so run `code-central init` again in a repository when:
 
 - the release notes mention new or changed teaching files, hooks or `docs/agents/` content, or
 - you want the generated files' header comment to record the current version.
