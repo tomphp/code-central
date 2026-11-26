@@ -650,7 +650,8 @@ export interface TicketView {
   retroable: boolean;
   // Stoppable says the human may stop the Ticket's live Claim, and
   // Resumable that they may resume it, as stop and resume would accept
-  // them. Computed on read.
+  // them. Left out when false, to keep an agent's get_ticket within its
+  // budget. Computed on read.
   stoppable?: boolean;
   resumable?: boolean;
   // SilentSince is set while the Ticket is a Silent Claim: In Progress

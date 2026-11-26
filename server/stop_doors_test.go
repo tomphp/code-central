@@ -19,7 +19,7 @@ func init() {
 			setup: factoryClaimedTicket,
 			ok:    call{http: httpCall{"POST", "/api/p/acme/tickets/3/stop", `{"note":"Wrong approach."}`}},
 			check: ticketAcknowledgement("acme-3", "In Progress", "claims", "comments", "stoppable", "resumable"),
-			full:  isSet("resumable"),
+			full:  trueField("resumable"),
 			bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/2/stop", `{}`}},
 			code:  api.ActionNotAllowed,
 		},
@@ -27,7 +27,7 @@ func init() {
 			setup: stoppedTicket,
 			ok:    call{http: httpCall{"POST", "/api/p/acme/tickets/3/resume", `{}`}},
 			check: ticketAcknowledgement("acme-3", "In Progress", "claims", "stoppable", "resumable"),
-			full:  isSet("stoppable"),
+			full:  trueField("stoppable"),
 			bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/2/resume", `{}`}},
 			code:  api.ActionNotAllowed,
 		},
@@ -69,8 +69,8 @@ func TestStopAndResumeAreRefusedForAnAgent(t *testing.T) {
 	}
 }
 
-// isSet checks the record has name set.
-func isSet(name string) func(*testing.T, map[string]any) {
+// trueField checks the record's name is true.
+func trueField(name string) func(*testing.T, map[string]any) {
 	return func(t *testing.T, out map[string]any) {
 		t.Helper()
 		boolField(t, out, name, true)

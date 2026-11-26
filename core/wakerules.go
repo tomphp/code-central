@@ -36,20 +36,20 @@ func blockersShrank(was, t domain.Ticket) bool {
 // action other than its holder's own, such as cancel, release or a move
 // by hand: the Factory may be running its turn, and has a slot back.
 func claimWithdrawn(was, t domain.Ticket) bool {
-	_, now, ok := liveClaimNow(was, t)
-	return ok && !now.Live() && !isHolderAction(now.EndedBy)
+	_, after, ok := liveClaimBeforeAndAfter(was, t)
+	return ok && !after.Live() && !isHolderAction(after.EndedBy)
 }
 
 // stoppedMarkChanged says whether the Claim live on was is still live on
 // t and was Stopped or Resumed: the Factory stops its turn, or takes the
 // Claim up again.
 func stoppedMarkChanged(was, t domain.Ticket) bool {
-	before, now, ok := liveClaimNow(was, t)
-	return ok && now.Live() && now.Stopped() != before.Stopped()
+	before, after, ok := liveClaimBeforeAndAfter(was, t)
+	return ok && after.Live() && after.Stopped() != before.Stopped()
 }
 
-// liveClaimNow is the Claim live on was, before and as t holds it.
-func liveClaimNow(was, t domain.Ticket) (before, now domain.Claim, ok bool) {
+// liveClaimBeforeAndAfter is the Claim live on was, as was and t hold it.
+func liveClaimBeforeAndAfter(was, t domain.Ticket) (before, after domain.Claim, ok bool) {
 	live, ok := liveClaim(was)
 	if !ok {
 		return domain.Claim{}, domain.Claim{}, false

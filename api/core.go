@@ -287,7 +287,8 @@ type TicketView struct {
 	Retroable bool `json:"retroable"`
 	// Stoppable says the human may stop the Ticket's live Claim, and
 	// Resumable that they may resume it, as stop and resume would accept
-	// them. Computed on read.
+	// them. Left out when false, to keep an agent's get_ticket within its
+	// budget. Computed on read.
 	Stoppable bool `json:"stoppable,omitempty"`
 	Resumable bool `json:"resumable,omitempty"`
 	// SilentSince is set while the Ticket is a Silent Claim: In Progress
