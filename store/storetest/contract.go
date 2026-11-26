@@ -318,6 +318,7 @@ func Run(t *testing.T, f Factory) {
 	runCI(t, f)
 	runGitHubIssues(t, f)
 	runAzureBoards(t, f)
+	runCheckCommand(t, f)
 	runAwaitingTriage(t, f)
 	runCIRuns(t, f)
 	runUsage(t, f)

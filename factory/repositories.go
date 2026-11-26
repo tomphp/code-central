@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
@@ -64,6 +65,9 @@ type repository struct {
 	// Request, as only a Home that lost its remote can be: nothing lands
 	// in it.
 	localOnlyUnderPullRequest bool
+	// check is its effective Check Command, as the Project lists it, which
+	// turns read from their own goroutines.
+	check atomic.Pointer[string]
 	// problem says why it is Repository missing; empty while its clone is
 	// ready.
 	problem string
@@ -72,10 +76,20 @@ type repository struct {
 }
 
 // listedAs takes from v, r as the Project lists it, what every poll
-// reads again: its Push remote, and whether it is local-only, and so
-// under Pull Request.
+// reads again: its Push remote, whether it is local-only, and so under
+// Pull Request, and its effective Check Command.
 func (r *repository) listedAs(v api.RepositoryView) {
 	r.remote, r.localOnly, r.localOnlyUnderPullRequest = v.PushRemote, v.LocalOnly, v.LocalOnlyUnderPullRequest
+	r.check.Store(&v.CheckCommand)
+}
+
+// checkInstruction is what a conflict prompt tells the agent to check
+// r's resolution with: its Check Command, else its own docs.
+func (r *repository) checkInstruction() string {
+	if c := r.check.Load(); c != nil && *c != "" {
+		return fmt.Sprintf("Run `%s` and the tests the resolution touches.", *c)
+	}
+	return "Run the Repository's checks and the tests the resolution touches, as its own docs (such as CLAUDE.md or README) describe."
 }
 
 // policy is r's Landing Policy among the Project's, policies, which every

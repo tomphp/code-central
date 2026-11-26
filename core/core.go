@@ -418,7 +418,7 @@ func (c *Core) projectView(p domain.Project) api.ProjectView {
 		Landing: landingViewWith(p, c.watchers.view(watcherKey{api.WatcherPullRequests, p.Key}, now)), CI: ciView(p, c.watchers.view(watcherKey{api.WatcherCI, p.Key}, now)),
 		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{api.WatcherIssues, p.Key}, now)), AzureBoards: azureBoardsView(p, c.watchers.view(watcherKey{api.WatcherWorkItems, p.Key}, now)), Models: modelsView(p.Models),
 		ReportedModels: reportedModelsView(p.ReportedModels), StageGuides: stageGuidesView(p.StageGuides), AutoAccept: autoAcceptView(p),
-		FocusKinds: focusKindsView(p.FocusKindsOff), FactoryStatus: c.factories.FactoryStatus(p.Key, c.clock.Now()), Repositories: repositoriesView(p)}
+		FocusKinds: focusKindsView(p.FocusKindsOff), FactoryStatus: c.factories.FactoryStatus(p.Key, c.clock.Now()), CheckCommand: p.CheckCommand, Repositories: repositoriesView(p)}
 	c.fillClones(p.Key, v.Repositories)
 	if !p.Archived.IsZero() {
 		at := p.Archived
