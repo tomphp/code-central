@@ -266,6 +266,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.SetSubagentExploration(human, "acme", api.SetSubagentExplorationInput{On: false})
 		return err
 	},
+	"set_check_command": func(f fixture) error {
+		_, err := f.core.SetCheckCommand(human, "acme", api.SetCheckCommandInput{CheckCommand: "make check"})
+		return err
+	},
 	"set_auto_accept": func(f fixture) error {
 		_, err := f.core.SetAutoAccept(human, "acme", api.SetAutoAcceptInput{Kinds: map[domain.AutoAcceptKind]bool{domain.AutoAcceptImplementation: true}})
 		return err

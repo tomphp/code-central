@@ -62,12 +62,15 @@ type projectFile struct {
 	// AutoAccept is the Auto-accept kinds that are on, left out while
 	// every kind is off.
 	AutoAccept []string `yaml:"auto_accept,omitempty"`
+	// CheckCommand is left out while the Project has none.
+	CheckCommand string `yaml:"check_command,omitempty"`
 	// Repositories is left out while the Home Repository is the only one.
 	Repositories []repositoryFile `yaml:"repositories,omitempty"`
 }
 
 // repositoryFile is one of a Project's Repositories, in landing order.
-// The Home Repository's holds only its name, Own Landing and Push remote.
+// The Home Repository's holds only its name, Own Landing, Push remote and
+// Check Command.
 type repositoryFile struct {
 	Name      string `yaml:"name"`
 	Home      bool   `yaml:"home,omitempty"`
@@ -79,6 +82,8 @@ type repositoryFile struct {
 	Landing *ownLandingFile `yaml:"landing,omitempty"`
 	// PushRemote is left out while it uses the Project's.
 	PushRemote string `yaml:"push_remote,omitempty"`
+	// CheckCommand is left out while it uses the Project's.
+	CheckCommand string `yaml:"check_command,omitempty"`
 }
 
 // ownLandingFile is a Repository's Own Landing.
@@ -851,7 +856,7 @@ func projectFileOf(r domain.Project) projectFile {
 	return projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI),
 		GitHubIssues: encodeGitHubIssues(r.GitHubIssues), AzureBoards: encodeAzureBoards(r.AzureBoards), Models: encodeModels(r.Models),
 		ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), FocusKindsOff: r.FocusKindsOff, CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec, SmallChangesSpec: r.SmallChangesSpec, RetrosSpec: r.RetrosSpec, AutoAccept: encodeAutoAccept(r.AutoAccept),
-		Repositories: encodeRepositories(r.Repositories)}
+		CheckCommand: r.CheckCommand, Repositories: encodeRepositories(r.Repositories)}
 }
 
 func optionsFileOf(r domain.Options) optionsFile {
@@ -1099,11 +1104,12 @@ func encodeAutoAccept(kinds []domain.AutoAcceptKind) []string {
 }
 
 // encodeRepositories is the Repositories as project.yaml holds them, the
-// Home Repository's with its name, Own Landing and Push remote alone.
+// Home Repository's with its name, Own Landing, Push remote and Check
+// Command alone.
 func encodeRepositories(rs []domain.Repository) []repositoryFile {
 	var out []repositoryFile
 	for _, r := range rs {
-		f := repositoryFile{Name: r.Name, Home: r.Home, PushRemote: r.PushRemote}
+		f := repositoryFile{Name: r.Name, Home: r.Home, PushRemote: r.PushRemote, CheckCommand: r.CheckCommand}
 		if !r.Home {
 			f.CloneURL, f.Base, f.LocalPath = r.CloneURL, r.Base, r.LocalPath
 		}
@@ -1117,8 +1123,8 @@ func encodeRepositories(rs []domain.Repository) []repositoryFile {
 
 // decodeRepositories checks a Project's Repositories as load does: each
 // Name is unique, the Home Repository, named key, is listed once with
-// nothing more than an Own Landing and a Push remote, every other keeps
-// the Repository Name rules and has a Clone URL or a local path and a
+// nothing more than an Own Landing, a Push remote and a Check Command,
+// every other keeps the Repository Name rules and has a Clone URL or a local path and a
 // Base, and each Own Landing names a Landing Method, with Pull Request's
 // Push normalised away. The Home Repository's name is the Project Key,
 // which keeps the key's own rules. It returns the offending field,
@@ -1149,9 +1155,9 @@ func decodeRepositories(key string, fs []repositoryFile) ([]domain.Repository, s
 				return nil, field + ".name", fmt.Errorf("the Home Repository is named by the Project Key %q, not %q", key, f.Name)
 			}
 			if f.CloneURL != "" || f.Base != "" || f.LocalPath != "" {
-				return nil, field, errors.New("the Home Repository holds only its name, Own Landing and Push remote: its Clone URL is reported and its Base is the Project's")
+				return nil, field, errors.New("the Home Repository holds only its name, Own Landing, Push remote and Check Command: its Clone URL is reported and its Base is the Project's")
 			}
-			out = append(out, domain.Repository{Name: f.Name, Home: true, OwnLanding: own, PushRemote: f.PushRemote})
+			out = append(out, domain.Repository{Name: f.Name, Home: true, OwnLanding: own, PushRemote: f.PushRemote, CheckCommand: f.CheckCommand})
 			continue
 		}
 		if f.CloneURL == "" && f.LocalPath == "" {
@@ -1160,7 +1166,7 @@ func decodeRepositories(key string, fs []repositoryFile) ([]domain.Repository, s
 		if f.Base == "" {
 			return nil, field + ".base", errors.New("missing")
 		}
-		out = append(out, domain.Repository{Name: f.Name, CloneURL: f.CloneURL, Base: f.Base, LocalPath: f.LocalPath, OwnLanding: own, PushRemote: f.PushRemote})
+		out = append(out, domain.Repository{Name: f.Name, CloneURL: f.CloneURL, Base: f.Base, LocalPath: f.LocalPath, OwnLanding: own, PushRemote: f.PushRemote, CheckCommand: f.CheckCommand})
 	}
 	if homes != 1 {
 		return nil, "", fmt.Errorf("lists the Home Repository %d times, want once", homes)
@@ -1498,6 +1504,7 @@ func projectOf(pf projectFile) (domain.Project, *LoadError) {
 	p.CIFixesSpec = pf.CIFixesSpec
 	p.SmallChangesSpec = pf.SmallChangesSpec
 	p.RetrosSpec = pf.RetrosSpec
+	p.CheckCommand = pf.CheckCommand
 	for i, k := range pf.AutoAccept {
 		kind := domain.AutoAcceptKind(k)
 		if !kind.Valid() {

@@ -446,8 +446,11 @@ export function projectSettingsContract(driver: () => Driver) {
     // A local path is absolute where Core runs, as d.absolutePath is.
     const local = (name: string) => d.absolutePath.replace(/[^\\/]+$/, name);
     // A Repository follows the Default Landing with the Project's Push
-    // remote until it has its own.
-    const following = { landing: "merge", own_landing: false, push_remote: "origin", own_push_remote: false, local_only_under_pull_request: false };
+    // remote and Check Command until it has its own.
+    const following = {
+      landing: "merge", own_landing: false, push_remote: "origin", own_push_remote: false, check_command: "", own_check_command: false,
+      local_only_under_pull_request: false,
+    };
     // The Home isn't local-only until the Factory reports its clone has no
     // Push remote; its CI, filled in from no Clone URL, is Not watched.
     expect((await d.api.listProjects())[0].repositories).toEqual([
@@ -484,6 +487,42 @@ export function projectSettingsContract(driver: () => Driver) {
     const order = await d.api.setLandingOrder("acme", ["api"]).catch((e) => e);
     expect(order).toMatchObject({ status: 422, code: "invalid", field: "names" });
     expect(await d.api.editRepository("acme", "web", { base: "main" }).catch((e) => e)).toMatchObject({ status: 404, code: "not_found" });
+  });
+
+  it("sets a Project's Check Command, trimmed, none to begin with, and clears it", async () => {
+    await d.createProject("acme", "Acme");
+    expect((await d.api.listProjects())[0].check_command).toBe("");
+    expect((await d.api.setCheckCommand("acme", " make typecheck ")).check_command).toBe("make typecheck");
+    expect((await d.api.listProjects())[0].check_command).toBe("make typecheck");
+    expect((await d.api.setCheckCommand("acme", "")).check_command).toBe("");
+
+    const twoLines = await d.api.setCheckCommand("acme", "make\ntest").catch((e) => e);
+    expect(twoLines).toMatchObject({ status: 422, code: "invalid", field: "check_command" });
+    expect(twoLines.message).toContain("line break");
+    expect(twoLines.fix).toBeTruthy();
+  });
+
+  it("resolves a Repository's Check Command to its own, else the Project's, else none, for the Home too", async () => {
+    await d.createProject("acme", "Acme");
+    const checkOf = (p: { repositories: { name: string; check_command: string; own_check_command: boolean }[] }) =>
+      Object.fromEntries(p.repositories.map((r) => [r.name, [r.check_command, r.own_check_command]]));
+
+    expect(checkOf(await d.api.addRepository("acme", { name: "web", clone_url: "git@github.com:acme/web.git", check_command: " npm run check " }))).toEqual({
+      acme: ["", false],
+      web: ["npm run check", true],
+    });
+    expect(checkOf(await d.api.setCheckCommand("acme", "make check"))).toEqual({ acme: ["make check", false], web: ["npm run check", true] });
+    expect(checkOf(await d.api.editRepository("acme", "acme", { check_command: "make typecheck" }))).toEqual({
+      acme: ["make typecheck", true],
+      web: ["npm run check", true],
+    });
+    // Left out on edit, it is unchanged; set empty, it follows the Project's.
+    expect(checkOf(await d.api.editRepository("acme", "web", { landing: "branch" }))).toMatchObject({ web: ["npm run check", true] });
+    expect(checkOf(await d.api.editRepository("acme", "web", { check_command: "" }))).toMatchObject({ web: ["make check", false] });
+    expect(checkOf(await d.api.setCheckCommand("acme", ""))).toEqual({ acme: ["make typecheck", true], web: ["", false] });
+
+    const twoLines = await d.api.editRepository("acme", "acme", { check_command: "make\rcheck" }).catch((e) => e);
+    expect(twoLines).toMatchObject({ status: 422, code: "invalid", field: "check_command" });
   });
 
   it("sets a Project's Azure Pipelines settings, validating them by provider", async () => {
