@@ -22,6 +22,9 @@ import (
 // every Turn needs, none of the Factory's Claims, client or poster.
 type turnRunner struct {
 	harness harness.Harness
+	// caps are what the Harness declares; what it reports of a feature it
+	// doesn't declare is dropped.
+	caps harness.Capabilities
 	// killGrace is how long a Turn being stopped has after each stop step
 	// but the last (stopSteps).
 	killGrace time.Duration
@@ -39,7 +42,7 @@ func newTurnRunner(h harness.Harness, e Env, verbose bool) *turnRunner {
 	if clk == nil {
 		clk = clock.System{}
 	}
-	return &turnRunner{harness: h, killGrace: e.killGrace(), verbose: verbose, clock: clk, work: work{e.Work}}
+	return &turnRunner{harness: h, caps: h.Capabilities(), killGrace: e.killGrace(), verbose: verbose, clock: clk, work: work{e.Work}}
 }
 
 // turnInput is one Turn: the Harness's Turn, its Model Choice, and how
@@ -76,7 +79,12 @@ func (r *turnRunner) run(stop context.Context, in turnInput) harness.Outcome {
 		}
 	}
 	t.Exec = r.exec(in)
-	return r.harness.Run(stop, t)
+	if !r.caps.PlanLimits {
+		t.OnPlanLimits = func(api.PlanLimits) {}
+	}
+	out := r.harness.Run(stop, t)
+	out.ReviewCalled = out.ReviewCalled && r.caps.ReviewDetection
+	return out
 }
 
 // withDefaults is in with the Turn's defaults, Linef for an Echo it
