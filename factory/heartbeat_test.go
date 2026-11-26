@@ -15,7 +15,7 @@ import (
 )
 
 // factories is the Project's Factory Status, read as the human.
-func factories(t *testing.T, h *factorytest.Harness) api.FactoryStatusView {
+func factories(t *testing.T, h *factorytest.Rig) api.FactoryStatusView {
 	t.Helper()
 	p, err := h.Human().GetProject(context.Background(), h.Project)
 	if err != nil {
@@ -27,7 +27,7 @@ func factories(t *testing.T, h *factorytest.Harness) api.FactoryStatusView {
 // wantFactory fails the test unless the Factory shows status with a note
 // containing note, and returns its Factory Status. A test settles the
 // Factory first: a Heartbeat it has queued is busy work until posted.
-func wantFactory(t *testing.T, h *factorytest.Harness, status api.FactoryStatusName, note string) api.FactoryStatusView {
+func wantFactory(t *testing.T, h *factorytest.Rig, status api.FactoryStatusName, note string) api.FactoryStatusView {
 	t.Helper()
 	fs := factories(t, h)
 	if fs.Status != status || len(fs.Factories) != 1 || !strings.Contains(fs.Factories[0].Note, note) {

@@ -93,9 +93,9 @@ func (l *lander) locateBases(ctx context.Context, p api.ProjectView) {
 // Repository's remotes, if it has any, aren't the Repository's, so it is
 // never fetched and its base is the local branch or missing (Spec
 // code-central-879). It reports current or missing to Code Central, and
-// for the Home Repository checks that .mcp.json is committed on a base
+// for the Home Repository checks that the MCP config is committed on a base
 // found for the first time or changed. Nothing touching r lands while its
-// base is missing. A held .mcp.json doesn't stop landing; it only stops
+// base is missing. A held MCP config doesn't stop landing; it only stops
 // claims.
 func (l *lander) locateBase(ctx context.Context, p api.ProjectView, r *repository) {
 	s := l.stateOf(r)
@@ -157,7 +157,7 @@ func (l *lander) locateBase(ctx context.Context, p api.ProjectView, r *repositor
 	}
 }
 
-// checkMCP holds new branches and worktrees while .mcp.json isn't
+// checkMCP holds new branches and worktrees while the MCP config isn't
 // committed on the base, and checks again each poll until it is. A base
 // already found to have it isn't checked again.
 func (l *lander) checkMCP(base string) {
@@ -166,7 +166,7 @@ func (l *lander) checkMCP(base string) {
 	}
 	if l.mcpCommitted() {
 		if l.mcpHeld {
-			l.printf(".mcp.json is committed on %s: cutting branches again", base)
+			l.printf("%s is committed on %s: cutting branches again", l.mcpConfig, base)
 		}
 		l.mcpBase, l.mcpHeld = base, false
 		return
@@ -178,7 +178,7 @@ func (l *lander) checkMCP(base string) {
 }
 
 // checkMCPAtStart is start's check of the base it has set: a base the
-// Home Repository has must have .mcp.json committed, or the Factory
+// Home Repository has must have the MCP config committed, or the Factory
 // doesn't start. One it hasn't yet is left to checkMCP on each poll.
 func (l *lander) checkMCPAtStart() error {
 	base := l.repos.baseBranch()
@@ -192,16 +192,16 @@ func (l *lander) checkMCPAtStart() error {
 	return nil
 }
 
-// mcpCommitted is whether .mcp.json is committed on the base.
+// mcpCommitted is whether the MCP config is committed on the base.
 func (l *lander) mcpCommitted() bool {
-	return l.repos.home.git.HasFile(l.repos.baseBranch(), ".mcp.json")
+	return l.repos.home.git.HasFile(l.repos.baseBranch(), l.mcpConfig)
 }
 
-// mcpMessage says that .mcp.json isn't committed on the base, and why it
-// must be.
+// mcpMessage says that the MCP config isn't committed on the base, and
+// why it must be.
 func (l *lander) mcpMessage() string {
 	b := l.repos.baseBranch()
-	return fmt.Sprintf(".mcp.json isn't committed on %s: every worktree starts from %s, so its sessions need it; commit it first", b, b)
+	return fmt.Sprintf("%s isn't committed on %s: every worktree starts from %s, so its sessions need it; commit it first", l.mcpConfig, b, b)
 }
 
 // setBase takes the base the Project names this poll into the registry.

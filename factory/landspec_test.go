@@ -13,7 +13,7 @@ import (
 
 // holdTicketsStage adds a Draft tickets Stage Ticket, which keeps the Spec
 // from being ready to land until it is cancelled; release cancels it.
-func holdTicketsStage(t *testing.T, h *factorytest.Harness) (release func()) {
+func holdTicketsStage(t *testing.T, h *factorytest.Rig) (release func()) {
 	t.Helper()
 	ctx := context.Background()
 	made, err := h.Server.Client.CreateTicket(ctx, h.Project, api.CreateTicketInput{Spec: api.Ref(h.SpecID()), Title: "Tickets", State: domain.Draft, Labels: []string{domain.StageLabel("tickets")}})
@@ -29,7 +29,7 @@ func holdTicketsStage(t *testing.T, h *factorytest.Harness) (release func()) {
 
 // twoAccepted is a Requirement Spec with two Accepted Tickets and its
 // tickets Stage Done.
-func twoAccepted(t *testing.T, h *factorytest.Harness) (a, b string) {
+func twoAccepted(t *testing.T, h *factorytest.Rig) (a, b string) {
 	t.Helper()
 	h.MakeRequirement()
 	a, _ = accepted(h, "First", "one.txt", "1\n")

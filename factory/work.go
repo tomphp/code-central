@@ -1,6 +1,6 @@
 // The Factory's work in flight, told to Env.Work (ADR 0045): a test's
 // hook hears of each piece of work as it starts and ends, so that the
-// test harness, factorytest, knows when the Factory has settled. The
+// test rig, factorytest, knows when the Factory has settled. The
 // binary gives no hook, and then the Factory tells nothing and pays for
 // nothing.
 
@@ -88,7 +88,7 @@ func (w work) rest(name ...string) (end func()) {
 // after is clk.After(d), telling of the wait as resting work named by
 // name's parts until the timer fires; end ends the wait. The timer is made
 // before the time is read, so a clock moving between them leaves the wait
-// due no earlier than its timer: due earlier, a harness would wait for a
+// due no earlier than its timer: due earlier, a rig would wait for a
 // timer that only the clock moving fires.
 func (w work) after(clk clock.Clock, d time.Duration, name ...string) (fired <-chan time.Time, end func()) {
 	if w.hook == nil {

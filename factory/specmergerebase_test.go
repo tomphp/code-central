@@ -33,7 +33,7 @@ func rebaseSpecMergeScript(fix string) []factorytest.Step {
 // too and the Factory opened the Spec merge Ticket fix, whose session ran
 // script. It returns the Factory, with the Spec held from landing by
 // release until it is called.
-func specMergeOpened(t *testing.T, h *factorytest.Harness, fix string, script ...factorytest.Step) (r *factorytest.Running, a string, release func()) {
+func specMergeOpened(t *testing.T, h *factorytest.Rig, fix string, script ...factorytest.Step) (r *factorytest.Running, a string, release func()) {
 	t.Helper()
 	h.MakeRequirement()
 	setRebase(h, true)
@@ -92,13 +92,13 @@ func TestUnderRebaseASpecBranchConflictOpensTheRebaseTicketAndAcceptingItReplace
 }
 
 // descends reports whether commit descends from ancestor in dir, or is it.
-func descends(h *factorytest.Harness, dir, commit, ancestor string) bool {
+func descends(h *factorytest.Rig, dir, commit, ancestor string) bool {
 	return h.GitIn(dir, "rev-list", "-n", "1", ancestor, "^"+commit) == ""
 }
 
 // acceptedOnSpecBranch makes an Accepted Ticket whose branch, cut from
 // the Spec Branch's tip, changes file, and returns it with its commit.
-func acceptedOnSpecBranch(h *factorytest.Harness, title, file, content string) (id, commit string) {
+func acceptedOnSpecBranch(h *factorytest.Rig, title, file, content string) (id, commit string) {
 	id = h.ReadyTicket(title)
 	h.Git("branch", id, "spec/"+h.SpecID())
 	commit = h.CommitOn(id, file, content)
@@ -286,7 +286,7 @@ func TestUnderRebaseAMergeTheSpecBranchGainedWhileRebaseWasOffIsRemadeOnTheRebas
 // the Spec Branch conflicts in both and the Factory opened the Spec
 // merge Ticket fix, whose session ran script. It returns the Factory,
 // api and the Ticket.
-func specMergeOpenedInTwo(t *testing.T, h *factorytest.Harness, fix string, script ...factorytest.Step) (r *factorytest.Running, apiRepo *factorytest.Repository, id string) {
+func specMergeOpenedInTwo(t *testing.T, h *factorytest.Rig, fix string, script ...factorytest.Step) (r *factorytest.Running, apiRepo *factorytest.Repository, id string) {
 	t.Helper()
 	h.MakeRequirement()
 	apiRepo = h.AddRepository("api")

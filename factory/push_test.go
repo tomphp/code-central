@@ -10,7 +10,7 @@ import (
 )
 
 // mergeAndPush sets the Merge Landing Method with Push to remote.
-func mergeAndPush(h *factorytest.Harness, remote string) {
+func mergeAndPush(h *factorytest.Rig, remote string) {
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Push: true, Remote: remote})
 }
 

@@ -18,8 +18,8 @@ import (
 
 const wakePath = "/api/p/acme/factory/next-wake"
 
-// wakingHarness is a harness that passes the Factory its wakes.
-func wakingHarness(t *testing.T) *factorytest.Harness {
+// wakingRig is a rig that passes the Factory its wakes.
+func wakingRig(t *testing.T) *factorytest.Rig {
 	h := factorytest.New(t, factorytest.FakeGit())
 	h.PassWakes()
 	return h
@@ -27,7 +27,7 @@ func wakingHarness(t *testing.T) *factorytest.Harness {
 
 func TestAnApprovedTicketIsClaimedOnAWake(t *testing.T) {
 	t.Parallel()
-	h := wakingHarness(t)
+	h := wakingRig(t)
 	id := h.NewTicket(api.CreateTicketInput{Title: "Approve me", State: domain.Draft})
 	r := h.Start()
 
@@ -42,7 +42,7 @@ func TestAnApprovedTicketIsClaimedOnAWake(t *testing.T) {
 // it for one already Done clears it.
 func TestATicketWhoseLastBlockerIsCancelledIsClaimedOnAWake(t *testing.T) {
 	t.Parallel()
-	h := wakingHarness(t)
+	h := wakingRig(t)
 	blocker := h.NewTicket(api.CreateTicketInput{Title: "Not wanted", State: domain.Draft})
 	done := h.NewTicket(api.CreateTicketInput{Title: "Done instead", State: domain.Draft})
 	ctx := context.Background()
@@ -63,7 +63,7 @@ func TestATicketWhoseLastBlockerIsCancelledIsClaimedOnAWake(t *testing.T) {
 // again to claim the Ticket that waited on it.
 func TestAnAcceptedTicketLandsAndItsBlockedTicketIsClaimedOnWakes(t *testing.T) {
 	t.Parallel()
-	h := wakingHarness(t)
+	h := wakingRig(t)
 	blocker := h.ReadyTicket("First")
 	h.Finished(blocker, blocker, h.CommitOn(blocker, "first.txt", "first\n"))
 	id := h.NewTicket(api.CreateTicketInput{Title: "Second", State: domain.Ready, BlockedBy: []api.Ref{api.Ref(blocker)}})
@@ -82,7 +82,7 @@ func TestAnsweringARoundsLastQuestionResumesTheSessionOnAWake(t *testing.T) {
 	for name, lost := range map[string]int{"answer kept": 0, "answer lost": 1} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			h := wakingHarness(t)
+			h := wakingRig(t)
 			id := h.ReadyTicket("Ask first")
 			h.Script(id, factorytest.PostRound("Which colour?"), factorytest.Result("success"))
 			h.LoseAnswer("/claim", lost)
@@ -103,7 +103,7 @@ func TestAnsweringARoundsLastQuestionResumesTheSessionOnAWake(t *testing.T) {
 
 func TestCancellingARunningClaimStopsItsTurnOnAWake(t *testing.T) {
 	t.Parallel()
-	h := wakingHarness(t)
+	h := wakingRig(t)
 	id := h.ReadyTicket("Not wanted")
 	h.Script(id, factorytest.Wait())
 	r := h.Start()
@@ -122,7 +122,7 @@ func TestCancellingARunningClaimStopsItsTurnOnAWake(t *testing.T) {
 // can't claim.
 func TestWithEverySlotFullAWakeStillRunsThePoll(t *testing.T) {
 	t.Parallel()
-	h := wakingHarness(t)
+	h := wakingRig(t)
 	running := h.ReadyTicket("Running")
 	h.Script(running, factorytest.Wait())
 	r := h.Start("--parallel", "1")
@@ -138,7 +138,7 @@ func TestWithEverySlotFullAWakeStillRunsThePoll(t *testing.T) {
 
 func TestWhilePausedAWakeStillRunsThePoll(t *testing.T) {
 	t.Parallel()
-	h := wakingHarness(t)
+	h := wakingRig(t)
 	cut := h.ReadyTicket("Cut off")
 	h.Script(cut, factorytest.APIError("rate_limit"), factorytest.Result("success"), factorytest.Exit(1))
 	r := h.Start()
@@ -158,7 +158,7 @@ func TestWhilePausedAWakeStillRunsThePoll(t *testing.T) {
 // The Ticket is made while the long-poll fails, so no wake comes of it.
 func TestACommentOrSetSessionDoesNotWakeThePoll(t *testing.T) {
 	t.Parallel()
-	h := wakingHarness(t)
+	h := wakingRig(t)
 	h.SetFailing("/factory/next-wake")
 	r := h.Start()
 	id := h.ReadyTicket("Claim on a poll")
@@ -195,7 +195,7 @@ func TestACommentOrSetSessionDoesNotWakeThePoll(t *testing.T) {
 
 func TestAFailingLongPollWarnsOnceAndTheTimedPollCarriesOn(t *testing.T) {
 	t.Parallel()
-	h := wakingHarness(t)
+	h := wakingRig(t)
 	h.SetFailing("/factory/next-wake")
 	r := h.Start()
 	// The poll's Tick passes the long-poll's pauses after failing.
@@ -214,7 +214,7 @@ func TestAFailingLongPollWarnsOnceAndTheTimedPollCarriesOn(t *testing.T) {
 
 func TestAnOlderCodeCentralWithoutTheLongPollGetsTheTimedPollOnly(t *testing.T) {
 	t.Parallel()
-	h := wakingHarness(t)
+	h := wakingRig(t)
 	h.SetMissing("/factory/next-wake")
 	r := h.Start()
 	r.WantOutput("warning: Code Central has no next_factory_wake: polling every 30s only")
@@ -234,7 +234,7 @@ func TestAnOlderCodeCentralWithoutTheLongPollGetsTheTimedPollOnly(t *testing.T) 
 // nothing more.
 func TestADrainingFactoryClaimsNothingOnAWake(t *testing.T) {
 	t.Parallel()
-	h := wakingHarness(t)
+	h := wakingRig(t)
 	running := h.ReadyTicket("Nearly done")
 	h.Script(running, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start()

@@ -2,6 +2,8 @@
 
 A Factory is any program that claims a Project's Tickets and works them, as [`code-central-factory`](running-the-factory.md) does. This guide covers the one thing Code Central asks of it beyond the Tickets: a **Heartbeat**, so the Project's dot in the left pane says whether anything is working it. A Factory that sends none works fine; its Project just shows Offline.
 
+`code-central-factory` runs its Turns with one **Harness**, the coding-agent CLI it starts for each Claim and Chat Message, chosen with `--harness` when it starts. The default is `claude`, Claude Code, which is the only Harness so far. Code Central doesn't see which Harness a Factory runs; a Factory you write picks its own CLI, and sends the Heartbeat below whichever it is.
+
 Code Central never probes a Factory and never guesses one from its other calls. The Factory announces itself, and Code Central forgets every Heartbeat when it restarts, so each Factory's next Heartbeat brings it back.
 
 ## The call

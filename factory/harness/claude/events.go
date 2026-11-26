@@ -1,4 +1,4 @@
-package factory
+package claude
 
 import (
 	"encoding/json"
@@ -9,11 +9,9 @@ import (
 	"github.com/tomoram/code-central/api"
 )
 
-// Session Events (ADR 0008). The Factory turns each turn's stream-json
-// and its own lines about a held Claim into Session Events and posts them
-// to Code Central, so the Claim's Transcript fills as the agent works.
-// Posting never blocks a turn and never fails one: events wait in a
-// bounded queue, and a batch that can't be posted is dropped.
+// Session Events (ADR 0008). The Harness turns each Turn's stream-json
+// into Session Events, which the Factory posts to Code Central so the
+// Claim's Transcript fills as the agent works.
 
 // toolResultMax is the most bytes of a tool result's text posted.
 const toolResultMax = 4 << 10

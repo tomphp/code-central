@@ -61,13 +61,13 @@ func (f *fakeT) finish() {
 	}
 }
 
-// proxyTo starts a harness proxy, logging to a fake test, in front of
+// proxyTo starts a rig proxy, logging to a fake test, in front of
 // upstream.
 func proxyTo(t *testing.T, upstream http.Handler) (*fakeT, string) {
 	up := httptest.NewServer(upstream)
 	t.Cleanup(up.Close)
 	ft := &fakeT{TB: t}
-	h := &Harness{t: ft, Server: &codecentraltest.Server{URL: up.URL}, refused: map[string]int64{}}
+	h := &Rig{t: ft, Server: &codecentraltest.Server{URL: up.URL}, refused: map[string]int64{}}
 	return ft, h.startProxy()
 }
 
@@ -136,9 +136,9 @@ func TestProxyDropsLinesAfterTheTest(t *testing.T) {
 	}
 }
 
-// claimThroughProxy claims ticket through the harness's URL and returns the
+// claimThroughProxy claims ticket through the rig's URL and returns the
 // client's error.
-func claimThroughProxy(h *Harness, ticket string) error {
+func claimThroughProxy(h *Rig, ticket string) error {
 	c := client.New(h.URL)
 	_, err := c.Claim(context.Background(), h.Project, api.ClaimInput{Ticket: api.Ref(ticket)})
 	return err
@@ -179,7 +179,7 @@ func TestLoseAnswerLogsTheCutNamingTheRequest(t *testing.T) {
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "ok") }))
 	t.Cleanup(up.Close)
 	ft := &fakeT{TB: t}
-	h := &Harness{t: ft, Server: &codecentraltest.Server{URL: up.URL}, refused: map[string]int64{}}
+	h := &Rig{t: ft, Server: &codecentraltest.Server{URL: up.URL}, refused: map[string]int64{}}
 	url := h.startProxy()
 	h.LoseAnswer("/claim", 1)
 	if _, err := http.Post(url+"/p/acme/claim", "application/json", nil); err == nil {
@@ -221,7 +221,7 @@ func TestTheProxyRunsTheRelayOnTheFakeGitAndNeverForwardsIt(t *testing.T) {
 	fake := git.NewFake(t)
 	dir := t.TempDir()
 	head := fake.Init(dir, map[string]string{"README.md": "Hello\n"}, "First")
-	h := &Harness{t: ft, Server: &codecentraltest.Server{URL: up.URL}, refused: map[string]int64{}, fake: fake}
+	h := &Rig{t: ft, Server: &codecentraltest.Server{URL: up.URL}, refused: map[string]int64{}, fake: fake}
 	url := h.startProxy()
 
 	status, body := postRelay(t, url, dir)

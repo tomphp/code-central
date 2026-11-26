@@ -90,19 +90,23 @@ The section of Project Options where the human sets a model and effort for the P
 _Avoid_: Model config, AI settings
 
 **Model Choice**:
-The model and effort a Factory session's turn runs with, worked out at every start and resume from, highest first: the Ticket's `model` or `effort` Tag, the Project's Models row for its kind of work, the Project default row, the Factory's `--model` or `--effort` flag, and Claude Code's own default. Model and effort are each worked out on their own. A model `claude` rejects, or an effort it doesn't accept, fails the Claim with a Failure Report naming where it was set.
+The model and effort a Factory session's turn runs with, worked out at every start and resume from, highest first: the Ticket's `model` or `effort` Tag, the Project's Models row for its kind of work, the Project default row, the Factory's `--model` or `--effort` flag, and the Harness's own default. Model and effort are each worked out on their own. A model or effort the Harness rejects fails the Claim with a Failure Report naming where it was set.
 _Avoid_: Model selection, model config
 
 **Reported Models**:
-The effort levels, model aliases and model IDs reported as accepted by the Project's `claude`, along with the Factory's own flags. Code Central keeps them across restarts and offers them in the model and effort pickers.
+The effort levels, model aliases and model IDs reported as accepted by the Project's Factory's Harness, along with the Factory's own flags. Code Central keeps them across restarts and offers them in the model and effort pickers.
 _Avoid_: Available models, model catalogue
 
 **Factory**:
 A program outside Code Central that claims Tickets and runs agents on them to deliver work.
 _Avoid_: Controller, runner, orchestrator
 
+**Harness**:
+The coding-agent CLI a Factory runs its Turns with, such as Claude Code, Codex CLI, Copilot CLI, Gemini CLI or OpenCode. Each Factory runs one Harness, chosen when it starts.
+_Avoid_: agent (the model at work inside a session), tool (an MCP or agent tool), provider, backend, runner
+
 **Turn**:
-One run of claude the Factory starts, for a Claim or to answer a Chat Message. It ends done, failed, in an Outage, on a login failure, on a rejected model or effort, or stopped.
+One run of the Factory's Harness, for a Claim or to answer a Chat Message. It ends done, failed, in an Outage, on a login failure, on a rejected model or effort, or stopped.
 _Avoid_: run, process, session (a session spans many Turns)
 
 **Outage**:
@@ -369,7 +373,7 @@ The signal a running Factory sends Code Central on each poll, naming its Project
 _Avoid_: ping, keepalive, check-in ("Ping" is already the session activity hook)
 
 **Plan Limits**:
-The Claude account's 5-hour limit and weekly limit, each as the percentage used and the time it resets, as a Factory last reported them from its Turns. They are account-wide, and go stale while the Factory is idle.
+The Claude account's 5-hour limit and weekly limit, each as the percentage used and the time it resets, as a Factory last reported them from its Turns. They are account-wide, and go stale while the Factory is idle. They are Claude Code's: only a Factory whose Harness is Claude Code reports them.
 _Avoid_: usage, session limit, quota
 
 **Limits popup**:
@@ -502,7 +506,7 @@ _Avoid_: Log, stream
 
 **Context Report**:
 What agents load into context, measured from Claude Code's own session logs on the machine (not Transcripts): the size of tool results per kind of session (each Stage, implementation, and the review and other subagents), tool and operation, the largest results, the Specs and Tickets read more than once, and signs that a cut went too far, each with its change against a saved baseline.
-It is not Usage: it reads Claude Code's logs on the machine, while Usage records what Code Central and the Factory see.
+It is not Usage: it reads Claude Code's logs on the machine, while Usage records what Code Central and the Factory see. It is Claude Code's: it measures only sessions whose Harness is Claude Code.
 _Avoid_: Token report, usage report
 
 **CI view**:

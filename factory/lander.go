@@ -40,6 +40,8 @@ type lander struct {
 	work   work
 	printf func(format string, args ...any)
 	hooks  landerHooks
+	// mcpConfig is the file the base must hold: the Harness's MCP config.
+	mcpConfig string
 
 	// reportedSeveral is whether the last report of the Repositories'
 	// clones was of several, and reportRepositoriesFailing whether it
@@ -65,7 +67,7 @@ type lander struct {
 	// with the remote's this poll, and the merges made into it that
 	// haven't landed yet.
 	bases map[string]*baseState
-	// mcpBase is the base whose .mcp.json was last found committed, and
+	// mcpBase is the base whose MCP config was last found committed, and
 	// mcpHeld whether the file is missing from the base, so no branch or
 	// worktree is cut.
 	mcpBase string
@@ -99,9 +101,9 @@ type lander struct {
 
 // newLander is the landing part of project's Factory over the registry
 // repos, reporting through c, with nothing found out yet: start sets the
-// .mcp.json state it finds.
-func newLander(repos *repositories, c *client.Client, project string, w work, printf func(format string, args ...any), h landerHooks) *lander {
-	return &lander{repos: repos, client: c, project: project, work: w, printf: printf, hooks: h, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, saidHeld: map[string]bool{}, bases: map[string]*baseState{}, saidLocalOnly: map[string]bool{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, pushedSpecBranches: map[string]bool{}}
+// MCP config state it finds, in the file mcpConfig names.
+func newLander(repos *repositories, c *client.Client, project, mcpConfig string, w work, printf func(format string, args ...any), h landerHooks) *lander {
+	return &lander{repos: repos, client: c, project: project, mcpConfig: mcpConfig, work: w, printf: printf, hooks: h, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, saidHeld: map[string]bool{}, bases: map[string]*baseState{}, saidLocalOnly: map[string]bool{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, pushedSpecBranches: map[string]bool{}}
 }
 
 // poll is a poll's landing: it reads the Landing Method and the
@@ -128,7 +130,7 @@ func (l *lander) poll(ctx context.Context) (p api.ProjectView, ok bool) {
 // claimingHeld reports whether nothing may be claimed, as every claim
 // cuts a branch or a worktree from each Repository's base: a base
 // disagrees with the host's or is missing, the Home Repository's lacks
-// .mcp.json, or a Repository is missing, so a Ticket would start without
+// the MCP config, or a Repository is missing, so a Ticket would start without
 // a checkout of every Repository.
 func (l *lander) claimingHeld() bool {
 	return l.anyBaseHeld() || l.mcpHeld || l.repos.anyMissing()

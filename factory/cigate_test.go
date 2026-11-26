@@ -17,7 +17,7 @@ import (
 // gated pushes an Accepted Ticket's merge under Merge + Push with CI
 // Tracking on, and waits until it is reported as the Ticket's pushed
 // commit. It returns the Ticket and the pushed commit.
-func gated(t *testing.T, h *factorytest.Harness, r *factorytest.Running, title, file string) (id, pushed string) {
+func gated(t *testing.T, h *factorytest.Rig, r *factorytest.Running, title, file string) (id, pushed string) {
 	t.Helper()
 	id, _ = accepted(h, title, file, title+"\n")
 	r.Poll()
@@ -29,9 +29,9 @@ func gated(t *testing.T, h *factorytest.Harness, r *factorytest.Running, title, 
 	return id, tk.PushedCommit.Commit
 }
 
-// gatedHarness is a harness under Merge + Push to origin with CI Tracking
+// gatedRig is a rig under Merge + Push to origin with CI Tracking
 // on, its Factory started.
-func gatedHarness(t *testing.T, opts ...factorytest.Option) (*factorytest.Harness, *factorytest.Remote, *factorytest.Running) {
+func gatedRig(t *testing.T, opts ...factorytest.Option) (*factorytest.Rig, *factorytest.Remote, *factorytest.Running) {
 	t.Helper()
 	h := factorytest.New(t, append([]factorytest.Option{factorytest.FakeGit()}, opts...)...)
 	remote := h.AddRemote("origin")
@@ -42,14 +42,14 @@ func gatedHarness(t *testing.T, opts ...factorytest.Option) (*factorytest.Harnes
 
 // reportRun reports, as the CI Watcher, one run of ci.yml on commit
 // tracked against ticket, with its status and conclusion.
-func reportRun(t *testing.T, h *factorytest.Harness, id int64, ticket, commit string, status domain.CIRunStatus, conclusion domain.CIConclusion) {
+func reportRun(t *testing.T, h *factorytest.Rig, id int64, ticket, commit string, status domain.CIRunStatus, conclusion domain.CIConclusion) {
 	t.Helper()
 	reportAttempt(t, h, id, 1, ticket, commit, status, conclusion)
 }
 
 // reportAttempt reports, as the CI Watcher, attempt of run id of ci.yml
 // on commit tracked against ticket, with its status and conclusion.
-func reportAttempt(t *testing.T, h *factorytest.Harness, id int64, attempt int, ticket, commit string, status domain.CIRunStatus, conclusion domain.CIConclusion) {
+func reportAttempt(t *testing.T, h *factorytest.Rig, id int64, attempt int, ticket, commit string, status domain.CIRunStatus, conclusion domain.CIConclusion) {
 	t.Helper()
 	started := h.Clock.Now()
 	run := api.CIRunView{ID: id, Attempt: attempt, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: commit,
@@ -60,7 +60,7 @@ func reportAttempt(t *testing.T, h *factorytest.Harness, id int64, attempt int, 
 }
 
 // stillAccepted fails unless ticket is Accepted after a poll.
-func stillAccepted(t *testing.T, h *factorytest.Harness, r *factorytest.Running, ticket, why string) {
+func stillAccepted(t *testing.T, h *factorytest.Rig, r *factorytest.Running, ticket, why string) {
 	t.Helper()
 	r.Poll()
 	if s := h.Ticket(ticket).State; s != domain.Accepted {
@@ -70,7 +70,7 @@ func stillAccepted(t *testing.T, h *factorytest.Harness, r *factorytest.Running,
 
 func TestUnderMergeAndPushWithCITrackingATicketLandsAtItsPushedCommitOncePassed(t *testing.T) {
 	t.Parallel()
-	h, remote, r := gatedHarness(t)
+	h, remote, r := gatedRig(t)
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
 	if got := remote.Tip("main"); got != pushed {
 		t.Fatalf("the remote's main is at %q, want the pushed commit %s", got, pushed)
@@ -93,7 +93,7 @@ func TestUnderMergeAndPushWithCITrackingATicketLandsAtItsPushedCommitOncePassed(
 
 func TestUnderMergeAndPushWithCITrackingAFailedCIResultDoesNotLand(t *testing.T) {
 	t.Parallel()
-	h, _, r := gatedHarness(t)
+	h, _, r := gatedRig(t)
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
 
 	reportRun(t, h, 1, id, pushed, domain.CICompleted, domain.CIFailure)
@@ -103,7 +103,7 @@ func TestUnderMergeAndPushWithCITrackingAFailedCIResultDoesNotLand(t *testing.T)
 
 func TestUnderMergeAndPushWithCITrackingACancelledCIResultDoesNotLand(t *testing.T) {
 	t.Parallel()
-	h, _, r := gatedHarness(t)
+	h, _, r := gatedRig(t)
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
 
 	reportRun(t, h, 1, id, pushed, domain.CICompleted, domain.CICancelled)
@@ -116,7 +116,7 @@ func TestUnderMergeAndPushWithCITrackingACancelledCIResultDoesNotLand(t *testing
 // one that passed.
 func TestUnderTheCIGateATicketLandsAtAnEarlierPushedCommitThatPassedAfterALaterOneFailed(t *testing.T) {
 	t.Parallel()
-	h, remote, r := gatedHarness(t)
+	h, remote, r := gatedRig(t)
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
 	reportRun(t, h, 1, id, pushed, domain.CIInProgress, "")
 	later := h.CommitOn("later", "later.txt", "later\n")
@@ -140,7 +140,7 @@ func TestUnderTheCIGateATicketLandsAtAnEarlierPushedCommitThatPassedAfterALaterO
 // next poll.
 func TestAfterLandAnywayAFailedTicketLandsOnTheNextPoll(t *testing.T) {
 	t.Parallel()
-	h, _, r := gatedHarness(t)
+	h, _, r := gatedRig(t)
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
 	reportRun(t, h, 1, id, pushed, domain.CICompleted, domain.CIFailure)
 	stillAccepted(t, h, r, id, "with a failed CI result")
@@ -158,7 +158,7 @@ func TestAfterLandAnywayAFailedTicketLandsOnTheNextPoll(t *testing.T) {
 
 func TestATicketBlockedByAGatedTicketStaysBlockedUntilItLands(t *testing.T) {
 	t.Parallel()
-	h, _, r := gatedHarness(t)
+	h, _, r := gatedRig(t)
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
 	blocked := h.ReadyTicket("Build on the feature")
 	if _, err := h.Server.Client.AddBlocker(context.Background(), h.Project, api.BlockerInput{Ticket: api.Ref(blocked), Blocker: api.Ref(id)}); err != nil {
@@ -180,22 +180,22 @@ func TestATicketBlockedByAGatedTicketStaysBlockedUntilItLands(t *testing.T) {
 
 func TestTheGateLiftingLandsAWaitingTicketOnTheNextPoll(t *testing.T) {
 	t.Parallel()
-	for name, lift := range map[string]func(*testing.T, *factorytest.Harness){
-		"ci tracking off": func(t *testing.T, h *factorytest.Harness) {
+	for name, lift := range map[string]func(*testing.T, *factorytest.Rig){
+		"ci tracking off": func(t *testing.T, h *factorytest.Rig) {
 			if _, err := h.Human().SetCITracking(context.Background(), h.Project, api.SetCITrackingInput{Tracking: false, Repository: "acme/web"}); err != nil {
 				t.Fatal(err)
 			}
 		},
-		"push off": func(t *testing.T, h *factorytest.Harness) {
+		"push off": func(t *testing.T, h *factorytest.Rig) {
 			h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge})
 		},
-		"branch": func(t *testing.T, h *factorytest.Harness) {
+		"branch": func(t *testing.T, h *factorytest.Rig) {
 			h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingBranch, Push: true, Remote: "origin"})
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			h, _, r := gatedHarness(t)
+			h, _, r := gatedRig(t)
 			id, _ := gated(t, h, r, "Add a feature", "feature.txt")
 			stillAccepted(t, h, r, id, "while the gate holds")
 
@@ -214,7 +214,7 @@ func TestTheGateLiftingLandsAWaitingTicketOnTheNextPoll(t *testing.T) {
 
 func TestATicketWaitingOnCIDoesNotStopAnotherFromMergingAndPushing(t *testing.T) {
 	t.Parallel()
-	h, remote, r := gatedHarness(t)
+	h, remote, r := gatedRig(t)
 	first, _ := gated(t, h, r, "Add a feature", "feature.txt")
 	second, secondPushed := gated(t, h, r, "Add another", "another.txt")
 	if got := remote.Tip("main"); got != secondPushed {
@@ -244,7 +244,7 @@ func TestUnderBranchAndPushTheHumansMergeLandsWhateverTheCIResult(t *testing.T) 
 
 func TestAnInReviewTicketMergedByHandWaitsOnCIInReview(t *testing.T) {
 	t.Parallel()
-	h, remote, r := gatedHarness(t)
+	h, remote, r := gatedRig(t)
 	id := h.ReadyTicket("Add a feature")
 	commit := h.CommitOn(id, "feature.txt", "feature\n")
 	h.Finished(id, id, commit)
@@ -278,7 +278,7 @@ func TestAnInReviewTicketMergedByHandWaitsOnCIInReview(t *testing.T) {
 // failed one.
 func TestASentBackCIFailureIsFixedOnItsBranchAndItsNewPushedCommitDecides(t *testing.T) {
 	t.Parallel()
-	h, remote, r := gatedHarness(t)
+	h, remote, r := gatedRig(t)
 	id, failed := sentBackCIFailure(t, h, r)
 	r.Poll()
 	h.WantState(id, domain.InReview)
@@ -312,7 +312,7 @@ func TestASentBackCIFailureIsFixedOnItsBranchAndItsNewPushedCommitDecides(t *tes
 // accepts and the Factory pushes; its CI fails, and the human sends it
 // back with the next Claim scripted to fix it on its branch. It returns
 // the Ticket, Ready, and its failed pushed commit.
-func sentBackCIFailure(t *testing.T, h *factorytest.Harness, r *factorytest.Running) (id, failed string) {
+func sentBackCIFailure(t *testing.T, h *factorytest.Rig, r *factorytest.Running) (id, failed string) {
 	t.Helper()
 	id = h.ReadyTicket("Add a feature")
 	h.Script(id,
@@ -349,7 +349,7 @@ func sentBackCIFailure(t *testing.T, h *factorytest.Harness, r *factorytest.Runn
 // land on the next poll.
 func TestAfterNewFixTicketTheFailedTicketKeepsWaiting(t *testing.T) {
 	t.Parallel()
-	h, _, r := gatedHarness(t)
+	h, _, r := gatedRig(t)
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
 	reportRun(t, h, 1, id, pushed, domain.CICompleted, domain.CIFailure)
 	stillAccepted(t, h, r, id, "with a failed CI result")
@@ -371,7 +371,7 @@ func TestAfterNewFixTicketTheFailedTicketKeepsWaiting(t *testing.T) {
 
 func TestAfterAnotherTicketsMergeIsPushedEarlierWaitingTicketsGetTheNewTipAndLandWhenItPasses(t *testing.T) {
 	t.Parallel()
-	h, remote, r := gatedHarness(t)
+	h, remote, r := gatedRig(t)
 	first, _ := gated(t, h, r, "Add a feature", "feature.txt")
 	second, tip := gated(t, h, r, "Add another", "another.txt")
 
@@ -398,7 +398,7 @@ func TestAfterAnotherTicketsMergeIsPushedEarlierWaitingTicketsGetTheNewTipAndLan
 
 func TestACommitPushedByHandFromAnotherCloneIsReportedToWaitingTicketsAndLandsThemWhenItPasses(t *testing.T) {
 	t.Parallel()
-	h, remote, r := gatedHarness(t)
+	h, remote, r := gatedRig(t)
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
 	byHand := h.CommitOn("hand", "hand.txt", "hand\n")
 	h.PushByHand(remote, "hand", "main")
@@ -418,7 +418,7 @@ func TestACommitPushedByHandFromAnotherCloneIsReportedToWaitingTicketsAndLandsTh
 
 func TestAnInReviewTicketMergedByHandGetsALaterTipToo(t *testing.T) {
 	t.Parallel()
-	h, remote, r := gatedHarness(t)
+	h, remote, r := gatedRig(t)
 	id := h.ReadyTicket("Add a feature")
 	h.Finished(id, id, h.CommitOn(id, "feature.txt", "feature\n"))
 	h.MergeByHand(id, "main")
@@ -438,7 +438,7 @@ func TestAnInReviewTicketMergedByHandGetsALaterTipToo(t *testing.T) {
 
 func TestATipThatDoesNotContainATicketsWorkIsNotReportedToIt(t *testing.T) {
 	t.Parallel()
-	h, remote, r := gatedHarness(t, factorytest.RealGit())
+	h, remote, r := gatedRig(t, factorytest.RealGit())
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
 	// Another clone force-pushes the base back to before the Ticket's work.
 	before := h.Parents(pushed)[0]
@@ -506,7 +506,7 @@ func TestUnderTheCIGateARedBuildInAnotherRepositoryDoesNotHoldBackTheHomes(t *te
 
 // reportRunIn reports, as the CI Watcher, run id of ci.yml on commit in
 // the Repository repo, tracked against ticket.
-func reportRunIn(t *testing.T, h *factorytest.Harness, repo string, id int64, ticket, commit string, status domain.CIRunStatus, conclusion domain.CIConclusion) {
+func reportRunIn(t *testing.T, h *factorytest.Rig, repo string, id int64, ticket, commit string, status domain.CIRunStatus, conclusion domain.CIConclusion) {
 	t.Helper()
 	started := h.Clock.Now()
 	run := api.CIRunView{Repository: repo, ID: id, Attempt: 1, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: commit,

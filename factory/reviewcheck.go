@@ -2,31 +2,11 @@ package factory
 
 import (
 	"context"
-	"encoding/json"
 	"path"
 	"strings"
 
 	"github.com/tomoram/code-central/api"
 )
-
-// calledReview reports whether a tool call is the Skill tool running the
-// code-review skill, under any plugin prefix (mattpocock-skills:code-review).
-func calledReview(tool string, input json.RawMessage) bool {
-	if tool != "Skill" {
-		return false
-	}
-	var in struct {
-		Skill string `json:"skill"`
-	}
-	if json.Unmarshal(input, &in) != nil {
-		return false
-	}
-	name := in.Skill
-	if i := strings.LastIndex(name, ":"); i >= 0 {
-		name = name[i+1:]
-	}
-	return name == "code-review"
-}
 
 // docsOnly reports whether every changed file is under docs/ or is a
 // Markdown file.

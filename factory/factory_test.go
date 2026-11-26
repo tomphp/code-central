@@ -15,7 +15,7 @@ func TestMain(m *testing.M) { factorytest.Main(m) }
 
 // refuses runs the Factory from dir and checks it refused to start,
 // saying why, without claiming anything.
-func refuses(t *testing.T, h *factorytest.Harness, dir, why string, args ...string) {
+func refuses(t *testing.T, h *factorytest.Rig, dir, why string, args ...string) {
 	t.Helper()
 	code, _, stderr := h.RunIn(dir, args...)
 	if code == 0 || !strings.Contains(stderr, why) {
@@ -88,6 +88,23 @@ func TestTheFactoryStartsOnADetachedHead(t *testing.T) {
 	r := h.Start()
 	r.WantOutput("base: main")
 	h.WantState(id, domain.InReview)
+}
+
+func TestTheFactoryRunsClaudeCodeWithOrWithoutTheHarnessFlag(t *testing.T) {
+	t.Parallel()
+	for _, args := range [][]string{nil, {"--harness", "claude"}} {
+		h := factorytest.New(t, factorytest.FakeGit())
+		id := h.ReadyTicket("From the Harness")
+		r := h.Start(args...)
+		r.WantOutput("harness: claude")
+		h.WantState(id, domain.InReview)
+	}
+}
+
+func TestTheFactoryRefusesAHarnessItDoesNotKnowAndNamesClaude(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t, factorytest.FakeGit())
+	refuses(t, h, h.Repo, `--harness "codex" isn't one this Factory runs: use claude`, "--harness", "codex")
 }
 
 func TestTheFactoryRefusesTheBaseFlagAndPointsToProjectOptions(t *testing.T) {

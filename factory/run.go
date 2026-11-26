@@ -19,6 +19,7 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/domain"
+	"github.com/tomoram/code-central/factory/harness"
 )
 
 // loop polls until ctx ends: the first poll is at once, the rest on a
@@ -499,7 +500,7 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		return false
 	}
 	session := newSessionID()
-	resume := "claude --resume " + session
+	resume := f.harness.ResumeCommand(session, nil)
 	// The worktree's path is fixed by the Ticket ID, which isn't known
 	// until the claim, so the claim names it afterwards (set_session).
 	in := api.ClaimInput{Ticket: next, SessionID: session, ResumeCommand: &resume}
@@ -568,7 +569,7 @@ func (f *factory) startClaimed(ctx context.Context, in api.ClaimInput, res api.C
 	c := claim{Ticket: id, ClaimID: res.ClaimID, SessionID: session, AllowedTools: []string{}, AddDirs: ws.addDirs(), Conflict: conflicted}
 	var prompt string
 	if ws.several() {
-		c.SystemPrompt, prompt = severalSystemPrompt(c, stage, ws, guide, conflicted), severalFirstPrompt(c, stage, ws, conflicts, rebase)
+		c.SystemPrompt, prompt = severalSystemPrompt(f.runner.harness, c, stage, ws, guide, conflicted), severalFirstPrompt(f.runner.harness, c, stage, ws, conflicts, rebase)
 	} else {
 		var files []string
 		var check string
@@ -576,10 +577,10 @@ func (f *factory) startClaimed(ctx context.Context, in api.ClaimInput, res api.C
 			files = conflicts[0].files
 			check = conflicts[0].w.r.checkInstruction()
 		}
-		c.SystemPrompt, prompt = systemPrompt(c, stage, wt, guide, files), firstPrompt(c, stage, f.repos.baseBranch(), files, rebase, check)
+		c.SystemPrompt, prompt = systemPrompt(f.runner.harness, c, stage, wt, guide, files), firstPrompt(f.runner.harness, c, stage, f.repos.baseBranch(), files, rebase, check)
 	}
-	// The Ticket's Resume Command adds the folders its turns do.
-	resume := *in.ResumeCommand + addDirFlags(c.AddDirs)
+	// The Harness's Resume Command adds the folders its turns do.
+	resume := f.harness.ResumeCommand(session, c.AddDirs)
 	f.noteTicket(c, *res.Ticket)
 	if err := f.addClaim(c); err != nil {
 		f.claimf(c, "%s: can't write the state file: %v", id, err)
@@ -596,7 +597,7 @@ func (f *factory) startClaimed(ctx context.Context, in api.ClaimInput, res api.C
 		return true
 	}
 	mc := f.withFlags(stage, res.ModelChoice)
-	f.startTurn(ctx, c, turnInput{Dir: wt, Choice: mc, Prompt: prompt})
+	f.startTurn(ctx, c, turnInput{Turn: harness.Turn{Dir: wt, Prompt: prompt}, Choice: mc})
 	return true
 }
 
@@ -681,7 +682,7 @@ func (f *factory) resumeAnswered(ctx context.Context, c claim) {
 	if decided != "" {
 		prompt += "\n" + decided + "\n"
 	}
-	f.startTurn(ctx, c, turnInput{Dir: f.repos.worktree(c.Ticket), Resume: true, Choice: mc, Prompt: prompt})
+	f.startTurn(ctx, c, turnInput{Turn: harness.Turn{Dir: f.repos.worktree(c.Ticket), Resume: true, Prompt: prompt}, Choice: mc})
 }
 
 // sessionHolder looks through the process list for a process other than

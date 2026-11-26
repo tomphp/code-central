@@ -12,7 +12,7 @@
 // suite takes longer than the budget of wall-clock time, unless the load
 // average is above the core count, when the overrun is only a warning.
 // A job that fails only the way load makes tests fail (a Vitest file, a Go
-// test killed or one whose harness "didn't stop") gets one serial rerun of
+// test killed or one whose rig "didn't stop") gets one serial rerun of
 // just what failed; if that passes the job is reported as flaky under load
 // and doesn't fail the suite. The load average is printed beside failures.
 // With -e2e [-f <web file>] it runs `make e2e`'s suites instead, one after
@@ -126,7 +126,7 @@ func rerunVitest(output []byte) (args, items []string) {
 }
 
 // loadFailure matches what a Go test run prints when load killed the test
-// binary or the Factory harness's process didn't stop in its grace period.
+// binary or the Factory rig's process didn't stop in its grace period.
 var loadFailure = regexp.MustCompile(`signal: killed|didn't stop`)
 
 // rerunGo reruns the packages that failed with a load failure, one at a
