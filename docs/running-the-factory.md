@@ -281,6 +281,24 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    Check: the Factory has exited, and the Requirement is still *Finished*.
 
+## Stop and Resume
+
+Ctrl-C stops the Factory. **Stop** stops one Ticket's session and leaves the Factory running. On a Ticket with a live Claim, **Stop** asks you to confirm, then marks the Claim Stopped, and the Ticket shows in Needs Me as **Stopped**. The Factory sees it at once, as a wake, or on its next poll, and stops that Ticket's turn:
+
+```text
+acme-shop-3: stopped by the human: stopping its turn (Claim kept)
+```
+
+A Claim with no turn running prints `acme-shop-3: stopped by the human: holding its Claim` the first time the Factory sees it Stopped. A Stopped Claim takes no slot and no path resumes it: not a restart, not an answer to a Round, not a poll.
+
+| | Ctrl-C | Stop |
+| --- | --- | --- |
+| Stops | the Factory, and with a second press every running turn | one Ticket's turn |
+| Claim | kept, picked up when you start the Factory again | kept, held until you act |
+| Resumed | on its own, when the Factory starts again | only when you Resume |
+
+**Resume** in the Stopped panel clears the mark, and the Factory resumes the same session after the Stop, telling it that a human stopped it and has now resumed it. **Release…** gives the Claim up instead, and the panel's resume command lets you carry on by hand.
+
 ## The Factory Status dot
 
 While `code-central-factory` runs, it sends Code Central a Heartbeat on every poll, and the Project's row in the left pane shows a dot before its name: green for Online, amber for Draining and grey for Offline. Hover or focus the dot to list each Factory as name on host, its status, its last Heartbeat and its note, and whether it has Chat support. Project Options has the same list under **Factories**. Archived Projects show no dot.
