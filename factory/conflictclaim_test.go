@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -148,4 +149,31 @@ func TestTheConflictTicketTheFactoryOpensForASpecBranchStartsAsAConflictClaim(t 
 	r.WantOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main in README: opened " + fix)
 
 	requireConflictClaim(t, callFor(t, h, fix), "README")
+}
+
+func conflictClaimFinishing(t *testing.T, h *factorytest.Harness) api.TicketView {
+	t.Helper()
+	id, _ := accepted(h, "Change the readme", "README", "theirs\n")
+	h.CommitOn("main", "README", "ours\n")
+	h.Script(id, append(commitFile("main.go"), finishWithBranch("Resolved."))...)
+	h.Start()
+	return h.WantState(id, domain.InReview)
+}
+
+func TestAConflictClaimFinishingWithCodeChangesAndNoCodeReviewGetsNoComment(t *testing.T) {
+	t.Parallel()
+	tk := conflictClaimFinishing(t, factorytest.New(t, factorytest.FakeGit()))
+	if reviewSkippedComment(tk) {
+		t.Errorf("a Conflict Claim got a review comment: %+v", tk.Comments)
+	}
+}
+
+func TestAConflictClaimUnderRebaseFinishingWithNoCodeReviewGetsNoComment(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t, factorytest.FakeGit())
+	setRebase(h, true)
+	tk := conflictClaimFinishing(t, h)
+	if reviewSkippedComment(tk) {
+		t.Errorf("a Conflict Claim under Rebase got a review comment: %+v", tk.Comments)
+	}
 }

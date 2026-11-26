@@ -34,6 +34,9 @@ type claim struct {
 	// Reviewed is whether an earlier turn of the Claim called the
 	// code-review skill.
 	Reviewed bool `json:"reviewed,omitempty"`
+	// Conflict is whether the Claim started with conflicts in any
+	// Repository, so the review check skips it.
+	Conflict bool `json:"conflict,omitempty"`
 }
 
 // denialRound is a Round of the Factory's own: one Question per distinct
