@@ -502,7 +502,7 @@ func (f *factory) claimNext(ctx context.Context) bool {
 	resume := "claude --resume " + session
 	// The worktree's path is fixed by the Ticket ID, which isn't known
 	// until the claim, so the claim names it afterwards (set_session).
-	in := api.ClaimInput{Ticket: next, SessionID: session, ResumeCommand: &resume}
+	in := api.ClaimInput{Ticket: next, SessionID: session, ResumeCommand: &resume, Factory: factoryName, Host: f.host}
 	res, err := f.claimRecovering(ctx, in)
 	switch {
 	case ctx.Err() != nil:

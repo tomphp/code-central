@@ -285,3 +285,15 @@ func TestALostClaimsTicketIsNotChosenAgainAsNewWork(t *testing.T) {
 		t.Errorf("a claim was refused; stdout:\n%s", r.Stdout())
 	}
 }
+
+func TestTheFactoryNamesItselfOnItsClaimSoItIsAFactoryClaim(t *testing.T) {
+	t.Parallel()
+	h := wakingHarness(t)
+	id := h.ReadyTicket("Claimed by the Factory")
+	h.Start()
+
+	h.WantState(id, domain.InReview)
+	if claims := h.Ticket(id).Claims; len(claims) != 1 || !claims[0].FactoryClaim {
+		t.Errorf("%s Claims = %+v, want one Factory Claim", id, claims)
+	}
+}

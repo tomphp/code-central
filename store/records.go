@@ -353,16 +353,24 @@ type editFile struct {
 }
 
 type claimFile struct {
-	Number        int    `yaml:"number"`
-	ID            string `yaml:"id"`
-	SessionID     string `yaml:"session_id,omitempty"`
-	WorkingDir    string `yaml:"working_dir,omitempty"`
-	ResumeCommand string `yaml:"resume_command,omitempty"`
-	Model         string `yaml:"model,omitempty"`
-	Effort        string `yaml:"effort,omitempty"`
-	Started       string `yaml:"started"`
-	Ended         string `yaml:"ended,omitempty"`
-	EndedBy       string `yaml:"ended_by,omitempty"`
+	Number        int        `yaml:"number"`
+	ID            string     `yaml:"id"`
+	SessionID     string     `yaml:"session_id,omitempty"`
+	WorkingDir    string     `yaml:"working_dir,omitempty"`
+	ResumeCommand string     `yaml:"resume_command,omitempty"`
+	Model         string     `yaml:"model,omitempty"`
+	Effort        string     `yaml:"effort,omitempty"`
+	Factory       string     `yaml:"factory,omitempty"`
+	Host          string     `yaml:"host,omitempty"`
+	Started       string     `yaml:"started"`
+	Ended         string     `yaml:"ended,omitempty"`
+	EndedBy       string     `yaml:"ended_by,omitempty"`
+	Stops         []stopFile `yaml:"stops,omitempty"`
+}
+
+type stopFile struct {
+	Stopped string `yaml:"stopped"`
+	Resumed string `yaml:"resumed,omitempty"`
 }
 
 type roundFile struct {
@@ -581,7 +589,7 @@ func ticketOf(f ticketFile, n int) (domain.Ticket, *LoadError) {
 func decodeClaims(fs []claimFile) ([]domain.Claim, *LoadError) {
 	var out []domain.Claim
 	for i, c := range fs {
-		cl := domain.Claim{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, Model: c.Model, Effort: c.Effort, EndedBy: c.EndedBy}
+		cl := domain.Claim{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, Model: c.Model, Effort: c.Effort, Factory: c.Factory, Host: c.Host, EndedBy: c.EndedBy}
 		field := fmt.Sprintf("claims[%d]", i)
 		if cl.ID == "" {
 			return nil, &LoadError{Field: field + ".id", Msg: "required"}
@@ -595,7 +603,29 @@ func decodeClaims(fs []claimFile) ([]domain.Claim, *LoadError) {
 				return nil, &LoadError{Field: field + ".ended", Msg: err.Error()}
 			}
 		}
+		var lerr *LoadError
+		if cl.Stops, lerr = decodeStops(c.Stops, field+".stops"); lerr != nil {
+			return nil, lerr
+		}
 		out = append(out, cl)
+	}
+	return out, nil
+}
+
+func decodeStops(fs []stopFile, field string) ([]domain.Stop, *LoadError) {
+	var out []domain.Stop
+	for i, f := range fs {
+		var s domain.Stop
+		var err error
+		if s.Stopped, err = parseTime(f.Stopped); err != nil {
+			return nil, &LoadError{Field: fmt.Sprintf("%s[%d].stopped", field, i), Msg: err.Error()}
+		}
+		if f.Resumed != "" {
+			if s.Resumed, err = parseTime(f.Resumed); err != nil {
+				return nil, &LoadError{Field: fmt.Sprintf("%s[%d].resumed", field, i), Msg: err.Error()}
+			}
+		}
+		out = append(out, s)
 	}
 	return out, nil
 }
@@ -910,9 +940,12 @@ func ticketFileOf(r domain.Ticket) ticketFile {
 func encodeClaims(cs []domain.Claim) []claimFile {
 	out := []claimFile{}
 	for _, c := range cs {
-		cf := claimFile{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, Model: c.Model, Effort: c.Effort, Started: formatTime(c.Started), EndedBy: c.EndedBy}
+		cf := claimFile{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, Model: c.Model, Effort: c.Effort, Factory: c.Factory, Host: c.Host, Started: formatTime(c.Started), EndedBy: c.EndedBy}
 		if !c.Ended.IsZero() {
 			cf.Ended = formatTime(c.Ended)
+		}
+		for _, s := range c.Stops {
+			cf.Stops = append(cf.Stops, stopFile{Stopped: formatTime(s.Stopped), Resumed: formatOptionalTime(s.Resumed)})
 		}
 		out = append(out, cf)
 	}

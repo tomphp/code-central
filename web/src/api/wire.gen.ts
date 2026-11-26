@@ -1086,6 +1086,11 @@ export interface ClaimInput {
   // leaves them unset.
   working_dir?: string;
   resume_command?: string;
+  // Factory and Host are the Factory's name and host as its Heartbeat
+  // gives them, set only by a Factory; a Claim with them is a Factory
+  // Claim.
+  factory?: string;
+  host?: string;
 }
 
 // FinishInput is finish's input.
@@ -2134,6 +2139,13 @@ export interface ClaimView {
   model?: string;
   effort?: string;
   started: string;
+  // FactoryClaim is whether a Factory made the Claim; only a Factory
+  // Claim can be Stopped.
+  factory_claim?: boolean;
+  // Stopped is whether the Claim is live with its latest Stop not yet
+  // Resumed.
+  stopped?: boolean;
+  stops?: StopView[];
   // LastActivity is the latest write the Claim's agent made on the Ticket.
   last_activity: string;
   ended?: string;
@@ -2695,6 +2707,12 @@ export interface CIItemTicket {
   id: string;
   title: string;
   spec: string;
+}
+
+// StopView is one Stop of a Claim; Resumed is nil until it is Resumed.
+export interface StopView {
+  stopped: string;
+  resumed?: string;
 }
 
 // QuestionView is one Question: open, answered or dismissed.

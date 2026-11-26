@@ -3,6 +3,7 @@ package storetest
 import (
 	"fmt"
 	"maps"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -267,7 +268,7 @@ func checkHead(t *testing.T, f Factory, s store.Store, when string, want domain.
 
 func headEqual(a, b domain.TicketHead) bool {
 	return a.Entered.Equal(b.Entered) && a.BackToReady.Equal(b.BackToReady) && a.ExternalStateChanged.Equal(b.ExternalStateChanged) &&
-		ptrEqual(a.LiveClaim, b.LiveClaim, func(x, y domain.Claim) bool { return x == y }) &&
+		ptrEqual(a.LiveClaim, b.LiveClaim, func(x, y domain.Claim) bool { return reflect.DeepEqual(x, y) }) &&
 		ptrEqual(a.LatestFailureReport, b.LatestFailureReport, func(x, y domain.FailureReport) bool { return x == y }) &&
 		ptrEqual(a.LatestRound, b.LatestRound, func(x, y domain.Round) bool {
 			return x.Number == y.Number && x.Claim == y.Claim && x.Posted.Equal(y.Posted) && slices.Equal(x.Questions, y.Questions)
