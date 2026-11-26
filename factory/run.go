@@ -564,7 +564,7 @@ func (f *factory) startClaimed(ctx context.Context, in api.ClaimInput, res api.C
 		guide = f.stageGuide(ctx, res.StageGuide, stage)
 	}
 	wt := ws.home().path
-	c := claim{Ticket: id, ClaimID: res.ClaimID, SessionID: session, AllowedTools: []string{}, AddDirs: ws.addDirs()}
+	c := claim{Ticket: id, ClaimID: res.ClaimID, SessionID: session, AllowedTools: []string{}, AddDirs: ws.addDirs(), Conflict: len(conflicts) > 0}
 	var prompt string
 	if ws.several() {
 		c.SystemPrompt, prompt = severalSystemPrompt(c, stage, ws, guide, len(conflicts) > 0), severalFirstPrompt(c, stage, ws, conflicts, rebase)

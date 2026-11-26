@@ -380,6 +380,10 @@ _Avoid_: usage popup, meter popup, session popup
 Talking to Claude about a Project from the UI, outside any Ticket, through a floating icon and a pop-up.
 _Avoid_: chatbot, assistant, console
 
+**Conflict Claim**:
+A Claim the Factory starts with conflicts in any Repository, the same condition that gives it the conflict prompt instead of the Stage's skill. It includes a Claim on a Spec merge Ticket. It is held to no review check: its finish never draws the comment that the code-review skill was skipped, whether it merges or rebases.
+_Avoid_: merge Claim, merge-conflict Claim
+
 **Conversation**:
 One Chat session, from its first Chat Message until the human starts a new one. Each message resumes the same session. A Project has at most one current Conversation, held by one Factory. Only Factories reporting to this service can take one here; on another service sharing the Store, Chat says where it runs.
 _Avoid_: thread, chat session
