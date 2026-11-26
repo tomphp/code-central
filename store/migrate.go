@@ -103,6 +103,7 @@ var migrations = []MigrationStep{
 	{From: 56, Name: "add Azure Boards' Work Item States"},
 	{From: 57, Name: "add the Check Command of a Project and of a Repository"},
 	{From: 58, Name: "add a Claim's Factory and its Stops"},
+	{From: 59, Name: "add the Needs Me reason stopped to the Focus Kinds"},
 }
 
 // githubIssuesRepositoryBecomesAList is format 46 to 47 (Spec

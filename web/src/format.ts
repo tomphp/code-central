@@ -3,6 +3,7 @@ import type { CIRunView, NeedsMeReason, NeedsMeRow } from "./api/types";
 export const REASON_LABEL: Record<NeedsMeReason, string> = {
   needs_answer: "Questions",
   answered: "Answered",
+  stopped: "Stopped",
   silent_claim: "Silent Claim",
   long_claim: "Long Claim",
   failed: "Failed",
@@ -73,6 +74,8 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
         : "Questions waiting";
     case "answered":
       return `Answered ${ago(now, r.since)}, no session has picked it up`;
+    case "stopped":
+      return `Stopped ${ago(now, r.since)}`;
     case "silent_claim":
       return `Quiet for ${duration(now, r.since)}`;
     case "long_claim":

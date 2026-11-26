@@ -69,6 +69,26 @@ func whyNotStoppable(key string, t domain.Ticket) string {
 	return ""
 }
 
+// stoppedSince is when t's live Claim was Stopped, if it is.
+func stoppedSince(t domain.Ticket) (time.Time, bool) {
+	cl, live := liveClaim(t)
+	if !live || !cl.Stopped() {
+		return time.Time{}, false
+	}
+	return cl.Stops[len(cl.Stops)-1].Stopped, true
+}
+
+// latestResume is when cl was last Resumed, zero if never.
+func latestResume(cl domain.Claim) time.Time {
+	var last time.Time
+	for _, s := range cl.Stops {
+		if s.Resumed.After(last) {
+			last = s.Resumed
+		}
+	}
+	return last
+}
+
 // whyNotResumable is why resume would refuse t, or "" when its live Claim
 // is Stopped.
 func whyNotResumable(key string, t domain.Ticket) string {

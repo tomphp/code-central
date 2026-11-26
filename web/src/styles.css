@@ -167,6 +167,7 @@ textarea { width: 100%; resize: vertical; }
 /* Reason colours. */
 .reason-needs_answer { --rc: var(--r-answer); }
 .reason-answered { --rc: var(--r-answered); }
+.reason-stopped { --rc: var(--r-silent); }
 .reason-silent_claim { --rc: var(--r-silent); }
 .reason-long_claim { --rc: var(--r-long); }
 .reason-failed { --rc: var(--r-failed); }

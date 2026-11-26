@@ -117,10 +117,10 @@ func (e *evaluation) evaluated() *evaluation {
 // chain is t's reason and since, or "" when it doesn't wait on the
 // human: the one precedence chain, where the first reason that applies
 // wins. A Ticket Needs Answer, Answered, Failed or In Review waits for
-// that. One In Progress or Accepted waits for CI failed, else CI
+// that, except that one Answered whose Claim is Stopped waits for Stopped. One In Progress or Accepted waits for CI failed, else CI
 // cancelled; then for nothing if it is one of a Spec's pull-request
 // Tickets but not its lead; then for Pull request closed, To merge, and
-// the timed reasons time passing gives: Silent Claim, else Long Claim,
+// Stopped for a Stopped Claim, and the timed reasons time passing gives: Silent Claim, else Long Claim,
 // while In Progress, and CI unavailable, else Accepted but not landed,
 // while Accepted. Any other Ticket, or one of those with none of its
 // reasons, waits for Blocked by a Cancelled Ticket, else Closed
@@ -131,6 +131,9 @@ func (e *evaluation) chain(t domain.Ticket) (api.NeedsMeReason, time.Time) {
 	case domain.NeedsAnswer:
 		return api.ReasonNeedsAnswer, entered(t)
 	case domain.Answered:
+		if since, ok := stoppedSince(t); ok {
+			return api.ReasonStopped, since
+		}
 		return api.ReasonAnswered, entered(t)
 	case domain.InProgress, domain.Accepted:
 		a := e.ci.ticket(t)
@@ -149,6 +152,9 @@ func (e *evaluation) chain(t domain.Ticket) (api.NeedsMeReason, time.Time) {
 		}
 		if t.State == domain.Accepted && lp.Any(domain.LandingPolicy.LandsOnHumanMerge) {
 			return api.ReasonToMerge, entered(t)
+		}
+		if since, ok := stoppedSince(t); ok {
+			return api.ReasonStopped, since
 		}
 		if s := c.silentSince(t); s != nil {
 			return api.ReasonSilentClaim, *s

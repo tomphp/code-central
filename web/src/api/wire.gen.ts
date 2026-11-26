@@ -22,6 +22,7 @@ export type State = (typeof STATES)[number];
 export const NEEDS_ME_REASONS = [
   "needs_answer",
   "answered",
+  "stopped",
   "silent_claim",
   "long_claim",
   "failed",

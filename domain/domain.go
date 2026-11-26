@@ -644,7 +644,7 @@ var ModelKinds = []string{"grilling", "spec", "tickets", "map-chart", "map-grill
 // NeedsMeReasons are the Needs Me reasons a Project's Focus Kinds may
 // turn off, in group order: core's Needs Me reasons, which core's tests
 // keep in step.
-var NeedsMeReasons = []string{"needs_answer", "answered", "silent_claim", "long_claim", "failed", "in_review",
+var NeedsMeReasons = []string{"needs_answer", "answered", "stopped", "silent_claim", "long_claim", "failed", "in_review",
 	"ci_failed", "ci_cancelled", "base_diverged", "base_missing", "repository_missing", "pull_request_closed", "to_merge", "ci_unavailable",
 	"accepted_not_landed", "blocked_by_cancelled", "new_issue", "closed_externally"}
 

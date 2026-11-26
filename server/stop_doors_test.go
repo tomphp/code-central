@@ -18,7 +18,7 @@ func init() {
 		"stop": {
 			setup: factoryClaimedTicket,
 			ok:    call{http: httpCall{"POST", "/api/p/acme/tickets/3/stop", `{"note":"Wrong approach."}`}},
-			check: ticketAcknowledgement("acme-3", "In Progress", "claims", "comments", "stoppable", "resumable"),
+			check: ticketAcknowledgement("acme-3", "In Progress", "claims", "comments", "stoppable", "resumable", "needs_me_reason"),
 			full:  trueField("resumable"),
 			bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/2/stop", `{}`}},
 			code:  api.ActionNotAllowed,
@@ -26,7 +26,7 @@ func init() {
 		"resume": {
 			setup: stoppedTicket,
 			ok:    call{http: httpCall{"POST", "/api/p/acme/tickets/3/resume", `{}`}},
-			check: ticketAcknowledgement("acme-3", "In Progress", "claims", "stoppable", "resumable"),
+			check: ticketAcknowledgement("acme-3", "In Progress", "claims", "stoppable", "resumable", "needs_me_reason"),
 			full:  trueField("stoppable"),
 			bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/2/resume", `{}`}},
 			code:  api.ActionNotAllowed,
