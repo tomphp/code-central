@@ -49,6 +49,12 @@ func New(o Options) *Harness {
 // Name is claude.
 func (h *Harness) Name() string { return "claude" }
 
+// Capabilities: claude reports Plan Limits in its rate_limit_events, and
+// its Skill tool calls say whether code-review ran.
+func (h *Harness) Capabilities() harness.Capabilities {
+	return harness.Capabilities{PlanLimits: true, ReviewDetection: true}
+}
+
 // Run runs t as claude -p. An effort claude doesn't accept starts
 // nothing.
 func (h *Harness) Run(ctx context.Context, t harness.Turn) harness.Outcome {

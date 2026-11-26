@@ -41,7 +41,7 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, out harness.Outcome) d
 		if len(denials) > 0 {
 			f.commentDenials(ctx, t, denials)
 		}
-		if by == "finish" {
+		if by == "finish" && f.runner.detectsReview() {
 			f.checkReview(ctx, t, tk, c.Reviewed || out.ReviewCalled)
 		}
 		if checksFinish(by, tk.State) {

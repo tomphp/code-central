@@ -28,6 +28,9 @@ type Harness interface {
 	// VerifyArgs checks, with the Harness run in dir, that it accepts
 	// the args it was given, warning through warnf when it can't tell.
 	VerifyArgs(dir string, warnf func(format string, args ...any)) error
+	// Capabilities declares the optional features this Harness has. One it
+	// lacks is absent from the Factory, never emulated.
+	Capabilities() Capabilities
 	// Run runs t to its end, stopping it when ctx ends, and says how it
 	// ended once its process has exited and its output has been read.
 	Run(ctx context.Context, t Turn) Outcome
@@ -55,6 +58,18 @@ type Accepts struct {
 // effort at all. Without levels it can't say, so it takes any.
 func (a Accepts) TakesEffort(effort string) bool {
 	return effort == "" || len(a.Efforts) == 0 || slices.Contains(a.Efforts, effort)
+}
+
+// Capabilities are the optional features a Harness declares beyond the
+// required core.
+type Capabilities struct {
+	// PlanLimits is whether the Harness reports its account's Plan Limits
+	// through Turn.OnPlanLimits; without it none show on the Heartbeat.
+	PlanLimits bool
+	// ReviewDetection is whether the Harness says, in Outcome.ReviewCalled,
+	// whether a Turn ran the code-review skill; without it a Claim's
+	// Reviewed is never set from a Turn and no review is checked for.
+	ReviewDetection bool
 }
 
 // Turn is one run of a Harness: where and as what it runs, and where
