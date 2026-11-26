@@ -214,11 +214,11 @@ Add, edit, reorder and remove them in the **Repositories** section at the top of
 
 ```console
 $ code-central repository add web --clone-url git@github.com:acme/web.git
-NAME             CLONE URL                         BASE  LOCAL PATH  LANDING          PUSH REMOTE
+NAME             CLONE URL                         BASE  LOCAL PATH  LANDING          PUSH REMOTE  CHECK COMMAND
 acme-api (home)  git@github.com:acme/acme-api.git  main  -           Merge (default)  origin
 web              git@github.com:acme/web.git       main  -           Merge (default)  origin
 $ code-central repository move web --before acme-api
-NAME             CLONE URL                         BASE  LOCAL PATH  LANDING          PUSH REMOTE
+NAME             CLONE URL                         BASE  LOCAL PATH  LANDING          PUSH REMOTE  CHECK COMMAND
 web              git@github.com:acme/web.git       main  -           Merge (default)  origin
 acme-api (home)  git@github.com:acme/acme-api.git  main  -           Merge (default)  origin
 ```
@@ -227,7 +227,7 @@ A repository you never push, with no remote or none you want the Factory to use,
 
 ```console
 $ code-central repository add notes --local-path /home/you/src/notes
-NAME             CLONE URL                         BASE  LOCAL PATH           LANDING          PUSH REMOTE
+NAME             CLONE URL                         BASE  LOCAL PATH           LANDING          PUSH REMOTE  CHECK COMMAND
 web              git@github.com:acme/web.git       main  -                    Merge (default)  origin
 acme-api (home)  git@github.com:acme/acme-api.git  main  -                    Merge (default)  origin
 notes            (none: local only)                main  /home/you/src/notes  Merge (default)  origin
@@ -237,8 +237,18 @@ Each Repository, the Home included, follows the Project's **Default Landing** (t
 
 ```console
 $ code-central repository edit web --landing pull-request --push-remote upstream
-NAME             CLONE URL                         BASE  LOCAL PATH           LANDING             PUSH REMOTE
+NAME             CLONE URL                         BASE  LOCAL PATH           LANDING             PUSH REMOTE  CHECK COMMAND
 web              git@github.com:acme/web.git       main  -                    Pull Request (own)  upstream
+acme-api (home)  git@github.com:acme/acme-api.git  main  -                    Merge (default)     origin
+notes            (none: local only)                main  /home/you/src/notes  Merge (default)     origin
+```
+
+**Check Command.** The command an agent runs in a Repository to check its code, such as `npm run check`. Set the Project's in the **Check Command** field at the top of Project Options, beside the Repositories section; each Repository follows it unless `--check-command` (on `repository add` or `edit`) or the Repository's **Edit** form gives it its own. Today only a Conflict Claim runs it, after resolving a merge or rebase. A Repository with neither has the Claim follow its own docs, such as CLAUDE.md or README. The list's CHECK COMMAND column shows the effective command, marked `(own)` or `(default)`, and nothing when there is none:
+
+```console
+$ code-central repository edit web --check-command "npm run check"
+NAME             CLONE URL                         BASE  LOCAL PATH           LANDING             PUSH REMOTE  CHECK COMMAND
+web              git@github.com:acme/web.git       main  -                    Pull Request (own)  upstream     npm run check (own)
 acme-api (home)  git@github.com:acme/acme-api.git  main  -                    Merge (default)     origin
 notes            (none: local only)                main  /home/you/src/notes  Merge (default)     origin
 ```
