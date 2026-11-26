@@ -83,9 +83,13 @@ func (r *turnRunner) run(stop context.Context, in turnInput) harness.Outcome {
 		t.OnPlanLimits = func(api.PlanLimits) {}
 	}
 	out := r.harness.Run(stop, t)
-	out.ReviewCalled = out.ReviewCalled && r.caps.ReviewDetection
+	out.ReviewCalled = out.ReviewCalled && r.detectsReview()
 	return out
 }
+
+// detectsReview is whether the Harness says if a Turn ran the code-review
+// skill; without it no review is checked for.
+func (r *turnRunner) detectsReview() bool { return r.caps.ReviewDetection }
 
 // withDefaults is in with the Turn's defaults, Linef for an Echo it
 // leaves out and a stint that tells nothing for a Work it leaves out.

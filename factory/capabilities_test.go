@@ -20,7 +20,7 @@ func (reportingHarness) Run(_ context.Context, t harness.Turn) harness.Outcome {
 	return harness.Outcome{Kind: harness.Done, ReviewCalled: true}
 }
 
-func TestAHarnessThatDeclaresNoCapabilitiesHasNoPlanLimitsOrReview(t *testing.T) {
+func TestATurnReportsOnlyThePlanLimitsAndReviewItsHarnessDeclares(t *testing.T) {
 	t.Parallel()
 	for name, tc := range map[string]struct {
 		caps                     harness.Capabilities
