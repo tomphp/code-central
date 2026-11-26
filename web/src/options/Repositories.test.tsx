@@ -410,4 +410,75 @@ describe("the Repositories section", () => {
 
     expect(section()).toBeDisabled();
   });
+
+  describe("Check Command", () => {
+    const detail = (name: string) =>
+      within(row(name)).getByText("Check Command", { selector: "dt" }).nextElementSibling;
+
+    it("saves the Project's from its field at the top, with its help text", async () => {
+      const { w } = await fresh();
+      await renderApp(w);
+
+      const form = within(section()).getByRole("form", { name: "Check Command" });
+      expect(form).toHaveTextContent("Today only Conflict Claims run it");
+      expect(within(form).getByRole("button", { name: "Save" })).toBeDisabled();
+      await userEvent.type(within(form).getByRole("textbox", { name: "Check Command" }), "make typecheck");
+      await userEvent.click(within(form).getByRole("button", { name: "Save" }));
+      await settle(w);
+
+      expect((await w.api.listProjects())[0].check_command).toBe("make typecheck");
+      expect(within(form).getByRole("status")).toHaveTextContent("Saved");
+    });
+
+    it("shows each row's as its own, the Project's, or following the Repository's docs", async () => {
+      const { w } = await fresh({ repositories: ["web", "api"] });
+      await w.api.editRepository("acme", "web", { check_command: "npm run check" });
+      await renderApp(w);
+
+      expect(detail("acme")).toHaveTextContent("none: follows the Repository's own docs");
+      expect(detail("web")).toHaveTextContent("npm run check (its own)");
+
+      await w.api.setCheckCommand("acme", "make check");
+      await settle(w);
+      expect(detail("acme")).toHaveTextContent("make check (Project's)");
+      expect(detail("api")).toHaveTextContent("make check (Project's)");
+      expect(detail("web")).toHaveTextContent("npm run check (its own)");
+    });
+
+    it("gives a Repository its own in place, with the Project's as its placeholder, and sets it back", async () => {
+      const { w } = await fresh({ repositories: ["web"] });
+      await w.api.setCheckCommand("acme", "make check");
+      await renderApp(w);
+
+      await userEvent.click(within(row("web")).getByRole("button", { name: "Edit web" }));
+      let field = within(within(section()).getByRole("form", { name: "Edit web" })).getByRole("textbox", { name: "Check Command" });
+      expect(field).toHaveValue("");
+      expect(field).toHaveAttribute("placeholder", "make check");
+      await userEvent.type(field, "npm run check");
+      await userEvent.click(within(within(section()).getByRole("form", { name: "Edit web" })).getByRole("button", { name: "Save" }));
+      await settle(w);
+      expect(detail("web")).toHaveTextContent("npm run check (its own)");
+
+      await userEvent.click(within(row("web")).getByRole("button", { name: "Edit web" }));
+      field = within(within(section()).getByRole("form", { name: "Edit web" })).getByRole("textbox", { name: "Check Command" });
+      expect(field).toHaveValue("npm run check");
+      await userEvent.clear(field);
+      await userEvent.click(within(within(section()).getByRole("form", { name: "Edit web" })).getByRole("button", { name: "Save" }));
+      await settle(w);
+      expect(detail("web")).toHaveTextContent("make check (Project's)");
+    });
+
+    it("gives the Home its own too", async () => {
+      const { w } = await fresh();
+      await renderApp(w);
+
+      await userEvent.click(within(row("acme")).getByRole("button", { name: "Edit acme" }));
+      const form = within(section()).getByRole("form", { name: "Edit acme" });
+      await userEvent.type(within(form).getByRole("textbox", { name: "Check Command" }), "make typecheck");
+      await userEvent.click(within(form).getByRole("button", { name: "Save" }));
+      await settle(w);
+
+      expect(detail("acme")).toHaveTextContent("make typecheck (its own)");
+    });
+  });
 });
