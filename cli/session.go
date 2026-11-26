@@ -134,20 +134,29 @@ func runHook(_ context.Context, e Env, args []string) error {
 	if json.NewDecoder(e.Stdin).Decode(&in) != nil || in.SessionID == "" {
 		return nil
 	}
+	if !completesInput(in.ToolName) {
+		return nil
+	}
 	input := in.ToolInput
 	if input == nil {
 		input = map[string]any{}
 	}
-	input["session_id"] = in.SessionID
-	// The CLI's version goes alongside, so a service of another version
-	// names both versions when it rejects a field it doesn't know.
-	input["client_version"] = e.version()
-	// claim and set_session also get the session's working directory,
-	// unless the agent gave one. post_round takes none, and decodes
-	// strictly.
-	if _, given := input["working_dir"]; !given && in.Cwd != "" && takesWorkingDir(in.ToolName) {
-		input["working_dir"] = in.Cwd
+	added := false
+	add := func(key, value string) {
+		if _, given := input[key]; !given && value != "" {
+			input[key] = value
+			added = true
+		}
 	}
+	add("session_id", in.SessionID)
+	add("working_dir", in.Cwd)
+	if !added {
+		return nil
+	}
+	// The CLI's version goes alongside what the hook adds, so a service of
+	// another version names both versions when it rejects a field it doesn't
+	// know.
+	input["client_version"] = e.version()
 	// updatedInput replaces the whole tool input. No permissionDecision:
 	// the call goes through the normal permission flow.
 	out := map[string]any{"hookSpecificOutput": map[string]any{
@@ -162,9 +171,9 @@ func runHook(_ context.Context, e Env, args []string) error {
 	return nil
 }
 
-// takesWorkingDir reports whether the MCP tool takes a working_dir: claim
-// and set_session.
-func takesWorkingDir(tool string) bool {
+// completesInput reports whether the hook completes the MCP tool's input:
+// claim and set_session.
+func completesInput(tool string) bool {
 	return strings.HasSuffix(tool, "__claim") || strings.HasSuffix(tool, "__set_session")
 }
 
@@ -178,7 +187,7 @@ const (
 )
 
 var ourHooks = []struct{ event, matcher, command string }{
-	{"PreToolUse", "mcp__" + serverName + "__claim|mcp__" + serverName + "__set_session|mcp__" + serverName + "__post_round", sessionHookCmd},
+	{"PreToolUse", "mcp__" + serverName + "__claim|mcp__" + serverName + "__set_session", sessionHookCmd},
 	{"PostToolUse", "*", pingHookCmd},
 }
 

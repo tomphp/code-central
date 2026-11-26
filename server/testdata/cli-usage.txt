@@ -25,7 +25,7 @@ Commands:
   get-ticket <id> [--part claims|failure_reports|comments|rounds|moves|edits]...
   get-workflow  print the workflow (same as workflow)
   give-up <id> --claim <claim-id> [--note <md> | --file <path|->] [--full]
-  hook session-id  PreToolUse hook: add session_id and client_version to the tool input
+  hook session-id  PreToolUse hook: add a missing session_id or working_dir to claim and set_session
   import [--dry-run] [--file <json-path|->]  import a .scratch/ payload {specs, tickets} from stdin or a file
   import-guide  print how to map a .scratch/ folder into an import
   init [--key <key>] [--local | --committed]  set this repository up as a Project (--local keeps init's files out of git)

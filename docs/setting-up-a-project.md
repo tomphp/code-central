@@ -86,7 +86,7 @@ You're starting `acme-shop` from nothing, in `~/src`.
    | File | What it's for |
    | --- | --- |
    | `.mcp.json` | Adds the `code-central` MCP server, at `${CODE_CENTRAL_URL:-http://localhost:7733}/p/acme-shop/mcp`, so Claude Code can reach the Project. Any other servers in the file are kept. |
-   | `.claude/settings.json` | The hooks: `code-central hook session-id` records the session on a Claim and a Round, and `code-central ping` marks the session active so its Claim doesn't turn Silent. |
+   | `.claude/settings.json` | The hooks: `code-central hook session-id` records the session on a Claim, and `code-central ping` marks the session active so its Claim doesn't turn Silent. |
    | `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md` | Tell the `mattpocock-skills` skills to use Code Central's operations, States and Labels instead of an issue tracker's. Each starts with a `Written by code-central init` header line, and re-running init rewrites a file that has it. Take the header line out to keep your own version: init then asks before replacing it. |
    | `CLAUDE.md` | A short `## Issue tracker` section pointing at `docs/agents/issue-tracker.md`. An existing `CLAUDE.md` keeps its content; init only adds the section. |
 

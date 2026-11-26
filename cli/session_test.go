@@ -155,13 +155,22 @@ func TestPingGivesUpAfter300Milliseconds(t *testing.T) {
 	}
 }
 
-func TestHookSessionIDAddsTheSessionToTheToolInput(t *testing.T) {
-	t.Parallel()
-	in := `{"session_id":"abc","hook_event_name":"PreToolUse","tool_name":"mcp__code-central__claim","tool_input":{"spec":"acme-1","session_id":"stale"}}`
-	r := run(t, nil, in, "hook", "session-id")
+// hookOutput runs the session-id hook on stdin and returns its stdout, which
+// is empty when the hook leaves the call alone.
+func hookOutput(t *testing.T, stdin string) string {
+	t.Helper()
+	r := run(t, nil, stdin, "hook", "session-id")
 	if r.code != 0 {
 		t.Fatalf("exit %d: %s", r.code, r.stderr)
 	}
+	return r.stdout
+}
+
+// hookUpdatedInput returns the updatedInput the session-id hook answers with:
+// the whole input, as updatedInput replaces it, and no permission decision, so
+// the normal permission flow applies.
+func hookUpdatedInput(t *testing.T, stdin string) map[string]any {
+	t.Helper()
 	var out struct {
 		HookSpecificOutput struct {
 			HookEventName      string         `json:"hookEventName"`
@@ -169,65 +178,73 @@ func TestHookSessionIDAddsTheSessionToTheToolInput(t *testing.T) {
 			PermissionDecision *string        `json:"permissionDecision"`
 		} `json:"hookSpecificOutput"`
 	}
-	dec := json.NewDecoder(strings.NewReader(r.stdout))
+	stdout := hookOutput(t, stdin)
+	dec := json.NewDecoder(strings.NewReader(stdout))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&out); err != nil {
-		t.Fatalf("%v: %s", err, r.stdout)
+		t.Fatalf("%v: %s", err, stdout)
 	}
-	h := out.HookSpecificOutput
-	// updatedInput replaces the whole input, so every field is kept, and
-	// the CLI's version goes alongside the session; no permission decision
-	// is made, so the normal permission flow applies.
-	want := map[string]any{"spec": "acme-1", "session_id": "abc", "client_version": cli.Version}
-	if h.HookEventName != "PreToolUse" || len(h.UpdatedInput) != len(want) || h.PermissionDecision != nil {
-		t.Fatalf("hook output %s", r.stdout)
-	}
-	for k, v := range want {
-		if h.UpdatedInput[k] != v {
-			t.Fatalf("updatedInput[%q] = %v, want %v", k, h.UpdatedInput[k], v)
-		}
-	}
-}
-
-// hookUpdatedInput runs the session-id hook on stdin and returns its
-// updatedInput.
-func hookUpdatedInput(t *testing.T, stdin string) map[string]any {
-	t.Helper()
-	r := run(t, nil, stdin, "hook", "session-id")
-	if r.code != 0 {
-		t.Fatalf("exit %d: %s", r.code, r.stderr)
-	}
-	var out struct {
-		HookSpecificOutput struct {
-			UpdatedInput map[string]any `json:"updatedInput"`
-		} `json:"hookSpecificOutput"`
-	}
-	if err := json.Unmarshal([]byte(r.stdout), &out); err != nil {
-		t.Fatalf("%v: %s", err, r.stdout)
+	if h := out.HookSpecificOutput; h.HookEventName != "PreToolUse" || h.PermissionDecision != nil {
+		t.Fatalf("hook output %s", stdout)
 	}
 	return out.HookSpecificOutput.UpdatedInput
 }
 
-func TestHookSessionIDFillsClaimAndSetSessionsWorkingDirFromTheHooksCwd(t *testing.T) {
+func hookCall(tool, cwd, input string) string {
+	return `{"session_id":"abc","cwd":"` + cwd + `","tool_name":"mcp__code-central__` + tool + `","tool_input":` + input + `}`
+}
+
+func TestHookSessionIDLeavesACompleteCallAlone(t *testing.T) {
 	t.Parallel()
-	got := hookUpdatedInput(t, `{"session_id":"abc","cwd":"/work/acme","tool_name":"mcp__code-central__claim","tool_input":{"spec":"acme-1"}}`)
-	if len(got) != 4 || got["session_id"] != "abc" || got["working_dir"] != "/work/acme" {
-		t.Fatalf("updatedInput %v", got)
+	complete := `{"ticket":"acme-1","session_id":"mine","working_dir":"/elsewhere"}`
+	for _, tool := range []string{"claim", "set_session"} {
+		if out := hookOutput(t, hookCall(tool, "/work/acme", complete)); out != "" {
+			t.Fatalf("%s: hook printed %s", tool, out)
+		}
 	}
-	// A working_dir the agent gave is kept.
-	got = hookUpdatedInput(t, `{"session_id":"abc","cwd":"/work/acme","tool_name":"mcp__code-central__claim","tool_input":{"working_dir":"/elsewhere"}}`)
-	if got["working_dir"] != "/elsewhere" {
-		t.Fatalf("updatedInput %v", got)
+}
+
+func TestHookSessionIDDoesNothingForPostRound(t *testing.T) {
+	t.Parallel()
+	for _, input := range []string{`{"ticket":"acme-2"}`, `{"ticket":"acme-2","session_id":"mine"}`} {
+		if out := hookOutput(t, hookCall("post_round", "/work/acme", input)); out != "" {
+			t.Fatalf("post_round %s: hook printed %s", input, out)
+		}
 	}
-	// set_session takes one too.
-	got = hookUpdatedInput(t, `{"session_id":"abc","cwd":"/work/acme","tool_name":"mcp__code-central__set_session","tool_input":{"ticket":"acme-2","claim_id":"c1"}}`)
-	if len(got) != 5 || got["session_id"] != "abc" || got["working_dir"] != "/work/acme" {
-		t.Fatalf("updatedInput %v", got)
+}
+
+func TestHookSessionIDAddsOnlyWhatIsMissing(t *testing.T) {
+	t.Parallel()
+	v := cli.Version
+	tests := map[string]struct {
+		tool, input string
+		want        map[string]any
+	}{
+		"claim without a session": {"claim", `{"spec":"acme-1","working_dir":"/mine"}`,
+			map[string]any{"spec": "acme-1", "working_dir": "/mine", "session_id": "abc", "client_version": v}},
+		"claim without a working_dir": {"claim", `{"spec":"acme-1","session_id":"stale"}`,
+			map[string]any{"spec": "acme-1", "session_id": "stale", "working_dir": "/work/acme", "client_version": v}},
+		"claim without either": {"claim", `{"spec":"acme-1"}`,
+			map[string]any{"spec": "acme-1", "session_id": "abc", "working_dir": "/work/acme", "client_version": v}},
+		"set_session without either": {"set_session", `{"ticket":"acme-2","claim_id":"c1"}`,
+			map[string]any{"ticket": "acme-2", "claim_id": "c1", "session_id": "abc", "working_dir": "/work/acme", "client_version": v}},
+		"no tool_input": {"claim", `null`,
+			map[string]any{"session_id": "abc", "working_dir": "/work/acme", "client_version": v}},
 	}
-	// post_round takes no working_dir, so it gets none.
-	got = hookUpdatedInput(t, `{"session_id":"abc","cwd":"/work/acme","tool_name":"mcp__code-central__post_round","tool_input":{"ticket":"acme-2"}}`)
-	if _, ok := got["working_dir"]; ok || got["session_id"] != "abc" || got["client_version"] != cli.Version {
-		t.Fatalf("updatedInput %v", got)
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			got := hookUpdatedInput(t, hookCall(tt.tool, "/work/acme", tt.input))
+			if b, w := mustJSON(got), mustJSON(tt.want); !bytes.Equal(b, w) {
+				t.Fatalf("updatedInput\n got %s\nwant %s", b, w)
+			}
+		})
+	}
+}
+
+func TestHookSessionIDWithNothingToAddPrintsNothing(t *testing.T) {
+	t.Parallel()
+	if out := hookOutput(t, hookCall("claim", "", `{"spec":"acme-1","session_id":"mine"}`)); out != "" {
+		t.Fatalf("hook printed %s", out)
 	}
 }
 
@@ -243,11 +260,6 @@ func TestHookSessionIDNeverBlocks(t *testing.T) {
 				t.Fatalf("hook: %+v", r)
 			}
 		})
-	}
-	// No tool_input still gets one holding the session.
-	r := run(t, nil, `{"session_id":"abc"}`, "hook", "session-id")
-	if r.code != 0 || !strings.Contains(r.stdout, `"updatedInput":{"client_version":"`+cli.Version+`","session_id":"abc"}`) {
-		t.Fatalf("hook: %+v", r)
 	}
 	if r := run(t, nil, "", "hook", "nope"); r.code != 0 {
 		t.Fatalf("an unknown hook exits %d, want 0", r.code)
@@ -296,7 +308,7 @@ func TestInitWritesTheHooks(t *testing.T) {
 	ok(t, runIn(t, dir, map[string]string{"CODE_CENTRAL_URL": srv.URL}, "\ny\n", "init"))
 	doc := settings(t, dir)
 	want := map[string]map[string][]string{
-		"PreToolUse":  {"mcp__code-central__claim|mcp__code-central__set_session|mcp__code-central__post_round": {"code-central hook session-id"}},
+		"PreToolUse":  {"mcp__code-central__claim|mcp__code-central__set_session": {"code-central hook session-id"}},
 		"PostToolUse": {"Write": {"gofmt -w"}, "*": {"code-central ping"}},
 	}
 	got := hookCommands(doc)
@@ -312,6 +324,21 @@ func TestInitWritesTheHooks(t *testing.T) {
 	ok(t, runIn(t, dir, map[string]string{"CODE_CENTRAL_URL": srv.URL}, "\ny\n", "init"))
 	if b, w := mustJSON(hookCommands(settings(t, dir))), mustJSON(want); !bytes.Equal(b, w) {
 		t.Fatalf("after a second init\n got %s\nwant %s", b, w)
+	}
+}
+
+func TestInitReplacesAnOlderSessionHookMatcherThatNamedPostRound(t *testing.T) {
+	t.Parallel()
+	srv := codecentraltest.NewServer(t)
+	dir := gitRepo(t, "api")
+	os.MkdirAll(filepath.Join(dir, ".claude"), 0o755)
+	old := `{"hooks":{"PreToolUse":[{"matcher":"mcp__code-central__claim|mcp__code-central__set_session|mcp__code-central__post_round","hooks":[{"type":"command","command":"code-central hook session-id"}]}]}}`
+	os.WriteFile(filepath.Join(dir, ".claude", "settings.json"), []byte(old), 0o644)
+
+	ok(t, runIn(t, dir, map[string]string{"CODE_CENTRAL_URL": srv.URL}, "\ny\n", "init"))
+	want := map[string][]string{"mcp__code-central__claim|mcp__code-central__set_session": {"code-central hook session-id"}}
+	if b, w := mustJSON(hookCommands(settings(t, dir))["PreToolUse"]), mustJSON(want); !bytes.Equal(b, w) {
+		t.Fatalf("PreToolUse\n got %s\nwant %s", b, w)
 	}
 }
 
