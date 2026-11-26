@@ -12,8 +12,8 @@ import (
 )
 
 // pushRemoteURL is the Push remote URL the Factory last reported on the
-// harness's Project.
-func pushRemoteURL(t *testing.T, h *factorytest.Harness) string {
+// rig's Project.
+func pushRemoteURL(t *testing.T, h *factorytest.Rig) string {
 	t.Helper()
 	p, err := h.Human().GetProject(context.Background(), h.Project)
 	if err != nil {
@@ -61,8 +61,8 @@ func TestAFactoryWithNoPushRemoteReportsNoURLAndStillStarts(t *testing.T) {
 	}
 }
 
-// trackCI turns CI Tracking on for the harness's Project as the human.
-func trackCI(t *testing.T, h *factorytest.Harness) {
+// trackCI turns CI Tracking on for the rig's Project as the human.
+func trackCI(t *testing.T, h *factorytest.Rig) {
 	t.Helper()
 	if _, err := h.Human().SetCITracking(context.Background(), h.Project, api.SetCITrackingInput{Tracking: true, Repository: "acme/web"}); err != nil {
 		t.Fatal(err)

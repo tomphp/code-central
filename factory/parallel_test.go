@@ -8,7 +8,7 @@ import (
 )
 
 // callsFor is the claude runs for ticket, oldest first.
-func callsFor(h *factorytest.Harness, ticket string) []factorytest.Call {
+func callsFor(h *factorytest.Rig, ticket string) []factorytest.Call {
 	var out []factorytest.Call
 	for _, c := range h.Calls() {
 		if c.Ticket == ticket {

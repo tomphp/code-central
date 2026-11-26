@@ -11,7 +11,7 @@ import (
 )
 
 // reported is the Project's Reported Models, read as the human.
-func reported(t *testing.T, h *factorytest.Harness) api.ReportedModelsView {
+func reported(t *testing.T, h *factorytest.Rig) api.ReportedModelsView {
 	t.Helper()
 	p, err := h.Human().GetProject(context.Background(), h.Project)
 	if err != nil {
@@ -22,7 +22,7 @@ func reported(t *testing.T, h *factorytest.Harness) api.ReportedModelsView {
 
 // wantReport fails the test unless the Factory has made its report_models
 // (a test settles the Factory first), and returns it.
-func wantReport(t *testing.T, h *factorytest.Harness) api.ReportedModelsView {
+func wantReport(t *testing.T, h *factorytest.Rig) api.ReportedModelsView {
 	t.Helper()
 	got := reported(t, h)
 	if got.Reported == nil {

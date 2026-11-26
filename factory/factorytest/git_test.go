@@ -277,7 +277,7 @@ func TestRawGitFailsUnderTheFakeGitNamingTheTypedHelpersAndRealGit(t *testing.T)
 	t.Parallel()
 	h := New(t, FakeGit())
 	if h.fake == nil {
-		t.Skip(gitEnv + "=real runs every Harness on real git")
+		t.Skip(gitEnv + "=real runs every Rig on real git")
 	}
 	remote := h.AddRemote("origin")
 	for name, raw := range map[string]func(){
@@ -301,7 +301,7 @@ func TestTheGitSwitchRunsATestThatChoseTheFakeGitOnRealGit(t *testing.T) {
 	t.Setenv(gitEnv, "real")
 	h := New(t, FakeGit())
 	if h.fake != nil {
-		t.Fatalf("%s=real, but the Harness is on the Fake git", gitEnv)
+		t.Fatalf("%s=real, but the Rig is on the Fake git", gitEnv)
 	}
 	if got, want := h.Git("rev-parse", "main"), h.Tip("main"); got != want {
 		t.Errorf("real git's main is %s, want %s", got, want)
@@ -339,7 +339,7 @@ func TestGitVersionSetsTheFakeGitsVersion(t *testing.T) {
 	t.Parallel()
 	h := New(t, FakeGit())
 	if h.fake == nil {
-		t.Skip(gitEnv + "=real runs every Harness on real git")
+		t.Skip(gitEnv + "=real runs every Rig on real git")
 	}
 	h.GitVersion("2.37.9")
 	if v, err := h.fake.Version(); err != nil || v != "git version 2.37.9" {
@@ -391,7 +391,7 @@ func TestAScriptsGitStepTheFakeGitDoesntModelFailsTheTestNamingTheCommand(t *tes
 	defer ft.finish()
 	h := New(ft, FakeGit())
 	if h.fake == nil {
-		t.Skip(gitEnv + "=real runs every Harness on real git")
+		t.Skip(gitEnv + "=real runs every Rig on real git")
 	}
 	id := h.ReadyTicket("Add a feature")
 	h.Script(id, Git("stash", "push"), Result("success"))

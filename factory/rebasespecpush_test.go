@@ -15,7 +15,7 @@ import (
 // Branch before the base moved on, then landed by merge and push, with CI
 // Tracking on: it returns the Tickets, the pushed commit and the running
 // Factory, with the Tickets Accepted and waiting on CI.
-func rebasedSpecPushed(t *testing.T, h *factorytest.Harness) (a, b, pushed string, r *factorytest.Running) {
+func rebasedSpecPushed(t *testing.T, h *factorytest.Rig) (a, b, pushed string, r *factorytest.Running) {
 	t.Helper()
 	remote := h.AddRemote("origin")
 	on, landPerSpec := true, true

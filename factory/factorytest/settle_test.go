@@ -22,7 +22,7 @@ type requestHold struct {
 
 // newRequestHold sets h's proxy up to hold requests; call it before
 // Start.
-func newRequestHold(h *Harness) *requestHold {
+func newRequestHold(h *Rig) *requestHold {
 	rh := &requestHold{released: make(chan struct{})}
 	rh.suffix.Store("")
 	h.stall = func(r *http.Request) {
@@ -51,7 +51,7 @@ func (rh *requestHold) release() {
 
 // waitUnsettledBy waits until what the Factory is yet to settle has an
 // entry starting with want, and returns all it names.
-func waitUnsettledBy(t *testing.T, h *Harness, r *Running, want string) []string {
+func waitUnsettledBy(t *testing.T, h *Rig, r *Running, want string) []string {
 	t.Helper()
 	var unmet []string
 	h.WaitForDescribed(func() string { return want + " in flight (have " + strings.Join(unmet, "; ") + ")" }, func() bool {

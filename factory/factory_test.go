@@ -15,7 +15,7 @@ func TestMain(m *testing.M) { factorytest.Main(m) }
 
 // refuses runs the Factory from dir and checks it refused to start,
 // saying why, without claiming anything.
-func refuses(t *testing.T, h *factorytest.Harness, dir, why string, args ...string) {
+func refuses(t *testing.T, h *factorytest.Rig, dir, why string, args ...string) {
 	t.Helper()
 	code, _, stderr := h.RunIn(dir, args...)
 	if code == 0 || !strings.Contains(stderr, why) {

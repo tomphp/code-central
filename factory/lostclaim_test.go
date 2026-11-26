@@ -19,7 +19,7 @@ const claimPath = "/api/p/acme/claim"
 
 func TestAClaimWhoseAnswerIsLostIsClaimedAgainAndRuns(t *testing.T) {
 	t.Parallel()
-	h := wakingHarness(t)
+	h := wakingRig(t)
 	id := h.ReadyTicket("Ask first")
 	h.Script(id, factorytest.PostRound("Which colour?"), factorytest.Result("success"))
 	h.LoseAnswer("/claim", 1)
@@ -43,7 +43,7 @@ func TestAClaimWhoseAnswerIsLostIsClaimedAgainAndRuns(t *testing.T) {
 
 func TestAClaimThatNeverArrivedIsClaimedAgainAndRuns(t *testing.T) {
 	t.Parallel()
-	h := wakingHarness(t)
+	h := wakingRig(t)
 	id := h.ReadyTicket("Lost on the way")
 	h.LoseRequest("/claim", 1)
 	r := h.Start()
@@ -62,7 +62,7 @@ func TestAClaimThatNeverArrivedIsClaimedAgainAndRuns(t *testing.T) {
 // claim and runs no turn.
 func TestAClaimAnotherSessionTakesBeforeTheRetryIsDropped(t *testing.T) {
 	t.Parallel()
-	h := wakingHarness(t)
+	h := wakingRig(t)
 	// Every try but the last is cut before Code Central sees it, so the
 	// other session has from the first cut to the last try to claim.
 	h.LoseRequest("/claim", 3)
@@ -101,7 +101,7 @@ func TestAClaimAnotherSessionTakesBeforeTheRetryIsDropped(t *testing.T) {
 // and 3 more, and starts no turn.
 func TestAClaimLostOnEveryTryIsSentFourTimes(t *testing.T) {
 	t.Parallel()
-	h := wakingHarness(t)
+	h := wakingRig(t)
 	id := h.ReadyTicket("Never through")
 	h.LoseRequest("/claim", 5)
 	r := h.Start()

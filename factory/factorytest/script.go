@@ -1,5 +1,5 @@
 // What the fake claude does on a run, its Script of Steps, and what the
-// harness reads back: its Calls and the signals a Wait step noted.
+// rig reads back: its Calls and the signals a Wait step noted.
 
 package factorytest
 
@@ -26,7 +26,7 @@ type Step struct {
 	Write *File `json:"write,omitempty"`
 	// Git runs git with these args in the worktree: git on PATH under
 	// real git, and under the Fake git the Fake's git.Fake.Run, through
-	// the harness's relay (relayPath).
+	// the rig's relay (relayPath).
 	Git []string `json:"git,omitempty"`
 	// Need fails the run unless this file is in the worktree.
 	Need string `json:"need,omitempty"`
@@ -60,7 +60,7 @@ func PostRound(title string) Step {
 }
 
 // Continue lets the run of ticket now in a Wait step carry on.
-func (h *Harness) Continue(ticket string) {
+func (h *Rig) Continue(ticket string) {
 	h.t.Helper()
 	must(h.t, os.WriteFile(filepath.Join(h.data, "continue", ticket), nil, 0o644))
 	h.WaitFor(ticket+"'s run to carry on", func() bool {
@@ -71,7 +71,7 @@ func (h *Harness) Continue(ticket string) {
 
 // Signals is the signals runs of ticket got while in a Wait step, in
 // order: "INT" and "TERM" on Unix, "BREAK" on Windows.
-func (h *Harness) Signals(ticket string) []string {
+func (h *Rig) Signals(ticket string) []string {
 	b, err := readFile(filepath.Join(h.data, "signals", ticket))
 	if os.IsNotExist(err) {
 		return nil
@@ -107,21 +107,21 @@ Commands:
 `
 
 // ClaudeHelp makes the fake claude's --help print help.
-func (h *Harness) ClaudeHelp(help string) {
+func (h *Rig) ClaudeHelp(help string) {
 	h.t.Helper()
 	must(h.t, os.WriteFile(filepath.Join(h.data, "help.txt"), []byte(help), 0o644))
 }
 
 // ClaudeRejects makes the fake claude name arg an unknown option when the
 // Factory checks its Claude Args, as real claude does for a typo.
-func (h *Harness) ClaudeRejects(arg string) {
+func (h *Rig) ClaudeRejects(arg string) {
 	h.t.Helper()
 	must(h.t, os.WriteFile(filepath.Join(h.data, "rejects.txt"), []byte(arg+"\n"), 0o644))
 }
 
 // ClaudeSays makes the fake claude print output, and exit 0, when the
 // Factory checks its Claude Args.
-func (h *Harness) ClaudeSays(output string) {
+func (h *Rig) ClaudeSays(output string) {
 	h.t.Helper()
 	must(h.t, os.WriteFile(filepath.Join(h.data, "says.txt"), []byte(output), 0o644))
 }
@@ -374,7 +374,7 @@ const ChatReply = "Here is the answer."
 var DefaultChatScript = []Step{Say(ChatReply), Result("success")}
 
 // Script sets what the fake does on every run for ticket.
-func (h *Harness) Script(ticket string, steps ...Step) {
+func (h *Rig) Script(ticket string, steps ...Step) {
 	b, err := json.Marshal(steps)
 	must(h.t, err)
 	must(h.t, os.WriteFile(filepath.Join(h.data, "scripts", ticket+".json"), b, 0o644))
@@ -426,7 +426,7 @@ func (c Call) Has(arg string) bool {
 }
 
 // Calls is every run of the fake claude so far, oldest first.
-func (h *Harness) Calls() []Call {
+func (h *Rig) Calls() []Call {
 	h.t.Helper()
 	dir := filepath.Join(h.data, "calls")
 	entries, err := os.ReadDir(dir)
@@ -444,7 +444,7 @@ func (h *Harness) Calls() []Call {
 
 // WantCalls fails the test unless the fake claude has run n times, and
 // returns the Calls. A test settles the Factory first.
-func (h *Harness) WantCalls(n int) []Call {
+func (h *Rig) WantCalls(n int) []Call {
 	h.t.Helper()
 	calls := h.Calls()
 	if len(calls) != n {

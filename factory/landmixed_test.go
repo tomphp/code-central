@@ -18,7 +18,7 @@ import (
 // setLanding has the human give the Repository name the Own Landing
 // landing, or with core.RepositoryLandingDefault, have it follow the
 // Default Landing.
-func setLanding(t *testing.T, h *factorytest.Harness, name string, landing api.RepositoryLanding) {
+func setLanding(t *testing.T, h *factorytest.Rig, name string, landing api.RepositoryLanding) {
 	t.Helper()
 	if _, err := h.Human().EditRepository(context.Background(), h.Project, api.EditRepositoryInput{Name: name, Landing: &landing}); err != nil {
 		t.Fatal(err)
@@ -28,8 +28,8 @@ func setLanding(t *testing.T, h *factorytest.Harness, name string, landing api.R
 // pullRequestBesideAMergedHome has every Repository but the Home, which
 // has an Own Landing of Merge, follow a Default Landing of Pull Request.
 // (An Own Landing of Pull Request needs a Code Host's Clone URL, which the
-// harness's Repositories don't have.)
-func pullRequestBesideAMergedHome(t *testing.T, h *factorytest.Harness) {
+// rig's Repositories don't have.)
+func pullRequestBesideAMergedHome(t *testing.T, h *factorytest.Rig) {
 	t.Helper()
 	setLanding(t, h, h.Project, api.RepositoryLandingMerge)
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingPullRequest, Remote: "origin"})

@@ -11,7 +11,7 @@ import (
 )
 
 // SubjectIn is the subject of commit in the repository at dir.
-func (h *Harness) SubjectIn(dir, commit string) string {
+func (h *Rig) SubjectIn(dir, commit string) string {
 	h.t.Helper()
 	if h.fake != nil {
 		return h.fake.Subject(dir, commit)
@@ -21,9 +21,9 @@ func (h *Harness) SubjectIn(dir, commit string) string {
 
 // Head is the commit checked out in the repo's worktree, an absolute
 // path.
-func (h *Harness) Head(worktree string) string { h.t.Helper(); return h.headIn(h.Repo, worktree) }
+func (h *Rig) Head(worktree string) string { h.t.Helper(); return h.headIn(h.Repo, worktree) }
 
-// Head is Harness.Head for r's clone.
+// Head is Rig.Head for r's clone.
 func (r *Repository) Head(worktree string) string {
 	r.h.t.Helper()
 	return r.h.headIn(r.Path, worktree)
@@ -31,28 +31,28 @@ func (r *Repository) Head(worktree string) string {
 
 // CheckedOut is the branch checked out in the repo's worktree, an
 // absolute path, failing the test when it is detached.
-func (h *Harness) CheckedOut(worktree string) string {
+func (h *Rig) CheckedOut(worktree string) string {
 	h.t.Helper()
 	return h.checkedOut(h.Repo, worktree)
 }
 
-// CheckedOut is Harness.CheckedOut for r's clone.
+// CheckedOut is Rig.CheckedOut for r's clone.
 func (r *Repository) CheckedOut(worktree string) string {
 	r.h.t.Helper()
 	return r.h.checkedOut(r.Path, worktree)
 }
 
 // HasRemote reports whether the repo has the remote name.
-func (h *Harness) HasRemote(name string) bool { h.t.Helper(); return h.hasRemote(h.Repo, name) }
+func (h *Rig) HasRemote(name string) bool { h.t.Helper(); return h.hasRemote(h.Repo, name) }
 
-// HasRemote is Harness.HasRemote for r's clone.
+// HasRemote is Rig.HasRemote for r's clone.
 func (r *Repository) HasRemote(name string) bool { r.h.t.Helper(); return r.h.hasRemote(r.Path, name) }
 
 // RemoteURL is the URL of the repo's remote name, failing the test when
 // it has none.
-func (h *Harness) RemoteURL(name string) string { h.t.Helper(); return h.remoteURL(h.Repo, name) }
+func (h *Rig) RemoteURL(name string) string { h.t.Helper(); return h.remoteURL(h.Repo, name) }
 
-// RemoteURL is Harness.RemoteURL for r's clone.
+// RemoteURL is Rig.RemoteURL for r's clone.
 func (r *Repository) RemoteURL(name string) string {
 	r.h.t.Helper()
 	return r.h.remoteURL(r.Path, name)
@@ -60,9 +60,9 @@ func (r *Repository) RemoteURL(name string) string {
 
 // SetRemote makes the repo's remote name have the URL url, adding the
 // remote when it has none.
-func (h *Harness) SetRemote(name, url string) { h.t.Helper(); h.setRemote(h.Repo, name, url) }
+func (h *Rig) SetRemote(name, url string) { h.t.Helper(); h.setRemote(h.Repo, name, url) }
 
-// SetRemote is Harness.SetRemote for r's clone.
+// SetRemote is Rig.SetRemote for r's clone.
 func (r *Repository) SetRemote(name, url string) { r.h.t.Helper(); r.h.setRemote(r.Path, name, url) }
 
 // Fetch fetches the remote in r's clone, as a human would, so its
@@ -114,7 +114,7 @@ func (r *Remote) Branch(branch, from string) {
 
 // CloneByHand clones url into path, which must not exist, as a human
 // would; the clone's remote is origin.
-func (h *Harness) CloneByHand(url, path string) {
+func (h *Rig) CloneByHand(url, path string) {
 	h.t.Helper()
 	if h.fake != nil {
 		if out, err := h.fake.Clone(context.Background(), "origin", url, path); err != nil {
@@ -126,7 +126,7 @@ func (h *Harness) CloneByHand(url, path string) {
 	h.git(filepath.Dir(path), "clone", "-q", url, path)
 }
 
-func (h *Harness) headIn(dir, worktree string) string {
+func (h *Rig) headIn(dir, worktree string) string {
 	h.t.Helper()
 	if h.fake == nil {
 		return h.git(worktree, "rev-parse", "HEAD")
@@ -136,7 +136,7 @@ func (h *Harness) headIn(dir, worktree string) string {
 	return h.commit(dir, id)
 }
 
-func (h *Harness) checkedOut(dir, worktree string) string {
+func (h *Rig) checkedOut(dir, worktree string) string {
 	h.t.Helper()
 	if h.fake == nil {
 		b := h.git(worktree, "branch", "--show-current")
@@ -150,7 +150,7 @@ func (h *Harness) checkedOut(dir, worktree string) string {
 	return b
 }
 
-func (h *Harness) hasRemote(dir, name string) bool {
+func (h *Rig) hasRemote(dir, name string) bool {
 	h.t.Helper()
 	if h.fake != nil {
 		return h.fake.Open(dir).HasRemote(name)
@@ -163,7 +163,7 @@ func (h *Harness) hasRemote(dir, name string) bool {
 	return false
 }
 
-func (h *Harness) remoteURL(dir, name string) string {
+func (h *Rig) remoteURL(dir, name string) string {
 	h.t.Helper()
 	if h.fake != nil {
 		url, err := h.fake.Open(dir).RemoteURL(name)
@@ -173,7 +173,7 @@ func (h *Harness) remoteURL(dir, name string) string {
 	return h.git(dir, "remote", "get-url", name)
 }
 
-func (h *Harness) setRemote(dir, name, url string) {
+func (h *Rig) setRemote(dir, name, url string) {
 	h.t.Helper()
 	switch {
 	case h.fake != nil && h.fake.Open(dir).HasRemote(name):
@@ -188,7 +188,7 @@ func (h *Harness) setRemote(dir, name, url string) {
 	}
 }
 
-func (h *Harness) fetch(dir, remote string) {
+func (h *Rig) fetch(dir, remote string) {
 	h.t.Helper()
 	if h.fake != nil {
 		if out, err := h.fake.Open(dir).Fetch(context.Background(), remote); err != nil {
@@ -199,7 +199,7 @@ func (h *Harness) fetch(dir, remote string) {
 	h.git(dir, "fetch", "-q", remote)
 }
 
-func (h *Harness) status(dir, worktree string) string {
+func (h *Rig) status(dir, worktree string) string {
 	h.t.Helper()
 	if h.fake != nil {
 		out, err := h.fake.Open(dir).Status(worktree)
@@ -219,7 +219,7 @@ func (r *Repository) HasRemoteTip(remote, branch string) bool {
 
 // RepositoryAt is a Repository named name whose clone is at path, one
 // the test made or will have made there: it has no Clone URL.
-func (h *Harness) RepositoryAt(name, path string) *Repository {
+func (h *Rig) RepositoryAt(name, path string) *Repository {
 	return &Repository{Name: name, Path: path, h: h}
 }
 

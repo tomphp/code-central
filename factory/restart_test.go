@@ -102,7 +102,7 @@ func TestARestartReconcilesEachSavedClaimAgainstCodeCentral(t *testing.T) {
 }
 
 // lastCall is the newest run of the fake claude for ticket.
-func lastCall(h *factorytest.Harness, ticket string) factorytest.Call {
+func lastCall(h *factorytest.Rig, ticket string) factorytest.Call {
 	calls := callsFor(h, ticket)
 	if len(calls) == 0 {
 		return factorytest.Call{}

@@ -20,7 +20,7 @@ import (
 // and Push remote, and no missing remote stops landing Project-wide.
 
 // repositoryView is the Project's Repository name as the human reads it.
-func repositoryView(t *testing.T, h *factorytest.Harness, name string) api.RepositoryView {
+func repositoryView(t *testing.T, h *factorytest.Rig, name string) api.RepositoryView {
 	t.Helper()
 	p, err := h.Human().GetProject(context.Background(), h.Project)
 	if err != nil {
@@ -35,7 +35,7 @@ func repositoryView(t *testing.T, h *factorytest.Harness, name string) api.Repos
 
 // setPushRemote has the human give the Repository name its own Push
 // remote, or with remote "", have it use the Project's.
-func setPushRemote(t *testing.T, h *factorytest.Harness, name, remote string) {
+func setPushRemote(t *testing.T, h *factorytest.Rig, name, remote string) {
 	t.Helper()
 	if _, err := h.Human().EditRepository(context.Background(), h.Project, api.EditRepositoryInput{Name: name, PushRemote: &remote}); err != nil {
 		t.Fatal(err)

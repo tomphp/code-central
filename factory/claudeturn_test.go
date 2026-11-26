@@ -14,10 +14,10 @@ import (
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
-// turnTest is a Turn runner of the harness's fake claude, and what its
+// turnTest is a Turn runner of the rig's fake claude, and what its
 // sinks and line function got.
 type turnTest struct {
-	h      *factorytest.Harness
+	h      *factorytest.Rig
 	runner *factory.TurnRunner
 
 	mu     sync.Mutex
@@ -43,7 +43,7 @@ func newTurnTest(t *testing.T, o runnerOpts) *turnTest {
 	return &turnTest{h: h, runner: factory.NewTurnRunner(h.Claude(), e, defaultLevels, o.bypass, o.claudeArgs, o.verbose)}
 }
 
-// input is a Turn of id, whose script the fake runs, in the harness's
+// input is a Turn of id, whose script the fake runs, in the rig's
 // repo, its sinks and line function recording what they get.
 func (tt *turnTest) input(id string) factory.TurnInput {
 	return factory.TurnInput{
