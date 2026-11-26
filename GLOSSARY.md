@@ -57,7 +57,7 @@ A Project's colour bar, whose colour is fixed by the Project's Key, so a Project
 _Avoid_: colour bar, project colour
 
 **Project Options**:
-The page where the human sets a Project's settings, such as its Landing Method, CI Tracking, GitHub Issues, Models, Stage Guides, Auto-accept and Focus, with Auto-fix in its CI section, and its Repositories section, where the human adds and removes the Project's Repositories (the CLI does the same) and, in each Repository's row, sets its Own Landing, Push remote and CI choice. Unlike an Option, what it sets belongs to one Project.
+The page where the human sets a Project's settings, such as its Landing Method, CI Tracking, GitHub Issues, Models, Stage Guides, Auto-accept, Focus and Check Command, with Auto-fix in its CI section, and its Repositories section, where the human sets the Project's Check Command, adds and removes the Project's Repositories (the CLI does the same) and, in each Repository's row, sets its Own Landing, Push remote, Check Command and CI choice. Unlike an Option, what it sets belongs to one Project.
 _Avoid_: Project settings, preferences, config
 
 **Store**:
