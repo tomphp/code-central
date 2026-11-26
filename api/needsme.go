@@ -13,6 +13,7 @@ type NeedsMeReason string
 const (
 	ReasonNeedsAnswer NeedsMeReason = "needs_answer"
 	ReasonAnswered    NeedsMeReason = "answered"
+	ReasonStopped     NeedsMeReason = "stopped"
 	ReasonSilentClaim NeedsMeReason = "silent_claim"
 	ReasonLongClaim   NeedsMeReason = "long_claim"
 	ReasonFailed      NeedsMeReason = "failed"
@@ -196,6 +197,7 @@ type FailureSummary struct {
 var NeedsMeReasonViews = []NeedsMeReasonView{
 	{Reason: ReasonNeedsAnswer, Meaning: "Needs Answer: a Round waits for the human's answers"},
 	{Reason: ReasonAnswered, Meaning: "Answered: answers wait for the asking session to pick them up"},
+	{Reason: ReasonStopped, Meaning: "Stopped: the human stopped the Claim's session; resume, take over or release it"},
 	{Reason: ReasonSilentClaim, Meaning: "Silent Claim: In Progress, no activity for 30 minutes"},
 	{Reason: ReasonLongClaim, Meaning: "Long Claim: In Progress and active, with no claim or pick_up_answers for over 60 minutes"},
 	{Reason: ReasonFailed, Meaning: "Failed: a Failure Report waits for the human"},

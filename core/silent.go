@@ -89,7 +89,7 @@ func (c *Core) lastPing(cl domain.Claim) time.Time {
 // none".
 func (c *Core) quietSince(t domain.Ticket, cl domain.Claim) time.Time {
 	last := c.activity.started
-	for _, at := range []time.Time{t.Updated, cl.Started, c.lastPing(cl)} {
+	for _, at := range []time.Time{t.Updated, cl.Started, c.lastPing(cl), latestResume(cl)} {
 		if at.After(last) {
 			last = at
 		}
@@ -105,7 +105,7 @@ func (c *Core) silentSince(t domain.Ticket) *time.Time {
 		return nil
 	}
 	cl, ok := liveClaim(t)
-	if !ok {
+	if !ok || cl.Stopped() {
 		return nil
 	}
 	last := c.quietSince(t, *cl)
@@ -123,10 +123,14 @@ func (c *Core) longSince(t domain.Ticket) *time.Time {
 	if t.State != domain.InProgress {
 		return nil
 	}
-	if _, ok := liveClaim(t); !ok {
+	cl, ok := liveClaim(t)
+	if !ok || cl.Stopped() {
 		return nil
 	}
 	moved := entered(t)
+	if resumed := latestResume(*cl); resumed.After(moved) {
+		moved = resumed
+	}
 	if c.now().Sub(moved) <= LongAfter {
 		return nil
 	}
