@@ -161,6 +161,8 @@ export interface RepositoryAdd {
   landing?: RepositoryLanding;
   // push_remote names its Push remote; left out, the Project's.
   push_remote?: string;
+  // check_command is its own Check Command; left out, the Project's.
+  check_command?: string;
 }
 
 // A Repository's CI entry as the human sets it: Not watched, or a CI
@@ -177,14 +179,15 @@ export interface RepositoryCIChange {
 // A change to a Repository: each field left out keeps its value, an empty
 // local_path puts the clone back beside the Home Repository and an empty
 // clone_url clears it, making the Repository local-only. landing default
-// has it follow the Default Landing, and an empty push_remote the
-// Project's; the Home Repository takes these two alone.
+// has it follow the Default Landing, and an empty push_remote or
+// check_command the Project's; the Home Repository takes these three alone.
 export interface RepositoryChange {
   clone_url?: string;
   base?: string;
   local_path?: string;
   landing?: RepositoryLanding;
   push_remote?: string;
+  check_command?: string;
 }
 
 // CI_VIEW_DAYS is how far back the CI view lists finished runs.

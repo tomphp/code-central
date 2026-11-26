@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/api"
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
@@ -63,6 +64,38 @@ func TestATicketSentBackForAConflictIsClaimedWithAnInlinePrompt(t *testing.T) {
 	h.Start()
 
 	requireConflictClaim(t, callFor(t, h, id), "README")
+}
+
+func conflictPromptWith(t *testing.T, setup func(h *factorytest.Harness)) string {
+	t.Helper()
+	h := factorytest.New(t, factorytest.FakeGit())
+	id, _ := accepted(h, "Change the readme", "README", "theirs\n")
+	h.CommitOn("main", "README", "ours\n")
+	setup(h)
+	h.Script(id, factorytest.Wait())
+	h.Start()
+	return callFor(t, h, id).Prompt
+}
+
+func TestAConflictPromptNamesTheRepositorysCheckCommandAndNotMakeTypecheck(t *testing.T) {
+	t.Parallel()
+	p := conflictPromptWith(t, func(h *factorytest.Harness) {
+		cmd := "npm run check"
+		if _, err := h.Human().EditRepository(context.Background(), h.Project, api.EditRepositoryInput{Name: h.Project, CheckCommand: &cmd}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(p, "Run `npm run check` and the tests the resolution touches.") || strings.Contains(p, "make typecheck") {
+		t.Errorf("prompt %q", p)
+	}
+}
+
+func TestAConflictPromptWithNoCheckCommandPointsToTheRepositorysDocs(t *testing.T) {
+	t.Parallel()
+	p := conflictPromptWith(t, func(*factorytest.Harness) {})
+	if !strings.Contains(p, "as its own docs (such as CLAUDE.md or README) describe.") || strings.Contains(p, "make typecheck") || strings.Contains(p, "Run `") {
+		t.Errorf("prompt %q", p)
+	}
 }
 
 func TestATicketSentBackForAnotherReasonStartsAsAnOrdinaryClaim(t *testing.T) {
@@ -148,4 +181,31 @@ func TestTheConflictTicketTheFactoryOpensForASpecBranchStartsAsAConflictClaim(t 
 	r.WantOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main in README: opened " + fix)
 
 	requireConflictClaim(t, callFor(t, h, fix), "README")
+}
+
+func conflictClaimFinishing(t *testing.T, h *factorytest.Harness) api.TicketView {
+	t.Helper()
+	id, _ := accepted(h, "Change the readme", "README", "theirs\n")
+	h.CommitOn("main", "README", "ours\n")
+	h.Script(id, append(commitFile("main.go"), finishWithBranch("Resolved."))...)
+	h.Start()
+	return h.WantState(id, domain.InReview)
+}
+
+func TestAConflictClaimFinishingWithCodeChangesAndNoCodeReviewGetsNoComment(t *testing.T) {
+	t.Parallel()
+	tk := conflictClaimFinishing(t, factorytest.New(t, factorytest.FakeGit()))
+	if reviewSkippedComment(tk) {
+		t.Errorf("a Conflict Claim got a review comment: %+v", tk.Comments)
+	}
+}
+
+func TestAConflictClaimUnderRebaseFinishingWithNoCodeReviewGetsNoComment(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t, factorytest.FakeGit())
+	setRebase(h, true)
+	tk := conflictClaimFinishing(t, h)
+	if reviewSkippedComment(tk) {
+		t.Errorf("a Conflict Claim under Rebase got a review comment: %+v", tk.Comments)
+	}
 }

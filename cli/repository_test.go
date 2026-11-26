@@ -10,6 +10,7 @@ import (
 
 	"github.com/tomoram/code-central/api"
 	"github.com/tomoram/code-central/codecentraltest"
+	"github.com/tomoram/code-central/core/coretest"
 )
 
 // srcPath is a clone's absolute path on this OS: "/src/<name>" isn't
@@ -178,6 +179,37 @@ func TestRepositoryTakesALandingAndPushRemoteAndListsThem(t *testing.T) {
 	}
 	if r := run(t, env, "", "repository", "edit", "web", "--landing", "rebase"); r.code != 1 || !strings.Contains(r.stderr, "merge+push") {
 		t.Fatalf("an unknown --landing: exit %d, stderr %q; want a usage error listing the Landings", r.code, r.stderr)
+	}
+}
+
+// A Repository, the Home included, follows the Project's Check Command or
+// has its own (Spec code-central-1229).
+func TestRepositoryTakesACheckCommandAndListsTheEffectiveOne(t *testing.T) {
+	t.Parallel()
+	srv, env := repositoryEnv(t)
+
+	out := printed(t, run(t, env, "", "repository", "add", "web", "--clone-url", "git@github.com:acme/web.git", "--check-command", "make web"))
+	if web := lineOf(t, out, "web"); !strings.Contains(web, "make web (own)") {
+		t.Fatalf("add printed:\n%s\nwant web on its own Check Command", out)
+	}
+	if !strings.Contains(out, "CHECK COMMAND") {
+		t.Fatalf("list:\n%s\nwant a CHECK COMMAND column", out)
+	}
+	if home := lineOf(t, out, "acme (home)"); strings.Contains(home, "(own)") || strings.Contains(home, "(default)") && strings.Contains(home, "make") {
+		t.Fatalf("add printed:\n%s\nwant the Home with no Check Command", out)
+	}
+
+	if _, err := srv.Core.SetCheckCommand(coretest.Human, "acme", api.SetCheckCommandInput{CheckCommand: "make check"}); err != nil {
+		t.Fatal(err)
+	}
+	out = printed(t, run(t, env, "", "repository", "edit", "acme", "--check-command", "make home"))
+	if home := lineOf(t, out, "acme (home)"); !strings.Contains(home, "make home (own)") {
+		t.Fatalf("edit printed:\n%s\nwant the Home on its own Check Command", out)
+	}
+
+	out = printed(t, run(t, env, "", "repository", "edit", "web", "--check-command", ""))
+	if web := lineOf(t, out, "web"); !strings.Contains(web, "make check (default)") {
+		t.Fatalf("clearing printed:\n%s\nwant web back on the Project's Check Command", out)
 	}
 }
 

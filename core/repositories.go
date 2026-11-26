@@ -49,6 +49,7 @@ func repositoryView(p domain.Project, r domain.Repository) api.RepositoryView {
 	}
 	v.CodeHost, _ = codeHostOf(v.CloneURL)
 	v.Landing, v.OwnLanding = effectiveLanding(p, r)
+	v.CheckCommand, v.OwnCheckCommand = effectiveCheckCommand(p, r)
 	v.CI = ciEntryView(ciEntryOfRepository(p, r))
 	return v
 }
@@ -105,6 +106,9 @@ func (c *Core) AddRepository(ctx context.Context, key string, in api.AddReposito
 		landing = api.RepositoryLandingDefault
 	}
 	if err := setRepositoryLanding(&r, &landing, &in.PushRemote); err != nil {
+		return api.Written[api.ProjectView]{}, err
+	}
+	if err := setRepositoryCheckCommand(&r, &in.CheckCommand); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	entry := ciEntryFromCloneURL(r.Name, r.CloneURL)
@@ -172,6 +176,9 @@ func (c *Core) EditRepository(ctx context.Context, key string, in api.EditReposi
 		}
 	}
 	if err := setRepositoryLanding(&r, in.Landing, in.PushRemote); err != nil {
+		return api.Written[api.ProjectView]{}, err
+	}
+	if err := setRepositoryCheckCommand(&r, in.CheckCommand); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
 	edit := func(rs []domain.Repository) ([]domain.Repository, error) {

@@ -208,6 +208,10 @@ export interface Api {
   // off whole, keeping them in group order with duplicates collapsed. It
   // refuses anything that isn't a Needs Me reason.
   setFocusKinds(project: string, off: NeedsMeReason[]): Promise<ProjectView>;
+  // setCheckCommand sets the Project's Check Command (human-only), the
+  // default for each Repository without its own: trimmed, empty for none,
+  // refused when it holds a line break.
+  setCheckCommand(project: string, command: string): Promise<ProjectView>;
   // addCIRule adds a CI Rule and creates its Spec, titled like "CI: ci.yml
   // on main"; editCIRule changes the rule on Spec spec, and
   // removeCIRule removes it, leaving its Spec as the record. Workflow and

@@ -214,11 +214,11 @@ Add, edit, reorder and remove them in the **Repositories** section at the top of
 
 ```console
 $ code-central repository add web --clone-url git@github.com:acme/web.git
-NAME             CLONE URL                         BASE  LOCAL PATH  LANDING          PUSH REMOTE
+NAME             CLONE URL                         BASE  LOCAL PATH  LANDING          PUSH REMOTE  CHECK COMMAND
 acme-api (home)  git@github.com:acme/acme-api.git  main  -           Merge (default)  origin
 web              git@github.com:acme/web.git       main  -           Merge (default)  origin
 $ code-central repository move web --before acme-api
-NAME             CLONE URL                         BASE  LOCAL PATH  LANDING          PUSH REMOTE
+NAME             CLONE URL                         BASE  LOCAL PATH  LANDING          PUSH REMOTE  CHECK COMMAND
 web              git@github.com:acme/web.git       main  -           Merge (default)  origin
 acme-api (home)  git@github.com:acme/acme-api.git  main  -           Merge (default)  origin
 ```
@@ -227,7 +227,7 @@ A repository you never push, with no remote or none you want the Factory to use,
 
 ```console
 $ code-central repository add notes --local-path /home/you/src/notes
-NAME             CLONE URL                         BASE  LOCAL PATH           LANDING          PUSH REMOTE
+NAME             CLONE URL                         BASE  LOCAL PATH           LANDING          PUSH REMOTE  CHECK COMMAND
 web              git@github.com:acme/web.git       main  -                    Merge (default)  origin
 acme-api (home)  git@github.com:acme/acme-api.git  main  -                    Merge (default)  origin
 notes            (none: local only)                main  /home/you/src/notes  Merge (default)  origin
@@ -237,8 +237,18 @@ Each Repository, the Home included, follows the Project's **Default Landing** (t
 
 ```console
 $ code-central repository edit web --landing pull-request --push-remote upstream
-NAME             CLONE URL                         BASE  LOCAL PATH           LANDING             PUSH REMOTE
+NAME             CLONE URL                         BASE  LOCAL PATH           LANDING             PUSH REMOTE  CHECK COMMAND
 web              git@github.com:acme/web.git       main  -                    Pull Request (own)  upstream
+acme-api (home)  git@github.com:acme/acme-api.git  main  -                    Merge (default)     origin
+notes            (none: local only)                main  /home/you/src/notes  Merge (default)     origin
+```
+
+**Check Command.** The command an agent runs in a Repository to check its code, such as `npm run check`. Set the Project's in the **Check Command** field at the top of Project Options, beside the Repositories section; each Repository follows it unless `--check-command` (on `repository add` or `edit`) or the Repository's **Edit** form gives it its own. Today only a Conflict Claim runs it, after resolving a merge or rebase. A Repository with neither has the Claim follow its own docs, such as CLAUDE.md or README. The list's CHECK COMMAND column shows the effective command, marked `(own)` or `(default)`, and nothing when there is none:
+
+```console
+$ code-central repository edit web --check-command "npm run check"
+NAME             CLONE URL                         BASE  LOCAL PATH           LANDING             PUSH REMOTE  CHECK COMMAND
+web              git@github.com:acme/web.git       main  -                    Pull Request (own)  upstream     npm run check (own)
 acme-api (home)  git@github.com:acme/acme-api.git  main  -                    Merge (default)     origin
 notes            (none: local only)                main  /home/you/src/notes  Merge (default)     origin
 ```
@@ -247,7 +257,7 @@ Pull Request is refused only where a local-only Repository would end up under it
 
 **A local-only Home beside pushed Repositories.** The Home Repository needs no remote. When its clone has none of the Push remote's name, the Factory reports that when it starts and the Home shows as `(none: local only)`: nothing is pushed or fetched there, a Ticket lands there once merged, and the CI gate never holds there, while the other Repositories push and gate by their own Landing and Push remote. A missing remote on the Home stops no landing anywhere.
 
-The list is the **landing order**: accepted work lands in each Repository in that order. `code-central repository list` shows it; `edit <name>` takes `--clone-url`, `--base`, `--local-path`, `--landing` and `--push-remote` (an empty `--clone-url ""` clears the Clone URL, making the Repository local-only, and an empty `--local-path ""` clears the local path, but never both); `remove <name>` takes one off the list and leaves its clone on disk. The Home Repository is listed under the Project Key: its Clone URL is the Push remote URL the Factory reports, and its Base is set in the Landing Method section. Each refusal says how to put it right: neither a Clone URL nor a local path, a Repository Name or a Clone URL already listed (`git@github.com:acme/web.git` and `https://github.com/acme/web` are the same one), removing the Home Repository, or removing one an unfinished Ticket has changed. A Repository that comes under Pull Request, as it is added or by its Landing, needs a Clone URL on a Code Host Pull Request supports, and the Pull Request Watcher's check to pass for it.
+The list is the **landing order**: accepted work lands in each Repository in that order. `code-central repository list` shows it; `edit <name>` takes `--clone-url`, `--base`, `--local-path`, `--landing`, `--push-remote` and `--check-command` (an empty `--check-command ""` goes back to the Project's, and the list's CHECK COMMAND column marks each `(own)` or `(default)`; an empty `--clone-url ""` clears the Clone URL, making the Repository local-only, and an empty `--local-path ""` clears the local path, but never both); `remove <name>` takes one off the list and leaves its clone on disk. The Home Repository is listed under the Project Key: its Clone URL is the Push remote URL the Factory reports, and its Base is set in the Landing Method section. Each refusal says how to put it right: neither a Clone URL nor a local path, a Repository Name or a Clone URL already listed (`git@github.com:acme/web.git` and `https://github.com/acme/web` are the same one), removing the Home Repository, or removing one an unfinished Ticket has changed. A Repository that comes under Pull Request, as it is added or by its Landing, needs a Clone URL on a Code Host Pull Request supports, and the Pull Request Watcher's check to pass for it.
 
 The Factory clones each Repository on its next poll, beside the Home Repository (`/home/you/src/web` for `web` when the Home Repository is `/home/you/src/acme-api`) unless you gave a local path, and adopts a clone of the Clone URL it finds there as it is. Each Ticket then gets a worktree in every Repository, named after it, and a session that starts in the Home worktree and reaches the others with `--add-dir`:
 

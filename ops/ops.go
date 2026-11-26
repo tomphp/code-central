@@ -251,6 +251,9 @@ var all = []entry{
 	defined(SetAutoAccept),
 	// Focus Kinds (Spec code-central-550).
 	defined(SetFocusKinds),
+	// The Check Command (Spec code-central-1229): the human's alone, over
+	// HTTP only.
+	defined(SetCheckCommand),
 	// Repositories (Spec code-central-848): the human's alone, over HTTP
 	// and the CLI's repository command, never MCP.
 	defined(AddRepository),

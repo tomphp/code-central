@@ -42,10 +42,11 @@ func docsOnly(files []string) bool {
 // checkReview comments on tk, which t's Claim ended with a finish, when
 // it is an implementation finish with a branch, no turn of the Claim
 // called the code-review skill (reviewed) and the branch's diff since its
-// base touches more than docs. The human sees it at In Review.
+// base touches more than docs. A Conflict Claim is never checked. The
+// human sees it at In Review.
 func (f *factory) checkReview(ctx context.Context, t *turn, tk api.TicketView, reviewed bool) {
 	c := t.claim
-	if reviewed || tk.Branch == "" || api.GuideName(tk.Labels) != api.ImplementationStage {
+	if reviewed || c.Conflict || tk.Branch == "" || api.GuideName(tk.Labels) != api.ImplementationStage {
 		return
 	}
 	r := f.repos.home

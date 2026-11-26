@@ -125,6 +125,7 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     setModelAssignment: (project, on) => operate("set_model_assignment", project, { on, full: true }),
     setAutoAccept: (project, kinds) => operate("set_auto_accept", project, { kinds, full: true }),
     setFocusKinds: (project, off) => operate("set_focus_kinds", project, { off, full: true }),
+    setCheckCommand: (project, check_command) => operate("set_check_command", project, { check_command, full: true }),
     addCIRule: (project, rule) => operate("add_ci_rule", project, { ...rule, full: true }),
     editCIRule: (project, spec, rule) => operate("edit_ci_rule", project, { ...rule, spec, full: true }),
     removeCIRule: (project, spec) => operate("remove_ci_rule", project, { spec, full: true }),
