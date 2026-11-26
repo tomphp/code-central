@@ -14,9 +14,9 @@ import (
 // runs in a Repository to check its code, set for a Project as the
 // default and for a Repository as its own.
 
-// checkCommand is command trimmed, refusing one that holds a line break,
-// as a single shell command can't.
-func checkCommand(command string) (string, error) {
+// parseCheckCommand is command trimmed, refusing one that holds a line
+// break, as a single shell command can't.
+func parseCheckCommand(command string) (string, error) {
 	command = strings.TrimSpace(command)
 	if strings.ContainsAny(command, "\r\n") {
 		return "", &api.Error{Code: api.Invalid, Field: "check_command", Message: "a Check Command is one line, and this one holds a line break",
@@ -31,7 +31,7 @@ func setRepositoryCheckCommand(r *domain.Repository, command *string) error {
 	if command == nil {
 		return nil
 	}
-	own, err := checkCommand(*command)
+	own, err := parseCheckCommand(*command)
 	if err != nil {
 		return err
 	}
@@ -56,7 +56,7 @@ func (c *Core) SetCheckCommand(ctx context.Context, key string, in api.SetCheckC
 	if err := foundation.HumanOnly(ctx, "set_check_command"); err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}
-	command, err := checkCommand(in.CheckCommand)
+	command, err := parseCheckCommand(in.CheckCommand)
 	if err != nil {
 		return api.Written[api.ProjectView]{}, err
 	}

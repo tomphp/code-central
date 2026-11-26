@@ -1124,9 +1124,9 @@ func encodeRepositories(rs []domain.Repository) []repositoryFile {
 // decodeRepositories checks a Project's Repositories as load does: each
 // Name is unique, the Home Repository, named key, is listed once with
 // nothing more than an Own Landing, a Push remote and a Check Command,
-// every other keeps the Repository Name rules and has a Clone URL or a local path and a
-// Base, and each Own Landing names a Landing Method, with Pull Request's
-// Push normalised away. The Home Repository's name is the Project Key,
+// every other keeps the Repository Name rules and has a Clone URL or a
+// local path and a Base, and each Own Landing names a Landing Method,
+// with Pull Request's Push normalised away. The Home Repository's name is the Project Key,
 // which keeps the key's own rules. It returns the offending field,
 // relative to repositories, with the error.
 func decodeRepositories(key string, fs []repositoryFile) ([]domain.Repository, string, error) {

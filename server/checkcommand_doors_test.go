@@ -12,10 +12,8 @@ import (
 // human's, so HTTP only, as add_repository and edit_repository are.
 func init() {
 	cases["set_check_command"] = opCase{
-		ok: call{http: setCheckCommand(`{"check_command":" make typecheck "}`)},
-		check: func(t *testing.T, out map[string]any) {
-			acknowledgement("acme", "check_command", "repositories")(t, out)
-		},
+		ok:    call{http: setCheckCommand(`{"check_command":" make typecheck "}`)},
+		check: acknowledgement("acme", "check_command", "repositories"),
 		full: func(t *testing.T, out map[string]any) {
 			if out["check_command"] != "make typecheck" {
 				t.Fatalf("check_command = %v, want make typecheck", out["check_command"])
