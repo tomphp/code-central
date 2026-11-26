@@ -186,6 +186,10 @@ const (
 	exitStopped = 2
 )
 
+// claudeHarness is the name of the one Harness a Factory runs, and the
+// default of --harness.
+const claudeHarness = "claude"
+
 // options are the Factory's flags. There is no config file.
 type options struct {
 	parallel int
@@ -196,6 +200,7 @@ type options struct {
 	effort   string
 	project  string
 	verbose  bool
+	harness  string
 	// claudeArgs are what follows -- on the command line: claude flags
 	// every start and resume passes as given.
 	claudeArgs []string
@@ -214,6 +219,7 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 	fs.String("base", "", "removed: the base is the Project's Base branch setting")
 	fs.BoolVar(&o.verbose, "verbose", false, "print a line for each tool call the agents make")
 	fs.StringVar(&o.project, "project", "", "Project Key (default $CODE_CENTRAL_PROJECT, else the nearest .mcp.json)")
+	fs.StringVar(&o.harness, "harness", claudeHarness, "the coding-agent CLI that runs the turns; only claude")
 	fs.Usage = func() {
 		fmt.Fprintln(stderr, "Usage: code-central-factory [flags] [-- <Claude Args>]")
 		fmt.Fprintln(stderr, "\n<Claude Args> are claude flags, such as --chrome, passed as given to every start and resume.")
@@ -227,6 +233,9 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 	fs.Visit(func(fl *flag.Flag) { refused = refused || fl.Name == "base" })
 	if refused {
 		return o, errors.New("--base is gone: the base is the Project's setting now; set it in Project Options' Base branch field")
+	}
+	if o.harness != claudeHarness {
+		return o, fmt.Errorf("--harness %q isn't one this Factory runs: use %s", o.harness, claudeHarness)
 	}
 	if rest := fs.Args(); len(rest) > 0 {
 		if i := len(args) - len(rest) - 1; i < 0 || args[i] != "--" {
@@ -269,6 +278,7 @@ func Run(ctx context.Context, args []string, e Env) int {
 	}
 	f.polling.end = startingUp
 	defer f.lock.Close()
+	f.printf("harness: %s", f.harness.Name())
 	f.printf("base: %s", f.repos.baseBranch())
 	if len(o.claudeArgs) > 0 {
 		f.printf("passing to every %s turn: %s", f.harness.Name(), harness.JoinArgs(o.claudeArgs))
@@ -364,9 +374,8 @@ func (f *factory) printf(format string, args ...any) {
 
 // factory is a started Factory.
 type factory struct {
-	e      Env
-	o      options
-	claude string
+	e Env
+	o options
 	// repos is the registry of the Home Repository, the Project's
 	// Repositories and its base, and of their worktrees.
 	repos *repositories
@@ -502,14 +511,14 @@ func start(e Env, o options) (*factory, error) {
 	// The Home Repository is named by the Project Key.
 	home.name = project
 	f.repos.replace(map[string]*repository{project: home}, []*repository{home})
-	claudePath, ok := e.lookPath("claude")
-	if !ok {
-		return nil, errors.New("claude isn't on PATH")
-	}
-	f.claude = claudePath
-	if err := refuseClaudeShim(f.claude); err != nil {
+	claudePath, err := claude.Locate(e.lookPath)
+	if err != nil {
 		return nil, err
 	}
+	f.harness = claude.New(claude.Options{
+		Path: claudePath, Environ: e.Environ, Stderr: e.Stderr, Clock: e.Clock,
+		Bypass: o.bypass, Args: o.claudeArgs,
+	})
 	if err := writable(home.worktrees); err != nil {
 		return nil, fmt.Errorf("can't use the worktree folder %s: %v", home.worktrees, err)
 	}
@@ -526,7 +535,7 @@ func start(e Env, o options) (*factory, error) {
 	}
 	f.events = newSender(f.client.PostSessionEvents, e.Clock, every, timeout, f.work, "Session Events")
 	f.usage = newSender(f.client.PostUsage, e.Clock, every, timeout, f.work, "token usage")
-	f.lander = newLander(f.repos, f.client, project, f.work, f.printf, f.hooks())
+	f.lander = newLander(f.repos, f.client, project, f.harness.MCPConfig(), f.work, f.printf, f.hooks())
 	// A Project that can't be read yet is checked on every poll instead.
 	p, readErr := f.client.GetProject(context.Background(), project)
 	// The base is the Project's, read again on every poll; until it can be
@@ -539,10 +548,6 @@ func start(e Env, o options) (*factory, error) {
 	if err := f.lander.checkMCPAtStart(); err != nil {
 		return nil, err
 	}
-	f.harness = claude.New(claude.Options{
-		Path: f.claude, Environ: e.Environ, Stderr: e.Stderr, Clock: e.Clock,
-		Bypass: o.bypass, Args: o.claudeArgs,
-	})
 	f.accepts = f.harness.Discover(home.dir, f.printf)
 	if err := f.checkEffortFlag(); err != nil {
 		return nil, err

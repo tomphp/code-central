@@ -166,7 +166,7 @@ func (l *lander) checkMCP(base string) {
 	}
 	if l.mcpCommitted() {
 		if l.mcpHeld {
-			l.printf(".mcp.json is committed on %s: cutting branches again", base)
+			l.printf("%s is committed on %s: cutting branches again", l.mcpConfig, base)
 		}
 		l.mcpBase, l.mcpHeld = base, false
 		return
@@ -192,16 +192,16 @@ func (l *lander) checkMCPAtStart() error {
 	return nil
 }
 
-// mcpCommitted is whether .mcp.json is committed on the base.
+// mcpCommitted is whether the MCP config is committed on the base.
 func (l *lander) mcpCommitted() bool {
-	return l.repos.home.git.HasFile(l.repos.baseBranch(), ".mcp.json")
+	return l.repos.home.git.HasFile(l.repos.baseBranch(), l.mcpConfig)
 }
 
-// mcpMessage says that .mcp.json isn't committed on the base, and why it
-// must be.
+// mcpMessage says that the MCP config isn't committed on the base, and
+// why it must be.
 func (l *lander) mcpMessage() string {
 	b := l.repos.baseBranch()
-	return fmt.Sprintf(".mcp.json isn't committed on %s: every worktree starts from %s, so its sessions need it; commit it first", b, b)
+	return fmt.Sprintf("%s isn't committed on %s: every worktree starts from %s, so its sessions need it; commit it first", l.mcpConfig, b, b)
 }
 
 // setBase takes the base the Project names this poll into the registry.

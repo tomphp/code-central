@@ -500,7 +500,7 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		return false
 	}
 	session := newSessionID()
-	resume := "claude --resume " + session
+	resume := f.harness.ResumeCommand(session, nil)
 	// The worktree's path is fixed by the Ticket ID, which isn't known
 	// until the claim, so the claim names it afterwards (set_session).
 	in := api.ClaimInput{Ticket: next, SessionID: session, ResumeCommand: &resume}
@@ -580,7 +580,7 @@ func (f *factory) startClaimed(ctx context.Context, in api.ClaimInput, res api.C
 		c.SystemPrompt, prompt = systemPrompt(f.runner.harness, c, stage, wt, guide, files), firstPrompt(f.runner.harness, c, stage, f.repos.baseBranch(), files, rebase, check)
 	}
 	// The Ticket's Resume Command adds the folders its turns do.
-	resume := *in.ResumeCommand + addDirFlags(c.AddDirs)
+	resume := f.harness.ResumeCommand(session, c.AddDirs)
 	f.noteTicket(c, *res.Ticket)
 	if err := f.addClaim(c); err != nil {
 		f.claimf(c, "%s: can't write the state file: %v", id, err)

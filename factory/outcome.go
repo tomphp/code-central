@@ -82,7 +82,7 @@ func (f *factory) reportStuck(ctx context.Context, t *turn, out harness.Outcome)
 	if strings.TrimSpace(out.LastText) == "" {
 		why = "The agent printed no text."
 	}
-	fix := fmt.Sprintf("Read the session (claude --resume %s, in %s) to see why it stopped, fix the cause and send the Ticket back.", c.SessionID, t.dir)
+	fix := fmt.Sprintf("Read the session (%s, in %s) to see why it stopped, fix the cause and send the Ticket back.", f.harness.ResumeCommand(c.SessionID, nil), t.dir)
 	if !out.Ended && len(f.o.claudeArgs) > 0 {
 		fix += fmt.Sprintf(" The turn started with the Claude Args %s: if %s rejected one, fix it and restart the Factory.", harness.JoinArgs(f.o.claudeArgs), f.harness.Name())
 	}
