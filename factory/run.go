@@ -571,10 +571,12 @@ func (f *factory) startClaimed(ctx context.Context, in api.ClaimInput, res api.C
 		c.SystemPrompt, prompt = severalSystemPrompt(c, stage, ws, guide, conflicted), severalFirstPrompt(c, stage, ws, conflicts, rebase)
 	} else {
 		var files []string
+		var check string
 		if len(conflicts) > 0 {
 			files = conflicts[0].files
+			check = conflicts[0].w.r.checkInstruction()
 		}
-		c.SystemPrompt, prompt = systemPrompt(c, stage, wt, guide, files), firstPrompt(c, stage, f.repos.baseBranch(), files, rebase)
+		c.SystemPrompt, prompt = systemPrompt(c, stage, wt, guide, files), firstPrompt(c, stage, f.repos.baseBranch(), files, rebase, check)
 	}
 	// The Ticket's Resume Command adds the folders its turns do.
 	resume := *in.ResumeCommand + addDirFlags(c.AddDirs)
