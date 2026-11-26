@@ -10,6 +10,7 @@ import type { PanelDef, PanelProps } from "../ActionPanel";
 import { Release } from "../resume/Release";
 import { ResumeCommand, sessionOf } from "../resume/ResumeCommand";
 
+// Stopped says when the Claim was stopped, falling back to when the Ticket last changed.
 function Stopped({ project, ticket: t, now }: PanelProps) {
   const api = useApi();
   const { busy, error, run } = useAct();

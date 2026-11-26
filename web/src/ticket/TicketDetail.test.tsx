@@ -88,7 +88,7 @@ describe("the Ticket detail", () => {
     const { w, s } = await acme();
     const id = await s.ticket("acme", { title: "Stop me" });
     await s.factoryClaim("acme", id, "s-1");
-    const clock = (d: Date) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const clock = (d: Date) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
     const stopped = w.now();
     await w.api.act("acme", id, "stop", {});
     w.advance(200 * MIN);

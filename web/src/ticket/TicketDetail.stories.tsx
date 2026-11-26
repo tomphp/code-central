@@ -69,7 +69,7 @@ export const Claims = pane(async (s, w) => {
   return id;
 });
 
-// A Factory Claim the human stopped: the Stopped panel, its Stop in the Claim row.
+// A Factory Claim the human stopped: the Stopped panel, and the Stop on its Claim row.
 export const Stopped = pane(async (s, w) => {
   const id = await s.ticket("acme", { title: "Rate-limit the sign-in endpoint" });
   await s.factoryClaim("acme", id, SESSION);

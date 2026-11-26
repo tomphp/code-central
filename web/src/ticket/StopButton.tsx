@@ -7,6 +7,7 @@ import { Button } from "../controls/Button";
 import { useApi } from "../live";
 import { useAct } from "./useAct";
 
+// StopButton is offered only while the Ticket is stoppable.
 export function StopButton({ project, ticket: t }: { project: string; ticket: TicketView }) {
   const api = useApi();
   const [confirming, setConfirming] = useState(false);

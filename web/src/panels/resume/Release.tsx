@@ -8,6 +8,7 @@ import { Button } from "../../controls/Button";
 import { useApi } from "../../live";
 import "./resume.css";
 
+// Release stays busy once the release is made: the Ticket leaves the panel.
 export function Release({ project, ticket: t }: { project: string; ticket: TicketView }) {
   const api = useApi();
   const [open, setOpen] = useState(false);

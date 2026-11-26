@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { moveTargets } from "../api/actions/move";
 import type { EditView, ReportedModels, State, TicketView } from "../api/types";
-import { ago, CLAUDE_CODE_DEFAULT, clock } from "../format";
+import { ago, CLAUDE_CODE_DEFAULT } from "../format";
 import { Markdown } from "../Markdown";
 import { EditForm } from "../edit/EditForm";
 import { NewRetro } from "../requirement/NewRequirement";
@@ -18,6 +18,7 @@ import { WaitingBadge } from "./WaitingBadge";
 import { PartlyLandedBadge } from "./PartlyLandedBadge";
 import { useAct } from "./useAct";
 import { StopButton } from "./StopButton";
+import { ClaimStops } from "./ClaimStops";
 import { CISection } from "./CISection";
 import { TicketRepositories } from "./TicketRepositories";
 import { Triage } from "./Triage";
@@ -233,18 +234,7 @@ function TicketBody({ project, ticket: t, specLabels, now, reported, openSpec, o
                     </span>
                   </>
                 )}
-                {c.stops?.map((stop) => (
-                  <span key={stop.stopped}>
-                    {" · "}
-                    <span className="claim-field">Stopped {clock(stop.stopped)}</span>
-                    {stop.resumed && (
-                      <>
-                        {" · "}
-                        <span className="claim-field">Resumed {clock(stop.resumed)}</span>
-                      </>
-                    )}
-                  </span>
-                ))}
+                <ClaimStops stops={c.stops} />
                 {" · "}
                 <span className="claim-field">model {c.model || CLAUDE_CODE_DEFAULT}</span> ·{" "}
                 <span className="claim-field">effort {c.effort || CLAUDE_CODE_DEFAULT}</span>

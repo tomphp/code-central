@@ -184,9 +184,9 @@ export function ago(now: Date, at: string): string {
   return d === "just now" ? d : `${d} ago`;
 }
 
-// clock is the time of day of an instant, in the viewer's time zone.
-export function clock(at: string): string {
-  return new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+// timeOfDay is the 24-hour time of day of an instant, in the viewer's time zone.
+export function timeOfDay(at: string): string {
+  return new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 }
 
 // bytes is a size in readable units: bytes under 1 KB, then KB, then MB,

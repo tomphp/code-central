@@ -183,7 +183,7 @@ describe("the Resume-then-Release panel", () => {
     }
   });
 
-  it("warns before stopping a Silent Claim, then sends the note", async () => {
+  it("warns before releasing a Silent Claim, then sends the note", async () => {
     const user = userEvent.setup();
     const { w, id } = await silentWorld("sess-42");
     await renderApp(w, id);
