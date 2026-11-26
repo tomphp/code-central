@@ -31,7 +31,7 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, out harness.Outcome) d
 		f.claimf(c, "%s: get_ticket: %v", c.Ticket, err)
 		return ""
 	}
-	rules, denials := f.denialsOf(out)
+	rules, denials := denialsOf(f.runner.harness, out)
 	// The Claim may already be dropped by a poll that saw the finish, so
 	// liveness here is read from the Ticket alone.
 	ended, by := claimEnded(tk, c)

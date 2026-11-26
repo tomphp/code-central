@@ -30,8 +30,8 @@ func denialInput(d harness.Denial) string {
 // denialsOf is the calls out's turn had denied that the Harness can
 // allow, with the rules that allow them: none for a Harness with no
 // denial list.
-func (f *factory) denialsOf(out harness.Outcome) (harness.DenialRules, []harness.Denial) {
-	rules := f.runner.harness.Denials()
+func denialsOf(h harness.Harness, out harness.Outcome) (harness.DenialRules, []harness.Denial) {
+	rules := h.Denials()
 	if rules == nil {
 		return nil, nil
 	}

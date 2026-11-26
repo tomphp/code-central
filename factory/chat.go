@@ -193,7 +193,7 @@ func (f *factory) answerChat(ctx context.Context, t api.ChatTurn, session string
 		Work:     work,
 		StopWork: stopWork,
 	})
-	if rules, denials := f.denialsOf(out); len(denials) > 0 {
+	if rules, denials := denialsOf(f.runner.harness, out); len(denials) > 0 {
 		p.add(denialsItem(rules, denials, f.e.Clock.Now()))
 	}
 	return chatOutcome(t, out)
