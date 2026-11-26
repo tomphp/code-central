@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { moveTargets } from "../api/actions/move";
 import type { EditView, ReportedModels, State, TicketView } from "../api/types";
-import { ago, CLAUDE_CODE_DEFAULT } from "../format";
+import { ago, CLAUDE_CODE_DEFAULT, clock } from "../format";
 import { Markdown } from "../Markdown";
 import { EditForm } from "../edit/EditForm";
 import { NewRetro } from "../requirement/NewRequirement";
@@ -17,6 +17,7 @@ import { PullRequestBadge } from "./PullRequestBadge";
 import { WaitingBadge } from "./WaitingBadge";
 import { PartlyLandedBadge } from "./PartlyLandedBadge";
 import { useAct } from "./useAct";
+import { StopButton } from "./StopButton";
 import { CISection } from "./CISection";
 import { TicketRepositories } from "./TicketRepositories";
 import { Triage } from "./Triage";
@@ -129,6 +130,7 @@ export function TicketDetail(props: TicketDetailProps) {
                   Edit
                 </Button>
               )}
+              <StopButton project={props.project} ticket={t} />
               {t.retroable && props.openTicket && (
                 <NewRetro target={t.id} onSubmitted={(r) => props.openTicket?.(r.id)} />
               )}
@@ -231,6 +233,18 @@ function TicketBody({ project, ticket: t, specLabels, now, reported, openSpec, o
                     </span>
                   </>
                 )}
+                {c.stops?.map((stop) => (
+                  <span key={stop.stopped}>
+                    {" · "}
+                    <span className="claim-field">Stopped {clock(stop.stopped)}</span>
+                    {stop.resumed && (
+                      <>
+                        {" · "}
+                        <span className="claim-field">Resumed {clock(stop.resumed)}</span>
+                      </>
+                    )}
+                  </span>
+                ))}
                 {" · "}
                 <span className="claim-field">model {c.model || CLAUDE_CODE_DEFAULT}</span> ·{" "}
                 <span className="claim-field">effort {c.effort || CLAUDE_CODE_DEFAULT}</span>

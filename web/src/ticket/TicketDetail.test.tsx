@@ -84,6 +84,23 @@ describe("the Ticket detail", () => {
     ]);
   });
 
+  it("shows each Stop of a Claim as the time it was stopped and resumed", async () => {
+    const { w, s } = await acme();
+    const id = await s.ticket("acme", { title: "Stop me" });
+    await s.factoryClaim("acme", id, "s-1");
+    const clock = (d: Date) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const stopped = w.now();
+    await w.api.act("acme", id, "stop", {});
+    w.advance(200 * MIN);
+    const resumed = w.now();
+    await w.api.act("acme", id, "resume", {});
+    w.advance(5 * MIN);
+    const stoppedAgain = w.now();
+    await w.api.act("acme", id, "stop", {});
+    const [row] = within(within(await detailOf(w, id)).getByRole("list", { name: "Claims" })).getAllByRole("listitem");
+    expect(claimLine(row)).toHaveTextContent(`Stopped ${clock(stopped)} · Resumed ${clock(resumed)} · Stopped ${clock(stoppedAgain)} · model`);
+  });
+
   it("shows the model and effort each Claim's latest turn ran with, or Claude Code's default", async () => {
     const { w, s } = await acme();
     const id = await s.ticket("acme", { title: "Tune it" });

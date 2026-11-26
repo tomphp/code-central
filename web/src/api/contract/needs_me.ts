@@ -95,4 +95,20 @@ export function needsMeContract(driver: () => Driver) {
     ]);
     expect((await reasons())[failing]).toBe("ci_failed");
   });
+
+  it("lists a Stopped Claim under stopped until it is resumed", async () => {
+    await d.createProject("acme", "Acme");
+    const running = await d.createTicket("acme", "Running", "Ready");
+    await d.factoryClaim("acme", running, "sess-1");
+    expect((await d.api.needsMe()).count).toBe(0);
+
+    await d.api.act("acme", running, "stop", {});
+    const v = await d.api.needsMe();
+    expect(v.count).toBe(1);
+    expect(v.groups.map((g) => g.reason)).toEqual(["stopped"]);
+    expect(v.groups[0].tickets[0]).toMatchObject({ project: "acme", id: running, state: "In Progress", reason: "stopped" });
+
+    await d.api.act("acme", running, "resume", {});
+    expect((await d.api.needsMe()).count).toBe(0);
+  });
 }
