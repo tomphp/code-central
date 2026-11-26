@@ -66,7 +66,7 @@ func TestTurningLandPerSpecOnHoldsOnlyLaterTickets(t *testing.T) {
 
 // cancelDrafts cancels the Spec's Draft Stage Tickets, so only the
 // implementation Tickets keep it unfinished.
-func cancelDrafts(t *testing.T, h *factorytest.Harness) {
+func cancelDrafts(t *testing.T, h *factorytest.Rig) {
 	t.Helper()
 	rows, err := h.Server.Client.FindTickets(t.Context(), h.Project, api.FindTicketsInput{Spec: api.Ref(h.SpecID()), State: []domain.State{domain.Draft}})
 	if err != nil {

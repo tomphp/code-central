@@ -1,16 +1,16 @@
 // Claude Args (Spec code-central-516): what follows -- on the Factory's
 // command line is claude flags the Factory passes, as given, to every
-// start and resume. The Factory refuses the ones it sets itself and
-// checks at startup that claude accepts the rest.
+// start and resume. The Harness refuses the ones the Factory sets itself
+// and checks at startup that claude accepts the rest.
 
-package factory
+package claude
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strings"
+
+	"github.com/tomoram/code-central/factory/harness"
 )
 
 // reservedFlags maps each flag the Factory sets itself to what to say
@@ -39,9 +39,9 @@ var reservedFlags = map[string]string{
 	"--bare":                         "",
 }
 
-// checkClaudeArgs refuses a Claude Arg the Factory sets itself, in its
+// CheckArgs refuses a Claude Arg the Factory sets itself, in its
 // --flag or --flag=value form, and a bare --.
-func checkClaudeArgs(args []string) error {
+func CheckArgs(args []string) error {
 	for _, a := range args {
 		if a == "--" {
 			return errors.New("a -- among the Claude Args: the Factory ends the flags itself")
@@ -59,30 +59,16 @@ func checkClaudeArgs(args []string) error {
 	return nil
 }
 
-// joinArgs joins args with spaces, quoting any that holds a space.
-func joinArgs(args []string) string {
-	parts := make([]string, len(args))
-	for i, a := range args {
-		parts[i] = a
-		if strings.ContainsAny(a, " \t") {
-			parts[i] = fmt.Sprintf("%q", a)
-		}
-	}
-	return strings.Join(parts, " ")
-}
-
-// checkClaudeArgsAccepted runs `claude -p <Claude Args>` with empty
-// stdin and no prompt, which makes no model call and leaves no session:
-// claude names an unknown option, or says the input must be provided.
-// Anything else only warns.
-func (f *factory) checkClaudeArgsAccepted() error {
-	if len(f.o.claudeArgs) == 0 {
+// VerifyArgs runs `claude -p <Claude Args>` with empty stdin and no
+// prompt, which makes no model call and leaves no session: claude names
+// an unknown option, or says the input must be provided. Anything else
+// only warns.
+func (h *Harness) VerifyArgs(dir string, warnf func(string, ...any)) error {
+	if len(h.o.Args) == 0 {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), helpTimeout)
+	cmd, cancel := h.probe(dir, append([]string{"-p"}, h.o.Args...)...)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, f.claude, append([]string{"-p"}, f.o.claudeArgs...)...)
-	cmd.Dir, cmd.Env = f.repos.home.dir, f.e.Environ
 	out, err := cmd.CombinedOutput()
 	text := strings.TrimSpace(string(out))
 	for line := range strings.Lines(text) {
@@ -96,6 +82,6 @@ func (f *factory) checkClaudeArgsAccepted() error {
 	if err == nil {
 		err = errors.New("exit 0")
 	}
-	f.printf("warning: can't tell whether claude accepts the Claude Args (claude -p %s: %v, said %q); carrying on", joinArgs(f.o.claudeArgs), err, text)
+	warnf("warning: can't tell whether claude accepts the Claude Args (claude -p %s: %v, said %q); carrying on", harness.JoinArgs(h.o.Args), err, text)
 	return nil
 }

@@ -13,7 +13,7 @@ import (
 )
 
 // accepted makes an Accepted Ticket whose branch adds file.
-func accepted(h *factorytest.Harness, title, file, content string) (id, commit string) {
+func accepted(h *factorytest.Rig, title, file, content string) (id, commit string) {
 	id = h.ReadyTicket(title)
 	commit = h.CommitOn(id, file, content)
 	h.Finished(id, id, commit)

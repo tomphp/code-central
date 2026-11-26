@@ -14,7 +14,7 @@ import (
 )
 
 // lastFailure is the newest Failure Report on a Failed Ticket.
-func lastFailure(t *testing.T, h *factorytest.Harness, id string) string {
+func lastFailure(t *testing.T, h *factorytest.Rig, id string) string {
 	t.Helper()
 	tk := h.WantState(id, domain.Failed)
 	r := tk.FailureReports[len(tk.FailureReports)-1]
@@ -106,7 +106,7 @@ func TestAStageWorktreePathHoldingABranchWorktreeIsAFailureReport(t *testing.T) 
 }
 
 // move moves a Ticket to state as the human.
-func move(t *testing.T, h *factorytest.Harness, id string, state domain.State) {
+func move(t *testing.T, h *factorytest.Rig, id string, state domain.State) {
 	t.Helper()
 	if _, err := h.Human().Move(context.Background(), h.Project, api.MoveInput{Ticket: api.Ref(id), ToState: state}); err != nil {
 		t.Fatal(err)

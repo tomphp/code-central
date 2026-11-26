@@ -9,12 +9,12 @@ import (
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
-func setBase(h *factorytest.Harness, base string) {
+func setBase(h *factorytest.Rig, base string) {
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Base: &base})
 }
 
 // baseMissingItem is the Project's Base missing item in Needs Me.
-func baseMissingItem(t *testing.T, h *factorytest.Harness) (api.NeedsMeRow, bool) {
+func baseMissingItem(t *testing.T, h *factorytest.Rig) (api.NeedsMeRow, bool) {
 	t.Helper()
 	if rows := h.NeedsMeItems(api.ReasonBaseMissing); len(rows) > 0 {
 		return rows[0], true

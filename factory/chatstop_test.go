@@ -11,7 +11,7 @@ import (
 
 // startLongReply starts the Factory and sends a Chat Message whose reply
 // waits, once the fake claude is running it and the Factory has settled.
-func startLongReply(t *testing.T, h *factorytest.Harness, args ...string) *factorytest.Running {
+func startLongReply(t *testing.T, h *factorytest.Rig, args ...string) *factorytest.Running {
 	t.Helper()
 	h.Script(factorytest.Chat, factorytest.Say("Working"), factorytest.Wait(), factorytest.Say("All done."), factorytest.Result("success"))
 	r := h.Start(args...)

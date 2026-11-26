@@ -14,7 +14,7 @@ import (
 
 // builtPrototype scripts Prototype id to commit a file on its branch and
 // finish with no branch, as the prototype guide says.
-func builtPrototype(h *factorytest.Harness, id string) {
+func builtPrototype(h *factorytest.Rig, id string) {
 	h.Script(id,
 		factorytest.WriteFile("picker.html", "<select></select>\n"),
 		factorytest.Git("add", "picker.html"),

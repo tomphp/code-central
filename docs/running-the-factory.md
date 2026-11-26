@@ -23,10 +23,11 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    ```console
    $ cd ~/src/acme-shop
    $ code-central-factory
+   harness: claude
    base: main
    ```
 
-   That one line is all it prints at the start. It is now running, and looks for work every 30 seconds. Keep this terminal open for every step below: each line it prints later is one thing it did.
+   Those two lines are all it prints at the start. It is now running, and looks for work every 30 seconds. Keep this terminal open for every step below: each line it prints later is one thing it did.
 
    It refuses to start, and says why, if something it needs is missing. For example, every Claim's worktree starts from the base, so its sessions need `.mcp.json` committed there:
 
@@ -44,6 +45,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    | `--parallel <n>` | The most `claude` turns running at once. The default is 3. |
    | `--model <model>` | The model for every session it starts or resumes, such as `--model opus`, unless the Ticket sets one. The default is Claude Code's own. See [Model and effort](#model-and-effort). |
    | `--effort <level>` | The effort for every session it starts or resumes, such as `--effort high`, unless the Ticket sets one. The default is Claude Code's own. It must be a level `claude --help` lists; see [What `claude` accepts](#what-claude-accepts). |
+   | `--harness <name>` | The **Harness**, the coding-agent CLI that runs the turns. The default is `claude`, Claude Code, and it is the only one: any other value stops the Factory at the start, naming `claude`. The Factory prints `harness: claude` as it starts. A Project can run several Factories, each on one Harness. |
    | `--bypass-permissions` | Runs every session in `bypassPermissions` mode, with no permission checks. It prints a warning line at the start. |
    | `--no-chat` | Turns off Chat support. The Factory reports `chat: true` in every Heartbeat by default, saying it can run Conversations for the Project's Chat; with `--no-chat` it reports `chat: false`. |
    | `-- <Claude Args>` | Everything after `--` is `claude` flags the Factory passes, as given, to every start and resume, such as `-- --chrome`. See [Claude Args](#claude-args). |
@@ -54,7 +56,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    The Factory keeps a request open to Code Central and starts its poll at once when work appears: a new or approved Ticket, an Accept or Reject, answered Questions. It also polls at once when a turn ends, to fill the freed slot, but a Ticket whose session gave up waits for the next timed poll rather than being claimed again straight away. `--poll <duration>` (default 30s, at least 5s) remains the fallback for what Code Central can't see happen, such as CI results and merged Pull Requests, and sets the Heartbeat cadence.
 
-   Check: the Factory is still running, and its only line is `base: main`.
+   Check: the Factory is still running, and its only lines are `harness: claude` and `base: main`.
 
 2. **Submit the Requirement from the UI.** Open <http://localhost:7733>, click **+ New**, type the same Requirement's text and click **Submit requirement**:
 
@@ -376,6 +378,7 @@ If it can't read the levels or the aliases, say from a `claude` whose help reads
 $ code-central-factory
 warning: can't read the effort levels from claude --help, so none are reported, and --effort isn't checked
 warning: can't read the model aliases from claude --help, so none are reported
+harness: claude
 base: main
 ```
 
@@ -409,6 +412,7 @@ Factory sessions can't turn on the Chrome extension with an interactive `/chrome
 
 ```console
 $ code-central-factory --parallel 1 -- --chrome --add-dir ../shared
+harness: claude
 base: main
 passing to every claude turn: --chrome --add-dir ../shared
 ```

@@ -1,4 +1,4 @@
-// The settled signal: what the Factory under test tells the harness of
+// The settled signal: what the Factory under test tells the rig of
 // its work in flight (factory.Work), and the waits built on it, Settle,
 // Tick and Poll. The package doc says what settled means.
 
@@ -22,7 +22,7 @@ import (
 // tracker hears of one Running Factory's work in flight: it is the
 // Factory's factory.Work.
 type tracker struct {
-	h *Harness
+	h *Rig
 
 	mu sync.Mutex
 	// started is set once the Factory has told of its first work.
@@ -54,7 +54,7 @@ type piece struct {
 	answered bool
 }
 
-func newTracker(h *Harness) *tracker {
+func newTracker(h *Rig) *tracker {
 	return &tracker{h: h, open: map[int]*piece{}, graces: map[string]int{}}
 }
 
@@ -162,7 +162,7 @@ func (k *tracker) signal() {
 
 // unsettled is every condition of settled that doesn't hold yet, and
 // whether one of them is outside the Factory, in the fake's files or in
-// Code Central, which tell the harness of no change.
+// Code Central, which tell the rig of no change.
 func (k *tracker) unsettled() (unmet []string, outside bool) {
 	now := k.h.Clock.Now()
 	k.mu.Lock()
@@ -241,8 +241,8 @@ func (k *tracker) inKillGrace() bool {
 }
 
 // changes is closed at the next change to what any Factory of the
-// harness has told, or to the requests through its proxy.
-func (h *Harness) changes() <-chan struct{} {
+// rig has told, or to the requests through its proxy.
+func (h *Rig) changes() <-chan struct{} {
 	h.changeMu.Lock()
 	defer h.changeMu.Unlock()
 	if h.change == nil {
@@ -252,7 +252,7 @@ func (h *Harness) changes() <-chan struct{} {
 }
 
 // changed wakes every wait on changes.
-func (h *Harness) changed() {
+func (h *Rig) changed() {
 	h.changeMu.Lock()
 	defer h.changeMu.Unlock()
 	if h.change != nil {
@@ -263,11 +263,11 @@ func (h *Harness) changed() {
 
 // marker is the file the fake claude keeps while a run of key is in a
 // Wait step.
-func (h *Harness) marker(key string) string { return filepath.Join(h.data, "waiting", key) }
+func (h *Rig) marker(key string) string { return filepath.Join(h.data, "waiting", key) }
 
 // parked reports whether a run of key is in a Wait step, and how many
 // stop signals it has noted.
-func (h *Harness) parked(key string) (noted int, ok bool) {
+func (h *Rig) parked(key string) (noted int, ok bool) {
 	b, err := readFile(h.marker(key))
 	if err != nil {
 		return 0, false
@@ -278,7 +278,7 @@ func (h *Harness) parked(key string) (noted int, ok bool) {
 }
 
 // removeMarker removes key's marker, retrying while Windows holds it.
-func (h *Harness) removeMarker(key string) {
+func (h *Rig) removeMarker(key string) {
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		err := os.Remove(h.marker(key))
@@ -522,7 +522,7 @@ func longPollOf(path string) string {
 // for a wake, answered and held until PassWakes. A wake's call is open
 // at Code Central once Code Central holds as many unwoken calls as the
 // proxy has sent on.
-func (h *Harness) longPollsUnsettled(wakes, chats int) string {
+func (h *Rig) longPollsUnsettled(wakes, chats int) string {
 	h.polls.mu.Lock()
 	upWakes, upChats, parked := h.polls.upstream[factory.WakeLongPoll], h.polls.upstream[factory.ChatLongPoll], h.polls.parked
 	h.polls.mu.Unlock()
@@ -539,7 +539,7 @@ func (h *Harness) longPollsUnsettled(wakes, chats int) string {
 
 // sendLongPoll counts a long-poll called name sent on to Code Central
 // until done is called with whether its answer is to be parked.
-func (h *Harness) sendLongPoll(name string) (done func(park bool)) {
+func (h *Rig) sendLongPoll(name string) (done func(park bool)) {
 	h.polls.mu.Lock()
 	if h.polls.upstream == nil {
 		h.polls.upstream = map[string]int{}
@@ -559,7 +559,7 @@ func (h *Harness) sendLongPoll(name string) (done func(park bool)) {
 }
 
 // unpark counts a parked wake answer gone, passed on or given up.
-func (h *Harness) unpark() {
+func (h *Rig) unpark() {
 	h.polls.mu.Lock()
 	h.polls.parked--
 	h.polls.mu.Unlock()
@@ -568,7 +568,7 @@ func (h *Harness) unpark() {
 
 // answered marks the long-poll called name of every Factory running as
 // answered, before its answer goes on to it.
-func (h *Harness) answered(name string) {
+func (h *Rig) answered(name string) {
 	h.runMu.Lock()
 	runs := slices.Clone(h.runs)
 	h.runMu.Unlock()

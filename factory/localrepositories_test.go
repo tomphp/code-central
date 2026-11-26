@@ -21,7 +21,7 @@ import (
 
 // addLocalOnly adds Repository name to the Project with the local path
 // dir and no Clone URL, leaving dir as it is.
-func addLocalOnly(t *testing.T, h *factorytest.Harness, name, dir string) *factorytest.Repository {
+func addLocalOnly(t *testing.T, h *factorytest.Rig, name, dir string) *factorytest.Repository {
 	t.Helper()
 	if _, err := h.Human().AddRepository(context.Background(), h.Project, api.AddRepositoryInput{Name: name, LocalPath: dir}); err != nil {
 		t.Fatal(err)
@@ -30,7 +30,7 @@ func addLocalOnly(t *testing.T, h *factorytest.Harness, name, dir string) *facto
 }
 
 // editCloneURL has the human set Repository name's Clone URL to url.
-func editCloneURL(t *testing.T, h *factorytest.Harness, name, url string) {
+func editCloneURL(t *testing.T, h *factorytest.Rig, name, url string) {
 	t.Helper()
 	if _, err := h.Human().EditRepository(context.Background(), h.Project, api.EditRepositoryInput{Name: name, CloneURL: &url}); err != nil {
 		t.Fatal(err)
@@ -41,7 +41,7 @@ func editCloneURL(t *testing.T, h *factorytest.Harness, name, url string) {
 // remote named origin, the Push remote's name, that isn't the
 // Repository's: a repository of its own, other, whose main shares no
 // history with r's. It returns other.
-func addUnrelatedOrigin(h *factorytest.Harness, r *factorytest.Repository) *factorytest.Repository {
+func addUnrelatedOrigin(h *factorytest.Rig, r *factorytest.Repository) *factorytest.Repository {
 	other := h.MakeRepository("other")
 	r.SetRemote("origin", other.CloneURL)
 	return other

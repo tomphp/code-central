@@ -61,7 +61,7 @@ func responses(u api.UsageView) int {
 // waitForUsage polls until Usage holds n responses in all, and returns
 // it. It is for a turn that is still running: what it printed may reach a
 // later batch.
-func waitForUsage(h *factorytest.Harness, r *factorytest.Running, n int) api.UsageView {
+func waitForUsage(h *factorytest.Rig, r *factorytest.Running, n int) api.UsageView {
 	var u api.UsageView
 	r.PollUntil("Usage to hold the responses", func() bool {
 		u = h.Usage()
@@ -73,7 +73,7 @@ func waitForUsage(h *factorytest.Harness, r *factorytest.Running, n int) api.Usa
 // wantUsage polls once, which posts what the turns that have ended
 // printed, and returns Usage, failing the test unless it holds n responses
 // in all.
-func wantUsage(t *testing.T, h *factorytest.Harness, r *factorytest.Running, n int) api.UsageView {
+func wantUsage(t *testing.T, h *factorytest.Rig, r *factorytest.Running, n int) api.UsageView {
 	t.Helper()
 	r.Poll()
 	u := h.Usage()

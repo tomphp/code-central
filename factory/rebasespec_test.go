@@ -17,7 +17,7 @@ import (
 // specLine is the subjects of the commits on dir's Spec Branch's
 // first-parent line that rev lacks, oldest first, and its merge commits'
 // subjects among them.
-func specLine(h *factorytest.Harness, v gitView, rev string) (subs, merges []string) {
+func specLine(h *factorytest.Rig, v gitView, rev string) (subs, merges []string) {
 	commits, mergeCommits := inRange(v, v.Tip("spec/"+h.SpecID()), rev)
 	return subjects(v, commits), subjects(v, mergeCommits)
 }

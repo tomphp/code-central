@@ -335,7 +335,7 @@ func TestAnExpiredLoginStopsTheFactory(t *testing.T) {
 
 // stateAllowedTools is the allowed tools the Factory's state file holds
 // for claimID.
-func stateAllowedTools(t *testing.T, h *factorytest.Harness, claimID string) []string {
+func stateAllowedTools(t *testing.T, h *factorytest.Rig, claimID string) []string {
 	t.Helper()
 	b, err := h.ReadStateFile()
 	if err != nil {

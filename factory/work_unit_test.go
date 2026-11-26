@@ -8,7 +8,7 @@ import (
 )
 
 // movingClock moves the fake clock right after each Now, as a test
-// harness might between a caller's reading the time and making its timer.
+// rig might between a caller's reading the time and making its timer.
 type movingClock struct {
 	*clock.Fake
 	by time.Duration
@@ -33,7 +33,7 @@ func (h *restHook) PollWait(until time.Time) func() {
 }
 
 // A wait the clock moves under while it starts is told as due no earlier
-// than its timer: told earlier, a harness would call it due while the
+// than its timer: told earlier, a rig would call it due while the
 // timer hadn't fired, and wait for it without moving the clock.
 func TestAWaitIsNeverToldDueBeforeItsTimer(t *testing.T) {
 	for name, wait := range map[string]func(work, clock.Clock){

@@ -17,14 +17,14 @@ import (
 // never twice.
 
 // setRebase turns the Project's Rebase on or off, under Merge.
-func setRebase(h *factorytest.Harness, on bool) {
+func setRebase(h *factorytest.Rig, on bool) {
 	h.SetLandingMethod(api.SetLandingMethodInput{Method: domain.LandingMerge, Rebase: &on})
 }
 
 // commitAs commits file with content on branch, made from main when it
 // doesn't exist, by author at date with message, and returns the commit.
 // The repo is left on main.
-func commitAs(t *testing.T, h *factorytest.Harness, dir, branch, file, content, author, date, message string) string {
+func commitAs(t *testing.T, h *factorytest.Rig, dir, branch, file, content, author, date, message string) string {
 	t.Helper()
 	if !strings.Contains(h.GitIn(dir, "branch", "--list", branch), branch) {
 		h.GitIn(dir, "branch", branch, "main")
@@ -41,11 +41,11 @@ func commitAs(t *testing.T, h *factorytest.Harness, dir, branch, file, content, 
 
 // authored is commit's author, author date and message, as a replay keeps
 // them. It reads real git.
-func authored(h *factorytest.Harness, dir, commit string) string {
+func authored(h *factorytest.Rig, dir, commit string) string {
 	return h.GitIn(dir, "log", "-1", "--format=%an <%ae> %aI%n%B", commit)
 }
 
-// gitView is what the typed helpers read of a repository: the Harness for
+// gitView is what the typed helpers read of a repository: the Rig for
 // the Home Repository, and a *factorytest.Repository.
 type gitView interface {
 	Tip(branch string) string
@@ -91,7 +91,7 @@ func inRange(v gitView, tip, base string) (commits, merges []string) {
 
 // onSpecBranch is the commits on the Spec Branch that main lacks, oldest
 // first, and its merge commits among them.
-func onSpecBranch(h *factorytest.Harness, v gitView) (commits, merges []string) {
+func onSpecBranch(h *factorytest.Rig, v gitView) (commits, merges []string) {
 	return inRange(v, v.Tip("spec/"+h.SpecID()), v.Tip("main"))
 }
 
@@ -124,7 +124,7 @@ func descendsFrom(v gitView, commit, ancestor string) bool {
 
 // acceptedTwice makes an Accepted Ticket whose branch, cut from main, holds
 // two commits, and returns it with them.
-func acceptedTwice(h *factorytest.Harness, title, file string) (id string, commits []string) {
+func acceptedTwice(h *factorytest.Rig, title, file string) (id string, commits []string) {
 	id = h.ReadyTicket(title)
 	commits = append(commits, h.CommitOn(id, file+".a", "a\n"), h.CommitOn(id, file+".b", "b\n"))
 	h.Finished(id, id, commits[1])
@@ -134,7 +134,7 @@ func acceptedTwice(h *factorytest.Harness, title, file string) (id string, commi
 
 // acceptedAs is acceptedTwice with the commits by different authors, at
 // different dates and with messages of their own. It needs real git.
-func acceptedAs(t *testing.T, h *factorytest.Harness, title, file string) (id string, commits []string) {
+func acceptedAs(t *testing.T, h *factorytest.Rig, title, file string) (id string, commits []string) {
 	t.Helper()
 	id = h.ReadyTicket(title)
 	commits = append(commits,

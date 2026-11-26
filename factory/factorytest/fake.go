@@ -255,7 +255,7 @@ func headIn(data string, c Call, repository string) string {
 }
 
 // runGit runs git with args in dir, or the run's working directory for
-// "", and returns its trimmed output: through the harness's relay to the
+// "", and returns its trimmed output: through the rig's relay to the
 // Fake git when the data folder names one (relayFile), else on real git,
 // passing on what git prints to stderr.
 func runGit(data, dir string, args []string) (string, error) {
@@ -346,7 +346,7 @@ func wait(data, key string, sigs <-chan os.Signal, noted *int) (code int, stop b
 }
 
 // whileInUse runs do again for up to 2s while it fails on a file another
-// process holds open, as the harness reading a marker does on Windows.
+// process holds open, as the rig reading a marker does on Windows.
 func whileInUse(do func() error) {
 	deadline := time.Now().Add(2 * time.Second)
 	for err := do(); inUse(err) && time.Now().Before(deadline); err = do() {

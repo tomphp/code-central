@@ -14,7 +14,7 @@ import (
 
 // researched scripts research Ticket id to commit its findings on its
 // branch and finish with no branch, as the map-research guide says.
-func researched(h *factorytest.Harness, id string) {
+func researched(h *factorytest.Rig, id string) {
 	h.Script(id,
 		factorytest.WriteFile("findings.md", "# Colour libraries\n"),
 		factorytest.Git("add", "findings.md"),

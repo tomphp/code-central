@@ -85,7 +85,7 @@ func newLandWorld(t *testing.T) *landWorld {
 		stopped:       func(context.Context) bool { return false },
 		turnRunningOn: func(string) bool { return false },
 	}
-	l := newLander(repos, srv.Client, "acme", work{}, printf, hooks)
+	l := newLander(repos, srv.Client, "acme", ".mcp.json", work{}, printf, hooks)
 	return &landWorld{t: t, l: l, repo: repo, fake: fake, root: root, top: top, srv: srv, human: human, out: out}
 }
 

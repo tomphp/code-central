@@ -17,14 +17,14 @@ import (
 
 const stoppedPrompt = "A human stopped your last turn and has now resumed you; carry on."
 
-func stop(t *testing.T, h *factorytest.Harness, id string) {
+func stop(t *testing.T, h *factorytest.Rig, id string) {
 	t.Helper()
 	if _, err := h.Human().Stop(context.Background(), h.Project, api.StopInput{Ticket: api.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func resume(t *testing.T, h *factorytest.Harness, id string) {
+func resume(t *testing.T, h *factorytest.Rig, id string) {
 	t.Helper()
 	if _, err := h.Human().Resume(context.Background(), h.Project, api.ResumeInput{Ticket: api.Ref(id)}); err != nil {
 		t.Fatal(err)
@@ -33,7 +33,7 @@ func resume(t *testing.T, h *factorytest.Harness, id string) {
 
 // wantHeld checks id's Claim is kept: In Progress or Answered, Stopped,
 // in the state file and with no Failure Report.
-func wantHeld(t *testing.T, h *factorytest.Harness, id string) {
+func wantHeld(t *testing.T, h *factorytest.Rig, id string) {
 	t.Helper()
 	tk := h.Ticket(id)
 	if len(tk.Claims) != 1 || !tk.Claims[0].Stopped || len(tk.FailureReports) != 0 {
@@ -46,7 +46,7 @@ func wantHeld(t *testing.T, h *factorytest.Harness, id string) {
 
 func TestAStopStopsTheTurnOnAWakeKeepsTheClaimAndFreesItsSlot(t *testing.T) {
 	t.Parallel()
-	h := wakingHarness(t)
+	h := wakingRig(t)
 	stopped := h.ReadyTicket("Stopped")
 	other := h.ReadyTicket("Carries on")
 	h.Script(stopped, factorytest.WriteFile("wip.txt", "wip\n"), factorytest.Wait())
