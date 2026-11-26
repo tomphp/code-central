@@ -441,6 +441,8 @@ export const TICKET_FIELDS = [
   "claimable",
   "editable",
   "retroable",
+  "stoppable",
+  "resumable",
   "silent_since",
   "needs_me_reason",
   "link",
@@ -646,6 +648,12 @@ export interface TicketView {
   // Every read sets them. Computed on read.
   editable: boolean;
   retroable: boolean;
+  // Stoppable says the human may stop the Ticket's live Claim, and
+  // Resumable that they may resume it, as stop and resume would accept
+  // them. Left out when false, to keep an agent's get_ticket within its
+  // budget. Computed on read.
+  stoppable?: boolean;
+  resumable?: boolean;
   // SilentSince is set while the Ticket is a Silent Claim: In Progress
   // with no activity for 30 minutes. It is the time of the last
   // activity, so the quiet time is now minus it. Computed, never stored.
@@ -1145,6 +1153,22 @@ export interface SetSessionInput {
 
 // ReleaseInput is release's input; the note is optional.
 export interface ReleaseInput {
+  ticket: string;
+  note?: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// StopInput is stop's input; the note is optional.
+export interface StopInput {
+  ticket: string;
+  note?: string;
+  // Full asks for the Ticket in place of the Acknowledgement.
+  full?: boolean;
+}
+
+// ResumeInput is resume's input; the note is optional.
+export interface ResumeInput {
   ticket: string;
   note?: string;
   // Full asks for the Ticket in place of the Acknowledgement.
@@ -3212,6 +3236,20 @@ export const OPERATIONS = {
     query: {},
     input: "ReleaseInput",
   },
+  stop: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/stop",
+    bind: { n: "ticket" },
+    query: {},
+    input: "StopInput",
+  },
+  resume: {
+    method: "POST",
+    path: "/api/p/{key}/tickets/{n}/resume",
+    bind: { n: "ticket" },
+    query: {},
+    input: "ResumeInput",
+  },
   add_blocker: {
     method: "POST",
     path: "/api/p/{key}/tickets/{n}/add_blocker",
@@ -3701,6 +3739,8 @@ export interface OperationInputs {
   reject: RejectInput;
   set_session: SetSessionInput;
   release: ReleaseInput;
+  stop: StopInput;
+  resume: ResumeInput;
   add_blocker: BlockerInput;
   remove_blocker: BlockerInput;
   cancel: CancelInput;

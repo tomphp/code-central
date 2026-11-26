@@ -38,11 +38,13 @@ Commands:
   remove-tags <id> <key>...
   report-failure <id> --claim <claim-id> --what-broke <md> --why <md> --what-to-fix <md> --where-work-stands <md> | --file <json-path|-> [--full]
   repository list | add <name> [--clone-url <url>] [--base <branch>] [--local-path <path>] [--landing <landing>] [--push-remote <remote>] [--check-command <command>] | edit <name> [--clone-url <url>] [--base <branch>] [--local-path <path>] [--landing <landing>] [--push-remote <remote>] [--check-command <command>] | remove <name> | move <name> --before|--after <name>  [--project <key>]  manage the Project's Repositories, listed in landing order; each needs a Clone URL, a local path or both, and one with no Clone URL is local-only, never cloned or pushed; an empty --clone-url or --local-path clears it; --landing is default (the Project's Default Landing), merge, merge+push, branch, branch+push or pull-request, an empty --push-remote uses the Project's, and an empty --check-command goes back to the Project's Check Command; edit takes the Home Repository's --landing, --push-remote and --check-command
+  resume <id> [--note <md>] [--project <key>]  resume a Stopped Claim, so the Factory takes it up again
   send-back <id> [--note <md> | --file <path|->] [--full]  Accepted work that can't land (a merge conflict) back to Ready; the note is required
   serve [--store <dir>] [--port <n>] [--bind <ip>] [--no-notify] [--log <file>]  run the service in the foreground; --port serves on that loopback port instead of 7733; --bind adds one address (such as the Docker bridge IP), never a LAN address; --log appends serve's output to a file
   service install [--store <dir>] [--bind <ip>] | service restart  run serve as a login item (launchd on macOS, systemd user unit on Linux, a scheduled task on Windows); install again after an upgrade
   set-session <id> --claim <claim-id> [--session <id>] [--working-dir <dir>] [--resume-command <command>] [--full]  (session defaults to $CLAUDE_CODE_SESSION_ID)
   set-tags <id> <key>=<value>...
+  stop <id> [--note <md>] [--project <key>]  stop the Factory's session on an In Progress or Answered Ticket, keeping its State and Claim until resumed or released
   store move --to <kind>[:<path>] [--url-env <name>] [--store <dir>]  copy the Store serve opens into a new, empty files, sqlite or postgres Store and switch settings.yaml to it; offline: stop serve first
   submit-map [--text <md> | --file <path|->] [--draft] [--full]  submit a Map; its first line becomes the Spec's title
   submit-prototype <spec> [--text <md> | --file <path|->] [--full]  submit a Prototype on the Spec; its first line becomes the title

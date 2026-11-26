@@ -103,6 +103,21 @@ func TestEveryMoveTheFactorysPollActsOnWakesIt(t *testing.T) {
 			_, err := f.core.Move(human, "acme", api.MoveInput{Ticket: "2", ToState: domain.Done})
 			return err
 		}},
+		{"stop", func(t *testing.T, f fixture) {
+			f.work(t, domain.Ready)
+			f.claim(t, byFactory)
+		}, func(f fixture) error {
+			_, err := f.core.Stop(human, "acme", api.StopInput{Ticket: "2"})
+			return err
+		}},
+		{"resume", func(t *testing.T, f fixture) {
+			f.work(t, domain.Ready)
+			f.claim(t, byFactory)
+			f.stop(t, "2")
+		}, func(f fixture) error {
+			_, err := f.core.Resume(human, "acme", api.ResumeInput{Ticket: "2"})
+			return err
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFixture(t)

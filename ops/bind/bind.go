@@ -99,6 +99,9 @@ var all = []binding{
 	// Silent Claims and sessions (ticket 31).
 	bind(ops.SetSession, (*core.Core).SetSession),
 	bind(ops.Release, (*core.Core).Release),
+	// Stopping a Factory Claim (Spec code-central-1233).
+	bind(ops.Stop, (*core.Core).Stop),
+	bind(ops.Resume, (*core.Core).Resume),
 	// Blockers, Replacements and finding work (ticket 28).
 	bind(ops.AddBlocker, (*core.Core).AddBlocker),
 	bind(ops.RemoveBlocker, (*core.Core).RemoveBlocker),
