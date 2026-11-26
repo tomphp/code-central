@@ -66,6 +66,38 @@ func TestATicketSentBackForAConflictIsClaimedWithAnInlinePrompt(t *testing.T) {
 	requireConflictClaim(t, callFor(t, h, id), "README")
 }
 
+func conflictPromptWith(t *testing.T, setup func(h *factorytest.Harness)) string {
+	t.Helper()
+	h := factorytest.New(t, factorytest.FakeGit())
+	id, _ := accepted(h, "Change the readme", "README", "theirs\n")
+	h.CommitOn("main", "README", "ours\n")
+	setup(h)
+	h.Script(id, factorytest.Wait())
+	h.Start()
+	return callFor(t, h, id).Prompt
+}
+
+func TestAConflictPromptNamesTheRepositorysCheckCommandAndNotMakeTypecheck(t *testing.T) {
+	t.Parallel()
+	p := conflictPromptWith(t, func(h *factorytest.Harness) {
+		cmd := "npm run check"
+		if _, err := h.Human().EditRepository(context.Background(), h.Project, api.EditRepositoryInput{Name: h.Project, CheckCommand: &cmd}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(p, "Run `npm run check` and the tests the resolution touches.") || strings.Contains(p, "make typecheck") {
+		t.Errorf("prompt %q", p)
+	}
+}
+
+func TestAConflictPromptWithNoCheckCommandPointsToTheRepositorysDocs(t *testing.T) {
+	t.Parallel()
+	p := conflictPromptWith(t, func(*factorytest.Harness) {})
+	if !strings.Contains(p, "as its own docs (such as CLAUDE.md or README) describe.") || strings.Contains(p, "make typecheck") || strings.Contains(p, "Run `") {
+		t.Errorf("prompt %q", p)
+	}
+}
+
 func TestATicketSentBackForAnotherReasonStartsAsAnOrdinaryClaim(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t, factorytest.FakeGit())
