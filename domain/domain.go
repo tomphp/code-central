@@ -747,11 +747,34 @@ type Claim struct {
 	ResumeCommand string
 	// Model and Effort are what the Claim's latest turn ran with, empty
 	// meaning Claude Code's default.
-	Model   string
-	Effort  string
+	Model  string
+	Effort string
+	// Factory and Host are the Factory that made the Claim, as its
+	// Heartbeat names it; empty for a Claim no Factory made.
+	Factory string
+	Host    string
 	Started time.Time
 	Ended   time.Time // zero while the Claim is live
 	EndedBy string    // the action that ended it
+	// Stops are the human's Stops of the Claim, oldest first.
+	Stops []Stop
+}
+
+// Stop is one Stop of a Claim, with the time of its Resume once Resumed.
+type Stop struct {
+	Stopped time.Time
+	Resumed time.Time // zero until Resumed
+}
+
+// FactoryClaim reports whether a Factory made the Claim. Only a Factory
+// Claim can be Stopped.
+func (c Claim) FactoryClaim() bool { return c.Factory != "" }
+
+// Stopped reports whether the Claim is live and its latest Stop has no
+// Resume. Ending the Claim ends the mark with it.
+func (c Claim) Stopped() bool {
+	n := len(c.Stops)
+	return c.Live() && n > 0 && c.Stops[n-1].Resumed.IsZero()
 }
 
 // FailureReport is one numbered, permanent report of why an agent with

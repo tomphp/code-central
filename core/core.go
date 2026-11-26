@@ -460,6 +460,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t domain.Ticket) api.
 	}
 	for _, cl := range t.Claims {
 		cv := api.ClaimView{Number: cl.Number, SessionID: cl.SessionID, WorkingDir: cl.WorkingDir, ResumeCommand: cl.ResumeCommand, Model: cl.Model, Effort: cl.Effort, Started: cl.Started, LastActivity: c.claimActivity(t, cl), EndedBy: cl.EndedBy,
+			FactoryClaim: cl.FactoryClaim(), Stopped: cl.Stopped(), Stops: stopViews(cl.Stops),
 			LatestEvent: c.factories.LatestEvent(key, t.Number, cl.Number)}
 		if !cl.Live() {
 			ended := cl.Ended

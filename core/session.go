@@ -20,7 +20,7 @@ func (c *Core) SetSession(_ context.Context, key string, in api.SetSessionInput)
 		before := *cl
 		cl.SessionID = in.SessionID
 		setResume(cl, in.WorkingDir, in.ResumeCommand)
-		return *cl != before, nil
+		return cl.SessionID != before.SessionID || cl.WorkingDir != before.WorkingDir || cl.ResumeCommand != before.ResumeCommand, nil
 	})
 }
 

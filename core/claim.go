@@ -62,7 +62,7 @@ func (c *Core) Claim(ctx context.Context, key string, in api.ClaimInput) (api.Cl
 			return rule.blockedError(t, api.ActorOf(ctx))
 		}
 		now := c.now()
-		cl := domain.Claim{Number: len(t.Claims) + 1, SessionID: in.SessionID, Started: now}
+		cl := domain.Claim{Number: len(t.Claims) + 1, SessionID: in.SessionID, Factory: in.Factory, Host: in.Host, Started: now}
 		setResume(&cl, in.WorkingDir, in.ResumeCommand)
 		t.Claims = append(t.Claims, cl)
 		if err := transition(ctx, &t, key, "claim", "", now); err != nil {

@@ -382,6 +382,19 @@ func editViews(es []domain.Edit) []api.EditView {
 	return out
 }
 
+func stopViews(ss []domain.Stop) []api.StopView {
+	var out []api.StopView
+	for _, s := range ss {
+		v := api.StopView{Stopped: s.Stopped}
+		if !s.Resumed.IsZero() {
+			resumed := s.Resumed
+			v.Resumed = &resumed
+		}
+		out = append(out, v)
+	}
+	return out
+}
+
 func commentViews(cs []domain.Comment) []api.CommentView {
 	out := []api.CommentView{}
 	for _, c := range cs {

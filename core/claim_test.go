@@ -283,3 +283,18 @@ func TestClaimingATicketAnotherSessionHoldsSaysWhoHoldsIt(t *testing.T) {
 	wantMessage(t, err, api.ActionNotAllowed, "",
 		"acme-2 is held by Claim 1 of another session; claim another Ticket, or ask the human to release it; if this session holds it, call claim again with your session_id")
 }
+
+func TestAClaimMadeWithAFactoryNameIsAFactoryClaimAndOtherClaimsAreNot(t *testing.T) {
+	f := newFixture(t)
+	f.work(t, domain.Ready, domain.Ready)
+
+	byFactory := f.claim(t, api.ClaimInput{Factory: "code-central-factory", Host: "laptop"})
+	byAgent := f.claim(t, api.ClaimInput{})
+
+	if c := byFactory.Ticket.Claims[0]; !c.FactoryClaim || c.Stopped {
+		t.Errorf("Factory's claim = %+v, want a Factory Claim, not Stopped", c)
+	}
+	if c := byAgent.Ticket.Claims[0]; c.FactoryClaim {
+		t.Errorf("agent's claim = %+v, want not a Factory Claim", c)
+	}
+}

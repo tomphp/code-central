@@ -4,11 +4,12 @@
 package storetest
 
 import (
-	"github.com/tomoram/code-central/domain"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/domain"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -133,7 +134,7 @@ func Run(t *testing.T, f Factory) {
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
 				got, _ := r.Ticket("acme", 1, store.History...)
-				if len(got.Claims) != 2 || got.Claims[0] != tk.Claims[0] || got.Claims[1] != tk.Claims[1] {
+				if len(got.Claims) != 2 || !reflect.DeepEqual(got.Claims, tk.Claims) {
 					t.Fatalf("claims: got %+v", got.Claims)
 				}
 				if len(got.FailureReports) != 1 || got.FailureReports[0] != tk.FailureReports[0] {
