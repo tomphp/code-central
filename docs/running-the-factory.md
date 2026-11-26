@@ -23,10 +23,11 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    ```console
    $ cd ~/src/acme-shop
    $ code-central-factory
+   harness: claude
    base: main
    ```
 
-   That one line is all it prints at the start. It is now running, and looks for work every 30 seconds. Keep this terminal open for every step below: each line it prints later is one thing it did.
+   Those two lines are all it prints at the start. It is now running, and looks for work every 30 seconds. Keep this terminal open for every step below: each line it prints later is one thing it did.
 
    It refuses to start, and says why, if something it needs is missing. For example, every Claim's worktree starts from the base, so its sessions need `.mcp.json` committed there:
 
@@ -359,6 +360,7 @@ If it can't read the levels or the aliases, say from a `claude` whose help reads
 $ code-central-factory
 warning: can't read the effort levels from claude --help, so none are reported, and --effort isn't checked
 warning: can't read the model aliases from claude --help, so none are reported
+harness: claude
 base: main
 ```
 
@@ -392,6 +394,7 @@ Factory sessions can't turn on the Chrome extension with an interactive `/chrome
 
 ```console
 $ code-central-factory --parallel 1 -- --chrome --add-dir ../shared
+harness: claude
 base: main
 passing to every claude turn: --chrome --add-dir ../shared
 ```

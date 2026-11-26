@@ -6,9 +6,6 @@ import (
 	"github.com/tomoram/code-central/factory/harness"
 )
 
-// MCPConfig is .mcp.json, where claude finds the Code Central MCP server.
-func (*Harness) MCPConfig() string { return ".mcp.json" }
-
 // ResumeCommand is claude --resume session, with the --add-dir flags
 // that give a Turn its other Repositories' worktrees.
 func (*Harness) ResumeCommand(session string, addDirs []string) string {

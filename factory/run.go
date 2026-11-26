@@ -579,7 +579,7 @@ func (f *factory) startClaimed(ctx context.Context, in api.ClaimInput, res api.C
 		}
 		c.SystemPrompt, prompt = systemPrompt(f.runner.harness, c, stage, wt, guide, files), firstPrompt(f.runner.harness, c, stage, f.repos.baseBranch(), files, rebase, check)
 	}
-	// The Ticket's Resume Command adds the folders its turns do.
+	// The Harness's Resume Command adds the folders its turns do.
 	resume := f.harness.ResumeCommand(session, c.AddDirs)
 	f.noteTicket(c, *res.Ticket)
 	if err := f.addClaim(c); err != nil {

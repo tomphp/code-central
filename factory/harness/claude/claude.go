@@ -49,6 +49,9 @@ func New(o Options) *Harness {
 // Name is claude.
 func (h *Harness) Name() string { return "claude" }
 
+// MCPConfig is .mcp.json, where claude finds the Code Central MCP server.
+func (*Harness) MCPConfig() string { return ".mcp.json" }
+
 // Capabilities: claude reports Plan Limits in its rate_limit_events, and
 // its Skill tool calls say whether code-review ran.
 func (h *Harness) Capabilities() harness.Capabilities {

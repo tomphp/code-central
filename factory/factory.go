@@ -41,7 +41,7 @@
 //     session part makes the report of what claude accepts (reportModels)
 //     until Code Central takes it. Landing never makes that report.
 //   - claimingHeld, wherever claiming is gated: a base is missing or has
-//     diverged, .mcp.json is missing from the base, or a Repository is
+//     diverged, the MCP config is missing from the base, or a Repository is
 //     missing.
 //
 // The rules that keep the split from changing behaviour:
