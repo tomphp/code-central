@@ -17,6 +17,8 @@ import { PullRequestBadge } from "./PullRequestBadge";
 import { WaitingBadge } from "./WaitingBadge";
 import { PartlyLandedBadge } from "./PartlyLandedBadge";
 import { useAct } from "./useAct";
+import { StopButton } from "./StopButton";
+import { ClaimStops } from "./ClaimStops";
 import { CISection } from "./CISection";
 import { TicketRepositories } from "./TicketRepositories";
 import { Triage } from "./Triage";
@@ -129,6 +131,7 @@ export function TicketDetail(props: TicketDetailProps) {
                   Edit
                 </Button>
               )}
+              <StopButton project={props.project} ticket={t} />
               {t.retroable && props.openTicket && (
                 <NewRetro target={t.id} onSubmitted={(r) => props.openTicket?.(r.id)} />
               )}
@@ -231,6 +234,7 @@ function TicketBody({ project, ticket: t, specLabels, now, reported, openSpec, o
                     </span>
                   </>
                 )}
+                <ClaimStops stops={c.stops} />
                 {" · "}
                 <span className="claim-field">model {c.model || CLAUDE_CODE_DEFAULT}</span> ·{" "}
                 <span className="claim-field">effort {c.effort || CLAUDE_CODE_DEFAULT}</span>

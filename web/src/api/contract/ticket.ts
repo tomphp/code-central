@@ -52,4 +52,59 @@ export function ticketContract(driver: () => Driver) {
       expect(ack.changed).not.toContain(f);
     }
   });
+
+  it("stops a Factory Claim keeping its State, marks it Stopped, and resumes it", async () => {
+    await d.createProject("acme", "Acme");
+    const id = await d.createTicket("acme", "A", "Ready");
+    await d.factoryClaim("acme", id, "sess-1");
+    expect(await d.api.getTicket("acme", id)).toMatchObject({ state: "In Progress", stoppable: true });
+
+    wantAcknowledgement(await d.api.act("acme", id, "stop", { note: "Pausing" }), id, "In Progress", ["claims", "comments"]);
+    const stopped = await d.api.getTicket("acme", id);
+    expect(stopped).toMatchObject({ state: "In Progress", needs_me_reason: "stopped", resumable: true });
+    expect(stopped.stoppable).toBeFalsy();
+    expect(stopped.claims![0]).toMatchObject({ factory_claim: true, stopped: true });
+    expect(stopped.claims![0].stops).toHaveLength(1);
+    expect(stopped.claims![0].stops![0].resumed).toBeUndefined();
+    expect(stopped.comments!.at(-1)).toMatchObject({ actor: "human", body: "Pausing" });
+
+    wantAcknowledgement(await d.api.act("acme", id, "resume", {}), id, "In Progress", ["claims"]);
+    const resumed = await d.api.getTicket("acme", id);
+    expect(resumed).toMatchObject({ state: "In Progress", stoppable: true });
+    expect(resumed.needs_me_reason).toBeUndefined();
+    expect(resumed.resumable).toBeFalsy();
+    expect(resumed.claims![0].stops).toEqual([{ stopped: expect.any(String), resumed: expect.any(String) }]);
+    expect(resumed.claims![0].stopped).toBeFalsy();
+  });
+
+  it("refuses to stop what isn't a live Factory Claim, and to resume what isn't Stopped", async () => {
+    await d.createProject("acme", "Acme");
+    const hand = await d.createTicket("acme", "By hand", "Ready");
+    await d.claim("acme", hand, "sess-1");
+    expect((await d.api.getTicket("acme", hand)).stoppable).toBeFalsy();
+    expect(await d.api.act("acme", hand, "stop", {}).catch((e) => e)).toMatchObject({ status: 409, code: "action_not_allowed" });
+
+    const ready = await d.createTicket("acme", "Ready one", "Ready");
+    expect(await d.api.act("acme", ready, "stop", {}).catch((e) => e)).toMatchObject({ status: 409, code: "action_not_allowed" });
+
+    const running = await d.createTicket("acme", "Running", "Ready");
+    await d.factoryClaim("acme", running, "sess-2");
+    expect(await d.api.act("acme", running, "resume", {}).catch((e) => e)).toMatchObject({ status: 409, code: "action_not_allowed" });
+    await d.api.act("acme", running, "stop", {});
+    expect(await d.api.act("acme", running, "stop", {}).catch((e) => e)).toMatchObject({ status: 409, code: "action_not_allowed" });
+  });
+
+  it("releases a Stopped Claim, which ends the Stopped mark with it", async () => {
+    await d.createProject("acme", "Acme");
+    const id = await d.createTicket("acme", "A", "Ready");
+    await d.factoryClaim("acme", id, "sess-1");
+    await d.api.act("acme", id, "stop", {});
+
+    await d.api.act("acme", id, "release", {});
+    const t = await d.api.getTicket("acme", id);
+    expect(t.state).toBe("Ready");
+    expect(t.needs_me_reason).toBeUndefined();
+    expect(t.claims![0]).toMatchObject({ ended_by: "release" });
+    expect(t.claims![0].stopped).toBeFalsy();
+  });
 }

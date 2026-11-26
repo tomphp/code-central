@@ -184,6 +184,11 @@ export function ago(now: Date, at: string): string {
   return d === "just now" ? d : `${d} ago`;
 }
 
+// timeOfDay is the 24-hour time of day of an instant, in the viewer's time zone.
+export function timeOfDay(at: string): string {
+  return new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+}
+
 // bytes is a size in readable units: bytes under 1 KB, then KB, then MB,
 // then GB, always to one decimal place, "1.0 KB" (1 KB is 1024 bytes).
 export function bytes(n: number): string {
